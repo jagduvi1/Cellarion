@@ -34,6 +34,7 @@ jest.mock('../models/WineVintagePrice', () => {
 });
 jest.mock('../models/PriceTrackingRequest', () => ({ find: jest.fn(), findOne: jest.fn(), findById: jest.fn(), deleteOne: jest.fn(), findOneAndUpdate: jest.fn() }));
 jest.mock('../models/PriceTrackingSkip', () => ({ find: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn(), deleteOne: jest.fn() }));
+jest.mock('../models/WineCorrectionProposal', () => ({ create: jest.fn(), findById: jest.fn(), deleteOne: jest.fn() }));
 jest.mock('../utils/rackGeometry', () => ({ getMaxPosition: jest.fn(() => 12) }));
 jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false), search: jest.fn(), searchBottles: jest.fn(), indexWine: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../services/statsService', () => ({ computeOverview: jest.fn(), buildEmptyStats: jest.fn() }));
@@ -68,7 +69,7 @@ const USER_CTX = { user: { id: ME, roles: ['user'] }, scopes: ['read', 'write'],
 
 const tool = (name) => allTools().find((t) => t.name === name);
 const parse = (res) => JSON.parse(res.content[0].text);
-const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'remove_from_maturity_queue', 'set_wine_profile', 'list_price_tracking_requests', 'set_vintage_price', 'reject_price_request'];
+const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'remove_from_maturity_queue', 'set_wine_profile', 'propose_wine_correction', 'list_price_tracking_requests', 'set_vintage_price', 'reject_price_request'];
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -632,6 +633,132 @@ describe('reject_price_request', () => {
     const res = await tool('undo_last').handler({}, { ...SOMM_CTX, scopes: ['consume', 'write'] });
     expect(parse(res).error).toBeUndefined();
     expect(PriceTrackingSkip.deleteOne).not.toHaveBeenCalled();
+  });
+});
+
+describe('propose_wine_correction', () => {
+  const WineCorrectionProposal = require('../models/WineCorrectionProposal');
+  const WINE_ID = oid('f');
+  const TARGET_ID = oid('e');
+  const REASON = 'Producer verified on the estate website — the registry row misspells it.';
+
+  const mkWine = (over = {}) => {
+    const w = {
+      _id: WINE_ID, name: 'Barolo', producer: 'Pira', appellation: 'Barolo',
+      classification: 'DOCG',
+      country: { name: 'Italy' }, region: { name: 'Piedmont' },
+      ...over,
+    };
+    WineDefinition.findById.mockReturnValue(chain(w));
+    return w;
+  };
+
+  test('files a field_correction: snapshot captured, ledger row + audit written, nothing applied', async () => {
+    mkWine();
+    WineCorrectionProposal.create.mockResolvedValue({ _id: 'prop-1' });
+    const body = parse(await tool('propose_wine_correction').handler({
+      wine_id: WINE_ID, kind: 'field_correction',
+      proposed_fields: { producer: 'E. Pira e Figli' },
+      evidence_url: 'https://pira-barolo.example/estate',
+      reason: REASON,
+    }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(body.data.status).toBe('pending');
+    expect(body.data.proposal_id).toBe('prop-1');
+    // The point of the tier: the tool itself never touches the wine.
+    expect(body.data.note).toMatch(/until an admin/);
+
+    const created = WineCorrectionProposal.create.mock.calls[0][0];
+    expect(created).toMatchObject({
+      proposer: ME, wineDefinition: WINE_ID, kind: 'field_correction',
+      proposedFields: { producer: 'E. Pira e Figli' },
+      evidenceUrl: 'https://pira-barolo.example/estate',
+      reason: REASON,
+    });
+    // The propose-time snapshot is what lets the admin diff show drift.
+    expect(created.currentSnapshot).toEqual({
+      producer: 'Pira', name: 'Barolo', appellation: 'Barolo',
+      region: 'Piedmont', country: 'Italy', classification: 'DOCG',
+    });
+
+    const row = McpActionLog.create.mock.calls[0][0];
+    expect(row.action).toBe('somm_proposal');
+    expect(row.detail).toEqual({ proposalId: 'prop-1', wineId: WINE_ID, kind: 'field_correction' });
+    expect(logAudit).toHaveBeenCalledWith(SOMM_CTX.req, 'somm.wineProposal.create',
+      expect.anything(), expect.objectContaining({ kind: 'field_correction', via: 'mcp' }));
+  });
+
+  test('merge kind: the target must differ from the wine and must exist', async () => {
+    let body = parse(await tool('propose_wine_correction').handler({
+      wine_id: WINE_ID, kind: 'merge', merge_target_id: WINE_ID, reason: REASON,
+    }, SOMM_CTX));
+    expect(body.error.code).toBe('invalid_input');
+    expect(body.error.message).toMatch(/DIFFERENT wine/);
+    expect(WineDefinition.findById).not.toHaveBeenCalled();
+
+    // First findById = the wine (found), second = the merge target (gone).
+    const w = { _id: WINE_ID, name: 'Barolo', producer: 'Pira', country: { name: 'Italy' }, region: null };
+    WineDefinition.findById.mockReturnValueOnce(chain(w)).mockReturnValueOnce(chain(null));
+    body = parse(await tool('propose_wine_correction').handler({
+      wine_id: WINE_ID, kind: 'merge', merge_target_id: TARGET_ID, reason: REASON,
+    }, SOMM_CTX));
+    expect(body.error.code).toBe('not_found');
+    expect(body.error.message).toMatch(/merge_target_id/);
+    expect(WineCorrectionProposal.create).not.toHaveBeenCalled();
+  });
+
+  test('a short reason is refused before any read', async () => {
+    const body = parse(await tool('propose_wine_correction').handler({
+      wine_id: WINE_ID, kind: 'non_wine', reason: 'too short',
+    }, SOMM_CTX));
+    expect(body.error.code).toBe('invalid_input');
+    expect(body.error.message).toMatch(/at least 10/);
+    expect(WineDefinition.findById).not.toHaveBeenCalled();
+    expect(WineCorrectionProposal.create).not.toHaveBeenCalled();
+  });
+
+  test('field_correction with no non-empty field is refused', async () => {
+    const body = parse(await tool('propose_wine_correction').handler({
+      wine_id: WINE_ID, kind: 'field_correction', proposed_fields: { producer: '   ' }, reason: REASON,
+    }, SOMM_CTX));
+    expect(body.error.code).toBe('invalid_input');
+    expect(body.error.message).toMatch(/at least one non-empty field/);
+  });
+
+  test('a second pending proposal for the same wine+kind is a clean conflict (unique-index violation)', async () => {
+    mkWine();
+    WineCorrectionProposal.create.mockRejectedValue(Object.assign(new Error('E11000 duplicate key'), { code: 11000 }));
+    const body = parse(await tool('propose_wine_correction').handler({
+      wine_id: WINE_ID, kind: 'non_wine', reason: REASON,
+    }, SOMM_CTX));
+    expect(body.error.code).toBe('conflict');
+    expect(body.error.message).toMatch(/already exists/);
+    expect(McpActionLog.create).not.toHaveBeenCalled();
+  });
+
+  test('undo withdraws a STILL-PENDING proposal via a status-gated delete and claims the row', async () => {
+    const row = { _id: 'wp', action: 'somm_proposal', reversed: false, detail: { proposalId: 'prop-1', wineId: WINE_ID, kind: 'merge' } };
+    McpActionLog.findOne.mockReturnValue(chain(row));
+    McpActionLog.findOneAndUpdate.mockResolvedValue(row);
+    WineCorrectionProposal.findById.mockReturnValue(chain({ _id: 'prop-1', status: 'pending', kind: 'merge' }));
+    WineCorrectionProposal.deleteOne.mockResolvedValue({ deletedCount: 1 });
+    const res = await tool('undo_last').handler({}, { ...SOMM_CTX, scopes: ['consume', 'write'] });
+    expect(parse(res).data.undone).toBe('propose_wine_correction');
+    // Status-gated: a decision landing between the pre-check and the delete wins.
+    expect(WineCorrectionProposal.deleteOne).toHaveBeenCalledWith({ _id: 'prop-1', status: 'pending' });
+    expect(McpActionLog.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: 'wp', reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+  });
+
+  test('undo refuses once an admin decided — the decision stands, nothing claimed or deleted', async () => {
+    const row = { _id: 'wp', action: 'somm_proposal', reversed: false, detail: { proposalId: 'prop-1', wineId: WINE_ID, kind: 'non_wine' } };
+    McpActionLog.findOne.mockReturnValue(chain(row));
+    WineCorrectionProposal.findById.mockReturnValue(chain({ _id: 'prop-1', status: 'approved', kind: 'non_wine' }));
+    const res = await tool('undo_last').handler({}, { ...SOMM_CTX, scopes: ['consume', 'write'] });
+    expect(parse(res).error.code).toBe('conflict');
+    expect(parse(res).error.message).toMatch(/approved/);
+    expect(McpActionLog.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(WineCorrectionProposal.deleteOne).not.toHaveBeenCalled();
   });
 });
 

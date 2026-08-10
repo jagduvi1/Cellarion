@@ -15,6 +15,7 @@ const WineVintagePrice = require('../../models/WineVintagePrice');
 const PriceTrackingRequest = require('../../models/PriceTrackingRequest');
 const PriceTrackingSkip = require('../../models/PriceTrackingSkip');
 const WineDefinition = require('../../models/WineDefinition');
+const WineCorrectionProposal = require('../../models/WineCorrectionProposal');
 const { registerTool } = require('../registry');
 const { logAudit } = require('../../services/audit');
 const { SUPPORTED_CURRENCIES } = require('../../config/currencies');
@@ -734,6 +735,198 @@ registerTool({
       action: 'somm_price_decline',
       detail: { requestId: String(request._id), wineId: String(request.wineDefinition), vintage: request.vintage, reason },
       prev,
+      result: envelope,
+    });
+    return ok(envelope.summary, envelope.data);
+  },
+});
+
+// Correction proposals — the human-gated tier of registry curation. Direct
+// somm writes cover type/grapes/tasting profile (set_wine_profile, recoverable
+// + undoable); IDENTITY fields drive dedup keys, URLs and every owner's
+// display, and curator assertions on producer/name have been confidently wrong
+// (5 overturned by web-verification 2026-08-10) — so those go through a
+// proposal an admin diffs and applies (routes/admin/wineProposals.js), with
+// the curator's research preserved as structured data instead of a prose
+// ticket the admin re-types.
+const PROPOSAL_KINDS = ['field_correction', 'merge', 'non_wine'];
+const PROPOSAL_FIELDS = ['producer', 'name', 'appellation', 'region', 'country', 'classification'];
+const PROPOSAL_REASON_MIN = 10;
+const PROPOSAL_REASON_MAX = 1000;
+const PROPOSAL_FIELD_MAX = 200;
+const PROPOSAL_URL_MAX = 500;
+
+registerTool({
+  name: 'propose_wine_correction',
+  title: 'Sommelier: propose an identity fix, merge or non-wine flag (admin-reviewed)',
+  description:
+    'Files a correction PROPOSAL on a registry wine for an admin to review — nothing changes until they approve. ' +
+    'THIS is the path for the identity fields set_wine_profile deliberately does not cover: producer, name, ' +
+    'appellation, region, country and classification (kind "field_correction", region/country as plain names — ' +
+    'resolved against the taxonomy at approval, never minted). Also: kind "merge" when this wine duplicates another ' +
+    'registry wine (merge_target_id = the wine that should SURVIVE), and kind "non_wine" when the row is not wine at ' +
+    'all (spirits/cider/sake) and should be quarantined out of search and the maturity queue. Always give the reason ' +
+    'the somm established, and cite an evidence_url (producer site, appellation register) — evidence is what makes a ' +
+    'one-click approval possible. One pending proposal per wine and kind. Reversible via undo_last while pending.',
+  scope: 'write',
+  requireRole: SOMM_ROLES,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  inputSchema: {
+    wine_id: objectId.describe('From list_maturity_queue, search_registry or get_wine'),
+    kind: z.enum(PROPOSAL_KINDS),
+    proposed_fields: z.object({
+      producer: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional(),
+      name: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional(),
+      appellation: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional(),
+      region: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional(),
+      country: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional(),
+      classification: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional(),
+    }).optional().describe('kind "field_correction" only: the corrected value per field (omit fields that are right). Region/country as plain names.'),
+    merge_target_id: objectId.optional().describe('kind "merge" only: the duplicate\'s SURVIVING wine — must differ from wine_id'),
+    evidence_url: z.string().max(PROPOSAL_URL_MAX).optional()
+      .describe('http(s) URL backing the claim — cite one whenever the somm has it; it is what makes approval fast'),
+    reason: z.string().min(PROPOSAL_REASON_MIN).max(PROPOSAL_REASON_MAX)
+      .describe('What is wrong and how the somm verified the fix — the admin reads this verbatim'),
+  },
+  handler: async (args, ctx) => {
+    const denied = requireSomm(ctx);
+    if (denied) return denied;
+
+    // Same reason hygiene as reject_price_request: plain text only, bounded
+    // even after strip — the admin reads it verbatim in the review diff.
+    const reason = stripHtml(typeof args.reason === 'string' ? args.reason : '');
+    if (!reason || reason.length < PROPOSAL_REASON_MIN) {
+      return fail('invalid_input', `reason must be at least ${PROPOSAL_REASON_MIN} characters of plain text (HTML is stripped) — say what is wrong and how it was verified.`);
+    }
+    if (reason.length > PROPOSAL_REASON_MAX) {
+      return fail('invalid_input', `reason must be at most ${PROPOSAL_REASON_MAX} characters.`);
+    }
+    if (!PROPOSAL_KINDS.includes(args.kind)) {
+      return fail('invalid_input', `kind must be one of: ${PROPOSAL_KINDS.join(', ')}`);
+    }
+
+    let evidenceUrl = '';
+    if (args.evidence_url !== undefined && args.evidence_url !== null) {
+      evidenceUrl = String(args.evidence_url).trim();
+      if (evidenceUrl && !/^https?:\/\//i.test(evidenceUrl)) {
+        return fail('invalid_input', 'evidence_url must be an http:// or https:// URL.');
+      }
+      if (evidenceUrl.length > PROPOSAL_URL_MAX) {
+        return fail('invalid_input', `evidence_url must be at most ${PROPOSAL_URL_MAX} characters.`);
+      }
+    }
+
+    // Per-kind shape: refuse mixed payloads loudly rather than silently
+    // dropping fields the model believed would ride along.
+    let proposedFields = null;
+    if (args.kind === 'field_correction') {
+      if (args.merge_target_id) {
+        return fail('invalid_input', 'merge_target_id only applies to kind "merge" — file a separate merge proposal.');
+      }
+      proposedFields = {};
+      const src = args.proposed_fields || {};
+      for (const f of PROPOSAL_FIELDS) {
+        if (src[f] === undefined || src[f] === null) continue;
+        const v = String(src[f]).trim();
+        if (!v) continue;
+        if (v.length > PROPOSAL_FIELD_MAX) {
+          return fail('invalid_input', `proposed_fields.${f} must be at most ${PROPOSAL_FIELD_MAX} characters.`);
+        }
+        proposedFields[f] = v;
+      }
+      if (Object.keys(proposedFields).length === 0) {
+        return fail('invalid_input', `field_correction needs at least one non-empty field in proposed_fields (${PROPOSAL_FIELDS.join(', ')}).`);
+      }
+    } else {
+      if (args.proposed_fields && Object.keys(args.proposed_fields).length > 0) {
+        return fail('invalid_input', 'proposed_fields only applies to kind "field_correction" — file a separate field_correction proposal.');
+      }
+      if (args.kind === 'merge') {
+        if (!args.merge_target_id) {
+          return fail('invalid_input', 'kind "merge" needs merge_target_id — the registry wine this duplicate should be merged INTO.');
+        }
+        if (String(args.merge_target_id) === String(args.wine_id)) {
+          return fail('invalid_input', 'merge_target_id must be a DIFFERENT wine — a wine cannot merge into itself.');
+        }
+      } else if (args.merge_target_id) {
+        return fail('invalid_input', 'merge_target_id only applies to kind "merge".');
+      }
+    }
+
+    if (!isValidId(args.wine_id)) return fail('invalid_input', 'wine_id must be a 24-hex id.');
+    const wine = await WineDefinition.findById(args.wine_id)
+      .populate('country', 'name').populate('region', 'name');
+    if (!wine) return fail('not_found', 'No such wine. Use search_registry to find it.');
+
+    let target = null;
+    if (args.kind === 'merge') {
+      if (!isValidId(args.merge_target_id)) return fail('invalid_input', 'merge_target_id must be a 24-hex id.');
+      target = await WineDefinition.findById(args.merge_target_id).select('name producer');
+      if (!target) return fail('not_found', 'No registry wine with that merge_target_id. Use search_registry to find the surviving wine.');
+    }
+
+    // Identity fields as they stand NOW (region/country as display names) —
+    // the admin diff renders against live values and uses this to show drift.
+    const currentSnapshot = {
+      producer: wine.producer || null,
+      name: wine.name || null,
+      appellation: wine.appellation || null,
+      region: wine.region?.name || null,
+      country: wine.country?.name || null,
+      classification: wine.classification || null,
+    };
+
+    let proposal;
+    try {
+      proposal = await WineCorrectionProposal.create({
+        proposer: ctx.user.id,
+        wineDefinition: wine._id,
+        kind: args.kind,
+        ...(proposedFields ? { proposedFields } : {}),
+        ...(target ? { mergeTargetId: target._id } : {}),
+        ...(evidenceUrl ? { evidenceUrl } : {}),
+        reason,
+        currentSnapshot,
+      });
+    } catch (err) {
+      // The one-pending-per-(wine, kind) partial unique index — a clean
+      // conflict, not a stack trace, when a proposal is already waiting.
+      if (err?.code === 11000) {
+        return fail('conflict', `A pending ${args.kind} proposal already exists for this wine — an admin has not reviewed it yet. Wait for that decision instead of re-filing.`);
+      }
+      throw err;
+    }
+
+    logAudit(ctx.req, 'somm.wineProposal.create',
+      { type: 'wine', id: wine._id },
+      {
+        proposalId: proposal._id, kind: args.kind,
+        wine: `${wine.producer} — ${wine.name}`,
+        ...(target ? { mergeTargetId: target._id } : {}),
+        via: 'mcp',
+      });
+
+    const kindLabel = args.kind === 'merge'
+      ? `merge into ${target.producer ? `${target.producer} — ` : ''}${target.name}`
+      : args.kind === 'non_wine' ? 'non-wine quarantine' : 'identity-field correction';
+    const envelope = {
+      summary: `Proposal filed: ${kindLabel} for ${wine.producer} — ${wine.name} (awaiting admin review)`,
+      data: {
+        proposal_id: proposal._id,
+        wine_id: wine._id,
+        kind: args.kind,
+        status: 'pending',
+        ...(proposedFields ? { proposed_fields: proposedFields } : {}),
+        ...(target ? { merge_target: { wine_id: target._id, name: target.name, producer: target.producer || null } } : {}),
+        evidence_url: evidenceUrl || null,
+        note: 'Nothing has changed — the wine stays as-is until an admin reviews the diff and approves.',
+        undo: 'undo_last withdraws the proposal while it is still pending',
+      },
+    };
+    await logAction(ctx, {
+      tool: 'propose_wine_correction',
+      action: 'somm_proposal',
+      detail: { proposalId: String(proposal._id), wineId: String(wine._id), kind: args.kind },
       result: envelope,
     });
     return ok(envelope.summary, envelope.data);

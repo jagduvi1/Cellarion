@@ -59,6 +59,7 @@ const RestockAlert = require('../models/RestockAlert');
 const Review = require('../models/Review');
 const ReviewVote = require('../models/ReviewVote');
 const SupportTicket = require('../models/SupportTicket');
+const WineCorrectionProposal = require('../models/WineCorrectionProposal');
 const WineList = require('../models/WineList');
 const WineReport = require('../models/WineReport');
 const WineRequest = require('../models/WineRequest');
@@ -515,6 +516,37 @@ const REGISTRY = [
       // portability requires they come back out (audit 2026-07-29 M1).
       reports: { wines: markTrunc(ctx, 'wineReports', await WineReport.find({ user: ctx.userId }).select('wineDefinition reason status createdAt details suggestedField suggestedValue').limit(EXPORT_MAX).lean())
         .map(r => ({ reason: r.reason, status: r.status, createdAt: r.createdAt, details: r.details, suggestedField: r.suggestedField, suggestedValue: r.suggestedValue })) },
+    }),
+  },
+  {
+    // Same policy as WineReport (the closest sibling — user-authored rows
+    // about shared registry wines): the proposer's rows are hard-deleted; the
+    // departing user's ADMIN ref (decidedBy) is cleared off other users'
+    // decided proposals so it doesn't dangle.
+    model: WineCorrectionProposal, category: 'shared-content', userFields: ['proposer', 'decidedBy'],
+    purge: (ctx) => [
+      WineCorrectionProposal.deleteMany({ proposer: ctx.userId }),
+      WineCorrectionProposal.updateMany({ decidedBy: ctx.userId }, { $unset: { decidedBy: '' } }),
+    ],
+    exportFragment: async (ctx) => ({
+      // reason/proposedFields/evidenceUrl are text the USER typed —
+      // portability requires they come back out (the WineReport precedent,
+      // audit 2026-07-29 M1). The wine label comes from the propose-time
+      // snapshot so it survives the wine being merged away or renamed.
+      wineCorrectionProposals: markTrunc(ctx, 'wineCorrectionProposals',
+        await WineCorrectionProposal.find({ proposer: ctx.userId })
+          .select('kind currentSnapshot proposedFields reason evidenceUrl status createdAt decidedAt')
+          .limit(EXPORT_MAX).lean())
+        .map(p => ({
+          kind: p.kind,
+          wine: [p.currentSnapshot?.producer, p.currentSnapshot?.name].filter(Boolean).join(' — ') || null,
+          proposedFields: p.proposedFields || null,
+          reason: p.reason,
+          evidenceUrl: p.evidenceUrl || null,
+          status: p.status,
+          createdAt: p.createdAt,
+          decidedAt: p.decidedAt || null,
+        })),
     }),
   },
   {

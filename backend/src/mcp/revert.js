@@ -26,7 +26,7 @@ async function unclaim(rowId) {
 
 const CONSUME_REVERSIBLE = ['consume', 'restore', 'open', 'pour', 'close'];
 const WRITE_REVERSIBLE = ['add', 'update', 'bulk_add', 'somm_maturity', 'somm_maturity_remove',
-  'somm_wine_profile', 'somm_price', 'somm_price_decline',
+  'somm_wine_profile', 'somm_price', 'somm_price_decline', 'somm_proposal',
   'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange', 'tasting_note', 'attach_image',
   'winelist_add', 'winelist_price'];
 
@@ -388,6 +388,46 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     const envelope = {
       summary: `Undid price-request decline — vintage ${prev.vintage} is back in the price queue and can be requested again`,
       data: { undone: 'reject_price_request', vintage: prev.vintage, requesters_restored: (prev.requesters || []).length },
+    };
+    await logAction(ctx, { tool: 'undo_last', action: row.action, viaUndo: true, detail: { undid: String(row._id) }, result: envelope });
+    return ok(envelope.summary, envelope.data);
+  }
+
+  // Somm correction proposal — withdraws it by DELETING the row, but only
+  // while it is still pending: once an admin decided, the decision (and its
+  // audit trail) stands and the undo refuses. The delete is status-gated so a
+  // decision landing between the pre-check and the delete still wins.
+  if (row.action === 'somm_proposal') {
+    const roles = ctx.user?.roles || [];
+    if (!roles.includes('somm') && !roles.includes('admin')) {
+      return fail('forbidden_scope', 'Undoing sommelier curation needs the sommelier (or admin) role.');
+    }
+    const WineCorrectionProposal = require('../models/WineCorrectionProposal');
+    const proposal = await WineCorrectionProposal.findById(row.detail?.proposalId).select('status kind');
+    if (!proposal) return fail('conflict', 'That proposal no longer exists; nothing was changed.');
+    if (proposal.status !== 'pending') {
+      return fail('conflict', `That proposal has already been ${proposal.status} by an admin — the decision stands; nothing was undone.`);
+    }
+    // Claim before mutating, like every other branch here.
+    const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+    if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
+
+    let del;
+    try {
+      del = await WineCorrectionProposal.deleteOne({ _id: proposal._id, status: 'pending' });
+    } catch (err) {
+      await unclaim(row._id); // nothing deleted yet → let the undo be retried
+      throw err;
+    }
+    if (!del.deletedCount) {
+      // Decided in the race window between the pre-check and the delete.
+      await unclaim(row._id);
+      return fail('conflict', 'That proposal was just decided by an admin — the decision stands; nothing was undone.');
+    }
+
+    const envelope = {
+      summary: `Withdrew the pending ${proposal.kind} proposal — it no longer awaits admin review`,
+      data: { undone: 'propose_wine_correction', proposal_id: String(proposal._id), withdrawn: true },
     };
     await logAction(ctx, { tool: 'undo_last', action: row.action, viaUndo: true, detail: { undid: String(row._id) }, result: envelope });
     return ok(envelope.summary, envelope.data);

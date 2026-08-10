@@ -1340,90 +1340,103 @@ router.post('/:id/merge', async (req, res) => {
       return res.status(400).json({ error: 'Cannot merge a wine into itself' });
     }
 
-    const [source, target] = await Promise.all([
-      WineDefinition.findById(sourceId),
-      WineDefinition.findById(targetId),
-    ]);
-    if (!source) return res.status(404).json({ error: 'Source wine not found' });
-    if (!target) return res.status(404).json({ error: 'Target wine not found' });
-
-    // Capture the source's primary BottleImage (the one whose URL backs
-    // WineDefinition.image) BEFORE the bulk reassign below. After reassign
-    // it'll point to target, so we need its _id now to decide what to do
-    // with the assignedToWine flag.
-    const sourcePrimaryImage = await BottleImage.findOne({
-      wineDefinition: sourceId,
-      assignedToWine: true,
-    }).select('_id processedUrl originalUrl');
-
-    // Reassign every reference from source to target (shared with the golden
-    // /merge route so both stay in lockstep — one place to add new models).
-    const bottlesMoved = await reassignWineRefs(sourceId, targetId);
-
-    // Image consolidation. Contract elsewhere in the codebase (admin/images.js
-    // approval flow) is: a wine has at most one BottleImage with
-    // assignedToWine: true, and its URL is denormalised into WineDefinition.image.
-    // After the bulk reassign above, two things can be broken:
-    //   1. Target had no image but source did → target.image still null even
-    //      though the source's primary BottleImage is now sitting on target.
-    //   2. Target had its own image AND source had a primary image → two
-    //      BottleImages now point to target with assignedToWine: true.
-    let imageAction = 'none';
-    if (sourcePrimaryImage) {
-      if (!target.image) {
-        // Case 1: adopt the source's primary image as target's
-        const sourceUrl = sourcePrimaryImage.processedUrl || sourcePrimaryImage.originalUrl;
-        await WineDefinition.findByIdAndUpdate(targetId, {
-          image: sourceUrl,
-          imageCredit: source.imageCredit || null,
-        });
-        imageAction = 'adopted_from_source';
-      } else {
-        // Case 2: target keeps its own image; clear the source's
-        // assigned-to-wine flag so we don't have two primaries
-        await BottleImage.findByIdAndUpdate(sourcePrimaryImage._id, {
-          assignedToWine: false,
-        });
-        imageAction = 'cleared_source_assignment';
-      }
-    }
-
-    // Carry the source's AI tasting profile to the keeper if the keeper has none,
-    // so the re-embed below encodes taste/style instead of losing it on merge.
-    await inheritAiProfileIfMissing(target, [source]);
-
-    logAudit(req, 'admin.wine.merge',
-      { type: 'wine', id: source._id },
-      {
-        sourceName: source.name,
-        sourceProducer: source.producer,
-        targetId: target._id,
-        targetName: target.name,
-        targetProducer: target.producer,
-        bottlesMoved,
-        imageAction,
-      }
-    );
-
-    await source.deleteOne();
-    searchService.removeWine(sourceId);
-    // Target was mutated if we adopted the image; re-index so search sees it
-    if (imageAction === 'adopted_from_source') searchService.indexWine(targetId);
-
-    // Re-embed the keeper's vintages (it just absorbed the source's bottles and
-    // possibly its profile) so semantic search reflects the merged wine.
-    reembedKeeper(targetId);
+    const result = await performWineMerge(sourceId, targetId, req);
+    if (result.error) return res.status(result.error.status).json({ error: result.error.message });
 
     res.json({
       message: 'Wines merged successfully',
-      bottlesMoved,
-      imageAction,
+      bottlesMoved: result.bottlesMoved,
+      imageAction: result.imageAction,
     });
   } catch (error) {
     console.error('Merge wine error:', error);
     res.status(500).json({ error: 'Failed to merge wines' });
   }
 });
+
+// The single-pair merge body, extracted so the correction-proposal approve
+// (routes/admin/wineProposals.js) runs EXACTLY the machinery the route above
+// runs — one implementation, two callers. Ids must be pre-validated (24-hex,
+// source ≠ target) by the caller. `req` is for audit attribution only.
+// Returns { error: { status, message } } or { bottlesMoved, imageAction,
+// source, target }.
+async function performWineMerge(sourceId, targetId, req) {
+  const [source, target] = await Promise.all([
+    WineDefinition.findById(sourceId),
+    WineDefinition.findById(targetId),
+  ]);
+  if (!source) return { error: { status: 404, message: 'Source wine not found' } };
+  if (!target) return { error: { status: 404, message: 'Target wine not found' } };
+
+  // Capture the source's primary BottleImage (the one whose URL backs
+  // WineDefinition.image) BEFORE the bulk reassign below. After reassign
+  // it'll point to target, so we need its _id now to decide what to do
+  // with the assignedToWine flag.
+  const sourcePrimaryImage = await BottleImage.findOne({
+    wineDefinition: sourceId,
+    assignedToWine: true,
+  }).select('_id processedUrl originalUrl');
+
+  // Reassign every reference from source to target (shared with the golden
+  // /merge route so both stay in lockstep — one place to add new models).
+  const bottlesMoved = await reassignWineRefs(sourceId, targetId);
+
+  // Image consolidation. Contract elsewhere in the codebase (admin/images.js
+  // approval flow) is: a wine has at most one BottleImage with
+  // assignedToWine: true, and its URL is denormalised into WineDefinition.image.
+  // After the bulk reassign above, two things can be broken:
+  //   1. Target had no image but source did → target.image still null even
+  //      though the source's primary BottleImage is now sitting on target.
+  //   2. Target had its own image AND source had a primary image → two
+  //      BottleImages now point to target with assignedToWine: true.
+  let imageAction = 'none';
+  if (sourcePrimaryImage) {
+    if (!target.image) {
+      // Case 1: adopt the source's primary image as target's
+      const sourceUrl = sourcePrimaryImage.processedUrl || sourcePrimaryImage.originalUrl;
+      await WineDefinition.findByIdAndUpdate(targetId, {
+        image: sourceUrl,
+        imageCredit: source.imageCredit || null,
+      });
+      imageAction = 'adopted_from_source';
+    } else {
+      // Case 2: target keeps its own image; clear the source's
+      // assigned-to-wine flag so we don't have two primaries
+      await BottleImage.findByIdAndUpdate(sourcePrimaryImage._id, {
+        assignedToWine: false,
+      });
+      imageAction = 'cleared_source_assignment';
+    }
+  }
+
+  // Carry the source's AI tasting profile to the keeper if the keeper has none,
+  // so the re-embed below encodes taste/style instead of losing it on merge.
+  await inheritAiProfileIfMissing(target, [source]);
+
+  logAudit(req, 'admin.wine.merge',
+    { type: 'wine', id: source._id },
+    {
+      sourceName: source.name,
+      sourceProducer: source.producer,
+      targetId: target._id,
+      targetName: target.name,
+      targetProducer: target.producer,
+      bottlesMoved,
+      imageAction,
+    }
+  );
+
+  await source.deleteOne();
+  searchService.removeWine(String(sourceId));
+  // Target was mutated if we adopted the image; re-index so search sees it
+  if (imageAction === 'adopted_from_source') searchService.indexWine(targetId);
+
+  // Re-embed the keeper's vintages (it just absorbed the source's bottles and
+  // possibly its profile) so semantic search reflects the merged wine.
+  reembedKeeper(targetId);
+
+  return { bottlesMoved, imageAction, source, target };
+}
 
 // ── Merge embedding / enrichment consistency helpers ─────────────────────────
 
@@ -1759,3 +1772,6 @@ router.post('/merge', async (req, res) => {
 });
 
 module.exports = router;
+// The extracted single-pair merge, shared with the correction-proposal
+// approve route (wineProposals.js) so the two surfaces cannot drift.
+module.exports.performWineMerge = performWineMerge;
