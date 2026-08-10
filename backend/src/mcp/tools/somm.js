@@ -152,8 +152,9 @@ registerTool({
     'Call whenever the somm wants to set, record, or CORRECT when a specific wine is drinkable. Address the profile ' +
     'either by profile_id (from list_maturity_queue) or by wine_id + vintage (wine_id from search_registry/get_wine/' +
     'drink_window_for) — the wine_id route reaches ALREADY-REVIEWED profiles too, so it is how a published window ' +
-    'gets corrected. Absolute years (1900–2200) — except NV vintages, which use RELATIVE year-offsets 0–100 from ' +
-    'release. Ordering: each until ≥ its from; peak_from ≥ early_from; late_from ≥ peak_from. Marks the profile ' +
+    'gets corrected. Absolute years (1900–2200) — except NV vintages, which use RELATIVE year-offsets 0–100 counted ' +
+    'from when the owner ACQUIRES the bottle (resolved against each bottle\'s purchase year; 0 = drink right after ' +
+    'purchase). Ordering: each until ≥ its from; peak_from ≥ early_from; late_from ≥ peak_from. Marks the profile ' +
     'reviewed. This is SHARED data powering every user\'s recommendations — confirm the values with the somm first. ' +
     'Reversible via undo_last.',
   scope: 'write',
