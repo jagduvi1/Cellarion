@@ -636,3 +636,43 @@ describe('normalizeProducerKey (ticket #2B: dup-cluster bucketing)', () => {
     expect(normalizeProducerKey('Wines Ltd')).toBe('');
   });
 });
+
+describe('normalizeProducerKey — Saint fold + founding-year strip (tickets d49fea22 / d49dfd38)', () => {
+  test('St / Ste / Saint / Sainte share one bucket token — the Caronne 3-spelling split', () => {
+    const key = normalizeProducerKey('Château Caronne Sainte Gemme');
+    expect(key).toBe('caronne saint gemme');
+    expect(normalizeProducerKey('Château Caronne Ste Gemme')).toBe(key);
+    expect(normalizeProducerKey('Chateau Caronne Saint Gemme')).toBe(key);
+  });
+
+  test('folds at any token position, not just leading', () => {
+    expect(normalizeProducerKey('St Hallett')).toBe('saint hallett');
+    expect(normalizeProducerKey('Mount St John')).toBe('mount saint john');
+    expect(normalizeProducerKey('Chateau Ste Michelle')).toBe(normalizeProducerKey('Chateau Sainte Michelle'));
+  });
+
+  test('a trailing founding year is a date, not producer identity', () => {
+    expect(normalizeProducerKey("Grand Pappy's 1846")).toBe(normalizeProducerKey("Grand Pappy's"));
+    expect(normalizeProducerKey("Grand Pappy's Est. 1846")).toBe('grand pappys');
+    expect(normalizeProducerKey('Bodega Norton Anno 1895')).toBe('norton');
+  });
+
+  test('a LEADING year is a brand name and survives — even when the tail is a stop word', () => {
+    // tokenize() drops 'winery', which would leave the brand year LOOKING
+    // trailing — this pins that position is judged on the raw string.
+    expect(normalizeProducerKey('1848 Winery')).toBe('1848');
+  });
+
+  test('a producer that IS only a year keys empty — callers fall back to the raw string', () => {
+    // wineIdentity.producerSegment and wineMatching.producerSimilarity both
+    // fall back to normalizeString on an empty key, so bare-year producers
+    // stay distinct from each other instead of sharing one canonical bucket.
+    expect(normalizeProducerKey('1846')).toBe('');
+    expect(normalizeProducerKey('Est. 1846')).toBe('');
+  });
+
+  test('corp-suffix stripping still works alongside both folds', () => {
+    expect(normalizeProducerKey('St Hallett Wines Ltd')).toBe('saint hallett');
+    expect(normalizeProducerKey('Kumeu River Wines Limited')).toBe('kumeu river');
+  });
+});
