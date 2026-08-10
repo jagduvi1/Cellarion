@@ -13,6 +13,7 @@ import WineDuplicatesModal from '../components/WineDuplicatesModal';
 import WineProducerInNameModal from '../components/WineProducerInNameModal';
 import WineLowConfidenceModal from '../components/WineLowConfidenceModal';
 import WineCanonicalCollisionsModal from '../components/WineCanonicalCollisionsModal';
+import WineFragmentationModal from '../components/WineFragmentationModal';
 import { WINE_TYPES } from '../config/wineTypes';
 import GrapePicker from '../components/GrapePicker';
 import ImageUpload from '../components/ImageUpload';
@@ -83,6 +84,7 @@ function AdminWines() {
   const [showProducerInName, setShowProducerInName] = useState(false);
   const [showLowConfidence, setShowLowConfidence] = useState(false);
   const [showCollisions, setShowCollisions] = useState(false);
+  const [showFragmentation, setShowFragmentation] = useState(false);
   const [reindexing, setReindexing] = useState(false);
 
   const handleReindex = async () => {
@@ -400,6 +402,9 @@ function AdminWines() {
           </button>
           <button className="btn btn-secondary" onClick={() => setShowCollisions(true)} title={t('admin.wines.canonicalCollisions.buttonTitle')}>
             {t('admin.wines.canonicalCollisions.button')}
+          </button>
+          <button className="btn btn-secondary" onClick={() => setShowFragmentation(true)} title={t('admin.wines.fragmentation.buttonTitle')}>
+            {t('admin.wines.fragmentation.button')}
           </button>
           <button className="btn btn-secondary" onClick={handleReindex} disabled={reindexing} title={t('admin.wines.reindexSearchTitle')}>
             {reindexing ? '…' : t('admin.wines.reindexSearch')}
@@ -910,6 +915,13 @@ function AdminWines() {
         <WineCanonicalCollisionsModal
           apiFetch={apiFetch}
           onClose={() => setShowCollisions(false)}
+        />
+      )}
+
+      {showFragmentation && (
+        <WineFragmentationModal
+          apiFetch={apiFetch}
+          onClose={() => setShowFragmentation(false)}
         />
       )}
 

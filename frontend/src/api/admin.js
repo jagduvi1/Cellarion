@@ -59,6 +59,12 @@ export const adminUndismissDuplicateCluster = (apiFetch, wineIds) =>
 export const adminGetCanonicalCollisions = (apiFetch) =>
   apiFetch('/api/admin/wines/canonical-collisions');
 
+// SAME-WINE fragmentation the name-keyed nets can't see. mode=groups: records
+// sharing an exact producer + appellation, disjoint-vintage sets first;
+// mode=pairs: near-identical producer spellings inside one appellation.
+export const adminGetWineFragmentation = (apiFetch, params) =>
+  apiFetch(`/api/admin/wines/fragmentation?${params}`);
+
 // Distinct wine-appellation strings no curated Appellation doc covers —
 // the review queue that keeps free-text appellations honest.
 export const adminGetUnmatchedAppellations = (apiFetch) =>

@@ -12,6 +12,7 @@ const {
   normalizeAppellation
 } = require('../../utils/normalize');
 const { scoreWineMatch } = require('../../services/wineMatching');
+const { sameProducerAppellationGroups, nearProducerPairs } = require('../../services/registryFragmentation');
 const WineDefinition = require('../../models/WineDefinition');
 const Bottle = require('../../models/Bottle');
 const BottleImage = require('../../models/BottleImage');
@@ -1022,6 +1023,38 @@ router.get('/producer-in-name', async (req, res) => {
   } catch (error) {
     console.error('Producer-in-name scan error:', error);
     res.status(500).json({ error: 'Failed to scan for producer-in-name wines' });
+  }
+});
+
+// GET /api/admin/wines/fragmentation?mode=groups|pairs — SAME-WINE
+// fragmentation the name-keyed nets cannot see (curator ticket d4a0e96b):
+//   groups — records sharing an exact producer + appellation key, with the
+//            disjoint-vintage discriminator (see services/registryFragmentation)
+//   pairs  — producer keys within edit distance 1..2 inside one
+//            (country, appellation) bucket
+// Review queues only — merging happens in the duplicates scanner; a groups-mode
+// set dismissed via POST /dismiss-duplicates (the group's wine ids) stops
+// resurfacing here exactly as in the canonical-collisions queue. Pairs mode has
+// no dismissal (producer-level pairs don't map onto the wine-pair store).
+// Query: mode (default groups), limit (default 50, max 200), offset|page
+router.get('/fragmentation', async (req, res) => {
+  try {
+    const { limit, offset, page } = parsePagination(req.query, { limit: 50, maxLimit: 200 });
+    const mode = req.query.mode || 'groups';
+    if (mode !== 'groups' && mode !== 'pairs') {
+      return res.status(400).json({ error: 'mode must be "groups" or "pairs"' });
+    }
+
+    if (mode === 'groups') {
+      const { groups, total, scannedCount } = await sameProducerAppellationGroups({ limit, offset });
+      return res.json({ groups, total, page, pages: Math.ceil(total / limit), scannedCount });
+    }
+
+    const { pairs, total, scannedCount, skippedBuckets } = await nearProducerPairs({ limit, offset });
+    res.json({ pairs, total, page, pages: Math.ceil(total / limit), scannedCount, skippedBuckets });
+  } catch (error) {
+    console.error('Fragmentation scan error:', error);
+    res.status(500).json({ error: 'Failed to scan for fragmentation' });
   }
 });
 
