@@ -139,6 +139,17 @@ describe('resolveGrapeIdsStrict (match-only)', () => {
     const r = await resolveGrapeIdsStrict(['Syrah', 'Shiraz']);
     expect(r.ids).toEqual(['g-syrah']);
   });
+
+  // Audit 2026-08-10: names that normalize to '' (non-Latin scripts, bare
+  // percentages) were silently DROPPED — a set became a partial write, and an
+  // all-such list became an accidental clear of wine.grapes.
+  test('a name that normalizes to nothing is refused, never silently dropped', async () => {
+    Grape.findOne.mockReturnValue(found({ _id: 'g-syrah', name: 'Syrah' }));
+    const r = await resolveGrapeIdsStrict(['Ркацители', 'Syrah']);
+    expect(r.ok).toBe(false);
+    expect(r.unmatched).toEqual(['Ркацители']);
+    expect((await resolveGrapeIdsStrict(['Ркацители'])).ok).toBe(false);
+  });
 });
 
 describe('applyProfilePatch', () => {

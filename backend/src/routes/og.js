@@ -508,11 +508,17 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
 
     // Pull the most authoritative vintage profile so we can include real drink-window
     // dates in the prose and FAQ. Prefer reviewed profiles, then most recent vintage.
+    // Relative (NV) profiles are excluded outright: they store year-OFFSETS from each
+    // bottle's purchase, and this page has no bottle to anchor them to — quoting them
+    // would print "peak maturity from 2 to 5" as if those were dates. The byte-wise
+    // vintage sort makes it worse ('NV' > every year string), so without the filter a
+    // reviewed NV profile would WIN the pick whenever one exists (audit 2026-08-10).
     let profile = null;
     try {
       profile = await WineVintageProfile.findOne({
         wineDefinition: wine._id,
-        status: 'reviewed'
+        status: 'reviewed',
+        relative: { $ne: true }
       }).sort({ vintage: -1 }).select('vintage peakFrom peakUntil earlyFrom earlyUntil lateFrom lateUntil').lean();
     } catch (e) {
       // Profile is optional — failure here shouldn't break the page render.

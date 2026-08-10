@@ -233,6 +233,20 @@ const normalizeProducerKey = (producer) => {
     raw.pop();
     if (raw.length > 0 && PRODUCER_FOUNDING_MARKERS.has(raw[raw.length - 1])) raw.pop();
   }
+  // A stop/corp word can also TRAIL the founding year ("Grand Pappy's 1846
+  // Winery", "… 1846 Ltd") and hide it from the literal-tail loop above —
+  // which would split keys the pre-fold code unified ("X 1846" vs "X 1846
+  // Winery"; audit 2026-08-10). Walk back over droppable tail tokens and
+  // strip a year found behind them — but only when it is NOT the opening
+  // token: a leading year is a brand name ("1848 Winery") whatever follows.
+  const droppableTail = (t) => PRODUCER_CORP_SUFFIXES.has(t) || tokenize(t).length === 0;
+  let end = raw.length - 1;
+  while (end > 0 && droppableTail(raw[end])) end -= 1;
+  while (end > 0 && PRODUCER_FOUNDING_YEAR_RX.test(raw[end])) {
+    raw.splice(end, 1);
+    end -= 1;
+    if (end > 0 && PRODUCER_FOUNDING_MARKERS.has(raw[end])) { raw.splice(end, 1); end -= 1; }
+  }
   return tokenize(raw.join(' '))
     .filter((t) => !PRODUCER_CORP_SUFFIXES.has(t))
     .map(foldProducerToken)

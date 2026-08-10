@@ -197,7 +197,12 @@ async function resolveGrapeIdsStrict(names) {
   for (const raw of names) {
     const resolved = resolveGrapeName(raw);
     const normalizedName = normalizeString(resolved);
-    if (!normalizedName || seen.has(normalizedName)) continue;
+    // A name that normalizes to nothing (non-Latin scripts — normalizeString
+    // strips non-ASCII word chars — or a bare percentage) is UNRESOLVABLE, not
+    // ignorable: silently dropping it turned a set into a partial write, and an
+    // all-such list into an accidental CLEAR of wine.grapes (audit 2026-08-10).
+    if (!normalizedName) { unmatched.push(raw); continue; }
+    if (seen.has(normalizedName)) continue;
     seen.add(normalizedName);
     const grape = await Grape.findOne({
       $or: [{ normalizedName }, { normalizedSynonyms: normalizedName }],
