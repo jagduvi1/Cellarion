@@ -24,7 +24,7 @@ jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.f
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineEmbedding', () => ({ findOne: jest.fn() }));
 jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
-jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn(), findById: jest.fn(), countDocuments: jest.fn(), deleteOne: jest.fn(), findOneAndUpdate: jest.fn() }));
+jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn(), findById: jest.fn(), findOne: jest.fn(), countDocuments: jest.fn(), deleteOne: jest.fn(), findOneAndUpdate: jest.fn() }));
 jest.mock('../models/WineVintagePrice', () => {
   const M = jest.fn(function (doc) { Object.assign(this, doc); this._id = 'price-1'; this.save = jest.fn().mockResolvedValue(undefined); });
   M.aggregate = jest.fn().mockResolvedValue([]);
@@ -185,6 +185,51 @@ describe('set_vintage_maturity', () => {
     profile();
     body = parse(await tool('set_vintage_maturity').handler({ profile_id: oid('1'), peak_from: 2026 }, SOMM_CTX));
     expect(body.data.somm_notes).toBeNull();
+  });
+
+  // Ticket d49cc924: once a pair left the pending queue nothing returned its
+  // profile_id, so a published-but-wrong window was unreachable over MCP.
+  test('wine_id + vintage reaches a REVIEWED profile (the published-window correction path)', async () => {
+    const p = {
+      _id: oid('1'), vintage: '2017', status: 'reviewed', relative: false,
+      peakFrom: 2024, peakUntil: 2029,
+      wineDefinition: { _id: oid('f'), name: 'The Dead Arm Shiraz' },
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+    WineVintageProfile.findOne.mockReturnValue(chain(p));
+    const body = parse(await tool('set_vintage_maturity').handler(
+      { wine_id: oid('f'), vintage: '2017', peak_from: 2024, peak_until: 2036 }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(WineVintageProfile.findOne).toHaveBeenCalledWith({ wineDefinition: oid('f'), vintage: '2017' });
+    expect(WineVintageProfile.findById).not.toHaveBeenCalled();
+    expect(p.peakUntil).toBe(2036);
+    expect(p.status).toBe('reviewed');
+    expect(p.save).toHaveBeenCalled();
+  });
+
+  test('wine_id route canonicalizes the vintage ("nv " → NV) and misses with a seeding hint', async () => {
+    WineVintageProfile.findOne.mockReturnValue(chain(null));
+    const body = parse(await tool('set_vintage_maturity').handler(
+      { wine_id: oid('f'), vintage: 'nv ', peak_from: 1, peak_until: 5 }, SOMM_CTX));
+    expect(WineVintageProfile.findOne).toHaveBeenCalledWith({ wineDefinition: oid('f'), vintage: 'NV' });
+    expect(body.error.code).toBe('not_found');
+    expect(body.error.message).toMatch(/seeded when a bottle/);
+  });
+
+  test('profile_id wins when both address forms are sent; neither/half-address is invalid_input', async () => {
+    const p = profile();
+    let body = parse(await tool('set_vintage_maturity').handler(
+      { profile_id: oid('1'), wine_id: oid('f'), vintage: '2019', peak_from: 2026 }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(WineVintageProfile.findOne).not.toHaveBeenCalled();
+    expect(p.save).toHaveBeenCalled();
+
+    body = parse(await tool('set_vintage_maturity').handler({ peak_from: 2026 }, SOMM_CTX));
+    expect(body.error.code).toBe('invalid_input');
+    body = parse(await tool('set_vintage_maturity').handler({ vintage: '2019', peak_from: 2026 }, SOMM_CTX));
+    expect(body.error.code).toBe('invalid_input');
+    body = parse(await tool('set_vintage_maturity').handler({ wine_id: oid('f'), peak_from: 2026 }, SOMM_CTX));
+    expect(body.error.code).toBe('invalid_input');
   });
 
   test('prev snapshot captures phases + review state for undo; audit uses the REST action string', async () => {
