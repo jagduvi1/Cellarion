@@ -137,6 +137,25 @@ export const adminUnverifyWineChecks = (apiFetch, wineIds, checks) =>
     method: 'DELETE', headers: J, body: JSON.stringify({ wineIds, checks }),
   });
 
+// The cross-field domain scan: registry values sitting in the wrong FIELD
+// (producer that is an appellation/region/country/grape/style term/
+// placeholder, name⊂producer splits, …). Review queue — flags, never blocks.
+export const adminGetCrossFieldChecks = (apiFetch, params) =>
+  apiFetch(`/api/admin/wines/cross-field-checks?${params}`);
+
+// Record (or undo) that an admin confirmed these wines' flagged values really
+// belong in their fields, per rule id — the cross-field sibling of
+// adminVerifyWineChecks, writing crossChecksCleared instead of verifiedChecks.
+export const adminClearCrossChecks = (apiFetch, wineIds, checks) =>
+  apiFetch('/api/admin/wines/cross-checks-clear', {
+    method: 'POST', headers: J, body: JSON.stringify({ wineIds, checks }),
+  });
+
+export const adminUnclearCrossChecks = (apiFetch, wineIds, checks) =>
+  apiFetch('/api/admin/wines/cross-checks-clear', {
+    method: 'DELETE', headers: J, body: JSON.stringify({ wineIds, checks }),
+  });
+
 // ── Taxonomy ─────────────────────────────────────────────────────────────────
 export const adminGetTaxonomy = (apiFetch, endpoint) =>
   apiFetch(endpoint);

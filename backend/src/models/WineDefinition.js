@@ -224,6 +224,40 @@ const wineDefinitionSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  // Cross-field clearances (ticket analysis 2026-08-10, Tier-2 item 5): rule
+  // ids from utils/crossFieldChecks.js an admin has read this wine against
+  // and confirmed the flagged value really belongs in its field. Deliberately
+  // a SIBLING of verifiedChecks, not more entries in it: verifiedChecks'
+  // scope rule (name+producer-only verdicts) is what makes its two-field
+  // invalidation complete, and cross-field rules break it by design — they
+  // read the wine's placement fields against the taxonomy collections. Same
+  // per-rule-id design (a new or id-bumped rule has no clearances anywhere,
+  // so it surfaces every row by construction), same undefined-on-legacy-rows
+  // semantics under .lean(), same never-bulk-set-from-a-script rule; the
+  // clearing admin is recorded in AuditLog, not here (mirrors verifiedChecks).
+  //
+  // INVARIANT for this field: only a rule whose verdict reads nothing but
+  // this wine's name / producer / appellation / region / country / grapes
+  // plus the Appellation/Region/Country/Grape reference collections may
+  // consult it. The pre-validate hook below invalidates it when ANY of those
+  // six fields changes — broader than verifiedChecks because the rules read
+  // all six. Residuals, stated honestly: (a) renaming a TAXONOMY doc writes
+  // nothing here, so a clearance can outlive the taxonomy state it was
+  // judged against until the wine itself is edited (the scan's audit view
+  // exists to re-examine); (b) the taxonomy-merge service re-points
+  // region/country/grapes ids via updateMany, bypassing the hook —
+  // acceptable because a merge preserves the semantic value the admin
+  // cleared against.
+  crossChecksCleared: {
+    type: [String],
+    default: undefined
+  },
+  // When the most recent cross-field clearance was recorded. Same contract as
+  // verifiedAt: display and forensics only, never a scan filter.
+  crossChecksClearedAt: {
+    type: Date,
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -278,6 +312,19 @@ wineDefinitionSchema.pre('validate', function(next) {
   if (!this.isNew && (this.isModified('name') || this.isModified('producer'))) {
     this.verifiedChecks = undefined;
     this.verifiedAt = null;
+  }
+  // crossChecksCleared watches all SIX identity fields — its rules judge the
+  // wine's placement fields against the taxonomy collections (see the field
+  // comment), so any of the six changing may change a verdict. Save-based
+  // writes only, same as above; the taxonomy-merge updateMany residual is
+  // documented on the field.
+  if (!this.isNew && (
+    this.isModified('name') || this.isModified('producer') ||
+    this.isModified('appellation') || this.isModified('region') ||
+    this.isModified('country') || this.isModified('grapes')
+  )) {
+    this.crossChecksCleared = undefined;
+    this.crossChecksClearedAt = null;
   }
   next();
 });

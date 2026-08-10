@@ -48,6 +48,11 @@ const {
   NAME_CHECKS, NAME_CHECK_IDS, DEFAULT_CHECK_IDS, NAME_CHECK_SELECT,
   resolveCheck, runNameChecks,
 } = require('../../utils/nameChecks');
+const {
+  CROSS_FIELD_CHECKS, CROSS_FIELD_CHECK_IDS, DEFAULT_CROSS_FIELD_CHECK_IDS,
+  resolveCrossFieldCheck,
+} = require('../../utils/crossFieldChecks');
+const { scanCrossFieldChecks, detectCrossFieldForWines } = require('../../services/crossFieldScan');
 const Country = require('../../models/Country');
 const { findOrCreateWine } = require('../../services/findOrCreateWine');
 
@@ -1056,6 +1061,147 @@ router.get('/fragmentation', async (req, res) => {
   } catch (error) {
     console.error('Fragmentation scan error:', error);
     res.status(500).json({ error: 'Failed to scan for fragmentation' });
+  }
+});
+
+// GET /api/admin/wines/cross-field-checks — the CROSS-FIELD domain scan
+// (ticket analysis 2026-08-10, Tier-2 item 5): registry values sitting in the
+// wrong FIELD, tested against the reference lists the app already holds
+// (utils/crossFieldChecks.js — producer that is an appellation/region/
+// country/grape/style term/placeholder, parenthetical producers, name⊂producer
+// splits, appellation that is a grape, region that is a country). Flags only,
+// never blocks — this is the admin queue for the class findOrCreateWine's
+// mint-time gate cannot see (un-promoted taxonomy, later-minted docs).
+//
+// Query params (same contract as /producer-in-name):
+//   ?check=<ruleId>     scope to one rule (default = every defaultActive rule)
+//   ?includeCleared=1   AUDIT VIEW — ignore clearances entirely, so a newly
+//                       added or refined rule can be validated across the
+//                       whole registry before its suppression is trusted
+//
+// Rows an admin cleared via POST /cross-checks-clear are suppressed PER RULE.
+//
+// Returns: { wines: [{ _id, name, producer, appellation, region, country,
+//   hits: [{ check, detail }], cleared }], total, page, pages, clearedCount,
+//   scannedCount, ruleCounts, checkIds, allCheckIds, checkLabelKeys,
+//   checkFields }
+router.get('/cross-field-checks', async (req, res) => {
+  try {
+    const { limit, offset, page } = parsePagination(req.query, { limit: 50, maxLimit: 200 });
+
+    const only = req.query.check;
+    if (only !== undefined && !resolveCrossFieldCheck(only)) {
+      return res.status(400).json({ error: 'Unknown check id' });
+    }
+    const checkIds = only ? [only] : DEFAULT_CROSS_FIELD_CHECK_IDS;
+    const ignoreCleared = req.query.includeCleared === '1' || req.query.includeCleared === 'true';
+
+    const { rows, ruleCounts, total, clearedCount, scannedCount } =
+      await scanCrossFieldChecks({ checkIds, ignoreCleared });
+
+    res.json({
+      wines: rows.slice(offset, offset + limit)
+        .map(r => ({ ...r.wine, hits: r.hits, cleared: r.cleared })),
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+      clearedCount,
+      scannedCount,
+      ruleCounts,
+      checkIds,
+      allCheckIds: CROSS_FIELD_CHECK_IDS,
+      checkLabelKeys: CROSS_FIELD_CHECKS.reduce((m, c) => (m[c.id] = c.labelKey, m), {}),
+      checkFields: CROSS_FIELD_CHECKS.reduce((m, c) => (m[c.id] = c.field, m), {}),
+    });
+  } catch (error) {
+    console.error('Cross-field checks scan error:', error);
+    res.status(500).json({ error: 'Failed to scan for cross-field checks' });
+  }
+});
+
+// POST /api/admin/wines/cross-checks-clear — record that an admin read these
+// wines and confirmed the flagged values really belong in their fields, so
+// the cross-field scan stops surfacing them FOR THOSE RULES ONLY. DELETE
+// undoes it. Body: { wineIds: [id, …], checks: [ruleId, …] } (1..N ids).
+//
+// PARALLEL to /verify-checks rather than an extension of it, on purpose:
+// that endpoint's whole contract (NAME_CHECK_SELECT projection, runNameChecks
+// recompute, the verifiedChecks target) rests on the name+producer-only
+// invariant this family deliberately breaks — dispatching both families
+// through one handler would tangle the two invalidation records the model
+// keeps apart. Same validation gates, same $addToSet idempotence, same
+// no-reindex/no-IndexNow stance (a clearance is not public content), and the
+// same no-MCP-tool rule: "a human checked this" asserted by an AI defeats
+// the record.
+router.post('/cross-checks-clear', async (req, res) => {
+  try {
+    const ids = [...new Set((Array.isArray(req.body?.wineIds) ? req.body.wineIds : []).filter(isValidId))];
+    if (ids.length < 1) return res.status(400).json({ error: 'wineIds must contain at least 1 valid id' });
+    if (ids.length > 500) return res.status(400).json({ error: 'At most 500 wineIds per call' });
+
+    const raw = Array.isArray(req.body?.checks) ? req.body.checks : null;
+    const specs = (raw || []).map(resolveCrossFieldCheck);
+    if (!raw || raw.length === 0 || specs.some(s => !s)) {
+      return res.status(400).json({ error: 'checks must be a non-empty array of known check ids' });
+    }
+    const checkIds = [...new Set(specs.map(s => s.id))];
+
+    // Server-side re-detect (mirrors /verify-checks): a stale client row must
+    // not be able to clear a rule the admin never actually saw on screen.
+    const hitsById = await detectCrossFieldForWines(ids.map(id => new mongoose.Types.ObjectId(id)), checkIds);
+    if (hitsById.size === 0) return res.status(404).json({ error: 'No matching wines' });
+
+    const now = new Date();
+    const ops = [];
+    const notFlagged = [];
+    for (const id of ids) {
+      const tripped = hitsById.get(id);
+      if (tripped === undefined) continue; // wine not found — reported via updated count
+      if (tripped.length === 0) { notFlagged.push(id); continue; }
+      ops.push({ updateOne: {
+        filter: { _id: new mongoose.Types.ObjectId(id) },
+        update: {
+          $addToSet: { crossChecksCleared: { $each: tripped } },
+          $set: { crossChecksClearedAt: now },
+        },
+      } });
+    }
+    const result = ops.length ? await WineDefinition.bulkWrite(ops, { ordered: false }) : { modifiedCount: 0 };
+
+    logAudit(req, 'admin.wine.clearCrossChecks', { type: 'wine', id: ids[0] },
+      { wineIds: ids, checks: checkIds, updated: result.modifiedCount || 0, notFlagged: notFlagged.length });
+    res.json({ message: 'Recorded', updated: result.modifiedCount || 0, checks: checkIds, notFlagged });
+  } catch (error) {
+    console.error('Clear cross-checks error:', error);
+    res.status(500).json({ error: 'Failed to record clearance' });
+  }
+});
+
+// DELETE /api/admin/wines/cross-checks-clear — undo the above.
+// crossChecksClearedAt is deliberately left as-is: display/forensics
+// metadata, not the suppression key (same contract as verifiedAt).
+router.delete('/cross-checks-clear', async (req, res) => {
+  try {
+    const ids = [...new Set((Array.isArray(req.body?.wineIds) ? req.body.wineIds : []).filter(isValidId))];
+    if (ids.length < 1) return res.status(400).json({ error: 'wineIds must contain at least 1 valid id' });
+
+    const raw = Array.isArray(req.body?.checks) ? req.body.checks : null;
+    const specs = (raw || []).map(resolveCrossFieldCheck);
+    if (!raw || raw.length === 0 || specs.some(s => !s)) {
+      return res.status(400).json({ error: 'checks must be a non-empty array of known check ids' });
+    }
+    const checkIds = [...new Set(specs.map(s => s.id))];
+
+    const result = await WineDefinition.updateMany(
+      { _id: { $in: ids.map(id => new mongoose.Types.ObjectId(id)) } },
+      { $pull: { crossChecksCleared: { $in: checkIds } } }
+    );
+    logAudit(req, 'admin.wine.unclearCrossChecks', { type: 'wine', id: ids[0] },
+      { wineIds: ids, checks: checkIds, updated: result.modifiedCount || 0 });
+    res.json({ message: 'Clearance removed', updated: result.modifiedCount || 0 });
+  } catch (error) {
+    console.error('Unclear cross-checks error:', error);
+    res.status(500).json({ error: 'Failed to remove clearance' });
   }
 });
 

@@ -13,6 +13,7 @@ jest.mock('../models/WineRequest', () => ({ countDocuments: jest.fn() }));
 jest.mock('../models/User', () => ({ find: jest.fn() }));
 jest.mock('../models/RegistryHealthSnapshot', () => ({ findOne: jest.fn(), create: jest.fn() }));
 jest.mock('./notifications', () => ({ createNotification: jest.fn() }));
+jest.mock('./crossFieldScan', () => ({ scanCrossFieldChecks: jest.fn() }));
 
 const WineDefinition = require('../models/WineDefinition');
 const WineReport = require('../models/WineReport');
@@ -20,7 +21,8 @@ const WineRequest = require('../models/WineRequest');
 const User = require('../models/User');
 const RegistryHealthSnapshot = require('../models/RegistryHealthSnapshot');
 const { createNotification } = require('./notifications');
-const { runRegistryHealthCheck, computeMetrics } = require('./registryHealthJob');
+const { scanCrossFieldChecks } = require('./crossFieldScan');
+const { runRegistryHealthCheck, computeMetrics, METRIC_LABELS, crossFieldMetricKey } = require('./registryHealthJob');
 
 const leanChain = (result) => ({
   select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(result) }),
@@ -44,6 +46,7 @@ beforeEach(() => {
   RegistryHealthSnapshot.findOne.mockReturnValue(leanChain(null));
   RegistryHealthSnapshot.create.mockResolvedValue({});
   createNotification.mockResolvedValue({});
+  scanCrossFieldChecks.mockResolvedValue({ rows: [], ruleCounts: {}, total: 0, clearedCount: 0, scannedCount: 0 });
 });
 
 afterEach(() => console.log.mockRestore());
@@ -70,6 +73,21 @@ describe('computeMetrics', () => {
     ]));
     const m = await computeMetrics();
     expect(m.nameCheckFlags).toBe(1);
+  });
+
+  test('cross-field per-rule counts land as metrics under dot-free keys the label map knows', async () => {
+    scanCrossFieldChecks.mockResolvedValue({
+      rows: [], total: 3, clearedCount: 0, scannedCount: 100,
+      ruleCounts: { 'producer-is-appellation.v1': 2, 'region-is-country.v1': 1 },
+    });
+    const m = await computeMetrics();
+    // Mongoose Map keys (RegistryHealthSnapshot.metrics) may not contain '.',
+    // so the versioned rule id's dot is folded — and the folded key must be
+    // registered in METRIC_LABELS or the regression loop would never diff it.
+    expect(m[crossFieldMetricKey('producer-is-appellation.v1')]).toBe(2);
+    expect(m[crossFieldMetricKey('region-is-country.v1')]).toBe(1);
+    expect(crossFieldMetricKey('producer-is-appellation.v1')).not.toContain('.');
+    expect(METRIC_LABELS[crossFieldMetricKey('producer-is-appellation.v1')]).toContain('producer-is-appellation.v1');
   });
 });
 
@@ -115,6 +133,36 @@ describe('runRegistryHealthCheck', () => {
     WineReport.countDocuments.mockResolvedValue(7); // no baseline for this key
     const res = await runRegistryHealthCheck();
     expect(res.regressions).toEqual([]);
+  });
+
+  test('the NEW cross-field metrics ride the same contract: silent on first appearance, alerting on later increase', async () => {
+    const key = crossFieldMetricKey('producer-is-appellation.v1');
+    // First run after deploy: the baseline predates the metric → skip a cycle
+    // (this is the "new keys appear once" behaviour the prod watchdog mirrors).
+    RegistryHealthSnapshot.findOne.mockReturnValue(leanChain({
+      metrics: { nameCheckFlags: 0, canonicalCollisionSets: 0, lowConfidenceQueue: 0,
+        producerSpellingSplits: 0, missingInvariants: 0, pendingWineReports: 0, pendingWineRequests: 0 },
+    }));
+    scanCrossFieldChecks.mockResolvedValue({
+      rows: [], total: 2, clearedCount: 0, scannedCount: 100,
+      ruleCounts: { 'producer-is-appellation.v1': 2 },
+    });
+    let res = await runRegistryHealthCheck();
+    expect(res.regressions).toEqual([]);
+
+    // Next run: baselined at 2, now 5 → a named per-rule regression.
+    RegistryHealthSnapshot.findOne.mockReturnValue(leanChain({
+      metrics: { nameCheckFlags: 0, canonicalCollisionSets: 0, lowConfidenceQueue: 0,
+        producerSpellingSplits: 0, missingInvariants: 0, pendingWineReports: 0, pendingWineRequests: 0,
+        [key]: 2 },
+    }));
+    scanCrossFieldChecks.mockResolvedValue({
+      rows: [], total: 5, clearedCount: 0, scannedCount: 100,
+      ruleCounts: { 'producer-is-appellation.v1': 5 },
+    });
+    res = await runRegistryHealthCheck();
+    expect(res.regressions).toEqual(['cross-field flags (producer-is-appellation.v1): 2 → 5']);
+    expect(createNotification).toHaveBeenCalled();
   });
 
   test('a notify failure is per-admin non-fatal', async () => {
