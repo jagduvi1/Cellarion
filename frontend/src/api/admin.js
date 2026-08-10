@@ -65,6 +65,23 @@ export const adminGetCanonicalCollisions = (apiFetch) =>
 export const adminGetWineFragmentation = (apiFetch, params) =>
   apiFetch(`/api/admin/wines/fragmentation?${params}`);
 
+// Sommelier correction proposals: identity-field fixes, merges and non-wine
+// flags filed from the maturity queue (MCP propose_wine_correction). The list
+// is pending-first and its envelope carries pendingCount for the toolbar badge;
+// approve applies the diff in one click, reject requires a reason.
+export const adminGetWineProposals = (apiFetch, params) =>
+  apiFetch(`/api/admin/wine-proposals?${params}`);
+
+export const adminApproveWineProposal = (apiFetch, id) =>
+  apiFetch(`/api/admin/wine-proposals/${id}/approve`, { method: 'POST' });
+
+export const adminRejectWineProposal = (apiFetch, id, reason) =>
+  apiFetch(`/api/admin/wine-proposals/${id}/reject`, {
+    method: 'POST',
+    headers: J,
+    body: JSON.stringify({ reason }),
+  });
+
 // Distinct wine-appellation strings no curated Appellation doc covers —
 // the review queue that keeps free-text appellations honest.
 export const adminGetUnmatchedAppellations = (apiFetch) =>

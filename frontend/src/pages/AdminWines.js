@@ -5,7 +5,7 @@ import {
   adminGetWines, adminGetWine, adminSaveWine, adminDeleteWine,
   adminMergeWine,
   adminGetCountries, adminGetGrapes, adminGetRegions, adminGetAppellations,
-  adminAssignImageToWine, adminReindexSearch,
+  adminAssignImageToWine, adminReindexSearch, adminGetWineProposals,
 } from '../api/admin';
 import Modal from '../components/Modal';
 import Drawer from '../components/Drawer';
@@ -14,6 +14,7 @@ import WineProducerInNameModal from '../components/WineProducerInNameModal';
 import WineLowConfidenceModal from '../components/WineLowConfidenceModal';
 import WineCanonicalCollisionsModal from '../components/WineCanonicalCollisionsModal';
 import WineFragmentationModal from '../components/WineFragmentationModal';
+import WineProposalsModal from '../components/WineProposalsModal';
 import { WINE_TYPES } from '../config/wineTypes';
 import GrapePicker from '../components/GrapePicker';
 import ImageUpload from '../components/ImageUpload';
@@ -85,7 +86,23 @@ function AdminWines() {
   const [showLowConfidence, setShowLowConfidence] = useState(false);
   const [showCollisions, setShowCollisions] = useState(false);
   const [showFragmentation, setShowFragmentation] = useState(false);
+  const [showProposals, setShowProposals] = useState(false);
+  // Toolbar badge for the somm correction-proposal queue — proposals are the
+  // one human-gated queue here, so it must announce itself. The list endpoint
+  // carries pendingCount as cheap meta; limit=1 keeps the call minimal.
+  const [proposalsPending, setProposalsPending] = useState(0);
   const [reindexing, setReindexing] = useState(false);
+
+  const refreshProposalsBadge = useCallback(async () => {
+    try {
+      const res = await adminGetWineProposals(apiFetch, new URLSearchParams({ status: 'pending', limit: 1 }));
+      if (!res.ok) return;
+      const data = await res.json().catch(() => ({}));
+      setProposalsPending(data.pendingCount || 0);
+    } catch { /* badge only — the button works without it */ }
+  }, [apiFetch]);
+
+  useEffect(() => { refreshProposalsBadge(); }, [refreshProposalsBadge]);
 
   const handleReindex = async () => {
     setReindexing(true);
@@ -405,6 +422,11 @@ function AdminWines() {
           </button>
           <button className="btn btn-secondary" onClick={() => setShowFragmentation(true)} title={t('admin.wines.fragmentation.buttonTitle')}>
             {t('admin.wines.fragmentation.button')}
+          </button>
+          <button className="btn btn-secondary" onClick={() => setShowProposals(true)} title={t('admin.wines.proposals.buttonTitle')}>
+            {proposalsPending > 0
+              ? t('admin.wines.proposals.buttonWithCount', { count: proposalsPending })
+              : t('admin.wines.proposals.button')}
           </button>
           <button className="btn btn-secondary" onClick={handleReindex} disabled={reindexing} title={t('admin.wines.reindexSearchTitle')}>
             {reindexing ? '…' : t('admin.wines.reindexSearch')}
@@ -922,6 +944,14 @@ function AdminWines() {
         <WineFragmentationModal
           apiFetch={apiFetch}
           onClose={() => setShowFragmentation(false)}
+        />
+      )}
+
+      {showProposals && (
+        <WineProposalsModal
+          apiFetch={apiFetch}
+          onClose={() => setShowProposals(false)}
+          onChanged={() => { refreshProposalsBadge(); fetchWines(); }}
         />
       )}
 

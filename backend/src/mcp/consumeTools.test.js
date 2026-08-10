@@ -336,7 +336,7 @@ describe('undo_last walk-backward + scope gating (e2e-caught regression)', () =>
     await tool('undo_last').handler({}, { ...CTX, scopes: ['consume', 'write'] });
     q = McpActionLog.findOne.mock.calls[0][0];
     expect(q.action.$in).toEqual(['consume', 'restore', 'open', 'pour', 'close', 'add', 'update', 'bulk_add', 'somm_maturity',
-      'somm_maturity_remove', 'somm_wine_profile', 'somm_price', 'somm_price_decline',
+      'somm_maturity_remove', 'somm_wine_profile', 'somm_price', 'somm_price_decline', 'somm_proposal',
       'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange', 'tasting_note', 'attach_image',
       'winelist_add', 'winelist_price']);
   });

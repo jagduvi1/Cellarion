@@ -1,4 +1,5 @@
 const WineVintageProfile = require('../models/WineVintageProfile');
+const WineDefinition = require('../models/WineDefinition');
 
 /**
  * Ensure a *pending* WineVintageProfile exists for a (wine, vintage) pair so the
@@ -14,6 +15,10 @@ const WineVintageProfile = require('../models/WineVintageProfile');
  *   - No-op for the 'Unknown' vintage: there is no calendar year to recommend a
  *     window for. NV *does* get a profile so somms can attach drinking notes to
  *     non-vintage Champagne and sparkling blends.
+ *   - No-op for a nonWine-quarantined wine. This completes the quarantine:
+ *     the non-wine flag hides the row from search and the admin scan pools,
+ *     but every re-added bottle of a quarantined cider kept re-seeding a
+ *     pending profile and dragging it back into the somm queue.
  *   - NV seeds with relative:true from the start. The flag is fully determined
  *     by the vintage string, and leaving it to default false shipped every NV
  *     wine into the maturity queue in a self-contradictory state — a curator
@@ -33,6 +38,7 @@ const WineVintageProfile = require('../models/WineVintageProfile');
 async function ensurePendingVintageProfile(wineDefinitionId, vintage) {
   if (!wineDefinitionId || !vintage || vintage === 'Unknown') return;
   try {
+    if (await WineDefinition.exists({ _id: wineDefinitionId, nonWine: true })) return;
     await WineVintageProfile.findOneAndUpdate(
       { wineDefinition: wineDefinitionId, vintage },
       { $setOnInsert: { wineDefinition: wineDefinitionId, vintage, status: 'pending', relative: vintage === 'NV' } },
