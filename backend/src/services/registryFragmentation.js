@@ -17,10 +17,11 @@
  *    (sets are disjoint). Disjoint groups sort first; overlapping groups still
  *    list, just later — overlap is evidence, not proof.
  *
- * 2. nearProducerPairs — producer keys within Levenshtein distance 1..2 INSIDE
- *    the same (country, appellation) bucket ("Pierre Charau"/"Pierre Chanau",
- *    Tavel). An unscoped edit-distance sweep over ~5.5k producers is noise;
- *    the appellation is the cheap discriminator that makes distance 1-2 mean
+ * 2. nearProducerPairs — producer keys within a small Levenshtein window
+ *    (1..2, widening to 3 for long keys) INSIDE the same (country,
+ *    appellation) bucket ("Pierre Charau"/"Pierre Chanau", Tavel). An
+ *    unscoped edit-distance sweep over ~5.5k producers is noise; the
+ *    appellation is the cheap discriminator that makes a small distance mean
  *    "typo", not "different estate".
  *
  * Both scans fetch the registry once with a small projection and group in
@@ -49,6 +50,15 @@ const MAX_PAIR_BUCKET = 200;
 // Producer keys shorter than this never enter the pairwise comparison:
 // one or two edits inside a 4-char key is a different word, not a typo.
 const MIN_PRODUCER_KEY_LEN = 5;
+
+// The edit-distance window scales with key length: 2 edits is the ceiling for
+// ordinary keys, but a garbled long name drifts further — "Grenoble
+// Guillaume" is a real prod misread of "Vignoble Guillaume" (ticket d4a0e96b)
+// at distance 3, which a flat ≤2 window misses. Three edits inside a ≥8-char
+// key is still a smaller relative distortion than two inside a 5-char one,
+// and the queue sorts distance-ascending so the wider tail lists last.
+const LONG_KEY_LEN = 8;
+const maxPairDistance = (a, b) => (Math.min(a.length, b.length) >= LONG_KEY_LEN ? 3 : 2);
 
 const pairKey = (a, b) => (String(a) < String(b) ? `${a}|${b}` : `${b}|${a}`);
 
@@ -190,7 +200,8 @@ async function sameProducerAppellationGroups({ limit = 50, offset = 0 } = {}) {
 }
 
 /**
- * Detector 2 — distinct producer keys within Levenshtein distance 1..2 inside
+ * Detector 2 — distinct producer keys within a small Levenshtein window (1..2,
+ * or 1..3 when both keys are ≥8 chars — see maxPairDistance) inside
  * one (country, appellation key) bucket. Distance 0 (equal keys) is detector
  * 1's territory and is structurally excluded here — equal keys share one map
  * entry. No dismissal support: the not-a-duplicate store keys wine-id PAIRS,
@@ -241,10 +252,11 @@ async function nearProducerPairs({ limit = 50, offset = 0 } = {}) {
     const keys = [...byProducer.keys()];
     for (let i = 0; i < keys.length; i++) {
       for (let j = i + 1; j < keys.length; j++) {
-        // Length gap > 2 can never reach distance ≤ 2 — skip the O(m·n) walk.
-        if (Math.abs(keys[i].length - keys[j].length) > 2) continue;
+        const allowed = maxPairDistance(keys[i], keys[j]);
+        // A length gap beyond the window can never reach it — skip the O(m·n) walk.
+        if (Math.abs(keys[i].length - keys[j].length) > allowed) continue;
         const distance = levenshteinDistance(keys[i], keys[j]);
-        if (distance < 1 || distance > 2) continue;
+        if (distance < 1 || distance > allowed) continue;
         const side = (k) => {
           const entry = byProducer.get(k);
           return {

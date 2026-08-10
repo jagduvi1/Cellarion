@@ -177,6 +177,24 @@ describe('nearProducerPairs', () => {
     expect(pair.producers[0].sampleNames).toHaveLength(1);
   });
 
+  test('long keys widen the window to 3 — the real "Grenoble Guillaume" garble of Vignoble Guillaume', async () => {
+    WineDefinition.find.mockReturnValue(leanChain([
+      { _id: 'w1', name: 'Cuvée G', producer: 'Vignoble Guillaume', appellation: 'Franche-Comté', country: 'c-fr' },
+      { _id: 'w2', name: 'Rouge', producer: 'Grenoble Guillaume', appellation: 'Franche-Comté', country: 'c-fr' },
+    ]));
+
+    const res = await nearProducerPairs({});
+    expect(res.total).toBe(1);
+    expect(res.pairs[0].distance).toBe(3);
+    // Short keys keep the tight window: the same 3 edits inside a 6-char key
+    // ('montes' → 'mintaz') is a different word, not a garble.
+    WineDefinition.find.mockReturnValue(leanChain([
+      { _id: 'w3', name: 'A', producer: 'Montes', appellation: 'Rueda', country: 'c-es' },
+      { _id: 'w4', name: 'B', producer: 'Mintaz', appellation: 'Rueda', country: 'c-es' },
+    ]));
+    expect((await nearProducerPairs({})).total).toBe(0);
+  });
+
   test('equal keys are detector 1\'s job: spelling variants folding to one key never pair', async () => {
     WineDefinition.find.mockReturnValue(leanChain([
       // Corp suffix is stripped by normalizeProducerKey → both fold to 'goisot'.
