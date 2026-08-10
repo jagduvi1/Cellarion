@@ -234,6 +234,24 @@ describe('set_vintage_maturity', () => {
     expect(body.error.code).toBe('invalid_input');
   });
 
+  // Audit 2026-08-10: profiles predating the relative-flag derivation hold
+  // absolute years under vintage 'NV'; a partial write flips relative=true on
+  // save, silently reinterpreting retained years as offsets. Must refuse.
+  test('a partial write on an NV profile carrying absolute years is refused, a full rewrite lands', async () => {
+    profile({ vintage: 'NV', relative: false, peakFrom: 2024, peakUntil: 2029 });
+    let body = parse(await tool('set_vintage_maturity').handler(
+      { profile_id: oid('1'), somm_notes: 'legacy row' }, SOMM_CTX));
+    expect(body.error.code).toBe('conflict');
+    expect(body.error.message).toMatch(/retained from the stored profile/);
+
+    const p = profile({ vintage: 'NV', relative: false, peakFrom: 2024, peakUntil: 2029 });
+    body = parse(await tool('set_vintage_maturity').handler(
+      { profile_id: oid('1'), early_from: 0, early_until: 1, peak_from: 2, peak_until: 4, late_from: null, late_until: null }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(p.relative).toBe(true);
+    expect(p.save).toHaveBeenCalled();
+  });
+
   test('prev snapshot captures phases + review state for undo; audit uses the REST action string', async () => {
     const p = profile({ peakFrom: 2020, peakUntil: 2030, status: 'reviewed', setBy: oid('b'), setAt: new Date('2026-01-01') });
     await tool('set_vintage_maturity').handler({ profile_id: oid('1'), peak_from: 2026, peak_until: 2040 }, SOMM_CTX);

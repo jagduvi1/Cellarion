@@ -199,6 +199,21 @@ registerTool({
       }
       next[f] = v;
     }
+    // RETAINED values must satisfy the target range too. Profiles that predate
+    // the relative-flag derivation (the #908 backfill's re-curation list) hold
+    // absolute years under vintage 'NV' — the save below flips relative=true,
+    // which would silently reinterpret a carried-forward 2024 as "2024 years
+    // after purchase" (audit 2026-08-10). Refuse the partial write and demand
+    // a full rewrite instead of laundering the corruption.
+    for (const f of PHASE_FIELDS) {
+      if (incoming[f] !== undefined) continue;
+      const v = next[f];
+      if (v != null && (v < min || v > max)) {
+        return fail('conflict',
+          `${f}=${v} retained from the stored profile is outside the ${isNv ? 'NV offset range 0–100' : 'year range 1900–2200'} — ` +
+          'this profile still carries values in the other unit. Rewrite all six phases in this call (pass null to clear a phase).');
+      }
+    }
     const pairs = [['earlyFrom', 'earlyUntil'], ['peakFrom', 'peakUntil'], ['lateFrom', 'lateUntil']];
     for (const [from, until] of pairs) {
       if (next[from] != null && next[until] != null && next[until] < next[from]) {

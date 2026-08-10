@@ -98,6 +98,29 @@ describe('sameProducerAppellationGroups', () => {
     expect(g.wines.find(w => w._id === 'w1').vintages).toEqual(['2015']); // Unknown dropped
   });
 
+  // Audit 2026-08-10: a group with NO vintage evidence anywhere is vacuously
+  // disjoint — seeded/import rows without bottles would flood page 1 wearing a
+  // "no shared vintage" badge that rests on no data. Evidenced groups first.
+  test('vacuously-disjoint zero-evidence groups rank below genuinely evidenced disjoint ones', async () => {
+    WineDefinition.find.mockReturnValue(leanChain([
+      // Zero-evidence pair (no bottles, no profiles) — vacuously disjoint.
+      { _id: 's1', name: 'A', producer: 'Seeded House', appellation: 'Rueda' },
+      { _id: 's2', name: 'B', producer: 'Seeded House', appellation: 'Rueda' },
+      // Evidenced disjoint pair — the genuinely strong candidate.
+      caronne({ _id: 'w1', name: 'Haut-Médoc' }),
+      caronne({ _id: 'w2', name: 'Cru Bourgeois Haut-Médoc' }),
+    ]));
+    Bottle.aggregate.mockResolvedValue([
+      { _id: 'w1', count: 1, vintages: ['2016'] },
+      { _id: 'w2', count: 1, vintages: ['2017'] },
+    ]);
+
+    const res = await sameProducerAppellationGroups({});
+    expect(res.total).toBe(2);
+    expect(res.groups.map(g => g.producer)).toEqual(['Château Caronne Sainte-Gemme', 'Seeded House']);
+    expect(res.groups.map(g => g.disjoint)).toEqual([true, true]); // both flagged; ordering carries the evidence
+  });
+
   test('empty appellation keys and all-stopword producer keys never group', async () => {
     WineDefinition.find.mockReturnValue(leanChain([
       { _id: 'w1', name: 'A', producer: 'Guigal', appellation: '' },

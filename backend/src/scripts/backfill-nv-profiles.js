@@ -82,7 +82,10 @@ async function run() {
     const docs = missing.map(wineDefinition => ({
       wineDefinition,
       vintage: 'NV',
-      status: 'pending'
+      status: 'pending',
+      // Derived, same as ensurePendingVintageProfile — seeding it false shipped
+      // NV rows into the queue self-contradictory (ticket d49d2b36).
+      relative: true
     }));
     // ordered:false so a single duplicate-key error (race with the route)
     // doesn't abort the whole batch

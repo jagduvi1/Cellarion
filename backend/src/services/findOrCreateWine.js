@@ -269,7 +269,13 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // the soft zone can disambiguate instead of picking one arbitrarily.
   // Canonical prefix first (variant-tolerant); the raw normalizedKey prefix is
   // kept as a fallback for rows that predate canonicalKey on instances that
-  // haven't run the backfill — they converge organically as docs save.
+  // haven't run the backfill. Convergence is NOT organic beyond that: the
+  // pre-validate hook rekeys a row only when name/producer/appellation change,
+  // so after any change to key DERIVATION (e.g. the 2026-08-10 Saint fold /
+  // year strip) stored keys stay stale until backfill-canonical-key.js --apply
+  // is rerun — until then new-style lookups can only MISS old rows, never
+  // mis-match them (folded query keys are a strict subset of fold-class
+  // spellings; audit 2026-08-10).
   if (!skipSiblingMatch) {
     const canonicalSiblings = await WineDefinition.find({
       canonicalKey: new RegExp(`^${escapeRegex(canonicalSiblingPrefix(trimmedName, trimmedProducer))}`),

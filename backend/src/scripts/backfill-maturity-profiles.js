@@ -91,6 +91,9 @@ async function run() {
       wineDefinition: m.wineDefinition,
       vintage: m.vintage,
       status: 'pending',
+      // Derived, same as ensurePendingVintageProfile — seeding it false shipped
+      // NV rows into the queue self-contradictory (ticket d49d2b36).
+      relative: m.vintage === 'NV',
     }));
     // ordered:false so a single duplicate-key error (race with a live add/import)
     // doesn't abort the whole batch.

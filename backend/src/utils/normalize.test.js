@@ -663,6 +663,16 @@ describe('normalizeProducerKey — Saint fold + founding-year strip (tickets d49
     expect(normalizeProducerKey('1848 Winery')).toBe('1848');
   });
 
+  test('a stop/corp word after the founding year does not hide it (audit 2026-08-10)', () => {
+    // Pre-fix, "X 1846" and "X 1846 Winery" split into different keys — a
+    // regression against the pre-fold bucketing, which unified them.
+    expect(normalizeProducerKey("Grand Pappy's 1846 Winery")).toBe('grand pappys');
+    expect(normalizeProducerKey('Bodega Norton 1895 Ltd')).toBe('norton');
+    expect(normalizeProducerKey("Grand Pappy's Est. 1846 Winery")).toBe('grand pappys');
+    // The leading-brand-year rule still wins over the walk-back.
+    expect(normalizeProducerKey('1848 Winery')).toBe('1848');
+  });
+
   test('a producer that IS only a year keys empty — callers fall back to the raw string', () => {
     // wineIdentity.producerSegment and wineMatching.producerSimilarity both
     // fall back to normalizeString on an empty key, so bare-year producers

@@ -75,7 +75,10 @@ function WineFragmentationModal({ apiFetch, onClose }) {
   useEffect(() => { fetchPage(page); }, [fetchPage, page]);
 
   const switchMode = (m) => {
-    if (m === mode) return;
+    // Blocked while a dismiss is in flight (belt to the button-disable braces
+    // below): its resolve would setItems a groups-shaped list under the pairs
+    // renderer → TypeError → app ErrorBoundary (audit 2026-08-10).
+    if (m === mode || pendingKey) return;
     dismissedDelta.current = 0;
     setMode(m);
     setItems(null);
@@ -90,11 +93,15 @@ function WineFragmentationModal({ apiFetch, onClose }) {
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         dismissedDelta.current += 1;
-        const remaining = (items || []).filter(g => g.key !== group.key);
-        const newTotal = Math.max(0, total - 1);
-        setItems(remaining);
-        setTotal(newTotal);
-        if (remaining.length === 0 && newTotal > 0) {
+        // Functional updaters, sibling pattern (WineCanonicalCollisionsModal):
+        // never derive the new list from the render closure — a snapshot write
+        // after an await resurrects concurrently-removed rows. The drain check
+        // may use the closure because every interleaving path (second dismiss,
+        // mode switch, page change) is disabled while this one is pending.
+        setItems(prev => (prev || []).filter(g => g.key !== group.key));
+        setTotal(prev => Math.max(0, prev - 1));
+        const remaining = (items || []).filter(g => g.key !== group.key).length;
+        if (remaining === 0 && total - 1 > 0) {
           if (page > 1) setPage(p => p - 1);
           else fetchPage(1);
         }
@@ -141,6 +148,7 @@ function WineFragmentationModal({ apiFetch, onClose }) {
         <button
           type="button"
           className={`btn ${mode === 'groups' ? 'btn-primary' : 'btn-secondary'} btn-small`}
+          disabled={!!pendingKey}
           onClick={() => switchMode('groups')}
         >
           {t('admin.wines.fragmentation.modeGroups')}
@@ -148,6 +156,7 @@ function WineFragmentationModal({ apiFetch, onClose }) {
         <button
           type="button"
           className={`btn ${mode === 'pairs' ? 'btn-primary' : 'btn-secondary'} btn-small`}
+          disabled={!!pendingKey}
           onClick={() => switchMode('pairs')}
         >
           {t('admin.wines.fragmentation.modePairs')}
@@ -195,7 +204,7 @@ function WineFragmentationModal({ apiFetch, onClose }) {
                   type="button"
                   className="btn btn-secondary btn-small"
                   style={{ marginLeft: 'auto' }}
-                  disabled={pendingKey === group.key}
+                  disabled={!!pendingKey}
                   onClick={() => dismissGroup(group)}
                   title={t('admin.wines.fragmentation.dismissTitle')}
                 >
