@@ -966,7 +966,19 @@
     "structure": "Structure",
     "flavours": "Flavours",
     "pairsWith": "Pairs with",
-    "consumeError": "Failed to remove bottle"
+    "consumeError": "Failed to remove bottle",
+    "addMore": {
+      "action": "Add more bottles",
+      "title": "Add more bottles",
+      "countLabel": "How many more bottles?",
+      "copyLabel": "Copy this bottle's details",
+      "copyHint": "Price, purchase info, notes and occasion are copied from this bottle. Unticked, the new bottles start blank.",
+      "unplacedNote": "The new bottles are added unplaced — placing them in a rack is a separate step, from the cellar page.",
+      "submit_one": "Add {{count}} bottle",
+      "submit_other": "Add {{count}} bottles",
+      "success_one": "{{count}} more bottle added to this cellar. It's unplaced — place it from the cellar page whenever you like.",
+      "success_other": "{{count}} more bottles added to this cellar. They're unplaced — place them from the cellar page whenever you like."
+    }
   },
   "bottles": {
     "title": "All bottles",
