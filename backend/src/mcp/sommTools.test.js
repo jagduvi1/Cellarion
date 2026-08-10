@@ -115,6 +115,27 @@ describe('list_maturity_queue', () => {
     expect(body.data[0].phases).toHaveProperty('peakFrom', null);
   });
 
+  // Curator feedback on v1.101.0: reaching one wine's reviewed rows meant
+  // paginating ~5,600 profiles at 50/page. A wine-scoped call is one call —
+  // and defaults to status 'all', because "what is curated for THIS wine"
+  // wants reviewed rows, not the pending default.
+  test('wine_id scopes the queue and defaults to all statuses; vintage narrows further (nv → NV)', async () => {
+    WineVintageProfile.countDocuments.mockResolvedValue(0);
+    WineVintageProfile.find.mockReturnValue(chain([]));
+    await tool('list_maturity_queue').handler({ wine_id: oid('f') }, SOMM_CTX);
+    expect(WineVintageProfile.find.mock.calls[0][0]).toEqual({ wineDefinition: oid('f') });
+
+    await tool('list_maturity_queue').handler({ wine_id: oid('f'), status: 'pending' }, SOMM_CTX);
+    expect(WineVintageProfile.find.mock.calls[1][0]).toEqual({ status: 'pending', wineDefinition: oid('f') });
+
+    await tool('list_maturity_queue').handler({ wine_id: oid('f'), vintage: 'nv ' }, SOMM_CTX);
+    expect(WineVintageProfile.find.mock.calls[2][0]).toEqual({ wineDefinition: oid('f'), vintage: 'NV' });
+
+    // Unscoped calls keep the pending-queue default — the killer workflow is untouched.
+    await tool('list_maturity_queue').handler({}, SOMM_CTX);
+    expect(WineVintageProfile.find.mock.calls[3][0]).toEqual({ status: 'pending' });
+  });
+
   // #787: the note was fetched but dropped in the row mapping — write-only data.
   test('reviewed rows carry the curator note; absent note reads as null', async () => {
     WineVintageProfile.countDocuments.mockResolvedValueOnce(2).mockResolvedValueOnce(0);
