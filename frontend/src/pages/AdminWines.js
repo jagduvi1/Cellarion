@@ -14,6 +14,7 @@ import WineProducerInNameModal from '../components/WineProducerInNameModal';
 import WineLowConfidenceModal from '../components/WineLowConfidenceModal';
 import WineCanonicalCollisionsModal from '../components/WineCanonicalCollisionsModal';
 import WineFragmentationModal from '../components/WineFragmentationModal';
+import WineCrossFieldChecksModal from '../components/WineCrossFieldChecksModal';
 import WineProposalsModal from '../components/WineProposalsModal';
 import { WINE_TYPES } from '../config/wineTypes';
 import GrapePicker from '../components/GrapePicker';
@@ -86,6 +87,7 @@ function AdminWines() {
   const [showLowConfidence, setShowLowConfidence] = useState(false);
   const [showCollisions, setShowCollisions] = useState(false);
   const [showFragmentation, setShowFragmentation] = useState(false);
+  const [showCrossField, setShowCrossField] = useState(false);
   const [showProposals, setShowProposals] = useState(false);
   // Toolbar badge for the somm correction-proposal queue — proposals are the
   // one human-gated queue here, so it must announce itself. The list endpoint
@@ -422,6 +424,9 @@ function AdminWines() {
           </button>
           <button className="btn btn-secondary" onClick={() => setShowFragmentation(true)} title={t('admin.wines.fragmentation.buttonTitle')}>
             {t('admin.wines.fragmentation.button')}
+          </button>
+          <button className="btn btn-secondary" onClick={() => setShowCrossField(true)} title={t('admin.wines.crossField.buttonTitle')}>
+            {t('admin.wines.crossField.button')}
           </button>
           <button className="btn btn-secondary" onClick={() => setShowProposals(true)} title={t('admin.wines.proposals.buttonTitle')}>
             {proposalsPending > 0
@@ -944,6 +949,13 @@ function AdminWines() {
         <WineFragmentationModal
           apiFetch={apiFetch}
           onClose={() => setShowFragmentation(false)}
+        />
+      )}
+
+      {showCrossField && (
+        <WineCrossFieldChecksModal
+          apiFetch={apiFetch}
+          onClose={() => setShowCrossField(false)}
         />
       )}
 

@@ -21,11 +21,21 @@ const WineRequest = require('../models/WineRequest');
 const User = require('../models/User');
 const RegistryHealthSnapshot = require('../models/RegistryHealthSnapshot');
 const { runNameChecks, NAME_CHECK_SELECT } = require('../utils/nameChecks');
+const { DEFAULT_CROSS_FIELD_CHECK_IDS } = require('../utils/crossFieldChecks');
+const { scanCrossFieldChecks } = require('./crossFieldScan');
 const { normalizeString } = require('../utils/normalize');
 const { createNotification } = require('./notifications');
 
 // Mirrors the admin low-confidence queue's default (routes/admin/wines.js).
 const LOW_CONFIDENCE_THRESHOLD = 0.3;
+
+// Cross-field rule ids become snapshot metric keys. Two constraints shape the
+// fold: Mongoose Map keys (RegistryHealthSnapshot.metrics) may not contain
+// '.', and rule ids end in a versioned '.vN' — so the dot folds to '_', and a
+// rule-id bump therefore lands as a NEW metric key, which is exactly right:
+// the bumped rule's count restarts against a fresh baseline instead of
+// diffing v2's queue against v1's.
+const crossFieldMetricKey = (ruleId) => `crossField_${ruleId.replace(/\./g, '_')}`;
 
 /** Human labels for the notification message — keys match computeMetrics. */
 const METRIC_LABELS = {
@@ -37,6 +47,14 @@ const METRIC_LABELS = {
   pendingWineReports: 'open wine reports',
   pendingWineRequests: 'pending wine requests',
 };
+// Per-rule outstanding cross-field counts (ticket 2026-08-10 Tier-2 item 5).
+// Registered per rule, not as one lump sum, so the alert names WHICH kind of
+// misplacement regressed. New keys have no baseline on their first run — the
+// job skips them for one cycle (see the `before` guard below), and the prod
+// watchdog script prints each as NEW METRIC once; both are expected and fine.
+for (const id of DEFAULT_CROSS_FIELD_CHECK_IDS) {
+  METRIC_LABELS[crossFieldMetricKey(id)] = `cross-field flags (${id})`;
+}
 
 async function computeMetrics() {
   // One lean pass serves both the name checks and the spelling-split count —
@@ -63,7 +81,7 @@ async function computeMetrics() {
     if (set.size > 1) producerSpellingSplits += 1;
   }
 
-  const [collisionAgg, lowConfidenceQueue, pendingWineReports, pendingWineRequests] = await Promise.all([
+  const [collisionAgg, lowConfidenceQueue, pendingWineReports, pendingWineRequests, crossField] = await Promise.all([
     // Raw collision sets (the admin endpoint additionally hides dismissed
     // sets; dismissals only shrink the number, so an INCREASE here is always
     // a real new collision — which is the only thing this job alerts on).
@@ -92,9 +110,14 @@ async function computeMetrics() {
     }),
     WineReport.countDocuments({ status: 'pending' }),
     WineRequest.countDocuments({ status: 'pending' }),
+    // Per-rule OUTSTANDING counts (clearance-filtered), mirroring what the
+    // admin cross-field queue shows — the same numbers-agree contract as
+    // every other metric here. Its own registry pass with its own projection
+    // + 4 small taxonomy fetches; same order of work as one admin scan.
+    scanCrossFieldChecks(),
   ]);
 
-  return {
+  const metrics = {
     nameCheckFlags,
     canonicalCollisionSets: collisionAgg[0]?.sets || 0,
     lowConfidenceQueue,
@@ -103,6 +126,10 @@ async function computeMetrics() {
     pendingWineReports,
     pendingWineRequests,
   };
+  for (const [ruleId, count] of Object.entries(crossField.ruleCounts)) {
+    metrics[crossFieldMetricKey(ruleId)] = count;
+  }
+  return metrics;
 }
 
 /**
@@ -154,4 +181,4 @@ async function runRegistryHealthCheck() {
   return { metrics, regressions, notified, baseline: !previous };
 }
 
-module.exports = { runRegistryHealthCheck, computeMetrics, METRIC_LABELS };
+module.exports = { runRegistryHealthCheck, computeMetrics, METRIC_LABELS, crossFieldMetricKey };

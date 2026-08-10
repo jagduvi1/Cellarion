@@ -1,0 +1,84 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`detect() source of appellation-is-grape.v1 is unchanged — bump the id if you edited it 1`] = `"(w, refs) => lookupEntity(refs.grapes, w.appellation)"`;
+
+exports[`detect() source of name-in-producer.v1 is unchanged — bump the id if you edited it 1`] = `
+"w => {
+    const name = normalizeString(w.name || '');
+    const producer = normalizeString(w.producer || '');
+    if (!name || !producer || name === producer) return null;
+    const nameIsShorter = name.length <= producer.length;
+    const [shorter, longer] = nameIsShorter ? [name, producer] : [producer, name];
+    if (longer.length - shorter.length < 3) return null;
+    if (!\` \${longer} \`.includes(\` \${shorter} \`)) return null;
+    if (shorter.split(' ').every(t => CONTAINMENT_HOUSE_WORDS.has(t))) return null;
+    return (nameIsShorter ? w.name : w.producer).trim();
+  }"
+`;
+
+exports[`detect() source of producer-is-appellation.v1 is unchanged — bump the id if you edited it 1`] = `"(w, refs) => lookupEntity(refs.appellations, w.producer)"`;
+
+exports[`detect() source of producer-is-country.v1 is unchanged — bump the id if you edited it 1`] = `
+"(w, refs) => {
+    const producer = w.producer || '';
+    if (!producer.trim()) return null;
+    const canonical = resolveCountryName(producer);
+    return lookupEntity(refs.countries, canonical) || (isRecognizedCountry(producer) ? String(canonical).trim() : null);
+  }"
+`;
+
+exports[`detect() source of producer-is-grape.v1 is unchanged — bump the id if you edited it 1`] = `"(w, refs) => lookupEntity(refs.grapes, w.producer) || lookupEntity(refs.grapes, resolveGrapeName(w.producer || ''))"`;
+
+exports[`detect() source of producer-is-region.v1 is unchanged — bump the id if you edited it 1`] = `"(w, refs) => lookupEntity(refs.regions, w.producer)"`;
+
+exports[`detect() source of producer-is-style-term.v1 is unchanged — bump the id if you edited it 1`] = `
+"w => {
+    const tokens = normalizeString(w.producer || '').split(' ').filter(Boolean);
+    if (tokens.length === 0) return null;
+    const matched = [];
+    for (const t of tokens) {
+      if (STYLE_WORDS.has(t)) matched.push(t);else if (!STYLE_FILLER_WORDS.has(t)) return null;
+    }
+    return matched.length ? matched.join(' ') : null;
+  }"
+`;
+
+exports[`detect() source of producer-parenthetical.v1 is unchanged — bump the id if you edited it 1`] = `
+"w => {
+    const producer = w.producer || '';
+    const i = producer.indexOf('(');
+    return i === -1 ? null : producer.slice(i).trim() || producer.trim();
+  }"
+`;
+
+exports[`detect() source of producer-placeholder.v1 is unchanged — bump the id if you edited it 1`] = `
+"w => {
+    const raw = (w.producer || '').trim();
+    if (!raw) return null;
+    return isUnknownName(raw) || PLACEHOLDER_PRODUCERS.has(normalizeString(raw)) ? raw : null;
+  }"
+`;
+
+exports[`detect() source of region-is-country.v1 is unchanged — bump the id if you edited it 1`] = `
+"(w, refs) => {
+    const region = w.region || '';
+    if (!region.trim()) return null;
+    const canonical = resolveCountryName(region);
+    return lookupEntity(refs.countries, canonical) || (isRecognizedCountry(region) ? String(canonical).trim() : null);
+  }"
+`;
+
+exports[`rule ids are pinned (adding/removing/renaming a rule must be deliberate) 1`] = `
+[
+  "producer-is-appellation.v1",
+  "producer-is-region.v1",
+  "producer-is-country.v1",
+  "producer-is-grape.v1",
+  "producer-is-style-term.v1",
+  "producer-placeholder.v1",
+  "producer-parenthetical.v1",
+  "name-in-producer.v1",
+  "appellation-is-grape.v1",
+  "region-is-country.v1",
+]
+`;
