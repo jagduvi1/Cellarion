@@ -33,6 +33,7 @@ const ReviewForm = lazy(() => import('../components/ReviewForm'));
 const ConsumeModal = lazy(() => import('../components/ConsumeModal').then(m => ({ default: m.ConsumeModal })));
 const SuggestGrapesModal = lazy(() => import('../components/SuggestGrapesModal').then(m => ({ default: m.SuggestGrapesModal })));
 const RecommendWineModal = lazy(() => import('../components/RecommendWineModal'));
+const AddMoreBottlesModal = lazy(() => import('../components/AddMoreBottlesModal'));
 
 function BottleDetail() {
   const { t } = useTranslation();
@@ -61,6 +62,8 @@ function BottleDetail() {
   const [mistakeOpen, setMistakeOpen] = useState(false);
   const [mistakeBusy, setMistakeBusy] = useState(false);
   const [suggestGrapesOpen, setSuggestGrapesOpen] = useState(false);
+  const [addMoreOpen, setAddMoreOpen] = useState(false);
+  const [addMoreMsg, setAddMoreMsg] = useState(null); // success banner after "Add more bottles"
   const [reportWineOpen, setReportWineOpen] = useState(false);
   const [reportDefaultReason, setReportDefaultReason] = useState(null);
   const [recommendOpen, setRecommendOpen] = useState(false);
@@ -320,9 +323,20 @@ function BottleDetail() {
     (Date.now() - new Date(bottle.consumedAt).getTime()) <= RESTORE_WINDOW_MS;
 
   // Shared overflow-menu contents — same list used by the desktop header ⋮ and
-  // the mobile bar ⋮, so the rare actions live in exactly one place.
+  // the mobile bar ⋮, so these actions live in exactly one place and can never
+  // drift between the page's two action surfaces.
   const overflowItems = (
     <>
+      {/* "Add more bottles" — the support answer to "I added Qty 1, how do I
+          make it 6?" without re-searching in Add Bottle (promised 2026-08-10).
+          Needs a real registry wine to clone (pending-request bottles have
+          none) and a non-demo account (POST /api/bottles is requireNonDemo,
+          same gate that hides the Add Bottle form in the demo). */}
+      {canEdit && wine && !user?.isDemo && (
+        <button className="bd-overflow-item" role="menuitem" onClick={() => { setAddMoreOpen(true); setBdMoreOpen(false); }}>
+          <span aria-hidden="true">➕</span> {t('bottleDetail.addMore.action', 'Add more bottles')}
+        </button>
+      )}
       {canMove && (
         <button className="bd-overflow-item" role="menuitem" onClick={() => { setMoveOpen(true); setBdMoreOpen(false); }}>
           <span aria-hidden="true">📦</span> {t('moveBottle.action')}
@@ -339,6 +353,14 @@ function BottleDetail() {
   const handleMoved = () => {
     setMoveOpen(false);
     navigate(`/cellars/${cellarId}`); // stay with the source cellar — back to its list
+  };
+
+  const handleAddedMore = (n) => {
+    setAddMoreOpen(false);
+    setAddMoreMsg(t('bottleDetail.addMore.success', { count: n }));
+    // Same refresh path every other mutation on this page uses (edit, open):
+    // re-pull the bottle + its cellar/rack context after the cellar changed.
+    fetchBottle();
   };
 
   const handleRestore = async () => {
@@ -375,6 +397,22 @@ function BottleDetail() {
           </button>
         </div>
       )}
+      {/* Confirmation after "Add more bottles" — same dismissible-banner shape
+          as the error banner above, since the modal is gone by the time the
+          batch result matters. */}
+      {addMoreMsg && (
+        <div className="alert alert-success" role="status">
+          {addMoreMsg}
+          <button
+            type="button"
+            className="btn btn-small btn-secondary"
+            style={{ marginLeft: '0.75rem' }}
+            onClick={() => setAddMoreMsg(null)}
+          >
+            ✕
+          </button>
+        </div>
+      )}
       {/* ── Clean header ── */}
       <div className="bd-page-header">
         <div className="bd-header-top">
@@ -401,8 +439,9 @@ function BottleDetail() {
                   </button>
                 </>
               )}
-              {/* Rare actions (Move, Added by mistake) live in the overflow —
-                  frequent actions stay visible, so the bar fits on phones too */}
+              {/* Less-frequent actions (Add more, Move, Added by mistake) live
+                  in the overflow — frequent actions stay visible, so the bar
+                  fits on phones too */}
               {(canMove || canEdit) && (
                 <div className="bd-overflow-wrap">
                   <button
@@ -708,8 +747,9 @@ function BottleDetail() {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 2h8l4 10H4L8 2z"/><path d="M12 12v6"/><path d="M8 22h8"/></svg>
             {t('bottleDetail.removeBottleShort')}
           </button>
-          {/* Rare actions (Move, Added by mistake) — keeps the bar to three
-              visible buttons so nothing gets cut off on narrow screens */}
+          {/* Less-frequent actions (Add more, Move, Added by mistake) — keeps
+              the bar to three visible buttons so nothing gets cut off on
+              narrow screens */}
           {(canMove || canEdit) && (
             <div className="bd-overflow-wrap bd-overflow-wrap--mobile">
               <button className="bd-mobile-action-btn bd-mobile-action-more" onClick={() => setBdMoreOpen(o => !o)} aria-label={t('cellarDetail.moreActions')} aria-haspopup="menu" aria-expanded={bdMoreOpen}>
@@ -791,6 +831,14 @@ function BottleDetail() {
           <SuggestGrapesModal
             wine={wine}
             onClose={() => setSuggestGrapesOpen(false)}
+          />
+        )}
+
+        {addMoreOpen && bottle && (
+          <AddMoreBottlesModal
+            bottle={bottle}
+            onClose={() => setAddMoreOpen(false)}
+            onAdded={handleAddedMore}
           />
         )}
 

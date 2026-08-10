@@ -18,6 +18,15 @@ export const listBottles = (apiFetch, params = {}) => {
 export const getBottle = (apiFetch, id) =>
   apiFetch(`/api/bottles/${id}`);
 
+// Create ONE bottle (POST /api/bottles). There is no batch endpoint — a
+// multi-bottle add is N sequential calls of this (see AddMoreBottlesModal).
+export const createBottle = (apiFetch, data) =>
+  apiFetch('/api/bottles', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(data),
+  });
+
 export const updateBottle = (apiFetch, id, data) =>
   apiFetch(`/api/bottles/${id}`, {
     method: 'PUT',
