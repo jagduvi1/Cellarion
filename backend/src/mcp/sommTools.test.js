@@ -21,6 +21,7 @@ jest.mock('../models/Rack', () => ({ find: jest.fn(), findOne: jest.fn(), countD
 jest.mock('../models/WishlistItem', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/JournalEntry', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn() }));
+jest.mock('../models/Grape', () => ({ findOne: jest.fn() }));
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineEmbedding', () => ({ findOne: jest.fn() }));
 jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
@@ -54,6 +55,7 @@ jest.mock('./mutationBudget', () => ({ takeMutationSlot: jest.fn(() => true), WR
 const WineVintageProfile = require('../models/WineVintageProfile');
 const WineVintagePrice = require('../models/WineVintagePrice');
 const WineDefinition = require('../models/WineDefinition');
+const Grape = require('../models/Grape');
 const McpActionLog = require('../models/McpActionLog');
 const { logAudit } = require('../services/audit');
 const { allTools, toolsForScopes } = require('./registry');
@@ -330,6 +332,49 @@ describe('set_wine_profile', () => {
     expect(row.prev).toMatchObject({ description: 'Built for immediate drinking.', source: 'ai' });
     expect(logAudit).toHaveBeenCalledWith(SOMM_CTX.req, 'somm.wineProfile.update',
       expect.anything(), expect.objectContaining({ via: 'mcp' }));
+  });
+
+  // Ticket d4a1aef5: the vin jaune case — accurate prose, wrong type, empty
+  // grapes. The record fields must be correctable without claiming the
+  // (already-correct) tasting profile was curator-verified.
+  test('type + grapes correct the record WITHOUT claiming the profile verified', async () => {
+    const w = wine({ type: 'fortified', grapes: [] });
+    Grape.findOne.mockReturnValue(chain({ _id: oid('9'), name: 'Savagnin' }));
+    const body = parse(await tool('set_wine_profile').handler(
+      { wine_id: oid('f'), type: 'white', grapes: ['Savagnin'] }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(w.type).toBe('white');
+    expect(w.grapes).toEqual([oid('9')]);
+    expect(w.aiProfile.source).toBe('ai'); // profile untouched, still enrichment-eligible
+    expect(body.summary).toMatch(/record fields corrected/);
+    expect(body.data.record).toEqual({ type: 'white', grapes: ['Savagnin'] });
+    // The undo snapshot carries the record fields so undo_last can put them back.
+    expect(McpActionLog.create.mock.calls[0][0].prev).toMatchObject({ type: 'fortified', grapes: [] });
+  });
+
+  test('an unknown grape variety refuses the whole write — match-only, nothing minted', async () => {
+    const w = wine({ type: 'white', grapes: [] });
+    Grape.findOne.mockReturnValue(chain(null));
+    const body = parse(await tool('set_wine_profile').handler(
+      { wine_id: oid('f'), grapes: ['Savagnin Rose'] }, SOMM_CTX));
+    expect(body.error.code).toBe('invalid_input');
+    expect(body.error.message).toMatch(/Savagnin Rose/);
+    expect(w.save).not.toHaveBeenCalled();
+  });
+
+  // Ticket d49ca3af: clearing used to curator-freeze the wine out of
+  // enrichment — the worst-sourced rows got locked empty.
+  test('a write that ONLY clears does not curator-freeze; the response says so', async () => {
+    const w = wine(); // ai-sourced with a description
+    const body = parse(await tool('set_wine_profile').handler(
+      { wine_id: oid('f'), description: null }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(w.aiProfile.description).toBeNull();
+    expect(w.aiProfile.source).toBe('ai');
+    expect(body.summary).toMatch(/still eligible/);
+    expect(body.data.note).toMatch(/may regenerate/);
+    // Still undoable — the ledger row exists even for a clear.
+    expect(McpActionLog.create.mock.calls[0][0].action).toBe('somm_wine_profile');
   });
 
   test('undo restores the values AND the provenance, and CLAIMS the ledger row', async () => {

@@ -1,9 +1,16 @@
+// resolveGrapeIdsStrict is the only DB-touching function here; the rest stay
+// pure. The mock lets the strict-match contract be asserted without MongoDB.
+jest.mock('../models/Grape', () => ({ findOne: jest.fn() }));
+
+const Grape = require('../models/Grape');
 const {
   validateProfilePatch,
+  resolveGrapeIdsStrict,
   applyProfilePatch,
   snapshotProfile,
   restoreProfile,
   EDITABLE_FIELDS,
+  WINE_TYPES,
 } = require('./wineProfileOps');
 
 // A stand-in for a mongoose doc: only markModified is behaviour we rely on.
@@ -83,6 +90,55 @@ describe('validateProfilePatch', () => {
       expect(validateProfilePatch({ [f]: 'x' }).ok).toBe(false); // nothing editable was supplied
     }
   });
+
+  test('WINE_TYPES mirrors the WineDefinition schema enum (drift pin)', () => {
+    // Hardcoded rather than read at require time (test suites mock the model
+    // as a bare object) — this pin is what keeps the copies honest.
+    const real = require('../models/WineDefinition').schema.path('type').enumValues;
+    expect(WINE_TYPES).toEqual(real);
+  });
+
+  test('type accepts the schema vocabulary; null and strangers are refused', () => {
+    expect(validateProfilePatch({ type: 'white' })).toEqual({ ok: true, clean: { type: 'white' } });
+    expect(validateProfilePatch({ type: 'orange' }).ok).toBe(false);
+    // Every wine has a type — there is no cleared state to return to.
+    const r = validateProfilePatch({ type: null });
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/cannot be cleared/);
+  });
+
+  test('grapes are validated as NAMES: trimmed, deduped, capped; null clears to []', () => {
+    expect(validateProfilePatch({ grapes: ['  Savagnin ', 'savagnin'] }).clean.grapes).toEqual(['Savagnin']);
+    expect(validateProfilePatch({ grapes: null }).clean.grapes).toEqual([]);
+    expect(validateProfilePatch({ grapes: ['x'.repeat(61)] }).ok).toBe(false);
+    expect(validateProfilePatch({ grapes: Array.from({ length: 21 }, (_, i) => `g${i}`) }).ok).toBe(false);
+  });
+});
+
+describe('resolveGrapeIdsStrict (match-only)', () => {
+  const found = (doc) => ({ select: () => ({ lean: () => Promise.resolve(doc) }) });
+  beforeEach(() => jest.clearAllMocks());
+
+  test('resolves a synonym to its canonical taxonomy doc and echoes the display name', async () => {
+    Grape.findOne.mockReturnValue(found({ _id: 'g-syrah', name: 'Syrah' }));
+    const r = await resolveGrapeIdsStrict(['Shiraz']);
+    expect(r).toEqual({ ok: true, ids: ['g-syrah'], names: ['Syrah'] });
+    // The lookup must consult synonyms, same as findOrCreateGrapes.
+    expect(Grape.findOne.mock.calls[0][0].$or).toBeDefined();
+  });
+
+  test('an unknown variety refuses the whole write — never mints taxonomy', async () => {
+    Grape.findOne.mockReturnValue(found(null));
+    const r = await resolveGrapeIdsStrict(['Savagnin Rose']);
+    expect(r.ok).toBe(false);
+    expect(r.unmatched).toEqual(['Savagnin Rose']);
+  });
+
+  test('two names resolving to one doc dedupe to a single id', async () => {
+    Grape.findOne.mockReturnValue(found({ _id: 'g-syrah', name: 'Syrah' }));
+    const r = await resolveGrapeIdsStrict(['Syrah', 'Shiraz']);
+    expect(r.ids).toEqual(['g-syrah']);
+  });
 });
 
 describe('applyProfilePatch', () => {
@@ -117,6 +173,45 @@ describe('applyProfilePatch', () => {
     applyProfilePatch(wine, { body: 'full' }, 'user-1');
     expect(wine.aiProfile.body).toBe('full');
     expect(wine.aiProfile.source).toBe('curator');
+  });
+
+  // Ticket d49ca3af: clearing a bad AI description used to curator-freeze the
+  // wine, locking exactly the worst-sourced rows out of the re-enrichment that
+  // would have fixed them once their real defect (null geography) was repaired.
+  test('a write that ONLY clears an AI profile resets fields but does NOT verify', () => {
+    const wine = fakeWine({ description: 'invented filler', body: 'full', source: 'ai', confidence: 0.3 });
+    applyProfilePatch(wine, { description: null, flavors: [] }, 'user-1');
+    expect(wine.aiProfile.description).toBeNull();
+    expect(wine.aiProfile.flavors).toEqual([]);
+    expect(wine.aiProfile.source).toBe('ai');          // still enrichment-eligible
+    expect(wine.aiProfile.verifiedAt).toBeUndefined(); // nothing was verified
+    expect(wine.profileReviewedAt).toBeNull();          // stays in the low-conf queue
+    expect(wine.markModified).toHaveBeenCalledWith('aiProfile');
+  });
+
+  test('a clear on an already-curator profile stays curator — editing your own curated data', () => {
+    const wine = fakeWine({ description: 'hand-written', foodPairings: ['oysters'], source: 'curator' });
+    applyProfilePatch(wine, { foodPairings: null }, 'user-2');
+    expect(wine.aiProfile.source).toBe('curator');
+    expect(wine.aiProfile.verifiedBy).toBe('user-2');
+  });
+
+  test('a mixed set+clear is a curation and stamps provenance', () => {
+    const wine = fakeWine({ description: 'wrong', body: 'full', source: 'ai' });
+    applyProfilePatch(wine, { description: null, body: 'medium' }, 'user-1');
+    expect(wine.aiProfile.source).toBe('curator');
+  });
+
+  test('type/grapes-only writes correct the record without touching profile provenance', () => {
+    const wine = fakeWine({ description: 'accurate vin jaune prose', source: 'ai', confidence: 0.6 });
+    wine.type = 'fortified';
+    wine.grapes = [];
+    applyProfilePatch(wine, { type: 'white', grapes: ['g-savagnin'] }, 'user-1');
+    expect(wine.type).toBe('white');
+    expect(wine.grapes).toEqual(['g-savagnin']);
+    expect(wine.aiProfile.source).toBe('ai');
+    expect(wine.profileReviewedAt).toBeNull();
+    expect(wine.markModified).not.toHaveBeenCalled(); // aiProfile untouched
   });
 });
 
@@ -157,5 +252,28 @@ describe('snapshot / restore (the undo_last contract)', () => {
     restoreProfile(wine, snap);
     expect(wine.aiProfile.description).toBe('original');
     expect(wine.aiProfile.source).toBe('ai');
+  });
+
+  test('type and grapes round-trip; populated grape docs snapshot as bare ids', () => {
+    const wine = fakeWine({ source: 'ai' });
+    wine.type = 'fortified';
+    wine.grapes = [{ _id: 'g-1', name: 'Savagnin' }]; // populated doc shape
+    const snap = snapshotProfile(wine);
+    expect(snap.type).toBe('fortified');
+    expect(snap.grapes).toEqual(['g-1']);
+
+    applyProfilePatch(wine, { type: 'white', grapes: ['g-2'] }, 'user-1');
+    restoreProfile(wine, snap);
+    expect(wine.type).toBe('fortified');
+    expect(wine.grapes).toEqual(['g-1']);
+  });
+
+  test('a legacy snapshot without record fields leaves type/grapes alone (old ledger rows)', () => {
+    const wine = fakeWine({ description: 'x', source: 'curator' });
+    wine.type = 'white';
+    wine.grapes = ['g-1'];
+    restoreProfile(wine, { description: 'y', source: 'ai' }); // pre-feature prev
+    expect(wine.type).toBe('white');
+    expect(wine.grapes).toEqual(['g-1']);
   });
 });

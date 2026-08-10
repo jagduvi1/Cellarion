@@ -50,6 +50,23 @@ const EDITABLE_FIELDS = [
   'description',
 ];
 
+// Structural RECORD fields a curator may also correct (support ticket
+// d4a1aef5: a vin jaune arrived typed "fortified" — a serving/storage hazard
+// — and the only field the curator could reach was the prose, which was
+// already right). Both are closed vocabularies and neither is a merge/join
+// key, which is exactly why they are safe here while producer/name/region/
+// appellation are not. They live on the wine document itself, NOT inside
+// aiProfile, and touching them alone does not claim the tasting profile was
+// verified.
+//
+// Mirrors the WineDefinition schema enum — pinned by a drift test in
+// wineProfileOps.test.js rather than read from the schema at require time,
+// because test suites mock the model as a bare object.
+const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
+const GRAPES_MAX = 20;      // mirrors findOrCreateWine's MAX_GRAPES cap
+const GRAPE_NAME_MAX = 60;
+const RECORD_FIELDS = ['type', 'grapes'];
+
 function normalizeList(raw, { max, maxLen }) {
   if (!Array.isArray(raw)) return null;
   const out = [];
@@ -84,14 +101,40 @@ function validateProfilePatch(patch) {
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
     return { ok: false, error: 'Profile patch must be an object' };
   }
-  const touched = EDITABLE_FIELDS.filter(f => patch[f] !== undefined);
+  const allFields = [...EDITABLE_FIELDS, ...RECORD_FIELDS];
+  const touched = allFields.filter(f => patch[f] !== undefined);
   if (touched.length === 0) {
-    return { ok: false, error: `Nothing to update — supply at least one of: ${EDITABLE_FIELDS.join(', ')}` };
+    return { ok: false, error: `Nothing to update — supply at least one of: ${allFields.join(', ')}` };
   }
 
   const clean = {};
   for (const field of touched) {
     const value = patch[field];
+
+    if (field === 'type') {
+      // Every wine HAS a type (schema enum with a default) — there is no
+      // cleared state to return to, so null is a mistake, not an abstention.
+      if (value === null) {
+        return { ok: false, error: 'type cannot be cleared — pass the corrected value instead' };
+      }
+      if (typeof value !== 'string' || !WINE_TYPES.includes(value)) {
+        return { ok: false, error: `type must be one of: ${WINE_TYPES.join(', ')}` };
+      }
+      clean.type = value;
+      continue;
+    }
+
+    if (field === 'grapes') {
+      // Validated here as NAMES (shape only); the caller resolves them to
+      // taxonomy ids with resolveGrapeIdsStrict before applyProfilePatch.
+      if (value === null) { clean.grapes = []; continue; }
+      const list = normalizeList(value, { max: GRAPES_MAX, maxLen: GRAPE_NAME_MAX });
+      if (list === null) {
+        return { ok: false, error: `grapes must be an array of at most ${GRAPES_MAX} variety names, each ≤ ${GRAPE_NAME_MAX} characters (or null to clear)` };
+      }
+      clean.grapes = list;
+      continue;
+    }
 
     if (value === null) { clean[field] = field in LIST_FIELDS ? [] : null; continue; }
 
@@ -130,6 +173,45 @@ function validateProfilePatch(patch) {
   return { ok: true, clean };
 }
 
+/**
+ * Resolve curator-supplied grape variety NAMES to Grape taxonomy ids.
+ * MATCH-ONLY, deliberately: synonyms resolve ("Shiraz" finds the Syrah doc,
+ * same lookup findOrCreateGrapes uses) but an unknown name is an error, never
+ * a new taxonomy row — a typo'd variety from a curation session must fail
+ * loudly rather than silently mint junk the whole registry then trusts. A
+ * genuinely new variety is an admin taxonomy add first.
+ *
+ * @param {string[]} names  cleaned names from validateProfilePatch
+ * @returns {Promise<{ok:true, ids:any[], names:string[]}|{ok:false, unmatched:string[]}>}
+ *          `names` echoes the CANONICAL display names, for response payloads.
+ */
+async function resolveGrapeIdsStrict(names) {
+  // Lazy requires, matching the module's load-lean convention: the pure
+  // validators above stay importable without the model layer.
+  const Grape = require('../models/Grape');
+  const { resolveGrapeName, normalizeString } = require('../utils/normalize');
+  const ids = [];
+  const canonical = [];
+  const unmatched = [];
+  const seen = new Set();
+  for (const raw of names) {
+    const resolved = resolveGrapeName(raw);
+    const normalizedName = normalizeString(resolved);
+    if (!normalizedName || seen.has(normalizedName)) continue;
+    seen.add(normalizedName);
+    const grape = await Grape.findOne({
+      $or: [{ normalizedName }, { normalizedSynonyms: normalizedName }],
+    }).select('_id name').lean();
+    if (grape) {
+      ids.push(grape._id);
+      canonical.push(grape.name);
+    } else {
+      unmatched.push(raw);
+    }
+  }
+  return unmatched.length ? { ok: false, unmatched } : { ok: true, ids, names: canonical };
+}
+
 /** The fields an undo needs to put back, captured before mutation. */
 function snapshotProfile(wine) {
   const ap = wine.aiProfile || {};
@@ -142,31 +224,61 @@ function snapshotProfile(wine) {
   snap.verifiedBy = ap.verifiedBy ? String(ap.verifiedBy) : null;
   snap.verifiedAt = ap.verifiedAt || null;
   snap.profileReviewedAt = wine.profileReviewedAt || null;
+  // Record fields (may hold populated docs — keep bare ids for the undo).
+  snap.type = wine.type || null;
+  snap.grapes = Array.isArray(wine.grapes) ? wine.grapes.map((g) => String(g && g._id ? g._id : g)) : [];
   return snap;
 }
 
 /**
  * Apply a validated patch to a wine document (does NOT save — the caller owns
  * the transaction boundary and any post-save side effects like re-indexing).
+ * If the patch carries `grapes`, the caller must have already swapped the
+ * names for taxonomy ids via resolveGrapeIdsStrict — the value here is
+ * assigned to wine.grapes verbatim.
  *
- * Marking the row curator-sourced also clears it from the admin low-confidence
- * queue: profileReviewedAt is set, because a human has now looked at exactly
- * the thing that queue asks a human to look at.
+ * Provenance (the part that controls enrichment):
+ *   - A write that SETS at least one profile value is a curation — it stamps
+ *     source='curator' + verifiedBy/At, which permanently exempts the wine
+ *     from enrichmentJob, and profileReviewedAt, which clears it from the
+ *     admin low-confidence queue (a human looked at exactly what that queue
+ *     asks a human to look at).
+ *   - A write that ONLY CLEARS profile values is a reset signal — "this is
+ *     wrong", not "this is verified". On an AI-sourced profile it clears the
+ *     fields and touches NO provenance, so the wine stays eligible for
+ *     re-enrichment (support ticket d49ca3af: clearing used to curator-freeze
+ *     the wine, locking exactly the worst-sourced rows out of the enrichment
+ *     that would have fixed them). On an already-curator profile a clear is
+ *     someone editing their own curated data and stays curator.
+ *   - Record fields (type/grapes) live outside aiProfile and never claim the
+ *     tasting profile was verified.
  */
 function applyProfilePatch(wine, clean, userId, { now = new Date() } = {}) {
   if (!wine.aiProfile) wine.aiProfile = {};
-  for (const [field, value] of Object.entries(clean)) {
+  const profileEntries = Object.entries(clean).filter(([f]) => EDITABLE_FIELDS.includes(f));
+  for (const [field, value] of profileEntries) {
     wine.aiProfile[field] = value;
   }
-  wine.aiProfile.source = 'curator';
-  wine.aiProfile.verifiedBy = userId || null;
-  wine.aiProfile.verifiedAt = now;
-  wine.profileReviewedAt = now;
-  wine.markModified('aiProfile');
+  if (clean.type !== undefined) wine.type = clean.type;
+  if (clean.grapes !== undefined) wine.grapes = clean.grapes;
+
+  const isClear = (v) => v === null || (Array.isArray(v) && v.length === 0);
+  const pureClear = profileEntries.length > 0 && profileEntries.every(([, v]) => isClear(v));
+  if (profileEntries.length > 0) {
+    if (!pureClear || wine.aiProfile.source === 'curator') {
+      wine.aiProfile.source = 'curator';
+      wine.aiProfile.verifiedBy = userId || null;
+      wine.aiProfile.verifiedAt = now;
+      wine.profileReviewedAt = now;
+    }
+    wine.markModified('aiProfile');
+  }
   return wine;
 }
 
-/** Restore a snapshot verbatim (undo). Mirrors applyProfilePatch's surface. */
+/** Restore a snapshot verbatim (undo). Mirrors applyProfilePatch's surface.
+ *  Record fields restore only when the snapshot carries them — ledger rows
+ *  written before type/grapes existed must not null a wine's type. */
 function restoreProfile(wine, snap) {
   if (!wine.aiProfile) wine.aiProfile = {};
   for (const f of EDITABLE_FIELDS) {
@@ -176,6 +288,8 @@ function restoreProfile(wine, snap) {
   wine.aiProfile.verifiedBy = snap.verifiedBy || null;
   wine.aiProfile.verifiedAt = snap.verifiedAt || null;
   wine.profileReviewedAt = snap.profileReviewedAt || null;
+  if (typeof snap.type === 'string' && snap.type) wine.type = snap.type;
+  if (Array.isArray(snap.grapes)) wine.grapes = [...snap.grapes];
   wine.markModified('aiProfile');
   return wine;
 }
@@ -184,8 +298,13 @@ module.exports = {
   PROFILE_ENUMS,
   LIST_FIELDS,
   EDITABLE_FIELDS,
+  RECORD_FIELDS,
+  WINE_TYPES,
+  GRAPES_MAX,
+  GRAPE_NAME_MAX,
   DESCRIPTION_MAX,
   validateProfilePatch,
+  resolveGrapeIdsStrict,
   applyProfilePatch,
   snapshotProfile,
   restoreProfile,

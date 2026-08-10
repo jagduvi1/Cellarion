@@ -24,7 +24,11 @@ const { ok, fail, objectId, pageParams } = require('../toolUtil');
 const { logAction } = require('../actionLedger');
 const {
   PROFILE_ENUMS,
+  WINE_TYPES,
+  GRAPES_MAX,
+  GRAPE_NAME_MAX,
   validateProfilePatch,
+  resolveGrapeIdsStrict,
   applyProfilePatch,
   snapshotProfile,
 } = require('../../services/wineProfileOps');
@@ -313,16 +317,18 @@ registerTool({
 
 registerTool({
   name: 'set_wine_profile',
-  title: 'Sommelier: correct a wine\'s tasting profile',
+  title: 'Sommelier: correct a wine\'s tasting profile, type or grapes',
   description:
     'Corrects the AI-generated tasting profile on a registry wine — body, tannin, acidity, sweetness, flavours, food ' +
-    'pairings and the prose description. Use when the somm says a generated profile is WRONG (the generator writes ' +
-    'confident prose for wines it only half-knows, e.g. describing a Vintage Port as "built for immediate drinking"). ' +
-    'Get wine_id from list_maturity_queue, search_registry or get_wine. FIELD-LEVEL: omit a field to leave it alone, ' +
-    'pass null to CLEAR it — clearing a description you do not trust is better than leaving fiction, and costs nothing ' +
-    'elsewhere because only the structured descriptors feed semantic search. Marks the profile curator-verified, which ' +
-    'permanently stops the AI regenerating over it. This is SHARED data shown to every owner of the wine — confirm the ' +
-    'values with the somm first. Reversible via undo_last.',
+    'pairings and the prose description — and the wine\'s structural record fields type and grapes (a wrong type ' +
+    'changes filtering, serving and storage guidance; use when e.g. a vin jaune is typed "fortified" or a cider ' +
+    '"rosé"). Get wine_id from list_maturity_queue, search_registry or get_wine. FIELD-LEVEL: omit a field to leave ' +
+    'it alone, pass null to CLEAR it — except type, which can only be corrected, never cleared. Grape values are ' +
+    'variety NAMES resolved against the taxonomy (synonyms work: "Shiraz" finds Syrah); an unknown variety is ' +
+    'refused, never created. A write that sets profile values marks the profile curator-verified, which permanently ' +
+    'stops the AI regenerating over it; a write that ONLY clears does NOT verify — the wine stays eligible for ' +
+    'enrichment, so clearing fiction you cannot replace is still better than leaving it. This is SHARED data shown ' +
+    'to every owner of the wine — confirm the values with the somm first. Reversible via undo_last.',
   scope: 'write',
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
@@ -338,6 +344,10 @@ registerTool({
       .describe('Replaces the whole list.'),
     description: z.string().max(1000).nullable().optional()
       .describe('Plain-text tasting note shown to owners. null clears it.'),
+    type: z.enum(WINE_TYPES).optional()
+      .describe('Correct the wine\'s structural type. Cannot be cleared — every wine has one.'),
+    grapes: z.array(z.string().min(1).max(GRAPE_NAME_MAX)).max(GRAPES_MAX).nullable().optional()
+      .describe('Replace the grape list with these variety NAMES (taxonomy-resolved, synonyms ok). null clears the list.'),
   },
   handler: async (args, ctx) => {
     const denied = requireSomm(ctx);
@@ -346,13 +356,29 @@ registerTool({
     // Same validator the REST route uses, so the two surfaces cannot drift.
     // snake_case is the MCP convention; map to the model's camelCase first.
     const patch = {};
-    for (const f of ['body', 'tannin', 'acidity', 'sweetness', 'description', 'flavors']) {
+    for (const f of ['body', 'tannin', 'acidity', 'sweetness', 'description', 'flavors', 'type', 'grapes']) {
       if (args[f] !== undefined) patch[f] = args[f];
     }
     if (args.food_pairings !== undefined) patch.foodPairings = args.food_pairings;
 
     const check = validateProfilePatch(patch);
     if (!check.ok) return fail('invalid_input', check.error);
+
+    // Names → taxonomy ids, match-only: an unknown variety fails loudly here
+    // rather than minting junk taxonomy every owner then sees.
+    let grapeNames = null;
+    if (Array.isArray(check.clean.grapes) && check.clean.grapes.length > 0) {
+      const resolved = await resolveGrapeIdsStrict(check.clean.grapes);
+      if (!resolved.ok) {
+        return fail('invalid_input',
+          `Not in the grape taxonomy: ${resolved.unmatched.join(', ')}. Synonyms resolve ("Shiraz" finds Syrah) — ` +
+          'check the spelling; a genuinely new variety needs an admin taxonomy add first.');
+      }
+      check.clean.grapes = resolved.ids;
+      grapeNames = resolved.names;
+    } else if (Array.isArray(check.clean.grapes)) {
+      grapeNames = [];
+    }
 
     const wine = await WineDefinition.findById(args.wine_id);
     if (!wine) return fail('not_found', 'No such wine. Use search_registry to find it.');
@@ -379,8 +405,16 @@ registerTool({
       via: 'mcp',
     });
 
+    // Say what actually happened to provenance: a pure-clear on an AI profile
+    // deliberately does NOT verify (the wine stays enrichment-eligible), and a
+    // type/grapes-only write never touches the tasting profile's provenance.
+    const profileTouched = Object.keys(check.clean).some((f) => !['type', 'grapes'].includes(f));
+    const curatorNow = wine.aiProfile?.source === 'curator';
+    const outcome = !profileTouched
+      ? 'record fields corrected'
+      : curatorNow ? 'now curator-verified' : 'cleared — still eligible for AI enrichment';
     const envelope = {
-      summary: `Tasting profile updated for ${wine.producer} — ${wine.name} (now curator-verified)`,
+      summary: `${wine.producer} — ${wine.name} updated (${outcome})`,
       data: {
         wine_id: wine._id,
         updated_fields: Object.keys(check.clean),
@@ -394,7 +428,15 @@ registerTool({
           description: wine.aiProfile.description,
           source: wine.aiProfile.source,
         },
-        note: 'The AI enrichment job will no longer overwrite this wine.',
+        record: {
+          type: wine.type || null,
+          ...(grapeNames !== null ? { grapes: grapeNames } : {}),
+        },
+        note: profileTouched
+          ? (curatorNow
+            ? 'The AI enrichment job will no longer overwrite this wine.'
+            : 'Cleared without verifying — the AI enrichment job may regenerate this profile.')
+          : 'Type/grape corrections do not claim the tasting profile was verified.',
         undo: 'undo_last restores the previous profile and its provenance',
       },
     };
