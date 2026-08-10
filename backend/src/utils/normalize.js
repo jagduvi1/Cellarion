@@ -187,15 +187,55 @@ const PRODUCER_CORP_SUFFIXES = new Set([
   'pty', 'co', 'company', 'corp', 'corporation', 'ab', 'oy', 'as', 'kg', 'kft',
 ]);
 
+// Cross-gender and abbreviated Saint forms of one estate name must share a
+// bucket token: "Caronne Sainte Gemme" / "Caronne Ste Gemme" were 3 spellings
+// holding 5 registry records for one Haut-Médoc estate (support ticket
+// d49fea22), invisible to normalization because 'ste' and 'sainte' are simply
+// different tokens. The key is comparison-only and non-unique, so a rare false
+// fold (a 'Ste' abbreviating Société) lands in the human-reviewed canonical-
+// collisions queue — never an auto-merge.
+const PRODUCER_SAINT_TOKENS = new Set(['st', 'ste', 'saint', 'sainte']);
+
+// Fold one already-normalized token into producer-key token space. Exported for
+// stripProducerKeyPrefix, which walks a wine name's display words against the
+// key-token run and must fold each word exactly like the key itself was folded
+// — otherwise a name-side "St"/"Ste" could never match the key's 'saint'.
+const foldProducerToken = (token) => (PRODUCER_SAINT_TOKENS.has(token) ? 'saint' : token);
+
+// A TRAILING year on a producer string is a founding date, never part of the
+// legal producer name — "Grand Pappy's 1846" and "Grand Pappy's" are the same
+// house (support ticket d49dfd38). 1000–2049: founding dates reach centuries
+// further back than TRAILING_VINTAGE_RX's vintage window.
+const PRODUCER_FOUNDING_YEAR_RX = /^(?:1[0-9]{3}|20[0-4][0-9])$/;
+
+// "Est." / "Anno" / "Since" only mean "founded" with a year attached, so a
+// marker is dropped only right after the year it introduced was stripped
+// ("Grand Pappy's Est. 1846" → "Grand Pappy's"); a bare mid-name 'est'
+// (French for east — "Domaine de l'Est") is untouched.
+const PRODUCER_FOUNDING_MARKERS = new Set(['est', 'estd', 'estab', 'anno', 'since']);
+
 /**
  * Normalize a producer to a comparison/bucketing key: drop wine stop words AND
  * corporate suffixes, so "Kumeu River Wines Limited" and "Kumeu River" collapse
- * to the same key ("kumeu river"). Comparison-only — never overwrites the
- * stored display producer. Returns '' for an all-stopword/empty producer.
+ * to the same key ("kumeu river"); fold Saint-token variants to one bucket
+ * token ("St Hallett" ≡ "Saint Hallett") and strip trailing founding year(s).
+ * Comparison-only — never overwrites the stored display producer. Returns ''
+ * for an all-stopword/empty producer (every caller has a raw-string fallback
+ * or skips the empty bucket — see wineIdentity.producerSegment).
  */
 const normalizeProducerKey = (producer) => {
-  return tokenize(producer)
+  // The founding-year strip inspects the PRE-stop-word token sequence: after
+  // tokenize() drops 'winery', the brand year in "1848 Winery" would LOOK
+  // trailing. Position is judged on the raw string, where a LEADING year is a
+  // brand name and only a genuinely trailing one is a founding date.
+  const raw = normalizeString(producer).split(' ').filter(Boolean);
+  while (raw.length > 0 && PRODUCER_FOUNDING_YEAR_RX.test(raw[raw.length - 1])) {
+    raw.pop();
+    if (raw.length > 0 && PRODUCER_FOUNDING_MARKERS.has(raw[raw.length - 1])) raw.pop();
+  }
+  return tokenize(raw.join(' '))
     .filter((t) => !PRODUCER_CORP_SUFFIXES.has(t))
+    .map(foldProducerToken)
     .join(' ')
     .trim();
 };
@@ -765,6 +805,7 @@ module.exports = {
   generateWineSlug,
   GRAPE_SYNONYMS,
   normalizeProducerKey,
+  foldProducerToken,
   normalizeAppellation,
   normalizeAppellationKey,
   stripTrailingVintage,

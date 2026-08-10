@@ -1,4 +1,4 @@
-const { normalizeString, normalizeProducerKey, tokenize } = require('./normalize');
+const { normalizeString, normalizeProducerKey, foldProducerToken, tokenize } = require('./normalize');
 
 /**
  * Multi-character connectives / prepositions that cannot legitimately END a
@@ -160,8 +160,9 @@ function stripProducerName(name, producer) {
  *   - Leading words that normalize away entirely (house/stop words: "Fattoria",
  *     "La", "Weingut") may precede the key run — they belong to the producer
  *     reference even though the comparison key drops them.
- *   - The FULL key-token run must then match word-for-word (normalized), so a
- *     partial producer overlap never strips.
+ *   - The FULL key-token run must then match word-for-word (normalized, each
+ *     word folded into key-token space so a name-side "St"/"Ste" matches the
+ *     key's 'saint'), so a partial producer overlap never strips.
  *   - Something meaningful must remain.
  *   - Suffixes are deliberately NOT handled here: legitimate wine names END
  *     with the producer key ("Les Forts de Latour" — Château Latour), so
@@ -183,7 +184,9 @@ function stripProducerKeyPrefix(name, producer) {
   while (start < words.length && tokenize(words[start]).length === 0) start += 1;
   if (start + keyTokens.length >= words.length) return null; // nothing meaningful would remain
   for (let i = 0; i < keyTokens.length; i++) {
-    if (normalizeString(words[start + i]) !== keyTokens[i]) return null;
+    // Same per-token fold the key went through — without it the Saint fold
+    // would break every same-spelling embed ("St Hugo …" vs key 'saint hugo').
+    if (foldProducerToken(normalizeString(words[start + i])) !== keyTokens[i]) return null;
   }
 
   const remainder = words.slice(start + keyTokens.length).join(' ').replace(/^[\s\-–—]+/, '').trim();
