@@ -184,6 +184,7 @@
 .history-section-header h2 {
   margin: 0;
   font-size: 1.1rem;
+  color: inherit;
 }
 
 .history-section-icon { font-size: 1.2rem; }
