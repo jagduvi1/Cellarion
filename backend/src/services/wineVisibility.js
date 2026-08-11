@@ -26,6 +26,7 @@
  */
 
 const WineDefinition = require('../models/WineDefinition');
+const { isValidId } = require('../utils/validation');
 
 const CURATION_ROLES = ['somm', 'admin'];
 
@@ -81,7 +82,12 @@ function canSeeWine(wine, viewer = {}) {
  */
 async function findVisibleWine(id, opts = {}) {
   const { userId, roles, select, populate, lean = false } = opts;
-  let q = WineDefinition.findOne({ _id: id, ...wineVisibilityFilter({ userId, roles }) });
+  // Enforce the id contract HERE rather than trusting nine call sites to have
+  // done it: one caller forgetting would let an operator object reach the
+  // filter. A bad id is simply not-visible, which is the same answer this
+  // helper already gives for a hidden or missing wine.
+  if (!isValidId(String(id))) return null;
+  let q = WineDefinition.findOne({ _id: String(id), ...wineVisibilityFilter({ userId, roles }) });
   if (select) q = q.select(select);
   if (populate) q = q.populate(populate);
   if (lean) q = q.lean();
