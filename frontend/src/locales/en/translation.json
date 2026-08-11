@@ -1421,7 +1421,10 @@
       "addRegionalName": "+ Add regional name",
       "regionalNameWholeCountry": "Whole country",
       "regionalNamePlaceholder": "e.g. Tinta Roriz",
-      "regionalNameRemove": "Remove"
+      "regionalNameRemove": "Remove",
+      "savedRegionUnavailable": "(saved region — list unavailable)",
+      "regionsLoadFailed": "Failed to load the region list — a saved region scope may not display correctly.",
+      "savedWithWarnings": "Saved, with warnings:"
     },
     "wines": {
       "title": "Admin: Wine Library",

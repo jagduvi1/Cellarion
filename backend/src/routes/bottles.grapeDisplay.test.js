@@ -9,6 +9,11 @@
  * bottle page's grape pills (`g.displayName || g.name`) rest on. Storage is
  * untouched: the bottle still references the canonical Grape doc.
  *
+ * The list route's in-memory search haystack is covered here too (audit
+ * 2026-08-11): what the card DISPLAYS must be what search matches, so
+ * `?search=` must hit the regional display name resolved for each wine's own
+ * place — and only that one, not every mapping the grape carries.
+ *
  * Real router + real requireAuth/requireBottleAccess (HS256 test tokens);
  * models and side-effect services are mocked so no MongoDB is needed.
  */
@@ -39,7 +44,7 @@ jest.mock('../utils/vintageProfile', () => ({
   ensurePendingVintageProfile: jest.fn().mockResolvedValue(undefined),
 }));
 
-jest.mock('../models/Cellar', () => ({ findById: jest.fn() }));
+jest.mock('../models/Cellar', () => ({ findById: jest.fn(), find: jest.fn() }));
 jest.mock('../models/WineDefinition', () => ({ findById: jest.fn() }));
 jest.mock('../models/Rack', () => ({ updateMany: jest.fn() }));
 jest.mock('../models/Country', () => ({}));
@@ -49,7 +54,7 @@ jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn() }));
 jest.mock('../models/PriceTrackingRequest', () => ({}));
 jest.mock('../models/BottleImage', () => ({ findOne: jest.fn(), findById: jest.fn() }));
 jest.mock('../models/WineRequest', () => ({}));
-jest.mock('../models/Bottle', () => ({ findById: jest.fn() }));
+jest.mock('../models/Bottle', () => ({ findById: jest.fn(), find: jest.fn() }));
 
 const express = require('express');
 const http = require('http');
@@ -151,5 +156,74 @@ describe('GET /api/bottles/:id', () => {
     // The doc the rest of the app sees (indexing, audit) keeps canonical-only
     // grapes — decoration happens on the serialized copy.
     expect(storedBottle.wineDefinition.grapes[0].displayName).toBeUndefined();
+  });
+});
+
+// ── GET /api/bottles?search= — regional names in the in-memory haystack ──────
+
+describe('GET /api/bottles list search', () => {
+  const ALENTEJO = 'e'.repeat(24);
+
+  // Lean list bottle: a Douro wine whose Tempranillo carries BOTH a Douro
+  // mapping (applies → searchable) and an Alentejo mapping (does not apply).
+  const leanBottle = () => ({
+    _id: BOTTLE_ID,
+    cellar: CELLAR_ID,
+    status: 'active',
+    vintage: '2017',
+    createdAt: new Date('2026-01-01'),
+    wineDefinition: {
+      _id: WINE_ID,
+      name: 'Vintage Port',
+      producer: 'Quinta do Exemplo',
+      type: 'fortified',
+      country: { _id: PORTUGAL, name: 'Portugal' },
+      region: { _id: DOURO, name: 'Douro' },
+      grapes: [
+        {
+          _id: 'c'.repeat(24),
+          name: 'Tempranillo',
+          regionalNames: [
+            { country: PORTUGAL, region: DOURO, name: 'Tinta Roriz' },
+            { country: PORTUGAL, region: ALENTEJO, name: 'Aragonez' },
+          ],
+        },
+      ],
+    },
+  });
+
+  const primeList = (bottles) => {
+    Cellar.find.mockReturnValue({ distinct: jest.fn().mockResolvedValue([CELLAR_ID]) });
+    const chain = {
+      populate: jest.fn().mockReturnThis(),
+      sort: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockResolvedValue(bottles),
+    };
+    Bottle.find.mockReturnValue(chain);
+  };
+
+  test('?search= matches the regional display name shown on the card', async () => {
+    primeList([leanBottle()]);
+    const { status, body } = await get('/api/bottles?search=roriz');
+    expect(status).toBe(200);
+    expect(body.bottles.items).toHaveLength(1);
+    // …and the surviving item is decorated for rendering, same label.
+    expect(body.bottles.items[0].wineDefinition.grapes[0].displayName).toBe('Tinta Roriz');
+  });
+
+  test('the canonical name still matches (regional recall is additive)', async () => {
+    primeList([leanBottle()]);
+    const { body } = await get('/api/bottles?search=tempranillo');
+    expect(body.bottles.items).toHaveLength(1);
+  });
+
+  test('a mapping for a DIFFERENT place does not match — only the label the card shows', async () => {
+    primeList([leanBottle()]);
+    // "Aragonez" is this grape's ALENTEJO name; the wine is a Douro wine, so
+    // its card never shows it and search must not pretend otherwise.
+    const { body } = await get('/api/bottles?search=aragonez');
+    expect(body.bottles.items).toHaveLength(0);
   });
 });

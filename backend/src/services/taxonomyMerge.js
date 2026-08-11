@@ -5,12 +5,15 @@
  *
  *   Grape   → WineDefinition.grapes, Region.typicalGrapes/permittedGrapes;
  *             duplicate's name + synonyms move into the canonical doc's
- *             synonyms[] so findOrCreateGrapes resolves the old name forever.
- *   Region  → WineDefinition.region, Region.parentRegion, Appellation.region;
- *             duplicate's name + synonyms move into canonical synonyms[]
- *             (same re-mint protection via findOrCreateRegion).
- *   Country → WineDefinition.country, Region.country, Appellation.country;
- *             colliding region names (unique per country) are merged first.
+ *             synonyms[] so findOrCreateGrapes resolves the old name forever;
+ *             regionalNames carry over (minus already-covered place pairs).
+ *   Region  → WineDefinition.region, Region.parentRegion, Appellation.region,
+ *             Grape.regionalNames.region; duplicate's name + synonyms move
+ *             into canonical synonyms[] (same re-mint protection via
+ *             findOrCreateRegion).
+ *   Country → WineDefinition.country, Region.country, Appellation.country,
+ *             Grape.regionalNames.country; colliding region names (unique
+ *             per country) are merged first.
  *
  * Every function returns a summary object and never deletes until all
  * references are rewritten. Search reindexing of affected wines is included;
@@ -95,6 +98,20 @@ async function mergeGrapes(fromId, toId, { resync = true, synonyms = true } = {}
   for (const field of ['color', 'origin', 'agingPotential', 'prestige', 'description']) {
     if (!to[field] && from[field]) to[field] = from[field];
   }
+  // Regional display names ride along: an entry is display data about the
+  // VARIETY, so it must survive its duplicate doc. Pairs the canonical doc
+  // already covers win (one name per place — the admin validator's
+  // invariant). Ids compared as strings so ObjectIds and lean/hex forms
+  // interoperate; a null/absent region IS the country-level pair. Carried
+  // entries are copied as plain objects — never another doc's subdocuments.
+  const pairKey = (e) => `${String(e.country)}:${e.region ? String(e.region) : ''}`;
+  const takenPairs = new Set((to.regionalNames || []).map(pairKey));
+  const carriedRegionalNames = (from.regionalNames || [])
+    .filter(e => e && e.name && !takenPairs.has(pairKey(e)))
+    .map(e => ({ country: e.country, region: e.region || null, name: e.name }));
+  if (carriedRegionalNames.length) {
+    to.regionalNames = [...(to.regionalNames || []), ...carriedRegionalNames];
+  }
   await to.save(); // pre-save hook refreshes normalizedSynonyms
 
   await from.deleteOne();
@@ -130,6 +147,18 @@ async function mergeRegionDocs(from, to, { resync = true, synonyms = true } = {}
 
   const children = await Region.updateMany({ parentRegion: from._id }, { $set: { parentRegion: to._id } });
   const apps = await Appellation.updateMany({ region: from._id }, { $set: { region: to._id } });
+
+  // Grape regional display names scope to regions too — re-point them with
+  // the other refs so resolution keeps working after the duplicate goes.
+  // A re-point CAN leave a duplicate (country, region) pair on a grape that
+  // carried entries for both regions; that residue is acceptable by design:
+  // resolution is first-match and the admin validator blocks NEW duplicates
+  // on the next edit.
+  await Grape.updateMany(
+    { 'regionalNames.region': from._id },
+    { $set: { 'regionalNames.$[e].region': to._id } },
+    { arrayFilters: [{ 'e.region': from._id }] }
+  );
 
   const synonymsAdded = synonyms ? absorbSynonyms(from, to) : [];
   for (const field of ['classification', 'prestigeLevel', 'description']) {
@@ -188,6 +217,15 @@ async function mergeCountries(fromId, toId, { resync = true } = {}) {
   const affectedWines = await WineDefinition.find({ country: from._id }).select('_id').lean();
   await WineDefinition.updateMany({ country: from._id }, { $set: { country: to._id } });
   const apps = await Appellation.updateMany({ country: from._id }, { $set: { country: to._id } });
+
+  // Country-level grape regional display names follow the country merge.
+  // Duplicate-pair residue is acceptable for the same reason as in
+  // mergeRegionDocs: first-match resolution + validator blocks new dupes.
+  await Grape.updateMany(
+    { 'regionalNames.country': from._id },
+    { $set: { 'regionalNames.$[e].country': to._id } },
+    { arrayFilters: [{ 'e.country': from._id }] }
+  );
 
   await from.deleteOne();
 

@@ -152,6 +152,23 @@ describe('resolveGrapeIdsStrict (match-only)', () => {
     expect(r.ids).toEqual(['g-syrah']);
   });
 
+  // Info 2026-08-11: ["Tempranillo", "Tinta Roriz"] — the alias resolves via
+  // DB synonyms (normalizedSynonyms), NOT the static map, so the two inputs
+  // fold to different strings and the seen-by-name guard let the same
+  // ObjectId in twice ([X, X] stored on the wine).
+  test('two DIFFERENT names matching one doc via DB synonyms store ONE id, and the skipped duplicate records no substitution', async () => {
+    Grape.findOne.mockReturnValue(found({ _id: 'g-tempranillo', name: 'Tempranillo' }));
+    const r = await resolveGrapeIdsStrict(['Tempranillo', 'Tinta Roriz']);
+    expect(r.ok).toBe(true);
+    expect(r.ids).toEqual(['g-tempranillo']);
+    expect(r.names).toEqual(['Tempranillo']);
+    // Nothing was stored under a different name — the duplicate was skipped,
+    // so no substitution is reported for it.
+    expect(r.substitutions).toEqual([]);
+    // Both lookups really happened (the dedupe is at match time, not by name).
+    expect(Grape.findOne).toHaveBeenCalledTimes(2);
+  });
+
   // Audit 2026-08-10: names that normalize to '' (non-Latin scripts, bare
   // percentages) were silently DROPPED — a set became a partial write, and an
   // all-such list became an accidental clear of wine.grapes.

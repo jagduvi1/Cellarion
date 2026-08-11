@@ -174,7 +174,9 @@ async function syncIfNeeded(idx, syncFn, label, attempt = 0) {
 // applies to THIS wine ("Tinta Roriz" alongside "Tempranillo" on a Douro
 // row) — additive recall so the label-true spelling matches too, while
 // grapeIds filters stay on the single canonical vocabulary. Wines with no
-// applicable mapping index exactly what they indexed before.
+// applicable mapping index exactly what they indexed before. Shared by
+// buildDocument AND buildBottleDocument: bottle cards show the same regional
+// label, so cellar search must match on it too (audit 2026-08-11).
 function wineGrapeSearchNames(wine) {
   const names = [];
   for (const g of wine.grapes || []) {
@@ -355,7 +357,10 @@ function buildBottleDocument(bottle) {
     regionId: (wd.region?._id || wd.region || '').toString(),
     regionName: wd.region?.name || '',
     grapeIds: (wd.grapes || []).map(g => (g._id || g).toString()),
-    grapeNames: (wd.grapes || []).filter(g => g.name).map(g => g.name).join(', '),
+    // Same helper as the wines index (never duplicate its logic): canonical
+    // names first, then any regional display name that applies to this wine —
+    // byte-identical to the old plain join when no mapping applies.
+    grapeNames: wineGrapeSearchNames(wd),
     vintage: bottle.vintage || '',
     price: bottle.price || 0,
     rating: bottle.rating || 0,
@@ -757,5 +762,8 @@ module.exports = {
   indexDiscussion,
   removeDiscussion,
   searchDiscussions,
-  getIsAvailable
+  getIsAvailable,
+  // Pure document builder, exported for unit tests
+  // (search.buildBottleDocument.test.js) — no client needed.
+  buildBottleDocument,
 };

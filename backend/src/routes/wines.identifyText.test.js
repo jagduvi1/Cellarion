@@ -276,6 +276,47 @@ describe('POST /api/wines/identify-text — model output is normalized before th
   });
 });
 
+describe('POST /api/wines/identify-text — regional grape display parity', () => {
+  // Audit 2026-08-11 INFO: the AI-identify card renders next to the search
+  // list, which already shows the regional label ("Tinta Roriz" on a Douro
+  // row) — the identify response must be decorated the same way.
+  const DOURO_WINE = {
+    _id: 'w1',
+    name: 'Vintage Port',
+    producer: 'Quinta do Exemplo',
+    country: { _id: 'pt1', name: 'Portugal' },
+    region: { _id: 'douro1', name: 'Douro' },
+    grapes: [{
+      _id: 'g1',
+      name: 'Tempranillo',
+      regionalNames: [{ country: 'pt1', region: 'douro1', name: 'Tinta Roriz' }],
+    }],
+  };
+
+  test('a confident match carries displayName on its grapes; name stays canonical', async () => {
+    findOrCreateWine.mockResolvedValue({ wine: DOURO_WINE });
+
+    const res = await postJson(app, '/api/wines/identify-text', { query: 'quinta do exemplo vintage port' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.match.wine.grapes[0].displayName).toBe('Tinta Roriz');
+    expect(res.body.match.wine.grapes[0].name).toBe('Tempranillo');
+  });
+
+  test('soft-zone candidates are decorated too, scores untouched', async () => {
+    findOrCreateWine.mockResolvedValue({
+      wine: null,
+      candidates: [{ wine: DOURO_WINE, score: 0.9 }],
+    });
+
+    const res = await postJson(app, '/api/wines/identify-text', { query: 'quinta do exemplo vintage port' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.candidates[0].wine.grapes[0].displayName).toBe('Tinta Roriz');
+    expect(res.body.candidates[0].score).toBe(0.9);
+  });
+});
+
 describe('POST /api/wines/identify-text — demo accounts', () => {
   test('a demo JWT gets 403 demo_ai_disabled before Claude and before any probe', async () => {
     const res = await postJson(app, '/api/wines/identify-text', { query: 'penfolds bin 407' },

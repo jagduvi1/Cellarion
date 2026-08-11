@@ -27,7 +27,9 @@ const { parsePagination } = require('../utils/pagination');
 // Read-surface decoration: populated grapes gain `displayName` — the
 // regionally correct label for the bottle's wine (Tinta Roriz on a Douro
 // Port) — while `name` stays canonical for storage/filters/stats.
-const { decorateGrapes } = require('../utils/grapeDisplay');
+// resolveGrapeDisplayName feeds the in-memory search haystack below: what
+// the card displays must be what search matches.
+const { decorateGrapes, resolveGrapeDisplayName } = require('../utils/grapeDisplay');
 const mongoose = require('mongoose');
 const searchService = require('../services/search');
 // add/update/consume/restore/remove logic + rack-slot freeing live in the
@@ -257,7 +259,19 @@ router.get('/', async (req, res) => {
           b.wineDefinition?.region?.name,
           b.wineDefinition?.appellation,
           b.wineDefinition?.type,
-          ...(b.wineDefinition?.grapes || []).map(g => g.name),
+          // Canonical grape names PLUS the regional display name resolved for
+          // this wine's own country/region when it differs ("Tinta Roriz" on
+          // a Douro Port) — the card shows the regional label, so searching
+          // it must hit (audit 2026-08-11). Undefineds fall to filter(Boolean).
+          ...(b.wineDefinition?.grapes || []).flatMap(g => {
+            const names = [g?.name];
+            const display = resolveGrapeDisplayName(g, {
+              countryId: b.wineDefinition.country,
+              regionId: b.wineDefinition.region,
+            });
+            if (display && display !== g?.name) names.push(display);
+            return names;
+          }),
         ].filter(Boolean).map(s => stripAccents(String(s).toLowerCase())).join(' ');
         return words.every(word => allText.includes(word));
       });

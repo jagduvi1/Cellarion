@@ -214,6 +214,12 @@ async function resolveGrapeIdsStrict(names) {
       $or: [{ normalizedName }, { normalizedSynonyms: normalizedName }],
     }).select('_id name').lean();
     if (grape) {
+      // Id-level dedupe: two DIFFERENT input names can resolve to one Grape
+      // doc via DB synonyms ("Tempranillo" + "Tinta Roriz") — the seen-by-name
+      // guard above only catches inputs folding to the same string, so without
+      // this the same ObjectId was stored twice. A skipped duplicate records
+      // no substitution either: nothing new gets stored under another name.
+      if (ids.some((id) => String(id) === String(grape._id))) continue;
       ids.push(grape._id);
       canonical.push(grape.name);
       if (normalizeString(raw) !== normalizeString(grape.name)) {

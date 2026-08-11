@@ -49,6 +49,11 @@ function AdminTaxonomy() {
     setShowForm(false);
     setEditItem(null);
     setFormData({});
+    // Per-country region cache starts cold on every tab entry — a region
+    // created on the Regions tab must show up when returning to Grapes, and
+    // a row whose fetch failed gets a retry instead of a stale empty list.
+    setRegionsByCountry({});
+    setSaveWarnings(null);
   }, [activeTab, apiFetch]);
 
   useEffect(() => {
@@ -94,14 +99,22 @@ function AdminTaxonomy() {
   // share (that would cross-talk between rows).
   const [regionsByCountry, setRegionsByCountry] = useState({});
 
+  // Non-blocking warnings returned by a successful grape save (regional names
+  // that are not synonyms — the backend flags, never blocks).
+  const [saveWarnings, setSaveWarnings] = useState(null);
+
   const loadRegionsForCountry = async (countryId) => {
     if (!countryId || regionsByCountry[countryId]) return;
     try {
       const res = await adminGetRegions(apiFetch, countryId);
       const data = await res.json();
       if (res.ok) setRegionsByCountry(prev => ({ ...prev, [countryId]: data.regions || [] }));
+      else setError(t('admin.taxonomy.regionsLoadFailed'));
     } catch (err) {
       console.error('Failed to load regions', err);
+      // A silent failure here left a row LOOKING country-wide ("Whole
+      // country") while still submitting its saved region — say it broke.
+      setError(t('admin.taxonomy.regionsLoadFailed'));
     }
   };
 
@@ -155,11 +168,17 @@ function AdminTaxonomy() {
   const handleCreate = async (e) => {
     e.preventDefault();
     setError(null);
+    setSaveWarnings(null);
     try {
       const payload = buildPayload(formData);
       const res = await adminCreateTaxonomy(apiFetch, endpoints[activeTab], payload);
       const data = await res.json();
       if (res.ok) {
+        // The save SUCCEEDED — these are advisories (grape regional names
+        // that curators can't write back), shown as a warning, not a failure.
+        if (Array.isArray(data.regionalNameWarnings) && data.regionalNameWarnings.length > 0) {
+          setSaveWarnings(data.regionalNameWarnings);
+        }
         setShowForm(false);
         setFormData({});
         fetchItems();
@@ -180,11 +199,16 @@ function AdminTaxonomy() {
   const handleUpdate = async (e) => {
     e.preventDefault();
     setError(null);
+    setSaveWarnings(null);
     try {
       const payload = buildPayload(formData);
       const res = await adminUpdateTaxonomy(apiFetch, endpoints[activeTab], editItem._id, payload);
       const data = await res.json();
       if (res.ok) {
+        // Same advisory surface as create — warning, never a failure.
+        if (Array.isArray(data.regionalNameWarnings) && data.regionalNameWarnings.length > 0) {
+          setSaveWarnings(data.regionalNameWarnings);
+        }
         setEditItem(null);
         setFormData({});
         fetchItems();
@@ -643,6 +667,14 @@ function AdminTaxonomy() {
               {(regionsByCountry[rn.country] || []).map(r => (
                 <option key={r._id} value={r._id}>{r.name}</option>
               ))}
+              {/* Row HAS a saved region but the loaded list doesn't contain it
+                  (fetch failed / list stale): render it as its own option so
+                  the select shows the truth instead of falling back to "Whole
+                  country" while still submitting the region. */}
+              {rn.region &&
+                !(regionsByCountry[rn.country] || []).some(r => String(r._id) === String(rn.region)) && (
+                <option value={rn.region}>{t('admin.taxonomy.savedRegionUnavailable')}</option>
+              )}
             </select>
             <input
               type="text"
@@ -806,6 +838,15 @@ function AdminTaxonomy() {
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
+
+      {saveWarnings && (
+        <div className="alert alert-warning">
+          <strong>{t('admin.taxonomy.savedWithWarnings')}</strong>
+          <ul style={{ margin: '4px 0 0', paddingLeft: '1.2em' }}>
+            {saveWarnings.map((w, i) => <li key={i}>{w}</li>)}
+          </ul>
+        </div>
+      )}
 
       {isBottleSizes && <BottleSizesAdmin apiFetch={apiFetch} />}
 

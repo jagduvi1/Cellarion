@@ -22,7 +22,7 @@ jest.mock('../models/Region', () => ({
   updateMany: jest.fn(),
   updateOne: jest.fn(),
 }));
-jest.mock('../models/Grape', () => ({ findById: jest.fn() }));
+jest.mock('../models/Grape', () => ({ findById: jest.fn(), updateMany: jest.fn() }));
 jest.mock('../models/Appellation', () => ({ updateMany: jest.fn() }));
 jest.mock('./search', () => ({ indexWine: jest.fn().mockResolvedValue(undefined) }));
 
@@ -55,6 +55,7 @@ beforeEach(() => {
   WineDefinition.updateMany.mockResolvedValue({ modifiedCount: 0 });
   Region.updateMany.mockResolvedValue({ modifiedCount: 0 });
   Region.updateOne.mockResolvedValue({ modifiedCount: 1 });
+  Grape.updateMany.mockResolvedValue({ modifiedCount: 0 });
   Appellation.updateMany.mockResolvedValue({ modifiedCount: 0 });
   primeAffectedWines([]);
 });
@@ -128,6 +129,44 @@ describe('mergeGrapes', () => {
     await mergeGrapes('g-dup', 'g-canon', { resync: false });
     expect(searchService.indexWine).not.toHaveBeenCalled();
   });
+
+  // Audit 2026-08-11: regionalNames are display data about the VARIETY — a
+  // merge that dropped them silently lost curated labels.
+  test('carries the duplicate\'s regionalNames, skipping (country, region) pairs the canonical doc already covers', async () => {
+    const from = doc({
+      _id: 'g-dup', name: 'Pinot Nero',
+      regionalNames: [
+        { country: 'c-pt', region: 'r-douro', name: 'Tinta Roriz' },   // new pair → carried
+        { country: 'c-pt', region: null, name: 'Aragonez' },           // country-level pair taken → skipped
+      ],
+    });
+    const to = doc({
+      _id: 'g-canon', name: 'Pinot Noir',
+      regionalNames: [{ country: 'c-pt', region: null, name: 'Aragonês' }],
+    });
+    Grape.findById.mockImplementation(id => Promise.resolve(id === 'g-dup' ? from : to));
+
+    await mergeGrapes('g-dup', 'g-canon');
+
+    expect(to.regionalNames).toEqual([
+      { country: 'c-pt', region: null, name: 'Aragonês' },
+      { country: 'c-pt', region: 'r-douro', name: 'Tinta Roriz' },
+    ]);
+    expect(to.save).toHaveBeenCalled();
+  });
+
+  test('regionalNames carry onto a canonical doc that had none', async () => {
+    const from = doc({
+      _id: 'g-dup', name: 'Pinot Nero',
+      regionalNames: [{ country: 'c-it', region: null, name: 'Pinot Nero' }],
+    });
+    const to = doc({ _id: 'g-canon', name: 'Pinot Noir' }); // no regionalNames field at all
+    Grape.findById.mockImplementation(id => Promise.resolve(id === 'g-dup' ? from : to));
+
+    await mergeGrapes('g-dup', 'g-canon');
+
+    expect(to.regionalNames).toEqual([{ country: 'c-it', region: null, name: 'Pinot Nero' }]);
+  });
 });
 
 describe('mergeRegions', () => {
@@ -160,6 +199,22 @@ describe('mergeRegions', () => {
     expect(to.typicalGrapes).toEqual(['g1', 'g2']);  // union, no dupes
     expect(from.deleteOne).toHaveBeenCalled();
     expect(summary).toMatchObject({ winesUpdated: 1, childRegionsUpdated: 3, appellationsUpdated: 1 });
+  });
+
+  // Audit 2026-08-11: grape regionalNames scope to regions — a merge must
+  // re-point them like every other region ref or resolution silently stops.
+  test('re-points Grape.regionalNames.region via arrayFilters', async () => {
+    const from = rdoc({ _id: 'r-dup', name: 'Piemonte' });
+    const to = rdoc({ _id: 'r-canon', name: 'Piedmont' });
+    Region.findById.mockImplementation(id => Promise.resolve(id === 'r-dup' ? from : to));
+
+    await mergeRegions('r-dup', 'r-canon');
+
+    expect(Grape.updateMany).toHaveBeenCalledWith(
+      { 'regionalNames.region': 'r-dup' },
+      { $set: { 'regionalNames.$[e].region': 'r-canon' } },
+      { arrayFilters: [{ 'e.region': 'r-dup' }] }
+    );
   });
 });
 
@@ -209,5 +264,19 @@ describe('mergeCountries', () => {
     expect(Appellation.updateMany).toHaveBeenCalledWith({ country: 'c-dup' }, { $set: { country: 'c-canon' } });
     expect(from.deleteOne).toHaveBeenCalled();
     expect(summary).toMatchObject({ winesUpdated: 3, regionsMoved: 1, regionsMerged: 1 });
+
+    // Audit 2026-08-11: country-level grape regionalNames follow the merge —
+    // and the folded colliding region re-pointed its region-level entries too
+    // (mergeRegionDocs runs for it).
+    expect(Grape.updateMany).toHaveBeenCalledWith(
+      { 'regionalNames.country': 'c-dup' },
+      { $set: { 'regionalNames.$[e].country': 'c-canon' } },
+      { arrayFilters: [{ 'e.country': 'c-dup' }] }
+    );
+    expect(Grape.updateMany).toHaveBeenCalledWith(
+      { 'regionalNames.region': 'r-coll' },
+      { $set: { 'regionalNames.$[e].region': 'r-existing' } },
+      { arrayFilters: [{ 'e.region': 'r-coll' }] }
+    );
   });
 });
