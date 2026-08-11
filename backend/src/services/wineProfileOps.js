@@ -182,8 +182,13 @@ function validateProfilePatch(patch) {
  * genuinely new variety is an admin taxonomy add first.
  *
  * @param {string[]} names  cleaned names from validateProfilePatch
- * @returns {Promise<{ok:true, ids:any[], names:string[]}|{ok:false, unmatched:string[]}>}
+ * @returns {Promise<{ok:true, ids:any[], names:string[], substitutions:{from:string,to:string}[]}|{ok:false, unmatched:string[]}>}
  *          `names` echoes the CANONICAL display names, for response payloads.
+ *          `substitutions` lists every input stored under a DIFFERENT name
+ *          (synonym or static-map hop, e.g. "Tinta Roriz" → Tempranillo) —
+ *          the write path must SAY when it overrides what the curator typed
+ *          (somm ticket 2026-08-11), so callers surface these in responses.
+ *          Case/diacritic-only differences are not substitutions.
  */
 async function resolveGrapeIdsStrict(names) {
   // Lazy requires, matching the module's load-lean convention: the pure
@@ -193,6 +198,7 @@ async function resolveGrapeIdsStrict(names) {
   const ids = [];
   const canonical = [];
   const unmatched = [];
+  const substitutions = [];
   const seen = new Set();
   for (const raw of names) {
     const resolved = resolveGrapeName(raw);
@@ -210,11 +216,14 @@ async function resolveGrapeIdsStrict(names) {
     if (grape) {
       ids.push(grape._id);
       canonical.push(grape.name);
+      if (normalizeString(raw) !== normalizeString(grape.name)) {
+        substitutions.push({ from: String(raw).trim(), to: grape.name });
+      }
     } else {
       unmatched.push(raw);
     }
   }
-  return unmatched.length ? { ok: false, unmatched } : { ok: true, ids, names: canonical };
+  return unmatched.length ? { ok: false, unmatched } : { ok: true, ids, names: canonical, substitutions };
 }
 
 /** The fields an undo needs to put back, captured before mutation. */

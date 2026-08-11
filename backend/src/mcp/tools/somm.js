@@ -400,6 +400,7 @@ registerTool({
     // Names → taxonomy ids, match-only: an unknown variety fails loudly here
     // rather than minting junk taxonomy every owner then sees.
     let grapeNames = null;
+    let grapeSubs = [];
     if (Array.isArray(check.clean.grapes) && check.clean.grapes.length > 0) {
       const resolved = await resolveGrapeIdsStrict(check.clean.grapes);
       if (!resolved.ok) {
@@ -409,6 +410,7 @@ registerTool({
       }
       check.clean.grapes = resolved.ids;
       grapeNames = resolved.names;
+      grapeSubs = resolved.substitutions || [];
     } else if (Array.isArray(check.clean.grapes)) {
       grapeNames = [];
     }
@@ -446,8 +448,15 @@ registerTool({
     const outcome = !profileTouched
       ? 'record fields corrected'
       : curatorNow ? 'now curator-verified' : 'cleared — still eligible for AI enrichment';
+    // The write path must SAY when it stores something other than what the
+    // curator sent (ticket 2026-08-11: "Tinta Roriz" silently became
+    // Tempranillo) — surfaced in the summary, the record, AND the note so no
+    // reading depth misses it.
+    const subsLine = grapeSubs.length
+      ? ` — stored under canonical variety name${grapeSubs.length > 1 ? 's' : ''}: ${grapeSubs.map((s) => `"${s.from}" as ${s.to}`).join(', ')}`
+      : '';
     const envelope = {
-      summary: `${wine.producer} — ${wine.name} updated (${outcome})`,
+      summary: `${wine.producer} — ${wine.name} updated (${outcome})${subsLine}`,
       data: {
         wine_id: wine._id,
         updated_fields: Object.keys(check.clean),
@@ -464,12 +473,16 @@ registerTool({
         record: {
           type: wine.type || null,
           ...(grapeNames !== null ? { grapes: grapeNames } : {}),
+          ...(grapeSubs.length ? { grape_substitutions: grapeSubs.map((s) => `${s.from} → ${s.to}`) } : {}),
         },
-        note: profileTouched
+        note: (profileTouched
           ? (curatorNow
             ? 'The AI enrichment job will no longer overwrite this wine.'
             : 'Cleared without verifying — the AI enrichment job may regenerate this profile.')
-          : 'Type/grape corrections do not claim the tasting profile was verified.',
+          : 'Type/grape corrections do not claim the tasting profile was verified.')
+          + (grapeSubs.length
+            ? ' Grape names are stored under their canonical variety doc (same variety, canonical display) — see grape_substitutions.'
+            : ''),
         undo: 'undo_last restores the previous profile and its provenance',
       },
     };

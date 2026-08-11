@@ -65,12 +65,14 @@ router.put('/:wineId', requireSommOrAdmin, async (req, res) => {
     const check = validateProfilePatch(req.body);
     if (!check.ok) return res.status(400).json({ error: check.error });
 
+    let grapeSubstitutions = [];
     if (Array.isArray(check.clean.grapes) && check.clean.grapes.length > 0) {
       const resolved = await resolveGrapeIdsStrict(check.clean.grapes);
       if (!resolved.ok) {
         return res.status(400).json({ error: `Not in the grape taxonomy: ${resolved.unmatched.join(', ')}` });
       }
       check.clean.grapes = resolved.ids;
+      grapeSubstitutions = resolved.substitutions || [];
     }
 
     const wine = await WineDefinition.findById(req.params.wineId);
@@ -101,6 +103,9 @@ router.put('/:wineId', requireSommOrAdmin, async (req, res) => {
       // Additive: present so the panel can reflect record corrections too.
       type: wine.type,
       grapes: wine.grapes,
+      // The write path says when it stored a different name than was sent
+      // (synonym/static-map canonicalisation — ticket 2026-08-11).
+      grapeSubstitutions,
     });
   } catch (error) {
     console.error('Update wine profile error:', error);
