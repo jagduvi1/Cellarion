@@ -50,10 +50,12 @@ function OwnerInquiriesModal({ apiFetch, onClose, onChanged }) {
   // removed from the fixed page*limit offset (the proposals drain pattern).
   const decidedDelta = useRef(0);
 
-  const fetchPage = useCallback(async (p) => {
+  const fetchPage = useCallback(async (p, { keepError = false } = {}) => {
     const gen = ++fetchGen.current;
     setLoading(true);
-    setError(null);
+    // keepError: the 409-resolve path refetches to drop the stale row but the
+    // "someone else resolved it" message must survive the refresh.
+    if (!keepError) setError(null);
     try {
       const drained = statusView === 'active' ? decidedDelta.current : 0;
       const offset = Math.max(0, (p - 1) * PAGE_SIZE - drained);
@@ -124,7 +126,7 @@ function OwnerInquiriesModal({ apiFetch, onClose, onChanged }) {
         setError(data.error || t('admin.wines.ownerInquiries.resolveError'));
         // 409: another admin resolved it (or it closed) first — refresh so
         // the stale row leaves the list instead of inviting a second click.
-        if (res.status === 409) fetchPage(page);
+        if (res.status === 409) fetchPage(page, { keepError: true });
       }
     } catch {
       setError(t('common.networkError'));
