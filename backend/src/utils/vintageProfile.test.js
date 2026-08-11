@@ -55,7 +55,12 @@ test('Unknown vintage and missing args are no-ops', async () => {
 test('a nonWine-quarantined wine never seeds — the quarantine covers the somm queue too', async () => {
   WineDefinition.exists.mockResolvedValue({ _id: WINE });
   await ensurePendingVintageProfile(WINE, '2018');
-  expect(WineDefinition.exists).toHaveBeenCalledWith({ _id: WINE, nonWine: true });
+  // The quarantine query now also covers pendingIdentity rows — same reason
+  // (nothing to curate a drink window against) and same no-op outcome.
+  expect(WineDefinition.exists).toHaveBeenCalledWith({
+    _id: WINE,
+    $or: [{ nonWine: true }, { pendingIdentity: true }],
+  });
   expect(WineVintageProfile.findOneAndUpdate).not.toHaveBeenCalled();
 });
 

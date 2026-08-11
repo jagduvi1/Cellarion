@@ -6,6 +6,7 @@ const searchService = require('../services/search');
 const { requireAuth, requireNonDemo, optionalAuth } = require('../middleware/auth');
 const { scanLabelFull, identifyWineFromQuery } = require('../services/labelScan');
 const { sanitizeImageBuffer, detectImageFormat } = require('../services/imageSanitizer');
+const { persistLabelScan } = require('../services/imageOps');
 const { findOrCreateWine } = require('../services/findOrCreateWine');
 const { generateWineKey } = require('../utils/normalize');
 const { findBestMatch } = require('../services/wineMatching');
@@ -112,8 +113,12 @@ const USER_SEARCH_LIMIT = 10;
 // MongoDB fallback search (used when Meilisearch is unavailable)
 async function mongoSearch(filter, sort, limit, offset, search) {
   // Quarantined non-wine rows never surface in registry search — the Meili
-  // branch excludes them at index time; this is the fallback's mirror.
+  // branch excludes them at index time; this is the fallback's mirror. Same for
+  // pendingIdentity rows: they are not in the index either, so without this the
+  // Mongo fallback would be the one surface that leaks them (and this list is
+  // also what the wine-list / wishlist / add-bottle pickers read).
   filter.nonWine = { $ne: true };
+  filter.pendingIdentity = { $ne: true };
   let sortOptions = {};
   const sortField = sort.startsWith('-') ? sort.substring(1) : sort;
   const sortDir = sort.startsWith('-') ? -1 : 1;
@@ -249,8 +254,19 @@ router.get('/', requireAuth, async (req, res) => {
 // Returns: {
 //   extracted: { name, producer, vintage, country, region, appellation, type, grapes[] },
 //   match: { wine: WineDefinition, confidence: number } | null,
-//   labelImage: "data:image/png;base64,..." (background-removed label, or original as fallback)
+//   labelImage: "data:image/png;base64,..." (background-removed label, or original as fallback),
+//   scanImageId: "<BottleImage id>" | null
 // }
+//
+// scanImageId: the ORIGINAL frame is now persisted (private, kind:'label-scan')
+// instead of being discarded with the request. The client threads it back
+// inside `newWine` on the bottle/wishlist commit, where it is stamped onto the
+// minted wine — that photo is what lets a curator FIX a wine the extraction
+// could not identify, which is the whole point of the pending-identity queue.
+// A scan that never gets committed is swept after 30 days
+// (services/scanImageRetentionJob.js). GDPR: no new consent category — this is
+// a bottle photo, in the same collection, under the same EXIF-strip, exported
+// and erased with all the others.
 // asyncHandler (mirrors chat.js): if tryDebitAi rejects on a Mongo error — it
 // runs BEFORE the try below — Express 4 would otherwise leave the request
 // hanging on an unhandled rejection instead of responding 500 (audit HIGH).
@@ -383,7 +399,13 @@ router.post('/scan-label', requireAuth, aiBurstLimiter, asyncHandler(async (req,
       }
     }
 
-    res.json({ extracted, match, labelImage });
+    // Keep the sanitized ORIGINAL (not the background-removed render — a
+    // curator wants the untouched frame). Best-effort: a storage failure
+    // returns null and the scan still succeeds. Demo accounts never reach here
+    // (tryDebitAi refuses them above), so no throwaway account writes files.
+    const scanImage = await persistLabelScan({ buffer: safeBuffer, userId: req.user.id });
+
+    res.json({ extracted, match, labelImage, scanImageId: scanImage ? String(scanImage._id) : null });
   } catch (err) {
     console.error('Label scan match error:', err.message);
     res.status(500).json({ error: 'Label scan failed' });
@@ -433,7 +455,14 @@ router.post('/find-or-create', requireAuth, requireNonDemo, asyncHandler(async (
   // Same caps as the commit path (shared helper): the free-text fields feed
   // the O(m·n) fuzzy-match scorer, and the body limit here is 5mb — a
   // multi-MB name/producer would be an authenticated DoS.
-  const invalid = validateNewWineFields(req.body);
+  //
+  // allowPending relaxes ONLY the producer requirement, because the add flows
+  // now let a user leave the producer blank when the label is unreadable. This
+  // route still creates nothing (matchOnly); a producerless probe simply can't
+  // score high enough to auto-match or soft-zone — producer carries 45% of the
+  // composite — so it returns noMatch and the fields ride to the commit, which
+  // mints the pending row.
+  const invalid = validateNewWineFields(req.body, { allowPending: true });
   if (invalid) return res.status(400).json({ error: invalid });
 
   try {
@@ -442,7 +471,9 @@ router.post('/find-or-create', requireAuth, requireNonDemo, asyncHandler(async (
     // above the matchOnly gate, collapsing every 0.85–0.95 near-match into
     // noMatch, which is exactly the duplication this endpoint exists to stop.
     const probe = await findOrCreateWine(
-      { name, producer, country, region, appellation, type, grapes: grapes || [] },
+      // '' not undefined: findOrCreateWine's .trim() runs before any option is
+      // consulted, and a probe must never be the thing that 500s.
+      { name, producer: typeof producer === 'string' ? producer : '', country, region, appellation, type, grapes: grapes || [] },
       req.user.id,
       { matchOnly: true }
     );
@@ -597,9 +628,13 @@ router.get('/:idOrSlug/public', async (req, res) => {
     // here for the same reason as on the OG page (code audit 2026-07-27, M5).
     // The authenticated /:id route below deliberately still resolves them, so
     // an owner's own bottle page keeps working: hiding, not breaking.
+    // pendingIdentity joins the exclusion: this route is unauthenticated, so
+    // there is nobody here who could be the creator — a half-identified wine
+    // must simply not have a public page (nor an OG card, nor a sitemap entry).
+    const hidden = { nonWine: { $ne: true }, pendingIdentity: { $ne: true } };
     const filter = isValidId(idOrSlug)
-      ? { _id: idOrSlug, nonWine: { $ne: true } }
-      : { slug: String(idOrSlug).toLowerCase(), nonWine: { $ne: true } };
+      ? { _id: idOrSlug, ...hidden }
+      : { slug: String(idOrSlug).toLowerCase(), ...hidden };
 
     const wine = await WineDefinition.findOne(filter)
       .populate(['country', 'region', 'grapes'])
@@ -649,6 +684,11 @@ router.get('/:idOrSlug/community-prices', async (req, res) => {
   }
 });
 
+// Authenticated wine detail. A pendingIdentity row is visible ONLY to its
+// creator (whose bottle page has to render — hiding, not breaking, same
+// principle as the nonWine quarantine one route up) and to curation
+// (somm/admin, who work the pending queue). Everyone else gets the same 404 a
+// non-existent id gets, so the row's existence never leaks.
 router.get('/:id', requireAuth, async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
@@ -658,6 +698,12 @@ router.get('/:id', requireAuth, async (req, res) => {
 
     if (!wine) {
       return res.status(404).json({ error: 'Wine not found' });
+    }
+    if (wine.pendingIdentity === true) {
+      const isCurator = req.user.roles.includes('admin') || req.user.roles.includes('somm');
+      if (!isCurator && String(wine.createdBy) !== String(req.user.id)) {
+        return res.status(404).json({ error: 'Wine not found' });
+      }
     }
 
     res.json({ wine: decorateGrapes(wine) });

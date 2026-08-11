@@ -42,6 +42,15 @@ const {
   sweepExpiredInquiries,
   queryInquiryPage,
 } = require('../../services/ownerInquiryOps');
+const {
+  queryPendingWines,
+  validatePendingFix,
+  applyPendingFix,
+  loadPendingWine,
+  CREATED_VIA_FILTERS,
+  FIELD_MAX,
+  MAX_BOTTLE_IMAGES,
+} = require('../../services/pendingWineOps');
 // services/search is required lazily at call time, not here: it pulls in the
 // Meili client and half the model layer at module load, which every consumer
 // of the tool registry would then have to stand up (registry.test.js does not).
@@ -1091,5 +1100,263 @@ registerTool({
       data,
       { page: { limit, offset, total } }
     );
+  },
+});
+
+// ── Pending-identity queue ───────────────────────────────────────────────────
+//
+// Wines minted at bottle-commit from an INCOMPLETE identity: no producer, a
+// sentinel one ("Unknown", "N/A"), or a geography typed into the producer box.
+// The bottle saved instantly (never make adding harder); the registry row is
+// hidden from everyone but its creator until a curator completes it. All three
+// tools ride services/pendingWineOps, so REST and MCP cannot drift on
+// projection, taxonomy resolution or conflict semantics.
+//
+// ANONYMISED like the owner inquiries (#930): the curator gets the wine, its
+// bottle count and its IMAGES — never who added it.
+const { promises: fsp } = require('fs');
+const { safeUploadPath } = require('../../services/imageProcessor');
+
+// Downscale cap for the image blocks. 1024px on the longest edge is what a
+// vision model needs to read a wine label and is a large byte reduction on a
+// phone capture; the total cap keeps one response inside a sane MCP payload.
+const IMAGE_MAX_EDGE = 1024;
+const IMAGE_TOTAL_CAP_BYTES = 4 * 1024 * 1024;
+
+registerTool({
+  name: 'list_pending_wines',
+  title: 'Sommelier: list wines waiting for an identity',
+  description:
+    'Lists registry wines created from an INCOMPLETE identity — an unreadable label, a missing producer, or a region ' +
+    'typed where the producer belongs. Their bottles are already in their owners\' cellars and work normally; the ' +
+    'wine itself is hidden from every other user until a curator completes it, so this queue is what un-hides them. ' +
+    'Newest first. Pass created_via to work one source at a time — "import" is typically one user\'s CSV burst and is ' +
+    'best cleared in a batch, "ui" is the trickle of label scans. Each row carries image ids: call ' +
+    'get_pending_wine_images to actually READ the label, then fix_pending_wine. Owners are never identified here.',
+  scope: 'read',
+  requireRole: SOMM_ROLES,
+  annotations: { readOnlyHint: true, openWorldHint: false },
+  inputSchema: {
+    created_via: z.enum(CREATED_VIA_FILTERS).optional()
+      .describe('Narrow to one entry surface — the practical way to work a large import burst'),
+    limit: z.number().int().min(1).max(50).default(20),
+    offset: z.number().int().min(0).default(0),
+  },
+  handler: async (args, ctx) => {
+    const denied = requireSomm(ctx);
+    if (denied) return denied;
+    const { limit, offset } = pageParams(args, 20, 50);
+    const { rows, total, pendingTotal } = await queryPendingWines({
+      limit, offset, createdVia: args.created_via,
+    });
+    const data = rows.map((r) => ({
+      wine_id: r._id,
+      name: r.name,
+      producer: r.producer,
+      appellation: r.appellation,
+      region: r.regionName,
+      country: r.countryName,
+      grapes: r.grapeNames,
+      type: r.type,
+      created_at: r.createdAt,
+      created_via: r.createdVia,
+      bottle_count: r.bottleCount,
+      scan_image_id: r.scanImageId,
+      bottle_image_ids: r.bottleImageIds,
+      has_images: !!(r.scanImageId || r.bottleImageIds.length),
+    }));
+    return ok(
+      `${pendingTotal} wine(s) awaiting an identity (showing ${data.length} of ${total}${args.created_via ? ` via ${args.created_via}` : ''})`,
+      data,
+      { page: { limit, offset, total } }
+    );
+  },
+});
+
+registerTool({
+  name: 'get_pending_wine_images',
+  title: 'Sommelier: read a pending wine\'s label photos',
+  description:
+    'Returns the actual PHOTOS for one wine in the pending-identity queue — the original label frame its owner ' +
+    'scanned, plus up to 3 photos of their bottles — as images you can look at. THIS is how the queue gets fixed: ' +
+    'read the producer, appellation and classification off the label, then call fix_pending_wine with what the label ' +
+    'says. Do not guess from the broken name string when a photo is available. Images are downscaled server-side. ' +
+    'Some rows have no photo at all (an import file has none) — say so rather than inventing a producer.',
+  scope: 'read',
+  requireRole: SOMM_ROLES,
+  annotations: { readOnlyHint: true, openWorldHint: false },
+  inputSchema: {
+    wine_id: objectId.describe('From list_pending_wines'),
+  },
+  handler: async (args, ctx) => {
+    const denied = requireSomm(ctx);
+    if (denied) return denied;
+    if (!isValidId(args.wine_id)) return fail('invalid_input', 'wine_id must be a 24-hex id.');
+
+    const wine = await WineDefinition.findById(args.wine_id)
+      .select('name producer pendingIdentity scanImage').lean();
+    if (!wine) return fail('not_found', 'No wine with that id. Use list_pending_wines for valid ids.');
+
+    // "Which images belong to this wine" has exactly one definition — the same
+    // both-ways match the queue projection uses (some upload paths stamp the
+    // wine on the image, the plain add flow only links it to the bottle).
+    const BottleImage = require('../../models/BottleImage');
+    const Bottle = require('../../models/Bottle');
+    const bottleIds = await Bottle.distinct('_id', { wineDefinition: wine._id });
+    const imgs = await BottleImage.find({
+      kind: { $ne: 'label-scan' },
+      $or: [{ wineDefinition: wine._id }, ...(bottleIds.length ? [{ bottle: { $in: bottleIds } }] : [])],
+    }).select('_id kind originalUrl processedUrl').sort({ createdAt: -1 }).limit(MAX_BOTTLE_IMAGES).lean();
+
+    const ordered = [];
+    if (wine.scanImage) {
+      const scan = await BottleImage.findById(wine.scanImage)
+        .select('_id kind originalUrl processedUrl').lean();
+      if (scan) ordered.push(scan); // the scanned label first — it is the primary evidence
+    }
+    ordered.push(...imgs);
+
+    if (ordered.length === 0) {
+      return ok(
+        `No photos are stored for "${wine.name}" — this row has to be judged on its text alone`,
+        { wine_id: wine._id, images: 0, still_pending: wine.pendingIdentity === true }
+      );
+    }
+
+    // sharp is already a backend dependency (services/imageSanitizer) —
+    // nothing new is added for this.
+    const sharp = require('sharp');
+    const blocks = [];
+    const included = [];
+    let totalBytes = 0;
+    for (const doc of ordered) {
+      // The ORIGINAL is what a curator wants: background removal can eat a
+      // corner of the label. Fall back to the processed render if it is gone.
+      const url = doc.originalUrl || doc.processedUrl;
+      if (!url || typeof url !== 'string' || !url.startsWith('/api/uploads/')) continue;
+      try {
+        const buf = await fsp.readFile(safeUploadPath(url.replace('/api/uploads/', '')));
+        const out = await sharp(buf)
+          .rotate()
+          .resize({ width: IMAGE_MAX_EDGE, height: IMAGE_MAX_EDGE, fit: 'inside', withoutEnlargement: true })
+          .jpeg({ quality: 82 })
+          .toBuffer();
+        // Cap the WHOLE response, not each image: 4 MB is the budget, and a
+        // curator would rather see two labels than be refused all of them.
+        if (totalBytes + out.length > IMAGE_TOTAL_CAP_BYTES) break;
+        totalBytes += out.length;
+        blocks.push({ type: 'image', data: out.toString('base64'), mimeType: 'image/jpeg' });
+        included.push({ image_id: String(doc._id), kind: doc.kind || 'bottle' });
+      } catch (err) {
+        console.warn('[mcp] pending-wine image read failed:', err.message);
+      }
+    }
+    if (blocks.length === 0) {
+      return fail('unavailable', 'The stored photos for this wine could not be read right now — retry later, or judge the row on its text.');
+    }
+
+    // Text part FIRST so the model reads the instruction before the pixels.
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            summary: `${blocks.length} photo(s) for "${wine.name}"${wine.producer ? ` — ${wine.producer}` : ' (no producer recorded)'}`,
+            data: {
+              wine_id: wine._id,
+              still_pending: wine.pendingIdentity === true,
+              images: included,
+              guidance: 'Read the producer, appellation and classification off the label. Transcribe what is printed — never infer a producer from the region.',
+            },
+          }),
+        },
+        ...blocks,
+      ],
+    };
+  },
+});
+
+registerTool({
+  name: 'fix_pending_wine',
+  title: 'Sommelier: complete a pending wine\'s identity',
+  description:
+    'Writes the corrected identity onto one wine in the pending-identity queue: producer, name, appellation, region, ' +
+    'country, grapes, type. The moment producer AND name are both real the wine is PROMOTED automatically — it enters ' +
+    'registry search, gets embedded, and its vintages enter the maturity queue — so send both in one call whenever ' +
+    'you can. Region and country are plain NAMES resolved against the taxonomy (the country must already exist; grape ' +
+    'synonyms resolve, unknown varieties are refused, never created). Refuses a wine that is no longer pending. This ' +
+    'is SHARED registry data other users will see: base it on the label photo (get_pending_wine_images) or on the ' +
+    'somm\'s own knowledge, never on a guess from the broken string.',
+  scope: 'write',
+  requireRole: SOMM_ROLES,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  inputSchema: {
+    wine_id: objectId.describe('From list_pending_wines'),
+    producer: z.string().min(1).max(FIELD_MAX).optional().describe('The winery exactly as printed on the label'),
+    name: z.string().min(1).max(FIELD_MAX).optional().describe('The cuvée/wine name WITHOUT the producer in it'),
+    appellation: z.string().max(FIELD_MAX).optional().describe('Empty string clears it'),
+    region: z.string().max(FIELD_MAX).optional().describe('Region NAME; empty string clears it'),
+    country: z.string().max(FIELD_MAX).optional().describe('Country NAME — must already exist in the taxonomy'),
+    grapes: z.array(z.string().min(1).max(GRAPE_NAME_MAX)).max(GRAPES_MAX).optional()
+      .describe('Variety NAMES, taxonomy-resolved (synonyms ok). Replaces the whole list.'),
+    type: z.enum(WINE_TYPES).optional(),
+  },
+  handler: async (args, ctx) => {
+    const denied = requireSomm(ctx);
+    if (denied) return denied;
+
+    // snake_case in, the shared validator's field names out — ONE validator
+    // with the REST PATCH, so the two surfaces cannot drift.
+    const patch = {};
+    if (args.producer !== undefined) patch.producer = args.producer;
+    if (args.name !== undefined) patch.name = args.name;
+    if (args.appellation !== undefined) patch.appellation = args.appellation;
+    if (args.region !== undefined) patch.regionName = args.region;
+    if (args.country !== undefined) patch.countryName = args.country;
+    if (args.grapes !== undefined) patch.grapeNames = args.grapes;
+    if (args.type !== undefined) patch.type = args.type;
+
+    const check = validatePendingFix(patch);
+    if (!check.ok) return fail('invalid_input', check.error);
+
+    const loaded = await loadPendingWine(args.wine_id);
+    if (!loaded.ok) return fail(loaded.code, loaded.message);
+
+    const applied = await applyPendingFix(loaded.wine, check.clean, ctx.user.id);
+    if (!applied.ok) return fail(applied.code, applied.message);
+    const { wine, promoted, diff } = applied;
+
+    // Same audit action string as the REST PATCH — REST and MCP curation must
+    // audit identically (this file's header rule).
+    logAudit(ctx.req, 'wine.pending_fix', { type: 'wine', id: wine._id }, {
+      fields: Object.keys(check.clean), diff, promoted, via: 'mcp',
+    });
+
+    const envelope = {
+      summary: promoted
+        ? `${wine.producer} — ${wine.name}: identity completed, the wine is now live in the registry`
+        : `${wine.name}: saved, but still missing a producer — it stays in the pending queue`,
+      data: {
+        wine_id: wine._id,
+        promoted,
+        still_pending: !promoted,
+        producer: wine.producer || null,
+        name: wine.name,
+        appellation: wine.appellation || null,
+        type: wine.type || null,
+        ...(applied.grapeNames ? { grapes: applied.grapeNames } : {}),
+        changed: Object.keys(diff),
+        note: promoted
+          ? 'The wine is now searchable, embedded, and its vintages are in the maturity queue.'
+          : 'Send a producer to promote it — everything else is optional.',
+      },
+    };
+    await logAction(ctx, {
+      tool: 'fix_pending_wine',
+      action: 'somm_pending_fix',
+      detail: { wineId: String(wine._id), fields: Object.keys(check.clean), promoted },
+      result: envelope,
+    });
+    return ok(envelope.summary, envelope.data);
   },
 });

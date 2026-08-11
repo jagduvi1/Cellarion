@@ -42,7 +42,7 @@ async function resolveCanonicalProducerSpelling(rawProducer, producerNorm) {
     const rows = await WineDefinition.aggregate([
       // Quarantined rows keep their spelling but don't get a vote — a nonWine
       // row's producer is exactly the kind of data we don't want to copy.
-      { $match: { normalizedKey: new RegExp(`^${escapeRegex(producerNorm)}:`), nonWine: { $ne: true } } },
+      { $match: { normalizedKey: new RegExp(`^${escapeRegex(producerNorm)}:`), nonWine: { $ne: true }, pendingIdentity: { $ne: true } } },
       { $group: { _id: '$producer', count: { $sum: 1 }, oldest: { $min: '$createdAt' } } },
       { $sort: { count: -1, oldest: 1 } },
       { $limit: 1 },

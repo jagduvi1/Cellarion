@@ -38,7 +38,16 @@ const WineDefinition = require('../models/WineDefinition');
 async function ensurePendingVintageProfile(wineDefinitionId, vintage) {
   if (!wineDefinitionId || !vintage || vintage === 'Unknown') return;
   try {
-    if (await WineDefinition.exists({ _id: wineDefinitionId, nonWine: true })) return;
+    // Quarantined non-wines AND pending-identity rows stay out of the somm
+    // maturity queue. For a pending row the reason is the same shape as the
+    // nonWine one: there is nothing a curator can set a drink window against
+    // until the wine has an identity — and it would double-surface the row in
+    // two queues. The pending-wines queue is where it belongs; promotion
+    // re-seeds the maturity rows from the wine's own bottles.
+    if (await WineDefinition.exists({
+      _id: wineDefinitionId,
+      $or: [{ nonWine: true }, { pendingIdentity: true }],
+    })) return;
     await WineVintageProfile.findOneAndUpdate(
       { wineDefinition: wineDefinitionId, vintage },
       { $setOnInsert: { wineDefinition: wineDefinitionId, vintage, status: 'pending', relative: vintage === 'NV' } },

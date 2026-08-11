@@ -88,7 +88,7 @@ async function listUnmatchedAppellations() {
   const [existing, rows] = await Promise.all([
     Appellation.find({}).select('normalizedName normalizedSynonyms').lean(),
     WineDefinition.aggregate([
-      { $match: { appellation: { $nin: [null, ''] }, nonWine: { $ne: true } } },
+      { $match: { appellation: { $nin: [null, ''] }, nonWine: { $ne: true }, pendingIdentity: { $ne: true } } },
       { $group: { _id: { ap: '$appellation', country: '$country', region: '$region' }, n: { $sum: 1 } } },
     ]),
   ]);

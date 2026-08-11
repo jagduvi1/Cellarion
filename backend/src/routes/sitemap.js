@@ -77,7 +77,7 @@ router.get('/', sitemapLimiter, async (req, res) => {
     // Wine pages — public wine detail pages. Prefer slug URLs when available
     // (human-readable, AI-citable); fall back to ObjectId for any wine that
     // hasn't been migrated yet so the sitemap stays complete.
-    const wines = await WineDefinition.find({ nonWine: { $ne: true } })
+    const wines = await WineDefinition.find({ nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
       .sort({ updatedAt: -1 })
       .select('_id slug updatedAt')
       .limit(5000)

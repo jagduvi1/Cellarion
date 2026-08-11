@@ -70,7 +70,13 @@ describe('scanCrossFieldChecks', () => {
 
     await scanCrossFieldChecks();
 
-    expect(WineDefinition.find).toHaveBeenCalledWith({ nonWine: { $ne: true } });
+    // pendingIdentity rows are excluded for the same reason nonWine rows are —
+    // and additionally because they have their OWN queue: surfacing an
+    // identity-less row in the cross-field scan would double-surface it, and
+    // every rule would flag it for the producer it does not have.
+    expect(WineDefinition.find).toHaveBeenCalledWith({
+      nonWine: { $ne: true }, pendingIdentity: { $ne: true },
+    });
     const selectArg = chain.select.mock.calls[0][0];
     for (const field of CROSS_FIELD_CHECK_SELECT.split(' ')) {
       expect(selectArg).toContain(field);

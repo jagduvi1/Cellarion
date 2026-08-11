@@ -2129,6 +2129,18 @@ function ImportBottles() {
           )}
         </div>
       )}
+      {/* One plain line, no dialog and no extra step: the bottles ARE imported,
+          so this is information, not an action. Rows whose wine could not be
+          fully identified used to be dropped silently; now they land and a
+          curator finishes the wine. */}
+      {importResult?.pendingIdentityCount > 0 && (
+        <p className="done-note">
+          {/* `n`, not `count`: passing i18next's magic `count` would demand a
+              plural-suffix key pair, which this codebase's i18n workflow keeps
+              out of feature PRs. */}
+          {t('importBottles.done.pendingIdentityNote', { n: importResult.pendingIdentityCount })}
+        </p>
+      )}
       {skippedDetails.length > 0 && (
         <details className="done-errors-detail">
           <summary>{t('importBottles.done.skippedSummary', { count: skippedDetails.length })}</summary>

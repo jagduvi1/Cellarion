@@ -59,7 +59,7 @@ for (const id of DEFAULT_CROSS_FIELD_CHECK_IDS) {
 async function computeMetrics() {
   // One lean pass serves both the name checks and the spelling-split count —
   // ~4k rows of three short fields, the same order of work as one admin scan.
-  const wines = await WineDefinition.find({ nonWine: { $ne: true } })
+  const wines = await WineDefinition.find({ nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
     .select(`${NAME_CHECK_SELECT} canonicalKey slug`)
     .lean();
 
@@ -86,13 +86,13 @@ async function computeMetrics() {
     // sets; dismissals only shrink the number, so an INCREASE here is always
     // a real new collision — which is the only thing this job alerts on).
     WineDefinition.aggregate([
-      { $match: { nonWine: { $ne: true }, canonicalKey: { $ne: null } } },
+      { $match: { nonWine: { $ne: true }, pendingIdentity: { $ne: true }, canonicalKey: { $ne: null } } },
       { $group: { _id: '$canonicalKey', n: { $sum: 1 } } },
       { $match: { n: { $gte: 2 } } },
       { $count: 'sets' },
     ]),
     WineDefinition.countDocuments({
-      nonWine: { $ne: true },
+      nonWine: { $ne: true }, pendingIdentity: { $ne: true },
       // Mirrors the admin queue in routes/admin/wines.js: a null confidence is
       // an unvouched-for row, not a confident one, and excluding it meant the
       // watchdog could never count the rows most worth counting.

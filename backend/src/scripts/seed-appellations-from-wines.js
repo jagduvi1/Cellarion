@@ -40,7 +40,7 @@ const { normalizeAppellationKey, normalizeAppellation } = require('../utils/norm
   await mongoose.connect(process.env.MONGO_URI || 'mongodb://mongo:27017/winecellar');
 
   const [wines, existing, admin] = await Promise.all([
-    WineDefinition.find({ appellation: { $nin: [null, ''] }, nonWine: { $ne: true } })
+    WineDefinition.find({ appellation: { $nin: [null, ''] }, nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
       .select('appellation country region createdAt').lean(),
     Appellation.find({}).select('normalizedName normalizedSynonyms').lean(),
     User.findOne({ roles: 'admin' }).select('_id').lean(),

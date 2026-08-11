@@ -70,7 +70,7 @@ const flattenWine = (w, regionNamesById, countryNamesById) => ({
  */
 async function scanCrossFieldChecks({ checkIds = DEFAULT_CROSS_FIELD_CHECK_IDS, ignoreCleared = false } = {}) {
   const { refs, regionNamesById, countryNamesById } = await loadContext();
-  const wines = await WineDefinition.find({ nonWine: { $ne: true } })
+  const wines = await WineDefinition.find({ nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
     .select(CROSS_FIELD_CHECK_SELECT)
     .sort({ producer: 1, name: 1 })
     .lean();

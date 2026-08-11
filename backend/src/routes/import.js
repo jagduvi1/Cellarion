@@ -800,6 +800,11 @@ router.post('/confirm', async (req, res) => {
     // routinely repeats the same wine, and each unique one must resolve to ONE
     // registry row per batch. normalizedKey-style key, same as /validate.
     const aiWineCache = new Map();
+    // Wines this batch minted with an incomplete identity (no usable producer,
+    // or a geography in the producer column — the classic one-column-off
+    // mapping). Their BOTTLES imported normally; only the registry entry waits
+    // on a curator. Reported once, as a plain line on the done screen.
+    let pendingIdentityCount = 0;
     // Collected rack-placement intents from this batch; processed per-rack
     // after the main loop so multiple bottles claiming the same slot can
     // overflow cleanly into adjacent free slots.
@@ -839,29 +844,36 @@ router.post('/confirm', async (req, res) => {
           // findOrCreateWine .trim()s name/producer before consulting any
           // option — a non-string must become a row error here, not a throw.
           const str = (v) => (typeof v === 'string' && v.trim() ? v : undefined);
-          if (typeof ai !== 'object' || !str(ai.name) || !str(ai.producer)) {
-            errors.push({ index: i, reason: 'AI wine data is missing its name or producer' });
+          // Name only. A row whose producer the file/AI could not supply used
+          // to die here — the strict mint gate 400'd, the catch turned it into
+          // a row error, and the user SILENTLY LOST the bottle. With
+          // allowPending the bottle lands and the wine goes to the somm queue,
+          // which is the exact friction this feature exists to remove.
+          if (typeof ai !== 'object' || !str(ai.name)) {
+            errors.push({ index: i, reason: 'AI wine data is missing its name' });
             continue;
           }
-          const aiKey = `${normalizeString(ai.name)}:${normalizeString(ai.producer)}`;
+          const aiKey = `${normalizeString(ai.name)}:${normalizeString(ai.producer || '')}`;
           let wine = aiWineCache.get(aiKey);
           if (!wine) {
             const { wine: resolved, created } = await findOrCreateWine({
               name: ai.name,
-              producer: ai.producer,
+              producer: str(ai.producer) || '',
               country: str(ai.country),
               region: str(ai.region),
               appellation: str(ai.appellation),
               type: str(ai.type),
               grapes: sanitizeGrapeNames(ai.grapes),
-            }, req.user.id, { createdVia: 'import' });
+            }, req.user.id, { createdVia: 'import', allowPending: true });
             wine = resolved;
             aiWineCache.set(aiKey, wine);
             if (created) {
+              if (wine.pendingIdentity) pendingIdentityCount++;
               // Same action name as the MCP/admin/find-or-create surfaces so
               // registry writes read as one audit stream (2026-08-03 M-1).
               logAudit(req, 'wine.create', { type: 'wine', id: wine._id },
-                { via: 'import', name: wine.name, producer: wine.producer });
+                { via: 'import', name: wine.name, producer: wine.producer || null,
+                  ...(wine.pendingIdentity ? { pendingIdentity: true } : {}) });
             }
           }
           // Hand the resolved doc straight to the bottle-creation flow below —
@@ -1244,7 +1256,12 @@ router.post('/confirm', async (req, res) => {
       racksCreated: createdRacks.length,
       placed: placedCount,
       overflowed: overflowedCount,
-      unplaced: unplacedDetails.length
+      unplaced: unplacedDetails.length,
+      // Extends the EXISTING import audit rather than inventing a second
+      // action: how many registry rows this import left for curation is part
+      // of the same event, and splitting it would break the one-line-per-import
+      // reading of the audit stream.
+      pendingIdentity: pendingIdentityCount
     });
 
     res.json({
@@ -1258,7 +1275,8 @@ router.post('/confirm', async (req, res) => {
       racksCreated: createdRacks,
       placed: placedCount,
       overflowed: overflowedCount,
-      unplaced: unplacedDetails
+      unplaced: unplacedDetails,
+      pendingIdentityCount
     });
   } catch (error) {
     console.error('Import confirm error:', error);

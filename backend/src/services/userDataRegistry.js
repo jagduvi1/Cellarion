@@ -184,15 +184,29 @@ const REGISTRY = [
       const own = await BottleImage.find({ uploadedBy: ctx.userId, assignedToWine: { $ne: true } })
         .select('originalUrl processedUrl').lean();
       for (const img of own) await unlinkImageFiles(img);
+      // Label-scan images (kind:'label-scan') are in that hard-delete set —
+      // they are never assignedToWine. A pending/curated WineDefinition may
+      // POINT at one via scanImage, and a dangling pointer would make the
+      // pending queue 404 on an image forever, so the reference is cleared in
+      // the same pass. Deliberately keyed on the image ids we are about to
+      // delete rather than on the user: a wine created by someone ELSE can
+      // legitimately carry this user's scan (a second bottle supplied it).
+      const ownIds = own.map((i) => i._id);
       await Promise.all([
         BottleImage.deleteMany({ uploadedBy: ctx.userId, assignedToWine: { $ne: true } }),
         BottleImage.updateMany({ uploadedBy: ctx.userId, assignedToWine: true }, { $set: { uploadedBy: ctx.deletedUserId } }),
         BottleImage.updateMany({ reviewedBy: ctx.userId }, { $unset: { reviewedBy: '' } }),
+        ownIds.length
+          ? WineDefinition.updateMany({ scanImage: { $in: ownIds } }, { $set: { scanImage: null } })
+          : Promise.resolve(),
       ]);
     },
     exportFragment: async (ctx) => ({
+      // `kind` rides along so the export distinguishes the user's bottle photos
+      // from the label frames the scanner kept — same three fields otherwise,
+      // same URL-reference form (the bytes ship in the full-export ZIP).
       images: markTrunc(ctx, 'images', await BottleImage.find({ uploadedBy: ctx.userId }).limit(EXPORT_MAX).lean())
-        .map(i => ({ originalUrl: i.originalUrl, processedUrl: i.processedUrl, uploadedAt: i.createdAt })),
+        .map(i => ({ originalUrl: i.originalUrl, processedUrl: i.processedUrl, uploadedAt: i.createdAt, kind: i.kind || 'bottle' })),
     }),
   },
   {

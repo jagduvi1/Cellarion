@@ -151,4 +151,52 @@ async function attachOfficialWineImage({ buffer, wineDefinitionId, credit = null
   return { image };
 }
 
-module.exports = { ingestBottleImage, attachOfficialWineImage, MAX_IMAGES_PER_BOTTLE };
+/**
+ * Persist the ORIGINAL frame a label scan was run on, so a curator working the
+ * pending-identity queue can read the label instead of guessing from three
+ * broken strings. Until now the scan bytes lived only in the request handler
+ * and were garbage-collected with it — which is exactly why an unreadable
+ * label produced an unfixable registry row.
+ *
+ * Deliberately NOT ingestBottleImage: no per-bottle cap applies (there is no
+ * bottle), no background removal is kicked off (the scan flow already ran one
+ * on a copy, and a curator wants the untouched frame), and the row is born
+ * private + kind:'label-scan' so it can never reach a gallery or a wine image.
+ *
+ * The buffer must ALREADY be sanitised (the scan route's sanitizeImageBuffer
+ * output — decoded, pixel-capped, EXIF/GPS stripped): this function persists
+ * what it is given, so passing raw client bytes here would be a bug.
+ *
+ * Best-effort by contract: a failure returns null and the caller carries on —
+ * losing the scan copy must never fail the user's scan.
+ *
+ * @returns {Promise<object|null>} the BottleImage doc, or null
+ */
+async function persistLabelScan({ buffer, userId }) {
+  try {
+    if (!Buffer.isBuffer(buffer) || buffer.length === 0) return null;
+    const format = detectImageFormat(buffer);
+    if (!format) return null;
+    const filename = `${crypto.randomUUID()}.${EXT_FOR[format]}`;
+    await fs.promises.writeFile(path.join(ORIGINALS_DIR, filename), buffer);
+    let contentHash = null;
+    try { contentHash = hashImageBytes(buffer); } catch { /* non-fatal */ }
+    const image = new BottleImage({
+      bottle: null,
+      wineDefinition: null,     // set at commit, by services/wineCommit
+      uploadedBy: userId,
+      originalUrl: `/api/uploads/originals/${filename}`,
+      status: 'uploaded',
+      visibility: 'private',
+      kind: 'label-scan',
+      contentHash,
+    });
+    await image.save();
+    return image;
+  } catch (err) {
+    console.warn('[imageOps] label-scan persist failed (non-fatal):', err.message);
+    return null;
+  }
+}
+
+module.exports = { ingestBottleImage, attachOfficialWineImage, persistLabelScan, MAX_IMAGES_PER_BOTTLE };

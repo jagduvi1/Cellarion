@@ -72,7 +72,13 @@ async function planItem(item, userId) {
   }
 
   const { findOrCreateWine } = require('../../services/findOrCreateWine');
-  const res = await findOrCreateWine(item.new_wine, userId, { matchOnly: true });
+  // producer is optional on NEW_WINE_SHAPE now; findOrCreateWine's .trim() runs
+  // before any option is consulted, so a preview must hand it '' not undefined.
+  const res = await findOrCreateWine(
+    { ...item.new_wine, producer: item.new_wine.producer || '' },
+    userId,
+    { matchOnly: true }
+  );
   if (res.wine) {
     // Registry already knows it — upgrade the item to the existing wine.
     return { status: 'ready', wine_id: String(res.wine._id), wine: wineSummary(res.wine), matched_existing: true };
@@ -209,12 +215,16 @@ registerTool({
           // of silently bypassing the registry guard.
           const res = await findOrCreateWine(item.new_wine, ctx.user.id, {
             confirmCreate: !!p.despite_candidates, skipSiblingMatch: false, createdVia: 'mcp',
+            // Same commit-path rule as add_bottle: an incomplete identity files
+            // a pendingIdentity row for sommelier completion instead of losing
+            // the bottle mid-batch.
+            allowPending: true,
           });
           if (!res.wine) { failures.push({ index: i, error: 'similar wines appeared since the preview — resolve this item individually with resolve_wine' }); continue; }
           wineDoc = res.wine;
           if (res.created) {
             winesCreated.push(String(wineDoc._id));
-            logAudit(ctx.req, 'wine.create', { type: 'wine', id: wineDoc._id }, { via: 'mcp', bulk: true, name: wineDoc.name, producer: wineDoc.producer });
+            logAudit(ctx.req, 'wine.create', { type: 'wine', id: wineDoc._id }, { via: 'mcp', bulk: true, name: wineDoc.name, producer: wineDoc.producer || null, ...(wineDoc.pendingIdentity ? { pendingIdentity: true } : {}) });
           }
         }
         const result = await addBottle(access.cellar, wineDoc, {

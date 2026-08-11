@@ -19,7 +19,7 @@ const Region = require('../models/Region');
 const Grape = require('../models/Grape');
 const Appellation = require('../models/Appellation');
 const searchService = require('./search');
-const { generateWineKey, normalizeString, normalizeAppellation, normalizeAppellationKey, stripTrailingVintage, resolveGrapeName, resolveCountryName, isRecognizedCountry, isUnknownName, isJunkGrapeName, sanitizeTaxonomyName } = require('../utils/normalize');
+const { generateWineKey, normalizeString, normalizeAppellation, normalizeAppellationKey, stripTrailingVintage, resolveGrapeName, resolveCountryName, isRecognizedCountry, isUnknownName, isIdentitySentinel, isJunkGrapeName, sanitizeTaxonomyName } = require('../utils/normalize');
 const { scoreAllMatches } = require('./wineMatching');
 const { canonicalizeWineName } = require('../utils/producerPrefix');
 const { computeCanonicalKey, canonicalSiblingPrefix } = require('../utils/wineIdentity');
@@ -39,6 +39,23 @@ const SIMILARITY_THRESHOLD = 0.95;
 const SOFT_ZONE_MIN = 0.85;
 const SOFT_ZONE_TOP_N = 5;
 const POPULATE = ['country', 'region', 'grapes'];
+
+// ── Pending identity ─────────────────────────────────────────────────────────
+//
+// The producer segment a pending (producerless) row keys under. Built by
+// STRING CONCATENATION, deliberately NOT through generateWineKey: normalizeString
+// emits [a-z0-9 ] only — it strips '~' — so a segment containing '~' is one no
+// real producer can ever produce, which is what makes the pending key namespace
+// provably disjoint from the ordinary one under the UNIQUE normalizedKey index.
+// The creator id in the segment is what stops two users' identical producerless
+// adds from colliding (one would otherwise inherit the other's row via the
+// E11000 recovery), while making the SAME user's retry key identically and
+// resolve to their own row instead of minting again.
+// See the pendingIdentity field note on models/WineDefinition.js.
+const PENDING_KEY_PREFIX = 'pending~';
+const pendingProducerKey = (userId) => `${PENDING_KEY_PREFIX}${String(userId)}`;
+const pendingWineKey = (name, userId, appellation = '') =>
+  `${pendingProducerKey(userId)}:${normalizeString(name)}:${normalizeString(appellation)}`;
 
 // ── Taxonomy helpers ─────────────────────────────────────────────────────────
 
@@ -183,14 +200,30 @@ async function findOrCreateGrapes(rawNames, userId) {
  *   the user should have picked, which is the duplication the read-only change exists to stop.
  *   ⚠️ Not throw-free: the .trim() on name/producer runs before any option is consulted, so
  *   callers passing model output must normalize types first (identify-text does).
+ * @param {boolean} [opts.allowPending=false] - COMMIT paths only. When the identity is
+ *   incomplete — producer missing, a sentinel ("Unknown", "N/A", "-"), unusable, or a
+ *   geography typed into the producer box — mint a pendingIdentity row instead of throwing
+ *   400, so the user's bottle SAVES and a curator completes the wine later. Passed by
+ *   services/wineCommit (bottle + wishlist + MCP add), routes/import.js /confirm and
+ *   services/cellarImport. NEVER passed by the deliberate shared-registry curation
+ *   surfaces (routes/admin/wines.js, routes/admin/wineRequests.js, MCP
+ *   admin_add_registry_wine): a curator typing "Bordeaux" as producer SHOULD be told.
  */
-async function findOrCreateWine({ name, producer, country, region, appellation, type, grapes }, userId, { confirmCreate = false, skipSiblingMatch = false, matchOnly = false, createdVia = null } = {}) {
+async function findOrCreateWine({ name, producer, country, region, appellation, type, grapes }, userId, { confirmCreate = false, skipSiblingMatch = false, matchOnly = false, createdVia = null, allowPending = false } = {}) {
   // Internal whitespace collapses too, not just the ends: a double space is
   // invisible in every UI and every normalized key, so "Wrights  Estate" and
   // "Wrights Estate" would otherwise coexist as two display spellings forever
   // (found by the unify script's first prod-data dry run).
   let trimmedName = name.trim().replace(/\s+/g, ' ').slice(0, MAX_FIELD);
-  const trimmedProducer = producer.trim().replace(/\s+/g, ' ').slice(0, MAX_FIELD);
+  // A sentinel producer is MISSING information, not a producer — storing
+  // "Unknown" would put it in the shared registry for everyone else's wines to
+  // match against (prod grew a producer literally named "Unknown" that way).
+  // Only consulted when the caller allows pending: without it the `.trim()`
+  // below keeps its exact historical behaviour, including on non-strings.
+  let producerMissing = allowPending && isIdentitySentinel(producer);
+  let trimmedProducer = producerMissing
+    ? ''
+    : producer.trim().replace(/\s+/g, ' ').slice(0, MAX_FIELD);
   // Canonicalize the appellation (strip a trailing DOCG/DOC/AOC/… tier) so
   // "Barolo" and "Barolo DOCG" resolve to / create ONE registry appellation
   // instead of two (ticket #2C). The tier belongs in classification.
@@ -198,7 +231,7 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // one (strategy R2) — BEFORE key generation, so a synonym ("Chateauneuf du
   // Pape") produces the same normalizedKey as the canonical form and the
   // exact-match stage collapses them instead of minting a sibling.
-  const trimmedAppellation = await resolveCanonicalAppellation(
+  let trimmedAppellation = await resolveCanonicalAppellation(
     normalizeAppellation((typeof appellation === 'string' ? appellation.trim() : '')).slice(0, MAX_FIELD)
   );
 
@@ -238,10 +271,22 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     return Boolean(candidateCountry && candidateCountry !== queryCountryKey);
   };
 
+  // Pending-identity ISOLATION. A pending row is invisible to everyone but its
+  // creator and curation, and that has to hold in the RESOLVER too — otherwise
+  // user B's add silently attaches to user A's half-identified wine and the
+  // registry quietly merges two strangers' records. Every match stage below is
+  // gated on this predicate; the SAME creator still matches their own pending
+  // row, which is what makes a retry (or a second bottle of the same wine)
+  // resolve instead of minting again.
+  const pendingBlocked = (candidate) =>
+    !!candidate && candidate.pendingIdentity === true && String(candidate.createdBy) !== String(userId);
+
   // 1. Exact match by normalizedKey
-  const normalizedKey = generateWineKey(trimmedName, trimmedProducer, trimmedAppellation);
+  const normalizedKey = producerMissing
+    ? pendingWineKey(trimmedName, userId, trimmedAppellation)
+    : generateWineKey(trimmedName, trimmedProducer, trimmedAppellation);
   let wine = await WineDefinition.findOne({ normalizedKey }).populate(POPULATE);
-  if (wine) return { wine, created: false };
+  if (wine && !pendingBlocked(wine)) return { wine, created: false };
 
   // 1a. Canonical-identity match: collapses producer spelling variants,
   // producer-in-name embeds and appellation tiers, so ANY spelling of an
@@ -254,9 +299,15 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // identity-level hit is the same wine (the different-country guard covers
   // the distinct-winery collisions).
   const canonicalKey = computeCanonicalKey(trimmedName, trimmedProducer, trimmedAppellation);
-  const canonicalHits = await WineDefinition.find({ canonicalKey })
+  // canonicalKey carries NO pending marker (it is computed by the model hook,
+  // which cannot know the caller): a producerless row keys ':name:app'. That is
+  // harmless because it is non-unique — but it does mean another creator's
+  // pending row can land here, so the isolation gate is load-bearing, not
+  // defensive. Filtered BEFORE the length check so a blocked row doesn't make a
+  // real single hit look ambiguous.
+  const canonicalHits = (await WineDefinition.find({ canonicalKey })
     .limit(2)
-    .populate(POPULATE);
+    .populate(POPULATE)).filter((c) => !pendingBlocked(c));
   if (canonicalHits.length === 1 && !conflictsCountry(canonicalHits[0])) {
     return { wine: canonicalHits[0], created: false };
   }
@@ -279,19 +330,24 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // mis-match them (folded query keys are a strict subset of fold-class
   // spellings; audit 2026-08-10).
   if (!skipSiblingMatch) {
-    const canonicalSiblings = await WineDefinition.find({
+    // Same isolation gate as the two stages above — a sibling scan on a
+    // producerless query keys ':name:' and would otherwise sweep in every other
+    // creator's producerless row of the same name.
+    const canonicalSiblings = (await WineDefinition.find({
       canonicalKey: new RegExp(`^${escapeRegex(canonicalSiblingPrefix(trimmedName, trimmedProducer))}`),
     })
       .limit(2)
-      .populate(POPULATE);
+      .populate(POPULATE)).filter((c) => !pendingBlocked(c));
     if (canonicalSiblings.length === 1 && !conflictsCountry(canonicalSiblings[0])) {
       return { wine: canonicalSiblings[0], created: false };
     }
     if (canonicalSiblings.length === 0) {
-      const siblingPrefix = `${normalizeString(trimmedProducer)}:${normalizeString(trimmedName)}:`;
-      const siblings = await WineDefinition.find({ normalizedKey: new RegExp(`^${escapeRegex(siblingPrefix)}`) })
+      const siblingPrefix = producerMissing
+        ? `${pendingProducerKey(userId)}:${normalizeString(trimmedName)}:`
+        : `${normalizeString(trimmedProducer)}:${normalizeString(trimmedName)}:`;
+      const siblings = (await WineDefinition.find({ normalizedKey: new RegExp(`^${escapeRegex(siblingPrefix)}`) })
         .limit(2)
-        .populate(POPULATE);
+        .populate(POPULATE)).filter((c) => !pendingBlocked(c));
       if (siblings.length === 1 && !conflictsCountry(siblings[0])) {
         return { wine: siblings[0], created: false };
       }
@@ -323,6 +379,12 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
       // No text-index match — proceed to creation
     }
   }
+
+  // Pending rows are not in Meilisearch at all, but the MongoDB $text fallback
+  // above reads the collection directly — drop them here so neither the
+  // auto-match nor the soft-zone "did you mean?" list can ever show a stranger
+  // one (the soft zone would leak the row's existence even without linking it).
+  candidates = candidates.filter((c) => !pendingBlocked(c));
 
   // When creation proceeds PAST a soft-zone-level top candidate (confirmCreate
   // callers skip the "did you mean?" gate), report that near-miss back so
@@ -378,29 +440,65 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // Barolo" and "La Rioja Alta" pass while bare "Barolo" / "La Rioja" do not.
   // Mint-time only (like the country gate): existing rows keep resolving
   // above until the data cleanup re-points them.
-  const producerNorm = normalizeString(trimmedProducer);
-  if (producerNorm.length < 2) {
-    const err = new Error(`"${trimmedProducer}" is not a usable producer name`);
-    err.status = 400;
-    throw err;
+  //
+  // With allowPending each of these gates has a SECOND outcome: instead of
+  // 400-ing away the user's bottle, the wine mints pendingIdentity and a
+  // curator finishes it. Without allowPending the gates throw exactly as they
+  // always have, byte-identical messages included — the deliberate
+  // shared-registry curation surfaces must keep being told.
+  let producerNorm = normalizeString(trimmedProducer);
+  if (!producerMissing && producerNorm.length < 2) {
+    if (!allowPending) {
+      const err = new Error(`"${trimmedProducer}" is not a usable producer name`);
+      err.status = 400;
+      throw err;
+    }
+    // A producer that normalizes to nothing carries no information — the same
+    // state as an absent one. Never stored.
+    producerMissing = true;
+    trimmedProducer = '';
+    producerNorm = '';
   }
-  const [placeCountry, placeRegion, placeAppellation] = await Promise.all([
-    Country.exists({ normalizedName: producerNorm }),
-    Region.exists({ $or: [{ normalizedName: producerNorm }, { normalizedSynonyms: producerNorm }] }),
-    // Appellation keys fold hyphens to spaces (normalizeAppellationKey) —
-    // querying with plain normalizeString would MISS every hyphenated
-    // appellation doc ("Châteauneuf-du-Pape") and silently reopen the
-    // place-as-producer hole for exactly the places the seed script promotes
-    // (audit 2026-07-29 A3). Both keys queried: legacy docs may still carry
-    // the old fold until the backfill script has run.
-    Appellation.exists({ normalizedName: { $in: [producerNorm, normalizeAppellationKey(trimmedProducer)] } }),
-  ]);
-  if (placeCountry || placeRegion || placeAppellation) {
-    const err = new Error(
-      `"${trimmedProducer}" is a wine region, not a producer — put the actual winery in the producer field`
-    );
-    err.status = 400;
-    throw err;
+  if (!producerMissing) {
+    const [placeCountry, placeRegion, placeAppellation] = await Promise.all([
+      Country.exists({ normalizedName: producerNorm }),
+      Region.exists({ $or: [{ normalizedName: producerNorm }, { normalizedSynonyms: producerNorm }] }),
+      // Appellation keys fold hyphens to spaces (normalizeAppellationKey) —
+      // querying with plain normalizeString would MISS every hyphenated
+      // appellation doc ("Châteauneuf-du-Pape") and silently reopen the
+      // place-as-producer hole for exactly the places the seed script promotes
+      // (audit 2026-07-29 A3). Both keys queried: legacy docs may still carry
+      // the old fold until the backfill script has run.
+      Appellation.exists({ normalizedName: { $in: [producerNorm, normalizeAppellationKey(trimmedProducer)] } }),
+    ]);
+    if (placeCountry || placeRegion || placeAppellation) {
+      if (!allowPending) {
+        const err = new Error(
+          `"${trimmedProducer}" is a wine region, not a producer — put the actual winery in the producer field`
+        );
+        err.status = 400;
+        throw err;
+      }
+      // The user did not invent data — they put a real place in the wrong box.
+      // MOVE it to the box it belongs in when that one is empty (the commonest
+      // shape by far: an import column mapped one field left), otherwise just
+      // drop it. Either way the producer is now missing → pending.
+      const misplaced = trimmedProducer;
+      if (placeCountry) {
+        if (!(typeof country === 'string' && country.trim()) || isUnknownName(country)) country = misplaced;
+      } else if (placeRegion) {
+        if (!(typeof region === 'string' && region.trim()) || isUnknownName(region)) region = misplaced;
+      } else if (!trimmedAppellation) {
+        // Same canonicalisation the appellation field got at the top, so the
+        // moved value keys identically to a typed one.
+        trimmedAppellation = await resolveCanonicalAppellation(
+          normalizeAppellation(misplaced).slice(0, MAX_FIELD)
+        );
+      }
+      producerMissing = true;
+      trimmedProducer = '';
+      producerNorm = '';
+    }
   }
 
   // Adopt the registry's majority spelling for this producer (accent, case
@@ -408,7 +506,17 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // Display-only: every derived key (normalizedKey, canonicalKey, slug) folds
   // both spellings identically, which is precisely why nothing upstream of
   // this point needs recomputing and why no key-based net ever caught these.
-  const producerToStore = await resolveCanonicalProducerSpelling(trimmedProducer, producerNorm);
+  const producerToStore = producerMissing
+    ? ''
+    : await resolveCanonicalProducerSpelling(trimmedProducer, producerNorm);
+
+  // The key may have moved since step 1: a geography-as-producer MOVE changes
+  // both the producer segment (→ pending) and possibly the appellation one.
+  // Recompute so the row is stored under the key a repeat submission will look
+  // it up by (and so the E11000 recovery below re-queries the right one).
+  const mintKey = producerMissing
+    ? pendingWineKey(trimmedName, userId, trimmedAppellation)
+    : normalizedKey;
 
   // Resolve taxonomy
   const countryDoc = await findOrCreateCountry(country, userId);
@@ -442,11 +550,16 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     appellation: trimmedAppellation || null,
     type: wineType,
     grapes: grapeIds,
-    normalizedKey,
+    normalizedKey: mintKey,
     createdBy: userId,
     // Surface provenance ('mcp' = minted by a connected AI) — reviewable as a
     // class by admins; see WineDefinition.createdVia.
-    createdVia
+    createdVia,
+    // Hidden from everyone but its creator and curation until a somm completes
+    // the identity (models/WineDefinition.pendingIdentity). The model's
+    // pre-validate hook promotes it automatically once producer + name are both
+    // real, so nothing has to remember to clear this.
+    pendingIdentity: producerMissing,
   });
 
   try {
@@ -454,7 +567,12 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   } catch (err) {
     if (err.code === 11000) {
       // Race condition: another request created the same wine concurrently
-      wine = await WineDefinition.findOne({ normalizedKey }).populate(POPULATE);
+      wine = await WineDefinition.findOne({ normalizedKey: mintKey }).populate(POPULATE);
+      // A raced row that is someone ELSE's pending wine must not be handed
+      // over (the pending key namespace makes this unreachable — the creator id
+      // is in the key — but the caller's 409-and-retry is the right answer if
+      // it ever became reachable, not a silent cross-user attach).
+      if (pendingBlocked(wine)) return { wine: null, created: false };
       return { wine, created: false };
     }
     throw err;
@@ -462,12 +580,23 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
 
   await newWine.populate(POPULATE);
 
-  // Sync to Meilisearch (fire-and-forget)
+  // Sync to Meilisearch (fire-and-forget). Called unconditionally, exactly like
+  // the nonWine quarantine: indexWine owns index MEMBERSHIP and removes a
+  // hidden row rather than adding it, so a later promotion re-adding the row is
+  // the same one call.
   searchService.indexWine(newWine._id);
 
-  return nearMiss
-    ? { wine: newWine, created: true, nearMiss }
-    : { wine: newWine, created: true };
+  const created = { wine: newWine, created: true };
+  if (nearMiss) created.nearMiss = nearMiss;
+  if (producerMissing) created.pendingIdentity = true;
+  return created;
 }
 
-module.exports = { findOrCreateWine, findOrCreateCountry, findOrCreateRegion, findOrCreateGrapes };
+module.exports = {
+  findOrCreateWine,
+  findOrCreateCountry,
+  findOrCreateRegion,
+  findOrCreateGrapes,
+  pendingProducerKey,
+  pendingWineKey,
+};

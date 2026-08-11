@@ -6,6 +6,27 @@ export const getSommWineProfileSchema = (apiFetch) =>
   apiFetch('/api/somm/wine-profile/schema');
 
 /**
+ * The pending-identity queue: registry wines minted at bottle-commit from an
+ * incomplete identity (unreadable label, missing producer, geography in the
+ * producer box). Anonymised — no creator is ever returned.
+ * `params` is a URLSearchParams: page, limit, createdVia.
+ */
+export const sommGetPendingWines = (apiFetch, params) =>
+  apiFetch(`/api/somm/pending-wines?${params}`);
+
+/**
+ * Complete a pending wine's identity. Fields: producer, name, appellation,
+ * regionName, countryName, grapeNames[], type — all optional, send what you
+ * fixed. Filling producer + name promotes the wine automatically.
+ */
+export const sommFixPendingWine = (apiFetch, wineId, patch) =>
+  apiFetch(`/api/somm/pending-wines/${wineId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+
+/**
  * Correct a wine's tasting profile. Field-level: omit a key to leave it alone,
  * pass null to clear it.
  */

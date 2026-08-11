@@ -245,7 +245,10 @@ async function fullSync() {
     return await syncViaCursor(
       // Quarantined non-wine rows (spirits/cider/sake kept for their owners —
       // registry audit 2026-07-26, policy: keep, hide) never enter the index.
-      WineDefinition.find({ nonWine: { $ne: true } })
+      // Neither do pendingIdentity rows: a half-identified wine must not be
+      // findable by strangers in registry search. The BOTTLES index is
+      // deliberately untouched — an owner keeps finding their own bottle.
+      WineDefinition.find({ nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
         .populate('country', 'name')
         .populate('region', 'name')
         // regionalNames feed wineGrapeSearchNames (regional display recall).
@@ -275,7 +278,11 @@ async function indexWine(wineId) {
 
     // A wine flagged non-wine after having been indexed must LEAVE the index —
     // indexWine is called on every save, so the flag toggle self-heals here.
-    if (wine.nonWine === true) {
+    // pendingIdentity rides the same switch in BOTH directions: a pending mint
+    // never enters, and the promoting write's own indexWine() call is what puts
+    // the completed wine INTO the index (there is no separate "add on promote"
+    // path to forget — this is it).
+    if (wine.nonWine === true || wine.pendingIdentity === true) {
       await index.deleteDocument(String(wine._id));
       return;
     }

@@ -179,7 +179,12 @@ async function runJob(cfg) {
           .populate('grapes', 'name regionalNames')
           .lean();
 
-        if (!wine) {
+        // A pendingIdentity wine is never embedded: its text would be
+        // "<name> — " with no producer and often a misplaced region, so it
+        // would pollute semantic search AND the similar-wines graph with a row
+        // strangers must not see anyway. The promoting write re-embeds
+        // (reembedActiveVintages), which is when the pair genuinely enters.
+        if (!wine || wine.pendingIdentity === true) {
           job.skipped++;
           job.done++;
           continue;
@@ -326,7 +331,11 @@ async function embedSinglePair(wineDefId, vintage) {
       .populate('grapes', 'name regionalNames')
       .lean();
 
-    if (!wine) return;
+    // Same rule as the batch loop: never embed a pending-identity row. This is
+    // the fire-and-forget call every bottle add makes, so without it the very
+    // add that mints a pending wine would immediately index it for semantic
+    // search — the one surface that would leak it to strangers.
+    if (!wine || wine.pendingIdentity === true) return;
 
     const text = buildEmbeddingText(wine, vintage);
     const textHash = sha256(text);
