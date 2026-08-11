@@ -25,6 +25,7 @@ const DiscussionReply = require('../../models/DiscussionReply');
 const WineEmbedding = require('../../models/WineEmbedding');
 const WineNotDuplicate = require('../../models/WineNotDuplicate');
 const WineCorrectionProposal = require('../../models/WineCorrectionProposal');
+const { repointInquiriesForWineMerge, closeInquiriesForWineDelete } = require('../../services/ownerInquiryOps');
 const WineList = require('../../models/WineList');
 const WishlistItem = require('../../models/WishlistItem');
 const PriceTrackingRequest = require('../../models/PriceTrackingRequest');
@@ -1379,6 +1380,8 @@ router.delete('/:id', async (req, res) => {
         { status: 'pending', $or: [{ wineDefinition: id }, { mergeTargetId: id }] },
         { $set: { status: 'rejected', decidedAt: new Date(), rejectReason: 'Closed automatically: the wine was deleted before review.' } }
       ),
+      // Active owner inquiries have nothing left to verify — same closure.
+      closeInquiriesForWineDelete(id, req),
       // Qdrant points + WineEmbedding bookkeeping rows (same helper as merge).
       purgeSourceVectors(id),
     ]);
@@ -1604,6 +1607,12 @@ async function performWineMerge(sourceId, targetId, req) {
       rejectReason: `Closed automatically: the wine was merged into "${keeperLabel}". Re-file against that wine if the issue still applies.`.slice(0, 500),
     } }
   );
+
+  // Owner inquiries take the opposite path to proposals: the merge does NOT
+  // resolve the question — the bottles (and their owners) moved to the keeper,
+  // so active inquiries FOLLOW them. Only an open inquiry colliding with the
+  // keeper's own open one closes (with the proposal-style reason).
+  await repointInquiriesForWineMerge(sourceId, targetId, keeperLabel, req);
 
   // Re-embed the keeper's vintages (it just absorbed the source's bottles and
   // possibly its profile) so semantic search reflects the merged wine.

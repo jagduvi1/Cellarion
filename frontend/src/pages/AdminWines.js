@@ -6,6 +6,7 @@ import {
   adminMergeWine,
   adminGetCountries, adminGetGrapes, adminGetRegions, adminGetAppellations,
   adminAssignImageToWine, adminReindexSearch, adminGetWineProposals,
+  adminGetOwnerInquiries, adminAskOwnerInquiry,
 } from '../api/admin';
 import Modal from '../components/Modal';
 import Drawer from '../components/Drawer';
@@ -16,6 +17,7 @@ import WineCanonicalCollisionsModal from '../components/WineCanonicalCollisionsM
 import WineFragmentationModal from '../components/WineFragmentationModal';
 import WineCrossFieldChecksModal from '../components/WineCrossFieldChecksModal';
 import WineProposalsModal from '../components/WineProposalsModal';
+import OwnerInquiriesModal from '../components/OwnerInquiriesModal';
 import { WINE_TYPES } from '../config/wineTypes';
 import GrapePicker from '../components/GrapePicker';
 import ImageUpload from '../components/ImageUpload';
@@ -95,6 +97,16 @@ function AdminWines() {
   const [proposalsPending, setProposalsPending] = useState(0);
   const [reindexing, setReindexing] = useState(false);
 
+  // Owner-inquiry queue (curator questions to bottle owners + their answers).
+  const [showOwnerInquiries, setShowOwnerInquiries] = useState(false);
+  const [inquiriesPending, setInquiriesPending] = useState(0);
+  // "Ask the owner" mini-modal on a wine row.
+  const [askOwnerWine, setAskOwnerWine] = useState(null);
+  const [askQuestion, setAskQuestion] = useState('');
+  const [asking, setAsking] = useState(false);
+  const [askError, setAskError] = useState(null);
+  const [askResult, setAskResult] = useState(null); // { recipientCount, fallbackUsed }
+
   const refreshProposalsBadge = useCallback(async () => {
     try {
       const res = await adminGetWineProposals(apiFetch, new URLSearchParams({ status: 'pending', limit: 1 }));
@@ -104,7 +116,47 @@ function AdminWines() {
     } catch { /* badge only — the button works without it */ }
   }, [apiFetch]);
 
+  const refreshInquiriesBadge = useCallback(async () => {
+    try {
+      const res = await adminGetOwnerInquiries(apiFetch, new URLSearchParams({ status: 'active', limit: 1 }));
+      if (!res.ok) return;
+      const data = await res.json().catch(() => ({}));
+      setInquiriesPending(data.pendingCount || 0);
+    } catch { /* badge only — the button works without it */ }
+  }, [apiFetch]);
+
   useEffect(() => { refreshProposalsBadge(); }, [refreshProposalsBadge]);
+  useEffect(() => { refreshInquiriesBadge(); }, [refreshInquiriesBadge]);
+
+  const closeAskOwner = () => {
+    if (asking) return;
+    setAskOwnerWine(null);
+    setAskQuestion('');
+    setAskError(null);
+    setAskResult(null);
+  };
+
+  const submitAskOwner = async (e) => {
+    e.preventDefault();
+    const question = askQuestion.trim();
+    if (question.length < 10 || asking) return;
+    setAsking(true);
+    setAskError(null);
+    try {
+      const res = await adminAskOwnerInquiry(apiFetch, askOwnerWine._id, question);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setAskResult({ recipientCount: data.recipientCount || 0, fallbackUsed: !!data.fallbackUsed });
+        refreshInquiriesBadge();
+      } else {
+        setAskError(data.error || t('admin.wines.ownerInquiries.askError'));
+      }
+    } catch {
+      setAskError(t('common.networkError'));
+    } finally {
+      setAsking(false);
+    }
+  };
 
   const handleReindex = async () => {
     setReindexing(true);
@@ -432,6 +484,11 @@ function AdminWines() {
             {proposalsPending > 0
               ? t('admin.wines.proposals.buttonWithCount', { count: proposalsPending })
               : t('admin.wines.proposals.button')}
+          </button>
+          <button className="btn btn-secondary" onClick={() => setShowOwnerInquiries(true)} title={t('admin.wines.ownerInquiries.buttonTitle')}>
+            {inquiriesPending > 0
+              ? t('admin.wines.ownerInquiries.buttonWithCount', { count: inquiriesPending })
+              : t('admin.wines.ownerInquiries.button')}
           </button>
           <button className="btn btn-secondary" onClick={handleReindex} disabled={reindexing} title={t('admin.wines.reindexSearchTitle')}>
             {reindexing ? '…' : t('admin.wines.reindexSearch')}
@@ -783,6 +840,13 @@ function AdminWines() {
                       {t('common.edit')}
                     </button>
                     <button
+                      className="btn btn-secondary btn-small"
+                      title={t('admin.wines.ownerInquiries.askTitle')}
+                      onClick={() => { setAskOwnerWine(wine); setAskQuestion(''); setAskError(null); setAskResult(null); }}
+                    >
+                      {t('admin.wines.ownerInquiries.askBtn')}
+                    </button>
+                    <button
                       className="btn btn-danger btn-small"
                       onClick={() => handleDelete(wine)}
                     >
@@ -965,6 +1029,61 @@ function AdminWines() {
           onClose={() => setShowProposals(false)}
           onChanged={() => { refreshProposalsBadge(); fetchWines(); }}
         />
+      )}
+
+      {showOwnerInquiries && (
+        <OwnerInquiriesModal
+          apiFetch={apiFetch}
+          onClose={() => setShowOwnerInquiries(false)}
+          onChanged={refreshInquiriesBadge}
+        />
+      )}
+
+      {/* "Ask the owner" — send this wine's bottle owners a record question */}
+      {askOwnerWine && (
+        <Modal title={t('admin.wines.ownerInquiries.askModalTitle')} onClose={closeAskOwner}>
+          <p style={{ marginTop: 0 }}>
+            <strong>{[askOwnerWine.producer, askOwnerWine.name].filter(Boolean).join(' — ')}</strong>
+          </p>
+          {askResult ? (
+            <>
+              <div className="alert alert-success" role="status">
+                {t('admin.wines.ownerInquiries.askSent', { count: askResult.recipientCount })}
+                {askResult.fallbackUsed && ` ${t('admin.wines.ownerInquiries.askSentConsumed')}`}
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="btn btn-primary" onClick={closeAskOwner}>
+                  {t('common.close')}
+                </button>
+              </div>
+            </>
+          ) : (
+            <form onSubmit={submitAskOwner}>
+              <p className="merge-info">{t('admin.wines.ownerInquiries.askInfo')}</p>
+              {askError && <div className="alert alert-error">{askError}</div>}
+              <div className="form-group">
+                <label>{t('admin.wines.ownerInquiries.askLabel')}</label>
+                <textarea
+                  value={askQuestion}
+                  onChange={(e) => setAskQuestion(e.target.value)}
+                  placeholder={t('admin.wines.ownerInquiries.askPlaceholder')}
+                  maxLength={500}
+                  rows={3}
+                  disabled={asking}
+                  autoFocus
+                />
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="btn btn-secondary" onClick={closeAskOwner} disabled={asking}>
+                  {t('common.cancel')}
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={asking || askQuestion.trim().length < 10}>
+                  {asking ? t('admin.wines.ownerInquiries.askSending') : t('admin.wines.ownerInquiries.askSubmit')}
+                </button>
+              </div>
+            </form>
+          )}
+        </Modal>
       )}
 
       {/* Action-feedback toasts */}

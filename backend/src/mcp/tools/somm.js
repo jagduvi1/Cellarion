@@ -16,6 +16,7 @@ const PriceTrackingRequest = require('../../models/PriceTrackingRequest');
 const PriceTrackingSkip = require('../../models/PriceTrackingSkip');
 const WineDefinition = require('../../models/WineDefinition');
 const WineCorrectionProposal = require('../../models/WineCorrectionProposal');
+const WineOwnerInquiry = require('../../models/WineOwnerInquiry');
 const { registerTool } = require('../registry');
 const { logAudit } = require('../../services/audit');
 const { SUPPORTED_CURRENCIES } = require('../../config/currencies');
@@ -33,6 +34,13 @@ const {
   applyProfilePatch,
   snapshotProfile,
 } = require('../../services/wineProfileOps');
+const {
+  QUESTION_MIN,
+  QUESTION_MAX,
+  createOwnerInquiry,
+  sweepExpiredInquiries,
+  queryInquiryPage,
+} = require('../../services/ownerInquiryOps');
 // services/search is required lazily at call time, not here: it pulls in the
 // Meili client and half the model layer at module load, which every consumer
 // of the tool registry would then have to stand up (registry.test.js does not).
@@ -944,5 +952,140 @@ registerTool({
       result: envelope,
     });
     return ok(envelope.summary, envelope.data);
+  },
+});
+
+// Owner inquiries — the channel for record questions only a bottle's OWNER
+// can settle ("what does the label say?"). Both tools ride the shared
+// services/ownerInquiryOps so REST and MCP cannot drift on recipient
+// building, conflict semantics or queue order. Recipients are ANONYMISED on
+// this surface — a curator needs the answers, never the owners' identities
+// (the admin REST queue is the only place identities show).
+const INQUIRY_STATUS_FILTERS = ['active', 'open', 'answered', 'resolved', 'closed', 'decided'];
+
+registerTool({
+  name: 'ask_bottle_owner',
+  title: 'Sommelier: ask a wine\'s bottle owners about their record',
+  description:
+    'Sends a question about a registry wine to the users who OWN bottles of it (in-app notification; owners answer ' +
+    'from their bottle page, answers land in the owner-inquiry queue). THE tool for record facts research cannot ' +
+    'settle — "what does the label say the producer is?", "is this the DOCG or the DOC bottling?". Owners with ' +
+    'ACTIVE bottles are asked; when none exist, owners who consumed one are asked instead. Capped at 20 owners. One ' +
+    'open inquiry per wine — a second ask conflicts until the first is resolved. This notifies real people: confirm ' +
+    'the wording with the somm first. NOT reversible via undo_last (notifications cannot be unsent). Read the ' +
+    'answers later with list_owner_inquiries.',
+  scope: 'write',
+  requireRole: SOMM_ROLES,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  inputSchema: {
+    wine_id: objectId.describe('From list_maturity_queue, search_registry or get_wine'),
+    question: z.string().min(QUESTION_MIN).max(QUESTION_MAX)
+      .describe(`The question the owners read VERBATIM (${QUESTION_MIN}–${QUESTION_MAX} chars, plain text) — e.g. "Could you check the label: is the producer written as ‘E. Pira e Figli’ or just ‘Pira’?"`),
+  },
+  handler: async (args, ctx) => {
+    const denied = requireSomm(ctx);
+    if (denied) return denied;
+
+    // ONE implementation with the REST create route — identical validation,
+    // conflict semantics and audit action string (via:'mcp' in the detail).
+    const result = await createOwnerInquiry({
+      wineId: args.wine_id,
+      userId: ctx.user.id,
+      via: 'mcp',
+      question: args.question,
+      req: ctx.req,
+    });
+    if (!result.ok) {
+      if (result.code === 'not_found') return fail('not_found', result.message + ' Use search_registry to find it.');
+      if (result.code === 'conflict') return fail('conflict', result.message + ' Check it with list_owner_inquiries.');
+      if (result.code === 'no_owners') {
+        return fail('conflict', result.message + ' There is nobody to ask — settle the record another way (propose_wine_correction with evidence, or a support ticket).');
+      }
+      return fail('invalid_input', result.message);
+    }
+
+    const label = [result.wine.producer, result.wine.name].filter(Boolean).join(' — ');
+    return ok(
+      `Inquiry sent to ${result.recipientCount} bottle owner(s) of ${label}${result.fallbackUsed ? ' (no active bottles — owners of consumed bottles were asked)' : ''}`,
+      {
+        inquiry_id: result.inquiry._id,
+        wine_id: result.wine._id,
+        status: 'open',
+        recipients_notified: result.recipientCount,
+        asked_consumed_owners: result.fallbackUsed,
+        expires_at: result.inquiry.expiresAt,
+        note: 'Owners answer in-app; answers appear in list_owner_inquiries. The inquiry expires after 60 days. Not undoable — the notifications are already out.',
+      }
+    );
+  },
+});
+
+registerTool({
+  name: 'list_owner_inquiries',
+  title: 'Sommelier: list owner inquiries and their answers',
+  description:
+    'Lists owner inquiries (questions sent to bottle owners via ask_bottle_owner) WITH the answers owners have ' +
+    'given — this is how a curator reads the replies. Answered first, then open, then decided. Pass wine_id to ' +
+    'check one wine, status to narrow ("active" = open+answered is the default; "decided" = resolved+closed). ' +
+    'Recipients are anonymised ("owner 1", "owner 2") — identities are never exposed here; judge the answers on ' +
+    'content. Resolution (applying what was learned) is an admin step in the web queue.',
+  scope: 'read',
+  requireRole: SOMM_ROLES,
+  annotations: { readOnlyHint: true, openWorldHint: false },
+  inputSchema: {
+    status: z.enum(INQUIRY_STATUS_FILTERS).optional().describe('Default "active" (open + answered)'),
+    wine_id: objectId.optional().describe('Scope to one registry wine'),
+    limit: z.number().int().min(1).max(50).default(20),
+    offset: z.number().int().min(0).default(0),
+  },
+  handler: async (args, ctx) => {
+    const denied = requireSomm(ctx);
+    if (denied) return denied;
+    const { limit, offset } = pageParams(args, 20, 50);
+
+    // Expired open inquiries leave as 'closed' before the queue renders —
+    // same lazy sweep the admin REST list runs.
+    await sweepExpiredInquiries();
+
+    // Filter values are literals from the static array, never raw input.
+    const status = INQUIRY_STATUS_FILTERS.includes(args.status) ? args.status : 'active';
+    const filter = {};
+    if (status === 'active') filter.status = { $in: ['open', 'answered'] };
+    else if (status === 'decided') filter.status = { $in: ['resolved', 'closed'] };
+    else filter.status = status;
+    if (args.wine_id) filter.wineDefinition = args.wine_id;
+
+    const { rows, total, pendingCount, answeredCount } = await queryInquiryPage(filter, { limit, offset });
+    await WineOwnerInquiry.populate(rows, [
+      { path: 'wineDefinition', select: 'name producer type appellation', populate: ['country', 'region'] },
+    ]);
+
+    const data = rows.map((i) => ({
+      inquiry_id: i._id,
+      wine: wineLite(i.wineDefinition),
+      status: i.status,
+      question: i.question,
+      asked_via: i.askedVia || 'rest',
+      created_at: i.createdAt,
+      expires_at: i.expiresAt || null,
+      // Anonymised, positionally stable labels — answers without identities.
+      recipients: (i.recipients || []).map((r, idx) => ({
+        label: `owner ${idx + 1}`,
+        notified_at: r.notifiedAt || null,
+        responded: !!r.response,
+        response: r.response || null,
+        responded_at: r.respondedAt || null,
+      })),
+      response_count: (i.recipients || []).filter((r) => r.response).length,
+      recipient_count: (i.recipients || []).length,
+      resolution_note: i.resolutionNote || null,
+      resolved_at: i.resolvedAt || null,
+    }));
+
+    return ok(
+      `${answeredCount} inquiry(ies) with answers waiting, ${pendingCount} active in total (showing ${data.length} of ${total} ${status})`,
+      data,
+      { page: { limit, offset, total } }
+    );
   },
 });

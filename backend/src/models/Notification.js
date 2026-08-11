@@ -46,7 +46,9 @@ const notificationSchema = new mongoose.Schema({
       'climate_alert',
       'climate_recovered',
       'climate_offline',
-      'registry_health'
+      'registry_health',
+      'owner_inquiry',
+      'owner_inquiry_response'
     ],
     required: true
   },
