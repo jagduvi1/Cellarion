@@ -179,3 +179,105 @@ describe('ReviewVote purge — reconciles Review.likesCount (grand-audit M11)', 
     expect(rec.userFields).toContain('recipientEmail');
   });
 });
+
+// Owner inquiries are multi-party: one curator question, up to 20 recipient
+// owners with answers. Erasure must be surgical — pull ONLY the departing
+// user's recipient entry (their answer goes with it), keep the question for
+// the others, close the inquiry when nobody is left, and null the asker ref
+// (the schema is nullable for exactly this). Export covers both sides.
+describe('WineOwnerInquiry — recipient-entry erasure + asker nulling', () => {
+  const WineOwnerInquiry = require('../models/WineOwnerInquiry');
+  const entry = REGISTRY.find(e => e.model.modelName === 'WineOwnerInquiry');
+  const ctx = { userId: 'u1', deletedUserId: 'del1' };
+
+  test('is registered with all three user link fields', () => {
+    expect(entry).toBeTruthy();
+    expect(entry.userFields).toEqual(expect.arrayContaining(['askedBy', 'recipients.user', 'resolvedBy']));
+  });
+
+  test('purge pulls the user\'s recipient entry (answer included), NULLS askedBy, clears resolvedBy', async () => {
+    const updateSpy = jest.spyOn(WineOwnerInquiry, 'updateMany').mockResolvedValue({});
+    try {
+      await Promise.all(entry.purge(ctx));
+      const calls = updateSpy.mock.calls;
+      // (a) their recipient entry — and with it their answer — leaves the doc
+      expect(calls).toContainEqual([
+        { 'recipients.user': 'u1' },
+        { $pull: { recipients: { user: 'u1' } } },
+      ]);
+      // (b) inquiries they asked keep the question, anonymous
+      expect(calls).toContainEqual([
+        { askedBy: 'u1' },
+        { $set: { askedBy: null } },
+      ]);
+      // (c) their admin ref off OTHER users' resolved inquiries
+      expect(calls).toContainEqual([
+        { resolvedBy: 'u1' },
+        { $unset: { resolvedBy: '' } },
+      ]);
+    } finally {
+      updateSpy.mockRestore();
+    }
+  });
+
+  test('postPurge closes ACTIVE inquiries left with no recipients (nobody can answer any more)', async () => {
+    const updateSpy = jest.spyOn(WineOwnerInquiry, 'updateMany').mockResolvedValue({});
+    try {
+      await entry.postPurge(ctx);
+      const [filter, update] = updateSpy.mock.calls[0];
+      expect(filter).toEqual({ recipients: { $size: 0 }, status: { $in: ['open', 'answered'] } });
+      expect(update.$set.status).toBe('closed');
+      // resolvedAt is stamped so the closed shell still rides the 180-day TTL.
+      expect(update.$set.resolvedAt).toBeInstanceOf(Date);
+    } finally {
+      updateSpy.mockRestore();
+    }
+  });
+
+  test('export returns both sides — own answers with question + wine label, own asked questions — never other recipients', async () => {
+    const chain = (rows) => {
+      const c = {};
+      for (const m of ['select', 'populate', 'limit']) c[m] = jest.fn(() => c);
+      c.lean = jest.fn(async () => rows);
+      return c;
+    };
+    const received = [{
+      question: 'What does the label say the producer is?', status: 'answered',
+      wineDefinition: { producer: 'Pira', name: 'Barolo' },
+      recipients: [
+        { user: 'u1', response: 'Label says E. Pira e Figli', respondedAt: 'r1', notifiedAt: 'n1' },
+        { user: 'u2', response: 'another owner\'s private answer' },
+      ],
+      createdAt: 'c1',
+    }];
+    const asked = [{
+      question: 'Is this the DOCG bottling?', status: 'resolved', resolutionNote: 'Record corrected.',
+      wineDefinition: { producer: 'G', name: 'W' }, createdAt: 'c2', resolvedAt: 'r2',
+    }];
+    const findSpy = jest.spyOn(WineOwnerInquiry, 'find')
+      .mockReturnValueOnce(chain(received))
+      .mockReturnValueOnce(chain(asked));
+    try {
+      const frag = await entry.exportFragment({ userId: 'u1', truncated: {} });
+      expect(frag.ownerInquiries.received[0]).toEqual({
+        wine: 'Pira — Barolo',
+        question: 'What does the label say the producer is?',
+        status: 'answered',
+        myResponse: 'Label says E. Pira e Figli',
+        respondedAt: 'r1',
+        notifiedAt: 'n1',
+        createdAt: 'c1',
+      });
+      // Portability is the USER's data only — the co-recipient's answer must not ride along.
+      expect(JSON.stringify(frag)).not.toContain('another owner');
+      expect(frag.ownerInquiries.asked[0]).toMatchObject({
+        wine: 'G — W',
+        question: 'Is this the DOCG bottling?',
+        resolutionNote: 'Record corrected.',
+        resolvedAt: 'r2',
+      });
+    } finally {
+      findSpy.mockRestore();
+    }
+  });
+});

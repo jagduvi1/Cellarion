@@ -82,6 +82,28 @@ export const adminRejectWineProposal = (apiFetch, id, reason) =>
     body: JSON.stringify({ reason }),
   });
 
+// Owner inquiries: questions sent to a wine's bottle owners (curator→owner
+// channel for records only an owner can settle). The list is answered-first
+// and its envelope carries pendingCount + answeredCount for the toolbar
+// badge; resolve requires a note. Ask is somm-or-admin (lives under
+// /api/admin/wines but is NOT admin-only server-side).
+export const adminGetOwnerInquiries = (apiFetch, params) =>
+  apiFetch(`/api/admin/owner-inquiries?${params}`);
+
+export const adminResolveOwnerInquiry = (apiFetch, id, note) =>
+  apiFetch(`/api/admin/owner-inquiries/${id}/resolve`, {
+    method: 'POST',
+    headers: J,
+    body: JSON.stringify({ note }),
+  });
+
+export const adminAskOwnerInquiry = (apiFetch, wineId, question) =>
+  apiFetch(`/api/admin/wines/${wineId}/owner-inquiry`, {
+    method: 'POST',
+    headers: J,
+    body: JSON.stringify({ question }),
+  });
+
 // Distinct wine-appellation strings no curated Appellation doc covers —
 // the review queue that keeps free-text appellations honest.
 export const adminGetUnmatchedAppellations = (apiFetch) =>

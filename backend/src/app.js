@@ -30,6 +30,8 @@ const adminCellarsRoute = require('./routes/admin/cellars');
 const adminSupportTicketsRoute = require('./routes/admin/supportTickets');
 const adminWineReportsRoute = require('./routes/admin/wineReports');
 const adminWineProposalsRoute = require('./routes/admin/wineProposals');
+const adminOwnerInquiriesRoute = require('./routes/admin/ownerInquiries');
+const ownerInquiriesRoute = require('./routes/ownerInquiries');
 const adminStatsRoute = require('./routes/admin/stats');
 const adminMcpRoute = require('./routes/admin/mcp');
 const aiBudgetRoute = require('./routes/aiBudget');
@@ -258,6 +260,10 @@ app.use('/api/bottles', bottlesRoute);
 app.use('/api/wine-requests', wineRequestsRoute);
 app.use('/api/admin/taxonomy', adminTaxonomyRoute);
 app.use('/api/admin/search', adminSearchRoute);
+// Owner-inquiry CREATE is somm-or-admin, so it cannot live inside the
+// admin-gated wines router — mounted first on the same prefix; unmatched
+// paths fall through to adminWinesRoute (the /api/auth two-router pattern).
+app.use('/api/admin/wines', adminOwnerInquiriesRoute.wineInquiryRouter);
 app.use('/api/admin/wines', adminWinesRoute);
 app.use('/api/admin/wine-requests', adminWineRequestsRoute);
 app.use('/api/admin/images', adminImagesRoute);
@@ -270,6 +276,8 @@ app.use('/api/admin/cellars', adminCellarsRoute);
 app.use('/api/admin/support-tickets', adminSupportTicketsRoute);
 app.use('/api/admin/wine-reports', adminWineReportsRoute);
 app.use('/api/admin/wine-proposals', adminWineProposalsRoute);
+app.use('/api/admin/owner-inquiries', adminOwnerInquiriesRoute);
+app.use('/api/owner-inquiries', ownerInquiriesRoute);
 app.use('/api/admin/stats', adminStatsRoute);
 app.use('/api/admin/mcp', adminMcpRoute);
 app.use('/api/ai-budget', aiBudgetRoute);

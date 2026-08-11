@@ -60,6 +60,7 @@ const Review = require('../models/Review');
 const ReviewVote = require('../models/ReviewVote');
 const SupportTicket = require('../models/SupportTicket');
 const WineCorrectionProposal = require('../models/WineCorrectionProposal');
+const WineOwnerInquiry = require('../models/WineOwnerInquiry');
 const WineList = require('../models/WineList');
 const WineReport = require('../models/WineReport');
 const WineRequest = require('../models/WineRequest');
@@ -548,6 +549,72 @@ const REGISTRY = [
           decidedAt: p.decidedAt || null,
         })),
     }),
+  },
+  {
+    // Owner inquiries are multi-party (one question, up to 20 recipients), so
+    // erasure is surgical: the departing user's RECIPIENT entry (their answer
+    // included) is pulled while the question stays for the other recipients;
+    // an inquiry left with no recipients is closed in postPurge (nobody can
+    // answer it any more — the PriceTrackingRequest orphan pattern). Their
+    // ASKED inquiries keep the question for the queue with askedBy nulled
+    // (the schema is nullable for exactly this), and their admin ref
+    // (resolvedBy) is cleared off other users' resolved inquiries.
+    model: WineOwnerInquiry, category: 'shared-content', userFields: ['askedBy', 'recipients.user', 'resolvedBy'],
+    purge: (ctx) => [
+      WineOwnerInquiry.updateMany({ 'recipients.user': ctx.userId }, { $pull: { recipients: { user: ctx.userId } } }),
+      WineOwnerInquiry.updateMany({ askedBy: ctx.userId }, { $set: { askedBy: null } }),
+      WineOwnerInquiry.updateMany({ resolvedBy: ctx.userId }, { $unset: { resolvedBy: '' } }),
+    ],
+    postPurge: () => WineOwnerInquiry.updateMany(
+      { recipients: { $size: 0 }, status: { $in: ['open', 'answered'] } },
+      { $set: {
+        status: 'closed',
+        resolvedAt: new Date(),
+        resolutionNote: 'Closed automatically: no recipients remain to answer.',
+      } }
+    ),
+    exportFragment: async (ctx) => {
+      // Both sides are the user's data: answers they wrote as a recipient
+      // (with the question + wine label for context) and questions they asked
+      // as a curator. Never other recipients' entries.
+      const [received, asked] = await Promise.all([
+        WineOwnerInquiry.find({ 'recipients.user': ctx.userId })
+          .select('question status recipients createdAt')
+          .populate('wineDefinition', 'name producer')
+          .limit(EXPORT_MAX).lean(),
+        WineOwnerInquiry.find({ askedBy: ctx.userId })
+          .select('question status resolutionNote createdAt resolvedAt')
+          .populate('wineDefinition', 'name producer')
+          .limit(EXPORT_MAX).lean(),
+      ]);
+      markTrunc(ctx, 'ownerInquiriesReceived', received);
+      markTrunc(ctx, 'ownerInquiriesAsked', asked);
+      const label = (i) => [i.wineDefinition?.producer, i.wineDefinition?.name].filter(Boolean).join(' — ') || null;
+      return {
+        ownerInquiries: {
+          received: received.map((i) => {
+            const mine = (i.recipients || []).find((r) => (r.user?.toString?.() || r.user) === ctx.userId);
+            return {
+              wine: label(i),
+              question: i.question,
+              status: i.status,
+              myResponse: mine?.response || null,
+              respondedAt: mine?.respondedAt || null,
+              notifiedAt: mine?.notifiedAt || null,
+              createdAt: i.createdAt,
+            };
+          }),
+          asked: asked.map((i) => ({
+            wine: label(i),
+            question: i.question,
+            status: i.status,
+            resolutionNote: i.resolutionNote || null,
+            createdAt: i.createdAt,
+            resolvedAt: i.resolvedAt || null,
+          })),
+        },
+      };
+    },
   },
   {
     model: SupportTicket, category: 'personal-data', userFields: ['user', 'respondedBy', 'replies.by'],

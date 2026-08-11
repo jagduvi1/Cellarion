@@ -22,6 +22,7 @@ import ConsumedDetails from '../components/bottle/ConsumedDetails';
 import EditForm from '../components/bottle/EditForm';
 import ViewDetails from '../components/bottle/ViewDetails';
 import BottleJourney from '../components/BottleJourney';
+import OwnerInquiryCard from '../components/bottle/OwnerInquiryCard';
 import DialogBox from '../components/DialogBox';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
 import './BottleDetail.css';
@@ -525,6 +526,10 @@ function BottleDetail() {
           </div>
         </div>
       </div>
+
+      {/* ── Curator owner-inquiry (content card — renders only when this
+          wine has an open inquiry addressed to the viewer) ── */}
+      {wine?._id && <OwnerInquiryCard apiFetch={apiFetch} wineId={wine._id} />}
 
       {/* ── Consumption details (history bottles only) ── */}
       {isConsumed && (
