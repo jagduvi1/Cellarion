@@ -576,11 +576,19 @@ router.post('/identify-text', requireAuth, aiBurstLimiter, asyncHandler(async (r
     // near-match into noMatch — which is exactly the duplication this fixes.
     const probe = await findOrCreateWine(identified, req.user.id, { matchOnly: true });
 
+    // decorateGrapes on every wine that leaves this route: the AI-identify
+    // card sits NEXT TO the search list, which already shows the regional
+    // grape label ("Tinta Roriz" on a Douro row) — the two must agree.
     if (probe.wine) {
-      return res.json({ identified, match: { wine: probe.wine }, candidates: [], reason: null });
+      return res.json({ identified, match: { wine: decorateGrapes(probe.wine) }, candidates: [], reason: null });
     }
     if (probe.candidates?.length) {
-      return res.json({ identified, match: null, candidates: probe.candidates, reason: null });
+      return res.json({
+        identified,
+        match: null,
+        candidates: probe.candidates.map((c) => ({ ...c, wine: decorateGrapes(c.wine) })),
+        reason: null,
+      });
     }
     return res.json({ identified, match: null, candidates: [], reason: null });
   } catch (err) {

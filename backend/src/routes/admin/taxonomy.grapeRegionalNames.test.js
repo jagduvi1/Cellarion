@@ -6,10 +6,12 @@
  * regionalNames are ref-bearing display data — Mongoose validates neither
  * that the ids exist nor that a region belongs to its entry's country, and a
  * duplicate (country, region) pair would make display resolution
- * order-dependent. The validator carries those invariants; the PUT wiring
- * test pins that the route honours a rejection (400, nothing saved) and that
- * an accepted change resyncs the WINES search index (regional names feed its
- * grapeNames) without the bottles resync a rename needs.
+ * order-dependent. The validator carries those invariants; the wiring tests
+ * pin that the routes honour a rejection (400, nothing saved), that an
+ * accepted change resyncs BOTH search indexes (regional names feed the
+ * grapeNames of the wines AND bottles documents — audit 2026-08-11), that
+ * both write routes return the non-blocking curator-trap warnings, and that
+ * a region referenced by a grape's regional name refuses deletion.
  */
 
 process.env.JWT_SECRET = 'test-secret';
@@ -26,18 +28,30 @@ jest.mock('../../services/search', () => ({
 }));
 jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../../models/Country', () => ({ exists: jest.fn() }));
-jest.mock('../../models/Region', () => ({ findById: jest.fn() }));
-jest.mock('../../models/Grape', () => ({ findById: jest.fn(), find: jest.fn() }));
+jest.mock('../../models/Region', () => ({ findById: jest.fn(), countDocuments: jest.fn() }));
+jest.mock('../../models/WineDefinition', () => ({ countDocuments: jest.fn() }));
+// Constructor + statics: the POST route instantiates `new Grape(...)`.
+jest.mock('../../models/Grape', () => {
+  const Grape = jest.fn(function (fields) {
+    Object.assign(this, fields);
+    this.save = jest.fn().mockResolvedValue(undefined);
+  });
+  Grape.findById = jest.fn();
+  Grape.find = jest.fn();
+  Grape.exists = jest.fn();
+  return Grape;
+});
 
 const express = require('express');
 const http = require('http');
 const jwt = require('jsonwebtoken');
 const Country = require('../../models/Country');
 const Region = require('../../models/Region');
+const WineDefinition = require('../../models/WineDefinition');
 const Grape = require('../../models/Grape');
 const searchService = require('../../services/search');
 const router = require('./taxonomy');
-const { validateGrapeRegionalNames } = router;
+const { validateGrapeRegionalNames, computeRegionalNameWarnings } = router;
 
 const ADMIN_ID = '64b000000000000000000001';
 const GRAPE_ID = '64b00000000000000000009e';
@@ -55,6 +69,9 @@ beforeEach(() => {
       lean: async () => (String(id) === DOURO ? regionDoc(DOURO, PORTUGAL, 'Douro') : null),
     }),
   }));
+  Region.countDocuments.mockResolvedValue(0);
+  WineDefinition.countDocuments.mockResolvedValue(0);
+  Grape.exists.mockResolvedValue(null);
 });
 
 describe('validateGrapeRegionalNames', () => {
@@ -126,9 +143,62 @@ describe('validateGrapeRegionalNames', () => {
   test('an empty array is valid — it clears the grape\'s regional names', async () => {
     expect(await validateGrapeRegionalNames([])).toEqual({ value: [] });
   });
+
+  test('names get the sanitizeTaxonomyName fold grape.name gets: control chars stripped, whitespace collapsed', async () => {
+    const res = await validateGrapeRegionalNames([
+      { country: PORTUGAL, name: 'Tinta' + String.fromCharCode(0, 7) + '  Roriz\n' },
+    ]);
+    expect(res.error).toBeUndefined();
+    expect(res.value[0].name).toBe('Tinta Roriz');
+    // All-control input folds to empty and is rejected like a blank name.
+    expect((await validateGrapeRegionalNames([{ country: PORTUGAL, name: String.fromCharCode(0, 1) }])).error)
+      .toMatch(/non-empty name/);
+  });
 });
 
-// ── PUT wiring ───────────────────────────────────────────────────────────────
+// ── Curator-trap warnings (pure) ─────────────────────────────────────────────
+// A regional name that is not also a synonym displays fine but cannot be
+// written back via set_wine_profile (resolveGrapeIdsStrict matches
+// normalizedName + normalizedSynonyms only) — the check must run the exact
+// fold that write path runs, and it must flag, never block.
+
+describe('computeRegionalNameWarnings', () => {
+  const entries = (...names) => names.map((name) => ({ country: PORTUGAL, region: null, name }));
+
+  test('a name that is neither the grape nor a synonym warns, with the exact curator-facing message', () => {
+    const w = computeRegionalNameWarnings(entries('Tinta Roriz'), {
+      name: 'Tempranillo', normalizedName: 'tempranillo', synonyms: [],
+    });
+    expect(w).toEqual([
+      "'Tinta Roriz' is not a synonym of Tempranillo — curators cannot write it back via set_wine_profile; add it as a synonym too",
+    ]);
+  });
+
+  test('a synonym match silences the warning — diacritic/case-insensitively', () => {
+    const w = computeRegionalNameWarnings(entries('Tinta Roriz'), {
+      name: 'Tempranillo', normalizedName: 'tempranillo', synonyms: ['TINTA RORÍZ'],
+    });
+    expect(w).toEqual([]);
+  });
+
+  test('the static GRAPE_SYNONYMS hop counts as writable — "Aragonez" resolves to Tempranillo before the check', () => {
+    // resolveGrapeName maps Aragonez → Tempranillo, exactly as the write path
+    // would, so no synonym entry is needed for it.
+    const w = computeRegionalNameWarnings(entries('Aragonez'), {
+      name: 'Tempranillo', normalizedName: 'tempranillo', synonyms: [],
+    });
+    expect(w).toEqual([]);
+  });
+
+  test('a name that normalizes to nothing (non-Latin script) is not writable → warns', () => {
+    const w = computeRegionalNameWarnings(entries('Ркацители'), {
+      name: 'Rkatsiteli', normalizedName: 'rkatsiteli', synonyms: [],
+    });
+    expect(w).toHaveLength(1);
+  });
+});
+
+// ── Route wiring ─────────────────────────────────────────────────────────────
 
 let server, baseUrl;
 beforeAll((done) => {
@@ -141,18 +211,23 @@ beforeAll((done) => {
 afterAll((done) => { server.closeAllConnections(); server.close(done); });
 
 const adminToken = () => jwt.sign({ id: ADMIN_ID, roles: ['admin'] }, 'test-secret');
-const put = (path, body) => fetch(`${baseUrl}/api/admin/taxonomy${path}`, {
-  method: 'PUT',
+const send = (method, path, body) => fetch(`${baseUrl}/api/admin/taxonomy${path}`, {
+  method,
   headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken()}` },
-  body: JSON.stringify(body),
+  ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
 });
+const put = (path, body) => send('PUT', path, body);
+const post = (path, body) => send('POST', path, body);
 
 describe('PUT /grapes/:id regionalNames wiring', () => {
-  const grapeDoc = () => ({
+  const grapeDoc = (over = {}) => ({
     _id: GRAPE_ID,
     name: 'Tempranillo',
+    normalizedName: 'tempranillo',
+    synonyms: [],
     regionalNames: [],
     save: jest.fn().mockResolvedValue(undefined),
+    ...over,
   });
 
   test('a rejected payload → 400 with the validator\'s message, nothing saved', async () => {
@@ -170,7 +245,7 @@ describe('PUT /grapes/:id regionalNames wiring', () => {
     expect(grape.regionalNames).toEqual([]);
   });
 
-  test('a valid set saves, and resyncs the WINES index only (no rename → no bottles resync)', async () => {
+  test('a valid set saves and resyncs BOTH indexes — bottle documents carry regional grape names too', async () => {
     const grape = grapeDoc();
     Grape.findById.mockResolvedValue(grape);
     const res = await put(`/grapes/${GRAPE_ID}`, {
@@ -180,7 +255,9 @@ describe('PUT /grapes/:id regionalNames wiring', () => {
     expect(grape.regionalNames).toEqual([{ country: PORTUGAL, region: DOURO, name: 'Tinta Roriz' }]);
     expect(grape.save).toHaveBeenCalled();
     expect(searchService.fullSync).toHaveBeenCalled();
-    expect(searchService.fullSyncBottles).not.toHaveBeenCalled();
+    // Audit 2026-08-11: buildBottleDocument shares wineGrapeSearchNames, so a
+    // mapping change without this resync left cellar search missing the label.
+    expect(searchService.fullSyncBottles).toHaveBeenCalled();
   });
 
   test('an update that does not touch regionalNames triggers no resync at all', async () => {
@@ -190,5 +267,109 @@ describe('PUT /grapes/:id regionalNames wiring', () => {
     expect(res.status).toBe(200);
     expect(searchService.fullSync).not.toHaveBeenCalled();
     expect(searchService.fullSyncBottles).not.toHaveBeenCalled();
+  });
+
+  test('a non-synonym regional name → 200 with regionalNameWarnings (flag, never block)', async () => {
+    const grape = grapeDoc();
+    Grape.findById.mockResolvedValue(grape);
+    const res = await put(`/grapes/${GRAPE_ID}`, {
+      regionalNames: [{ country: PORTUGAL, region: DOURO, name: 'Tinta Roriz' }],
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.regionalNameWarnings).toEqual([
+      "'Tinta Roriz' is not a synonym of Tempranillo — curators cannot write it back via set_wine_profile; add it as a synonym too",
+    ]);
+    expect(grape.save).toHaveBeenCalled(); // saved anyway — non-blocking
+  });
+
+  test('the INCOMING synonyms are what count when the request changes them', async () => {
+    const grape = grapeDoc(); // stored synonyms: []
+    Grape.findById.mockResolvedValue(grape);
+    const res = await put(`/grapes/${GRAPE_ID}`, {
+      synonyms: ['Tinta Roriz'],
+      regionalNames: [{ country: PORTUGAL, region: DOURO, name: 'Tinta Roriz' }],
+    });
+    const body = await res.json();
+    expect(body.regionalNameWarnings).toBeUndefined();
+  });
+
+  test('the stored doc\'s synonyms count when the request leaves them alone', async () => {
+    const grape = grapeDoc({ synonyms: ['Tinta Roriz'] });
+    Grape.findById.mockResolvedValue(grape);
+    const res = await put(`/grapes/${GRAPE_ID}`, {
+      regionalNames: [{ country: PORTUGAL, region: DOURO, name: 'Tinta Roriz' }],
+    });
+    const body = await res.json();
+    expect(body.regionalNameWarnings).toBeUndefined();
+  });
+
+  test('no regionalNames in the request → no warnings field, even if stored entries are not synonyms', async () => {
+    const grape = grapeDoc({
+      regionalNames: [{ country: PORTUGAL, region: DOURO, name: 'Tinta Roriz' }],
+    });
+    Grape.findById.mockResolvedValue(grape);
+    const res = await put(`/grapes/${GRAPE_ID}`, { origin: 'Rioja, Spain' });
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.regionalNameWarnings).toBeUndefined();
+  });
+});
+
+describe('POST /grapes regionalNames wiring', () => {
+  test('creating with a non-synonym regional name → 201 with regionalNameWarnings', async () => {
+    const res = await post('/grapes', {
+      name: 'Tempranillo',
+      regionalNames: [{ country: PORTUGAL, region: DOURO, name: 'Tinta Roriz' }],
+    });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.grape.name).toBe('Tempranillo');
+    expect(body.regionalNameWarnings).toEqual([
+      "'Tinta Roriz' is not a synonym of Tempranillo — curators cannot write it back via set_wine_profile; add it as a synonym too",
+    ]);
+  });
+
+  test('creating with the name also in synonyms → 201 and NO warnings field', async () => {
+    const res = await post('/grapes', {
+      name: 'Tempranillo',
+      synonyms: ['Tinta Roriz'],
+      regionalNames: [{ country: PORTUGAL, region: DOURO, name: 'Tinta Roriz' }],
+    });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.regionalNameWarnings).toBeUndefined();
+  });
+});
+
+// ── Region DELETE guard ──────────────────────────────────────────────────────
+// A region referenced by a grape's regional display name must refuse deletion
+// (audit 2026-08-11): a dangling ref would silently drop curated display data.
+// Merge is the supported path — mergeRegions re-points regionalNames.region.
+
+describe('DELETE /regions/:id — grape regionalNames in-use guard', () => {
+  const regionDelDoc = () => ({
+    _id: DOURO,
+    name: 'Douro',
+    deleteOne: jest.fn().mockResolvedValue(undefined),
+  });
+
+  test('refuses deletion while a grape regional name references the region', async () => {
+    const region = regionDelDoc();
+    Region.findById.mockResolvedValue(region);
+    Grape.exists.mockResolvedValue({ _id: GRAPE_ID });
+    const res = await send('DELETE', `/regions/${DOURO}`);
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/regional display name/);
+    expect(Grape.exists).toHaveBeenCalledWith({ 'regionalNames.region': DOURO });
+    expect(region.deleteOne).not.toHaveBeenCalled();
+  });
+
+  test('deletes normally when no grape references the region', async () => {
+    const region = regionDelDoc();
+    Region.findById.mockResolvedValue(region);
+    const res = await send('DELETE', `/regions/${DOURO}`);
+    expect(res.status).toBe(200);
+    expect(region.deleteOne).toHaveBeenCalled();
   });
 });
