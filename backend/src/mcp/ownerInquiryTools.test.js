@@ -64,6 +64,7 @@ jest.mock('../services/ownerInquiryOps', () => ({
   queryInquiryPage: jest.fn(),
 }));
 
+const mongoose = require('mongoose');
 const WineOwnerInquiry = require('../models/WineOwnerInquiry');
 const { createOwnerInquiry, sweepExpiredInquiries, queryInquiryPage } = require('../services/ownerInquiryOps');
 const { allTools, toolsForScopes } = require('./registry');
@@ -202,10 +203,13 @@ describe('list_owner_inquiries', () => {
     queryInquiryPage.mockResolvedValue({ rows: [], total: 0, pendingCount: 0, answeredCount: 0 });
 
     await tool('list_owner_inquiries').handler({ status: 'decided', wine_id: oid('f') }, SOMM_CTX);
-    expect(queryInquiryPage.mock.calls[0][0]).toEqual({
-      status: { $in: ['resolved', 'closed'] },
-      wineDefinition: oid('f'),
-    });
+    const filter = queryInquiryPage.mock.calls[0][0];
+    expect(filter.status).toEqual({ $in: ['resolved', 'closed'] });
+    // MUST be a cast ObjectId, not the client hex string: queryInquiryPage
+    // aggregates, and Mongoose does not cast $match values in pipelines — a
+    // string filter matches nothing (audit 2026-08-11 M-1).
+    expect(filter.wineDefinition).toBeInstanceOf(mongoose.Types.ObjectId);
+    expect(String(filter.wineDefinition)).toBe(oid('f'));
 
     await tool('list_owner_inquiries').handler({ status: 'answered' }, SOMM_CTX);
     expect(queryInquiryPage.mock.calls[1][0]).toEqual({ status: 'answered' });

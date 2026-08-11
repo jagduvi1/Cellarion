@@ -96,3 +96,16 @@ test('a server refusal surfaces the error and keeps the form usable', async () =
   expect(await screen.findByText('This inquiry is no longer open')).toBeInTheDocument();
   expect(screen.getByText('Send answer')).toBeInTheDocument(); // still submittable
 });
+
+test('a terminal 409 (already answered / closed) hides the form — no retry that can only 409 again', async () => {
+  respondToOwnerInquiry.mockResolvedValue({ ok: false, status: 409, json: async () => ({ error: 'You already answered this inquiry' }) });
+  renderCard();
+  await screen.findByText('What does the label say the producer is?');
+
+  fireEvent.change(screen.getByPlaceholderText(/The label says/), { target: { value: 'An answer' } });
+  fireEvent.click(screen.getByText('Send answer'));
+
+  expect(await screen.findByText('You already answered this inquiry')).toBeInTheDocument();
+  expect(screen.queryByText('Send answer')).not.toBeInTheDocument();
+  expect(screen.queryByPlaceholderText(/The label says/)).not.toBeInTheDocument();
+});

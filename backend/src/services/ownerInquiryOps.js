@@ -41,8 +41,17 @@ async function buildRecipients(wineId) {
   const ownersWith = (statusMatch) => Bottle.aggregate([
     { $match: { wineDefinition: wineOid, status: statusMatch } },
     { $sort: { createdAt: -1 } },
-    { $group: { _id: '$user', bottle: { $first: '$_id' }, cellar: { $first: '$cellar' } } },
+    // latest makes the cap DETERMINISTIC ($group emits undefined order —
+    // audit 2026-08-11 L-3: without the re-sort the 20 kept were arbitrary).
+    { $group: { _id: '$user', bottle: { $first: '$_id' }, cellar: { $first: '$cellar' }, latest: { $first: '$createdAt' } } },
+    // Demo visitors hold clones of real registry wines but can never answer
+    // (respond is requireNonDemo) — without this exclusion they crowd real
+    // owners out of the cap (audit 2026-08-11 frontend MEDIUM).
+    { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'owner' } },
+    { $match: { 'owner.isDemo': { $ne: true } } },
+    { $sort: { latest: -1 } },
     { $limit: RECIPIENT_CAP },
+    { $project: { bottle: 1, cellar: 1 } },
   ]);
 
   let rows = await ownersWith({ $nin: CONSUMED_STATUSES });

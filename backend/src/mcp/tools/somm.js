@@ -10,6 +10,7 @@
 // Audit action strings are IDENTICAL to the REST somm routes (somm.maturity.
 // review, somm.price.add) so REST and MCP curation audit identically.
 const { z } = require('zod');
+const mongoose = require('mongoose');
 const WineVintageProfile = require('../../models/WineVintageProfile');
 const WineVintagePrice = require('../../models/WineVintagePrice');
 const PriceTrackingRequest = require('../../models/PriceTrackingRequest');
@@ -1053,7 +1054,10 @@ registerTool({
     if (status === 'active') filter.status = { $in: ['open', 'answered'] };
     else if (status === 'decided') filter.status = { $in: ['resolved', 'closed'] };
     else filter.status = status;
-    if (args.wine_id) filter.wineDefinition = args.wine_id;
+    // Cast REQUIRED: queryInquiryPage runs an aggregate, and Mongoose does not
+    // cast $match values in pipelines — a hex STRING matches nothing while the
+    // sibling countDocuments (which does cast) still counts (audit M-1).
+    if (args.wine_id) filter.wineDefinition = new mongoose.Types.ObjectId(args.wine_id);
 
     const { rows, total, pendingCount, answeredCount } = await queryInquiryPage(filter, { limit, offset });
     await WineOwnerInquiry.populate(rows, [

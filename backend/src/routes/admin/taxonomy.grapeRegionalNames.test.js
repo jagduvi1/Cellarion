@@ -27,7 +27,7 @@ jest.mock('../../services/search', () => ({
   waitForTasks: jest.fn(),
 }));
 jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
-jest.mock('../../models/Country', () => ({ exists: jest.fn() }));
+jest.mock('../../models/Country', () => ({ exists: jest.fn(), findById: jest.fn() }));
 jest.mock('../../models/Region', () => ({ findById: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../../models/WineDefinition', () => ({ countDocuments: jest.fn() }));
 // Constructor + statics: the POST route instantiates `new Grape(...)`.
@@ -371,5 +371,37 @@ describe('DELETE /regions/:id — grape regionalNames in-use guard', () => {
     const res = await send('DELETE', `/regions/${DOURO}`);
     expect(res.status).toBe(200);
     expect(region.deleteOne).toHaveBeenCalled();
+  });
+});
+
+// ── Country DELETE guard ─────────────────────────────────────────────────────
+// Same asymmetry the region guard closed (audit 2026-08-11 L-2): a country
+// referenced only by a grape's country-level regional name must refuse
+// deletion — a dangling ref bricks that grape's next regionalNames save.
+
+describe('DELETE /countries/:id — grape regionalNames in-use guard', () => {
+  const countryDelDoc = () => ({
+    _id: PORTUGAL,
+    name: 'Portugal',
+    deleteOne: jest.fn().mockResolvedValue(undefined),
+  });
+
+  test('refuses deletion while a grape regional name references the country', async () => {
+    const country = countryDelDoc();
+    Country.findById.mockResolvedValue(country);
+    Grape.exists.mockResolvedValue({ _id: GRAPE_ID });
+    const res = await send('DELETE', `/countries/${PORTUGAL}`);
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/regional display name/);
+    expect(Grape.exists).toHaveBeenCalledWith({ 'regionalNames.country': PORTUGAL });
+    expect(country.deleteOne).not.toHaveBeenCalled();
+  });
+
+  test('deletes normally when no grape references the country', async () => {
+    const country = countryDelDoc();
+    Country.findById.mockResolvedValue(country);
+    const res = await send('DELETE', `/countries/${PORTUGAL}`);
+    expect(res.status).toBe(200);
+    expect(country.deleteOne).toHaveBeenCalled();
   });
 });
