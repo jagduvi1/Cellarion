@@ -1,10 +1,10 @@
 # Cellarion
 
-**Cellarion is a hosted wine cellar app — a ready-to-use online service at [cellarion.app](https://cellarion.app).** Create a free account and start tracking your bottles, organizing them into cellars and racks, searching a shared wine registry, getting drink-window recommendations, and chatting with an AI sommelier about your collection. No installation, no server, no setup — just sign up and go. **Every feature is free, forever.**
+**Cellarion is a hosted wine cellar app — a ready-to-use online service at [cellarion.app](https://cellarion.app).** Create a free account and start tracking your bottles, organizing them into cellars and racks, searching a shared wine registry, getting sommelier-curated drink-window recommendations, and chatting with an AI sommelier about your collection. No installation, no server, no setup — just sign up and go. **Every feature is free, forever.**
 
-> **Just want to use Cellarion?** Go to **[cellarion.app](https://cellarion.app)** and sign up. You do **not** need to clone this repository, run Docker, or host anything yourself.
+> **Just want to use Cellarion?** Go to **[cellarion.app](https://cellarion.app)** and sign up. You do **not** need to clone this repository, run Docker, or host anything yourself. There's also a public **[demo account](https://cellarion.app)** (Try the demo on the landing page) and an Android app on **[Google Play](https://play.google.com/store/apps/details?id=app.cellarion.twa)**.
 
-Cellarion is *also* open-source (AGPL-3.0), so if you'd prefer to run your own private instance, you can self-host it. The rest of this README covers self-hosting — see [Quick Start](#quick-start). Most people should just use the hosted service at [cellarion.app](https://cellarion.app).
+Cellarion is *also* open-source (AGPL-3.0), so if you'd prefer to run your own private instance, you can self-host it. The rest of this README covers self-hosting — see [Quick Start](#self-hosting-quick-start). Most people should just use the hosted service at [cellarion.app](https://cellarion.app).
 
 ## Hosted Service (recommended)
 
@@ -12,26 +12,43 @@ Cellarion is live and publicly available at:
 
 👉 **https://cellarion.app**
 
-This is the primary way to use Cellarion. Create an account and start using the full service today — **every feature is free, forever.** No credit card, no trial clock, no paywalled features, nothing to install or maintain.
+This is the primary way to use Cellarion. Create an account and start using the full service today — **every feature is free, forever.** No credit card, no trial clock, no paywalled features, nothing to install or maintain. If you want to chip in, optional [Supporter and Patron tiers](https://cellarion.app/plans) (monthly or annual) and [GitHub Sponsors](https://github.com/sponsors/jagduvi1) fund development — they unlock nothing extra, just our thanks.
 
 ## Features
 
-- **Bottle tracking** — Log every bottle with vintage, producer, region, price, rating, and tasting notes
-- **Cellar & rack management** — Organize bottles across multiple cellars with interactive 8×4 rack grids
-- **Drink-window alerts** — Get notified when bottles are approaching peak, in window, or past it
-- **Rich statistics** — Charts, maps (world choropleth), breakdowns by country, grape, value, and drink status
-- **Smart search** — Meilisearch-powered fuzzy search with deduplication
-- **AI cellar chat** — Ask questions about your collection — food pairings, occasion picks, cellar checks (powered by Claude + Voyage embeddings + Qdrant)
-- **Label scanning** — Snap a photo of a wine label and let AI fill in the details (Anthropic Vision API)
-- **Import & export** — Bring collections from Vivino, CellarTracker, or generic CSV; export as JSON (or ZIP with images)
+**Your cellar**
+- **Bottle tracking** — Log every bottle with vintage, producer, region, price, rating, and tasting notes; add more of a bottle you already own in one click
+- **Cellar & rack management** — Multiple cellars with customizable rack grids (up to 20×20) and a 3D cellar room view for physical placement
+- **Open-bottle tracking** — Open a bottle, pour glasses over days, close or finish it — with preservation-aware drink-soon nudges
+- **Reserved bottles** — Mark bottles as "spoken for" (a birthday, a dinner) so suggestions and consume flows respect them
+- **Drink-window alerts** — Sommelier-curated maturity windows per wine and vintage; alerts when bottles approach peak, are in window, or slipping past it
+- **Rich statistics** — Charts, world choropleth map, breakdowns by country, grape, value, and drink status
+- **Import & export** — Bring collections from Vivino (incl. drinking history), CellarTracker, generic CSV, or Cellarion's own JSON; export everything as JSON or a ZIP with your images
+
+**The shared registry**
+- **Smart search** — Meilisearch-powered fuzzy search with aggressive deduplication and canonical-key matching
+- **Label scanning** — Snap a photo of a wine label and let AI fill in the details
+- **Regional grape names** — One canonical variety per grape, displayed the way the label writes it (a Douro Port shows *Tinta Roriz*, an Alentejo red *Aragonez* — both stored as Tempranillo)
+- **Registry quality tooling** — Duplicate/fragmentation queues, cross-field domain checks, name checks, and a sommelier correction-proposal workflow keep the shared data clean
+
+**AI**
+- **AI cellar chat** — Ask questions about your collection — food pairings, occasion picks, cellar health (Claude + Voyage embeddings + Qdrant; only ever answers from wines you actually own)
+- **Connect your own AI** — A built-in [MCP server](#connect-your-ai-mcp) lets Claude, and any MCP-capable client, read and manage your cellar conversationally
+- **Bring your own models** — Self-hosters can point every AI feature at any OpenAI-compatible endpoint (Ollama, vLLM, LM Studio) instead of Anthropic/Voyage
+
+**Community & sharing**
 - **Cellar sharing** — Invite others to browse or co-manage a cellar with role-based access
-- **Dark mode** — Full light/dark theme with system preference detection
-- **Notifications** — In-app notification bell for wine requests, image approvals, shared cellars, and more
-- **Everything free** — Every feature is free for everyone. Optional Supporter and Patron tiers let you chip in to fund development — they unlock nothing extra, just our thanks
-- **Support system** — In-app support tickets and wine quality reports
-- **Internationalization** — i18n support via react-i18next
-- **Sommelier tools** — Dedicated maturity phase and pricing interfaces for sommeliers
-- **Super admin dashboard** — Platform-wide analytics, service health, rate limits, and embedding management
+- **Wine lists, reviews & discussions** — Build shareable lists, review wines, discuss them, follow other users, and get restock alerts
+- **Tasting journal & wishlist** — Keep private notes and a want-to-try list
+
+**Platform**
+- **Climate monitoring** — Connect cellar temperature/humidity sensors (Home Assistant-friendly ingest API) with per-cellar dashboards
+- **Sign in with Google** — Optional Google SSO alongside email/password
+- **Installable app** — PWA with push notifications, plus an Android app on [Google Play](https://play.google.com/store/apps/details?id=app.cellarion.twa)
+- **Internationalization** — Community-translated via Weblate ([help translate](#translations))
+- **Privacy & GDPR** — Full data export, account deletion with cooling-off, one-click email opt-out, optional self-hosted cookie-free analytics (Umami)
+- **Everything free** — Optional Supporter/Patron tiers (Stripe, monthly or annual) and GitHub Sponsors fund development; they unlock nothing extra
+- **Sommelier & admin tools** — Maturity/pricing curation surfaces, wine requests, quality reports, registry health watchdog, audit log, super-admin dashboard
 
 ---
 
@@ -39,16 +56,19 @@ This is the primary way to use Cellarion. Create an account and start using the 
 
 - **MongoDB 7** — Database (Mongoose 8)
 - **Express 4** — Backend API
-- **React 19** — Frontend (React Router 6)
-- **Node.js 24 (LTS)** — Runtime
+- **React 19** — Frontend (React Router 6, built with **Vite 7**)
+- **Node.js 24** — Runtime
 - **Meilisearch** — Fuzzy search engine
 - **Qdrant** — Vector database for AI cellar chat
-- **Voyage AI** — Wine embedding generation
-- **Anthropic Claude** — Label scanning + AI chat
+- **Voyage AI** — Wine embedding generation (swappable for any OpenAI-compatible endpoint)
+- **Anthropic Claude** — Label scanning + AI chat (swappable, same mechanism)
+- **MCP** — Model Context Protocol server (`/api/mcp`) with OAuth, for AI assistants
+- **Stripe** — Optional supporter payments (hosted Checkout + Portal)
 - **nginx** — Serves the React SPA and proxies `/api/` to the backend (internal)
 - **Traefik** — External reverse proxy (bring your own; not included in this Compose file)
 - **Docker Compose** — Containerization
 - **rembg** — Python/Flask background removal microservice
+- **Umami** — Optional self-hosted, cookie-free analytics (compose `--profile analytics`)
 
 ---
 
@@ -86,14 +106,12 @@ After the containers are running:
 docker exec cellarion-backend node src/seed-demo.js
 ```
 
-This creates:
+This creates demo accounts plus a starter taxonomy, wine registry entries, and a demo cellar with sample bottles:
 
 | Account | Email | Password | Role |
 |---------|-------|----------|------|
 | Admin   | admin@cellarion.app | Admin1234!demo | admin |
 | Demo user | user@cellarion.app | User1234!demo | user |
-
-…plus 2 countries, 2 regions, 5 grape varieties, 2 wine definitions, and a demo cellar with sample bottles.
 
 > These are local development credentials. Change them before deploying anywhere public.
 
@@ -108,126 +126,56 @@ docker-compose down -v       # also remove all volumes (wipes database)
 
 ## Architecture
 
+The tree below shows the shape of the codebase — the highlights, not every file. The backend has **57 Mongoose schemas** and **~65 route modules** (44 top-level + `admin/` + `somm/`), plus the MCP server.
+
 ```
 Cellarion/
 ├── backend/
-│   ├── src/
-│   │   ├── config/
-│   │   │   ├── aiConfig.js         # AI chat feature flags, model config, daily limits
-│   │   │   ├── db.js               # MongoDB connection
-│   │   │   ├── plans.js            # Supporter tier config (all features free)
-│   │   │   └── upload.js           # Multer config
-│   │   ├── middleware/
-│   │   │   ├── auth.js             # JWT + role middleware (requireAuth, requireAdmin, requireSomm)
-│   │   │   └── bottleAccess.js     # requireBottleAccess(minRole) factory
-│   │   ├── models/                 # 22 Mongoose schemas
-│   │   │   ├── User.js
-│   │   │   ├── WineDefinition.js   # Shared wine registry (vintage-neutral)
-│   │   │   ├── Bottle.js           # User-owned bottle records
-│   │   │   ├── Cellar.js
-│   │   │   ├── Rack.js             # 8×4 grid rack layout
-│   │   │   ├── AuditLog.js
-│   │   │   ├── BottleImage.js      # Bottle photo metadata
-│   │   │   ├── WineVintageProfile.js
-│   │   │   ├── WineVintagePrice.js
-│   │   │   ├── WineRequest.js
-│   │   │   ├── WineReport.js       # User-submitted wine quality reports
-│   │   │   ├── WineEmbedding.js    # Vector embedding tracking for RAG
-│   │   │   ├── Country.js
-│   │   │   ├── Region.js
-│   │   │   ├── Appellation.js      # Wine appellations (e.g. Barolo, Châteauneuf-du-Pape)
-│   │   │   ├── Grape.js
-│   │   │   ├── ChatUsage.js        # Daily AI chat usage per user
-│   │   │   ├── Notification.js     # In-app notifications
-│   │   │   ├── SupportTicket.js    # User support tickets
-│   │   │   ├── SiteConfig.js       # Global admin settings
-│   │   │   ├── ImportSession.js    # Persisted bottle import state
-│   │   │   └── ExchangeRateSnapshot.js # Cached currency exchange rates
-│   │   ├── routes/
-│   │   │   ├── auth.js             # /api/auth/*
-│   │   │   ├── cellars.js          # /api/cellars/*
-│   │   │   ├── bottles.js          # /api/bottles/*
-│   │   │   ├── wines.js            # /api/wines/*
-│   │   │   ├── racks.js            # /api/racks/*
-│   │   │   ├── wineRequests.js     # /api/wine-requests/*
-│   │   │   ├── wineReports.js      # /api/wine-reports/*
-│   │   │   ├── import.js           # /api/bottles/import/*
-│   │   │   ├── chat.js             # /api/chat (AI cellar chat)
-│   │   │   ├── stats.js            # /api/stats/overview
-│   │   │   ├── notifications.js    # /api/notifications
-│   │   │   ├── support.js          # /api/support
-│   │   │   ├── settings.js         # /api/settings
-│   │   │   ├── images.js           # /api/images/*
-│   │   │   ├── users.js            # /api/users/*
-│   │   │   ├── health.js           # /api/health
-│   │   │   ├── superadmin.js       # /api/superadmin/* (super admin only)
-│   │   │   ├── admin/              # /api/admin/* (admin role)
-│   │   │   └── somm/               # /api/somm/* (sommelier features)
-│   │   ├── services/
-│   │   │   ├── aiChat.js           # RAG pipeline: embed → Qdrant → Claude response
-│   │   │   ├── audit.js            # Audit logging
-│   │   │   ├── embedding.js        # Voyage AI embedding generation
-│   │   │   ├── findOrCreateWine.js # Intelligent wine lookup/creation
-│   │   │   ├── imageProcessor.js   # Background removal via rembg
-│   │   │   ├── labelScan.js        # Anthropic Vision API for label scanning
-│   │   │   ├── notifications.js    # Notification creation for key events
-│   │   │   ├── search.js           # Meilisearch integration
-│   │   │   ├── statsService.js     # Stats computation
-│   │   │   └── vectorStore.js      # Qdrant REST client for vector search
-│   │   ├── utils/
-│   │   │   ├── cellarAccess.js     # Ownership verification
-│   │   │   ├── drinkWindow.js      # classifyDrinkWindow() shared helper
-│   │   │   ├── normalize.js        # Wine name dedup & fuzzy matching
-│   │   │   └── ratingUtils.js      # Rating scale conversion + resolveRating()
-│   │   ├── data/                   # Taxonomy reference JSON files
-│   │   └── seed-demo.js            # Demo data seeder
-│   └── Dockerfile
+│   ├── server.js                   # Entry point
+│   └── src/
+│       ├── app.js                  # Express app setup, mounting, rate limiters
+│       ├── config/                 # db, plans, upload, aiConfig (models, prompts, limits)
+│       ├── middleware/
+│       │   ├── auth.js             # JWT + role middleware (requireAuth, requireAdmin, requireSomm)
+│       │   └── bottleAccess.js     # requireBottleAccess(minRole) factory
+│       ├── models/                 # 57 Mongoose schemas — core: User, WineDefinition,
+│       │                           #   Bottle, Cellar, Rack, WineVintageProfile/Price,
+│       │                           #   WineRequest, WineCorrectionProposal, BottleImage,
+│       │                           #   AuditLog, Country/Region/Appellation/Grape;
+│       │                           #   community: Discussion*, Review, JournalEntry,
+│       │                           #   WishlistItem, WineList, Follow, RestockAlert;
+│       │                           #   infra: Notification, PushSubscription, SupportTicket,
+│       │                           #   ImportSession, StripeWebhookEvent, WineEmbedding,
+│       │                           #   ClimateDevice/Reading, OAuth*, McpActionLog, …
+│       ├── routes/                 # ~44 top-level route modules: auth (incl. Google SSO),
+│       │                           #   cellars, bottles, wines (public read), racks, chat,
+│       │                           #   stats, import, export, wineRequests, wineReports,
+│       │                           #   discussions, reviews, journal, wishlist, wineLists,
+│       │                           #   follows, recommendations, restockAlerts, climate,
+│       │                           #   notifications, support, stripe, blog, og, sitemap,
+│       │                           #   users, settings, images, health, superadmin, …
+│       │   ├── admin/              # /api/admin/* — registry curation, taxonomy, users,
+│       │   │                       #   tickets, proposals, fragmentation/cross-field queues
+│       │   └── somm/               # /api/somm/* — maturity windows, prices, wine profiles
+│       ├── mcp/                    # MCP server: registry, tools (read/write/somm/admin),
+│       │                           #   OAuth, action ledger with undo
+│       ├── services/               # search (Meili), embedding (Voyage/OpenAI-compatible),
+│       │                           #   aiChat (RAG), labelScan, enrichmentJob, audit,
+│       │                           #   findOrCreateWine, imageProcessor, taxonomyMerge,
+│       │                           #   registryHealthJob, crossFieldScan, statsService, …
+│       ├── utils/                  # normalize (dedup), cellarAccess, drinkWindow,
+│       │                           #   grapeDisplay (regional names), nameChecks,
+│       │                           #   crossFieldChecks, ratingUtils, maturityUtils, …
+│       ├── data/                   # Taxonomy reference JSON
+│       └── seed-demo.js
 ├── frontend/
 │   ├── src/
-│   │   ├── api/                    # API client wrappers
-│   │   │   ├── admin.js            # Admin endpoints (wine reports, rate limits, etc.)
-│   │   │   ├── bottles.js          # getBottle, updateBottle, consumeBottle, import
-│   │   │   ├── cellars.js          # getCellar, updateCellar, deleteCellar, …
-│   │   │   ├── importSessions.js   # Import session management
-│   │   │   ├── racks.js            # getRacks, deleteRack, updateSlot, clearSlot
-│   │   │   ├── support.js          # Support tickets & wine reports
-│   │   │   └── wines.js            # searchWines, getWine, scanLabel
-│   │   ├── components/
-│   │   │   ├── BottleCard.js       # Bottle row/card (list + grid view)
-│   │   │   ├── CellarionLogo.js    # Brand SVG logo component
-│   │   │   ├── Layout.js           # Persistent navbar + bottom nav + mobile menu
-│   │   │   ├── Modal.js            # Shared modal overlay
-│   │   │   ├── NotificationBell.js # Notification dropdown with unread badge
-│   │   │   ├── ReportWineModal.js  # Wine quality report modal
-│   │   │   ├── SupportModal.js     # Support ticket submission modal
-│   │   │   ├── ProtectedRoute.js
-│   │   │   └── ErrorBoundary.js
-│   │   ├── contexts/
-│   │   │   ├── AuthContext.js      # Global auth state
-│   │   │   ├── ThemeContext.js     # Dark/light mode with system preference detection
-│   │   │   └── NotificationContext.js # Notification polling & unread count
-│   │   ├── pages/                  # App screens
-│   │   │   ├── LandingPage.js      # Public landing page
-│   │   │   ├── Login.js            # Auth (login/register)
-│   │   │   ├── VerifyEmail.js      # Email verification
-│   │   │   ├── ResetPassword.js    # Password reset flow
-│   │   │   ├── CellarChat.js       # AI cellar chat interface
-│   │   │   ├── Statistics.js       # Analytics dashboard with charts & world map
-│   │   │   ├── DrinkAlerts.js      # Drink-window alerts by urgency
-│   │   │   ├── Plans.js            # Supporter tiers (all features free)
-│   │   │   ├── Settings.js         # User preferences (currency, language, rating scale)
-│   │   │   ├── SupportPage.js      # Support tickets & wine reports
-│   │   │   ├── SommMaturity.js     # Sommelier maturity phase management
-│   │   │   ├── SommPrices.js       # Sommelier pricing data management
-│   │   │   ├── SuperAdmin.js       # Platform-wide admin dashboard
-│   │   │   ├── AdminSupportTickets.js
-│   │   │   ├── AdminWineReports.js
-│   │   │   └── …                   # Cellar, bottle, rack, wine pages
-│   │   ├── config/
-│   │   │   ├── currencies.js
-│   │   │   └── plans.js
-│   │   ├── utils/                  # Frontend helpers
-│   │   └── styles/common.css
+│   │   ├── api/                    # Typed API client modules (one per resource)
+│   │   ├── components/             # Reusable UI (Layout, Modal, BottleCard, rack grids, …)
+│   │   ├── pages/                  # App screens (cellars, bottles, stats, chat, admin, …)
+│   │   ├── contexts/               # Auth, Theme, Notifications
+│   │   ├── locales/                # i18n (Weblate-managed except en)
+│   │   └── utils/
 │   ├── nginx.conf                  # nginx config (SPA + /api/ proxy)
 │   └── Dockerfile                  # Multi-stage: Node build → nginx-unprivileged
 ├── rembg/                          # Python background-removal service
@@ -247,6 +195,7 @@ All external traffic enters through Traefik (runs on the shared `web` Docker net
 | Meilisearch  | internal  | Fuzzy search engine (port 7700)    |
 | Qdrant       | internal  | Vector database (port 6333)        |
 | rembg        | internal  | Background removal (port 5000)     |
+| Umami (+db)  | internal  | Optional analytics — `--profile analytics` |
 
 ### Running behind Traefik
 
@@ -273,17 +222,31 @@ Update the `Host(...)` rule to match your own domain.
 
 ---
 
+## Connect your AI (MCP)
+
+Cellarion ships a built-in **[Model Context Protocol](https://modelcontextprotocol.io)** server, so AI assistants can read and manage your cellar conversationally — "what should I open tonight?", "add these six bottles", "set the drink window for this vintage".
+
+- **Personal server** — `https://cellarion.app/api/mcp` (OAuth; your own cellar, read/write/consume scopes, sommelier and admin tools for those roles, with an action ledger and `undo_last`)
+- **Public registry server** — `https://cellarion.app/api/mcp/public` (no signup; read-only shared wine registry)
+- **Setup guide** — **[cellarion.app/connect-ai](https://cellarion.app/connect-ai)** has copy-paste config for Claude (web/Desktop/Code) and other MCP clients
+- Also published as [`cellarion-mcp`](https://www.npmjs.com/package/cellarion-mcp) on npm and in the [official MCP registry](https://registry.modelcontextprotocol.io) (`app.cellarion/cellarion`, `app.cellarion/wine-registry`)
+
+Self-hosted instances serve the same endpoints from their own origin — the `/connect-ai` page renders instance-specific snippets automatically.
+
+---
+
 ## Core Concepts
 
 | Entity | Description |
 |--------|-------------|
-| **WineDefinition** | Vintage-neutral wine entry in the shared registry. Admins create and manage these. |
-| **Bottle** | A user's bottle: references a WineDefinition and adds vintage, price, rating, notes, rack location. |
+| **WineDefinition** | Vintage-neutral wine entry in the shared registry. Admin-managed; grows via user wine requests, imports, and sommelier correction proposals with one-click admin review. |
+| **Bottle** | A user's bottle: references a WineDefinition and adds vintage, price, rating, notes, rack location, open/reserved state. |
 | **Cellar** | Named container of Bottles, owned by a user. Can be shared with other users via role-based access. |
-| **Rack** | 8×4 grid within a Cellar for physical bottle placement. |
+| **Rack** | Customizable grid (up to 20×20, default 8×4) within a Cellar for physical bottle placement, with a 3D room view. |
+| **WineVintageProfile** | Sommelier-curated drink-window (maturity) data per wine + vintage — the source of drink alerts. |
 | **WineRequest** | User-submitted wine suggestion. Admins review and fulfil by creating a WineDefinition. |
-| **Taxonomy** | Admin-managed Countries, Regions, Appellations, and Grapes to prevent free-text proliferation. |
-| **Notification** | In-app notification for events like wine requests resolved, images approved, cellars shared. |
+| **Taxonomy** | Admin-managed Countries, Regions, Appellations, and Grapes (with regional display names) to prevent free-text proliferation. |
+| **Notification** | In-app + push notification for events like wine requests resolved, images approved, cellars shared, restocks. |
 | **SupportTicket** | User support tickets with admin response tracking. |
 | **WineReport** | User-submitted wine quality reports (wrong info, duplicates, inappropriate content). |
 
@@ -292,13 +255,15 @@ Update the `Host(...)` rule to match your own domain.
 | Role | Description |
 |------|-------------|
 | **user** | Standard user — manages own cellars, bottles, and requests |
-| **sommelier** | Can manage maturity profiles and pricing data for wines |
-| **admin** | Full access — wine library, taxonomy, user management, image review, audit log |
-| **super admin** | Platform-level access — system monitor, service health, rate limits, embedding management |
+| **sommelier** | Curates maturity windows, pricing data, tasting profiles, and correction proposals for the shared registry |
+| **admin** | Full access — wine library, taxonomy, user management, image review, registry quality queues, audit log |
+| **super admin** | Platform-level access — system monitor, service health, rate limits, AI config, embedding management |
 
 ---
 
 ## API Summary
+
+The backend exposes ~65 route modules; this is the core surface, not an exhaustive reference. Wine registry reads (`/api/wines`, public wine pages, OG images, sitemap) are public; everything personal requires a JWT (`Authorization: Bearer <token>`).
 
 ### Auth — `/api/auth`
 
@@ -306,6 +271,7 @@ Update the `Host(...)` rule to match your own domain.
 |--------|------|-------------|
 | POST | `/register` | Create account (sends verification email if Mailgun is configured) |
 | POST | `/login` | Login, returns JWT (blocked until email is verified when Mailgun is configured) |
+| GET | `/google` → `/google/callback` | Google SSO (when `GOOGLE_CLIENT_ID/SECRET` are set) |
 | GET | `/verify-email?token=` | Verify email address, returns JWT on success |
 | POST | `/resend-verification` | Resend verification email |
 | POST | `/forgot-password` | Request password reset email |
@@ -329,20 +295,18 @@ Update the `Host(...)` rule to match your own domain.
 | POST | `/` | Add bottle to cellar |
 | PUT | `/:id` | Update bottle |
 | DELETE | `/:id` | Remove bottle |
-| POST | `/import/validate` | Validate import data and match wines |
+| POST | `/:id/consume` · `/:id/open` · pour/close | Drink-tracking lifecycle |
+| POST | `/import/validate` | Validate import data and match wines (registry-read-only) |
 | POST | `/import/confirm` | Create bottles from validated import |
 
-### Wine Registry — `/api/wines` *(auth required)*
+### Wine Registry — `/api/wines`
 
-All wine registry endpoints require a valid JWT. Behaviour differs by role:
-
-- **Regular users** — `search` param is mandatory; results capped at 10.
-- **Admin / Sommelier** — full browse without a search term; no result cap.
+Public read. Regular-user searches are capped; admin/sommelier get full browse.
 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/` | Search/filter wines. Params: `search`, `type`, `country`, `region`, `grapes`, `sort`, `limit`, `offset` |
-| GET | `/:id` | Get a single wine definition by ID |
+| GET | `/:id` | Get a single wine definition (grapes carry `displayName` regional labels) |
 
 ### Chat — `/api/chat` *(auth required)*
 
@@ -350,74 +314,43 @@ All wine registry endpoints require a valid JWT. Behaviour differs by role:
 |--------|------|-------------|
 | POST | `/` | Send a question to the AI cellar chat (RAG pipeline) |
 
-### Notifications — `/api/notifications` *(auth required)*
+### MCP — `/api/mcp` and `/api/mcp/public`
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/` | Get user's notifications |
-| PUT | `/:id/read` | Mark notification as read |
-| PUT | `/read-all` | Mark all notifications as read |
+See [Connect your AI](#connect-your-ai-mcp). OAuth 2.0 with dynamic client registration on the personal server; the public server needs no auth.
 
-### Stats — `/api/stats` *(auth required)*
+### Community *(auth required)*
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/overview` | Collection analytics (all cellars) |
+`/api/discussions`, `/api/reviews`, `/api/journal`, `/api/wishlist`, `/api/wine-lists`, `/api/follows`, `/api/recommendations`, `/api/restock-alerts` — lists, reviews, discussions, journal, wishlist, follows, and restock alerts.
 
-### Support — `/api/support` *(auth required)*
+### Climate — `/api/climate` *(auth required)*
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/tickets` | Get user's support tickets |
-| POST | `/tickets` | Submit a support ticket |
+Register cellar sensors, ingest readings (Home Assistant-friendly token auth), per-cellar dashboards.
 
-### Wine Reports — `/api/wine-reports` *(auth required)*
+### Notifications / Stats / Support / Wine Reports / Wine Requests *(auth required)*
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/` | Get user's wine reports |
-| POST | `/` | Report a wine issue (wrong info, duplicate, etc.) |
-
-### Wine Requests — `/api/wine-requests` *(auth required)*
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/` | Get user's wine requests |
-| POST | `/` | Submit a new wine request |
+As before: `/api/notifications`, `/api/stats/overview`, `/api/support`, `/api/wine-reports`, `/api/wine-requests`.
 
 ### Sommelier — `/api/somm/*` *(somm or admin role)*
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET/POST | `/maturity` | Manage maturity phases for wine vintages |
-| GET/POST | `/prices` | Manage pricing data for wine vintages |
+| GET/PUT | `/maturity` | Curate drink-window phases per wine + vintage |
+| GET/POST | `/prices` | Curate pricing data |
+| PUT | `/profile/:wineId` | Correct a wine's tasting profile, type, and grapes |
 
 ### Admin — `/api/admin/*` *(admin role required)*
 
-| Method | Path | Description |
-|--------|------|-------------|
-| POST/PUT/DELETE | `/wines` | Manage wine definitions |
-| GET/PUT | `/wine-requests` | Review user wine requests |
-| CRUD | `/taxonomy/*` | Manage countries, regions, appellations, grapes |
-| GET/DELETE | `/images` | Manage bottle images |
-| GET | `/audit` | View audit log |
-| GET | `/users` | Manage users |
-| GET/PUT | `/support-tickets` | Manage support tickets |
-| GET/PUT | `/wine-reports` | Manage wine reports |
+Wine definitions + merges, wine requests, correction proposals, taxonomy (incl. grape regional names), registry quality queues (duplicates, fragmentation, name checks, cross-field checks), images, users, tickets, audit log.
 
 ### Super Admin — `/api/superadmin/*` *(super admin only)*
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/dashboard` | Platform analytics (user counts, supporter-tier distribution) |
-| GET/PUT | `/settings` | Rate limits, contact email, AI config |
-| POST | `/embeddings` | Manage embedding jobs |
+Platform analytics, rate limits, AI model/prompt config, announcement banner, embedding jobs.
 
 ---
 
 ## Environment Variables
 
-Copy `.env.example` to `.env` in the project root and set the required values:
+Copy `.env.example` to `.env` — **it is fully commented and is the authoritative reference.** Core values:
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
@@ -431,25 +364,21 @@ Copy `.env.example` to `.env` in the project root and set the required values:
 | `REMBG_URL` | No | `http://rembg:5000` | Background removal service |
 | `ANTHROPIC_API_KEY` | No | — | Enables label scanning and AI cellar chat ([get a key](https://console.anthropic.com/)) |
 | `VOYAGE_API_KEY` | No | — | Required for AI cellar chat embeddings ([get a key](https://dash.voyageai.com/)) |
-| `AI_PROVIDER` | No | `anthropic` | Set to `openai` to serve all LLM features from an OpenAI-compatible endpoint (see [Self-hosted AI](#self-hosted-ai-openai-compatible-endpoints)) |
-| `OPENAI_BASE_URL` | No | — | OpenAI-compatible `/v1` root, e.g. `http://host.docker.internal:11434/v1` (required when `AI_PROVIDER=openai`) |
-| `OPENAI_API_KEY` | No | — | Bearer token for the endpoint (Ollama/LM Studio ignore it; vLLM may require one) |
-| `AI_MODEL` | No | — | Model name to use, e.g. `llama3.1:70b` (required when `AI_PROVIDER=openai`) |
-| `AI_VISION_MODEL` | No | `AI_MODEL` | Vision-capable model for label scanning, e.g. `qwen2.5-vl:32b` |
-| `OPENAI_TIMEOUT_MS` | No | `120000` | Per-request timeout for the OpenAI-compatible endpoint |
-| `EMBEDDING_PROVIDER` | No | `voyage` | Set to `openai` to serve wine embeddings from an OpenAI-compatible endpoint instead of Voyage AI |
-| `EMBEDDING_BASE_URL` | No | `OPENAI_BASE_URL` | `/v1` root of the embedding endpoint |
-| `EMBEDDING_API_KEY` | No | — | Bearer token for the embedding endpoint (falls back to `OPENAI_API_KEY` only when `EMBEDDING_BASE_URL` is also unset — a dedicated embedding host is never sent the chat key) |
-| `EMBEDDING_MODEL` | No | — | Embedding model name, e.g. `nomic-embed-text` (required when `EMBEDDING_PROVIDER=openai`) |
-| `EMBEDDING_DIMENSION` | No | — | The model's vector size, e.g. `768` (required when `EMBEDDING_PROVIDER=openai`) |
-| `EMBEDDING_TIMEOUT_MS` | No | `30000` | Per-request timeout for the embedding endpoint |
 | `QDRANT_URL` | No | `http://qdrant:6333` | Vector database URL (auto-set in Docker Compose) |
 | `SUPER_ADMIN_EMAIL` | No | — | Email of the super admin account |
-| `SUPER_ADMIN_IPS` | No | — | Comma-separated IP allowlist for super admin access |
-| `MAILGUN_API_KEY` | No | — | Mailgun API key — enables email verification when set |
-| `MAILGUN_DOMAIN` | No | — | Mailgun sending domain (e.g. `mg.yourdomain.com`) |
-| `MAILGUN_FROM` | No | `Cellarion <no-reply@{DOMAIN}>` | Sender address shown in verification emails |
-| `MAILGUN_API_URL` | No | `https://api.mailgun.net` | Use `https://api.eu.mailgun.net` for EU region |
+| `MAILGUN_API_KEY` / `MAILGUN_DOMAIN` | No | — | Enable email verification + transactional email |
+
+**Optional integrations** (each fully documented in `.env.example`):
+
+| Group | Variables | Enables |
+|-------|-----------|---------|
+| Self-hosted AI | `AI_PROVIDER`, `OPENAI_BASE_URL`, `OPENAI_API_KEY`, `AI_MODEL`, `AI_VISION_MODEL`, `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `EMBEDDING_DIMENSION`, … | Any OpenAI-compatible endpoint instead of Anthropic/Voyage — see [Self-hosted AI](#self-hosted-ai-openai-compatible-endpoints) |
+| Google SSO | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL` | Sign in with Google |
+| Supporter payments | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_*_PRICE_ID` (monthly + annual) | Stripe Checkout for the optional tiers |
+| Push notifications | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_EMAIL` | Web-push for drink alerts and events |
+| Climate monitoring | `CLIMATE_RETENTION_DAYS`, `CLIMATE_MAX_DEVICES_PER_USER`, `CLIMATE_MAX_READINGS_PER_DAY`, … | Sensor ingest limits + GDPR retention |
+| Analytics | `UMAMI_DB_PASSWORD`, `UMAMI_APP_SECRET`, `VITE_UMAMI_URL`, `VITE_UMAMI_WEBSITE_ID` | Self-hosted cookie-free Umami (`--profile analytics`; `VITE_*` are build-time) |
+| Ops | `TRUST_PROXY_HOPS`, `COOKIE_SECURE`, `BACKEND_URL`, `MEILI_SEARCH_KEY`, `LOG_LEVEL`, `AUDIT_TTL_DAYS`, `VITE_SITE_URL`, `INDEXNOW_KEY`, `SUPER_ADMIN_IPS`, `QDRANT_API_KEY` | Proxy trust, cookies, logging, SEO, audit retention |
 
 ### AI Cellar Chat
 
@@ -512,12 +441,12 @@ db.users.updateMany({ emailVerified: { $exists: false } }, { $set: { emailVerifi
 
 ## Bottle Import
 
-Users can import bottles from other wine cellar apps (Vivino, CellarTracker, or any generic CSV). The import flow:
+Users can import bottles from other wine cellar apps (Vivino — including drinking history, CellarTracker, or any generic CSV). The import flow:
 
 1. **Upload** — Drop a CSV file; the system auto-detects the source format and maps it to a standard schema
 2. **Validate** — Each item is matched against the wine library using fuzzy search (Meilisearch + MongoDB text search + normalized key lookup) and scored with combined similarity
 3. **Review** — Users see match results: exact matches (auto-selected), fuzzy matches (pick from candidates), and unmatched items (search manually or skip)
-4. **Import** — Confirmed items are created as bottles in the target cellar
+4. **Import** — Confirmed items are created as bottles in the target cellar (nothing is written to the shared registry until you confirm)
 
 Import sessions are persisted so users can resume later if interrupted. Access the import from any cellar's overflow menu (⋯ → Import Bottles). Requires editor or owner access.
 
@@ -565,13 +494,13 @@ To import directly into history (already consumed bottles), add:
 
 ### Cellar Export
 
-Cellar owners can export their data via a cellar's overflow menu (⋯ → Export) or Settings. Available as JSON, or as a ZIP that also includes your uploaded bottle images. The export covers bottles with rack placement (`rackName`, `rackPosition`), rack geometry, the 3D room layout, and your own reviews. The JSON format is directly re-importable.
+Cellar owners can export their data via a cellar's overflow menu (⋯ → Export) or Settings. Available as JSON, or as a ZIP that also includes your uploaded bottle images. The export covers bottles with rack placement (`rackName`, `rackPosition`), rack geometry, the 3D room layout, and your own reviews. The JSON format is directly re-importable. (A full account export — every category of your data — is available under Settings → Privacy, per GDPR.)
 
 ---
 
 ## Wine Deduplication
 
-When an admin creates a wine, the system checks for near-duplicates using:
+When a wine is created, the system checks for near-duplicates using:
 
 1. **Levenshtein distance** (40%) — character-level similarity
 2. **Trigram Jaccard** (30%) — overlapping 3-char sequences
@@ -579,7 +508,7 @@ When an admin creates a wine, the system checks for near-duplicates using:
 
 Score: `name × 0.45 + producer × 0.45 + appellation × 0.10`
 
-Candidates above the threshold (default 0.75) appear as warnings with a "Use This" option.
+Candidates above the threshold (default 0.75) appear as warnings with a "Use This" option. Behind that sit admin-side quality queues — duplicate groups, producer-fragmentation pairs, name checks, and cross-field domain checks (a producer that is actually an appellation, a region that is a country…) — re-tested against the live taxonomy on every scan.
 
 ---
 
@@ -588,10 +517,10 @@ Candidates above the threshold (default 0.75) appear as warnings with a "Use Thi
 ### Frontend
 
 ```bash
-cd frontend && npm test -- --watchAll=false
+cd frontend && npm test
 ```
 
-Uses Jest + React Testing Library (bundled with Create React App). Covers drink-window logic, currency conversion, and the shared Modal component.
+Runs **Vitest** (`vitest run` — a single non-watch pass) with React Testing Library. Do **not** append CRA-style flags like `--watchAll=false` — the frontend is built with Vite, not Create React App, and unknown flags error.
 
 ### Backend
 
@@ -599,7 +528,7 @@ Uses Jest + React Testing Library (bundled with Create React App). Covers drink-
 cd backend && npm test
 ```
 
-Uses Jest. Covers auth middleware, cellar access control, wine normalisation/similarity, rating scale conversion, and drink-window classification.
+Uses Jest — ~124 suites covering auth middleware, cellar access control, wine normalisation/dedup, registry checks, rating conversion, drink windows, MCP tools, and more.
 
 **Run both test suites before opening a pull request. PRs with failing tests will not be merged.**
 
