@@ -90,3 +90,15 @@ describe('buildBottleDocument grapeNames', () => {
     expect(doc.wineName).toBe('');
   });
 });
+
+// The admin reindex 500'd on prod (2026-08-11): meilisearch-js >=0.38 moved
+// task waiting to client.tasks.waitForTasks and renamed the options — the
+// client is constructor-mocked in every suite, so only a source pin can catch
+// this API-drift class before prod does.
+describe('waitForTasks Meili API pin', () => {
+  test('uses client.tasks.waitForTasks (0.38+ API), never client.waitForTasks', () => {
+    const src = require('fs').readFileSync(require.resolve('./search'), 'utf8');
+    expect(src).toMatch(/client\.tasks\.waitForTasks\(/);
+    expect(src).not.toMatch(/client\.waitForTasks\(/);
+  });
+});
