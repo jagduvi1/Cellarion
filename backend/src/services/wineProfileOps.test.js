@@ -119,12 +119,24 @@ describe('resolveGrapeIdsStrict (match-only)', () => {
   const found = (doc) => ({ select: () => ({ lean: () => Promise.resolve(doc) }) });
   beforeEach(() => jest.clearAllMocks());
 
-  test('resolves a synonym to its canonical taxonomy doc and echoes the display name', async () => {
+  test('resolves a synonym to its canonical doc — and REPORTS the substitution', async () => {
     Grape.findOne.mockReturnValue(found({ _id: 'g-syrah', name: 'Syrah' }));
     const r = await resolveGrapeIdsStrict(['Shiraz']);
-    expect(r).toEqual({ ok: true, ids: ['g-syrah'], names: ['Syrah'] });
+    // Ticket 2026-08-11: "Tinta Roriz" silently became Tempranillo — the
+    // resolver must flag every stored-name override so callers can surface it.
+    expect(r).toEqual({
+      ok: true, ids: ['g-syrah'], names: ['Syrah'],
+      substitutions: [{ from: 'Shiraz', to: 'Syrah' }],
+    });
     // The lookup must consult synonyms, same as findOrCreateGrapes.
     expect(Grape.findOne.mock.calls[0][0].$or).toBeDefined();
+  });
+
+  test('case/diacritic-only differences are NOT substitutions', async () => {
+    Grape.findOne.mockReturnValue(found({ _id: 'g-syrah', name: 'Syrah' }));
+    const r = await resolveGrapeIdsStrict(['syrah']);
+    expect(r.substitutions).toEqual([]);
+    expect(r.names).toEqual(['Syrah']);
   });
 
   test('an unknown variety refuses the whole write — never mints taxonomy', async () => {

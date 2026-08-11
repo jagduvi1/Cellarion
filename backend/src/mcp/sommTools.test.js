@@ -392,6 +392,23 @@ describe('set_wine_profile', () => {
     expect(McpActionLog.create.mock.calls[0][0].prev).toMatchObject({ type: 'fortified', grapes: [] });
   });
 
+  // Ticket 2026-08-11: "Tinta Roriz" was silently stored as Tempranillo. The
+  // canonicalisation itself is the design (one variety doc keeps search and
+  // stats coherent) — but the response must SAY it happened, at every reading
+  // depth: summary, record payload, and note.
+  test('a synonym-stored grape is REPORTED as a substitution, never silent', async () => {
+    const w = wine({ type: 'fortified', grapes: [] });
+    Grape.findOne.mockReturnValue(chain({ _id: oid('9'), name: 'Tempranillo' }));
+    const body = parse(await tool('set_wine_profile').handler(
+      { wine_id: oid('f'), grapes: ['Tinta Roriz'] }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(w.grapes).toEqual([oid('9')]);
+    expect(body.summary).toMatch(/"Tinta Roriz" as Tempranillo/);
+    expect(body.data.record.grapes).toEqual(['Tempranillo']);
+    expect(body.data.record.grape_substitutions).toEqual(['Tinta Roriz → Tempranillo']);
+    expect(body.data.note).toMatch(/canonical variety doc/);
+  });
+
   test('an unknown grape variety refuses the whole write — match-only, nothing minted', async () => {
     const w = wine({ type: 'white', grapes: [] });
     Grape.findOne.mockReturnValue(chain(null));
