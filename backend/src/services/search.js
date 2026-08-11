@@ -742,7 +742,10 @@ function getIsAvailable() {
  */
 async function waitForTasks(taskUids, { timeOutMs = 120000 } = {}) {
   if (!isAvailable || !Array.isArray(taskUids) || taskUids.length === 0) return;
-  await client.waitForTasks(taskUids, { timeOutMs, intervalMs: 250 });
+  // meilisearch-js ≥0.38 moved task waiting to client.tasks and renamed the
+  // options (timeout/interval, ms) — client.waitForTasks does not exist on
+  // 0.58 and 500'd the admin reindex (prod 2026-08-11).
+  await client.tasks.waitForTasks(taskUids, { timeout: timeOutMs, interval: 250 });
 }
 
 module.exports = {
