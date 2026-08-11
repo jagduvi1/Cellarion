@@ -15,12 +15,10 @@ const { isValidId } = require('../utils/validation');
 // regionally correct label for THIS wine (Tinta Roriz on a Douro Port) —
 // while `name` stays canonical. Storage/filters/stats are untouched.
 const { decorateGrapes } = require('../utils/grapeDisplay');
-const { submitUrls } = require('../services/indexNow');
 const { getReleaseCurve } = require('../services/communityPrice');
 const aiBurstLimiter = require('../middleware/aiBurstLimiter');
 const asyncHandler = require('../utils/asyncHandler');
 const { tryDebitAi, isRefundableFailure, isRefundableScanError } = require('../services/aiBudget');
-const { logAudit } = require('../services/audit');
 
 const REMBG_URL = process.env.REMBG_URL || 'http://rembg:5000';
 
@@ -31,10 +29,10 @@ const router = express.Router();
 // chat message cap (chat.js).
 const MAX_AI_QUERY_LEN = 300;
 
-// Field caps for anything that reaches the registry-write path. Mirrors the
-// value findOrCreateWine enforces at its own create chokepoint.
-const MAX_WINE_FIELD = 200;
-const MAX_GRAPES = 20;
+// Field caps shared with the registry-write path (which now lives at bottle/
+// wishlist commit — services/wineCommit). Imported, not re-declared, so the
+// resolve endpoint below and the commit endpoints can never drift.
+const { validateNewWineFields, MAX_WINE_FIELD, MAX_GRAPES } = require('../services/wineCommit');
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
 
 const cleanField = (v) => {
@@ -392,109 +390,69 @@ router.post('/scan-label', requireAuth, aiBurstLimiter, asyncHandler(async (req,
   }
 }));
 
-// POST /api/wines/find-or-create
-// Called after the user confirms (and optionally edits) the AI-extracted wine data.
-// Finds an existing matching wine or creates a new one, including any needed
-// taxonomy records (country, region, grapes).
+// POST /api/wines/find-or-create — resolve a confirmed wine against the
+// registry. RESOLVE-ONLY: this route creates nothing (path kept for client
+// compatibility; it is the add flows' step-1 lookup/soft-zone endpoint).
 //
-// Body:  { name, producer, country, region?, appellation?, type?, grapes?: string[],
-//           labelImage?: "data:image/png;base64,...", confirmCreate?: boolean }
-// Returns one of:
-//   { wine: WineDefinition, created: false }       — exact or auto-fuzzy match
-//   { candidates: [{ wine, score }, ...] }         — soft-zone: similar wines exist,
-//                                                     UI should ask "did you mean…?"
-//   { wine: WineDefinition, created: true }        — new wine created
+// It used to mint the WineDefinition (plus Country/Region/Grape taxonomy) the
+// moment the user confirmed the wine in STEP 1 of AddBottle/AddToWishlist —
+// before any bottle existed. A user who abandoned the flow left an orphan
+// registry row forever. Measured on prod 2026-08-10: 31 zero-bottle
+// createdVia:'ui' rows; the same day a user minted "Domaine de Riquewihr —
+// Kaefferkopf" (village-as-producer, likely fictitious) and two minutes later
+// attached their bottle to a DIFFERENT existing wine. Creation now happens at
+// the commit itself — POST /api/bottles / POST /api/wishlist with `newWine`
+// (services/wineCommit) — exactly the shape of the two prior fixes:
+// identify-text went read-only in v1.97 (52% orphan rate for 'ai' rows) and
+// import /validate went registry-read-only in v1.100.0 (#899).
 //
-// Pass `confirmCreate: true` after the user has reviewed the soft-zone
-// candidates and explicitly chosen to create a new wine anyway.
+// Body:  { name, producer, country, region?, appellation?, type?, grapes? }
+//        (confirmCreate / source / labelImage are accepted and IGNORED — a
+//         stale client may still send them; nothing here creates, so there is
+//         nothing to confirm or stamp.)
+// Returns 200 with one of:
+//   { wine, created: false }               — confident match (exact key,
+//                                            canonical/sibling, or score ≥0.95)
+//   { candidates: [{ wine, score }, ...] } — soft zone: ask "did you mean…?"
+//   { wine: null, created: false, noMatch: true }
+//                                          — not in the registry. The client
+//                                            carries the fields to the bottle/
+//                                            wishlist commit, which mints.
+// Never 201: `created` is always false here. Consumers that assumed a saved
+// document on the noMatch shape fail loudly (wine is null), not silently.
 //
-// `source: 'ai'` marks "the user accepted an AI suggestion" and stamps
-// createdVia:'ai'. Note the semantic shift: before identify-text became
-// read-only, createdVia:'ai' meant "auto-minted with nobody's confirmation"
-// (the ~162 pre-existing prod rows). From this release it means the opposite —
-// a human looked at the suggestion and said yes. The createdAt deploy boundary
-// separates the two cohorts, which is why this reuses the value rather than
-// adding an enum member.
-// requireNonDemo: find-or-create is a NON-AI registry-write primitive — on a miss
-// it mints a WineDefinition + Country/Region/Grape into the SHARED registry
-// (reachable via the AddBottle/Wishlist "create new wine" flow). purgeUserData
-// only reassigns createdBy on reap, so those rows would persist forever. A demo
-// must never create registry entries; it can only resolve existing ones elsewhere.
-// asyncHandler: the validation below runs before the try, and `?.trim()` only
-// short-circuits on null/undefined — a numeric `name` threw a rejection Express 4
-// never catches, so the request hung open forever with nothing but an
-// unhandledRejection line in the log. Same hazard the identify-text route
-// documents below; this handler was the one that still had it.
+// requireNonDemo kept deliberately: this endpoint only serves the add flows,
+// which the demo does not have (POST /api/bottles is requireNonDemo, AddBottle
+// shows a sign-up nudge) — loosening it would be an unrelated semantic change.
+// asyncHandler: `?.trim()` only short-circuits on null/undefined — a numeric
+// `name` threw a rejection Express 4 never catches, so the request hung open
+// forever. The shared validator 400s non-strings before the service runs.
 router.post('/find-or-create', requireAuth, requireNonDemo, asyncHandler(async (req, res) => {
-  const { name, producer, country, region, appellation, type, grapes, labelImage, confirmCreate, source } = req.body;
+  const { name, producer, country, region, appellation, type, grapes } = req.body;
 
-  // typeof, not `?.` — see the asyncHandler note above. A non-string here must
-  // be a 400, not a thrown TypeError.
-  if (typeof name !== 'string' || !name.trim() || typeof producer !== 'string' || !producer.trim()) {
-    return res.status(400).json({ error: 'name and producer are required' });
-  }
-  if (typeof country !== 'string' || !country.trim()) {
-    return res.status(400).json({ error: 'country is required' });
-  }
-  // Cap the free-text fields that feed the O(m·n) fuzzy-match scorer. Without
-  // this, a multi-MB name/producer (the body limit here is 5mb) would drive a
-  // huge Levenshtein computation against every candidate — an authenticated DoS.
-  // region is capped too: findOrCreateRegion mints whatever arrives, and since
-  // identify-text stopped creating, this is the sole user-facing write path and
-  // now receives machine-generated payloads.
-  for (const [field, value] of Object.entries({ name, producer, appellation, region })) {
-    if (typeof value === 'string' && value.length > MAX_WINE_FIELD) {
-      return res.status(400).json({ error: `${field} must be ${MAX_WINE_FIELD} characters or fewer` });
-    }
-  }
-  if (grapes !== undefined) {
-    if (!Array.isArray(grapes) || grapes.length > MAX_GRAPES) {
-      return res.status(400).json({ error: `grapes must be an array of at most ${MAX_GRAPES} entries` });
-    }
-    // `typeof g !== 'string' ||`, not `typeof g === 'string' &&`: the latter let a
-    // non-string element straight through to isUnknownName, which calls .trim()
-    // on it and 500s with the internal TypeError message.
-    if (grapes.some(g => typeof g !== 'string' || g.length > MAX_WINE_FIELD)) {
-      return res.status(400).json({ error: `each grape must be a string of ${MAX_WINE_FIELD} characters or fewer` });
-    }
-  }
+  // Same caps as the commit path (shared helper): the free-text fields feed
+  // the O(m·n) fuzzy-match scorer, and the body limit here is 5mb — a
+  // multi-MB name/producer would be an authenticated DoS.
+  const invalid = validateNewWineFields(req.body);
+  if (invalid) return res.status(400).json({ error: invalid });
 
   try {
-    const result = await findOrCreateWine(
+    // matchOnly and NOTHING else — same probe identify-text uses. confirmCreate
+    // must never ride along: it would gate off the soft-zone return that sits
+    // above the matchOnly gate, collapsing every 0.85–0.95 near-match into
+    // noMatch, which is exactly the duplication this endpoint exists to stop.
+    const probe = await findOrCreateWine(
       { name, producer, country, region, appellation, type, grapes: grapes || [] },
       req.user.id,
-      // skipSiblingMatch: the user has already reviewed the suggested matches
-      // (that's what confirmCreate means here) — an appellation-variant sibling
-      // must not silently override their explicit "create a new wine anyway".
-      // Strict allowlist on source so an arbitrary body value can't invent a
-      // provenance the enum would reject.
-      { confirmCreate: !!confirmCreate, skipSiblingMatch: !!confirmCreate, createdVia: source === 'ai' ? 'ai' : 'ui' }
+      { matchOnly: true }
     );
 
-    // Soft-zone: hand the candidates back so the UI can prompt the user
-    if (result.candidates) {
-      return res.status(200).json({ candidates: result.candidates });
-    }
-
-    const { wine, created } = result;
-    if (created) {
-      // This is the only user-facing path that mints into the SHARED registry,
-      // and since identify-text went read-only it is also where AI suggestions
-      // land once a user accepts them — so it was the one registry-write surface
-      // with no traceable record. `createdVia` alone doesn't serve: it is
-      // client-asserted and later merges rewrite it. Action name matches the MCP
-      // and admin surfaces so the three read as one stream.
-      logAudit(req, 'wine.create',
-        { type: 'wine', id: wine._id },
-        { via: source === 'ai' ? 'ai' : 'ui', name: wine.name, producer: wine.producer }
-      );
-      submitUrls(`/wines/${wine.slug || wine._id}`);
-    }
-
-    res.status(created ? 201 : 200).json({ wine, created });
+    if (probe.wine) return res.json({ wine: probe.wine, created: false });
+    if (probe.candidates?.length) return res.status(200).json({ candidates: probe.candidates });
+    return res.json({ wine: null, created: false, noMatch: true });
   } catch (err) {
-    console.error('Find or create wine error:', err);
-    res.status(err.status || 500).json({ error: err.message || 'Failed to find or create wine' });
+    console.error('Resolve wine error:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Failed to resolve wine' });
   }
 }));
 
@@ -507,7 +465,11 @@ router.post('/find-or-create', requireAuth, requireNonDemo, asyncHandler(async (
 // confirmed and before any bottle existed. Measured on prod 2026-08-03: 85 of
 // 162 createdVia:'ai' rows had zero bottles (52%) against 3% for 'ui', and the
 // same producer arrived spelled three ways from one user retyping a query.
-// Creation now happens only when the user accepts, via POST /find-or-create.
+// Creation now happens only when the user COMMITS — POST /api/bottles /
+// /api/wishlist with `newWine` (services/wineCommit); an accepted suggestion
+// rides along as fields until then. (/find-or-create was the interim mint
+// point; it went resolve-only when the 'ui' source grew the same orphan
+// pattern — 31 zero-bottle rows by 2026-08-10.)
 //
 // Response — 200, one shape with four states:
 //   { identified: {name, producer, country, region, appellation, type,

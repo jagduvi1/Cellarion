@@ -7,16 +7,17 @@
  * or the AI call quietly returning to fire on every search again. A manual
  * click-through passes all three.
  *
- * The behaviour being locked (PR #884): searching is registry-only and writes
- * nothing; AI is opt-in; an unsaved suggestion is only ever turned into a wine
- * through find-or-create, on an explicit press.
+ * The behaviour being locked (PR #884, tightened when step 1 went read-only):
+ * searching is registry-only and writes nothing; AI is opt-in; accepting an
+ * unsaved suggestion goes through resolveWine (a READ — the wine is only
+ * minted when the bottle is committed; see AddBottle.mintOnCommit.test.js).
  */
 
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
 vi.mock('../api/wines', () => ({
   searchWines: vi.fn(),
-  findOrCreateWine: vi.fn(),
+  resolveWine: vi.fn(),
   identifyWineByText: vi.fn(),
 }));
 vi.mock('../contexts/AuthContext', () => ({
@@ -47,7 +48,7 @@ vi.mock('react-i18next', () => {
   return { useTranslation: () => ({ t }), Trans };
 });
 
-const { searchWines, findOrCreateWine, identifyWineByText } = await import('../api/wines');
+const { searchWines, resolveWine, identifyWineByText } = await import('../api/wines');
 const AddBottle = (await import('./AddBottle')).default;
 
 const jsonRes = (body, ok = true, status = 200) => ({ ok, status, json: async () => body });
@@ -66,7 +67,8 @@ const REGISTRY_WINE = {
 beforeEach(() => {
   vi.clearAllMocks();
   searchWines.mockResolvedValue(jsonRes({ wines: [] }));
-  findOrCreateWine.mockResolvedValue(jsonRes({ wine: REGISTRY_WINE, created: true }, true, 201));
+  // resolveWine is READ-ONLY: it matches or reports noMatch, never 201.
+  resolveWine.mockResolvedValue(jsonRes({ wine: REGISTRY_WINE, created: false }));
 });
 
 /** Open the text-search pane and run a search for `q`. */
@@ -87,7 +89,7 @@ describe('AddBottle — searching is registry-only', () => {
 
     expect(searchWines).toHaveBeenCalledTimes(1);
     expect(identifyWineByText).not.toHaveBeenCalled();
-    expect(findOrCreateWine).not.toHaveBeenCalled();
+    expect(resolveWine).not.toHaveBeenCalled();
   });
 
   test('registry results stay visible — they are no longer hidden behind an AI card', async () => {
@@ -133,24 +135,37 @@ describe('AddBottle — an unsaved AI suggestion', () => {
     expect(screen.queryByText('addBottle.aiUseThisWine')).not.toBeInTheDocument();
   });
 
-  test('accepting routes through find-or-create with source:ai — never straight to step 2', async () => {
+  test('accepting routes through resolveWine with source:ai riding along — never straight to step 2', async () => {
     await search();
     await askAi();
     await act(async () => { fireEvent.click(screen.getByText('addBottle.aiAddAndUse')); });
 
-    expect(findOrCreateWine).toHaveBeenCalledTimes(1);
-    const body = findOrCreateWine.mock.calls[0][1];
+    expect(resolveWine).toHaveBeenCalledTimes(1);
+    const body = resolveWine.mock.calls[0][1];
     expect(body).toMatchObject({
       name: 'Les Romains', producer: 'Domaine Vacheron', country: 'France',
       appellation: 'Sancerre', type: 'white', source: 'ai',
     });
     expect(body.grapes).toEqual(['Sauvignon Blanc']);
-    // and only THEN does the saved wine carry the flow forward
+    // and only THEN does the matched wine carry the flow forward
     await waitFor(() => expect(screen.getByText('addBottle.addBottleBtn')).toBeInTheDocument());
   });
 
+  test('an unmatched suggestion (noMatch) still reaches step 2 — as PENDING data, with nothing minted', async () => {
+    resolveWine.mockResolvedValue(jsonRes({ wine: null, created: false, noMatch: true }));
+
+    await search();
+    await askAi();
+    await act(async () => { fireEvent.click(screen.getByText('addBottle.aiAddAndUse')); });
+
+    // step 2 renders from the display stub; the mint happens at bottle commit
+    // (covered by AddBottle.mintOnCommit.test.js)
+    await waitFor(() => expect(screen.getByText('addBottle.addBottleBtn')).toBeInTheDocument());
+    expect(resolveWine).toHaveBeenCalledTimes(1);
+  });
+
   test('a soft-zone response opens the "did you mean" modal instead of creating', async () => {
-    findOrCreateWine.mockResolvedValue(jsonRes({
+    resolveWine.mockResolvedValue(jsonRes({
       candidates: [{ wine: { ...REGISTRY_WINE, _id: 'w9' }, score: 0.9 }],
     }));
 
@@ -176,7 +191,7 @@ describe('AddBottle — an AI result already in the registry', () => {
 
     await act(async () => { fireEvent.click(screen.getByText('addBottle.aiUseThisWine')); });
 
-    expect(findOrCreateWine).not.toHaveBeenCalled();
+    expect(resolveWine).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByText('addBottle.addBottleBtn')).toBeInTheDocument());
   });
 });

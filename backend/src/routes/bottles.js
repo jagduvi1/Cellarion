@@ -38,6 +38,10 @@ const {
   addBottle, updateBottleFields, consumeBottle, restoreBottle, removeFromRacks, removeBottleCascade,
   openBottle, pourFromBottle, closeBottle,
 } = require('../services/bottleOps');
+// Mint-at-commit for the POST route's `newWine` branch — the wine is created
+// (or resolved) INSIDE the bottle create, never before it. Shared with the
+// wishlist route; findOrCreateWine itself is lazy-required inside the service.
+const { resolveOrMintWine } = require('../services/wineCommit');
 const { moveBottleToCellar } = require('../services/rackOps');
 
 const router = express.Router();
@@ -364,18 +368,41 @@ router.get('/', async (req, res) => {
 // disabled for demo accounts, so rather than offer a lesser AI-free add we keep
 // the demo an explore-and-interact experience on the pre-populated cellar
 // (consume, pour, move, arrange, edit, browse). "Sign up to add your bottles."
+//
+// Wine reference — EXACTLY ONE of:
+//   wineDefinition — id of an existing registry wine (the common case)
+//   newWine        — { name, producer, country, region?, appellation?, type?,
+//                      grapes?, confirmCreate?, source? }: mint-at-commit.
+// The UI used to mint the WineDefinition in step 1 of the add flow (POST
+// /api/wines/find-or-create), before any bottle existed — a user who abandoned
+// the form left an orphan registry row forever. Measured on prod 2026-08-10:
+// 31 zero-bottle createdVia:'ui' rows; one user minted "Domaine de Riquewihr —
+// Kaefferkopf" (village-as-producer, likely fictitious) then attached their
+// bottle to a different existing wine two minutes later. The wine is now
+// resolved-or-minted HERE, inside the bottle create — the same commit-time
+// pattern as import /confirm (#899) and the MCP add_bottle tool, via the same
+// findOrCreateWine chokepoint (dedup, soft zone, taxonomy mint gates).
+// Soft-zone: when very similar wines already exist, this returns 200
+// { candidates } and creates NOTHING — the client re-submits with either an
+// existing wineDefinition id or newWine + confirmCreate:true (identical
+// semantics to the old find-or-create route, so the UI dialog is unchanged).
 router.post('/', requireNonDemo, async (req, res) => {
   try {
-    const { cellar, wineDefinition, price, currency } = req.body;
+    const { cellar, wineDefinition, newWine, price, currency } = req.body;
 
-    if (!cellar || !wineDefinition) {
-      return res.status(400).json({ error: 'Cellar and wine definition are required' });
+    if (!cellar || (!wineDefinition && !newWine)) {
+      return res.status(400).json({ error: 'Cellar and a wine (wineDefinition or newWine) are required' });
+    }
+    if (wineDefinition && newWine) {
+      return res.status(400).json({ error: 'Provide wineDefinition or newWine, not both' });
     }
 
     // Access + existence checks stay on the route — the shared service takes
     // ACCESS-CHECKED docs (same contract as the MCP tools). Soft-deleted
     // cellars are rejected too: a bottle added there would be invisible
     // everywhere (all cellar lists filter deletedAt) and effectively lost.
+    // Cellar access is checked BEFORE any registry work, so a viewer (or a
+    // stranger) can never mint a wine through a cellar they cannot add to.
     if (!mongoose.isValidObjectId(cellar)) {
       return res.status(400).json({ error: 'Invalid cellar ID' });
     }
@@ -387,12 +414,30 @@ router.post('/', requireNonDemo, async (req, res) => {
     if (!role || role === 'viewer') {
       return res.status(403).json({ error: 'Not authorized to add bottles to this cellar' });
     }
-    if (!mongoose.isValidObjectId(wineDefinition)) {
-      return res.status(400).json({ error: 'Invalid wine definition ID' });
-    }
-    const wineDoc = await WineDefinition.findById(wineDefinition);
-    if (!wineDoc) {
-      return res.status(404).json({ error: 'Wine definition not found' });
+
+    let wineDoc;
+    if (wineDefinition) {
+      if (!mongoose.isValidObjectId(wineDefinition)) {
+        return res.status(400).json({ error: 'Invalid wine definition ID' });
+      }
+      wineDoc = await WineDefinition.findById(wineDefinition);
+      if (!wineDoc) {
+        return res.status(404).json({ error: 'Wine definition not found' });
+      }
+    } else {
+      // Mint-at-commit: validation caps, dedup/soft-zone, wine.create audit
+      // (via 'ui'/'ai' per newWine.source) and IndexNow all live in the shared
+      // service — one implementation with POST /api/wishlist's newWine branch.
+      const minted = await resolveOrMintWine(newWine, req);
+      if (minted.error) {
+        return res.status(minted.error.status).json({ error: minted.error.message });
+      }
+      if (minted.candidates) {
+        // Nothing was created — a multi-bottle client submit stops on the
+        // FIRST bottle, so the whole batch waits on the user's answer.
+        return res.status(200).json({ candidates: minted.candidates });
+      }
+      wineDoc = minted.wine;
     }
 
     // ONE shared implementation with the MCP add_bottle tool (plan §7):
@@ -414,7 +459,9 @@ router.post('/', requireNonDemo, async (req, res) => {
           price,
           currency: currency || 'USD',
           userId: cellarDoc.user,
-          wineDefinitionId: wineDefinition,
+          // wineDoc, not the request field — on the newWine path there is no
+          // wineDefinition id in the body.
+          wineDefinitionId: wineDoc._id,
           vintage: bottle.vintage,
         });
       } catch (err) {

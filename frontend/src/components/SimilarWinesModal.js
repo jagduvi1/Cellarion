@@ -4,13 +4,15 @@ import WineImage from './WineImage';
 import './WineModalThumbs.css';
 
 /**
- * Shown when the backend's find-or-create returns soft-zone candidates —
- * the wine the user is trying to add is similar to existing entries but
- * not similar enough to auto-match. Asks the user to pick one or confirm
- * "no, create a new wine".
+ * Shown when the dedup soft zone returns candidates — the wine the user is
+ * trying to add is similar to existing entries but not similar enough to
+ * auto-match. Asks the user to pick one or confirm "no, create a new wine".
+ * Candidates come from the step-1 resolve (/api/wines/find-or-create, now
+ * read-only) or, in the rare commit-time race, from the bottle/wishlist POST
+ * itself — which creates NOTHING until this dialog is answered.
  *
  * Props:
- *   candidates   — [{ wine, score }] from /api/wines/find-or-create
+ *   candidates   — [{ wine, score }]
  *   queryName    — the name the user was trying to add (shown in the prompt)
  *   onPick(wine) — user picked an existing wine
  *   onCreateNew  — user wants to create a new wine anyway

@@ -1,11 +1,17 @@
 /**
- * POST /api/wines/find-or-create — the registry-write chokepoint.
+ * POST /api/wines/find-or-create — the add flows' step-1 RESOLVE endpoint.
  *
- * Since identify-text became read-only, this is the ONLY user-facing path that
- * mints a WineDefinition, and it now receives machine-generated payloads (the
- * AI suggestion the user accepted, forwarded verbatim by AddBottle /
- * AddToWishlist). It had no route-level coverage at all; these tests pin the
- * guards and the provenance stamp.
+ * This route used to be the registry-write chokepoint: it minted the
+ * WineDefinition the moment the user confirmed the wine in step 1, before any
+ * bottle existed — an abandoned flow left an orphan row forever (31 zero-bottle
+ * createdVia:'ui' rows on prod, 2026-08-10; the "Domaine de Riquewihr —
+ * Kaefferkopf" case). It is now RESOLVE-ONLY (matchOnly), the same shape as
+ * identify-text (v1.97) and import /validate (#899): creation moved to the
+ * bottle/wishlist commit (services/wineCommit, covered by its own suites).
+ *
+ * These tests pin the guards (unchanged), and the new no-write contract:
+ * matchOnly always, never 201, never an audit or IndexNow ping, and a
+ * confirmCreate in the body is ignored rather than becoming a create.
  *
  * Real router; the service layer is mocked (no MongoDB).
  */
@@ -23,6 +29,7 @@ jest.mock('../services/labelScan', () => ({
 }));
 jest.mock('../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn() }));
 jest.mock('../services/indexNow', () => ({ submitUrls: jest.fn() }));
+jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../middleware/aiBurstLimiter', () => (req, res, next) => next());
 jest.mock('../models/User', () => ({
   findById: jest.fn(() => ({ select: () => ({ lean: async () => null }) })),
@@ -34,6 +41,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const { findOrCreateWine } = require('../services/findOrCreateWine');
 const { submitUrls } = require('../services/indexNow');
+const { logAudit } = require('../services/audit');
 const winesRouter = require('./wines');
 
 const USER_ID = 'u1';
@@ -104,7 +112,7 @@ describe('POST /api/wines/find-or-create — guards', () => {
     expect(findOrCreateWine).not.toHaveBeenCalled();
   });
 
-  test('missing country is a 400 — an AI suggestion with a null country cannot be accepted', async () => {
+  test('missing country is a 400 — an AI suggestion with a null country cannot be resolved', async () => {
     const res = await post({ name: 'Bin 407', producer: 'Penfolds' });
 
     expect(res.status).toBe(400);
@@ -118,7 +126,7 @@ describe('POST /api/wines/find-or-create — guards', () => {
     expect(findOrCreateWine).not.toHaveBeenCalled();
   });
 
-  test('an over-long name or region is a 400 (region cap is new — findOrCreateRegion mints what arrives)', async () => {
+  test('an over-long name or region is a 400 (region cap: findOrCreateRegion mints what arrives)', async () => {
     const long = 'x'.repeat(201);
 
     expect((await post({ ...VALID, name: long })).status).toBe(400);
@@ -140,9 +148,24 @@ describe('POST /api/wines/find-or-create — guards', () => {
   });
 });
 
-describe('POST /api/wines/find-or-create — behaviour', () => {
+describe('POST /api/wines/find-or-create — resolve-only behaviour', () => {
+  test('resolves with matchOnly and NOTHING else — never a create option', async () => {
+    await post(VALID);
+
+    expect(findOrCreateWine).toHaveBeenCalledTimes(1);
+    expect(findOrCreateWine.mock.calls[0][2]).toEqual({ matchOnly: true });
+  });
+
+  test('a confident match returns 200 { wine, created: false }', async () => {
+    const res = await post(VALID);
+
+    expect(res.status).toBe(200);
+    expect(res.body.wine._id).toBe('w1');
+    expect(res.body.created).toBe(false);
+  });
+
   test('a soft-zone result hands candidates back as 200 and creates nothing', async () => {
-    findOrCreateWine.mockResolvedValue({ candidates: [{ wine: { _id: 'w9' }, score: 0.88 }] });
+    findOrCreateWine.mockResolvedValue({ wine: null, candidates: [{ wine: { _id: 'w9' }, score: 0.88 }] });
 
     const res = await post(VALID);
 
@@ -151,39 +174,33 @@ describe('POST /api/wines/find-or-create — behaviour', () => {
     expect(submitUrls).not.toHaveBeenCalled();
   });
 
-  test('a create returns 201 and pings IndexNow', async () => {
-    findOrCreateWine.mockResolvedValue({ wine: { _id: 'w1', slug: 'bin-407' }, created: true });
+  test('no match returns 200 { wine: null, noMatch: true } — the client carries the fields to the commit', async () => {
+    findOrCreateWine.mockResolvedValue({ wine: null, noMatch: true });
 
     const res = await post(VALID);
 
-    expect(res.status).toBe(201);
-    expect(submitUrls).toHaveBeenCalledWith('/wines/bin-407');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ wine: null, created: false, noMatch: true });
   });
 
-  test('confirmCreate also passes skipSiblingMatch — an explicit "create anyway" is not overridden by a sibling', async () => {
+  test('confirmCreate in the body is IGNORED — no create, no skipSiblingMatch, still matchOnly', async () => {
+    // A stale client (or a crafted request) asking to create must get a
+    // resolve, never a mint: the only mint points are the commit endpoints.
+    findOrCreateWine.mockResolvedValue({ wine: null, noMatch: true });
+
+    const res = await post({ ...VALID, confirmCreate: true, source: 'ai' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.noMatch).toBe(true);
+    expect(findOrCreateWine.mock.calls[0][2]).toEqual({ matchOnly: true });
+  });
+
+  test('never audits wine.create and never pings IndexNow — this route writes nothing', async () => {
+    findOrCreateWine.mockResolvedValue({ wine: null, noMatch: true });
+    await post(VALID);
     await post({ ...VALID, confirmCreate: true });
 
-    expect(findOrCreateWine.mock.calls[0][2]).toEqual({
-      confirmCreate: true, skipSiblingMatch: true, createdVia: 'ui',
-    });
-  });
-
-  test("source:'ai' stamps createdVia 'ai'; anything else falls back to 'ui'", async () => {
-    // Provenance keeps the accepted-AI-suggestion cohort measurable after
-    // identify-text stopped being the (unconfirmed) writer of createdVia:'ai'.
-    await post({ ...VALID, source: 'ai' });
-    expect(findOrCreateWine.mock.calls[0][2].createdVia).toBe('ai');
-
-    jest.clearAllMocks();
-    findOrCreateWine.mockResolvedValue({ wine: { _id: 'w1' }, created: false });
-
-    await post({ ...VALID, source: 'totally-made-up' });
-    expect(findOrCreateWine.mock.calls[0][2].createdVia).toBe('ui');
-
-    jest.clearAllMocks();
-    findOrCreateWine.mockResolvedValue({ wine: { _id: 'w1' }, created: false });
-
-    await post(VALID);
-    expect(findOrCreateWine.mock.calls[0][2].createdVia).toBe('ui');
+    expect(logAudit).not.toHaveBeenCalled();
+    expect(submitUrls).not.toHaveBeenCalled();
   });
 });

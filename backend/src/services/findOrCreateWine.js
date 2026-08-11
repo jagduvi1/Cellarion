@@ -171,10 +171,12 @@ async function findOrCreateGrapes(rawNames, userId) {
  *   so their "create anyway" isn't silently overridden by an appellation-variant sibling.
  * @param {boolean} [opts.matchOnly=false] - Never create. Resolve only to an existing
  *   registry wine (exact/sibling/fuzzy>=threshold); if nothing confident matches, return
- *   { wine: null, noMatch: true } instead of minting a WineDefinition + taxonomy. Two
- *   consumers: the registry-safe ephemeral-demo clone (so a throwaway account can't pollute
- *   the shared registry), and POST /api/wines/identify-text, which reports what the registry
- *   already holds and leaves creation to an explicit user confirmation.
+ *   { wine: null, noMatch: true } instead of minting a WineDefinition + taxonomy.
+ *   Consumers: the registry-safe ephemeral-demo clone (so a throwaway account can't pollute
+ *   the shared registry), POST /api/wines/identify-text, the MCP resolve_wine tool, and —
+ *   since the UI went mint-at-commit — POST /api/wines/find-or-create, which resolves in
+ *   step 1 of the add flows and leaves creation to the bottle/wishlist commit
+ *   (services/wineCommit).
  *   ⚠️ Do NOT combine with confirmCreate outside the demo clone. The soft-zone candidate
  *   return sits ABOVE the matchOnly gate, so confirmCreate collapses every 0.85–0.95
  *   near-match into noMatch — for identify-text that would hide exactly the existing wines

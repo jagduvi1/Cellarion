@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { searchWines, findOrCreateWine, identifyWineByText } from '../api/wines';
+import { searchWines, resolveWine, identifyWineByText } from '../api/wines';
 import useLabelScanner from '../hooks/useLabelScanner';
 import { CURRENCIES } from '../config/currencies';
 import { BOTTLE_SIZES, bottleSizeLabel } from '../config/bottleSizes';
@@ -32,11 +32,18 @@ function AddBottle() {
   // registry already holds, and creates nothing. `aiIdentified` is UNSAVED data
   // (plain strings, no _id); only `aiMatch` and `aiCandidates[].wine` are real
   // registry documents. Accepting an unsaved suggestion goes through
-  // find-or-create, which is where a wine is actually created.
+  // resolveWine (also read-only); the wine is only minted when the BOTTLE is
+  // committed (POST /api/bottles with `newWine`) — an abandoned form leaves
+  // no orphan registry row.
   const [aiIdentified, setAiIdentified] = useState(null);
   const [aiMatch, setAiMatch] = useState(null);
   const [aiCandidates, setAiCandidates] = useState([]);
   const [selectedWine, setSelectedWine] = useState(null);
+  // The not-yet-registered wine riding along to the bottle submit. When set,
+  // `selectedWine` is a display-only stub WITHOUT `_id`; the first POST
+  // /api/bottles carries this payload as `newWine` and mints exactly one wine,
+  // whose id the remaining bottles of the batch then reference.
+  const [pendingNewWine, setPendingNewWine] = useState(null);
   const [numBottles, setNumBottles] = useState(1);
   const [bottleData, setBottleData] = useState({
     vintage: '',
@@ -130,6 +137,7 @@ function AddBottle() {
     createdBottlesRef.current = [];
     imagesLinkedRef.current = false;
     setSelectedWine(wine);
+    setPendingNewWine(null);
     setBottleData(prev => ({ ...prev, vintage: carriedVintage || '' }));
     setScanResult(null);
     setLabelImage(null);
@@ -141,13 +149,33 @@ function AddBottle() {
     setStep(2);
   }, [clearAi]);
 
-  // Submit a find-or-create request, handling the three response shapes:
-  // resolved wine, soft-zone candidates, or error.
-  const submitFindOrCreate = useCallback(async (wineData, carriedVintage, { confirmCreate = false } = {}) => {
+  // Advance to step 2 WITHOUT any registry write: the confirmed wine fields
+  // ride along and are minted by POST /api/bottles when the user commits the
+  // bottle (see submitBottles). selectedWine becomes a display-only stub.
+  const applyPendingNewWine = useCallback((wineData, carriedVintage) => {
+    createdBottlesRef.current = [];
+    imagesLinkedRef.current = false;
+    setPendingNewWine(wineData);
+    setSelectedWine({ name: wineData.name, producer: wineData.producer, type: wineData.type });
+    setBottleData(prev => ({ ...prev, vintage: carriedVintage || '' }));
+    setScanResult(null);
+    setLabelImage(null);
+    setShowManualForm(false);
+    setPendingWineData(null);
+    setSoftCandidates(null);
+    setSoftPending(null);
+    clearAi();
+    setStep(2);
+  }, [clearAi]);
+
+  // Resolve confirmed wine data against the registry (READ-ONLY — nothing is
+  // created in step 1 any more), handling the three response shapes: matched
+  // wine, soft-zone candidates, or no match (→ the data rides to the commit).
+  const resolveSelectedWine = useCallback(async (wineData, carriedVintage) => {
     setError(null);
     setFindingWine(true);
     try {
-      const res = await findOrCreateWine(apiFetch, { ...wineData, confirmCreate });
+      const res = await resolveWine(apiFetch, wineData);
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || t('addBottle.scanFailedToSaveWine'));
@@ -160,15 +188,24 @@ function AddBottle() {
         setSoftPending({ wineData, carriedVintage, queryLabel: search.trim() || wineData.name });
         return;
       }
-      applyResolvedWine(data.wine, carriedVintage);
+      if (data.wine) {
+        applyResolvedWine(data.wine, carriedVintage);
+        return;
+      }
+      // noMatch: not in the registry. Nothing was minted — the fields carry
+      // forward and POST /api/bottles creates the wine WITH the first bottle.
+      applyPendingNewWine(wineData, carriedVintage);
     } catch {
       setError(t('addBottle.scanFailedToSaveWine'));
     } finally {
       setFindingWine(false);
     }
-  }, [apiFetch, t, applyResolvedWine, search]);
+  }, [apiFetch, t, applyResolvedWine, applyPendingNewWine, search]);
 
-  // Confirm scan result — find/create the wine, save label image, go to bottle details
+  // Confirm scan result — resolve the wine and go to bottle details. The
+  // label image is NOT part of the wine payload (the old find-or-create route
+  // ignored it, and it must not bloat the bottle commit): bottle photos go
+  // through the separate /api/images upload + link-to-bottle flow.
   const handleConfirmScan = useCallback(async () => {
     const { extracted, match } = scanResult;
     // If there's a match, use the matched wine's canonical data for the lookup
@@ -181,8 +218,7 @@ function AddBottle() {
           region: match.wine.region?.name || extracted.region || '',
           appellation: match.wine.appellation || extracted.appellation || '',
           type: match.wine.type || extracted.type || 'red',
-          grapes: (match.wine.grapes || []).map(g => g.name),
-          labelImage: labelImage || undefined
+          grapes: (match.wine.grapes || []).map(g => g.name)
         }
       : {
           name: extracted.name,
@@ -191,12 +227,11 @@ function AddBottle() {
           region: extracted.region || '',
           appellation: extracted.appellation || '',
           type: extracted.type || 'red',
-          grapes: extracted.grapes || [],
-          labelImage: labelImage || undefined
+          grapes: extracted.grapes || []
         };
 
-    await submitFindOrCreate(wineData, extracted.vintage);
-  }, [scanResult, labelImage, submitFindOrCreate]);
+    await resolveSelectedWine(wineData, extracted.vintage);
+  }, [scanResult, resolveSelectedWine]);
 
   // Switch to the editable manual form (user says "not the right wine")
   const handleNotRightWine = useCallback(() => {
@@ -222,11 +257,11 @@ function AddBottle() {
     const grapes = pendingWineData.grapes
       ? pendingWineData.grapes.split(',').map(g => g.trim()).filter(Boolean)
       : [];
-    await submitFindOrCreate(
-      { ...pendingWineData, grapes, labelImage: labelImage || undefined },
+    await resolveSelectedWine(
+      { ...pendingWineData, grapes },
       scanResult?.extracted?.vintage
     );
-  }, [pendingWineData, scanResult, labelImage, t, submitFindOrCreate]);
+  }, [pendingWineData, scanResult, t, resolveSelectedWine]);
 
   // Reset — back to search
   const handleScanReset = useCallback(() => {
@@ -308,13 +343,15 @@ function AddBottle() {
     // Already in the registry — a pure selection, nothing is written.
     if (aiMatch) { handleSelectWine(aiMatch); return; }
     if (!aiIdentified) return;
-    // No country means find-or-create would 400; send the user to the edit form
-    // to supply it rather than surfacing a server error.
+    // No country means the eventual commit would 400; send the user to the
+    // edit form to supply it rather than surfacing a server error.
     if (!aiIdentified.country) { editAiSuggestion(); return; }
     // Forward EVERY field, appellation included: it feeds normalizedKey, so
     // dropping it would both mint an appellation-less row and make the
-    // accept-time match score differently from the identify-time probe.
-    submitFindOrCreate({
+    // resolve-time match score differently from the identify-time probe.
+    // `source: 'ai'` rides with the payload to the commit, where it stamps
+    // createdVia:'ai' (the resolve endpoint ignores it).
+    resolveSelectedWine({
       name: aiIdentified.name,
       producer: aiIdentified.producer,
       country: aiIdentified.country,
@@ -330,6 +367,7 @@ function AddBottle() {
     createdBottlesRef.current = [];
     imagesLinkedRef.current = false;
     setSelectedWine(wine);
+    setPendingNewWine(null);
     setStep(2);
   };
 
@@ -374,18 +412,19 @@ function AddBottle() {
     });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  // Create the bottle records that are still missing. wineRef is EITHER
+  // { wineId } (an existing registry wine) or { newWinePayload } — in the
+  // latter case only the FIRST POST carries `newWine`: the backend mints (or
+  // resolves) the wine inside that bottle create, and every later bottle of
+  // the batch reuses the returned id. An N-bottle add therefore mints exactly
+  // ONE wine, and a batch abandoned before this point mints nothing.
+  // Callable from the form submit AND from the soft-zone modal (the rare
+  // commit-time race below), so a modal answer finishes the add in one step.
+  const submitBottles = async ({ wineId, newWinePayload }) => {
     // In-flight guard: the N sequential POSTs below leave a wide window
     // where a second submit (double-click, Enter+click) would duplicate
     // every bottle.
     if (saving) return;
-
-    // Client-side validation for the personal drink window + occasion —
-    // mirrors the backend rules (integer years 1900–2200, from ≤ to, ≤500 chars).
-    const windowError = validateDrinkWindowFields(bottleData, t);
-    if (windowError) { setError(windowError); return; }
-
     setSaving(true);
     setError(null);
 
@@ -396,9 +435,8 @@ function AddBottle() {
       : msg;
 
     try {
-      const payload = {
+      const base = {
         cellar: cellarId,
-        wineDefinition: selectedWine._id,
         ...bottleData,
         price: bottleData.price ? parseFloat(bottleData.price) : undefined,
         occasion: bottleData.occasion || undefined,
@@ -417,11 +455,19 @@ function AddBottle() {
         } : {})
       };
 
-      // Create the bottle records that are still missing. createdBottlesRef
-      // carries the ones a previous, partially-failed attempt already created,
-      // so a retry never duplicates them.
+      // createdBottlesRef carries the bottles a previous, partially-failed
+      // attempt already created, so a retry never duplicates them — and if
+      // that first attempt already minted the wine, its id is reused here
+      // rather than sending `newWine` again.
       const createdBottles = createdBottlesRef.current;
+      let wineRefId = wineId
+        || createdBottles[0]?.wineDefinition?._id
+        || (typeof createdBottles[0]?.wineDefinition === 'string' ? createdBottles[0].wineDefinition : undefined);
+
       for (let i = createdBottles.length; i < numBottles; i++) {
+        const payload = wineRefId
+          ? { ...base, wineDefinition: wineRefId }
+          : { ...base, newWine: newWinePayload };
         const res = await apiFetch('/api/bottles', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -429,12 +475,25 @@ function AddBottle() {
         });
 
         const data = await res.json();
+        if (res.ok && data.candidates && data.candidates.length > 0) {
+          // Commit-time soft zone: a very similar wine entered the registry
+          // between the step-1 resolve and this submit. NOTHING was created —
+          // re-open the "did you mean?" modal; its answer resumes this batch.
+          setSoftCandidates(data.candidates);
+          setSoftPending({ forCommit: true, queryLabel: newWinePayload?.name });
+          return;
+        }
         if (!res.ok) {
           setError(partialError(data.error || t('addBottle.addFailed'), createdBottles.length));
           linkUploadedImages();
           return;
         }
         createdBottles.push(data.bottle);
+        if (!wineRefId) {
+          // First bottle of a newWine batch — every remaining bottle
+          // references the wine this create just minted/resolved.
+          wineRefId = data.bottle?.wineDefinition?._id || data.bottle?.wineDefinition;
+        }
       }
 
       // Link uploaded images to the first bottle
@@ -446,6 +505,20 @@ function AddBottle() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (saving) return;
+
+    // Client-side validation for the personal drink window + occasion —
+    // mirrors the backend rules (integer years 1900–2200, from ≤ to, ≤500 chars).
+    const windowError = validateDrinkWindowFields(bottleData, t);
+    if (windowError) { setError(windowError); return; }
+
+    await submitBottles(pendingNewWine
+      ? { newWinePayload: pendingNewWine }
+      : { wineId: selectedWine._id });
   };
 
   // Adding bottles is not available in the demo (backend enforces via
@@ -1148,15 +1221,44 @@ function AddBottle() {
         </div>
       )}
 
+      {/* Soft-zone "did you mean?" — two phases, one dialog:
+          - step 1 (resolve): picking uses the existing wine; "create new"
+            writes NOTHING — it carries the fields (+ confirmCreate) to step 2,
+            and the commit skips this question having already asked it.
+          - commit (rare race — a similar wine appeared after the resolve):
+            the answer resumes the interrupted batch immediately, so the
+            user's steps stay the same. */}
       {softCandidates && (
         <SimilarWinesModal
           candidates={softCandidates}
           queryName={softPending?.queryLabel || softPending?.wineData?.name}
-          busy={findingWine}
-          onPick={(wine) => applyResolvedWine(wine, softPending?.carriedVintage)}
-          onCreateNew={() => softPending && submitFindOrCreate(
-            softPending.wineData, softPending.carriedVintage, { confirmCreate: true }
-          )}
+          busy={findingWine || saving}
+          onPick={(wine) => {
+            if (softPending?.forCommit) {
+              setSoftCandidates(null);
+              setSoftPending(null);
+              setSelectedWine(wine);
+              setPendingNewWine(null);
+              submitBottles({ wineId: wine._id });
+            } else {
+              applyResolvedWine(wine, softPending?.carriedVintage);
+            }
+          }}
+          onCreateNew={() => {
+            if (!softPending) return;
+            if (softPending.forCommit) {
+              const confirmed = { ...pendingNewWine, confirmCreate: true };
+              setSoftCandidates(null);
+              setSoftPending(null);
+              setPendingNewWine(confirmed);
+              submitBottles({ newWinePayload: confirmed });
+            } else {
+              applyPendingNewWine(
+                { ...softPending.wineData, confirmCreate: true },
+                softPending.carriedVintage
+              );
+            }
+          }}
           onCancel={() => { setSoftCandidates(null); setSoftPending(null); }}
         />
       )}
