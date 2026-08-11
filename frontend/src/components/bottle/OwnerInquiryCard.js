@@ -17,6 +17,9 @@ function OwnerInquiryCard({ apiFetch, wineId }) {
   const [answer, setAnswer] = useState('');
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  // Terminal 409 (already answered / inquiry closed) — the form hides so the
+  // error message can't invite retries that only 409 again.
+  const [closed, setClosed] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -54,6 +57,9 @@ function OwnerInquiryCard({ apiFetch, wineId }) {
         setSent(true);
       } else {
         setError(data.error || t('bottleDetail.ownerInquiry.sendError', 'Could not send your answer — please try again.'));
+        // 409 is terminal (already answered, or the inquiry closed) — hide the
+        // form so the error can't invite retries that only 409 again.
+        if (res.status === 409) setClosed(true);
       }
     } catch {
       setError(t('common.networkError', 'Network error. Please try again.'));
@@ -78,6 +84,8 @@ function OwnerInquiryCard({ apiFetch, wineId }) {
         <p role="status" style={{ margin: 0, fontWeight: 600 }}>
           {t('bottleDetail.ownerInquiry.thanks', 'Thank you — your answer was sent to the curators and helps keep the shared registry accurate.')}
         </p>
+      ) : closed ? (
+        error && <div className="alert alert-error" style={{ margin: 0 }}>{error}</div>
       ) : (
         <form onSubmit={submit}>
           {error && <div className="alert alert-error" style={{ marginBottom: 8 }}>{error}</div>}

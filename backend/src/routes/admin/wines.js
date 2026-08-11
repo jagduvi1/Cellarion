@@ -1895,8 +1895,24 @@ router.post('/merge', async (req, res) => {
     }
 
     let bottlesMoved = 0;
+    // Lifecycle parity with performWineMerge (audit 2026-08-11 M-2): pending
+    // proposals close and owner inquiries follow the bottles on the GOLDEN
+    // route too — reassignWineRefs deliberately owns only silent ref moves,
+    // these two write user-visible outcomes (reject reasons, repoint audit).
+    const goldenKeeperLabel = [keeper.producer, keeper.name].filter(Boolean).join(' — ');
     for (const src of sources) {
       bottlesMoved += await reassignWineRefs(src._id, keeperOid);
+      await WineCorrectionProposal.updateMany(
+        { status: 'pending', $or: [{ wineDefinition: src._id }, { mergeTargetId: src._id }] },
+        {
+          $set: {
+            status: 'rejected',
+            decidedAt: new Date(),
+            rejectReason: `Closed automatically: the wine was merged into "${goldenKeeperLabel}". Re-file against that wine if the issue still applies.`.slice(0, 500),
+          },
+        }
+      );
+      await repointInquiriesForWineMerge(src._id, keeperOid, goldenKeeperLabel, req);
     }
 
     // Apply the image choice. After the reassign every image points at the

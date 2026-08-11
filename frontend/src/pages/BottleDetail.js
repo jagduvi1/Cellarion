@@ -528,8 +528,10 @@ function BottleDetail() {
       </div>
 
       {/* ── Curator owner-inquiry (content card — renders only when this
-          wine has an open inquiry addressed to the viewer) ── */}
-      {wine?._id && <OwnerInquiryCard apiFetch={apiFetch} wineId={wine._id} />}
+          wine has an open inquiry addressed to the viewer). Demo visitors are
+          excluded: their ephemeral accounts can never respond (requireNonDemo)
+          and the shop-window must not dead-end into a 403. ── */}
+      {wine?._id && !user?.isDemo && <OwnerInquiryCard apiFetch={apiFetch} wineId={wine._id} />}
 
       {/* ── Consumption details (history bottles only) ── */}
       {isConsumed && (

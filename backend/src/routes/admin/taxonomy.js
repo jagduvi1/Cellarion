@@ -200,6 +200,16 @@ router.delete('/countries/:id', async (req, res) => {
       });
     }
 
+    // Grape regional display names reference countries too — a dangling
+    // country ref would silently fall back to the canonical name AND brick
+    // that grape's next regionalNames save (same guard region DELETE has).
+    const grapeRef = await Grape.exists({ 'regionalNames.country': req.params.id });
+    if (grapeRef) {
+      return res.status(400).json({
+        error: 'Cannot delete country. A grape regional display name references it.'
+      });
+    }
+
     logAudit(req, 'admin.taxonomy.delete',
       { type: 'country', id: country._id },
       { name: country.name }

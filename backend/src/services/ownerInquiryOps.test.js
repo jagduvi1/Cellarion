@@ -71,7 +71,15 @@ describe('buildRecipients', () => {
     // Newest-first sort feeds $first, so each user's entry is their latest bottle.
     expect(pipeline[1]).toEqual({ $sort: { createdAt: -1 } });
     expect(pipeline[2].$group._id).toBe('$user');
-    expect(pipeline[3]).toEqual({ $limit: RECIPIENT_CAP });
+    // Audit 2026-08-11: demo accounts can never respond (requireNonDemo) and
+    // must not crowd real owners out of the cap — excluded BEFORE $limit; and
+    // the cap must be deterministic (newest owners), so the group re-sorts on
+    // the captured latest before limiting ($group emits undefined order).
+    expect(pipeline[2].$group.latest).toEqual({ $first: '$createdAt' });
+    expect(pipeline[3].$lookup).toMatchObject({ from: 'users', localField: '_id' });
+    expect(pipeline[4]).toEqual({ $match: { 'owner.isDemo': { $ne: true } } });
+    expect(pipeline[5]).toEqual({ $sort: { latest: -1 } });
+    expect(pipeline[6]).toEqual({ $limit: RECIPIENT_CAP });
   });
 
   test('falls back to consumed-bottle owners when no active bottles exist', async () => {
