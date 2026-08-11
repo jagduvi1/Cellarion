@@ -121,7 +121,11 @@ async function attachScanImage(wine, scanImageId, req) {
     // single-use guard (not yet bound to a wine), so two concurrent commits
     // cannot both claim the same scan.
     const image = await BottleImage.findOneAndUpdate(
-      { _id: scanImageId, uploadedBy: req.user.id, kind: 'label-scan', wineDefinition: null },
+      // The VALIDATED string, not the raw client value: isValidId() runs on
+      // String(scanImageId), so querying the original would check one thing and
+      // query another (an array whose single element is a valid id stringifies
+      // past the guard). Authorization is still the uploadedBy term.
+      { _id: String(scanImageId), uploadedBy: req.user.id, kind: 'label-scan', wineDefinition: null },
       { $set: { wineDefinition: wine._id, updatedAt: new Date() } },
       { new: true }
     ).select('_id');
