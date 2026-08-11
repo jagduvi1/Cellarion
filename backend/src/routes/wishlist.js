@@ -4,6 +4,9 @@ const { requireAuth } = require('../middleware/auth');
 const WishlistItem = require('../models/WishlistItem');
 const { logAudit } = require('../services/audit');
 const { escapeRegex } = require('../utils/sanitize');
+// Mint-at-commit for the POST route's `newWine` branch (shared with POST
+// /api/bottles) — findOrCreateWine itself is lazy-required inside the service.
+const { resolveOrMintWine } = require('../services/wineCommit');
 
 const router = express.Router();
 
@@ -160,22 +163,65 @@ router.get('/', async (req, res) => {
  * POST /api/wishlist
  * Add a wine to the authenticated user's wishlist.
  * Body: { wineDefinitionId, vintage?, notes?, priority? }
+ *   or: { newWine: { name, producer, country, region?, appellation?, type?,
+ *                    grapes?, confirmCreate?, source? }, vintage?, notes?, priority? }
+ *
+ * Exactly one of wineDefinitionId | newWine. A wishlist item REQUIRES a real
+ * registry row (the schema references WineDefinition, and the whole list UI
+ * populates it), so wishing for a not-yet-registered wine is a legitimate
+ * zero-bottle registry write — but the mint belongs HERE, at the commit,
+ * not in step 1 of the AddToWishlist flow. The step-1 mint (via the old
+ * find-or-create route) left an orphan whenever the user confirmed the wine
+ * and then abandoned the form — the same leak POST /api/bottles closed for
+ * bottles (31 zero-bottle createdVia:'ui' rows on prod, 2026-08-10; the
+ * "Domaine de Riquewihr — Kaefferkopf" case). Shared implementation:
+ * services/wineCommit (dedup soft zone → 200 { candidates }, nothing created;
+ * wine.create audit + IndexNow on a real mint).
  */
 router.post('/', async (req, res) => {
   try {
-    const { wineDefinitionId, vintage, notes, priority } = req.body;
+    const { wineDefinitionId, newWine, vintage, notes, priority } = req.body;
 
-    if (!wineDefinitionId || !mongoose.Types.ObjectId.isValid(wineDefinitionId)) {
-      return res.status(400).json({ error: 'Valid wineDefinitionId is required' });
+    if ((!wineDefinitionId && !newWine) || (wineDefinitionId && newWine)) {
+      return res.status(400).json({ error: 'Provide wineDefinitionId or newWine (exactly one)' });
+    }
+
+    let resolvedWineId;
+    if (newWine) {
+      // Registry write — same demo bar the old find-or-create route had
+      // (requireNonDemo): purgeUserData only reassigns createdBy on reap, so a
+      // demo-minted row would persist forever. The by-id path stays open to
+      // demo accounts (it references existing wines, writing nothing shared).
+      if (req.user.isDemo) {
+        return res.status(403).json({ error: 'This action is not available in the demo. Create a free account to use it.' });
+      }
+      const minted = await resolveOrMintWine(newWine, req);
+      if (minted.error) {
+        return res.status(minted.error.status).json({ error: minted.error.message });
+      }
+      if (minted.candidates) {
+        // Nothing was created — the client re-submits with a picked wine id
+        // or newWine + confirmCreate:true (same contract as POST /api/bottles).
+        return res.status(200).json({ candidates: minted.candidates });
+      }
+      resolvedWineId = String(minted.wine._id);
+    } else {
+      if (!mongoose.Types.ObjectId.isValid(wineDefinitionId)) {
+        return res.status(400).json({ error: 'Valid wineDefinitionId is required' });
+      }
+      resolvedWineId = wineDefinitionId;
     }
 
     // Sanitise vintage: must be a string (prevents NoSQL injection via objects)
     const safeVintage = vintage != null ? String(vintage) : '';
 
-    // Prevent duplicates: same user + same wine + same vintage (or both null)
+    // Prevent duplicates: same user + same wine + same vintage (or both null).
+    // Runs AFTER the newWine resolve on purpose: a freshly MINTED wine can't
+    // have a duplicate item (nothing references its new id yet), so a 409 here
+    // only ever follows a resolve-to-existing — no orphan wine is left behind.
     const dupFilter = {
       user: req.user.id,
-      wineDefinition: wineDefinitionId,
+      wineDefinition: resolvedWineId,
       status: 'wanted'
     };
     if (safeVintage) {
@@ -203,7 +249,7 @@ router.post('/', async (req, res) => {
 
     const item = await WishlistItem.create({
       user: req.user.id,
-      wineDefinition: wineDefinitionId,
+      wineDefinition: resolvedWineId,
       vintage: safeVintage || undefined,
       notes: notes || undefined,
       priority: priority || 'medium'
@@ -220,7 +266,7 @@ router.post('/', async (req, res) => {
         ]
       });
 
-    logAudit(req, 'wishlist.add', { type: 'wishlistItem', id: item._id }, { wineDefinitionId });
+    logAudit(req, 'wishlist.add', { type: 'wishlistItem', id: item._id }, { wineDefinitionId: resolvedWineId });
 
     res.status(201).json({ item: populated });
   } catch (err) {

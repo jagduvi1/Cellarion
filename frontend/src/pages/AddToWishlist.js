@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { searchWines, getWine, findOrCreateWine, identifyWineByText } from '../api/wines';
+import { searchWines, getWine, resolveWine, identifyWineByText } from '../api/wines';
 import useLabelScanner from '../hooks/useLabelScanner';
 import { addToWishlist } from '../api/wishlist';
 import '../components/ImageUpload.css';
@@ -29,11 +29,16 @@ function AddToWishlist() {
   const [aiSearching, setAiSearching] = useState(false);
   const [aiSearchError, setAiSearchError] = useState(null);
   // identify-text is read-only — see api/wines.js. `aiIdentified` is UNSAVED
-  // (plain strings, no _id); this page posts wineDefinitionId on save, so an
-  // unsaved suggestion MUST go through find-or-create before it can be used.
+  // (plain strings, no _id); resolveWine (also read-only) either matches it to
+  // a registry wine or leaves it pending, and the wine is minted only when the
+  // wishlist item is SAVED (POST /api/wishlist with `newWine`) — an abandoned
+  // form leaves no orphan registry row.
   const [aiIdentified, setAiIdentified] = useState(null);
   const [aiMatch, setAiMatch] = useState(null);
   const [aiCandidates, setAiCandidates] = useState([]);
+  // The not-yet-registered wine riding along to the save. When set,
+  // `selectedWine` is a display-only stub WITHOUT `_id`.
+  const [pendingNewWine, setPendingNewWine] = useState(null);
 
   // ── Scan result state ──
   const [scanResult, setScanResult] = useState(null);
@@ -54,6 +59,7 @@ function AddToWishlist() {
 
   const applyResolvedWine = useCallback((wine) => {
     setSelectedWine(wine);
+    setPendingNewWine(null);
     setScanResult(null);
     setLabelImage(null);
     setShowManualForm(false);
@@ -63,11 +69,28 @@ function AddToWishlist() {
     clearAi();
   }, [clearAi]);
 
-  const submitFindOrCreate = useCallback(async (wineData, { confirmCreate = false } = {}) => {
+  // Advance to the details step WITHOUT any registry write: the confirmed
+  // wine fields ride along and are minted by POST /api/wishlist on save.
+  const applyPendingNewWine = useCallback((wineData) => {
+    setPendingNewWine(wineData);
+    setSelectedWine({ name: wineData.name, producer: wineData.producer, type: wineData.type });
+    setScanResult(null);
+    setLabelImage(null);
+    setShowManualForm(false);
+    setPendingWineData(null);
+    setSoftCandidates(null);
+    setSoftPending(null);
+    clearAi();
+  }, [clearAi]);
+
+  // Resolve confirmed wine data against the registry (READ-ONLY — nothing is
+  // created here any more): matched wine, soft-zone candidates, or no match
+  // (→ the fields ride to the save, which mints).
+  const resolveSelectedWine = useCallback(async (wineData) => {
     setError(null);
     setFindingWine(true);
     try {
-      const res = await findOrCreateWine(apiFetch, { ...wineData, confirmCreate });
+      const res = await resolveWine(apiFetch, wineData);
       const data = await res.json();
       if (!res.ok) { setError(data.error || t('addToWishlist.failedSaveWine')); return; }
       if (data.candidates && data.candidates.length > 0) {
@@ -75,13 +98,14 @@ function AddToWishlist() {
         setSoftPending({ wineData });
         return;
       }
-      applyResolvedWine(data.wine);
+      if (data.wine) { applyResolvedWine(data.wine); return; }
+      applyPendingNewWine(wineData);
     } catch {
       setError(t('addToWishlist.failedSaveWine'));
     } finally {
       setFindingWine(false);
     }
-  }, [apiFetch, applyResolvedWine, t]);
+  }, [apiFetch, applyResolvedWine, applyPendingNewWine, t]);
 
   // ── Wishlist item details ──
   const [vintage, setVintage] = useState('');
@@ -136,7 +160,9 @@ function AddToWishlist() {
     return () => { cancelled = true; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Confirm scan result — find/create the wine then add to wishlist ──
+  // ── Confirm scan result — resolve the wine, then add details. The label
+  // image is NOT part of the wine payload (the old find-or-create route
+  // ignored it, and it must not bloat the wishlist commit). ──
   const handleConfirmScan = useCallback(async () => {
     const { extracted, match } = scanResult;
     const wineData = match?.wine
@@ -147,8 +173,7 @@ function AddToWishlist() {
           region: match.wine.region?.name || extracted.region || '',
           appellation: match.wine.appellation || extracted.appellation || '',
           type: match.wine.type || extracted.type || 'red',
-          grapes: (match.wine.grapes || []).map(g => g.name),
-          labelImage: labelImage || undefined
+          grapes: (match.wine.grapes || []).map(g => g.name)
         }
       : {
           name: extracted.name,
@@ -157,12 +182,11 @@ function AddToWishlist() {
           region: extracted.region || '',
           appellation: extracted.appellation || '',
           type: extracted.type || 'red',
-          grapes: extracted.grapes || [],
-          labelImage: labelImage || undefined
+          grapes: extracted.grapes || []
         };
 
-    await submitFindOrCreate(wineData);
-  }, [scanResult, labelImage, submitFindOrCreate]);
+    await resolveSelectedWine(wineData);
+  }, [scanResult, resolveSelectedWine]);
 
   const handleNotRightWine = useCallback(() => {
     const { extracted } = scanResult;
@@ -186,8 +210,8 @@ function AddToWishlist() {
     const grapes = pendingWineData.grapes
       ? pendingWineData.grapes.split(',').map(g => g.trim()).filter(Boolean)
       : [];
-    await submitFindOrCreate({ ...pendingWineData, grapes, labelImage: labelImage || undefined });
-  }, [pendingWineData, labelImage, submitFindOrCreate]);
+    await resolveSelectedWine({ ...pendingWineData, grapes });
+  }, [pendingWineData, t, resolveSelectedWine]);
 
   const handleScanReset = useCallback(() => {
     setScanResult(null);
@@ -263,13 +287,14 @@ function AddToWishlist() {
     setShowManualForm(true);
   };
 
-  // A wishlist item is saved with wineDefinitionId, so an unsaved suggestion
-  // must be resolved through find-or-create before it can be selected.
+  // An unsaved suggestion is resolved against the registry first; if it is
+  // not there, the fields ride to the save, which mints. `source: 'ai'`
+  // travels with the payload so the commit stamps createdVia:'ai'.
   const handleAcceptAiResult = () => {
     if (aiMatch) { handleSelectWine(aiMatch); return; }
     if (!aiIdentified) return;
     if (!aiIdentified.country) { editAiSuggestion(); return; }
-    submitFindOrCreate({
+    resolveSelectedWine({
       name: aiIdentified.name,
       producer: aiIdentified.producer,
       country: aiIdentified.country,
@@ -283,6 +308,7 @@ function AddToWishlist() {
 
   const handleSelectWine = (wine) => {
     setSelectedWine(wine);
+    setPendingNewWine(null);
   };
 
   // One row renderer for both the registry-search list and the AI near-match
@@ -306,25 +332,44 @@ function AddToWishlist() {
     </div>
   );
 
-  // ── Save to wishlist ──
-  const handleSave = async (e) => {
-    e.preventDefault();
-    if (!selectedWine) return;
+  // ── Save to wishlist. wineRef is EITHER { wineId } (existing registry
+  // wine) or { newWinePayload } — the save then mints the wine WITH the
+  // wishlist item (a wanted-but-not-owned wine is a legitimate zero-bottle
+  // registry row; what changed is only WHEN it is created). Callable from the
+  // form submit and from the soft-zone modal (the rare commit-time race), so
+  // a modal answer finishes the save in one step. ──
+  const saveItem = async ({ wineId, newWinePayload }) => {
+    if (saving) return;
     setError(null);
     setSaving(true);
     try {
-      const res = await addToWishlist(apiFetch, {
-        wineDefinitionId: selectedWine._id,
+      const body = {
         vintage: vintage || undefined,
         notes: notes || undefined,
         priority
-      });
+      };
+      if (newWinePayload) body.newWine = newWinePayload;
+      else body.wineDefinitionId = wineId;
+
+      const res = await addToWishlist(apiFetch, body);
       const data = await res.json();
+      if (res.ok && data.candidates && data.candidates.length > 0) {
+        // Commit-time soft zone: a very similar wine entered the registry
+        // between the resolve and this save. NOTHING was created — ask again.
+        setSoftCandidates(data.candidates);
+        setSoftPending({ forCommit: true, queryLabel: newWinePayload?.name });
+        return;
+      }
       if (!res.ok) {
         setError(data.error || t('addToWishlist.failedAdd'));
         return;
       }
-      setSuccess(t('addToWishlist.addedSuccess', { name: selectedWine.name }));
+      // The saved item's populated wine, not selectedWine: when the commit-
+      // phase modal picked a different wine (or the save just minted one),
+      // this closure's selectedWine is still the stale stub.
+      setSuccess(t('addToWishlist.addedSuccess', {
+        name: data.item?.wineDefinition?.name || selectedWine?.name
+      }));
       // Reset for adding another
       setTimeout(() => {
         navigate('/wishlist');
@@ -334,6 +379,14 @@ function AddToWishlist() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!selectedWine) return;
+    await saveItem(pendingNewWine
+      ? { newWinePayload: pendingNewWine }
+      : { wineId: selectedWine._id });
   };
 
   return (
@@ -719,13 +772,38 @@ function AddToWishlist() {
         </div>
       )}
 
+      {/* Soft-zone "did you mean?" — same two-phase dialog as AddBottle:
+          resolve-phase answers write nothing ("create new" only carries the
+          fields + confirmCreate to the save); commit-phase answers resume the
+          interrupted save immediately. */}
       {softCandidates && (
         <SimilarWinesModal
           candidates={softCandidates}
-          queryName={softPending?.wineData?.name}
-          busy={findingWine}
-          onPick={(wine) => applyResolvedWine(wine)}
-          onCreateNew={() => softPending && submitFindOrCreate(softPending.wineData, { confirmCreate: true })}
+          queryName={softPending?.queryLabel || softPending?.wineData?.name}
+          busy={findingWine || saving}
+          onPick={(wine) => {
+            if (softPending?.forCommit) {
+              setSoftCandidates(null);
+              setSoftPending(null);
+              setSelectedWine(wine);
+              setPendingNewWine(null);
+              saveItem({ wineId: wine._id });
+            } else {
+              applyResolvedWine(wine);
+            }
+          }}
+          onCreateNew={() => {
+            if (!softPending) return;
+            if (softPending.forCommit) {
+              const confirmed = { ...pendingNewWine, confirmCreate: true };
+              setSoftCandidates(null);
+              setSoftPending(null);
+              setPendingNewWine(confirmed);
+              saveItem({ newWinePayload: confirmed });
+            } else {
+              applyPendingNewWine({ ...softPending.wineData, confirmCreate: true });
+            }
+          }}
           onCancel={() => { setSoftCandidates(null); setSoftPending(null); }}
         />
       )}

@@ -122,6 +122,12 @@ app.use('/api/bottles/import/sessions', express.json({ limit: '5mb' }));
 // coordinated batch-wide), so the limit must hold a large import — up to
 // MAX_IMPORT_SIZE (2000) items with notes. 8mb leaves comfortable headroom.
 app.use('/api/bottles/import', express.json({ limit: '8mb' }));
+// Mint-at-commit: POST /api/bottles may now carry a `newWine` object (name/
+// producer/taxonomy strings, all capped at 200 chars) alongside the bottle
+// fields — a worst-case legitimate payload (5000-char notes + 20 grapes)
+// passes the 10kb default. No images ever ride here. AFTER the /import rules
+// (first express.json to parse wins), so the import limits keep applying.
+app.use('/api/bottles', express.json({ limit: '64kb' }));
 app.use('/api/blog/admin/posts', express.json({ limit: '2mb' }));
 app.use('/api/wine-lists', express.json({ limit: '1mb' }));
 // MCP: the anonymous public surface stays tiny (no image tool) — registered
