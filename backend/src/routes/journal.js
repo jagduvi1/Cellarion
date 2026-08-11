@@ -51,7 +51,16 @@ router.get('/wine-search', async (req, res) => {
     // bottles for those wines (capped). Avoids the previous pattern of loading
     // the user's ENTIRE active-bottle collection into memory on every keystroke
     // just to filter it down to 10.
-    const matchedWines = await WineDefinition.find({ $or: [{ name: regex }, { producer: regex }] })
+    // Same exclusions the registry search itself carries (routes/wines.js
+    // mongoSearch): a quarantined non-wine row and a pendingIdentity row are
+    // not pickable registry content. Without them this regex-over-the-whole-
+    // registry picker was the one authenticated surface handing out pending
+    // wine IDS — which other tools then accept as a wine_id (security audit).
+    const matchedWines = await WineDefinition.find({
+      $or: [{ name: regex }, { producer: regex }],
+      pendingIdentity: { $ne: true },
+      nonWine: { $ne: true },
+    })
       .select('name producer type')
       .limit(200)
       .lean();

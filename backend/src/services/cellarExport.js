@@ -307,10 +307,19 @@ async function buildCellarDataExport(userId, scope) {
 
   // Only the user's OWN uploaded images + reviews, for the bottles in scope.
   const bottleIds = bottles.map((b) => b._id);
-  const [images, reviews, layouts] = await Promise.all([
+  const [images, labelScans, reviews, layouts] = await Promise.all([
     bottleIds.length
       ? BottleImage.find({ uploadedBy: userId, bottle: { $in: bottleIds } })
           .select('bottle originalUrl processedUrl credit createdAt').limit(EXPORT_MAX).lean()
+      : [],
+    // Label scans (audit L-2). They hang off a WINE, never a bottle, so the
+    // bottle-scoped query above could never reach them — yet
+    // services/userDataRegistry states the bytes ship in this ZIP, and they
+    // are unambiguously the user's own photos. Only the user's own, and only
+    // on a full export: a per-cellar scope has no cellar to file them under.
+    scope === 'all'
+      ? BottleImage.find({ uploadedBy: userId, kind: 'label-scan' })
+          .select('originalUrl processedUrl wineDefinition createdAt').limit(EXPORT_MAX).lean()
       : [],
     bottleIds.length
       ? Review.find({ author: userId, bottle: { $in: bottleIds } })
@@ -418,17 +427,29 @@ async function buildCellarDataExport(userId, scope) {
     scope: scope === 'all' ? 'all' : String(scope),
     cellarCount: cellarPayloads.length,
     bottleCount: bottles.length,
-    imageCount: images.length,
+    imageCount: images.length + labelScans.length,
     reviewCount: reviews.length,
     maturityCount: profilesByWineVintage.size,
     cellars: cellarPayloads,
+    // Additive top-level key (importers ignore what they don't know): a label
+    // scan belongs to no cellar, so it cannot ride inside `cellars`.
+    ...(labelScans.length ? {
+      labelScans: labelScans.map((s) => ({
+        file: `images/${(s.originalUrl || s.processedUrl || '').replace('/api/uploads/', '')}`,
+        scannedAt: s.createdAt,
+      })),
+    } : {}),
   };
   if (bottles.length >= EXPORT_MAX) {
     payload._truncated = EXPORT_MAX;
     console.warn(`[cellarExport] truncation hit for user ${userId} scope ${scope} (${EXPORT_MAX})`);
   }
 
-  return { payload, imageFiles: collectImageFiles(images), imageCount: images.length };
+  // Label scans bundle their ORIGINAL frame — that IS the artefact (there is no
+  // background-removed render of a label scan), and collectImageFiles already
+  // prefers processed-then-original per row.
+  const imageFiles = collectImageFiles([...images, ...labelScans]);
+  return { payload, imageFiles, imageCount: images.length + labelScans.length };
 }
 
 /** README bundled into the ZIP so the archive is self-explanatory. */
@@ -449,6 +470,11 @@ reads JSON — Cellarion never locks your data in.
   Images other people contributed (for example a shared wine's label) are not
   included either. Each bottle in \`data.json\` lists its images by their path
   inside this folder, e.g. \`images/processed/<id>.png\`.
+- Label frames you scanned that Cellarion kept so a sommelier could finish
+  identifying the wine are listed under \`labelScans\` in \`data.json\`, with
+  their file in the same \`images/\` folder. They are private — only you and
+  Cellarion's curators ever see them — and unattached ones are deleted
+  automatically after 30 days.
 
 ## data.json shape
 

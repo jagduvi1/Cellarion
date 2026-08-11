@@ -72,7 +72,14 @@ async function loadWineMap(wineList) {
   }
 
   const [wines, stockMap] = await Promise.all([
-    WineDefinition.find({ _id: { $in: [...wineIds] } })
+    // pendingIdentity rows are excluded here as well as refused at write time
+    // (routes/wineLists.js, mcp/tools/wineLists.js). Defence in depth with a
+    // reason: a published wine list is served by routes/wineListPublic.js,
+    // which has NO auth at all, and rows attached before the write gate existed
+    // would otherwise still render a stranger's hidden wine to the internet.
+    // An excluded entry simply drops out of the map — the exact same handling
+    // an entry whose wine was deleted already gets.
+    WineDefinition.find({ _id: { $in: [...wineIds] }, pendingIdentity: { $ne: true } })
       .select(WINE_SELECT)
       .populate(WINE_POPULATE)
       .lean(),

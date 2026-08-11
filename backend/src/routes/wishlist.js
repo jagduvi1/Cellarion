@@ -7,8 +7,14 @@ const { escapeRegex } = require('../utils/sanitize');
 // Mint-at-commit for the POST route's `newWine` branch (shared with POST
 // /api/bottles) — findOrCreateWine itself is lazy-required inside the service.
 const { resolveOrMintWine } = require('../services/wineCommit');
+const { findVisibleWine } = require('../services/wineVisibility');
 
 const router = express.Router();
+
+// What a wishlist response may say about a registry wine. Never createdBy,
+// scanImage, normalizedKey or canonicalKey — see the populate comments below.
+const WINE_RESPONSE_SELECT =
+  'name producer slug type appellation classification country region grapes image communityRating aiProfile lwin pendingIdentity';
 
 // All wishlist routes require authentication
 router.use(requireAuth);
@@ -89,7 +95,11 @@ router.get('/', async (req, res) => {
           foreignField: '_id',
           as: 'wineDefinition.grapes'
         }
-      }
+      },
+      // Same rule as the populates below: the list endpoint returned the whole
+      // registry document too. These four are never part of a wishlist answer,
+      // and normalizedKey carries a pending row's creator id verbatim.
+      { $unset: ['wineDefinition.createdBy', 'wineDefinition.scanImage', 'wineDefinition.normalizedKey', 'wineDefinition.canonicalKey'] }
     ];
 
     // Free-text search on wine name or producer. Guard the type: an object/array
@@ -223,6 +233,13 @@ router.post('/', async (req, res) => {
       if (!mongoose.Types.ObjectId.isValid(wineDefinitionId)) {
         return res.status(400).json({ error: 'Valid wineDefinitionId is required' });
       }
+      // The id was taken on trust — no existence check at all, so a wish could
+      // be filed against any id, including a stranger's pending row, whose
+      // name then came back through the populate above (security audit M-4).
+      const wine = await findVisibleWine(wineDefinitionId, {
+        userId: req.user.id, roles: req.user.roles, select: '_id', lean: true,
+      });
+      if (!wine) return res.status(404).json({ error: 'Wine not found' });
       resolvedWineId = wineDefinitionId;
     }
 
@@ -257,6 +274,12 @@ router.post('/', async (req, res) => {
     const populated = await WishlistItem.findById(item._id)
       .populate({
         path: 'wineDefinition',
+        // EXPLICIT select (security audit M-4). Without it the whole registry
+        // document came back — including createdBy, scanImage and
+        // normalizedKey, and a pending row's normalizedKey IS
+        // `pending~<creator-id>:…`, so the projection itself handed out
+        // another user's id.
+        select: WINE_RESPONSE_SELECT,
         populate: [
           { path: 'country' },
           { path: 'region' },
@@ -325,6 +348,12 @@ router.put('/:id', async (req, res) => {
     const populated = await WishlistItem.findById(item._id)
       .populate({
         path: 'wineDefinition',
+        // EXPLICIT select (security audit M-4). Without it the whole registry
+        // document came back — including createdBy, scanImage and
+        // normalizedKey, and a pending row's normalizedKey IS
+        // `pending~<creator-id>:…`, so the projection itself handed out
+        // another user's id.
+        select: WINE_RESPONSE_SELECT,
         populate: [
           { path: 'country' },
           { path: 'region' },

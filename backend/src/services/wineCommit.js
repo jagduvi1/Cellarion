@@ -213,10 +213,18 @@ async function resolveOrMintWine(newWine, req, { allowPending = true } = {}) {
     // promotion path submits it instead.
     if (!pendingIdentity) submitUrls(`/wines/${wine.slug || wine._id}`);
   }
-  // Stamp the label scan on a NEW mint — and on the creator's OWN pending row
-  // that has none yet, which is how a second bottle of the same unidentified
-  // wine can still supply the photo the first add didn't have.
-  if (newWine.scanImageId && (created || (pendingIdentity && String(wine.createdBy) === String(req.user.id) && !wine.scanImage))) {
+  // Stamp the label scan on a new PENDING mint — and on the creator's OWN
+  // pending row that has none yet, which is how a second bottle of the same
+  // unidentified wine can still supply the photo the first add didn't have.
+  //
+  // PENDING ONLY (audit L-5, data minimisation): the scan exists for exactly
+  // one purpose — letting a curator read a label the software could not. A
+  // fully-identified wine needs no such evidence, so retaining the user's
+  // original frame against it stores a personal photo with no purpose to
+  // justify it. Unattached scans are swept after 30 days by
+  // services/scanImageRetentionJob.
+  if (newWine.scanImageId && pendingIdentity
+      && (created || (String(wine.createdBy) === String(req.user.id) && !wine.scanImage))) {
     await attachScanImage(wine, newWine.scanImageId, req);
   }
   return { wine, created: !!created, pendingIdentity };

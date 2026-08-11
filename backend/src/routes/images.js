@@ -316,7 +316,28 @@ router.get('/:id', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Image not found' });
     }
 
-    res.json({ image });
+    // PROJECT the response (audit L-4). Returning the whole document handed
+    // back uploadedBy — and the somm/admin branch above exists precisely so a
+    // curator can read a stranger's label scan, which the pending-wine queue
+    // goes to deliberate lengths to keep ANONYMOUS (services/pendingWineOps).
+    // Sending the uploader's id with the bytes undid that in one line. These
+    // are the fields the client polls for.
+    res.json({
+      image: {
+        _id: image._id,
+        kind: image.kind || 'bottle',
+        status: image.status,
+        visibility: image.visibility,
+        originalUrl: image.originalUrl,
+        processedUrl: image.processedUrl,
+        bottle: image.bottle,
+        wineDefinition: image.wineDefinition,
+        assignedToWine: image.assignedToWine,
+        credit: image.credit,
+        createdAt: image.createdAt,
+        updatedAt: image.updatedAt,
+      },
+    });
   } catch (error) {
     console.error('Get image error:', error);
     res.status(500).json({ error: 'Failed to get image' });

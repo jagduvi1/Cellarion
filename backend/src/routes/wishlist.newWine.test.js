@@ -33,6 +33,9 @@ jest.mock('../models/WishlistItem', () => ({
 }));
 // Demo tokens make requireAuth confirm the account still exists.
 jest.mock('../models/User', () => ({ exists: jest.fn(async () => ({ _id: 'demo1' })) }));
+// The by-id path now checks the wine is visible to the caller before filing a
+// wish — it used to take the id on trust (security audit M-4).
+jest.mock('../models/WineDefinition', () => ({ findOne: jest.fn() }));
 
 const express = require('express');
 const http = require('http');
@@ -92,6 +95,9 @@ const WINE_DOC = { _id: WINE_ID, name: 'Kaefferkopf', producer: 'Cave de Kaysers
 beforeEach(() => {
   jest.clearAllMocks();
   findOrCreateWine.mockResolvedValue({ wine: WINE_DOC, created: true });
+  require('../models/WineDefinition').findOne.mockReturnValue({
+    select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue({ _id: WINE_ID }) }),
+  });
   WishlistItem.findOne.mockResolvedValue(null);
   WishlistItem.create.mockResolvedValue({ _id: ITEM_ID });
   WishlistItem.findById.mockReturnValue({

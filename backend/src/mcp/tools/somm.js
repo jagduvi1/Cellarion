@@ -1193,20 +1193,33 @@ registerTool({
     if (denied) return denied;
     if (!isValidId(args.wine_id)) return fail('invalid_input', 'wine_id must be a 24-hex id.');
 
+    // PENDING ONLY, exactly like the REST sibling (routes/images.js): this tool
+    // ships other people's PRIVATE bottle photos as base64 to an external
+    // model, and the only justification for that is a curator reading a label
+    // they have been asked to identify. Without the gate any somm token could
+    // pull the private gallery of ANY wine in the registry (security audit).
+    // A real-but-completed id is a conflict, not a 404 — the same distinction
+    // loadPendingWine makes, so a curator whose fix already landed is told so.
     const wine = await WineDefinition.findById(args.wine_id)
       .select('name producer pendingIdentity scanImage').lean();
     if (!wine) return fail('not_found', 'No wine with that id. Use list_pending_wines for valid ids.');
+    if (wine.pendingIdentity !== true) {
+      return fail('conflict',
+        'That wine is not in the pending-identity queue — its photos are its owners\' private images, not curation evidence.');
+    }
 
     // "Which images belong to this wine" has exactly one definition — the same
     // both-ways match the queue projection uses (some upload paths stamp the
     // wine on the image, the plain add flow only links it to the bottle).
+    // `visibility` rides along so the caller can be told what it is looking at:
+    // these are private photos, surfaced only because the row needs curating.
     const BottleImage = require('../../models/BottleImage');
     const Bottle = require('../../models/Bottle');
     const bottleIds = await Bottle.distinct('_id', { wineDefinition: wine._id });
     const imgs = await BottleImage.find({
       kind: { $ne: 'label-scan' },
       $or: [{ wineDefinition: wine._id }, ...(bottleIds.length ? [{ bottle: { $in: bottleIds } }] : [])],
-    }).select('_id kind originalUrl processedUrl').sort({ createdAt: -1 }).limit(MAX_BOTTLE_IMAGES).lean();
+    }).select('_id kind visibility originalUrl processedUrl').sort({ createdAt: -1 }).limit(MAX_BOTTLE_IMAGES).lean();
 
     const ordered = [];
     if (wine.scanImage) {
@@ -1246,7 +1259,13 @@ registerTool({
         if (totalBytes + out.length > IMAGE_TOTAL_CAP_BYTES) break;
         totalBytes += out.length;
         blocks.push({ type: 'image', data: out.toString('base64'), mimeType: 'image/jpeg' });
-        included.push({ image_id: String(doc._id), kind: doc.kind || 'bottle' });
+        // Marked private unless the owner published it: these are somebody's
+        // own bottle photos, released to curation for one purpose only.
+        included.push({
+          image_id: String(doc._id),
+          kind: doc.kind || 'bottle',
+          private: doc.visibility !== 'public',
+        });
       } catch (err) {
         console.warn('[mcp] pending-wine image read failed:', err.message);
       }
@@ -1266,7 +1285,7 @@ registerTool({
               wine_id: wine._id,
               still_pending: wine.pendingIdentity === true,
               images: included,
-              guidance: 'Read the producer, appellation and classification off the label. Transcribe what is printed — never infer a producer from the region.',
+              guidance: 'Read the producer, appellation and classification off the label. Transcribe what is printed — never infer a producer from the region. These are the owner\'s private photos, released for this one purpose: do not describe, store or reuse them for anything but completing this wine\'s identity.',
             },
           }),
         },

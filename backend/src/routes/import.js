@@ -18,6 +18,7 @@ const { identifyWineFromText } = require('../services/labelScan');
 const aiProvider = require('../services/aiProvider');
 const { findOrCreateWine } = require('../services/findOrCreateWine');
 const { scoreWineMatchVariants, stripProducerPrefix } = require('../services/wineMatching');
+const { wineVisibilityFilter } = require('../services/wineVisibility');
 const { tryDebitAi, isRefundableFailure } = require('../services/aiBudget');
 const rateLimitsConfig = require('../config/rateLimits');
 const { generateWineKey } = require('../utils/normalize');
@@ -101,9 +102,21 @@ async function findExactRegistryWine(item) {
  *   1. Try Meilisearch fuzzy search (fast, covers typos)
  *   2. Fallback to MongoDB text search + normalized key lookup
  *   3. Score all candidates with combinedSimilarity
+ *
+ * `viewer` ({ userId, roles }) gates pendingIdentity rows exactly as the
+ * resolver does. It matters here more than anywhere: a CellarTracker row with
+ * no producer scores 1.0 against a PENDING row, whose stored producer is ''
+ * — so without the gate an import would offer, and then attach bottles to,
+ * ANOTHER USER's hidden half-identified wine (security audit). Strategy 3 was
+ * the worst of the three: `normalizedKey: /:<name>:/` is unanchored, and the
+ * pending namespace `pending~<uid>:<name>:` contains that substring by
+ * construction. The creator still matches their OWN pending rows, which is
+ * what keeps /validate's preview honest about what /confirm will do (the
+ * commit path passes allowPending and resolves to the same row).
  */
-async function findWineMatches(item) {
+async function findWineMatches(item, viewer = {}) {
   const candidates = new Map(); // id -> { wine, score }
+  const visible = wineVisibilityFilter(viewer);
 
   // Strategy 1: Meilisearch search (if available)
   if (searchService.getIsAvailable()) {
@@ -121,7 +134,9 @@ async function findWineMatches(item) {
 
       const { ids } = await searchService.search(query, searchOpts);
       if (ids.length > 0) {
-        const wines = await WineDefinition.find({ _id: { $in: ids } })
+        // Pending rows are not in the Meili index at all; the clause is here so
+        // the gate holds if that ever changes (all three strategies, one rule).
+        const wines = await WineDefinition.find({ _id: { $in: ids }, ...visible })
           .populate(['country', 'region', 'grapes'])
           .lean();
 
@@ -143,7 +158,7 @@ async function findWineMatches(item) {
       const searchTerms = `${item.producer || ''} ${item.wineName || ''}`.trim();
       if (searchTerms) {
         const mongoWines = await WineDefinition.find(
-          { $text: { $search: searchTerms } },
+          { $text: { $search: searchTerms }, ...visible },
           { score: { $meta: 'textScore' } }
         )
           .populate(['country', 'region', 'grapes'])
@@ -171,12 +186,17 @@ async function findWineMatches(item) {
     const normalizedProducer = normalizeString(item.producer);
     const normalizedName = normalizeString(item.wineName);
 
-    const directMatches = await WineDefinition.find({
+    const keyMatch = {
       $or: [
         { normalizedKey: { $regex: `^${escapeRegex(normalizedProducer)}:` } },
         { normalizedKey: { $regex: `:${escapeRegex(normalizedName)}:` } }
       ]
-    })
+    };
+    // $and, not a spread: `visible` is itself an $or for non-curators, and two
+    // $or keys in one object would silently drop the first.
+    const directMatches = await WineDefinition.find(
+      visible.$or ? { $and: [keyMatch, visible] } : { ...keyMatch, ...visible }
+    )
       .populate(['country', 'region', 'grapes'])
       .limit(20)
       .lean();
@@ -212,6 +232,8 @@ async function findWineMatches(item) {
 router.post('/validate', aiBurstLimiter, async (req, res) => {
   try {
     const { cellarId, items } = req.body;
+    // Who the candidate pool is being built FOR — see findWineMatches.
+    const viewer = { userId: req.user.id, roles: req.user.roles };
 
     if (!cellarId) {
       return res.status(400).json({ error: 'cellarId is required' });
@@ -303,7 +325,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
         pr.registryWine = { wine: exactWine, score: 1 };
         continue;
       }
-      const matches = await findWineMatches(pr.item);
+      const matches = await findWineMatches(pr.item, viewer);
       pr.preMatches = matches; // reused by Pass 3 if this row ends up on the fuzzy path
       if (matches.length > 0 && matches[0].score >= EXACT_THRESHOLD) {
         pr.registryWine = { wine: matches[0].wine, score: matches[0].score };
@@ -446,7 +468,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     // instead of re-querying.
     for (const pr of preResults) {
       if (pr.errorMsg || pr.aiWine || pr.registryWine) continue; // skip errors and matched items
-      const matches = pr.preMatches ?? await findWineMatches(pr.item);
+      const matches = pr.preMatches ?? await findWineMatches(pr.item, viewer);
       pr.matches = matches;
     }
 
@@ -865,6 +887,14 @@ router.post('/confirm', async (req, res) => {
               type: str(ai.type),
               grapes: sanitizeGrapeNames(ai.grapes),
             }, req.user.id, { createdVia: 'import', allowPending: true });
+            // findOrCreateWine can return { wine: null, candidates } — the soft
+            // zone. Unguarded, `wine._id` two lines down threw and took the
+            // whole /confirm batch with it (audit L-7). Skip the row and report
+            // it, which is what every other unresolvable row here does.
+            if (!resolved) {
+              errors.push({ index: i, reason: 'Could not resolve this wine in the registry — very similar wines already exist' });
+              continue;
+            }
             wine = resolved;
             aiWineCache.set(aiKey, wine);
             if (created) {
@@ -1415,7 +1445,7 @@ router.get('/sessions/:id', async (req, res) => {
       const result = (session.results || []).find(r => r.index === idx);
       if (!result?.item) continue;
       try {
-        const matches = await findWineMatches(result.item);
+        const matches = await findWineMatches(result.item, { userId: req.user.id, roles: req.user.roles });
         if (matches.length > 0 && matches[0].score >= EXACT_THRESHOLD) {
           const m = matches[0];
           refreshed[idx] = {

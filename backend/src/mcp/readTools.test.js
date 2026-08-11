@@ -27,7 +27,7 @@ jest.mock('../models/Bottle', () => ({
 jest.mock('../models/Rack', () => ({ find: jest.fn(), findOne: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/WishlistItem', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/JournalEntry', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
-jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn() }));
+jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn(), findOne: jest.fn() }));
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('../utils/rackGeometry', () => ({ getMaxPosition: jest.fn(() => 12) }));
 // Lazy-required inside handlers; jest still intercepts by resolved path.
@@ -234,7 +234,7 @@ describe('regional grape display names (somm ticket: Tinta Roriz on a Douro Port
   test('get_wine serializes the regionally correct grape label for the wine\'s own place', async () => {
     const PORTUGAL = oid('1');
     const DOURO = oid('2');
-    WineDefinition.findById.mockReturnValue(chain({
+    WineDefinition.findOne.mockReturnValue(chain({
       _id: oid('f'), name: 'Vintage Port', producer: 'Quinta do Exemplo', type: 'fortified',
       country: { _id: PORTUGAL, name: 'Portugal' },
       region: { _id: DOURO, name: 'Douro' },
@@ -249,7 +249,7 @@ describe('regional grape display names (somm ticket: Tinta Roriz on a Douro Port
   });
 
   test('get_wine keeps the canonical name when no entry applies to the wine\'s country', async () => {
-    WineDefinition.findById.mockReturnValue(chain({
+    WineDefinition.findOne.mockReturnValue(chain({
       _id: oid('f'), name: 'Ribera Tinto', producer: 'X', type: 'red',
       country: { _id: oid('9'), name: 'Spain' },
       grapes: [{ _id: oid('3'), name: 'Tempranillo', regionalNames: [{ country: oid('1'), region: oid('2'), name: 'Tinta Roriz' }] }],

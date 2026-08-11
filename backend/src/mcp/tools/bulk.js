@@ -22,6 +22,7 @@ const { isValidId } = require('../../utils/validation');
 const { parseAndValidateVintage, parseDrinkYear } = require('../../utils/validation');
 const { resolveRating } = require('../../utils/ratingUtils');
 const WineDefinition = require('../../models/WineDefinition');
+const { findVisibleWine } = require('../../services/wineVisibility');
 const { NEW_WINE_SHAPE } = require('./write');
 const { ok, fail, objectId, MSG_CELLAR_NOT_FOUND, resolveCellarAccess, wineSummary } = require('../toolUtil');
 const { logAction } = require('../actionLedger');
@@ -58,7 +59,7 @@ function validateItemFields(item) {
   return null;
 }
 
-async function planItem(item, userId) {
+async function planItem(item, userId, roles) {
   if (!item.wine_id && !item.new_wine) return { status: 'invalid', error: 'wine_id or new_wine required' };
   if (item.wine_id && item.new_wine) return { status: 'invalid', error: 'wine_id OR new_wine, not both' };
   const fieldError = validateItemFields(item);
@@ -66,7 +67,12 @@ async function planItem(item, userId) {
 
   if (item.wine_id) {
     if (!isValidId(item.wine_id)) return { status: 'invalid', error: 'wine_id must be a 24-hex id' };
-    const wine = await WineDefinition.findById(item.wine_id).populate(['country', 'region', 'grapes']);
+    // Visible-to-this-caller (services/wineVisibility) — same rule as
+    // add_bottle: own pending row yes, a stranger's no. planItem is the
+    // preview AND the plan the commit executes, so gating here gates both.
+    const wine = await findVisibleWine(item.wine_id, {
+      userId, roles, populate: ['country', 'region', 'grapes'],
+    });
     if (!wine) return { status: 'invalid', error: `no registry wine ${item.wine_id}` };
     return { status: 'ready', wine_id: String(wine._id), wine: wineSummary(wine) };
   }
@@ -126,7 +132,7 @@ registerTool({
       const plan = [];
       for (let i = 0; i < args.items.length; i++) {
         // Serial on purpose: bounded work, and registry lookups stay gentle.
-        const p = await planItem(args.items[i], ctx.user.id);
+        const p = await planItem(args.items[i], ctx.user.id, ctx.user.roles);
         plan.push({ index: i, vintage: args.items[i].vintage || 'NV', ...p });
       }
       const counts = plan.reduce((acc, p) => ((acc[p.status] = (acc[p.status] || 0) + 1), acc), {});

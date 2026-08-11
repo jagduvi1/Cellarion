@@ -83,13 +83,19 @@ registerTool({
   inputSchema: { wine_id: z.string().describe('Registry wine id from search_registry or a bottle\'s wine') },
   handler: async (args) => {
     if (!isValidId(args.wine_id)) return fail('invalid_input', 'wine_id must be a 24-hex Mongo id.');
-    const raw = await WineDefinition.findById(args.wine_id)
+    // The exclusion is a QUERY clause, not a post-filter on the result. A
+    // post-filter here was DEAD CODE (security audit): SAFE_SELECT is an
+    // INCLUSIVE projection and does not list pendingIdentity, so under .lean()
+    // the field is always undefined and `undefined === true` never fired —
+    // this tool is 'public' scope, served by the UNAUTHENTICATED
+    // /api/mcp/public surface, so that gate was the only thing standing between
+    // an anonymous caller and a stranger's half-identified wine. nonWine rides
+    // along in the same clause (it was never filtered here either). Compare
+    // publicContent.js's drink_window_for, which selects the flag it tests.
+    const raw = await WineDefinition.findOne({ _id: args.wine_id, ...VISIBLE })
       .select(SAFE_SELECT).populate(['country', 'region', 'grapes']).lean();
-    // Post-filter rather than a query clause: 'public' scope means there is no
-    // caller identity to compare against the row's creator, so a pending row is
-    // simply not registry content here — reported as the same not_found a
-    // missing id gets, so its existence never leaks.
-    if (!raw || raw.pendingIdentity === true) {
+    // Same not_found a missing id gets, so a hidden row's existence never leaks.
+    if (!raw) {
       return fail('not_found', 'No registry wine with that id. Find wines via search_registry.');
     }
     // Grapes surface as the regionally correct label for THIS wine's place

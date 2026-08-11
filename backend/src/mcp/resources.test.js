@@ -22,7 +22,7 @@ jest.mock('../models/Bottle', () => ({
 jest.mock('../models/Rack', () => ({ find: jest.fn(), findOne: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/WishlistItem', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/JournalEntry', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
-jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn() }));
+jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn(), findOne: jest.fn() }));
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineEmbedding', () => ({ findOne: jest.fn() }));
 jest.mock('../utils/rackGeometry', () => ({ getMaxPosition: jest.fn(() => 12) }));
@@ -218,7 +218,7 @@ describe('previously-uncovered handlers', () => {
     const bad = await tool('get_wine').handler({ wine_id: 'nope' }, CTX);
     expect(JSON.parse(bad.content[0].text).error.code).toBe('invalid_input');
 
-    WineDefinition.findById.mockReturnValue(chain({
+    WineDefinition.findOne.mockReturnValue(chain({
       _id: oid('f'), name: 'Barolo', producer: 'X', slug: 'barolo-x', grapes: [],
       aiProfile: { body: null, acidity: null, notes: [] }, communityRating: { averageNormalized: null, reviewCount: 0 },
     }));

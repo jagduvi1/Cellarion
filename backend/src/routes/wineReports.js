@@ -3,6 +3,7 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const WineReport = require('../models/WineReport');
 const WineDefinition = require('../models/WineDefinition');
+const { findVisibleWine } = require('../services/wineVisibility');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
 const { stripHtml } = require('../utils/sanitize');
@@ -56,7 +57,13 @@ router.post('/', requireAuth, requireNonDemo, async (req, res) => {
       }
     }
 
-    const wine = await WineDefinition.findById(wineDefinitionId).lean();
+    // Visible-to-this-user, not merely existing (services/wineVisibility) —
+    // a stranger must not be able to confirm a pending row exists by reporting
+    // a correction to it. Its creator still can: their row is the one most
+    // likely to need one.
+    const wine = await findVisibleWine(wineDefinitionId, {
+      userId: req.user.id, roles: req.user.roles, lean: true,
+    });
     if (!wine) {
       return res.status(404).json({ error: 'Wine not found' });
     }

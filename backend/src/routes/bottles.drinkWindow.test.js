@@ -43,7 +43,7 @@ jest.mock('../utils/vintageProfile', () => ({
 // ── Model mocks ──────────────────────────────────────────────────────────────
 
 jest.mock('../models/Cellar', () => ({ findById: jest.fn() }));
-jest.mock('../models/WineDefinition', () => ({ findById: jest.fn() }));
+jest.mock('../models/WineDefinition', () => ({ findById: jest.fn(), findOne: jest.fn() }));
 jest.mock('../models/Rack', () => ({ updateMany: jest.fn() }));
 jest.mock('../models/Country', () => ({}));
 jest.mock('../models/Region', () => ({}));
@@ -128,7 +128,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   Bottle.__instances.length = 0;
   Cellar.findById.mockResolvedValue({ _id: CELLAR_ID, name: 'Main', user: USER_ID, members: [], deletedAt: null });
-  WineDefinition.findById.mockResolvedValue({ _id: WINE_ID, name: 'Test Wine' });
+  // findOne: the by-id path resolves through services/wineVisibility (M-4).
+  WineDefinition.findOne.mockResolvedValue({ _id: WINE_ID, name: 'Test Wine' });
   // Existing bottle for PUT — carries a stored window half for the
   // partial-update inversion checks.
   storedBottle = {

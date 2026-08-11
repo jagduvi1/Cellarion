@@ -9,7 +9,7 @@
  */
 
 jest.mock('../models/WineList', () => ({ findOne: jest.fn(), find: jest.fn(), countDocuments: jest.fn() }));
-jest.mock('../models/WineDefinition', () => ({ findById: jest.fn() }));
+jest.mock('../models/WineDefinition', () => ({ findById: jest.fn(), findOne: jest.fn() }));
 jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 // revert.js and tools/write.js top-require bottleOps (which pulls the search/
@@ -64,7 +64,9 @@ beforeEach(() => {
   jest.clearAllMocks();
   McpActionLog.create.mockResolvedValue({});
   McpActionLog.findOne.mockReturnValue({ lean: () => Promise.resolve(null) });
-  WineDefinition.findById.mockReturnValue({ populate: jest.fn(() => Promise.resolve({ _id: WINE, name: 'Barolo Riserva', producer: 'Rinaldi' })) });
+  // findOne with an absolute pendingIdentity exclusion: a wine list can be
+  // PUBLISHED and routes/wineListPublic.js has no auth (security audit H-5).
+  WineDefinition.findOne.mockReturnValue({ populate: jest.fn(() => Promise.resolve({ _id: WINE, name: 'Barolo Riserva', producer: 'Rinaldi' })) });
 });
 
 describe('registration + scopes', () => {
@@ -114,7 +116,7 @@ describe('list_wine_lists / get_wine_list', () => {
 describe('add_to_list', () => {
   test('unknown wine → not_found', async () => {
     WineList.findOne.mockResolvedValue(makeList());
-    WineDefinition.findById.mockReturnValue({ populate: jest.fn(() => Promise.resolve(null)) });
+    WineDefinition.findOne.mockReturnValue({ populate: jest.fn(() => Promise.resolve(null)) });
     const res = await tool('add_to_list').handler({ list_id: LIST, wine_id: WINE }, CTX);
     expect(parse(res).error.code).toBe('not_found');
   });

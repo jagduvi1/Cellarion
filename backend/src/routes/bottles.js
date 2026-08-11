@@ -4,6 +4,7 @@ const { requireBottleAccess } = require('../middleware/bottleAccess');
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
 const WineDefinition = require('../models/WineDefinition');
+const { findVisibleWine } = require('../services/wineVisibility');
 const Country = require('../models/Country');
 const Region = require('../models/Region');
 const Grape = require('../models/Grape');
@@ -420,7 +421,13 @@ router.post('/', requireNonDemo, async (req, res) => {
       if (!mongoose.isValidObjectId(wineDefinition)) {
         return res.status(400).json({ error: 'Invalid wine definition ID' });
       }
-      wineDoc = await WineDefinition.findById(wineDefinition);
+      // Visible-to-this-user (services/wineVisibility). The CREATOR clause is
+      // load-bearing here, not a nicety: a multi-bottle add posts bottles 2..N
+      // against the wine id the first bottle minted, and that row is pending
+      // precisely when the label could not be read. A blanket pending
+      // exclusion would break the case the feature exists for; a stranger
+      // still gets the same 404 a missing id gets.
+      wineDoc = await findVisibleWine(wineDefinition, { userId: req.user.id, roles: req.user.roles });
       if (!wineDoc) {
         return res.status(404).json({ error: 'Wine definition not found' });
       }

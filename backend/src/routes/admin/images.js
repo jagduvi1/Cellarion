@@ -22,7 +22,14 @@ router.get('/', async (req, res) => {
   try {
     const { status } = req.query;
     const { limit, offset, page } = parsePagination(req.query, { limit: 20, maxLimit: 100 });
-    const filter = {};
+    // Label scans are NOT moderation content (audit L-6). They are the private
+    // original frame a user scanned, kept for one purpose — letting a curator
+    // read an unreadable label — and they are never public. Surfacing them here
+    // let an admin approve one as a wine's official image, which sets
+    // assignedToWine and thereby moves it from the DELETE branch of account
+    // deletion to the ANONYMISE branch (services/userDataRegistry): the user's
+    // own photo would outlive their account, reattributed.
+    const filter = { kind: { $ne: 'label-scan' } };
     const validStatuses = ['uploaded', 'processing', 'processed', 'approved', 'rejected'];
     if (status) {
       if (!validStatuses.includes(status)) {
@@ -63,7 +70,8 @@ router.get('/by-wine', async (req, res) => {
     // An image belongs to a wine directly (wineDefinition) or via its bottle.
     const HAS_FILE = { $or: [{ processedUrl: { $ne: null } }, { originalUrl: { $ne: null } }] };
     const basePipeline = [
-      { $match: { status: { $ne: 'rejected' }, ...HAS_FILE } },
+      // kind exclusion: same reason as GET / above (audit L-6).
+      { $match: { status: { $ne: 'rejected' }, kind: { $ne: 'label-scan' }, ...HAS_FILE } },
       { $lookup: { from: 'bottles', localField: 'bottle', foreignField: '_id', as: '_b' } },
       { $addFields: { effWine: { $ifNull: ['$wineDefinition', { $arrayElemAt: ['$_b.wineDefinition', 0] }] } } },
       { $match: { effWine: { $ne: null } } },
@@ -105,6 +113,7 @@ router.get('/by-wine', async (req, res) => {
 
     const images = await BottleImage.find({
       status: { $ne: 'rejected' },
+      kind: { $ne: 'label-scan' },
       $and: [
         HAS_FILE,
         { $or: [{ wineDefinition: { $in: wineIds } }, { bottle: { $in: bottles.map(b => b._id) } }] },
@@ -167,6 +176,14 @@ router.put('/:id/approve', async (req, res) => {
     }
     if (!['processed', 'uploaded'].includes(image.status)) {
       return res.status(400).json({ error: 'Image cannot be approved in current state' });
+    }
+    // Never a label scan (audit L-6): it is a private frame kept only so a
+    // curator can read an unreadable label. Promoting one to a wine's official
+    // image makes it public AND sets assignedToWine, which moves it out of the
+    // delete branch of account deletion into the anonymise branch, so the
+    // uploader's own photo would outlive their account, reattributed.
+    if (image.kind === 'label-scan') {
+      return res.status(400).json({ error: 'A label scan is private curation evidence, not a wine image' });
     }
 
     const visibility = req.body.visibility || 'public';
@@ -450,6 +467,14 @@ router.put('/:id/assign-to-wine', async (req, res) => {
     if (image.status !== 'approved') {
       return res.status(400).json({ error: 'Only approved images can be assigned to a wine' });
     }
+    // Never a label scan (audit L-6): it is a private frame kept only so a
+    // curator can read an unreadable label. Promoting one to a wine's official
+    // image makes it public AND sets assignedToWine, which moves it out of the
+    // delete branch of account deletion into the anonymise branch, so the
+    // uploader's own photo would outlive their account, reattributed.
+    if (image.kind === 'label-scan') {
+      return res.status(400).json({ error: 'A label scan is private curation evidence, not a wine image' });
+    }
 
     // wineDefinitionId comes from the request body — validate it as an ObjectId
     // before it flows into updateMany/findByIdAndUpdate filters. Without this,
@@ -520,6 +545,14 @@ router.put('/:id/set-official', async (req, res) => {
     if (!image) return res.status(404).json({ error: 'Image not found' });
     if (image.status === 'rejected') {
       return res.status(400).json({ error: 'Rejected images cannot be set as official' });
+    }
+    // Never a label scan (audit L-6): it is a private frame kept only so a
+    // curator can read an unreadable label. Promoting one to a wine's official
+    // image makes it public AND sets assignedToWine, which moves it out of the
+    // delete branch of account deletion into the anonymise branch, so the
+    // uploader's own photo would outlive their account, reattributed.
+    if (image.kind === 'label-scan') {
+      return res.status(400).json({ error: 'A label scan is private curation evidence, not a wine image' });
     }
 
     const imageUrl = image.processedUrl || image.originalUrl;
