@@ -86,6 +86,45 @@ function AdminTaxonomy() {
     }
   };
 
+  // ── Regional display names editor (grapes tab) ─────────────────────────────
+  // Rows of [country, optional region, display name] on the grape form — e.g.
+  // Tempranillo shown as "Tinta Roriz" on Douro wines. Each row can point at a
+  // DIFFERENT country, so regions are cached per country here instead of going
+  // through the single-country allRegions state the region/appellation forms
+  // share (that would cross-talk between rows).
+  const [regionsByCountry, setRegionsByCountry] = useState({});
+
+  const loadRegionsForCountry = async (countryId) => {
+    if (!countryId || regionsByCountry[countryId]) return;
+    try {
+      const res = await adminGetRegions(apiFetch, countryId);
+      const data = await res.json();
+      if (res.ok) setRegionsByCountry(prev => ({ ...prev, [countryId]: data.regions || [] }));
+    } catch (err) {
+      console.error('Failed to load regions', err);
+    }
+  };
+
+  const setRegionalNameRow = (idx, patch) => {
+    const rows = [...(formData.regionalNames || [])];
+    rows[idx] = { ...rows[idx], ...patch };
+    setFormData({ ...formData, regionalNames: rows });
+  };
+
+  const addRegionalNameRow = () => {
+    setFormData({
+      ...formData,
+      regionalNames: [...(formData.regionalNames || []), { country: '', region: '', name: '' }]
+    });
+  };
+
+  const removeRegionalNameRow = (idx) => {
+    setFormData({
+      ...formData,
+      regionalNames: (formData.regionalNames || []).filter((_, i) => i !== idx)
+    });
+  };
+
   // Monotonic fetch id: each fetch (tab switch, create/update/delete refresh)
   // invalidates any still in-flight response, so a slow response for the
   // previous tab can't render its documents under the new tab.
@@ -238,6 +277,14 @@ function AdminTaxonomy() {
         description: item.description || ''
       });
     } else if (activeTab === 'grapes') {
+      const regionalNames = (item.regionalNames || []).map(rn => ({
+        country: rn.country?._id || rn.country || '',
+        region: rn.region?._id || rn.region || '',
+        name: rn.name || ''
+      }));
+      // Warm the per-country region cache so existing rows show their region
+      // names immediately instead of an empty dropdown.
+      [...new Set(regionalNames.map(rn => rn.country).filter(Boolean))].forEach(loadRegionsForCountry);
       setFormData({
         name: item.name,
         synonymsText: (item.synonyms || []).join(', '),
@@ -248,7 +295,8 @@ function AdminTaxonomy() {
         characteristics: item.characteristics || [],
         agingPotential: item.agingPotential || '',
         prestige: item.prestige || '',
-        description: item.description || ''
+        description: item.description || '',
+        regionalNames
       });
     } else if (activeTab === 'appellations') {
       const countryId = item.country?._id || item.country || '';
@@ -293,7 +341,13 @@ function AdminTaxonomy() {
         characteristics: fd.characteristics || [],
         agingPotential: fd.agingPotential || null,
         prestige: fd.prestige || null,
-        description: fd.description || ''
+        description: fd.description || '',
+        // Fully empty rows (no country, no name) are just an unused "+ add"
+        // click — drop them. Half-filled rows are KEPT so the backend's
+        // validation message reaches the admin instead of silent data loss.
+        regionalNames: (fd.regionalNames || [])
+          .filter(rn => rn.country || (rn.name || '').trim())
+          .map(rn => ({ country: rn.country, region: rn.region || null, name: (rn.name || '').trim() }))
       };
     }
     if (activeTab === 'appellations') {
@@ -558,6 +612,58 @@ function AdminTaxonomy() {
           onChange={(e) => setFormData({ ...formData, prestige: e.target.value })}
           placeholder="e.g. Noble, Premium"
         />
+      </div>
+      <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+        <label>{t('admin.taxonomy.regionalNamesLabel')}</label>
+        <p className="regional-names-hint">{t('admin.taxonomy.regionalNamesHint')}</p>
+        {(formData.regionalNames || []).map((rn, idx) => (
+          <div key={idx} className="regional-name-row">
+            <select
+              value={rn.country || ''}
+              onChange={(e) => {
+                // Country drives the region list — changing it resets the
+                // row's region (same interlock as the appellation form).
+                setRegionalNameRow(idx, { country: e.target.value, region: '' });
+                loadRegionsForCountry(e.target.value);
+              }}
+              aria-label={t('admin.requests.countryLabel')}
+            >
+              <option value="">{t('admin.taxonomy.selectCountry')}</option>
+              {allCountries.map(c => (
+                <option key={c._id} value={c._id}>{c.name}</option>
+              ))}
+            </select>
+            <select
+              value={rn.region || ''}
+              onChange={(e) => setRegionalNameRow(idx, { region: e.target.value })}
+              disabled={!rn.country}
+              aria-label={t('admin.taxonomy.appellationRegionLabel')}
+            >
+              <option value="">{t('admin.taxonomy.regionalNameWholeCountry')}</option>
+              {(regionsByCountry[rn.country] || []).map(r => (
+                <option key={r._id} value={r._id}>{r.name}</option>
+              ))}
+            </select>
+            <input
+              type="text"
+              value={rn.name || ''}
+              maxLength={60}
+              placeholder={t('admin.taxonomy.regionalNamePlaceholder')}
+              onChange={(e) => setRegionalNameRow(idx, { name: e.target.value })}
+              aria-label={t('admin.taxonomy.regionalNamesLabel')}
+            />
+            <button
+              type="button"
+              className="btn btn-danger btn-small"
+              onClick={() => removeRegionalNameRow(idx)}
+            >
+              {t('admin.taxonomy.regionalNameRemove')}
+            </button>
+          </div>
+        ))}
+        <button type="button" className="btn btn-secondary btn-small" onClick={addRegionalNameRow}>
+          {t('admin.taxonomy.addRegionalName')}
+        </button>
       </div>
       <div className="form-group" style={{ gridColumn: '1 / -1' }}>
         <label>Description <span style={{ fontWeight: 400, color: 'var(--color-text-secondary)' }}>(shown publicly on /grapes/:slug)</span></label>

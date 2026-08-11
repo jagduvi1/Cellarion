@@ -130,7 +130,9 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
         {grapes.length > 0 ? (
           <div className="bd-grapes">
             {grapes.map(g => (
-              <span key={g._id} className="bd-grape-pill">{g.name}</span>
+              // displayName = regionally correct label ("Tinta Roriz" on a
+              // Douro Port); name stays the canonical variety.
+              <span key={g._id} className="bd-grape-pill">{g.displayName || g.name}</span>
             ))}
           </div>
         ) : canEdit ? (

@@ -82,7 +82,9 @@ export default function WineDetail() {
   const pageUrl = `${SITE_URL}${winePath}`;
   const wineImageSrc = getWineImageUrl(wine.image);
   const imageUrl = wineImageSrc || `${SITE_URL}/cellarion-logo.jpg`;
-  const grapeNames = wine.grapes?.map(g => g.name).filter(Boolean) || [];
+  // Prefer the regionally correct label when the backend resolved one
+  // ("Tinta Roriz" on a Douro Port); g.name stays the canonical variety.
+  const grapeNames = wine.grapes?.map(g => g.displayName || g.name).filter(Boolean) || [];
 
   const ratingScale = user?.preferences?.ratingScale || '5';
   const hasRating = wine.communityRating?.reviewCount > 0;

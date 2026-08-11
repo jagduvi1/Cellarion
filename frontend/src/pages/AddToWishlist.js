@@ -299,7 +299,7 @@ function AddToWishlist() {
           <span className={`wine-type-pill ${wine.type}`}>{wine.type}</span>
         </div>
         {wine.grapes?.length > 0 && (
-          <p className="wine-grapes">{wine.grapes.map(g => g.name).join(', ')}</p>
+          <p className="wine-grapes">{wine.grapes.map(g => g.displayName || g.name).join(', ')}</p>
         )}
       </div>
       <button className="btn btn-primary btn-small">{t('addToWishlist.select')}</button>

@@ -9,6 +9,7 @@ const { registerTool } = require('../registry');
 const { isValidId } = require('../../utils/validation');
 const { ok, fail, wineSummary, hasContent } = require('../toolUtil');
 const { siteBaseUrl } = require('../../utils/siteUrl');
+const { decorateGrapes } = require('../../utils/grapeDisplay');
 
 const REGISTRY_LIMIT = 10; // == USER_SEARCH_LIMIT in routes/wines.js
 
@@ -75,9 +76,13 @@ registerTool({
   inputSchema: { wine_id: z.string().describe('Registry wine id from search_registry or a bottle\'s wine') },
   handler: async (args) => {
     if (!isValidId(args.wine_id)) return fail('invalid_input', 'wine_id must be a 24-hex Mongo id.');
-    const w = await WineDefinition.findById(args.wine_id)
+    const raw = await WineDefinition.findById(args.wine_id)
       .select(SAFE_SELECT).populate(['country', 'region', 'grapes']).lean();
-    if (!w) return fail('not_found', 'No registry wine with that id. Find wines via search_registry.');
+    if (!raw) return fail('not_found', 'No registry wine with that id. Find wines via search_registry.');
+    // Grapes surface as the regionally correct label for THIS wine's place
+    // ("Tinta Roriz" on a Douro Port) — storage stays canonical, and the
+    // grapes field keeps its array-of-strings shape.
+    const w = decorateGrapes(raw);
     return ok(`${w.name}${w.producer ? ` — ${w.producer}` : ''}`, {
       ...wineSummary(w),
       classification: w.classification || null,

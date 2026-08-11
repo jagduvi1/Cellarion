@@ -175,7 +175,8 @@ async function runJob(cfg) {
         const wine = await WineDefinition.findById(wineDefId)
           .populate('country', 'name')
           .populate('region', 'name')
-          .populate('grapes', 'name')
+          // regionalNames feed buildEmbeddingText's regional grape labels.
+          .populate('grapes', 'name regionalNames')
           .lean();
 
         if (!wine) {
@@ -321,7 +322,8 @@ async function embedSinglePair(wineDefId, vintage) {
     const wine = await WineDefinition.findById(wineDefId)
       .populate('country', 'name')
       .populate('region', 'name')
-      .populate('grapes', 'name')
+      // regionalNames feed buildEmbeddingText's regional grape labels.
+      .populate('grapes', 'name regionalNames')
       .lean();
 
     if (!wine) return;

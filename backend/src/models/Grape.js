@@ -1,6 +1,28 @@
 const mongoose = require('mongoose');
 const { slugify, normalizeString } = require('../utils/normalize');
 
+// One regionally correct display name for one place — see `regionalNames`
+// below. No per-entry _id: entries are replaced wholesale by the admin editor
+// and referenced by (country, region) pair, never individually.
+const regionalNameSchema = new mongoose.Schema({
+  country: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Country',
+    required: [true, 'A regional name needs a country']
+  },
+  region: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Region',
+    default: null
+  },
+  name: {
+    type: String,
+    required: [true, 'A regional name needs a name'],
+    trim: true,
+    maxlength: 60
+  }
+}, { _id: false });
+
 const grapeSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -52,6 +74,18 @@ const grapeSchema = new mongoose.Schema({
     type: [String],
     default: [],
     index: true
+  },
+  // Regionally correct display names for this variety: a Douro wine shows
+  // "Tinta Roriz", an Alentejo one "Aragonez" — both stored as this ONE
+  // canonical doc, so search facets, stats and pairing keep a single
+  // vocabulary. `region` unset means the name applies country-wide; an entry
+  // with a region wins over a country-only entry (utils/grapeDisplay.js).
+  // Deliberately NO normalized copies of these names: they are display-only
+  // and never matched against user input — resolving a typed "Tinta Roriz" to
+  // this doc stays the job of synonyms/normalizedSynonyms above.
+  regionalNames: {
+    type: [regionalNameSchema],
+    default: []
   },
   slug: { type: String, trim: true, lowercase: true, unique: true, sparse: true, index: true },
   description: { type: String, trim: true, default: '' },

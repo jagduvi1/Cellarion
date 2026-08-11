@@ -230,6 +230,35 @@ describe('PII and data minimisation', () => {
   });
 });
 
+describe('regional grape display names (somm ticket: Tinta Roriz on a Douro Port)', () => {
+  test('get_wine serializes the regionally correct grape label for the wine\'s own place', async () => {
+    const PORTUGAL = oid('1');
+    const DOURO = oid('2');
+    WineDefinition.findById.mockReturnValue(chain({
+      _id: oid('f'), name: 'Vintage Port', producer: 'Quinta do Exemplo', type: 'fortified',
+      country: { _id: PORTUGAL, name: 'Portugal' },
+      region: { _id: DOURO, name: 'Douro' },
+      grapes: [
+        // Stored canonical (one Grape doc for filters/stats); displayed local.
+        { _id: oid('3'), name: 'Tempranillo', regionalNames: [{ country: PORTUGAL, region: DOURO, name: 'Tinta Roriz' }] },
+        { _id: oid('4'), name: 'Touriga Nacional' },
+      ],
+    }));
+    const res = await tool('get_wine').handler({ wine_id: oid('f') }, CTX);
+    expect(parse(res).data.grapes).toEqual(['Tinta Roriz', 'Touriga Nacional']);
+  });
+
+  test('get_wine keeps the canonical name when no entry applies to the wine\'s country', async () => {
+    WineDefinition.findById.mockReturnValue(chain({
+      _id: oid('f'), name: 'Ribera Tinto', producer: 'X', type: 'red',
+      country: { _id: oid('9'), name: 'Spain' },
+      grapes: [{ _id: oid('3'), name: 'Tempranillo', regionalNames: [{ country: oid('1'), region: oid('2'), name: 'Tinta Roriz' }] }],
+    }));
+    const res = await tool('get_wine').handler({ wine_id: oid('f') }, CTX);
+    expect(parse(res).data.grapes).toEqual(['Tempranillo']);
+  });
+});
+
 describe('privilege parity & bounds', () => {
   test('search_registry via engine is capped at 10 (== REST USER_SEARCH_LIMIT)', async () => {
     searchService.getIsAvailable.mockReturnValue(true);

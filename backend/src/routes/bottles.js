@@ -24,6 +24,10 @@ const { stripHtml, escapeRegex } = require('../utils/sanitize');
 const { toNormalized } = require('../utils/ratingUtils');
 const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
 const { parsePagination } = require('../utils/pagination');
+// Read-surface decoration: populated grapes gain `displayName` — the
+// regionally correct label for the bottle's wine (Tinta Roriz on a Douro
+// Port) — while `name` stays canonical for storage/filters/stats.
+const { decorateGrapes } = require('../utils/grapeDisplay');
 const mongoose = require('mongoose');
 const searchService = require('../services/search');
 // add/update/consume/restore/remove logic + rack-slot freeing live in the
@@ -319,6 +323,9 @@ router.get('/', async (req, res) => {
 
     const items = bottles.map(b => ({
       ...b,
+      // Regional grape display names resolved per wine (additive `displayName`
+      // on each populated grape; canonical `name` untouched).
+      ...(b.wineDefinition ? { wineDefinition: decorateGrapes(b.wineDefinition) } : {}),
       ...(maturityMap ? { maturityStatus: maturityMap.get(b._id.toString()) || null } : {}),
     }));
 
@@ -417,6 +424,11 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
     // Join the historical rate snapshot for the date this price was entered.
     // Exposed as priceCurrencyRates so the frontend needs no changes.
     const bottleObj = bottle.toObject();
+    // Regional grape display names resolved against the wine's own
+    // country/region (additive `displayName`; canonical `name` untouched).
+    if (bottleObj.wineDefinition) {
+      bottleObj.wineDefinition = decorateGrapes(bottleObj.wineDefinition);
+    }
     if (bottle.priceSetAt) {
       const date = bottle.priceSetAt.toISOString().slice(0, 10);
       const snapshot = await getSnapshotForDate(date);
