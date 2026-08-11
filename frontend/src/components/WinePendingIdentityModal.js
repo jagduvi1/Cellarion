@@ -109,7 +109,12 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
       }
       setSuccessMsg(data.message);
       cancelEdit();
-      await fetchPage(page);
+      // Fixing the LAST row of a later page shrinks the queue past this page —
+      // refetching the same index returns an empty list and the modal would say
+      // "nothing waiting" while rows sit on page 1 (audit M-3). Step back first.
+      const nextPage = wines.length === 1 && page > 1 ? page - 1 : page;
+      if (nextPage !== page) setPage(nextPage);
+      await fetchPage(nextPage);
     } catch {
       setRowError(t('common.networkError'));
     } finally {
@@ -232,7 +237,11 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
                         </div>
                       ) : (
                         <>
-                          <Link to={`/wines/${w._id}`} target="_blank" rel="noreferrer">{w.name}</Link>
+                          {/* Deliberately NOT a link: /wines/:id renders from
+                              the public route, which excludes pending rows — so
+                              every link here would 404 (audit H-1). The row's
+                              own edit form + photos are the working surface. */}
+                          <strong>{w.name}</strong>
                           <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary, #666)' }}>
                             {w.producer || <em>{t('admin.wines.pendingIdentity.noProducer')}</em>}
                             {w.appellation ? ` · ${w.appellation}` : ''}
@@ -298,7 +307,7 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
           <button className="btn btn-secondary btn-sm" disabled={page <= 1 || loading} onClick={() => setPage(p => p - 1)}>
             {t('common.previous')}
           </button>
-          <span style={{ fontSize: '0.85rem' }}>{t('admin.audit.page', { page, pages })}</span>
+          <span style={{ fontSize: '0.85rem' }}>{t('admin.audit.page', { current: page, total: pages })}</span>
           <button className="btn btn-secondary btn-sm" disabled={page >= pages || loading} onClick={() => setPage(p => p + 1)}>
             {t('common.next')}
           </button>

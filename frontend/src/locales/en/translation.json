@@ -864,6 +864,7 @@
     "detailsApplyToAll_other": "These details apply to all {{count}} bottles."
   },
   "bottleDetail": {
+    "producerPending": "producer being confirmed",
     "backToCellar": "← Back to Cellar",
     "backToChat": "← Back to chat",
     "loadingBottle": "Loading bottle...",
@@ -3491,6 +3492,8 @@
     "resultMaturity_other": "{{count}} maturity windows added",
     "resultWines_one": "{{count}} new wine added to the registry",
     "resultWines_other": "{{count}} new wines added to the registry",
+    "resultPendingIdentity_one": "{{count}} wine couldn't be fully identified — the bottle is in your cellar, and our curators will complete the details",
+    "resultPendingIdentity_other": "{{count}} wines couldn't be fully identified — the bottles are in your cellar, and our curators will complete the details",
     "resultWineRequests_one": "{{count}} wine submitted for review (couldn't auto-create)",
     "resultWineRequests_other": "{{count}} wines submitted for review (couldn't auto-create)",
     "resultUnplaced_one": "{{count}} bottle couldn't be placed in a rack slot",
@@ -3847,7 +3850,7 @@
       "placedInRacks": "Placed in racks",
       "overflowSuffix": " ({{count}} into adjacent slots)",
       "couldntPlace": "Couldn't place",
-      "pendingIdentityNote": "{{n}} wines couldn't be fully identified from your file — the bottles are in your cellar, and our curators will complete the details.",
+      "pendingIdentityNote": "{{n}} wine(s) couldn't be fully identified from your file — the bottles are in your cellar, and our curators will complete the details.",
       "autoCreatedRacks": "Auto-created racks ({{count}})",
       "unplacedSummary": "Bottles that couldn't be placed in a rack ({{count}})",
       "unplacedRow": "Row {{row}} → rack <1>{{rack}}</1>",

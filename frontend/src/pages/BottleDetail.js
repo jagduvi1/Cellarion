@@ -517,8 +517,14 @@ function BottleDetail() {
               )}
             </div>
             <p className="bd-producer">
-              {displayProducer}
-              {wine?.country?.name && <span className="bd-country"> · {wine.country.name}</span>}
+              {/* A pending-identity wine has no producer yet. Say so plainly
+                  rather than rendering a bare "· France": the owner otherwise
+                  has no way to know their wine is awaiting curation, and won't
+                  understand why it can't be found in search (audit L-3 + the
+                  product finding). No action is required of them — promotion
+                  is automatic — so this is a statement, not a prompt. */}
+              {displayProducer || <em className="bd-producer-pending">{t('bottleDetail.producerPending')}</em>}
+              {wine?.country?.name && <span className="bd-country">{displayProducer ? ' · ' : ' — '}{wine.country.name}</span>}
             </p>
             {wine?.type && (
               <span className={`wine-type-pill ${wine.type}`}>{wine.type}</span>
