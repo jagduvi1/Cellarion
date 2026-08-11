@@ -15,6 +15,7 @@
 // costs nothing.
 const { z } = require('zod');
 const WineDefinition = require('../../models/WineDefinition');
+const { findVisibleWine } = require('../../services/wineVisibility');
 const { registerTool } = require('../registry');
 // findOrCreateWine is required LAZILY inside handlers: it top-requires
 // services/search → the ESM-only meilisearch package, which jest cannot parse
@@ -136,7 +137,13 @@ registerTool({
     let wineCreated = false;
     if (args.wine_id) {
       if (!isValidId(args.wine_id)) return fail('invalid_input', 'wine_id must be a 24-hex Mongo id.');
-      wineDoc = await WineDefinition.findById(args.wine_id).populate(['country', 'region', 'grapes']);
+      // Visible-to-this-caller (services/wineVisibility): the creator may add
+      // more bottles of their own pending row (that is how a case of one
+      // unreadable label works), a stranger gets the same not_found a missing
+      // id gets — security audit M-4.
+      wineDoc = await findVisibleWine(args.wine_id, {
+        userId: ctx.user.id, roles: ctx.user.roles, populate: ['country', 'region', 'grapes'],
+      });
       if (!wineDoc) return fail('not_found', 'No registry wine with that id. Use resolve_wine or search_registry.');
     } else {
       const { findOrCreateWine } = require('../../services/findOrCreateWine');
@@ -162,6 +169,13 @@ registerTool({
         return fail('conflict',
           'Very similar wines already exist — use one of these wine_ids, or call again with confirm_new_wine:true ONLY if the user confirms it is genuinely different: ' +
           result.candidates.map((c) => `${c.wine.name} — ${c.wine.producer} (wine_id ${c.wine._id}, score ${c.score})`).join('; '));
+      }
+      // A no-wine result with no candidates either (audit L-7): the branch
+      // above only covers the candidates case, so this fell through to
+      // `wineDoc.name` and threw a 500. bulk.js:224 already handles it as a
+      // failure rather than a crash — mirror that.
+      if (!result.wine) {
+        return fail('unavailable', 'The registry could not resolve or create that wine — retry, or pick a wine_id with resolve_wine.');
       }
       wineDoc = result.wine;
       wineCreated = !!result.created;

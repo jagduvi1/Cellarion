@@ -19,7 +19,7 @@ const Region = require('../models/Region');
 const Grape = require('../models/Grape');
 const Appellation = require('../models/Appellation');
 const searchService = require('./search');
-const { generateWineKey, normalizeString, normalizeAppellation, normalizeAppellationKey, stripTrailingVintage, resolveGrapeName, resolveCountryName, isRecognizedCountry, isUnknownName, isIdentitySentinel, isJunkGrapeName, sanitizeTaxonomyName } = require('../utils/normalize');
+const { generateWineKey, pendingProducerKey, pendingWineKey, normalizeString, normalizeAppellation, normalizeAppellationKey, stripTrailingVintage, resolveGrapeName, resolveCountryName, isRecognizedCountry, isUnknownName, isIdentitySentinel, isJunkGrapeName, sanitizeTaxonomyName } = require('../utils/normalize');
 const { scoreAllMatches } = require('./wineMatching');
 const { canonicalizeWineName } = require('../utils/producerPrefix');
 const { computeCanonicalKey, canonicalSiblingPrefix } = require('../utils/wineIdentity');
@@ -42,20 +42,11 @@ const POPULATE = ['country', 'region', 'grapes'];
 
 // ── Pending identity ─────────────────────────────────────────────────────────
 //
-// The producer segment a pending (producerless) row keys under. Built by
-// STRING CONCATENATION, deliberately NOT through generateWineKey: normalizeString
-// emits [a-z0-9 ] only — it strips '~' — so a segment containing '~' is one no
-// real producer can ever produce, which is what makes the pending key namespace
-// provably disjoint from the ordinary one under the UNIQUE normalizedKey index.
-// The creator id in the segment is what stops two users' identical producerless
-// adds from colliding (one would otherwise inherit the other's row via the
-// E11000 recovery), while making the SAME user's retry key identically and
-// resolve to their own row instead of minting again.
-// See the pendingIdentity field note on models/WineDefinition.js.
-const PENDING_KEY_PREFIX = 'pending~';
-const pendingProducerKey = (userId) => `${PENDING_KEY_PREFIX}${String(userId)}`;
-const pendingWineKey = (name, userId, appellation = '') =>
-  `${pendingProducerKey(userId)}:${normalizeString(name)}:${normalizeString(appellation)}`;
+// The pending key namespace (PENDING_KEY_PREFIX / pendingProducerKey /
+// pendingWineKey) now lives in utils/normalize.js, beside generateWineKey — the
+// curation queue (services/pendingWineOps) has to build the same key and must
+// not drag this module's dependency tree along to do it. Re-exported below, so
+// existing importers are unchanged.
 
 // ── Taxonomy helpers ─────────────────────────────────────────────────────────
 
@@ -447,6 +438,18 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // always have, byte-identical messages included — the deliberate
   // shared-registry curation surfaces must keep being told.
   let producerNorm = normalizeString(trimmedProducer);
+  // KNOWN LIMIT — a NON-LATIN producer ("Мукузани", "獺祭", "ქართული ღვინო")
+  // reaches this gate with producerNorm === '' and is therefore filed pending,
+  // even though isIdentitySentinel now correctly says it is real information
+  // (security audit H-4). That is deliberate for now, not an oversight: the
+  // registry's normalizedKey is `normalizeString(producer):…`, so STORING such
+  // a producer would key it as `:<name>:<appellation>` — indistinguishable from
+  // every other non-Latin producer of a same-named wine, and the E11000
+  // recovery below would then silently attach one user's wine to another's.
+  // The pending namespace is per-creator and has no such collision. Promotion
+  // works correctly (the model hook consults isIdentitySentinel alone), so a
+  // curator CAN complete these rows; storing the original at mint needs a
+  // script-aware key namespace, which is a registry-wide change.
   if (!producerMissing && producerNorm.length < 2) {
     if (!allowPending) {
       const err = new Error(`"${trimmedProducer}" is not a usable producer name`);

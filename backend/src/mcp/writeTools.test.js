@@ -23,7 +23,7 @@ jest.mock('../models/Bottle', () => ({
 jest.mock('../models/Rack', () => ({ find: jest.fn(), findOne: jest.fn(), countDocuments: jest.fn(), updateMany: jest.fn() }));
 jest.mock('../models/WishlistItem', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/JournalEntry', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
-jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn() }));
+jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn(), findOne: jest.fn() }));
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineEmbedding', () => ({ findOne: jest.fn() }));
 jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn(), deleteOne: jest.fn(() => Promise.resolve({})) }));
@@ -163,7 +163,9 @@ describe('add_bottle', () => {
 
   test('existing wine_id: no findOrCreateWine call, no wine.create audit', async () => {
     ownCellar();
-    WineDefinition.findById.mockReturnValue(chain({ _id: oid('f'), name: 'Known', producer: 'P', grapes: [] }));
+    // findOne, not findById: the wine_id branch goes through
+    // services/wineVisibility, so a stranger's pending row is not_found (M-4).
+    WineDefinition.findOne.mockReturnValue(chain({ _id: oid('f'), name: 'Known', producer: 'P', grapes: [] }));
     bottleOps.addBottle.mockResolvedValue({ bottle: { _id: oid('d'), vintage: 'NV', cellar: oid('c') } });
     const body = parse(await tool('add_bottle').handler({ cellar_id: oid('c'), wine_id: oid('f') }, CTX));
     expect(body.data.wine_created).toBe(false);

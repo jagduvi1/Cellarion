@@ -244,3 +244,41 @@ describe('bounds on model output', () => {
     expect(persisted().description).toHaveLength(1000);
   });
 });
+
+/**
+ * M-3 (pending-identity security audit) — a pendingIdentity row is never
+ * enriched. embeddingJob was gated for exactly this in the same PR and
+ * enrichmentJob was not, so the AI was asked to describe a wine whose producer
+ * is '' and whose region is often the misplaced string that made it pending.
+ * Worse, services/bottleOps fires enrichWineById on EVERY bottle add with the
+ * adder as budgetUserId — so the very add that MINTED the pending row spent
+ * that user's daily AI budget on it, and the output would have surfaced as the
+ * registry's tasting note the moment a curator promoted the wine.
+ */
+describe('pendingIdentity rows are never enriched', () => {
+  const { tryDebitAi } = require('./aiBudget');
+
+  test('enrichWineById returns before calling the model or debiting the budget', async () => {
+    WineDefinition.findById.mockReturnValue(chain({
+      _id: WINE_ID, name: 'Kaefferkopf', producer: '', pendingIdentity: true,
+      country: { name: 'France' }, region: null, grapes: [],
+    }));
+    tryDebitAi.mockResolvedValue({ ok: true, refund: jest.fn() });
+
+    await enrichWineById(WINE_ID, { budgetUserId: 'b'.repeat(24) });
+
+    expect(suggestProfile).not.toHaveBeenCalled();
+    expect(tryDebitAi).not.toHaveBeenCalled();
+    expect(WineDefinition.updateOne).not.toHaveBeenCalled();
+  });
+
+  test('the gate is narrow: an ordinary unenriched wine is still processed', async () => {
+    tryDebitAi.mockResolvedValue({ ok: true, refund: jest.fn() });
+    suggestProfile.mockResolvedValue(profile('Bright and fresh.'));
+
+    await enrichWineById(WINE_ID, { budgetUserId: 'b'.repeat(24) });
+
+    expect(suggestProfile).toHaveBeenCalled();
+    expect(WineDefinition.updateOne).toHaveBeenCalled();
+  });
+});

@@ -426,7 +426,14 @@ router.post('/', requireAuth, requireNonDemo, async (req, res) => {
     // to a real ObjectId before it touches the query (clears taint tracking).
     const wineOid = wineDefinition ? new mongoose.Types.ObjectId(String(wineDefinition)) : null;
     if (wineOid) {
-      const wineExists = await WineDefinition.exists({ _id: wineOid });
+      // ABSOLUTE pendingIdentity gate — not the creator-aware one. A discussion
+      // is anonymously readable (optionalAuth), its wine is populated into the
+      // response, baked into the anonymously-searchable discussion Meili index
+      // and rendered for CRAWLERS by routes/og.js. So even the row's own
+      // creator must not be able to publish it: attaching is what would make a
+      // hidden half-identified wine public (security audit). Refused at WRITE
+      // time, which closes every downstream read path at once.
+      const wineExists = await WineDefinition.exists({ _id: wineOid, pendingIdentity: { $ne: true } });
       if (!wineExists) return res.status(400).json({ error: 'Wine not found' });
     }
 
@@ -710,7 +717,11 @@ router.post('/:idOrSlug/replies', requireAuth, requireNonDemo, async (req, res) 
     // Validate wine reference if provided
     let validWineId = null;
     if (wineDefId && isValidId(wineDefId)) {
-      const wine = await WineDefinition.findById(wineDefId).select('_id');
+      // Same absolute gate as the create path above — a reply's wine chip is
+      // rendered to anonymous readers and to crawlers too. This path drops an
+      // unusable id silently (it always has), so a pending one just doesn't
+      // attach rather than failing the reply.
+      const wine = await WineDefinition.findOne({ _id: wineDefId, pendingIdentity: { $ne: true } }).select('_id');
       if (wine) validWineId = wine._id;
     }
 

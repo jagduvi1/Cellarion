@@ -3,6 +3,7 @@ const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
 const WineRequest = require('../models/WineRequest');
 const WineDefinition = require('../models/WineDefinition');
+const { findVisibleWine } = require('../services/wineVisibility');
 const { createWineRequest } = require('../services/accountOps');
 
 const router = express.Router();
@@ -29,7 +30,12 @@ router.post('/', requireNonDemo, async (req, res) => {
       if (typeof linkedWineDefinition !== 'string' || !/^[0-9a-fA-F]{24}$/.test(linkedWineDefinition)) {
         return res.status(400).json({ error: 'Invalid linkedWineDefinition id' });
       }
-      const wine = await WineDefinition.findById(linkedWineDefinition);
+      // Visible-to-this-user, not merely existing (services/wineVisibility) —
+      // otherwise a grape suggestion is a probe that confirms a stranger's
+      // pending row exists, and copies its name into the admin queue.
+      const wine = await findVisibleWine(linkedWineDefinition, {
+        userId: req.user.id, roles: req.user.roles,
+      });
       if (!wine) return res.status(404).json({ error: 'Wine not found' });
 
       const wineRequest = new WineRequest({

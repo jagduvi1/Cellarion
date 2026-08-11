@@ -2,6 +2,7 @@ const express = require('express');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const Recommendation = require('../models/Recommendation');
 const WineDefinition = require('../models/WineDefinition');
+const { findVisibleWine } = require('../services/wineVisibility');
 const User = require('../models/User');
 const Follow = require('../models/Follow');
 const { logAudit } = require('../services/audit');
@@ -94,10 +95,16 @@ router.post('/', requireNonDemo, async (req, res) => {
     // Validate note length
     const trimmedNote = (note || '').trim().slice(0, 500);
 
-    // Validate wine exists
-    const wine = await WineDefinition.findById(wineId)
-      .select('name producer appellation country region image')
-      .lean();
+    // Validate wine exists AND is visible. This route EMAILS the wine's name to
+    // an arbitrary third-party address, so a pending row reaching it would put
+    // a hidden half-identified wine in a stranger's inbox — outside the app
+    // entirely, where no later gate can take it back (security audit M-4).
+    const wine = await findVisibleWine(wineId, {
+      userId: req.user.id,
+      roles: req.user.roles,
+      select: 'name producer appellation country region image',
+      lean: true,
+    });
     if (!wine) return res.status(404).json({ error: 'Wine not found' });
 
     let recipientUser = null;

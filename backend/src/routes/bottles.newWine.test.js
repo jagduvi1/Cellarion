@@ -53,7 +53,7 @@ jest.mock('../utils/vintageProfile', () => ({
 }));
 
 jest.mock('../models/Cellar', () => ({ findById: jest.fn() }));
-jest.mock('../models/WineDefinition', () => ({ findById: jest.fn() }));
+jest.mock('../models/WineDefinition', () => ({ findById: jest.fn(), findOne: jest.fn() }));
 jest.mock('../models/Rack', () => ({ updateMany: jest.fn() }));
 jest.mock('../models/Country', () => ({}));
 jest.mock('../models/Region', () => ({}));
@@ -174,7 +174,10 @@ describe('POST /api/bottles — wine reference contract', () => {
   });
 
   test('the by-id path is untouched: loads the wine, never calls findOrCreateWine, never audits wine.create', async () => {
-    WineDefinition.findById.mockResolvedValue(WINE_DOC);
+    // findOne, not findById: the by-id path resolves through
+    // services/wineVisibility so a stranger's pendingIdentity row answers the
+    // same 404 a missing id does (security audit M-4).
+    WineDefinition.findOne.mockResolvedValue(WINE_DOC);
 
     const { status, body } = await post({ cellar: CELLAR_ID, vintage: '2019', wineDefinition: WINE_ID });
 

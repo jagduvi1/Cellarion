@@ -170,7 +170,10 @@ registerTool({
 
     const [list, wine] = await Promise.all([
       WineList.findOne({ _id: args.list_id, user: ctx.user.id }),
-      WineDefinition.findById(args.wine_id).populate('country region'),
+      // ABSOLUTE pendingIdentity gate, matching the REST PUT: a wine list can
+      // be published, and routes/wineListPublic.js serves it with no auth — so
+      // not even the pending row's own creator may put it on one.
+      WineDefinition.findOne({ _id: args.wine_id, pendingIdentity: { $ne: true } }).populate('country region'),
     ]);
     if (!list) return fail('not_found', 'No such wine list. Use list_wine_lists for valid ids.');
     if (!wine) return fail('not_found', 'No such registry wine. Find the wine_id via search_registry or a bottle\'s wine.');

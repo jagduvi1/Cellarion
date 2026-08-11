@@ -254,6 +254,25 @@ const normalizeProducerKey = (producer) => {
     .trim();
 };
 
+// The producer segment a PENDING (producerless) wine keys under. Built by
+// STRING CONCATENATION, deliberately NOT through generateWineKey: normalizeString
+// emits [a-z0-9 ] only — it strips '~' — so a segment containing '~' is one no
+// real producer can ever produce, which is what makes the pending key namespace
+// provably disjoint from the ordinary one under the UNIQUE normalizedKey index.
+// The creator id in the segment is what stops two users' identical producerless
+// adds from colliding, while making the SAME user's retry key identically and
+// resolve to their own row instead of minting again.
+//
+// Lives here, beside generateWineKey, because BOTH the resolver
+// (services/findOrCreateWine) and the curation queue (services/pendingWineOps)
+// must agree on it — and normalize.js has no dependencies, so neither module
+// has to drag the other's dependency tree (or mock it) to build a key.
+// See the pendingIdentity field note on models/WineDefinition.js.
+const PENDING_KEY_PREFIX = 'pending~';
+const pendingProducerKey = (userId) => `${PENDING_KEY_PREFIX}${String(userId)}`;
+const pendingWineKey = (name, userId, appellation = '') =>
+  `${pendingProducerKey(userId)}:${normalizeString(name)}:${normalizeString(appellation)}`;
+
 /**
  * Generate a normalized key for wine deduplication
  * Combines producer + wine name + appellation
@@ -785,14 +804,42 @@ const IDENTITY_SENTINEL_RX =
   /^(unknown|unbekannt|inconnu|inconnue|okand|na|none|no producer|producer unknown|domaine unknown|unknown producer|unknown winery)$/;
 
 /**
+ * Letters or digits that survive diacritic folding but that `normalizeString`
+ * cannot represent — i.e. a script outside its `[a-z0-9 ]` output. "Ø" and "é"
+ * fold to ASCII and are NOT counted; Cyrillic, Greek, Georgian, Han, Kana,
+ * Hebrew, Arabic and Devanagari are.
+ *
+ * The point: normalizeString returning '' is only evidence of "no information"
+ * for a Latin-script value. For "Мукузани" the empty key is a limit of the KEY,
+ * not a statement about the producer.
+ */
+const hasNonLatinAlnum = (str) =>
+  /[\p{L}\p{N}]/u.test(
+    str.normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')  // fold diacritics first — "Château" is Latin
+      .replace(/[\u0000-\u007f]/g, '')  // drop everything normalizeString can see
+  );
+
+/**
  * True when an identity string carries no real information — empty, whitespace,
  * punctuation-only, or one of the sentinels above. Used by the pending-identity
  * mint path (services/findOrCreateWine) to decide "this producer is MISSING,
  * not wrong", and by the WineDefinition auto-promote hook to decide when a
  * pending row has become a complete identity.
+ *
+ * UNICODE-AWARE, and it has to be (security audit): normalizeString strips
+ * every non-ASCII letter, so "Мукузани", "ქართული ღვინო", "獺祭" and "Δομαίν"
+ * all normalized to '' and read as MISSING. That discarded the producer the
+ * user actually typed at mint time and — worse — made the row unpromotable,
+ * because a curator typing the producer exactly as printed on the label hit
+ * this same predicate in the auto-promote hook and the wine stayed hidden
+ * forever. Any letter or number in ANY script is real information.
  */
 const isIdentitySentinel = (value) => {
   if (typeof value !== 'string') return true;
+  // Checked BEFORE the fold, so a mixed value ("Unknown Мукузани") is judged on
+  // what it contains rather than on the Latin fragment that survives.
+  if (hasNonLatinAlnum(value)) return false;
   const key = normalizeString(value);
   return key === '' || IDENTITY_SENTINEL_RX.test(key);
 };
@@ -845,6 +892,9 @@ module.exports = {
   slugify,
   tokenize,
   generateWineKey,
+  PENDING_KEY_PREFIX,
+  pendingProducerKey,
+  pendingWineKey,
   generateWineSlug,
   GRAPE_SYNONYMS,
   normalizeProducerKey,

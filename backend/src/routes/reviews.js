@@ -4,6 +4,7 @@ const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const Review = require('../models/Review');
 const ReviewVote = require('../models/ReviewVote');
 const WineDefinition = require('../models/WineDefinition');
+const { findVisibleWine } = require('../services/wineVisibility');
 const User = require('../models/User');
 const Follow = require('../models/Follow');
 const { resolveRating } = require('../utils/ratingUtils');
@@ -51,8 +52,11 @@ router.post('/', requireNonDemo, async (req, res) => {
       return res.status(400).json({ error: 'Invalid bottle ID' });
     }
 
-    // Validate wine exists
-    const wine = await WineDefinition.findById(wineDefinition);
+    // Validate wine exists AND is visible to this user — a pendingIdentity row
+    // is a wine nobody but its creator and curation may see, so for everyone
+    // else "exists" must answer the same 404 a missing id does
+    // (services/wineVisibility, security audit M-4).
+    const wine = await findVisibleWine(wineDefinition, { userId: req.user.id, roles: req.user.roles });
     if (!wine) {
       return res.status(404).json({ error: 'Wine not found' });
     }

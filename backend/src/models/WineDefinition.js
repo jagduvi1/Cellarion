@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const mongoose = require('mongoose');
 const { generateWineSlug, isIdentitySentinel } = require('../utils/normalize');
 const { computeCanonicalKey } = require('../utils/wineIdentity');
@@ -397,20 +398,59 @@ wineDefinitionSchema.pre('validate', function(next) {
   next();
 });
 
-// Auto-generate slug for new wines when missing. On collision the caller (the
-// findOrCreateWine flow) appends a -2/-3 suffix; the migration script does the
-// same when backfilling. Existing slugs are never overwritten — URL stability.
-wineDefinitionSchema.pre('save', async function(next) {
-  if (this.slug || !this.isNew) return next();
-  const base = generateWineSlug(this.name, this.producer);
-  if (!base) return next();
+/**
+ * Does this document get a slug on THIS save?
+ *
+ * A static (not an inline condition) so the rule can be tested without a live
+ * connection — the audit's M-5 was a rule nobody could see fire.
+ *
+ * - Never overwrite an existing slug. URL stability.
+ * - A pendingIdentity row gets NO slug — SLUG SQUATTING (security audit M-5).
+ *   The slug is derived from name+producer, and a pending row's producer is ''
+ *   — so a row minted from a half-read "Cloudy Bay Sauvignon Blanc" label took
+ *   /wines/cloudy-bay-sauvignon-blanc and served a 404 there to everyone
+ *   (pending rows are excluded from every public read), while the REAL wine was
+ *   pushed onto `-2`. Nothing ever reclaimed it: the old guard also returned
+ *   early for every non-new doc, so promotion never regenerated.
+ * - Create, or the save that PROMOTES a pending row — which is exactly when the
+ *   wine first deserves a public URL. pre-validate has already flipped the flag
+ *   by the time the save hook runs, so isModified is how promotion is spotted.
+ * - A slugless LEGACY row is left alone: backfilling those belongs to the
+ *   migration script, not to whatever write happens to touch them next.
+ */
+wineDefinitionSchema.statics.shouldAssignSlug = function (doc) {
+  if (doc.slug) return false;
+  if (doc.pendingIdentity === true) return false;
+  return Boolean(doc.isNew || doc.isModified('pendingIdentity'));
+};
+
+/**
+ * First free slug for `base`, disambiguating with -2, -3, … as the
+ * findOrCreateWine flow and the backfill migration do.
+ *
+ * The old loop `for (let i = 2; i < 100; i++)` fell through SILENTLY when all
+ * 98 suffixes were taken: it assigned its last candidate without ever checking
+ * it, i.e. a known-colliding slug against a unique index — a write failure at
+ * the very end of a bottle add. A random suffix ends it in one step, and is
+ * still checked, so every return from here carries the same guarantee.
+ */
+wineDefinitionSchema.statics.findFreeSlug = async function (base) {
+  const taken = async (slug) => Boolean(await this.findOne({ slug }).select('_id').lean());
   let candidate = base;
   for (let i = 2; i < 100; i++) {
-    const collision = await this.constructor.findOne({ slug: candidate }).select('_id').lean();
-    if (!collision) break;
+    if (!await taken(candidate)) return candidate;
     candidate = `${base}-${i}`;
   }
-  this.slug = candidate;
+  if (!await taken(candidate)) return candidate;
+  return `${base}-${crypto.randomBytes(4).toString('hex')}`;
+};
+
+// Auto-generate the slug when the rules above say this save earns one.
+wineDefinitionSchema.pre('save', async function(next) {
+  if (!this.constructor.shouldAssignSlug(this)) return next();
+  const base = generateWineSlug(this.name, this.producer);
+  if (!base) return next();
+  this.slug = await this.constructor.findFreeSlug(base);
   next();
 });
 

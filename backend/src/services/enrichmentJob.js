@@ -184,7 +184,15 @@ async function runJob(cfg) {
     // already safe (a corrected row has a description), so this only bites in
     // full mode — which is exactly the mode that would have destroyed the
     // most work. See WineDefinition.aiProfile.source.
-    const keepCurated = { 'aiProfile.source': { $ne: 'curator' } };
+    // A pendingIdentity row is never enriched — the SAME rule embeddingJob
+    // carries, and it was missed here (security audit M-3). Its producer is ''
+    // and its region is often the misplaced string that made it pending, so
+    // the model would be asked to describe a wine nobody has identified yet:
+    // an AI spend on a row strangers cannot see, whose output would then be
+    // presented as the registry's tasting note the moment it is promoted.
+    // The promoting write re-enriches (runPromotionFollowThrough), which is
+    // when the wine genuinely enters.
+    const keepCurated = { 'aiProfile.source': { $ne: 'curator' }, pendingIdentity: { $ne: true } };
     const filter = job.mode === 'full'
       ? keepCurated
       : {
@@ -357,6 +365,11 @@ async function enrichWineById(wineDefId, { budgetUserId } = {}) {
       .populate('grapes', 'name')
       .lean();
     if (!wine) return;
+    // Same rule as the batch filter above, and it matters MORE here: this is
+    // the fire-and-forget call services/bottleOps.js makes on every bottle add,
+    // so without it the very add that mints a pending row would immediately
+    // spend the adding user's daily AI budget describing a producerless wine.
+    if (wine.pendingIdentity === true) return;
     if (wine.aiProfile && wine.aiProfile.description) return; // already enriched
     if (wine.aiProfile && wine.aiProfile.source === 'curator') return; // hand-corrected — never regenerate
 

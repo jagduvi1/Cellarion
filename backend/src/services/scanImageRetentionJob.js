@@ -51,7 +51,19 @@ async function runScanImageRetentionSweep() {
       console.warn('[scanImageRetention] unlink failed (continuing):', err.message);
     }
   }
-  const res = await BottleImage.deleteMany({ _id: { $in: stale.map((i) => i._id) } });
+  // The selection predicate is REPEATED in the delete (audit L-1). Between the
+  // find above and this delete, a second bottle of the same unidentified wine
+  // can attach one of these scans (services/wineCommit.attachScanImage stamps
+  // it on the wine) — deleting by id alone would then drop the row a live
+  // WineDefinition.scanImage points at. Re-asserting the filter makes the
+  // delete a no-op for any row that stopped being unattached.
+  const res = await BottleImage.deleteMany({
+    _id: { $in: stale.map((i) => i._id) },
+    kind: 'label-scan',
+    wineDefinition: null,
+    bottle: null,
+    createdAt: { $lt: cutoff },
+  });
   const deleted = res.deletedCount || 0;
   if (deleted > 0) {
     console.log(

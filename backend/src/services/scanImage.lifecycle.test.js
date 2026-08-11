@@ -148,7 +148,16 @@ describe('runScanImageRetentionSweep', () => {
 
     // Files first: the doc is the only reference to the file on disk.
     expect(unlinkImageFiles).toHaveBeenCalledWith(stale[0]);
-    expect(BottleImage.deleteMany).toHaveBeenCalledWith({ _id: { $in: ['i1'] } });
+    // The delete REPEATS the selection predicate (audit L-1): between the find
+    // and the delete a second bottle of the same unidentified wine can attach
+    // one of these scans, and deleting by id alone would drop a row a live
+    // WineDefinition.scanImage points at.
+    const del = BottleImage.deleteMany.mock.calls[0][0];
+    expect(del._id).toEqual({ $in: ['i1'] });
+    expect(del.kind).toBe('label-scan');
+    expect(del.wineDefinition).toBeNull();
+    expect(del.bottle).toBeNull();
+    expect(del.createdAt.$lt).toBeInstanceOf(Date);
     expect(res.deleted).toBe(1);
   });
 

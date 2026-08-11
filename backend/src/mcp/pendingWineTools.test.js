@@ -222,8 +222,10 @@ describe('get_pending_wine_images — the point of the feature', () => {
       expect(typeof img.data).toBe('string');
       expect(Buffer.from(img.data, 'base64').toString()).toBe('downscaled-jpeg-bytes');
     }
-    // The scanned LABEL is the primary evidence and comes first.
-    expect(parse(res).data.images[0]).toEqual({ image_id: String(SCAN), kind: 'label-scan' });
+    // The scanned LABEL is the primary evidence and comes first. `private`
+    // rides along (audit M-1): these are the owner's own photos, released to
+    // curation for one purpose, and the payload says so.
+    expect(parse(res).data.images[0]).toEqual({ image_id: String(SCAN), kind: 'label-scan', private: true });
   });
 
   test('downscales server-side to <=1024px on the longest edge, never enlarging', async () => {
@@ -257,6 +259,56 @@ describe('get_pending_wine_images — the point of the feature', () => {
 
     const res = await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX);
     expect(parse(res).error.code).toBe('unavailable');
+  });
+
+  /**
+   * M-1 (security audit) — this tool ships other people's PRIVATE bottle photos
+   * as base64 to an EXTERNAL model. The only thing that justifies it is a
+   * curator reading a label they have been asked to identify, so the wine must
+   * still be pending. Without the gate any somm token could pull the private
+   * gallery of ANY wine in the registry. The REST sibling (routes/images.js)
+   * always required pendingIdentity: true; this is the parity fix.
+   */
+  describe('M-1 — only PENDING wines release their owners\' photos', () => {
+    const primeNonPending = () => {
+      WineDefinition.findById.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          lean: jest.fn().mockResolvedValue({
+            _id: W1, name: 'Barolo', producer: 'Rinaldi', pendingIdentity: false, scanImage: SCAN,
+          }),
+        }),
+      });
+    };
+
+    test('a COMPLETED wine is refused — its photos are private, not curation evidence', async () => {
+      primeNonPending();
+
+      const res = await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX);
+      const body = parse(res);
+
+      expect(body.error.code).toBe('conflict');
+      expect(body.error.message).toMatch(/not in the pending-identity queue/);
+    });
+
+    test('no image is read from disk for a completed wine', async () => {
+      primeNonPending();
+      fs.promises.readFile.mockClear();
+
+      await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX);
+
+      expect(fs.promises.readFile).not.toHaveBeenCalled();
+      expect(BottleImage.find).not.toHaveBeenCalled();
+    });
+
+    test('the payload marks the photos PRIVATE and says what they may be used for', async () => {
+      primeWine();
+
+      const res = await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX);
+      const body = parse(res);
+
+      expect(body.data.images.every((i) => i.private === true)).toBe(true);
+      expect(body.data.guidance).toMatch(/private photos/i);
+    });
   });
 });
 

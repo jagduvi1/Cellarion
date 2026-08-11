@@ -27,7 +27,10 @@ const WineDefinition = require('../models/WineDefinition');
 const BottleImage = require('../models/BottleImage');
 const Bottle = require('../models/Bottle');
 const Country = require('../models/Country');
-const { generateWineKey, normalizeAppellation, normalizeString, resolveCountryName } = require('../utils/normalize');
+// pendingWineKey comes from utils/normalize (beside generateWineKey), NOT from
+// services/findOrCreateWine: one definition of the key shape, and no dependency
+// from the curation queue onto the resolver's module tree to build a string.
+const { generateWineKey, pendingWineKey, normalizeAppellation, normalizeString, resolveCountryName, isIdentitySentinel } = require('../utils/normalize');
 const { resolveGrapeIdsStrict, GRAPES_MAX, GRAPE_NAME_MAX, WINE_TYPES } = require('./wineProfileOps');
 
 // Fields a curator may set. `producer` and `name` are the two that promote the
@@ -294,8 +297,20 @@ async function applyPendingFix(wine, clean, userId) {
   // name/producer/appellation. Regenerating it here is also what moves a
   // promoted row OUT of the pending key namespace (pending~<creator>:…) and
   // into the ordinary one, where the unique index re-checks it.
+  //
+  // …but ONLY when the row is actually leaving. `wine.pendingIdentity` is still
+  // true at this point (the pre-validate hook flips it during save below), so
+  // this must PREDICT the hook with the hook's own predicate rather than read
+  // the flag. Using generateWineKey unconditionally dropped the creator id out
+  // of a STILL-PENDING row's key (security audit M-2), breaking the documented
+  // namespace invariant: two curator-renamed pending rows by different users
+  // could then land on the same ordinary key and E11000 into a "merge them
+  // instead" 409 that is simply false.
   if (clean.name || clean.producer || clean.appellation !== undefined) {
-    wine.normalizedKey = generateWineKey(wine.name, wine.producer, wine.appellation);
+    const willPromote = !isIdentitySentinel(wine.producer) && !isIdentitySentinel(wine.name);
+    wine.normalizedKey = willPromote
+      ? generateWineKey(wine.name, wine.producer, wine.appellation)
+      : pendingWineKey(wine.name, wine.createdBy, wine.appellation);
   }
 
   // The pre-validate hook promotes; read the outcome rather than deciding it.
@@ -356,6 +371,11 @@ async function runPromotionFollowThrough(wine) {
     .catch((err) => console.error('Bottle re-index after pending promotion failed:', err.message));
   // Never embedded while pending — embed now, for the vintages that exist.
   require('./embeddingJob').reembedActiveVintages(wine._id).catch(() => {});
+  // Never enriched while pending either (services/enrichmentJob) — the wine now
+  // HAS a producer, so a tasting profile can finally be about something. No
+  // budgetUserId: this is curation work, not a user action, so it is not
+  // debited to whoever happened to add the bottle.
+  require('./enrichmentJob').enrichWineById(wine._id).catch?.(() => {});
   // The maturity queue refused to seed this wine while pending; seed it from
   // the bottles that are already in cellars, so the drink windows the owners
   // are waiting for finally get curated.

@@ -12,8 +12,40 @@ const { generateWineListPdf } = require('../services/wineListPdf');
 const { stripImageMetadata } = require('../services/imageSanitizer');
 const { loadWineMap, loadCellarWines, entryKey, allEntries } = require('../services/wineListData');
 const { LOGO_DIR, ensureLogoDir, deleteLogoFile, copyLogoFile } = require('../services/wineListLogos');
+const WineDefinition = require('../models/WineDefinition');
 
 const router = express.Router();
+
+/** Every distinct wine id referenced by a list, in any structure mode. */
+const entryWineIds = (wineList) =>
+  new Set(allEntries(wineList).filter(e => e.wine).map(e => String(e.wine)));
+
+/**
+ * Refuse to ADD a pendingIdentity wine to a wine list.
+ *
+ * ABSOLUTE, like the discussion gate and for the same reason: a list can be
+ * PUBLISHED, and routes/wineListPublic.js serves it with no auth — so attaching
+ * is the act that would make a hidden half-identified wine public. Enforced at
+ * WRITE time, which closes the public render, the PDF and the stats endpoint in
+ * one place.
+ *
+ * Only NEWLY referenced wines are checked. The PUT replaces sections wholesale,
+ * so judging the whole payload would soft-lock any list that already carried a
+ * pending row from before this gate existed — the owner could not even edit it
+ * to remove the entry. Rows already on the list are handled by the read-side
+ * exclusion in services/wineListData.loadWineMap, which drops them from every
+ * render; this gate stops the set from growing.
+ *
+ * @returns {Promise<string|null>} an error message, or null when the write is clean
+ */
+async function pendingWineAdded(wineList, previousIds) {
+  const added = [...entryWineIds(wineList)].filter(id => !previousIds.has(id));
+  if (!added.length) return null;
+  const pending = await WineDefinition.find({ _id: { $in: added }, pendingIdentity: true })
+    .select('name').limit(3).lean();
+  if (!pending.length) return null;
+  return `This wine is still waiting for its producer to be identified and can't go on a list that may be published: ${pending.map(w => w.name).join(', ')}`;
+}
 
 // --- Logo upload setup ---
 ensureLogoDir();
@@ -161,6 +193,10 @@ router.put('/:id', requireAuth, async (req, res) => {
     const wineList = await WineList.findOne({ _id: req.params.id, user: req.user.id });
     if (!wineList) return res.status(404).json({ error: 'Wine list not found' });
 
+    // Snapshot the wines already on the list BEFORE the payload overwrites
+    // sections — pendingWineAdded only judges what this write introduces.
+    const previousWineIds = entryWineIds(wineList);
+
     // Allowed update fields
     const fields = [
       'name', 'structureMode', 'language',
@@ -181,6 +217,9 @@ router.put('/:id', requireAuth, async (req, res) => {
       if (!wineList.branding) wineList.branding = {};
       wineList.branding.logoUrl = storedLogoUrl;
     }
+
+    const pendingMsg = await pendingWineAdded(wineList, previousWineIds);
+    if (pendingMsg) return res.status(400).json({ error: pendingMsg });
 
     await wineList.save();
     logAudit(req, 'winelist.update', { type: 'winelist', id: wineList._id, cellarId: wineList.cellar });
