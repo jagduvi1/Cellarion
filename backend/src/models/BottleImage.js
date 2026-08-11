@@ -52,6 +52,22 @@ const bottleImageSchema = new mongoose.Schema({
     enum: ['private', 'public'],
     default: 'public'
   },
+  // What this image IS, so the one collection can hold two things that must
+  // never be confused. 'bottle' (the default, and what every pre-existing row
+  // is) = a user's photo of their bottle: gallery-eligible, wine-image-
+  // eligible, public once approved. 'label-scan' = the original frame handed to
+  // the AI label scanner, kept ONLY so a curator working the pending-identity
+  // queue can read the label the extraction got wrong. A label-scan row is
+  // always visibility:'private', never has a `bottle`, is never assignedToWine,
+  // and therefore appears in no gallery and no public listing — the existing
+  // { status:'approved', visibility:'public' } gates already exclude it, and
+  // this field is what makes that intent explicit and queryable.
+  kind: {
+    type: String,
+    enum: ['bottle', 'label-scan'],
+    default: 'bottle',
+    index: true
+  },
   assignedToWine: {
     type: Boolean,
     default: false
@@ -80,6 +96,9 @@ bottleImageSchema.index({ bottle: 1, status: 1 });
 bottleImageSchema.index({ wineDefinition: 1, assignedToWine: 1 });
 // Dedup lookup on import: "does this user already have this exact image?"
 bottleImageSchema.index({ uploadedBy: 1, contentHash: 1 }, { sparse: true });
+// The 30-day unattached-scan sweep (services/scanImageRetentionJob.js) reads
+// exactly this shape: label scans that never reached a wine.
+bottleImageSchema.index({ kind: 1, wineDefinition: 1, createdAt: 1 });
 
 bottleImageSchema.pre('save', function(next) {
   this.updatedAt = Date.now();

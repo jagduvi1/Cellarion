@@ -158,7 +158,7 @@ registerTool({
       });
     }
 
-    const docs = await WineDefinition.find({ _id: { $in: ranked.map(([id]) => id) } })
+    const docs = await WineDefinition.find({ _id: { $in: ranked.map(([id]) => id) }, pendingIdentity: { $ne: true } })
       .select('name producer slug country region appellation classification grapes type communityRating')
       .populate(['country', 'region', 'grapes'])
       .lean();

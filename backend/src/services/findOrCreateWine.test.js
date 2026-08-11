@@ -626,6 +626,7 @@ describe('findOrCreateWine — creation', () => {
       normalizedKey: INPUT_KEY,
       createdBy: USER_ID,
       createdVia: null, // provenance default — 'mcp' only via the MCP write tools
+      pendingIdentity: false, // complete identity — nothing for a curator to finish
     });
     expect(result.created).toBe(true);
     expect(result.wine.save).toHaveBeenCalled();

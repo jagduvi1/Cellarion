@@ -37,7 +37,7 @@ const { clearTaxonomyListCache } = require('../taxonomy');
 async function wineCountsByRef(field) {
   const rows = await WineDefinition.aggregate([
     // Quarantined rows don't count as "in use" — mirror taxonomyReview.js.
-    { $match: { [field]: { $ne: null }, nonWine: { $ne: true } } },
+    { $match: { [field]: { $ne: null }, nonWine: { $ne: true }, pendingIdentity: { $ne: true } } },
     { $group: { _id: `$${field}`, n: { $sum: 1 } } },
   ]);
   return new Map(rows.map(r => [String(r._id), r.n]));
@@ -46,7 +46,7 @@ async function wineCountsByRef(field) {
 /** Map<grapeIdString, wineCount> (grapes is an array field). */
 async function wineCountsByGrape() {
   const rows = await WineDefinition.aggregate([
-    { $match: { nonWine: { $ne: true } } },
+    { $match: { nonWine: { $ne: true }, pendingIdentity: { $ne: true } } },
     { $unwind: '$grapes' },
     { $group: { _id: '$grapes', n: { $sum: 1 } } },
   ]);
@@ -60,7 +60,7 @@ async function wineCountsByGrape() {
  */
 async function wineCountsByAppellation() {
   const rows = await WineDefinition.aggregate([
-    { $match: { appellation: { $nin: [null, ''] }, nonWine: { $ne: true } } },
+    { $match: { appellation: { $nin: [null, ''] }, nonWine: { $ne: true }, pendingIdentity: { $ne: true } } },
     { $group: { _id: '$appellation', n: { $sum: 1 } } },
   ]);
   const map = new Map();

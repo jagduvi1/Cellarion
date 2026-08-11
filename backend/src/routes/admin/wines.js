@@ -320,7 +320,7 @@ router.get('/duplicate-clusters', async (req, res) => {
     // Quarantined non-wines are excluded: a whisky must never be offered as a
     // merge candidate against a wine (#844's stated contract, which this pool
     // was missed out of — code audit 2026-07-27, H3).
-    const wines = await WineDefinition.find({ nonWine: { $ne: true } })
+    const wines = await WineDefinition.find({ nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
       .select('name producer appellation image type country region')
       .populate('country', 'name')
       .populate('region', 'name')
@@ -682,7 +682,7 @@ router.get('/low-confidence', async (req, res) => {
     // Unknown now means "review me", which is also how the two rows already
     // sitting invisible in prod get seen.
     const base = {
-      nonWine: { $ne: true },
+      nonWine: { $ne: true }, pendingIdentity: { $ne: true },
       $or: [
         { 'aiProfile.confidence': null },
         { 'aiProfile.confidence': { $lte: threshold } },
@@ -770,11 +770,11 @@ router.get('/duplicates', async (req, res) => {
     // Both candidate queries exclude quarantined non-wines, same contract as
     // the other duplicate pools (code audit 2026-07-27, H3).
     const [textHits, regexHits] = await Promise.all([
-      WineDefinition.find({ $text: { $search: searchTerms }, nonWine: { $ne: true } })
+      WineDefinition.find({ $text: { $search: searchTerms }, nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
         .populate(['country', 'region', 'grapes'])
         .limit(CANDIDATE_LIMIT),
       WineDefinition.find({
-        nonWine: { $ne: true },
+        nonWine: { $ne: true }, pendingIdentity: { $ne: true },
         $or: [
           { name: new RegExp(escapeRegex(name.split(' ')[0]), 'i') },
           { producer: new RegExp(escapeRegex(producer.split(' ')[0]), 'i') }
@@ -872,7 +872,7 @@ router.get('/duplicates', async (req, res) => {
 // pre-backfill row and deserves a look.
 router.get('/canonical-collisions', async (req, res) => {
   try {
-    const wines = await WineDefinition.find({ canonicalKey: { $ne: null }, nonWine: { $ne: true } })
+    const wines = await WineDefinition.find({ canonicalKey: { $ne: null }, nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
       .select('name producer appellation type country canonicalKey createdAt createdVia')
       .populate('country', 'name')
       .lean();
@@ -981,7 +981,7 @@ router.get('/producer-in-name', async (req, res) => {
     // may be cleared for one rule and outstanding for another — and `total`
     // below is computed from flagged.length, so in-memory pagination stays
     // honest.
-    const all = await WineDefinition.find({ nonWine: { $ne: true } })
+    const all = await WineDefinition.find({ nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
       .select(`${NAME_CHECK_SELECT} createdAt verifiedAt`)
       .sort({ producer: 1, name: 1 })
       .lean();

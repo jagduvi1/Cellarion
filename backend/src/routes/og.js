@@ -440,8 +440,8 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
     // but left this detail page serving their title/OG/JSON-LD in full to
     // anything that had the URL (code audit 2026-07-27, M5).
     const filter = isId
-      ? { _id: idOrSlug, nonWine: { $ne: true } }
-      : { slug: String(idOrSlug).toLowerCase(), nonWine: { $ne: true } };
+      ? { _id: idOrSlug, nonWine: { $ne: true }, pendingIdentity: { $ne: true } }
+      : { slug: String(idOrSlug).toLowerCase(), nonWine: { $ne: true }, pendingIdentity: { $ne: true } };
 
     const wine = await WineDefinition.findOne(filter)
       .populate(['country', 'region', 'grapes'])
@@ -999,7 +999,7 @@ router.get('/regions/:slug', ogLimiter, async (req, res) => {
       .lean();
     if (!region) return res.status(404).send('Not found');
 
-    const wines = await WineDefinition.find({ region: region._id, nonWine: { $ne: true } })
+    const wines = await WineDefinition.find({ region: region._id, nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
       .select('name producer slug _id')
       .sort({ name: 1 })
       .limit(20)
@@ -1060,7 +1060,7 @@ router.get('/countries/:slug', ogLimiter, async (req, res) => {
       .lean();
     if (!country) return res.status(404).send('Not found');
 
-    const wines = await WineDefinition.find({ country: country._id, nonWine: { $ne: true } })
+    const wines = await WineDefinition.find({ country: country._id, nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
       .select('name producer slug _id')
       .sort({ name: 1 })
       .limit(20)
@@ -1110,7 +1110,7 @@ router.get('/grapes/:slug', ogLimiter, async (req, res) => {
       .lean();
     if (!grape) return res.status(404).send('Not found');
 
-    const wines = await WineDefinition.find({ grapes: grape._id, nonWine: { $ne: true } })
+    const wines = await WineDefinition.find({ grapes: grape._id, nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
       .select('name producer slug _id')
       .sort({ name: 1 })
       .limit(20)
@@ -1173,7 +1173,7 @@ router.get('/wine-types/:type', ogLimiter, async (req, res) => {
     const type = String(req.params.type).toLowerCase();
     if (!WINE_TYPES.includes(type)) return res.status(404).send('Not found');
 
-    const wines = await WineDefinition.find({ type, nonWine: { $ne: true } })
+    const wines = await WineDefinition.find({ type, nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
       .select('name producer slug _id')
       .sort({ name: 1 })
       .limit(20)

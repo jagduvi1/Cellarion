@@ -123,7 +123,7 @@ async function collectVintageEvidence(ids) {
 async function sameProducerAppellationGroups({ limit = 50, offset = 0 } = {}) {
   // Quarantined non-wines are excluded, same contract as every other
   // duplicate pool (code audit 2026-07-27, H3).
-  const wines = await WineDefinition.find({ nonWine: { $ne: true } })
+  const wines = await WineDefinition.find({ nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
     .select('name producer appellation')
     .lean();
 
@@ -225,7 +225,7 @@ async function sameProducerAppellationGroups({ limit = 50, offset = 0 } = {}) {
  *     producers: [{ producer, recordCount, sampleNames }] × 2 }
  */
 async function nearProducerPairs({ limit = 50, offset = 0 } = {}) {
-  const wines = await WineDefinition.find({ nonWine: { $ne: true } })
+  const wines = await WineDefinition.find({ nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
     .select('name producer appellation country')
     .lean();
 

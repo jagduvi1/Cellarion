@@ -382,15 +382,29 @@ async function resolveWine(item, userId, cache, result, demoMode = false) {
 
   try {
     const { wine, created, nearMiss } = await findOrCreateWine(
-      { name, producer: producer || name, country: item.country, region: item.region,
+      // producer is passed through AS GIVEN — no longer `producer || name`.
+      // That fallback fabricated a producer out of the wine's own name, which
+      // is precisely the junk identity the pending queue exists to catch: with
+      // allowPending a producerless row now files itself for curation instead
+      // of being minted as "Chardonnay — Chardonnay". Demo mode is matchOnly,
+      // so it never reaches the mint and can't create pending rows either.
+      { name, producer, country: item.country, region: item.region,
         appellation: item.appellation, type: item.type,
         grapes: Array.isArray(item.grapes) ? item.grapes : [] },
       userId,
-      { confirmCreate: true, matchOnly: demoMode, createdVia: 'import' } // demo: match existing only; else match >= 0.95 or create
+      // demo: match existing only; else match >= 0.95 or create. allowPending:
+      // a row the strict gates would refuse (no producer, geography in the
+      // producer column) still becomes a bottle — it just carries a wine a
+      // sommelier finishes, instead of silently degrading to a WineRequest the
+      // owner never hears about again.
+      { confirmCreate: true, matchOnly: demoMode, createdVia: 'import', allowPending: !demoMode }
     );
     if (wine) {
       if (created) {
         result.winesCreated++;
+        if (wine.pendingIdentity) {
+          result.pendingIdentityCount = (result.pendingIdentityCount || 0) + 1;
+        }
         // confirmCreate skips the soft-zone prompt by design (imports must not
         // stall) — but a creation that sailed past a >=0.85 candidate is the
         // exact shape that used to mint duplicates, so leave an audit trail
@@ -912,6 +926,9 @@ async function importCellar(userId, cellar, opts) {
     winesCreated: 0,
     winesSkipped: 0,
     wineRequests: 0,
+    // Subset of winesCreated whose identity was incomplete — the bottles are in
+    // the cellar, the wines are queued for a curator (pendingIdentity).
+    pendingIdentityCount: 0,
     reviewsCreated: 0,
     reviewsSkipped: 0,
     maturityCreated: 0,

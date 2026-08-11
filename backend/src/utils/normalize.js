@@ -769,6 +769,35 @@ const isUnknownName = (name) => {
 };
 
 /**
+ * Producer/name placeholders a user (or an import file, or a label the AI could
+ * not read) puts in the box when they simply do not know — "Unknown", "N/A",
+ * "-", "Domaine Unknown". They must never be STORED as a producer: every one of
+ * them would become a shared-registry producer other people's wines then match
+ * against (prod grew a producer literally named "Unknown" this way).
+ *
+ * Checked after normalizeString(), which lowercases, strips diacritics and
+ * drops punctuation — so "N/A" → "na", "Okänd" → "okand", and "-" / "?" → ""
+ * (caught by the empty check). Deliberately a SUPERSET of UNKNOWN_NAME_RX
+ * above: that one guards taxonomy minting, this one guards the wine's own
+ * identity fields and adds the two-word producer forms ("no producer").
+ */
+const IDENTITY_SENTINEL_RX =
+  /^(unknown|unbekannt|inconnu|inconnue|okand|na|none|no producer|producer unknown|domaine unknown|unknown producer|unknown winery)$/;
+
+/**
+ * True when an identity string carries no real information — empty, whitespace,
+ * punctuation-only, or one of the sentinels above. Used by the pending-identity
+ * mint path (services/findOrCreateWine) to decide "this producer is MISSING,
+ * not wrong", and by the WineDefinition auto-promote hook to decide when a
+ * pending row has become a complete identity.
+ */
+const isIdentitySentinel = (value) => {
+  if (typeof value !== 'string') return true;
+  const key = normalizeString(value);
+  return key === '' || IDENTITY_SENTINEL_RX.test(key);
+};
+
+/**
  * Grape names additionally reject descriptions-instead-of-varietals: the AI
  * sometimes returns hedges like "blend - specific varieties unknown",
  * "unknown - likely Riesling, Gewurztraminer, Pinot Gris, or Muscat" or
@@ -827,6 +856,7 @@ module.exports = {
   resolveCountryName,
   isRecognizedCountry,
   isUnknownName,
+  isIdentitySentinel,
   isJunkGrapeName,
   levenshteinDistance,
   calculateSimilarity,

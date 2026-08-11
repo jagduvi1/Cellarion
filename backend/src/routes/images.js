@@ -271,6 +271,33 @@ router.get('/:id', requireAuth, async (req, res) => {
       authorized = true;
     }
 
+    // Curation: a sommelier/admin working the pending-identity queue must be
+    // able to fetch the label scan and the owner's bottle photos of a wine
+    // whose identity they are being asked to complete — that is the entire
+    // point of keeping the scan. Deliberately the SMALLEST possible widening:
+    // only somm/admin, and only for an image tied to a wine that is still
+    // pending (or the label scan itself, which exists for no other purpose and
+    // is never public). It does NOT open ordinary users' bottle galleries to
+    // curators. The bytes themselves were always served by the unauthenticated
+    // random-UUID static mount (app.js), so this is the one gate that mattered.
+    if (!authorized && (req.user.roles?.includes('somm') || req.user.roles?.includes('admin'))) {
+      if (image.kind === 'label-scan') {
+        authorized = true;
+      } else {
+        // The photo may name the wine directly, or only the bottle it hangs
+        // off (the plain AddBottle upload path) — resolve both.
+        let wineId = image.wineDefinition;
+        if (!wineId && image.bottle) {
+          const b = await Bottle.findById(image.bottle).select('wineDefinition').lean();
+          wineId = b?.wineDefinition || null;
+        }
+        const WineDefinition = require('../models/WineDefinition');
+        if (wineId && await WineDefinition.exists({ _id: wineId, pendingIdentity: true })) {
+          authorized = true;
+        }
+      }
+    }
+
     // User owns the bottle this image is attached to, or has cellar access
     if (!authorized && image.bottle) {
       const bottle = await Bottle.findById(image.bottle);

@@ -174,6 +174,8 @@ describe('additive regression (items without grapes/drink windows)', () => {
       placed: 0,
       overflowed: 0,
       unplaced: [],
+      // Additive — 0 when every row's wine had a complete identity.
+      pendingIdentityCount: 0,
     });
 
     expect(Bottle.__instances).toHaveLength(1);

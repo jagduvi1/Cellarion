@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { generateWineSlug } = require('../utils/normalize');
+const { generateWineSlug, isIdentitySentinel } = require('../utils/normalize');
 const { computeCanonicalKey } = require('../utils/wineIdentity');
 
 const wineDefinitionSchema = new mongoose.Schema({
@@ -11,7 +11,11 @@ const wineDefinitionSchema = new mongoose.Schema({
   },
   producer: {
     type: String,
-    required: [true, 'Producer is required'],
+    // Conditionally required: a pendingIdentity row is EXACTLY the row whose
+    // producer could not be established, and it stores '' (see the field note
+    // on pendingIdentity below). Every other row keeps the hard requirement,
+    // so no ordinary write path can drop a producer by accident.
+    required: [function () { return this.pendingIdentity !== true; }, 'Producer is required'],
     trim: true,
     index: true
   },
@@ -193,6 +197,54 @@ const wineDefinitionSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // Pending identity: this row was minted at bottle-commit from an INCOMPLETE
+  // identity — no producer, a sentinel producer ("Unknown", "N/A"), or a
+  // geography typed into the producer box. The bottle saves instantly (that is
+  // the whole point — an add must never be harder), and the shared registry is
+  // protected by hiding the row from everyone except its creator and curation
+  // until a sommelier completes it. Every exclusion nonWine has, this has too:
+  // Meilisearch, public /api/wines reads, MCP registry tools, embeddings, the
+  // maturity queue, sitemap/OG, taxonomy listings and the admin scan pools.
+  //
+  // MISSING-PRODUCER REPRESENTATION (deliberate, do not "fix"): the stored
+  // producer is the EMPTY STRING, never a sentinel and never absent, and the
+  // normalizedKey's producer segment is `pending~<createdBy>` (see
+  // services/findOrCreateWine.pendingProducerKey). Three properties follow:
+  //   1. normalizeString() output is [a-z0-9 ] only — it strips '~' — so no
+  //      real producer can ever produce a segment containing '~'. The pending
+  //      namespace is provably disjoint from every non-pending key, and the
+  //      unique index on normalizedKey therefore cannot collide across them.
+  //   2. Two pending rows by different creators with the SAME name get
+  //      different keys (different creator ids) — no cross-creator E11000, so
+  //      one user's bottle can never be silently attached to another's
+  //      pending row.
+  //   3. The SAME creator re-submitting the same identity keys identically and
+  //      resolves to their own existing row — retry storms mint once, not N
+  //      times.
+  // On promotion the key is regenerated from the real producer by the normal
+  // generateWineKey path, so a promoted row lands in the ordinary namespace and
+  // the unique index re-checks it there.
+  pendingIdentity: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
+  // The original label photo this wine was minted from, kept so a curator can
+  // READ the label instead of guessing (the whole point of the pending queue).
+  // Curation-visible only — never public, never in a bottle gallery; the
+  // BottleImage carries kind:'label-scan' + visibility:'private'.
+  //
+  // GDPR: this introduces NO new consent category. Bottle photos are already a
+  // category the user consents to on upload, stored in the same collection with
+  // the same EXIF-stripping pipeline; this is one more image of the same kind,
+  // exported with the others in GET /api/users/me/export, deleted with the
+  // account (the pointer is nulled, never left dangling), and expired after
+  // 30 days when it was scanned but never committed to a wine.
+  scanImage: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'BottleImage',
+    default: null
+  },
   // Human data-quality review (support ticket 2026-07-26): the registry's
   // false-positive whitelist AND its skip-on-rescan record. Each entry is a
   // RULE ID from utils/nameChecks.js that an admin has read this wine and
@@ -303,6 +355,22 @@ wineDefinitionSchema.pre('save', function(next) {
 // field on an existing row (admin LWIN import wraps both in $ifNull, so it can
 // only fill them on upsert-insert).
 wineDefinitionSchema.pre('validate', function(next) {
+  // AUTO-PROMOTE. A pending row exists only because its identity was
+  // incomplete; the moment producer AND name are both real (present and not a
+  // sentinel like "Unknown"/"N/A") the reason to hide it is gone, so it leaves
+  // the queue by itself. Deliberately a hook, not a line in the somm route:
+  // every write path that completes the identity — the REST fix, the MCP fix, a
+  // future admin PUT, a backfill script using .save() — promotes identically
+  // and none of them can forget. Runs BEFORE the `required` validator on
+  // producer, whose condition reads this same flag.
+  //
+  // Index membership does NOT ride along here: mirroring nonWine, the caller
+  // that completes the identity calls searchService.indexWine(), which owns
+  // add-vs-remove. A promoting caller must also re-embed (the row was skipped
+  // by the embedding pipeline while pending) and re-seed its maturity rows.
+  if (this.pendingIdentity === true && !isIdentitySentinel(this.producer) && !isIdentitySentinel(this.name)) {
+    this.pendingIdentity = false;
+  }
   if (!this.canonicalKey || this.isModified('name') || this.isModified('producer') || this.isModified('appellation')) {
     this.canonicalKey = computeCanonicalKey(this.name, this.producer, this.appellation);
   }

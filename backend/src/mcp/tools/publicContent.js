@@ -31,8 +31,13 @@ registerTool({
     if (!isValidId(String(args.wine_id || ''))) {
       return fail('invalid_input', 'wine_id must be a 24-hex id from search_registry.');
     }
-    const wine = await WineDefinition.findById(args.wine_id).select('name producer type').lean();
-    if (!wine) return fail('not_found', 'No such registry wine. Use search_registry for valid ids.');
+    const wine = await WineDefinition.findById(args.wine_id).select('name producer type pendingIdentity').lean();
+    // Public tool, no caller identity to compare — a pendingIdentity row is not
+    // registry content yet (and has no reviewed maturity rows anyway, since it
+    // never enters the somm queue). Same not_found a missing id gets.
+    if (!wine || wine.pendingIdentity === true) {
+      return fail('not_found', 'No such registry wine. Use search_registry for valid ids.');
+    }
 
     const filter = { wineDefinition: wine._id, status: 'reviewed' };
     if (args.vintage) filter.vintage = String(args.vintage).trim();

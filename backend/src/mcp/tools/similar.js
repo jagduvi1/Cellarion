@@ -107,7 +107,7 @@ registerTool({
     // beyond it — say so instead of implying an exhaustive ranking.
     const possiblyMore = ranked.length < limit && hits.length >= FETCH;
 
-    const docs = await WineDefinition.find({ _id: { $in: ranked.map(([id]) => id) } })
+    const docs = await WineDefinition.find({ _id: { $in: ranked.map(([id]) => id) }, pendingIdentity: { $ne: true } })
       .select('name producer slug country region appellation classification grapes type communityRating')
       .populate(['country', 'region', 'grapes'])
       .lean();

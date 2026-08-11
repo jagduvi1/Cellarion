@@ -204,7 +204,9 @@ describe('POST /api/bottles — newWine mints at commit', () => {
     expect(fields).toMatchObject({ name: 'Kaefferkopf', producer: 'Cave de Kaysersberg', country: 'France' });
     expect(fields.grapes).toEqual(['Gewürztraminer']);
     expect(userId).toBe(USER_ID);
-    expect(opts).toEqual({ confirmCreate: false, skipSiblingMatch: false, createdVia: 'ui' });
+    // allowPending: the commit path files an incomplete identity instead of
+    // 400-ing the user's bottle away (pending-identity wines).
+    expect(opts).toEqual({ confirmCreate: false, skipSiblingMatch: false, createdVia: 'ui', allowPending: true });
 
     // audit parity with every other registry-write surface: same action name,
     // same detail shape — plus IndexNow on a real creation
@@ -233,7 +235,7 @@ describe('POST /api/bottles — newWine mints at commit', () => {
     await post({ cellar: CELLAR_ID, vintage: '2019', newWine: { ...NEW_WINE, confirmCreate: true } });
 
     expect(findOrCreateWine.mock.calls[0][2]).toEqual({
-      confirmCreate: true, skipSiblingMatch: true, createdVia: 'ui',
+      confirmCreate: true, skipSiblingMatch: true, createdVia: 'ui', allowPending: true,
     });
   });
 
@@ -279,8 +281,10 @@ describe('POST /api/bottles — newWine mints at commit', () => {
 
 describe('POST /api/bottles — newWine validation caps (shared with the resolve route)', () => {
   test.each([
-    ['missing name', { ...NEW_WINE, name: '' }, /name and producer/],
-    ['non-string producer', { ...NEW_WINE, producer: 42 }, /name and producer/],
+    // NAME stays hard-required on a commit path: a wine with no name is not an
+    // incomplete identity, it is no identity at all. PRODUCER deliberately is
+    // NOT here any more — see the pending-identity test below.
+    ['missing name', { ...NEW_WINE, name: '' }, /name is required/],
     ['missing country', { ...NEW_WINE, country: undefined }, /country/],
     ['over-long name', { ...NEW_WINE, name: 'x'.repeat(201) }, /200 characters/],
     ['over-long region', { ...NEW_WINE, region: 'x'.repeat(201) }, /region/],
@@ -294,6 +298,34 @@ describe('POST /api/bottles — newWine validation caps (shared with the resolve
     expect(body.error).toMatch(msg);
     expect(findOrCreateWine).not.toHaveBeenCalled();
     expect(Bottle.instances).toHaveLength(0);
+  });
+
+  // The behaviour change this feature exists for: an unreadable/absent producer
+  // no longer refuses the add. The route hands it to the service, which files a
+  // pendingIdentity row — the BOTTLE is what the user came for.
+  test.each([
+    ['absent producer', undefined],
+    ['empty producer', ''],
+    ['sentinel producer', 'Unknown'],
+    ['non-string producer', 42],
+  ])('%s no longer 400s — the bottle is created and the wine goes to the pending queue', async (_label, producer) => {
+    findOrCreateWine.mockResolvedValue({
+      wine: { ...WINE_DOC, producer: '', pendingIdentity: true },
+      created: true,
+      pendingIdentity: true,
+    });
+
+    const { status } = await post({
+      cellar: CELLAR_ID, vintage: '2019', newWine: { ...NEW_WINE, producer },
+    });
+
+    expect(status).toBe(201);
+    expect(findOrCreateWine).toHaveBeenCalledTimes(1);
+    expect(Bottle.instances).toHaveLength(1);
+    // A pending row has no public page — nothing is announced to IndexNow.
+    expect(submitUrls).not.toHaveBeenCalled();
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'wine.create',
+      expect.anything(), expect.objectContaining({ pendingIdentity: true, producer: null }));
   });
 });
 

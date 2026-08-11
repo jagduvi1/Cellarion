@@ -32,7 +32,12 @@ const { logAction, replay, releaseClaim } = require('../actionLedger');
 
 const NEW_WINE_SHAPE = {
   name: z.string().trim().min(1).max(200).describe('Wine name WITHOUT the producer in it (e.g. "Sauvignon Blanc", not "Cloudy Bay Sauvignon Blanc")'),
-  producer: z.string().trim().min(1).max(200),
+  // Optional, NOT because a producerless wine is fine — it is the single most
+  // valuable identity field — but because refusing the add was worse: the
+  // bottle was simply lost. Omitting it mints a pendingIdentity registry row a
+  // sommelier completes; the model should still ask the user first.
+  producer: z.string().trim().max(200).optional()
+    .describe('Omit ONLY when the user genuinely cannot tell you (unreadable label). The wine is then filed for sommelier completion and stays invisible to other users until then — never guess a producer to fill this in.'),
   country: z.string().trim().min(1).max(200).describe('Country name (required to create)'),
   region: z.string().max(200).optional(),
   appellation: z.string().max(200).optional(),
@@ -143,6 +148,11 @@ registerTool({
           confirmCreate: !!args.confirm_new_wine,
           skipSiblingMatch: false,
           createdVia: 'mcp',
+          // Commit path: an unreadable/absent producer files a pending row
+          // instead of 400-ing the user's bottle away. The strict gates still
+          // apply to the deliberate registry-curation tool
+          // (admin_add_registry_wine), which never passes this.
+          allowPending: true,
         });
       } catch (err) {
         if (err?.status === 400) return fail('invalid_input', err.message);
@@ -158,7 +168,8 @@ registerTool({
       if (wineCreated) {
         logAudit(ctx.req, 'wine.create',
           { type: 'wine', id: wineDoc._id },
-          { via: 'mcp', name: wineDoc.name, producer: wineDoc.producer });
+          { via: 'mcp', name: wineDoc.name, producer: wineDoc.producer || null,
+            ...(wineDoc.pendingIdentity ? { pendingIdentity: true } : {}) });
       }
     }
 
@@ -177,12 +188,19 @@ registerTool({
     if (result.error) return fail('invalid_input', result.error.message);
     const { bottle } = result;
 
+    const pendingIdentity = wineDoc.pendingIdentity === true;
     const envelope = {
-      summary: `Added ${wineDoc.name} ${bottle.vintage} to "${access.cellar.name}"${wineCreated ? ' (new registry wine created)' : ''}`,
+      summary: `Added ${wineDoc.name} ${bottle.vintage} to "${access.cellar.name}"${wineCreated ? (pendingIdentity ? ' (registry wine filed for sommelier completion — no producer)' : ' (new registry wine created)') : ''}`,
       data: {
         bottle_id: bottle._id,
         wine: { ...wineSummary(wineDoc) },
         wine_created: wineCreated,
+        // Say it plainly: the bottle is saved and usable, but the wine is not
+        // shared registry content until a curator completes the identity.
+        ...(pendingIdentity ? {
+          wine_pending_identity: true,
+          note: 'The wine could not be fully identified, so it is filed for sommelier completion: the bottle is in the cellar and works normally, but the wine is invisible to other users until a curator finishes it.',
+        } : {}),
         vintage: bottle.vintage,
         cellar_id: access.cellar._id,
         placement: null,

@@ -52,16 +52,27 @@ const MAX_GRAPES = 20;
  * Validate a new-wine payload against the caps the old find-or-create route
  * enforced — extracted rather than duplicated, so the resolve endpoint and
  * both commit endpoints can never drift.
+ *
+ * @param {object} payload
+ * @param {object} [opts]
+ * @param {boolean} [opts.allowPending=false] — the caller mints pending rows
+ *   (services/findOrCreateWine allowPending), so a missing producer is a state
+ *   to record, not a 400. NAME stays hard-required everywhere: a wine with no
+ *   name is not an incomplete identity, it is no identity at all, and there
+ *   would be nothing for a curator to research from.
  * @returns {string|null} an error message, or null when valid.
  */
-function validateNewWineFields(payload) {
+function validateNewWineFields(payload, { allowPending = false } = {}) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     return 'newWine must be an object';
   }
   const { name, producer, country, region, appellation, grapes } = payload;
   // typeof, not `?.` — a non-string here must be a 400, not a thrown TypeError
   // inside findOrCreateWine's .trim() (the identify-text hang, audit HIGH).
-  if (typeof name !== 'string' || !name.trim() || typeof producer !== 'string' || !producer.trim()) {
+  if (typeof name !== 'string' || !name.trim()) {
+    return allowPending ? 'name is required' : 'name and producer are required';
+  }
+  if (!allowPending && (typeof producer !== 'string' || !producer.trim())) {
     return 'name and producer are required';
   }
   if (typeof country !== 'string' || !country.trim()) {
@@ -88,13 +99,56 @@ function validateNewWineFields(payload) {
 }
 
 /**
+ * Attach the label photo the user scanned to the registry wine it produced, so
+ * the pending-identity queue can show a curator the actual label instead of
+ * asking them to guess from three broken strings.
+ *
+ * Ownership-checked and single-use: only the SCANNER's own label-scan image,
+ * and only when it is not already attached to a wine (which is also what keeps
+ * it out of the 30-day unattached-scan cleanup). Best-effort by design — a
+ * failure here must never fail the user's bottle add.
+ *
+ * @param {object} wine   the freshly resolved/minted WineDefinition doc
+ * @param {*} scanImageId client-supplied id (validated here, never trusted)
+ * @param {object} req
+ */
+async function attachScanImage(wine, scanImageId, req) {
+  try {
+    const { isValidId } = require('../utils/validation');
+    if (!wine || !scanImageId || !isValidId(String(scanImageId))) return;
+    const BottleImage = require('../models/BottleImage');
+    // One atomic claim: the filter is the authorization (uploader) AND the
+    // single-use guard (not yet bound to a wine), so two concurrent commits
+    // cannot both claim the same scan.
+    const image = await BottleImage.findOneAndUpdate(
+      { _id: scanImageId, uploadedBy: req.user.id, kind: 'label-scan', wineDefinition: null },
+      { $set: { wineDefinition: wine._id, updatedAt: new Date() } },
+      { new: true }
+    ).select('_id');
+    if (!image) return;
+    wine.scanImage = image._id;
+    await wine.save();
+  } catch (err) {
+    console.warn('Scan-image attach failed (non-fatal):', err.message);
+  }
+}
+
+/**
  * Resolve a new-wine payload to a registry wine, minting only when nothing
  * matches (or the user confirmed past the soft zone). See the module header
  * for the three return shapes. Non-400 service errors are rethrown so the
  * calling route's catch-all logs them.
+ *
+ * @param {object} newWine
+ * @param {object} req
+ * @param {object} [opts]
+ * @param {boolean} [opts.allowPending=true] — this is a COMMIT path, so the
+ *   default is on: an incomplete identity mints a pendingIdentity row and the
+ *   user's bottle saves instantly, rather than 400-ing their add away. Pass
+ *   false only from a surface that deliberately curates the shared registry.
  */
-async function resolveOrMintWine(newWine, req) {
-  const invalid = validateNewWineFields(newWine);
+async function resolveOrMintWine(newWine, req, { allowPending = true } = {}) {
+  const invalid = validateNewWineFields(newWine, { allowPending });
   if (invalid) return { error: { status: 400, message: invalid } };
 
   const via = newWine.source === 'ai' ? 'ai' : 'ui';
@@ -119,7 +173,7 @@ async function resolveOrMintWine(newWine, req) {
       // suggested matches (that is what confirmCreate means) — an appellation-
       // variant sibling must not silently override their explicit "create a
       // new wine anyway". Same semantics the find-or-create route had.
-      { confirmCreate: !!newWine.confirmCreate, skipSiblingMatch: !!newWine.confirmCreate, createdVia: via }
+      { confirmCreate: !!newWine.confirmCreate, skipSiblingMatch: !!newWine.confirmCreate, createdVia: via, allowPending }
     );
   } catch (err) {
     // The service's mint gates (unrecognized country, place-as-producer,
@@ -140,6 +194,7 @@ async function resolveOrMintWine(newWine, req) {
   }
 
   const { wine, created } = result;
+  const pendingIdentity = wine.pendingIdentity === true;
   if (created) {
     // Same action string + detail shape the find-or-create route emitted (and
     // the MCP/admin/import surfaces emit), so registry writes keep reading as
@@ -147,11 +202,20 @@ async function resolveOrMintWine(newWine, req) {
     // is client-asserted and later merges rewrite it.
     logAudit(req, 'wine.create',
       { type: 'wine', id: wine._id },
-      { via, name: wine.name, producer: wine.producer }
+      { via, name: wine.name, producer: wine.producer || null, ...(pendingIdentity ? { pendingIdentity: true } : {}) }
     );
-    submitUrls(`/wines/${wine.slug || wine._id}`);
+    // A pending row has no public wine page to announce — it 404s for everyone
+    // but its creator, so pinging IndexNow would advertise a dead URL. The
+    // promotion path submits it instead.
+    if (!pendingIdentity) submitUrls(`/wines/${wine.slug || wine._id}`);
   }
-  return { wine, created: !!created };
+  // Stamp the label scan on a NEW mint — and on the creator's OWN pending row
+  // that has none yet, which is how a second bottle of the same unidentified
+  // wine can still supply the photo the first add didn't have.
+  if (newWine.scanImageId && (created || (pendingIdentity && String(wine.createdBy) === String(req.user.id) && !wine.scanImage))) {
+    await attachScanImage(wine, newWine.scanImageId, req);
+  }
+  return { wine, created: !!created, pendingIdentity };
 }
 
-module.exports = { resolveOrMintWine, validateNewWineFields, MAX_WINE_FIELD, MAX_GRAPES };
+module.exports = { resolveOrMintWine, validateNewWineFields, attachScanImage, MAX_WINE_FIELD, MAX_GRAPES };

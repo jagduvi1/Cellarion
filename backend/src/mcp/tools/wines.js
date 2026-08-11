@@ -16,6 +16,13 @@ const REGISTRY_LIMIT = 10; // == USER_SEARCH_LIMIT in routes/wines.js
 // Fields safe to expose: never normalizedKey / createdBy / productNumber*.
 const SAFE_SELECT = 'name producer slug country region appellation classification grapes type communityRating aiProfile lwin';
 
+// Registry reads on this surface are 'public' scope — served to any token and
+// to the anonymous /api/mcp/public surface — so there is no caller identity to
+// compare against a pending row's creator. The rule is therefore absolute here:
+// pendingIdentity rows are not registry content until they are completed.
+// (Pending rows are not in Meilisearch either; this covers the Mongo paths.)
+const VISIBLE = { nonWine: { $ne: true }, pendingIdentity: { $ne: true } };
+
 registerTool({
   name: 'search_registry',
   title: 'Search the shared wine registry',
@@ -38,7 +45,7 @@ registerTool({
     if (searchService.getIsAvailable()) {
       try {
         const res = await searchService.search(args.query, { limit: REGISTRY_LIMIT });
-        const docs = await WineDefinition.find({ _id: { $in: res.ids } })
+        const docs = await WineDefinition.find({ _id: { $in: res.ids }, ...VISIBLE })
           .select(SAFE_SELECT).populate(['country', 'region', 'grapes']).lean();
         const byId = new Map(docs.map((d) => [String(d._id), d]));
         wines = res.ids.map((id) => byId.get(String(id))).filter(Boolean);
@@ -47,7 +54,7 @@ registerTool({
     }
     if (!viaEngine) {
       wines = await WineDefinition.find(
-        { $text: { $search: args.query } },
+        { $text: { $search: args.query }, ...VISIBLE },
         { score: { $meta: 'textScore' } }
       )
         .select(SAFE_SELECT).sort({ score: { $meta: 'textScore' } })
@@ -78,7 +85,13 @@ registerTool({
     if (!isValidId(args.wine_id)) return fail('invalid_input', 'wine_id must be a 24-hex Mongo id.');
     const raw = await WineDefinition.findById(args.wine_id)
       .select(SAFE_SELECT).populate(['country', 'region', 'grapes']).lean();
-    if (!raw) return fail('not_found', 'No registry wine with that id. Find wines via search_registry.');
+    // Post-filter rather than a query clause: 'public' scope means there is no
+    // caller identity to compare against the row's creator, so a pending row is
+    // simply not registry content here — reported as the same not_found a
+    // missing id gets, so its existence never leaks.
+    if (!raw || raw.pendingIdentity === true) {
+      return fail('not_found', 'No registry wine with that id. Find wines via search_registry.');
+    }
     // Grapes surface as the regionally correct label for THIS wine's place
     // ("Tinta Roriz" on a Douro Port) — storage stays canonical, and the
     // grapes field keeps its array-of-strings shape.

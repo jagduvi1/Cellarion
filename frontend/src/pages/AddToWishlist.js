@@ -43,6 +43,9 @@ function AddToWishlist() {
   // ── Scan result state ──
   const [scanResult, setScanResult] = useState(null);
   const [labelImage, setLabelImage] = useState(null);
+  // Id of the stored ORIGINAL scan frame — never rendered; it rides the commit
+  // so the minted wine keeps the label a curator may need to read.
+  const [scanImageId, setScanImageId] = useState(null);
   const [showManualForm, setShowManualForm] = useState(false);
   const [pendingWineData, setPendingWineData] = useState(null);
   const [findingWine, setFindingWine] = useState(false);
@@ -62,6 +65,8 @@ function AddToWishlist() {
     setPendingNewWine(null);
     setScanResult(null);
     setLabelImage(null);
+    // Wine already identified — its scan has no curation value.
+    setScanImageId(null);
     setShowManualForm(false);
     setPendingWineData(null);
     setSoftCandidates(null);
@@ -117,6 +122,9 @@ function AddToWishlist() {
   const handleScanSuccess = useCallback((data) => {
     setScanResult(data);
     setLabelImage(data.labelImage || null);
+    // Carry the stored original frame's id to the commit — it is what lets a
+    // curator fix the wine when the extraction was wrong (see AddBottle).
+    setScanImageId(data.scanImageId || null);
     setShowManualForm(false);
     setPendingWineData(null);
     // Pre-fill vintage from scan
@@ -202,9 +210,12 @@ function AddToWishlist() {
     setShowManualForm(true);
   }, [scanResult]);
 
+  // Producer is deliberately NOT required — see AddBottle: an unreadable label
+  // must not block the add, and a producerless payload resolves to noMatch and
+  // mints a pending-identity wine a curator completes.
   const handleConfirmManualWine = useCallback(async () => {
-    if (!pendingWineData?.name?.trim() || !pendingWineData?.producer?.trim() || !pendingWineData?.country?.trim()) {
-      setError(t('addToWishlist.requiredFields'));
+    if (!pendingWineData?.name?.trim() || !pendingWineData?.country?.trim()) {
+      setError(t('addToWishlist.nameCountryRequired'));
       return;
     }
     const grapes = pendingWineData.grapes
@@ -216,6 +227,7 @@ function AddToWishlist() {
   const handleScanReset = useCallback(() => {
     setScanResult(null);
     setLabelImage(null);
+    setScanImageId(null);
     setShowManualForm(false);
     setPendingWineData(null);
     setError(null);
@@ -348,7 +360,9 @@ function AddToWishlist() {
         notes: notes || undefined,
         priority
       };
-      if (newWinePayload) body.newWine = newWinePayload;
+      // scanImageId rides at the ONE place a newWine payload is sent, so every
+      // entry path carries the label photo without each remembering to.
+      if (newWinePayload) body.newWine = { ...newWinePayload, ...(scanImageId ? { scanImageId } : {}) };
       else body.wineDefinitionId = wineId;
 
       const res = await addToWishlist(apiFetch, body);
@@ -515,9 +529,11 @@ function AddToWishlist() {
                     onChange={e => setPendingWineData(p => ({ ...p, name: e.target.value }))} required />
                 </div>
                 <div className="form-group">
-                  <label>{t('addToWishlist.producer')}</label>
+                  {/* Optional: no `*` in the label key, no `required`. */}
+                  <label>{t('addToWishlist.producerOptional')}</label>
                   <input type="text" value={pendingWineData.producer}
-                    onChange={e => setPendingWineData(p => ({ ...p, producer: e.target.value }))} required />
+                    placeholder={t('addToWishlist.producerOptionalPlaceholder')}
+                    onChange={e => setPendingWineData(p => ({ ...p, producer: e.target.value }))} />
                 </div>
                 <div className="form-group">
                   <label>{t('addToWishlist.country')}</label>

@@ -92,8 +92,11 @@ function AddBottle() {
   const imagesLinkedRef = useRef(false);
 
   // ── Scan result state ──
-  const [scanResult, setScanResult] = useState(null);  // { extracted, match, labelImage }
+  const [scanResult, setScanResult] = useState(null);  // { extracted, match, labelImage, scanImageId }
   const [labelImage, setLabelImage] = useState(null);  // bg-removed data URL for display
+  // Id of the stored ORIGINAL scan frame (never rendered — it rides the commit
+  // so the minted wine keeps the label a curator may need to read).
+  const [scanImageId, setScanImageId] = useState(null);
   const [showManualForm, setShowManualForm] = useState(false);
   const [pendingWineData, setPendingWineData] = useState(null);
   const [findingWine, setFindingWine] = useState(false);
@@ -110,6 +113,10 @@ function AddBottle() {
   const handleScanSuccess = useCallback((data) => {
     setScanResult(data);
     setLabelImage(data.labelImage || null);
+    // The server kept the original frame; carry its id through the flow so the
+    // commit can stamp it on the wine. If the extraction was wrong, that photo
+    // is what lets a curator fix the registry entry later.
+    setScanImageId(data.scanImageId || null);
     setShowManualForm(false);
     setPendingWineData(null);
   }, []);
@@ -141,6 +148,9 @@ function AddBottle() {
     setBottleData(prev => ({ ...prev, vintage: carriedVintage || '' }));
     setScanResult(null);
     setLabelImage(null);
+    // The wine is already identified in the registry — its label scan has no
+    // curation value, so it is dropped here and swept after 30 days.
+    setScanImageId(null);
     setShowManualForm(false);
     setPendingWineData(null);
     setSoftCandidates(null);
@@ -248,10 +258,15 @@ function AddBottle() {
     setShowManualForm(true);
   }, [scanResult]);
 
-  // Confirm from the manual edit form
+  // Confirm from the manual edit form.
+  // Producer is deliberately NOT required: an unreadable label used to be a
+  // dead end here, and the whole point of the pending-identity flow is that the
+  // bottle saves anyway. A producerless payload simply can't score a registry
+  // match (producer is 45% of the dedup composite), so the resolve returns
+  // noMatch and the commit mints a wine a curator completes.
   const handleConfirmManualWine = useCallback(async () => {
-    if (!pendingWineData?.name?.trim() || !pendingWineData?.producer?.trim() || !pendingWineData?.country?.trim()) {
-      setError(t('addBottle.scanNameProducerCountryRequired'));
+    if (!pendingWineData?.name?.trim() || !pendingWineData?.country?.trim()) {
+      setError(t('addBottle.scanNameCountryRequired'));
       return;
     }
     const grapes = pendingWineData.grapes
@@ -267,6 +282,7 @@ function AddBottle() {
   const handleScanReset = useCallback(() => {
     setScanResult(null);
     setLabelImage(null);
+    setScanImageId(null);
     setShowManualForm(false);
     setPendingWineData(null);
     setError(null);
@@ -467,7 +483,10 @@ function AddBottle() {
       for (let i = createdBottles.length; i < numBottles; i++) {
         const payload = wineRefId
           ? { ...base, wineDefinition: wineRefId }
-          : { ...base, newWine: newWinePayload };
+          // scanImageId rides here, at the ONE place a newWine payload is
+          // sent, so every entry path (scan confirm, manual form, soft-zone
+          // "create new") carries the label photo without each remembering to.
+          : { ...base, newWine: { ...newWinePayload, ...(scanImageId ? { scanImageId } : {}) } };
         const res = await apiFetch('/api/bottles', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -685,9 +704,13 @@ function AddBottle() {
                     onChange={e => setPendingWineData(p => ({ ...p, name: e.target.value }))} required />
                 </div>
                 <div className="form-group">
-                  <label>{t('addBottle.scanProducer')} *</label>
+                  {/* No `*` and no `required`: an unreadable producer must not
+                      block the add. The bottle saves; the wine goes to the
+                      sommelier queue and comes back completed. */}
+                  <label>{t('addBottle.scanProducer')}</label>
                   <input type="text" value={pendingWineData.producer}
-                    onChange={e => setPendingWineData(p => ({ ...p, producer: e.target.value }))} required />
+                    placeholder={t('addBottle.scanProducerOptionalPlaceholder')}
+                    onChange={e => setPendingWineData(p => ({ ...p, producer: e.target.value }))} />
                 </div>
                 <div className="form-group">
                   <label>{t('addBottle.scanCountry')} *</label>

@@ -5,6 +5,7 @@ const { runCommunityPriceAggregation } = require('./communityPriceJob');
 const { runUserDeletionJob } = require('./userDeletionJob');
 const { runCellarRetentionPurge } = require('./cellarRetentionJob');
 const { runRecommendationEmailScrub } = require('./recommendationRetentionJob');
+const { runScanImageRetentionSweep } = require('./scanImageRetentionJob');
 const { runSecurityAlertCheck } = require('./securityAlertJob');
 const { runClimateOfflineCheck } = require('./climateOfflineJob');
 const { runDemoSweep } = require('./demoSweepJob');
@@ -77,6 +78,18 @@ function startScheduler() {
       await runRecommendationEmailScrub();
     } catch (err) {
       console.error('[scheduler] Recommendation email scrub failed:', err);
+    }
+  });
+
+  // Unattached label-scan sweep: daily at 04:45 UTC (after the email scrub).
+  // Deletes label frames that were scanned but never became part of a wine,
+  // after 30 days — files first, then documents.
+  cron.schedule('45 4 * * *', async () => {
+    console.log('[scheduler] Running label-scan retention sweep…');
+    try {
+      await runScanImageRetentionSweep();
+    } catch (err) {
+      console.error('[scheduler] Label-scan retention sweep failed:', err);
     }
   });
 

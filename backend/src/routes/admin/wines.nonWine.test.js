@@ -139,7 +139,11 @@ test('the name-check scan pool excludes quarantined rows at the query level', as
     headers: { Authorization: `Bearer ${adminToken()}` },
   });
 
-  expect(WineDefinition.find).toHaveBeenCalledWith({ nonWine: { $ne: true } });
+  // pendingIdentity joins the exclusion: those rows have their own queue, and
+  // flagging a row for the producer it does not have is noise, not a finding.
+  expect(WineDefinition.find).toHaveBeenCalledWith({
+    nonWine: { $ne: true }, pendingIdentity: { $ne: true },
+  });
 });
 
 // #844 promised, in its commit message AND in the /:id/non-wine route comment,
@@ -173,7 +177,7 @@ describe('every duplicate/collision pool excludes quarantined rows', () => {
 
     expect(WineDefinition.find).toHaveBeenCalled();
     for (const call of WineDefinition.find.mock.calls) {
-      expect(call[0]).toMatchObject({ nonWine: { $ne: true } });
+      expect(call[0]).toMatchObject({ nonWine: { $ne: true }, pendingIdentity: { $ne: true } });
     }
   });
 });

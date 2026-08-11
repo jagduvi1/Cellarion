@@ -96,9 +96,21 @@ async function createOwnerInquiry({ wineId, userId, via = 'rest', question, req 
     return { ok: false, code: 'invalid_input', message: 'wine id must be a 24-hex id.' };
   }
 
-  const wine = await WineDefinition.findById(wineId).select('name producer');
+  const wine = await WineDefinition.findById(wineId).select('name producer pendingIdentity');
   if (!wine) {
     return { ok: false, code: 'not_found', message: 'No registry wine with that id.' };
+  }
+  // An owner inquiry asks OTHER people's owners what their label says. On a
+  // pending-identity row the only owner IS the creator, whose add is what left
+  // the identity incomplete — asking them what the curator can already see in
+  // the attached scan image is a notification for nothing. Refused loudly so
+  // the curator uses the queue's own fix path instead.
+  if (wine.pendingIdentity === true) {
+    return {
+      ok: false,
+      code: 'conflict',
+      message: 'This wine is in the pending-identity queue — its only bottle owner is the person whose add created it. Read the label scan in that queue and fix it there instead.',
+    };
   }
 
   const { recipients, fallbackUsed } = await buildRecipients(wine._id);

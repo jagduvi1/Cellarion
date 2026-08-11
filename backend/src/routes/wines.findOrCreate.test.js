@@ -120,10 +120,24 @@ describe('POST /api/wines/find-or-create — guards', () => {
     expect(findOrCreateWine).not.toHaveBeenCalled();
   });
 
-  test('missing name or producer is a 400', async () => {
+  test('missing name is a 400', async () => {
     expect((await post({ producer: 'Penfolds', country: 'Australia' })).status).toBe(400);
-    expect((await post({ name: 'Bin 407', country: 'Australia' })).status).toBe(400);
     expect(findOrCreateWine).not.toHaveBeenCalled();
+  });
+
+  // The add flows let a user leave the producer blank when the label is
+  // unreadable, so step 1 must probe rather than refuse. This route still
+  // creates nothing (matchOnly); the commit is what mints the pending row.
+  test('a producerless payload is probed, not refused — producer reaches the service as a string', async () => {
+    const res = await post({ name: 'Bin 407', country: 'Australia' });
+
+    expect(res.status).toBe(200);
+    expect(findOrCreateWine).toHaveBeenCalledTimes(1);
+    const [fields, , opts] = findOrCreateWine.mock.calls[0];
+    // '' not undefined: the service .trim()s producer before consulting any
+    // option, so a probe must never be the thing that 500s.
+    expect(fields.producer).toBe('');
+    expect(opts).toEqual({ matchOnly: true });
   });
 
   test('an over-long name or region is a 400 (region cap: findOrCreateRegion mints what arrives)', async () => {
