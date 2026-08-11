@@ -35,7 +35,7 @@ const searchService = require('../services/search');
 // add/update/consume/restore/remove logic + rack-slot freeing live in the
 // shared service so the REST routes and the MCP tools can never drift (§7).
 const {
-  addBottle, updateBottleFields, consumeBottle, restoreBottle, removeFromRacks, removeBottleCascade,
+  addBottle, validateBottleCommitFields, updateBottleFields, consumeBottle, restoreBottle, removeFromRacks, removeBottleCascade,
   openBottle, pourFromBottle, closeBottle,
 } = require('../services/bottleOps');
 // Mint-at-commit for the POST route's `newWine` branch — the wine is created
@@ -425,6 +425,14 @@ router.post('/', requireNonDemo, async (req, res) => {
         return res.status(404).json({ error: 'Wine definition not found' });
       }
     } else {
+      // Commit-field validation BEFORE the mint (release-audit LOW-1): a
+      // vintage/rating/notes 400 after resolveOrMintWine would leave the
+      // exact orphan mint-at-commit exists to prevent. Checks-only — addBottle
+      // still validates and resolves values itself below.
+      const preCheck = validateBottleCommitFields(req.body);
+      if (preCheck.error) {
+        return res.status(preCheck.error.status).json({ error: preCheck.error.message });
+      }
       // Mint-at-commit: validation caps, dedup/soft-zone, wine.create audit
       // (via 'ui'/'ai' per newWine.source) and IndexNow all live in the shared
       // service — one implementation with POST /api/wishlist's newWine branch.

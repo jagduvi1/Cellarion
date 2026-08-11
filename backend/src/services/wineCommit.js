@@ -131,6 +131,14 @@ async function resolveOrMintWine(newWine, req) {
 
   if (result.candidates) return { candidates: result.candidates };
 
+  // Release-audit LOW-2: findOrCreateWine's E11000 recovery re-queries by
+  // normalizedKey only — a same-slug/different-key sub-second race can return
+  // { wine: null }. Both consumers would deref it into a 500; a clean 409
+  // self-heals on retry (the winner is committed by then).
+  if (!result.wine) {
+    return { error: { status: 409, message: 'Wine resolution raced with another write — please retry.' } };
+  }
+
   const { wine, created } = result;
   if (created) {
     // Same action string + detail shape the find-or-create route emitted (and
