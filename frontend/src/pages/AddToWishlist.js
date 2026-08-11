@@ -362,6 +362,15 @@ function AddToWishlist() {
       }
       if (!res.ok) {
         setError(data.error || t('addToWishlist.failedAdd'));
+        // Release-audit MEDIUM (same as AddBottle): a mint-gate 400 arrives
+        // after the wine form is gone — when the failed save carried newWine,
+        // reopen the manual form seeded with the typed fields so the user
+        // fixes the named field instead of retyping the wine.
+        if (newWinePayload) {
+          setPendingWineData({ ...newWinePayload, grapes: (newWinePayload.grapes || []).join(', ') });
+          setShowManualForm(true);
+        }
+        window.scrollTo(0, 0);
         return;
       }
       // The saved item's populated wine, not selectedWine: when the commit-

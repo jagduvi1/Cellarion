@@ -273,6 +273,61 @@ async function closeBottle(bottle, req) {
  *
  * Returns { error: { status, message } } | { bottle }.
  */
+/**
+ * Checks-only validation of the bottle-create field surface — no values are
+ * produced and nothing is written. Exists so the POST /api/bottles newWine
+ * branch can validate the COMMIT fields BEFORE resolveOrMintWine runs
+ * (release-audit LOW-1: a field 400 after the mint would leave the exact
+ * orphan mint-at-commit exists to prevent). addBottle still runs its own
+ * inline validation+resolution afterwards — this is a pre-mint gate, not a
+ * replacement, and the parsers are pure so double-parsing is free.
+ */
+function validateBottleCommitFields(fields = {}) {
+  const {
+    vintage, purchaseLocation, purchaseUrl, location,
+    notes, occasion, rating, ratingScale, drinkFrom, drinkTo,
+    addToHistory, consumedReason, consumedRating, consumedRatingScale,
+  } = fields;
+
+  const parsedVintage = parseAndValidateVintage(vintage);
+  if (!parsedVintage.ok) return { error: { status: 400, message: parsedVintage.error } };
+  const from = parseDrinkYear(drinkFrom, 'drinkFrom');
+  if (!from.ok) return { error: { status: 400, message: from.error } };
+  const to = parseDrinkYear(drinkTo, 'drinkTo');
+  if (!to.ok) return { error: { status: 400, message: to.error } };
+  if (from.value && to.value && from.value > to.value) {
+    return { error: { status: 400, message: 'drinkFrom cannot be after drinkTo' } };
+  }
+  const { error: ratingError } = resolveRatingUtil(rating, ratingScale);
+  if (ratingError) return { error: { status: 400, message: ratingError } };
+  if (notes && (typeof notes !== 'string' || notes.length > 5000)) {
+    return { error: { status: 400, message: 'Notes are too long (max 5000 characters)' } };
+  }
+  for (const [label, value] of [
+    ['Occasion', occasion], ['Purchase location', purchaseLocation], ['Location', location],
+  ]) {
+    if (value && (typeof value !== 'string' || value.length > 500)) {
+      return { error: { status: 400, message: `${label} is too long (max 500 characters)` } };
+    }
+  }
+  if (purchaseUrl) {
+    if (typeof purchaseUrl !== 'string' || purchaseUrl.length > 2048) {
+      return { error: { status: 400, message: 'purchaseUrl is too long (max 2048 characters)' } };
+    }
+    if (!isSafeUrl(purchaseUrl)) {
+      return { error: { status: 400, message: 'purchaseUrl must be a valid http or https URL' } };
+    }
+  }
+  if (addToHistory && consumedReason && !CONSUMED_STATUSES.includes(consumedReason)) {
+    return { error: { status: 400, message: 'Invalid consumed reason' } };
+  }
+  if (addToHistory) {
+    const { error: consumedRatingError } = resolveRatingUtil(consumedRating, consumedRatingScale);
+    if (consumedRatingError) return { error: { status: 400, message: consumedRatingError } };
+  }
+  return { ok: true };
+}
+
 async function addBottle(cellarDoc, wineDoc, fields = {}, req) {
   const {
     vintage, price, currency, bottleSize,
@@ -662,7 +717,7 @@ async function removeBottleCascade(bottle, req, auditAction) {
 
 module.exports = {
   consumeBottle, restoreBottle, removeFromRacks, RESTORE_WINDOW_MS,
-  addBottle, updateBottleFields, removeBottleCascade, UPDATABLE_FIELDS,
+  addBottle, validateBottleCommitFields, updateBottleFields, removeBottleCascade, UPDATABLE_FIELDS,
   openBottle, pourFromBottle, closeBottle,
   PRESERVATION_METHODS, DEFAULT_POUR_ML, MAX_POURS,
 };

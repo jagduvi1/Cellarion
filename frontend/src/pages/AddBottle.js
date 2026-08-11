@@ -485,6 +485,19 @@ function AddBottle() {
         }
         if (!res.ok) {
           setError(partialError(data.error || t('addBottle.addFailed'), createdBottles.length));
+          // Release-audit MEDIUM: a mint-gate 400 ("Riquewihr is a village,
+          // not a producer") lands here AFTER the wine form is gone. When the
+          // failed POST carried newWine and nothing was created yet, reopen
+          // step 1's manual form seeded with the typed fields so the user
+          // fixes the named field instead of retyping the wine from scratch.
+          if (newWinePayload && createdBottles.length === 0) {
+            setPendingWineData({ ...newWinePayload, grapes: (newWinePayload.grapes || []).join(', ') });
+            setShowManualForm(true);
+            setStep(1);
+          }
+          // The alert renders at the top of a long form — without the scroll
+          // a failed submit reads as "the button did nothing" (audit LOW).
+          window.scrollTo(0, 0);
           linkUploadedImages();
           return;
         }

@@ -186,6 +186,20 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Provide wineDefinitionId or newWine (exactly one)' });
     }
 
+    // Item-field validation BEFORE any registry work (release-audit LOW-1):
+    // a 400 on notes/priority/vintage after the mint would leave the exact
+    // orphan the mint-at-commit change exists to prevent.
+    const safeVintage = vintage != null ? String(vintage) : '';
+    if (notes && notes.length > 2000) {
+      return res.status(400).json({ error: 'Notes must be 2000 characters or less' });
+    }
+    if (priority && !['low', 'medium', 'high'].includes(priority)) {
+      return res.status(400).json({ error: 'Priority must be low, medium, or high' });
+    }
+    if (safeVintage && safeVintage.length > 20) {
+      return res.status(400).json({ error: 'Vintage must be 20 characters or less' });
+    }
+
     let resolvedWineId;
     if (newWine) {
       // Registry write — same demo bar the old find-or-create route had
@@ -212,9 +226,6 @@ router.post('/', async (req, res) => {
       resolvedWineId = wineDefinitionId;
     }
 
-    // Sanitise vintage: must be a string (prevents NoSQL injection via objects)
-    const safeVintage = vintage != null ? String(vintage) : '';
-
     // Prevent duplicates: same user + same wine + same vintage (or both null).
     // Runs AFTER the newWine resolve on purpose: a freshly MINTED wine can't
     // have a duplicate item (nothing references its new id yet), so a 409 here
@@ -232,19 +243,6 @@ router.post('/', async (req, res) => {
     const existing = await WishlistItem.findOne(dupFilter);
     if (existing) {
       return res.status(409).json({ error: 'This wine is already on your wishlist' });
-    }
-
-    // Validate notes length
-    if (notes && notes.length > 2000) {
-      return res.status(400).json({ error: 'Notes must be 2000 characters or less' });
-    }
-    // Validate priority
-    if (priority && !['low', 'medium', 'high'].includes(priority)) {
-      return res.status(400).json({ error: 'Priority must be low, medium, or high' });
-    }
-    // Validate vintage length
-    if (safeVintage && safeVintage.length > 20) {
-      return res.status(400).json({ error: 'Vintage must be 20 characters or less' });
     }
 
     const item = await WishlistItem.create({
