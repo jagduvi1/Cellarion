@@ -98,6 +98,7 @@ function activeEmbeddingModel(requestedModel) {
 }
 
 const { fetchWithRetry } = require('../utils/fetchRetry');
+const { resolveGrapeDisplayName } = require('../utils/grapeDisplay');
 
 function retryOpts({ maxRetries, timeoutMs, label }) {
   return {
@@ -225,7 +226,20 @@ function buildEmbeddingText(wine, vintage) {
   ];
   if (wine.region?.name)   lines.push(`Region: ${wine.region.name}`);
   if (wine.country?.name)  lines.push(`Country: ${wine.country.name}`);
-  const grapeNames = (wine.grapes || []).filter(g => g.name).map(g => g.name).join(', ');
+  // Grapes: canonical name, plus the regionally correct label in parentheses
+  // when a Grape.regionalNames entry applies to THIS wine's country/region —
+  // "Tempranillo (Tinta Roriz)" on a Douro wine — so semantic search recalls
+  // the label-true name without forking the vocabulary. A wine with no
+  // applicable mapping produces BYTE-IDENTICAL text to before: textHash is
+  // the embedding job's skip key, so any accidental change here re-embeds the
+  // whole registry (pinned in embedding.buildText.test.js).
+  const grapeNames = (wine.grapes || [])
+    .filter(g => g && g.name)
+    .map(g => {
+      const display = resolveGrapeDisplayName(g, { countryId: wine.country, regionId: wine.region });
+      return display && display !== g.name ? `${g.name} (${display})` : g.name;
+    })
+    .join(', ');
   if (grapeNames)          lines.push(`Grapes: ${grapeNames}`);
   if (wine.appellation)    lines.push(`Appellation: ${wine.appellation}`);
   if (wine.classification) lines.push(`Classification: ${wine.classification}`);

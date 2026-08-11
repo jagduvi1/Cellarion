@@ -23,6 +23,7 @@ const { registerTool } = require('../registry');
 const { addBottle, updateBottleFields } = require('../../services/bottleOps');
 const { logAudit } = require('../../services/audit');
 const { isValidId } = require('../../utils/validation');
+const { decorateGrapes } = require('../../utils/grapeDisplay');
 const {
   ok, fail, objectId, MSG_CELLAR_NOT_FOUND, MSG_BOTTLE_NOT_FOUND,
   resolveCellarAccess, resolveBottleAccess, wineSummary,
@@ -61,15 +62,18 @@ registerTool({
       ctx.user.id,
       { matchOnly: true }
     );
+    // decorateGrapes: matched/candidate wines show the regionally correct
+    // grape label for their own place ("Tinta Roriz" on a Douro Port) — the
+    // registry keeps referencing the canonical Grape doc.
     if (result.wine) {
       return ok(`Matched existing registry wine: ${result.wine.name}`, {
-        matched: { ...wineSummary(result.wine) },
+        matched: { ...wineSummary(decorateGrapes(result.wine)) },
         guidance: 'Use this wine_id in add_bottle. Do not create a new wine.',
       });
     }
     if (result.candidates?.length) {
       return ok(`${result.candidates.length} close candidate(s) — none certain`, {
-        candidates: result.candidates.map((c) => ({ ...wineSummary(c.wine), score: c.score })),
+        candidates: result.candidates.map((c) => ({ ...wineSummary(decorateGrapes(c.wine)), score: c.score })),
         guidance: 'If one of these IS the wine, use its wine_id in add_bottle. Only if none match, call add_bottle with new_wine and confirm_new_wine:true.',
       });
     }

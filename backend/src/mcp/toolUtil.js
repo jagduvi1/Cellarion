@@ -103,7 +103,11 @@ function wineSummary(wd) {
     country: wd.country?.name || null,
     region: wd.region?.name || null,
     appellation: wd.appellation || null,
-    grapes: Array.isArray(wd.grapes) ? wd.grapes.map((g) => g.name).filter(Boolean) : [],
+    // Callers that ran the wine through utils/grapeDisplay.decorateGrapes
+    // (get_wine, resolve_wine) surface the regionally correct label here
+    // ("Tinta Roriz" on a Douro Port); undecorated callers keep the canonical
+    // name — same array-of-strings shape either way.
+    grapes: Array.isArray(wd.grapes) ? wd.grapes.map((g) => g.displayName || g.name).filter(Boolean) : [],
   };
 }
 

@@ -415,6 +415,67 @@ router.delete('/regions/:id', async (req, res) => {
 
 // ===== GRAPES =====
 
+// ── Regional display names validation ────────────────────────────────────────
+// Grape.regionalNames = [{ country, region?, name }] — regionally correct
+// display labels ("Tinta Roriz" for Tempranillo on Douro wines; see
+// models/Grape.js). Bounded and ref-checked here because Mongoose validates
+// neither that the ids exist nor that the region belongs to the country.
+const REGIONAL_NAMES_MAX = 20;
+const REGIONAL_NAME_MAX_LENGTH = 60; // == the schema's maxlength
+
+/**
+ * Validate a regionalNames payload. Returns { error } (human-readable, safe
+ * for a 400 body) or { value } — the cleaned array: trimmed names, ids as
+ * strings, region null when absent.
+ *
+ * Same discipline as taxonomyReview.appellationRefsError: every id is
+ * isValidId-checked and the validated STRING is what reaches the query, so
+ * operator objects from the request body never enter a filter.
+ */
+async function validateGrapeRegionalNames(input) {
+  if (!Array.isArray(input)) {
+    return { error: 'regionalNames must be an array of { country, region?, name } entries' };
+  }
+  if (input.length > REGIONAL_NAMES_MAX) {
+    return { error: `At most ${REGIONAL_NAMES_MAX} regional names per grape` };
+  }
+  const value = [];
+  const seenPairs = new Set();
+  for (const entry of input) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      return { error: 'regionalNames must be an array of { country, region?, name } entries' };
+    }
+    const name = typeof entry.name === 'string' ? entry.name.trim() : '';
+    if (!name) return { error: 'Each regional name needs a non-empty name' };
+    if (name.length > REGIONAL_NAME_MAX_LENGTH) {
+      return { error: `Regional names must be ${REGIONAL_NAME_MAX_LENGTH} characters or fewer` };
+    }
+    const countryKey = String(entry.country ?? '');
+    if (!isValidId(countryKey)) return { error: 'Each regional name needs a valid country id' };
+    const countryExists = await Country.exists({ _id: countryKey });
+    if (!countryExists) return { error: 'No country with that id' };
+    let regionKey = null;
+    if (entry.region) {
+      regionKey = String(entry.region);
+      if (!isValidId(regionKey)) return { error: 'Invalid region id in regional names' };
+      const region = await Region.findById(regionKey).select('name country').lean();
+      if (!region) return { error: 'No region with that id' };
+      if (String(region.country) !== countryKey) {
+        return { error: `Region "${region.name}" belongs to a different country than the regional name's country` };
+      }
+    }
+    // One display name per place — a duplicate (country, region) pair would
+    // make resolution order-dependent.
+    const pairKey = `${countryKey}:${regionKey || ''}`;
+    if (seenPairs.has(pairKey)) {
+      return { error: 'Duplicate (country, region) pair in regional names — each place carries one display name' };
+    }
+    seenPairs.add(pairKey);
+    value.push({ country: countryKey, region: regionKey, name });
+  }
+  return { value };
+}
+
 // GET /api/admin/taxonomy/grapes - List all grapes
 router.get('/grapes', async (req, res) => {
   try {
@@ -433,10 +494,20 @@ router.get('/grapes', async (req, res) => {
 // POST /api/admin/taxonomy/grapes - Add grape
 router.post('/grapes', async (req, res) => {
   try {
-    const { name, synonyms, color, origin, characteristics, agingPotential, prestige, description } = req.body;
+    const { name, synonyms, color, origin, characteristics, agingPotential, prestige, description, regionalNames } = req.body;
 
     if (!name) {
       return res.status(400).json({ error: 'Grape name is required' });
+    }
+
+    // The create and update forms share the grape editor, so both routes
+    // accept regionalNames — a field the UI offers but the API drops would be
+    // silent data loss.
+    let regionalNamesValue = [];
+    if (regionalNames !== undefined) {
+      const check = await validateGrapeRegionalNames(regionalNames);
+      if (check.error) return res.status(400).json({ error: check.error });
+      regionalNamesValue = check.value;
     }
 
     const normalizedName = normalizeString(name);
@@ -451,6 +522,7 @@ router.post('/grapes', async (req, res) => {
       agingPotential: agingPotential || null,
       prestige: prestige || null,
       description: description || '',
+      regionalNames: regionalNamesValue,
       createdBy: req.user.id
     });
 
@@ -473,11 +545,20 @@ router.post('/grapes', async (req, res) => {
 router.put('/grapes/:id', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    const { name, synonyms, color, origin, characteristics, agingPotential, prestige, description } = req.body;
+    const { name, synonyms, color, origin, characteristics, agingPotential, prestige, description, regionalNames } = req.body;
 
     const grape = await Grape.findById(req.params.id);
     if (!grape) {
       return res.status(404).json({ error: 'Grape not found' });
+    }
+
+    // Validate before mutating anything, so a rejected payload leaves the
+    // loaded doc untouched.
+    let regionalNamesValue;
+    if (regionalNames !== undefined) {
+      const check = await validateGrapeRegionalNames(regionalNames);
+      if (check.error) return res.status(400).json({ error: check.error });
+      regionalNamesValue = check.value;
     }
 
     if (name) {
@@ -491,17 +572,24 @@ router.put('/grapes/:id', async (req, res) => {
     if (agingPotential !== undefined) grape.agingPotential = agingPotential;
     if (prestige !== undefined) grape.prestige = prestige;
     if (description !== undefined) grape.description = description;
+    if (regionalNamesValue !== undefined) grape.regionalNames = regionalNamesValue;
 
     await grape.save();
     logAudit(req, 'admin.taxonomy.update',
       { type: 'grape', id: grape._id },
-      { name: grape.name }
+      {
+        name: grape.name,
+        ...(regionalNames !== undefined ? { regionalNames: grape.regionalNames.length } : {})
+      }
     );
 
     // Resync search indexes if name changed (denormalized data). Bottle
     // documents denormalize taxonomy names too — fullSync() alone rebuilds
     // only the wines index, leaving cellar search matching the old name.
+    // regionalNames feed only the WINES index's grapeNames (regional display
+    // recall), so that change resyncs wines alone.
     if (name) { searchService.fullSync(); searchService.fullSyncBottles(); }
+    else if (regionalNames !== undefined) { searchService.fullSync(); }
 
     res.json({ grape });
   } catch (error) {
@@ -904,3 +992,6 @@ module.exports = router;
 // the half of the REST/MCP parity contract that lives on this side.
 module.exports.appellationNameError = appellationNameError;
 module.exports.validateAppellationSynonyms = validateAppellationSynonyms;
+// Exported for its unit tests (taxonomy.grapeRegionalNames.test.js) — the DB
+// lookups inside are mocked there.
+module.exports.validateGrapeRegionalNames = validateGrapeRegionalNames;

@@ -109,7 +109,7 @@ export default function WineReferenceCard({ wine }) {
                 {grapes.length > 0 && (
                   <div className="wine-modal__row">
                     <dt>Grapes</dt>
-                    <dd>{grapes.map(g => g.name || g).join(', ')}</dd>
+                    <dd>{grapes.map(g => g.displayName || g.name || g).join(', ')}</dd>
                   </div>
                 )}
               </dl>

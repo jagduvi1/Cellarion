@@ -6,6 +6,7 @@ const Bottle = require('../models/Bottle');
 const Discussion = require('../models/Discussion');
 const { WINE_POPULATE, CONSUMED_STATUSES } = require('../config/constants');
 const { stripHtml } = require('../utils/sanitize');
+const { resolveGrapeDisplayName } = require('../utils/grapeDisplay');
 
 const INDEX_NAME = 'wines';
 const BOTTLES_INDEX_NAME = 'bottles';
@@ -169,6 +170,22 @@ async function syncIfNeeded(idx, syncFn, label, attempt = 0) {
   }
 }
 
+// Canonical grape names, plus any regionally correct display name that
+// applies to THIS wine ("Tinta Roriz" alongside "Tempranillo" on a Douro
+// row) — additive recall so the label-true spelling matches too, while
+// grapeIds filters stay on the single canonical vocabulary. Wines with no
+// applicable mapping index exactly what they indexed before.
+function wineGrapeSearchNames(wine) {
+  const names = [];
+  for (const g of wine.grapes || []) {
+    if (!g || !g.name) continue;
+    names.push(g.name);
+    const display = resolveGrapeDisplayName(g, { countryId: wine.country, regionId: wine.region });
+    if (display && display !== g.name) names.push(display);
+  }
+  return names.join(', ');
+}
+
 function buildDocument(wine) {
   return {
     id: wine._id.toString(),
@@ -181,7 +198,7 @@ function buildDocument(wine) {
     regionId: wine.region?._id?.toString() || wine.region?.toString() || '',
     regionName: wine.region?.name || '',
     grapeIds: (wine.grapes || []).map(g => (g._id || g).toString()),
-    grapeNames: (wine.grapes || []).filter(g => g.name).map(g => g.name).join(', '),
+    grapeNames: wineGrapeSearchNames(wine),
     image: wine.image || '',
     createdAt: wine.createdAt ? Math.floor(new Date(wine.createdAt).getTime() / 1000) : 0
   };
@@ -229,7 +246,8 @@ async function fullSync() {
       WineDefinition.find({ nonWine: { $ne: true } })
         .populate('country', 'name')
         .populate('region', 'name')
-        .populate('grapes', 'name')
+        // regionalNames feed wineGrapeSearchNames (regional display recall).
+        .populate('grapes', 'name regionalNames')
         .lean(),
       buildDocument,
       index,
@@ -247,7 +265,8 @@ async function indexWine(wineId) {
     const wine = await WineDefinition.findById(wineId)
       .populate('country', 'name')
       .populate('region', 'name')
-      .populate('grapes', 'name')
+      // regionalNames feed wineGrapeSearchNames (regional display recall).
+      .populate('grapes', 'name regionalNames')
       .lean();
 
     if (!wine) return;

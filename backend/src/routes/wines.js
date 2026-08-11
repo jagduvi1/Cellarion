@@ -11,6 +11,10 @@ const { generateWineKey } = require('../utils/normalize');
 const { findBestMatch } = require('../services/wineMatching');
 const { parsePagination } = require('../utils/pagination');
 const { isValidId } = require('../utils/validation');
+// Read-surface decoration: each populated grape gains `displayName` — the
+// regionally correct label for THIS wine (Tinta Roriz on a Douro Port) —
+// while `name` stays canonical. Storage/filters/stats are untouched.
+const { decorateGrapes } = require('../utils/grapeDisplay');
 const { submitUrls } = require('../services/indexNow');
 const { getReleaseCurve } = require('../services/communityPrice');
 const aiBurstLimiter = require('../middleware/aiBurstLimiter');
@@ -214,7 +218,7 @@ router.get('/', requireAuth, async (req, res) => {
           total: estimatedTotalHits,
           offset: parsedOffset,
           limit: parsedLimit,
-          wines
+          wines: wines.map(decorateGrapes)
         });
       } catch (err) {
         console.warn('Meilisearch query failed, falling back to MongoDB:', err.message);
@@ -229,7 +233,7 @@ router.get('/', requireAuth, async (req, res) => {
       total,
       offset: parsedOffset,
       limit: parsedLimit,
-      wines
+      wines: wines.map(decorateGrapes)
     });
   } catch (error) {
     console.error('Get wines error:', error);
@@ -635,7 +639,7 @@ router.get('/:idOrSlug/public', async (req, res) => {
       return res.status(404).json({ error: 'Wine not found' });
     }
 
-    res.json({ wine });
+    res.json({ wine: decorateGrapes(wine) });
   } catch (error) {
     console.error('Get public wine error:', error);
     res.status(500).json({ error: 'Failed to get wine' });
@@ -686,7 +690,7 @@ router.get('/:id', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Wine not found' });
     }
 
-    res.json({ wine });
+    res.json({ wine: decorateGrapes(wine) });
   } catch (error) {
     console.error('Get wine error:', error);
     res.status(500).json({ error: 'Failed to get wine' });
