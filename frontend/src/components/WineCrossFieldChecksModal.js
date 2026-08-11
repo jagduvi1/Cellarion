@@ -146,6 +146,11 @@ function WineCrossFieldChecksModal({ apiFetch, onClose }) {
       if (res.ok) {
         setPendingUndo(null);
         fetchPage(page);
+      } else {
+        // Row may already be gone from the list, so surface at modal level —
+        // the banner stays so the admin can retry.
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || `Failed to undo (${res.status})`);
       }
     } catch { /* the banner stays; the admin can retry */ } finally {
       setPending(null);

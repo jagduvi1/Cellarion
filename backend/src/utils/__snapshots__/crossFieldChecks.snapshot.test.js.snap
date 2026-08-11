@@ -31,9 +31,9 @@ exports[`detect() source of producer-is-grape.v1 is unchanged — bump the id if
 
 exports[`detect() source of producer-is-region.v1 is unchanged — bump the id if you edited it 1`] = `"(w, refs) => lookupEntity(refs.regions, w.producer)"`;
 
-exports[`detect() source of producer-is-style-term.v1 is unchanged — bump the id if you edited it 1`] = `
+exports[`detect() source of producer-is-style-term.v2 is unchanged — bump the id if you edited it 1`] = `
 "w => {
-    const tokens = normalizeString(w.producer || '').split(' ').filter(Boolean);
+    const tokens = normalizeString((w.producer || '').replace(/ß/g, 'ss')).split(' ').filter(Boolean);
     if (tokens.length === 0) return null;
     const matched = [];
     for (const t of tokens) {
@@ -74,7 +74,7 @@ exports[`rule ids are pinned (adding/removing/renaming a rule must be deliberate
   "producer-is-region.v1",
   "producer-is-country.v1",
   "producer-is-grape.v1",
-  "producer-is-style-term.v1",
+  "producer-is-style-term.v2",
   "producer-placeholder.v1",
   "producer-parenthetical.v1",
   "name-in-producer.v1",

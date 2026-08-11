@@ -49,10 +49,12 @@ function AddMoreBottlesModal({ bottle, onClose, onAdded }) {
 
   // What a copy is made of — only fields POST /api/bottles accepts (see
   // backend bottleOps.addBottle):
-  // - wine / cellar / vintage / bottleSize always travel: "more of this
-  //   bottle" means the same wine, same vintage, same format, same cellar.
-  // - The details checkbox carries provenance: price, currency, purchase
-  //   info, notes, occasion.
+  // - wine / cellar / vintage / bottleSize / currency always travel: "more of
+  //   this bottle" means the same wine, same vintage, same format, same
+  //   cellar — and the same currency even when details are unticked, because
+  //   the backend otherwise defaults a blank copy to USD (bottleOps).
+  // - The details checkbox carries provenance: price, purchase info, notes,
+  //   occasion.
   // - Never copied: rating and the personal drink window (judgements about
   //   that specific bottle, not the purchase), rack position (new bottles
   //   arrive unplaced) and the migration helpers (dateAdded / addToHistory).
@@ -63,9 +65,9 @@ function AddMoreBottlesModal({ bottle, onClose, onAdded }) {
       vintage: bottle.vintage,
       bottleSize: bottle.bottleSize || undefined,
     };
+    if (bottle.currency) payload.currency = bottle.currency;
     if (copyDetails) {
       if (bottle.price != null) payload.price = bottle.price;
-      if (bottle.currency) payload.currency = bottle.currency;
       if (bottle.purchaseDate) payload.purchaseDate = bottle.purchaseDate;
       if (bottle.purchaseLocation) payload.purchaseLocation = bottle.purchaseLocation;
       if (bottle.purchaseUrl) payload.purchaseUrl = bottle.purchaseUrl;

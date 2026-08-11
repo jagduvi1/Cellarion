@@ -571,6 +571,7 @@ router.delete('/verify-checks', async (req, res) => {
   try {
     const ids = [...new Set((Array.isArray(req.body?.wineIds) ? req.body.wineIds : []).filter(isValidId))];
     if (ids.length < 1) return res.status(400).json({ error: 'wineIds must contain at least 1 valid id' });
+    if (ids.length > 500) return res.status(400).json({ error: 'At most 500 wineIds per call' });
 
     const raw = Array.isArray(req.body?.checks) ? req.body.checks : null;
     const specs = (raw || []).map(resolveCheck);
@@ -1154,9 +1155,10 @@ router.post('/cross-checks-clear', async (req, res) => {
     const now = new Date();
     const ops = [];
     const notFlagged = [];
-    for (const id of ids) {
-      const tripped = hitsById.get(id);
-      if (tripped === undefined) continue; // wine not found — reported via updated count
+    // Iterate the FOUND docs (map keys are canonical String(_id)), not the
+    // client array — a case-variant id that the $in query matched must not
+    // silently fall out of the clearance (same shape as /verify-checks).
+    for (const [id, tripped] of hitsById) {
       if (tripped.length === 0) { notFlagged.push(id); continue; }
       ops.push({ updateOne: {
         filter: { _id: new mongoose.Types.ObjectId(id) },
@@ -1184,6 +1186,7 @@ router.delete('/cross-checks-clear', async (req, res) => {
   try {
     const ids = [...new Set((Array.isArray(req.body?.wineIds) ? req.body.wineIds : []).filter(isValidId))];
     if (ids.length < 1) return res.status(400).json({ error: 'wineIds must contain at least 1 valid id' });
+    if (ids.length > 500) return res.status(400).json({ error: 'At most 500 wineIds per call' });
 
     const raw = Array.isArray(req.body?.checks) ? req.body.checks : null;
     const specs = (raw || []).map(resolveCrossFieldCheck);
