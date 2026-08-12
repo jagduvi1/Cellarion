@@ -50,10 +50,27 @@ describe('shouldRegenerateSlug', () => {
     expect(WineDefinition.shouldRegenerateSlug(loaded())).toBe(false);
   });
 
-  test('a PRODUCER respelling alone does not — it folds away in the slug anyway', () => {
+  test('a PRODUCER respelling alone does not — the base comparison folds it away', () => {
+    // Producer edits now ENTER the check (see the re-attribution test below);
+    // a respelling still never churns because the regenerated base is
+    // identical to the slug the wine already has.
     const doc = loaded();
     doc.producer = 'Frederic Magnien';
     expect(WineDefinition.shouldRegenerateSlug(doc)).toBe(false);
+  });
+
+  test('a producer RE-ATTRIBUTION regenerates — the slug carried the wrong winery', () => {
+    // THE ROW (2026-08-12): La Orphica corrected Juan Gil → Bodegas Trenza but
+    // kept serving at /wines/bodegas-juan-gil-la-orphica-monastrell — the wrong
+    // producer in the URL itself. The name-only guard is what produced it.
+    const doc = loaded({
+      name: 'La Orphica Monastrell',
+      producer: 'Bodegas Juan Gil',
+      slug: 'bodegas-juan-gil-la-orphica-monastrell',
+      normalizedKey: 'bodegas juan gil:la orphica monastrell:',
+    });
+    doc.producer = 'Bodegas Trenza';
+    expect(WineDefinition.shouldRegenerateSlug(doc)).toBe(true);
   });
 
   test('a rename that produces the SAME slug does not regenerate', () => {
@@ -119,6 +136,23 @@ describe('the outgoing slug stays alive', () => {
 
     expect(doc.slug).toBe('frederic-magnien-nuitssaintgeorges-premier-cru-cur-de-roches');
     expect(doc.previousSlugs).toEqual(['frederic-magnien-coeur-de-roi']);
+  });
+
+  test('a producer re-attribution redirects too: old slug onto previousSlugs, new one taken', async () => {
+    withFreeSlugs();
+    const doc = loaded({
+      name: 'La Orphica Monastrell',
+      producer: 'Bodegas Juan Gil',
+      slug: 'bodegas-juan-gil-la-orphica-monastrell',
+      normalizedKey: 'bodegas juan gil:la orphica monastrell:',
+    });
+    doc.producer = 'Bodegas Trenza';
+
+    await new Promise((resolve, reject) =>
+      doc.constructor.hooks.execPre('save', doc, (err) => (err ? reject(err) : resolve())));
+
+    expect(doc.slug).toBe('bodegas-trenza-la-orphica-monastrell');
+    expect(doc.previousSlugs).toEqual(['bodegas-juan-gil-la-orphica-monastrell']);
   });
 
   test('previousSlugs is bounded and never records the slug the wine currently has', async () => {

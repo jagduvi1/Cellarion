@@ -582,11 +582,16 @@ wineDefinitionSchema.statics.findFreeSlug = async function (base) {
  * Georges Premier Cru Cœur de Roches" and still served at /wines/coeur-de-roi.
  * A slug that states a name the wine does not have is a second wrong record.
  *
- * Narrow on purpose — this must fire on a real rename and nothing else:
+ * Narrow on purpose — this must fire on a real identity change and nothing else:
  *   - only when a slug already exists (assignment is shouldAssignSlug's job)
  *     and the doc is not new;
- *   - only when `name` was modified. A producer respelling folds away in
- *     generateWineSlug, and re-saving an untouched row must never churn;
+ *   - only when `name` or `producer` was modified. Producer matters just as
+ *     much as name: the slug is derived from BOTH, and a re-attribution left
+ *     the Trenza wine published at /wines/bodegas-juan-gil-… — the wrong
+ *     winery in the URL itself (found 2026-08-12). A producer RESPELLING that
+ *     folds to the same slug is caught by the base comparison below and never
+ *     churns, which is what the old name-only guard wrongly assumed it had to
+ *     protect against;
  *   - only when the slug would actually CHANGE. The current slug may be a
  *     disambiguated form of the same base ("cloudy-bay-2"), which is still the
  *     right slug for this name and must not be regenerated into "-3" on every
@@ -596,7 +601,7 @@ wineDefinitionSchema.statics.findFreeSlug = async function (base) {
 wineDefinitionSchema.statics.shouldRegenerateSlug = function (doc) {
   if (!doc.slug || doc.isNew) return false;
   if (doc.pendingIdentity === true) return false;
-  if (!doc.isModified('name')) return false;
+  if (!doc.isModified('name') && !doc.isModified('producer')) return false;
   const base = generateWineSlug(doc.name, doc.producer);
   if (!base || doc.slug === base) return false;
   if (doc.slug.startsWith(`${base}-`)) {
