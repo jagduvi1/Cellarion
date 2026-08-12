@@ -227,10 +227,10 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
       {successMsg && <div className="alert alert-success">{successMsg}</div>}
       {error && <div className="alert alert-error">{error}</div>}
       {loading && <p>{t('common.loading')}</p>}
+      {/* "every wine has a usable identity" is only true of an UNFILTERED
+          empty queue. With a source filter on, or with dispositioned rows
+          hidden, it asserts the exact opposite of the truth (audit M-3). */}
       {wines !== null && !loading && wines.length === 0 && !error && (
-        {/* "every wine has a usable identity" is only true of an UNFILTERED
-            empty queue. With a source filter on, or with dispositioned rows
-            hidden, it asserts the exact opposite of the truth (audit M-3). */}
         <p>{(viaFilter || unavailableTotal > 0)
           ? t('admin.wines.pendingIdentity.emptyFiltered', { n: unavailableTotal })
           : t('admin.wines.pendingIdentity.empty')}</p>
