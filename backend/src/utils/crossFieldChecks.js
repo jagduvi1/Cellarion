@@ -56,6 +56,7 @@ const {
   resolveGrapeName,
   isRecognizedCountry,
   isUnknownName,
+  tokenize,
 } = require('./normalize');
 
 /**
@@ -314,6 +315,57 @@ const CROSS_FIELD_CHECKS = [
     },
   },
   {
+    // Producer "Increíble", name "Increíble" — the label's one readable word
+    // echoed into both boxes by the scan.
+    //
+    // THIS RULE IS A FLAG, AND THAT IS THE WHOLE POINT. The same suspicion used
+    // to live in utils/normalize.isImplausibleIdentity, where it BLOCKED
+    // promotion — and blocking it condemned an entire category of real wine:
+    // producer == name is the SINGLE-WINE ESTATE (Château Margaux, Petrus,
+    // Krug, Salon, Opus One, Sassicaia, Masseto, Château Rayas, J.J. Prüm), and
+    // the containment half condemned Domaine de la Romanée-Conti / "Romanée-
+    // Conti", Harlan Estate / "Harlan", Duckhorn / "Duckhorn Vineyards". 67 of
+    // 91 sampled real pairs. Nothing in the STRING distinguishes those from the
+    // "Increíble" echo; only a person looking at the label can.
+    //
+    // So the "Increíble" case is now SURFACED here rather than buried in a
+    // refusal a curator could not see or overrule: it lands in this queue like
+    // every other rule, and a real single-estate wine is cleared once with the
+    // existing per-rule clearing mechanism (crossChecksCleared) and never asks
+    // again. Meanwhile P2's 7-day post-promotion scan window keeps the label
+    // photo readable while a curator judges it — which is exactly the evidence
+    // the original prod row no longer had.
+    //
+    // Overlaps nameChecks' name-equals-producer.v1 on the equality half, on
+    // purpose: that suite is a different queue with a different clearance field
+    // (verifiedChecks), and the placement queue is where a curator working
+    // producer defects actually looks.
+    id: 'producer-echoes-name.v1',
+    labelKey: 'producerEchoesName',
+    field: 'producer',
+    defaultActive: true,
+    detect: (w) => {
+      const p = normalizeString(w.producer || '');
+      const n = normalizeString(w.name || '');
+      if (!p || !n) return null;
+      if (p === n) return `${w.producer.trim()} = ${w.name.trim()}`;
+      // Containment leaving NO DISTINCT remainder on either side, compared on
+      // stop-word-stripped tokens — "Increíble Wines" / "Increíble" is the same
+      // echo wearing an estate word, while "Cloudy Bay" / "Cloudy Bay Sauvignon
+      // Blanc" leaves 'sauvignon blanc' and is a real (if badly formatted) row.
+      const pTok = tokenize(w.producer || '');
+      const nTok = tokenize(w.name || '');
+      // All-stop-word sides are utils/normalize.isImplausibleIdentity's
+      // business (it still BLOCKS a producer that is only house words) and
+      // comparing two empty token lists would flag every such pair twice.
+      if (!pTok.length || !nTok.length) return null;
+      const pSet = new Set(pTok);
+      const nSet = new Set(nTok);
+      if (pTok.some((t) => !nSet.has(t)) || nTok.some((t) => !pSet.has(t))) return null;
+      return `${w.producer.trim()} = ${w.name.trim()}`;
+    },
+  },
+  {
     // "Cabernet Sauvignon" as appellation. Curated Grape docs/synonyms ONLY —
     // deliberately NOT resolveGrapeName's static map, whose keys include wine
     // names misused as grapes ("Muscadet" → Melon de Bourgogne) that are
@@ -351,17 +403,34 @@ const CROSS_FIELD_CHECKS = [
     // maturity curve is computed for the wrong style. Pure string test — the
     // only rule in this family that reads `type`, which is why `type` joins
     // CROSS_FIELD_CHECK_SELECT and the crossChecksCleared invalidation set.
-    id: 'colour-contradiction.v1',
+    // v2 (audit L-7): two exemptions, both measured against real rows.
+    //   (a) a colour word that is also in the PRODUCER string is the ESTATE's
+    //       name, not a claim about the wine — "Cheval Blanc" (a red),
+    //       "Mas Blanc", "Clos Blanc". The name repeats the house; the house is
+    //       not evidence of colour.
+    //   (b) "White <grape>" on a rosé is the American label convention for a
+    //       rosé pressed off a black grape — "White Zinfandel", "White Merlot".
+    //       Judged against the live Grape refs rather than a hardcoded list, so
+    //       it widens with the taxonomy exactly as the rest of this family does.
+    id: 'colour-contradiction.v2',
     labelKey: 'colourContradiction',
     field: 'type',
     defaultActive: true,
-    detect: (w) => {
+    detect: (w, refs) => {
       const type = w.type;
       if (!COLOUR_TYPES.has(type)) return null;
+      const producerTokens = new Set(
+        normalizeString((w.producer || '').replace(/ß/g, 'ss')).split(' ').filter(Boolean)
+      );
       const tokens = normalizeString((w.name || '').replace(/ß/g, 'ss')).split(' ').filter(Boolean);
-      for (const t of tokens) {
+      for (let i = 0; i < tokens.length; i++) {
+        const t = tokens[i];
         const implied = NAME_COLOUR_TERMS.get(t);
-        if (implied && implied !== type) return `${t} → ${implied}, stored as ${type}`;
+        if (!implied || implied === type) continue;
+        if (producerTokens.has(t)) continue;                                    // (a)
+        if (type === 'rosé' && implied === 'white' &&
+            lookupEntity(refs?.grapes || new Map(), tokens[i + 1] || '')) continue; // (b)
+        return `${t} → ${implied}, stored as ${type}`;
       }
       return null;
     },
@@ -390,7 +459,13 @@ const DB_BACKED_CROSS_FIELD_CHECKS = [
     // scanner got slightly WRONG, which is only ever suspicious within one
     // producer's own range. FLAG ONLY — a producer really can own two
     // similarly-named cuvées, so nothing is ever changed automatically.
-    id: 'cuvee-near-miss.v1',
+    //
+    // v2 (audit M-6): threshold 0.85 → 0.78, and a NUMERIC-ONLY difference is
+    // now disqualified — "Reserva 2010"/"Reserva 2011" and "Valbuena 5"/
+    // "Valbuena 3" score above ANY threshold and are different wines, not
+    // misreads. The threshold comment in services/crossFieldScan states what
+    // 0.78 still does not reach, and why no threshold reaches it.
+    id: 'cuvee-near-miss.v2',
     labelKey: 'cuveeNearMiss',
     field: 'name',
     defaultActive: true,
@@ -419,6 +494,11 @@ const ALL_CROSS_FIELD_CHECKS = [...CROSS_FIELD_CHECKS, ...DB_BACKED_CROSS_FIELD_
  * real but badly FORMATTED — "Cloudy Bay" under name "Cloudy Bay Sauvignon
  * Blanc" trips name-in-producer, and refusing that would trap a wine whose
  * curator transcribed the label correctly. Those stay in the review queue.
+ *
+ * And emphatically NOT producer-echoes-name.v1. Refusing producer == name is
+ * how the previous revision condemned Château Margaux, Petrus, Krug, Salon and
+ * 63 other real single-wine estates; that rule exists to be LOOKED AT, never to
+ * refuse a write. See its comment above.
  */
 const IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS = [
   'producer-is-appellation.v1',
@@ -452,7 +532,7 @@ function runCrossFieldChecks(wine, refs, { checkIds = DEFAULT_CROSS_FIELD_CHECK_
     // source of truth — the staleness contract test appends a rule and proves
     // clearances recorded before it existed cannot suppress it (the same
     // guarantee nameChecks pins). Deliberately searches the PURE list only: a
-    // DB-backed id (cuvee-near-miss.v1) has no detect and is computed by
+    // DB-backed id (cuvee-near-miss.v2) has no detect and is computed by
     // services/crossFieldScan, so it falls through here rather than needing a
     // special case at every call site.
     const check = CROSS_FIELD_CHECKS.find(c => c.id === id);

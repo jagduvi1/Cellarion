@@ -68,7 +68,12 @@ const ENTRIES = [
   { region: 'Pfalz',      country: 'Germany', synonyms: ['Pfälzer', 'Pfalzer'], why: 'adjectival label form' },
   { region: 'Rheingau',   country: 'Germany', synonyms: ['Rheingauer'],         why: 'adjectival label form' },
   { region: 'Baden',      country: 'Germany', synonyms: ['Badener', 'Badische'], why: 'adjectival label forms' },
-  { region: 'Mosel',      country: 'Germany', synonyms: ['Moselle'],            why: 'the French/English spelling of the same river region' },
+  // DELIBERATELY ABSENT: Mosel ← "Moselle" (audit L-9). Moselle is also a real
+  // French AOC on the same river, and aliasing the string to the GERMAN region
+  // would make a later mint resolve a Lorraine wine to Germany — a
+  // cross-jurisdiction error the taxonomy cannot detect afterwards, and one
+  // this list's own rule ("never a neighbouring place") forbids. If Moselle AOC
+  // is ever added as its own Region, nothing needs re-deciding.
 
   // ── France — the regional NOUN a label uses for the wider area.
   { region: 'Bordeaux',   country: 'France',  synonyms: ['Bordelais'],          why: 'the regional noun/adjective for the Bordeaux area' },
@@ -78,7 +83,10 @@ const ENTRIES = [
   { region: 'Champagne',  country: 'France',  synonyms: ['Champenois'],         why: 'adjectival form' },
 
   // ── Spain — Castilian/Catalan variants and the -ano adjective.
-  { region: 'Rioja',      country: 'Spain',   synonyms: ['Riojano', 'La Rioja'], why: 'adjectival form + the full regional name' },
+  // "La Rioja" is NOT here (audit L-9): it is also an Argentine wine province,
+  // and pointing the bare string at SPAIN's Rioja would silently resolve
+  // Argentine wines to the wrong country. Same rule as Moselle above.
+  { region: 'Rioja',      country: 'Spain',   synonyms: ['Riojano'],             why: 'adjectival form' },
   { region: 'Priorat',    country: 'Spain',   synonyms: ['Priorato'],            why: 'the Castilian spelling of the Catalan name' },
   { region: 'Jerez',      country: 'Spain',   synonyms: ['Jerezano'],            why: 'adjectival form' },
 

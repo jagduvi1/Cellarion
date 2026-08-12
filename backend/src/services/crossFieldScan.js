@@ -30,7 +30,7 @@ const {
 const { normalizeString, normalizeProducerKey, calculateSimilarity } = require('../utils/normalize');
 
 /** The DB-backed rule this file computes (declared in utils/crossFieldChecks). */
-const CUVEE_NEAR_MISS = 'cuvee-near-miss.v1';
+const CUVEE_NEAR_MISS = 'cuvee-near-miss.v2';
 
 /**
  * How alike two names from ONE producer have to be before the pair reads as a
@@ -41,18 +41,59 @@ const CUVEE_NEAR_MISS = 'cuvee-near-miss.v1';
  * "Alexandra", "Vieilles" / "Vielles"), and the composite's token-Jaccard third
  * scores exactly that shape LOWER than an honest suffix addition
  * ("Chardonnay" / "Chardonnay Reserve"), which is the opposite of what this
- * rule wants. 0.85 measured against the pairs in the suite.
+ * rule wants.
+ *
+ * 0.78, not 0.85 (audit M-6), and the lower bar is only safe because of
+ * NUMERIC_TOKEN_DIFF below: the extra pairs a looser threshold buys are
+ * overwhelmingly vintage/lot digits ("Reserva 2010" ~ "Reserva 2011" = 0.92,
+ * "Valbuena 5" ~ "Valbuena 3" = 0.90), and those are now disqualified outright.
+ *
+ * STATED HONESTLY — 0.78 still does NOT reach the row this rule was written for.
+ * Measured, not assumed:
+ *     calculateSimilarity('coeur de roi', 'coeur de roches') = 0.7333
+ *     (and the pair AS STORED is worse still: normalizeString deletes the œ
+ *      ligature, so "Cœur de Roches" folds to 'cur de roches' → 0.5385)
+ * while the nearest same-producer pair that must NEVER flag —
+ *     'brunello di montalcino' ~ 'rosso di montalcino' = 0.7273, two real wines
+ *     hundreds of Montalcino estates both make —
+ * sits 0.006 below it. There is no threshold that separates them, so no
+ * threshold is set there: 0.78 widens the net as far as it can go before
+ * ordinary range pairs start arriving. Catching "Roi"/"Roches" needs evidence
+ * this rule does not have (the label photo), which is what the pending-identity
+ * queue and its 7-day scan window are for.
  */
-const NEAR_MISS_MIN_SIMILARITY = 0.85;
+const NEAR_MISS_MIN_SIMILARITY = 0.78;
 // Short names hit high edit-distance ratios by accident ("Brut" / "Brun").
 const NEAR_MISS_MIN_LENGTH = 6;
+/**
+ * Do two names differ ONLY in numeric tokens?
+ *
+ * "Reserva 2010" / "Reserva 2011" and "Valbuena 5" / "Valbuena 3" are the two
+ * shapes that flood this rule once the threshold is loosened, and neither is a
+ * misread: a vintage or a lot number IS the distinction between two real,
+ * separate wines. A vision misread changes LETTERS ("roi" → "roches",
+ * "Alexandre" → "Alexandra"); if every token that differs is digits, the pair is
+ * a range, not a mistake.
+ *
+ * Compared on raw normalized tokens (not `tokenize`) so nothing is dropped
+ * before the diff — a stop word that differs is still a letter difference.
+ */
+const NUMERIC_TOKEN_DIFF = (aNorm, bNorm) => {
+  const a = aNorm.split(' ').filter(Boolean);
+  const b = bNorm.split(' ').filter(Boolean);
+  const aSet = new Set(a);
+  const bSet = new Set(b);
+  const differing = [...a.filter((t) => !bSet.has(t)), ...b.filter((t) => !aSet.has(t))];
+  return differing.length > 0 && differing.every((t) => /^\d+$/.test(t));
+};
+
 // One producer with a very large range would make the O(n²) pass the dominant
 // cost of the whole scan; above this the group is skipped and reported nowhere.
 // No real winery's registry range is anywhere near it.
 const NEAR_MISS_MAX_GROUP = 200;
 
 /**
- * cuvee-near-miss.v1 — for each wine, the SAME PRODUCER's most similar other
+ * cuvee-near-miss.v2 — for each wine, the SAME PRODUCER's most similar other
  * name, when it is nearly but not exactly the same string.
  *
  * Grouped on normalizeProducerKey so a producer's own spelling variants
@@ -63,7 +104,8 @@ const NEAR_MISS_MAX_GROUP = 200;
  *
  * CONTAINMENT is not a near miss: "Gran Reserva" beside "Gran Reserva 904" is
  * a range, not a misread, and it scores high on any string metric. Whole-name
- * containment (either direction) disqualifies the pair before scoring.
+ * containment (either direction) disqualifies the pair before scoring. Nor is a
+ * NUMERIC-ONLY difference (NUMERIC_TOKEN_DIFF) — "Reserva 2010"/"Reserva 2011".
  *
  * @param {Array<{_id, name, producer}>} wines  flattened rows
  * @returns {Map<string, string>} wineId → the other wine's name
@@ -89,6 +131,8 @@ function detectCuveeNearMiss(wines) {
         const b = list[j];
         if (a.norm === b.norm) continue;                       // identical is the duplicate scanner's problem
         if (a.norm.includes(b.norm) || b.norm.includes(a.norm)) continue;
+        // A vintage or lot number is a real distinction, never a misread (M-6).
+        if (NUMERIC_TOKEN_DIFF(a.norm, b.norm)) continue;
         if (calculateSimilarity(a.norm, b.norm) < NEAR_MISS_MIN_SIMILARITY) continue;
         // BOTH rows are flagged, each naming the other: a curator cannot tell
         // from one row alone which of the two is the misread.
@@ -125,7 +169,7 @@ const flattenWine = (w, regionNamesById, countryNamesById) => ({
   appellation: w.appellation || null,
   region: w.region ? (regionNamesById.get(String(w.region)) || null) : null,
   country: w.country ? (countryNamesById.get(String(w.country)) || null) : null,
-  // Read only by colour-contradiction.v1 — the one rule in the family whose
+  // Read only by colour-contradiction.v2 — the one rule in the family whose
   // verdict is about the wine's own colour rather than a reference list.
   type: w.type || null,
   crossChecksCleared: w.crossChecksCleared,

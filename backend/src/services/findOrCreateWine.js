@@ -504,21 +504,23 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     }
   }
 
-  // Producer SHAPE gate. Both fields are present and non-sentinel and the pair
-  // is still not an identity — the prod row that motivated this: producer
-  // "Increíble" AND name "Increíble", the label's one readable word echoed into
-  // both boxes. Minting that publicly is worse than filing it pending, because
-  // a public row loses its label photo to the promoted-scan clock and keeps its
-  // 45%-weighted producer segment in every future dedup comparison.
+  // Producer SHAPE gate — the same predicate the auto-promote hook uses
+  // (utils/normalize.isImplausibleIdentity), so mint, promote and curation
+  // share ONE definition, with the same two outcomes as the gates above:
+  // pending for commit paths, a 400 for the deliberate curation surfaces.
   //
-  // Same predicate the auto-promote hook uses (utils/normalize
-  // .isImplausibleIdentity) — one definition across mint, promote and curation
-  // — and the same two outcomes as the gates above: pending for commit paths,
-  // a 400 for the deliberate curation surfaces, which should be told.
+  // DELIBERATELY ALMOST EMPTY. It used to also refuse producer == name and
+  // house-word-stripped containment, which condemned Château Margaux, Petrus,
+  // Krug, Domaine de la Romanée-Conti / "Romanée-Conti" and 64 other real
+  // wines — see the predicate's own comment. What survives here is the
+  // all-house-words producer ("Domaine", "The Wine Estate"); the sub-2-char
+  // case is already refused by the length gate above with its own message.
+  // The echo is now a cross-field FLAG (producer-echoes-name.v1), reviewed by a
+  // human with the label in front of them, never a refusal.
   if (!producerMissing && isImplausibleIdentity(trimmedProducer, trimmedName)) {
     if (!allowPending) {
       const err = new Error(
-        `"${trimmedProducer}" is not a usable producer for "${trimmedName}" — the producer field must name the winery, distinctly from the wine name`
+        `"${trimmedProducer}" is not a usable producer name — it is only house words (Domaine, Casa, Estate) with no winery attached to them`
       );
       err.status = 400;
       throw err;

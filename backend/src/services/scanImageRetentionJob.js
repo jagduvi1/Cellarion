@@ -68,7 +68,11 @@ async function runPromotedScanExpirySweep() {
   const now = new Date();
   const expired = await BottleImage.find({
     kind: 'label-scan',
-    retainUntil: { $ne: null, $lt: now },
+    // `$type: 'date'` rather than `$ne: null` — identical semantics here (the
+    // field is a Date or null), but it matches the index's
+    // partialFilterExpression exactly, so the planner can prove the partial
+    // index covers this query (models/BottleImage, audit L-10).
+    retainUntil: { $type: 'date', $lt: now },
   })
     .select('originalUrl processedUrl')
     .limit(SWEEP_LIMIT)
@@ -85,7 +89,11 @@ async function runPromotedScanExpirySweep() {
   const res = await BottleImage.deleteMany({
     _id: { $in: ids },
     kind: 'label-scan',
-    retainUntil: { $ne: null, $lt: now },
+    // `$type: 'date'` rather than `$ne: null` — identical semantics here (the
+    // field is a Date or null), but it matches the index's
+    // partialFilterExpression exactly, so the planner can prove the partial
+    // index covers this query (models/BottleImage, audit L-10).
+    retainUntil: { $type: 'date', $lt: now },
   });
   const deleted = res.deletedCount || 0;
 

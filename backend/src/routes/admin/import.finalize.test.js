@@ -10,7 +10,9 @@
 
 jest.mock('../../services/search', () => ({ fullSync: jest.fn(), indexWine: jest.fn() }));
 jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
-jest.mock('../../models/WineDefinition', () => ({ findById: jest.fn(), findOne: jest.fn() }));
+jest.mock('../../models/WineDefinition', () => ({
+  findById: jest.fn(), findOne: jest.fn(), findFreeSlug: jest.fn(),
+}));
 jest.mock('../../models/Country', () => ({ findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
 jest.mock('../../models/Region', () => ({ findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
 jest.mock('../../models/Appellation', () => ({ findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
@@ -39,6 +41,9 @@ const slugProbe = (result) => ({ select: () => ({ lean: () => Promise.resolve(re
 beforeEach(() => {
   jest.clearAllMocks();
   WineDefinition.findOne.mockReturnValue(slugProbe(null)); // no slug collision
+  // The real static (models/WineDefinition) probes slug AND previousSlugs; here
+  // the base is simply free.
+  WineDefinition.findFreeSlug.mockImplementation(async (base) => base);
 });
 
 describe('finalizeMintedWines', () => {
@@ -54,15 +59,50 @@ describe('finalizeMintedWines', () => {
     expect(d.save).toHaveBeenCalled();
   });
 
-  test('slug collision gets the -2 suffix, mirroring the model pre-save hook', async () => {
+  test('the slug comes from findFreeSlug — NOT a bare { slug } probe (audit M-5)', async () => {
+    // This was the fifth slug-assignment site and the only one still blind to
+    // previousSlugs: a bare `findOne({ slug })` happily hands an import a slug
+    // that another wine still ANSWERS TO after a rename, and then
+    // { $or: [{slug}, {previousSlugs}] } matches two documents and /wines/<slug>
+    // resolves nondeterministically. Suffix behaviour itself is pinned on the
+    // static (models/WineDefinition.slugRename.test.js).
     const d = doc();
     WineDefinition.findById.mockReturnValue(selectChain(d));
-    // First probe: taken; second: free.
-    WineDefinition.findOne
-      .mockReturnValueOnce(slugProbe({ _id: 'other' }))
-      .mockReturnValue(slugProbe(null));
+    WineDefinition.findFreeSlug.mockResolvedValue('albe-2');
+
     await finalizeMintedWines(['w1']);
-    expect(d.slug.endsWith('-2')).toBe(true);
+
+    expect(WineDefinition.findFreeSlug).toHaveBeenCalledTimes(1);
+    expect(d.slug).toBe('albe-2');
+    // No hand-rolled probe survives anywhere on this path.
+    expect(WineDefinition.findOne).not.toHaveBeenCalled();
+  });
+
+  test('a save collision re-asks findFreeSlug instead of mangling the slug', async () => {
+    const err = Object.assign(new Error('dup'), { code: 11000 });
+    const d = doc({ save: jest.fn().mockRejectedValueOnce(err).mockResolvedValue(undefined) });
+    WineDefinition.findById.mockReturnValue(selectChain(d));
+    WineDefinition.findFreeSlug
+      .mockResolvedValueOnce('albe')
+      .mockResolvedValueOnce('albe-2');
+
+    expect(await finalizeMintedWines(['w1'])).toBe(1);
+    // Was `${doc.slug}-r1` — a slug nothing had checked against previousSlugs.
+    expect(d.slug).toBe('albe-2');
+  });
+
+  test('a save collision that is NOT the slug is not retried forever', async () => {
+    // findFreeSlug returning the same value means the 11000 came from
+    // normalizedKey; mangling the URL would not fix it, so the row fails
+    // (non-fatally) instead of spinning.
+    const err = Object.assign(new Error('dup'), { code: 11000 });
+    const d = doc({ save: jest.fn().mockRejectedValue(err) });
+    WineDefinition.findById.mockReturnValue(selectChain(d));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    expect(await finalizeMintedWines(['w1'])).toBe(0);
+    expect(d.save).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
   });
 
   test('existing slug and createdVia are never overwritten', async () => {

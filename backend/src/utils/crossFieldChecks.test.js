@@ -52,7 +52,7 @@ describe('rule registry shape', () => {
       expect(typeof c.id).toBe('string');
       expect(c.id).toMatch(/\.v\d+$/); // versioned — refinement bumps it
       expect(typeof c.labelKey).toBe('string');
-      // 'type' joined with colour-contradiction.v1 — the one rule whose
+      // 'type' joined with colour-contradiction.v2 — the one rule whose
       // verdict is about the wine's own colour rather than a reference list.
       expect(['name', 'producer', 'appellation', 'region', 'type']).toContain(c.field);
       expect(typeof c.detect).toBe('function');

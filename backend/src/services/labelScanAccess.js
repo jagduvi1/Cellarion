@@ -75,9 +75,45 @@ const mayCurationReadScan = (wine, image, now = Date.now()) => {
   return isWithinPromotedGrace(image, now);
 };
 
+/**
+ * Start the clock on one promoted wine's label scan.
+ *
+ * ONE implementation, called from the WineDefinition post('save') hook — i.e.
+ * from the transition itself, so no write path can promote a row and forget
+ * (audit M-4). The admin PUT and /strip-producer both set a producer and
+ * save(), the hook clears pendingIdentity, and neither route called the
+ * follow-through: the scan became unreadable (the wine is no longer pending)
+ * AND unsweepable (retainUntil null is excluded by the expiry sweep), leaving
+ * the file on disk forever with no way to read it. That is precisely the "worst
+ * of both worlds" this grace window exists to end.
+ *
+ * IDEMPOTENT by construction: the update matches only `retainUntil: null`, so a
+ * second call — services/pendingWineOps.runPromotionFollowThrough still makes
+ * one, deliberately, for the curation path — can never extend a live deadline.
+ * Best-effort: a missed stamp leaves the scan on its old (indefinite) footing
+ * and never deletes anything early.
+ *
+ * @param {{scanImage?: any}} wine
+ */
+const stampPromotedScanRetention = async (wine) => {
+  if (!wine || !wine.scanImage) return;
+  try {
+    const BottleImage = require('../models/BottleImage');
+    await BottleImage.updateOne(
+      // Re-assert kind: nothing else in this collection may be given a
+      // retention deadline by this path.
+      { _id: wine.scanImage, kind: 'label-scan', retainUntil: null },
+      { $set: { retainUntil: promotedScanDeadline() } }
+    );
+  } catch (err) {
+    console.warn('[labelScanAccess] label-scan retention stamp failed (non-fatal):', err.message);
+  }
+};
+
 module.exports = {
   PROMOTED_SCAN_GRACE_DAYS,
   promotedScanDeadline,
   isWithinPromotedGrace,
   mayCurationReadScan,
+  stampPromotedScanRetention,
 };

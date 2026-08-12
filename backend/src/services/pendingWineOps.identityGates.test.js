@@ -84,9 +84,23 @@ beforeEach(() => {
 });
 
 describe('shape gate', () => {
-  test('THE BUG: completing "Increíble" with producer "Increíble" is REFUSED, not silently left pending', async () => {
+  test('INVERTED: completing "Increíble" with producer "Increíble" is ACCEPTED and promotes', async () => {
+    // Was refused. Refusing it also refused a curator writing "Petrus" as the
+    // producer of "Petrus" — the single-wine estate, 67 of 91 sampled real
+    // pairs (audit H-1/H-2). The suspicion is now producer-echoes-name.v1 in
+    // the cross-field REVIEW queue, where a curator with the label photo (still
+    // readable for 7 days after promotion) can clear it or correct it.
     const wine = pendingWine();
     const res = await applyPendingFix(wine, { producer: 'Increíble' }, CURATOR);
+
+    expect(res.ok).toBe(true);
+    expect(res.promoted).toBe(true);
+    expect(wine.producer).toBe('Increíble');
+  });
+
+  test('what the shape gate STILL refuses: a producer that is only house words', async () => {
+    const wine = pendingWine();
+    const res = await applyPendingFix(wine, { producer: 'Domaine' }, CURATOR);
 
     expect(res.ok).toBe(false);
     expect(res.code).toBe('invalid_input');
@@ -96,7 +110,7 @@ describe('shape gate', () => {
   });
 
   test('it runs BEFORE any DB work — no taxonomy round-trip is spent on a doomed fix', async () => {
-    await applyPendingFix(pendingWine(), { producer: 'Increíble' }, CURATOR);
+    await applyPendingFix(pendingWine(), { producer: 'Domaine' }, CURATOR);
     expect(detectCrossFieldForValues).not.toHaveBeenCalled();
   });
 
@@ -164,5 +178,47 @@ describe('cross-field gate', () => {
     expect(res.ok).toBe(true);
     expect(res.promoted).toBe(true);
     expect(detectCrossFieldForValues).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * The OVERRIDE (audit L-10b). Users can mint Regions and Appellations, so a
+ * junk taxonomy row bearing a real producer's name made that producer
+ * permanently unwritable — and the only escape left was identityUnavailable,
+ * i.e. recording a FALSEHOOD about a label that plainly prints the name.
+ */
+describe('cross-field override', () => {
+  const REGION_HIT = [{ check: 'producer-is-region.v1', detail: 'Ferreirinha' }];
+
+  test('the refusal names the override instead of leaving the curator stuck', async () => {
+    detectCrossFieldForValues.mockResolvedValue(REGION_HIT);
+    const res = await applyPendingFix(pendingWine({ name: 'Barca Velha' }), { producer: 'Ferreirinha' }, CURATOR);
+
+    expect(res.ok).toBe(false);
+    expect(res.message).toContain('crossFieldOverride: true');
+  });
+
+  test('with the override the write lands, and the overridden rules come back for the audit log', async () => {
+    detectCrossFieldForValues.mockResolvedValue(REGION_HIT);
+    const wine = pendingWine({ name: 'Barca Velha' });
+
+    const res = await applyPendingFix(wine, { producer: 'Ferreirinha', crossFieldOverride: true }, CURATOR);
+
+    expect(res.ok).toBe(true);
+    expect(res.promoted).toBe(true);
+    expect(res.crossFieldOverridden).toEqual([{ check: 'producer-is-region.v1', detail: 'Ferreirinha' }]);
+  });
+
+  test('a clean write reports NO override — the audit entry must not claim one', async () => {
+    const res = await applyPendingFix(pendingWine({ name: 'Barca Velha' }), { producer: 'Ferreirinha', crossFieldOverride: true }, CURATOR);
+    expect(res.ok).toBe(true);
+    expect(res.crossFieldOverridden).toBeNull();
+  });
+
+  test('it does not disarm the SHAPE gate — that one has no override', async () => {
+    // The shape gate refuses only what cannot be an identity in any language;
+    // there is no taxonomy mistake for a curator to be right about.
+    const res = await applyPendingFix(pendingWine(), { producer: 'Domaine', crossFieldOverride: true }, CURATOR);
+    expect(res.ok).toBe(false);
   });
 });

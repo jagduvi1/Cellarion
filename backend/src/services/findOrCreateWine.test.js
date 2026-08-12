@@ -235,14 +235,15 @@ describe('findOrCreateWine — producer-prefix canonicalization (step 0)', () =>
 
   test('a name identical to the producer is left alone (nothing would remain)', async () => {
     // Step 0 is the subject here: the strip must not eat the whole name.
-    // Routed through a COMMIT path because the identity shape gate further down
-    // now refuses producer === name outright on the curation surfaces — the
-    // "Increíble"/"Increíble" class. The name still has to survive step 0
-    // intact, and the row is filed pending rather than minted public.
-    await findOrCreateWine({ ...INPUT, name: 'Paul Avril' }, USER_ID, { allowPending: true });
+    //
+    // INVERTED (audit H-1): this briefly asserted pendingIdentity: true, because
+    // the shape gate refused producer === name. That refusal is gone — it is the
+    // single-wine estate, and "Paul Avril"/"Paul Avril" is exactly the shape
+    // Petrus and Château Margaux have. The row mints PUBLIC, name intact.
+    await findOrCreateWine({ ...INPUT, name: 'Paul Avril' }, USER_ID);
 
     expect(WineDefinition.mock.calls[0][0].name).toBe('Paul Avril');
-    expect(WineDefinition.mock.calls[0][0].pendingIdentity).toBe(true);
+    expect(WineDefinition.mock.calls[0][0].pendingIdentity).toBe(false);
   });
 });
 

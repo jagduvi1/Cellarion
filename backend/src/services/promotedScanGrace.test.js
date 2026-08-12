@@ -122,6 +122,49 @@ describe('the stamp — promotion starts the clock', () => {
     await expect(runPromotionFollowThrough(promotedWine())).resolves.toBeUndefined();
     warn.mockRestore();
   });
+
+  /**
+   * Audit M-4. "Every promoting caller runs the follow-through" was FALSE: the
+   * admin PUT (routes/admin/wines.js) and POST /:id/strip-producer promote by
+   * setting a producer and calling save(), and called nothing. The scan then
+   * became unreadable (curation access is gated on pending-or-within-grace) AND
+   * unsweepable (the expiry job excludes a null retainUntil) — kept forever,
+   * readable by nobody, the exact state this window exists to end.
+   *
+   * So the stamp moved onto the TRANSITION itself and is shared by both.
+   */
+  describe('the stamp is on the transition, not on the caller', () => {
+    const { stampPromotedScanRetention } = require('./labelScanAccess');
+
+    test('one shared implementation, reachable without the curation queue', async () => {
+      await stampPromotedScanRetention({ _id: 'w', scanImage: 'scan-9' });
+
+      const [filter, update] = BottleImage.updateOne.mock.calls[0];
+      expect(filter).toMatchObject({ _id: 'scan-9', kind: 'label-scan', retainUntil: null });
+      expect(update.$set.retainUntil).toBeInstanceOf(Date);
+    });
+
+    test('it is idempotent by filter — a second call cannot extend a live deadline', async () => {
+      await stampPromotedScanRetention({ scanImage: 'scan-9' });
+      await stampPromotedScanRetention({ scanImage: 'scan-9' });
+      for (const [filter] of BottleImage.updateOne.mock.calls) {
+        expect(filter.retainUntil).toBeNull();
+      }
+    });
+
+    test('no scan, no write', async () => {
+      await stampPromotedScanRetention({ scanImage: null });
+      await stampPromotedScanRetention(null);
+      expect(BottleImage.updateOne).not.toHaveBeenCalled();
+    });
+
+    test('it swallows its own failure — a promotion must not roll back over a stamp', async () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      BottleImage.updateOne.mockRejectedValue(new Error('mongo down'));
+      await expect(stampPromotedScanRetention({ scanImage: 'scan-9' })).resolves.toBeUndefined();
+      warn.mockRestore();
+    });
+  });
 });
 
 describe('the sweep — an expired scan is deleted, file, doc and pointer', () => {
@@ -147,7 +190,7 @@ describe('the sweep — an expired scan is deleted, file, doc and pointer', () =
 
     const filter = BottleImage.find.mock.calls[0][0];
     expect(filter.kind).toBe('label-scan');
-    expect(filter.retainUntil.$ne).toBeNull();
+    expect(filter.retainUntil.$type).toBe('date');
     expect(filter.retainUntil.$lt).toBeInstanceOf(Date);
     expect(res.expired).toBe(1);
   });
@@ -165,7 +208,7 @@ describe('the sweep — an expired scan is deleted, file, doc and pointer', () =
     const del = BottleImage.deleteMany.mock.calls[0][0];
     expect(del._id).toEqual({ $in: ['i1'] });
     expect(del.kind).toBe('label-scan');
-    expect(del.retainUntil.$ne).toBeNull();
+    expect(del.retainUntil.$type).toBe('date');
   });
 
   test('the wine\'s scanImage pointer is nulled for the rows that actually went', async () => {
@@ -191,8 +234,10 @@ describe('the sweep — an expired scan is deleted, file, doc and pointer', () =
   test('a STILL-PENDING wine\'s scan can never be selected — it carries no deadline', async () => {
     primeExpired([]);
     await runPromotedScanExpirySweep();
-    // The filter demands a non-null retainUntil, and only promotion writes one.
-    expect(BottleImage.find.mock.calls[0][0].retainUntil.$ne).toBeNull();
+    // The filter demands a real DATE retainUntil, and only promotion writes one.
+    // ($type: 'date' rather than $ne: null — identical semantics, but it matches
+    // the index's partialFilterExpression so the planner can use it; audit L-10.)
+    expect(BottleImage.find.mock.calls[0][0].retainUntil.$type).toBe('date');
   });
 
   test('the 30-day UNATTACHED sweep is unchanged and still ignores retainUntil', async () => {

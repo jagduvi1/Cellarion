@@ -1605,6 +1605,7 @@
           "producerPlaceholder": "Placeholder producer",
           "producerParenthetical": "Parenthetical in producer",
           "nameInProducer": "Name/producer overlap",
+          "producerEchoesName": "Producer echoes the name",
           "appellationIsGrape": "Appellation is a grape",
           "regionIsCountry": "Region is a country",
           "colourContradiction": "Name colour contradicts the type",
