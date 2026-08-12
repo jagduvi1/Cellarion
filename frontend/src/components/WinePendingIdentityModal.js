@@ -43,12 +43,19 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
   const [editing, setEditing] = useState(null);   // wineId being edited
   const [draft, setDraft] = useState(null);       // the edit form's values
   const [saving, setSaving] = useState(false);
-  const [rowError, setRowError] = useState(null);
+  // Keyed by wine id, NOT a single string: the error renders inside every
+  // non-editing row, so one shared value paints the same red paragraph under
+  // all 25 rows and follows the curator through paging (audit HIGH-1).
+  const [rowErrors, setRowErrors] = useState({});
   const [successMsg, setSuccessMsg] = useState(null);
 
   const fetchPage = useCallback(async (p) => {
     setLoading(true);
     setError(null);
+    // Stale row errors and a stale green banner must not survive a reload —
+    // they would follow the curator through paging and filter changes.
+    setRowErrors({});
+    setSuccessMsg(null);
     try {
       const params = new URLSearchParams({ page: p, limit: PAGE_SIZE });
       if (viaFilter) params.set('createdVia', viaFilter);
@@ -76,7 +83,7 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
   useEffect(() => { fetchPage(page); }, [fetchPage, page]);
 
   const startEdit = (w) => {
-    setRowError(null);
+    setRowErrors({});
     setEditing(w._id);
     setDraft({
       producer: w.producer || '',
@@ -88,7 +95,7 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
     });
   };
 
-  const cancelEdit = () => { setEditing(null); setDraft(null); setRowError(null); };
+  const cancelEdit = () => { setEditing(null); setDraft(null); setRowErrors({}); };
 
   /**
    * Re-read the current page after a write, stepping back when the row that
@@ -96,7 +103,8 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
    * index would show "nothing waiting" while rows sit on page 1).
    */
   const refetchAfterWrite = async () => {
-    const nextPage = wines.length === 1 && page > 1 ? page - 1 : page;
+    const rowLeavesList = !showUnavailable;   // with the filter on, a dispositioned row stays visible (audit LOW-5)
+    const nextPage = rowLeavesList && wines.length === 1 && page > 1 ? page - 1 : page;
     if (nextPage !== page) setPage(nextPage);
     await fetchPage(nextPage);
   };
@@ -111,18 +119,18 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
   const setUnavailable = async (wineId, value) => {
     if (value && !window.confirm(t('admin.wines.pendingIdentity.unavailableConfirm'))) return;
     setSaving(true);
-    setRowError(null);
+    setRowErrors({});
     try {
       const res = await sommFixPendingWine(apiFetch, wineId, { identityUnavailable: value });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setRowError(data.error || `Failed to save (${res.status})`);
+        setRowErrors({ [wineId]: data.error || `Failed to save (${res.status})` });
         return;
       }
       setSuccessMsg(data.message);
       await refetchAfterWrite();
     } catch {
-      setRowError(t('common.networkError'));
+      setRowErrors({ [wineId]: t('common.networkError') });
     } finally {
       setSaving(false);
     }
@@ -130,7 +138,7 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
 
   const save = async (wineId) => {
     setSaving(true);
-    setRowError(null);
+    setRowErrors({});
     try {
       // Only send what the curator actually typed — an untouched field must
       // not be echoed back as a "change" (and an empty producer would be
@@ -146,14 +154,14 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
       const res = await sommFixPendingWine(apiFetch, wineId, patch);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setRowError(data.error || `Failed to save (${res.status})`);
+        setRowErrors({ [wineId]: data.error || `Failed to save (${res.status})` });
         return;
       }
       setSuccessMsg(data.message);
       cancelEdit();
       await refetchAfterWrite();
     } catch {
-      setRowError(t('common.networkError'));
+      setRowErrors({ [wineId]: t('common.networkError') });
     } finally {
       setSaving(false);
     }
@@ -220,7 +228,12 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
       {error && <div className="alert alert-error">{error}</div>}
       {loading && <p>{t('common.loading')}</p>}
       {wines !== null && !loading && wines.length === 0 && !error && (
-        <p>{t('admin.wines.pendingIdentity.empty')}</p>
+        {/* "every wine has a usable identity" is only true of an UNFILTERED
+            empty queue. With a source filter on, or with dispositioned rows
+            hidden, it asserts the exact opposite of the truth (audit M-3). */}
+        <p>{(viaFilter || unavailableTotal > 0)
+          ? t('admin.wines.pendingIdentity.emptyFiltered', { n: unavailableTotal })
+          : t('admin.wines.pendingIdentity.empty')}</p>
       )}
 
       {wines !== null && !loading && wines.length > 0 && (
@@ -337,7 +350,7 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
                           <button className="btn btn-secondary btn-sm" disabled={saving} onClick={cancelEdit}>
                             {t('common.cancel')}
                           </button>
-                          {rowError && <div className="alert alert-error" style={{ marginTop: 6 }}>{rowError}</div>}
+                          {rowErrors[w._id] && <div className="alert alert-error" style={{ marginTop: 6 }}>{rowErrors[w._id]}</div>}
                         </>
                       ) : (
                         <>
@@ -348,7 +361,21 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
                               and the wine stays pending and out of the registry.
                               Last resort — ask the bottle's owner first. */}
                           <button
-                            className="btn btn-secondary btn-sm"
+                            /* Deliberately NOT btn-secondary: as a visual peer
+                               of "Fix" this is the path of least resistance
+                               (one click vs reading a photo and typing), and a
+                               queue emptied this way is a queue that stopped
+                               working. Muted link styling marks it an escape
+                               hatch (audit MEDIUM-2). */
+                            className="btn btn-sm"
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              padding: '0.2rem 0.3rem',
+                              textDecoration: 'underline',
+                              color: 'var(--color-text-secondary, #666)',
+                              fontSize: '0.8rem',
+                            }}
                             disabled={saving}
                             title={t('admin.wines.pendingIdentity.unavailableTitle')}
                             onClick={() => setUnavailable(w._id, !w.identityUnavailable)}
@@ -357,7 +384,7 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
                               ? t('admin.wines.pendingIdentity.unavailableUndoBtn')
                               : t('admin.wines.pendingIdentity.unavailableBtn')}
                           </button>
-                          {rowError && <div className="alert alert-error" style={{ marginTop: 6 }}>{rowError}</div>}
+                          {rowErrors[w._id] && <div className="alert alert-error" style={{ marginTop: 6 }}>{rowErrors[w._id]}</div>}
                         </>
                       )}
                     </td>
