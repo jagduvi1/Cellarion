@@ -141,7 +141,7 @@ describe('POST /api/wines/scan-label sanitization', () => {
     expect(res.body.match).toBeNull();
     expect(res.body.labelImage).toMatch(/^data:image\/png;base64,/);
     // Claude received the sanitized buffer with the DETECTED media type.
-    expect(scanLabelFull).toHaveBeenCalledWith(expect.any(String), 'image/png');
+    expect(scanLabelFull).toHaveBeenCalledWith(expect.any(String), 'image/png', { allowPartial: true });
     const sentBuffer = Buffer.from(scanLabelFull.mock.calls[0][0], 'base64');
     const meta = await sharp(sentBuffer).metadata();
     expect(meta.format).toBe('png');

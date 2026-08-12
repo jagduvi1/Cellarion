@@ -52,9 +52,19 @@ function validateMediaType(mediaType) {
  *
  * @param {string} image     Base64-encoded image data
  * @param {string} mediaType MIME type (default 'image/jpeg')
+ * @param {object} [opts]
+ * @param {boolean} [opts.allowPartial=false] — return a HALF-READ label instead
+ *   of throwing 422. A worn, angled or half-obscured front label routinely
+ *   yields a producer and no name (or the reverse), and throwing there threw
+ *   away the photo with it: the user fell back to manual entry, the wine minted
+ *   pending, and the curator got a broken string and NO evidence — the exact
+ *   case the pending queue exists to serve. With allowPartial the caller keeps
+ *   the frame, prefills what was read, and can offer the back-label rescue.
+ *   `partial: true` rides on the returned object so no caller can mistake a
+ *   half-read for a clean extraction.
  * @returns {Promise<Object>} Extracted wine data
  */
-async function scanLabelFull(image, mediaType = 'image/jpeg') {
+async function scanLabelFull(image, mediaType = 'image/jpeg', { allowPartial = false } = {}) {
   validateMediaType(mediaType);
   const client = getClient();
 
@@ -108,7 +118,17 @@ async function scanLabelFull(image, mediaType = 'image/jpeg') {
     throw err;
   }
 
-  if (!data.name || !data.producer) {
+  // A NON-EMPTY STRING in at least one of the two identity fields is the bar
+  // for "partial". `typeof`, not truthiness alone: a model returning
+  // `"name": 42` would otherwise pass here and blow up downstream in .trim()
+  // (the identify-text hang, audit HIGH).
+  const usable = (v) => typeof v === 'string' && v.trim() !== '';
+  const hasName = usable(data.name);
+  const hasProducer = usable(data.producer);
+
+  if (!hasName && !hasProducer) {
+    // NEITHER field readable — nothing to prefill and nothing to merge a back
+    // label into. Still a 422 with the historical message, allowPartial or not.
     const err = new Error('Could not identify wine from label');
     err.status = 422;
     // Debug raw logged server-side only
@@ -116,10 +136,224 @@ async function scanLabelFull(image, mediaType = 'image/jpeg') {
     throw err;
   }
 
+  if (!hasName || !hasProducer) {
+    if (!allowPartial) {
+      const err = new Error('Could not identify wine from label');
+      err.status = 422;
+      // Debug raw logged server-side only
+      console.error('[labelScan] raw AI response:', raw);
+      throw err;
+    }
+    data.partial = true;
+  }
+
   // Ensure grapes is always an array
   if (!Array.isArray(data.grapes)) data.grapes = [];
 
   return data;
+}
+
+/**
+ * The back-label RESCUE scan: read the back label of a bottle whose front scan
+ * came back incomplete, and report ONLY what the back label itself states.
+ *
+ * Both frames are sent when the caller still has the front one, because the two
+ * labels are one artefact: an importer's back label saying "Produced and
+ * bottled by …" only resolves the front's cuvée line when the model can see
+ * both. The front EXTRACTION rides along as context so the model knows which
+ * gaps matter — and is explicitly told not to echo it back.
+ *
+ * Returns the raw parsed object (nulls for everything the back label is silent
+ * about). It is NEVER the merged identity: mergeBackScan below does that
+ * deterministically, server-side, because "which of two contradicting labels
+ * wins" is a policy decision and a model is the wrong place to keep policy.
+ *
+ * @param {object} opts
+ * @param {string} opts.backImage      base64 back-label frame (required)
+ * @param {string} [opts.backMediaType]
+ * @param {string} [opts.frontImage]   base64 front-label frame, when still held
+ * @param {string} [opts.frontMediaType]
+ * @param {object} [opts.frontExtracted] what the front scan produced
+ * @returns {Promise<Object>} { name, producer, vintage, country, region,
+ *   appellation, type, grapes[] } — any of them null
+ */
+async function scanLabelBack({ backImage, backMediaType = 'image/jpeg', frontImage, frontMediaType = 'image/jpeg', frontExtracted = {} } = {}) {
+  validateMediaType(backMediaType);
+  if (frontImage) validateMediaType(frontMediaType);
+  const client = getClient();
+
+  // EVERY value below is client-supplied text on its way into a prompt — the
+  // client sends back the front extraction it was handed, and nothing stops it
+  // sending something else. Identical sanitisation to suggestProfile.field():
+  // control characters out (a newline is what lets injected text pose as a new
+  // instruction), whitespace collapsed, length bounded.
+  const field = (v) =>
+    String(v ?? '')
+      .replace(/\p{C}/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 200);
+
+  // Per NAME, not on a joined string — capping a join can cut a varietal
+  // mid-word (suggestProfile carries the same note for the same reason).
+  const grapes = (Array.isArray(frontExtracted.grapes) ? frontExtracted.grapes : [])
+    .map(field)
+    .filter(Boolean)
+    .slice(0, 20);
+
+  // JSON.stringify, not a hand-rolled "key: value" list: the model is being
+  // handed untrusted strings, and JSON escaping is what keeps a quote or brace
+  // inside a value from restructuring the surrounding document.
+  const frontData = JSON.stringify({
+    name: field(frontExtracted.name) || null,
+    producer: field(frontExtracted.producer) || null,
+    vintage: field(frontExtracted.vintage) || null,
+    country: field(frontExtracted.country) || null,
+    region: field(frontExtracted.region) || null,
+    appellation: field(frontExtracted.appellation) || null,
+    type: field(frontExtracted.type) || null,
+    grapes,
+  });
+
+  /**
+   * Substitute one placeholder with a replacer FUNCTION.
+   *
+   * Not cosmetic: with a string replacement, String.prototype.replace honours
+   * `$&`, `` $` ``, `$'` and `$$` inside it even for a plain-string pattern, so
+   * a producer named `$'` expands to the whole remainder of the template —
+   * a well-formed prompt followed by the attacker's own trailing instruction,
+   * at ~30x the token bill. A replacer function is inserted literally.
+   *
+   * replaceAll, not replace, because the template is superadmin-overridable via
+   * SiteConfig and a custom one may use the placeholder twice.
+   */
+  const put = (template, token, value) => template.replaceAll(token, () => value);
+
+  const prompt = put(aiConfig.get().labelScanBackPrompt, '{{frontData}}', frontData);
+
+  // Image ORDER is the contract the prompt states (front first, back second).
+  const content = [];
+  if (frontImage) {
+    content.push({ type: 'text', text: 'Image 1 — the FRONT label of the bottle:' });
+    content.push({ type: 'image', source: { type: 'base64', media_type: frontMediaType, data: frontImage } });
+  }
+  content.push({ type: 'text', text: frontImage ? 'Image 2 — the BACK label of the SAME bottle:' : 'The BACK label of the bottle:' });
+  content.push({ type: 'image', source: { type: 'base64', media_type: backMediaType, data: backImage } });
+  content.push({ type: 'text', text: prompt });
+
+  const response = await client.messages.create({
+    model: aiConfig.get().labelScanModel,
+    max_tokens: 600,
+    ...thinkingOff(aiConfig.get().labelScanModel),
+    messages: [{ role: 'user', content }],
+  });
+
+  const raw = textFromResponse(response);
+
+  // Same fence-strip + first-balanced-object extraction as scanLabelFull: local
+  // vision models wrap their JSON in prose, and failing there used to burn a
+  // non-refundable budget unit on a scan that had actually been read.
+  const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+
+  let data;
+  try {
+    data = JSON.parse(extractFirstJsonObject(stripped));
+  } catch {
+    const err = new Error('Could not read back label');
+    err.status = 422;
+    console.error('[labelScan] raw back-label AI response:', raw);
+    throw err;
+  }
+
+  if (data.error) {
+    const err = new Error('Could not read back label');
+    err.status = 422;
+    console.error('[labelScan] raw back-label AI response:', raw);
+    throw err;
+  }
+
+  if (!Array.isArray(data.grapes)) data.grapes = [];
+  return data;
+}
+
+/** The scalar identity fields the back label may fill, in display order. */
+const MERGE_SCALARS = ['name', 'producer', 'vintage', 'country', 'region', 'appellation', 'type'];
+
+/** A usable value is a non-empty string after trimming; everything else is a gap. */
+const mergeValue = (v) => (typeof v === 'string' && v.trim() ? v.trim() : '');
+
+/**
+ * Merge a back-label reading into a front-label extraction — DETERMINISTIC,
+ * server-side, and never delegated to the model.
+ *
+ * FILL BLANKS ONLY. The front label is the wine's own identity statement; the
+ * back label is the importer's or bottler's description of it, and where they
+ * differ the front is what a person reading the shelf sees. So a non-empty
+ * front value always wins, the back fills only what the front left empty, and a
+ * real disagreement is RECORDED rather than resolved — `conflicts` becomes
+ * curation evidence on the pending wine (WineDefinition.scanFieldConflicts).
+ *
+ * Equality is judged with normalizeString (utils/normalize), the same fold the
+ * dedup scorer uses: "Château Musar" vs "Chateau MUSAR" is one producer written
+ * two ways, not a conflict, and flagging it would bury the real ones.
+ *
+ * Grapes are a UNION, not a contest: a back label listing the blend and a front
+ * label naming the dominant variety are both true, and case is the only
+ * difference that has to be collapsed.
+ *
+ * @returns {{merged: object, conflicts: Array<{field,front,back}>, filled: string[]}}
+ *   `filled` names the fields the BACK label supplied — the client fills only
+ *   those, and only into form fields the user has not typed into.
+ */
+function mergeBackScan(front = {}, back = {}) {
+  const { normalizeString } = require('../utils/normalize');
+  const merged = { ...(front || {}) };
+  const conflicts = [];
+  const filled = [];
+
+  for (const key of MERGE_SCALARS) {
+    const f = mergeValue(front?.[key]);
+    const b = mergeValue(back?.[key]);
+    if (!f && b) {
+      merged[key] = b;
+      filled.push(key);
+      continue;
+    }
+    if (f && b && normalizeString(f) !== normalizeString(b)) {
+      conflicts.push({ field: key, front: f, back: b });
+    }
+    // Both empty, or agreeing, or front-only: the front value stands (it is
+    // already in `merged` from the spread).
+    if (f) merged[key] = f;
+  }
+
+  const frontGrapes = (Array.isArray(front?.grapes) ? front.grapes : []).map(mergeValue).filter(Boolean);
+  const backGrapes = (Array.isArray(back?.grapes) ? back.grapes : []).map(mergeValue).filter(Boolean);
+  if (frontGrapes.length === 0 && backGrapes.length > 0) {
+    merged.grapes = backGrapes;
+    filled.push('grapes');
+  } else {
+    // Case-insensitive union, front order first. Never a conflict: two labels
+    // listing different varieties of one blend are describing the same wine.
+    const seen = new Set(frontGrapes.map((g) => g.toLowerCase()));
+    const added = backGrapes.filter((g) => {
+      const k = g.toLowerCase();
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    merged.grapes = [...frontGrapes, ...added];
+    if (added.length > 0) filled.push('grapes');
+  }
+
+  // `partial` is a statement about the CURRENT identity, and the back label may
+  // just have completed it. Recomputed rather than inherited from the spread —
+  // a stale `partial: true` would keep offering the rescue step the user has
+  // already taken.
+  if (mergeValue(merged.name) && mergeValue(merged.producer)) delete merged.partial;
+  else merged.partial = true;
+
+  return { merged, conflicts, filled };
 }
 
 /**
@@ -424,4 +658,4 @@ async function suggestProfile({ name, producer, vintage, country, region, appell
   });
 }
 
-module.exports = { scanLabelFull, identifyWineFromText, identifyWineFromQuery, suggestDrinkWindow, suggestPrice, suggestProfile };
+module.exports = { scanLabelFull, scanLabelBack, mergeBackScan, identifyWineFromText, identifyWineFromQuery, suggestDrinkWindow, suggestPrice, suggestProfile };

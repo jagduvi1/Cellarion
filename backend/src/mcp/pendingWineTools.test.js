@@ -226,7 +226,7 @@ describe('get_pending_wine_images — the point of the feature', () => {
     // The scanned LABEL is the primary evidence and comes first. `private`
     // rides along (audit M-1): these are the owner's own photos, released to
     // curation for one purpose, and the payload says so.
-    expect(parse(res).data.images[0]).toEqual({ image_id: String(SCAN), kind: 'label-scan', private: true });
+    expect(parse(res).data.images[0]).toEqual({ image_id: String(SCAN), kind: 'label-scan', side: 'front', private: true });
   });
 
   test('downscales server-side to <=1024px on the longest edge, never enlarging', async () => {
@@ -341,7 +341,7 @@ describe('get_pending_wine_images — the point of the feature', () => {
 
       expect(res.isError).toBeUndefined();
       expect(body.data.still_pending).toBe(false);
-      expect(body.data.images).toEqual([{ image_id: String(SCAN), kind: 'label-scan', private: true }]);
+      expect(body.data.images).toEqual([{ image_id: String(SCAN), kind: 'label-scan', side: 'front', private: true }]);
       expect(body.data.guidance).toMatch(/correction window/i);
     });
 
@@ -483,5 +483,122 @@ describe('fix_pending_wine', () => {
     validatePendingFix.mockReturnValue({ ok: false, error: 'nope' });
     await tool('fix_pending_wine').handler({ wine_id: W1 }, SOMM_CTX);
     expect(McpActionLog.create).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The BACK-LABEL frame on the curation surfaces.
+ *
+ * A queue row can now carry two label photos of one bottle, and the thing that
+ * has to hold is that a curator is never left guessing which is which: "the
+ * producer is not printed on this one" means opposite things about a front and
+ * a back label, and an id in a JSON list cannot say which position in the image
+ * stream it occupies.
+ */
+describe('the back label reaches curation, labelled', () => {
+  const BACK = oid('4');
+
+  const primeBothFrames = () => {
+    WineDefinition.findById.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue({
+          _id: W1, name: 'Kaefferkopf', producer: '', pendingIdentity: true,
+          scanImage: SCAN, scanImageBack: BACK,
+          scanFieldConflicts: [{ field: 'producer', front: 'Cave', back: 'Wolfberger' }],
+        }),
+      }),
+    });
+    Bottle.distinct.mockResolvedValue([]);
+    BottleImage.find.mockReturnValue(leanChain([]));
+    BottleImage.findById.mockImplementation((id) => ({
+      select: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue(String(id) === String(BACK)
+          ? { _id: BACK, kind: 'label-scan', side: 'back', originalUrl: '/api/uploads/originals/back.jpg' }
+          : { _id: SCAN, kind: 'label-scan', side: 'front', originalUrl: '/api/uploads/originals/scan.jpg' }),
+      }),
+    }));
+  };
+
+  test('both frames are served, front first, each preceded by a caption naming its face', async () => {
+    primeBothFrames();
+
+    const res = await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX);
+
+    expect(res.content.filter((c) => c.type === 'image')).toHaveLength(2);
+    const captions = res.content.filter((c) => c.type === 'text').map((c) => c.text);
+    expect(captions.some((t) => /FRONT LABEL/.test(t))).toBe(true);
+    expect(captions.some((t) => /BACK LABEL/.test(t))).toBe(true);
+
+    const { images } = parse(res).data;
+    expect(images).toEqual([
+      { image_id: String(SCAN), kind: 'label-scan', side: 'front', private: true },
+      { image_id: String(BACK), kind: 'label-scan', side: 'back', private: true },
+    ]);
+  });
+
+  test('what the two labels disagreed about rides in the payload', async () => {
+    primeBothFrames();
+
+    const { front_back_disagreements: d } = parse(
+      await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX)
+    ).data;
+
+    expect(d).toEqual([{ field: 'producer', front: 'Cave', back: 'Wolfberger' }]);
+  });
+
+  test('a wine with ONLY a back frame is served — the front scan 422\'d and its frame was abandoned', async () => {
+    WineDefinition.findById.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue({
+          _id: W1, name: 'Kaefferkopf', producer: '', pendingIdentity: true,
+          scanImage: null, scanImageBack: BACK,
+        }),
+      }),
+    });
+    Bottle.distinct.mockResolvedValue([]);
+    BottleImage.find.mockReturnValue(leanChain([]));
+    BottleImage.findById.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue({ _id: BACK, kind: 'label-scan', side: 'back', originalUrl: '/api/uploads/originals/back.jpg' }),
+      }),
+    });
+
+    const res = await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX);
+
+    expect(res.isError).toBeUndefined();
+    expect(parse(res).data.images).toEqual([
+      { image_id: String(BACK), kind: 'label-scan', side: 'back', private: true },
+    ]);
+  });
+
+  test('list_pending_wines carries the back-frame id and the disagreements', async () => {
+    queryPendingWines.mockResolvedValue({
+      rows: [{
+        ...ROW,
+        scanImageBackId: String(BACK),
+        scanFieldConflicts: [{ field: 'producer', front: 'Cave', back: 'Wolfberger' }],
+      }],
+      total: 1, pendingTotal: 1,
+    });
+
+    const [row] = parse(await tool('list_pending_wines').handler({}, SOMM_CTX)).data;
+
+    expect(row.scan_image_back_id).toBe(String(BACK));
+    expect(row.front_back_disagreements).toEqual([
+      { field: 'producer', front: 'Cave', back: 'Wolfberger' },
+    ]);
+    expect(row.has_images).toBe(true);
+  });
+
+  test('a one-frame row omits the disagreement key entirely — most rows have nothing to say', async () => {
+    queryPendingWines.mockResolvedValue({
+      rows: [{ ...ROW, scanImageBackId: null, scanFieldConflicts: [] }],
+      total: 1, pendingTotal: 1,
+    });
+
+    const [row] = parse(await tool('list_pending_wines').handler({}, SOMM_CTX)).data;
+
+    expect(row.scan_image_back_id).toBeNull();
+    expect(row).not.toHaveProperty('front_back_disagreements');
   });
 });

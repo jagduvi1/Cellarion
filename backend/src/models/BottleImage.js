@@ -68,6 +68,23 @@ const bottleImageSchema = new mongoose.Schema({
     default: 'bottle',
     index: true
   },
+  // WHICH FACE of the bottle this frame shows. Meaningful ONLY for
+  // kind:'label-scan' — a kind:'bottle' gallery photo keeps the 'front' default
+  // and nothing reads it there.
+  //
+  // Exists because the back label is the rescue path when the front scan came
+  // back incomplete: both frames are kept as curation evidence on the same
+  // pending wine (WineDefinition.scanImage / .scanImageBack), and a curator
+  // being shown two photos must be told which is which — "the producer is not
+  // on this one" is a different statement about a front label than about a
+  // back label. Same data category, same retention, same sweeps as the front
+  // scan: this field distinguishes evidence, it does not create a new class of
+  // it.
+  side: {
+    type: String,
+    enum: ['front', 'back'],
+    default: 'front'
+  },
   // PURPOSE-BOUND retention deadline for a kind:'label-scan' row whose wine has
   // LEFT the pending-identity queue. Stamped on the TRANSITION itself — the
   // WineDefinition post('save') hook, via

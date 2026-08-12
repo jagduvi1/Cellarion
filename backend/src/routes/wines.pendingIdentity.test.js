@@ -129,7 +129,7 @@ describe('POST /api/wines/scan-label — the original frame is kept, not discard
     expect(body.scanImageId).toBe(SCAN_IMG);
     // The SANITIZED ORIGINAL is stored — not the background-removed render a
     // curator would have to squint at.
-    expect(persistLabelScan).toHaveBeenCalledWith({ buffer: expect.any(Buffer), userId: CREATOR });
+    expect(persistLabelScan).toHaveBeenCalledWith({ buffer: expect.any(Buffer), userId: CREATOR, side: 'front' });
   });
 
   test('a storage failure still returns a successful scan — the photo is a bonus, not a gate', async () => {

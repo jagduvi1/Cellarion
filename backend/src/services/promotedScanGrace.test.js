@@ -16,6 +16,7 @@ jest.mock('../models/BottleImage', () => ({
   find: jest.fn(),
   findById: jest.fn(),
   updateOne: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
+  updateMany: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
   deleteMany: jest.fn().mockResolvedValue({ deletedCount: 0 }),
 }));
 jest.mock('../models/WineDefinition', () => ({ updateMany: jest.fn().mockResolvedValue({}) }));
@@ -51,6 +52,7 @@ const daysFromNow = (n) => new Date(Date.now() + n * DAY);
 beforeEach(() => {
   jest.clearAllMocks();
   BottleImage.updateOne.mockResolvedValue({ modifiedCount: 1 });
+  BottleImage.updateMany.mockResolvedValue({ modifiedCount: 1 });
   WineDefinition.updateMany.mockResolvedValue({});
 });
 
@@ -92,32 +94,32 @@ describe('the stamp — promotion starts the clock', () => {
   test('promotion stamps retainUntil on the label scan', async () => {
     await runPromotionFollowThrough(promotedWine());
 
-    const [filter, update] = BottleImage.updateOne.mock.calls[0];
-    expect(filter).toMatchObject({ _id: 'scan-1', kind: 'label-scan', retainUntil: null });
+    const [filter, update] = BottleImage.updateMany.mock.calls[0];
+    expect(filter).toMatchObject({ _id: { $in: ['scan-1'] }, kind: 'label-scan', retainUntil: null });
     const until = update.$set.retainUntil.getTime();
     expect(Math.abs(until - (Date.now() + PROMOTED_SCAN_GRACE_DAYS * DAY))).toBeLessThan(5000);
   });
 
   test('it re-asserts kind — nothing but a label scan may be given a deadline by this path', async () => {
     await runPromotionFollowThrough(promotedWine());
-    expect(BottleImage.updateOne.mock.calls[0][0].kind).toBe('label-scan');
+    expect(BottleImage.updateMany.mock.calls[0][0].kind).toBe('label-scan');
   });
 
   test('an ALREADY-stamped scan is not re-stamped (the filter requires retainUntil: null)', async () => {
     // A second promotion-follow-through must not extend a window that is
     // already running.
     await runPromotionFollowThrough(promotedWine());
-    expect(BottleImage.updateOne.mock.calls[0][0].retainUntil).toBeNull();
+    expect(BottleImage.updateMany.mock.calls[0][0].retainUntil).toBeNull();
   });
 
   test('a wine with no scan stamps nothing', async () => {
     await runPromotionFollowThrough(promotedWine({ scanImage: null }));
-    expect(BottleImage.updateOne).not.toHaveBeenCalled();
+    expect(BottleImage.updateMany).not.toHaveBeenCalled();
   });
 
   test('a stamp failure is non-fatal — the fix is already committed', async () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    BottleImage.updateOne.mockRejectedValue(new Error('mongo down'));
+    BottleImage.updateMany.mockRejectedValue(new Error('mongo down'));
 
     await expect(runPromotionFollowThrough(promotedWine())).resolves.toBeUndefined();
     warn.mockRestore();
@@ -139,15 +141,30 @@ describe('the stamp — promotion starts the clock', () => {
     test('one shared implementation, reachable without the curation queue', async () => {
       await stampPromotedScanRetention({ _id: 'w', scanImage: 'scan-9' });
 
-      const [filter, update] = BottleImage.updateOne.mock.calls[0];
-      expect(filter).toMatchObject({ _id: 'scan-9', kind: 'label-scan', retainUntil: null });
+      const [filter, update] = BottleImage.updateMany.mock.calls[0];
+      expect(filter).toMatchObject({ _id: { $in: ['scan-9'] }, kind: 'label-scan', retainUntil: null });
       expect(update.$set.retainUntil).toBeInstanceOf(Date);
+    });
+
+    // Back-label rescue: the wine points at two frames and they are ONE piece
+    // of evidence. A stamp reaching only the front would leave the back frame
+    // unreadable AND unsweepable — the exact state the window exists to end.
+    test('both frames are stamped when the wine carries a back scan too', async () => {
+      await stampPromotedScanRetention({ _id: 'w', scanImage: 'scan-9', scanImageBack: 'scan-10' });
+
+      const [filter] = BottleImage.updateMany.mock.calls[0];
+      expect(filter._id.$in).toEqual(['scan-9', 'scan-10']);
+    });
+
+    test('a back scan alone is stamped', async () => {
+      await stampPromotedScanRetention({ _id: 'w', scanImage: null, scanImageBack: 'scan-10' });
+      expect(BottleImage.updateMany.mock.calls[0][0]._id.$in).toEqual(['scan-10']);
     });
 
     test('it is idempotent by filter — a second call cannot extend a live deadline', async () => {
       await stampPromotedScanRetention({ scanImage: 'scan-9' });
       await stampPromotedScanRetention({ scanImage: 'scan-9' });
-      for (const [filter] of BottleImage.updateOne.mock.calls) {
+      for (const [filter] of BottleImage.updateMany.mock.calls) {
         expect(filter.retainUntil).toBeNull();
       }
     });
@@ -155,12 +172,12 @@ describe('the stamp — promotion starts the clock', () => {
     test('no scan, no write', async () => {
       await stampPromotedScanRetention({ scanImage: null });
       await stampPromotedScanRetention(null);
-      expect(BottleImage.updateOne).not.toHaveBeenCalled();
+      expect(BottleImage.updateMany).not.toHaveBeenCalled();
     });
 
     test('it swallows its own failure — a promotion must not roll back over a stamp', async () => {
       const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-      BottleImage.updateOne.mockRejectedValue(new Error('mongo down'));
+      BottleImage.updateMany.mockRejectedValue(new Error('mongo down'));
       await expect(stampPromotedScanRetention({ scanImage: 'scan-9' })).resolves.toBeUndefined();
       warn.mockRestore();
     });
@@ -219,7 +236,13 @@ describe('the sweep — an expired scan is deleted, file, doc and pointer', () =
 
     expect(WineDefinition.updateMany).toHaveBeenCalledWith(
       { scanImage: { $in: ['i1'] } },
-      { $set: { scanImage: null } }
+      { $set: { scanImage: null, scanFieldConflicts: [] } }
+    );
+    // The back-label pointer is nulled by its OWN matched update, so a wine
+    // whose front scan expired keeps a back scan that did not.
+    expect(WineDefinition.updateMany).toHaveBeenCalledWith(
+      { scanImageBack: { $in: ['i1'] } },
+      { $set: { scanImageBack: null, scanFieldConflicts: [] } }
     );
   });
 

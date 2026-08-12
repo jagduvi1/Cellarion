@@ -97,6 +97,16 @@ function AddBottle() {
   // Id of the stored ORIGINAL scan frame (never rendered — it rides the commit
   // so the minted wine keeps the label a curator may need to read).
   const [scanImageId, setScanImageId] = useState(null);
+  // ── Back-label rescue ──
+  // Offered ONLY when the front pass came back incomplete (`extracted.partial`)
+  // or unreadable (a 422, which still hands back a scanImageId). Optional and
+  // dismissible: skipping it must behave exactly as it did before this existed,
+  // and the form stays fully editable throughout.
+  const [backOffer, setBackOffer] = useState(false);
+  const [backScanImageId, setBackScanImageId] = useState(null);
+  // What the two labels disagreed about. Shown as a non-blocking note and
+  // threaded to the commit as curation evidence.
+  const [scanConflicts, setScanConflicts] = useState([]);
   const [showManualForm, setShowManualForm] = useState(false);
   const [pendingWineData, setPendingWineData] = useState(null);
   const [findingWine, setFindingWine] = useState(false);
@@ -119,17 +129,87 @@ function AddBottle() {
     setScanImageId(data.scanImageId || null);
     setShowManualForm(false);
     setPendingWineData(null);
+    // A HALF-READ label (one of name/producer empty) is a 200 now, not an
+    // error: what was read prefills the card, and the back label is offered as
+    // an optional way to fill the rest.
+    setBackOffer(data.extracted?.partial === true);
+    setBackScanImageId(null);
+    setScanConflicts([]);
   }, []);
 
-  const handleScanError = useCallback((msg) => {
+  const handleScanError = useCallback((msg, body) => {
     setError(msg);
+    // An unreadable label still hands back the stored frame. Keep its id and
+    // offer the back label: the user is about to type the wine by hand, that
+    // manual entry mints a pending-identity row, and the photo is the only
+    // thing a curator will have to work from.
+    if (body?.scanImageId) {
+      setScanImageId(body.scanImageId);
+      setBackOffer(true);
+    }
   }, []);
+
+  /**
+   * Merge a back-label reading into the form WITHOUT ever overwriting the user.
+   *
+   * The scan runs while the form is live, so anything they typed in the
+   * meantime is a deliberate correction and outranks both labels. The server's
+   * merge already settled front-vs-back (front wins, disagreements recorded);
+   * this only fills what is still blank on screen.
+   */
+  const handleBackScanSuccess = useCallback((data) => {
+    const merged = data.merged || {};
+    setBackScanImageId(data.backScanImageId || null);
+    setScanConflicts(Array.isArray(data.conflicts) ? data.conflicts : []);
+    setBackOffer(false);
+    setError(null);
+
+    // The read-only scan card holds no user input — it shows the merged
+    // identity and the re-run registry match wholesale.
+    setScanResult(prev => (prev
+      ? { ...prev, extracted: merged, match: data.match || null }
+      : { extracted: merged, match: data.match || null, labelImage: null, scanImageId: null }));
+
+    setPendingWineData(prev => {
+      const fromMerged = {
+        name: merged.name || '',
+        producer: merged.producer || '',
+        country: merged.country || '',
+        region: merged.region || '',
+        appellation: merged.appellation || '',
+        type: merged.type || 'red',
+        grapes: (merged.grapes || []).join(', '),
+      };
+      // Nothing typed yet (the front scan 422'd and the user had not opened the
+      // form) — seed it, so the rescue lands somewhere visible.
+      if (!prev) return fromMerged;
+      const next = { ...prev };
+      for (const key of Object.keys(fromMerged)) {
+        const typed = typeof prev[key] === 'string' ? prev[key].trim() : prev[key];
+        if (!typed && fromMerged[key]) next[key] = fromMerged[key];
+      }
+      return next;
+    });
+    setShowManualForm(prev => prev || !scanResult);
+  }, [scanResult]);
 
   const {
     labelCam, labelScanning, labelFacing, setLabelFacing,
     labelVideoRef, labelCanvasRef,
-    startCamera: startLabelCamera, stopCamera: stopLabelCamera, capturePhoto: captureLabelPhoto
-  } = useLabelScanner(apiFetch, { onScanSuccess: handleScanSuccess, onScanError: handleScanError });
+    startCamera: startLabelCamera, startBackCamera: startBackLabelCamera,
+    stopCamera: stopLabelCamera, capturePhoto: captureLabelPhoto
+  } = useLabelScanner(apiFetch, {
+    onScanSuccess: handleScanSuccess,
+    onScanError: handleScanError,
+    onBackScanSuccess: handleBackScanSuccess,
+  });
+
+  const startBackScan = useCallback(() => {
+    startBackLabelCamera({
+      frontExtracted: scanResult?.extracted || {},
+      frontScanImageId: scanImageId,
+    });
+  }, [startBackLabelCamera, scanResult, scanImageId]);
 
   // Apply a resolved wine (from find-or-create OR from a soft-zone pick) and
   // advance to the bottle-details step. Centralised so all entry paths share
@@ -148,9 +228,14 @@ function AddBottle() {
     setBottleData(prev => ({ ...prev, vintage: carriedVintage || '' }));
     setScanResult(null);
     setLabelImage(null);
-    // The wine is already identified in the registry — its label scan has no
-    // curation value, so it is dropped here and swept after 30 days.
+    // The wine is already identified in the registry — its label scans have no
+    // curation value, so they are dropped here and swept after 30 days. The
+    // recorded front/back disagreement goes with them: it only ever explained
+    // an identity nobody now has to fix.
     setScanImageId(null);
+    setBackScanImageId(null);
+    setScanConflicts([]);
+    setBackOffer(false);
     setShowManualForm(false);
     setPendingWineData(null);
     setSoftCandidates(null);
@@ -170,6 +255,9 @@ function AddBottle() {
     setBottleData(prev => ({ ...prev, vintage: carriedVintage || '' }));
     setScanResult(null);
     setLabelImage(null);
+    // The scan ids and conflicts survive into step 2 — this is the path that
+    // ends in a pendingIdentity mint, which is exactly who the evidence is for.
+    setBackOffer(false);
     setShowManualForm(false);
     setPendingWineData(null);
     setSoftCandidates(null);
@@ -283,6 +371,9 @@ function AddBottle() {
     setScanResult(null);
     setLabelImage(null);
     setScanImageId(null);
+    setBackScanImageId(null);
+    setScanConflicts([]);
+    setBackOffer(false);
     setShowManualForm(false);
     setPendingWineData(null);
     setError(null);
@@ -483,10 +574,17 @@ function AddBottle() {
       for (let i = createdBottles.length; i < numBottles; i++) {
         const payload = wineRefId
           ? { ...base, wineDefinition: wineRefId }
-          // scanImageId rides here, at the ONE place a newWine payload is
+          // The scan evidence rides here, at the ONE place a newWine payload is
           // sent, so every entry path (scan confirm, manual form, soft-zone
-          // "create new") carries the label photo without each remembering to.
-          : { ...base, newWine: { ...newWinePayload, ...(scanImageId ? { scanImageId } : {}) } };
+          // "create new") carries it without each remembering to. All three
+          // parts travel together: the front frame, the optional back frame,
+          // and what the two labels disagreed about.
+          : { ...base, newWine: {
+            ...newWinePayload,
+            ...(scanImageId ? { scanImageId } : {}),
+            ...(backScanImageId ? { scanImageBackId: backScanImageId } : {}),
+            ...(scanConflicts.length > 0 ? { scanConflicts } : {}),
+          } };
         const res = await apiFetch('/api/bottles', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -634,6 +732,35 @@ function AddBottle() {
 
       {step === 1 && (
         <div className="card">
+          {/* ── Back-label rescue ─────────────────────────────────────────
+              Appears ONLY after a front scan that read half a label or none
+              of it. Optional in the strongest sense: "Skip" dismisses it,
+              every field below stays editable while it is on screen, and
+              ignoring it leaves the flow exactly as it was. ── */}
+          {backOffer && !labelCam.open && (
+            <div className="scan-back-prompt">
+              <p className="scan-back-prompt-text">{t('addBottle.backScanPrompt')}</p>
+              <div className="scan-back-prompt-actions">
+                <button type="button" className="btn btn-secondary" onClick={startBackScan}>
+                  {t('addBottle.backScanCta')}
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={() => setBackOffer(false)}>
+                  {t('addBottle.backScanSkip')}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Non-blocking: the front value was kept, and saying so is what
+              stops a user re-typing a field that is already right. */}
+          {scanConflicts.length > 0 && (
+            <p className="scan-back-conflicts">
+              {t('addBottle.backScanConflicts', {
+                fields: scanConflicts.map(c => c.field).join(', '),
+              })}
+            </p>
+          )}
+
           {/* ── Scan result: unified wine card ──────────────────────────── */}
           {scanResult && !showManualForm && (
             <div className="scan-wine-card">

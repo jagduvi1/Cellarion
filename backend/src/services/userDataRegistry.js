@@ -191,6 +191,11 @@ const REGISTRY = [
       // the same pass. Deliberately keyed on the image ids we are about to
       // delete rather than on the user: a wine created by someone ELSE can
       // legitimately carry this user's scan (a second bottle supplied it).
+      // A wine added through the back-label rescue points at TWO label frames
+      // (scanImage + scanImageBack); both are kind:'label-scan', both are in
+      // the hard-delete set above, and BOTH pointers have to be cleared or the
+      // pending queue 404s on an image forever. Separate matched updates so
+      // each pointer is nulled only where it names a deleted image.
       const ownIds = own.map((i) => i._id);
       await Promise.all([
         BottleImage.deleteMany({ uploadedBy: ctx.userId, assignedToWine: { $ne: true } }),
@@ -199,14 +204,21 @@ const REGISTRY = [
         ownIds.length
           ? WineDefinition.updateMany({ scanImage: { $in: ownIds } }, { $set: { scanImage: null } })
           : Promise.resolve(),
+        ownIds.length
+          ? WineDefinition.updateMany({ scanImageBack: { $in: ownIds } }, { $set: { scanImageBack: null } })
+          : Promise.resolve(),
       ]);
     },
     exportFragment: async (ctx) => ({
       // `kind` rides along so the export distinguishes the user's bottle photos
       // from the label frames the scanner kept — same three fields otherwise,
       // same URL-reference form (the bytes ship in the full-export ZIP).
+      // `side` distinguishes the front frame from the optional back-label
+      // rescue frame: both are label scans of one bottle, and an export that
+      // showed two indistinguishable images would be a worse answer to "what do
+      // you hold about me" than one that names them.
       images: markTrunc(ctx, 'images', await BottleImage.find({ uploadedBy: ctx.userId }).limit(EXPORT_MAX).lean())
-        .map(i => ({ originalUrl: i.originalUrl, processedUrl: i.processedUrl, uploadedAt: i.createdAt, kind: i.kind || 'bottle' })),
+        .map(i => ({ originalUrl: i.originalUrl, processedUrl: i.processedUrl, uploadedAt: i.createdAt, kind: i.kind || 'bottle', side: i.side || 'front' })),
     }),
   },
   {

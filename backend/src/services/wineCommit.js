@@ -98,39 +98,88 @@ function validateNewWineFields(payload, { allowPending = false } = {}) {
   return null;
 }
 
+/** Cap on stored front/back disagreements — see validateScanConflicts. */
+const MAX_SCAN_CONFLICTS = 8;
+
 /**
- * Attach the label photo the user scanned to the registry wine it produced, so
- * the pending-identity queue can show a curator the actual label instead of
- * asking them to guess from three broken strings.
+ * Validate the front/back label disagreements the client threads back from the
+ * back-label rescue scan (POST /api/wines/scan-label-back returned them).
  *
- * Ownership-checked and single-use: only the SCANNER's own label-scan image,
- * and only when it is not already attached to a wine (which is also what keeps
- * it out of the 30-day unattached-scan cleanup). Best-effort by design — a
- * failure here must never fail the user's bottle add.
+ * Client-supplied like everything else in `newWine`, so it is bounded here
+ * rather than trusted: the merge that produced it compares seven scalar fields,
+ * so eight entries is already more than the feature can legitimately generate,
+ * and each string rides the same MAX_WINE_FIELD cap as the identity fields it
+ * describes.
+ *
+ * @returns {Array<{field,front,back}>|null} the clean array, or null when the
+ *   payload is unusable — the caller DROPS it rather than 400-ing: this is
+ *   evidence attached to a bottle add, and a malformed extra must never cost
+ *   the user their bottle.
+ */
+function validateScanConflicts(raw) {
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_SCAN_CONFLICTS) return null;
+  const clean = [];
+  for (const c of raw) {
+    if (!c || typeof c !== 'object' || Array.isArray(c)) return null;
+    const { field, front, back } = c;
+    for (const v of [field, front, back]) {
+      if (typeof v !== 'string' || v.length > MAX_WINE_FIELD) return null;
+    }
+    if (!field.trim()) return null;
+    clean.push({ field, front, back });
+  }
+  return clean;
+}
+
+/**
+ * Attach the label photo(s) the user scanned to the registry wine they
+ * produced, so the pending-identity queue can show a curator the actual label
+ * instead of asking them to guess from three broken strings.
+ *
+ * Ownership-checked and single-use PER IMAGE: only the SCANNER's own label-scan
+ * images, and only ones not already attached to a wine (which is also what
+ * keeps them out of the 30-day unattached-scan cleanup). Two independent atomic
+ * claims and ONE save() — the back scan is an optional second frame of the same
+ * bottle, not a second wine, and a failed claim on one must not lose the other.
+ * Best-effort by design: a failure here must never fail the user's bottle add.
  *
  * @param {object} wine   the freshly resolved/minted WineDefinition doc
- * @param {*} scanImageId client-supplied id (validated here, never trusted)
+ * @param {object} ids    { scanImageId?, scanImageBackId? } — client-supplied,
+ *                        validated here, never trusted
  * @param {object} req
  */
-async function attachScanImage(wine, scanImageId, req) {
+async function attachScanImage(wine, { scanImageId, scanImageBackId } = {}, req) {
   try {
+    if (!wine || (!scanImageId && !scanImageBackId)) return;
     const { isValidId } = require('../utils/validation');
-    if (!wine || !scanImageId || !isValidId(String(scanImageId))) return;
     const BottleImage = require('../models/BottleImage');
+
     // One atomic claim: the filter is the authorization (uploader) AND the
     // single-use guard (not yet bound to a wine), so two concurrent commits
     // cannot both claim the same scan.
-    const image = await BottleImage.findOneAndUpdate(
+    const claim = async (id) => {
       // The VALIDATED string, not the raw client value: isValidId() runs on
-      // String(scanImageId), so querying the original would check one thing and
-      // query another (an array whose single element is a valid id stringifies
-      // past the guard). Authorization is still the uploadedBy term.
-      { _id: String(scanImageId), uploadedBy: req.user.id, kind: 'label-scan', wineDefinition: null },
-      { $set: { wineDefinition: wine._id, updatedAt: new Date() } },
-      { new: true }
-    ).select('_id');
-    if (!image) return;
-    wine.scanImage = image._id;
+      // String(id), so querying the original would check one thing and query
+      // another (an array whose single element is a valid id stringifies past
+      // the guard). Authorization is still the uploadedBy term.
+      if (!id || !isValidId(String(id))) return null;
+      const image = await BottleImage.findOneAndUpdate(
+        { _id: String(id), uploadedBy: req.user.id, kind: 'label-scan', wineDefinition: null },
+        { $set: { wineDefinition: wine._id, updatedAt: new Date() } },
+        { new: true }
+      ).select('_id');
+      return image ? image._id : null;
+    };
+
+    // Sequential, not Promise.all: the two claims write to the same collection
+    // and the loser of a race must be observable as a null, not swallowed by a
+    // rejected sibling.
+    const frontId = await claim(scanImageId);
+    const backId = await claim(scanImageBackId);
+    if (!frontId && !backId) return;
+
+    if (frontId) wine.scanImage = frontId;
+    if (backId) wine.scanImageBack = backId;
     await wine.save();
   } catch (err) {
     console.warn('Scan-image attach failed (non-fatal):', err.message);
@@ -223,11 +272,37 @@ async function resolveOrMintWine(newWine, req, { allowPending = true } = {}) {
   // original frame against it stores a personal photo with no purpose to
   // justify it. Unattached scans are swept after 30 days by
   // services/scanImageRetentionJob.
-  if (newWine.scanImageId && pendingIdentity
-      && (created || (String(wine.createdBy) === String(req.user.id) && !wine.scanImage))) {
-    await attachScanImage(wine, newWine.scanImageId, req);
+  //
+  // The BACK scan and the front/back conflicts ride the SAME gate, deliberately:
+  // they are the same evidence about the same unreadable label, so a condition
+  // that let one through and not the other would store a photo whose
+  // explanation is missing (or the reverse). The back frame is optional — a
+  // commit may carry only the front, only the back (the front scan 422'd and
+  // its frame was abandoned), or both.
+  if ((newWine.scanImageId || newWine.scanImageBackId) && pendingIdentity
+      && (created || (String(wine.createdBy) === String(req.user.id) && !wine.scanImage && !wine.scanImageBack))) {
+    await attachScanImage(
+      wine,
+      { scanImageId: newWine.scanImageId, scanImageBackId: newWine.scanImageBackId },
+      req
+    );
+    // Stored only alongside the evidence it explains, and only when the row is
+    // still pending — a completed identity has nothing to correct.
+    const conflicts = validateScanConflicts(newWine.scanConflicts);
+    if (conflicts && (wine.scanImage || wine.scanImageBack)
+        && (!wine.scanFieldConflicts || wine.scanFieldConflicts.length === 0)) {
+      try {
+        wine.scanFieldConflicts = conflicts;
+        await wine.save();
+      } catch (err) {
+        console.warn('Scan-conflict record failed (non-fatal):', err.message);
+      }
+    }
   }
   return { wine, created: !!created, pendingIdentity };
 }
 
-module.exports = { resolveOrMintWine, validateNewWineFields, attachScanImage, MAX_WINE_FIELD, MAX_GRAPES };
+module.exports = {
+  resolveOrMintWine, validateNewWineFields, attachScanImage, validateScanConflicts,
+  MAX_WINE_FIELD, MAX_GRAPES, MAX_SCAN_CONFLICTS,
+};

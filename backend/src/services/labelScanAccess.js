@@ -93,16 +93,25 @@ const mayCurationReadScan = (wine, image, now = Date.now()) => {
  * Best-effort: a missed stamp leaves the scan on its old (indefinite) footing
  * and never deletes anything early.
  *
- * @param {{scanImage?: any}} wine
+ * BOTH FRAMES: a wine added through the back-label rescue carries a front scan
+ * AND a back scan, and they are one piece of evidence about one identity. A
+ * stamp that reached only the front would leave the back frame on the old
+ * indefinite footing — unreadable (curation access is gated on
+ * pending-or-within-grace) and unsweepable (the expiry job excludes
+ * retainUntil: null) — which is precisely the state this window exists to end.
+ * One updateMany over both ids, not two calls, so they can never diverge.
+ *
+ * @param {{scanImage?: any, scanImageBack?: any}} wine
  */
 const stampPromotedScanRetention = async (wine) => {
-  if (!wine || !wine.scanImage) return;
+  const ids = [wine && wine.scanImage, wine && wine.scanImageBack].filter(Boolean);
+  if (ids.length === 0) return;
   try {
     const BottleImage = require('../models/BottleImage');
-    await BottleImage.updateOne(
+    await BottleImage.updateMany(
       // Re-assert kind: nothing else in this collection may be given a
       // retention deadline by this path.
-      { _id: wine.scanImage, kind: 'label-scan', retainUntil: null },
+      { _id: { $in: ids }, kind: 'label-scan', retainUntil: null },
       { $set: { retainUntil: promotedScanDeadline() } }
     );
   } catch (err) {

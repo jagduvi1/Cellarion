@@ -250,9 +250,14 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
             </thead>
             <tbody>
               {wines.map(w => {
-                const imageIds = [w.scanImageId, ...(w.bottleImageIds || [])]
+                // Front scan, then the optional BACK scan (the rescue photo
+                // taken when the front label read half an identity), then the
+                // owners' bottle photos. The back label is usually the one
+                // that names the importer, the full appellation and the blend.
+                const imageIds = [w.scanImageId, w.scanImageBackId, ...(w.bottleImageIds || [])]
                   .filter(Boolean)
                   .filter(id => thumbSrc(w, id));
+                const conflicts = w.scanFieldConflicts || [];
                 return (
                   <tr key={w._id}>
                     <td style={tdStyle}>
@@ -308,6 +313,16 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
                           {w.identityUnavailable && (
                             <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary, #888)' }}>
                               {t('admin.wines.pendingIdentity.unavailableBadge')}
+                            </div>
+                          )}
+                          {/* What the front and back labels disagreed about at
+                              scan time. The FRONT value is what was stored, so
+                              this is usually enough to settle the row without
+                              opening the photos at all. */}
+                          {conflicts.length > 0 && (
+                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary, #888)' }}>
+                              {t('admin.wines.pendingIdentity.frontBackDisagree')}{' '}
+                              {conflicts.map(c => `${c.field}: “${c.front}” / “${c.back}”`).join('; ')}
                             </div>
                           )}
                         </>

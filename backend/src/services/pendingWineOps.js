@@ -152,9 +152,12 @@ async function queryPendingWines({ limit = 20, offset = 0, createdVia = null, in
     imagesBy.set(key, list);
   }
 
-  // Scan images are fetched separately: the wine points AT one, so there is no
-  // wineDefinition/bottle link to find it by.
-  const scanIds = wines.map((w) => w.scanImage).filter(Boolean);
+  // Scan images are fetched separately: the wine points AT them, so there is no
+  // wineDefinition/bottle link to find them by. Both faces in one query — a
+  // wine added through the back-label rescue carries a front frame and a back
+  // frame, and the curator needs to see the one that actually names the
+  // producer.
+  const scanIds = wines.flatMap((w) => [w.scanImage, w.scanImageBack]).filter(Boolean);
   const scans = scanIds.length
     ? await BottleImage.find({ _id: { $in: scanIds } }).select('originalUrl processedUrl').lean()
     : [];
@@ -172,10 +175,11 @@ async function queryPendingWines({ limit = 20, offset = 0, createdVia = null, in
   const rows = wines.map((w) => {
     const bottleImageIds = (imagesBy.get(String(w._id)) || []).map((i) => String(i._id));
     const scanImageId = w.scanImage ? String(w.scanImage) : null;
+    const scanImageBackId = w.scanImageBack ? String(w.scanImageBack) : null;
     // Scoped to THIS row's ids — a shared map repeated on 25 rows is 25 copies
     // of the same payload.
     const urls = {};
-    for (const id of [scanImageId, ...bottleImageIds]) {
+    for (const id of [scanImageId, scanImageBackId, ...bottleImageIds]) {
       if (id && imageUrls[id]) urls[id] = imageUrls[id];
     }
     return {
@@ -195,6 +199,15 @@ async function queryPendingWines({ limit = 20, offset = 0, createdVia = null, in
       bottleCount: countBy.get(String(w._id)) || 0,
       // The point of the whole feature: the label the curator has to read.
       scanImageId,
+      // The optional BACK label, when the front scan came back incomplete and
+      // the owner took the rescue photo. Usually the one that names the
+      // importer, the full appellation and the blend.
+      scanImageBackId,
+      // What the two labels disagreed about, front value kept. Empty for every
+      // row that has only one frame.
+      scanFieldConflicts: (w.scanFieldConflicts || []).map((c) => ({
+        field: c.field, front: c.front, back: c.back,
+      })),
       bottleImageIds,
       imageUrls: urls,
       // NO creator field, by design — see the module header.

@@ -99,7 +99,7 @@ describe('attachScanImage — the commit stamps the label onto the wine', () => 
     });
     const w = wine();
 
-    await attachScanImage(w, IMG, req);
+    await attachScanImage(w, { scanImageId: IMG }, req);
 
     expect(BottleImage.findOneAndUpdate).toHaveBeenCalledWith(
       { _id: IMG, uploadedBy: USER, kind: 'label-scan', wineDefinition: null },
@@ -114,14 +114,14 @@ describe('attachScanImage — the commit stamps the label onto the wine', () => 
     BottleImage.findOneAndUpdate.mockReturnValue({ select: jest.fn().mockResolvedValue(null) });
     const w = wine();
 
-    await attachScanImage(w, IMG, { user: { id: OTHER } });
+    await attachScanImage(w, { scanImageId: IMG }, { user: { id: OTHER } });
 
     expect(w.scanImage).toBeNull();
     expect(w.save).not.toHaveBeenCalled();
   });
 
   test('a junk id never reaches the database', async () => {
-    await attachScanImage(wine(), 'not-an-id', req);
+    await attachScanImage(wine(), { scanImageId: 'not-an-id' }, req);
     expect(BottleImage.findOneAndUpdate).not.toHaveBeenCalled();
   });
 });

@@ -97,9 +97,14 @@ router.get('/', async (req, res) => {
         }
       },
       // Same rule as the populates below: the list endpoint returned the whole
-      // registry document too. These four are never part of a wishlist answer,
-      // and normalizedKey carries a pending row's creator id verbatim.
-      { $unset: ['wineDefinition.createdBy', 'wineDefinition.scanImage', 'wineDefinition.normalizedKey', 'wineDefinition.canonicalKey'] }
+      // registry document too. None of these is ever part of a wishlist answer,
+      // and normalizedKey carries a pending row's creator id verbatim. The two
+      // scan pointers and the front/back disagreements are CURATION evidence —
+      // they belong to the pending queue, not to a reader's wishlist.
+      { $unset: [
+        'wineDefinition.createdBy', 'wineDefinition.scanImage', 'wineDefinition.scanImageBack',
+        'wineDefinition.scanFieldConflicts', 'wineDefinition.normalizedKey', 'wineDefinition.canonicalKey',
+      ] }
     ];
 
     // Free-text search on wine name or producer. Guard the type: an object/array
@@ -174,7 +179,8 @@ router.get('/', async (req, res) => {
  * Add a wine to the authenticated user's wishlist.
  * Body: { wineDefinitionId, vintage?, notes?, priority? }
  *   or: { newWine: { name, producer, country, region?, appellation?, type?,
- *                    grapes?, confirmCreate?, source? }, vintage?, notes?, priority? }
+ *                    grapes?, confirmCreate?, source?, scanImageId?,
+ *                    scanImageBackId?, scanConflicts? }, vintage?, notes?, priority? }
  *
  * Exactly one of wineDefinitionId | newWine. A wishlist item REQUIRES a real
  * registry row (the schema references WineDefinition, and the whole list UI
