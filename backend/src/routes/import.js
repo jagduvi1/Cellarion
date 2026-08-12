@@ -645,7 +645,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
  */
 router.post('/confirm', async (req, res) => {
   try {
-    const { cellarId, items, positionAnchor: rawAnchor, rackConfigs: rawRackConfigs, defaultCurrency: rawDefaultCurrency } = req.body;
+    const { cellarId, items, positionAnchor: rawAnchor, rackConfigs: rawRackConfigs, defaultCurrency: rawDefaultCurrency, importNotes: rawImportNotes, importOccasion: rawImportOccasion } = req.body;
 
     if (!cellarId) {
       return res.status(400).json({ error: 'cellarId is required' });
@@ -669,6 +669,15 @@ router.post('/confirm', async (req, res) => {
     const defaultCurrency = (typeof rawDefaultCurrency === 'string' && /^[A-Z]{3}$/i.test(rawDefaultCurrency))
       ? rawDefaultCurrency.toUpperCase()
       : 'USD';
+
+    // Whole-import comment/occasion (support ticket 2026-07-30): typed once on
+    // the confirm screen, they land on every BOTTLE this import creates.
+    // Fill-blank only — a row that carries its own note from the file keeps it
+    // (imports never overwrite file data). Wishlist rows are deliberately
+    // excluded: "bought at the estate sale" describes bottles owned, not wines
+    // wanted. Caps mirror the Bottle schema (notes 5000, occasion 500).
+    const importNotes = typeof rawImportNotes === 'string' ? stripHtml(rawImportNotes).slice(0, 5000) : '';
+    const importOccasion = typeof rawImportOccasion === 'string' ? stripHtml(rawImportOccasion).slice(0, 500) : '';
 
     // Validate user-supplied per-rack configuration.
     // Shape: { [rackName]: { skip?, type?, rows?, cols?, typeConfig?: {...}, disabledPositions?: [Number] } }
@@ -1046,7 +1055,8 @@ router.post('/confirm', async (req, res) => {
             purchaseDate: item.purchaseDate || undefined,
             purchaseLocation: stripHtml(item.purchaseLocation),
             location: stripHtml(item.location),
-            notes: stripHtml(item.notes),
+            notes: stripHtml(item.notes) || importNotes || undefined,
+            occasion: (stripHtml(item.occasion) || '').slice(0, 500) || importOccasion || undefined,
             rating: resolvedRating,
             ratingScale: resolvedScale,
             drinkFrom,
@@ -1141,7 +1151,8 @@ router.post('/confirm', async (req, res) => {
           purchaseDate: item.purchaseDate || undefined,
           purchaseLocation: stripHtml(item.purchaseLocation),
           location: stripHtml(item.location),
-          notes: stripHtml(item.notes),
+          notes: stripHtml(item.notes) || importNotes || undefined,
+          occasion: (stripHtml(item.occasion) || '').slice(0, 500) || importOccasion || undefined,
           rating: resolvedRating,
           ratingScale: resolvedScale,
           drinkFrom,

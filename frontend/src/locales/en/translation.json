@@ -3678,6 +3678,14 @@
       "dropHint": "JSON, CSV, TSV, or TXT — max 10 MB",
       "encodingLine": "File encoding: {{encoding}}"
     },
+    "wholeImport": {
+      "title": "For every imported bottle",
+      "hint": "Optional — typed once, applied to every bottle in this import. Rows that carry their own note in the file keep it.",
+      "commentLabel": "Comment",
+      "commentPlaceholder": "e.g. Moved over from my old cellar app",
+      "occasionLabel": "Occasion",
+      "occasionPlaceholder": "e.g. Estate auction, March 2026"
+    },
     "rack": {
       "title": "Rack placement",
       "oenoHint": "Detected an <1>Oeno by Vintec</1> export. Cabinets and per-column modules from your CSV have been mapped to one Open Shelf rack each (6 front + 5 back per shelf, shelf 1 at the bottom). Each bottle's exact slot is preserved — adjust shelf counts below only if a cabinet has more shelves than the file shows.",

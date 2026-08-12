@@ -148,6 +148,11 @@ function ImportBottles() {
   // currency column. Seeded from the user's profile preference, but can be
   // overridden per-import via the picker.
   const [importCurrency, setImportCurrency] = useState(user?.preferences?.currency || 'USD');
+  // Whole-import comment/occasion (support ticket 2026-07-30): typed once,
+  // applied by the backend to every bottle this import creates — rows that
+  // carry their own note in the file keep it (fill-blank only).
+  const [importNotes, setImportNotes] = useState('');
+  const [importOccasion, setImportOccasion] = useState('');
 
   // Review step
   const [results, setResults] = useState([]);
@@ -891,7 +896,11 @@ function ImportBottles() {
     }
 
     try {
-      const res = await confirmImport(apiFetch, { cellarId, items, positionAnchor, rackConfigs, defaultCurrency: importCurrency });
+      const res = await confirmImport(apiFetch, {
+        cellarId, items, positionAnchor, rackConfigs, defaultCurrency: importCurrency,
+        importNotes: importNotes.trim() || undefined,
+        importOccasion: importOccasion.trim() || undefined,
+      });
       const data = await res.json();
 
       if (!res.ok) {
@@ -1196,6 +1205,33 @@ function ImportBottles() {
           profileCurrency={user?.preferences?.currency}
           anyRowHasCurrency={parsedItems.some(i => i.currency)}
         />
+      )}
+
+      {parsedItems.length > 0 && (
+        <div className="import-rack-options">
+          <h3>{t('importBottles.wholeImport.title')}</h3>
+          <p className="rack-options-hint">{t('importBottles.wholeImport.hint')}</p>
+          <div className="form-group">
+            <label>{t('importBottles.wholeImport.commentLabel')}</label>
+            <textarea
+              value={importNotes}
+              onChange={(e) => setImportNotes(e.target.value)}
+              placeholder={t('importBottles.wholeImport.commentPlaceholder')}
+              rows="2"
+              maxLength={5000}
+            />
+          </div>
+          <div className="form-group">
+            <label>{t('importBottles.wholeImport.occasionLabel')}</label>
+            <input
+              type="text"
+              value={importOccasion}
+              onChange={(e) => setImportOccasion(e.target.value)}
+              placeholder={t('importBottles.wholeImport.occasionPlaceholder')}
+              maxLength={500}
+            />
+          </div>
+        </div>
       )}
 
       {parsedItems.length > 0 && Object.keys(rackSummary).length > 0 && (
