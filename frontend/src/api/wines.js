@@ -19,6 +19,39 @@ export const scanLabel = (apiFetch, image, mediaType = 'image/jpeg') =>
   });
 
 /**
+ * The BACK-LABEL RESCUE scan. Offered only after a front scan came back
+ * incomplete (`extracted.partial`) or unreadable (422 — which still carries a
+ * `scanImageId`): the user photographs the back label and the fields the front
+ * could not supply are filled from it.
+ *
+ * payload: {
+ *   image,               // base64 back photo (required)
+ *   frontImage?,         // base64 front frame, when the client still holds it
+ *   frontExtracted?,     // what the front scan produced — context for the model
+ *   frontScanImageId?,   // echoed back, so both ids ride one response
+ * }
+ *
+ * Returns: {
+ *   merged,              // front value wins every contested scalar; the back
+ *                        //   fills only blanks (server-side, deterministic)
+ *   conflicts: [{ field, front, back }],   // recorded, not resolved
+ *   filled: string[],    // the fields the BACK label supplied
+ *   match,               // registry match re-run on the merged identity
+ *   backScanImageId,
+ *   frontScanImageId,
+ * }
+ *
+ * Both scan ids ride the eventual commit inside `newWine` (scanImageId +
+ * scanImageBackId), where they become curation evidence on the pending wine.
+ */
+export const scanLabelBack = (apiFetch, payload) =>
+  apiFetch('/api/wines/scan-label-back', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(payload),
+  });
+
+/**
  * Resolve confirmed wine data against the shared registry. READ-ONLY — this
  * NEVER creates (the endpoint keeps its /find-or-create path for
  * compatibility, but it went resolve-only when step-1 minting left 31

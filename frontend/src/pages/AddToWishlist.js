@@ -46,6 +46,12 @@ function AddToWishlist() {
   // Id of the stored ORIGINAL scan frame — never rendered; it rides the commit
   // so the minted wine keeps the label a curator may need to read.
   const [scanImageId, setScanImageId] = useState(null);
+  // ── Back-label rescue — see AddBottle.js for the design. Offered only after
+  // a front pass that read half a label or none of it; optional, dismissible,
+  // and never a gate on manual entry. ──
+  const [backOffer, setBackOffer] = useState(false);
+  const [backScanImageId, setBackScanImageId] = useState(null);
+  const [scanConflicts, setScanConflicts] = useState([]);
   const [showManualForm, setShowManualForm] = useState(false);
   const [pendingWineData, setPendingWineData] = useState(null);
   const [findingWine, setFindingWine] = useState(false);
@@ -65,8 +71,12 @@ function AddToWishlist() {
     setPendingNewWine(null);
     setScanResult(null);
     setLabelImage(null);
-    // Wine already identified — its scan has no curation value.
+    // Wine already identified — its scans have no curation value, and neither
+    // does the record of what the two labels disagreed about.
     setScanImageId(null);
+    setBackScanImageId(null);
+    setScanConflicts([]);
+    setBackOffer(false);
     setShowManualForm(false);
     setPendingWineData(null);
     setSoftCandidates(null);
@@ -81,6 +91,9 @@ function AddToWishlist() {
     setSelectedWine({ name: wineData.name, producer: wineData.producer, type: wineData.type });
     setScanResult(null);
     setLabelImage(null);
+    // The scan ids and conflicts survive — this path ends in a pendingIdentity
+    // mint, which is exactly who the evidence is for.
+    setBackOffer(false);
     setShowManualForm(false);
     setPendingWineData(null);
     setSoftCandidates(null);
@@ -127,19 +140,83 @@ function AddToWishlist() {
     setScanImageId(data.scanImageId || null);
     setShowManualForm(false);
     setPendingWineData(null);
+    // A HALF-READ label is a 200, not an error: what was read prefills the
+    // card, and the back label is offered as an optional way to fill the rest.
+    setBackOffer(data.extracted?.partial === true);
+    setBackScanImageId(null);
+    setScanConflicts([]);
     // Pre-fill vintage from scan
     if (data.extracted?.vintage) setVintage(data.extracted.vintage);
   }, []);
 
-  const handleScanError = useCallback((msg) => {
+  const handleScanError = useCallback((msg, body) => {
     setError(msg);
+    // An unreadable label still hands back the stored frame — keep its id and
+    // offer the back label, so the pending wine the manual entry mints is not
+    // left with no evidence at all.
+    if (body?.scanImageId) {
+      setScanImageId(body.scanImageId);
+      setBackOffer(true);
+    }
   }, []);
+
+  /**
+   * Merge a back-label reading into the form WITHOUT ever overwriting the user.
+   * Anything typed while the scan was in flight is a deliberate correction and
+   * outranks both labels; this only fills what is still blank. (Front-vs-back
+   * was already settled server-side — front wins, disagreements recorded.)
+   */
+  const handleBackScanSuccess = useCallback((data) => {
+    const merged = data.merged || {};
+    setBackScanImageId(data.backScanImageId || null);
+    setScanConflicts(Array.isArray(data.conflicts) ? data.conflicts : []);
+    setBackOffer(false);
+    setError(null);
+
+    setScanResult(prev => (prev
+      ? { ...prev, extracted: merged, match: data.match || null }
+      : { extracted: merged, match: data.match || null, labelImage: null, scanImageId: null }));
+
+    setPendingWineData(prev => {
+      const fromMerged = {
+        name: merged.name || '',
+        producer: merged.producer || '',
+        country: merged.country || '',
+        region: merged.region || '',
+        appellation: merged.appellation || '',
+        type: merged.type || 'red',
+        grapes: (merged.grapes || []).join(', '),
+      };
+      if (!prev) return fromMerged;
+      const next = { ...prev };
+      for (const key of Object.keys(fromMerged)) {
+        const typed = typeof prev[key] === 'string' ? prev[key].trim() : prev[key];
+        if (!typed && fromMerged[key]) next[key] = fromMerged[key];
+      }
+      return next;
+    });
+    setShowManualForm(prev => prev || !scanResult);
+    // The vintage field is the user's; only fill it if they have not.
+    if (merged.vintage) setVintage(prev => prev || merged.vintage);
+  }, [scanResult]);
 
   const {
     labelCam, labelScanning, labelFacing, setLabelFacing,
     labelVideoRef, labelCanvasRef,
-    startCamera: startLabelCamera, stopCamera: stopLabelCamera, capturePhoto: captureLabelPhoto
-  } = useLabelScanner(apiFetch, { onScanSuccess: handleScanSuccess, onScanError: handleScanError });
+    startCamera: startLabelCamera, startBackCamera: startBackLabelCamera,
+    stopCamera: stopLabelCamera, capturePhoto: captureLabelPhoto
+  } = useLabelScanner(apiFetch, {
+    onScanSuccess: handleScanSuccess,
+    onScanError: handleScanError,
+    onBackScanSuccess: handleBackScanSuccess,
+  });
+
+  const startBackScan = useCallback(() => {
+    startBackLabelCamera({
+      frontExtracted: scanResult?.extracted || {},
+      frontScanImageId: scanImageId,
+    });
+  }, [startBackLabelCamera, scanResult, scanImageId]);
 
   // Pre-select wine when navigating from restock suggestions (route state)
   // or from a wine page's "Add to Wishlist" link (?wine=<id> query param).
@@ -228,6 +305,9 @@ function AddToWishlist() {
     setScanResult(null);
     setLabelImage(null);
     setScanImageId(null);
+    setBackScanImageId(null);
+    setScanConflicts([]);
+    setBackOffer(false);
     setShowManualForm(false);
     setPendingWineData(null);
     setError(null);
@@ -360,9 +440,16 @@ function AddToWishlist() {
         notes: notes || undefined,
         priority
       };
-      // scanImageId rides at the ONE place a newWine payload is sent, so every
-      // entry path carries the label photo without each remembering to.
-      if (newWinePayload) body.newWine = { ...newWinePayload, ...(scanImageId ? { scanImageId } : {}) };
+      // The scan evidence rides at the ONE place a newWine payload is sent, so
+      // every entry path carries it without each remembering to. All three
+      // parts travel together: the front frame, the optional back frame, and
+      // what the two labels disagreed about.
+      if (newWinePayload) body.newWine = {
+        ...newWinePayload,
+        ...(scanImageId ? { scanImageId } : {}),
+        ...(backScanImageId ? { scanImageBackId: backScanImageId } : {}),
+        ...(scanConflicts.length > 0 ? { scanConflicts } : {}),
+      };
       else body.wineDefinitionId = wineId;
 
       const res = await addToWishlist(apiFetch, body);
@@ -467,6 +554,35 @@ function AddToWishlist() {
       {/* ── Step 1: Select wine ── */}
       {!selectedWine && (
         <div className="card">
+          {/* ── Back-label rescue ─────────────────────────────────────────
+              Appears ONLY after a front scan that read half a label or none
+              of it. Optional in the strongest sense: "Skip" dismisses it,
+              every field below stays editable while it is on screen, and
+              ignoring it leaves the flow exactly as it was. ── */}
+          {backOffer && !labelCam.open && (
+            <div className="scan-back-prompt">
+              <p className="scan-back-prompt-text">{t('addToWishlist.backScanPrompt')}</p>
+              <div className="scan-back-prompt-actions">
+                <button type="button" className="btn btn-secondary" onClick={startBackScan}>
+                  {t('addToWishlist.backScanCta')}
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={() => setBackOffer(false)}>
+                  {t('addToWishlist.backScanSkip')}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Non-blocking: the front value was kept, and saying so is what
+              stops a user re-typing a field that is already right. */}
+          {scanConflicts.length > 0 && (
+            <p className="scan-back-conflicts">
+              {t('addToWishlist.backScanConflicts', {
+                fields: scanConflicts.map(c => c.field).join(', '),
+              })}
+            </p>
+          )}
+
           {/* Scan result: wine card */}
           {scanResult && !showManualForm && (
             <div className="scan-wine-card">
