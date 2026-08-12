@@ -981,9 +981,11 @@ registerTool({
     'from their bottle page, answers land in the owner-inquiry queue). THE tool for record facts research cannot ' +
     'settle — "what does the label say the producer is?", "is this the DOCG or the DOC bottling?". Owners with ' +
     'ACTIVE bottles are asked; when none exist, owners who consumed one are asked instead. Capped at 20 owners. One ' +
-    'open inquiry per wine — a second ask conflicts until the first is resolved. This notifies real people: confirm ' +
-    'the wording with the somm first. NOT reversible via undo_last (notifications cannot be unsent). Read the ' +
-    'answers later with list_owner_inquiries.',
+    'open inquiry per wine — a second ask conflicts until the first is resolved. Works on pending-identity wines ' +
+    'too, and is the RIGHT escalation when the label scan cannot answer the question: the owner has the bottle in ' +
+    'hand and can read the back label ("Mis en bouteille par…") when the front prints no producer. This notifies ' +
+    'real people: confirm the wording with the somm first. NOT reversible via undo_last (notifications cannot be ' +
+    'unsent). Read the answers later with list_owner_inquiries.',
   scope: 'write',
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },

@@ -100,18 +100,15 @@ async function createOwnerInquiry({ wineId, userId, via = 'rest', question, req 
   if (!wine) {
     return { ok: false, code: 'not_found', message: 'No registry wine with that id.' };
   }
-  // An owner inquiry asks OTHER people's owners what their label says. On a
-  // pending-identity row the only owner IS the creator, whose add is what left
-  // the identity incomplete — asking them what the curator can already see in
-  // the attached scan image is a notification for nothing. Refused loudly so
-  // the curator uses the queue's own fix path instead.
-  if (wine.pendingIdentity === true) {
-    return {
-      ok: false,
-      code: 'conflict',
-      message: 'This wine is in the pending-identity queue — its only bottle owner is the person whose add created it. Read the label scan in that queue and fix it there instead.',
-    };
-  }
+  // Pending-identity wines are deliberately ASKABLE. This used to be refused on
+  // the reasoning that the only owner is the creator, so asking them adds
+  // nothing over reading the scan — but those two things don't connect. When the
+  // scan is unreadable (a washed-out producer line, a label that simply doesn't
+  // print the producer, a photo of a screen), the owner is holding the bottle
+  // and can read the BACK label, which carries "Mis en bouteille par…". That is
+  // strictly more information than the curator has, and it is the only path that
+  // resolves the row at all. Refusing it left such wines stuck in the queue
+  // forever with no escalation (found in use, 2026-08-12).
 
   const { recipients, fallbackUsed } = await buildRecipients(wine._id);
   if (recipients.length === 0) {
