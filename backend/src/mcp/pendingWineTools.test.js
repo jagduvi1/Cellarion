@@ -298,7 +298,11 @@ describe('get_pending_wine_images — the point of the feature', () => {
       const body = parse(res);
 
       expect(body.error.code).toBe('conflict');
-      expect(body.error.message).toMatch(/not in the pending-identity queue/);
+      // Asserts the MEANING, not the sentence: a completed wine past its grace
+      // window is refused and told the scan is gone. (The wording changed when
+      // the no-scan case got its own message — behaviour here is unchanged.)
+      expect(body.error.message).toMatch(/pending-identity queue/);
+      expect(body.error.message).toMatch(/window has closed/);
     });
 
     test('no image is read from disk for a completed wine', async () => {
@@ -357,6 +361,27 @@ describe('get_pending_wine_images — the point of the feature', () => {
 
       expect(body.error.code).toBe('conflict');
       expect(body.error.message).toMatch(/correction window has closed/);
+    });
+
+    // Found in use 2026-08-12: a curator asked about a wine that was never
+    // added from a photo and was told its window "has closed" — asserting that
+    // evidence had existed and they were too late. The three states must not
+    // share one message.
+    test('a wine with NO scan is told so, not told a window expired', async () => {
+      WineDefinition.findById.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          lean: jest.fn().mockResolvedValue({
+            _id: W1, name: 'Rosé Poulsard', producer: 'Domaine Rolet', pendingIdentity: false, scanImage: null,
+          }),
+        }),
+      });
+
+      const body = parse(await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX));
+
+      expect(body.error.code).toBe('conflict');
+      expect(body.error.message).toMatch(/has no label scan/);
+      expect(body.error.message).not.toMatch(/window has closed/);
+      expect(body.error.message).toMatch(/ask_bottle_owner/);
     });
 
     test('a promoted wine whose scan was never stamped stays refused', async () => {

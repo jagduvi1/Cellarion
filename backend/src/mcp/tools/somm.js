@@ -1231,9 +1231,18 @@ registerTool({
         .select('_id kind originalUrl processedUrl retainUntil').lean()
       : null;
     if (!mayCurationReadScan(wine, scan)) {
+      // Three different states used to share one message, and it asserted an
+      // expiry for all of them — a curator asking about a wine that was never
+      // added from a photo was told its window "has closed", i.e. that
+      // evidence had existed and they were too late. Say which case it is.
+      if (!scan) {
+        return fail('conflict',
+          'That wine has no label scan — it was not added from a photo, so there is no curation evidence to read. '
+          + 'Its bottle photos belong to their owners. Use ask_bottle_owner if the label is the only thing that can settle this.');
+      }
       return fail('conflict',
-        `That wine is not in the pending-identity queue and its label scan's ${PROMOTED_SCAN_GRACE_DAYS}-day ` +
-        'correction window has closed — the remaining photos are its owners\' private images, not curation evidence.');
+        `That wine left the pending-identity queue and its label scan's ${PROMOTED_SCAN_GRACE_DAYS}-day `
+        + 'correction window has closed, so the scan is gone. Use ask_bottle_owner if the label is the only thing that can settle this.');
     }
 
     // "Which images belong to this wine" has exactly one definition — the same
