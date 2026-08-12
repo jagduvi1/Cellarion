@@ -121,6 +121,25 @@ describe('createOwnerInquiry', () => {
     expect(WineOwnerInquiry.create).not.toHaveBeenCalled();
   });
 
+  // Regression: this was REFUSED with a conflict on the reasoning that a
+  // pending row's only owner is its creator, so asking adds nothing over
+  // reading the scan. Wrong — when the scan cannot answer (washed-out producer
+  // line, a label that prints no producer at all), the owner holds the bottle
+  // and can read the back label. Refusing left those rows stuck with no
+  // escalation at all (found in use 2026-08-12).
+  test('ASKS a pending-identity wine — the owner can read the back label the scan cannot show', async () => {
+    WineDefinition.findById.mockReturnValue({
+      select: jest.fn().mockResolvedValue({ ...wineDoc, pendingIdentity: true }),
+    });
+    happyRecipients();
+    WineOwnerInquiry.create.mockResolvedValue({ _id: oid('e'), status: 'open', question: QUESTION });
+
+    const res = await createOwnerInquiry({ wineId: WINE, userId: ASKER, question: QUESTION });
+
+    expect(res.ok).toBe(true);
+    expect(WineOwnerInquiry.create).toHaveBeenCalled();
+  });
+
   test('strips HTML from the question — owners read plain text', async () => {
     mockWineFound();
     happyRecipients();
