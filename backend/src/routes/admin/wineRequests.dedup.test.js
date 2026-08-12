@@ -20,6 +20,9 @@ jest.mock('../../models/WineDefinition', () => {
 jest.mock('../../models/Bottle', () => ({ distinct: jest.fn(), updateMany: jest.fn() }));
 jest.mock('../../models/Country', () => ({ findById: jest.fn() }));
 jest.mock('../../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn() }));
+// Identity by default so the tier-strip assertion below reads the
+// normalizeAppellation output; the curated-registry test overrides it.
+jest.mock('../../services/appellationResolve', () => ({ resolveCanonicalAppellation: jest.fn(async (v) => v) }));
 jest.mock('../../services/search', () => ({ indexWine: jest.fn() }));
 jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../../services/notifications', () => ({ createNotification: jest.fn() }));
@@ -34,6 +37,7 @@ const WineDefinition = require('../../models/WineDefinition');
 const Bottle = require('../../models/Bottle');
 const Country = require('../../models/Country');
 const { findOrCreateWine } = require('../../services/findOrCreateWine');
+const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const wineRequestsRouter = require('./wineRequests');
 
 const ADMIN_ID = '64b000000000000000000001';
@@ -119,6 +123,25 @@ test('clean create canonicalizes name + appellation and stamps createdVia ui', a
   expect(doc.appellation).toBe('Barolo');       // tier suffix stripped (the missed v1.85.0 fix)
   expect(doc.createdVia).toBe('ui');
   expect(requestDoc.save).toHaveBeenCalled();
+});
+
+// Tier-stripping alone is not enough: this branch builds the WineDefinition
+// itself, so approving a request has to run the curated-registry resolver or
+// it mints a decorated variant of an appellation the taxonomy already holds.
+test('the STORED appellation is the resolver\'s canonical spelling', async () => {
+  resolveCanonicalAppellation.mockResolvedValueOnce('Yecla');
+
+  const res = await resolve({ ...CREATE_BODY, wineData: { ...CREATE_BODY.wineData, appellation: ' Yecla DO ' } });
+  expect(res.status).toBe(200);
+
+  expect(resolveCanonicalAppellation).toHaveBeenCalledWith('Yecla DO');
+  const doc = WineDefinition.mock.calls[0][0];
+  expect(doc.appellation).toBe('Yecla');
+  // The probe is keyed off the resolved value too, so the dedup match sees the
+  // same string the registry already stores.
+  expect(findOrCreateWine).toHaveBeenCalledWith(
+    expect.objectContaining({ appellation: 'Yecla' }), ADMIN_ID, { matchOnly: true }
+  );
 });
 
 test('confirmCreate skips the probe (explicit "create anyway")', async () => {

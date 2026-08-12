@@ -50,6 +50,12 @@ const appellationSchema = new mongoose.Schema({
 
 // No two appellations with the same name in the same country
 appellationSchema.index({ country: 1, normalizedName: 1 }, { unique: true });
+// The resolver's country-less lookup ($or on normalizedName/normalizedSynonyms)
+// cannot use the compound above (country prefix) — without this it collscans,
+// and the membership-gated stripping now issues up to 5 lookups per decorated
+// input, on a path every bottle-add hits (release-audit LOW-1). Cheap at ~1k
+// docs, load-bearing if the taxonomy grows.
+appellationSchema.index({ normalizedName: 1 });
 
 // Keep normalizedSynonyms in lockstep with synonyms — same hook as Grape, so
 // every save-based admin edit maintains what the write-time lookup matches.

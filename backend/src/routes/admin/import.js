@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const { parse } = require('csv-parse');
 const { requireAuth, requireRole } = require('../../middleware/auth');
-const { generateWineKey, generateWineSlug, normalizeString, normalizeAppellation, resolveCountryName, isRecognizedCountry, isUnknownName, sanitizeTaxonomyName } = require('../../utils/normalize');
+const { generateWineKey, generateWineSlug, normalizeString, normalizeAppellation, normalizeAppellationKey, resolveCountryName, isRecognizedCountry, isUnknownName, sanitizeTaxonomyName } = require('../../utils/normalize');
 const { canonicalizeWineName } = require('../../utils/producerPrefix');
 const { computeCanonicalKey } = require('../../utils/wineIdentity');
 const WineDefinition = require('../../models/WineDefinition');
@@ -10,6 +10,7 @@ const Country = require('../../models/Country');
 const Region = require('../../models/Region');
 const Appellation = require('../../models/Appellation');
 const { logAudit } = require('../../services/audit');
+const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const searchService = require('../../services/search');
 
 const router = express.Router();
@@ -215,7 +216,16 @@ async function getOrCreateAppellation(name, countryId, regionId, userId, cache) 
   const key = `${countryId}:${name.toLowerCase().trim()}`;
   if (cache.has(key)) return cache.get(key);
 
-  const normalized = normalizeString(name);
+  // normalizeAppellationKey, NOT normalizeString (release-audit F1/MEDIUM-1,
+  // both auditors independently): every other Appellation creator and every
+  // lookup — the resolver, taxonomyReview, the backfill script — keys with
+  // the hyphen-folding form. normalizeString deletes hyphens without a space
+  // ("Nuits-Saint-Georges" → 'nuitssaintgeorges'), so keying here with it
+  // MISSED every hyphenated curated doc and upserted an invisible twin —
+  // which got worse, not better, once line ~445 started resolving spellings
+  // to their canonical (hyphenated) forms. Country/Region above keep
+  // normalizeString: that IS their collections' convention.
+  const normalized = normalizeAppellationKey(name);
   const doc = await Appellation.findOneAndUpdate(
     { country: countryId, normalizedName: normalized },
     {
@@ -231,6 +241,20 @@ async function getOrCreateAppellation(name, countryId, regionId, userId, cache) 
   );
   cache.set(key, doc._id);
   return doc._id;
+}
+
+/**
+ * Adopt the curated display spelling for an imported appellation string,
+ * memoized per import run. Falsy in / falsy out, and the resolver itself never
+ * throws — an unknown CSV spelling passes through verbatim and lands in the
+ * admin unmatched queue, exactly like every other write surface.
+ */
+async function resolveImportAppellation(name, cache) {
+  if (!name) return name;
+  if (cache.has(name)) return cache.get(name);
+  const resolved = await resolveCanonicalAppellation(name);
+  cache.set(name, resolved);
+  return resolved;
 }
 
 const BATCH_SIZE = 500;
@@ -262,6 +286,7 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
   const countryCache = new Map();
   const regionCache = new Map();
   const appellationCache = new Map();
+  const appellationSpellingCache = new Map();
 
   // Auto-detect delimiter and whether a header row is present.
   // Strip BOM before inspecting — some LWIN exports include a UTF-8 BOM.
@@ -308,10 +333,8 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
     const rows = batch;
     batch = [];
 
-    const ops = rows.map(({ mapped, countryId, regionId, normalizedKey }) => {
-      const filter = mapped.lwin7
-        ? { $or: [{ normalizedKey }, { 'lwin.lwin7': mapped.lwin7 }] }
-        : { normalizedKey };
+    const ops = rows.map(({ mapped, countryId, regionId, normalizedKey, legacyKey }) => {
+      const filter = buildUpsertFilter({ normalizedKey, legacyKey, lwin7: mapped.lwin7 });
 
       // Wrap user-derived CSV values in $literal: in an aggregation update
       // pipeline a string beginning with '$' is otherwise evaluated as a field
@@ -419,13 +442,31 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
         // producer "Vajra") mints the producer-in-name shape the admin tool
         // then has to clean up (registry audit 2026-07-26).
         mapped.name = canonicalizeWineName(mapped.name, mapped.producer);
+        // Curated-registry resolve, same reason as the name canon: parseRow is
+        // sync so it can only tier-strip, and this path bulkWrites directly
+        // instead of going through findOrCreateWine — so without the resolver a
+        // CSV column spelling both lands on the wine AND mints a duplicate
+        // Appellation doc through getOrCreateAppellation below. Cached like
+        // every other taxonomy lookup here: LWIN dumps repeat a few thousand
+        // appellation strings across hundreds of thousands of rows.
+        const preResolveAppellation = mapped.appellation;
+        mapped.appellation = await resolveImportAppellation(mapped.appellation, appellationSpellingCache);
 
         const countryId = await getOrCreateCountry(mapped.country, userId, countryCache);
         const regionId = await getOrCreateRegion(mapped.region, countryId, userId, regionCache);
         await getOrCreateAppellation(mapped.appellation, countryId, regionId, userId, appellationCache);
         const normalizedKey = generateWineKey(mapped.name, mapped.producer, mapped.appellation || '');
+        // Resolution moves the dedup key ("… Yecla DO" → "… Yecla"), so a
+        // re-import of a file whose rows this import minted BEFORE the
+        // resolver existed would miss them and upsert twins (release-audit
+        // F3). The pre-resolve key rides into the upsert filter's $or so the
+        // old rows still match; findOrCreateWine's sibling net gives every
+        // other path this protection, but the bulkWrite has only its filter.
+        const legacyKey = mapped.appellation !== preResolveAppellation
+          ? generateWineKey(mapped.name, mapped.producer, preResolveAppellation || '')
+          : null;
 
-        batch.push({ mapped, countryId, regionId, normalizedKey, rowIndex });
+        batch.push({ mapped, countryId, regionId, normalizedKey, legacyKey, rowIndex });
 
         if (batch.length >= BATCH_SIZE) {
           await flush();
@@ -490,6 +531,21 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
  * @param {object} stats running import stats (mutated)
  * @returns {object|null} the partial BulkWriteResult to credit, or null
  */
+/**
+ * The upsert filter for one import row. Three identities may name an existing
+ * row: the current dedup key, the PRE-RESOLVE key (release-audit F3 — the
+ * curated-spelling resolve moved keys, and a re-import of a file whose rows
+ * were minted before the resolver must still match them rather than upsert
+ * twins), and the LWIN7 (stable across every spelling change). Pure and
+ * exported for tests.
+ */
+function buildUpsertFilter({ normalizedKey, legacyKey, lwin7 }) {
+  const orKeys = [{ normalizedKey }];
+  if (legacyKey) orKeys.push({ normalizedKey: legacyKey });
+  if (lwin7) orKeys.push({ 'lwin.lwin7': lwin7 });
+  return orKeys.length > 1 ? { $or: orKeys } : { normalizedKey };
+}
+
 function applyBulkWriteError(err, rows, stats) {
   const failRow = (rowIndex, reason) => {
     stats.total--;
@@ -603,3 +659,12 @@ module.exports.finalizeMintedWines = finalizeMintedWines;
 // recovery keeps a mid-batch duplicate-key from discarding up to 499
 // created wines' stats and invariants (audit 2026-08-03 H1).
 module.exports.applyBulkWriteError = applyBulkWriteError;
+// resolveImportAppellation exported for its unit tests — parseRow is sync and
+// can only tier-strip, so this is the ONLY place the import adopts the curated
+// registry spelling before it both stores the string and mints the taxonomy doc.
+module.exports.resolveImportAppellation = resolveImportAppellation;
+// Test seams for the release-audit F1/F3 fixes: the Appellation-doc keying
+// convention and the legacy-key upsert filter are exactly the kind of quiet
+// contract a refactor breaks without noticing.
+module.exports.getOrCreateAppellation = getOrCreateAppellation;
+module.exports.buildUpsertFilter = buildUpsertFilter;

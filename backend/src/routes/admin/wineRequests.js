@@ -7,6 +7,7 @@ const { generateWineKey, normalizeAppellation } = require('../../utils/normalize
 const { canonicalizeWineName } = require('../../utils/producerPrefix');
 const Country = require('../../models/Country');
 const { findOrCreateWine } = require('../../services/findOrCreateWine');
+const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const searchService = require('../../services/search');
 const { logAudit } = require('../../services/audit');
 const { createNotification } = require('../../services/notifications');
@@ -118,7 +119,13 @@ router.put('/:id/resolve', async (req, res) => {
 
       const cleanProducer = producer.trim();
       const cleanName = canonicalizeWineName(name, cleanProducer);
-      const cleanAppellation = normalizeAppellation(typeof appellation === 'string' ? appellation.trim() : null) || null;
+      // Tier-strip AND curated-registry resolve — this branch bulk-builds the
+      // WineDefinition itself rather than going through findOrCreateWine, so
+      // the resolver has to be called explicitly or an approved request mints
+      // a spelling variant of an already-curated appellation.
+      const cleanAppellation = await resolveCanonicalAppellation(
+        normalizeAppellation(typeof appellation === 'string' ? appellation.trim() : null)
+      ) || null;
 
       if (!req.body.confirmCreate) {
         const countryDoc = await Country.findById(String(country)).select('name').lean().catch(() => null);

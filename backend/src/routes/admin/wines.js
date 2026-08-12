@@ -11,6 +11,7 @@ const {
   normalizeProducerKey,
   normalizeAppellation
 } = require('../../utils/normalize');
+const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const { scoreWineMatch } = require('../../services/wineMatching');
 const { sameProducerAppellationGroups, nearProducerPairs } = require('../../services/registryFragmentation');
 const WineDefinition = require('../../models/WineDefinition');
@@ -172,7 +173,13 @@ router.post('/', async (req, res) => {
 
     const cleanProducer = producer.trim();
     const cleanName = canonicalizeWineName(name, cleanProducer);
-    const cleanAppellation = normalizeAppellation(typeof appellation === 'string' ? appellation.trim() : null) || null;
+    // Resolved, not just tier-stripped: this branch writes the WineDefinition
+    // directly, so without the curated-registry lookup an admin create
+    // reintroduces the spelling variants the mint chokepoint folds. One
+    // resolution serves the dedup probe, the key and the stored field.
+    const cleanAppellation = await resolveCanonicalAppellation(
+      normalizeAppellation(typeof appellation === 'string' ? appellation.trim() : null)
+    ) || null;
 
     if (!confirmCreate) {
       const countryDoc = await Country.findById(String(country)).select('name').lean().catch(() => null);
@@ -1244,7 +1251,9 @@ router.put('/:id', async (req, res) => {
     if (producer) wine.producer = producer.trim();
     if (country) wine.country = country;
     if (region !== undefined) wine.region = region || null;
-    if (appellation !== undefined) wine.appellation = normalizeAppellation(appellation?.trim());
+    if (appellation !== undefined) {
+      wine.appellation = await resolveCanonicalAppellation(normalizeAppellation(appellation?.trim()));
+    }
     if (grapes !== undefined) wine.grapes = grapes;
     if (type) wine.type = type;
 

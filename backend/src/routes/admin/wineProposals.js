@@ -36,6 +36,7 @@ const { submitUrls } = require('../../services/indexNow');
 const searchService = require('../../services/search');
 const { reembedActiveVintages } = require('../../services/embeddingJob');
 const { findOrCreateRegion } = require('../../services/findOrCreateWine');
+const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const { performWineMerge } = require('./wines');
 const { generateWineKey, normalizeAppellation, normalizeString, resolveCountryName } = require('../../utils/normalize');
 const { parsePagination } = require('../../utils/pagination');
@@ -202,7 +203,15 @@ router.post('/:id/approve', async (req, res) => {
         if (pf.name) { wine.name = pf.name.trim(); applied.push('name'); }
         if (pf.producer) { wine.producer = pf.producer.trim(); applied.push('producer'); }
         if (pf.classification) { wine.classification = pf.classification.trim(); applied.push('classification'); }
-        if (pf.appellation) { wine.appellation = normalizeAppellation(pf.appellation.trim()); applied.push('appellation'); }
+        if (pf.appellation) {
+          // Tier-strip AND curated-registry resolve. Approving a proposal is a
+          // registry WRITE, so it owes the same canonicalization as the mint
+          // chokepoint: without the resolver a somm's "Yecla DO" landed
+          // verbatim on the wine (prod, 2026-08-12) because the trailing "DO"
+          // is deliberately outside normalizeAppellation's token set.
+          wine.appellation = await resolveCanonicalAppellation(normalizeAppellation(pf.appellation.trim()));
+          applied.push('appellation');
+        }
 
         let countryDoc = null;
         if (pf.country) {

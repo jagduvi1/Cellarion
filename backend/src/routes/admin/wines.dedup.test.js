@@ -8,6 +8,11 @@
  * matcher (matchOnly) and 409s with candidates unless confirmCreate is given,
  * and stores canonicalized fields + createdVia provenance. This suite pins
  * that gate.
+ *
+ * It also pins the appellation CANONICALIZATION on both admin write surfaces
+ * (POST and PUT): both write the WineDefinition directly rather than through
+ * findOrCreateWine, so both must call the curated-registry resolver themselves
+ * or the admin surfaces reintroduce spelling variants the mint path folds.
  */
 
 process.env.JWT_SECRET = 'test-secret';
@@ -20,7 +25,7 @@ jest.mock('../../models/WineDefinition', () => {
   ctor.countDocuments = jest.fn();
   return ctor;
 });
-jest.mock('../../models/Bottle', () => ({ aggregate: jest.fn(), countDocuments: jest.fn() }));
+jest.mock('../../models/Bottle', () => ({ aggregate: jest.fn(), countDocuments: jest.fn(), distinct: jest.fn() }));
 jest.mock('../../models/BottleImage', () => ({}));
 jest.mock('../../models/WineVintageProfile', () => ({}));
 jest.mock('../../models/WineVintagePrice', () => ({}));
@@ -44,10 +49,13 @@ jest.mock('../../models/Country', () => ({ findById: jest.fn() }));
 jest.mock('../../services/vectorStore', () => ({}));
 jest.mock('../../services/imageProcessor', () => ({ unlinkImageFiles: jest.fn() }));
 jest.mock('../../services/embeddingJob', () => ({ embedSinglePair: jest.fn() }));
-jest.mock('../../services/search', () => ({ indexWine: jest.fn(), removeWine: jest.fn() }));
+jest.mock('../../services/search', () => ({ indexWine: jest.fn(), removeWine: jest.fn(), bulkIndexBottles: jest.fn() }));
 jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../../services/indexNow', () => ({ submitUrls: jest.fn() }));
 jest.mock('../../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn() }));
+// Identity by default so the tier-strip assertion below reads the
+// normalizeAppellation output; the curated-registry test overrides it.
+jest.mock('../../services/appellationResolve', () => ({ resolveCanonicalAppellation: jest.fn(async (v) => v) }));
 
 const express = require('express');
 const http = require('http');
@@ -57,6 +65,7 @@ const WineNotDuplicate = require('../../models/WineNotDuplicate');
 const Bottle = require('../../models/Bottle');
 const Country = require('../../models/Country');
 const { findOrCreateWine } = require('../../services/findOrCreateWine');
+const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const { generateWineKey } = require('../../utils/normalize');
 const adminWinesRouter = require('./wines');
 
@@ -146,6 +155,48 @@ test('no probe hit creates with canonicalized fields + createdVia ui', async () 
   expect(doc.appellation).toBe('Bannockburn'); // tier suffix stripped
   expect(doc.createdVia).toBe('ui');
   expect(doc.normalizedKey).toBe(generateWineKey('Block 3 Pinot Noir', 'Felton Road Wines Ltd', 'Bannockburn'));
+});
+
+// The admin create writes the WineDefinition itself, so the curated-registry
+// resolve has to happen HERE — one resolution serving the dedup probe, the
+// normalizedKey and the stored field, or the admin surface reintroduces the
+// spelling variants the mint chokepoint folds.
+test('the STORED appellation is the resolver\'s canonical spelling, and the probe sees it too', async () => {
+  resolveCanonicalAppellation.mockResolvedValueOnce('Yecla');
+
+  const res = await postWine({ ...BODY, appellation: 'Yecla DO' });
+  expect(res.status).toBe(201);
+
+  expect(resolveCanonicalAppellation).toHaveBeenCalledWith('Yecla DO');
+  const doc = WineDefinition.mock.calls[0][0];
+  expect(doc.appellation).toBe('Yecla');
+  expect(doc.normalizedKey).toBe(generateWineKey('Block 3 Pinot Noir', 'Felton Road Wines Ltd', 'Yecla'));
+  expect(findOrCreateWine).toHaveBeenCalledWith(
+    expect.objectContaining({ appellation: 'Yecla' }), ADMIN_ID, { matchOnly: true }
+  );
+});
+
+// The PUT is the everyday admin edit surface and the second direct writer in
+// this file — same rule, separately pinned.
+test('PUT stores the resolver\'s canonical spelling and keys off it', async () => {
+  resolveCanonicalAppellation.mockResolvedValueOnce('Bordeaux');
+  const wine = {
+    _id: 'wine-1', name: 'Le Petit', producer: 'Ch. Test', appellation: 'old',
+    save: jest.fn().mockResolvedValue(undefined), populate: jest.fn().mockResolvedValue(undefined),
+  };
+  WineDefinition.findById.mockResolvedValue(wine);
+  Bottle.distinct.mockResolvedValue([]);
+
+  const res = await fetch(`${baseUrl}/api/admin/wines/64b0000000000000000000b1`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken()}` },
+    body: JSON.stringify({ appellation: '  Appellation Bordeaux Contrôlée  ' }),
+  });
+  expect(res.status).toBe(200);
+
+  expect(resolveCanonicalAppellation).toHaveBeenCalledWith('Appellation Bordeaux Contrôlée');
+  expect(wine.appellation).toBe('Bordeaux');
+  expect(wine.normalizedKey).toBe(generateWineKey('Le Petit', 'Ch. Test', 'Bordeaux'));
 });
 
 test('confirmCreate skips the probe entirely (explicit "create anyway")', async () => {

@@ -66,6 +66,12 @@ registerTool({
       const { findOrCreateWine } = require('../../services/findOrCreateWine');
       let result;
       try {
+        // The appellation is handed over RAW on purpose. findOrCreateWine is
+        // the mint chokepoint and already tier-strips AND resolves it against
+        // the curated registry before keying and storing; pre-canonicalizing
+        // here would only add a second, driftable copy of that rule (the
+        // admin REST create has to do it itself precisely because it writes
+        // the WineDefinition directly instead of coming through here).
         result = await findOrCreateWine({
           name: args.name,
           producer: args.producer,

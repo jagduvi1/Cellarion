@@ -42,6 +42,12 @@ jest.mock('../../services/findOrCreateWine', () => ({
 jest.mock('../../services/crossFieldScan', () => ({
   detectCrossFieldForValues: jest.fn().mockResolvedValue(null),
 }));
+// Same reason: the appellation a curator writes is resolved against the curated
+// registry, and that lookup must not reach the real Appellation collection here.
+// The resolve itself is pinned in services/pendingWineOps.identityGates.test.js.
+jest.mock('../../services/appellationResolve', () => ({
+  resolveCanonicalAppellation: jest.fn(async (v) => v),
+}));
 jest.mock('../../services/wineProfileOps', () => ({
   resolveGrapeIdsStrict: jest.fn(),
   GRAPES_MAX: 20,
