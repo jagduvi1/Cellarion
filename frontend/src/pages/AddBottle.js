@@ -127,14 +127,33 @@ function AddBottle() {
     // commit can stamp it on the wine. If the extraction was wrong, that photo
     // is what lets a curator fix the registry entry later.
     setScanImageId(data.scanImageId || null);
-    setShowManualForm(false);
-    setPendingWineData(null);
     // A HALF-READ label (one of name/producer empty) is a 200 now, not an
-    // error: what was read prefills the card, and the back label is offered as
-    // an optional way to fill the rest.
-    setBackOffer(data.extracted?.partial === true);
+    // error: the back label is offered as an optional way to fill the rest.
+    const partial = data.extracted?.partial === true;
+    setBackOffer(partial);
     setBackScanImageId(null);
     setScanConflicts([]);
+    if (partial) {
+      // Straight to the EDITABLE form, prefilled — never the read-only card
+      // (release-audit M-1): the card renders a blank title and its confirm
+      // button can only 400 on the missing name/country. The form's own
+      // validation speaks the user's language, producer stays optional, and
+      // the back-label offer sits right above it.
+      const e = data.extracted || {};
+      setPendingWineData({
+        name: e.name || '',
+        producer: e.producer || '',
+        country: e.country || '',
+        region: e.region || '',
+        appellation: e.appellation || '',
+        type: e.type || 'red',
+        grapes: (e.grapes || []).join(', '),
+      });
+      setShowManualForm(true);
+    } else {
+      setShowManualForm(false);
+      setPendingWineData(null);
+    }
   }, []);
 
   const handleScanError = useCallback((msg, body) => {

@@ -34,7 +34,7 @@ router.get('/rate-limits', async (req, res) => {
 // accountLockout.threshold to 9999 effectively turns lockout off).
 router.patch('/rate-limits', async (req, res) => {
   try {
-    const { api, write, auth, accountLockout, chatBurst, chatConcurrentStreams, aiDailyBudget, aiImportPerRequestCap, aiGlobalDailyCap, demo, mcp } = req.body;
+    const { api, write, auth, accountLockout, chatBurst, chatConcurrentStreams, aiDailyBudget, aiImportPerRequestCap, aiGlobalDailyCap, imageUploadBurst, demo, mcp } = req.body;
 
     const previous = { ...rateLimitsConfig.get() };
 
@@ -90,6 +90,15 @@ router.patch('/rate-limits', async (req, res) => {
       requireIntInRange('aiGlobalDailyCap.max', aiGlobalDailyCap.max, 0, 10_000_000);
     }
 
+    // Per-user photo-upload burst. config/rateLimits.js documented this as
+    // "runtime-tunable by SuperAdmin" since it shipped, but it was never in
+    // this handler — the one claim without a lever. Floor 5 keeps a typo from
+    // effectively disabling uploads; window floor matches the other bursts.
+    if (imageUploadBurst !== undefined) {
+      requireIntInRange('imageUploadBurst.max',      imageUploadBurst.max,      5,      10_000);
+      requireIntInRange('imageUploadBurst.windowMs', imageUploadBurst.windowMs, 60_000, 24 * 60 * 60 * 1000);
+    }
+
     // Ephemeral public-demo accounts. globalMax=0 is the demo kill-switch
     // (demo-login always 429s), so the lower bound is 0. ttlMs floor of 5 min
     // keeps the reaper meaningful; createWindowMs floor of 1 min matches the
@@ -131,9 +140,13 @@ router.patch('/rate-limits', async (req, res) => {
 
     const updated = {
       // Spread previous first so groups not exposed by this handler
-      // (aiBurst, imageUploadBurst, and any future groups) survive the
-      // wholesale rateLimitsConfig.set() below instead of being dropped.
+      // (aiBurst, and any future groups) survive the wholesale
+      // rateLimitsConfig.set() below instead of being dropped.
       ...previous,
+      imageUploadBurst: {
+        max:      imageUploadBurst?.max      ?? previous.imageUploadBurst?.max      ?? rateLimitsConfig.defaults.imageUploadBurst.max,
+        windowMs: imageUploadBurst?.windowMs ?? previous.imageUploadBurst?.windowMs ?? rateLimitsConfig.defaults.imageUploadBurst.windowMs,
+      },
       api:   { max: api?.max   ?? previous.api.max   },
       write: { max: write?.max ?? previous.write.max },
       auth:  { max: auth?.max  ?? previous.auth.max  },

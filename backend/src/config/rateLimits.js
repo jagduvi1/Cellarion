@@ -57,9 +57,13 @@ const defaults = {
   // stored on disk; without this cap a logged-in user could script a loop and
   // fill the disk. The per-bottle MAX_IMAGES_PER_BOTTLE cap limits per-resource
   // growth but doesn't stop a user creating bottles + uploading in a loop.
-  // Default 30/hour bounds worst-case to ~7 GB/day per user — generous for
-  // real use (a session of adding bottles rarely exceeds 30 uploads).
-  imageUploadBurst: { max: 30, windowMs: 60 * 60 * 1000 },
+  // 60/hour, raised from 30 on 2026-08-12: prod audit logs showed nine users
+  // hitting the old cap, every one in a single-day burst — the "new user
+  // photographing their whole cellar" onboarding session (one added 216
+  // bottles + 96 photos on day one and was blocked NINE times). The cap
+  // punished exactly the most engaged first-day behaviour. Worst-case disk
+  // bound doubles to ~14 GB/day per user, still sweepable and tunable below.
+  imageUploadBurst: { max: 60, windowMs: 60 * 60 * 1000 },
   // Ephemeral public-demo accounts (POST /api/auth/demo-login). Cloning a
   // snapshot cellar per visitor is write-heavy, so this is bounded on three
   // axes: per-IP creation rate, a DURABLE global ceiling on concurrent live

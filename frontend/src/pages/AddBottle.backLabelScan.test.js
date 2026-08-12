@@ -109,9 +109,11 @@ describe('the offer appears only when the front label came back incomplete', () 
 
     expect(screen.getByText('addBottle.backScanPrompt')).toBeInTheDocument();
     expect(screen.getByText('addBottle.backScanCta')).toBeInTheDocument();
-    // …and what WAS read is already on screen: the rescue never replaces the
-    // prefill, it adds to it.
-    expect(screen.getByText('Kaefferkopf')).toBeInTheDocument();
+    // …and what WAS read is already on screen — in the EDITABLE form, not the
+    // read-only card (release-audit M-1: the card rendered a blank title and a
+    // confirm that could only 400 on the missing fields).
+    expect(screen.getByDisplayValue('Kaefferkopf')).toBeInTheDocument();
+    expect(screen.queryByText('addBottle.scanNotRight')).not.toBeInTheDocument();
   });
 
   test('a COMPLETE front scan offers nothing — nothing about the flow changes', async () => {
@@ -167,9 +169,8 @@ describe('the merged result never overwrites the user', () => {
     render(<AddBottle />);
     await deliverScan(PARTIAL);
 
-    // The user opens the editable form and types their own producer while the
-    // back scan is (notionally) in flight.
-    fireEvent.click(screen.getByText('addBottle.scanNotRight'));
+    // A partial scan lands directly in the editable form (audit M-1); the user
+    // types their own producer while the back scan is (notionally) in flight.
     fireEvent.change(screen.getByPlaceholderText('addBottle.scanProducerOptionalPlaceholder'), { target: { value: 'Typed Producer' } });
 
     await deliverBack(BACK_RESULT);
@@ -236,6 +237,12 @@ describe('both scan ids and the disagreement ride the commit', () => {
     render(<AddBottle />);
     await deliverScan(PARTIAL);
     fireEvent.click(screen.getByText('addBottle.backScanSkip'));
+
+    // The partial scan left country blank, and the editable form requires it —
+    // the user supplies what the label could not (audit MEDIUM-1: the old
+    // read-only card would have 400'd here in untranslated English).
+    const countryGroup = screen.getByText('addBottle.scanCountry', { exact: false }).closest('.form-group');
+    fireEvent.change(countryGroup.querySelector('input'), { target: { value: 'France' } });
 
     await act(async () => { fireEvent.click(screen.getByText('addBottle.scanConfirmWine')); });
     await waitFor(() => expect(screen.getByText('addBottle.addBottleBtn')).toBeInTheDocument());

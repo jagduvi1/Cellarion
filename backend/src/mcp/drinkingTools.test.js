@@ -135,6 +135,9 @@ describe('what_should_i_open_tonight', () => {
     expect(body.data).toHaveLength(1);
     expect(String(body.data[0].bottle_id)).toBe(String(cheapRed._id));
     expect(body.warnings.join(' ')).toMatch(/without a comparable price were excluded/);
+    // Release-audit M-2: the screened total is the UNFILTERED cellar; the
+    // filtered pool is reported separately, never as the total.
+    expect(body.summary).toMatch(/^Screened 4 active bottle\(s\) \(1 matched the filters\)/);
   });
 
   test('foreign cellar_id → not_found', async () => {

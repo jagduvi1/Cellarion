@@ -505,25 +505,36 @@ router.post('/scan-label-back', requireAuth, aiBurstLimiter, asyncHandler(async 
   // into a prompt (sanitised again in scanLabelBack, belt and braces), and an
   // oversized payload is a cost attack, not a user error to be tolerated.
   // Same caps as the registry-write path, imported not re-declared.
+  //
+  // ALLOWLIST, not a loop over whatever arrived (release-audit HIGH-1): the
+  // client sends back the `extracted` object /scan-label handed it, VERBATIM —
+  // including `partial: true`, the very flag that makes the rescue worth
+  // offering. A validator that 400'd on any non-string key therefore rejected
+  // the feature's primary case (and a model returning `"vintage": 2019` as a
+  // number tripped it too). Unknown and non-string members are DROPPED here,
+  // so only the eight identity fields ever reach the prompt or the merge.
+  let front = {};
   if (frontExtracted !== undefined) {
     if (!frontExtracted || typeof frontExtracted !== 'object' || Array.isArray(frontExtracted)) {
       return res.status(400).json({ error: 'frontExtracted must be an object' });
     }
-    for (const [key, value] of Object.entries(frontExtracted)) {
-      if (key === 'grapes') continue;
-      if (value === null || value === undefined) continue;
-      if (typeof value !== 'string' || value.length > MAX_WINE_FIELD) {
+    for (const key of ['name', 'producer', 'vintage', 'country', 'region', 'appellation', 'type']) {
+      const value = frontExtracted[key];
+      if (typeof value !== 'string') continue;
+      if (value.length > MAX_WINE_FIELD) {
         return res.status(400).json({ error: `frontExtracted.${key} must be a string of ${MAX_WINE_FIELD} characters or fewer` });
       }
+      front[key] = value;
     }
     const { grapes } = frontExtracted;
-    if (grapes !== undefined && grapes !== null) {
-      if (!Array.isArray(grapes) || grapes.length > MAX_GRAPES) {
+    if (Array.isArray(grapes)) {
+      if (grapes.length > MAX_GRAPES) {
         return res.status(400).json({ error: `frontExtracted.grapes must be an array of at most ${MAX_GRAPES} entries` });
       }
       if (grapes.some(g => typeof g !== 'string' || g.length > MAX_WINE_FIELD)) {
         return res.status(400).json({ error: `each grape must be a string of ${MAX_WINE_FIELD} characters or fewer` });
       }
+      front.grapes = grapes;
     }
   }
 
@@ -565,7 +576,7 @@ router.post('/scan-label-back', requireAuth, aiBurstLimiter, asyncHandler(async 
       backMediaType: safeBackType,
       frontImage: safeFront ? safeFront.toString('base64') : undefined,
       frontMediaType: safeFrontType || undefined,
-      frontExtracted: frontExtracted || {},
+      frontExtracted: front,
     });
   } catch (err) {
     if (isRefundableScanError(err)) await debit.refund();
@@ -576,7 +587,10 @@ router.post('/scan-label-back', requireAuth, aiBurstLimiter, asyncHandler(async 
   // Phase 2: merge + match + persist. The billable call is paid for, so a
   // failure here is a 500 WITHOUT a refund.
   try {
-    const { merged, conflicts, filled } = mergeBackScan(frontExtracted || {}, back);
+    // The ALLOWLISTED front object, so junk keys a hostile client stuffed into
+    // frontExtracted can never ride mergeBackScan's spread back out to the
+    // client (audit INFO-1).
+    const { merged, conflicts, filled } = mergeBackScan(front, back);
 
     // Re-run the registry lookup on the MERGED identity — the whole point of
     // the rescue is that the wine may now be identifiable when it was not.
@@ -886,7 +900,14 @@ router.get('/:id', requireAuth, async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
 
+    // The label-scan evidence fields belong to the pending queue (which has
+    // its own gated surfaces), not to a general wine read: conflicts survive
+    // promotion for the 7-day correction window, and any logged-in user could
+    // read that label text here (release-audit LOW-3 — same rationale as the
+    // wishlist $unset). Image BYTES were always gated per-image; this hides
+    // the pointers and the text.
     const wine = await WineDefinition.findById(req.params.id)
+      .select('-scanImage -scanImageBack -scanFieldConflicts')
       .populate(['country', 'region', 'grapes']);
 
     if (!wine) {

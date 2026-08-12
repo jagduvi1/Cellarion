@@ -118,9 +118,9 @@ app.use('/api/wine-requests', express.json({ limit: '5mb' }));
 app.use('/api/admin/wine-requests', express.json({ limit: '5mb' }));
 // The back-label rescue scan carries TWO frames — the back photo plus the front
 // one it is filling the gaps from — so it gets double the front route's budget.
-// Same 800px JPEG captures from the camera hook; mounted BEFORE its sibling
-// because a reader should not have to know that Express `use` matches on whole
-// path segments to see that these are two different limits.
+// Same 800px JPEG captures from the camera hook. Order relative to the sibling
+// mount below is irrelevant: Express `use` matches whole path segments, so
+// '/api/wines/scan-label' never claims '/api/wines/scan-label-back'.
 app.use('/api/wines/scan-label-back', express.json({ limit: '600kb' }));
 app.use('/api/wines/scan-label', express.json({ limit: '300kb' }));
 app.use('/api/wines/find-or-create', express.json({ limit: '5mb' }));

@@ -262,6 +262,35 @@ describe('get_pending_wine_images — the point of the feature', () => {
     expect(parse(res).error.code).toBe('unavailable');
   });
 
+  test('per-image gating: an expired front frame does not ride the back frame\'s grace (release-audit M-2)', async () => {
+    // Promoted wine, divergent retainUntil: front expired yesterday, back in
+    // grace until tomorrow. The pair-level gate passes (either readable), but
+    // only the still-readable frame may be served — the expired one is gone
+    // evidence, whatever its sibling's clock says.
+    const SCANB = oid('b');
+    WineDefinition.findById.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue({
+          _id: W1, name: 'Barolo', producer: 'Rinaldi', pendingIdentity: false,
+          scanImage: SCAN, scanImageBack: SCANB,
+        }),
+      }),
+    });
+    BottleImage.findById.mockImplementation((id) => ({
+      select: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue(String(id) === String(SCAN)
+          ? { _id: SCAN, kind: 'label-scan', side: 'front', originalUrl: '/api/uploads/originals/scan.jpg', retainUntil: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+          : { _id: SCANB, kind: 'label-scan', side: 'back', originalUrl: '/api/uploads/originals/scanb.jpg', retainUntil: new Date(Date.now() + 24 * 60 * 60 * 1000) }),
+      }),
+    }));
+
+    const res = await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX);
+    const body = parse(res);
+    const ids = body.data.images.map((i) => i.image_id);
+    expect(ids).toContain(String(SCANB));
+    expect(ids).not.toContain(String(SCAN));
+  });
+
   /**
    * M-1 (security audit) — this tool ships other people's PRIVATE bottle photos
    * as base64 to an EXTERNAL model. The only thing that justifies it is a

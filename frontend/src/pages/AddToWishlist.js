@@ -138,13 +138,30 @@ function AddToWishlist() {
     // Carry the stored original frame's id to the commit — it is what lets a
     // curator fix the wine when the extraction was wrong (see AddBottle).
     setScanImageId(data.scanImageId || null);
-    setShowManualForm(false);
-    setPendingWineData(null);
-    // A HALF-READ label is a 200, not an error: what was read prefills the
-    // card, and the back label is offered as an optional way to fill the rest.
-    setBackOffer(data.extracted?.partial === true);
+    // A HALF-READ label is a 200, not an error: the back label is offered as
+    // an optional way to fill the rest.
+    const partial = data.extracted?.partial === true;
+    setBackOffer(partial);
     setBackScanImageId(null);
     setScanConflicts([]);
+    if (partial) {
+      // Straight to the EDITABLE form, prefilled — never the read-only card
+      // (release-audit M-1; see AddBottle for the full argument).
+      const e = data.extracted || {};
+      setPendingWineData({
+        name: e.name || '',
+        producer: e.producer || '',
+        country: e.country || '',
+        region: e.region || '',
+        appellation: e.appellation || '',
+        type: e.type || 'red',
+        grapes: (e.grapes || []).join(', '),
+      });
+      setShowManualForm(true);
+    } else {
+      setShowManualForm(false);
+      setPendingWineData(null);
+    }
     // Pre-fill vintage from scan
     if (data.extracted?.vintage) setVintage(data.extracted.vintage);
   }, []);

@@ -78,9 +78,13 @@ registerTool({
     const openCount = data.filter((c) => c.readiness === 'open').length;
     const urgentCount = data.filter((c) => c.readiness === 'declining' || c.readiness === 'late').length;
     return ok(
-      // Same screened-total lead as pair_with_dish: the shortlist must never
-      // read as the whole cellar.
-      `Screened ${sel.considered + sel.reservedExcluded} active bottle(s); ` +
+      // Same screened-total lead as pair_with_dish — and it must be the
+      // UNFILTERED total (release-audit M-2): with wine_type/max_price set,
+      // `considered` is the post-filter pool, and leading with it re-created
+      // the very "the AI can only see part of my cellar" misreading this line
+      // exists to kill.
+      `Screened ${sel.totalActive} active bottle(s)` +
+        `${sel.considered !== sel.totalActive ? ` (${sel.considered} matched the filters)` : ''}; ` +
         `${data.length} candidate(s)${scope.cellarName ? ` in "${scope.cellarName}"` : ''}` +
         `${openCount ? ` — ${openCount} already open` : ''}${urgentCount ? `, ${urgentCount} in closing windows` : ''}`,
       data,
@@ -157,7 +161,7 @@ registerTool({
       // known false"): this tool reads the WHOLE cellar and returns a shortlist,
       // but a summary that only counts the shortlist reads as "the AI can see
       // 11 of my 72 bottles" to the person the answer is relayed to.
-      `Screened all ${sel.considered + sel.reservedExcluded} active bottle(s) in the cellar; returning a shortlist — ` +
+      `Screened all ${sel.totalActive} active bottle(s) in the cellar; returning a shortlist — ` +
         `${matchedOut.length} keyword match(es) for "${args.dish}", ${spreadOut.length} style-spread candidate(s). ` +
         'Tell the user the whole cellar was considered.',
       { matched: matchedOut, style_spread: spreadOut },

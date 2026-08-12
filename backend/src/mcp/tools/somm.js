@@ -1275,12 +1275,18 @@ registerTool({
       $or: [{ wineDefinition: wine._id }, ...(bottleIds.length ? [{ bottle: { $in: bottleIds } }] : [])],
     }).select('_id kind visibility originalUrl processedUrl').sort({ createdAt: -1 }).limit(MAX_BOTTLE_IMAGES).lean() : [];
 
+    // PER-IMAGE readability, not the pair's (release-audit M-2): the gate
+    // above passes when EITHER frame is readable, but each frame carries its
+    // own retainUntil — if they ever diverge (the retention job explicitly
+    // anticipates a back scan added later), the expired one must not ride the
+    // other's grace window. The REST sibling (routes/images.js) already gates
+    // per image; this surface does the same.
     const ordered = [];
-    if (scan) ordered.push(scan); // the scanned label first — it is the primary evidence
+    if (scan && mayCurationReadScan(wine, scan)) ordered.push(scan); // the scanned label first — it is the primary evidence
     // …then the back label, when the owner took the rescue photo. Second
     // because the front is what names the wine; the back is what usually names
     // the producer and the appellation the front left off.
-    if (scanBack) ordered.push(scanBack);
+    if (scanBack && mayCurationReadScan(wine, scanBack)) ordered.push(scanBack);
     ordered.push(...imgs);
 
     if (ordered.length === 0) {
