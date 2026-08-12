@@ -1144,6 +1144,8 @@ registerTool({
   inputSchema: {
     created_via: z.enum(CREATED_VIA_FILTERS).optional()
       .describe('Narrow to one entry surface — the practical way to work a large import burst'),
+    include_unavailable: z.boolean().optional()
+      .describe('Also list rows already recorded as having NO producer on the label (excluded by default — they have no work left). Use it to review or reverse that disposition.'),
     limit: z.number().int().min(1).max(50).default(20),
     offset: z.number().int().min(0).default(0),
   },
@@ -1151,8 +1153,9 @@ registerTool({
     const denied = requireSomm(ctx);
     if (denied) return denied;
     const { limit, offset } = pageParams(args, 20, 50);
-    const { rows, total, pendingTotal } = await queryPendingWines({
+    const { rows, total, pendingTotal, unavailableTotal } = await queryPendingWines({
       limit, offset, createdVia: args.created_via,
+      includeUnavailable: args.include_unavailable === true,
     });
     const data = rows.map((r) => ({
       wine_id: r._id,
@@ -1166,12 +1169,14 @@ registerTool({
       created_at: r.createdAt,
       created_via: r.createdVia,
       bottle_count: r.bottleCount,
+      identity_unavailable: r.identityUnavailable,
       scan_image_id: r.scanImageId,
       bottle_image_ids: r.bottleImageIds,
       has_images: !!(r.scanImageId || r.bottleImageIds.length),
     }));
     return ok(
-      `${pendingTotal} wine(s) awaiting an identity (showing ${data.length} of ${total}${args.created_via ? ` via ${args.created_via}` : ''})`,
+      `${pendingTotal} wine(s) awaiting an identity (showing ${data.length} of ${total}${args.created_via ? ` via ${args.created_via}` : ''})` +
+      (unavailableTotal ? `; ${unavailableTotal} more recorded as having no producer on the label` : ''),
       data,
       { page: { limit, offset, total } }
     );
@@ -1329,7 +1334,8 @@ registerTool({
     'you can. Region and country are plain NAMES resolved against the taxonomy (the country must already exist; grape ' +
     'synonyms resolve, unknown varieties are refused, never created). Refuses a wine that is no longer pending. This ' +
     'is SHARED registry data other users will see: base it on the label photo (get_pending_wine_images) or on the ' +
-    'somm\'s own knowledge, never on a guess from the broken string.',
+    'somm\'s own knowledge, never on a guess from the broken string. When the label genuinely prints no producer at ' +
+    'all, identity_unavailable clears the row from the queue WITHOUT promoting it — read its description first.',
   scope: 'write',
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
@@ -1343,6 +1349,15 @@ registerTool({
     grapes: z.array(z.string().min(1).max(GRAPE_NAME_MAX)).max(GRAPES_MAX).optional()
       .describe('Variety NAMES, taxonomy-resolved (synonyms ok). Replaces the whole list.'),
     type: z.enum(WINE_TYPES).optional(),
+    identity_unavailable: z.boolean().optional()
+      .describe(
+        'LAST RESORT — only after asking the bottle\'s owner (ask_bottle_owner works on pending wines) and being ' +
+        'told the label genuinely prints NO producer: a retailer own-label, a négociant clean-skin, an unlabelled ' +
+        'bin-end. Takes the row OUT OF THE QUEUE without promoting it: the wine stays hidden from the registry, out ' +
+        'of search, embeddings and the maturity queue, exactly as it is now. Never use it to clear a row you simply ' +
+        'could not read — promoting a producerless wine would wreck deduplication (producer is 45% of the score), ' +
+        'and guessing a producer is worse. Reversible: send false.'
+      ),
   },
   handler: async (args, ctx) => {
     const denied = requireSomm(ctx);
@@ -1351,6 +1366,7 @@ registerTool({
     // snake_case in, the shared validator's field names out — ONE validator
     // with the REST PATCH, so the two surfaces cannot drift.
     const patch = {};
+    if (args.identity_unavailable !== undefined) patch.identityUnavailable = args.identity_unavailable;
     if (args.producer !== undefined) patch.producer = args.producer;
     if (args.name !== undefined) patch.name = args.name;
     if (args.appellation !== undefined) patch.appellation = args.appellation;
@@ -1375,14 +1391,18 @@ registerTool({
       fields: Object.keys(check.clean), diff, promoted, via: 'mcp',
     });
 
+    const unavailable = wine.identityUnavailable === true;
     const envelope = {
       summary: promoted
         ? `${wine.producer} — ${wine.name}: identity completed, the wine is now live in the registry`
-        : `${wine.name}: saved, but still missing a producer — it stays in the pending queue`,
+        : unavailable
+          ? `${wine.name}: recorded as having no producer on the label — out of the queue, still not in the registry`
+          : `${wine.name}: saved, but still missing a producer — it stays in the pending queue`,
       data: {
         wine_id: wine._id,
         promoted,
         still_pending: !promoted,
+        identity_unavailable: unavailable,
         producer: wine.producer || null,
         name: wine.name,
         appellation: wine.appellation || null,
@@ -1391,7 +1411,9 @@ registerTool({
         changed: Object.keys(diff),
         note: promoted
           ? 'The wine is now searchable, embedded, and its vintages are in the maturity queue.'
-          : 'Send a producer to promote it — everything else is optional.',
+          : unavailable
+            ? 'It stays hidden from the registry and its owner keeps their bottle. Send identity_unavailable: false to put it back in the queue.'
+            : 'Send a producer to promote it — everything else is optional.',
       },
     };
     await logAction(ctx, {

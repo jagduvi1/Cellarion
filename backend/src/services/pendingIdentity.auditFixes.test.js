@@ -110,10 +110,14 @@ describe('M-5 — a pending row gets no slug, and gets one when it promotes', ()
 describe('M-5 — the disambiguation loop no longer falls through silently', () => {
   const WineDefinition = require('../models/WineDefinition');
 
+  // findFreeSlug now probes `{ $or: [{ slug }, { previousSlugs }] }` — "free"
+  // includes SUPERSEDED slugs, so a new wine can never take a URL an older one
+  // still answers to (models/WineDefinition.previousSlugs).
   const withSlugLookup = (isTaken) => {
-    const spy = jest.spyOn(WineDefinition, 'findOne').mockImplementation(({ slug }) => ({
-      select: () => ({ lean: async () => (isTaken(slug) ? { _id: 'x' } : null) }),
-    }));
+    const spy = jest.spyOn(WineDefinition, 'findOne').mockImplementation((filter) => {
+      const slug = filter.$or[0].slug;
+      return { select: () => ({ lean: async () => (isTaken(slug) ? { _id: 'x' } : null) }) };
+    });
     return spy;
   };
 

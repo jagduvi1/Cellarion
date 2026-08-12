@@ -173,7 +173,8 @@ describe('list_pending_wines', () => {
     const res = await tool('list_pending_wines').handler({ limit: 20, offset: 0 }, SOMM_CTX);
     const body = parse(res);
 
-    expect(queryPendingWines).toHaveBeenCalledWith({ limit: 20, offset: 0, createdVia: undefined });
+    expect(queryPendingWines).toHaveBeenCalledWith(
+      { limit: 20, offset: 0, createdVia: undefined, includeUnavailable: false });
     expect(body.summary).toMatch(/7 wine\(s\) awaiting an identity/);
     expect(body.data[0]).toMatchObject({
       wine_id: W1, name: 'Kaefferkopf', producer: null,
@@ -409,6 +410,37 @@ describe('fix_pending_wine', () => {
 
     expect(body.data.still_pending).toBe(true);
     expect(body.data.note).toMatch(/Send a producer/);
+  });
+
+  /**
+   * "No producer on the label" — a LAST-RESORT disposition, described as such
+   * on the argument, and routed through the SAME shared validator as every
+   * other field so REST and MCP cannot drift on it.
+   */
+  test('identity_unavailable maps to the shared validator and reports the disposition', async () => {
+    validatePendingFix.mockReturnValue({ ok: true, clean: { identityUnavailable: true } });
+    applyPendingFix.mockResolvedValue({
+      ok: true,
+      wine: { ...wine, producer: '', pendingIdentity: true, identityUnavailable: true },
+      promoted: false,
+      diff: { identityUnavailable: { from: false, to: true } },
+    });
+
+    const body = parse(await tool('fix_pending_wine').handler(
+      { wine_id: W1, identity_unavailable: true }, SOMM_CTX));
+
+    expect(validatePendingFix).toHaveBeenCalledWith({ identityUnavailable: true });
+    expect(body.data.identity_unavailable).toBe(true);
+    expect(body.data.promoted).toBe(false);
+    expect(body.data.still_pending).toBe(true);   // it is NOT in the registry
+    expect(body.summary).toMatch(/no producer on the label/);
+    expect(body.data.note).toMatch(/identity_unavailable: false/);  // reversible, and it says so
+  });
+
+  test('the argument is described as a last resort, after asking the owner', async () => {
+    const schema = tool('fix_pending_wine').inputSchema.identity_unavailable;
+    expect(schema.description).toMatch(/LAST RESORT/);
+    expect(schema.description).toMatch(/ask_bottle_owner/);
   });
 
   test('service refusals map straight to the MCP error taxonomy', async () => {

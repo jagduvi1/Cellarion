@@ -38,7 +38,7 @@ const { resolveGrapeIdsStrict, GRAPES_MAX, GRAPE_NAME_MAX, WINE_TYPES } = requir
 // row; the rest ride along so one pass can fix everything the misread label
 // got wrong. Deliberately NOT here: type-only/profile fields (set_wine_profile
 // owns those), nonWine (a quarantine proposal), and anything about the bottle.
-const FIXABLE_FIELDS = ['producer', 'name', 'appellation', 'regionName', 'countryName', 'grapeNames', 'type'];
+const FIXABLE_FIELDS = ['producer', 'name', 'appellation', 'regionName', 'countryName', 'grapeNames', 'type', 'identityUnavailable'];
 const FIELD_MAX = 200;
 // Up to three bottle photos per wine — enough for a curator to cross-read a
 // label, small enough to keep an MCP image response inside its size cap.
@@ -53,22 +53,29 @@ const CREATED_VIA_FILTERS = ['ui', 'import', 'mcp', 'ai'];
  * @param {object} [opts]
  * @param {number} [opts.limit=20]
  * @param {number} [opts.offset=0]
+ * @param {boolean} [opts.includeUnavailable=false] show the rows a curator has
+ *   dispositioned "no producer on the label"
+ *   (models/WineDefinition.identityUnavailable). Excluded by default because
+ *   this queue is a list of WORK and those rows have none left; they are still
+ *   pending, still hidden from the registry, and one filter click away — the
+ *   disposition is reversible and must stay visible to be reversed.
  * @param {string} [opts.createdVia] one of CREATED_VIA_FILTERS — the filter
  *   that makes a big import burst workable: 500 rows from one CSV are one
  *   `createdVia:'import'` sweep, and a curator can leave them for a batch
  *   session while still clearing the trickle of 'ui' scans. (Grouping by
  *   import session was the alternative; ImportSession is deleted the moment an
  *   import finishes, so there would be nothing left to group by.)
- * @returns {{ rows, total, pendingTotal }}
+ * @returns {{ rows, total, pendingTotal, unavailableTotal }}
  */
-async function queryPendingWines({ limit = 20, offset = 0, createdVia = null } = {}) {
+async function queryPendingWines({ limit = 20, offset = 0, createdVia = null, includeUnavailable = false } = {}) {
   const filter = { pendingIdentity: true };
+  if (!includeUnavailable) filter.identityUnavailable = { $ne: true };
   // Literal from the static array, never raw input (CodeQL query-injection
   // rule, the aiBudgetRequests pattern).
   const viaIdx = CREATED_VIA_FILTERS.indexOf(String(createdVia || ''));
   if (viaIdx !== -1) filter.createdVia = CREATED_VIA_FILTERS[viaIdx];
 
-  const [wines, total, pendingTotal] = await Promise.all([
+  const [wines, total, pendingTotal, unavailableTotal] = await Promise.all([
     WineDefinition.find(filter)
       .sort({ createdAt: -1 })
       .skip(offset)
@@ -78,7 +85,11 @@ async function queryPendingWines({ limit = 20, offset = 0, createdVia = null } =
       .populate('grapes', 'name')
       .lean(),
     WineDefinition.countDocuments(filter),
-    WineDefinition.countDocuments({ pendingIdentity: true }),
+    // The WORK figure: rows still awaiting an identity, excluding the ones a
+    // curator has already dispositioned. Counted separately below so the UI can
+    // still say how many of those there are.
+    WineDefinition.countDocuments({ pendingIdentity: true, identityUnavailable: { $ne: true } }),
+    WineDefinition.countDocuments({ pendingIdentity: true, identityUnavailable: true }),
   ]);
 
   const ids = wines.map((w) => w._id);
@@ -158,6 +169,7 @@ async function queryPendingWines({ limit = 20, offset = 0, createdVia = null } =
       countryName: w.country?.name || null,
       grapeNames: (w.grapes || []).map((g) => g.name).filter(Boolean),
       type: w.type || null,
+      identityUnavailable: w.identityUnavailable === true,
       createdAt: w.createdAt,
       createdVia: w.createdVia || null,
       bottleCount: countBy.get(String(w._id)) || 0,
@@ -169,7 +181,7 @@ async function queryPendingWines({ limit = 20, offset = 0, createdVia = null } =
     };
   });
 
-  return { rows, total, pendingTotal };
+  return { rows, total, pendingTotal, unavailableTotal };
 }
 
 /**
@@ -200,6 +212,15 @@ function validatePendingFix(patch) {
         return { ok: false, error: `type must be one of: ${WINE_TYPES.join(', ')}` };
       }
       clean.type = patch.type;
+      continue;
+    }
+    if (field === 'identityUnavailable') {
+      // A disposition, not a value — strictly boolean so `false` (the UNDO)
+      // survives the loop instead of being read as "unset".
+      if (typeof patch.identityUnavailable !== 'boolean') {
+        return { ok: false, error: 'identityUnavailable must be true or false' };
+      }
+      clean.identityUnavailable = patch.identityUnavailable;
       continue;
     }
     if (typeof patch[field] !== 'string') {
@@ -240,10 +261,18 @@ async function applyPendingFix(wine, clean, userId) {
     name: wine.name,
     appellation: wine.appellation || null,
     type: wine.type || null,
+    identityUnavailable: wine.identityUnavailable === true,
   };
 
   if (clean.name) wine.name = clean.name;
   if (clean.producer) wine.producer = clean.producer;
+  // The "no producer on the label" disposition. Deliberately NOT a promotion:
+  // pendingIdentity stays true and every exclusion it carries stays in force —
+  // the row simply leaves the WORK list (see the field comment on
+  // models/WineDefinition.identityUnavailable). Reversible with `false`.
+  if (clean.identityUnavailable !== undefined) {
+    wine.identityUnavailable = clean.identityUnavailable;
+  }
 
   // SHAPE gate, before any DB work. The same predicate the auto-promote hook
   // uses, so a fix the hook would silently decline to promote is refused here
@@ -399,6 +428,7 @@ async function applyPendingFix(wine, clean, userId) {
     name: wine.name,
     appellation: wine.appellation || null,
     type: wine.type || null,
+    identityUnavailable: wine.identityUnavailable === true,
   };
   const diff = {};
   for (const k of Object.keys(after)) {

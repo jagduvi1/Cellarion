@@ -252,6 +252,33 @@ const wineDefinitionSchema = new mongoose.Schema({
     default: false,
     index: true
   },
+  // "This label genuinely prints NO producer." Retailer own-label bottles,
+  // négociant clean-skins and bin-end relabels exist, and two are in the queue
+  // now. A curator must be able to stop them from occupying a queue that is a
+  // list of WORK — but the one thing they must not do is promote them:
+  // producer is 45% of the composite duplicate score, so a producerless row in
+  // the shared registry would attract every other producerless wine to itself.
+  //
+  // So this is a QUEUE disposition, NOT a promotion. pendingIdentity stays
+  // TRUE and every exclusion it carries stays in force — Meilisearch, public
+  // reads, MCP registry tools, embeddings, enrichment, the maturity queue,
+  // sitemap/OG, the admin scan pools. The row's owner still sees their bottle
+  // exactly as before. All that changes is that the curation queue stops
+  // listing it by default (services/pendingWineOps: a filter shows them again).
+  //
+  // REVERSIBLE by construction — it is one boolean, cleared by the same PATCH
+  // that set it, and cleared automatically if the row ever does promote (the
+  // pre-validate hook below), because a wine WITH a producer cannot be a wine
+  // whose producer is unavailable.
+  //
+  // LAST RESORT, and the surfaces say so: ask_bottle_owner works on pending
+  // wines (#941), and the owner is holding the bottle. This is for when they
+  // have answered "there is no producer on it", or cannot be reached.
+  identityUnavailable: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
   // The original label photo this wine was minted from, kept so a curator can
   // READ the label instead of guessing (the whole point of the pending queue).
   // Curation-visible only — never public, never in a bottle gallery; the
@@ -410,6 +437,9 @@ wineDefinitionSchema.pre('validate', function(next) {
       !isIdentitySentinel(this.producer) && !isIdentitySentinel(this.name) &&
       !isImplausibleIdentity(this.producer, this.name)) {
     this.pendingIdentity = false;
+    // A wine WITH a producer cannot be one whose producer is unavailable. The
+    // disposition is a statement about a row in the queue; the row has left.
+    this.identityUnavailable = false;
   }
   if (!this.canonicalKey || this.isModified('name') || this.isModified('producer') || this.isModified('appellation')) {
     this.canonicalKey = computeCanonicalKey(this.name, this.producer, this.appellation);

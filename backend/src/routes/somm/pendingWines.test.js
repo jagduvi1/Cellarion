@@ -209,6 +209,19 @@ describe('GET — projection and anonymisation', () => {
     WineDefinition.find.mockReturnValue(leanChain([]));
     WineDefinition.countDocuments.mockResolvedValue(0);
     await get(tokenFor(['somm']), '?createdVia=' + encodeURIComponent('{"$ne":null}'));
+    expect(WineDefinition.find).toHaveBeenCalledWith(
+      { pendingIdentity: true, identityUnavailable: { $ne: true } });
+  });
+
+  test('rows dispositioned "no producer on the label" are excluded, and ?includeUnavailable=1 shows them', async () => {
+    await get(tokenFor(['somm']));
+    expect(WineDefinition.find).toHaveBeenCalledWith(
+      { pendingIdentity: true, identityUnavailable: { $ne: true } });
+
+    jest.clearAllMocks();
+    WineDefinition.find.mockReturnValue(leanChain([]));
+    WineDefinition.countDocuments.mockResolvedValue(0);
+    await get(tokenFor(['somm']), '?includeUnavailable=1');
     expect(WineDefinition.find).toHaveBeenCalledWith({ pendingIdentity: true });
   });
 });
@@ -308,6 +321,35 @@ describe('PATCH — fix, promote, audit', () => {
 
     expect(res.status).toBe(400);
     expect((await res.json()).error).toMatch(/Not in the grape taxonomy/);
+  });
+
+  /**
+   * "No producer on the label" — a REVERSIBLE queue disposition, not a
+   * promotion. Some bottles genuinely print no producer; promoting one would
+   * wreck deduplication (producer is 45% of the composite score).
+   */
+  test('identityUnavailable rides the same PATCH and does NOT promote', async () => {
+    const doc = wineDoc();
+    WineDefinition.findById.mockResolvedValue(doc);
+
+    const res = await patch(tokenFor(['somm']), W1, { identityUnavailable: true });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.promoted).toBe(false);
+    expect(body.wine.identityUnavailable).toBe(true);
+    expect(body.wine.pendingIdentity).toBe(true);
+    expect(logAudit).toHaveBeenCalledWith(
+      expect.anything(), 'wine.pending_fix', { type: 'wine', id: doc._id },
+      expect.objectContaining({ fields: ['identityUnavailable'], promoted: false })
+    );
+  });
+
+  test('a non-boolean disposition is a 400', async () => {
+    WineDefinition.findById.mockResolvedValue(wineDoc());
+    const res = await patch(tokenFor(['somm']), W1, { identityUnavailable: 'yes' });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/must be true or false/);
   });
 
   test('a duplicate-identity save is a 409 telling the curator to merge', async () => {

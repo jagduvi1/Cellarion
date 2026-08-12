@@ -36,6 +36,8 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
   const [pages, setPages] = useState(1);
   const [viaFilter, setViaFilter] = useState('');
   const [viaOptions, setViaOptions] = useState([]);
+  const [showUnavailable, setShowUnavailable] = useState(false);
+  const [unavailableTotal, setUnavailableTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(null);   // wineId being edited
@@ -50,6 +52,7 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
     try {
       const params = new URLSearchParams({ page: p, limit: PAGE_SIZE });
       if (viaFilter) params.set('createdVia', viaFilter);
+      if (showUnavailable) params.set('includeUnavailable', '1');
       const res = await sommGetPendingWines(apiFetch, params);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -61,13 +64,14 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
       setTotal(data.total || 0);
       setPages(data.pages || 1);
       setViaOptions(data.createdViaOptions || []);
+      setUnavailableTotal(data.unavailableTotal || 0);
     } catch {
       setError(t('common.networkError'));
       setWines([]);
     } finally {
       setLoading(false);
     }
-  }, [apiFetch, t, viaFilter]);
+  }, [apiFetch, t, viaFilter, showUnavailable]);
 
   useEffect(() => { fetchPage(page); }, [fetchPage, page]);
 
@@ -85,6 +89,44 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
   };
 
   const cancelEdit = () => { setEditing(null); setDraft(null); setRowError(null); };
+
+  /**
+   * Re-read the current page after a write, stepping back when the row that
+   * just left was the last one on a later page (audit M-3 — refetching the same
+   * index would show "nothing waiting" while rows sit on page 1).
+   */
+  const refetchAfterWrite = async () => {
+    const nextPage = wines.length === 1 && page > 1 ? page - 1 : page;
+    if (nextPage !== page) setPage(nextPage);
+    await fetchPage(nextPage);
+  };
+
+  /**
+   * "No producer on the label" — a DISPOSITION, not a fix. The row leaves the
+   * queue; the wine stays pending and stays out of the registry, because
+   * promoting a producerless wine would wreck deduplication (producer is 45% of
+   * the composite score). Reversible from the same button once the filter is
+   * showing those rows.
+   */
+  const setUnavailable = async (wineId, value) => {
+    if (value && !window.confirm(t('admin.wines.pendingIdentity.unavailableConfirm'))) return;
+    setSaving(true);
+    setRowError(null);
+    try {
+      const res = await sommFixPendingWine(apiFetch, wineId, { identityUnavailable: value });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setRowError(data.error || `Failed to save (${res.status})`);
+        return;
+      }
+      setSuccessMsg(data.message);
+      await refetchAfterWrite();
+    } catch {
+      setRowError(t('common.networkError'));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const save = async (wineId) => {
     setSaving(true);
@@ -109,12 +151,7 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
       }
       setSuccessMsg(data.message);
       cancelEdit();
-      // Fixing the LAST row of a later page shrinks the queue past this page —
-      // refetching the same index returns an empty list and the modal would say
-      // "nothing waiting" while rows sit on page 1 (audit M-3). Step back first.
-      const nextPage = wines.length === 1 && page > 1 ? page - 1 : page;
-      if (nextPage !== page) setPage(nextPage);
-      await fetchPage(nextPage);
+      await refetchAfterWrite();
     } catch {
       setRowError(t('common.networkError'));
     } finally {
@@ -167,6 +204,15 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
             <option value="">{t('admin.wines.pendingIdentity.allSources')}</option>
             {viaOptions.map(v => <option key={v} value={v}>{v}</option>)}
           </select>
+        </label>
+        <label style={{ fontSize: '0.85rem' }} title={t('admin.wines.pendingIdentity.showUnavailableTitle')}>
+          <input
+            type="checkbox"
+            checked={showUnavailable}
+            onChange={e => { setShowUnavailable(e.target.checked); setPage(1); }}
+            disabled={loading || saving}
+          />{' '}
+          {t('admin.wines.pendingIdentity.showUnavailable', { n: unavailableTotal })}
         </label>
       </div>
 
@@ -246,6 +292,11 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
                             {w.producer || <em>{t('admin.wines.pendingIdentity.noProducer')}</em>}
                             {w.appellation ? ` · ${w.appellation}` : ''}
                           </div>
+                          {w.identityUnavailable && (
+                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary, #888)' }}>
+                              {t('admin.wines.pendingIdentity.unavailableBadge')}
+                            </div>
+                          )}
                         </>
                       )}
                     </td>
@@ -289,9 +340,25 @@ function WinePendingIdentityModal({ apiFetch, onClose }) {
                           {rowError && <div className="alert alert-error" style={{ marginTop: 6 }}>{rowError}</div>}
                         </>
                       ) : (
-                        <button className="btn btn-secondary btn-sm" onClick={() => startEdit(w)}>
-                          {t('admin.wines.pendingIdentity.fixBtn')}
-                        </button>
+                        <>
+                          <button className="btn btn-secondary btn-sm" disabled={saving} onClick={() => startEdit(w)}>
+                            {t('admin.wines.pendingIdentity.fixBtn')}
+                          </button>{' '}
+                          {/* A DISPOSITION, not a fix: the row leaves the queue
+                              and the wine stays pending and out of the registry.
+                              Last resort — ask the bottle's owner first. */}
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            disabled={saving}
+                            title={t('admin.wines.pendingIdentity.unavailableTitle')}
+                            onClick={() => setUnavailable(w._id, !w.identityUnavailable)}
+                          >
+                            {w.identityUnavailable
+                              ? t('admin.wines.pendingIdentity.unavailableUndoBtn')
+                              : t('admin.wines.pendingIdentity.unavailableBtn')}
+                          </button>
+                          {rowError && <div className="alert alert-error" style={{ marginTop: 6 }}>{rowError}</div>}
+                        </>
                       )}
                     </td>
                   </tr>

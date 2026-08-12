@@ -1635,6 +1635,13 @@
         "grapesPlaceholder": "Grapes (comma-separated)",
         "countryPlaceholder": "Country",
         "regionPlaceholder": "Region",
+        "unavailableBtn": "No producer on label",
+        "unavailableUndoBtn": "Put back in the queue",
+        "unavailableTitle": "Last resort — ask the bottle's owner first. Records that this label genuinely prints no producer (a retailer own-label or a négociant clean-skin). The row leaves this queue; the wine stays hidden from the registry and is never published, because a producerless wine would break duplicate matching.",
+        "unavailableConfirm": "Only do this when the label genuinely prints no producer — ask the bottle's owner first. The wine will leave this queue but stay hidden from the registry. Continue?",
+        "unavailableBadge": "recorded: no producer on the label",
+        "showUnavailable": "Show \"no producer on label\" ({{n}})",
+        "showUnavailableTitle": "Include the rows already recorded as having no producer on the label. They have no work left, but the record is reversible from here.",
         "empty": "Nothing waiting — every wine has a usable identity."
       },
       "proposals": {
