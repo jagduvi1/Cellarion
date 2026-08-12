@@ -1578,7 +1578,7 @@
       },
       "crossField": {
         "button": "Cross-field checks",
-        "buttonTitle": "Values sitting in the wrong field — a producer that is an appellation, region, country, grape, style term or placeholder; name/producer splits; an appellation that is a grape; a region that is a country",
+        "buttonTitle": "Values sitting in the wrong field — a producer that is an appellation, region, country, grape, style term or placeholder; name/producer splits; an appellation that is a grape; a region that is a country; a name whose colour contradicts the type; a cuvée name that almost matches another by the same producer",
         "title": "Cross-field checks",
         "intro": "Each value here matches a reference list for a DIFFERENT field — the string is usually right, its column is wrong. Open the wine to fix it, or mark it as fine so it stops reappearing.",
         "found_one": "{{count}} wine flagged",
@@ -1606,7 +1606,9 @@
           "producerParenthetical": "Parenthetical in producer",
           "nameInProducer": "Name/producer overlap",
           "appellationIsGrape": "Appellation is a grape",
-          "regionIsCountry": "Region is a country"
+          "regionIsCountry": "Region is a country",
+          "colourContradiction": "Name colour contradicts the type",
+          "cuveeNearMiss": "Almost the same name as another wine by this producer"
         },
         "empty": "No wines are flagged by the selected checks.",
         "networkError": "Network error"

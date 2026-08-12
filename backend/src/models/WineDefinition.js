@@ -290,11 +290,14 @@ const wineDefinitionSchema = new mongoose.Schema({
   // clearing admin is recorded in AuditLog, not here (mirrors verifiedChecks).
   //
   // INVARIANT for this field: only a rule whose verdict reads nothing but
-  // this wine's name / producer / appellation / region / country / grapes
-  // plus the Appellation/Region/Country/Grape reference collections may
+  // this wine's name / producer / appellation / region / country / grapes /
+  // type plus the Appellation/Region/Country/Grape reference collections may
   // consult it. The pre-validate hook below invalidates it when ANY of those
-  // six fields changes — broader than verifiedChecks because the rules read
-  // all six. Residuals, stated honestly: (a) renaming a TAXONOMY doc writes
+  // seven fields changes — broader than verifiedChecks because the rules read
+  // all seven. (`type` joined with colour-contradiction.v1; the DB-backed
+  // cuvee-near-miss.v1 reads `name` + `producer`, both already watched, plus
+  // OTHER wines — a sibling renamed elsewhere writes nothing here, the same
+  // taxonomy-rename residual as (a) below.) Residuals, stated honestly: (a) renaming a TAXONOMY doc writes
   // nothing here, so a clearance can outlive the taxonomy state it was
   // judged against until the wine itself is edited (the scan's audit view
   // exists to re-examine); (b) the taxonomy-merge service re-points
@@ -401,10 +404,15 @@ wineDefinitionSchema.pre('validate', function(next) {
   // comment), so any of the six changing may change a verdict. Save-based
   // writes only, same as above; the taxonomy-merge updateMany residual is
   // documented on the field.
+  // `type` joined the set with colour-contradiction.v1 (a name whose colour
+  // word contradicts the stored type) — the one rule in the family whose
+  // verdict is about the wine's own colour rather than a reference list, and a
+  // clearance of it must not survive the type being changed.
   if (!this.isNew && (
     this.isModified('name') || this.isModified('producer') ||
     this.isModified('appellation') || this.isModified('region') ||
-    this.isModified('country') || this.isModified('grapes')
+    this.isModified('country') || this.isModified('grapes') ||
+    this.isModified('type')
   )) {
     this.crossChecksCleared = undefined;
     this.crossChecksClearedAt = null;

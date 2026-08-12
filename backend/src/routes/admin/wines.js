@@ -50,7 +50,8 @@ const {
   resolveCheck, runNameChecks,
 } = require('../../utils/nameChecks');
 const {
-  CROSS_FIELD_CHECKS, CROSS_FIELD_CHECK_IDS, DEFAULT_CROSS_FIELD_CHECK_IDS,
+  CROSS_FIELD_CHECK_IDS, DEFAULT_CROSS_FIELD_CHECK_IDS,
+  CROSS_FIELD_CHECK_LABEL_KEYS, CROSS_FIELD_CHECK_FIELDS,
   resolveCrossFieldCheck,
 } = require('../../utils/crossFieldChecks');
 const { scanCrossFieldChecks, detectCrossFieldForWines } = require('../../services/crossFieldScan');
@@ -1112,8 +1113,10 @@ router.get('/cross-field-checks', async (req, res) => {
       ruleCounts,
       checkIds,
       allCheckIds: CROSS_FIELD_CHECK_IDS,
-      checkLabelKeys: CROSS_FIELD_CHECKS.reduce((m, c) => (m[c.id] = c.labelKey, m), {}),
-      checkFields: CROSS_FIELD_CHECKS.reduce((m, c) => (m[c.id] = c.field, m), {}),
+      // Built in the rules module so the DB-backed rules (computed in
+      // services/crossFieldScan, not by a detect) are in the maps too.
+      checkLabelKeys: CROSS_FIELD_CHECK_LABEL_KEYS,
+      checkFields: CROSS_FIELD_CHECK_FIELDS,
     });
   } catch (error) {
     console.error('Cross-field checks scan error:', error);

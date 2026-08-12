@@ -2,6 +2,19 @@
 
 exports[`detect() source of appellation-is-grape.v1 is unchanged — bump the id if you edited it 1`] = `"(w, refs) => lookupEntity(refs.grapes, w.appellation)"`;
 
+exports[`detect() source of colour-contradiction.v1 is unchanged — bump the id if you edited it 1`] = `
+"w => {
+    const type = w.type;
+    if (!COLOUR_TYPES.has(type)) return null;
+    const tokens = normalizeString((w.name || '').replace(/ß/g, 'ss')).split(' ').filter(Boolean);
+    for (const t of tokens) {
+      const implied = NAME_COLOUR_TERMS.get(t);
+      if (implied && implied !== type) return \`\${t} → \${implied}, stored as \${type}\`;
+    }
+    return null;
+  }"
+`;
+
 exports[`detect() source of name-in-producer.v1 is unchanged — bump the id if you edited it 1`] = `
 "w => {
     const name = normalizeString(w.name || '');
@@ -80,5 +93,6 @@ exports[`rule ids are pinned (adding/removing/renaming a rule must be deliberate
   "name-in-producer.v1",
   "appellation-is-grape.v1",
   "region-is-country.v1",
+  "colour-contradiction.v1",
 ]
 `;

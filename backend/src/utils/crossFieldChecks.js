@@ -11,11 +11,19 @@
  * placeholder], name "Wines" inside producer "The Freaky Wines", producer
  * "Trader Joe's (Bersano Estate)").
  *
- * REVIEW ONLY — this family flags, it never blocks a write. The create-time
- * hard gate (findOrCreateWine's producer-is-a-place 400) stays the only
- * blocker, and it only knows taxonomy that existed at mint time; this family
- * re-tests the whole registry against the LIVE lists on every scan, so every
- * appellation an admin promotes widens the net retroactively.
+ * REVIEW ONLY for the ~5.5k rows already in the registry — this family flags,
+ * it never rewrites. The create-time hard gate (findOrCreateWine's
+ * producer-is-a-place 400) knows only the taxonomy that existed at mint time;
+ * this family re-tests the whole registry against the LIVE lists on every scan,
+ * so every appellation an admin promotes widens the net retroactively.
+ * ONE exception, added deliberately: the producer-is-not-a-producer subset is
+ * ENFORCED on the pending-identity write path, where a curator is composing a
+ * producer from scratch — see IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS below.
+ *
+ * Two kinds of rule live here. Most are PURE — `detect(wine, refs)` against the
+ * preloaded reference maps. A few are DB-BACKED (DB_BACKED_CROSS_FIELD_CHECKS):
+ * their verdict needs the registry itself, so they are declared here for the
+ * queue's benefit and computed in services/crossFieldScan.js.
  *
  * A deliberate SIBLING of utils/nameChecks.js, not a bolt-on: those rules'
  * verdicts read NOTHING but name + producer — that invariant is what makes
@@ -143,6 +151,32 @@ const CONTAINMENT_HOUSE_WORDS = new Set([
   'cantina', 'cantine', 'azienda', 'fattoria', 'podere', 'poderi', 'cascina',
   'bodega', 'bodegas', 'vina', 'quinta', 'herdade', 'casa', 'finca',
 ]);
+
+// Colour words a wine NAME carries, mapped to the WineDefinition.type they
+// imply. Pre-normalized (normalizeString folds "Rosé" → 'rose'; ß is not
+// decomposable and would be stripped outright, so the detect pre-folds ß→ss
+// exactly as producer-is-style-term.v2 does — "Weiß" → 'weiss').
+//
+// Deliberately EXACTLY the colour-of-the-wine vocabulary and no more. 'noir' /
+// 'nero' / 'negro' are excluded on purpose even though they are colours: they
+// name the GRAPE, not the wine ("Pinot Noir", "Nero d'Avola"), and "Blanc de
+// Noirs" — a white or sparkling wine from black grapes — would flag on every
+// single row. Known residual in the other direction: 'rose' is also an English
+// noun, so a wine named "Wild Rose" flags. This family is a review queue, never
+// a block, and a curator dismisses that in one click.
+const NAME_COLOUR_TERMS = new Map([
+  ['rose', 'rosé'], ['rosato', 'rosé'], ['rosado', 'rosé'], ['blush', 'rosé'],
+  ['rouge', 'red'], ['tinto', 'red'], ['rosso', 'red'], ['rot', 'red'], ['red', 'red'],
+  ['blanc', 'white'], ['blanco', 'white'], ['bianco', 'white'], ['branco', 'white'],
+  ['weiss', 'white'], ['white', 'white'],
+]);
+
+// The types that ARE a colour. A contradiction can only be judged against one
+// of these three: 'sparkling', 'dessert' and 'fortified' say nothing about
+// colour, so "Blanc de Blancs" (sparkling) and "Bianco Passito" (dessert) must
+// never flag — and those are the wines whose names carry colour words most
+// often.
+const COLOUR_TYPES = new Set(['red', 'white', 'rosé']);
 
 /**
  * Each rule:
@@ -310,7 +344,62 @@ const CROSS_FIELD_CHECKS = [
         (isRecognizedCountry(region) ? String(canonical).trim() : null);
     },
   },
+  {
+    // Domaine Rolet, name "Rosé Poulsard", type `red` (sommelier ticket 3).
+    // The label says one colour and the record says another; whichever is
+    // wrong, a drinker filtering by type gets the wrong bottle and the
+    // maturity curve is computed for the wrong style. Pure string test — the
+    // only rule in this family that reads `type`, which is why `type` joins
+    // CROSS_FIELD_CHECK_SELECT and the crossChecksCleared invalidation set.
+    id: 'colour-contradiction.v1',
+    labelKey: 'colourContradiction',
+    field: 'type',
+    defaultActive: true,
+    detect: (w) => {
+      const type = w.type;
+      if (!COLOUR_TYPES.has(type)) return null;
+      const tokens = normalizeString((w.name || '').replace(/ß/g, 'ss')).split(' ').filter(Boolean);
+      for (const t of tokens) {
+        const implied = NAME_COLOUR_TERMS.get(t);
+        if (implied && implied !== type) return `${t} → ${implied}, stored as ${type}`;
+      }
+      return null;
+    },
+  },
 ];
+
+/**
+ * DB-BACKED rules: same queue, same clearance record, same versioned ids — but
+ * their verdict needs the REGISTRY, not just reference lists, so they cannot be
+ * a pure `detect(wine, refs)` and are computed in services/crossFieldScan.js
+ * instead. Declared here anyway so there is ONE list of what the queue can
+ * show: the route's label/field maps, the ?check= validator and the clearance
+ * endpoints all resolve against these too.
+ *
+ * runCrossFieldChecks skips them by construction (it looks each id up in
+ * CROSS_FIELD_CHECKS and continues when there is no rule with a detect), so a
+ * caller may pass a mixed id list without special-casing.
+ */
+const DB_BACKED_CROSS_FIELD_CHECKS = [
+  {
+    // Frédéric Magnien "Coeur de Roi" beside the real "Cœur de Roches"
+    // (sommelier ticket 3) — the VISION-MISREAD signature: one producer, two
+    // names that are nearly but not quite the same string. Not the duplicate
+    // scanner's job (that hunts the same wine entered twice, across the whole
+    // registry, and its threshold is tuned for merging); this hunts a name the
+    // scanner got slightly WRONG, which is only ever suspicious within one
+    // producer's own range. FLAG ONLY — a producer really can own two
+    // similarly-named cuvées, so nothing is ever changed automatically.
+    id: 'cuvee-near-miss.v1',
+    labelKey: 'cuveeNearMiss',
+    field: 'name',
+    defaultActive: true,
+    dbBacked: true,
+  },
+];
+
+/** Everything the queue can show — pure rules first, then the DB-backed ones. */
+const ALL_CROSS_FIELD_CHECKS = [...CROSS_FIELD_CHECKS, ...DB_BACKED_CROSS_FIELD_CHECKS];
 
 /**
  * The subset the CURATION WRITE PATH refuses on, rather than merely flagging
@@ -340,9 +429,9 @@ const IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS = [
   'producer-placeholder.v1',
 ];
 
-const CROSS_FIELD_CHECK_IDS = CROSS_FIELD_CHECKS.map(c => c.id);
-const DEFAULT_CROSS_FIELD_CHECK_IDS = CROSS_FIELD_CHECKS.filter(c => c.defaultActive).map(c => c.id);
-const byId = new Map(CROSS_FIELD_CHECKS.map(c => [c.id, c]));
+const CROSS_FIELD_CHECK_IDS = ALL_CROSS_FIELD_CHECKS.map(c => c.id);
+const DEFAULT_CROSS_FIELD_CHECK_IDS = ALL_CROSS_FIELD_CHECKS.filter(c => c.defaultActive).map(c => c.id);
+const byId = new Map(ALL_CROSS_FIELD_CHECKS.map(c => [c.id, c]));
 
 /** Operator-injection-safe lookup for an untrusted body/query value. */
 const resolveCrossFieldCheck = (id) =>
@@ -362,7 +451,10 @@ function runCrossFieldChecks(wine, refs, { checkIds = DEFAULT_CROSS_FIELD_CHECK_
     // Live lookup (not the load-time Map) so the rule list is the single
     // source of truth — the staleness contract test appends a rule and proves
     // clearances recorded before it existed cannot suppress it (the same
-    // guarantee nameChecks pins).
+    // guarantee nameChecks pins). Deliberately searches the PURE list only: a
+    // DB-backed id (cuvee-near-miss.v1) has no detect and is computed by
+    // services/crossFieldScan, so it falls through here rather than needing a
+    // special case at every call site.
     const check = CROSS_FIELD_CHECKS.find(c => c.id === id);
     if (!check) continue;
     if (!ignoreCleared && cleared.includes(id)) continue;
@@ -378,11 +470,17 @@ function runCrossFieldChecks(wine, refs, { checkIds = DEFAULT_CROSS_FIELD_CHECK_
  * region/country arrive as ObjectIds here; the scan service resolves them to
  * names before the rules run.
  */
-const CROSS_FIELD_CHECK_SELECT = 'name producer appellation region country crossChecksCleared';
+const CROSS_FIELD_CHECK_SELECT = 'name producer appellation region country type crossChecksCleared';
+
+/** id → i18n leaf / offending field, for the admin queue's column headers. */
+const CROSS_FIELD_CHECK_LABEL_KEYS = ALL_CROSS_FIELD_CHECKS.reduce((m, c) => (m[c.id] = c.labelKey, m), {});
+const CROSS_FIELD_CHECK_FIELDS = ALL_CROSS_FIELD_CHECKS.reduce((m, c) => (m[c.id] = c.field, m), {});
 
 module.exports = {
-  CROSS_FIELD_CHECKS, CROSS_FIELD_CHECK_IDS, DEFAULT_CROSS_FIELD_CHECK_IDS,
+  CROSS_FIELD_CHECKS, DB_BACKED_CROSS_FIELD_CHECKS, ALL_CROSS_FIELD_CHECKS,
+  CROSS_FIELD_CHECK_IDS, DEFAULT_CROSS_FIELD_CHECK_IDS,
   IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS,
+  CROSS_FIELD_CHECK_LABEL_KEYS, CROSS_FIELD_CHECK_FIELDS,
   CROSS_FIELD_CHECK_SELECT, resolveCrossFieldCheck, runCrossFieldChecks,
   buildCrossFieldRefs,
 };
