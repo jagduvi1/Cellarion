@@ -504,6 +504,9 @@ function registerModelRoute(path, configKey, saveErrorMsg) {
 // Route table (registration order preserved from the original handlers).
 registerPromptRoute('/ai/system-prompt',        'chatSystemPrompt',   SYSTEM_PROMPT_MAX_LENGTH, 'Failed to save system prompt');
 registerPromptRoute('/ai/label-scan-prompt',    'labelScanPrompt',    SCAN_PROMPT_MAX_LENGTH,   'Failed to save label scan prompt');
+// The back-label rescue prompt (POST /api/wines/scan-label-back). No model
+// route beside it: the back scan runs on labelScanModel, above.
+registerPromptRoute('/ai/label-scan-back-prompt', 'labelScanBackPrompt', SCAN_PROMPT_MAX_LENGTH, 'Failed to save back label scan prompt');
 registerPromptRoute('/ai/import-lookup-prompt', 'importLookupPrompt', SCAN_PROMPT_MAX_LENGTH,   'Failed to save import lookup prompt');
 registerModelRoute('/ai/import-lookup-model',   'importLookupModel',  'Failed to save import lookup model');
 registerModelRoute('/ai/label-scan-model',      'labelScanModel',     'Failed to save label scan model');

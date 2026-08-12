@@ -50,9 +50,9 @@ test('the export labels every image with its kind (bottle vs label-scan)', async
   const frag = await entry.exportFragment({ userId: USER, truncated: {} });
 
   expect(frag.images).toEqual([
-    { originalUrl: '/api/uploads/originals/a.jpg', processedUrl: null, uploadedAt: new Date(0), kind: 'label-scan' },
+    { originalUrl: '/api/uploads/originals/a.jpg', processedUrl: null, uploadedAt: new Date(0), kind: 'label-scan', side: 'front' },
     // Rows predating the field default to 'bottle' — no backfill needed.
-    { originalUrl: '/api/uploads/originals/b.jpg', processedUrl: '/api/uploads/processed/b.png', uploadedAt: new Date(0), kind: 'bottle' },
+    { originalUrl: '/api/uploads/originals/b.jpg', processedUrl: '/api/uploads/processed/b.png', uploadedAt: new Date(0), kind: 'bottle', side: 'front' },
   ]);
 });
 

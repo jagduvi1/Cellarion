@@ -1171,8 +1171,18 @@ registerTool({
       bottle_count: r.bottleCount,
       identity_unavailable: r.identityUnavailable,
       scan_image_id: r.scanImageId,
+      // The optional BACK label of the same bottle: present when the front scan
+      // came back incomplete and the owner took the rescue photo.
+      scan_image_back_id: r.scanImageBackId,
+      // Where the two labels disagreed at scan time. The FRONT value is what
+      // was stored — a curator reading "producer: front 'Ch. Musar', back
+      // 'Musar SAL'" can usually settle the row without opening the photos.
+      // Omitted entirely on rows with one frame, which is most of them.
+      ...(r.scanFieldConflicts && r.scanFieldConflicts.length
+        ? { front_back_disagreements: r.scanFieldConflicts }
+        : {}),
       bottle_image_ids: r.bottleImageIds,
-      has_images: !!(r.scanImageId || r.bottleImageIds.length),
+      has_images: !!(r.scanImageId || r.scanImageBackId || r.bottleImageIds.length),
     }));
     return ok(
       `${pendingTotal} wine(s) awaiting an identity (showing ${data.length} of ${total}${args.created_via ? ` via ${args.created_via}` : ''})` +
@@ -1188,7 +1198,8 @@ registerTool({
   title: 'Sommelier: read a pending wine\'s label photos',
   description:
     'Returns the actual PHOTOS for one wine in the pending-identity queue — the original label frame its owner ' +
-    'scanned, plus up to 3 photos of their bottles — as images you can look at. THIS is how the queue gets fixed: ' +
+    'scanned, the BACK label when they photographed that too, plus up to 3 photos of their bottles — as images you ' +
+    'can look at. A caption precedes each image saying whether it is the front or the back label. THIS is how the queue gets fixed: ' +
     'read the producer, appellation and classification off the label, then call fix_pending_wine with what the label ' +
     'says. Do not guess from the broken name string when a photo is available. Images are downscaled server-side. ' +
     'Some rows have no photo at all (an import file has none) — say so rather than inventing a producer. ' +
@@ -1222,20 +1233,26 @@ registerTool({
     const BottleImage = require('../../models/BottleImage');
     const Bottle = require('../../models/Bottle');
     const wine = await WineDefinition.findById(args.wine_id)
-      .select('name producer pendingIdentity scanImage').lean();
+      .select('name producer pendingIdentity scanImage scanImageBack scanFieldConflicts').lean();
     if (!wine) return fail('not_found', 'No wine with that id. Use list_pending_wines for valid ids.');
 
     const stillPending = wine.pendingIdentity === true;
-    const scan = wine.scanImage
-      ? await BottleImage.findById(wine.scanImage)
-        .select('_id kind originalUrl processedUrl retainUntil').lean()
-      : null;
-    if (!mayCurationReadScan(wine, scan)) {
+    const loadScan = async (id) => (id
+      ? BottleImage.findById(id).select('_id kind side originalUrl processedUrl retainUntil').lean()
+      : null);
+    const scan = await loadScan(wine.scanImage);
+    // The optional BACK label of the same bottle (the rescue scan). Gated on
+    // its OWN retainUntil as well as the front's: a wine may carry only a back
+    // frame — the front scan 422'd and its frame was never committed — and
+    // reading the gate off a missing front would hide the only evidence there
+    // is.
+    const scanBack = await loadScan(wine.scanImageBack);
+    if (!mayCurationReadScan(wine, scan) && !mayCurationReadScan(wine, scanBack)) {
       // Three different states used to share one message, and it asserted an
       // expiry for all of them — a curator asking about a wine that was never
       // added from a photo was told its window "has closed", i.e. that
       // evidence had existed and they were too late. Say which case it is.
-      if (!scan) {
+      if (!scan && !scanBack) {
         return fail('conflict',
           'That wine has no label scan — it was not added from a photo, so there is no curation evidence to read. '
           + 'Its bottle photos belong to their owners. Use ask_bottle_owner if the label is the only thing that can settle this.');
@@ -1260,6 +1277,10 @@ registerTool({
 
     const ordered = [];
     if (scan) ordered.push(scan); // the scanned label first — it is the primary evidence
+    // …then the back label, when the owner took the rescue photo. Second
+    // because the front is what names the wine; the back is what usually names
+    // the producer and the appellation the front left off.
+    if (scanBack) ordered.push(scanBack);
     ordered.push(...imgs);
 
     if (ordered.length === 0) {
@@ -1291,19 +1312,35 @@ registerTool({
         // curator would rather see two labels than be refused all of them.
         if (totalBytes + out.length > IMAGE_TOTAL_CAP_BYTES) break;
         totalBytes += out.length;
+        // A caption block BEFORE each image, because a queue row can now carry
+        // two label frames of one bottle and "the producer is not printed on
+        // this one" means opposite things about a front and a back label. The
+        // ids in `data.images` alone cannot carry that: nothing ties an id to a
+        // position in the image stream.
+        const isScan = (doc.kind || 'bottle') === 'label-scan';
+        const face = doc.side === 'back' ? 'BACK' : 'FRONT';
+        blocks.push({
+          type: 'text',
+          text: isScan
+            ? `Image ${included.length + 1} — the ${face} LABEL frame the owner scanned (image_id ${doc._id})`
+            : `Image ${included.length + 1} — a photo of the owner's bottle (image_id ${doc._id})`,
+        });
         blocks.push({ type: 'image', data: out.toString('base64'), mimeType: 'image/jpeg' });
         // Marked private unless the owner published it: these are somebody's
         // own bottle photos, released to curation for one purpose only.
         included.push({
           image_id: String(doc._id),
           kind: doc.kind || 'bottle',
+          // Only meaningful for a label scan; a gallery photo is always 'front'
+          // by schema default and nothing should read it as a claim.
+          ...(isScan ? { side: doc.side === 'back' ? 'back' : 'front' } : {}),
           private: doc.visibility !== 'public',
         });
       } catch (err) {
         console.warn('[mcp] pending-wine image read failed:', err.message);
       }
     }
-    if (blocks.length === 0) {
+    if (included.length === 0) {
       return fail('unavailable', 'The stored photos for this wine could not be read right now — retry later, or judge the row on its text.');
     }
 
@@ -1313,14 +1350,19 @@ registerTool({
         {
           type: 'text',
           text: JSON.stringify({
-            summary: `${blocks.length} photo(s) for "${wine.name}"${wine.producer ? ` — ${wine.producer}` : ' (no producer recorded)'}`,
+            summary: `${included.length} photo(s) for "${wine.name}"${wine.producer ? ` — ${wine.producer}` : ' (no producer recorded)'}`,
             data: {
               wine_id: wine._id,
               still_pending: stillPending,
               // Only present after promotion: how long the label stays
               // correctable. The model should say so when it reports a fix.
-              ...(stillPending ? {} : { correction_window_until: scan?.retainUntil || null }),
+              ...(stillPending ? {} : { correction_window_until: scan?.retainUntil || scanBack?.retainUntil || null }),
               images: included,
+              // What the two labels disagreed about at scan time, front value
+              // kept. Absent unless a back-label rescue scan actually ran.
+              ...((wine.scanFieldConflicts || []).length
+                ? { front_back_disagreements: wine.scanFieldConflicts.map((c) => ({ field: c.field, front: c.front, back: c.back })) }
+                : {}),
               guidance: stillPending
                 ? 'Read the producer, appellation and classification off the label. Transcribe what is printed — never infer a producer from the region. These are the owner\'s private photos, released for this one purpose: do not describe, store or reuse them for anything but completing this wine\'s identity.'
                 : 'This wine has already left the pending queue — you are looking at its label inside the correction window, to CHECK an identity somebody already wrote. If it is wrong, propose the correction (propose_wine_correction); do not describe, store or reuse this photo for anything else.',

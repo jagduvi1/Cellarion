@@ -226,7 +226,7 @@ describe('get_pending_wine_images — the point of the feature', () => {
     // The scanned LABEL is the primary evidence and comes first. `private`
     // rides along (audit M-1): these are the owner's own photos, released to
     // curation for one purpose, and the payload says so.
-    expect(parse(res).data.images[0]).toEqual({ image_id: String(SCAN), kind: 'label-scan', private: true });
+    expect(parse(res).data.images[0]).toEqual({ image_id: String(SCAN), kind: 'label-scan', side: 'front', private: true });
   });
 
   test('downscales server-side to <=1024px on the longest edge, never enlarging', async () => {
@@ -341,7 +341,7 @@ describe('get_pending_wine_images — the point of the feature', () => {
 
       expect(res.isError).toBeUndefined();
       expect(body.data.still_pending).toBe(false);
-      expect(body.data.images).toEqual([{ image_id: String(SCAN), kind: 'label-scan', private: true }]);
+      expect(body.data.images).toEqual([{ image_id: String(SCAN), kind: 'label-scan', side: 'front', private: true }]);
       expect(body.data.guidance).toMatch(/correction window/i);
     });
 

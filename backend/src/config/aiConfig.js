@@ -46,6 +46,39 @@ Important rules:
 - If a field is genuinely unknown and cannot be reliably inferred, set it to null rather than guessing.
 - Only return {"error":"cannot read label"} if the image contains no wine label at all.`;
 
+// The BACK-label rescue scan: used only after a front scan came back incomplete
+// and the user chose to photograph the back too. {{frontData}} is a JSON object
+// of what the front extraction produced — CLIENT-SUPPLIED TEXT reaching a
+// prompt, so services/labelScan.scanLabelBack sanitises every value (control
+// chars stripped, whitespace collapsed, 200-char cap) and substitutes it with a
+// replacer FUNCTION, never a string replacement. See suggestProfile's put() for
+// why that distinction is load-bearing.
+//
+// The instruction that matters most is "do not copy the front values": a model
+// handed a filled-in object will happily echo it back, which would turn an
+// unverified front guess into a second, corroborating-looking source. The merge
+// is done server-side (mergeBackScan) and never trusts this response to have
+// preserved anything.
+const DEFAULT_LABEL_SCAN_BACK_PROMPT =
+`You are a master sommelier with encyclopedic wine knowledge. You are looking at photographs of ONE bottle of wine. If two images are supplied, the FIRST is the FRONT label and the SECOND is the BACK label; if only one image is supplied it is the BACK label.
+
+We already extracted the following from the front label. It may be incomplete, and it may be WRONG: {{frontData}}
+
+Read the BACK label independently. Back labels usually carry the importer's text, the appellation in full, the grape breakdown, the alcohol and the bottler — often exactly the fields a worn or stylised front label does not state.
+
+Rules:
+- Do NOT copy a value from the front data into your answer for a field the BACK label does not itself state (or that you cannot read from the back label). A field the back label is silent about must be null. Repeating the front data teaches us nothing.
+- Where the back label DOES state a field, report what it says even if that contradicts the front data — the disagreement is useful and is resolved elsewhere.
+- Never invent a wine, producer, appellation or grape that is not printed or that you are not confident about.
+- The name field must contain ONLY the wine's own cuvée/vineyard/variety name — never the producer.
+- Country must be the canonical English country name: "United States" (never "USA"), "Germany" (never "Deutschland"/"Tyskland"), "Italy" (never "Italia"). Never a country name in the label's language.
+- Grapes: only varieties this specific wine actually contains, as stated on the back label.
+
+Respond with ONLY a raw JSON object (no markdown, no code fences, no extra text), using null for every field the back label does not state:
+{"name":"wine name or null","producer":"producer or winery name or null","vintage":"4-digit year or null","country":"country or null","region":"wine region or null","appellation":"appellation/AOC/DOC/IGT/AVA or null","type":"red|white|rosé|sparkling|dessert|fortified or null","grapes":["grape varieties"]}
+
+Only return {"error":"cannot read label"} if the image contains no wine label at all.`;
+
 const DEFAULT_IMPORT_LOOKUP_PROMPT =
 `You are a master sommelier with encyclopedic wine knowledge. Identify the following wine from your knowledge.
 
@@ -313,6 +346,10 @@ const defaults = {
   // where a hallucinated wine or misnamed entry pollutes every user's search.
   // The quality gap over Haiku is what keeps ghost wines out.
   labelScanPrompt: DEFAULT_LABEL_SCAN_PROMPT,
+  // The back-label rescue scan shares labelScanModel deliberately: it is the
+  // same vision task on the same bottle, and a second model setting is one more
+  // thing that can drift out of sync with the provider-resolved vision model.
+  labelScanBackPrompt: DEFAULT_LABEL_SCAN_BACK_PROMPT,
   labelScanModel: 'claude-sonnet-5',
   importLookupPrompt: DEFAULT_IMPORT_LOOKUP_PROMPT,
   importLookupModel: 'claude-sonnet-5',
@@ -348,6 +385,7 @@ async function load() {
         chatModelFallback:     VALID_CHAT_MODELS.includes(doc.value.chatModelFallback) ? doc.value.chatModelFallback : defaults.chatModelFallback,
         chatSystemPrompt:      doc.value.chatSystemPrompt     ?? defaults.chatSystemPrompt,
         labelScanPrompt:       doc.value.labelScanPrompt      ?? defaults.labelScanPrompt,
+        labelScanBackPrompt:   doc.value.labelScanBackPrompt  ?? defaults.labelScanBackPrompt,
         labelScanModel:        VALID_CHAT_MODELS.includes(doc.value.labelScanModel) ? doc.value.labelScanModel : defaults.labelScanModel,
         importLookupPrompt:    doc.value.importLookupPrompt   ?? defaults.importLookupPrompt,
         importLookupModel:     VALID_CHAT_MODELS.includes(doc.value.importLookupModel) ? doc.value.importLookupModel : defaults.importLookupModel,
@@ -433,4 +471,4 @@ function set(value) {
   cache = { ...defaults, ...value };
 }
 
-module.exports = { load, get, getRaw, set, defaults, DEFAULT_SYSTEM_PROMPT, DEFAULT_LABEL_SCAN_PROMPT, DEFAULT_IMPORT_LOOKUP_PROMPT, DEFAULT_TEXT_SEARCH_PROMPT, DEFAULT_MATURITY_SUGGEST_PROMPT, DEFAULT_MATURITY_SUGGEST_PROMPT_NV, DEFAULT_PRICE_SUGGEST_PROMPT, DEFAULT_ENRICHMENT_PROMPT, VALID_CHAT_MODELS };
+module.exports = { load, get, getRaw, set, defaults, DEFAULT_SYSTEM_PROMPT, DEFAULT_LABEL_SCAN_PROMPT, DEFAULT_LABEL_SCAN_BACK_PROMPT, DEFAULT_IMPORT_LOOKUP_PROMPT, DEFAULT_TEXT_SEARCH_PROMPT, DEFAULT_MATURITY_SUGGEST_PROMPT, DEFAULT_MATURITY_SUGGEST_PROMPT_NV, DEFAULT_PRICE_SUGGEST_PROMPT, DEFAULT_ENRICHMENT_PROMPT, VALID_CHAT_MODELS };

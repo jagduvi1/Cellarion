@@ -170,9 +170,14 @@ async function attachOfficialWineImage({ buffer, wineDefinitionId, credit = null
  * Best-effort by contract: a failure returns null and the caller carries on —
  * losing the scan copy must never fail the user's scan.
  *
+ * @param {'front'|'back'} [side='front'] which face of the bottle this frame
+ *   shows. Only the back-label rescue scan passes 'back'; everything else is a
+ *   front label and the default keeps every existing caller correct. Stored so
+ *   a curator shown two photos is told which is which — same data category,
+ *   same retention, same sweeps either way.
  * @returns {Promise<object|null>} the BottleImage doc, or null
  */
-async function persistLabelScan({ buffer, userId }) {
+async function persistLabelScan({ buffer, userId, side = 'front' }) {
   try {
     if (!Buffer.isBuffer(buffer) || buffer.length === 0) return null;
     const format = detectImageFormat(buffer);
@@ -189,6 +194,7 @@ async function persistLabelScan({ buffer, userId }) {
       status: 'uploaded',
       visibility: 'private',
       kind: 'label-scan',
+      side: side === 'back' ? 'back' : 'front',
       contentHash,
     });
     await image.save();

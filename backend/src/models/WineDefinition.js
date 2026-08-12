@@ -297,6 +297,44 @@ const wineDefinitionSchema = new mongoose.Schema({
     ref: 'BottleImage',
     default: null
   },
+  // The BACK label of the same bottle, when the front scan came back incomplete
+  // and the user took the optional rescue photo. Everything true of `scanImage`
+  // above is true of this field — same collection, same kind:'label-scan' +
+  // visibility:'private' row, same EXIF-stripping pipeline, same export, same
+  // account-deletion pointer-nulling, same two retention sweeps (7-day promoted
+  // expiry / 30-day unattached). NO new GDPR consent category: it is one more
+  // photo of the same bottle, taken for the same purpose.
+  //
+  // A SECOND POINTER rather than an array because the two frames are not
+  // interchangeable: the curator surfaces label them ("front says X, back says
+  // Y") and the merge that produced the wine's fields is asymmetric — the front
+  // label wins every contested scalar.
+  scanImageBack: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'BottleImage',
+    default: null
+  },
+  // What the two labels DISAGREED about, recorded at the moment the back scan
+  // was merged into the front extraction. Curation evidence, not wine data: the
+  // merge always kept the front value, so a curator seeing "producer: front
+  // 'Ch. Musar', back 'Musar SAL'" can tell at a glance whether the stored
+  // value is the label name or the corporate entity — the single most common
+  // reason a scanned identity reads wrong.
+  //
+  // Written under EXACTLY the conditions the scan images are (pending mint, or
+  // the creator's own pending row): on a fully-identified wine there is no
+  // identity to correct and therefore no purpose to justify storing it. Cleared
+  // together with the scan pointers when the retention sweep expires the photos
+  // — evidence that outlives the images it refers to is unverifiable.
+  scanFieldConflicts: {
+    type: [{
+      _id: false,
+      field: { type: String },
+      front: { type: String },
+      back: { type: String },
+    }],
+    default: []
+  },
   // Human data-quality review (support ticket 2026-07-26): the registry's
   // false-positive whitelist AND its skip-on-rescan record. Each entry is a
   // RULE ID from utils/nameChecks.js that an admin has read this wine and

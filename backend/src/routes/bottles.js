@@ -373,7 +373,11 @@ router.get('/', async (req, res) => {
 // Wine reference — EXACTLY ONE of:
 //   wineDefinition — id of an existing registry wine (the common case)
 //   newWine        — { name, producer, country, region?, appellation?, type?,
-//                      grapes?, confirmCreate?, source? }: mint-at-commit.
+//                      grapes?, confirmCreate?, source?, scanImageId?,
+//                      scanImageBackId?, scanConflicts? }: mint-at-commit.
+//                      The three scan fields are curation evidence for a
+//                      pendingIdentity mint and are ignored otherwise — see
+//                      services/wineCommit.
 // The UI used to mint the WineDefinition in step 1 of the add flow (POST
 // /api/wines/find-or-create), before any bottle existed — a user who abandoned
 // the form left an orphan registry row forever. Measured on prod 2026-08-10:

@@ -4,7 +4,7 @@ const WineDefinition = require('../models/WineDefinition');
 const Discussion = require('../models/Discussion');
 const searchService = require('../services/search');
 const { requireAuth, requireNonDemo, optionalAuth } = require('../middleware/auth');
-const { scanLabelFull, identifyWineFromQuery } = require('../services/labelScan');
+const { scanLabelFull, scanLabelBack, mergeBackScan, identifyWineFromQuery } = require('../services/labelScan');
 const { sanitizeImageBuffer, detectImageFormat } = require('../services/imageSanitizer');
 const { persistLabelScan } = require('../services/imageOps');
 const { findOrCreateWine } = require('../services/findOrCreateWine');
@@ -106,6 +106,78 @@ function sendAiBudgetExhausted(res, debit) {
     scope: debit.reason, // 'user_budget' | 'global_cap'
     retryAfterSeconds: debit.retryAfterSeconds,
   });
+}
+
+/**
+ * "Is this scanned identity already in the registry?" — ONE implementation,
+ * shared by the front scan and the back-label rescue scan.
+ *
+ * Extracted rather than duplicated the moment a second scan endpoint needed it:
+ * the three-step ladder below (exact normalizedKey → Meilisearch candidates →
+ * $text fallback → shared composite scorer at ≥0.75) is the dedup contract, and
+ * two copies of it drifting apart would mean the same bottle matched on the
+ * front scan and minted a duplicate on the back scan.
+ *
+ * Tolerates a PARTIAL identity by design: a half-read label reaching here with
+ * a name and no producer still gets a lookup — findBestMatch scores the fields
+ * it is given (producer is 45% of the composite, so a producerless identity
+ * simply cannot clear 0.75 on its own, which is the correct outcome: no
+ * silent attachment to somebody else's wine).
+ *
+ * @returns {Promise<{wine, confidence}|null>}
+ */
+async function matchScannedIdentity({ name, producer, appellation }) {
+  // Both fields are needed before the registry is consulted at all: with one of
+  // them missing the exact key cannot be generated and the fuzzy query degrades
+  // to a single token, which matches everything and therefore nothing useful.
+  if (!name || !producer) return null;
+
+  // 1. Exact normalizedKey match
+  const normalizedKey = generateWineKey(name, producer, appellation);
+  const wine = await WineDefinition.findOne({ normalizedKey })
+    .populate(['country', 'region', 'grapes']);
+  if (wine) return { wine, confidence: 1.0 };
+
+  // 2. Fuzzy search
+  const searchQuery = `${name} ${producer}`.trim();
+  let candidates = [];
+
+  if (searchService.getIsAvailable()) {
+    try {
+      const { ids } = await searchService.search(searchQuery, { limit: 20 });
+      if (ids.length > 0) {
+        candidates = await WineDefinition.find({ _id: { $in: ids } })
+          .populate(['country', 'region', 'grapes']);
+      }
+    } catch (err) {
+      console.warn('Meilisearch unavailable during scan-label match:', err.message);
+    }
+  }
+
+  if (candidates.length === 0) {
+    try {
+      candidates = await WineDefinition.find({ $text: { $search: searchQuery } })
+        .populate(['country', 'region', 'grapes'])
+        .limit(20);
+    } catch {
+      // No text match — no candidates
+    }
+  }
+
+  // Use the shared scorer so scan-label, find-or-create and import all
+  // dedup with one implementation. redistribute:false preserves this
+  // path's historical "neither side has an appellation → full weight"
+  // behaviour (matching find-or-create).
+  const { bestMatch, bestScore } = findBestMatch(
+    { name, producer, appellation },
+    candidates,
+    { redistribute: false }
+  );
+
+  if (bestScore >= 0.75 && bestMatch) {
+    return { wine: bestMatch, confidence: Math.round(bestScore * 100) / 100 };
+  }
+  return null;
 }
 
 const USER_SEARCH_LIMIT = 10;
@@ -252,11 +324,19 @@ router.get('/', requireAuth, async (req, res) => {
 //        (mediaType is accepted for compatibility but ignored — the actual type
 //         is detected from the sanitized bytes, since the declared one can lie)
 // Returns: {
-//   extracted: { name, producer, vintage, country, region, appellation, type, grapes[] },
+//   extracted: { name, producer, vintage, country, region, appellation, type,
+//                grapes[], partial?: true },
 //   match: { wine: WineDefinition, confidence: number } | null,
 //   labelImage: "data:image/png;base64,..." (background-removed label, or original as fallback),
 //   scanImageId: "<BottleImage id>" | null
 // }
+//
+// `extracted.partial` marks a HALF-READ label — one of name/producer came back
+// empty. It is a 200, not an error: the fields that WERE read prefill the form,
+// the frame is kept, and the client may offer the optional back-label rescue
+// (POST /scan-label-back). A 422 (nothing readable at all) now also carries
+// `scanImageId`, for the same reason — the user is about to type the wine by
+// hand, and that manual entry mints the pending row the photo is evidence for.
 //
 // scanImageId: the ORIGINAL frame is now persisted (private, kind:'label-scan')
 // instead of being discarded with the request. The client threads it back
@@ -332,12 +412,34 @@ router.post('/scan-label', requireAuth, aiBurstLimiter, asyncHandler(async (req,
       console.warn('rembg unavailable for label scan, using original:', rembgErr.message);
     }
 
-    // 2. Extract wine info via Claude
-    extracted = await scanLabelFull(scanImage, scanMediaType);
+    // 2. Extract wine info via Claude.
+    //
+    // allowPartial: a label that yielded a producer and no name (or the
+    // reverse) used to 422 here, and the photo went to the garbage collector
+    // with the request. The user then typed the wine by hand, the commit minted
+    // a pendingIdentity row, and the curator got a broken string and NO
+    // evidence — the exact case the queue exists to serve. A half-read now
+    // comes back with `partial: true` and the frame is kept either way (below).
+    extracted = await scanLabelFull(scanImage, scanMediaType, { allowPartial: true });
   } catch (err) {
     // Only a pre-completion / transport failure refunds; a completed 422 stays debited.
     if (isRefundableScanError(err)) await debit.refund();
     console.error('Label scan error:', err.message);
+
+    // A 422 means the AI call COMPLETED and read nothing usable — and that is
+    // precisely when the stored frame matters most: the user is about to type
+    // the wine by hand, and their manual entry will mint a pending row. Keep
+    // the frame and hand back its id so it can ride that commit. A user who
+    // walks away instead leaves an unattached scan, garbage-collected by the
+    // 30-day sweep (services/scanImageRetentionJob). Best-effort — a storage
+    // failure must not change the error the client sees.
+    if (err.status === 422) {
+      const orphan = await persistLabelScan({ buffer: safeBuffer, userId: req.user.id, side: 'front' });
+      return res.status(422).json({
+        error: err.message || 'Could not read label',
+        scanImageId: orphan ? String(orphan._id) : null,
+      });
+    }
     return res.status(err.status || 500).json({ error: err.message || 'Label scan failed' });
   }
 
@@ -345,70 +447,159 @@ router.post('/scan-label', requireAuth, aiBurstLimiter, asyncHandler(async (req,
   // been paid for — a failure here (e.g. a DB error) returns 500 WITHOUT a
   // refund, since the AI work really happened.
   try {
-    // Try to find an existing match in the registry
-    let match = null;
-
-    if (extracted.name && extracted.producer) {
-      // 1. Exact normalizedKey match
-      const normalizedKey = generateWineKey(extracted.name, extracted.producer, extracted.appellation);
-      let wine = await WineDefinition.findOne({ normalizedKey })
-        .populate(['country', 'region', 'grapes']);
-
-      if (wine) {
-        match = { wine, confidence: 1.0 };
-      } else {
-        // 2. Fuzzy search
-        const searchQuery = `${extracted.name} ${extracted.producer}`.trim();
-        let candidates = [];
-
-        if (searchService.getIsAvailable()) {
-          try {
-            const { ids } = await searchService.search(searchQuery, { limit: 20 });
-            if (ids.length > 0) {
-              candidates = await WineDefinition.find({ _id: { $in: ids } })
-                .populate(['country', 'region', 'grapes']);
-            }
-          } catch (err) {
-            console.warn('Meilisearch unavailable during scan-label match:', err.message);
-          }
-        }
-
-        if (candidates.length === 0) {
-          try {
-            candidates = await WineDefinition.find({ $text: { $search: searchQuery } })
-              .populate(['country', 'region', 'grapes'])
-              .limit(20);
-          } catch {
-            // No text match — no candidates
-          }
-        }
-
-        // Use the shared scorer so scan-label, find-or-create and import all
-        // dedup with one implementation. redistribute:false preserves this
-        // path's historical "neither side has an appellation → full weight"
-        // behaviour (matching find-or-create).
-        const { bestMatch, bestScore } = findBestMatch(
-          { name: extracted.name, producer: extracted.producer, appellation: extracted.appellation },
-          candidates,
-          { redistribute: false }
-        );
-
-        if (bestScore >= 0.75 && bestMatch) {
-          match = { wine: bestMatch, confidence: Math.round(bestScore * 100) / 100 };
-        }
-      }
-    }
+    // Run the match on whatever the extraction produced, partial or not: the
+    // shared helper is the one place that decides what a half-read identity can
+    // and cannot match (see matchScannedIdentity).
+    const match = await matchScannedIdentity(extracted);
 
     // Keep the sanitized ORIGINAL (not the background-removed render — a
     // curator wants the untouched frame). Best-effort: a storage failure
     // returns null and the scan still succeeds. Demo accounts never reach here
     // (tryDebitAi refuses them above), so no throwaway account writes files.
-    const scanImage = await persistLabelScan({ buffer: safeBuffer, userId: req.user.id });
+    const scanImage = await persistLabelScan({ buffer: safeBuffer, userId: req.user.id, side: 'front' });
 
     res.json({ extracted, match, labelImage, scanImageId: scanImage ? String(scanImage._id) : null });
   } catch (err) {
     console.error('Label scan match error:', err.message);
     res.status(500).json({ error: 'Label scan failed' });
+  }
+}));
+
+// POST /api/wines/scan-label-back
+// The BACK-LABEL RESCUE scan. Optional, and offered only after a front scan
+// came back incomplete (`extracted.partial`) or unreadable (422): the user
+// photographs the back label, and the fields the front could not supply are
+// filled from it.
+//
+// Body: {
+//   image: base64 (the BACK photo — required),
+//   frontImage?: base64 (the front frame, still in the client's hands),
+//   frontExtracted?: { name, producer, vintage, country, region, appellation,
+//                      type, grapes[] },   // what the front scan produced
+//   frontScanImageId?: "<BottleImage id>"  // echoed back so the client can
+//                                          // thread BOTH ids to the commit
+// }
+// Returns: { merged, conflicts, filled, match, backScanImageId, frontScanImageId }
+//
+// The MERGE is server-side and deterministic (services/labelScan.mergeBackScan):
+// the front value wins every contested scalar, the back fills only blanks, and
+// a real disagreement is recorded rather than resolved. The model is never
+// asked to decide which label is right.
+//
+// No rembg: background removal exists to render a pretty label card for the
+// front photo. Nobody displays a back label, and the stored frame must be the
+// untouched original anyway.
+//
+// GDPR: the back photo is the SAME data category as the front one — a private
+// photo of the user's own bottle, kind:'label-scan', EXIF-stripped by the same
+// sanitizer, exported with the others, erased with the account, and expired by
+// both retention sweeps. No new consent category.
+router.post('/scan-label-back', requireAuth, aiBurstLimiter, asyncHandler(async (req, res) => {
+  const { image, frontImage, frontExtracted, frontScanImageId } = req.body;
+
+  if (!image) {
+    return res.status(400).json({ error: 'Image is required' });
+  }
+
+  // Bound the front context BEFORE any AI call: these values are substituted
+  // into a prompt (sanitised again in scanLabelBack, belt and braces), and an
+  // oversized payload is a cost attack, not a user error to be tolerated.
+  // Same caps as the registry-write path, imported not re-declared.
+  if (frontExtracted !== undefined) {
+    if (!frontExtracted || typeof frontExtracted !== 'object' || Array.isArray(frontExtracted)) {
+      return res.status(400).json({ error: 'frontExtracted must be an object' });
+    }
+    for (const [key, value] of Object.entries(frontExtracted)) {
+      if (key === 'grapes') continue;
+      if (value === null || value === undefined) continue;
+      if (typeof value !== 'string' || value.length > MAX_WINE_FIELD) {
+        return res.status(400).json({ error: `frontExtracted.${key} must be a string of ${MAX_WINE_FIELD} characters or fewer` });
+      }
+    }
+    const { grapes } = frontExtracted;
+    if (grapes !== undefined && grapes !== null) {
+      if (!Array.isArray(grapes) || grapes.length > MAX_GRAPES) {
+        return res.status(400).json({ error: `frontExtracted.grapes must be an array of at most ${MAX_GRAPES} entries` });
+      }
+      if (grapes.some(g => typeof g !== 'string' || g.length > MAX_WINE_FIELD)) {
+        return res.status(400).json({ error: `each grape must be a string of ${MAX_WINE_FIELD} characters or fewer` });
+      }
+    }
+  }
+
+  // Same fail-closed pixel/format guard + EXIF strip as the front route, on
+  // BOTH frames. The front one is re-sanitised rather than trusted: the client
+  // is sending bytes back to us, and "we sanitised this a minute ago" is not a
+  // property of the bytes in this request.
+  let safeBack;
+  try {
+    safeBack = await sanitizeImageBuffer(Buffer.from(image, 'base64'));
+  } catch {
+    return res.status(400).json({ error: 'Image is too large or not a valid JPEG, PNG, or WebP' });
+  }
+  const safeBackType = `image/${detectImageFormat(safeBack) || 'jpeg'}`;
+
+  let safeFront = null;
+  if (frontImage) {
+    try {
+      safeFront = await sanitizeImageBuffer(Buffer.from(frontImage, 'base64'));
+    } catch {
+      // Non-fatal: the back label alone is still a useful read. Dropping the
+      // front frame degrades the scan; refusing the request would waste the
+      // photo the user just took.
+      safeFront = null;
+    }
+  }
+  const safeFrontType = safeFront ? `image/${detectImageFormat(safeFront) || 'jpeg'}` : null;
+
+  // Identical debit-before / refund-on-pre-completion-failure semantics to the
+  // front route: a completed-but-unhelpful call (422 "could not read back
+  // label") STAYS debited, which is what closes the budget bypass.
+  const debit = await tryDebitAi(req.user.id, { isDemo: req.user.isDemo });
+  if (!debit.ok) return sendAiBudgetExhausted(res, debit);
+
+  let back;
+  try {
+    back = await scanLabelBack({
+      backImage: safeBack.toString('base64'),
+      backMediaType: safeBackType,
+      frontImage: safeFront ? safeFront.toString('base64') : undefined,
+      frontMediaType: safeFrontType || undefined,
+      frontExtracted: frontExtracted || {},
+    });
+  } catch (err) {
+    if (isRefundableScanError(err)) await debit.refund();
+    console.error('Back-label scan error:', err.message);
+    return res.status(err.status || 500).json({ error: err.message || 'Back-label scan failed' });
+  }
+
+  // Phase 2: merge + match + persist. The billable call is paid for, so a
+  // failure here is a 500 WITHOUT a refund.
+  try {
+    const { merged, conflicts, filled } = mergeBackScan(frontExtracted || {}, back);
+
+    // Re-run the registry lookup on the MERGED identity — the whole point of
+    // the rescue is that the wine may now be identifiable when it was not.
+    const match = await matchScannedIdentity(merged);
+
+    // side:'back' so a curator shown two frames is told which is which.
+    const backScan = await persistLabelScan({ buffer: safeBack, userId: req.user.id, side: 'back' });
+
+    res.json({
+      merged,
+      conflicts,
+      filled,
+      match,
+      backScanImageId: backScan ? String(backScan._id) : null,
+      // Echoed, not re-derived: the client threads both ids into the commit,
+      // and this keeps the two halves of that payload coming from one response.
+      frontScanImageId: typeof frontScanImageId === 'string' && isValidId(frontScanImageId)
+        ? frontScanImageId
+        : null,
+    });
+  } catch (err) {
+    console.error('Back-label merge error:', err.message);
+    res.status(500).json({ error: 'Back-label scan failed' });
   }
 }));
 

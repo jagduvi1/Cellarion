@@ -109,7 +109,27 @@ async function runPromotedScanExpirySweep() {
     const WineDefinition = require('../models/WineDefinition');
     // updateOne-style $set, never a save(): re-validating a whole registry row
     // from a cleanup job is how an unrelated field gets rewritten.
-    await WineDefinition.updateMany({ scanImage: { $in: gone } }, { $set: { scanImage: null } });
+    //
+    // A wine added through the back-label rescue points at TWO frames, and the
+    // expiring image may be either one. TWO matched updates rather than one
+    // blanket write: each nulls only the pointer that actually names a deleted
+    // image, so a wine whose front scan went and whose back scan did not keeps
+    // the back pointer it still has. (They carry the same deadline today, but a
+    // sweep that assumed so would drop a live pointer the first time that stops
+    // being true — e.g. a back scan added later, on the creator's own row.)
+    //
+    // scanFieldConflicts goes with them: "front said X, back said Y" is a
+    // statement ABOUT those photos, and evidence that outlives the images it
+    // refers to cannot be checked. GDPR — this is retention enforcement, so
+    // everything the window covers expires together.
+    await WineDefinition.updateMany(
+      { scanImage: { $in: gone } },
+      { $set: { scanImage: null, scanFieldConflicts: [] } }
+    );
+    await WineDefinition.updateMany(
+      { scanImageBack: { $in: gone } },
+      { $set: { scanImageBack: null, scanFieldConflicts: [] } }
+    );
   }
   if (deleted > 0) {
     console.log(
