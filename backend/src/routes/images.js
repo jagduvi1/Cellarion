@@ -13,6 +13,7 @@ const { getCellarRole } = require('../utils/cellarAccess');
 const { processImage } = require('../services/imageProcessor');
 const { sanitizeImageBuffer } = require('../services/imageSanitizer');
 const { ingestBottleImage } = require('../services/imageOps');
+const { mayCurationReadScan } = require('../services/labelScanAccess');
 const { isValidId } = require('../utils/validation');
 const rateLimitsConfig = require('../config/rateLimits');
 const { logAudit } = require('../services/audit');
@@ -282,7 +283,19 @@ router.get('/:id', requireAuth, async (req, res) => {
     // random-UUID static mount (app.js), so this is the one gate that mattered.
     if (!authorized && (req.user.roles?.includes('somm') || req.user.roles?.includes('admin'))) {
       if (image.kind === 'label-scan') {
-        authorized = true;
+        // PURPOSE-BOUND, not blanket. A label scan is curation evidence while
+        // its wine is pending AND for the grace window after it promotes — so a
+        // wrong completion can still be corrected against the label, which is
+        // the whole reason the scan outlives the queue at all. Outside that it
+        // is an ordinary private photo of a wine nobody has been asked to
+        // identify, and this branch used to hand every one of them to any somm
+        // token. One definition, shared with the MCP tool
+        // (services/labelScanAccess).
+        const WineDefinition = require('../models/WineDefinition');
+        const scanWine = image.wineDefinition
+          ? await WineDefinition.findById(image.wineDefinition).select('pendingIdentity').lean()
+          : null;
+        authorized = mayCurationReadScan(scanWine, image);
       } else {
         // The photo may name the wine directly, or only the bottle it hangs
         // off (the plain AddBottle upload path) — resolve both.

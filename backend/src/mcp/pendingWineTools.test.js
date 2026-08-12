@@ -270,7 +270,7 @@ describe('get_pending_wine_images — the point of the feature', () => {
    * always required pendingIdentity: true; this is the parity fix.
    */
   describe('M-1 — only PENDING wines release their owners\' photos', () => {
-    const primeNonPending = () => {
+    const primeNonPending = (retainUntil = null) => {
       WineDefinition.findById.mockReturnValue({
         select: jest.fn().mockReturnValue({
           lean: jest.fn().mockResolvedValue({
@@ -278,7 +278,17 @@ describe('get_pending_wine_images — the point of the feature', () => {
           }),
         }),
       });
+      BottleImage.findById.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          lean: jest.fn().mockResolvedValue({
+            _id: SCAN, kind: 'label-scan', originalUrl: '/api/uploads/originals/scan.jpg', retainUntil,
+          }),
+        }),
+      });
+      Bottle.distinct.mockResolvedValue([oid('7')]);
+      BottleImage.find.mockReturnValue(leanChain([{ _id: IMG, kind: 'bottle', originalUrl: '/api/uploads/originals/b.jpg' }]));
     };
+    const daysFromNow = (n) => new Date(Date.now() + n * 24 * 60 * 60 * 1000);
 
     test('a COMPLETED wine is refused — its photos are private, not curation evidence', async () => {
       primeNonPending();
@@ -308,6 +318,51 @@ describe('get_pending_wine_images — the point of the feature', () => {
 
       expect(body.data.images.every((i) => i.private === true)).toBe(true);
       expect(body.data.guidance).toMatch(/private photos/i);
+    });
+
+    /**
+     * The GRACE WINDOW. A completed identity can be WRONG, and until now the
+     * label became unreadable the instant the row promoted — so nothing could
+     * ever check it (the "Increíble"/"Increíble" row reached the maturity queue
+     * in exactly that state). The scan therefore outlives the queue by
+     * PROMOTED_SCAN_GRACE_DAYS, and only the scan: the owners' BOTTLE photos
+     * are private again the moment the row promotes.
+     */
+    test('day 3 after promotion: the LABEL SCAN is still served', async () => {
+      primeNonPending(daysFromNow(4)); // stamped 7 days out, 3 days ago
+
+      const res = await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX);
+      const body = parse(res);
+
+      expect(res.isError).toBeUndefined();
+      expect(body.data.still_pending).toBe(false);
+      expect(body.data.images).toEqual([{ image_id: String(SCAN), kind: 'label-scan', private: true }]);
+      expect(body.data.guidance).toMatch(/correction window/i);
+    });
+
+    test('inside the window the owners\' BOTTLE photos are NOT released', async () => {
+      primeNonPending(daysFromNow(4));
+
+      const res = await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX);
+
+      expect(BottleImage.find).not.toHaveBeenCalled();
+      expect(res.content.filter((c) => c.type === 'image')).toHaveLength(1);
+    });
+
+    test('after the window closes it is refused again', async () => {
+      primeNonPending(daysFromNow(-1));
+
+      const body = parse(await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX));
+
+      expect(body.error.code).toBe('conflict');
+      expect(body.error.message).toMatch(/correction window has closed/);
+    });
+
+    test('a promoted wine whose scan was never stamped stays refused', async () => {
+      primeNonPending(null);
+
+      expect(parse(await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX)).error.code)
+        .toBe('conflict');
     });
   });
 });

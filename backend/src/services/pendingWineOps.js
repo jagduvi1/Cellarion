@@ -418,6 +418,32 @@ async function applyPendingFix(wine, clean, userId) {
  * All best-effort: the fix itself is committed, and none of these may fail it.
  */
 async function runPromotionFollowThrough(wine) {
+  // The label scan's clock starts HERE. While the row was pending the scan was
+  // curation evidence with a live purpose; promotion ends that purpose, but not
+  // instantly — a wrong completion has to be correctable against the label,
+  // which under the old rule became unreadable the moment the row left the
+  // queue (services/labelScanAccess). So the scan stays readable for
+  // PROMOTED_SCAN_GRACE_DAYS and is then deleted, file and doc, by the daily
+  // sweep. GDPR: this REDUCES retention — a promoted wine's scan was previously
+  // kept indefinitely, reachable by nobody.
+  //
+  // Here rather than in the model hook for the same reason index membership is:
+  // a pre-validate hook must not do I/O, and every promoting caller runs this
+  // follow-through. Best-effort like the rest — a missed stamp leaves the scan
+  // on its old (indefinite) footing, never deletes anything early.
+  if (wine.scanImage) {
+    try {
+      const { promotedScanDeadline } = require('./labelScanAccess');
+      await BottleImage.updateOne(
+        // Re-assert kind: nothing else in this collection may be given a
+        // retention deadline by this path.
+        { _id: wine.scanImage, kind: 'label-scan', retainUntil: null },
+        { $set: { retainUntil: promotedScanDeadline() } }
+      );
+    } catch (err) {
+      console.warn('[pendingWineOps] label-scan retention stamp failed (non-fatal):', err.message);
+    }
+  }
   const searchService = require('./search');
   // indexWine owns index membership in BOTH directions — this is the call that
   // ADDS the promoted row (it removed it while pending).

@@ -1118,6 +1118,9 @@ registerTool({
 // bottle count and its IMAGES — never who added it.
 const { promises: fsp } = require('fs');
 const { safeUploadPath } = require('../../services/imageProcessor');
+// ONE definition of "may curation read this label scan" — shared with the REST
+// image gate (routes/images.js) and the retention sweep.
+const { mayCurationReadScan, PROMOTED_SCAN_GRACE_DAYS } = require('../../services/labelScanAccess');
 
 // Downscale cap for the image blocks. 1024px on the longest edge is what a
 // vision model needs to read a wine label and is a large byte reduction on a
@@ -1183,7 +1186,10 @@ registerTool({
     'scanned, plus up to 3 photos of their bottles — as images you can look at. THIS is how the queue gets fixed: ' +
     'read the producer, appellation and classification off the label, then call fix_pending_wine with what the label ' +
     'says. Do not guess from the broken name string when a photo is available. Images are downscaled server-side. ' +
-    'Some rows have no photo at all (an import file has none) — say so rather than inventing a producer.',
+    'Some rows have no photo at all (an import file has none) — say so rather than inventing a producer. ' +
+    'The label scan stays readable for 7 days AFTER the wine leaves the queue, so a wrong completion can be ' +
+    'corrected against the label; after that it is deleted. Once a wine has left the queue only the scan itself is ' +
+    'returned — its owners\' bottle photos are private again.',
   scope: 'read',
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: true, openWorldHint: false },
@@ -1195,19 +1201,34 @@ registerTool({
     if (denied) return denied;
     if (!isValidId(args.wine_id)) return fail('invalid_input', 'wine_id must be a 24-hex id.');
 
-    // PENDING ONLY, exactly like the REST sibling (routes/images.js): this tool
-    // ships other people's PRIVATE bottle photos as base64 to an external
-    // model, and the only justification for that is a curator reading a label
-    // they have been asked to identify. Without the gate any somm token could
-    // pull the private gallery of ANY wine in the registry (security audit).
-    // A real-but-completed id is a conflict, not a 404 — the same distinction
+    // PENDING, or inside the label scan's post-promotion GRACE WINDOW — one
+    // definition, shared with the REST sibling (services/labelScanAccess). This
+    // tool ships other people's PRIVATE photos as base64 to an external model,
+    // and the only justification for that is a curator reading a label they
+    // have been asked to identify. Without the gate any somm token could pull
+    // the private gallery of ANY wine in the registry (security audit).
+    //
+    // The grace window is the narrower half of that justification: a completed
+    // identity can be WRONG, and the label is the only way to tell — but the
+    // owners' BOTTLE photos are private again the moment the row promotes, so
+    // only the scan itself is served after promotion. A real-but-completed id
+    // whose window has closed is a conflict, not a 404 — the distinction
     // loadPendingWine makes, so a curator whose fix already landed is told so.
+    const BottleImage = require('../../models/BottleImage');
+    const Bottle = require('../../models/Bottle');
     const wine = await WineDefinition.findById(args.wine_id)
       .select('name producer pendingIdentity scanImage').lean();
     if (!wine) return fail('not_found', 'No wine with that id. Use list_pending_wines for valid ids.');
-    if (wine.pendingIdentity !== true) {
+
+    const stillPending = wine.pendingIdentity === true;
+    const scan = wine.scanImage
+      ? await BottleImage.findById(wine.scanImage)
+        .select('_id kind originalUrl processedUrl retainUntil').lean()
+      : null;
+    if (!mayCurationReadScan(wine, scan)) {
       return fail('conflict',
-        'That wine is not in the pending-identity queue — its photos are its owners\' private images, not curation evidence.');
+        `That wine is not in the pending-identity queue and its label scan's ${PROMOTED_SCAN_GRACE_DAYS}-day ` +
+        'correction window has closed — the remaining photos are its owners\' private images, not curation evidence.');
     }
 
     // "Which images belong to this wine" has exactly one definition — the same
@@ -1215,26 +1236,22 @@ registerTool({
     // wine on the image, the plain add flow only links it to the bottle).
     // `visibility` rides along so the caller can be told what it is looking at:
     // these are private photos, surfaced only because the row needs curating.
-    const BottleImage = require('../../models/BottleImage');
-    const Bottle = require('../../models/Bottle');
-    const bottleIds = await Bottle.distinct('_id', { wineDefinition: wine._id });
-    const imgs = await BottleImage.find({
+    // POST-PROMOTION they are not fetched at all: the grace window is about the
+    // label, not about the gallery.
+    const bottleIds = stillPending ? await Bottle.distinct('_id', { wineDefinition: wine._id }) : [];
+    const imgs = stillPending ? await BottleImage.find({
       kind: { $ne: 'label-scan' },
       $or: [{ wineDefinition: wine._id }, ...(bottleIds.length ? [{ bottle: { $in: bottleIds } }] : [])],
-    }).select('_id kind visibility originalUrl processedUrl').sort({ createdAt: -1 }).limit(MAX_BOTTLE_IMAGES).lean();
+    }).select('_id kind visibility originalUrl processedUrl').sort({ createdAt: -1 }).limit(MAX_BOTTLE_IMAGES).lean() : [];
 
     const ordered = [];
-    if (wine.scanImage) {
-      const scan = await BottleImage.findById(wine.scanImage)
-        .select('_id kind originalUrl processedUrl').lean();
-      if (scan) ordered.push(scan); // the scanned label first — it is the primary evidence
-    }
+    if (scan) ordered.push(scan); // the scanned label first — it is the primary evidence
     ordered.push(...imgs);
 
     if (ordered.length === 0) {
       return ok(
         `No photos are stored for "${wine.name}" — this row has to be judged on its text alone`,
-        { wine_id: wine._id, images: 0, still_pending: wine.pendingIdentity === true }
+        { wine_id: wine._id, images: 0, still_pending: stillPending }
       );
     }
 
@@ -1285,9 +1302,14 @@ registerTool({
             summary: `${blocks.length} photo(s) for "${wine.name}"${wine.producer ? ` — ${wine.producer}` : ' (no producer recorded)'}`,
             data: {
               wine_id: wine._id,
-              still_pending: wine.pendingIdentity === true,
+              still_pending: stillPending,
+              // Only present after promotion: how long the label stays
+              // correctable. The model should say so when it reports a fix.
+              ...(stillPending ? {} : { correction_window_until: scan?.retainUntil || null }),
               images: included,
-              guidance: 'Read the producer, appellation and classification off the label. Transcribe what is printed — never infer a producer from the region. These are the owner\'s private photos, released for this one purpose: do not describe, store or reuse them for anything but completing this wine\'s identity.',
+              guidance: stillPending
+                ? 'Read the producer, appellation and classification off the label. Transcribe what is printed — never infer a producer from the region. These are the owner\'s private photos, released for this one purpose: do not describe, store or reuse them for anything but completing this wine\'s identity.'
+                : 'This wine has already left the pending queue — you are looking at its label inside the correction window, to CHECK an identity somebody already wrote. If it is wrong, propose the correction (propose_wine_correction); do not describe, store or reuse this photo for anything else.',
             },
           }),
         },
