@@ -845,6 +845,87 @@ const isIdentitySentinel = (value) => {
 };
 
 /**
+ * Is this producer+name pair IMPLAUSIBLY SHAPED — i.e. present, non-sentinel,
+ * and still not a usable identity?
+ *
+ * The gap this closes (found in prod): a wine minted with producer "Increíble"
+ * AND name "Increíble" — the label's one readable word echoed into both boxes
+ * by the scan — passed `isIdentitySentinel` on both fields, so the auto-promote
+ * hook let it leave the pending queue. It reached the maturity queue as a
+ * public registry row, and by then its label photo was no longer reachable:
+ * the one piece of evidence that could have fixed it was gated on the row still
+ * being pending. "Non-empty" is not the same as "an identity".
+ *
+ * CONTRACT — synchronous, pure and DEPENDENCY-FREE, because its primary caller
+ * is the WineDefinition pre-validate hook, which must not do DB I/O. Everything
+ * here is a string-shape test. The taxonomy-dependent half of the same question
+ * ("is this producer actually a place / a grape?") cannot be answered without
+ * the DB and therefore lives elsewhere: the mint gate in
+ * services/findOrCreateWine and the cross-field rules in utils/crossFieldChecks,
+ * enforced on the curation write path (services/pendingWineOps.applyPendingFix).
+ *
+ * Lives beside isIdentitySentinel so mint, promotion and curation share ONE
+ * definition of "this identity is not usable yet".
+ *
+ * What it deliberately does NOT catch — each would need either the DB or a
+ * judgement this predicate has no basis for:
+ *   • a producer that is a real PLACE or GRAPE ("Chablis", "Tokaji", "Syrah") —
+ *     taxonomy lookups, see above;
+ *   • a producer wholly contained in the name that still leaves a distinct
+ *     remainder ("Cloudy Bay" / "Cloudy Bay Sauvignon Blanc") — a formatting
+ *     defect, not a missing identity, and refusing it would trap a wine a
+ *     curator transcribed correctly off the label;
+ *   • a well-shaped producer that is simply WRONG (a range name, a retailer, a
+ *     misread cuvée) — nothing in the string says so;
+ *   • anything about appellation / region / country / grapes;
+ *   • NON-LATIN identities. normalizeString cannot see them, so every fold
+ *     below would read "empty" and condemn a real producer — the exact H-4
+ *     regression that made "Мукузани" rows unpromotable. Judged plausible and
+ *     left to the curator.
+ *
+ * @param {string} producer
+ * @param {string} name
+ * @returns {boolean} true when the pair must NOT be promoted / minted public
+ */
+const isImplausibleIdentity = (producer, name) => {
+  if (typeof producer !== 'string' || typeof name !== 'string') return false;
+  // See the non-Latin note above — this predicate has no opinion on scripts
+  // normalizeString cannot represent.
+  if (hasNonLatinAlnum(producer) || hasNonLatinAlnum(name)) return false;
+
+  const p = normalizeString(producer);
+  const n = normalizeString(name);
+  // MISSING is isIdentitySentinel's verdict, not this one's. Returning false
+  // here keeps the two predicates strictly complementary: callers ask both.
+  if (!p || !n) return false;
+
+  // 1. The live bug: the name echoed into the producer field.
+  if (p === n) return true;
+  // 2. A one-character producer is a stray keystroke — same bar the mint gate
+  //    has always applied (findOrCreateWine's producerNorm.length < 2).
+  if (p.length < 2) return true;
+  // 3. Digits only ("2019", "12345"). Punctuation-only folds to '' and was
+  //    already isIdentitySentinel's business.
+  if (!/[a-z]/.test(p)) return true;
+
+  // 4. Containment leaving NO DISTINCT PRODUCER. Compared on stop-word-stripped
+  //    tokens, because that is what "distinct" means here: producer "Increíble
+  //    Wines" with name "Increíble" is the same echo as case 1 wearing an estate
+  //    word, while "Cloudy Bay" with name "Cloudy Bay Sauvignon Blanc" leaves
+  //    'sauvignon blanc' and is a real (if badly formatted) identity.
+  const producerTokens = tokenize(producer);
+  const nameTokens = tokenize(name);
+  // A producer that is nothing but house/stop words ("Domaine", "Cantina") —
+  // branding with no house attached to it.
+  if (producerTokens.length === 0) return true;
+  const producerSet = new Set(producerTokens);
+  const nameSet = new Set(nameTokens);
+  const producerOnly = producerTokens.filter((t) => !nameSet.has(t));
+  const nameOnly = nameTokens.filter((t) => !producerSet.has(t));
+  return producerOnly.length === 0 && nameOnly.length === 0;
+};
+
+/**
  * Grape names additionally reject descriptions-instead-of-varietals: the AI
  * sometimes returns hedges like "blend - specific varieties unknown",
  * "unknown - likely Riesling, Gewurztraminer, Pinot Gris, or Muscat" or
@@ -907,6 +988,7 @@ module.exports = {
   isRecognizedCountry,
   isUnknownName,
   isIdentitySentinel,
+  isImplausibleIdentity,
   isJunkGrapeName,
   levenshteinDistance,
   calculateSimilarity,

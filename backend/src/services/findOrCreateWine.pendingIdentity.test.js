@@ -493,3 +493,60 @@ describe('pending rows are isolated from OTHER creators at every match stage', (
     expect(res).toEqual({ wine: normal, created: false });
   });
 });
+
+// ── Pending mint: an IMPLAUSIBLY SHAPED identity ─────────────────────────────
+//
+// The producer is present and non-sentinel and the pair still isn't an
+// identity — the prod row that motivated the gate: producer "Increíble" AND
+// name "Increíble", the label's one readable word echoed into both boxes.
+// Minting that PUBLICLY is the worst outcome: the row joins the shared registry
+// with a 45%-weighted producer segment that is really the wine name, and the
+// promoted-scan clock starts on the only evidence that could fix it.
+
+describe('an implausibly shaped identity is filed pending, not minted public', () => {
+  const ECHO = { ...BASE, name: 'Increíble', producer: 'Increíble' };
+
+  test('allowPending: the bottle still saves and the wine mints PENDING', async () => {
+    const res = await findOrCreateWine(ECHO, USER, { allowPending: true });
+
+    expect(res.created).toBe(true);
+    expect(res.pendingIdentity).toBe(true);
+    const doc = minted();
+    expect(doc.pendingIdentity).toBe(true);
+    // The producer is never STORED — it carried no producer information.
+    expect(doc.producer).toBe('');
+    expect(doc.normalizedKey).toContain(pendingProducerKey(USER));
+  });
+
+  test('the name the user typed survives — only the producer was unusable', async () => {
+    await findOrCreateWine(ECHO, USER, { allowPending: true });
+    expect(minted().name).toBe('Increíble');
+  });
+
+  test('NO allowPending (curation surfaces): it throws 400 and says why', async () => {
+    await expect(findOrCreateWine(ECHO, USER)).rejects.toMatchObject({
+      status: 400,
+      message: '"Increíble" is not a usable producer for "Increíble" — the producer field must name the winery, distinctly from the wine name',
+    });
+    expect(WineDefinition).not.toHaveBeenCalled();
+  });
+
+  test('a producer that merely PREFIXES the name is untouched — that is a formatting defect', async () => {
+    // canonicalizeWineName strips the embed at step 0, leaving a real identity;
+    // the gate must not turn this into a pending row.
+    const res = await findOrCreateWine(
+      { ...BASE, name: 'Cloudy Bay Sauvignon Blanc', producer: 'Cloudy Bay' },
+      USER, { allowPending: true }
+    );
+
+    expect(res.created).toBe(true);
+    expect(res.pendingIdentity).toBeUndefined();
+    expect(minted()).toMatchObject({ producer: 'Cloudy Bay', name: 'Sauvignon Blanc', pendingIdentity: false });
+  });
+
+  test('an ordinary identity is unaffected', async () => {
+    const res = await findOrCreateWine(BASE, USER, { allowPending: true });
+    expect(res.created).toBe(true);
+    expect(minted().pendingIdentity).toBe(false);
+  });
+});

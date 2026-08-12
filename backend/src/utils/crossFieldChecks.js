@@ -312,6 +312,34 @@ const CROSS_FIELD_CHECKS = [
   },
 ];
 
+/**
+ * The subset the CURATION WRITE PATH refuses on, rather than merely flagging
+ * (services/pendingWineOps.applyPendingFix).
+ *
+ * The family is REVIEW-ONLY by default — see the module header — and that does
+ * not change for the ~5.5k rows already in the registry. But a curator
+ * completing a pending identity is writing a producer FROM SCRATCH, and these
+ * six rules all say the same thing about that write: the string is not a
+ * producer at all. findOrCreateWine's mint gate already refuses three of them
+ * (place-as-producer) on the deliberate curation surfaces; running them here
+ * closes the same hole on the queue, where the DB lookups they need are allowed
+ * (the pre-validate hook's shape test cannot do I/O).
+ *
+ * Deliberately NOT the whole list. name-in-producer.v1, producer-parenthetical
+ * .v1, appellation-is-grape.v1 and region-is-country.v1 flag records that are
+ * real but badly FORMATTED — "Cloudy Bay" under name "Cloudy Bay Sauvignon
+ * Blanc" trips name-in-producer, and refusing that would trap a wine whose
+ * curator transcribed the label correctly. Those stay in the review queue.
+ */
+const IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS = [
+  'producer-is-appellation.v1',
+  'producer-is-region.v1',
+  'producer-is-country.v1',
+  'producer-is-grape.v1',
+  'producer-is-style-term.v2',
+  'producer-placeholder.v1',
+];
+
 const CROSS_FIELD_CHECK_IDS = CROSS_FIELD_CHECKS.map(c => c.id);
 const DEFAULT_CROSS_FIELD_CHECK_IDS = CROSS_FIELD_CHECKS.filter(c => c.defaultActive).map(c => c.id);
 const byId = new Map(CROSS_FIELD_CHECKS.map(c => [c.id, c]));
@@ -354,6 +382,7 @@ const CROSS_FIELD_CHECK_SELECT = 'name producer appellation region country cross
 
 module.exports = {
   CROSS_FIELD_CHECKS, CROSS_FIELD_CHECK_IDS, DEFAULT_CROSS_FIELD_CHECK_IDS,
+  IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS,
   CROSS_FIELD_CHECK_SELECT, resolveCrossFieldCheck, runCrossFieldChecks,
   buildCrossFieldRefs,
 };

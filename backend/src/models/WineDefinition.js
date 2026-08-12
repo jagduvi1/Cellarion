@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const mongoose = require('mongoose');
-const { generateWineSlug, isIdentitySentinel } = require('../utils/normalize');
+const { generateWineSlug, isIdentitySentinel, isImplausibleIdentity } = require('../utils/normalize');
 const { computeCanonicalKey } = require('../utils/wineIdentity');
 
 const wineDefinitionSchema = new mongoose.Schema({
@@ -357,9 +357,21 @@ wineDefinitionSchema.pre('save', function(next) {
 // only fill them on upsert-insert).
 wineDefinitionSchema.pre('validate', function(next) {
   // AUTO-PROMOTE. A pending row exists only because its identity was
-  // incomplete; the moment producer AND name are both real (present and not a
-  // sentinel like "Unknown"/"N/A") the reason to hide it is gone, so it leaves
-  // the queue by itself. Deliberately a hook, not a line in the somm route:
+  // incomplete; the moment producer AND name are both real (present, not a
+  // sentinel like "Unknown"/"N/A", and PLAUSIBLY SHAPED) the reason to hide it
+  // is gone, so it leaves the queue by itself.
+  //
+  // "Not a sentinel" alone was not enough (live bug): a row with producer
+  // "Increíble" AND name "Increíble" — the label's one readable word echoed
+  // into both boxes — satisfied it, left the queue, and reached the maturity
+  // queue as public registry data, at which point its label photo was no longer
+  // reachable. isImplausibleIdentity adds the shape test; it is deliberately
+  // synchronous and DB-free because a pre-validate hook must not do I/O, so the
+  // taxonomy-dependent half of the same question (producer-is-a-place / a
+  // grape) is enforced where a DB read is allowed — the mint gate in
+  // services/findOrCreateWine and services/pendingWineOps.applyPendingFix.
+  //
+  // Deliberately a hook, not a line in the somm route:
   // every write path that completes the identity — the REST fix, the MCP fix, a
   // future admin PUT, a backfill script using .save() — promotes identically
   // and none of them can forget. Runs BEFORE the `required` validator on
@@ -369,7 +381,9 @@ wineDefinitionSchema.pre('validate', function(next) {
   // that completes the identity calls searchService.indexWine(), which owns
   // add-vs-remove. A promoting caller must also re-embed (the row was skipped
   // by the embedding pipeline while pending) and re-seed its maturity rows.
-  if (this.pendingIdentity === true && !isIdentitySentinel(this.producer) && !isIdentitySentinel(this.name)) {
+  if (this.pendingIdentity === true &&
+      !isIdentitySentinel(this.producer) && !isIdentitySentinel(this.name) &&
+      !isImplausibleIdentity(this.producer, this.name)) {
     this.pendingIdentity = false;
   }
   if (!this.canonicalKey || this.isModified('name') || this.isModified('producer') || this.isModified('appellation')) {

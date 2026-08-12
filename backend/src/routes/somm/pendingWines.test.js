@@ -35,6 +35,13 @@ jest.mock('../../utils/vintageProfile', () => ({
 jest.mock('../../services/findOrCreateWine', () => ({
   findOrCreateRegion: jest.fn().mockResolvedValue({ _id: 'region-1' }),
 }));
+// The write path's cross-field pre-flight (a producer that is really a region /
+// grape / placeholder is refused). Its own gating is pinned in
+// services/pendingWineOps.identityGates.test.js; here it must simply not reach
+// for the taxonomy collections.
+jest.mock('../../services/crossFieldScan', () => ({
+  detectCrossFieldForValues: jest.fn().mockResolvedValue(null),
+}));
 jest.mock('../../services/wineProfileOps', () => ({
   resolveGrapeIdsStrict: jest.fn(),
   GRAPES_MAX: 20,
@@ -287,7 +294,7 @@ describe('PATCH — fix, promote, audit', () => {
     Country.findOne.mockResolvedValue(null);
     WineDefinition.findById.mockResolvedValue(wineDoc());
 
-    const res = await patch(tokenFor(['somm']), W1, { producer: 'X', countryName: 'Atlantis' });
+    const res = await patch(tokenFor(['somm']), W1, { producer: 'Cave de Kaysersberg',countryName: 'Atlantis' });
 
     expect(res.status).toBe(400);
     expect((await res.json()).error).toMatch(/Unknown country/);
@@ -297,7 +304,7 @@ describe('PATCH — fix, promote, audit', () => {
     resolveGrapeIdsStrict.mockResolvedValue({ ok: false, unmatched: ['Nonsensegrape'] });
     WineDefinition.findById.mockResolvedValue(wineDoc());
 
-    const res = await patch(tokenFor(['somm']), W1, { producer: 'X', grapeNames: ['Nonsensegrape'] });
+    const res = await patch(tokenFor(['somm']), W1, { producer: 'Cave de Kaysersberg',grapeNames: ['Nonsensegrape'] });
 
     expect(res.status).toBe(400);
     expect((await res.json()).error).toMatch(/Not in the grape taxonomy/);

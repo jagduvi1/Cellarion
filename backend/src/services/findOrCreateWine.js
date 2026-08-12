@@ -19,7 +19,7 @@ const Region = require('../models/Region');
 const Grape = require('../models/Grape');
 const Appellation = require('../models/Appellation');
 const searchService = require('./search');
-const { generateWineKey, pendingProducerKey, pendingWineKey, normalizeString, normalizeAppellation, normalizeAppellationKey, stripTrailingVintage, resolveGrapeName, resolveCountryName, isRecognizedCountry, isUnknownName, isIdentitySentinel, isJunkGrapeName, sanitizeTaxonomyName } = require('../utils/normalize');
+const { generateWineKey, pendingProducerKey, pendingWineKey, normalizeString, normalizeAppellation, normalizeAppellationKey, stripTrailingVintage, resolveGrapeName, resolveCountryName, isRecognizedCountry, isUnknownName, isIdentitySentinel, isImplausibleIdentity, isJunkGrapeName, sanitizeTaxonomyName } = require('../utils/normalize');
 const { scoreAllMatches } = require('./wineMatching');
 const { canonicalizeWineName } = require('../utils/producerPrefix');
 const { computeCanonicalKey, canonicalSiblingPrefix } = require('../utils/wineIdentity');
@@ -502,6 +502,30 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
       trimmedProducer = '';
       producerNorm = '';
     }
+  }
+
+  // Producer SHAPE gate. Both fields are present and non-sentinel and the pair
+  // is still not an identity — the prod row that motivated this: producer
+  // "Increíble" AND name "Increíble", the label's one readable word echoed into
+  // both boxes. Minting that publicly is worse than filing it pending, because
+  // a public row loses its label photo to the promoted-scan clock and keeps its
+  // 45%-weighted producer segment in every future dedup comparison.
+  //
+  // Same predicate the auto-promote hook uses (utils/normalize
+  // .isImplausibleIdentity) — one definition across mint, promote and curation
+  // — and the same two outcomes as the gates above: pending for commit paths,
+  // a 400 for the deliberate curation surfaces, which should be told.
+  if (!producerMissing && isImplausibleIdentity(trimmedProducer, trimmedName)) {
+    if (!allowPending) {
+      const err = new Error(
+        `"${trimmedProducer}" is not a usable producer for "${trimmedName}" — the producer field must name the winery, distinctly from the wine name`
+      );
+      err.status = 400;
+      throw err;
+    }
+    producerMissing = true;
+    trimmedProducer = '';
+    producerNorm = '';
   }
 
   // Adopt the registry's majority spelling for this producer (accent, case

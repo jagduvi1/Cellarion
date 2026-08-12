@@ -119,4 +119,33 @@ async function detectCrossFieldForWines(wineIds, checkIds) {
   return hitsById;
 }
 
-module.exports = { scanCrossFieldChecks, detectCrossFieldForWines };
+/**
+ * Run rules against an UNSAVED CANDIDATE row — the curation write path's
+ * pre-flight (services/pendingWineOps.applyPendingFix refuses a fix that would
+ * file a place or a grape in the producer box). Same loadContext, same rules,
+ * no parallel rule set; clearances are ignored because the row does not exist
+ * in this shape yet and nobody can have cleared it.
+ *
+ * Lives HERE, not in utils/crossFieldChecks, for the reason that splits the two
+ * modules in the first place: these verdicts need the taxonomy collections, and
+ * the rules module is pure.
+ *
+ * @param {{name?, producer?, appellation?, region?, country?}} values
+ *   region/country as DISPLAY NAMES (the flattened shape the rules read), not
+ *   ObjectIds — the caller has them in hand on this path.
+ * @param {string[]} checkIds
+ * @returns {Promise<Array<{check: string, detail: string}>|null>} null = clean
+ */
+async function detectCrossFieldForValues(values, checkIds = DEFAULT_CROSS_FIELD_CHECK_IDS) {
+  const { refs } = await loadContext();
+  const flat = {
+    name: values.name == null ? '' : String(values.name),
+    producer: values.producer == null ? '' : String(values.producer),
+    appellation: values.appellation || null,
+    region: values.region || null,
+    country: values.country || null,
+  };
+  return runCrossFieldChecks(flat, refs, { checkIds, ignoreCleared: true });
+}
+
+module.exports = { scanCrossFieldChecks, detectCrossFieldForWines, detectCrossFieldForValues };

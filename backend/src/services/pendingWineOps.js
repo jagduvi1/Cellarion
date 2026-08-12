@@ -30,7 +30,8 @@ const Country = require('../models/Country');
 // pendingWineKey comes from utils/normalize (beside generateWineKey), NOT from
 // services/findOrCreateWine: one definition of the key shape, and no dependency
 // from the curation queue onto the resolver's module tree to build a string.
-const { generateWineKey, pendingWineKey, normalizeAppellation, normalizeString, resolveCountryName, isIdentitySentinel } = require('../utils/normalize');
+const { generateWineKey, pendingWineKey, normalizeAppellation, normalizeString, resolveCountryName, isIdentitySentinel, isImplausibleIdentity } = require('../utils/normalize');
+const { IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS, resolveCrossFieldCheck } = require('../utils/crossFieldChecks');
 const { resolveGrapeIdsStrict, GRAPES_MAX, GRAPE_NAME_MAX, WINE_TYPES } = require('./wineProfileOps');
 
 // Fields a curator may set. `producer` and `name` are the two that promote the
@@ -243,6 +244,22 @@ async function applyPendingFix(wine, clean, userId) {
 
   if (clean.name) wine.name = clean.name;
   if (clean.producer) wine.producer = clean.producer;
+
+  // SHAPE gate, before any DB work. The same predicate the auto-promote hook
+  // uses, so a fix the hook would silently decline to promote is refused here
+  // with a reason instead — a curator whose write "succeeded" but left the row
+  // in the queue with no explanation is how the "Increíble"/"Increíble" class
+  // gets retried rather than corrected.
+  if ((clean.producer || clean.name) && isImplausibleIdentity(wine.producer, wine.name)) {
+    return {
+      ok: false,
+      code: 'invalid_input',
+      message:
+        `"${wine.producer}" is not a usable producer for "${wine.name}" — it carries no winery distinct from the ` +
+        'wine name, so nothing in the record says who made it. Read the label photo and write the winery as printed; ' +
+        'if the label genuinely prints no producer, mark the row identity-unavailable instead of guessing.',
+    };
+  }
   if (clean.appellation !== undefined) {
     wine.appellation = clean.appellation ? normalizeAppellation(clean.appellation) : null;
   }
@@ -293,6 +310,46 @@ async function applyPendingFix(wine, clean, userId) {
     }
   }
 
+  // CROSS-FIELD gate — the half of "is this a real identity?" that needs the
+  // taxonomy collections and therefore cannot live in the model's pre-validate
+  // hook. "Tokaji", "Chablis", "Syrah", "Roșu Demidulce" and "Domaine unknown"
+  // are all strings a label scan puts in the producer box, and a curator
+  // completing the row from a bad OCR guess would put them in the SHARED
+  // registry with a 45% dedup weight. The rules are the existing ones
+  // (utils/crossFieldChecks), restricted to the producer-is-not-a-producer
+  // family — see IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS for why the
+  // formatting rules stay review-only.
+  //
+  // Run when the producer was written, or when this save would PROMOTE (the
+  // hook's own predicate, predicted here exactly as the key regen below does) —
+  // never on an appellation-only touch-up of a row staying in the queue.
+  const willPromote = !isIdentitySentinel(wine.producer) && !isIdentitySentinel(wine.name) &&
+    !isImplausibleIdentity(wine.producer, wine.name);
+  if (clean.producer !== undefined || willPromote) {
+    // Lazy require, same reason as findOrCreateRegion above: keep the curation
+    // queue off the resolver/search module tree at load time.
+    const { detectCrossFieldForValues } = require('./crossFieldScan');
+    const hits = await detectCrossFieldForValues({
+      name: wine.name,
+      producer: wine.producer,
+      appellation: wine.appellation,
+    }, IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS);
+    if (hits && hits.length) {
+      const hit = hits[0];
+      const check = resolveCrossFieldCheck(hit.check);
+      return {
+        ok: false,
+        code: 'invalid_input',
+        message:
+          `Refused by cross-field rule ${hit.check}: "${hit.detail}" is not a producer — it belongs in a different ` +
+          `field${check ? ` (the flagged field is "${check.field}")` : ''}. Read the label photo and write the ` +
+          'winery as printed; a place, a grape, a style term or a placeholder in the producer box would spread ' +
+          'through the shared registry, where the producer is 45% of the duplicate score. If the label genuinely ' +
+          'prints no producer, mark the row identity-unavailable instead.',
+      };
+    }
+  }
+
   // Same rule as the admin PUT and the proposal approve: the dedup key follows
   // name/producer/appellation. Regenerating it here is also what moves a
   // promoted row OUT of the pending key namespace (pending~<creator>:…) and
@@ -306,8 +363,10 @@ async function applyPendingFix(wine, clean, userId) {
   // namespace invariant: two curator-renamed pending rows by different users
   // could then land on the same ordinary key and E11000 into a "merge them
   // instead" 409 that is simply false.
+  // …computed once above (it also decides whether the cross-field gate runs),
+  // and it now carries the hook's implausibility term too — a row the hook
+  // refuses to promote must keep its per-creator pending key.
   if (clean.name || clean.producer || clean.appellation !== undefined) {
-    const willPromote = !isIdentitySentinel(wine.producer) && !isIdentitySentinel(wine.name);
     wine.normalizedKey = willPromote
       ? generateWineKey(wine.name, wine.producer, wine.appellation)
       : pendingWineKey(wine.name, wine.createdBy, wine.appellation);
