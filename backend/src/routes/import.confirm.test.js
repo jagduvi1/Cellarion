@@ -401,3 +401,77 @@ describe('item.addToWishlist', () => {
     expect(body.skipped).toEqual([{ index: 1, reason: 'Duplicate wishlist row in this import' }]);
   });
 });
+
+// ── Whole-import comment/occasion (support ticket 2026-07-30) ───────────────
+
+describe('importNotes / importOccasion', () => {
+  const confirmWith = (items, extra) =>
+    postJson(buildApp(), '/api/bottles/import/confirm', { cellarId: CELLAR_ID, items, ...extra });
+
+  test('land on every created bottle when rows carry neither (matched + request-wine paths)', async () => {
+    const { status, body } = await confirmWith(
+      [
+        { wineDefinition: WINE_ID, vintage: '2018' },
+        { requestWine: true, wineName: 'Mystery', producer: 'Someone', vintage: '2019' },
+      ],
+      { importNotes: 'Moved from CellarTracker', importOccasion: 'Estate auction' }
+    );
+
+    expect(status).toBe(200);
+    expect(body.created).toBe(2);
+    expect(Bottle.__instances).toHaveLength(2);
+    for (const b of Bottle.__instances) {
+      expect(b.notes).toBe('Moved from CellarTracker');
+      expect(b.occasion).toBe('Estate auction');
+    }
+  });
+
+  test('fill-blank only: a row with its own note keeps it', async () => {
+    const { body } = await confirmWith(
+      [
+        { wineDefinition: WINE_ID, vintage: '2018', notes: 'from the file' },
+        { wineDefinition: WINE_ID, vintage: '2019' },
+      ],
+      { importNotes: 'batch comment' }
+    );
+
+    expect(body.created).toBe(2);
+    expect(Bottle.__instances[0].notes).toBe('from the file');
+    expect(Bottle.__instances[1].notes).toBe('batch comment');
+  });
+
+  test('sanitised and capped: HTML stripped, occasion clamped to the schema max (500)', async () => {
+    const { body } = await confirmWith(
+      [{ wineDefinition: WINE_ID, vintage: '2018' }],
+      { importNotes: '<b>bold</b> move', importOccasion: 'x'.repeat(600) }
+    );
+
+    expect(body.created).toBe(1);
+    expect(Bottle.__instances[0].notes).toBe('bold move');
+    expect(Bottle.__instances[0].occasion).toHaveLength(500);
+  });
+
+  test('wishlist rows are NOT stamped — the comment describes bottles owned, not wines wanted', async () => {
+    const { body } = await confirmWith(
+      [{ wineDefinition: WINE_ID, vintage: '2018', addToWishlist: true }],
+      { importNotes: 'batch comment', importOccasion: 'gala' }
+    );
+
+    expect(body.wishlistCreated).toBe(1);
+    expect(WishlistItem.create).toHaveBeenCalledWith(
+      expect.objectContaining({ notes: undefined })
+    );
+    expect(WishlistItem.create.mock.calls[0][0].occasion).toBeUndefined();
+  });
+
+  test('non-string values are ignored, absent fields leave bottles untouched (regression)', async () => {
+    const { body } = await confirmWith(
+      [{ wineDefinition: WINE_ID, vintage: '2018' }],
+      { importNotes: { length: 1e12 }, importOccasion: 42 }
+    );
+
+    expect(body.created).toBe(1);
+    expect(Bottle.__instances[0].notes).toBeUndefined();
+    expect(Bottle.__instances[0].occasion).toBeUndefined();
+  });
+});

@@ -378,9 +378,26 @@ async function _prepareChatContext(userId, message, { useQueryExpansion = true, 
     // Enrich matches with maturity, price, and count data
     const enrichment = await fetchEnrichmentData(userId, matches);
 
-    wineSection = matches.length
-      ? `Available wines from the user's cellar:\n\n${formatWineList(matches, enrichment)}`
-      : 'The user has no wines in their cellar that match this query.';
+    // HONEST SCOPING (support ticket 2026-08-12 "IA bottles known false"): the
+    // model only ever sees the chatMaxResults most relevant bottles, and
+    // without the cellar's true size it presents that selection AS the cellar
+    // — a user with 71 bottles concluded the AI "has knowledge only on 11".
+    // State the total inside the context itself, counted on the SAME scope as
+    // the search (user + active + optional cellar selection) so the number can
+    // never contradict the list. The line lives in wineSection, so a reused
+    // context (previousWines) carries it forward without re-counting.
+    const totalActive = await Bottle.countDocuments(bottleScope);
+    const scopeLine = `The user's cellar holds ${totalActive} active bottle(s)${cellarIds?.length ? ' in the selected cellar(s)' : ''} in total.`;
+
+    if (matches.length) {
+      wineSection = `${scopeLine} The ${matches.length} wine(s) below are only the most relevant to this question — NOT the whole cellar. If the user asks about their full collection (totals, inventory, "what do you know about my cellar"), quote the total above and explain you are shown a relevant selection.\n\nAvailable wines from the user's cellar:\n\n${formatWineList(matches, enrichment)}`;
+    } else if (totalActive === 0) {
+      wineSection = 'The user has no active bottles in their cellar.';
+    } else {
+      // Empty SEARCH, non-empty CELLAR — without the distinction the model
+      // told users their cellar had nothing in it.
+      wineSection = `${scopeLine} None of them matched this question semantically — the cellar is not empty, this search just surfaced no relevant bottles.`;
+    }
   } else {
     wineSection = previousWines;
   }

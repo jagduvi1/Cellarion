@@ -78,7 +78,10 @@ registerTool({
     const openCount = data.filter((c) => c.readiness === 'open').length;
     const urgentCount = data.filter((c) => c.readiness === 'declining' || c.readiness === 'late').length;
     return ok(
-      `${data.length} candidate(s)${scope.cellarName ? ` in "${scope.cellarName}"` : ''}` +
+      // Same screened-total lead as pair_with_dish: the shortlist must never
+      // read as the whole cellar.
+      `Screened ${sel.considered + sel.reservedExcluded} active bottle(s); ` +
+        `${data.length} candidate(s)${scope.cellarName ? ` in "${scope.cellarName}"` : ''}` +
         `${openCount ? ` — ${openCount} already open` : ''}${urgentCount ? `, ${urgentCount} in closing windows` : ''}`,
       data,
       {
@@ -150,7 +153,13 @@ registerTool({
     const spreadOut = await serializeCandidates(spread, sel.profileMap, scope.cellarIds, Math.max(limit - matchedOut.length, 3));
 
     return ok(
-      `${matchedOut.length} keyword match(es) for "${args.dish}", ${spreadOut.length} style-spread candidate(s)`,
+      // Lead with the screened total (support ticket 2026-08-12 "IA bottles
+      // known false"): this tool reads the WHOLE cellar and returns a shortlist,
+      // but a summary that only counts the shortlist reads as "the AI can see
+      // 11 of my 72 bottles" to the person the answer is relayed to.
+      `Screened all ${sel.considered + sel.reservedExcluded} active bottle(s) in the cellar; returning a shortlist — ` +
+        `${matchedOut.length} keyword match(es) for "${args.dish}", ${spreadOut.length} style-spread candidate(s). ` +
+        'Tell the user the whole cellar was considered.',
       { matched: matchedOut, style_spread: spreadOut },
       {
         warnings: [
