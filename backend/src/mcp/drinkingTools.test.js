@@ -156,6 +156,18 @@ describe('what_should_i_open_tonight', () => {
     expect(body.warnings.join(' ')).toMatch(/2 reserved .*excluded/i);
   });
 
+  test('summary leads with the screened cellar total, not just the shortlist (honest scoping)', async () => {
+    // 2026-08-12 support ticket "IA bottles known false": a shortlist-only
+    // summary was relayed to the user as "the AI only knows 11 of my 72
+    // bottles". The screened total — ready or not, reserved included — leads.
+    const ready = mkBottle({ drinkFrom: THIS_YEAR - 2, drinkTo: THIS_YEAR + 2 });
+    const notReady = mkBottle({ drinkFrom: THIS_YEAR + 3 });
+    const reserved = mkBottle({ drinkTo: THIS_YEAR + 2, reservedFor: 'Anna' });
+    wireCandidates([ready, notReady, reserved]);
+    const res = await tool('what_should_i_open_tonight').handler({}, ctxFor(oid('b')));
+    expect(parse(res).summary).toMatch(/^Screened 3 active bottle/);
+  });
+
   test('an all-reserved cellar returns the empty result WITH the reserved disclosure', async () => {
     // Without the warning the model would tell the user "nothing is ready" and
     // never mention that their peak bottles are simply spoken for.
@@ -195,6 +207,16 @@ describe('pair_with_dish', () => {
     expect(body.data.matched).toEqual([]);
     expect(body.data.style_spread).toHaveLength(1);
     expect(body.warnings.join(' ')).toMatch(/hints|evidence/i);
+  });
+
+  test('summary states the whole cellar was screened (honest scoping)', async () => {
+    const free = mkBottle({ drinkTo: THIS_YEAR + 2 });
+    const reserved = mkBottle({ drinkTo: THIS_YEAR + 2, reservedFor: 'the wedding' });
+    wireCandidates([free, reserved]);
+    const res = await tool('pair_with_dish').handler({ dish: 'roast chicken' }, ctxFor(oid('d')));
+    const body = parse(res);
+    expect(body.summary).toMatch(/^Screened all 2 active bottle/);
+    expect(body.summary).toMatch(/whole cellar was considered/);
   });
 
   test('reserved bottles are excluded from both the matches and the style spread', async () => {
