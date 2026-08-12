@@ -145,4 +145,10 @@ async function resolveCanonicalAppellation(rawAppellation) {
   }
 }
 
-module.exports = { resolveCanonicalAppellation };
+// candidateKeys is exported for services/taxonomyReview: the unmatched queue
+// must consider a string COVERED when any of its stripped variants matches a
+// curated doc (release-audit F2) — otherwise "Yecla DO" sits in the queue,
+// an admin promotes it, and the minted doc's exact-match hit permanently
+// disables the very stripping that would have folded it. One key function,
+// two consumers, no drift.
+module.exports = { resolveCanonicalAppellation, candidateKeys };

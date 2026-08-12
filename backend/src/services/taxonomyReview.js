@@ -15,6 +15,7 @@ const Region = require('../models/Region');
 const Country = require('../models/Country');
 const Appellation = require('../models/Appellation');
 const { normalizeAppellation, normalizeAppellationKey } = require('../utils/normalize');
+const { candidateKeys } = require('./appellationResolve');
 const { isValidId } = require('../utils/validation');
 
 /**
@@ -102,7 +103,13 @@ async function listUnmatchedAppellations() {
   for (const r of rows) {
     const cleaned = normalizeAppellation(r._id.ap || '') || r._id.ap || '';
     const key = normalizeAppellationKey(cleaned);
-    if (!key || matched.has(key)) continue;
+    // Covered when ANY resolver candidate key matches, not just the exact one
+    // (release-audit F2): "Yecla DO" is governed by the curated "Yecla" — the
+    // resolver folds it at write time, and listing it here invites an admin to
+    // promote the decorated form, whose exact-match hit would then permanently
+    // beat the stripped variant and split the appellation in two. What remains
+    // in this queue is only what NO variant of covers — the genuinely unknown.
+    if (!key || candidateKeys(key).some((k) => matched.has(k))) continue;
     let g = groups.get(key);
     if (!g) { g = { spellings: new Map(), countries: new Map(), regions: new Map(), total: 0 }; groups.set(key, g); }
     g.total += r.n;
