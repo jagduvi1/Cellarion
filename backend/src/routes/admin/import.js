@@ -10,6 +10,7 @@ const Country = require('../../models/Country');
 const Region = require('../../models/Region');
 const Appellation = require('../../models/Appellation');
 const { logAudit } = require('../../services/audit');
+const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const searchService = require('../../services/search');
 
 const router = express.Router();
@@ -233,6 +234,20 @@ async function getOrCreateAppellation(name, countryId, regionId, userId, cache) 
   return doc._id;
 }
 
+/**
+ * Adopt the curated display spelling for an imported appellation string,
+ * memoized per import run. Falsy in / falsy out, and the resolver itself never
+ * throws — an unknown CSV spelling passes through verbatim and lands in the
+ * admin unmatched queue, exactly like every other write surface.
+ */
+async function resolveImportAppellation(name, cache) {
+  if (!name) return name;
+  if (cache.has(name)) return cache.get(name);
+  const resolved = await resolveCanonicalAppellation(name);
+  cache.set(name, resolved);
+  return resolved;
+}
+
 const BATCH_SIZE = 500;
 
 // ── Route ─────────────────────────────────────────────────────────────────────
@@ -262,6 +277,7 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
   const countryCache = new Map();
   const regionCache = new Map();
   const appellationCache = new Map();
+  const appellationSpellingCache = new Map();
 
   // Auto-detect delimiter and whether a header row is present.
   // Strip BOM before inspecting — some LWIN exports include a UTF-8 BOM.
@@ -419,6 +435,14 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
         // producer "Vajra") mints the producer-in-name shape the admin tool
         // then has to clean up (registry audit 2026-07-26).
         mapped.name = canonicalizeWineName(mapped.name, mapped.producer);
+        // Curated-registry resolve, same reason as the name canon: parseRow is
+        // sync so it can only tier-strip, and this path bulkWrites directly
+        // instead of going through findOrCreateWine — so without the resolver a
+        // CSV column spelling both lands on the wine AND mints a duplicate
+        // Appellation doc through getOrCreateAppellation below. Cached like
+        // every other taxonomy lookup here: LWIN dumps repeat a few thousand
+        // appellation strings across hundreds of thousands of rows.
+        mapped.appellation = await resolveImportAppellation(mapped.appellation, appellationSpellingCache);
 
         const countryId = await getOrCreateCountry(mapped.country, userId, countryCache);
         const regionId = await getOrCreateRegion(mapped.region, countryId, userId, regionCache);
@@ -603,3 +627,7 @@ module.exports.finalizeMintedWines = finalizeMintedWines;
 // recovery keeps a mid-batch duplicate-key from discarding up to 499
 // created wines' stats and invariants (audit 2026-08-03 H1).
 module.exports.applyBulkWriteError = applyBulkWriteError;
+// resolveImportAppellation exported for its unit tests — parseRow is sync and
+// can only tier-strip, so this is the ONLY place the import adopts the curated
+// registry spelling before it both stores the string and mints the taxonomy doc.
+module.exports.resolveImportAppellation = resolveImportAppellation;

@@ -81,6 +81,21 @@ describe('creation through the shared dedup chokepoint', () => {
       expect.objectContaining({ via: 'mcp', admin: true }));
   });
 
+  // Every appellation writer has to reach the curated-registry resolver. This
+  // one reaches it by DELEGATION: the appellation goes to findOrCreateWine
+  // untouched, and that chokepoint tier-strips + resolves before keying and
+  // storing. The pin is that this tool never canonicalizes on its own — a
+  // second copy of the rule here is exactly how the surfaces drift apart.
+  test('the appellation is handed to the resolving chokepoint RAW, not pre-normalized', async () => {
+    findOrCreateWine.mockResolvedValue({ wine: WINE, created: true });
+    await tool('admin_add_registry_wine').handler(
+      { name: 'Barrica', producer: 'Castaño', country: 'Spain', appellation: 'Yecla DO', type: 'red' }, ADMIN_CTX
+    );
+    expect(findOrCreateWine).toHaveBeenCalledWith(
+      expect.objectContaining({ appellation: 'Yecla DO' }), oid('a'), expect.anything()
+    );
+  });
+
   test('soft-zone candidates → conflict listing ids, nothing created', async () => {
     findOrCreateWine.mockResolvedValue({ wine: null, candidates: [{ wine: WINE, score: 0.89 }] });
     const res = await tool('admin_add_registry_wine').handler(

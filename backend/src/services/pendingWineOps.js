@@ -35,6 +35,9 @@ const { IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS, resolveCrossFieldCheck } = requ
 // Top-level: labelScanAccess requires nothing at load (its own model require is
 // lazy), so it adds no module tree to the curation queue.
 const { stampPromotedScanRetention } = require('./labelScanAccess');
+// Same reasoning: appellationResolve requires only the Appellation model and
+// utils/normalize, so the curation queue keeps its light module tree.
+const { resolveCanonicalAppellation } = require('./appellationResolve');
 const { resolveGrapeIdsStrict, GRAPES_MAX, GRAPE_NAME_MAX, WINE_TYPES } = require('./wineProfileOps');
 
 // Fields a curator may set. `producer` and `name` are the two that promote the
@@ -295,8 +298,9 @@ function validatePendingFix(patch) {
  * follow-through when the identity became complete.
  *
  * Taxonomy is resolved with the SAME semantics as approving a correction
- * proposal (routes/admin/wineProposals.js): appellation normalized, country
- * RESOLVED never minted, region through the gated findOrCreateRegion, grapes
+ * proposal (routes/admin/wineProposals.js): appellation normalized AND resolved
+ * against the curated registry, country RESOLVED never minted, region through
+ * the gated findOrCreateRegion, grapes
  * match-only against the taxonomy, normalizedKey regenerated when any of
  * name/producer/appellation moved.
  *
@@ -337,7 +341,9 @@ async function applyPendingFix(wine, clean, userId) {
     };
   }
   if (clean.appellation !== undefined) {
-    wine.appellation = clean.appellation ? normalizeAppellation(clean.appellation) : null;
+    wine.appellation = clean.appellation
+      ? await resolveCanonicalAppellation(normalizeAppellation(clean.appellation))
+      : null;
   }
   if (clean.type) wine.type = clean.type;
 

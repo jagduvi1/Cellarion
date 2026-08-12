@@ -10,8 +10,10 @@
 
 jest.mock('../../services/search', () => ({ fullSync: jest.fn(), indexWine: jest.fn() }));
 jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
+jest.mock('../../services/appellationResolve', () => ({ resolveCanonicalAppellation: jest.fn() }));
 
-const { mapRow } = require('./import');
+const { mapRow, resolveImportAppellation } = require('./import');
+const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 
 const lwinRow = (over = {}) => ({
   LWIN: '1234567',
@@ -69,5 +71,37 @@ describe('mapRow (lwin) — appellation tier strip', () => {
     expect(mapRow(lwinRow({ SUB_REGION: 'Barolo DOCG' }), 'lwin').appellation).toBe('Barolo');
     expect(mapRow(lwinRow({ SUB_REGION: 'DO Alicante' }), 'lwin').appellation).toBe('Alicante');
     expect(mapRow(lwinRow({ SUB_REGION: 'NA' }), 'lwin').appellation).toBeNull();
+  });
+});
+
+// mapRow is sync, so it can only TIER-STRIP; the curated-registry resolve
+// happens in the async per-row loop, and this helper is that step. Without it
+// a CSV spelling both lands on the wine and mints a duplicate Appellation doc
+// through getOrCreateAppellation.
+describe('resolveImportAppellation', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    resolveCanonicalAppellation.mockImplementation(async (v) => (v === 'Yecla DO' ? 'Yecla' : v));
+  });
+
+  test('the row keeps the RESOLVER\'s spelling, not the tier-stripped CSV one', async () => {
+    const cache = new Map();
+    expect(await resolveImportAppellation('Yecla DO', cache)).toBe('Yecla');
+    expect(resolveCanonicalAppellation).toHaveBeenCalledWith('Yecla DO');
+  });
+
+  test('falsy in, falsy out — no lookup for a row without an appellation', async () => {
+    const cache = new Map();
+    expect(await resolveImportAppellation(null, cache)).toBeNull();
+    expect(await resolveImportAppellation('', cache)).toBe('');
+    expect(resolveCanonicalAppellation).not.toHaveBeenCalled();
+  });
+
+  test('memoized per import run — an LWIN dump repeats a few thousand strings over ~100k rows', async () => {
+    const cache = new Map();
+    await resolveImportAppellation('Yecla DO', cache);
+    await resolveImportAppellation('Yecla DO', cache);
+    await resolveImportAppellation('Yecla DO', cache);
+    expect(resolveCanonicalAppellation).toHaveBeenCalledTimes(1);
   });
 });

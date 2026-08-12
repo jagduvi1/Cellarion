@@ -30,6 +30,9 @@ jest.mock('./enrichmentJob', () => ({ enrichWineById: jest.fn().mockResolvedValu
 jest.mock('./indexNow', () => ({ submitUrls: jest.fn() }));
 jest.mock('../utils/vintageProfile', () => ({ ensurePendingVintageProfile: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('./findOrCreateWine', () => ({ findOrCreateRegion: jest.fn().mockResolvedValue({ _id: 'region-1' }) }));
+// Identity by default — the gate tests are about producer/name, not spelling;
+// the curated-registry test below overrides it.
+jest.mock('./appellationResolve', () => ({ resolveCanonicalAppellation: jest.fn(async (v) => v) }));
 jest.mock('./wineProfileOps', () => ({
   resolveGrapeIdsStrict: jest.fn(),
   GRAPES_MAX: 20,
@@ -38,6 +41,7 @@ jest.mock('./wineProfileOps', () => ({
 }));
 
 const { detectCrossFieldForValues } = require('./crossFieldScan');
+const { resolveCanonicalAppellation } = require('./appellationResolve');
 const { applyPendingFix } = require('./pendingWineOps');
 const { IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS, CROSS_FIELD_CHECK_IDS } = require('../utils/crossFieldChecks');
 
@@ -134,6 +138,19 @@ describe('shape gate', () => {
     expect(detectCrossFieldForValues).not.toHaveBeenCalled();
     // …and it keeps its per-creator key (audit M-2 stays fixed).
     expect(wine.normalizedKey).toContain('pending~');
+  });
+
+  // fix_pending_wine is a registry WRITE like any other, so the appellation a
+  // curator types is tier-stripped AND resolved against the curated registry —
+  // what lands on the row is the taxonomy's spelling, not the typed variant.
+  test('the STORED appellation is the resolver\'s canonical spelling', async () => {
+    resolveCanonicalAppellation.mockResolvedValueOnce('Yecla');
+    const wine = pendingWine();
+    const res = await applyPendingFix(wine, { appellation: 'Yecla DO' }, CURATOR);
+
+    expect(res.ok).toBe(true);
+    expect(resolveCanonicalAppellation).toHaveBeenCalledWith('Yecla DO');
+    expect(wine.appellation).toBe('Yecla');
   });
 });
 

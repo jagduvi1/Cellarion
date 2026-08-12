@@ -29,6 +29,9 @@ jest.mock('../../services/indexNow', () => ({ submitUrls: jest.fn() }));
 jest.mock('../../services/search', () => ({ indexWine: jest.fn(), bulkIndexBottles: jest.fn() }));
 jest.mock('../../services/embeddingJob', () => ({ reembedActiveVintages: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../../services/findOrCreateWine', () => ({ findOrCreateRegion: jest.fn() }));
+// Identity by default so the tier-strip assertions below still read the
+// normalizeAppellation output; the curated-registry test overrides it.
+jest.mock('../../services/appellationResolve', () => ({ resolveCanonicalAppellation: jest.fn(async (v) => v) }));
 // The extracted merge helper — the whole point of the extraction is that this
 // route invokes IT rather than re-implementing the machinery.
 jest.mock('./wines', () => ({ performWineMerge: jest.fn() }));
@@ -42,6 +45,7 @@ const WineVintageProfile = require('../../models/WineVintageProfile');
 const Bottle = require('../../models/Bottle');
 const Country = require('../../models/Country');
 const { performWineMerge } = require('./wines');
+const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const searchService = require('../../services/search');
 const { generateWineKey } = require('../../utils/normalize');
 const adminWineProposalsRouter = require('./wineProposals');
@@ -154,6 +158,24 @@ describe('POST /:id/approve', () => {
     // The receipt lands on the row.
     const noteSet = WineCorrectionProposal.updateOne.mock.calls.at(-1);
     expect(noteSet[1].$set.appliedNote).toMatch(/Applied/);
+  });
+
+  // The "Yecla DO" case (prod, 2026-08-12): approving a proposal used to store
+  // the tier-stripped string directly, so a decoration normalizeAppellation
+  // deliberately cannot strip survived onto the wine. The stored value must
+  // now come from the curated-registry resolver, not from the normalizer.
+  test('field_correction: the STORED appellation is the resolver\'s canonical spelling', async () => {
+    resolveCanonicalAppellation.mockResolvedValueOnce('Yecla');
+    claim({ _id: P1, kind: 'field_correction', wineDefinition: W1, proposedFields: { appellation: ' Yecla DO ' } });
+    const wine = { _id: W1, name: 'Barrica', producer: 'Castaño', appellation: null, country: 'c1', save: jest.fn().mockResolvedValue(undefined) };
+    WineDefinition.findById.mockResolvedValue(wine);
+
+    const res = await post(`/${P1}/approve`);
+    expect(res.status).toBe(200);
+    // Trimmed + tier-stripped on the way IN, canonical spelling on the way OUT.
+    expect(resolveCanonicalAppellation).toHaveBeenCalledWith('Yecla DO');
+    expect(wine.appellation).toBe('Yecla');
+    expect(wine.normalizedKey).toBe(generateWineKey('Barrica', 'Castaño', 'Yecla'));
   });
 
   test('field_correction E11000 → 409 "merge instead" and the claim is REVERTED (no half-approved state)', async () => {

@@ -5,6 +5,12 @@
  * un-curated appellation passes through verbatim (reviewed, never rejected),
  * a cross-country name clash only adopts when the curated spellings agree,
  * and a lookup failure never fails the mint.
+ *
+ * Plus the MEMBERSHIP GATE on decoration stripping: the resolver retries with
+ * "DO" / "Appellation … Contrôlée" removed, but only ADOPTS a stripped variant
+ * that a curated doc actually carries — and adopts the DOC's spelling, never
+ * the stripped raw string. That gate is the whole safety argument for
+ * stripping tokens utils/normalize deliberately leaves alone.
  */
 jest.mock('../models/Appellation', () => ({ find: jest.fn() }));
 
@@ -74,5 +80,82 @@ describe('resolveCanonicalAppellation', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     expect(await resolveCanonicalAppellation('Barolo')).toBe('Barolo');
     warn.mockRestore();
+  });
+
+  test('a synonym adopts the canonical name', async () => {
+    Appellation.find.mockReturnValue(chain([{ name: 'Châteauneuf-du-Pape' }]));
+    expect(await resolveCanonicalAppellation('CDP')).toBe('Châteauneuf-du-Pape');
+    expect(Appellation.find.mock.calls[0][0].$or[1]).toEqual({ normalizedSynonyms: 'cdp' });
+  });
+});
+
+/**
+ * Trailing "DO" and the "Appellation … Contrôlée" wrapper are decorations
+ * utils/normalize cannot strip blindly — 'do' collides with real place-name
+ * words, and the wrapper's payload IS the appellation. The resolver may strip
+ * them because membership decides: no curated doc, no adoption.
+ */
+describe('membership-gated decoration stripping', () => {
+  // A curated key sequence: exact first, then the stripped variants in order.
+  const findByKey = (byKey) => {
+    Appellation.find.mockImplementation((q) => chain(byKey[q.$or[0].normalizedName] || []));
+  };
+
+  test('"Yecla DO" adopts the curated "Yecla" — the prod case that motivated this', async () => {
+    findByKey({ yecla: [{ name: 'Yecla' }] });
+    expect(await resolveCanonicalAppellation('Yecla DO')).toBe('Yecla');
+    // The exact string is tried FIRST; only its miss licenses the strip.
+    expect(Appellation.find.mock.calls.map(c => c[0].$or[0].normalizedName)).toEqual(['yecla do', 'yecla']);
+  });
+
+  test('THE GATE: "Yecla DO" stays verbatim when no doc carries "Yecla"', async () => {
+    findByKey({});
+    expect(await resolveCanonicalAppellation('Yecla DO')).toBe('Yecla DO');
+  });
+
+  // The gate is what makes the aggressive strip safe: a real appellation whose
+  // last word happens to be "do" simply matches nothing stripped and survives.
+  test('THE GATE: a real name ending in "do" is not mutilated', async () => {
+    findByKey({ 'lisboa do': [{ name: 'Lisboa DO' }] });
+    expect(await resolveCanonicalAppellation('Lisboa DO')).toBe('Lisboa DO');
+    expect(Appellation.find).toHaveBeenCalledTimes(1); // exact hit, no strip attempted
+  });
+
+  test('the AOC wrapper is stripped when the payload is curated', async () => {
+    findByKey({ bordeaux: [{ name: 'Bordeaux' }] });
+    expect(await resolveCanonicalAppellation('Appellation Bordeaux Contrôlée')).toBe('Bordeaux');
+  });
+
+  test('the unaccented and Protégée wrapper forms fold to the same variant', async () => {
+    findByKey({ bordeaux: [{ name: 'Bordeaux' }] });
+    expect(await resolveCanonicalAppellation('Appellation Bordeaux Controlee')).toBe('Bordeaux');
+    expect(await resolveCanonicalAppellation("Appellation d'Origine Bordeaux Protégée")).toBe('Bordeaux');
+  });
+
+  test('both decorations at once', async () => {
+    findByKey({ yecla: [{ name: 'Yecla' }] });
+    expect(await resolveCanonicalAppellation('Appellation Yecla DO Contrôlée')).toBe('Yecla');
+  });
+
+  test('what is stored is the DOC\'s spelling, never the stripped raw string', async () => {
+    findByKey({ yecla: [{ name: 'Yecla DOP' }] }); // curated spelling keeps its own mark
+    expect(await resolveCanonicalAppellation('yecla do')).toBe('Yecla DOP');
+  });
+
+  test('the agree-all rule holds per variant — disagreeing docs keep the input', async () => {
+    findByKey({ yecla: [{ name: 'Yecla' }, { name: 'Iecla' }] });
+    expect(await resolveCanonicalAppellation('Yecla DO')).toBe('Yecla DO');
+  });
+
+  test('a KNOWN exact key that disagrees stops there — no stripping past a match', async () => {
+    findByKey({ 'yecla do': [{ name: 'Yecla DO' }, { name: 'Yecla D.O.' }], yecla: [{ name: 'Yecla' }] });
+    expect(await resolveCanonicalAppellation('Yecla DO')).toBe('Yecla DO');
+    expect(Appellation.find).toHaveBeenCalledTimes(1);
+  });
+
+  test('an undecorated miss costs exactly one query — no speculative variants', async () => {
+    findByKey({});
+    expect(await resolveCanonicalAppellation('Vin de Garage de Jean')).toBe('Vin de Garage de Jean');
+    expect(Appellation.find).toHaveBeenCalledTimes(1);
   });
 });
