@@ -185,8 +185,10 @@ const wineDefinitionSchema = new mongoose.Schema({
   // ANY wine, so one old URL can never come to mean two different wines.
   //
   // Multikey index: the lookup queries { $or: [{slug}, {previousSlugs: s}] }.
-  // Bounded (PREVIOUS_SLUG_LIMIT) — a row renamed dozens of times is churn, and
-  // the oldest links are the ones least likely to still be live. undefined on
+  // Bounded (PREVIOUS_SLUG_LIMIT) — a row renamed dozens of times is churn —
+  // but the ORIGINAL slug is never the one dropped, because a slug that falls
+  // out of this array becomes claimable by another wine (see
+  // boundPreviousSlugs for the full argument and the residual). undefined on
   // rows that have never been renamed, so nothing needs backfilling.
   previousSlugs: {
     type: [String],
@@ -343,8 +345,8 @@ const wineDefinitionSchema = new mongoose.Schema({
   // type plus the Appellation/Region/Country/Grape reference collections may
   // consult it. The pre-validate hook below invalidates it when ANY of those
   // seven fields changes — broader than verifiedChecks because the rules read
-  // all seven. (`type` joined with colour-contradiction.v1; the DB-backed
-  // cuvee-near-miss.v1 reads `name` + `producer`, both already watched, plus
+  // all seven. (`type` joined with colour-contradiction.v2; the DB-backed
+  // cuvee-near-miss.v2 reads `name` + `producer`, both already watched, plus
   // OTHER wines — a sibling renamed elsewhere writes nothing here, the same
   // taxonomy-rename residual as (a) below.) Residuals, stated honestly: (a) renaming a TAXONOMY doc writes
   // nothing here, so a clearance can outlive the taxonomy state it was
@@ -440,6 +442,10 @@ wineDefinitionSchema.pre('validate', function(next) {
     // A wine WITH a producer cannot be one whose producer is unavailable. The
     // disposition is a statement about a row in the queue; the row has left.
     this.identityUnavailable = false;
+    // Remember the TRANSITION for the post('save') hook below. $locals (not a
+    // schema path) because this is per-save bookkeeping, never stored — and
+    // isModified() is not readable in post('save'), where the stamp must run.
+    this.$locals.promotedFromPending = true;
   }
   if (!this.canonicalKey || this.isModified('name') || this.isModified('producer') || this.isModified('appellation')) {
     this.canonicalKey = computeCanonicalKey(this.name, this.producer, this.appellation);
@@ -456,7 +462,7 @@ wineDefinitionSchema.pre('validate', function(next) {
   // comment), so any of the six changing may change a verdict. Save-based
   // writes only, same as above; the taxonomy-merge updateMany residual is
   // documented on the field.
-  // `type` joined the set with colour-contradiction.v1 (a name whose colour
+  // `type` joined the set with colour-contradiction.v2 (a name whose colour
   // word contradicts the stored type) — the one rule in the family whose
   // verdict is about the wine's own colour rather than a reference list, and a
   // clearance of it must not survive the type being changed.
@@ -501,6 +507,30 @@ wineDefinitionSchema.statics.shouldAssignSlug = function (doc) {
 
 /** How many superseded slugs one wine keeps alive. */
 const PREVIOUS_SLUG_LIMIT = 10;
+
+/**
+ * Bound previousSlugs — keeping the ORIGINAL slug whatever else is dropped.
+ *
+ * The hole a plain `.slice(-LIMIT)` leaves (audit M-5): a dropped slug becomes
+ * invisible to findFreeSlug, so the 11th rename FREES the wine's first URL for
+ * another wine to mint — and that URL is the one with the most external life
+ * (search index, bookmarks, backlinks, the /wines/<slug> a user copied a year
+ * ago). Losing the newest superseded slug costs an internal redirect; losing
+ * the oldest hands someone else's wine an address the internet still points at
+ * this one.
+ *
+ * So index 0 is pinned and the bound is spent on the most recent LIMIT-1.
+ *
+ * RESIDUAL, stated rather than hidden: a wine renamed more than 10 times still
+ * drops slugs from the MIDDLE of its history, and those are reclaimable exactly
+ * as before. Closing that needs storage this schema does not have (a global
+ * retired-slug collection); 10+ renames of one registry row is a curation
+ * problem before it is a routing one.
+ */
+const boundPreviousSlugs = (list) => {
+  if (list.length <= PREVIOUS_SLUG_LIMIT) return list;
+  return [list[0], ...list.slice(-(PREVIOUS_SLUG_LIMIT - 1))];
+};
 
 /**
  * The filter for "the wine at this URL segment" — the CURRENT slug or any
@@ -588,9 +618,9 @@ wineDefinitionSchema.pre('save', async function(next) {
     const base = generateWineSlug(this.name, this.producer);
     this.slug = await this.constructor.findFreeSlug(base);
     const kept = (this.previousSlugs || []).filter((s) => s !== outgoing && s !== this.slug);
-    // Oldest first, newest-kept last, bounded — the oldest links are the ones
-    // least likely to still be live.
-    this.previousSlugs = [...kept, outgoing].slice(-PREVIOUS_SLUG_LIMIT);
+    // Oldest first, newest-kept last, bounded — and the ORIGINAL slug survives
+    // the bound whatever else is dropped (see boundPreviousSlugs).
+    this.previousSlugs = boundPreviousSlugs([...kept, outgoing]);
     return next();
   }
   if (!this.constructor.shouldAssignSlug(this)) return next();
@@ -598,6 +628,49 @@ wineDefinitionSchema.pre('save', async function(next) {
   if (!base) return next();
   this.slug = await this.constructor.findFreeSlug(base);
   next();
+});
+
+/**
+ * The one thing a pending→promoted transition must do on EVERY write path:
+ * start the label scan's retention clock.
+ *
+ * A hook, not a line in each route, because "every promoting caller runs the
+ * follow-through" was false (audit M-4). The admin PUT (routes/admin/wines.js)
+ * and POST /:id/strip-producer both set a producer and save(); the pre-validate
+ * hook above cleared pendingIdentity and nothing stamped BottleImage
+ * .retainUntil. The scan then became UNREADABLE (curation access is gated on
+ * pending-or-within-grace) and UNSWEEPABLE (the expiry job excludes
+ * retainUntil: null) — the file kept forever with no purpose and no way to read
+ * it, the exact state the 7-day window was built to end.
+ *
+ * Only the STAMP lives here. The rest of the follow-through (search index,
+ * embeddings, enrichment, maturity seeding, IndexNow) stays in
+ * services/pendingWineOps.runPromotionFollowThrough: those are curation-queue
+ * side effects with their own budget and failure semantics, and a model hook is
+ * the wrong place to fan them out. A promotion through the admin PUT therefore
+ * still relies on the admin route's own indexWine call — unchanged, and out of
+ * scope here; the retention stamp is the one that had no owner at all.
+ *
+ * Non-fatal by construction: stampPromotedScanRetention swallows its own
+ * errors, and the flag is cleared first so a re-save cannot re-run it.
+ */
+/**
+ * Did the pre-validate hook PROMOTE this document on this pass?
+ *
+ * A static rather than an inline condition, for the reason shouldAssignSlug is
+ * one: a rule nobody can see fire is a rule nobody can test. This one is only
+ * readable between validate() and the end of save(), which is exactly the
+ * window the post-save hook runs in.
+ */
+wineDefinitionSchema.statics.promotedOnThisSave = function (doc) {
+  return Boolean(doc && doc.$locals && doc.$locals.promotedFromPending === true);
+};
+
+wineDefinitionSchema.post('save', async function (doc) {
+  if (!doc.constructor.promotedOnThisSave(doc)) return;
+  doc.$locals.promotedFromPending = false;
+  const { stampPromotedScanRetention } = require('../services/labelScanAccess');
+  await stampPromotedScanRetention(doc);
 });
 
 module.exports = mongoose.model('WineDefinition', wineDefinitionSchema);

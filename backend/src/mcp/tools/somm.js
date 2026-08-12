@@ -1349,6 +1349,14 @@ registerTool({
     grapes: z.array(z.string().min(1).max(GRAPE_NAME_MAX)).max(GRAPES_MAX).optional()
       .describe('Variety NAMES, taxonomy-resolved (synonyms ok). Replaces the whole list.'),
     type: z.enum(WINE_TYPES).optional(),
+    cross_field_override: z.boolean().optional()
+      .describe(
+        'Force through a producer the cross-field rules refuse. Use ONLY when the label plainly prints this name ' +
+        'and the TAXONOMY is what is wrong — a user-minted region or appellation that happens to carry a real ' +
+        'producer\'s name, which would otherwise make that producer permanently unwritable. Never use it to push ' +
+        'through a place or a grape you read off the label as a producer. Requires a producer in the same call, and ' +
+        'is recorded in the audit log with the rules it overrode.'
+      ),
     identity_unavailable: z.boolean().optional()
       .describe(
         'LAST RESORT — only after asking the bottle\'s owner (ask_bottle_owner works on pending wines) and being ' +
@@ -1374,6 +1382,7 @@ registerTool({
     if (args.country !== undefined) patch.countryName = args.country;
     if (args.grapes !== undefined) patch.grapeNames = args.grapes;
     if (args.type !== undefined) patch.type = args.type;
+    if (args.cross_field_override !== undefined) patch.crossFieldOverride = args.cross_field_override;
 
     const check = validatePendingFix(patch);
     if (!check.ok) return fail('invalid_input', check.error);
@@ -1383,12 +1392,13 @@ registerTool({
 
     const applied = await applyPendingFix(loaded.wine, check.clean, ctx.user.id);
     if (!applied.ok) return fail(applied.code, applied.message);
-    const { wine, promoted, diff } = applied;
+    const { wine, promoted, diff, crossFieldOverridden } = applied;
 
     // Same audit action string as the REST PATCH — REST and MCP curation must
-    // audit identically (this file's header rule).
+    // audit identically (this file's header rule), override metadata included.
     logAudit(ctx.req, 'wine.pending_fix', { type: 'wine', id: wine._id }, {
       fields: Object.keys(check.clean), diff, promoted, via: 'mcp',
+      ...(crossFieldOverridden ? { crossFieldOverridden } : {}),
     });
 
     const unavailable = wine.identityUnavailable === true;
@@ -1419,7 +1429,10 @@ registerTool({
     await logAction(ctx, {
       tool: 'fix_pending_wine',
       action: 'somm_pending_fix',
-      detail: { wineId: String(wine._id), fields: Object.keys(check.clean), promoted },
+      detail: {
+        wineId: String(wine._id), fields: Object.keys(check.clean), promoted,
+        ...(crossFieldOverridden ? { crossFieldOverridden } : {}),
+      },
       result: envelope,
     });
     return ok(envelope.summary, envelope.data);

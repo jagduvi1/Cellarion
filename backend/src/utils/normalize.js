@@ -845,43 +845,68 @@ const isIdentitySentinel = (value) => {
 };
 
 /**
- * Is this producer+name pair IMPLAUSIBLY SHAPED — i.e. present, non-sentinel,
- * and still not a usable identity?
+ * Longest a producer may be and still be condemned for consisting of nothing
+ * but house/stop words.
  *
- * The gap this closes (found in prod): a wine minted with producer "Increíble"
- * AND name "Increíble" — the label's one readable word echoed into both boxes
- * by the scan — passed `isIdentitySentinel` on both fields, so the auto-promote
- * hook let it leave the pending queue. It reached the maturity queue as a
- * public registry row, and by then its label photo was no longer reachable:
- * the one piece of evidence that could have fixed it was gated on the row still
- * being pending. "Non-empty" is not the same as "an identity".
+ * The bound exists because WINE_STOP_WORDS is broad — it holds 'the', 'de',
+ * 'la', 'e', 'estate', 'wine', 'reserve' — so a LONG string can fold to zero
+ * tokens without being a placeholder at all. 15 characters is the length of the
+ * longest shape this rule is meant to catch ("The Wine Estate"); anything
+ * longer is left to a human. Normalized chars, not raw.
+ */
+const ALL_STOP_WORD_PRODUCER_MAX = 15;
+
+/**
+ * Is this producer+name pair so degenerate that it CANNOT be an identity?
+ *
+ * READ THIS BEFORE WIDENING IT. This predicate BLOCKS — a true verdict refuses
+ * a mint, refuses an auto-promotion and refuses a curator's write. Its first
+ * version tried to judge identity QUALITY from string shape and condemned an
+ * entire category of real wine. Measured against 91 real producer/name pairs it
+ * blocked 67 of them:
+ *
+ *   • `p === n` — the single-wine estate, which is not a defect but a whole way
+ *     of making wine: Château Margaux, Petrus, Krug, Salon, Dom Pérignon, Veuve
+ *     Clicquot, Pol Roger, Opus One, Screaming Eagle, Sassicaia, Masseto,
+ *     Ornellaia, Tignanello, Château Musar, Château Rayas, Zind-Humbrecht,
+ *     J.J. Prüm. The producer IS the wine. There is nothing wrong with the row.
+ *   • the stop-word-stripped containment test — Domaine de la Romanée-Conti /
+ *     "Romanée-Conti", Harlan Estate / "Harlan", Domaine Leflaive / "Leflaive",
+ *     Weingut Keller / "Keller", Casa Ferreirinha / "Ferreirinha", Viña Vik /
+ *     "Vik", Duckhorn / "Duckhorn Vineyards". Dropping the house word is how
+ *     labels and databases have always disagreed; it is not a missing producer.
+ *   • digits-only — the Penedès house "1+1=3" normalizes to '113', and "1865"
+ *     is Viña San Pedro's range. Both real, both condemned.
+ *
+ * THE LESSON: producer == name is not a defect, it is a category of wine.
+ * Almost nothing about identity QUALITY can be judged safely from string shape
+ * alone. So the suspicion moved to where a human can overrule it — the
+ * cross-field review queue's `producer-echoes-name.v1`
+ * (utils/crossFieldChecks) — and what is left here is only what cannot possibly
+ * be an identity in any language, under any label convention:
+ *
+ *   1. a producer shorter than 2 characters after normalization — a stray
+ *      keystroke, the same bar findOrCreateWine's mint gate has always applied;
+ *   2. a producer that is nothing but house/stop words AND short ("Domaine",
+ *      "Casa", "The Wine Estate") — branding with no house attached to it.
+ *
+ * That is the whole list. It is deliberately almost empty.
  *
  * CONTRACT — synchronous, pure and DEPENDENCY-FREE, because its primary caller
  * is the WineDefinition pre-validate hook, which must not do DB I/O. Everything
- * here is a string-shape test. The taxonomy-dependent half of the same question
- * ("is this producer actually a place / a grape?") cannot be answered without
- * the DB and therefore lives elsewhere: the mint gate in
- * services/findOrCreateWine and the cross-field rules in utils/crossFieldChecks,
- * enforced on the curation write path (services/pendingWineOps.applyPendingFix).
+ * here is a string-shape test. The taxonomy-dependent half of "is this a real
+ * producer?" ("is it actually a place / a grape?") needs the DB and lives
+ * elsewhere: the mint gate in services/findOrCreateWine and the cross-field
+ * rules in utils/crossFieldChecks, enforced on the curation write path
+ * (services/pendingWineOps.applyPendingFix).
  *
- * Lives beside isIdentitySentinel so mint, promotion and curation share ONE
- * definition of "this identity is not usable yet".
+ * `name` is still a parameter, and still consulted for two things only: the
+ * non-Latin exemption below, and the MISSING-is-not-my-verdict rule. It no
+ * longer takes part in any blocking test.
  *
- * What it deliberately does NOT catch — each would need either the DB or a
- * judgement this predicate has no basis for:
- *   • a producer that is a real PLACE or GRAPE ("Chablis", "Tokaji", "Syrah") —
- *     taxonomy lookups, see above;
- *   • a producer wholly contained in the name that still leaves a distinct
- *     remainder ("Cloudy Bay" / "Cloudy Bay Sauvignon Blanc") — a formatting
- *     defect, not a missing identity, and refusing it would trap a wine a
- *     curator transcribed correctly off the label;
- *   • a well-shaped producer that is simply WRONG (a range name, a retailer, a
- *     misread cuvée) — nothing in the string says so;
- *   • anything about appellation / region / country / grapes;
- *   • NON-LATIN identities. normalizeString cannot see them, so every fold
- *     below would read "empty" and condemn a real producer — the exact H-4
- *     regression that made "Мукузани" rows unpromotable. Judged plausible and
- *     left to the curator.
+ * NON-LATIN identities are exempt. normalizeString cannot see them, so both
+ * folds below would read "empty" and condemn a real producer — the H-4
+ * regression that made "Мукузани" rows unpromotable.
  *
  * @param {string} producer
  * @param {string} name
@@ -899,30 +924,17 @@ const isImplausibleIdentity = (producer, name) => {
   // here keeps the two predicates strictly complementary: callers ask both.
   if (!p || !n) return false;
 
-  // 1. The live bug: the name echoed into the producer field.
-  if (p === n) return true;
-  // 2. A one-character producer is a stray keystroke — same bar the mint gate
+  // 1. A one-character producer is a stray keystroke — same bar the mint gate
   //    has always applied (findOrCreateWine's producerNorm.length < 2).
   if (p.length < 2) return true;
-  // 3. Digits only ("2019", "12345"). Punctuation-only folds to '' and was
-  //    already isIdentitySentinel's business.
-  if (!/[a-z]/.test(p)) return true;
 
-  // 4. Containment leaving NO DISTINCT PRODUCER. Compared on stop-word-stripped
-  //    tokens, because that is what "distinct" means here: producer "Increíble
-  //    Wines" with name "Increíble" is the same echo as case 1 wearing an estate
-  //    word, while "Cloudy Bay" with name "Cloudy Bay Sauvignon Blanc" leaves
-  //    'sauvignon blanc' and is a real (if badly formatted) identity.
-  const producerTokens = tokenize(producer);
-  const nameTokens = tokenize(name);
-  // A producer that is nothing but house/stop words ("Domaine", "Cantina") —
-  // branding with no house attached to it.
-  if (producerTokens.length === 0) return true;
-  const producerSet = new Set(producerTokens);
-  const nameSet = new Set(nameTokens);
-  const producerOnly = producerTokens.filter((t) => !nameSet.has(t));
-  const nameOnly = nameTokens.filter((t) => !producerSet.has(t));
-  return producerOnly.length === 0 && nameOnly.length === 0;
+  // 2. A producer that is nothing but house/stop words ("Domaine", "Casa",
+  //    "The Wine Estate") — branding with no house attached to it. Length-
+  //    bounded so a long real name cannot be swallowed by a broad stop list;
+  //    see ALL_STOP_WORD_PRODUCER_MAX.
+  if (p.length <= ALL_STOP_WORD_PRODUCER_MAX && tokenize(producer).length === 0) return true;
+
+  return false;
 };
 
 /**

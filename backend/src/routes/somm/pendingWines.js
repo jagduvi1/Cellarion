@@ -11,7 +11,12 @@
  *                       curator fixes a record, not a person (the #930 rule).
  *   PATCH /:id        — { producer?, name?, appellation?, regionName?,
  *                       countryName?, grapeNames?[], type?,
- *                       identityUnavailable? }. Only rows that
+ *                       identityUnavailable?, crossFieldOverride? }.
+ *                       crossFieldOverride is not a field: it forces through a
+ *                       producer the cross-field rules refuse (a user-minted
+ *                       Region/Appellation carrying a real producer's name),
+ *                       and is recorded in the audit entry with the rules it
+ *                       overrode. Only rows that
  *                       are STILL pending may be edited; an already-completed
  *                       wine is a 409 (the id is real — say so) and a missing
  *                       one a 404. Completing producer + name promotes the row
@@ -87,12 +92,16 @@ router.patch('/:id', async (req, res) => {
       const status = applied.code === 'conflict' ? 409 : 400;
       return res.status(status).json({ error: applied.message });
     }
-    const { wine, promoted, diff } = applied;
+    const { wine, promoted, diff, crossFieldOverridden } = applied;
 
     logAudit(req, 'wine.pending_fix', { type: 'wine', id: wine._id }, {
       fields: Object.keys(check.clean),
       diff,
       promoted,
+      // Only present when a curator actually overrode a cross-field refusal —
+      // with the rules and matched strings, so the decision is reviewable
+      // afterwards rather than a bare boolean (audit L-10b).
+      ...(crossFieldOverridden ? { crossFieldOverridden } : {}),
     });
 
     res.json({

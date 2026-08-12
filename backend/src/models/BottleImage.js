@@ -69,10 +69,12 @@ const bottleImageSchema = new mongoose.Schema({
     index: true
   },
   // PURPOSE-BOUND retention deadline for a kind:'label-scan' row whose wine has
-  // LEFT the pending-identity queue. Stamped at promotion
-  // (services/pendingWineOps.runPromotionFollowThrough) and enforced by the
-  // daily sweep (services/scanImageRetentionJob): when it passes, the file and
-  // this document are deleted and WineDefinition.scanImage is nulled.
+  // LEFT the pending-identity queue. Stamped on the TRANSITION itself — the
+  // WineDefinition post('save') hook, via
+  // services/labelScanAccess.stampPromotedScanRetention, so no promoting write
+  // path can forget (audit M-4) — and enforced by the daily sweep
+  // (services/scanImageRetentionJob): when it passes, the file and this
+  // document are deleted and WineDefinition.scanImage is nulled.
   //
   // Why a scan outlives its queue at all: a curator's completion can be WRONG,
   // and until now the label became unreadable the instant the row promoted —
@@ -120,9 +122,18 @@ bottleImageSchema.index({ uploadedBy: 1, contentHash: 1 }, { sparse: true });
 // exactly this shape: label scans that never reached a wine.
 bottleImageSchema.index({ kind: 1, wineDefinition: 1, createdAt: 1 });
 // The 7-day promoted-scan expiry sweep: label scans whose grace window has run
-// out. Sparse — only promoted scans ever carry the field, and they are a small
-// fraction of the collection.
-bottleImageSchema.index({ kind: 1, retainUntil: 1 }, { sparse: true });
+// out.
+//
+// PARTIAL, not sparse (audit L-10). `retainUntil` has `default: null`, so every
+// document in the collection HAS the field and a sparse index indexes all of
+// them — the "small fraction" the comment claimed was the whole collection.
+// A partialFilterExpression on the value is what actually restricts it to the
+// promoted scans that carry a real deadline, which is also the only shape the
+// sweep queries ({ kind: 'label-scan', retainUntil: { $lte: now } }).
+bottleImageSchema.index(
+  { kind: 1, retainUntil: 1 },
+  { partialFilterExpression: { retainUntil: { $type: 'date' } } }
+);
 
 bottleImageSchema.pre('save', function(next) {
   this.updatedAt = Date.now();

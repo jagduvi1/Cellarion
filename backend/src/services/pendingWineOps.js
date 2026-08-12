@@ -32,6 +32,9 @@ const Country = require('../models/Country');
 // from the curation queue onto the resolver's module tree to build a string.
 const { generateWineKey, pendingWineKey, normalizeAppellation, normalizeString, resolveCountryName, isIdentitySentinel, isImplausibleIdentity } = require('../utils/normalize');
 const { IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS, resolveCrossFieldCheck } = require('../utils/crossFieldChecks');
+// Top-level: labelScanAccess requires nothing at load (its own model require is
+// lazy), so it adds no module tree to the curation queue.
+const { stampPromotedScanRetention } = require('./labelScanAccess');
 const { resolveGrapeIdsStrict, GRAPES_MAX, GRAPE_NAME_MAX, WINE_TYPES } = require('./wineProfileOps');
 
 // Fields a curator may set. `producer` and `name` are the two that promote the
@@ -39,6 +42,23 @@ const { resolveGrapeIdsStrict, GRAPES_MAX, GRAPE_NAME_MAX, WINE_TYPES } = requir
 // got wrong. Deliberately NOT here: type-only/profile fields (set_wine_profile
 // owns those), nonWine (a quarantine proposal), and anything about the bottle.
 const FIXABLE_FIELDS = ['producer', 'name', 'appellation', 'regionName', 'countryName', 'grapeNames', 'type', 'identityUnavailable'];
+/**
+ * Not a field — an explicit, audited OVERRIDE of the cross-field refusal below.
+ *
+ * Why it has to exist (audit L-10b): the gate refuses a producer that matches a
+ * Region or Appellation document, and users can MINT those. A junk Region
+ * called "Ferreirinha" or an appellation promoted from a misread label makes
+ * that real producer's name permanently unwritable — and the only escape the
+ * curator had left was `identityUnavailable`, i.e. RECORDING A FALSEHOOD ("the
+ * label prints no producer") about a wine whose label prints it plainly. A hard
+ * refusal with no override is how a data-quality rule starts manufacturing bad
+ * data.
+ *
+ * Deliberately separate from FIXABLE_FIELDS: it writes nothing, it is never
+ * echoed back as a value, and it must not count towards "did the curator send
+ * anything to change?".
+ */
+const CROSS_FIELD_OVERRIDE_FIELD = 'crossFieldOverride';
 const FIELD_MAX = 200;
 // Up to three bottle photos per wine — enough for a curator to cross-read a
 // label, small enough to keep an MCP image response inside its size cap.
@@ -240,6 +260,20 @@ function validatePendingFix(patch) {
   if (Object.keys(clean).length === 0) {
     return { ok: false, error: `Nothing to change — send at least one of: ${FIXABLE_FIELDS.join(', ')}` };
   }
+  // Checked AFTER the "nothing to change" test on purpose: an override on its
+  // own changes nothing and is not a request.
+  if (patch[CROSS_FIELD_OVERRIDE_FIELD] !== undefined) {
+    if (typeof patch[CROSS_FIELD_OVERRIDE_FIELD] !== 'boolean') {
+      return { ok: false, error: `${CROSS_FIELD_OVERRIDE_FIELD} must be true or false` };
+    }
+    if (patch[CROSS_FIELD_OVERRIDE_FIELD] === true && !clean.producer) {
+      return {
+        ok: false,
+        error: `${CROSS_FIELD_OVERRIDE_FIELD} only applies to a producer write — send the producer it should override`,
+      };
+    }
+    clean[CROSS_FIELD_OVERRIDE_FIELD] = patch[CROSS_FIELD_OVERRIDE_FIELD];
+  }
   return { ok: true, clean };
 }
 
@@ -354,6 +388,17 @@ async function applyPendingFix(wine, clean, userId) {
   // never on an appellation-only touch-up of a row staying in the queue.
   const willPromote = !isIdentitySentinel(wine.producer) && !isIdentitySentinel(wine.name) &&
     !isImplausibleIdentity(wine.producer, wine.name);
+  //
+  // OVERRIDABLE, explicitly and audibly (audit L-10b). The rules read the LIVE
+  // taxonomy, and users can mint Regions and Appellations — so a junk Region
+  // doc bearing a real producer's name makes that producer permanently
+  // unwritable, and the only remaining escape (identityUnavailable) records
+  // something FALSE about a label that plainly prints it. A curator who can see
+  // the label may say so with crossFieldOverride; the override is refused
+  // unless a producer is actually being written, it is never a default, and the
+  // caller logs it — see the audit metadata in routes/somm/pendingWines.js and
+  // mcp/tools/somm.fix_pending_wine.
+  let crossFieldOverridden = null;
   if (clean.producer !== undefined || willPromote) {
     // Lazy require, same reason as findOrCreateRegion above: keep the curation
     // queue off the resolver/search module tree at load time.
@@ -366,16 +411,23 @@ async function applyPendingFix(wine, clean, userId) {
     if (hits && hits.length) {
       const hit = hits[0];
       const check = resolveCrossFieldCheck(hit.check);
-      return {
-        ok: false,
-        code: 'invalid_input',
-        message:
-          `Refused by cross-field rule ${hit.check}: "${hit.detail}" is not a producer — it belongs in a different ` +
-          `field${check ? ` (the flagged field is "${check.field}")` : ''}. Read the label photo and write the ` +
-          'winery as printed; a place, a grape, a style term or a placeholder in the producer box would spread ' +
-          'through the shared registry, where the producer is 45% of the duplicate score. If the label genuinely ' +
-          'prints no producer, mark the row identity-unavailable instead.',
-      };
+      if (clean[CROSS_FIELD_OVERRIDE_FIELD] !== true) {
+        return {
+          ok: false,
+          code: 'invalid_input',
+          message:
+            `Refused by cross-field rule ${hit.check}: "${hit.detail}" is not a producer — it belongs in a different ` +
+            `field${check ? ` (the flagged field is "${check.field}")` : ''}. Read the label photo and write the ` +
+            'winery as printed; a place, a grape, a style term or a placeholder in the producer box would spread ' +
+            'through the shared registry, where the producer is 45% of the duplicate score. If the label genuinely ' +
+            'prints no producer, mark the row identity-unavailable instead. If the label DOES print this name and ' +
+            'the taxonomy is what is wrong (a user-minted region or appellation carrying a real producer\'s name), ' +
+            `resend with ${CROSS_FIELD_OVERRIDE_FIELD}: true — that is recorded against your account.`,
+        };
+      }
+      // Returned to the caller so the override lands in the audit log with the
+      // rule it overrode, not as a bare boolean nobody can interpret later.
+      crossFieldOverridden = hits.map((h) => ({ check: h.check, detail: String(h.detail) }));
     }
   }
 
@@ -438,7 +490,7 @@ async function applyPendingFix(wine, clean, userId) {
   if (clean.regionName !== undefined) diff.region = { to: clean.regionName || null };
   if (grapeNames !== null) diff.grapes = { to: grapeNames };
 
-  return { ok: true, wine, promoted, diff, grapeNames };
+  return { ok: true, wine, promoted, diff, grapeNames, crossFieldOverridden };
 }
 
 /**
@@ -457,23 +509,13 @@ async function runPromotionFollowThrough(wine) {
   // sweep. GDPR: this REDUCES retention — a promoted wine's scan was previously
   // kept indefinitely, reachable by nobody.
   //
-  // Here rather than in the model hook for the same reason index membership is:
-  // a pre-validate hook must not do I/O, and every promoting caller runs this
-  // follow-through. Best-effort like the rest — a missed stamp leaves the scan
-  // on its old (indefinite) footing, never deletes anything early.
-  if (wine.scanImage) {
-    try {
-      const { promotedScanDeadline } = require('./labelScanAccess');
-      await BottleImage.updateOne(
-        // Re-assert kind: nothing else in this collection may be given a
-        // retention deadline by this path.
-        { _id: wine.scanImage, kind: 'label-scan', retainUntil: null },
-        { $set: { retainUntil: promotedScanDeadline() } }
-      );
-    } catch (err) {
-      console.warn('[pendingWineOps] label-scan retention stamp failed (non-fatal):', err.message);
-    }
-  }
+  // The stamp itself now lives on the TRANSITION — a post('save') hook on
+  // WineDefinition — because "every promoting caller runs this follow-through"
+  // was simply false: the admin PUT and /strip-producer promote by setting a
+  // producer and saving, and called nothing (audit M-4). Kept here as well,
+  // deliberately: the update matches `retainUntil: null` and so cannot extend a
+  // live deadline, and this call is what the curation path's own test asserts.
+  await stampPromotedScanRetention(wine);
   const searchService = require('./search');
   // indexWine owns index membership in BOTH directions — this is the call that
   // ADDS the promoted row (it removed it while pending).
@@ -536,6 +578,7 @@ module.exports = {
   loadPendingWine,
   runPromotionFollowThrough,
   FIXABLE_FIELDS,
+  CROSS_FIELD_OVERRIDE_FIELD,
   CREATED_VIA_FILTERS,
   FIELD_MAX,
   MAX_BOTTLE_IMAGES,
