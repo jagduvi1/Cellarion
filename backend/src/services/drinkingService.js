@@ -40,10 +40,17 @@ function hasContent(obj) {
 
 /**
  * Select and rank ready-to-drink candidates within the given cellars.
- * Returns { ranked, profileMap, considered, notReady, reservedExcluded, priceWarning }.
+ * Returns { ranked, profileMap, totalActive, considered, notReady,
+ * reservedExcluded, priceWarning }.
+ *
+ * `totalActive` is the UNFILTERED live-bottle count in scope — what "screened
+ * the cellar" honestly means. `considered` is what survived the reserved/type/
+ * price filters. The tools' summaries must lead with totalActive (release-audit
+ * M-2: leading with the filtered count on a wine_type call re-created the
+ * "the AI can only see part of my cellar" misreading #946 exists to kill).
  */
 async function readyCandidates(userId, cellarIds, { wineType, maxPrice, currency } = {}) {
-  if (!cellarIds.length) return { ranked: [], profileMap: new Map(), considered: 0, notReady: 0, reservedExcluded: 0, priceWarning: null };
+  if (!cellarIds.length) return { ranked: [], profileMap: new Map(), totalActive: 0, considered: 0, notReady: 0, reservedExcluded: 0, priceWarning: null };
 
   const bottles = await Bottle.find({ cellar: { $in: cellarIds }, status: { $nin: CONSUMED_STATUSES } })
     .populate(WINE_POPULATE_LIST).lean();
@@ -89,7 +96,7 @@ async function readyCandidates(userId, cellarIds, { wineType, maxPrice, currency
     return String(a.b.vintage).localeCompare(String(x.b.vintage));
   });
 
-  return { ranked, profileMap, considered: pool.length, notReady, reservedExcluded, priceWarning };
+  return { ranked, profileMap, totalActive: bottles.length, considered: pool.length, notReady, reservedExcluded, priceWarning };
 }
 
 /** Serialize the top `limit` ranked entries, enriching with taste + position. */

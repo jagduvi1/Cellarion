@@ -201,11 +201,15 @@ const REGISTRY = [
         BottleImage.deleteMany({ uploadedBy: ctx.userId, assignedToWine: { $ne: true } }),
         BottleImage.updateMany({ uploadedBy: ctx.userId, assignedToWine: true }, { $set: { uploadedBy: ctx.deletedUserId } }),
         BottleImage.updateMany({ reviewedBy: ctx.userId }, { $unset: { reviewedBy: '' } }),
+        // scanFieldConflicts goes with the pointers (release-audit L-4): the
+        // "front said X, back said Y" record is a statement ABOUT those photos,
+        // and evidence that outlives the images it refers to cannot be checked
+        // — same rule the retention sweep already applies.
         ownIds.length
-          ? WineDefinition.updateMany({ scanImage: { $in: ownIds } }, { $set: { scanImage: null } })
+          ? WineDefinition.updateMany({ scanImage: { $in: ownIds } }, { $set: { scanImage: null, scanFieldConflicts: [] } })
           : Promise.resolve(),
         ownIds.length
-          ? WineDefinition.updateMany({ scanImageBack: { $in: ownIds } }, { $set: { scanImageBack: null } })
+          ? WineDefinition.updateMany({ scanImageBack: { $in: ownIds } }, { $set: { scanImageBack: null, scanFieldConflicts: [] } })
           : Promise.resolve(),
       ]);
     },

@@ -342,3 +342,45 @@ describe('POST /api/wines/scan-label — a half-read label keeps its photo', () 
     expect(mockRefund).toHaveBeenCalled();
   });
 });
+
+// ── The UI round-trip (release-audit HIGH-1) ────────────────────────────────
+// The client forwards /scan-label's `extracted` object VERBATIM — including
+// `partial: true`, the very flag that makes the rescue worth offering. The
+// first validator looped over every key and 400'd on the boolean, so the
+// endpoint rejected the feature's primary case (and a model returning a
+// numeric vintage tripped it too). These pin the allowlist behaviour.
+describe('POST /api/wines/scan-label-back — the UI round-trip (HIGH-1)', () => {
+  test('accepts the verbatim front-scan object: partial flag, numeric vintage, junk keys', async () => {
+    scanLabelBack.mockResolvedValue({ name: 'La Orphica' });
+    persistLabelScan.mockResolvedValue({ _id: BACK_IMG });
+
+    const res = await post({
+      image: IMAGE,
+      frontExtracted: {
+        name: '', producer: 'Bodegas Trenza', vintage: 2019,
+        partial: true, confidence: 0.4, junk: { deep: true }, grapes: [],
+      },
+    }, auth());
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    // Only allowlisted STRING fields reach the prompt/service — the numeric
+    // vintage and the flags are dropped, never fatal.
+    expect(scanLabelBack).toHaveBeenCalledWith(expect.objectContaining({
+      frontExtracted: { name: '', producer: 'Bodegas Trenza', grapes: [] },
+    }));
+    // …and junk keys cannot ride mergeBackScan's spread back out (INFO-1).
+    expect(body.merged.junk).toBeUndefined();
+    expect(body.merged.confidence).toBeUndefined();
+    expect(body.merged.name).toBe('La Orphica');
+  });
+
+  test('allowlisted fields are still length-capped', async () => {
+    const res = await post({
+      image: IMAGE,
+      frontExtracted: { producer: 'x'.repeat(201), partial: true },
+    }, auth());
+    expect(res.status).toBe(400);
+    expect(scanLabelBack).not.toHaveBeenCalled();
+  });
+});

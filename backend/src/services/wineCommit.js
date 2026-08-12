@@ -101,6 +101,13 @@ function validateNewWineFields(payload, { allowPending = false } = {}) {
 /** Cap on stored front/back disagreements — see validateScanConflicts. */
 const MAX_SCAN_CONFLICTS = 8;
 
+// The only field names mergeBackScan can legitimately put in a conflict —
+// its MERGE_SCALARS plus 'grapes' (services/labelScan.js; mirrored rather
+// than imported so this module keeps its lazy-require test seams). A free-text
+// key here would be 4.8KB of attacker-chosen text rendered in the curator's
+// modal and model context (release-audit LOW-2).
+const CONFLICT_FIELDS = ['name', 'producer', 'vintage', 'country', 'region', 'appellation', 'type', 'grapes'];
+
 /**
  * Validate the front/back label disagreements the client threads back from the
  * back-label rescue scan (POST /api/wines/scan-label-back returned them).
@@ -125,7 +132,7 @@ function validateScanConflicts(raw) {
     for (const v of [field, front, back]) {
       if (typeof v !== 'string' || v.length > MAX_WINE_FIELD) return null;
     }
-    if (!field.trim()) return null;
+    if (!CONFLICT_FIELDS.includes(field)) return null;
     clean.push({ field, front, back });
   }
   return clean;
