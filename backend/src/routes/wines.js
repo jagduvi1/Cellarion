@@ -632,9 +632,11 @@ router.get('/:idOrSlug/public', async (req, res) => {
     // there is nobody here who could be the creator — a half-identified wine
     // must simply not have a public page (nor an OG card, nor a sitemap entry).
     const hidden = { nonWine: { $ne: true }, pendingIdentity: { $ne: true } };
+    // slugFilter resolves SUPERSEDED slugs too, so a link that predates a name
+    // correction still opens the wine (models/WineDefinition.previousSlugs).
     const filter = isValidId(idOrSlug)
       ? { _id: idOrSlug, ...hidden }
-      : { slug: String(idOrSlug).toLowerCase(), ...hidden };
+      : { ...WineDefinition.slugFilter(idOrSlug), ...hidden };
 
     const wine = await WineDefinition.findOne(filter)
       .populate(['country', 'region', 'grapes'])
@@ -661,7 +663,7 @@ router.get('/:idOrSlug/community-prices', async (req, res) => {
     const currency = String(req.query.currency || 'USD').toUpperCase().slice(0, 10);
     const filter = isValidId(idOrSlug)
       ? { _id: idOrSlug }
-      : { slug: String(idOrSlug).toLowerCase() };
+      : WineDefinition.slugFilter(idOrSlug);
 
     const wine = await WineDefinition.findOne(filter).select('_id').lean();
     if (!wine) return res.status(404).json({ error: 'Wine not found' });
@@ -721,7 +723,7 @@ router.get('/:idOrSlug/discussions', optionalAuth, async (req, res) => {
     const { idOrSlug } = req.params;
     const filter = isValidId(idOrSlug)
       ? { _id: idOrSlug }
-      : { slug: String(idOrSlug).toLowerCase() };
+      : WineDefinition.slugFilter(idOrSlug);
 
     const wine = await WineDefinition.findOne(filter).select('_id');
     if (!wine) return res.status(404).json({ error: 'Wine not found' });

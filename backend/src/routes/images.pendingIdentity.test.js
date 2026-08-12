@@ -15,7 +15,7 @@ process.env.JWT_SECRET = 'test-secret';
 jest.mock('../models/BottleImage', () => ({ find: jest.fn(), findById: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/Bottle', () => ({ findById: jest.fn() }));
 jest.mock('../models/Cellar', () => ({ findById: jest.fn() }));
-jest.mock('../models/WineDefinition', () => ({ exists: jest.fn() }));
+jest.mock('../models/WineDefinition', () => ({ exists: jest.fn(), findById: jest.fn() }));
 jest.mock('../services/imageProcessor', () => ({ processImage: jest.fn() }));
 jest.mock('../services/imageSanitizer', () => ({ sanitizeImageBuffer: jest.fn() }));
 jest.mock('../services/imageOps', () => ({ ingestBottleImage: jest.fn() }));
@@ -53,8 +53,15 @@ afterAll((done) => { server.closeAllConnections(); server.close(done); });
 beforeEach(() => {
   jest.clearAllMocks();
   WineDefinition.exists.mockResolvedValue(null);
+  scanWine(null);
   Bottle.findById.mockReturnValue({ select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }) });
 });
+
+/** The wine a LABEL-SCAN row hangs off, as the gate loads it. */
+const scanWine = (doc) => WineDefinition.findById.mockReturnValue({
+  select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(doc) }),
+});
+const daysFromNow = (n) => new Date(Date.now() + n * 24 * 60 * 60 * 1000);
 
 const get = (token) => fetch(`${baseUrl}/api/images/${IMG}`, { headers: { Authorization: `Bearer ${token}` } });
 
@@ -63,10 +70,43 @@ const image = (over = {}) => ({
   bottle: null, wineDefinition: null, kind: 'bottle', ...over,
 });
 
-test('a somm may read a LABEL-SCAN row (it exists for no other purpose and is never public)', async () => {
-  BottleImage.findById.mockResolvedValue(image({ kind: 'label-scan' }));
+/**
+ * The label-scan branch is PURPOSE-BOUND, not blanket. It used to authorize any
+ * somm/admin for any label scan; a scan is curation evidence while its wine is
+ * pending and for the grace window after it promotes (services/labelScanAccess)
+ * — and outside that it is an ordinary private photo of a wine nobody has been
+ * asked to identify.
+ */
+test('a somm may read the LABEL SCAN of a wine that is still pending', async () => {
+  BottleImage.findById.mockResolvedValue(image({ kind: 'label-scan', wineDefinition: W1 }));
+  scanWine({ _id: W1, pendingIdentity: true });
 
   expect((await get(tokenFor(CURATOR, ['somm']))).status).toBe(200);
+});
+
+test('…and on day 3 after promotion, so a wrong completion can be corrected against the label', async () => {
+  BottleImage.findById.mockResolvedValue(
+    image({ kind: 'label-scan', wineDefinition: W1, retainUntil: daysFromNow(4) })
+  );
+  scanWine({ _id: W1, pendingIdentity: false });
+
+  expect((await get(tokenFor(CURATOR, ['somm']))).status).toBe(200);
+});
+
+test('once the window closes the scan is refused', async () => {
+  BottleImage.findById.mockResolvedValue(
+    image({ kind: 'label-scan', wineDefinition: W1, retainUntil: daysFromNow(-1) })
+  );
+  scanWine({ _id: W1, pendingIdentity: false });
+
+  expect((await get(tokenFor(CURATOR, ['somm']))).status).toBe(404);
+});
+
+test('a scan attached to NO wine is not curation evidence — nobody\'s queue shows it', async () => {
+  BottleImage.findById.mockResolvedValue(image({ kind: 'label-scan' }));
+
+  expect((await get(tokenFor(CURATOR, ['somm']))).status).toBe(404);
+  expect(WineDefinition.findById).not.toHaveBeenCalled();
 });
 
 test('a somm may read a bottle photo whose wine is STILL pending — named on the image', async () => {

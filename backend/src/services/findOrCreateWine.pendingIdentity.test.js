@@ -493,3 +493,78 @@ describe('pending rows are isolated from OTHER creators at every match stage', (
     expect(res).toEqual({ wine: normal, created: false });
   });
 });
+
+// ── The SHAPE gate, after the audit shrank it ────────────────────────────────
+//
+// It used to refuse producer == name, which is the SINGLE-WINE ESTATE — 67 of
+// 91 sampled real pairs, Château Margaux and Petrus among them. Nothing in the
+// string separates those from the "Increíble" echo, so the refusal is gone and
+// the suspicion is a cross-field FLAG a curator clears (see
+// utils/implausibleIdentity.test.js for the full argument). What the gate still
+// refuses is a producer that is only house words.
+
+describe('the echo mints like any other single-wine estate now', () => {
+  const ECHO = { ...BASE, name: 'Increíble', producer: 'Increíble' };
+
+  test('INVERTED — allowPending: it mints PUBLIC, not pending', async () => {
+    // Was: pendingIdentity true, producer discarded. Filing it pending also
+    // filed Petrus pending.
+    const res = await findOrCreateWine(ECHO, USER, { allowPending: true });
+
+    expect(res.created).toBe(true);
+    expect(res.pendingIdentity).toBeUndefined();
+    const doc = minted();
+    expect(doc.pendingIdentity).toBe(false);
+    // …and the producer the user typed is KEPT, which is the whole point.
+    expect(doc.producer).toBe('Increíble');
+    expect(doc.normalizedKey).not.toContain(pendingProducerKey(USER));
+  });
+
+  test('a real single-wine estate mints identically — same shape, same outcome', async () => {
+    const res = await findOrCreateWine(
+      { ...BASE, name: 'Château Margaux', producer: 'Château Margaux' }, USER, { allowPending: true }
+    );
+    expect(res.pendingIdentity).toBeUndefined();
+    expect(minted().producer).toBe('Château Margaux');
+  });
+
+  test('INVERTED — NO allowPending (curation surfaces): it no longer throws', async () => {
+    // Was a byte-pinned 400. That 400 was the message a curator got for typing
+    // "Petrus" as the producer of "Petrus".
+    await expect(findOrCreateWine(ECHO, USER)).resolves.toMatchObject({ created: true });
+  });
+
+  test('what the gate STILL refuses: a producer that is only house words', async () => {
+    await expect(findOrCreateWine({ ...BASE, producer: 'Domaine' }, USER))
+      .rejects.toMatchObject({
+        status: 400,
+        message: '"Domaine" is not a usable producer name — it is only house words (Domaine, Casa, Estate) with no winery attached to them',
+      });
+    expect(WineDefinition).not.toHaveBeenCalled();
+  });
+
+  test('…and on a commit path that same producer goes pending rather than failing the add', async () => {
+    const res = await findOrCreateWine({ ...BASE, producer: 'Domaine' }, USER, { allowPending: true });
+    expect(res.pendingIdentity).toBe(true);
+    expect(minted().producer).toBe('');
+  });
+
+  test('a producer that merely PREFIXES the name is untouched — that is a formatting defect', async () => {
+    // canonicalizeWineName strips the embed at step 0, leaving a real identity;
+    // the gate must not turn this into a pending row.
+    const res = await findOrCreateWine(
+      { ...BASE, name: 'Cloudy Bay Sauvignon Blanc', producer: 'Cloudy Bay' },
+      USER, { allowPending: true }
+    );
+
+    expect(res.created).toBe(true);
+    expect(res.pendingIdentity).toBeUndefined();
+    expect(minted()).toMatchObject({ producer: 'Cloudy Bay', name: 'Sauvignon Blanc', pendingIdentity: false });
+  });
+
+  test('an ordinary identity is unaffected', async () => {
+    const res = await findOrCreateWine(BASE, USER, { allowPending: true });
+    expect(res.created).toBe(true);
+    expect(minted().pendingIdentity).toBe(false);
+  });
+});

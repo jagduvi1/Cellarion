@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const mongoose = require('mongoose');
-const { generateWineSlug, isIdentitySentinel } = require('../utils/normalize');
+const { generateWineSlug, isIdentitySentinel, isImplausibleIdentity } = require('../utils/normalize');
 const { computeCanonicalKey } = require('../utils/wineIdentity');
 
 const wineDefinitionSchema = new mongoose.Schema({
@@ -161,14 +161,38 @@ const wineDefinitionSchema = new mongoose.Schema({
   },
   // Vintage-neutral, human-readable slug used in public URLs (/wines/:slug).
   // Sparse so older docs without a slug don't violate the unique index until
-  // the migration runs. Once set, never auto-regenerated on rename — URLs are
-  // stable forever; renames must be a deliberate admin action.
+  // the migration runs.
+  //
+  // REGENERATED when the name changes — and the old slug is kept in
+  // previousSlugs below, which every :idOrSlug lookup also resolves. The old
+  // rule was "never regenerate, URLs are stable forever", and it produced the
+  // Magnien row: corrected from a misread "Coeur de Roi" to "Nuits-Saint-
+  // Georges Premier Cru Cœur de Roches", still served at /wines/coeur-de-roi.
+  // A URL that states a name the wine does not have is not stability, it is a
+  // second wrong record — one search engines index and users copy. Stability is
+  // now what previousSlugs provides: no existing URL ever breaks.
   slug: {
     type: String,
     trim: true,
     lowercase: true,
     unique: true,
     sparse: true,
+    index: true
+  },
+  // Every slug this wine has ever had, oldest first. A :idOrSlug lookup
+  // resolves these too, so an old link, bookmark or backlink keeps working
+  // after a rename — and findFreeSlug refuses a candidate that appears here on
+  // ANY wine, so one old URL can never come to mean two different wines.
+  //
+  // Multikey index: the lookup queries { $or: [{slug}, {previousSlugs: s}] }.
+  // Bounded (PREVIOUS_SLUG_LIMIT) — a row renamed dozens of times is churn —
+  // but the ORIGINAL slug is never the one dropped, because a slug that falls
+  // out of this array becomes claimable by another wine (see
+  // boundPreviousSlugs for the full argument and the residual). undefined on
+  // rows that have never been renamed, so nothing needs backfilling.
+  previousSlugs: {
+    type: [String],
+    default: undefined,
     index: true
   },
   createdBy: {
@@ -226,6 +250,33 @@ const wineDefinitionSchema = new mongoose.Schema({
   // generateWineKey path, so a promoted row lands in the ordinary namespace and
   // the unique index re-checks it there.
   pendingIdentity: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
+  // "This label genuinely prints NO producer." Retailer own-label bottles,
+  // négociant clean-skins and bin-end relabels exist, and two are in the queue
+  // now. A curator must be able to stop them from occupying a queue that is a
+  // list of WORK — but the one thing they must not do is promote them:
+  // producer is 45% of the composite duplicate score, so a producerless row in
+  // the shared registry would attract every other producerless wine to itself.
+  //
+  // So this is a QUEUE disposition, NOT a promotion. pendingIdentity stays
+  // TRUE and every exclusion it carries stays in force — Meilisearch, public
+  // reads, MCP registry tools, embeddings, enrichment, the maturity queue,
+  // sitemap/OG, the admin scan pools. The row's owner still sees their bottle
+  // exactly as before. All that changes is that the curation queue stops
+  // listing it by default (services/pendingWineOps: a filter shows them again).
+  //
+  // REVERSIBLE by construction — it is one boolean, cleared by the same PATCH
+  // that set it, and cleared automatically if the row ever does promote (the
+  // pre-validate hook below), because a wine WITH a producer cannot be a wine
+  // whose producer is unavailable.
+  //
+  // LAST RESORT, and the surfaces say so: ask_bottle_owner works on pending
+  // wines (#941), and the owner is holding the bottle. This is for when they
+  // have answered "there is no producer on it", or cannot be reached.
+  identityUnavailable: {
     type: Boolean,
     default: false,
     index: true
@@ -290,11 +341,14 @@ const wineDefinitionSchema = new mongoose.Schema({
   // clearing admin is recorded in AuditLog, not here (mirrors verifiedChecks).
   //
   // INVARIANT for this field: only a rule whose verdict reads nothing but
-  // this wine's name / producer / appellation / region / country / grapes
-  // plus the Appellation/Region/Country/Grape reference collections may
+  // this wine's name / producer / appellation / region / country / grapes /
+  // type plus the Appellation/Region/Country/Grape reference collections may
   // consult it. The pre-validate hook below invalidates it when ANY of those
-  // six fields changes — broader than verifiedChecks because the rules read
-  // all six. Residuals, stated honestly: (a) renaming a TAXONOMY doc writes
+  // seven fields changes — broader than verifiedChecks because the rules read
+  // all seven. (`type` joined with colour-contradiction.v2; the DB-backed
+  // cuvee-near-miss.v2 reads `name` + `producer`, both already watched, plus
+  // OTHER wines — a sibling renamed elsewhere writes nothing here, the same
+  // taxonomy-rename residual as (a) below.) Residuals, stated honestly: (a) renaming a TAXONOMY doc writes
   // nothing here, so a clearance can outlive the taxonomy state it was
   // judged against until the wine itself is edited (the scan's audit view
   // exists to re-examine); (b) the taxonomy-merge service re-points
@@ -357,9 +411,21 @@ wineDefinitionSchema.pre('save', function(next) {
 // only fill them on upsert-insert).
 wineDefinitionSchema.pre('validate', function(next) {
   // AUTO-PROMOTE. A pending row exists only because its identity was
-  // incomplete; the moment producer AND name are both real (present and not a
-  // sentinel like "Unknown"/"N/A") the reason to hide it is gone, so it leaves
-  // the queue by itself. Deliberately a hook, not a line in the somm route:
+  // incomplete; the moment producer AND name are both real (present, not a
+  // sentinel like "Unknown"/"N/A", and PLAUSIBLY SHAPED) the reason to hide it
+  // is gone, so it leaves the queue by itself.
+  //
+  // "Not a sentinel" alone was not enough (live bug): a row with producer
+  // "Increíble" AND name "Increíble" — the label's one readable word echoed
+  // into both boxes — satisfied it, left the queue, and reached the maturity
+  // queue as public registry data, at which point its label photo was no longer
+  // reachable. isImplausibleIdentity adds the shape test; it is deliberately
+  // synchronous and DB-free because a pre-validate hook must not do I/O, so the
+  // taxonomy-dependent half of the same question (producer-is-a-place / a
+  // grape) is enforced where a DB read is allowed — the mint gate in
+  // services/findOrCreateWine and services/pendingWineOps.applyPendingFix.
+  //
+  // Deliberately a hook, not a line in the somm route:
   // every write path that completes the identity — the REST fix, the MCP fix, a
   // future admin PUT, a backfill script using .save() — promotes identically
   // and none of them can forget. Runs BEFORE the `required` validator on
@@ -369,8 +435,17 @@ wineDefinitionSchema.pre('validate', function(next) {
   // that completes the identity calls searchService.indexWine(), which owns
   // add-vs-remove. A promoting caller must also re-embed (the row was skipped
   // by the embedding pipeline while pending) and re-seed its maturity rows.
-  if (this.pendingIdentity === true && !isIdentitySentinel(this.producer) && !isIdentitySentinel(this.name)) {
+  if (this.pendingIdentity === true &&
+      !isIdentitySentinel(this.producer) && !isIdentitySentinel(this.name) &&
+      !isImplausibleIdentity(this.producer, this.name)) {
     this.pendingIdentity = false;
+    // A wine WITH a producer cannot be one whose producer is unavailable. The
+    // disposition is a statement about a row in the queue; the row has left.
+    this.identityUnavailable = false;
+    // Remember the TRANSITION for the post('save') hook below. $locals (not a
+    // schema path) because this is per-save bookkeeping, never stored — and
+    // isModified() is not readable in post('save'), where the stamp must run.
+    this.$locals.promotedFromPending = true;
   }
   if (!this.canonicalKey || this.isModified('name') || this.isModified('producer') || this.isModified('appellation')) {
     this.canonicalKey = computeCanonicalKey(this.name, this.producer, this.appellation);
@@ -387,10 +462,15 @@ wineDefinitionSchema.pre('validate', function(next) {
   // comment), so any of the six changing may change a verdict. Save-based
   // writes only, same as above; the taxonomy-merge updateMany residual is
   // documented on the field.
+  // `type` joined the set with colour-contradiction.v2 (a name whose colour
+  // word contradicts the stored type) — the one rule in the family whose
+  // verdict is about the wine's own colour rather than a reference list, and a
+  // clearance of it must not survive the type being changed.
   if (!this.isNew && (
     this.isModified('name') || this.isModified('producer') ||
     this.isModified('appellation') || this.isModified('region') ||
-    this.isModified('country') || this.isModified('grapes')
+    this.isModified('country') || this.isModified('grapes') ||
+    this.isModified('type')
   )) {
     this.crossChecksCleared = undefined;
     this.crossChecksClearedAt = null;
@@ -404,7 +484,8 @@ wineDefinitionSchema.pre('validate', function(next) {
  * A static (not an inline condition) so the rule can be tested without a live
  * connection — the audit's M-5 was a rule nobody could see fire.
  *
- * - Never overwrite an existing slug. URL stability.
+ * - Never overwrite an existing slug HERE. A rename is a different question,
+ *   answered by shouldRegenerateSlug below (which preserves the old URL).
  * - A pendingIdentity row gets NO slug — SLUG SQUATTING (security audit M-5).
  *   The slug is derived from name+producer, and a pending row's producer is ''
  *   — so a row minted from a half-read "Cloudy Bay Sauvignon Blanc" label took
@@ -424,9 +505,57 @@ wineDefinitionSchema.statics.shouldAssignSlug = function (doc) {
   return Boolean(doc.isNew || doc.isModified('pendingIdentity'));
 };
 
+/** How many superseded slugs one wine keeps alive. */
+const PREVIOUS_SLUG_LIMIT = 10;
+
+/**
+ * Bound previousSlugs — keeping the ORIGINAL slug whatever else is dropped.
+ *
+ * The hole a plain `.slice(-LIMIT)` leaves (audit M-5): a dropped slug becomes
+ * invisible to findFreeSlug, so the 11th rename FREES the wine's first URL for
+ * another wine to mint — and that URL is the one with the most external life
+ * (search index, bookmarks, backlinks, the /wines/<slug> a user copied a year
+ * ago). Losing the newest superseded slug costs an internal redirect; losing
+ * the oldest hands someone else's wine an address the internet still points at
+ * this one.
+ *
+ * So index 0 is pinned and the bound is spent on the most recent LIMIT-1.
+ *
+ * RESIDUAL, stated rather than hidden: a wine renamed more than 10 times still
+ * drops slugs from the MIDDLE of its history, and those are reclaimable exactly
+ * as before. Closing that needs storage this schema does not have (a global
+ * retired-slug collection); 10+ renames of one registry row is a curation
+ * problem before it is a routing one.
+ */
+const boundPreviousSlugs = (list) => {
+  if (list.length <= PREVIOUS_SLUG_LIMIT) return list;
+  return [list[0], ...list.slice(-(PREVIOUS_SLUG_LIMIT - 1))];
+};
+
+/**
+ * The filter for "the wine at this URL segment" — the CURRENT slug or any
+ * superseded one. Every :idOrSlug lookup uses it (routes/wines.js public
+ * detail / community-prices / discussions, routes/og.js) so a rename cannot
+ * 404 a link from one surface while another still resolves it.
+ *
+ * Returns a bare `$or`, which callers spread alongside their own scalar
+ * conditions (`{ ...WineDefinition.slugFilter(s), nonWine: { $ne: true } }`) —
+ * implicit AND. A caller that already has its own `$or` must merge with `$and`;
+ * none currently does.
+ */
+wineDefinitionSchema.statics.slugFilter = function (slug) {
+  const s = String(slug).toLowerCase();
+  return { $or: [{ slug: s }, { previousSlugs: s }] };
+};
+
 /**
  * First free slug for `base`, disambiguating with -2, -3, … as the
  * findOrCreateWine flow and the backfill migration do.
+ *
+ * "Free" includes SUPERSEDED slugs (previousSlugs) on purpose: handing a new
+ * wine a URL that an older wine still answers to would make one link resolve to
+ * two different wines, which is worse than the collision the -2 suffix exists
+ * to avoid.
  *
  * The old loop `for (let i = 2; i < 100; i++)` fell through SILENTLY when all
  * 98 suffixes were taken: it assigned its last candidate without ever checking
@@ -435,7 +564,8 @@ wineDefinitionSchema.statics.shouldAssignSlug = function (doc) {
  * still checked, so every return from here carries the same guarantee.
  */
 wineDefinitionSchema.statics.findFreeSlug = async function (base) {
-  const taken = async (slug) => Boolean(await this.findOne({ slug }).select('_id').lean());
+  const taken = async (slug) =>
+    Boolean(await this.findOne(this.slugFilter(slug)).select('_id').lean());
   let candidate = base;
   for (let i = 2; i < 100; i++) {
     if (!await taken(candidate)) return candidate;
@@ -445,13 +575,102 @@ wineDefinitionSchema.statics.findFreeSlug = async function (base) {
   return `${base}-${crypto.randomBytes(4).toString('hex')}`;
 };
 
-// Auto-generate the slug when the rules above say this save earns one.
+/**
+ * Does a RENAME make this document's slug wrong?
+ *
+ * The Magnien row: corrected from a misread "Coeur de Roi" to "Nuits-Saint-
+ * Georges Premier Cru Cœur de Roches" and still served at /wines/coeur-de-roi.
+ * A slug that states a name the wine does not have is a second wrong record.
+ *
+ * Narrow on purpose — this must fire on a real rename and nothing else:
+ *   - only when a slug already exists (assignment is shouldAssignSlug's job)
+ *     and the doc is not new;
+ *   - only when `name` was modified. A producer respelling folds away in
+ *     generateWineSlug, and re-saving an untouched row must never churn;
+ *   - only when the slug would actually CHANGE. The current slug may be a
+ *     disambiguated form of the same base ("cloudy-bay-2"), which is still the
+ *     right slug for this name and must not be regenerated into "-3" on every
+ *     unrelated save;
+ *   - never for a pending row: it has no public URL to keep correct (M-5).
+ */
+wineDefinitionSchema.statics.shouldRegenerateSlug = function (doc) {
+  if (!doc.slug || doc.isNew) return false;
+  if (doc.pendingIdentity === true) return false;
+  if (!doc.isModified('name')) return false;
+  const base = generateWineSlug(doc.name, doc.producer);
+  if (!base || doc.slug === base) return false;
+  if (doc.slug.startsWith(`${base}-`)) {
+    // …but only a DISAMBIGUATOR counts as "the same base" — "-2" or the random
+    // hex tail. "coeur-de-roi-premier-cru" is a different slug, not a suffix.
+    const tail = doc.slug.slice(base.length + 1);
+    if (/^(\d{1,3}|[0-9a-f]{8})$/.test(tail)) return false;
+  }
+  return true;
+};
+
+// Assign the slug when the rules above say this save earns one, or REGENERATE
+// it on a rename — keeping the outgoing slug alive in previousSlugs, which
+// every :idOrSlug lookup resolves. Regeneration is checked first: a doc that
+// has a slug can only ever be in that branch.
 wineDefinitionSchema.pre('save', async function(next) {
+  if (this.constructor.shouldRegenerateSlug(this)) {
+    const outgoing = this.slug;
+    const base = generateWineSlug(this.name, this.producer);
+    this.slug = await this.constructor.findFreeSlug(base);
+    const kept = (this.previousSlugs || []).filter((s) => s !== outgoing && s !== this.slug);
+    // Oldest first, newest-kept last, bounded — and the ORIGINAL slug survives
+    // the bound whatever else is dropped (see boundPreviousSlugs).
+    this.previousSlugs = boundPreviousSlugs([...kept, outgoing]);
+    return next();
+  }
   if (!this.constructor.shouldAssignSlug(this)) return next();
   const base = generateWineSlug(this.name, this.producer);
   if (!base) return next();
   this.slug = await this.constructor.findFreeSlug(base);
   next();
+});
+
+/**
+ * The one thing a pending→promoted transition must do on EVERY write path:
+ * start the label scan's retention clock.
+ *
+ * A hook, not a line in each route, because "every promoting caller runs the
+ * follow-through" was false (audit M-4). The admin PUT (routes/admin/wines.js)
+ * and POST /:id/strip-producer both set a producer and save(); the pre-validate
+ * hook above cleared pendingIdentity and nothing stamped BottleImage
+ * .retainUntil. The scan then became UNREADABLE (curation access is gated on
+ * pending-or-within-grace) and UNSWEEPABLE (the expiry job excludes
+ * retainUntil: null) — the file kept forever with no purpose and no way to read
+ * it, the exact state the 7-day window was built to end.
+ *
+ * Only the STAMP lives here. The rest of the follow-through (search index,
+ * embeddings, enrichment, maturity seeding, IndexNow) stays in
+ * services/pendingWineOps.runPromotionFollowThrough: those are curation-queue
+ * side effects with their own budget and failure semantics, and a model hook is
+ * the wrong place to fan them out. A promotion through the admin PUT therefore
+ * still relies on the admin route's own indexWine call — unchanged, and out of
+ * scope here; the retention stamp is the one that had no owner at all.
+ *
+ * Non-fatal by construction: stampPromotedScanRetention swallows its own
+ * errors, and the flag is cleared first so a re-save cannot re-run it.
+ */
+/**
+ * Did the pre-validate hook PROMOTE this document on this pass?
+ *
+ * A static rather than an inline condition, for the reason shouldAssignSlug is
+ * one: a rule nobody can see fire is a rule nobody can test. This one is only
+ * readable between validate() and the end of save(), which is exactly the
+ * window the post-save hook runs in.
+ */
+wineDefinitionSchema.statics.promotedOnThisSave = function (doc) {
+  return Boolean(doc && doc.$locals && doc.$locals.promotedFromPending === true);
+};
+
+wineDefinitionSchema.post('save', async function (doc) {
+  if (!doc.constructor.promotedOnThisSave(doc)) return;
+  doc.$locals.promotedFromPending = false;
+  const { stampPromotedScanRetention } = require('../services/labelScanAccess');
+  await stampPromotedScanRetention(doc);
 });
 
 module.exports = mongoose.model('WineDefinition', wineDefinitionSchema);

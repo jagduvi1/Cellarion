@@ -68,6 +68,28 @@ const bottleImageSchema = new mongoose.Schema({
     default: 'bottle',
     index: true
   },
+  // PURPOSE-BOUND retention deadline for a kind:'label-scan' row whose wine has
+  // LEFT the pending-identity queue. Stamped on the TRANSITION itself — the
+  // WineDefinition post('save') hook, via
+  // services/labelScanAccess.stampPromotedScanRetention, so no promoting write
+  // path can forget (audit M-4) — and enforced by the daily sweep
+  // (services/scanImageRetentionJob): when it passes, the file and this
+  // document are deleted and WineDefinition.scanImage is nulled.
+  //
+  // Why a scan outlives its queue at all: a curator's completion can be WRONG,
+  // and until now the label became unreadable the instant the row promoted —
+  // so the only evidence that could correct it was gone (see
+  // services/labelScanAccess for the full argument). The window is 7 days.
+  //
+  // null means NO CLOCK HAS STARTED, not "expired": every scan on a wine that
+  // is still pending, and every row predating the field. Those are governed by
+  // their wine's pending state and by the 30-day unattached sweep, never by
+  // this field. GDPR: this REDUCES retention (a promoted wine's scan used to be
+  // kept indefinitely) — it never extends it.
+  retainUntil: {
+    type: Date,
+    default: null
+  },
   assignedToWine: {
     type: Boolean,
     default: false
@@ -99,6 +121,19 @@ bottleImageSchema.index({ uploadedBy: 1, contentHash: 1 }, { sparse: true });
 // The 30-day unattached-scan sweep (services/scanImageRetentionJob.js) reads
 // exactly this shape: label scans that never reached a wine.
 bottleImageSchema.index({ kind: 1, wineDefinition: 1, createdAt: 1 });
+// The 7-day promoted-scan expiry sweep: label scans whose grace window has run
+// out.
+//
+// PARTIAL, not sparse (audit L-10). `retainUntil` has `default: null`, so every
+// document in the collection HAS the field and a sparse index indexes all of
+// them — the "small fraction" the comment claimed was the whole collection.
+// A partialFilterExpression on the value is what actually restricts it to the
+// promoted scans that carry a real deadline, which is also the only shape the
+// sweep queries ({ kind: 'label-scan', retainUntil: { $lte: now } }).
+bottleImageSchema.index(
+  { kind: 1, retainUntil: 1 },
+  { partialFilterExpression: { retainUntil: { $type: 'date' } } }
+);
 
 bottleImageSchema.pre('save', function(next) {
   this.updatedAt = Date.now();

@@ -1578,7 +1578,7 @@
       },
       "crossField": {
         "button": "Cross-field checks",
-        "buttonTitle": "Values sitting in the wrong field — a producer that is an appellation, region, country, grape, style term or placeholder; name/producer splits; an appellation that is a grape; a region that is a country",
+        "buttonTitle": "Values sitting in the wrong field — a producer that is an appellation, region, country, grape, style term or placeholder; name/producer splits; an appellation that is a grape; a region that is a country; a name whose colour contradicts the type; a cuvée name that almost matches another by the same producer",
         "title": "Cross-field checks",
         "intro": "Each value here matches a reference list for a DIFFERENT field — the string is usually right, its column is wrong. Open the wine to fix it, or mark it as fine so it stops reappearing.",
         "found_one": "{{count}} wine flagged",
@@ -1605,8 +1605,11 @@
           "producerPlaceholder": "Placeholder producer",
           "producerParenthetical": "Parenthetical in producer",
           "nameInProducer": "Name/producer overlap",
+          "producerEchoesName": "Producer echoes the name",
           "appellationIsGrape": "Appellation is a grape",
-          "regionIsCountry": "Region is a country"
+          "regionIsCountry": "Region is a country",
+          "colourContradiction": "Name colour contradicts the type",
+          "cuveeNearMiss": "Almost the same name as another wine by this producer"
         },
         "empty": "No wines are flagged by the selected checks.",
         "networkError": "Network error"
@@ -1615,7 +1618,7 @@
         "button": "Pending identity",
         "buttonTitle": "Wines added with an incomplete identity — an unreadable label, no producer, or a region typed where the producer belongs. Their bottles are already in their owners' cellars; the wine is hidden from everyone else until you complete it.",
         "title": "Pending identity",
-        "intro": "These wines were saved with the bottle so the add never failed — but they have no usable producer, so they are hidden from every user except the one who added them. Read the label photo and fill in what it says; a producer plus a name publishes the wine.",
+        "intro": "These wines were saved with the bottle so the add never failed — but they have no usable producer, so they are hidden from every user except the one who added them. Read the label photo and fill in what it says; a producer plus a name publishes the wine. A completed wine's label photo stays readable for 7 days, then it is deleted.",
         "imagesCol": "Label",
         "wineCol": "Wine",
         "placeCol": "Place",
@@ -1633,6 +1636,16 @@
         "grapesPlaceholder": "Grapes (comma-separated)",
         "countryPlaceholder": "Country",
         "regionPlaceholder": "Region",
+        "unavailableBtn": "No producer on label",
+        "unavailableUndoBtn": "Put back in the queue",
+        "unavailableTitle": "Last resort — ask the bottle's owner first. Records that this label genuinely prints no producer (a retailer own-label or a négociant clean-skin). The row leaves this queue; the wine stays hidden from the registry and is never published, because a producerless wine would break duplicate matching.",
+        "unavailableConfirm": "Only do this when the label genuinely prints no producer — ask the bottle's owner first. The wine will leave this queue but stay hidden from the registry. Their bottle keeps working, and you can put the row back later. Continue?",
+        "unavailableSaved": "Recorded: this label prints no producer. The row has left the queue and the wine stays hidden — you can put it back at any time.",
+        "unavailableUndone": "Back in the queue.",
+        "emptyFiltered": "Nothing waiting in this view. {{n}} wine(s) are recorded as having no producer on the label — tick the box above to see them, or clear the source filter.",
+        "unavailableBadge": "recorded: no producer on the label",
+        "showUnavailable": "Show \"no producer on label\" ({{n}})",
+        "showUnavailableTitle": "Include the rows already recorded as having no producer on the label. They have no work left, but the record is reversible from here.",
         "empty": "Nothing waiting — every wine has a usable identity."
       },
       "proposals": {

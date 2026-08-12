@@ -20,8 +20,11 @@
  *     overwritten, even when it disagrees with the name. "Undated" means the
  *     'NV' sentinel (Bottle.vintage's default), not null; see UNDATED below.
  *
- * The wine's slug is deliberately untouched (URL stability — same rule as
- * every rename path). Embedding: the name feeds the embed text, so touched
+ * The wine's slug is deliberately untouched: this writes with updateOne, which
+ * bypasses the model's rename hook (the hook regenerates the slug and keeps the
+ * old one in previousSlugs). A trailing vintage in a slug is cosmetic and the
+ * URL already works — re-slugging thousands of rows in a cleanup pass is not
+ * worth the churn. Embedding: the name feeds the embed text, so touched
  * wines re-embed on the next incremental job run; start one after --apply.
  *
  * Dry-run by default. On --apply: writes a JSON backup of affected rows first.

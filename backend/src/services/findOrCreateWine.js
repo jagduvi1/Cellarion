@@ -19,7 +19,7 @@ const Region = require('../models/Region');
 const Grape = require('../models/Grape');
 const Appellation = require('../models/Appellation');
 const searchService = require('./search');
-const { generateWineKey, pendingProducerKey, pendingWineKey, normalizeString, normalizeAppellation, normalizeAppellationKey, stripTrailingVintage, resolveGrapeName, resolveCountryName, isRecognizedCountry, isUnknownName, isIdentitySentinel, isJunkGrapeName, sanitizeTaxonomyName } = require('../utils/normalize');
+const { generateWineKey, pendingProducerKey, pendingWineKey, normalizeString, normalizeAppellation, normalizeAppellationKey, stripTrailingVintage, resolveGrapeName, resolveCountryName, isRecognizedCountry, isUnknownName, isIdentitySentinel, isImplausibleIdentity, isJunkGrapeName, sanitizeTaxonomyName } = require('../utils/normalize');
 const { scoreAllMatches } = require('./wineMatching');
 const { canonicalizeWineName } = require('../utils/producerPrefix');
 const { computeCanonicalKey, canonicalSiblingPrefix } = require('../utils/wineIdentity');
@@ -502,6 +502,32 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
       trimmedProducer = '';
       producerNorm = '';
     }
+  }
+
+  // Producer SHAPE gate — the same predicate the auto-promote hook uses
+  // (utils/normalize.isImplausibleIdentity), so mint, promote and curation
+  // share ONE definition, with the same two outcomes as the gates above:
+  // pending for commit paths, a 400 for the deliberate curation surfaces.
+  //
+  // DELIBERATELY ALMOST EMPTY. It used to also refuse producer == name and
+  // house-word-stripped containment, which condemned Château Margaux, Petrus,
+  // Krug, Domaine de la Romanée-Conti / "Romanée-Conti" and 64 other real
+  // wines — see the predicate's own comment. What survives here is the
+  // all-house-words producer ("Domaine", "The Wine Estate"); the sub-2-char
+  // case is already refused by the length gate above with its own message.
+  // The echo is now a cross-field FLAG (producer-echoes-name.v1), reviewed by a
+  // human with the label in front of them, never a refusal.
+  if (!producerMissing && isImplausibleIdentity(trimmedProducer, trimmedName)) {
+    if (!allowPending) {
+      const err = new Error(
+        `"${trimmedProducer}" is not a usable producer name — it is only house words (Domaine, Casa, Estate) with no winery attached to them`
+      );
+      err.status = 400;
+      throw err;
+    }
+    producerMissing = true;
+    trimmedProducer = '';
+    producerNorm = '';
   }
 
   // Adopt the registry's majority spelling for this producer (accent, case

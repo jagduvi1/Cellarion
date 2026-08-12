@@ -3,11 +3,20 @@
  *
  *   GET  /            — newest first, paged. ?createdVia=ui|import|mcp|ai
  *                       narrows a burst (a 500-row CSV is one 'import' sweep).
- *                       Envelope: { wines, total, page, pages, pendingTotal }.
+ *                       ?includeUnavailable=1 also lists the rows dispositioned
+ *                       "no producer on the label" (excluded by default: this
+ *                       queue is a list of WORK). Envelope: { wines, total,
+ *                       page, pages, pendingTotal, unavailableTotal }.
  *                       ANONYMISED: no creator id, username or email — a
  *                       curator fixes a record, not a person (the #930 rule).
  *   PATCH /:id        — { producer?, name?, appellation?, regionName?,
- *                       countryName?, grapeNames?[], type? }. Only rows that
+ *                       countryName?, grapeNames?[], type?,
+ *                       identityUnavailable?, crossFieldOverride? }.
+ *                       crossFieldOverride is not a field: it forces through a
+ *                       producer the cross-field rules refuse (a user-minted
+ *                       Region/Appellation carrying a real producer's name),
+ *                       and is recorded in the audit entry with the rules it
+ *                       overrode. Only rows that
  *                       are STILL pending may be edited; an already-completed
  *                       wine is a 409 (the id is real — say so) and a missing
  *                       one a 404. Completing producer + name promotes the row
@@ -43,10 +52,11 @@ router.use(requireAuth, requireSommOrAdmin);
 router.get('/', async (req, res) => {
   try {
     const { limit, offset, page } = parsePagination(req.query, { limit: 20, maxLimit: 100 });
-    const { rows, total, pendingTotal } = await queryPendingWines({
+    const { rows, total, pendingTotal, unavailableTotal } = await queryPendingWines({
       limit,
       offset,
       createdVia: req.query.createdVia,
+      includeUnavailable: req.query.includeUnavailable === '1' || req.query.includeUnavailable === 'true',
     });
     res.json({
       wines: rows,
@@ -54,6 +64,7 @@ router.get('/', async (req, res) => {
       page,
       pages: Math.ceil(total / limit),
       pendingTotal,
+      unavailableTotal,
       // So the UI can build the filter without a second copy of the list.
       createdViaOptions: CREATED_VIA_FILTERS,
       fixableFields: FIXABLE_FIELDS,
@@ -81,12 +92,16 @@ router.patch('/:id', async (req, res) => {
       const status = applied.code === 'conflict' ? 409 : 400;
       return res.status(status).json({ error: applied.message });
     }
-    const { wine, promoted, diff } = applied;
+    const { wine, promoted, diff, crossFieldOverridden } = applied;
 
     logAudit(req, 'wine.pending_fix', { type: 'wine', id: wine._id }, {
       fields: Object.keys(check.clean),
       diff,
       promoted,
+      // Only present when a curator actually overrode a cross-field refusal —
+      // with the rules and matched strings, so the decision is reviewable
+      // afterwards rather than a bare boolean (audit L-10b).
+      ...(crossFieldOverridden ? { crossFieldOverridden } : {}),
     });
 
     res.json({
@@ -101,6 +116,7 @@ router.patch('/:id', async (req, res) => {
         appellation: wine.appellation || null,
         type: wine.type || null,
         pendingIdentity: wine.pendingIdentity === true,
+        identityUnavailable: wine.identityUnavailable === true,
       },
     });
   } catch (err) {

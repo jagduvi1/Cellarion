@@ -542,34 +542,43 @@ async function finalizeMintedWines(ids) {
       if (!doc) continue;
       doc.canonicalKey = computeCanonicalKey(doc.name, doc.producer, doc.appellation);
       if (!doc.createdVia) doc.createdVia = 'import';
+      // findFreeSlug, NOT a hand-rolled `findOne({ slug })` probe (audit M-5).
+      // This was the FIFTH slug-assignment site and the only one still blind to
+      // previousSlugs: a bare slug probe happily hands an import a slug that
+      // another wine still ANSWERS TO after a rename, and then
+      // `{ $or: [{slug}, {previousSlugs}] }` matches two documents and findOne
+      // returns whichever the index reaches first — /wines/<slug> resolving
+      // nondeterministically to two different wines. One helper, one definition
+      // of "free" (models/WineDefinition.findFreeSlug), which also ends the
+      // silent fall-through when all 98 suffixes are taken.
+      let slugBase = null;
       if (!doc.slug) {
-        const base = generateWineSlug(doc.name, doc.producer);
-        if (base) {
-          let candidate = base;
-          for (let i = 2; i < 100; i++) {
-            const collision = await WineDefinition.findOne({ slug: candidate }).select('_id').lean();
-            if (!collision) break;
-            candidate = `${base}-${i}`;
-          }
-          doc.slug = candidate;
-        }
+        slugBase = generateWineSlug(doc.name, doc.producer);
+        if (slugBase) doc.slug = await WineDefinition.findFreeSlug(slugBase);
       }
       // save(): the pre-validate hook recomputes canonicalKey the same way
       // (idempotent) and the slug hook skips non-new docs, which is why the
       // slug is assigned by hand above. The slug probe is check-then-set, so
       // a concurrent import can win the race — on a unique-index collision,
-      // bump the suffix and retry instead of abandoning the row unfinalized
+      // ask findFreeSlug again (the winner is committed by now, so it returns
+      // the next genuinely free slug) instead of abandoning the row unfinalized
       // (audit 2026-07-29 F3: an abandoned row is exactly the invariant hole
-      // this function exists to close).
+      // this function exists to close). Retry only when WE assigned the slug:
+      // an 11000 on a row that already had one is a different collision
+      // (normalizedKey), and mangling its URL would not fix it.
       let attempt = 0;
       for (;;) {
         try {
           await doc.save();
           break;
         } catch (err) {
-          if (err.code === 11000 && doc.slug && attempt < 5) {
+          if (err.code === 11000 && slugBase && attempt < 5) {
             attempt += 1;
-            doc.slug = `${doc.slug}-r${attempt}`;
+            const next = await WineDefinition.findFreeSlug(slugBase);
+            // Unchanged means the collision was not the slug — retrying would
+            // spin. Surface it to the per-row handler instead.
+            if (next === doc.slug) throw err;
+            doc.slug = next;
             continue;
           }
           throw err;

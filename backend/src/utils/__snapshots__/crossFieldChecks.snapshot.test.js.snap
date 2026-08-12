@@ -2,6 +2,24 @@
 
 exports[`detect() source of appellation-is-grape.v1 is unchanged — bump the id if you edited it 1`] = `"(w, refs) => lookupEntity(refs.grapes, w.appellation)"`;
 
+exports[`detect() source of colour-contradiction.v2 is unchanged — bump the id if you edited it 1`] = `
+"(w, refs) => {
+    const type = w.type;
+    if (!COLOUR_TYPES.has(type)) return null;
+    const producerTokens = new Set(normalizeString((w.producer || '').replace(/ß/g, 'ss')).split(' ').filter(Boolean));
+    const tokens = normalizeString((w.name || '').replace(/ß/g, 'ss')).split(' ').filter(Boolean);
+    for (let i = 0; i < tokens.length; i++) {
+      const t = tokens[i];
+      const implied = NAME_COLOUR_TERMS.get(t);
+      if (!implied || implied === type) continue;
+      if (producerTokens.has(t)) continue; // (a)
+      if (type === 'rosé' && implied === 'white' && lookupEntity(refs?.grapes || new Map(), tokens[i + 1] || '')) continue; // (b)
+      return \`\${t} → \${implied}, stored as \${type}\`;
+    }
+    return null;
+  }"
+`;
+
 exports[`detect() source of name-in-producer.v1 is unchanged — bump the id if you edited it 1`] = `
 "w => {
     const name = normalizeString(w.name || '');
@@ -13,6 +31,29 @@ exports[`detect() source of name-in-producer.v1 is unchanged — bump the id if 
     if (!\` \${longer} \`.includes(\` \${shorter} \`)) return null;
     if (shorter.split(' ').every(t => CONTAINMENT_HOUSE_WORDS.has(t))) return null;
     return (nameIsShorter ? w.name : w.producer).trim();
+  }"
+`;
+
+exports[`detect() source of producer-echoes-name.v1 is unchanged — bump the id if you edited it 1`] = `
+"w => {
+    const p = normalizeString(w.producer || '');
+    const n = normalizeString(w.name || '');
+    if (!p || !n) return null;
+    if (p === n) return \`\${w.producer.trim()} = \${w.name.trim()}\`;
+    // Containment leaving NO DISTINCT remainder on either side, compared on
+    // stop-word-stripped tokens — "Increíble Wines" / "Increíble" is the same
+    // echo wearing an estate word, while "Cloudy Bay" / "Cloudy Bay Sauvignon
+    // Blanc" leaves 'sauvignon blanc' and is a real (if badly formatted) row.
+    const pTok = tokenize(w.producer || '');
+    const nTok = tokenize(w.name || '');
+    // All-stop-word sides are utils/normalize.isImplausibleIdentity's
+    // business (it still BLOCKS a producer that is only house words) and
+    // comparing two empty token lists would flag every such pair twice.
+    if (!pTok.length || !nTok.length) return null;
+    const pSet = new Set(pTok);
+    const nSet = new Set(nTok);
+    if (pTok.some(t => !nSet.has(t)) || nTok.some(t => !pSet.has(t))) return null;
+    return \`\${w.producer.trim()} = \${w.name.trim()}\`;
   }"
 `;
 
@@ -78,7 +119,9 @@ exports[`rule ids are pinned (adding/removing/renaming a rule must be deliberate
   "producer-placeholder.v1",
   "producer-parenthetical.v1",
   "name-in-producer.v1",
+  "producer-echoes-name.v1",
   "appellation-is-grape.v1",
   "region-is-country.v1",
+  "colour-contradiction.v2",
 ]
 `;

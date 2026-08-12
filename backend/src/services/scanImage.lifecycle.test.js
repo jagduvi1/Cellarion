@@ -47,7 +47,7 @@ const BottleImage = require('../models/BottleImage');
 const { processImage, unlinkImageFiles } = require('./imageProcessor');
 const { persistLabelScan } = require('./imageOps');
 const { attachScanImage } = require('./wineCommit');
-const { runScanImageRetentionSweep, SCAN_IMAGE_RETENTION_DAYS } = require('./scanImageRetentionJob');
+const { runScanImageRetentionSweep, runUnattachedScanSweep, SCAN_IMAGE_RETENTION_DAYS } = require('./scanImageRetentionJob');
 
 const USER = '507f1f77bcf86cd799439011';
 const OTHER = '507f1f77bcf86cd799439022';
@@ -136,7 +136,10 @@ describe('runScanImageRetentionSweep', () => {
     });
     BottleImage.deleteMany.mockResolvedValue({ deletedCount: 1 });
 
-    const res = await runScanImageRetentionSweep();
+    // The unattached clock specifically — the entry point now runs a second,
+    // disjoint one (the 7-day promoted-scan expiry, pinned in
+    // services/promotedScanGrace.test.js).
+    const res = await runUnattachedScanSweep();
 
     const filter = BottleImage.find.mock.calls[0][0];
     expect(filter.kind).toBe('label-scan');
@@ -168,7 +171,9 @@ describe('runScanImageRetentionSweep', () => {
       }),
     });
 
-    expect(await runScanImageRetentionSweep()).toEqual({ deleted: 0 });
+    // Two clocks now: the 30-day unattached sweep above and the 7-day
+    // promoted-scan expiry (services/promotedScanGrace.test.js pins that one).
+    expect(await runScanImageRetentionSweep()).toEqual({ deleted: 0, expired: 0 });
     expect(BottleImage.deleteMany).not.toHaveBeenCalled();
   });
 });

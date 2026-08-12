@@ -35,6 +35,13 @@ jest.mock('../../utils/vintageProfile', () => ({
 jest.mock('../../services/findOrCreateWine', () => ({
   findOrCreateRegion: jest.fn().mockResolvedValue({ _id: 'region-1' }),
 }));
+// The write path's cross-field pre-flight (a producer that is really a region /
+// grape / placeholder is refused). Its own gating is pinned in
+// services/pendingWineOps.identityGates.test.js; here it must simply not reach
+// for the taxonomy collections.
+jest.mock('../../services/crossFieldScan', () => ({
+  detectCrossFieldForValues: jest.fn().mockResolvedValue(null),
+}));
 jest.mock('../../services/wineProfileOps', () => ({
   resolveGrapeIdsStrict: jest.fn(),
   GRAPES_MAX: 20,
@@ -202,6 +209,19 @@ describe('GET — projection and anonymisation', () => {
     WineDefinition.find.mockReturnValue(leanChain([]));
     WineDefinition.countDocuments.mockResolvedValue(0);
     await get(tokenFor(['somm']), '?createdVia=' + encodeURIComponent('{"$ne":null}'));
+    expect(WineDefinition.find).toHaveBeenCalledWith(
+      { pendingIdentity: true, identityUnavailable: { $ne: true } });
+  });
+
+  test('rows dispositioned "no producer on the label" are excluded, and ?includeUnavailable=1 shows them', async () => {
+    await get(tokenFor(['somm']));
+    expect(WineDefinition.find).toHaveBeenCalledWith(
+      { pendingIdentity: true, identityUnavailable: { $ne: true } });
+
+    jest.clearAllMocks();
+    WineDefinition.find.mockReturnValue(leanChain([]));
+    WineDefinition.countDocuments.mockResolvedValue(0);
+    await get(tokenFor(['somm']), '?includeUnavailable=1');
     expect(WineDefinition.find).toHaveBeenCalledWith({ pendingIdentity: true });
   });
 });
@@ -287,7 +307,7 @@ describe('PATCH — fix, promote, audit', () => {
     Country.findOne.mockResolvedValue(null);
     WineDefinition.findById.mockResolvedValue(wineDoc());
 
-    const res = await patch(tokenFor(['somm']), W1, { producer: 'X', countryName: 'Atlantis' });
+    const res = await patch(tokenFor(['somm']), W1, { producer: 'Cave de Kaysersberg',countryName: 'Atlantis' });
 
     expect(res.status).toBe(400);
     expect((await res.json()).error).toMatch(/Unknown country/);
@@ -297,10 +317,39 @@ describe('PATCH — fix, promote, audit', () => {
     resolveGrapeIdsStrict.mockResolvedValue({ ok: false, unmatched: ['Nonsensegrape'] });
     WineDefinition.findById.mockResolvedValue(wineDoc());
 
-    const res = await patch(tokenFor(['somm']), W1, { producer: 'X', grapeNames: ['Nonsensegrape'] });
+    const res = await patch(tokenFor(['somm']), W1, { producer: 'Cave de Kaysersberg',grapeNames: ['Nonsensegrape'] });
 
     expect(res.status).toBe(400);
     expect((await res.json()).error).toMatch(/Not in the grape taxonomy/);
+  });
+
+  /**
+   * "No producer on the label" — a REVERSIBLE queue disposition, not a
+   * promotion. Some bottles genuinely print no producer; promoting one would
+   * wreck deduplication (producer is 45% of the composite score).
+   */
+  test('identityUnavailable rides the same PATCH and does NOT promote', async () => {
+    const doc = wineDoc();
+    WineDefinition.findById.mockResolvedValue(doc);
+
+    const res = await patch(tokenFor(['somm']), W1, { identityUnavailable: true });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.promoted).toBe(false);
+    expect(body.wine.identityUnavailable).toBe(true);
+    expect(body.wine.pendingIdentity).toBe(true);
+    expect(logAudit).toHaveBeenCalledWith(
+      expect.anything(), 'wine.pending_fix', { type: 'wine', id: doc._id },
+      expect.objectContaining({ fields: ['identityUnavailable'], promoted: false })
+    );
+  });
+
+  test('a non-boolean disposition is a 400', async () => {
+    WineDefinition.findById.mockResolvedValue(wineDoc());
+    const res = await patch(tokenFor(['somm']), W1, { identityUnavailable: 'yes' });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/must be true or false/);
   });
 
   test('a duplicate-identity save is a 409 telling the curator to merge', async () => {

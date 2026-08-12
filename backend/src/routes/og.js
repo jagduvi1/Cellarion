@@ -439,9 +439,13 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
     // routes below and the sitemap. #844 hid them from every discovery surface
     // but left this detail page serving their title/OG/JSON-LD in full to
     // anything that had the URL (code audit 2026-07-27, M5).
+    const hidden = { nonWine: { $ne: true }, pendingIdentity: { $ne: true } };
+    // slugFilter resolves SUPERSEDED slugs too, so a crawler's index entry from
+    // before a name correction still resolves — and is 301'd to the new slug
+    // below (models/WineDefinition.previousSlugs).
     const filter = isId
-      ? { _id: idOrSlug, nonWine: { $ne: true }, pendingIdentity: { $ne: true } }
-      : { slug: String(idOrSlug).toLowerCase(), nonWine: { $ne: true }, pendingIdentity: { $ne: true } };
+      ? { _id: idOrSlug, ...hidden }
+      : { ...WineDefinition.slugFilter(idOrSlug), ...hidden };
 
     const wine = await WineDefinition.findOne(filter)
       .populate(['country', 'region', 'grapes'])
@@ -452,9 +456,11 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
       return res.status(404).send('Not found');
     }
 
-    // Canonicalise to slug URL when one exists. 301 means crawlers + browsers
-    // both follow and any link equity earned by the ObjectId URL transfers.
-    if (isId && wine.slug) {
+    // Canonicalise to the CURRENT slug URL when one exists — from an ObjectId
+    // URL, and equally from a superseded slug after a name correction. 301
+    // means crawlers + browsers both follow, the old URL keeps working, and any
+    // link equity it earned transfers to the corrected name.
+    if (wine.slug && (isId || String(idOrSlug).toLowerCase() !== wine.slug)) {
       return res.redirect(301, `${SITE_URL}/wines/${wine.slug}`);
     }
 
