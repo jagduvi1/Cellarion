@@ -161,14 +161,36 @@ const wineDefinitionSchema = new mongoose.Schema({
   },
   // Vintage-neutral, human-readable slug used in public URLs (/wines/:slug).
   // Sparse so older docs without a slug don't violate the unique index until
-  // the migration runs. Once set, never auto-regenerated on rename — URLs are
-  // stable forever; renames must be a deliberate admin action.
+  // the migration runs.
+  //
+  // REGENERATED when the name changes — and the old slug is kept in
+  // previousSlugs below, which every :idOrSlug lookup also resolves. The old
+  // rule was "never regenerate, URLs are stable forever", and it produced the
+  // Magnien row: corrected from a misread "Coeur de Roi" to "Nuits-Saint-
+  // Georges Premier Cru Cœur de Roches", still served at /wines/coeur-de-roi.
+  // A URL that states a name the wine does not have is not stability, it is a
+  // second wrong record — one search engines index and users copy. Stability is
+  // now what previousSlugs provides: no existing URL ever breaks.
   slug: {
     type: String,
     trim: true,
     lowercase: true,
     unique: true,
     sparse: true,
+    index: true
+  },
+  // Every slug this wine has ever had, oldest first. A :idOrSlug lookup
+  // resolves these too, so an old link, bookmark or backlink keeps working
+  // after a rename — and findFreeSlug refuses a candidate that appears here on
+  // ANY wine, so one old URL can never come to mean two different wines.
+  //
+  // Multikey index: the lookup queries { $or: [{slug}, {previousSlugs: s}] }.
+  // Bounded (PREVIOUS_SLUG_LIMIT) — a row renamed dozens of times is churn, and
+  // the oldest links are the ones least likely to still be live. undefined on
+  // rows that have never been renamed, so nothing needs backfilling.
+  previousSlugs: {
+    type: [String],
+    default: undefined,
     index: true
   },
   createdBy: {
@@ -426,7 +448,8 @@ wineDefinitionSchema.pre('validate', function(next) {
  * A static (not an inline condition) so the rule can be tested without a live
  * connection — the audit's M-5 was a rule nobody could see fire.
  *
- * - Never overwrite an existing slug. URL stability.
+ * - Never overwrite an existing slug HERE. A rename is a different question,
+ *   answered by shouldRegenerateSlug below (which preserves the old URL).
  * - A pendingIdentity row gets NO slug — SLUG SQUATTING (security audit M-5).
  *   The slug is derived from name+producer, and a pending row's producer is ''
  *   — so a row minted from a half-read "Cloudy Bay Sauvignon Blanc" label took
@@ -446,9 +469,33 @@ wineDefinitionSchema.statics.shouldAssignSlug = function (doc) {
   return Boolean(doc.isNew || doc.isModified('pendingIdentity'));
 };
 
+/** How many superseded slugs one wine keeps alive. */
+const PREVIOUS_SLUG_LIMIT = 10;
+
+/**
+ * The filter for "the wine at this URL segment" — the CURRENT slug or any
+ * superseded one. Every :idOrSlug lookup uses it (routes/wines.js public
+ * detail / community-prices / discussions, routes/og.js) so a rename cannot
+ * 404 a link from one surface while another still resolves it.
+ *
+ * Returns a bare `$or`, which callers spread alongside their own scalar
+ * conditions (`{ ...WineDefinition.slugFilter(s), nonWine: { $ne: true } }`) —
+ * implicit AND. A caller that already has its own `$or` must merge with `$and`;
+ * none currently does.
+ */
+wineDefinitionSchema.statics.slugFilter = function (slug) {
+  const s = String(slug).toLowerCase();
+  return { $or: [{ slug: s }, { previousSlugs: s }] };
+};
+
 /**
  * First free slug for `base`, disambiguating with -2, -3, … as the
  * findOrCreateWine flow and the backfill migration do.
+ *
+ * "Free" includes SUPERSEDED slugs (previousSlugs) on purpose: handing a new
+ * wine a URL that an older wine still answers to would make one link resolve to
+ * two different wines, which is worse than the collision the -2 suffix exists
+ * to avoid.
  *
  * The old loop `for (let i = 2; i < 100; i++)` fell through SILENTLY when all
  * 98 suffixes were taken: it assigned its last candidate without ever checking
@@ -457,7 +504,8 @@ wineDefinitionSchema.statics.shouldAssignSlug = function (doc) {
  * still checked, so every return from here carries the same guarantee.
  */
 wineDefinitionSchema.statics.findFreeSlug = async function (base) {
-  const taken = async (slug) => Boolean(await this.findOne({ slug }).select('_id').lean());
+  const taken = async (slug) =>
+    Boolean(await this.findOne(this.slugFilter(slug)).select('_id').lean());
   let candidate = base;
   for (let i = 2; i < 100; i++) {
     if (!await taken(candidate)) return candidate;
@@ -467,8 +515,54 @@ wineDefinitionSchema.statics.findFreeSlug = async function (base) {
   return `${base}-${crypto.randomBytes(4).toString('hex')}`;
 };
 
-// Auto-generate the slug when the rules above say this save earns one.
+/**
+ * Does a RENAME make this document's slug wrong?
+ *
+ * The Magnien row: corrected from a misread "Coeur de Roi" to "Nuits-Saint-
+ * Georges Premier Cru Cœur de Roches" and still served at /wines/coeur-de-roi.
+ * A slug that states a name the wine does not have is a second wrong record.
+ *
+ * Narrow on purpose — this must fire on a real rename and nothing else:
+ *   - only when a slug already exists (assignment is shouldAssignSlug's job)
+ *     and the doc is not new;
+ *   - only when `name` was modified. A producer respelling folds away in
+ *     generateWineSlug, and re-saving an untouched row must never churn;
+ *   - only when the slug would actually CHANGE. The current slug may be a
+ *     disambiguated form of the same base ("cloudy-bay-2"), which is still the
+ *     right slug for this name and must not be regenerated into "-3" on every
+ *     unrelated save;
+ *   - never for a pending row: it has no public URL to keep correct (M-5).
+ */
+wineDefinitionSchema.statics.shouldRegenerateSlug = function (doc) {
+  if (!doc.slug || doc.isNew) return false;
+  if (doc.pendingIdentity === true) return false;
+  if (!doc.isModified('name')) return false;
+  const base = generateWineSlug(doc.name, doc.producer);
+  if (!base || doc.slug === base) return false;
+  if (doc.slug.startsWith(`${base}-`)) {
+    // …but only a DISAMBIGUATOR counts as "the same base" — "-2" or the random
+    // hex tail. "coeur-de-roi-premier-cru" is a different slug, not a suffix.
+    const tail = doc.slug.slice(base.length + 1);
+    if (/^(\d{1,3}|[0-9a-f]{8})$/.test(tail)) return false;
+  }
+  return true;
+};
+
+// Assign the slug when the rules above say this save earns one, or REGENERATE
+// it on a rename — keeping the outgoing slug alive in previousSlugs, which
+// every :idOrSlug lookup resolves. Regeneration is checked first: a doc that
+// has a slug can only ever be in that branch.
 wineDefinitionSchema.pre('save', async function(next) {
+  if (this.constructor.shouldRegenerateSlug(this)) {
+    const outgoing = this.slug;
+    const base = generateWineSlug(this.name, this.producer);
+    this.slug = await this.constructor.findFreeSlug(base);
+    const kept = (this.previousSlugs || []).filter((s) => s !== outgoing && s !== this.slug);
+    // Oldest first, newest-kept last, bounded — the oldest links are the ones
+    // least likely to still be live.
+    this.previousSlugs = [...kept, outgoing].slice(-PREVIOUS_SLUG_LIMIT);
+    return next();
+  }
   if (!this.constructor.shouldAssignSlug(this)) return next();
   const base = generateWineSlug(this.name, this.producer);
   if (!base) return next();

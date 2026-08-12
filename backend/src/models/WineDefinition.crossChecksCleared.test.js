@@ -63,6 +63,10 @@ describe('each of the six identity fields clears the record', () => {
     ['region', (d) => { d.region = oid(); }],
     ['country', (d) => { d.country = oid(); }],
     ['grapes', (d) => { d.grapes = [oid()]; }],
+    // `type` joined the watched set with colour-contradiction.v1 — the one
+    // rule in the family whose verdict is about the wine's own colour rather
+    // than a reference list, so a clearance of it must not survive a retype.
+    ['type', (d) => { d.type = 'white'; }],
   ];
   test.each(mutations)('changing %s clears crossChecksCleared + clearedAt', async (_field, mutate) => {
     const doc = await reviewedDoc();
@@ -75,7 +79,6 @@ describe('each of the six identity fields clears the record', () => {
 
 test('THE FALSE-CLEAR GUARD: non-identity field changes leave the record intact', async () => {
   const mutations = [
-    (d) => { d.type = 'white'; },
     (d) => { d.image = 'https://example.com/x.png'; },
     (d) => { d.imageCredit = 'Someone'; },
     (d) => { d.aiProfile.description = 'Bright cherry.'; },
