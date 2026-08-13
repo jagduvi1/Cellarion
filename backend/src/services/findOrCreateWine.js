@@ -530,6 +530,62 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     producerNorm = '';
   }
 
+  // CROSS-FIELD producer gate — the mint-time half of what the curation queue
+  // already refuses (services/pendingWineOps.applyPendingFix), running the SAME
+  // six rules the same DB-backed way
+  // (utils/crossFieldChecks.IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS).
+  //
+  // WHY, when the place gate above already asks three of these questions: prod
+  // 2026-08-13 minted an ordinary, published registry wine from producer "Pays
+  // d'Oc Organic Wine" / name "Chardonnay Reserve". The extraction was wrong but
+  // COMPLETE-LOOKING, so nothing here had anything to complain about — a missing
+  // producer is caught, a nonsense one was not. The rules close that: they read
+  // the taxonomy's SYNONYMS as well as its canonical names (the place gate reads
+  // only normalizedName), and they add the three shapes mint time never asked
+  // about at all — a grape, a style term ("Roșu Demidulce"), and the multi-word
+  // placeholders ("Domaine unknown") that isIdentitySentinel does not cover.
+  //
+  // ONE evaluation, on the CREATE path only: every resolve stage returns above
+  // this line, so an add that matches an existing wine pays nothing. The
+  // evaluation reads the four taxonomy collections (services/crossFieldScan
+  // .loadContext) — the same cost the queue pays per fix, and a mint is rare.
+  //
+  // Same two outcomes as every gate above it: pending for the commit paths, an
+  // untouched 400 for the deliberate curation surfaces.
+  let producerRejected = null;
+  if (!producerMissing) {
+    // Lazy require, mirroring pendingWineOps' call site: the scan service pulls
+    // the whole taxonomy + registry model tree, and this module is required at
+    // boot by every write path.
+    const { detectBlockingProducerIssue } = require('./crossFieldScan');
+    const blocking = await detectBlockingProducerIssue({
+      name: trimmedName,
+      producer: trimmedProducer,
+      appellation: trimmedAppellation,
+    });
+    if (blocking) {
+      if (!allowPending) {
+        const err = new Error(
+          `"${trimmedProducer}" is not a usable producer name — cross-field rule ${blocking.check} ` +
+          `matched "${blocking.detail}", which belongs in a different field`
+        );
+        err.status = 400;
+        throw err;
+      }
+      // Never STORED, exactly like every other unusable producer on this path:
+      // the row keys into the pending namespace with producer '' and a curator
+      // writes the real one from the label photo. The string itself is handed
+      // BACK to the caller so it survives in the audit log (services/wineCommit
+      // puts it on the wine.create entry) — the pending queue has no field for
+      // a rejected value, and losing it entirely would leave a curator with one
+      // less clue than the user had.
+      producerRejected = { producer: trimmedProducer, check: blocking.check, detail: String(blocking.detail) };
+      producerMissing = true;
+      trimmedProducer = '';
+      producerNorm = '';
+    }
+  }
+
   // Adopt the registry's majority spelling for this producer (accent, case
   // and punctuation variants — "Cave de Ribeauville" → "Cave de Ribeauvillé").
   // Display-only: every derived key (normalizedKey, canonicalKey, slug) folds
@@ -618,6 +674,9 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   const created = { wine: newWine, created: true };
   if (nearMiss) created.nearMiss = nearMiss;
   if (producerMissing) created.pendingIdentity = true;
+  // The producer string the cross-field rules refused, for the caller's audit
+  // entry. Only ever set on a create, and only when a rule actually fired.
+  if (producerRejected) created.producerRejected = producerRejected;
   return created;
 }
 

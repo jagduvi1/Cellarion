@@ -555,6 +555,78 @@ const CROSS_FIELD_CHECK_SELECT = 'name producer appellation region country type 
 /** id → i18n leaf / offending field, for the admin queue's column headers. */
 const CROSS_FIELD_CHECK_LABEL_KEYS = ALL_CROSS_FIELD_CHECKS.reduce((m, c) => (m[c.id] = c.labelKey, m), {});
 const CROSS_FIELD_CHECK_FIELDS = ALL_CROSS_FIELD_CHECKS.reduce((m, c) => (m[c.id] = c.field, m), {});
+// The scan-only heuristic is not a queue check (it must never appear in the
+// review queue or gate a write) but its id DOES ship to clients in
+// `producer_suspect`, so the label/field maps must resolve it (audit L-5).
+CROSS_FIELD_CHECK_LABEL_KEYS['producer-place-plus-filler.scan'] = 'producerPlacePlusFiller';
+CROSS_FIELD_CHECK_FIELDS['producer-place-plus-filler.scan'] = 'producer';
+
+// ── SCAN-ONLY place-plus-filler heuristic ───────────────────────────────────
+//
+// The prod row that motivated it: a label scan extracted producer "Pays d'Oc
+// Organic Wine" — an APPELLATION padded with marketing words. None of the six
+// blocking rules fire on it (they are full-string matches, and 'organic' is
+// neither style nor filler in their vocabularies), so it minted as a normal
+// published wine.
+//
+// This rule flags a producer whose tokens are a known place name (appellation,
+// region or country) plus NOTHING but filler. It is deliberately AGGRESSIVE —
+// "Château Margaux" trips it (margaux = appellation, chateau = filler), and
+// that is exactly why it is SCAN-ONLY and must never gate a write: estates
+// named after their place are an entire legitimate category (the #942 lesson).
+// At scan time the flag's whole cost is the editable prefilled form plus the
+// back-label offer instead of the one-tap card, and the route only applies it
+// when the registry matched nothing — a famous estate resolves to its
+// registry row and never sees the flag. Wrong-but-cheap beats right-but-rare
+// there; nowhere else.
+const SCAN_SUSPECT_PLACE_FILLER_ID = 'producer-place-plus-filler.scan';
+
+// Filler vocabulary for the scan heuristic — wider than STYLE_FILLER_WORDS and
+// the containment list on purpose (trade/marketing words are exactly the
+// padding this rule exists to see through), and NOT shared with them: the same
+// divergence-on-purpose convention as everywhere else in this file, so tuning
+// this scan-UX rule can never silently re-scope a review-queue verdict.
+const SCAN_PLACE_FILLER_WORDS = new Set([
+  ...STYLE_WORDS, ...STYLE_FILLER_WORDS, ...CONTAINMENT_HOUSE_WORDS,
+  'wine', 'wines', 'wein', 'weine', 'vins', 'vini', 'vinho', 'vinhos',
+  'organic', 'organico', 'bio', 'biologique', 'eco', 'natural', 'nature',
+  'winery', 'wineries', 'cellar', 'cellars', 'estate', 'estates',
+  'vineyard', 'vineyards', 'vignoble', 'vignobles', 'vigneron', 'vignerons',
+  'selection', 'reserve', 'reserva', 'riserva', 'cuvee', 'collection',
+  'grand', 'grande', 'premium', 'classic', 'original', 'old', 'vine', 'vines',
+  'the', 'of', 'and', 'et', 'y', 'e', 'les', 'des', 'los', 'las', 'dos', 'das',
+]);
+
+/**
+ * Producer = a known place + only filler? Pure given refs (the same preloaded
+ * maps every detect() reads). Tries every contiguous token window, longest
+ * first, so "Vino de la Tierra de Castilla Organic" finds the longest place
+ * match before a shorter accidental one. Single-token producers are the exact
+ * rules' turf (producer-is-appellation et al) and are skipped here.
+ *
+ * @returns {{ place: string, filler: string }|null}
+ */
+function detectPlacePlusFillerProducer(producer, refs) {
+  const tokens = normalizeString(String(producer == null ? '' : producer).replace(/ß/g, 'ss'))
+    .split(' ').filter(Boolean);
+  // Hard token ceiling (release-audit HIGH-2): the window loop is O(n³) and
+  // the front scan can feed it a model-returned string — 800 filler tokens
+  // measured at ~35s of synchronous event-loop block. No real place-plus-
+  // filler producer is 12+ tokens; anything longer is not this rule's shape.
+  if (tokens.length < 2 || tokens.length > 12) return null;
+  for (let len = tokens.length - 1; len >= 1; len--) {
+    for (let start = 0; start + len <= tokens.length; start++) {
+      const outside = [...tokens.slice(0, start), ...tokens.slice(start + len)];
+      if (!outside.every(t => SCAN_PLACE_FILLER_WORDS.has(t))) continue;
+      const windowStr = tokens.slice(start, start + len).join(' ');
+      const place = lookupEntity(refs.appellations, windowStr)
+        || lookupEntity(refs.regions, windowStr)
+        || lookupEntity(refs.countries, windowStr);
+      if (place) return { place, filler: outside.join(' ') || '(none)' };
+    }
+  }
+  return null;
+}
 
 module.exports = {
   CROSS_FIELD_CHECKS, DB_BACKED_CROSS_FIELD_CHECKS, ALL_CROSS_FIELD_CHECKS,
@@ -563,4 +635,5 @@ module.exports = {
   CROSS_FIELD_CHECK_LABEL_KEYS, CROSS_FIELD_CHECK_FIELDS,
   CROSS_FIELD_CHECK_SELECT, resolveCrossFieldCheck, runCrossFieldChecks,
   buildCrossFieldRefs,
+  detectPlacePlusFillerProducer, SCAN_SUSPECT_PLACE_FILLER_ID,
 };

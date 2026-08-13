@@ -80,7 +80,12 @@ const mayCurationReadScan = (wine, image, now = Date.now()) => {
  *
  * ONE implementation, called from the WineDefinition post('save') hook — i.e.
  * from the transition itself, so no write path can promote a row and forget
- * (audit M-4). The admin PUT and /strip-producer both set a producer and
+ * (audit M-4) — and, since 2026-08-13, from services/wineCommit for a wine that
+ * was BORN promoted. That row makes no pending→promoted transition, so the hook
+ * never fires for it; its correction window has to start at the mint instead.
+ * Same window, same sweep, same idempotence.
+ *
+ * The hook exists because the admin PUT and /strip-producer both set a producer and
  * save(), the hook clears pendingIdentity, and neither route called the
  * follow-through: the scan became unreadable (the wine is no longer pending)
  * AND unsweepable (retainUntil null is excluded by the expiry sweep), leaving

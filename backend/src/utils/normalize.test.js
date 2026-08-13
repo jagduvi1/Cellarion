@@ -124,6 +124,31 @@ describe('normalizeAppellation (ticket #2C: tier-suffix proliferation)', () => {
     expect(normalizeAppellation('Swartland WO')).toBe('Swartland');
   });
 
+  // Prod 2026-08-13: "Lison Classico D.O.C.G." kept its tier. The LEADING loop
+  // has always folded dots out of the candidate token ("D.O. Valle Central"
+  // above); the trailing loop only trimmed dots off the END, so 'd.o.c.g'
+  // never matched anything in the tier set and the abbreviated forms labels
+  // actually print sailed straight through into the registry.
+  test('strips a DOTTED trailing tier, the same fold the leading loop uses', () => {
+    expect(normalizeAppellation('Lison Classico D.O.C.G.')).toBe('Lison Classico');
+    expect(normalizeAppellation('Rioja D.O.Ca.')).toBe('Rioja');
+    expect(normalizeAppellation('Barolo D.O.C.G')).toBe('Barolo');       // no closing dot
+    expect(normalizeAppellation('Napa Valley A.V.A.')).toBe('Napa Valley');
+    // …and it converges with the undotted spelling, which is the whole point.
+    expect(normalizeAppellation('Rioja D.O.Ca.')).toBe(normalizeAppellation('Rioja DOCa'));
+  });
+
+  test('a REAL name whose tokens carry dots is untouched — folding is not stripping', () => {
+    // Nothing here folds INTO the tier set, so the loop must stop on the first
+    // token and leave every dot in the returned string exactly where it was.
+    expect(normalizeAppellation('Nuits-St.-Georges Premier Cru')).toBe('Nuits-St.-Georges Premier Cru');
+    expect(normalizeAppellation('Nuits-St.-Georges')).toBe('Nuits-St.-Georges');
+    expect(normalizeAppellation('St. Emilion Grand Cru')).toBe('St. Emilion Grand Cru');
+    // 'do' is trailing-only-excluded on purpose (it collides with real place
+    // words); the dotted spelling must inherit that exclusion, not escape it.
+    expect(normalizeAppellation('Rueda D.O.')).toBe('Rueda D.O.');
+  });
+
   test('the audit leave-alone list survives untouched', () => {
     // Official appellation forms — stripping them would corrupt real names.
     expect(normalizeAppellation('VQA Ontario')).toBe('VQA Ontario');      // leading VQA is the official form

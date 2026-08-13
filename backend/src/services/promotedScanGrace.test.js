@@ -271,4 +271,34 @@ describe('the sweep — an expired scan is deleted, file, doc and pointer', () =
     expect(filter).toMatchObject({ kind: 'label-scan', wineDefinition: null, bottle: null });
     expect(filter.retainUntil).toBeUndefined();
   });
+
+  /**
+   * The clock gained a SECOND population on 2026-08-13: a scan-originated wine
+   * that minted looking complete now keeps its frame too, stamped at birth by
+   * services/wineCommit (see the L-5 discussion there). The sweep needs no
+   * change for it and must not get one — it selects on retainUntil, never on
+   * how the deadline came to be written, so both populations expire by the same
+   * rule. This pins that the two are indistinguishable to the sweep.
+   */
+  test('a BORN-PROMOTED wine\'s scan expires by exactly the same rule', async () => {
+    // Stamped at the mint rather than at a promotion — same field, same value.
+    primeExpired([{ _id: 'born-1', originalUrl: '/api/uploads/originals/born.jpg' }]);
+    BottleImage.deleteMany.mockResolvedValue({ deletedCount: 1 });
+
+    const res = await runPromotedScanExpirySweep();
+
+    expect(res.expired).toBe(1);
+    expect(unlinkImageFiles).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: 'born-1' }));
+    expect(WineDefinition.updateMany).toHaveBeenCalledWith(
+      { scanImage: { $in: ['born-1'] } },
+      { $set: { scanImage: null, scanFieldConflicts: [] } }
+    );
+    // No population marker anywhere in the selection — retainUntil is the
+    // whole policy.
+    expect(BottleImage.find.mock.calls[0][0]).toEqual({
+      kind: 'label-scan',
+      retainUntil: { $type: 'date', $lt: expect.any(Date) },
+    });
+  });
 });

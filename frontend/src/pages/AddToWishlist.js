@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
@@ -51,6 +51,9 @@ function AddToWishlist() {
   // and never a gate on manual entry. ──
   const [backOffer, setBackOffer] = useState(false);
   const [backScanImageId, setBackScanImageId] = useState(null);
+  // Suspect-producer flag + the exact prefilled string (see AddBottle).
+  const [producerSuspect, setProducerSuspect] = useState(null);
+  const suspectProducerValueRef = useRef(null);
   const [scanConflicts, setScanConflicts] = useState([]);
   const [showManualForm, setShowManualForm] = useState(false);
   const [pendingWineData, setPendingWineData] = useState(null);
@@ -144,6 +147,10 @@ function AddToWishlist() {
     setBackOffer(partial);
     setBackScanImageId(null);
     setScanConflicts([]);
+    // Suspect producer: note + replace-if-untouched machinery (see AddBottle).
+    setProducerSuspect(data.extracted?.producer_suspect || null);
+    suspectProducerValueRef.current = data.extracted?.producer_suspect
+      ? (data.extracted.producer || '') : null;
     if (partial) {
       // Straight to the EDITABLE form, prefilled — never the read-only card
       // (release-audit M-1; see AddBottle for the full argument).
@@ -210,8 +217,18 @@ function AddToWishlist() {
         const typed = typeof prev[key] === 'string' ? prev[key].trim() : prev[key];
         if (!typed && fromMerged[key]) next[key] = fromMerged[key];
       }
+      // A SUSPECT front producer may be REPLACED by the back label's — only
+      // while the box still holds the exact prefilled string (audit M-1).
+      if (suspectProducerValueRef.current
+          && next.producer === suspectProducerValueRef.current
+          && fromMerged.producer
+          && fromMerged.producer !== next.producer) {
+        next.producer = fromMerged.producer;
+      }
       return next;
     });
+    setProducerSuspect(merged.producer_suspect || null);
+    suspectProducerValueRef.current = merged.producer_suspect ? (merged.producer || '') : null;
     setShowManualForm(prev => prev || !scanResult);
     // The vintage field is the user's; only fill it if they have not.
     if (merged.vintage) setVintage(prev => prev || merged.vintage);
@@ -319,6 +336,8 @@ function AddToWishlist() {
   }, [pendingWineData, t, resolveSelectedWine]);
 
   const handleScanReset = useCallback(() => {
+    setProducerSuspect(null);
+    suspectProducerValueRef.current = null;
     setScanResult(null);
     setLabelImage(null);
     setScanImageId(null);
@@ -597,6 +616,13 @@ function AddToWishlist() {
               {t('addToWishlist.backScanConflicts', {
                 fields: scanConflicts.map(c => c.field).join(', '),
               })}
+            </p>
+          )}
+
+          {/* WHY the scan is partial with filled boxes (audit M-2). */}
+          {producerSuspect && (
+            <p className="scan-back-conflicts">
+              {t('addToWishlist.producerSuspectNote')}
             </p>
           )}
 

@@ -183,7 +183,13 @@ registerTool({
         logAudit(ctx.req, 'wine.create',
           { type: 'wine', id: wineDoc._id },
           { via: 'mcp', name: wineDoc.name, producer: wineDoc.producer || null,
-            ...(wineDoc.pendingIdentity ? { pendingIdentity: true } : {}) });
+            ...(wineDoc.pendingIdentity ? { pendingIdentity: true } : {}),
+            // The refused producer string survives ONLY here (audit MED-1) —
+            // the pending row stores '', and a curator needs what the label
+            // scan / caller actually said.
+            ...(result.producerRejected
+              ? { rejectedProducer: result.producerRejected.producer, rejectedByCheck: result.producerRejected.check }
+              : {}) });
       }
     }
 

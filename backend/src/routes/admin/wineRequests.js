@@ -152,6 +152,19 @@ router.put('/:id/resolve', async (req, res) => {
         }
       }
 
+      // Same producer gate as the mint chokepoint and the admin POST
+      // (release-audit MED-3): approval builds the row directly and must not
+      // be the one surface that still publishes a place as a producer.
+      {
+        const { detectBlockingProducerIssue } = require('../../services/crossFieldScan');
+        const blocked = await detectBlockingProducerIssue({ name: cleanName, producer: cleanProducer, appellation: cleanAppellation || '' });
+        if (blocked) {
+          return res.status(400).json({
+            error: `"${cleanProducer}" is not a usable producer name — cross-field rule ${blocked.check} matched "${blocked.detail}", which belongs in a different field`,
+          });
+        }
+      }
+
       const normalizedKey = generateWineKey(cleanName, cleanProducer, cleanAppellation);
 
       linkedWine = new WineDefinition({

@@ -451,6 +451,64 @@ async function bulkIndexBottles(bottleIds) {
   }
 }
 
+/**
+ * Drop index hits whose Mongo row is gone, and self-heal the index.
+ *
+ * PROD 2026-08-13: 567 of 9,918 documents in the `bottles` index named bottles
+ * that no longer existed. Over MCP that read as "0 of 14"; across ~9 callers in
+ * routes/cellars.js it produced phantom counts and short pages. Every delete
+ * path DOES unindex — the debris was operational (a restore from backup, raw
+ * scripts), and it will happen again, so the fix belongs here rather than at
+ * the call sites: every caller of searchBottles inherits it and none of them
+ * has to know.
+ *
+ * Cheap RELATIVE TO WHAT THE CALLER ALREADY DOES, which is the honest way to
+ * put it: one `_id`-only covered query over the returned ids. The MCP tool
+ * pages at ≤50 and the facet-only calls pass limit: 0 (arriving here with an
+ * empty list and costing nothing), but the three cellar-list callers pass
+ * limit: 10000 — and each of those follows this with
+ * `Bottle.find({_id: {$in: ids}}).populate(WINE_POPULATE_LIST)` over the SAME
+ * ids, a strictly heavier query. So the added cost is a covered-index
+ * duplicate of a fetch that was happening anyway, never a new round trip
+ * shape. Fire-and-forget on the removal — a search must never wait on, or fail
+ * because of, a repair.
+ *
+ * FAIL-OPEN: if the verification itself errors (a Mongo hiccup, an index doc
+ * whose id is not an ObjectId → CastError), the raw hits are served unchanged.
+ * A resilience fix must not become a new way for search to break.
+ *
+ * @returns {Promise<{ids: string[], dropped: number}>}
+ */
+async function dropStaleBottleIds(ids) {
+  if (!ids || ids.length === 0) return { ids: ids || [], dropped: 0 };
+  try {
+    const rows = await Bottle.find({ _id: { $in: ids } }).select('_id').lean();
+    if (rows.length === ids.length) return { ids, dropped: 0 };
+    const live = new Set(rows.map(r => String(r._id)));
+    const missing = ids.filter(id => !live.has(String(id)));
+    // Self-heal, unawaited: removeBottles swallows its own errors, so this
+    // cannot reject, and the caller's response does not wait for Meilisearch to
+    // process the deletion task.
+    removeBottles(missing);
+    console.warn(`Meilisearch: dropped ${missing.length} stale bottle hit(s) and queued them for removal`);
+    return { ids: ids.filter(id => live.has(String(id))), dropped: missing.length };
+  } catch (err) {
+    console.warn(`Meilisearch bottle-hit verification failed (serving raw hits): ${err.message}`);
+    return { ids, dropped: 0 };
+  }
+}
+
+/**
+ * The honest total after stale hits were dropped.
+ *
+ * Reduced by what this page dropped — an estimate is all Meilisearch offers
+ * anyway, and a count that includes rows the user can never be shown is worse
+ * than a slightly low one. Floored at 0, and never below what was actually
+ * returned: "showing 12 of 8" is a bug report waiting to happen.
+ */
+const honestTotal = (estimated, dropped, returned) =>
+  Math.max(returned, Math.max(0, (estimated || 0) - dropped));
+
 async function searchBottles(query, {
   cellarId,
   cellarIds,
@@ -566,9 +624,16 @@ async function searchBottles(query, {
     offset
   });
 
+  // Verify the page against Mongo before anybody counts it (see
+  // dropStaleBottleIds). Facet distributions are NOT adjusted: they are
+  // Meilisearch's own aggregation over the whole index and cannot be corrected
+  // from one page of ids — the reconcile job (services/searchReconcileJob) is
+  // what makes them right, by emptying the index of debris in the first place.
+  const { ids, dropped } = await dropStaleBottleIds(result.hits.map(hit => hit.id));
+
   return {
-    ids: result.hits.map(hit => hit.id),
-    estimatedTotalHits: result.estimatedTotalHits || 0,
+    ids,
+    estimatedTotalHits: honestTotal(result.estimatedTotalHits, dropped, ids.length),
     facetDistribution: result.facetDistribution || {},
     facetStats: result.facetStats || {}
   };
@@ -742,6 +807,52 @@ function getIsAvailable() {
   return isAvailable;
 }
 
+// ── Index reconciliation surface ─────────────────────────────────────────────
+//
+// The nightly sweep (services/searchReconcileJob) needs to walk what is IN an
+// index and delete what Mongo no longer has. Both primitives live here rather
+// than in the job, for the same reason every other Meilisearch call does: this
+// module owns the client, and the `meilisearch` package is ESM-only — a second
+// require of it elsewhere is the #702 jest failure mode all over again. The job
+// requires THIS module, which every suite already knows how to mock.
+const RECONCILABLE_INDEXES = ['wines', 'bottles'];
+
+const indexByLabel = (label) => {
+  if (label === 'wines') return index;
+  if (label === 'bottles') return bottlesIndex;
+  return null;
+};
+
+/**
+ * One page of document ids from an index, oldest-first by Meilisearch's
+ * internal order (stable within a run — deleteDocuments only ENQUEUES a task,
+ * so nothing shifts under the paging while a sweep is walking).
+ *
+ * `fields: ['id']` keeps the payload to ids: a full document page of the
+ * bottles index would be megabytes for no purpose.
+ *
+ * @returns {Promise<{ids: string[], total: number}>}
+ */
+async function listIndexDocumentIds(label, { limit = 1000, offset = 0 } = {}) {
+  if (!isAvailable) return { ids: [], total: 0 };
+  const idx = indexByLabel(label);
+  if (!idx) throw new Error(`Unknown Meilisearch index '${label}'`);
+  const page = await idx.getDocuments({ limit, offset, fields: ['id'] });
+  const results = (page && page.results) || [];
+  return {
+    ids: results.map(d => d && d.id).filter(Boolean).map(String),
+    total: (page && page.total) || 0,
+  };
+}
+
+/** Batch delete by id from one index — the reconcile job's only write. */
+async function deleteIndexDocuments(label, ids) {
+  if (!isAvailable || !ids || ids.length === 0) return;
+  const idx = indexByLabel(label);
+  if (!idx) throw new Error(`Unknown Meilisearch index '${label}'`);
+  await idx.deleteDocuments(ids.map(id => String(id)));
+}
+
 /**
  * Wait for enqueued Meili tasks to actually complete — done-means-done for
  * callers like the admin force-reindex, where responding before indexing
@@ -773,6 +884,9 @@ module.exports = {
   removeDiscussion,
   searchDiscussions,
   getIsAvailable,
+  RECONCILABLE_INDEXES,
+  listIndexDocumentIds,
+  deleteIndexDocuments,
   // Pure document builder, exported for unit tests
   // (search.buildBottleDocument.test.js) — no client needed.
   buildBottleDocument,

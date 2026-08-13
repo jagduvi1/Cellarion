@@ -93,21 +93,36 @@ describe('attachScanImage — the commit stamps the label onto the wine', () => 
   const wine = () => ({ _id: 'wine-1', scanImage: null, save: jest.fn().mockResolvedValue(undefined) });
   const req = { user: { id: USER } };
 
-  test('claims the image atomically: uploader-scoped, label-scan only, not already bound', async () => {
+  test('claims the image atomically: uploader-scoped, label-scan only, not already bound — and a BORN-PROMOTED wine gets its retention clock in the SAME write', async () => {
     BottleImage.findOneAndUpdate.mockReturnValue({
       select: jest.fn().mockResolvedValue({ _id: IMG }),
     });
-    const w = wine();
+    const w = wine(); // no pendingIdentity → born promoted
 
     await attachScanImage(w, { scanImageId: IMG }, req);
 
+    // retainUntil rides the claim itself (release-audit LOW-1): a stamp that
+    // ran afterwards could fail and leave an attached frame with no clock —
+    // skipped by BOTH sweeps, kept forever.
     expect(BottleImage.findOneAndUpdate).toHaveBeenCalledWith(
       { _id: IMG, uploadedBy: USER, kind: 'label-scan', wineDefinition: null },
-      { $set: { wineDefinition: 'wine-1', updatedAt: expect.any(Date) } },
+      { $set: { wineDefinition: 'wine-1', updatedAt: expect.any(Date), retainUntil: expect.any(Date) } },
       { new: true },
     );
     expect(String(w.scanImage)).toBe(IMG);
     expect(w.save).toHaveBeenCalled();
+  });
+
+  test('a PENDING wine claims with NO clock — its window starts at promotion, as always', async () => {
+    BottleImage.findOneAndUpdate.mockReturnValue({
+      select: jest.fn().mockResolvedValue({ _id: IMG }),
+    });
+    const w = { ...wine(), pendingIdentity: true, save: jest.fn().mockResolvedValue(undefined) };
+
+    await attachScanImage(w, { scanImageId: IMG }, req);
+
+    const [, update] = BottleImage.findOneAndUpdate.mock.calls[0];
+    expect(update.$set).not.toHaveProperty('retainUntil');
   });
 
   test('another user\'s scan id is a no-op — the filter IS the authorization', async () => {

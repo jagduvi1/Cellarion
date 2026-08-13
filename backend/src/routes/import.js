@@ -887,7 +887,7 @@ router.post('/confirm', async (req, res) => {
           const aiKey = `${normalizeString(ai.name)}:${normalizeString(ai.producer || '')}`;
           let wine = aiWineCache.get(aiKey);
           if (!wine) {
-            const { wine: resolved, created } = await findOrCreateWine({
+            const { wine: resolved, created, producerRejected } = await findOrCreateWine({
               name: ai.name,
               producer: str(ai.producer) || '',
               country: str(ai.country),
@@ -912,7 +912,12 @@ router.post('/confirm', async (req, res) => {
               // registry writes read as one audit stream (2026-08-03 M-1).
               logAudit(req, 'wine.create', { type: 'wine', id: wine._id },
                 { via: 'import', name: wine.name, producer: wine.producer || null,
-                  ...(wine.pendingIdentity ? { pendingIdentity: true } : {}) });
+                  ...(wine.pendingIdentity ? { pendingIdentity: true } : {}),
+                  // What the CSV actually said, when the gate refused it
+                  // (audit MED-1) — the pending row itself stores ''.
+                  ...(producerRejected
+                    ? { rejectedProducer: producerRejected.producer, rejectedByCheck: producerRejected.check }
+                    : {}) });
             }
           }
           // Hand the resolved doc straight to the bottle-creation flow below —

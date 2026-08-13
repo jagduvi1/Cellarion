@@ -206,6 +206,21 @@ router.post('/', async (req, res) => {
       }
     }
 
+    // A producer that IS an appellation/region/country/grape/style-term is
+    // refused on this deliberate curation surface with the same 400 the mint
+    // chokepoint gives (release-audit MED-3: this route builds the row
+    // directly, so without its own gate an admin could still publish
+    // producer "Sangiovese" here while every other surface refuses it).
+    {
+      const { detectBlockingProducerIssue } = require('../../services/crossFieldScan');
+      const blocked = await detectBlockingProducerIssue({ name: cleanName, producer: cleanProducer, appellation: cleanAppellation || '' });
+      if (blocked) {
+        return res.status(400).json({
+          error: `"${cleanProducer}" is not a usable producer name — cross-field rule ${blocked.check} matched "${blocked.detail}", which belongs in a different field`,
+        });
+      }
+    }
+
     // Generate normalized key for deduplication
     const normalizedKey = generateWineKey(cleanName, cleanProducer, cleanAppellation);
 

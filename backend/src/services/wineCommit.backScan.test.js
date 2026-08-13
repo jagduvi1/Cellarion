@@ -6,13 +6,19 @@
  * The guards being pinned are the ones that were already load-bearing for the
  * FRONT scan and must hold identically for the back one — a second pointer is
  * a second way to attach somebody else's photo to a registry row:
- *   ownership (the filter IS the authorization), single-use (an image already
- *   bound to a wine is never re-claimed), and PENDING-ONLY (a fully-identified
- *   wine has no identity to correct, so retaining the user's original frame
- *   against it stores a personal photo with no purpose — audit L-5).
+ *   ownership (the filter IS the authorization) and single-use (an image
+ *   already bound to a wine is never re-claimed).
+ *
+ * The third guard, PENDING-ONLY, was INVERTED on 2026-08-13 for CREATES: prod
+ * showed the wines that need their label read are exactly the ones that minted
+ * looking complete. It still holds for RESOLVES, and data minimisation is now
+ * carried by the bounded retention window instead — the last describe here.
  */
 
-jest.mock('../models/BottleImage', () => ({ findOneAndUpdate: jest.fn() }));
+// updateMany is the retention stamp's write (services/labelScanAccess
+// .stampPromotedScanRetention), which now runs for a wine that was born
+// promoted — see the retainUntil describe at the bottom.
+jest.mock('../models/BottleImage', () => ({ findOneAndUpdate: jest.fn(), updateMany: jest.fn(async () => ({})) }));
 jest.mock('./audit', () => ({ logAudit: jest.fn() }));
 jest.mock('./indexNow', () => ({ submitUrls: jest.fn() }));
 jest.mock('./findOrCreateWine', () => ({ findOrCreateWine: jest.fn() }));
@@ -22,6 +28,7 @@ const { findOrCreateWine } = require('./findOrCreateWine');
 const {
   attachScanImage, resolveOrMintWine, validateScanConflicts, MAX_SCAN_CONFLICTS,
 } = require('./wineCommit');
+const { PROMOTED_SCAN_GRACE_DAYS } = require('./labelScanAccess');
 
 const oid = (c) => c.repeat(24);
 const USER = oid('1');
@@ -187,16 +194,32 @@ describe('resolveOrMintWine — the evidence gate', () => {
     ]);
   });
 
-  test('a fully-identified wine keeps NOTHING — no purpose, so no personal photo and no note (audit L-5)', async () => {
+  /**
+   * INVERTED 2026-08-13 (was: "a fully-identified wine keeps NOTHING").
+   *
+   * The old rule read data minimisation as "no queue, no purpose". Prod
+   * disproved the premise: the scan errors that need a label to settle are the
+   * ones that came back looking COMPLETE — "Chardonnay Reserve" by "Pays d'Oc
+   * Organic Wine" minted as an ordinary published row and a curator meeting it
+   * later had no photo at all. A scan that fails loudly left evidence; a scan
+   * that failed quietly left none.
+   *
+   * So the purpose exists for both, and the WINDOW bounds it instead of queue
+   * membership — see the retainUntil describe below.
+   */
+  test('a fully-identified mint KEEPS the frames and the disagreements too', async () => {
     const wine = wineDoc({ pendingIdentity: false });
     findOrCreateWine.mockResolvedValue({ wine, created: true });
+    primeClaims(FRONT, BACK);
 
-    await resolveOrMintWine(newWine({ producer: 'Cave de Kaysersberg' }), req);
+    const out = await resolveOrMintWine(newWine({ producer: 'Cave de Kaysersberg' }), req);
 
-    expect(BottleImage.findOneAndUpdate).not.toHaveBeenCalled();
-    expect(wine.scanImage).toBeNull();
-    expect(wine.scanImageBack).toBeNull();
-    expect(wine.scanFieldConflicts).toEqual([]);
+    expect(out.pendingIdentity).toBe(false);
+    expect(String(wine.scanImage)).toBe(FRONT);
+    expect(String(wine.scanImageBack)).toBe(BACK);
+    expect(wine.scanFieldConflicts).toEqual([
+      { field: 'producer', front: 'Cave', back: 'Wolfberger' },
+    ]);
   });
 
   test('a SECOND bottle can supply the frames the first add did not have — but only on the creator\'s own row', async () => {
@@ -254,5 +277,84 @@ describe('resolveOrMintWine — the evidence gate', () => {
     await resolveOrMintWine(newWine(), req);
 
     expect(wine.scanFieldConflicts).toEqual([]);
+  });
+
+  test('a RESOLVE to an existing non-pending wine is still never backfilled', async () => {
+    // Widening the attach to non-pending MINTS must not widen it to resolves:
+    // stamping a photo onto a published wine somebody else may own is a
+    // different act with a different owner, and nothing has asked for it.
+    const wine = wineDoc({ pendingIdentity: false });
+    findOrCreateWine.mockResolvedValue({ wine, created: false });
+
+    await resolveOrMintWine(newWine({ producer: 'Cave de Kaysersberg' }), req);
+
+    expect(BottleImage.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(wine.scanImage).toBeNull();
+  });
+});
+
+/**
+ * WHICH CLOCK the attached frame lands on.
+ *
+ * A pending row's purpose is the queue, and the queue has no deadline — so it
+ * carries no retainUntil until the promotion hook stamps one on the way out. A
+ * row that was born promoted makes no such transition, so the hook never fires
+ * for it: without an explicit stamp at the mint it would be attached, readable
+ * and on NO clock at all, which is exactly the "worst of both worlds" state
+ * services/labelScanAccess exists to end.
+ */
+describe('resolveOrMintWine — the retention clock', () => {
+  const newWine = (over = {}) => ({
+    name: 'Kaefferkopf', producer: 'Cave de Kaysersberg', country: 'France',
+    scanImageId: FRONT, scanImageBackId: BACK, ...over,
+  });
+  const DAY = 24 * 60 * 60 * 1000;
+
+  test('a NON-pending mint is stamped now + the 7-day grace window, both frames', async () => {
+    const wine = wineDoc({ pendingIdentity: false });
+    findOrCreateWine.mockResolvedValue({ wine, created: true });
+    primeClaims(FRONT, BACK);
+
+    await resolveOrMintWine(newWine(), req);
+
+    expect(BottleImage.updateMany).toHaveBeenCalledTimes(1);
+    const [filter, update] = BottleImage.updateMany.mock.calls[0];
+    // Idempotent by construction: only an unstamped label-scan row is touched.
+    expect(filter.kind).toBe('label-scan');
+    expect(filter.retainUntil).toBeNull();
+    expect(filter._id.$in.map(String).sort()).toEqual([FRONT, BACK].sort());
+    const until = update.$set.retainUntil.getTime();
+    expect(Math.abs(until - (Date.now() + PROMOTED_SCAN_GRACE_DAYS * DAY))).toBeLessThan(5000);
+  });
+
+  test('a PENDING mint is left unstamped — the queue is its purpose and has no deadline', async () => {
+    const wine = wineDoc({ pendingIdentity: true });
+    findOrCreateWine.mockResolvedValue({ wine, created: true });
+    primeClaims(FRONT, BACK);
+
+    await resolveOrMintWine({ ...newWine(), producer: '' }, req);
+
+    expect(BottleImage.updateMany).not.toHaveBeenCalled();
+  });
+
+  test('no stamp when no frame actually landed — nothing to put a clock on', async () => {
+    const wine = wineDoc({ pendingIdentity: false });
+    findOrCreateWine.mockResolvedValue({ wine, created: true });
+    primeClaims(null, null); // both claims lost to a race
+
+    await resolveOrMintWine(newWine(), req);
+
+    expect(BottleImage.updateMany).not.toHaveBeenCalled();
+  });
+
+  test('a stamp failure is non-fatal — the bottle add never depends on it', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const wine = wineDoc({ pendingIdentity: false });
+    findOrCreateWine.mockResolvedValue({ wine, created: true });
+    primeClaims(FRONT, BACK);
+    BottleImage.updateMany.mockRejectedValueOnce(new Error('mongo down'));
+
+    await expect(resolveOrMintWine(newWine(), req)).resolves.toMatchObject({ created: true });
+    warn.mockRestore();
   });
 });

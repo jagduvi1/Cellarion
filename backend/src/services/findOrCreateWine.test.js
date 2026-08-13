@@ -29,18 +29,21 @@ jest.mock('../models/WineDefinition', () => {
 jest.mock('../models/Country', () => {
   const ctor = jest.fn();
   ctor.findOne = jest.fn();
+  ctor.find = jest.fn();
   ctor.exists = jest.fn();
   return ctor;
 });
 jest.mock('../models/Region', () => {
   const ctor = jest.fn();
   ctor.findOne = jest.fn();
+  ctor.find = jest.fn();
   ctor.exists = jest.fn();
   return ctor;
 });
 jest.mock('../models/Grape', () => {
   const ctor = jest.fn();
   ctor.findOne = jest.fn();
+  ctor.find = jest.fn();
   return ctor;
 });
 jest.mock('../models/Appellation', () => ({ exists: jest.fn(), find: jest.fn() }));
@@ -84,6 +87,15 @@ const EXISTING_WINE = { _id: 'wine-existing', name: 'Clos des Papes' };
 
 // findOne(...).populate(...) — populate resolves to the doc or null
 const findOneChain = (doc) => ({ populate: jest.fn().mockResolvedValue(doc) });
+
+/** A fully chainable lean query — select→sort→limit→lean (the appellation
+ *  resolver) and select→lean (the cross-field reference load) both work. */
+const taxonomyChain = (rows) => {
+  const c = {};
+  for (const m of ['select', 'sort', 'limit', 'populate']) c[m] = jest.fn(() => c);
+  c.lean = jest.fn().mockResolvedValue(rows);
+  return c;
+};
 
 /**
  * Query-shape dispatcher for WineDefinition.find — the service issues five
@@ -146,14 +158,15 @@ beforeEach(() => {
   WineDefinition.findOne.mockReturnValue(findOneChain(null));
   // Producer-spelling adoption: default = producer is new to the registry
   WineDefinition.aggregate.mockResolvedValue([]);
-  // Appellation adoption: default = not curated → typed spelling kept
-  Appellation.find.mockReturnValue({
-    select: jest.fn().mockReturnValue({
-      sort: jest.fn().mockReturnValue({
-        limit: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([]) }),
-      }),
-    }),
-  });
+  // Appellation adoption: default = not curated → typed spelling kept.
+  // The same chain serves the mint-time cross-field producer gate's reference
+  // load (services/crossFieldScan.loadContext), which reads all four taxonomy
+  // collections — EMPTY here, so no cross-field rule can fire and this suite
+  // keeps testing threshold routing alone
+  // (findOrCreateWine.crossFieldProducer.test.js owns those rules).
+  for (const Model of [Appellation, Region, Country, Grape]) {
+    Model.find.mockReturnValue(taxonomyChain([]));
+  }
   searchService.getIsAvailable.mockReturnValue(false);
   primeFind();
   scoreAllMatches.mockReturnValue([]);
@@ -668,13 +681,11 @@ describe('findOrCreateWine — creation', () => {
   // generation, so a synonym produces the canonical normalizedKey and the
   // exact-match stage collapses variants instead of minting siblings.
   test('adopts the curated appellation spelling, and the keys follow it', async () => {
-    Appellation.find.mockReturnValue({
-      select: jest.fn().mockReturnValue({
-        sort: jest.fn().mockReturnValue({
-          limit: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([{ name: 'Châteauneuf-du-Pape' }]) }),
-        }),
-      }),
-    });
+    // The resolver's lookup ($or on the key) finds the curated doc; the
+    // cross-field reference load (a bare {}) must still see an empty taxonomy,
+    // or "Paul Avril" would be judged against a one-appellation registry.
+    Appellation.find.mockImplementation((q) =>
+      taxonomyChain(q && q.$or ? [{ name: 'Châteauneuf-du-Pape' }] : []));
     const result = await findOrCreateWine({ ...INPUT, appellation: 'Chateauneuf du Pape' }, USER_ID);
     expect(result.created).toBe(true);
     expect(WineDefinition.mock.calls[0][0].appellation).toBe('Châteauneuf-du-Pape');

@@ -23,9 +23,12 @@ const Country = require('../models/Country');
 const Grape = require('../models/Grape');
 const {
   DEFAULT_CROSS_FIELD_CHECK_IDS,
+  IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS,
   CROSS_FIELD_CHECK_SELECT,
   buildCrossFieldRefs,
   runCrossFieldChecks,
+  detectPlacePlusFillerProducer,
+  SCAN_SUSPECT_PLACE_FILLER_ID,
 } = require('../utils/crossFieldChecks');
 const { normalizeString, normalizeProducerKey, calculateSimilarity } = require('../utils/normalize');
 
@@ -144,8 +147,29 @@ function detectCuveeNearMiss(wines) {
   return hits;
 }
 
-/** One round-trip per taxonomy collection; refs + id→name maps from the same rows. */
+/**
+ * One round-trip per taxonomy collection; refs + id→name maps from the same
+ * rows. MEMOIZED for 45s (release-audit MED-2): the mint gate calls this once
+ * per CREATED wine, and a 300-row import paid the four collection loads 300
+ * times. The rules already tolerate taxonomy staleness by design (module
+ * header, residual 2), so a sub-minute cache changes no verdict that matters —
+ * a just-promoted appellation is picked up on the next window.
+ */
+let contextCache = null;
+let contextCacheAt = 0;
+const CONTEXT_TTL_MS = 45 * 1000;
 async function loadContext() {
+  // Disabled under jest: module-level state outlives clearAllMocks, and a
+  // cached refs object would silently bleed one test's taxonomy fixtures into
+  // the next. Production and one-off scripts get the cache.
+  if (process.env.NODE_ENV !== 'test'
+      && contextCache && Date.now() - contextCacheAt < CONTEXT_TTL_MS) return contextCache;
+  const fresh = await loadContextUncached();
+  contextCache = fresh;
+  contextCacheAt = Date.now();
+  return fresh;
+}
+async function loadContextUncached() {
   const [appellations, regions, countries, grapes] = await Promise.all([
     Appellation.find({}).select('name normalizedName normalizedSynonyms').lean(),
     Region.find({}).select('name normalizedName normalizedSynonyms').lean(),
@@ -293,7 +317,73 @@ async function detectCrossFieldForValues(values, checkIds = DEFAULT_CROSS_FIELD_
   return runCrossFieldChecks(flat, refs, { checkIds, ignoreCleared: true });
 }
 
+/**
+ * "Is this string a producer at all?" — the one-question form of the gate
+ * above, for the two surfaces that have a CANDIDATE producer and no wine row to
+ * hang it on: the mint chokepoint (services/findOrCreateWine, step 3) and the
+ * label scanner (routes/wines.js POST /scan-label).
+ *
+ * Same rules, same evaluation, same DB context as
+ * services/pendingWineOps.applyPendingFix — restricted to
+ * IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS, the producer-is-not-a-producer
+ * family. Wrapped here rather than repeated at each call site so the check id
+ * list can never drift between the queue that refuses these strings and the
+ * mint that must stop creating them.
+ *
+ * Returns the FIRST hit only: a caller acting on this has one decision to make
+ * (file the row pending / mark the extraction suspect), and the first rule that
+ * fires is the one worth telling a curator about.
+ *
+ * @param {{name?, producer?, appellation?, region?, country?}} values
+ * @returns {Promise<{check: string, detail: string}|null>} null = usable
+ */
+async function detectBlockingProducerIssue(values) {
+  const hits = await detectCrossFieldForValues(values, IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS);
+  return hits && hits.length ? hits[0] : null;
+}
+
+/**
+ * The SCAN-TIME variant: the six blocking rules first (hard — flag whatever
+ * else is true), then the aggressive place-plus-filler heuristic (soft — the
+ * caller applies it only when the registry matched nothing; see the rule's
+ * comment in utils/crossFieldChecks for why it must never gate a write).
+ * One taxonomy load serves both stages.
+ *
+ * @returns {Promise<{check, detail, hard: boolean}|null>}
+ */
+async function detectScanSuspectProducer(values) {
+  const flat = {
+    name: values.name == null ? '' : String(values.name),
+    producer: values.producer == null ? '' : String(values.producer),
+    appellation: values.appellation || null,
+    region: null,
+    country: null,
+  };
+  // A producer the Latin fold cannot represent ("獺祭", "Мукузани") is the
+  // documented non-Latin KNOWN LIMIT, not a placeholder — isUnknownName reads
+  // the empty fold as one and producer-placeholder.v1 would hard-flag every
+  // such scan (release-audit HIGH-1). The extraction is fine; the mint path
+  // already files these pending via its own length gate. No flag, no lookup.
+  const { normalizeString } = require('../utils/normalize');
+  if (flat.producer.trim() && !normalizeString(flat.producer)) return null;
+  const { refs } = await loadContext();
+  const hits = runCrossFieldChecks(flat, refs, {
+    checkIds: IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS, ignoreCleared: true,
+  });
+  if (hits && hits.length) return { ...hits[0], hard: true };
+  const soft = detectPlacePlusFillerProducer(flat.producer, refs);
+  if (soft) {
+    return {
+      check: SCAN_SUSPECT_PLACE_FILLER_ID,
+      detail: `"${soft.place}" + ${soft.filler}`,
+      hard: false,
+    };
+  }
+  return null;
+}
+
 module.exports = {
   scanCrossFieldChecks, detectCrossFieldForWines, detectCrossFieldForValues,
+  detectBlockingProducerIssue, detectScanSuspectProducer,
   detectCuveeNearMiss, CUVEE_NEAR_MISS, NEAR_MISS_MIN_SIMILARITY,
 };
