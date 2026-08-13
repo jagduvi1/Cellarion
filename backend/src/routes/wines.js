@@ -36,6 +36,48 @@ const MAX_AI_QUERY_LEN = 300;
 const { validateNewWineFields, MAX_WINE_FIELD, MAX_GRAPES } = require('../services/wineCommit');
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
 
+/**
+ * Mark a scan whose PRODUCER is detectably not a producer.
+ *
+ * Prod 2026-08-13: a label scan returned producer "Pays d'Oc Organic Wine",
+ * name "Chardonnay Reserve". Both boxes were filled, so the extraction looked
+ * complete, the read-only confirmation card was shown, the user pressed
+ * confirm, and the registry gained a published wine whose producer is a
+ * region-plus-marketing-copy string. Nothing asked whether the string was a
+ * producer.
+ *
+ * The same six rules the mint chokepoint and the curation queue use
+ * (services/crossFieldScan.detectBlockingProducerIssue), applied to the
+ * EXTRACTION. A hit reuses the v1.109.0 half-read machinery verbatim —
+ * `partial: true` routes the client to the editable prefilled form plus the
+ * back-label offer — so the user gets a chance to fix the producer BEFORE
+ * committing, with no new step and nothing rejected. `producer_suspect` names
+ * the rule, so the response says WHY rather than just "partial".
+ *
+ * Best-effort: this is a decoration on a scan that has already been paid for,
+ * and a taxonomy read failing here must never turn a successful scan into an
+ * error. Mutates and returns the extraction it was given.
+ */
+async function flagSuspectProducer(extracted) {
+  if (!extracted || typeof extracted !== 'object') return extracted;
+  if (typeof extracted.producer !== 'string' || !extracted.producer.trim()) return extracted;
+  try {
+    const { detectBlockingProducerIssue } = require('../services/crossFieldScan');
+    const hit = await detectBlockingProducerIssue({
+      name: typeof extracted.name === 'string' ? extracted.name : '',
+      producer: extracted.producer,
+      appellation: typeof extracted.appellation === 'string' ? extracted.appellation : '',
+    });
+    if (hit) {
+      extracted.partial = true;
+      extracted.producer_suspect = hit.check;
+    }
+  } catch (err) {
+    console.warn('Producer cross-field check failed (non-fatal):', err.message);
+  }
+  return extracted;
+}
+
 const cleanField = (v) => {
   if (typeof v !== 'string') return null;
   const s = v.trim().replace(/\s+/g, ' ').slice(0, MAX_WINE_FIELD);
@@ -325,16 +367,18 @@ router.get('/', requireAuth, async (req, res) => {
 //         is detected from the sanitized bytes, since the declared one can lie)
 // Returns: {
 //   extracted: { name, producer, vintage, country, region, appellation, type,
-//                grapes[], partial?: true },
+//                grapes[], partial?: true, producer_suspect?: "<rule id>" },
 //   match: { wine: WineDefinition, confidence: number } | null,
 //   labelImage: "data:image/png;base64,..." (background-removed label, or original as fallback),
 //   scanImageId: "<BottleImage id>" | null
 // }
 //
 // `extracted.partial` marks a HALF-READ label — one of name/producer came back
-// empty. It is a 200, not an error: the fields that WERE read prefill the form,
-// the frame is kept, and the client may offer the optional back-label rescue
-// (POST /scan-label-back). A 422 (nothing readable at all) now also carries
+// empty, OR the producer that came back is not a producer at all (see
+// flagSuspectProducer; `producer_suspect` then names the cross-field rule that
+// caught it). It is a 200, not an error: the fields that WERE read prefill the
+// form, the frame is kept, and the client may offer the optional back-label
+// rescue (POST /scan-label-back). A 422 (nothing readable at all) now also carries
 // `scanImageId`, for the same reason — the user is about to type the wine by
 // hand, and that manual entry mints the pending row the photo is evidence for.
 //
@@ -447,6 +491,12 @@ router.post('/scan-label', requireAuth, aiBurstLimiter, asyncHandler(async (req,
   // been paid for — a failure here (e.g. a DB error) returns 500 WITHOUT a
   // refund, since the AI work really happened.
   try {
+    // A producer the cross-field rules say is not a producer makes this a
+    // HALF-READ label, whatever the model filled the box with — the same
+    // `partial` treatment a genuinely empty producer already gets. Runs before
+    // the match so the response is internally consistent.
+    await flagSuspectProducer(extracted);
+
     // Run the match on whatever the extraction produced, partial or not: the
     // shared helper is the one place that decides what a half-read identity can
     // and cannot match (see matchScannedIdentity).
@@ -591,6 +641,15 @@ router.post('/scan-label-back', requireAuth, aiBurstLimiter, asyncHandler(async 
     // frontExtracted can never ride mergeBackScan's spread back out to the
     // client (audit INFO-1).
     const { merged, conflicts, filled } = mergeBackScan(front, back);
+
+    // The rescue can also FILL the producer box with a string that is not a
+    // producer (the back label's "Produit de France" line is the classic), and
+    // the merged identity is what the commit will carry — so it gets the same
+    // check the front scan got. Re-evaluated rather than carried over from the
+    // front response: the merge may have replaced a blank producer with a back
+    // value, or left a suspect front value in place, and only the merged row
+    // says which.
+    await flagSuspectProducer(merged);
 
     // Re-run the registry lookup on the MERGED identity — the whole point of
     // the rescue is that the wine may now be identifiable when it was not.

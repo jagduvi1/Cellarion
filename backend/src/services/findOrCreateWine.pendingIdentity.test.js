@@ -33,12 +33,14 @@ jest.mock('../models/WineDefinition', () => {
 jest.mock('../models/Country', () => {
   const ctor = jest.fn();
   ctor.findOne = jest.fn();
+  ctor.find = jest.fn();
   ctor.exists = jest.fn();
   return ctor;
 });
 jest.mock('../models/Region', () => {
   const ctor = jest.fn();
   ctor.findOne = jest.fn();
+  ctor.find = jest.fn();
   ctor.exists = jest.fn();
   return ctor;
 });
@@ -81,6 +83,30 @@ const BASE = {
 
 const findOneChain = (doc) => ({ populate: jest.fn().mockResolvedValue(doc) });
 
+/** A fully chainable lean query — the shape both the appellation resolver
+ *  (select→sort→limit→lean) and the cross-field reference load (select→lean)
+ *  ask for. */
+const chain = (rows) => {
+  const c = {};
+  for (const m of ['select', 'sort', 'limit', 'populate']) c[m] = jest.fn(() => c);
+  c.lean = jest.fn().mockResolvedValue(rows);
+  return c;
+};
+
+/**
+ * An EMPTY taxonomy for the four collections the mint-time cross-field
+ * producer gate loads (services/crossFieldScan.loadContext). Empty on purpose
+ * here: this suite is about the pending/sentinel/place gates, and the rules
+ * that need reference data have their own suite
+ * (findOrCreateWine.crossFieldProducer.test.js).
+ */
+function primeEmptyTaxonomy() {
+  Appellation.find.mockReturnValue(chain([]));
+  Region.find.mockReturnValue(chain([]));
+  Country.find.mockReturnValue(chain([]));
+  Grape.find.mockReturnValue(chain([]));
+}
+
 function primeFind({ canonicalHits = [], canonicalSiblings = [], siblings = [], meiliDocs = [], textDocs = [] } = {}) {
   WineDefinition.find.mockImplementation((q) => {
     if (q && q.canonicalKey) {
@@ -122,13 +148,7 @@ beforeEach(() => {
 
   WineDefinition.findOne.mockReturnValue(findOneChain(null));
   WineDefinition.aggregate.mockResolvedValue([]);
-  Appellation.find.mockReturnValue({
-    select: jest.fn().mockReturnValue({
-      sort: jest.fn().mockReturnValue({
-        limit: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([]) }),
-      }),
-    }),
-  });
+  primeEmptyTaxonomy();
   searchService.getIsAvailable.mockReturnValue(false);
   primeFind();
   scoreAllMatches.mockReturnValue([]);
@@ -163,21 +183,12 @@ function rearm() {
   });
   WineDefinition.findOne.mockReturnValue(findOneChain(null));
   WineDefinition.aggregate.mockResolvedValue([]);
-  Appellation.find.mockReturnValue({
-    select: jest.fn().mockReturnValue({
-      sort: jest.fn().mockReturnValue({
-        limit: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([]) }),
-      }),
-    }),
-  });
+  primeEmptyTaxonomy();
   Country.findOne.mockResolvedValue({ _id: 'country-1' });
   Region.findOne.mockResolvedValue({ _id: 'region-1' });
   Country.exists.mockResolvedValue(null);
   Region.exists.mockResolvedValue(null);
   Appellation.exists.mockResolvedValue(null);
-  Grape.find.mockReturnValue({
-    select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([]) }),
-  });
   searchService.getIsAvailable.mockReturnValue(false);
   scoreAllMatches.mockReturnValue([]);
 }
@@ -398,14 +409,19 @@ describe('WITHOUT allowPending the curation gates throw byte-identical 400s', ()
     expect(WineDefinition).not.toHaveBeenCalled();
   });
 
-  test('a sentinel producer is NOT treated as missing — it hits the normal gates', async () => {
-    // 'Unknown' normalizes to 7 chars, so it passes the length gate and is
-    // stored as a producer, exactly as before this feature. Curation surfaces
-    // catch it in the cross-field scan (producerPlaceholder rule).
-    const res = await findOrCreateWine({ ...BASE, producer: 'Unknown' }, USER);
-    expect(res.created).toBe(true);
-    expect(minted().pendingIdentity).toBe(false);
-    expect(minted().producer).toBe('Unknown');
+  test('INVERTED — a sentinel producer is now REFUSED here, not stored', async () => {
+    // Was: 'Unknown' passed the length gate and was stored verbatim, and the
+    // comment shrugged that "curation surfaces catch it in the cross-field
+    // scan" — i.e. a curator could mint a shared-registry producer literally
+    // named "Unknown" and the net caught it only afterwards, in a review queue.
+    // The mint-time cross-field gate (producer-placeholder.v1) closes that:
+    // the curation surfaces are told, at the moment they write.
+    await expect(findOrCreateWine({ ...BASE, producer: 'Unknown' }, USER))
+      .rejects.toMatchObject({
+        status: 400,
+        message: expect.stringContaining('producer-placeholder.v1'),
+      });
+    expect(WineDefinition).not.toHaveBeenCalled();
   });
 });
 

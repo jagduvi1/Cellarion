@@ -262,7 +262,21 @@ async function resolveOrMintWine(newWine, req, { allowPending = true } = {}) {
     // is client-asserted and later merges rewrite it.
     logAudit(req, 'wine.create',
       { type: 'wine', id: wine._id },
-      { via, name: wine.name, producer: wine.producer || null, ...(pendingIdentity ? { pendingIdentity: true } : {}) }
+      {
+        via, name: wine.name, producer: wine.producer || null,
+        ...(pendingIdentity ? { pendingIdentity: true } : {}),
+        // A producer the cross-field rules refused at mint time is NOT stored
+        // on the row (the wine keys pending with producer ''), so the audit
+        // entry is the only place the original string survives — which is what
+        // lets a curator see WHAT the scan read, and an admin see the rule that
+        // caught it. findOrCreateWine sets this on creates only.
+        ...(result.producerRejected
+          ? {
+              rejectedProducer: result.producerRejected.producer,
+              rejectedByCheck: result.producerRejected.check,
+            }
+          : {}),
+      }
     );
     // A pending row has no public wine page to announce — it 404s for everyone
     // but its creator, so pinging IndexNow would advertise a dead URL. The

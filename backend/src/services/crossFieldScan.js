@@ -23,6 +23,7 @@ const Country = require('../models/Country');
 const Grape = require('../models/Grape');
 const {
   DEFAULT_CROSS_FIELD_CHECK_IDS,
+  IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS,
   CROSS_FIELD_CHECK_SELECT,
   buildCrossFieldRefs,
   runCrossFieldChecks,
@@ -293,7 +294,33 @@ async function detectCrossFieldForValues(values, checkIds = DEFAULT_CROSS_FIELD_
   return runCrossFieldChecks(flat, refs, { checkIds, ignoreCleared: true });
 }
 
+/**
+ * "Is this string a producer at all?" — the one-question form of the gate
+ * above, for the two surfaces that have a CANDIDATE producer and no wine row to
+ * hang it on: the mint chokepoint (services/findOrCreateWine, step 3) and the
+ * label scanner (routes/wines.js POST /scan-label).
+ *
+ * Same rules, same evaluation, same DB context as
+ * services/pendingWineOps.applyPendingFix — restricted to
+ * IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS, the producer-is-not-a-producer
+ * family. Wrapped here rather than repeated at each call site so the check id
+ * list can never drift between the queue that refuses these strings and the
+ * mint that must stop creating them.
+ *
+ * Returns the FIRST hit only: a caller acting on this has one decision to make
+ * (file the row pending / mark the extraction suspect), and the first rule that
+ * fires is the one worth telling a curator about.
+ *
+ * @param {{name?, producer?, appellation?, region?, country?}} values
+ * @returns {Promise<{check: string, detail: string}|null>} null = usable
+ */
+async function detectBlockingProducerIssue(values) {
+  const hits = await detectCrossFieldForValues(values, IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS);
+  return hits && hits.length ? hits[0] : null;
+}
+
 module.exports = {
   scanCrossFieldChecks, detectCrossFieldForWines, detectCrossFieldForValues,
+  detectBlockingProducerIssue,
   detectCuveeNearMiss, CUVEE_NEAR_MISS, NEAR_MISS_MIN_SIMILARITY,
 };
