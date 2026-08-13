@@ -193,6 +193,22 @@ describe('list_pending_wines', () => {
   });
 });
 
+/**
+ * Two BottleImage.find shapes now reach this tool, and they must be answered
+ * separately or a test proves nothing:
+ *   { status: 'approved', visibility: 'public', … } — the PUBLIC gallery, the
+ *     same filter GET /api/images/wine/:id serves the web. Any wine.
+ *   { $or: [{ wineDefinition }, { bottle }] }       — the owners' own photos.
+ *     PENDING wines only (security audit M-1).
+ */
+const primeImageQueries = ({ gallery = [], owners = [] } = {}) => {
+  BottleImage.find.mockImplementation((q) =>
+    leanChain(q && q.status === 'approved' ? gallery : owners));
+};
+/** Did the tool issue the PRIVATE both-ways query at all? */
+const privateQueryIssued = () =>
+  BottleImage.find.mock.calls.some(([q]) => q && Array.isArray(q.$or));
+
 describe('get_pending_wine_images — the point of the feature', () => {
   const primeWine = (over = {}) => {
     WineDefinition.findById.mockReturnValue(leanChain(null).select ? {
@@ -201,7 +217,7 @@ describe('get_pending_wine_images — the point of the feature', () => {
       }),
     } : {});
     Bottle.distinct.mockResolvedValue([oid('7')]);
-    BottleImage.find.mockReturnValue(leanChain([{ _id: IMG, kind: 'bottle', originalUrl: '/api/uploads/originals/b.jpg' }]));
+    primeImageQueries({ owners: [{ _id: IMG, kind: 'bottle', originalUrl: '/api/uploads/originals/b.jpg' }] });
     BottleImage.findById.mockReturnValue({
       select: jest.fn().mockReturnValue({
         lean: jest.fn().mockResolvedValue({ _id: SCAN, kind: 'label-scan', originalUrl: '/api/uploads/originals/scan.jpg' }),
@@ -244,7 +260,7 @@ describe('get_pending_wine_images — the point of the feature', () => {
       }),
     });
     Bottle.distinct.mockResolvedValue([]);
-    BottleImage.find.mockReturnValue(leanChain([]));
+    primeImageQueries();
 
     const res = await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX);
     const body = parse(res);
@@ -268,6 +284,7 @@ describe('get_pending_wine_images — the point of the feature', () => {
     // only the still-readable frame may be served — the expired one is gone
     // evidence, whatever its sibling's clock says.
     const SCANB = oid('b');
+    primeImageQueries();
     WineDefinition.findById.mockReturnValue({
       select: jest.fn().mockReturnValue({
         lean: jest.fn().mockResolvedValue({
@@ -299,12 +316,13 @@ describe('get_pending_wine_images — the point of the feature', () => {
    * gallery of ANY wine in the registry. The REST sibling (routes/images.js)
    * always required pendingIdentity: true; this is the parity fix.
    */
-  describe('M-1 — only PENDING wines release their owners\' photos', () => {
-    const primeNonPending = (retainUntil = null) => {
+  describe('M-1 — only PENDING wines release their owners\' PRIVATE photos', () => {
+    const OWNER_PHOTO = { _id: IMG, kind: 'bottle', originalUrl: '/api/uploads/originals/b.jpg' };
+    const primeNonPending = (retainUntil = null, { scanImage = SCAN, gallery = [] } = {}) => {
       WineDefinition.findById.mockReturnValue({
         select: jest.fn().mockReturnValue({
           lean: jest.fn().mockResolvedValue({
-            _id: W1, name: 'Barolo', producer: 'Rinaldi', pendingIdentity: false, scanImage: SCAN,
+            _id: W1, name: 'Barolo', producer: 'Rinaldi', pendingIdentity: false, scanImage,
           }),
         }),
       });
@@ -316,32 +334,33 @@ describe('get_pending_wine_images — the point of the feature', () => {
         }),
       });
       Bottle.distinct.mockResolvedValue([oid('7')]);
-      BottleImage.find.mockReturnValue(leanChain([{ _id: IMG, kind: 'bottle', originalUrl: '/api/uploads/originals/b.jpg' }]));
+      primeImageQueries({ gallery, owners: [OWNER_PHOTO] });
     };
     const daysFromNow = (n) => new Date(Date.now() + n * 24 * 60 * 60 * 1000);
 
-    test('a COMPLETED wine is refused — its photos are private, not curation evidence', async () => {
+    test('a COMPLETED wine with no evidence left is refused — its photos are private', async () => {
       primeNonPending();
 
       const res = await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX);
       const body = parse(res);
 
       expect(body.error.code).toBe('conflict');
-      // Asserts the MEANING, not the sentence: a completed wine past its grace
-      // window is refused and told the scan is gone. (The wording changed when
-      // the no-scan case got its own message — behaviour here is unchanged.)
-      expect(body.error.message).toMatch(/pending-identity queue/);
-      expect(body.error.message).toMatch(/window has closed/);
+      // Asserts the MEANING, not the sentence: the scan is gone AND the wine
+      // publishes nothing, so there is genuinely nothing to look at.
+      expect(body.error.message).toMatch(/correction window has closed/);
+      expect(body.error.message).toMatch(/no public gallery photo/);
     });
 
-    test('no image is read from disk for a completed wine', async () => {
+    test('no image is read from disk, and the PRIVATE query is never issued', async () => {
       primeNonPending();
       fs.promises.readFile.mockClear();
 
       await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX);
 
       expect(fs.promises.readFile).not.toHaveBeenCalled();
-      expect(BottleImage.find).not.toHaveBeenCalled();
+      // The public-gallery lookup happens (it is what decides the refusal); the
+      // owners' both-ways query must not.
+      expect(privateQueryIssued()).toBe(false);
     });
 
     test('the payload marks the photos PRIVATE and says what they may be used for', async () => {
@@ -374,16 +393,17 @@ describe('get_pending_wine_images — the point of the feature', () => {
       expect(body.data.guidance).toMatch(/correction window/i);
     });
 
-    test('inside the window the owners\' BOTTLE photos are NOT released', async () => {
+    test('inside the window the owners\' PRIVATE photos are still NOT released', async () => {
       primeNonPending(daysFromNow(4));
 
       const res = await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX);
 
-      expect(BottleImage.find).not.toHaveBeenCalled();
+      expect(privateQueryIssued()).toBe(false);
       expect(res.content.filter((c) => c.type === 'image')).toHaveLength(1);
+      expect(parse(res).data.images.map((i) => i.image_id)).not.toContain(String(IMG));
     });
 
-    test('after the window closes it is refused again', async () => {
+    test('after the window closes, with nothing published, it is refused again', async () => {
       primeNonPending(daysFromNow(-1));
 
       const body = parse(await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX));
@@ -394,9 +414,10 @@ describe('get_pending_wine_images — the point of the feature', () => {
 
     // Found in use 2026-08-12: a curator asked about a wine that was never
     // added from a photo and was told its window "has closed" — asserting that
-    // evidence had existed and they were too late. The three states must not
-    // share one message.
-    test('a wine with NO scan is told so, not told a window expired', async () => {
+    // evidence had existed and they were too late. The states must not share
+    // one message.
+    test('a wine with NO scan and nothing published is told so, not told a window expired', async () => {
+      primeNonPending(null, { scanImage: null });
       WineDefinition.findById.mockReturnValue({
         select: jest.fn().mockReturnValue({
           lean: jest.fn().mockResolvedValue({
@@ -413,12 +434,123 @@ describe('get_pending_wine_images — the point of the feature', () => {
       expect(body.error.message).toMatch(/ask_bottle_owner/);
     });
 
-    test('a promoted wine whose scan was never stamped stays refused', async () => {
+    test('a promoted wine whose scan was never stamped, with nothing published, stays refused', async () => {
       primeNonPending(null);
 
       expect(parse(await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX)).error.code)
         .toBe('conflict');
     });
+
+    /**
+     * PROD 2026-08-13 — the inversion the somm reported: this tool refused a
+     * wine whose APPROVED PUBLIC photo the wine page renders to anonymous
+     * visitors, in the name of privacy. Serving it here is zero new exposure,
+     * and the refusal was simply false.
+     */
+    describe('the PUBLIC gallery is served for any wine, pending or not', () => {
+      const PUB = oid('c');
+      const publicPhoto = {
+        _id: PUB, kind: 'bottle', status: 'approved', visibility: 'public',
+        credit: 'Photo: Anna B.', originalUrl: '/api/uploads/originals/pub.jpg',
+      };
+
+      test('scan EXPIRED but the wine publishes a photo → the photo is served, truthfully captioned', async () => {
+        primeNonPending(daysFromNow(-1), { gallery: [publicPhoto] });
+
+        const res = await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX);
+        const body = parse(res);
+
+        expect(res.isError).toBeUndefined();
+        expect(body.data.images).toEqual([{
+          image_id: String(PUB), kind: 'bottle', private: false,
+          public_gallery: true, credit: 'Photo: Anna B.',
+        }]);
+        // The caption says what it is — a gallery shot is not a label frame and
+        // a model must not read it as one.
+        const captions = res.content.filter((c) => c.type === 'text').map((c) => c.text);
+        expect(captions.some((t) => /PUBLIC gallery photo/.test(t) && /Anna B\./.test(t))).toBe(true);
+        expect(body.data.guidance).toMatch(/No label scan is available/);
+        // …and the expired scan itself is still gone.
+        expect(body.data.images.map((i) => i.image_id)).not.toContain(String(SCAN));
+      });
+
+      test('a wine that never had a scan is served its gallery instead of a refusal', async () => {
+        primeNonPending(null, { scanImage: null, gallery: [publicPhoto] });
+        WineDefinition.findById.mockReturnValue({
+          select: jest.fn().mockReturnValue({
+            lean: jest.fn().mockResolvedValue({
+              _id: W1, name: 'Barolo', producer: 'Rinaldi', pendingIdentity: false, scanImage: null,
+            }),
+          }),
+        });
+
+        const body = parse(await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX));
+
+        expect(body.error).toBeUndefined();
+        expect(body.data.images.map((i) => i.image_id)).toEqual([String(PUB)]);
+      });
+
+      test('the gallery never widens M-1 — the owners\' private photos stay out', async () => {
+        primeNonPending(daysFromNow(-1), { gallery: [publicPhoto] });
+
+        const body = parse(await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX));
+
+        expect(privateQueryIssued()).toBe(false);
+        expect(body.data.images.map((i) => i.image_id)).not.toContain(String(IMG));
+      });
+
+      test('the gallery filter IS the web page\'s — approved + public, never a label scan', async () => {
+        primeNonPending(daysFromNow(-1), { gallery: [publicPhoto] });
+
+        await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX);
+
+        const galleryQuery = BottleImage.find.mock.calls.map(([q]) => q)
+          .find((q) => q && q.status === 'approved');
+        expect(galleryQuery).toEqual({
+          wineDefinition: W1,
+          status: 'approved',
+          visibility: 'public',
+          kind: { $ne: 'label-scan' },
+        });
+      });
+
+      test('a scan still in its window comes FIRST, with the gallery after it', async () => {
+        primeNonPending(daysFromNow(4), { gallery: [publicPhoto] });
+
+        const body = parse(await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX));
+
+        expect(body.data.images.map((i) => i.image_id)).toEqual([String(SCAN), String(PUB)]);
+        expect(body.data.images[0].private).toBe(true);
+        expect(body.data.images[1].public_gallery).toBe(true);
+      });
+    });
+  });
+
+  test('a PENDING wine does not show the same photo twice when it is also published', async () => {
+    // The owners' both-ways query already sweeps in an approved+public photo
+    // linked to the wine; the gallery pass must not append it a second time.
+    const shared = {
+      _id: IMG, kind: 'bottle', status: 'approved', visibility: 'public',
+      originalUrl: '/api/uploads/originals/b.jpg',
+    };
+    WineDefinition.findById.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue({
+          _id: W1, name: 'Kaefferkopf', producer: '', pendingIdentity: true, scanImage: SCAN,
+        }),
+      }),
+    });
+    BottleImage.findById.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue({ _id: SCAN, kind: 'label-scan', originalUrl: '/api/uploads/originals/scan.jpg' }),
+      }),
+    });
+    Bottle.distinct.mockResolvedValue([]);
+    primeImageQueries({ gallery: [shared], owners: [shared] });
+
+    const body = parse(await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX));
+
+    expect(body.data.images.map((i) => i.image_id)).toEqual([String(SCAN), String(IMG)]);
   });
 });
 
