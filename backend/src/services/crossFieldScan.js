@@ -27,6 +27,8 @@ const {
   CROSS_FIELD_CHECK_SELECT,
   buildCrossFieldRefs,
   runCrossFieldChecks,
+  detectPlacePlusFillerProducer,
+  SCAN_SUSPECT_PLACE_FILLER_ID,
 } = require('../utils/crossFieldChecks');
 const { normalizeString, normalizeProducerKey, calculateSimilarity } = require('../utils/normalize');
 
@@ -319,8 +321,41 @@ async function detectBlockingProducerIssue(values) {
   return hits && hits.length ? hits[0] : null;
 }
 
+/**
+ * The SCAN-TIME variant: the six blocking rules first (hard — flag whatever
+ * else is true), then the aggressive place-plus-filler heuristic (soft — the
+ * caller applies it only when the registry matched nothing; see the rule's
+ * comment in utils/crossFieldChecks for why it must never gate a write).
+ * One taxonomy load serves both stages.
+ *
+ * @returns {Promise<{check, detail, hard: boolean}|null>}
+ */
+async function detectScanSuspectProducer(values) {
+  const { refs } = await loadContext();
+  const flat = {
+    name: values.name == null ? '' : String(values.name),
+    producer: values.producer == null ? '' : String(values.producer),
+    appellation: values.appellation || null,
+    region: null,
+    country: null,
+  };
+  const hits = runCrossFieldChecks(flat, refs, {
+    checkIds: IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS, ignoreCleared: true,
+  });
+  if (hits && hits.length) return { ...hits[0], hard: true };
+  const soft = detectPlacePlusFillerProducer(flat.producer, refs);
+  if (soft) {
+    return {
+      check: SCAN_SUSPECT_PLACE_FILLER_ID,
+      detail: `"${soft.place}" + ${soft.filler}`,
+      hard: false,
+    };
+  }
+  return null;
+}
+
 module.exports = {
   scanCrossFieldChecks, detectCrossFieldForWines, detectCrossFieldForValues,
-  detectBlockingProducerIssue,
+  detectBlockingProducerIssue, detectScanSuspectProducer,
   detectCuveeNearMiss, CUVEE_NEAR_MISS, NEAR_MISS_MIN_SIMILARITY,
 };

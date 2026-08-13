@@ -27,7 +27,7 @@ jest.mock('../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn() }
 // The scan-time producer sanity check reads the four taxonomy collections; with
 // no Mongo here it would degrade to a 10s buffering timeout per call. Its own
 // behaviour is pinned in wines.suspectProducer.test.js.
-jest.mock('../services/crossFieldScan', () => ({ detectBlockingProducerIssue: jest.fn(async () => null) }));
+jest.mock('../services/crossFieldScan', () => ({ detectBlockingProducerIssue: jest.fn(async () => null), detectScanSuspectProducer: jest.fn(async () => null) }));
 jest.mock('../services/wineMatching', () => ({ findBestMatch: jest.fn(() => ({ bestMatch: null, bestScore: 0 })) }));
 jest.mock('../services/communityPrice', () => ({ getReleaseCurve: jest.fn() }));
 jest.mock('../middleware/aiBurstLimiter', () => (req, res, next) => next());

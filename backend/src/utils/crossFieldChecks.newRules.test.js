@@ -299,3 +299,54 @@ describe('both rules are first-class members of the queue', () => {
     for (const c of CROSS_FIELD_CHECKS) expect(typeof c.detect).toBe('function');
   });
 });
+
+// ── producer-place-plus-filler.scan (v1.111.0, SCAN-ONLY) ───────────────────
+// THE INCIDENT (prod 2026-08-13): producer "Pays d'Oc Organic Wine" — an
+// appellation padded with marketing words. The six blocking rules are
+// full-string matches and let it through to a published mint.
+describe('detectPlacePlusFillerProducer', () => {
+  const { detectPlacePlusFillerProducer } = require('./crossFieldChecks');
+  const refs = buildCrossFieldRefs({
+    appellations: [
+      { name: "Pays d'Oc", normalizedName: 'pays doc' },
+      { name: 'Margaux', normalizedName: 'margaux' },
+      { name: 'Toro', normalizedName: 'toro' },
+      { name: 'Vino de la Tierra de Castilla', normalizedName: 'vino de la tierra de castilla' },
+    ],
+    regions: [{ name: 'Rioja', normalizedName: 'rioja' }],
+    countries: [{ name: 'France', normalizedName: 'france' }],
+  });
+
+  test("THE INCIDENT: 'Pays d'Oc Organic Wine' → place + filler", () => {
+    const hit = detectPlacePlusFillerProducer("Pays d'Oc Organic Wine", refs);
+    expect(hit).toEqual({ place: "Pays d'Oc", filler: 'organic wine' });
+  });
+
+  test('Château Margaux DOES hit at the pure level — the ROUTE suppresses it behind a registry match (#942)', () => {
+    expect(detectPlacePlusFillerProducer('Château Margaux', refs))
+      .toEqual({ place: 'Margaux', filler: 'chateau' });
+  });
+
+  test('a real producer containing a place plus a NON-filler token is clean', () => {
+    // Toro is a DO; Albalá is nobody's filler word.
+    expect(detectPlacePlusFillerProducer('Bodegas Toro Albalá', refs)).toBeNull();
+  });
+
+  test('single-token producers are the exact rules\' turf — skipped here', () => {
+    expect(detectPlacePlusFillerProducer('Margaux', refs)).toBeNull();
+  });
+
+  test('longest place window wins — a multi-word VT is matched whole', () => {
+    expect(detectPlacePlusFillerProducer('Vino de la Tierra de Castilla Organic', refs))
+      .toEqual({ place: 'Vino de la Tierra de Castilla', filler: 'organic' });
+  });
+
+  test('country + filler is caught too', () => {
+    expect(detectPlacePlusFillerProducer('Organic Wine of France', refs))
+      .toEqual({ place: 'France', filler: 'organic wine of' });
+  });
+
+  test('no place anywhere → null, whatever the filler', () => {
+    expect(detectPlacePlusFillerProducer('Organic Natural Wine', refs)).toBeNull();
+  });
+});

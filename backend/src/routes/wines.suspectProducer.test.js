@@ -51,14 +51,14 @@ jest.mock('../services/aiBudget', () => ({
 // The verdict itself is the cross-field rules' own business (they have three
 // suites). What this one pins is that the ROUTE asks, and what it does with the
 // answer.
-jest.mock('../services/crossFieldScan', () => ({ detectBlockingProducerIssue: jest.fn() }));
+jest.mock('../services/crossFieldScan', () => ({ detectScanSuspectProducer: jest.fn() }));
 
 const express = require('express');
 const http = require('http');
 const jwt = require('jsonwebtoken');
 const WineDefinition = require('../models/WineDefinition');
 const { scanLabelFull, scanLabelBack } = require('../services/labelScan');
-const { detectBlockingProducerIssue } = require('../services/crossFieldScan');
+const { detectScanSuspectProducer } = require('../services/crossFieldScan');
 const winesRouter = require('./wines');
 
 const USER = '1'.repeat(24);
@@ -80,7 +80,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   // rembg unreachable — the route falls back to the sanitized original.
   global.fetch = jest.fn().mockRejectedValue(new Error('ECONNREFUSED'));
-  detectBlockingProducerIssue.mockResolvedValue(null);
+  detectScanSuspectProducer.mockResolvedValue(null);
   WineDefinition.findOne.mockReturnValue({ populate: jest.fn().mockResolvedValue(null) });
   WineDefinition.find.mockReturnValue({
     populate: jest.fn().mockReturnValue({ limit: jest.fn().mockResolvedValue([]) }),
@@ -99,8 +99,8 @@ const THE_ROW = { name: 'Chardonnay Reserve', producer: "Pays d'Oc Organic Wine"
 describe('POST /api/wines/scan-label — a producer that is not a producer', () => {
   test('the prod row: complete-looking, now marked partial with the rule that caught it', async () => {
     scanLabelFull.mockResolvedValue({ ...THE_ROW });
-    detectBlockingProducerIssue.mockResolvedValue({
-      check: 'producer-is-appellation.v1', detail: "Pays d'Oc",
+    detectScanSuspectProducer.mockResolvedValue({
+      check: 'producer-is-appellation.v1', detail: "Pays d'Oc", hard: true,
     });
 
     const body = await (await post('/api/wines/scan-label', { image: IMAGE })).json();
@@ -115,7 +115,7 @@ describe('POST /api/wines/scan-label — a producer that is not a producer', () 
 
   test('it is a 200 with the frame kept, exactly like a half-read label', async () => {
     scanLabelFull.mockResolvedValue({ ...THE_ROW });
-    detectBlockingProducerIssue.mockResolvedValue({ check: 'producer-is-grape.v1', detail: 'Syrah' });
+    detectScanSuspectProducer.mockResolvedValue({ check: 'producer-is-grape.v1', detail: 'Syrah', hard: true });
 
     const res = await post('/api/wines/scan-label', { image: IMAGE });
 
@@ -128,7 +128,7 @@ describe('POST /api/wines/scan-label — a producer that is not a producer', () 
 
     await post('/api/wines/scan-label', { image: IMAGE });
 
-    expect(detectBlockingProducerIssue).toHaveBeenCalledWith({
+    expect(detectScanSuspectProducer).toHaveBeenCalledWith({
       name: 'Chardonnay Reserve',
       producer: "Pays d'Oc Organic Wine",
       appellation: "Pays d'Oc",
@@ -149,14 +149,59 @@ describe('POST /api/wines/scan-label — a producer that is not a producer', () 
 
     const body = await (await post('/api/wines/scan-label', { image: IMAGE })).json();
 
-    expect(detectBlockingProducerIssue).not.toHaveBeenCalled();
+    expect(detectScanSuspectProducer).not.toHaveBeenCalled();
     expect(body.extracted.partial).toBe(true);           // untouched
+  });
+
+  test('SOFT hit (place-plus-filler) with NO registry match → flagged partial', async () => {
+    scanLabelFull.mockResolvedValue({ ...THE_ROW });
+    detectScanSuspectProducer.mockResolvedValue({
+      check: 'producer-place-plus-filler.scan', detail: '"Pays d\'Oc" + organic wine', hard: false,
+    });
+
+    const body = await (await post('/api/wines/scan-label', { image: IMAGE })).json();
+
+    expect(body.extracted.partial).toBe(true);
+    expect(body.extracted.producer_suspect).toBe('producer-place-plus-filler.scan');
+  });
+
+  test('SOFT hit with a registry MATCH is NOT flagged — Château Margaux keeps its one-tap card (#942)', async () => {
+    const { findBestMatch } = require('../services/wineMatching');
+    scanLabelFull.mockResolvedValue({ name: 'Château Margaux', producer: 'Château Margaux', country: 'France' });
+    findBestMatch.mockReturnValue({
+      bestMatch: { _id: 'w1', name: 'Château Margaux', producer: 'Château Margaux' }, bestScore: 0.95,
+    });
+    detectScanSuspectProducer.mockResolvedValue({
+      check: 'producer-place-plus-filler.scan', detail: '"Margaux" + chateau', hard: false,
+    });
+
+    const body = await (await post('/api/wines/scan-label', { image: IMAGE })).json();
+
+    expect(body.match).toBeTruthy();
+    expect(body.extracted.partial).toBeUndefined();
+    expect(body.extracted).not.toHaveProperty('producer_suspect');
+  });
+
+  test('a HARD hit flags even when the registry matched — that producer mints pending regardless', async () => {
+    const { findBestMatch } = require('../services/wineMatching');
+    scanLabelFull.mockResolvedValue({ ...THE_ROW });
+    findBestMatch.mockReturnValue({
+      bestMatch: { _id: 'w2', name: 'Chardonnay Reserve', producer: "Pays d'Oc Organic Wine" }, bestScore: 0.9,
+    });
+    detectScanSuspectProducer.mockResolvedValue({
+      check: 'producer-is-appellation.v1', detail: "Pays d'Oc", hard: true,
+    });
+
+    const body = await (await post('/api/wines/scan-label', { image: IMAGE })).json();
+
+    expect(body.extracted.partial).toBe(true);
+    expect(body.extracted.producer_suspect).toBe('producer-is-appellation.v1');
   });
 
   test('a taxonomy failure never costs the user a paid scan', async () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     scanLabelFull.mockResolvedValue({ ...THE_ROW });
-    detectBlockingProducerIssue.mockRejectedValue(new Error('mongo down'));
+    detectScanSuspectProducer.mockRejectedValue(new Error('mongo down'));
 
     const res = await post('/api/wines/scan-label', { image: IMAGE });
 
@@ -169,8 +214,8 @@ describe('POST /api/wines/scan-label — a producer that is not a producer', () 
 describe('POST /api/wines/scan-label-back — the MERGED identity is re-checked', () => {
   test('a back label that fills the producer box with a place is flagged on the merge', async () => {
     scanLabelBack.mockResolvedValue({ producer: 'Produit de France' });
-    detectBlockingProducerIssue.mockResolvedValue({
-      check: 'producer-is-country.v1', detail: 'France',
+    detectScanSuspectProducer.mockResolvedValue({
+      check: 'producer-is-country.v1', detail: 'France', hard: true,
     });
 
     const body = await (await post('/api/wines/scan-label-back', {
@@ -183,7 +228,7 @@ describe('POST /api/wines/scan-label-back — the MERGED identity is re-checked'
     expect(body.merged.producer_suspect).toBe('producer-is-country.v1');
     // Re-evaluated on the MERGE, not carried over from the front response: the
     // producer being judged here did not exist when the front scan ran.
-    expect(detectBlockingProducerIssue).toHaveBeenCalledWith(
+    expect(detectScanSuspectProducer).toHaveBeenCalledWith(
       expect.objectContaining({ producer: 'Produit de France' }));
   });
 

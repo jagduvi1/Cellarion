@@ -58,17 +58,24 @@ const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'
  * and a taxonomy read failing here must never turn a successful scan into an
  * error. Mutates and returns the extraction it was given.
  */
-async function flagSuspectProducer(extracted) {
+async function flagSuspectProducer(extracted, { match = null } = {}) {
   if (!extracted || typeof extracted !== 'object') return extracted;
   if (typeof extracted.producer !== 'string' || !extracted.producer.trim()) return extracted;
   try {
-    const { detectBlockingProducerIssue } = require('../services/crossFieldScan');
-    const hit = await detectBlockingProducerIssue({
+    const { detectScanSuspectProducer } = require('../services/crossFieldScan');
+    const hit = await detectScanSuspectProducer({
       name: typeof extracted.name === 'string' ? extracted.name : '',
       producer: extracted.producer,
       appellation: typeof extracted.appellation === 'string' ? extracted.appellation : '',
     });
-    if (hit) {
+    if (!hit) return extracted;
+    // HARD hits (the six blocking rules) flag regardless — that producer will
+    // mint pending whatever the user does, so the UI should say so up front.
+    // SOFT hits (place-plus-filler, the "Pays d'Oc Organic Wine" shape) flag
+    // only when the registry matched NOTHING: a real estate named after its
+    // place — Château Margaux — resolves to its registry row and must keep the
+    // one-tap card (the #942 lesson, enforced here rather than in the rule).
+    if (hit.hard || !match) {
       extracted.partial = true;
       extracted.producer_suspect = hit.check;
     }
@@ -491,16 +498,17 @@ router.post('/scan-label', requireAuth, aiBurstLimiter, asyncHandler(async (req,
   // been paid for — a failure here (e.g. a DB error) returns 500 WITHOUT a
   // refund, since the AI work really happened.
   try {
+    // Run the match on whatever the extraction produced: the shared helper is
+    // the one place that decides what a half-read identity can and cannot
+    // match (see matchScannedIdentity).
+    const match = await matchScannedIdentity(extracted);
+
     // A producer the cross-field rules say is not a producer makes this a
     // HALF-READ label, whatever the model filled the box with — the same
-    // `partial` treatment a genuinely empty producer already gets. Runs before
-    // the match so the response is internally consistent.
-    await flagSuspectProducer(extracted);
-
-    // Run the match on whatever the extraction produced, partial or not: the
-    // shared helper is the one place that decides what a half-read identity can
-    // and cannot match (see matchScannedIdentity).
-    const match = await matchScannedIdentity(extracted);
+    // `partial` treatment a genuinely empty producer already gets. Runs AFTER
+    // the match: the soft place-plus-filler flag applies only when the
+    // registry matched nothing (see the helper's comment).
+    await flagSuspectProducer(extracted, { match });
 
     // Keep the sanitized ORIGINAL (not the background-removed render — a
     // curator wants the untouched frame). Best-effort: a storage failure
@@ -642,18 +650,18 @@ router.post('/scan-label-back', requireAuth, aiBurstLimiter, asyncHandler(async 
     // client (audit INFO-1).
     const { merged, conflicts, filled } = mergeBackScan(front, back);
 
+    // Re-run the registry lookup on the MERGED identity — the whole point of
+    // the rescue is that the wine may now be identifiable when it was not.
+    const match = await matchScannedIdentity(merged);
+
     // The rescue can also FILL the producer box with a string that is not a
     // producer (the back label's "Produit de France" line is the classic), and
     // the merged identity is what the commit will carry — so it gets the same
     // check the front scan got. Re-evaluated rather than carried over from the
     // front response: the merge may have replaced a blank producer with a back
     // value, or left a suspect front value in place, and only the merged row
-    // says which.
-    await flagSuspectProducer(merged);
-
-    // Re-run the registry lookup on the MERGED identity — the whole point of
-    // the rescue is that the wine may now be identifiable when it was not.
-    const match = await matchScannedIdentity(merged);
+    // says which. After the match, for the same soft-flag rule as the front.
+    await flagSuspectProducer(merged, { match });
 
     // side:'back' so a curator shown two frames is told which is which.
     const backScan = await persistLabelScan({ buffer: safeBack, userId: req.user.id, side: 'back' });
