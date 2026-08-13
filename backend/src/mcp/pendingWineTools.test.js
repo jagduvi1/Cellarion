@@ -205,9 +205,14 @@ const primeImageQueries = ({ gallery = [], owners = [] } = {}) => {
   BottleImage.find.mockImplementation((q) =>
     leanChain(q && q.status === 'approved' ? gallery : owners));
 };
-/** Did the tool issue the PRIVATE both-ways query at all? */
+/**
+ * Did the tool issue the PRIVATE both-ways query at all? The public GALLERY
+ * query also carries an $or since the v1.111.0 hotfix (bottle-linked public
+ * photos render on the wine page and must be served) — what distinguishes the
+ * private query is the ABSENCE of the approved+public constraint.
+ */
 const privateQueryIssued = () =>
-  BottleImage.find.mock.calls.some(([q]) => q && Array.isArray(q.$or));
+  BottleImage.find.mock.calls.some(([q]) => q && Array.isArray(q.$or) && q.status !== 'approved');
 
 describe('get_pending_wine_images — the point of the feature', () => {
   const primeWine = (over = {}) => {
@@ -276,6 +281,34 @@ describe('get_pending_wine_images — the point of the feature', () => {
 
     const res = await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX);
     expect(parse(res).error.code).toBe('unavailable');
+  });
+
+  test('a BOTTLE-linked approved public photo is served for a promoted wine — the wine page shows it, so must we (v1.111.0 hotfix)', async () => {
+    // The somm's own example: Wynns "The Original", whose only photo hangs off
+    // a bottle (wineDefinition: null) yet renders publicly on the wine page.
+    WineDefinition.findById.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue({
+          _id: W1, name: 'The Original', producer: 'Wynns', pendingIdentity: false,
+          scanImage: null, scanImageBack: null,
+        }),
+      }),
+    });
+    Bottle.distinct.mockResolvedValue([oid('7')]);
+    BottleImage.find.mockReturnValue(leanChain([
+      { _id: IMG, kind: 'bottle', status: 'approved', visibility: 'public', originalUrl: '/api/uploads/originals/b.jpg' },
+    ]));
+
+    const res = await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX);
+    const body = parse(res);
+
+    expect(res.isError).toBeUndefined();
+    // The gallery query must reach for bottle-linked photos too.
+    const galleryFilter = BottleImage.find.mock.calls[0][0];
+    expect(galleryFilter.$or).toEqual(expect.arrayContaining([
+      expect.objectContaining({ bottle: { $in: [oid('7')] } }),
+    ]));
+    expect(body.data.images.map((i) => i.image_id)).toContain(String(IMG));
   });
 
   test('per-image gating: an expired front frame does not ride the back frame\'s grace (release-audit M-2)', async () => {
@@ -506,12 +539,13 @@ describe('get_pending_wine_images — the point of the feature', () => {
 
         const galleryQuery = BottleImage.find.mock.calls.map(([q]) => q)
           .find((q) => q && q.status === 'approved');
-        expect(galleryQuery).toEqual({
-          wineDefinition: W1,
-          status: 'approved',
-          visibility: 'public',
-          kind: { $ne: 'label-scan' },
-        });
+        // Both linkage forms, same public constraint (v1.111.0 hotfix): the
+        // wine page renders wine-linked AND bottle-linked approved+public
+        // photos, so the gallery asks for both — never anything private.
+        expect(galleryQuery.status).toBe('approved');
+        expect(galleryQuery.visibility).toBe('public');
+        expect(galleryQuery.kind).toEqual({ $ne: 'label-scan' });
+        expect(galleryQuery.$or).toEqual(expect.arrayContaining([{ wineDefinition: W1 }]));
       });
 
       test('a scan still in its window comes FIRST, with the gallery after it', async () => {

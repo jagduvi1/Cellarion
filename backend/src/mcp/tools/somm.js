@@ -1278,8 +1278,18 @@ registerTool({
     // first), so this surface can never show more than the page does. The
     // kind exclusion is belt-and-braces: a label scan is always private, so it
     // cannot match anyway.
+    // BOTH linkage forms (v1.111.0 hotfix — first prod smoke): an approved
+    // public photo may hang off the WINE or off one of its BOTTLES, and the
+    // wine page renders both — the somm's very example (Wynns "The Original",
+    // credited to its owner) is bottle-linked and was still refused. The
+    // distinct() runs for any wine because it only feeds this approved+public
+    // query; the PRIVATE both-ways owner query above stays pending-only (M-1).
+    const galleryBottleIds = (await Bottle.distinct('_id', { wineDefinition: wine._id })) || [];
     const gallery = await BottleImage.find({
-      wineDefinition: wine._id,
+      $or: [
+        { wineDefinition: wine._id },
+        ...(galleryBottleIds.length ? [{ bottle: { $in: galleryBottleIds } }] : []),
+      ],
       status: 'approved',
       visibility: 'public',
       kind: { $ne: 'label-scan' },
