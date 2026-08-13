@@ -4085,7 +4085,8 @@
     "closedNoReply": "This ticket is closed — open a new ticket if you need more help.",
     "awaitingResponse": "Awaiting admin response…",
     "yourDetails": "Your details",
-    "adminNotes": "Admin notes",
+    "reportResponse": "Our response",
+    "reportReviewed": "Reviewed — thanks for the report.",
     "underReview": "Under review…",
     "category": {
       "bug": "Bug Report",

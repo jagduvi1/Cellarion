@@ -9,10 +9,12 @@ const { canonicalizeWineName } = require('../../utils/producerPrefix');
 const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const { logAudit } = require('../../services/audit');
-const { stripHtml } = require('../../utils/sanitize');
-const { incrementCred } = require('../../utils/cellarCred');
 const { parsePagination } = require('../../utils/pagination');
 const { isValidId } = require('../../utils/validation');
+const { closeWineReport, validateResponse } = require('../../services/wineReportOps');
+
+// Close outcomes map onto HTTP the same way on both routes.
+const CLOSE_STATUS = { invalid_input: 400, not_found: 404, conflict: 400 };
 
 const REPORT_STATUSES = ['pending', 'resolved', 'dismissed'];
 // Keep in sync with the WineReport schema enum (models/WineReport.js)
@@ -54,7 +56,7 @@ router.get('/', async (req, res) => {
 });
 
 // PUT /api/admin/wine-reports/:id/resolve — mark a wine report as resolved.
-// Body: { adminNotes?, applySuggestion?: true }
+// Body: { response?, applySuggestion?: true }
 //
 // applySuggestion (R7): when the report carries a structured correction and
 // the admin agrees, resolving APPLIES it to the wine in the same action —
@@ -67,7 +69,12 @@ router.get('/', async (req, res) => {
 router.put('/:id/resolve', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    const { adminNotes, applySuggestion } = req.body;
+    const { response, applySuggestion } = req.body;
+
+    // BEFORE applySuggestion writes the wine — otherwise a rejected reply
+    // leaves the registry edited with the report still open.
+    const checked = validateResponse(response);
+    if (!checked.ok) return res.status(400).json({ error: checked.message });
 
     const report = await WineReport.findById(req.params.id);
     if (!report) return res.status(404).json({ error: 'Report not found' });
@@ -123,23 +130,12 @@ router.put('/:id/resolve', async (req, res) => {
         { via: 'wine-report', field: applied.field, from: applied.from, to: applied.to });
     }
 
-    report.status = 'resolved';
-    report.adminNotes = adminNotes ? stripHtml(adminNotes) : undefined;
-    report.resolvedBy = req.user.id;
-    report.resolvedAt = new Date();
-    await report.save();
-
-    // Award Cellar Cred to the reporter
-    incrementCred(report.user, 'wine_report_resolved').catch(() => {});
-
-    logAudit(req, 'wine.report.resolved', { type: 'WineReport', id: report._id }, {
-      wineDefinitionId: report.wineDefinition
+    const closed = await closeWineReport({
+      report, actorId: req.user.id, outcome: 'resolved', response, req, via: 'rest',
     });
+    if (!closed.ok) return res.status(CLOSE_STATUS[closed.code] || 400).json({ error: closed.message });
 
-    await report.populate('user', 'username email');
-    await report.populate('wineDefinition', 'name producer country type appellation');
-    await report.populate('resolvedBy', 'username');
-    res.json({ report, applied });
+    res.json({ report: closed.report, applied });
   } catch (err) {
     console.error('Admin resolve wine report error:', err);
     res.status(500).json({ error: 'Failed to resolve wine report' });
@@ -150,28 +146,14 @@ router.put('/:id/resolve', async (req, res) => {
 router.put('/:id/dismiss', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    const { adminNotes } = req.body;
+    const { response } = req.body;
 
-    const report = await WineReport.findById(req.params.id);
-    if (!report) return res.status(404).json({ error: 'Report not found' });
-    if (report.status !== 'pending') {
-      return res.status(400).json({ error: 'Report is already resolved or dismissed' });
-    }
-
-    report.status = 'dismissed';
-    report.adminNotes = adminNotes ? stripHtml(adminNotes) : undefined;
-    report.resolvedBy = req.user.id;
-    report.resolvedAt = new Date();
-    await report.save();
-
-    logAudit(req, 'wine.report.dismissed', { type: 'WineReport', id: report._id }, {
-      wineDefinitionId: report.wineDefinition
+    const closed = await closeWineReport({
+      reportId: req.params.id, actorId: req.user.id, outcome: 'dismissed', response, req, via: 'rest',
     });
+    if (!closed.ok) return res.status(CLOSE_STATUS[closed.code] || 400).json({ error: closed.message });
 
-    await report.populate('user', 'username email');
-    await report.populate('wineDefinition', 'name producer country type appellation');
-    await report.populate('resolvedBy', 'username');
-    res.json({ report });
+    res.json({ report: closed.report });
   } catch (err) {
     console.error('Admin dismiss wine report error:', err);
     res.status(500).json({ error: 'Failed to dismiss wine report' });

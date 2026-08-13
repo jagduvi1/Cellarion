@@ -49,10 +49,18 @@ const wineReportSchema = new mongoose.Schema({
     default: 'pending',
     index: true
   },
-  adminNotes: {
+  // The reply the reporter reads. Named for what it is: this field has always
+  // been rendered on the user's Support page, while the admin form called it
+  // "internal notes, not shown to user" — an admin taking that at its word
+  // could have published a candid note straight to the reporter. There is no
+  // internal-notes counterpart; anything written here is user-facing.
+  adminResponse: {
     type: String,
     trim: true,
     maxlength: 2000
+  },
+  respondedAt: {
+    type: Date
   },
   resolvedBy: {
     type: mongoose.Schema.Types.ObjectId,

@@ -3855,7 +3855,6 @@
     "closedNoReply": "Ce ticket est clos — ouvre un nouveau ticket si tu as encore besoin d'aide.",
     "awaitingResponse": "En attente de la réponse d'un administrateur…",
     "yourDetails": "Tes informations",
-    "adminNotes": "Notes de l'administrateur",
     "underReview": "En cours d'examen…",
     "category": {
       "bug": "Signalement de bug",
