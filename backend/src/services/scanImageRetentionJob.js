@@ -25,12 +25,19 @@
  * TWO CLOCKS, disjoint by construction:
  *   30 days, UNATTACHED  — the sweep described above: a scan that never became
  *                          part of any record (runUnattachedScanSweep).
- *    7 days, PROMOTED    — a scan whose wine has LEFT the pending-identity
+ *    7 days, PROMOTED    — a scan whose wine is NOT in the pending-identity
  *                          queue (runPromotedScanExpirySweep). Purpose-bound:
  *                          it stays readable to curation for a week so a wrong
- *                          completion can be corrected against the label, and
+ *                          identity can be corrected against the label, and
  *                          is then deleted — files, document, and the wine's
  *                          scanImage pointer. See services/labelScanAccess.
+ *                          Two populations, one clock: a row that LEFT the
+ *                          queue (stamped by the promotion hook) and, since
+ *                          2026-08-13, a scan-originated row that was never in
+ *                          it — minted looking complete and stamped at birth by
+ *                          services/wineCommit. The quiet failures are the ones
+ *                          whose label a curator most needs; the window is what
+ *                          bounds the retention, not queue membership.
  * A scan on a wine that is STILL pending is on neither clock: it is attached,
  * and it has no retainUntil until the row promotes.
  */

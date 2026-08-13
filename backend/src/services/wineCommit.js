@@ -140,8 +140,10 @@ function validateScanConflicts(raw) {
 
 /**
  * Attach the label photo(s) the user scanned to the registry wine they
- * produced, so the pending-identity queue can show a curator the actual label
- * instead of asking them to guess from three broken strings.
+ * produced, so curation can show a curator the actual label instead of asking
+ * them to guess from three broken strings — whether the row landed in the
+ * pending-identity queue or minted looking complete (see the L-5 discussion at
+ * the call site: the quiet failures are the ones that most need the photo).
  *
  * Ownership-checked and single-use PER IMAGE: only the SCANNER's own label-scan
  * images, and only ones not already attached to a wine (which is also what
@@ -283,32 +285,56 @@ async function resolveOrMintWine(newWine, req, { allowPending = true } = {}) {
     // promotion path submits it instead.
     if (!pendingIdentity) submitUrls(`/wines/${wine.slug || wine._id}`);
   }
-  // Stamp the label scan on a new PENDING mint — and on the creator's OWN
-  // pending row that has none yet, which is how a second bottle of the same
+  // Stamp the label scan on EVERY scan-originated mint — and on the creator's
+  // OWN pending row that has none yet, which is how a second bottle of the same
   // unidentified wine can still supply the photo the first add didn't have.
   //
-  // PENDING ONLY (audit L-5, data minimisation): the scan exists for exactly
-  // one purpose — letting a curator read a label the software could not. A
-  // fully-identified wine needs no such evidence, so retaining the user's
-  // original frame against it stores a personal photo with no purpose to
-  // justify it. Unattached scans are swept after 30 days by
-  // services/scanImageRetentionJob.
+  // L-5 (data minimisation) REVISITED, honestly. The rule used to be PENDING
+  // ONLY, on the argument that a fully-identified wine needs no evidence. Prod
+  // 2026-08-13 disproved the premise: the wines whose scan errors need a label
+  // to settle are precisely the ones that came back looking complete —
+  // "Chardonnay Reserve" by "Pays d'Oc Organic Wine" minted as an ordinary
+  // published row, and a curator meeting it later had a plausible-looking
+  // record, no photo, and no way to tell. A scan that fails LOUDLY leaves
+  // evidence; a scan that fails QUIETLY left none. That is the wrong way round.
+  //
+  // So the purpose exists for both populations, and the WINDOW is what bounds
+  // it — not queue membership:
+  //   pending row      → retainUntil stays null (no clock while the queue is the
+  //                      purpose); the promotion hook stamps it on the way out.
+  //   non-pending mint → stamped here, immediately: the wine was born promoted,
+  //                      so its correction window starts at birth. Same
+  //                      PROMOTED_SCAN_GRACE_DAYS, same sweep, same deletion.
+  // GDPR posture is unchanged: same data category (a private kind:'label-scan'
+  // photo of the user's own bottle), no new consent, already covered by
+  // GET /api/users/me/export and the account-deletion cascade (both key on
+  // uploadedBy, not on the wine's state — services/userDataRegistry), and
+  // deleted by the same two sweeps in services/scanImageRetentionJob. The net
+  // effect is BOUNDED retention where there was previously none at all: before
+  // this, a non-pending mint's frame was left unattached and swept at 30 days;
+  // it is now attached and swept at 7.
+  //
+  // The RESOLVE branch keeps its pending-only gate deliberately: backfilling a
+  // photo onto an existing published wine somebody else may have created is a
+  // different act with a different owner, and nothing has asked for it.
   //
   // The BACK scan and the front/back conflicts ride the SAME gate, deliberately:
-  // they are the same evidence about the same unreadable label, so a condition
-  // that let one through and not the other would store a photo whose
-  // explanation is missing (or the reverse). The back frame is optional — a
-  // commit may carry only the front, only the back (the front scan 422'd and
-  // its frame was abandoned), or both.
-  if ((newWine.scanImageId || newWine.scanImageBackId) && pendingIdentity
-      && (created || (String(wine.createdBy) === String(req.user.id) && !wine.scanImage && !wine.scanImageBack))) {
+  // they are the same evidence about the same label, so a condition that let one
+  // through and not the other would store a photo whose explanation is missing
+  // (or the reverse). The back frame is optional — a commit may carry only the
+  // front, only the back (the front scan 422'd and its frame was abandoned), or
+  // both.
+  if ((newWine.scanImageId || newWine.scanImageBackId)
+      && (created
+        || (pendingIdentity && String(wine.createdBy) === String(req.user.id)
+            && !wine.scanImage && !wine.scanImageBack))) {
     await attachScanImage(
       wine,
       { scanImageId: newWine.scanImageId, scanImageBackId: newWine.scanImageBackId },
       req
     );
-    // Stored only alongside the evidence it explains, and only when the row is
-    // still pending — a completed identity has nothing to correct.
+    // Stored only alongside the evidence it explains: "front said X, back said
+    // Y" is a statement ABOUT those photos and cannot be checked without them.
     const conflicts = validateScanConflicts(newWine.scanConflicts);
     if (conflicts && (wine.scanImage || wine.scanImageBack)
         && (!wine.scanFieldConflicts || wine.scanFieldConflicts.length === 0)) {
@@ -318,6 +344,18 @@ async function resolveOrMintWine(newWine, req, { allowPending = true } = {}) {
       } catch (err) {
         console.warn('Scan-conflict record failed (non-fatal):', err.message);
       }
+    }
+    // Start the retention clock on a wine that was born PROMOTED. The
+    // post('save') hook in models/WineDefinition only fires on the
+    // pending→promoted TRANSITION, which a row that was never pending never
+    // makes — so without this the frame would be attached, readable, and on no
+    // clock at all: exactly the "worst of both worlds" state
+    // services/labelScanAccess exists to end. Idempotent and best-effort by
+    // construction (it matches retainUntil: null and swallows its own errors),
+    // and a no-op for a pending row, whose clock must not start yet.
+    if (!pendingIdentity && (wine.scanImage || wine.scanImageBack)) {
+      const { stampPromotedScanRetention } = require('./labelScanAccess');
+      await stampPromotedScanRetention(wine);
     }
   }
   return { wine, created: !!created, pendingIdentity };

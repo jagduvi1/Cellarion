@@ -79,6 +79,31 @@ test('erasure unlinks the files, deletes the docs, and NULLS every wine pointing
   );
 });
 
+/**
+ * 2026-08-13: a scan-originated wine that mints looking COMPLETE now keeps its
+ * frame too (services/wineCommit, L-5 revisited). That is a new POPULATION of
+ * label-scan rows, not a new data category — so the GDPR contract must already
+ * cover it, and this pins that it does: both sides key on the UPLOADER, never
+ * on the wine's pending state, so a frame attached to a published wine is
+ * exported and erased exactly like one attached to a queued wine.
+ */
+test('export and erasure never consult the wine — they key on the uploader', async () => {
+  const own = [{ _id: 'born-1', originalUrl: '/api/uploads/originals/born.jpg' }];
+  BottleImage.find.mockReturnValue(leanFind(own));
+
+  await entry.purge({ userId: USER, deletedUserId: DELETED });
+
+  // The selection carries no pendingIdentity / retainUntil term of any kind.
+  const selection = BottleImage.find.mock.calls[0][0];
+  expect(selection).toEqual({ uploadedBy: USER, assignedToWine: { $ne: true } });
+  expect(BottleImage.deleteMany.mock.calls[0][0]).toEqual({ uploadedBy: USER, assignedToWine: { $ne: true } });
+  // …and the published wine's pointer is nulled like any other.
+  expect(WineDefinition.updateMany).toHaveBeenCalledWith(
+    { scanImage: { $in: ['born-1'] } },
+    { $set: { scanImage: null, scanFieldConflicts: [] } },
+  );
+});
+
 test('with nothing to delete, no pointer update is issued', async () => {
   BottleImage.find.mockReturnValue(leanFind([]));
 
