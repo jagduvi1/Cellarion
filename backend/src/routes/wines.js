@@ -63,19 +63,26 @@ async function flagSuspectProducer(extracted, { match = null } = {}) {
   if (typeof extracted.producer !== 'string' || !extracted.producer.trim()) return extracted;
   try {
     const { detectScanSuspectProducer } = require('../services/crossFieldScan');
+    // Field caps BEFORE the check (release-audit HIGH-2): scanLabelFull hands
+    // back the model's raw JSON, so a crafted label can return a producer far
+    // past any schema cap — and the containment heuristic's cost grows with
+    // token count. 200 chars is the registry field cap; nothing real is longer.
     const hit = await detectScanSuspectProducer({
-      name: typeof extracted.name === 'string' ? extracted.name : '',
-      producer: extracted.producer,
-      appellation: typeof extracted.appellation === 'string' ? extracted.appellation : '',
+      name: typeof extracted.name === 'string' ? extracted.name.slice(0, 200) : '',
+      producer: extracted.producer.slice(0, 200),
+      appellation: typeof extracted.appellation === 'string' ? extracted.appellation.slice(0, 200) : '',
     });
     if (!hit) return extracted;
-    // HARD hits (the six blocking rules) flag regardless — that producer will
-    // mint pending whatever the user does, so the UI should say so up front.
-    // SOFT hits (place-plus-filler, the "Pays d'Oc Organic Wine" shape) flag
-    // only when the registry matched NOTHING: a real estate named after its
-    // place — Château Margaux — resolves to its registry row and must keep the
-    // one-tap card (the #942 lesson, enforced here rather than in the rule).
-    if (hit.hard || !match) {
+    // Flag ONLY when the registry matched nothing — for hard and soft hits
+    // alike (release-audit M-3). With a match present, confirming attaches to
+    // the EXISTING wine and mints nothing, so the flag would cost the one-tap
+    // card (and the manual form's country requirement) for zero registry
+    // benefit; a real place-named estate — Château Margaux — keeps its card
+    // (the #942 lesson). A junk producer that matches an existing junk row
+    // dedups to it, which beats minting a twin; that row is curation's to fix.
+    // Without a match, the flag routes to the editable form, and if the user
+    // confirms a HARD-hit producer unchanged the mint gate files it pending.
+    if (!match) {
       extracted.partial = true;
       extracted.producer_suspect = hit.check;
     }
@@ -648,7 +655,14 @@ router.post('/scan-label-back', requireAuth, aiBurstLimiter, asyncHandler(async 
     // The ALLOWLISTED front object, so junk keys a hostile client stuffed into
     // frontExtracted can never ride mergeBackScan's spread back out to the
     // client (audit INFO-1).
-    const { merged, conflicts, filled } = mergeBackScan(front, back);
+    // The client echoes the front response's producer_suspect flag; it never
+    // enters the allowlisted `front` object (schema fields only), but it tells
+    // the merge that a usable back producer should WIN that field rather than
+    // lose to the flagged string (release-audit M-1 — front-wins made the
+    // rescue inert for the very case that triggers it).
+    const suspectProducer = typeof frontExtracted?.producer_suspect === 'string'
+      && frontExtracted.producer_suspect.length <= 64;
+    const { merged, conflicts, filled } = mergeBackScan(front, back, { suspectProducer });
 
     // Re-run the registry lookup on the MERGED identity — the whole point of
     // the rescue is that the wine may now be identifiable when it was not.

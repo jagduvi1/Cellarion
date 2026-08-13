@@ -350,3 +350,25 @@ describe('detectPlacePlusFillerProducer', () => {
     expect(detectPlacePlusFillerProducer('Organic Natural Wine', refs)).toBeNull();
   });
 });
+
+// Audit HIGH-1/HIGH-2 pins on the scan-time producer machinery.
+describe('scan-time producer machinery — audit hardening', () => {
+  const { detectPlacePlusFillerProducer } = require('./crossFieldChecks');
+  const refsHard = buildCrossFieldRefs({
+    appellations: [{ name: "Pays d'Oc", normalizedName: 'pays doc' }],
+  });
+
+  test('HIGH-2: 13+ tokens is not this rule\'s shape — the O(n³) window loop never runs on it', () => {
+    const long = "Pays d'Oc " + Array(12).fill('organic').join(' ');
+    expect(detectPlacePlusFillerProducer(long, refsHard)).toBeNull();
+  });
+
+  test('HIGH-1: a producer the Latin fold cannot represent is skipped, not flagged as a placeholder', async () => {
+    // detectScanSuspectProducer returns BEFORE any taxonomy query for these,
+    // so no model mocks are needed — a query would throw here.
+    const { detectScanSuspectProducer } = require('../services/crossFieldScan');
+    for (const producer of ['獺祭', 'Мукузани', '샤또 무똥']) {
+      expect(await detectScanSuspectProducer({ name: 'x', producer })).toBeNull();
+    }
+  });
+});

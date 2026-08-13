@@ -147,8 +147,29 @@ function detectCuveeNearMiss(wines) {
   return hits;
 }
 
-/** One round-trip per taxonomy collection; refs + id→name maps from the same rows. */
+/**
+ * One round-trip per taxonomy collection; refs + id→name maps from the same
+ * rows. MEMOIZED for 45s (release-audit MED-2): the mint gate calls this once
+ * per CREATED wine, and a 300-row import paid the four collection loads 300
+ * times. The rules already tolerate taxonomy staleness by design (module
+ * header, residual 2), so a sub-minute cache changes no verdict that matters —
+ * a just-promoted appellation is picked up on the next window.
+ */
+let contextCache = null;
+let contextCacheAt = 0;
+const CONTEXT_TTL_MS = 45 * 1000;
 async function loadContext() {
+  // Disabled under jest: module-level state outlives clearAllMocks, and a
+  // cached refs object would silently bleed one test's taxonomy fixtures into
+  // the next. Production and one-off scripts get the cache.
+  if (process.env.NODE_ENV !== 'test'
+      && contextCache && Date.now() - contextCacheAt < CONTEXT_TTL_MS) return contextCache;
+  const fresh = await loadContextUncached();
+  contextCache = fresh;
+  contextCacheAt = Date.now();
+  return fresh;
+}
+async function loadContextUncached() {
   const [appellations, regions, countries, grapes] = await Promise.all([
     Appellation.find({}).select('name normalizedName normalizedSynonyms').lean(),
     Region.find({}).select('name normalizedName normalizedSynonyms').lean(),
@@ -331,7 +352,6 @@ async function detectBlockingProducerIssue(values) {
  * @returns {Promise<{check, detail, hard: boolean}|null>}
  */
 async function detectScanSuspectProducer(values) {
-  const { refs } = await loadContext();
   const flat = {
     name: values.name == null ? '' : String(values.name),
     producer: values.producer == null ? '' : String(values.producer),
@@ -339,6 +359,14 @@ async function detectScanSuspectProducer(values) {
     region: null,
     country: null,
   };
+  // A producer the Latin fold cannot represent ("獺祭", "Мукузани") is the
+  // documented non-Latin KNOWN LIMIT, not a placeholder — isUnknownName reads
+  // the empty fold as one and producer-placeholder.v1 would hard-flag every
+  // such scan (release-audit HIGH-1). The extraction is fine; the mint path
+  // already files these pending via its own length gate. No flag, no lookup.
+  const { normalizeString } = require('../utils/normalize');
+  if (flat.producer.trim() && !normalizeString(flat.producer)) return null;
+  const { refs } = await loadContext();
   const hits = runCrossFieldChecks(flat, refs, {
     checkIds: IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS, ignoreCleared: true,
   });

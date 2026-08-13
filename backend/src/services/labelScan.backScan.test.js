@@ -241,6 +241,36 @@ describe('mergeBackScan — fill blanks only, never resolve a disagreement', () 
     expect(conflicts).toEqual([]);
   });
 
+  test('a SUSPECT front producer LOSES to a usable back producer — and the displaced string is recorded (audit M-1)', () => {
+    const { merged, conflicts, filled } = mergeBackScan(
+      { name: 'Chardonnay Reserve', producer: "Pays d'Oc Organic Wine" },
+      { producer: 'Domaine des Vignes' },
+      { suspectProducer: true },
+    );
+    expect(merged.producer).toBe('Domaine des Vignes');
+    expect(filled).toContain('producer');
+    expect(conflicts).toEqual([
+      { field: 'producer', front: "Pays d'Oc Organic Wine", back: 'Domaine des Vignes' },
+    ]);
+  });
+
+  test('without the suspect flag the front producer still wins — the default is unchanged', () => {
+    const { merged } = mergeBackScan(
+      { name: 'X', producer: 'Front Winery' },
+      { producer: 'Back Winery' },
+    );
+    expect(merged.producer).toBe('Front Winery');
+  });
+
+  test('suspect flag + EMPTY back producer keeps the front string — nothing better arrived', () => {
+    const { merged } = mergeBackScan(
+      { name: 'X', producer: "Pays d'Oc Organic Wine" },
+      { producer: null },
+      { suspectProducer: true },
+    );
+    expect(merged.producer).toBe("Pays d'Oc Organic Wine");
+  });
+
   test('`partial` is recomputed, not inherited — a completed identity stops offering the rescue', () => {
     const done = mergeBackScan({ name: 'Kaefferkopf', producer: '', partial: true }, { producer: 'Cave' });
     expect(done.merged.partial).toBeUndefined();

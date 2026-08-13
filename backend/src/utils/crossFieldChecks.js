@@ -555,6 +555,11 @@ const CROSS_FIELD_CHECK_SELECT = 'name producer appellation region country type 
 /** id → i18n leaf / offending field, for the admin queue's column headers. */
 const CROSS_FIELD_CHECK_LABEL_KEYS = ALL_CROSS_FIELD_CHECKS.reduce((m, c) => (m[c.id] = c.labelKey, m), {});
 const CROSS_FIELD_CHECK_FIELDS = ALL_CROSS_FIELD_CHECKS.reduce((m, c) => (m[c.id] = c.field, m), {});
+// The scan-only heuristic is not a queue check (it must never appear in the
+// review queue or gate a write) but its id DOES ship to clients in
+// `producer_suspect`, so the label/field maps must resolve it (audit L-5).
+CROSS_FIELD_CHECK_LABEL_KEYS['producer-place-plus-filler.scan'] = 'producerPlacePlusFiller';
+CROSS_FIELD_CHECK_FIELDS['producer-place-plus-filler.scan'] = 'producer';
 
 // ── SCAN-ONLY place-plus-filler heuristic ───────────────────────────────────
 //
@@ -604,7 +609,11 @@ const SCAN_PLACE_FILLER_WORDS = new Set([
 function detectPlacePlusFillerProducer(producer, refs) {
   const tokens = normalizeString(String(producer == null ? '' : producer).replace(/ß/g, 'ss'))
     .split(' ').filter(Boolean);
-  if (tokens.length < 2) return null;
+  // Hard token ceiling (release-audit HIGH-2): the window loop is O(n³) and
+  // the front scan can feed it a model-returned string — 800 filler tokens
+  // measured at ~35s of synchronous event-loop block. No real place-plus-
+  // filler producer is 12+ tokens; anything longer is not this rule's shape.
+  if (tokens.length < 2 || tokens.length > 12) return null;
   for (let len = tokens.length - 1; len >= 1; len--) {
     for (let start = 0; start + len <= tokens.length; start++) {
       const outside = [...tokens.slice(0, start), ...tokens.slice(start + len)];

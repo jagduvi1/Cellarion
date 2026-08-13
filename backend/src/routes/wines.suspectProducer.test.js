@@ -168,7 +168,7 @@ describe('POST /api/wines/scan-label — a producer that is not a producer', () 
   test('SOFT hit with a registry MATCH is NOT flagged — Château Margaux keeps its one-tap card (#942)', async () => {
     const { findBestMatch } = require('../services/wineMatching');
     scanLabelFull.mockResolvedValue({ name: 'Château Margaux', producer: 'Château Margaux', country: 'France' });
-    findBestMatch.mockReturnValue({
+    findBestMatch.mockReturnValueOnce({
       bestMatch: { _id: 'w1', name: 'Château Margaux', producer: 'Château Margaux' }, bestScore: 0.95,
     });
     detectScanSuspectProducer.mockResolvedValue({
@@ -182,10 +182,10 @@ describe('POST /api/wines/scan-label — a producer that is not a producer', () 
     expect(body.extracted).not.toHaveProperty('producer_suspect');
   });
 
-  test('a HARD hit flags even when the registry matched — that producer mints pending regardless', async () => {
+  test('a HARD hit with a registry match is NOT flagged either — confirming attaches to the existing row, minting nothing (audit M-3)', async () => {
     const { findBestMatch } = require('../services/wineMatching');
     scanLabelFull.mockResolvedValue({ ...THE_ROW });
-    findBestMatch.mockReturnValue({
+    findBestMatch.mockReturnValueOnce({
       bestMatch: { _id: 'w2', name: 'Chardonnay Reserve', producer: "Pays d'Oc Organic Wine" }, bestScore: 0.9,
     });
     detectScanSuspectProducer.mockResolvedValue({
@@ -194,8 +194,10 @@ describe('POST /api/wines/scan-label — a producer that is not a producer', () 
 
     const body = await (await post('/api/wines/scan-label', { image: IMAGE })).json();
 
-    expect(body.extracted.partial).toBe(true);
-    expect(body.extracted.producer_suspect).toBe('producer-is-appellation.v1');
+    expect(body.match).toBeTruthy();
+    expect(body.extracted.partial).toBeUndefined();
+    // The one-tap card stays; if the user instead edits into a NEW identity,
+    // the mint gate still files a hard-hit producer pending on commit.
   });
 
   test('a taxonomy failure never costs the user a paid scan', async () => {

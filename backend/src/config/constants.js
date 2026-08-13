@@ -11,8 +11,16 @@ const MS_PER_DAY = 86400000;
 
 // Standard Mongoose populate shape for WineDefinition — used across bottles, cellars, stats.
 // Array form also populates pendingWineRequest so pending bottles show their requested name.
+// The label-scan evidence fields are EXCLUDED here for the same reason
+// GET /api/wines/:id and the wishlist $unset exclude them (v1.109.0 LOW-3):
+// since v1.111.0 every scan-originated mint carries them for its 7-day
+// correction window, and a bottle payload of a SHARED published wine must not
+// hand any owner the pointers plus the "front said X, back said Y" label text
+// (release-audit M-4). Curation reads them through its own gated surfaces.
+const SCAN_EVIDENCE_EXCLUDE = '-scanImage -scanImageBack -scanFieldConflicts';
+
 const WINE_POPULATE = [
-  { path: 'wineDefinition', populate: ['country', 'region', 'grapes'] },
+  { path: 'wineDefinition', select: SCAN_EVIDENCE_EXCLUDE, populate: ['country', 'region', 'grapes'] },
   { path: 'pendingWineRequest', select: 'wineName producer' }
 ];
 
@@ -24,7 +32,7 @@ const WINE_POPULATE = [
 const WINE_POPULATE_LIST = [
   {
     path: 'wineDefinition',
-    select: '-aiProfile -normalizedKey -lwin -productNumber -productNumberShort -createdBy',
+    select: `-aiProfile -normalizedKey -lwin -productNumber -productNumberShort -createdBy ${SCAN_EVIDENCE_EXCLUDE}`,
     populate: ['country', 'region', 'grapes']
   },
   { path: 'pendingWineRequest', select: 'wineName producer' }

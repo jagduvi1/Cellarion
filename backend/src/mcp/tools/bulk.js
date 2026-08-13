@@ -230,7 +230,7 @@ registerTool({
           wineDoc = res.wine;
           if (res.created) {
             winesCreated.push(String(wineDoc._id));
-            logAudit(ctx.req, 'wine.create', { type: 'wine', id: wineDoc._id }, { via: 'mcp', bulk: true, name: wineDoc.name, producer: wineDoc.producer || null, ...(wineDoc.pendingIdentity ? { pendingIdentity: true } : {}) });
+            logAudit(ctx.req, 'wine.create', { type: 'wine', id: wineDoc._id }, { via: 'mcp', bulk: true, name: wineDoc.name, producer: wineDoc.producer || null, ...(wineDoc.pendingIdentity ? { pendingIdentity: true } : {}), ...(res.producerRejected ? { rejectedProducer: res.producerRejected.producer, rejectedByCheck: res.producerRejected.check } : {}) });
           }
         }
         const result = await addBottle(access.cellar, wineDoc, {

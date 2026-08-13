@@ -104,6 +104,11 @@ function AddBottle() {
   // and the form stays fully editable throughout.
   const [backOffer, setBackOffer] = useState(false);
   const [backScanImageId, setBackScanImageId] = useState(null);
+  // The cross-field rule id when the scanned producer looks like a place or
+  // label text (v1.111.0); the ref holds the exact prefilled string so the
+  // back-label rescue can replace it if — and only if — the user left it alone.
+  const [producerSuspect, setProducerSuspect] = useState(null);
+  const suspectProducerValueRef = useRef(null);
   // What the two labels disagreed about. Shown as a non-blocking note and
   // threaded to the commit as curation evidence.
   const [scanConflicts, setScanConflicts] = useState([]);
@@ -133,6 +138,14 @@ function AddBottle() {
     setBackOffer(partial);
     setBackScanImageId(null);
     setScanConflicts([]);
+    // A SUSPECT producer (the box holds a place or label text, not a winery —
+    // v1.111.0) is why this scan is partial even though every field is filled.
+    // The flag drives a visible note, and the ref remembers the exact string
+    // so a back-scan producer may REPLACE it — but only while the user hasn't
+    // edited the box (their typing always outranks both labels).
+    setProducerSuspect(data.extracted?.producer_suspect || null);
+    suspectProducerValueRef.current = data.extracted?.producer_suspect
+      ? (data.extracted.producer || '') : null;
     if (partial) {
       // Straight to the EDITABLE form, prefilled — never the read-only card
       // (release-audit M-1): the card renders a blank title and its confirm
@@ -207,8 +220,21 @@ function AddBottle() {
         const typed = typeof prev[key] === 'string' ? prev[key].trim() : prev[key];
         if (!typed && fromMerged[key]) next[key] = fromMerged[key];
       }
+      // A SUSPECT front producer is the one prefill the back label may
+      // REPLACE (audit M-1: fill-blanks-only left the flagged string in the
+      // box and made the rescue inert) — but only while the box still holds
+      // the exact prefilled string; any edit by the user outranks both labels.
+      if (suspectProducerValueRef.current
+          && next.producer === suspectProducerValueRef.current
+          && fromMerged.producer
+          && fromMerged.producer !== next.producer) {
+        next.producer = fromMerged.producer;
+      }
       return next;
     });
+    // The merge re-evaluates suspicion server-side; adopt its verdict.
+    setProducerSuspect(merged.producer_suspect || null);
+    suspectProducerValueRef.current = merged.producer_suspect ? (merged.producer || '') : null;
     setShowManualForm(prev => prev || !scanResult);
   }, [scanResult]);
 
@@ -392,6 +418,8 @@ function AddBottle() {
     setScanImageId(null);
     setBackScanImageId(null);
     setScanConflicts([]);
+    setProducerSuspect(null);
+    suspectProducerValueRef.current = null;
     setBackOffer(false);
     setShowManualForm(false);
     setPendingWineData(null);
@@ -777,6 +805,15 @@ function AddBottle() {
               {t('addBottle.backScanConflicts', {
                 fields: scanConflicts.map(c => c.field).join(', '),
               })}
+            </p>
+          )}
+
+          {/* WHY this scan is partial when every box is filled (audit M-2):
+              the producer looks like label text, not a winery. Says which box
+              to check; never blocks anything. */}
+          {producerSuspect && (
+            <p className="scan-back-conflicts">
+              {t('addBottle.producerSuspectNote')}
             </p>
           )}
 

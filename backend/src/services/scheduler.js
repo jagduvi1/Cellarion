@@ -94,12 +94,15 @@ function startScheduler() {
     }
   });
 
-  // Search-index reconciliation: daily at 02:15 UTC (a quiet slot — the two
-  // Sunday jobs above are done by then and the deletion cascade has not
-  // started). Deletes index documents whose Mongo row is gone; prod 2026-08-13
-  // had 567 such rows in the bottles index after a restore, producing "0 of 14"
-  // over MCP. Read-mostly and delete-only — see services/searchReconcileJob.
-  cron.schedule('15 2 * * *', async () => {
+  // Search-index reconciliation: daily at 02:37 (container clock; the whole
+  // schedule assumes it). The old 02:15 slot leaned on "the Sunday 02:00 jobs
+  // are done in 15 minutes", which nothing enforces on a 4 GB box
+  // (release-audit L-2) — 02:37 buys the margin without touching any other
+  // slot, and the off-minute keeps fleet load off the :00/:15/:30 marks.
+  // Deletes index documents whose Mongo row is gone; prod 2026-08-13 had 567
+  // such rows in the bottles index after a restore, producing "0 of 14" over
+  // MCP. Read-mostly and delete-only — see services/searchReconcileJob.
+  cron.schedule('37 2 * * *', async () => {
     console.log('[scheduler] Running search-index reconciliation…');
     try {
       await runSearchIndexReconcile();
@@ -177,7 +180,7 @@ function startScheduler() {
     }
   });
 
-  console.log('[scheduler] Cron jobs registered (drink-window daily 06:00 UTC, value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, search-reconcile daily 02:15 UTC, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, recommendation-email-scrub daily 04:30 UTC, label-scan-retention daily 04:45 UTC, security-spike every 15 min, climate-offline every 15 min, demo-sweep every 15 min offset, registry-health weekly Mon 05:00 UTC, embed-sweep weekly Mon 05:30 UTC)');
+  console.log('[scheduler] Cron jobs registered (drink-window daily 06:00 UTC, value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, search-reconcile daily 02:37, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, recommendation-email-scrub daily 04:30 UTC, label-scan-retention daily 04:45 UTC, security-spike every 15 min, climate-offline every 15 min, demo-sweep every 15 min offset, registry-health weekly Mon 05:00 UTC, embed-sweep weekly Mon 05:30 UTC)');
 }
 
 module.exports = { startScheduler };

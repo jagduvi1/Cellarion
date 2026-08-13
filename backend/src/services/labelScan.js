@@ -301,11 +301,21 @@ const mergeValue = (v) => (typeof v === 'string' && v.trim() ? v.trim() : '');
  * label naming the dominant variety are both true, and case is the only
  * difference that has to be collapsed.
  *
+ * SUSPECT-PRODUCER EXCEPTION (release-audit M-1, v1.111.0): front-wins is the
+ * right default because the front label is the wine's own identity statement —
+ * but when the front's producer was FLAGGED as not-a-producer (a place plus
+ * filler, an appellation in the box), front-wins made the rescue inert: the
+ * user was told to photograph the back label "to fill the gaps", the back
+ * label's real producer line lost the merge to the flagged string, and the one
+ * remedy the flag offered could never apply it. With `suspectProducer`, a
+ * usable back producer WINS that one field, and the displaced front string is
+ * recorded in `conflicts` so nothing is silently thrown away.
+ *
  * @returns {{merged: object, conflicts: Array<{field,front,back}>, filled: string[]}}
  *   `filled` names the fields the BACK label supplied — the client fills only
  *   those, and only into form fields the user has not typed into.
  */
-function mergeBackScan(front = {}, back = {}) {
+function mergeBackScan(front = {}, back = {}, { suspectProducer = false } = {}) {
   const { normalizeString } = require('../utils/normalize');
   const merged = { ...(front || {}) };
   const conflicts = [];
@@ -317,6 +327,13 @@ function mergeBackScan(front = {}, back = {}) {
     if (!f && b) {
       merged[key] = b;
       filled.push(key);
+      continue;
+    }
+    if (key === 'producer' && suspectProducer && b && f && normalizeString(f) !== normalizeString(b)) {
+      // The flagged front producer loses; the truth it displaced stays visible.
+      merged[key] = b;
+      filled.push(key);
+      conflicts.push({ field: key, front: f, back: b });
       continue;
     }
     if (f && b && normalizeString(f) !== normalizeString(b)) {

@@ -38,6 +38,9 @@ jest.mock('../../models/WineNotDuplicate', () => ({ find: jest.fn() }));
 jest.mock('../../models/WineList', () => ({}));
 jest.mock('../../models/WishlistItem', () => ({}));
 jest.mock('../../models/PriceTrackingRequest', () => ({}));
+// The new producer gate (v1.111.0 audit MED-3) is DB-backed; unmocked it
+// buffers on mongoose for 10s. Its verdicts have their own suites.
+jest.mock('../../services/crossFieldScan', () => ({ detectBlockingProducerIssue: jest.fn(async () => null) }));
 jest.mock('../../models/PriceTrackingSkip', () => ({}));
 jest.mock('../../models/CommunityWinePrice', () => ({}));
 jest.mock('../../models/JournalEntry', () => ({}));

@@ -162,6 +162,7 @@ async function attachScanImage(wine, { scanImageId, scanImageBackId } = {}, req)
     if (!wine || (!scanImageId && !scanImageBackId)) return;
     const { isValidId } = require('../utils/validation');
     const BottleImage = require('../models/BottleImage');
+    const { PROMOTED_SCAN_GRACE_DAYS } = require('./labelScanAccess');
 
     // One atomic claim: the filter is the authorization (uploader) AND the
     // single-use guard (not yet bound to a wine), so two concurrent commits
@@ -172,9 +173,19 @@ async function attachScanImage(wine, { scanImageId, scanImageBackId } = {}, req)
       // another (an array whose single element is a valid id stringifies past
       // the guard). Authorization is still the uploadedBy term.
       if (!id || !isValidId(String(id))) return null;
+      // For a wine born PROMOTED, the retention clock starts in the SAME
+      // atomic claim (release-audit LOW-1): stamping afterwards left a window
+      // where a failed stamp produced an attached frame with retainUntil null
+      // — skipped by the unattached sweep (it is attached) AND by the expiry
+      // sweep (no date) — i.e. kept forever, unreadable. Claim-and-clock is
+      // one write; the later stampPromotedScanRetention call is then an
+      // idempotent no-op (it matches retainUntil: null only).
+      const bornPromotedClock = wine.pendingIdentity !== true
+        ? { retainUntil: new Date(Date.now() + PROMOTED_SCAN_GRACE_DAYS * 24 * 60 * 60 * 1000) }
+        : {};
       const image = await BottleImage.findOneAndUpdate(
         { _id: String(id), uploadedBy: req.user.id, kind: 'label-scan', wineDefinition: null },
-        { $set: { wineDefinition: wine._id, updatedAt: new Date() } },
+        { $set: { wineDefinition: wine._id, updatedAt: new Date(), ...bornPromotedClock } },
         { new: true }
       ).select('_id');
       return image ? image._id : null;

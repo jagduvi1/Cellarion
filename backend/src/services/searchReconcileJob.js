@@ -48,11 +48,20 @@ const PAGE_SIZE = 1000;
 // this one stopped.
 const MAX_DELETES_PER_INDEX = 5000;
 
-// The two indexes and the collection each one mirrors.
-const TARGETS = [
-  { label: 'bottles', modelPath: '../models/Bottle' },
-  { label: 'wines', modelPath: '../models/WineDefinition' },
-];
+// The collection each reconcilable index mirrors. The index LIST itself lives
+// in services/search (RECONCILABLE_INDEXES) so adding an index is one edit
+// there plus a model mapping here — and a missing mapping fails loudly below
+// rather than silently skipping (release-audit INFO-1: two independent lists).
+const INDEX_MODELS = {
+  bottles: '../models/Bottle',
+  wines: '../models/WineDefinition',
+};
+// `|| Object.keys(...)`: suites mock services/search without the constant,
+// and a module-load throw there would fail every consumer's require.
+const TARGETS = (require('./search').RECONCILABLE_INDEXES || Object.keys(INDEX_MODELS)).map((label) => {
+  if (!INDEX_MODELS[label]) throw new Error(`searchReconcileJob: no model mapping for index '${label}'`);
+  return { label, modelPath: INDEX_MODELS[label] };
+});
 
 /** Mongo _id shape. An index doc id that is not one cannot be looked up. */
 const OBJECT_ID_RX = /^[a-f0-9]{24}$/i;
@@ -88,6 +97,7 @@ async function reconcileIndex({ label, modelPath }) {
     const lookupIds = ids.filter(id => OBJECT_ID_RX.test(id));
     skipped += ids.length - lookupIds.length;
 
+    let removedThisPage = 0;
     if (lookupIds.length > 0) {
       const rows = await Model.find({ _id: { $in: lookupIds } }).select('_id').lean();
       if (rows.length !== lookupIds.length) {
@@ -95,6 +105,7 @@ async function reconcileIndex({ label, modelPath }) {
         const orphans = lookupIds.filter(id => !live.has(id));
         await searchService.deleteIndexDocuments(label, orphans);
         removed += orphans.length;
+        removedThisPage = orphans.length;
       }
     }
 
@@ -106,7 +117,12 @@ async function reconcileIndex({ label, modelPath }) {
       );
       break;
     }
-    offset += PAGE_SIZE;
+    // Meili processes the enqueued deletes within the next round trip, so the
+    // remaining documents shift back by however many this page removed —
+    // advancing by the full page would skip that many LIVE docs (release-audit
+    // LOW-2). Never a wrong deletion, but an under-clean that converged over
+    // nights instead of one.
+    offset += PAGE_SIZE - removedThisPage;
   }
 
   return { checked, removed, skipped };

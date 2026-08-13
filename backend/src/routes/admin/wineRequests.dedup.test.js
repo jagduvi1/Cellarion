@@ -28,6 +28,9 @@ jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../../services/notifications', () => ({ createNotification: jest.fn() }));
 jest.mock('../../utils/cellarCred', () => ({ incrementCred: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../../utils/vintageProfile', () => ({ ensurePendingVintageProfile: jest.fn() }));
+// The new producer gate (v1.111.0 audit MED-3) is DB-backed; unmocked it
+// buffers on mongoose for 10s. Its verdicts have their own suites.
+jest.mock('../../services/crossFieldScan', () => ({ detectBlockingProducerIssue: jest.fn(async () => null) }));
 
 const express = require('express');
 const http = require('http');
