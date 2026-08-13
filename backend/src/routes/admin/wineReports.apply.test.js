@@ -15,6 +15,7 @@ jest.mock('../../services/search', () => ({ indexWine: jest.fn().mockResolvedVal
 jest.mock('../../services/appellationResolve', () => ({ resolveCanonicalAppellation: jest.fn(async (v) => v) }));
 jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../../utils/cellarCred', () => ({ incrementCred: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../../services/notifications', () => ({ createNotification: jest.fn() }));
 
 const express = require('express');
 const http = require('http');
@@ -84,7 +85,7 @@ describe('resolve with applySuggestion', () => {
     WineReport.findById.mockResolvedValue(r);
     WineDefinition.findById.mockResolvedValue(w);
 
-    const res = await resolve({ applySuggestion: true, adminNotes: 'confirmed on producer site' });
+    const res = await resolve({ applySuggestion: true, response: 'confirmed on producer site' });
     const body = await res.json();
 
     expect(res.status).toBe(200);

@@ -227,14 +227,22 @@ function SupportPage() {
                         <p>{report.details}</p>
                       </div>
                     )}
-                    {report.adminNotes && (
+                    {report.adminResponse && (
                       <div className="support-response">
-                        <h4>{t('support.adminNotes')}</h4>
-                        <p>{report.adminNotes}</p>
+                        <h4>{t('support.reportResponse')}</h4>
+                        <p>{report.adminResponse}</p>
+                        <span className="support-response-date">
+                          {report.respondedAt
+                            ? new Date(report.respondedAt).toLocaleDateString()
+                            : ''}
+                        </span>
                       </div>
                     )}
-                    {report.status === 'pending' && !report.adminNotes && (
+                    {report.status === 'pending' && (
                       <p className="support-awaiting">{t('support.underReview')}</p>
+                    )}
+                    {report.status !== 'pending' && !report.adminResponse && (
+                      <p className="support-awaiting">{t('support.reportReviewed')}</p>
                     )}
                   </div>
                 )}

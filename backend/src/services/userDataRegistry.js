@@ -545,8 +545,10 @@ const REGISTRY = [
     exportFragment: async (ctx) => ({
       // details/suggestedField/suggestedValue are text the USER typed —
       // portability requires they come back out (audit 2026-07-29 M1).
-      reports: { wines: markTrunc(ctx, 'wineReports', await WineReport.find({ user: ctx.userId }).select('wineDefinition reason status createdAt details suggestedField suggestedValue').limit(EXPORT_MAX).lean())
-        .map(r => ({ reason: r.reason, status: r.status, createdAt: r.createdAt, details: r.details, suggestedField: r.suggestedField, suggestedValue: r.suggestedValue })) },
+      // adminResponse is our reply TO them: already shown on their Support
+      // page, so it is part of the record they hold, not internal commentary.
+      reports: { wines: markTrunc(ctx, 'wineReports', await WineReport.find({ user: ctx.userId }).select('wineDefinition reason status createdAt details suggestedField suggestedValue adminResponse respondedAt').limit(EXPORT_MAX).lean())
+        .map(r => ({ reason: r.reason, status: r.status, createdAt: r.createdAt, details: r.details, suggestedField: r.suggestedField, suggestedValue: r.suggestedValue, adminResponse: r.adminResponse, respondedAt: r.respondedAt })) },
     }),
   },
   {

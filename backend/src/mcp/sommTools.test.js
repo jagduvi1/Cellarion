@@ -35,6 +35,8 @@ jest.mock('../models/WineVintagePrice', () => {
 jest.mock('../models/PriceTrackingRequest', () => ({ find: jest.fn(), findOne: jest.fn(), findById: jest.fn(), deleteOne: jest.fn(), findOneAndUpdate: jest.fn() }));
 jest.mock('../models/PriceTrackingSkip', () => ({ find: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn(), deleteOne: jest.fn() }));
 jest.mock('../models/WineCorrectionProposal', () => ({ create: jest.fn(), findById: jest.fn(), deleteOne: jest.fn() }));
+jest.mock('../models/WineReport', () => ({ find: jest.fn(), findById: jest.fn(), countDocuments: jest.fn() }));
+jest.mock('../utils/cellarCred', () => ({ incrementCred: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../utils/rackGeometry', () => ({ getMaxPosition: jest.fn(() => 12) }));
 jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false), search: jest.fn(), searchBottles: jest.fn(), indexWine: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../services/statsService', () => ({ computeOverview: jest.fn(), buildEmptyStats: jest.fn() }));
@@ -58,7 +60,9 @@ const WineVintagePrice = require('../models/WineVintagePrice');
 const WineDefinition = require('../models/WineDefinition');
 const Grape = require('../models/Grape');
 const McpActionLog = require('../models/McpActionLog');
+const WineReport = require('../models/WineReport');
 const { logAudit } = require('../services/audit');
+const { createNotification } = require('../services/notifications');
 const { allTools, toolsForScopes } = require('./registry');
 require('./tools');
 
@@ -69,7 +73,7 @@ const USER_CTX = { user: { id: ME, roles: ['user'] }, scopes: ['read', 'write'],
 
 const tool = (name) => allTools().find((t) => t.name === name);
 const parse = (res) => JSON.parse(res.content[0].text);
-const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'remove_from_maturity_queue', 'set_wine_profile', 'propose_wine_correction', 'list_price_tracking_requests', 'set_vintage_price', 'reject_price_request'];
+const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'remove_from_maturity_queue', 'set_wine_profile', 'propose_wine_correction', 'list_price_tracking_requests', 'set_vintage_price', 'reject_price_request', 'list_wine_reports', 'respond_to_wine_report'];
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -824,5 +828,148 @@ describe('undo of somm actions', () => {
     expect(p.status).toBe('pending');
     expect(p.setBy).toBeNull();
     expect(p.save).toHaveBeenCalled();
+  });
+});
+
+// ── Wine reports ─────────────────────────────────────────────────────────────
+//
+// A wine report is a real user saying "this record is wrong". These tools ride
+// services/wineReportOps (unmocked here) so the shared close path — storage,
+// audit and the reporter's notification — is exercised end to end.
+describe('list_wine_reports', () => {
+  const reportRow = (over = {}) => ({
+    _id: oid('1'), reason: 'wrong_tasting_profile', status: 'pending',
+    details: 'Zuccardi only just released this — it has 10+ years left.',
+    createdAt: new Date('2026-08-06'),
+    wineDefinition: { _id: oid('f'), name: 'Tinto de Familia', producer: 'Zuccardi', grapes: [] },
+    ...over,
+  });
+
+  test('defaults to pending, oldest first, and reports the pending count', async () => {
+    WineReport.find.mockReturnValue(chain([reportRow()]));
+    WineReport.countDocuments.mockResolvedValueOnce(3).mockResolvedValueOnce(3);
+
+    const res = await tool('list_wine_reports').handler({}, SOMM_CTX);
+    const body = parse(res);
+
+    expect(WineReport.find.mock.calls[0][0]).toEqual({ status: 'pending' });
+    // Oldest first: the longest-waiting reporter is the one most likely forgotten.
+    expect(WineReport.find.mock.results[0].value.sort).toHaveBeenCalledWith({ createdAt: 1 });
+    expect(body.summary).toMatch(/3 report/);
+    expect(body.data[0].report_id).toBe(oid('1'));
+    expect(body.data[0].details).toMatch(/10\+ years/);
+  });
+
+  test('the reporter is never identified on this surface', async () => {
+    WineReport.find.mockReturnValue(chain([reportRow({ user: { _id: oid('9'), username: 'marcoscl', email: 'marcoscl@example.com' } })]));
+    WineReport.countDocuments.mockResolvedValue(1);
+
+    const body = parse(await tool('list_wine_reports').handler({}, SOMM_CTX));
+    const serialized = JSON.stringify(body);
+    expect(serialized).not.toMatch(/marcoscl/);
+    expect(serialized).not.toMatch(/@example\.com/);
+  });
+
+  test('a structured suggestion is surfaced as a PROPOSAL, not something to apply here', async () => {
+    WineReport.find.mockReturnValue(chain([reportRow({ suggestedField: 'producer', suggestedValue: 'Familia Zuccardi' })]));
+    WineReport.countDocuments.mockResolvedValue(1);
+
+    const body = parse(await tool('list_wine_reports').handler({}, SOMM_CTX));
+    expect(body.data[0].suggested_correction).toMatchObject({
+      field: 'producer', current: 'Zuccardi', proposed: 'Familia Zuccardi',
+    });
+    expect(body.data[0].suggested_correction.note).toMatch(/propose_wine_correction/);
+  });
+
+  test('status "all" drops the filter; an unknown status falls back to pending', async () => {
+    WineReport.find.mockReturnValue(chain([]));
+    WineReport.countDocuments.mockResolvedValue(0);
+
+    await tool('list_wine_reports').handler({ status: 'all' }, SOMM_CTX);
+    expect(WineReport.find.mock.calls[0][0]).toEqual({});
+
+    await tool('list_wine_reports').handler({ status: 'bogus' }, SOMM_CTX);
+    expect(WineReport.find.mock.calls[1][0]).toEqual({ status: 'pending' });
+  });
+});
+
+describe('respond_to_wine_report', () => {
+  const pending = (over = {}) => {
+    const r = {
+      _id: oid('1'), status: 'pending', user: oid('9'), wineDefinition: oid('f'),
+      save: jest.fn().mockResolvedValue(undefined),
+      ...over,
+    };
+    r.populate = jest.fn(async (path) => {
+      if (path === 'wineDefinition') r.wineDefinition = { name: 'Tinto de Familia', producer: 'Zuccardi' };
+    });
+    return r;
+  };
+
+  test('resolving stores the reply and notifies the reporter, linked to Support', async () => {
+    const r = pending();
+    WineReport.findById.mockResolvedValue(r);
+
+    const res = await tool('respond_to_wine_report').handler(
+      { report_id: oid('1'), outcome: 'resolved', response: 'You were right — window moved to 2036.' },
+      SOMM_CTX
+    );
+    const body = parse(res);
+
+    expect(r.status).toBe('resolved');
+    expect(r.adminResponse).toBe('You were right — window moved to 2036.');
+    expect(body.data.acknowledgement_only).toBe(false);
+    expect(createNotification).toHaveBeenCalledTimes(1);
+    const [userId, type, , message, link] = createNotification.mock.calls[0];
+    expect(userId).toBe(oid('9'));
+    expect(type).toBe('wine_report_resolved');
+    expect(message).toMatch(/2036/);
+    expect(link).toBe('/support');
+  });
+
+  test('closing without a reply still notifies — silence is the bug being fixed', async () => {
+    const r = pending();
+    WineReport.findById.mockResolvedValue(r);
+
+    const body = parse(await tool('respond_to_wine_report').handler(
+      { report_id: oid('1'), outcome: 'dismissed' }, SOMM_CTX
+    ));
+
+    expect(body.data.acknowledgement_only).toBe(true);
+    expect(createNotification).toHaveBeenCalledTimes(1);
+    const [, type, , message] = createNotification.mock.calls[0];
+    expect(type).toBe('wine_report_dismissed');
+    expect(message).toMatch(/Tinto de Familia/);
+  });
+
+  test('an already-closed report is a conflict, and nobody is notified twice', async () => {
+    WineReport.findById.mockResolvedValue(pending({ status: 'resolved' }));
+    const res = await tool('respond_to_wine_report').handler(
+      { report_id: oid('1'), outcome: 'resolved', response: 'again' }, SOMM_CTX
+    );
+    expect(parse(res).error.code).toBe('conflict');
+    expect(createNotification).not.toHaveBeenCalled();
+  });
+
+  test('a missing report is not_found and points back at the lister', async () => {
+    WineReport.findById.mockResolvedValue(null);
+    const res = await tool('respond_to_wine_report').handler(
+      { report_id: oid('1'), outcome: 'resolved' }, SOMM_CTX
+    );
+    const err = parse(res).error;
+    expect(err.code).toBe('not_found');
+    expect(err.message).toMatch(/list_wine_reports/);
+  });
+
+  test('the close is audited as an MCP action with its outcome', async () => {
+    WineReport.findById.mockResolvedValue(pending());
+    await tool('respond_to_wine_report').handler(
+      { report_id: oid('1'), outcome: 'resolved', response: 'fixed' }, SOMM_CTX
+    );
+    expect(logAudit).toHaveBeenCalledWith(
+      expect.anything(), 'wine.report.resolved', expect.anything(),
+      expect.objectContaining({ via: 'mcp', responded: true })
+    );
+    expect(McpActionLog.create.mock.calls.at(-1)[0]).toMatchObject({ action: 'somm_wine_report_close' });
   });
 });

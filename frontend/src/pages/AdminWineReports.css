@@ -248,6 +248,13 @@
   text-transform: none;
 }
 
+.awr-response-hint {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
 .awr-error {
   color: var(--color-danger);
   font-size: 0.85rem;

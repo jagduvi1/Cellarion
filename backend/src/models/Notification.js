@@ -23,6 +23,8 @@ const notificationSchema = new mongoose.Schema({
     enum: [
       'wine_request_resolved',
       'wine_request_rejected',
+      'wine_report_resolved',
+      'wine_report_dismissed',
       'image_approved',
       'image_rejected',
       'cellar_shared',

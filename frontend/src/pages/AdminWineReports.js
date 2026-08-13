@@ -23,7 +23,7 @@ function AdminWineReports() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
-  const [adminNotes, setAdminNotes] = useState('');
+  const [response, setResponse] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -54,7 +54,7 @@ function AdminWineReports() {
 
   const openReport = (report) => {
     setSelected(report);
-    setAdminNotes(report.adminNotes || '');
+    setResponse(report.adminResponse || '');
     setError(null);
     setSuccess(null);
   };
@@ -65,7 +65,7 @@ function AdminWineReports() {
     setSuccess(null);
     try {
       const fn = action === 'resolve' ? adminResolveWineReport : adminDismissWineReport;
-      const res = await fn(apiFetch, selected._id, { adminNotes, ...(opts.apply ? { applySuggestion: true } : {}) });
+      const res = await fn(apiFetch, selected._id, { response, ...(opts.apply ? { applySuggestion: true } : {}) });
       const data = await res.json();
       if (!res.ok) return setError(data.error || `Failed to ${action} report`);
       setSuccess(`Report ${action === 'resolve' ? 'resolved' : 'dismissed'}.`);
@@ -207,12 +207,16 @@ function AdminWineReports() {
 
               {selected.status === 'pending' && (
                 <div className="awr-actions">
-                  <h4>Admin notes <span className="optional">(optional)</span></h4>
+                  <h4>Response to {selected.user?.username || 'the reporter'} <span className="optional">(optional)</span></h4>
+                  <p className="awr-response-hint">
+                    Shown to them on their Support page and sent as a notification. Leave it
+                    empty and they still get a plain acknowledgement.
+                  </p>
                   <textarea
-                    value={adminNotes}
-                    onChange={e => { setAdminNotes(e.target.value); setError(null); setSuccess(null); }}
+                    value={response}
+                    onChange={e => { setResponse(e.target.value); setError(null); setSuccess(null); }}
                     rows={4}
-                    placeholder="Notes for internal tracking (not shown to user)…"
+                    placeholder="Tell them what you found and what changed…"
                     maxLength={2000}
                   />
                   <div className="awr-action-buttons">
@@ -248,8 +252,8 @@ function AdminWineReports() {
 
               {selected.status !== 'pending' && (
                 <div className="awr-resolved-info">
-                  <h4>Admin notes</h4>
-                  <p>{selected.adminNotes || '—'}</p>
+                  <h4>Response sent</h4>
+                  <p>{selected.adminResponse || '— (acknowledgement only)'}</p>
                   {selected.resolvedBy && (
                     <p className="awr-resolved-by">
                       {STATUS_LABELS[selected.status]} by {selected.resolvedBy.username}

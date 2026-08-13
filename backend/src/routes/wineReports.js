@@ -114,7 +114,11 @@ router.post('/', requireAuth, requireNonDemo, async (req, res) => {
 // GET /api/wine-reports/my — list the authenticated user's own wine reports
 router.get('/my', requireAuth, async (req, res) => {
   try {
+    // Explicit projection: this route used to return the whole document, so
+    // every field added to the schema became user-visible by default. Name
+    // what the reporter gets so a future internal field is opt-in, not opt-out.
     const reports = await WineReport.find({ user: req.user.id })
+      .select('wineDefinition duplicateOf reason details suggestedField suggestedValue status adminResponse respondedAt createdAt')
       .sort({ createdAt: -1 })
       .populate('wineDefinition', 'name producer')
       .populate('duplicateOf', 'name producer')
