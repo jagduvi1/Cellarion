@@ -137,9 +137,16 @@ const normalizeAppellation = (appellation) => {
     if (!APPELLATION_LEADING_TIER_TOKENS.has(first)) break;
     parts.shift();
   }
-  // Drop trailing tier token(s), tolerating a trailing dot/comma on each.
+  // Drop trailing tier token(s), folding dots/commas OUT of the candidate the
+  // same way the leading loop does. Trimming only the TRAILING punctuation left
+  // the internal dots in place, so the abbreviated forms labels actually print
+  // — "Lison Classico D.O.C.G.", "Rioja D.O.Ca." — probed the set as 'd.o.c.g'
+  // and 'd.o.ca', which are in it nowhere, and the tier survived into the
+  // registry as a second spelling of the same appellation (prod 2026-08-13).
+  // The dots are punctuation inside one token, not token separators: the split
+  // above is on whitespace, so folding them cannot merge two tokens.
   while (parts.length > 1) {
-    const last = trimTrailingChars(parts[parts.length - 1], '.,').toLowerCase();
+    const last = parts[parts.length - 1].replace(/[.,]/g, '').toLowerCase();
     if (!APPELLATION_TIER_TOKENS.has(last)) break;
     parts.pop();
   }
