@@ -8,7 +8,17 @@ const BottleImage = require('../models/BottleImage');
 const Rack = require('../models/Rack');
 const AuditLog = require('../models/AuditLog');
 
-// How far back the audit log retains entries (auth.login.success included).
+// Audit actions that mean "this user logged in". Google SSO writes its OWN
+// action (routes/oauth.js) — matching only 'auth.login.success' silently drops
+// every SSO-only user from the login figures while their bottles still count
+// in the activity figures, which is what made "users with bottles" exceed
+// "users who logged in". Both carry the user in `resource.id`.
+// Deliberately NOT included: 'auth.demo_login' (one shared demo account, not a
+// returning person) and 'auth.register' / 'auth.email_verified' (a session
+// starts there without a login — see the doc note on what this metric means).
+const LOGIN_ACTIONS = ['auth.login.success', 'auth.oauth.success'];
+
+// How far back the audit log retains entries (all LOGIN_ACTIONS included).
 // Login-based retention figures are bounded by this window. Mirrors the TTL in
 // models/AuditLog.js so the UI can caption "within the last N days".
 const AUDIT_WINDOW_DAYS = parseInt(process.env.AUDIT_TTL_DAYS || '90', 10);
@@ -423,16 +433,17 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
   const coreUsers = ret.t4 || 0;        // 4+ — a stickier tier, subset of the above
   const singleSessionUsers = Math.max(0, ret.usersWithActivity - returningUsers);
 
-  // Login-based signals, derived from the AUDIT LOG (action 'auth.login.success')
-  // rather than a per-user field — so we store NO new personal data for this
-  // feature (data minimisation) and the numbers are retroactive. Login audit
-  // entries record the user in `resource.id` (actor is anonymous at login time,
+  // Login-based signals, derived from the AUDIT LOG (see LOGIN_ACTIONS — both
+  // password and Google SSO logins) rather than a per-user field — so we store
+  // NO new personal data for this feature (data minimisation) and the numbers
+  // are retroactive. Login audit entries record the user in `resource.id`
+  // (actor is anonymous at login time,
   // pre-auth). Bounded by the audit TTL (AUDIT_WINDOW_DAYS), so "repeat logins"
   // means within that window. Persistent refresh-token sessions don't re-hit
   // /login, so these undercount the most loyal users by design — the
   // activity-based metric above is the headline for exactly that reason.
   const loginAuditMatch = {
-    action: 'auth.login.success',
+    action: { $in: LOGIN_ACTIONS },
     'resource.id': excludeAdmins && adminIds.length
       ? { $ne: null, $nin: adminIds }
       : { $ne: null },
@@ -883,5 +894,5 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
 module.exports = {
   computeGlobalStats,
   // Exported for tests: the retention day-ladder and its two halves.
-  __testing: { DAY_TIERS, tierAccumulators, tierRows },
+  __testing: { DAY_TIERS, tierAccumulators, tierRows, LOGIN_ACTIONS },
 };

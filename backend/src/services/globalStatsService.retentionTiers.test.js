@@ -1,6 +1,27 @@
 const { __testing } = require('./globalStatsService');
 
-const { DAY_TIERS, tierAccumulators, tierRows } = __testing;
+const { DAY_TIERS, tierAccumulators, tierRows, LOGIN_ACTIONS } = __testing;
+
+describe('LOGIN_ACTIONS', () => {
+  it('counts Google SSO logins, not just password logins', () => {
+    // Regression guard: matching only 'auth.login.success' dropped every
+    // SSO-only user from the login figures while their bottles still counted
+    // in the activity figures — the dashboard then showed more users with
+    // bottles than users who had ever logged in.
+    expect(LOGIN_ACTIONS).toContain('auth.login.success');
+    expect(LOGIN_ACTIONS).toContain('auth.oauth.success');
+  });
+
+  it('excludes the shared demo account and non-login session starts', () => {
+    expect(LOGIN_ACTIONS).not.toContain('auth.demo_login');
+    expect(LOGIN_ACTIONS).not.toContain('auth.register');
+    expect(LOGIN_ACTIONS).not.toContain('auth.email_verified');
+  });
+
+  it('only matches successful auth events', () => {
+    expect(LOGIN_ACTIONS.every(a => !a.includes('failed'))).toBe(true);
+  });
+});
 
 describe('retention day-ladder (DAY_TIERS)', () => {
   it('is ascending and starts at 2 — a single day is never "returning"', () => {
