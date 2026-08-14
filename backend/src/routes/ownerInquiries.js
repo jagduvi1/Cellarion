@@ -8,7 +8,12 @@
  *                       only. Other recipients' identities and answers never
  *                       leave the server here — an owner must not learn who
  *                       else owns the wine (privacy). ?wine=<id> narrows to
- *                       one wine (what the BottleDetail card asks).
+ *                       one wine (what the BottleDetail card asks). Also
+ *                       returns inquiries the caller ANSWERED that a curator
+ *                       resolved within the last REPLY_VISIBLE_DAYS, carrying
+ *                       `curatorReply` — closing the loop for the person who
+ *                       went and read the label. The curator's own
+ *                       `resolutionNote` is never projected here.
  *   POST /:id/respond — body { response } (1–1000 plain text). Recipient-only,
  *                       single-shot and immutable (second attempt → 409),
  *                       demo-blocked. First answer flips the inquiry to
@@ -26,6 +31,7 @@ const { createNotification } = require('../services/notifications');
 const { logAudit } = require('../services/audit');
 const { isValidId } = require('../utils/validation');
 const { stripHtml } = require('../utils/sanitize');
+const { REPLY_VISIBLE_DAYS } = require('../services/ownerInquiryOps');
 
 const RESPONSE_MAX = 1000;
 
@@ -37,12 +43,22 @@ const activeFor = (now) => ([
   { status: 'open', expiresAt: { $gt: now } },
 ]);
 
+// …plus, for READING only, recently resolved ones: an owner who answered gets
+// the curator's reply back on the same card rather than watching the question
+// silently disappear. Narrowed to answerers in the projection below — a
+// recipient who ignored the question was never replied to.
+const replyWindowFrom = (now) => new Date(now.getTime() - REPLY_VISIBLE_DAYS * 24 * 60 * 60 * 1000);
+const visibleFor = (now) => ([
+  ...activeFor(now),
+  { status: 'resolved', resolvedAt: { $gt: replyWindowFrom(now) } },
+]);
+
 // GET /api/owner-inquiries/mine — the caller's recipient view
 router.get('/mine', async (req, res) => {
   try {
     const filter = {
       'recipients.user': req.user.id,
-      $or: activeFor(new Date()),
+      $or: visibleFor(new Date()),
     };
     // Optional wine scope — validated id or ignored (never a cast 500).
     const wine = typeof req.query.wine === 'string' ? req.query.wine : '';
@@ -58,24 +74,33 @@ router.get('/mine', async (req, res) => {
       .lean();
 
     // Privacy projection: ONLY the caller's own recipient entry leaves the
-    // server — never the other recipients or their answers.
-    const inquiries = rows.map((i) => {
-      const mine = (i.recipients || []).find((r) => String(r.user) === String(req.user.id));
-      return {
-        _id: i._id,
-        status: i.status,
-        question: i.question,
-        wine: i.wineDefinition
-          ? { _id: i.wineDefinition._id, name: i.wineDefinition.name, producer: i.wineDefinition.producer || null }
-          : null,
-        bottle: mine?.bottle || null,
-        responded: !!mine?.response,
-        myResponse: mine?.response || null,
-        respondedAt: mine?.respondedAt || null,
-        createdAt: i.createdAt,
-        expiresAt: i.expiresAt || null,
-      };
-    });
+    // server — never the other recipients or their answers. `resolutionNote`
+    // is absent BY DESIGN: it is the curator's private record, and only
+    // `ownerReply` was written to be read here.
+    const inquiries = rows
+      // A resolved row is worth showing only to someone who answered it.
+      .filter((i) => i.status !== 'resolved'
+        || (i.recipients || []).some((r) => String(r.user) === String(req.user.id) && r.response))
+      .map((i) => {
+        const mine = (i.recipients || []).find((r) => String(r.user) === String(req.user.id));
+        return {
+          _id: i._id,
+          status: i.status,
+          question: i.question,
+          wine: i.wineDefinition
+            ? { _id: i.wineDefinition._id, name: i.wineDefinition.name, producer: i.wineDefinition.producer || null }
+            : null,
+          bottle: mine?.bottle || null,
+          responded: !!mine?.response,
+          myResponse: mine?.response || null,
+          respondedAt: mine?.respondedAt || null,
+          // Only set once a curator has resolved it — the reply the owner is owed.
+          curatorReply: i.ownerReply || null,
+          resolvedAt: i.resolvedAt || null,
+          createdAt: i.createdAt,
+          expiresAt: i.expiresAt || null,
+        };
+      });
 
     res.json({ inquiries });
   } catch (err) {

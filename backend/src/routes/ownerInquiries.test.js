@@ -113,6 +113,50 @@ describe('GET /mine', () => {
     expect(filter.$or[1].expiresAt.$gt).toBeInstanceOf(Date);
   });
 
+  // The reply loop. Before it, resolving made the card vanish and the owner
+  // who read a back label for us got silence.
+  test('a resolved inquiry the caller ANSWERED comes back carrying the curator reply', async () => {
+    WineOwnerInquiry.find.mockReturnValue(findChain([{
+      ...INQUIRY_ROW,
+      status: 'resolved',
+      recipients: [
+        { user: ME, bottle: oid('5'), response: 'Label says E. Pira e Figli', respondedAt: '2026-08-02T00:00:00.000Z' },
+        { user: OTHER, bottle: oid('6'), response: 'Secret answer from another owner' },
+      ],
+      ownerReply: 'Thank you — the producer is now recorded as E. Pira e Figli.',
+      resolutionNote: 'Curator-only: owner answers agreed, applied.',
+      resolvedAt: '2026-08-10T00:00:00.000Z',
+    }]));
+
+    const { inquiries } = await (await mine()).json();
+    expect(inquiries).toHaveLength(1);
+    expect(inquiries[0].responded).toBe(true);
+    expect(inquiries[0].curatorReply).toBe('Thank you — the producer is now recorded as E. Pira e Figli.');
+    // The curator's private record must NOT ride along with the reply.
+    expect(JSON.stringify(inquiries[0])).not.toContain('Curator-only');
+
+    // Resolved rows are readable within the window; the query still asks for
+    // them by resolvedAt, not by status alone.
+    const filter = WineOwnerInquiry.find.mock.calls[0][0];
+    expect(filter.$or[2].status).toBe('resolved');
+    expect(filter.$or[2].resolvedAt.$gt).toBeInstanceOf(Date);
+  });
+
+  test('a resolved inquiry the caller IGNORED is not shown — nothing was replied to them', async () => {
+    WineOwnerInquiry.find.mockReturnValue(findChain([{
+      ...INQUIRY_ROW,
+      status: 'resolved',
+      recipients: [
+        { user: ME, bottle: oid('5'), response: null },
+        { user: OTHER, bottle: oid('6'), response: 'The one answer it got' },
+      ],
+      ownerReply: 'Thanks — settled.',
+      resolvedAt: '2026-08-10T00:00:00.000Z',
+    }]));
+
+    expect((await (await mine()).json()).inquiries).toEqual([]);
+  });
+
   test('?wine= scopes to one wine; an invalid id yields an empty list, never a cast error', async () => {
     WineOwnerInquiry.find.mockReturnValue(findChain([]));
     await mine(`?wine=${W1}`);

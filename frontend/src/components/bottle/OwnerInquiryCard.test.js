@@ -49,11 +49,44 @@ test('renders NOTHING when there is no inquiry, or when the viewer already answe
   expect(container).toBeEmptyDOMElement();
   unmount();
 
-  // Respond-or-ignore: an answered inquiry never re-renders the card.
+  // Answered but not yet replied to: nothing to show — the curator has not
+  // come back yet, and "you answered this" is not news to the answerer.
   getMyOwnerInquiries.mockResolvedValue(ok({ inquiries: [{ ...INQUIRY, responded: true, myResponse: 'said it already' }] }));
   const { container: c2 } = renderCard();
   await waitFor(() => expect(getMyOwnerInquiries).toHaveBeenCalledTimes(2));
   expect(c2).toBeEmptyDOMElement();
+});
+
+// The reply half of the loop: an owner who reads a back label for us gets to
+// see what it changed, instead of the card silently disappearing on resolve.
+const REPLIED = {
+  ...INQUIRY,
+  status: 'resolved',
+  responded: true,
+  myResponse: 'Front label reads E. Pira e Figli.',
+  curatorReply: 'Thank you — the producer is now recorded as E. Pira e Figli.',
+  resolvedAt: '2026-08-12T00:00:00.000Z',
+};
+
+test('a resolved inquiry the viewer answered shows the question, their answer and the curator reply — read-only', async () => {
+  getMyOwnerInquiries.mockResolvedValue(ok({ inquiries: [REPLIED] }));
+  renderCard();
+
+  expect(await screen.findByText('A curator replied about this wine')).toBeInTheDocument();
+  expect(screen.getByText('What does the label say the producer is?')).toBeInTheDocument();
+  expect(screen.getByText('Front label reads E. Pira e Figli.')).toBeInTheDocument();
+  expect(screen.getByText('Thank you — the producer is now recorded as E. Pira e Figli.')).toBeInTheDocument();
+  // Nothing to submit here — the answer was single-shot and is already in.
+  expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  expect(screen.queryByText('Send answer')).not.toBeInTheDocument();
+});
+
+test('an unanswered question outranks a reply — the one that still needs them wins the card', async () => {
+  getMyOwnerInquiries.mockResolvedValue(ok({ inquiries: [REPLIED, INQUIRY] }));
+  renderCard();
+
+  expect(await screen.findByText('A curator has a question about this wine')).toBeInTheDocument();
+  expect(screen.queryByText('A curator replied about this wine')).not.toBeInTheDocument();
 });
 
 test('submit interlock: empty answer disabled, in-flight shows Sending and blocks, then the thanks state replaces the form', async () => {

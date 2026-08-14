@@ -20,6 +20,15 @@ const { isValidId } = require('../utils/validation');
 
 const QUESTION_MIN = 10;
 const QUESTION_MAX = 500;
+const NOTE_MIN = 5;
+const NOTE_MAX = 500;
+// Matches the recipient answer cap — a reply should be able to be as long as
+// the answer it responds to.
+const OWNER_REPLY_MAX = 1000;
+// How long a resolved inquiry keeps rendering its reply on the owner's bottle
+// page. Long enough that an owner who answered and went quiet still sees it;
+// short enough that the card does not become permanent furniture.
+const REPLY_VISIBLE_DAYS = 30;
 // Fan-out ceiling: enough owners to get an answer, small enough that one ask
 // is never a notification blast.
 const RECIPIENT_CAP = 20;
@@ -161,6 +170,121 @@ async function createOwnerInquiry({ wineId, userId, via = 'rest', question, req 
 }
 
 /**
+ * Resolve an inquiry and — this is the point — tell the owners who answered.
+ *
+ * Shared by the admin REST queue and the somm MCP tool resolve_owner_inquiry,
+ * so neither surface can drift on what the owner is told. Two texts, two
+ * audiences, never mixed: `note` is the curator's record (admin-only, always
+ * required — it is what the queue reads back), `ownerReply` is written TO the
+ * owners and reaches them verbatim.
+ *
+ * Only recipients who actually ANSWERED are notified. A recipient who ignored
+ * the question is owed nothing, and "thanks for your answer" to someone who
+ * never gave one reads as a bug.
+ *
+ * @param {object} p
+ * @param {string} p.inquiryId
+ * @param {string} p.userId       the resolving curator
+ * @param {*}      p.note         curator record, 5–500 after strip (required)
+ * @param {*}     [p.ownerReply]  user-facing reply; blank sends a plain thank-you
+ * @param {'rest'|'mcp'} [p.via]
+ * @param {object|null} [p.req]   for audit attribution only
+ * @returns {{ok:true, inquiry, notified:number, replySent:string|null}
+ *         | {ok:false, code:'invalid_input'|'not_found'|'conflict', message:string}}
+ */
+async function resolveOwnerInquiry({ inquiryId, userId, note, ownerReply, via = 'rest', req = null }) {
+  // Plain text only, bounded even after strip (proposal-reject hygiene).
+  const cleanNote = stripHtml(typeof note === 'string' ? note : '');
+  if (!cleanNote || cleanNote.length < NOTE_MIN) {
+    return { ok: false, code: 'invalid_input', message: `A resolution note of at least ${NOTE_MIN} characters is required — say what was done with the answers.` };
+  }
+  if (cleanNote.length > NOTE_MAX) {
+    return { ok: false, code: 'invalid_input', message: `Resolution note must be at most ${NOTE_MAX} characters.` };
+  }
+  if (ownerReply != null && typeof ownerReply !== 'string') {
+    return { ok: false, code: 'invalid_input', message: 'The owner reply must be text.' };
+  }
+  const cleanReply = stripHtml(typeof ownerReply === 'string' ? ownerReply : '');
+  if (cleanReply.length > OWNER_REPLY_MAX) {
+    return { ok: false, code: 'invalid_input', message: `The owner reply must be at most ${OWNER_REPLY_MAX} characters.` };
+  }
+  if (!isValidId(String(inquiryId))) {
+    return { ok: false, code: 'invalid_input', message: 'inquiry id must be a 24-hex id.' };
+  }
+
+  // Atomic claim: only an active row can be resolved, so the second of two
+  // concurrent resolves loses cleanly (the wineProposals decide pattern) —
+  // which is also what stops two curators double-notifying the same owners.
+  const oid = new mongoose.Types.ObjectId(String(inquiryId));
+  const inquiry = await WineOwnerInquiry.findOneAndUpdate(
+    { _id: oid, status: { $in: ['open', 'answered'] } },
+    { $set: {
+      status: 'resolved',
+      resolvedBy: userId,
+      resolvedAt: new Date(),
+      resolutionNote: cleanNote,
+      ownerReply: cleanReply || null,
+    } },
+    { new: true }
+  ).populate('wineDefinition', 'name producer');
+
+  if (!inquiry) {
+    const exists = await WineOwnerInquiry.exists({ _id: oid });
+    return exists
+      ? { ok: false, code: 'conflict', message: 'This inquiry has already been resolved or closed.' }
+      : { ok: false, code: 'not_found', message: 'No inquiry with that id.' };
+  }
+
+  const answered = (inquiry.recipients || []).filter((r) => r.response);
+
+  logAudit(req, 'admin.wine.ownerInquiry.resolve',
+    { type: 'WineOwnerInquiry', id: inquiry._id },
+    {
+      wineDefinitionId: inquiry.wineDefinition?._id || inquiry.wineDefinition,
+      responses: answered.length,
+      note: cleanNote,
+      // Length only — the reply is correspondence with named users, not audit
+      // detail (same line the respond path draws around the answer text).
+      ownerReplyLength: cleanReply.length,
+      notified: answered.length,
+      ...(via === 'mcp' ? { via: 'mcp' } : {}),
+    });
+
+  if (answered.length === 0) {
+    return { ok: true, inquiry, notified: 0, replySent: cleanReply || null };
+  }
+
+  // The deep link needs the CELLAR, which the inquiry deliberately does not
+  // store (it is only ever used to build a link) — resolve it from the bottles
+  // now. A bottle deleted since the answer simply loses its link.
+  const label = wineLabel(inquiry.wineDefinition);
+  const bottleIds = answered.map((r) => r.bottle).filter(Boolean);
+  const cellarByBottle = new Map();
+  if (bottleIds.length > 0) {
+    const bottles = await Bottle.find({ _id: { $in: bottleIds } }).select('cellar').lean();
+    bottles.forEach((b) => cellarByBottle.set(String(b._id), b.cellar));
+  }
+
+  // In-app + push only, exactly like the ask — never email. Best-effort: a
+  // notification failure must not un-resolve an inquiry that is already
+  // written (the wine-report close draws the same line).
+  const fallback = `Thank you — your answer helped settle the record for ${label}.`;
+  createNotifications(answered.map((r) => {
+    const cellar = cellarByBottle.get(String(r.bottle));
+    return {
+      userId: r.user,
+      type: 'owner_inquiry_resolved',
+      title: 'A curator replied about your wine',
+      message: cleanReply || fallback,
+      link: cellar && r.bottle ? `/cellars/${cellar}/bottles/${r.bottle}` : null,
+      category: 'community',
+    };
+  })).catch(() => {});
+
+  return { ok: true, inquiry, notified: answered.length, replySent: cleanReply || null };
+}
+
+/**
  * Lazy retention sweep (no cron): OPEN inquiries past expiresAt become
  * 'closed' with resolvedAt stamped, which also arms the model's 180-day TTL
  * hard-delete. Runs ahead of every queue read (admin list, /mine, MCP list)
@@ -286,9 +410,14 @@ module.exports = {
   QUESTION_MIN,
   QUESTION_MAX,
   RECIPIENT_CAP,
+  NOTE_MIN,
+  NOTE_MAX,
+  OWNER_REPLY_MAX,
+  REPLY_VISIBLE_DAYS,
   EXPIRY_NOTE,
   buildRecipients,
   createOwnerInquiry,
+  resolveOwnerInquiry,
   sweepExpiredInquiries,
   queryInquiryPage,
   repointInquiriesForWineMerge,

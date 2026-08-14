@@ -50,7 +50,8 @@ const notificationSchema = new mongoose.Schema({
       'climate_offline',
       'registry_health',
       'owner_inquiry',
-      'owner_inquiry_response'
+      'owner_inquiry_response',
+      'owner_inquiry_resolved'
     ],
     required: true
   },

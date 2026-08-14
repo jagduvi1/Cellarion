@@ -611,11 +611,13 @@ const REGISTRY = [
       // as a curator. Never other recipients' entries.
       const [received, asked] = await Promise.all([
         WineOwnerInquiry.find({ 'recipients.user': ctx.userId })
-          .select('question status recipients createdAt')
+          // ownerReply is correspondence SENT TO them — theirs to export.
+          // resolutionNote is not: it is the curator's private record.
+          .select('question status recipients ownerReply createdAt resolvedAt')
           .populate('wineDefinition', 'name producer')
           .limit(EXPORT_MAX).lean(),
         WineOwnerInquiry.find({ askedBy: ctx.userId })
-          .select('question status resolutionNote createdAt resolvedAt')
+          .select('question status resolutionNote ownerReply createdAt resolvedAt')
           .populate('wineDefinition', 'name producer')
           .limit(EXPORT_MAX).lean(),
       ]);
@@ -633,7 +635,10 @@ const REGISTRY = [
               myResponse: mine?.response || null,
               respondedAt: mine?.respondedAt || null,
               notifiedAt: mine?.notifiedAt || null,
+              // Only reaches them if they answered — same rule as the card.
+              curatorReply: (mine?.response && i.ownerReply) || null,
               createdAt: i.createdAt,
+              resolvedAt: i.resolvedAt || null,
             };
           }),
           asked: asked.map((i) => ({
@@ -641,6 +646,7 @@ const REGISTRY = [
             question: i.question,
             status: i.status,
             resolutionNote: i.resolutionNote || null,
+            ownerReply: i.ownerReply || null,
             createdAt: i.createdAt,
             resolvedAt: i.resolvedAt || null,
           })),

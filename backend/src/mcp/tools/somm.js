@@ -38,7 +38,11 @@ const {
 const {
   QUESTION_MIN,
   QUESTION_MAX,
+  NOTE_MIN,
+  NOTE_MAX,
+  OWNER_REPLY_MAX,
   createOwnerInquiry,
+  resolveOwnerInquiry,
   sweepExpiredInquiries,
   queryInquiryPage,
 } = require('../../services/ownerInquiryOps');
@@ -1042,7 +1046,8 @@ registerTool({
     'given — this is how a curator reads the replies. Answered first, then open, then decided. Pass wine_id to ' +
     'check one wine, status to narrow ("active" = open+answered is the default; "decided" = resolved+closed). ' +
     'Recipients are anonymised ("owner 1", "owner 2") — identities are never exposed here; judge the answers on ' +
-    'content. Resolution (applying what was learned) is an admin step in the web queue.',
+    'content. Once the record is fixed, close the loop with resolve_owner_inquiry — it replies to the owners who ' +
+    'answered. (Applying an IDENTITY field is still an admin step: propose_wine_correction.)',
   scope: 'read',
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: true, openWorldHint: false },
@@ -1104,6 +1109,74 @@ registerTool({
       data,
       { page: { limit, offset, total } }
     );
+  },
+});
+
+registerTool({
+  name: 'resolve_owner_inquiry',
+  title: 'Sommelier: close an owner inquiry and thank the owners who answered',
+  description:
+    'Closes an owner inquiry and REPLIES to every owner who answered it. Two texts, two audiences: `note` is the ' +
+    'curator record the admin queue reads back (what the answers settled), `owner_reply` is read VERBATIM by the ' +
+    'people who walked to their shelf and read the label for you — write it to them: what they told you, what it ' +
+    'changed in the record, thanks. Fix the record FIRST (set_wine_profile / fix_pending_wine, or file a ' +
+    'propose_wine_correction), then close. Omitting owner_reply still sends a plain thank-you — worse, but never ' +
+    'silence, which is what an unanswered helper remembers. Owners who never answered are not notified. This ' +
+    'notifies real people and is NOT reversible via undo_last (notifications cannot be unsent): confirm the ' +
+    'wording with the somm first.',
+  scope: 'write',
+  requireRole: SOMM_ROLES,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  inputSchema: {
+    inquiry_id: objectId.describe('From list_owner_inquiries'),
+    note: z.string().min(NOTE_MIN).max(NOTE_MAX)
+      .describe(`Curator record — what was done with the answers (${NOTE_MIN}–${NOTE_MAX} chars). NOT shown to owners.`),
+    owner_reply: z.string().max(OWNER_REPLY_MAX).optional()
+      .describe(`What the answering owners read, verbatim (plain text, max ${OWNER_REPLY_MAX} chars).`),
+  },
+  handler: async (args, ctx) => {
+    const denied = requireSomm(ctx);
+    if (denied) return denied;
+
+    const result = await resolveOwnerInquiry({
+      inquiryId: args.inquiry_id,
+      userId: ctx.user.id,
+      note: args.note,
+      ownerReply: args.owner_reply,
+      via: 'mcp',
+      req: ctx.req,
+    });
+    if (!result.ok) {
+      if (result.code === 'not_found') return fail('not_found', result.message + ' Find it with list_owner_inquiries.');
+      if (result.code === 'conflict') return fail('conflict', result.message + ' Somebody else already handled it.');
+      return fail('invalid_input', result.message);
+    }
+
+    const { inquiry, notified, replySent } = result;
+    const label = [inquiry.wineDefinition?.producer, inquiry.wineDefinition?.name]
+      .filter(Boolean).join(' — ') || 'the wine';
+    const envelope = {
+      summary: notified > 0
+        ? `Inquiry on ${label} resolved — ${notified} owner(s) replied to`
+        : `Inquiry on ${label} resolved — nobody had answered, so no owner was notified`,
+      data: {
+        inquiry_id: inquiry._id,
+        status: inquiry.status,
+        owners_notified: notified,
+        reply_sent: replySent,
+        acknowledgement_only: notified > 0 && !replySent,
+        note: notified > 0
+          ? 'The owners who answered have been notified in-app and can read this on their bottle page for 30 days. Not undoable — the notifications are already out.'
+          : 'No owner had answered this inquiry, so there was nobody to reply to.',
+      },
+    };
+    await logAction(ctx, {
+      tool: 'resolve_owner_inquiry',
+      action: 'somm_owner_inquiry_resolve',
+      detail: { inquiryId: String(inquiry._id), notified, replied: !!replySent },
+      result: envelope,
+    });
+    return ok(envelope.summary, envelope.data);
   },
 });
 
