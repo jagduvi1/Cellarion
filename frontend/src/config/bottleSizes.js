@@ -11,6 +11,7 @@ export const BOTTLE_SIZES = [
   { ml: 500, code: '500ml', nameKey: 'halfLitre' },
   { ml: 620, code: '620ml', nameKey: 'clavelin' },
   { ml: 750, code: '750ml', nameKey: 'standard' },
+  { ml: 1000, code: '1000ml', nameKey: 'litre' },
   { ml: 1500, code: '1500ml', nameKey: 'magnum' },
   { ml: 3000, code: '3000ml', nameKey: 'doubleMagnum' },
   { ml: 6000, code: '6000ml', nameKey: 'imperial' },

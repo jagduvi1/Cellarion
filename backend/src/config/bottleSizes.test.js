@@ -14,6 +14,9 @@ describe('normalizeBottleSize', () => {
     ['620ml', '620ml'],           // Clavelin — kept as-is
     ['375ml (Half)', '375ml'],
     ['75cl', '750ml'],            // centilitres
+    ['100cl', '1000ml'],          // litre bottle, as printed on Alsace/German labels
+    ['1L', '1000ml'],
+    ['1 litre', '1000ml'],
     [750, '750ml'],               // bare number ml
     [1.5, '1500ml'],              // bare number litres
     ['', null],
