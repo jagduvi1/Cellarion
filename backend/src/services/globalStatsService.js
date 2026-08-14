@@ -22,6 +22,27 @@ const round = (n, d = 2) => {
 
 const pct = (count, total) => total > 0 ? round((count / total) * 100, 1) : 0;
 
+// Retention ladder: how many distinct days a user has to show up on to land in
+// each tier. Applied to BOTH signals (bottle activity and logins) so the two
+// read side by side. 2 = came back at all, 4 = a habit forming, 7 = committed.
+// Deliberately stops at 7: the login ladder is bounded by the audit TTL
+// (AUDIT_TTL_DAYS, 90d), so a 30-day tier would mean "30 of the last 90" and
+// read as broken sitting at 0. Add a tier here and both the API payload and
+// the dashboard pick it up — nothing else to change.
+const DAY_TIERS = [2, 4, 7];
+
+// $group accumulators counting users at or above each tier, e.g. { t2: {…}, t4: {…} }.
+const tierAccumulators = (dayField) => Object.fromEntries(
+  DAY_TIERS.map(n => [`t${n}`, { $sum: { $cond: [{ $gte: [dayField, n] }, 1, 0] } }]),
+);
+
+// …and back out again into a payload the UI can map over without knowing the tiers.
+const tierRows = (row, total) => DAY_TIERS.map(n => ({
+  days:  n,
+  users: row[`t${n}`] || 0,
+  pct:   pct(row[`t${n}`] || 0, total),
+}));
+
 const safeAggregate = async (model, pipeline) => {
   try { return await model.aggregate(pipeline); }
   catch (err) {
@@ -365,7 +386,8 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
   // "Returning" = a genuine repeat user, not a sign-up who poked around once.
   // Derived RETROACTIVELY from activity so it works across all history: a user
   // is returning if they added or consumed bottles on >=2 distinct calendar
-  // days (4+ days = "core"/power users). Counting distinct days, not events, so
+  // days (4+ days = "core"/power users; DAY_TIERS carries the full ladder).
+  // Counting distinct days, not events, so
   // adding 50 bottles in one sitting still counts as a single session. The
   // login-based figures further below are derived from the audit log (no new
   // per-user field stored) and so are likewise retroactive — bounded only by
@@ -390,15 +412,15 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
     { $group: {
       _id: null,
       usersWithActivity: { $sum: 1 },
-      returningUsers:    { $sum: { $cond: [{ $gte: ['$activeDays', 2] }, 1, 0] } },
-      // Power users: active on 4+ distinct days — a stickier engagement tier
-      // (subset of returningUsers).
-      coreUsers:         { $sum: { $cond: [{ $gte: ['$activeDays', 4] }, 1, 0] } },
+      // Each DAY_TIERS threshold as its own count — nested subsets, so t4 ⊆ t2.
+      ...tierAccumulators('$activeDays'),
     }},
   ]);
-  const ret = returningRaw[0] || { usersWithActivity: 0, returningUsers: 0, coreUsers: 0 };
-  const returningUsers = ret.returningUsers;
-  const coreUsers = ret.coreUsers;
+  const ret = returningRaw[0] || { usersWithActivity: 0 };
+  const activityTiers = tierRows(ret, ret.usersWithActivity || 0);
+  // Named aliases for the two headline tiers, kept for API back-compat.
+  const returningUsers = ret.t2 || 0;   // 2+ distinct active days
+  const coreUsers = ret.t4 || 0;        // 4+ — a stickier tier, subset of the above
   const singleSessionUsers = Math.max(0, ret.usersWithActivity - returningUsers);
 
   // Login-based signals, derived from the AUDIT LOG (action 'auth.login.success')
@@ -415,18 +437,38 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
       ? { $ne: null, $nin: adminIds }
       : { $ne: null },
   };
+  // Two shapes come out of the same scan:
+  //   • logins    — raw login EVENTS (five logins in one evening = 5)
+  //   • loginDays — distinct calendar days with a login, the login-side mirror
+  //     of the activity tiers above, so "returning" means the same thing on
+  //     both sides: came back on another day, not just clicked twice.
   const loginAgg = await safeAggregate(AuditLog, [
     { $match: loginAuditMatch },
-    { $group: { _id: '$resource.id', logins: { $sum: 1 }, lastAt: { $max: '$timestamp' } } },
+    // Collapse to user×day first, then per user, so a burst of logins in one
+    // sitting counts once — same reasoning as the activity metric.
+    { $group: {
+      _id:    { user: '$resource.id', day: { $dateToString: { format: '%Y-%m-%d', date: '$timestamp' } } },
+      hits:   { $sum: 1 },
+      lastAt: { $max: '$timestamp' },
+    }},
+    { $group: {
+      _id:       '$_id.user',
+      logins:    { $sum: '$hits' },
+      loginDays: { $sum: 1 },
+      lastAt:    { $max: '$lastAt' },
+    }},
     { $group: {
       _id: null,
       loginUsers:       { $sum: 1 },
       repeatLoginUsers: { $sum: { $cond: [{ $gte: ['$logins', 2] }, 1, 0] } },
       loggedIn30d:      { $sum: { $cond: [{ $gte: ['$lastAt', since30] }, 1, 0] } },
       loggedIn7d:       { $sum: { $cond: [{ $gte: ['$lastAt', since7d] }, 1, 0] } },
+      // Same ladder as the activity metric, on distinct login days.
+      ...tierAccumulators('$loginDays'),
     }},
   ]);
   const login = loginAgg[0] || { loginUsers: 0, repeatLoginUsers: 0, loggedIn30d: 0, loggedIn7d: 0 };
+  const loginTiers = tierRows(login, login.loginUsers || 0);
 
   // ── Plans / subscriptions ───────────────────────────────────────────────
   const planDistribution = await safeAggregate(User, [
@@ -763,9 +805,16 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
       returningUsers,
       coreUsers,
       singleSessionUsers,
-      usersWithActivity: ret.usersWithActivity,
+      usersWithActivity: ret.usersWithActivity || 0,
       returningPct: pct(returningUsers, ret.usersWithActivity),
       corePct: pct(coreUsers, ret.usersWithActivity),
+      // Full ladder: [{ days, users, pct }] for every DAY_TIERS threshold,
+      // percentages over usersWithActivity.
+      activityTiers,
+      // The same ladder counted on distinct LOGIN days instead of bottle
+      // activity — percentages over loginUsers (anyone who logged in at all
+      // within the audit window), so the two ladders aren't over the same base.
+      loginTiers,
       // Login-based, from the audit log — bounded by the audit TTL window.
       // null when the TTL is disabled (AUDIT_TTL_DAYS<=0): the audit log is then
       // retained indefinitely, so the figures cover all recorded history.
@@ -831,4 +880,8 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
   };
 }
 
-module.exports = { computeGlobalStats };
+module.exports = {
+  computeGlobalStats,
+  // Exported for tests: the retention day-ladder and its two halves.
+  __testing: { DAY_TIERS, tierAccumulators, tierRows },
+};
