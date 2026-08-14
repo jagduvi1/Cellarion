@@ -59,8 +59,23 @@ const callBudgetExceeded = () =>
 // record() is fire-and-forget and no-ops without a live Mongo connection, so
 // the directly-unit-tested wrappers below stay pure in jest.
 const McpUsageStat = require('../models/McpUsageStat');
-function recordUsage(ctx, kind, name, error) {
-  McpUsageStat.record({ surface: ctx.anonymous ? 'public' : 'personal', kind, name, error });
+function recordUsage(ctx, kind, name, error, code) {
+  McpUsageStat.record({ surface: ctx.anonymous ? 'public' : 'personal', kind, name, error, code });
+}
+
+// Pull the error CODE out of a tool result so the counters say WHY a call
+// failed, not just that it did. Tool failures are fail()'d envelopes whose
+// single text block is `{"error":{"code","message"}}` (toolUtil.fail) — anything
+// else (a thrown handler, a non-JSON body) counts as 'unknown' rather than
+// risking a throw inside instrumentation.
+function errorCodeOf(out) {
+  try {
+    const text = out?.content?.[0]?.text;
+    if (typeof text !== 'string') return 'unknown';
+    return JSON.parse(text)?.error?.code || 'unknown';
+  } catch {
+    return 'unknown';
+  }
 }
 
 // Run a handler and count it into McpUsageStat WITHOUT changing its calling
@@ -69,21 +84,27 @@ function recordUsage(ctx, kind, name, error) {
 // are pure/synchronous and their tests pin that — wrapping everything in a
 // promise here would silently break them.
 function withUsage(ctx, kind, name, run, isError = () => false) {
+  // A thrown handler never produced an envelope to read a code from — 'threw'
+  // separates that (a bug or an unhandled backend fault) from an orderly fail().
+  const settle = (v) => {
+    const bad = !!isError(v);
+    recordUsage(ctx, kind, name, bad, bad ? errorCodeOf(v) : undefined);
+    return v;
+  };
   let out;
   try {
     out = run();
   } catch (err) {
-    recordUsage(ctx, kind, name, true);
+    recordUsage(ctx, kind, name, true, 'threw');
     throw err;
   }
   if (out && typeof out.then === 'function') {
     return out.then(
-      (v) => { recordUsage(ctx, kind, name, !!isError(v)); return v; },
-      (err) => { recordUsage(ctx, kind, name, true); throw err; }
+      settle,
+      (err) => { recordUsage(ctx, kind, name, true, 'threw'); throw err; }
     );
   }
-  recordUsage(ctx, kind, name, !!isError(out));
-  return out;
+  return settle(out);
 }
 
 // Wrap a tool handler with the per-request call budget (+ the per-user
@@ -100,12 +121,12 @@ function budgetedHandler(tool, ctx, state) {
     state.calls += 1;
     const maxCalls = state.max || MAX_CALLS_PER_REQUEST;
     if (state.calls > maxCalls) {
-      recordUsage(ctx, 'tool', tool.name, true);
+      recordUsage(ctx, 'tool', tool.name, true, 'rate_limited');
       return rateLimited(`Too many tool calls in one request (max ${maxCalls}). Send fewer calls per batch and paginate instead.`);
     }
     // Cross-request caller budget — bounds read amplification (M-4).
     if (!withinCallBudget(ctx)) {
-      recordUsage(ctx, 'tool', tool.name, true);
+      recordUsage(ctx, 'tool', tool.name, true, 'rate_limited');
       return callBudgetExceeded();
     }
     if (tool.annotations?.readOnlyHint === false) {
@@ -113,7 +134,7 @@ function budgetedHandler(tool, ctx, state) {
       // tool is ever mis-scoped 'public', refuse cleanly instead of running a
       // userless mutation (and crashing on ctx.user.id below).
       if (ctx.anonymous || !ctx.user) {
-        recordUsage(ctx, 'tool', tool.name, true);
+        recordUsage(ctx, 'tool', tool.name, true, 'forbidden_scope');
         return {
           isError: true,
           content: [{ type: 'text', text: JSON.stringify({ error: { code: 'forbidden_scope', message: 'Mutations need an authenticated connection.' } }) }],
@@ -123,7 +144,7 @@ function budgetedHandler(tool, ctx, state) {
       // themselves — per ITEM on apply, nothing on preview — so the generic
       // one-slot-per-call charge here would double-count (MCP-audit M7).
       if (!tool.selfBudgeted && !takeMutationSlot(String(ctx.user.id), 1, ipKeyFor(ctx))) {
-        recordUsage(ctx, 'tool', tool.name, true);
+        recordUsage(ctx, 'tool', tool.name, true, 'rate_limited');
         return rateLimited('Too many cellar changes in a short time — wait a few minutes before mutating again. Reads still work.');
       }
     }
@@ -275,11 +296,11 @@ function budgetedPromptHandler(prompt, ctx, state) {
     state.calls += 1;
     const maxCalls = state.max || MAX_CALLS_PER_REQUEST;
     if (state.calls > maxCalls) {
-      recordUsage(ctx, 'prompt', prompt.name, true);
+      recordUsage(ctx, 'prompt', prompt.name, true, 'rate_limited');
       throw new Error(`rate_limited: too many calls in one request (max ${maxCalls})`);
     }
     if (!withinCallBudget(ctx)) {
-      recordUsage(ctx, 'prompt', prompt.name, true);
+      recordUsage(ctx, 'prompt', prompt.name, true, 'rate_limited');
       throw new Error('rate_limited: too many Cellarion tool calls in a short time');
     }
     return withUsage(ctx, 'prompt', prompt.name, () => prompt.handler(args || {}, ctx));
@@ -296,11 +317,11 @@ function budgetedResourceHandler(rsrc, ctx, state) {
     state.calls += 1;
     const maxCalls = state.max || MAX_CALLS_PER_REQUEST;
     if (state.calls > maxCalls) {
-      recordUsage(ctx, 'resource', rsrc.name, true);
+      recordUsage(ctx, 'resource', rsrc.name, true, 'rate_limited');
       throw new Error(`rate_limited: too many calls in one request (max ${maxCalls})`);
     }
     if (!withinCallBudget(ctx)) {
-      recordUsage(ctx, 'resource', rsrc.name, true);
+      recordUsage(ctx, 'resource', rsrc.name, true, 'rate_limited');
       throw new Error('rate_limited: too many Cellarion tool calls in a short time');
     }
     const params = rsrc.uriTemplate ? (varsOrExtra || {}) : {};

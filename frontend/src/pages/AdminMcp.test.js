@@ -24,7 +24,11 @@ const jsonRes = (body, ok = true) => ({ ok, json: () => Promise.resolve(body) })
 const USAGE = {
   days: 30,
   daily: [{ day: '2026-07-15T00:00:00.000Z', surface: 'personal', calls: 41, errors: 2 }],
-  topTools: [{ name: 'search_bottles', surface: 'personal', calls: 20, errors: 1 }],
+  topTools: [
+    { name: 'search_bottles', surface: 'personal', calls: 20, errors: 1, errorCodes: { invalid_input: 1 } },
+    // No errorCodes at all — the shape every row had before the field existed.
+    { name: 'get_wine', surface: 'public', calls: 9, errors: 0 },
+  ],
   connections: { bearer: { total: 3, activeLast7d: 2 }, oauth: { total: 5, activeLast7d: 4 } },
   users: { connected: 7, oauthConnected: 4, oauthActiveLast7d: 3, wroteLast7d: 2 },
   writesLast7d: 12,
@@ -63,6 +67,15 @@ test('survives a payload with no users block (older backend)', async () => {
   // Renders em-dashes rather than crashing on users.connected.
   await waitFor(() => expect(screen.getByText('2026-07-15')).toBeInTheDocument());
   expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+});
+
+test('shows WHY a tool failed, and renders rows that carry no errorCodes at all', async () => {
+  render(<AdminMcp />);
+  await waitFor(() => expect(screen.getByText('search_bottles')).toBeInTheDocument());
+  // The breakdown is the point — a bare "1" cannot be acted on.
+  expect(screen.getByText('invalid_input 1')).toBeInTheDocument();
+  // The pre-field row still renders (no crash on a missing map).
+  expect(screen.getByText('get_wine')).toBeInTheDocument();
 });
 
 test('surfaces a server error instead of blanking', async () => {

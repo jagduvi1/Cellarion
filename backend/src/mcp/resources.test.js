@@ -169,6 +169,20 @@ describe('find_similar_wines', () => {
     // over-fetch is (limit+1)*5 with limit clamped to 10 → 55
     expect(vectorStore.searchSimilar).toHaveBeenCalledWith('v1', [0.1], 55);
   });
+
+  // The clamp above is only REACHED if the registered schema lets the call
+  // through. It used to be z.number().int().min(1).max(10), so in production
+  // the SDK rejected `limit: 500` with -32602 before the handler ran — while
+  // this suite, which calls handlers directly, proved the unreachable clamp
+  // green. Prod counted 51 such refusals on the anonymous surface. Assert the
+  // SCHEMA is permissive, not just the handler.
+  test('limit schema accepts out-of-range and string numbers so the handler can clamp them', () => {
+    const { z } = require('zod');
+    const schema = z.object(tool('find_similar_wines').inputSchema);
+    expect(schema.safeParse({ wine_id: oid('f'), limit: 500 }).success).toBe(true);
+    expect(schema.safeParse({ wine_id: oid('f'), limit: '5' }).success).toBe(true);
+    expect(schema.safeParse({ wine_id: oid('f') }).success).toBe(true);
+  });
 });
 
 // ── Coverage added by the 2026-07-16 refactor audit ──────────────────────────

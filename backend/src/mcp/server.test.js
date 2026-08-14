@@ -113,6 +113,51 @@ describe('idempotency claim release-on-error (H2)', () => {
   });
 });
 
+// A bare error count says an agent is failing, not WHY — and "the tool's
+// contract confuses the model" (invalid_input) and "a backend is down"
+// (unavailable) need opposite responses from an admin.
+describe('usage counters record the error CODE', () => {
+  const McpUsageStat = require('../models/McpUsageStat');
+  const failWith = (code) => ({ isError: true, content: [{ type: 'text', text: JSON.stringify({ error: { code, message: 'x' } }) }] });
+  const lastRecord = () => McpUsageStat.record.mock.calls.at(-1)[0];
+
+  test('a fail() envelope contributes its code', async () => {
+    const handler = jest.fn(async () => failWith('invalid_input'));
+    await budgetedHandler(readTool(handler), ctxFor(), freshState())({});
+    expect(lastRecord()).toMatchObject({ name: 'search_bottles', error: true, code: 'invalid_input' });
+  });
+
+  test('a SUCCESS records no code (nothing to explain)', async () => {
+    const handler = jest.fn(async () => ({ content: [{ type: 'text', text: '{}' }] }));
+    await budgetedHandler(readTool(handler), ctxFor(), freshState())({});
+    expect(lastRecord()).toMatchObject({ error: false, code: undefined });
+  });
+
+  test("a THROWN handler is 'threw', not a parsed code — there is no envelope to read", async () => {
+    const handler = jest.fn(async () => { throw new Error('boom'); });
+    await expect(budgetedHandler(readTool(handler), ctxFor(), freshState())({})).rejects.toThrow('boom');
+    expect(lastRecord()).toMatchObject({ error: true, code: 'threw' });
+  });
+
+  test('a non-JSON / shapeless error body degrades to unknown instead of throwing inside instrumentation', async () => {
+    const handler = jest.fn(async () => ({ isError: true, content: [{ type: 'text', text: 'not json' }] }));
+    await budgetedHandler(readTool(handler), ctxFor(), freshState())({});
+    expect(lastRecord()).toMatchObject({ error: true, code: 'unknown' });
+  });
+
+  test('budget refusals carry their own codes (the handler never ran to produce one)', async () => {
+    withinCallBudget.mockReturnValue(false);
+    await budgetedHandler(readTool(jest.fn()), ctxFor(), freshState())({});
+    expect(lastRecord()).toMatchObject({ error: true, code: 'rate_limited' });
+
+    // Reset: the call budget is checked BEFORE the mutating gate, so leaving it
+    // exhausted would re-assert rate_limited and never reach forbidden_scope.
+    withinCallBudget.mockReturnValue(true);
+    await budgetedHandler(writeTool(jest.fn()), ctxFor({ anonymous: true, user: null }), freshState())({});
+    expect(lastRecord()).toMatchObject({ error: true, code: 'forbidden_scope' });
+  });
+});
+
 // ctx is spread with extra fields; assert on the object shape we passed.
 function ctxForMatch() {
   return expect.objectContaining({ user: USER });

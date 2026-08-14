@@ -80,7 +80,7 @@ test('maps aggregates into the daily series, top tools and connection split', as
       { _id: { day, surface: 'public' }, calls: 7, errors: 0 },
     ])
     .mockResolvedValueOnce([
-      { _id: { name: 'search_bottles', surface: 'personal' }, calls: 20, errors: 1 },
+      { _id: { name: 'search_bottles', surface: 'personal' }, calls: 20, errors: 1, errorCodes: [[{ k: 'invalid_input', v: 1 }]] },
     ]);
   ApiToken.aggregate
     .mockResolvedValueOnce([
@@ -97,7 +97,7 @@ test('maps aggregates into the daily series, top tools and connection split', as
     { day: day.toISOString(), surface: 'public', calls: 7, errors: 0 },
   ]);
   expect(body.topTools).toEqual([
-    { name: 'search_bottles', surface: 'personal', calls: 20, errors: 1 },
+    { name: 'search_bottles', surface: 'personal', calls: 20, errors: 1, errorCodes: { invalid_input: 1 } },
   ]);
   expect(body.connections).toEqual({
     bearer: { total: 3, activeLast7d: 2 },
@@ -109,6 +109,29 @@ test('maps aggregates into the daily series, top tools and connection split', as
   expect(body.users).toEqual({
     connected: 6, oauthConnected: 4, oauthActiveLast7d: 2, wroteLast7d: 2,
   });
+});
+
+test('errorCodes sum across days, and rows predating the field stay absent rather than crashing the map', async () => {
+  McpUsageStat.aggregate
+    .mockResolvedValueOnce([])
+    .mockResolvedValueOnce([
+      // Three days: two with codes, one clean (no errors → no map at all).
+      { _id: { name: 'find_similar_wines', surface: 'public' }, calls: 30, errors: 5, errorCodes: [
+        [{ k: 'invalid_input', v: 2 }, { k: 'unavailable', v: 1 }],
+        [],
+        [{ k: 'invalid_input', v: 2 }],
+      ] },
+      // A tool whose rows all predate the field — the aggregation pushes
+      // nothing usable and the response must simply carry an empty object.
+      { _id: { name: 'get_wine', surface: 'public' }, calls: 9, errors: 1, errorCodes: undefined },
+    ]);
+  ApiToken.aggregate.mockResolvedValue([]);
+  McpActionLog.aggregate.mockResolvedValue([]);
+  McpActionLog.countDocuments.mockResolvedValue(0);
+
+  const body = await (await getUsage(tokenFor(ADMIN_ID, ['admin']))).json();
+  expect(body.topTools[0].errorCodes).toEqual({ invalid_input: 4, unavailable: 1 });
+  expect(body.topTools[1].errorCodes).toEqual({});
 });
 
 test('the user pipelines count people, not tokens or rows', async () => {

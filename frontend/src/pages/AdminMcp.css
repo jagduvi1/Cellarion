@@ -199,6 +199,16 @@
   font-size: 0.82rem;
 }
 
+/* Error-code breakdown under the error count. Secondary to the number it
+   explains, and on its own line so the cell stays narrow. */
+.admin-mcp-error-codes {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  color: var(--color-text-muted, #6b7280);
+  margin-top: 2px;
+}
+
 .admin-mcp-bar-col {
   width: 30%;
   min-width: 80px;
