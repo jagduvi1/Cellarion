@@ -257,6 +257,28 @@ async function resolveImportAppellation(name, cache) {
   return resolved;
 }
 
+/**
+ * Adopt the registry's spelling for an imported producer, memoized per import
+ * run (LWIN dumps repeat a producer across hundreds of rows). The import was
+ * the LAST mint surface without this: LWIN's PRODUCER_NAME column drops the
+ * estate title that label scans include, so a file row "Philipp Kuhn" minted
+ * beside the scan-minted "Weingut Philipp Kuhn" — the exact class the
+ * 2026-08-14 consolidation cleaned 130 clusters of. Same contract as every
+ * other caller of the resolver: silent, fail-open, never blocks a row.
+ * Country-scoped, so the cache key carries the country id.
+ */
+async function resolveImportProducer(producer, countryId, cache) {
+  if (!producer) return producer;
+  const key = `${producer}|${countryId || ''}`;
+  if (cache.has(key)) return cache.get(key);
+  const { resolveCanonicalProducerSpelling } = require('../../services/producerSpelling');
+  const resolved = await resolveCanonicalProducerSpelling(
+    producer, normalizeString(producer), countryId ? { countryId } : {}
+  );
+  cache.set(key, resolved);
+  return resolved;
+}
+
 const BATCH_SIZE = 500;
 
 // ── Route ─────────────────────────────────────────────────────────────────────
@@ -287,6 +309,7 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
   const regionCache = new Map();
   const appellationCache = new Map();
   const appellationSpellingCache = new Map();
+  const producerSpellingCache = new Map();
 
   // Auto-detect delimiter and whether a header row is present.
   // Strip BOM before inspecting — some LWIN exports include a UTF-8 BOM.
@@ -333,8 +356,8 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
     const rows = batch;
     batch = [];
 
-    const ops = rows.map(({ mapped, countryId, regionId, normalizedKey, legacyKey }) => {
-      const filter = buildUpsertFilter({ normalizedKey, legacyKey, lwin7: mapped.lwin7 });
+    const ops = rows.map(({ mapped, countryId, regionId, normalizedKey, legacyKeys }) => {
+      const filter = buildUpsertFilter({ normalizedKey, legacyKeys, lwin7: mapped.lwin7 });
 
       // Wrap user-derived CSV values in $literal: in an aggregation update
       // pipeline a string beginning with '$' is otherwise evaluated as a field
@@ -453,20 +476,32 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
         mapped.appellation = await resolveImportAppellation(mapped.appellation, appellationSpellingCache);
 
         const countryId = await getOrCreateCountry(mapped.country, userId, countryCache);
+        // Producer spelling AFTER country resolution — the wider (decoration)
+        // stage of the resolver is fenced by country. A null countryId
+        // (placeholder country the bulkWrite pre-check will drop) still gets
+        // the same-string stage, matching findOrCreateWine.
+        const preResolveProducer = mapped.producer;
+        mapped.producer = await resolveImportProducer(mapped.producer, countryId, producerSpellingCache);
         const regionId = await getOrCreateRegion(mapped.region, countryId, userId, regionCache);
         await getOrCreateAppellation(mapped.appellation, countryId, regionId, userId, appellationCache);
         const normalizedKey = generateWineKey(mapped.name, mapped.producer, mapped.appellation || '');
-        // Resolution moves the dedup key ("… Yecla DO" → "… Yecla"), so a
-        // re-import of a file whose rows this import minted BEFORE the
-        // resolver existed would miss them and upsert twins (release-audit
-        // F3). The pre-resolve key rides into the upsert filter's $or so the
-        // old rows still match; findOrCreateWine's sibling net gives every
-        // other path this protection, but the bulkWrite has only its filter.
-        const legacyKey = mapped.appellation !== preResolveAppellation
-          ? generateWineKey(mapped.name, mapped.producer, preResolveAppellation || '')
-          : null;
+        // Resolution moves the dedup key ("… Yecla DO" → "… Yecla"; producer
+        // "Philipp Kuhn" → "Weingut Philipp Kuhn"), so a re-import of a file
+        // whose rows this import minted BEFORE a resolver existed would miss
+        // them and upsert twins (release-audit F3). Every (producer,
+        // appellation) combination a resolution moved rides into the upsert
+        // filter's $or so the old rows still match; findOrCreateWine's
+        // sibling net gives every other path this protection, but the
+        // bulkWrite has only its filter.
+        const legacyKeys = [];
+        for (const p of new Set([preResolveProducer, mapped.producer])) {
+          for (const a of new Set([preResolveAppellation || '', mapped.appellation || ''])) {
+            const k = generateWineKey(mapped.name, p, a);
+            if (k !== normalizedKey && !legacyKeys.includes(k)) legacyKeys.push(k);
+          }
+        }
 
-        batch.push({ mapped, countryId, regionId, normalizedKey, legacyKey, rowIndex });
+        batch.push({ mapped, countryId, regionId, normalizedKey, legacyKeys, rowIndex });
 
         if (batch.length >= BATCH_SIZE) {
           await flush();
@@ -539,9 +574,15 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
  * twins), and the LWIN7 (stable across every spelling change). Pure and
  * exported for tests.
  */
-function buildUpsertFilter({ normalizedKey, legacyKey, lwin7 }) {
+function buildUpsertFilter({ normalizedKey, legacyKey, legacyKeys, lwin7 }) {
   const orKeys = [{ normalizedKey }];
-  if (legacyKey) orKeys.push({ normalizedKey: legacyKey });
+  // Both spellings kept: `legacyKey` (single, the original F3 shape — pinned
+  // by tests) and `legacyKeys` (array, since producer resolution joined
+  // appellation resolution in moving the key: up to three combinations).
+  const seen = new Set([normalizedKey]);
+  for (const k of [legacyKey, ...(legacyKeys || [])]) {
+    if (k && !seen.has(k)) { seen.add(k); orKeys.push({ normalizedKey: k }); }
+  }
   if (lwin7) orKeys.push({ 'lwin.lwin7': lwin7 });
   return orKeys.length > 1 ? { $or: orKeys } : { normalizedKey };
 }

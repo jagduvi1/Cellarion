@@ -29,6 +29,10 @@ const { canonicalizeWineName } = require('./producerPrefix');
 // — falling back to the raw normalized string keeps such producers distinct
 // from each other instead of sharing one canonical bucket. Mirrors the raw
 // fallback in wineMatching.producerSimilarity.
+//
+// Exported (2026-08-14): services/producerSpelling.js scans the canonicalKey
+// index by this exact segment, so the two must be one computation — a private
+// copy there would drift the moment either fold rule changes.
 const producerSegment = (producer) =>
   normalizeProducerKey(producer || '') || normalizeString(producer || '');
 
@@ -49,4 +53,4 @@ function canonicalSiblingPrefix(name, producer) {
   return `${producerSegment(producer)}:${nameKey}:`;
 }
 
-module.exports = { computeCanonicalKey, canonicalSiblingPrefix };
+module.exports = { computeCanonicalKey, canonicalSiblingPrefix, producerSegment };

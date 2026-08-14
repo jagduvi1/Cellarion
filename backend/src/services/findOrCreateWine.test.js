@@ -658,15 +658,20 @@ describe('findOrCreateWine — creation', () => {
   // must adopt the registry's majority spelling — the display split is the one
   // axis no key-based net can catch, because every key folds it away.
   test('adopts the registry majority producer spelling on create; the typed variant is not stored', async () => {
+    // A realistic stage-1 hit is always a FOLD-EQUAL spelling of the typed
+    // producer — the bucket is grouped by the fold, so it cannot hold anything
+    // else. (The old fixture returned an unrelated producer, which only the
+    // artificial mock made possible.)
     WineDefinition.aggregate.mockResolvedValue([
-      { _id: 'Cave de Ribeauvillé', count: 12, oldest: new Date('2026-01-01') },
+      { _id: 'Pàul Avril', count: 12, oldest: new Date('2026-01-01') },
     ]);
-    const result = await findOrCreateWine(
-      { ...INPUT, producer: 'Paul Avril' }, USER_ID);
+    const result = await findOrCreateWine(INPUT, USER_ID);
     expect(result.created).toBe(true);
-    expect(WineDefinition.mock.calls[0][0].producer).toBe('Cave de Ribeauvillé');
-    // The keys were computed BEFORE adoption and must be spelling-invariant —
-    // normalizedKey still reflects the fold, which both spellings share.
+    expect(WineDefinition.mock.calls[0][0].producer).toBe('Pàul Avril');
+    // A same-string adoption is fold-invariant: the mint key computed from the
+    // ADOPTED spelling equals the one the typed spelling produces. (Decoration
+    // adoptions are NOT fold-invariant — the test below pins that the key
+    // follows the stored spelling there.)
     expect(WineDefinition.mock.calls[0][0].normalizedKey).toBe(INPUT_KEY);
   });
 
@@ -675,6 +680,23 @@ describe('findOrCreateWine — creation', () => {
     const result = await findOrCreateWine(INPUT, USER_ID);
     expect(result.created).toBe(true);
     expect(WineDefinition.mock.calls[0][0].producer).toBe('Paul Avril');
+  });
+
+  // 2026-08-14, decoration stage: the same estate stored with and without its
+  // title ("Paul Avril" vs "Domaine Paul Avril") is the split class the
+  // same-string stage above cannot see. Adoption here is NOT fold-invariant —
+  // the stored producer's normalizeString differs from the typed one — so the
+  // MINT KEY must follow the stored spelling, or the row would sit on a key no
+  // repeat submission ever computes.
+  test('adopts a decorated spelling of the same producer (same country), and the mint key follows it', async () => {
+    WineDefinition.aggregate
+      .mockResolvedValueOnce([]) // stage 1: this exact string is new to the registry
+      .mockResolvedValueOnce([{ _id: 'Domaine Paul Avril', count: 3, oldest: new Date('2026-01-01') }]);
+    const result = await findOrCreateWine(INPUT, USER_ID);
+    expect(result.created).toBe(true);
+    expect(WineDefinition.mock.calls[0][0].producer).toBe('Domaine Paul Avril');
+    expect(WineDefinition.mock.calls[0][0].normalizedKey)
+      .toBe(generateWineKey('Clos des Papes', 'Domaine Paul Avril', 'Châteauneuf-du-Pape'));
   });
 
   // Strategy R2: a curated appellation's spelling is adopted BEFORE key

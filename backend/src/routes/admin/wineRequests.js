@@ -3,7 +3,7 @@ const { requireAuth, requireRole } = require('../../middleware/auth');
 const WineRequest = require('../../models/WineRequest');
 const WineDefinition = require('../../models/WineDefinition');
 const Bottle = require('../../models/Bottle');
-const { generateWineKey, normalizeAppellation } = require('../../utils/normalize');
+const { generateWineKey, normalizeAppellation, normalizeString } = require('../../utils/normalize');
 const { canonicalizeWineName } = require('../../utils/producerPrefix');
 const Country = require('../../models/Country');
 const { findOrCreateWine } = require('../../services/findOrCreateWine');
@@ -165,11 +165,21 @@ router.put('/:id/resolve', async (req, res) => {
         }
       }
 
-      const normalizedKey = generateWineKey(cleanName, cleanProducer, cleanAppellation);
+      // Adopt the registry's existing spelling for this producer, mirroring
+      // the mint chokepoint (same-string majority + same-country decoration
+      // variants). Approval builds the row directly, so without this the
+      // approve button was one of the surfaces that could still mint a
+      // display split. Fail-open — ambiguity stores the typed spelling.
+      const { resolveCanonicalProducerSpelling } = require('../../services/producerSpelling');
+      const producerToStore = await resolveCanonicalProducerSpelling(
+        cleanProducer, normalizeString(cleanProducer), { countryId: String(country) }
+      );
+
+      const normalizedKey = generateWineKey(cleanName, producerToStore, cleanAppellation);
 
       linkedWine = new WineDefinition({
         name: cleanName,
-        producer: cleanProducer,
+        producer: producerToStore,
         country,
         region: region || null,
         appellation: cleanAppellation,

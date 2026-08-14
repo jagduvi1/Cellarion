@@ -586,30 +586,38 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     }
   }
 
-  // Adopt the registry's majority spelling for this producer (accent, case
-  // and punctuation variants — "Cave de Ribeauville" → "Cave de Ribeauvillé").
-  // Display-only: every derived key (normalizedKey, canonicalKey, slug) folds
-  // both spellings identically, which is precisely why nothing upstream of
-  // this point needs recomputing and why no key-based net ever caught these.
-  const producerToStore = producerMissing
-    ? ''
-    : await resolveCanonicalProducerSpelling(trimmedProducer, producerNorm);
-
-  // The key may have moved since step 1: a geography-as-producer MOVE changes
-  // both the producer segment (→ pending) and possibly the appellation one.
-  // Recompute so the row is stored under the key a repeat submission will look
-  // it up by (and so the E11000 recovery below re-queries the right one).
-  const mintKey = producerMissing
-    ? pendingWineKey(trimmedName, userId, trimmedAppellation)
-    : normalizedKey;
-
-  // Resolve taxonomy
+  // Resolve the country FIRST: the spelling stage below fences its wider
+  // (decoration-variant) adoption by country, so the id has to exist before
+  // the producer string is settled. Creating the Country doc marginally
+  // earlier is harmless — the same request would create it either way.
   const countryDoc = await findOrCreateCountry(country, userId);
   if (!countryDoc) {
     const err = new Error('Country is required to create a wine');
     err.status = 400;
     throw err;
   }
+
+  // Adopt the registry's spelling for this producer — accent/case/punctuation
+  // variants ("Cave de Ribeauville" → "Cave de Ribeauvillé") and, same
+  // country only, decoration variants ("Philipp Kuhn" → "Weingut Philipp
+  // Kuhn"; the 130-cluster class the 2026-08-14 consolidation cleaned up).
+  // SILENT and fail-open by contract: on any ambiguity the typed spelling is
+  // kept and the add proceeds — this stage can only ever change what string
+  // is stored, never whether the bottle saves.
+  const producerToStore = producerMissing
+    ? ''
+    : await resolveCanonicalProducerSpelling(trimmedProducer, producerNorm, { countryId: countryDoc._id });
+
+  // The key may have moved since step 1: a geography-as-producer MOVE changes
+  // both the producer segment (→ pending) and possibly the appellation one —
+  // and a DECORATION adoption above changes the producer segment too
+  // ("philipp kuhn:…" → "weingut philipp kuhn:…"), unlike the same-string
+  // stage, which is fold-invariant. Recompute from the string actually being
+  // stored, so the row lands under the key a repeat submission will look it
+  // up by (and so the E11000 recovery below re-queries the right one).
+  const mintKey = producerMissing
+    ? pendingWineKey(trimmedName, userId, trimmedAppellation)
+    : generateWineKey(trimmedName, producerToStore, trimmedAppellation);
 
   const regionDoc = await findOrCreateRegion(region, countryDoc._id, userId);
   let grapeIds = await findOrCreateGrapes(grapes, userId);

@@ -14,6 +14,7 @@ jest.mock('../models/User', () => ({ find: jest.fn() }));
 jest.mock('../models/RegistryHealthSnapshot', () => ({ findOne: jest.fn(), create: jest.fn() }));
 jest.mock('./notifications', () => ({ createNotification: jest.fn() }));
 jest.mock('./crossFieldScan', () => ({ scanCrossFieldChecks: jest.fn() }));
+jest.mock('./registryFragmentation', () => ({ nearProducerPairs: jest.fn() }));
 
 const WineDefinition = require('../models/WineDefinition');
 const WineReport = require('../models/WineReport');
@@ -22,6 +23,7 @@ const User = require('../models/User');
 const RegistryHealthSnapshot = require('../models/RegistryHealthSnapshot');
 const { createNotification } = require('./notifications');
 const { scanCrossFieldChecks } = require('./crossFieldScan');
+const { nearProducerPairs } = require('./registryFragmentation');
 const { runRegistryHealthCheck, computeMetrics, METRIC_LABELS, crossFieldMetricKey } = require('./registryHealthJob');
 
 const leanChain = (result) => ({
@@ -47,22 +49,70 @@ beforeEach(() => {
   RegistryHealthSnapshot.create.mockResolvedValue({});
   createNotification.mockResolvedValue({});
   scanCrossFieldChecks.mockResolvedValue({ rows: [], ruleCounts: {}, total: 0, clearedCount: 0, scannedCount: 0 });
+  nearProducerPairs.mockResolvedValue({ pairs: [], total: 0, scannedCount: 0, skippedBuckets: 0 });
 });
 
 afterEach(() => console.log.mockRestore());
 
 describe('computeMetrics', () => {
-  test('counts spelling splits by folded producer, and invariant drift', async () => {
+  test('counts display splits by producer KEY + country, and invariant drift', async () => {
     WineDefinition.find.mockReturnValue(leanChain([
-      wine({ producer: 'Cave de Ribeauvillé' }),
-      wine({ producer: 'Cave de Ribeauville' }),   // split with the above
-      wine({ producer: 'Guigal' }),
-      wine({ producer: 'Guigal' }),                // same spelling — no split
-      wine({ producer: 'Vajra', canonicalKey: null }), // invariant drift
+      wine({ producer: 'Cave de Ribeauvillé', country: 'FR' }),
+      wine({ producer: 'Cave de Ribeauville', country: 'FR' }),   // accent split — counts
+      wine({ producer: 'Guigal', country: 'FR' }),
+      wine({ producer: 'Guigal', country: 'FR' }),                // same spelling — no split
+      wine({ producer: 'Vajra', country: 'IT', canonicalKey: null }), // invariant drift
     ]));
     const m = await computeMetrics();
-    expect(m.producerSpellingSplits).toBe(1);
+    expect(m.producerDisplaySplits).toBe(1);
     expect(m.missingInvariants).toBe(1);
+  });
+
+  // 2026-08-14: the old metric grouped by normalizeString and counted ZERO of
+  // the 130 title-variant clusters the display consolidation found — the
+  // watchdog never rang for the biggest split class the registry had. These
+  // pin the widened definition.
+  test('title variants of one estate count as a split — the class the old metric was blind to', async () => {
+    WineDefinition.find.mockReturnValue(leanChain([
+      wine({ producer: 'Philipp Kuhn', country: 'DE' }),
+      wine({ producer: 'Weingut Philipp Kuhn', country: 'DE' }),
+    ]));
+    const m = await computeMetrics();
+    expect(m.producerDisplaySplits).toBe(1);
+  });
+
+  test('the same producer key in DIFFERENT countries is different estates, not a split', async () => {
+    // Taylors (Clare Valley) vs Taylor's (Port) — the prod case the country
+    // fence exists for.
+    WineDefinition.find.mockReturnValue(leanChain([
+      wine({ producer: 'Taylors', country: 'AU' }),
+      wine({ producer: "Taylor's", country: 'PT' }),
+    ]));
+    const m = await computeMetrics();
+    expect(m.producerDisplaySplits).toBe(0);
+  });
+
+  test('sentinel producers never count — ten flavours of Unknown are a data gap, not a split', async () => {
+    WineDefinition.find.mockReturnValue(leanChain([
+      wine({ producer: 'Unknown', country: 'DE' }),
+      wine({ producer: 'unknown', country: 'DE' }),
+    ]));
+    const m = await computeMetrics();
+    expect(m.producerDisplaySplits).toBe(0);
+  });
+
+  // 2026-08-14 (PR #966 follow-up): mint-time adoption deliberately refuses
+  // edit-distance folds — "Philip Kuhn" beside "Philipp Kuhn" is a HUMAN call
+  // (Rockford/Rochford are two real estates one edit apart). The queue that
+  // holds those calls is the admin fragmentation page, which nobody opens
+  // unprompted — so its total rides the weekly bell, sourced from the SAME
+  // function the admin page calls (numbers-agree contract).
+  test('near-miss producer pairs land as a metric, with the label the alert message needs', async () => {
+    nearProducerPairs.mockResolvedValue({ pairs: [], total: 3, scannedCount: 100, skippedBuckets: 0 });
+    const m = await computeMetrics();
+    expect(m.nearProducerPairs).toBe(3);
+    expect(nearProducerPairs).toHaveBeenCalledWith({ limit: 0 });
+    expect(METRIC_LABELS.nearProducerPairs).toBeTruthy();
   });
 
   test('name-check flags respect per-row verifiedChecks clearances', async () => {

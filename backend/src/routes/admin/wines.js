@@ -221,12 +221,24 @@ router.post('/', async (req, res) => {
       }
     }
 
+    // Adopt the registry's existing spelling for this producer (same-string
+    // majority + same-country decoration variants), mirroring the mint
+    // chokepoint — this branch writes the row directly, so without the call an
+    // admin create was one of the two surfaces that could still mint a
+    // display split ("Weingut Steininger" ×1 beside "Steininger" ×N came from
+    // exactly this hole). Fail-open: on any ambiguity the typed spelling is
+    // stored unchanged.
+    const { resolveCanonicalProducerSpelling } = require('../../services/producerSpelling');
+    const producerToStore = await resolveCanonicalProducerSpelling(
+      cleanProducer, normalizeString(cleanProducer), { countryId: String(country) }
+    );
+
     // Generate normalized key for deduplication
-    const normalizedKey = generateWineKey(cleanName, cleanProducer, cleanAppellation);
+    const normalizedKey = generateWineKey(cleanName, producerToStore, cleanAppellation);
 
     const wine = new WineDefinition({
       name: cleanName,
-      producer: cleanProducer,
+      producer: producerToStore,
       country,
       region: region || null,
       appellation: cleanAppellation,
