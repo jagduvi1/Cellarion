@@ -64,4 +64,17 @@ describe('buildUpsertFilter — F3: re-import identity', () => {
     expect(buildUpsertFilter({ normalizedKey: 'a', legacyKey: 'b', lwin7: '1234567' }))
       .toEqual({ $or: [{ normalizedKey: 'a' }, { normalizedKey: 'b' }, { 'lwin.lwin7': '1234567' }] });
   });
+
+  // 2026-08-14: producer resolution joined appellation resolution in moving
+  // the key, so a row can have several pre-resolve identities. Every moved
+  // combination matches; duplicates (including the final key itself) fold.
+  test('legacyKeys array: every moved combination rides the $or, deduped against the final key', () => {
+    expect(buildUpsertFilter({ normalizedKey: 'k', legacyKeys: ['a', 'b', 'k', 'a'], lwin7: null }))
+      .toEqual({ $or: [{ normalizedKey: 'k' }, { normalizedKey: 'a' }, { normalizedKey: 'b' }] });
+  });
+
+  test('legacyKey and legacyKeys compose — old callers and new coexist', () => {
+    expect(buildUpsertFilter({ normalizedKey: 'k', legacyKey: 'a', legacyKeys: ['a', 'b'], lwin7: null }))
+      .toEqual({ $or: [{ normalizedKey: 'k' }, { normalizedKey: 'a' }, { normalizedKey: 'b' }] });
+  });
 });
