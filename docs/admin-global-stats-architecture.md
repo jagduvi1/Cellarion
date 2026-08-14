@@ -54,7 +54,7 @@ The payload is structured so the frontend can render each section independently.
 |---|---|---|
 | **Overview** | Users, cellars, bottle counts (active / consumed / drank / gifted / sold / other), avg per user, avg per cellar, unique WineDefinitions | `Bottle.countDocuments` + `Cellar.countDocuments` + `User.countDocuments` |
 | **Engagement** | Active users 24h / 7d / 30d / 90d (added or consumed a bottle in the window) | `Bottle.aggregate $group` per window |
-| **Returning users (retention)** | Returning users (activity on 2+ distinct days) + single-session users + login-based figures (logged-in 30d/7d, repeat logins) | `Bottle.aggregate` (distinct user×day) + `AuditLog.aggregate` on `auth.login.success` |
+| **Returning users (retention)** | Two day-ladders (2/4/7/30 distinct days) — one on bottle activity, one on logins — plus single-session users and the login windows (logged-in 30d/7d, repeat logins) | `Bottle.aggregate` (distinct user×day) + `AuditLog.aggregate` on `auth.login.success` (distinct user×day) |
 | **Recent activity** | New users + bottles added + bottles consumed in 30d / 90d | Date-filter counts |
 | **12-month trends** | Monthly series (back-filled to always emit 12 entries) for bottles added, consumed, new users, new cellars | `$dateToString` group, then JS back-fill |
 | **Subscriptions** | Plan distribution, paid users, trial-eligible, plans expiring in 7d/30d, Stripe-customer count | `User.aggregate $group` on `plan` |
@@ -104,7 +104,24 @@ The default fall-through is `'early'`, matching `classifyMaturity`'s final `retu
 "Returning" is split into two complementary signals:
 
 1. **Activity-based (headline, retroactive):** a user is *returning* if they added or consumed a bottle on **2+ distinct calendar days** — counting distinct days, not events, so a 50-bottle import in one sitting is still a single session. Computed from `Bottle` (`createdAt` + `consumedAt`) so it works across **all** history. `singleSessionUsers = usersWithActivity − returningUsers`.
-2. **Login-based (from the audit log):** `loggedIn7d/30d`, `repeatLoginUsers` (≥2 logins), and `loginUsers` are derived from `AuditLog` entries with `action: 'auth.login.success'`, grouped by `resource.id` (the user — the actor is anonymous at login time, pre-auth). **No new per-user field is stored** — this reuses audit data the app already records, which keeps the GDPR surface unchanged (data minimisation). It's bounded by the audit TTL (`AUDIT_TTL_DAYS`, default 90d), echoed as `loginWindowDays`, so "repeat logins" means *within that window*. Long-lived refresh-token sessions don't re-hit `/login`, so login figures undercount the most loyal users by design — which is exactly why the activity metric is the headline.
+2. **Login-based (from the audit log):** `loggedIn7d/30d`, `repeatLoginUsers` (≥2 login *events*), and `loginUsers` are derived from `AuditLog` entries with `action: 'auth.login.success'`, grouped by `resource.id` (the user — the actor is anonymous at login time, pre-auth). **No new per-user field is stored** — this reuses audit data the app already records, which keeps the GDPR surface unchanged (data minimisation). It's bounded by the audit TTL (`AUDIT_TTL_DAYS`, default 90d), echoed as `loginWindowDays`, so "repeat logins" means *within that window*. Long-lived refresh-token sessions don't re-hit `/login`, so login figures undercount the most loyal users by design — which is exactly why the activity metric is the headline.
+
+### The day ladder (`DAY_TIERS`)
+
+Both signals are also counted as a **ladder of distinct-day thresholds** — `DAY_TIERS = [2, 4, 7]` — so the two read side by side:
+
+| Payload | Source | Denominator for `pct` |
+|---------|--------|-----------------------|
+| `retention.activityTiers` | distinct days a user added or consumed a bottle | `usersWithActivity` (users with ≥1 bottle) |
+| `retention.loginTiers` | distinct days a user logged in | `loginUsers` (anyone who logged in within the audit window) |
+
+Each entry is `{ days, users, pct }`; tiers are **nested subsets** (the 4+ count is contained in the 2+ count), not disjoint buckets. The login pipeline groups to `user × day` *before* grouping per user, so five logins in one evening count as one day — the same rule the activity metric uses, which is what makes the ladders comparable.
+
+`returningUsers` / `coreUsers` remain in the payload as aliases for the 2+ and 4+ activity tiers (API back-compat, and the dashboard gives those two their own named cards). Adding a threshold to `DAY_TIERS` flows through to both the payload and the dashboard with no other change — the frontend renders any tier it doesn't have a named card for from a generic template.
+
+**The ladder stops at 7 on purpose.** The login side only sees `AUDIT_TTL_DAYS` (90d default) of history, so a 30-day tier would mean "logged in on 30 of the last 90 days" — a bar almost nobody clears, showing 0 and reading as a broken metric rather than a finding. A guard in `globalStatsService.retentionTiers.test.js` fails if the top tier is raised, as a prompt to revisit the tooltip copy at the same time.
+
+**The two denominators differ on purpose.** A user with bottles who never logs in again still counts in `usersWithActivity`; a user who logs in weekly but never touches a bottle counts in `loginUsers` and in *no* activity tier. Don't sum or directly compare percentages across the two ladders.
 
 ## `excludeAdmins` filter chain
 

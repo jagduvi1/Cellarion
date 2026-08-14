@@ -9,6 +9,12 @@ function fmt(n) {
   return Number(n).toLocaleString();
 }
 
+// Activity-retention tiers that already have their own hand-written card
+// ("Returning users", "Power users"). Every other tier the server sends in
+// retention.activityTiers renders from the generic template, so extending
+// DAY_TIERS server-side needs no change here.
+const NAMED_ACTIVITY_TIERS = [2, 4];
+
 // Raw integer formatting for fields where a thousands separator is wrong —
 // vintage years (1973 not "1,973") and decade labels (2020 not "2,020").
 function fmtYear(n) {
@@ -231,6 +237,7 @@ function AdminStats() {
               ? t('adminStats.retentionNote', { days: retention.loginWindowDays })
               : t('adminStats.retentionNoteAllTime')}
           </p>
+          <h3 className="admin-stats-subhead">{t('adminStats.retentionByActivity')}</h3>
           <div className="admin-stats-cards">
             <StatCard
               accent="ok"
@@ -246,12 +253,39 @@ function AdminStats() {
               sublabel={`${fmtPct(retention.corePct)} ${t('adminStats.ofActiveUsers')}`}
               tooltip={t('adminStats.coreTooltip')}
             />
+            {/* Tiers beyond the two named cards above render generically, so
+                adding a threshold to DAY_TIERS on the server needs no change here. */}
+            {(retention.activityTiers || [])
+              .filter(tier => !NAMED_ACTIVITY_TIERS.includes(tier.days))
+              .map(tier => (
+                <StatCard
+                  key={`activity-${tier.days}`}
+                  label={t('adminStats.activityTier', { days: tier.days })}
+                  value={fmt(tier.users)}
+                  sublabel={`${fmtPct(tier.pct)} ${t('adminStats.ofActiveUsers')}`}
+                  tooltip={t('adminStats.activityTierTooltip', { days: tier.days })}
+                />
+              ))}
             <StatCard
               label={t('adminStats.singleSessionUsers')}
               value={fmt(retention.singleSessionUsers)}
               sublabel={t('adminStats.singleSessionSub')}
               tooltip={t('adminStats.singleSessionTooltip')}
             />
+          </div>
+
+          <h3 className="admin-stats-subhead">{t('adminStats.retentionByLogin')}</h3>
+          <div className="admin-stats-cards">
+            {(retention.loginTiers || []).map(tier => (
+              <StatCard
+                key={`login-${tier.days}`}
+                accent={tier.days <= 4 ? 'ok' : undefined}
+                label={t('adminStats.loginTier', { days: tier.days })}
+                value={fmt(tier.users)}
+                sublabel={`${fmtPct(tier.pct)} ${t('adminStats.ofLoginUsers')}`}
+                tooltip={t('adminStats.loginTierTooltip', { days: tier.days })}
+              />
+            ))}
             <StatCard
               label={t('adminStats.loggedIn30d')}
               value={fmt(retention.loggedIn30d)}

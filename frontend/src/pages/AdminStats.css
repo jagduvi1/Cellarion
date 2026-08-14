@@ -95,6 +95,18 @@
   padding-bottom: 0.5rem;
 }
 
+/* Sub-heading inside a section, for sections that carry two card groups
+   (retention: by bottle activity vs by login). Deliberately lighter than h2 —
+   it groups cards, it doesn't announce a new section. */
+.admin-stats-subhead {
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+  margin: 0 0 0.75rem;
+}
+
 /* ── Stat cards ── */
 .admin-stats-cards {
   display: grid;
