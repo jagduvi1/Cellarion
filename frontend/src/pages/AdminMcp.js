@@ -32,6 +32,15 @@ function byDay(daily) {
   return [...map.values()].sort((a, b) => (a.day < b.day ? 1 : -1));
 }
 
+// The error-code buckets for one tool, biggest first, capped at three so a
+// long tail of one-offs can't push the table wide. Absent on rows written
+// before the field existed — those simply show nothing.
+function topCodes(errorCodes) {
+  return Object.entries(errorCodes || {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3);
+}
+
 function AdminMcp() {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
@@ -226,7 +235,18 @@ function AdminMcp() {
                         <td className="admin-mcp-tool-name">{tool.name}</td>
                         <td>{t(tool.surface === 'public' ? 'adminMcp.public' : 'adminMcp.personal')}</td>
                         <td>{fmt(tool.calls)}</td>
-                        <td>{tool.errors > 0 ? fmt(tool.errors) : '—'}</td>
+                        <td>
+                          {tool.errors > 0 ? fmt(tool.errors) : '—'}
+                          {/* The count alone can't be acted on: invalid_input
+                              means the tool's contract is confusing the model,
+                              unavailable means a backend is down. Show the
+                              breakdown inline, biggest bucket first. */}
+                          {topCodes(tool.errorCodes).length > 0 && (
+                            <span className="admin-mcp-error-codes">
+                              {topCodes(tool.errorCodes).map(([code, n]) => `${code} ${fmt(n)}`).join(' · ')}
+                            </span>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

@@ -97,8 +97,15 @@ registerTool({
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {
     tag: z.string().max(40).optional().describe('Filter by tag'),
-    limit: z.number().int().min(1).max(GUIDE_LIST_LIMIT).default(10),
-    offset: z.number().int().min(0).default(0),
+    // Unbounded at the schema layer on purpose — see the note on
+    // find_similar_wines' `limit`. Pagination inputs are CLAMPED by the handler
+    // below (an over-large page is a request to be capped, not a malformed
+    // call); a schema-level .max would instead fail the call with -32602 before
+    // the handler runs, and an SDK-level rejection is recorded in no counter at
+    // all. Mutating tools keep their strict numeric bounds, where an
+    // out-of-range value is genuinely a client bug worth refusing.
+    limit: z.coerce.number().int().optional().describe(`How many to return (1-${GUIDE_LIST_LIMIT}, default 10; larger values are capped, not rejected)`),
+    offset: z.coerce.number().int().optional().describe('Skip this many (default 0)'),
   },
   handler: async (args) => {
     const BlogPost = require('../../models/BlogPost');

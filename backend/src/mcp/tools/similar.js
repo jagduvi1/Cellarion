@@ -18,10 +18,11 @@ registerTool({
   name: 'find_similar_wines',
   title: 'Find similar wines ("more like this")',
   description:
-    'Given a registry wine_id (or one of the user\'s bottle_ids), returns wines with the closest taste/style profile ' +
-    'from the shared registry, using vector similarity over wine embeddings. Call for "more like this", "what else is ' +
-    'like my favourite Barolo", or to seed purchase ideas from a wine the user loves. Only wines that have been ' +
-    'embedded are searchable — an empty result does not mean nothing similar exists.',
+    'Given a registry wine_id (or, on an authenticated connection, one of the user\'s bottle_ids), returns wines with ' +
+    'the closest taste/style profile from the shared registry, using vector similarity over wine embeddings. Call for ' +
+    '"more like this", "what else is like my favourite Barolo", or to seed purchase ideas from a wine the user loves. ' +
+    'Only wines that have been embedded are searchable — an empty result does not mean nothing similar exists. ' +
+    `Ids must be 24-hex Mongo ids from search_registry or search_bottles — a name or slug is not an id. Returns at most ${MAX_SIMILAR}.`,
   // 'public' (plan §3.17): the reference wine is already embedded, so this is
   // a stored-vector Qdrant lookup — $0 per call and safe on the anonymous
   // /api/mcp/public surface. The bottle_id input is guarded below (anonymous
@@ -29,9 +30,18 @@ registerTool({
   scope: 'public',
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {
-    wine_id: z.string().optional().describe('Registry wine id (from search_registry or a bottle\'s wine)'),
-    bottle_id: z.string().optional().describe('Alternatively: one of the user\'s bottle ids'),
-    limit: z.number().int().min(1).max(MAX_SIMILAR).default(8),
+    wine_id: z.string().optional().describe('Registry wine id (24-hex) from search_registry or a bottle\'s wine'),
+    bottle_id: z.string().optional().describe('Alternatively: one of the user\'s bottle ids (24-hex). Needs an authenticated connection — not available on the public endpoint.'),
+    // Deliberately UNBOUNDED at the schema layer, unlike the mutating tools'
+    // numeric inputs. A strict .min/.max here makes the SDK reject the whole
+    // call with -32602 before the handler runs — and an over-large `limit` is
+    // not a malformed request, it is a request to be capped. The handler clamps
+    // (that clamp was previously unreachable for out-of-range values), so
+    // "20 similar wines" now returns 10 instead of failing. z.coerce absorbs
+    // the string-number an agent may send. Counting note: an SDK-level -32602
+    // never reaches budgetedHandler, so it lands in NO McpUsageStat counter —
+    // rejections here were invisible in the usage stats, not merely uncounted.
+    limit: z.coerce.number().int().optional().describe(`How many to return (1-${MAX_SIMILAR}, default 8; larger values are capped, not rejected)`),
   },
   handler: async (args, ctx) => {
     const WineEmbedding = require('../../models/WineEmbedding');

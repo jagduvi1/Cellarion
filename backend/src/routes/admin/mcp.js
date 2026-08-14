@@ -13,6 +13,19 @@ router.use(requireAuth, requireRole('admin'));
 // device tokens are not AI connections and are excluded from the counts.
 const { MCP_PERSONAL_SCOPES: MCP_SCOPES } = require('../../config/constants');
 
+/**
+ * Flatten the per-day errorCodes maps a tool accumulated into one
+ * {code: total}. Input is an array of $objectToArray results (one per day),
+ * i.e. [[{k,v},…], …]; days with no errors contribute [].
+ */
+function mergeCodeCounts(perDay) {
+  const out = {};
+  for (const day of perDay || []) {
+    for (const { k, v } of day || []) out[k] = (out[k] || 0) + v;
+  }
+  return out;
+}
+
 // GET /api/admin/mcp/usage?days=30 — the admin MCP overview: per-day call/error
 // series, top tools, connection + distinct-user counts, recent write volume,
 // kill-switch state. Everything here is aggregate (McpUsageStat carries no user
@@ -44,6 +57,16 @@ router.get('/usage', async (req, res) => {
           _id: { name: '$name', surface: '$surface' },
           calls: { $sum: '$calls' },
           errors: { $sum: '$errorCount' },
+          // Merge the per-day errorCodes maps into one {code: total} per tool,
+          // so "this tool fails a lot" comes with WHY attached. $objectToArray
+          // on a missing/!object field would fault the whole pipeline — rows
+          // predating the field (and clean rows, which never get one) are
+          // mapped to [] first.
+          errorCodes: { $push: { $cond: [
+            { $eq: [{ $type: '$errorCodes' }, 'object'] },
+            { $objectToArray: '$errorCodes' },
+            [],
+          ] } },
         } },
         { $sort: { calls: -1 } },
         { $limit: 20 },
@@ -125,6 +148,11 @@ router.get('/usage', async (req, res) => {
         surface: t._id.surface,
         calls: t.calls,
         errors: t.errors,
+        // {invalid_input: 12, unavailable: 3} — flattened from the per-day maps
+        // the pipeline pushed. Merged here rather than in the pipeline: the
+        // aggregation form needs a double $reduce + $arrayToObject that is far
+        // harder to read than four lines of JS, over at most 90 rows per tool.
+        errorCodes: mergeCodeCounts(t.errorCodes),
       })),
       connections: connOut,
       users: {
