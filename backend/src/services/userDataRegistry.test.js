@@ -242,13 +242,16 @@ describe('WineOwnerInquiry — recipient-entry erasure + asker nulling', () => {
       return c;
     };
     const received = [{
-      question: 'What does the label say the producer is?', status: 'answered',
+      question: 'What does the label say the producer is?', status: 'resolved',
       wineDefinition: { producer: 'Pira', name: 'Barolo' },
       recipients: [
         { user: 'u1', response: 'Label says E. Pira e Figli', respondedAt: 'r1', notifiedAt: 'n1' },
         { user: 'u2', response: 'another owner\'s private answer' },
       ],
-      createdAt: 'c1',
+      // Correspondence sent TO them — exported. The curator's own
+      // resolutionNote is deliberately not even selected on this side.
+      ownerReply: 'Thank you — the producer is now recorded as E. Pira e Figli.',
+      createdAt: 'c1', resolvedAt: 'r0',
     }];
     const asked = [{
       question: 'Is this the DOCG bottling?', status: 'resolved', resolutionNote: 'Record corrected.',
@@ -262,11 +265,13 @@ describe('WineOwnerInquiry — recipient-entry erasure + asker nulling', () => {
       expect(frag.ownerInquiries.received[0]).toEqual({
         wine: 'Pira — Barolo',
         question: 'What does the label say the producer is?',
-        status: 'answered',
+        status: 'resolved',
         myResponse: 'Label says E. Pira e Figli',
         respondedAt: 'r1',
         notifiedAt: 'n1',
+        curatorReply: 'Thank you — the producer is now recorded as E. Pira e Figli.',
         createdAt: 'c1',
+        resolvedAt: 'r0',
       });
       // Portability is the USER's data only — the co-recipient's answer must not ride along.
       expect(JSON.stringify(frag)).not.toContain('another owner');

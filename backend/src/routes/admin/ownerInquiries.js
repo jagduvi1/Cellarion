@@ -13,8 +13,13 @@
  *                        show, and it is admin-gated. Envelope: { inquiries,
  *                        total, page, pages, pendingCount, answeredCount }
  *                        (pendingCount = active, feeds the AdminWines badge).
- *   POST /:id/resolve  — note required (5–500) → 'resolved' via a claim-style
- *                        findOneAndUpdate, so a double-resolve is a clean 409.
+ *   POST /:id/resolve  — body { note, ownerReply? } → 'resolved' via a
+ *                        claim-style findOneAndUpdate, so a double-resolve is
+ *                        a clean 409. `note` (5–500) is the CURATOR's record;
+ *                        `ownerReply` (optional, ≤1000) is sent verbatim to
+ *                        every owner who answered, and is the only one of the
+ *                        two they ever see. Both run through the shared
+ *                        services/ownerInquiryOps.resolveOwnerInquiry.
  *
  * Named export `wineInquiryRouter`, mounted at /api/admin/wines BEFORE the
  * admin-gated wines router (app.js — the /api/auth two-router pattern):
@@ -27,21 +32,21 @@
  * request input (CodeQL query-injection rule, wineProposals pattern).
  */
 const express = require('express');
-const mongoose = require('mongoose');
 const WineOwnerInquiry = require('../../models/WineOwnerInquiry');
 const { requireAuth, requireRole, requireSommOrAdmin } = require('../../middleware/auth');
-const { logAudit } = require('../../services/audit');
-const { createOwnerInquiry, sweepExpiredInquiries, queryInquiryPage } = require('../../services/ownerInquiryOps');
+const {
+  createOwnerInquiry,
+  resolveOwnerInquiry,
+  sweepExpiredInquiries,
+  queryInquiryPage,
+} = require('../../services/ownerInquiryOps');
 const { parsePagination } = require('../../utils/pagination');
 const { isValidId } = require('../../utils/validation');
-const { stripHtml } = require('../../utils/sanitize');
-
-const RESOLVE_NOTE_MIN = 5;
-const RESOLVE_NOTE_MAX = 500;
 
 // Service error code → HTTP status for the create path (no_owners is a
 // precondition failure, not a validation one, but 400 per the API contract).
 const CREATE_STATUS = { invalid_input: 400, not_found: 404, no_owners: 400, conflict: 409 };
+const RESOLVE_STATUS = { invalid_input: 400, not_found: 404, conflict: 409 };
 
 // ── Create (somm OR admin) — mounted under /api/admin/wines ────────────────
 const wineInquiryRouter = express.Router();
@@ -149,6 +154,9 @@ router.get('/', async (req, res) => {
       resolvedBy: i.resolvedBy ? { _id: i.resolvedBy._id, username: i.resolvedBy.username } : null,
       resolvedAt: i.resolvedAt || null,
       resolutionNote: i.resolutionNote || null,
+      // What was actually sent to the answering owners (null = they got the
+      // plain thank-you, or nobody had answered).
+      ownerReply: i.ownerReply || null,
       expiresAt: i.expiresAt || null,
       createdAt: i.createdAt,
     }));
@@ -163,42 +171,30 @@ router.get('/', async (req, res) => {
 // POST /api/admin/owner-inquiries/:id/resolve — note required, claim-style
 router.post('/:id/resolve', async (req, res) => {
   try {
-    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-
-    // Plain text only, bounded even after strip (proposal-reject hygiene) —
-    // the note is the record of what was done with the answers.
-    const note = stripHtml(typeof req.body?.note === 'string' ? req.body.note : '');
-    if (!note || note.length < RESOLVE_NOTE_MIN) {
-      return res.status(400).json({ error: `A resolution note of at least ${RESOLVE_NOTE_MIN} characters is required — say what was done with the answers` });
-    }
-    if (note.length > RESOLVE_NOTE_MAX) {
-      return res.status(400).json({ error: `Resolution note must be at most ${RESOLVE_NOTE_MAX} characters` });
-    }
-
-    // Atomic claim: only an active row can be resolved, so the second of two
-    // concurrent resolves loses cleanly (the wineProposals decide pattern).
-    const inquiryId = new mongoose.Types.ObjectId(req.params.id);
-    const inquiry = await WineOwnerInquiry.findOneAndUpdate(
-      { _id: inquiryId, status: { $in: ['open', 'answered'] } },
-      { $set: { status: 'resolved', resolvedBy: req.user.id, resolvedAt: new Date(), resolutionNote: note } },
-      { new: true }
-    );
-    if (!inquiry) {
-      const exists = await WineOwnerInquiry.exists({ _id: inquiryId });
-      return exists
-        ? res.status(409).json({ error: 'Inquiry has already been resolved or closed' })
-        : res.status(404).json({ error: 'Inquiry not found' });
+    // Validation, the atomic claim and the owner notification all live in the
+    // shared service so this queue and the somm MCP tool cannot drift on what
+    // the owners are told.
+    const result = await resolveOwnerInquiry({
+      inquiryId: req.params.id,
+      userId: req.user.id,
+      note: req.body?.note,
+      ownerReply: req.body?.ownerReply,
+      via: 'rest',
+      req,
+    });
+    if (!result.ok) {
+      return res.status(RESOLVE_STATUS[result.code] || 400).json({ error: result.message });
     }
 
-    logAudit(req, 'admin.wine.ownerInquiry.resolve',
-      { type: 'WineOwnerInquiry', id: inquiry._id },
-      {
-        wineDefinitionId: inquiry.wineDefinition,
-        responses: (inquiry.recipients || []).filter((r) => r.response).length,
-        note,
-      });
-
-    res.json({ message: 'Inquiry resolved', inquiryId: inquiry._id, status: 'resolved' });
+    res.json({
+      message: result.notified > 0
+        ? `Inquiry resolved — ${result.notified} owner(s) notified`
+        : 'Inquiry resolved',
+      inquiryId: result.inquiry._id,
+      status: 'resolved',
+      notified: result.notified,
+      replySent: result.replySent,
+    });
   } catch (err) {
     console.error('Resolve owner inquiry error:', err);
     res.status(500).json({ error: 'Failed to resolve owner inquiry' });

@@ -6,16 +6,19 @@
  * the admin-gated wines router) and maps the shared service's codes to
  * 201/400/404/409; the admin list runs the expiry sweep, filters only by
  * static-array literals, exposes recipient emails (the ONE surface allowed
- * to) and the pendingCount/answeredCount badge envelope; resolve is a
- * claim-style update so a double-resolve is a clean 409. The notification
- * fan-out itself is asserted in ownerInquiryOps.test.js — the exact create
- * path this route calls. Mock style follows wineProposals.test.js.
+ * to) and the pendingCount/answeredCount badge envelope; resolve forwards the
+ * curator note and the owner-facing reply as separate fields and maps the
+ * service's codes to 400/404/409. Both notification fan-outs (ask and the
+ * reply back to owners who answered), the atomic claim and the two-text
+ * validation are asserted in ownerInquiryOps.test.js — the exact service this
+ * route calls. Mock style follows wineProposals.test.js.
  */
 
 process.env.JWT_SECRET = 'test-secret';
 
 jest.mock('../../services/ownerInquiryOps', () => ({
   createOwnerInquiry: jest.fn(),
+  resolveOwnerInquiry: jest.fn(),
   sweepExpiredInquiries: jest.fn().mockResolvedValue(0),
   queryInquiryPage: jest.fn(),
 }));
@@ -24,14 +27,20 @@ jest.mock('../../models/WineOwnerInquiry', () => ({
   findOneAndUpdate: jest.fn(),
   exists: jest.fn(),
 }));
+// Auditing moved into the service with the resolve logic; the mock stays so
+// the router's module graph never reaches the real logger.
 jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
 
 const express = require('express');
 const http = require('http');
 const jwt = require('jsonwebtoken');
 const WineOwnerInquiry = require('../../models/WineOwnerInquiry');
-const { createOwnerInquiry, sweepExpiredInquiries, queryInquiryPage } = require('../../services/ownerInquiryOps');
-const { logAudit } = require('../../services/audit');
+const {
+  createOwnerInquiry,
+  resolveOwnerInquiry,
+  sweepExpiredInquiries,
+  queryInquiryPage,
+} = require('../../services/ownerInquiryOps');
 const adminOwnerInquiriesRouter = require('./ownerInquiries');
 
 const oid = (c) => c.repeat(24);
@@ -193,49 +202,60 @@ describe('GET /api/admin/owner-inquiries (list)', () => {
   });
 });
 
+// The claim, the validation and the owner notification all live in the shared
+// service now (so this queue and the MCP tool cannot drift) — what is tested
+// HERE is the route's own contract: both texts forwarded unmixed, service
+// codes mapped to statuses, admin-only.
 describe('POST /api/admin/owner-inquiries/:id/resolve', () => {
-  test('requires a note of at least 5 chars — nothing resolved without one', async () => {
-    let res = await resolve(I1, {});
-    expect(res.status).toBe(400);
-    res = await resolve(I1, { note: 'ok' });
-    expect(res.status).toBe(400);
-    expect(WineOwnerInquiry.findOneAndUpdate).not.toHaveBeenCalled();
-  });
-
-  test('resolves via an atomic claim on an ACTIVE row, stores the note, audits', async () => {
-    WineOwnerInquiry.findOneAndUpdate.mockResolvedValue({
-      _id: I1, wineDefinition: W1, status: 'resolved',
-      recipients: [{ response: 'answer' }, { response: null }],
+  test('forwards the curator note and the owner reply as SEPARATE fields', async () => {
+    resolveOwnerInquiry.mockResolvedValue({
+      ok: true,
+      inquiry: { _id: I1, status: 'resolved' },
+      notified: 2,
+      replySent: 'Thank you — the back label settled it.',
     });
 
-    const res = await resolve(I1, { note: 'Producer corrected to E. Pira e Figli per two owner answers.' });
+    const res = await resolve(I1, {
+      note: 'Producer corrected to E. Pira e Figli per two owner answers.',
+      ownerReply: 'Thank you — the back label settled it.',
+    });
     expect(res.status).toBe(200);
-    expect((await res.json()).status).toBe('resolved');
+    const body = await res.json();
+    expect(body.status).toBe('resolved');
+    expect(body.notified).toBe(2);
 
-    const [filter, update] = WineOwnerInquiry.findOneAndUpdate.mock.calls[0];
-    expect(filter.status).toEqual({ $in: ['open', 'answered'] });
-    expect(update.$set.status).toBe('resolved');
-    expect(update.$set.resolvedBy).toBe(ADMIN_ID);
-    expect(update.$set.resolutionNote).toMatch(/Producer corrected/);
-
-    const audit = logAudit.mock.calls.find((c) => c[1] === 'admin.wine.ownerInquiry.resolve');
-    expect(audit).toBeTruthy();
-    expect(audit[3].responses).toBe(1);
+    const [args] = resolveOwnerInquiry.mock.calls[0];
+    expect(args.note).toMatch(/Producer corrected/);
+    expect(args.ownerReply).toBe('Thank you — the back label settled it.');
+    expect(args.userId).toBe(ADMIN_ID);
+    expect(args.via).toBe('rest');
   });
 
-  test('a second resolve is a clean 409 (claim already taken), a bogus id is 404', async () => {
-    WineOwnerInquiry.findOneAndUpdate.mockResolvedValue(null);
-    WineOwnerInquiry.exists.mockResolvedValueOnce({ _id: I1 }).mockResolvedValueOnce(null);
+  test('an omitted owner reply is not invented by the route', async () => {
+    resolveOwnerInquiry.mockResolvedValue({
+      ok: true, inquiry: { _id: I1, status: 'resolved' }, notified: 0, replySent: null,
+    });
 
-    let res = await resolve(I1, { note: 'Second admin, seconds later.' });
-    expect(res.status).toBe(409);
-    res = await resolve(I1, { note: 'Never existed.' });
-    expect(res.status).toBe(404);
+    const res = await resolve(I1, { note: 'Nobody answered; closing the loop.' });
+    expect(res.status).toBe(200);
+    expect(resolveOwnerInquiry.mock.calls[0][0].ownerReply).toBeUndefined();
+    expect((await res.json()).notified).toBe(0);
+  });
+
+  test('service codes map to statuses: bad note 400, taken claim 409, unknown 404', async () => {
+    resolveOwnerInquiry.mockResolvedValueOnce({ ok: false, code: 'invalid_input', message: 'too short' });
+    expect((await resolve(I1, { note: 'ok' })).status).toBe(400);
+
+    resolveOwnerInquiry.mockResolvedValueOnce({ ok: false, code: 'conflict', message: 'already resolved' });
+    expect((await resolve(I1, { note: 'Second admin, seconds later.' })).status).toBe(409);
+
+    resolveOwnerInquiry.mockResolvedValueOnce({ ok: false, code: 'not_found', message: 'no such inquiry' });
+    expect((await resolve(I1, { note: 'Never existed.' })).status).toBe(404);
   });
 
   test('admin-only: a somm cannot resolve', async () => {
     const res = await resolve(I1, { note: 'A valid note.' }, 'somm');
     expect(res.status).toBe(403);
-    expect(WineOwnerInquiry.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(resolveOwnerInquiry).not.toHaveBeenCalled();
   });
 });

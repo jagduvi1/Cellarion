@@ -90,11 +90,15 @@ export const adminRejectWineProposal = (apiFetch, id, reason) =>
 export const adminGetOwnerInquiries = (apiFetch, params) =>
   apiFetch(`/api/admin/owner-inquiries?${params}`);
 
-export const adminResolveOwnerInquiry = (apiFetch, id, note) =>
+/**
+ * Resolve an inquiry. `note` is the curator record (required, admin-only);
+ * `ownerReply` is optional and goes VERBATIM to every owner who answered.
+ */
+export const adminResolveOwnerInquiry = (apiFetch, id, note, ownerReply = '') =>
   apiFetch(`/api/admin/owner-inquiries/${id}/resolve`, {
     method: 'POST',
     headers: J,
-    body: JSON.stringify({ note }),
+    body: JSON.stringify({ note, ownerReply }),
   });
 
 export const adminAskOwnerInquiry = (apiFetch, wineId, question) =>

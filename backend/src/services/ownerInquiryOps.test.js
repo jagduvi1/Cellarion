@@ -3,7 +3,9 @@
  *
  * Pins: recipient building (ACTIVE owners first, consumed-owner fallback,
  * per-user dedupe via $group, cap 20); create validation + notification
- * fan-out + the E11000 → conflict mapping; the lazy expiry sweep; the
+ * fan-out + the E11000 → conflict mapping; resolve (the atomic claim, the two
+ * texts staying in their own fields, and the reply fan-out reaching ONLY the
+ * owners who answered); the lazy expiry sweep; the
  * needs-attention-first page query; and the merge/delete lifecycle (answered
  * rows follow the bottles, an open row closes only when the keeper already
  * has one — including the 11000 race fallback).
@@ -12,12 +14,13 @@
 jest.mock('../models/WineOwnerInquiry', () => ({
   create: jest.fn(),
   updateMany: jest.fn(),
+  findOneAndUpdate: jest.fn(),
   exists: jest.fn(),
   aggregate: jest.fn(),
   countDocuments: jest.fn(),
 }));
 jest.mock('../models/WineDefinition', () => ({ findById: jest.fn() }));
-jest.mock('../models/Bottle', () => ({ aggregate: jest.fn() }));
+jest.mock('../models/Bottle', () => ({ aggregate: jest.fn(), find: jest.fn() }));
 jest.mock('./notifications', () => ({ createNotifications: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('./audit', () => ({ logAudit: jest.fn() }));
 
@@ -32,6 +35,7 @@ const {
   EXPIRY_NOTE,
   buildRecipients,
   createOwnerInquiry,
+  resolveOwnerInquiry,
   sweepExpiredInquiries,
   queryInquiryPage,
   repointInquiriesForWineMerge,
@@ -217,6 +221,143 @@ describe('createOwnerInquiry', () => {
 
     expect(res).toMatchObject({ ok: false, code: 'conflict' });
     expect(createNotifications).not.toHaveBeenCalled();
+  });
+});
+
+describe('resolveOwnerInquiry', () => {
+  const INQUIRY = oid('e');
+  const ADMIN = oid('f');
+  const NOTE = 'Producer corrected to E. Pira e Figli per two owner answers.';
+  const REPLY = 'Thank you — your back label settled it; the producer is now recorded correctly.';
+
+  // findOneAndUpdate(...).populate(...) resolves to the claimed doc.
+  const mockClaim = (doc) => WineOwnerInquiry.findOneAndUpdate.mockReturnValue({
+    populate: jest.fn().mockResolvedValue(doc),
+  });
+  const claimedDoc = (recipients) => ({
+    _id: INQUIRY, status: 'resolved', wineDefinition: wineDoc, recipients,
+  });
+  const answered = [
+    { user: oid('1'), bottle: oid('2'), response: 'Label says E. Pira e Figli' },
+    { user: oid('4'), bottle: oid('5'), response: 'Same on mine' },
+    { user: oid('7'), bottle: oid('8'), response: null }, // never answered
+  ];
+  const mockBottleCellars = () => Bottle.find.mockReturnValue({
+    select: jest.fn().mockReturnValue({
+      lean: jest.fn().mockResolvedValue([
+        { _id: oid('2'), cellar: oid('3') },
+        { _id: oid('5'), cellar: oid('6') },
+      ]),
+    }),
+  });
+
+  test('refuses a short / overlong / HTML-only note before touching the DB', async () => {
+    for (const note of ['', 'four', 'x'.repeat(501), '<b></b>', 42, undefined]) {
+      const res = await resolveOwnerInquiry({ inquiryId: INQUIRY, userId: ADMIN, note });
+      expect(res).toMatchObject({ ok: false, code: 'invalid_input' });
+    }
+    expect(WineOwnerInquiry.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  test('refuses a non-string or overlong owner reply — it is user-facing, so it is bounded too', async () => {
+    for (const ownerReply of [42, { text: 'x' }, 'x'.repeat(1001)]) {
+      const res = await resolveOwnerInquiry({ inquiryId: INQUIRY, userId: ADMIN, note: NOTE, ownerReply });
+      expect(res).toMatchObject({ ok: false, code: 'invalid_input' });
+    }
+    expect(WineOwnerInquiry.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  test('claims an ACTIVE row only, stores both texts in their own fields, strips HTML from the reply', async () => {
+    mockClaim(claimedDoc(answered));
+    mockBottleCellars();
+
+    const res = await resolveOwnerInquiry({
+      inquiryId: INQUIRY, userId: ADMIN, note: NOTE, ownerReply: `<script>x</script>${REPLY}`,
+    });
+
+    expect(res.ok).toBe(true);
+    const [filter, update] = WineOwnerInquiry.findOneAndUpdate.mock.calls[0];
+    expect(filter.status).toEqual({ $in: ['open', 'answered'] });
+    expect(update.$set.status).toBe('resolved');
+    expect(update.$set.resolvedBy).toBe(ADMIN);
+    // The two texts never merge: the note stays curator-only, the reply is
+    // the only field an owner ever reads.
+    expect(update.$set.resolutionNote).toBe(NOTE);
+    expect(update.$set.ownerReply).toBe(`x${REPLY}`);
+  });
+
+  test('notifies ONLY the owners who answered, deep-linked to their own bottle', async () => {
+    mockClaim(claimedDoc(answered));
+    mockBottleCellars();
+
+    const res = await resolveOwnerInquiry({ inquiryId: INQUIRY, userId: ADMIN, note: NOTE, ownerReply: REPLY });
+
+    expect(res.notified).toBe(2);
+    expect(createNotifications).toHaveBeenCalledTimes(1);
+    const items = createNotifications.mock.calls[0][0];
+    expect(items).toHaveLength(2);
+    expect(items[0]).toMatchObject({
+      userId: oid('1'),
+      type: 'owner_inquiry_resolved',
+      message: REPLY,
+      link: `/cellars/${oid('3')}/bottles/${oid('2')}`,
+    });
+    // The recipient who ignored the question is owed nothing.
+    expect(items.map((i) => i.userId)).not.toContain(oid('7'));
+  });
+
+  test('an omitted reply still sends a thank-you rather than silence', async () => {
+    mockClaim(claimedDoc([answered[0]]));
+    mockBottleCellars();
+
+    const res = await resolveOwnerInquiry({ inquiryId: INQUIRY, userId: ADMIN, note: NOTE });
+
+    expect(res.replySent).toBeNull();
+    expect(createNotifications.mock.calls[0][0][0].message).toMatch(/Thank you/);
+  });
+
+  test('nobody answered → nobody is notified (no "thanks for your answer" to non-answerers)', async () => {
+    mockClaim(claimedDoc([{ user: oid('7'), bottle: oid('8'), response: null }]));
+
+    const res = await resolveOwnerInquiry({ inquiryId: INQUIRY, userId: ADMIN, note: NOTE, ownerReply: REPLY });
+
+    expect(res.ok).toBe(true);
+    expect(res.notified).toBe(0);
+    expect(createNotifications).not.toHaveBeenCalled();
+    expect(Bottle.find).not.toHaveBeenCalled();
+  });
+
+  test('a bottle deleted since the answer costs the link, not the notification', async () => {
+    mockClaim(claimedDoc([answered[0]]));
+    Bottle.find.mockReturnValue({
+      select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([]) }),
+    });
+
+    await resolveOwnerInquiry({ inquiryId: INQUIRY, userId: ADMIN, note: NOTE, ownerReply: REPLY });
+
+    expect(createNotifications.mock.calls[0][0][0].link).toBeNull();
+  });
+
+  test('the lost half of a concurrent resolve is a conflict, an unknown id is not_found — neither notifies', async () => {
+    mockClaim(null);
+    WineOwnerInquiry.exists.mockResolvedValueOnce({ _id: INQUIRY }).mockResolvedValueOnce(null);
+
+    expect(await resolveOwnerInquiry({ inquiryId: INQUIRY, userId: ADMIN, note: NOTE }))
+      .toMatchObject({ ok: false, code: 'conflict' });
+    expect(await resolveOwnerInquiry({ inquiryId: INQUIRY, userId: ADMIN, note: NOTE }))
+      .toMatchObject({ ok: false, code: 'not_found' });
+    expect(createNotifications).not.toHaveBeenCalled();
+  });
+
+  test('audits with the reply LENGTH, never its text — correspondence is not audit detail', async () => {
+    mockClaim(claimedDoc(answered));
+    mockBottleCellars();
+
+    await resolveOwnerInquiry({ inquiryId: INQUIRY, userId: ADMIN, note: NOTE, ownerReply: REPLY, via: 'mcp' });
+
+    const audit = logAudit.mock.calls.find((c) => c[1] === 'admin.wine.ownerInquiry.resolve');
+    expect(audit[3]).toMatchObject({ responses: 2, notified: 2, ownerReplyLength: REPLY.length, via: 'mcp' });
+    expect(JSON.stringify(audit[3])).not.toContain(REPLY);
   });
 });
 

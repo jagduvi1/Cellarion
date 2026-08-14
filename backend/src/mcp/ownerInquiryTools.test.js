@@ -59,14 +59,23 @@ jest.mock('./mutationBudget', () => ({ takeMutationSlot: jest.fn(() => true), WR
 jest.mock('../services/ownerInquiryOps', () => ({
   QUESTION_MIN: 10,
   QUESTION_MAX: 500,
+  NOTE_MIN: 5,
+  NOTE_MAX: 500,
+  OWNER_REPLY_MAX: 1000,
   createOwnerInquiry: jest.fn(),
+  resolveOwnerInquiry: jest.fn(),
   sweepExpiredInquiries: jest.fn().mockResolvedValue(0),
   queryInquiryPage: jest.fn(),
 }));
 
 const mongoose = require('mongoose');
 const WineOwnerInquiry = require('../models/WineOwnerInquiry');
-const { createOwnerInquiry, sweepExpiredInquiries, queryInquiryPage } = require('../services/ownerInquiryOps');
+const {
+  createOwnerInquiry,
+  resolveOwnerInquiry,
+  sweepExpiredInquiries,
+  queryInquiryPage,
+} = require('../services/ownerInquiryOps');
 const { allTools, toolsForScopes } = require('./registry');
 require('./tools');
 
@@ -86,25 +95,29 @@ beforeEach(() => {
 });
 
 describe('role + scope gating', () => {
-  test('both tools are INVISIBLE without the somm/admin role; ask needs write, list needs only read', () => {
+  test('all three tools are INVISIBLE without the somm/admin role; the two writes need write, list needs only read', () => {
     const plain = toolsForScopes(['read', 'write'], ['user']).map((t) => t.name);
     expect(plain).not.toContain('ask_bottle_owner');
     expect(plain).not.toContain('list_owner_inquiries');
+    expect(plain).not.toContain('resolve_owner_inquiry');
 
     for (const role of ['somm', 'admin']) {
       const names = toolsForScopes(['read', 'write'], [role]).map((t) => t.name);
       expect(names).toContain('ask_bottle_owner');
       expect(names).toContain('list_owner_inquiries');
+      expect(names).toContain('resolve_owner_inquiry');
     }
 
-    // A read-only somm token can read answers but never notify owners.
+    // A read-only somm token can read answers but never notify owners —
+    // which now covers the reply as well as the ask.
     const readSomm = toolsForScopes(['read'], ['somm']).map((t) => t.name);
     expect(readSomm).toContain('list_owner_inquiries');
     expect(readSomm).not.toContain('ask_bottle_owner');
+    expect(readSomm).not.toContain('resolve_owner_inquiry');
   });
 
   test('defense-in-depth: handlers refuse a role-less ctx even if reached', async () => {
-    for (const n of ['ask_bottle_owner', 'list_owner_inquiries']) {
+    for (const n of ['ask_bottle_owner', 'list_owner_inquiries', 'resolve_owner_inquiry']) {
       const res = await tool(n).handler({ wine_id: oid('f'), question: QUESTION }, USER_CTX);
       expect(parse(res).error.code).toBe('forbidden_scope');
     }
@@ -213,5 +226,78 @@ describe('list_owner_inquiries', () => {
 
     await tool('list_owner_inquiries').handler({ status: 'answered' }, SOMM_CTX);
     expect(queryInquiryPage.mock.calls[1][0]).toEqual({ status: 'answered' });
+  });
+});
+
+describe('resolve_owner_inquiry', () => {
+  const INQUIRY = oid('e');
+  const NOTE = 'Two owners read the back label; the producer line is now correct.';
+  const REPLY = 'Thank you — your reading of the back label is what settled this record.';
+
+  test('delegates to the SHARED resolve with via mcp; the envelope says how many owners were replied to', async () => {
+    resolveOwnerInquiry.mockResolvedValue({
+      ok: true,
+      inquiry: { _id: INQUIRY, status: 'resolved', wineDefinition: { name: 'Barolo', producer: 'Pira' } },
+      notified: 2,
+      replySent: REPLY,
+    });
+
+    const res = await tool('resolve_owner_inquiry').handler(
+      { inquiry_id: INQUIRY, note: NOTE, owner_reply: REPLY }, SOMM_CTX
+    );
+
+    const [args] = resolveOwnerInquiry.mock.calls[0];
+    expect(args).toMatchObject({ inquiryId: INQUIRY, userId: ME, note: NOTE, ownerReply: REPLY, via: 'mcp' });
+
+    const { data, summary } = parse(res);
+    expect(summary).toMatch(/Pira — Barolo/);
+    expect(data.owners_notified).toBe(2);
+    expect(data.reply_sent).toBe(REPLY);
+    expect(data.acknowledgement_only).toBe(false);
+    // Notifications cannot be unsent — the envelope must say so.
+    expect(data.note).toMatch(/Not undoable/);
+  });
+
+  test('an omitted reply is reported as an acknowledgement, not as a reply that was written', async () => {
+    resolveOwnerInquiry.mockResolvedValue({
+      ok: true,
+      inquiry: { _id: INQUIRY, status: 'resolved', wineDefinition: { name: 'Barolo', producer: 'Pira' } },
+      notified: 1,
+      replySent: null,
+    });
+
+    const { data } = parse(await tool('resolve_owner_inquiry').handler({ inquiry_id: INQUIRY, note: NOTE }, SOMM_CTX));
+    expect(data.reply_sent).toBeNull();
+    expect(data.acknowledgement_only).toBe(true);
+  });
+
+  test('nobody answered → the summary says so instead of implying owners were reached', async () => {
+    resolveOwnerInquiry.mockResolvedValue({
+      ok: true,
+      inquiry: { _id: INQUIRY, status: 'resolved', wineDefinition: { name: 'Barolo', producer: 'Pira' } },
+      notified: 0,
+      replySent: REPLY,
+    });
+
+    const { data, summary } = parse(await tool('resolve_owner_inquiry').handler(
+      { inquiry_id: INQUIRY, note: NOTE, owner_reply: REPLY }, SOMM_CTX
+    ));
+    expect(summary).toMatch(/nobody had answered/);
+    expect(data.owners_notified).toBe(0);
+    expect(data.acknowledgement_only).toBe(false); // no reply was sent at all
+  });
+
+  test('service codes map to the MCP taxonomy — taken claim is a conflict, unknown id not_found', async () => {
+    resolveOwnerInquiry.mockResolvedValueOnce({ ok: false, code: 'conflict', message: 'Already resolved.' });
+    expect(parse(await tool('resolve_owner_inquiry').handler({ inquiry_id: INQUIRY, note: NOTE }, SOMM_CTX)).error.code)
+      .toBe('conflict');
+
+    resolveOwnerInquiry.mockResolvedValueOnce({ ok: false, code: 'not_found', message: 'No inquiry.' });
+    expect(parse(await tool('resolve_owner_inquiry').handler({ inquiry_id: INQUIRY, note: NOTE }, SOMM_CTX)).error.code)
+      .toBe('not_found');
+
+    resolveOwnerInquiry.mockResolvedValueOnce({ ok: false, code: 'invalid_input', message: 'Note too short.' });
+    expect(parse(await tool('resolve_owner_inquiry').handler({ inquiry_id: INQUIRY, note: 'x' }, SOMM_CTX)).error.code)
+      .toBe('invalid_input');
   });
 });

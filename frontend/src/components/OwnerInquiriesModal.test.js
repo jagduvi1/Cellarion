@@ -88,11 +88,46 @@ test('resolve interlock: needs a note, disables while POSTing, drops the row and
 
   // In flight: the confirm swaps to the pending label and the row is locked.
   expect(await screen.findByText('admin.wines.ownerInquiries.resolving')).toBeDisabled();
-  expect(adminResolveOwnerInquiry).toHaveBeenCalledWith(expect.any(Function), 'i1', 'Producer corrected per the owner answer.');
+  // An untouched reply field posts as empty — the server then sends the plain
+  // thank-you rather than the curator note, which owners must never see.
+  expect(adminResolveOwnerInquiry).toHaveBeenCalledWith(expect.any(Function), 'i1', 'Producer corrected per the owner answer.', '');
 
   release();
   await waitFor(() => expect(onChanged).toHaveBeenCalled());
   expect(await screen.findByText('admin.wines.ownerInquiries.emptyActive')).toBeInTheDocument();
+});
+
+test('the owner reply is sent as its own field, separate from the curator note', async () => {
+  adminResolveOwnerInquiry.mockResolvedValue(ok({ status: 'resolved', notified: 1 }));
+  renderModal();
+
+  fireEvent.click(await screen.findByText('admin.wines.ownerInquiries.resolve'));
+  fireEvent.change(screen.getByPlaceholderText('admin.wines.ownerInquiries.resolvePlaceholder'), {
+    target: { value: 'Curator record: applied, no further action.' },
+  });
+  fireEvent.change(screen.getByPlaceholderText('admin.wines.ownerInquiries.ownerReplyPlaceholder'), {
+    target: { value: 'Thank you — your back label settled it.' },
+  });
+  fireEvent.click(screen.getByText('admin.wines.ownerInquiries.resolveConfirm'));
+
+  await waitFor(() => expect(adminResolveOwnerInquiry).toHaveBeenCalledWith(
+    expect.any(Function),
+    'i1',
+    'Curator record: applied, no further action.',
+    'Thank you — your back label settled it.',
+  ));
+});
+
+test('no reply field when nobody answered — there is no one to reply to', async () => {
+  adminGetOwnerInquiries.mockResolvedValue(ok({
+    ...PAYLOAD,
+    inquiries: [{ ...ROW, status: 'open', responseCount: 0, recipients: [{ ...ROW.recipients[1] }] }],
+  }));
+  renderModal();
+
+  fireEvent.click(await screen.findByText('admin.wines.ownerInquiries.resolve'));
+  expect(screen.getByPlaceholderText('admin.wines.ownerInquiries.resolvePlaceholder')).toBeInTheDocument();
+  expect(screen.queryByPlaceholderText('admin.wines.ownerInquiries.ownerReplyPlaceholder')).toBeNull();
 });
 
 test('a 409 (someone else resolved it) refetches so the stale row leaves the list', async () => {

@@ -9,6 +9,11 @@ const mongoose = require('mongoose');
  * the answers land in the admin review queue (routes/admin/ownerInquiries.js)
  * and the somm MCP list (list_owner_inquiries, recipients anonymised).
  *
+ * The loop CLOSES: resolving carries an optional `ownerReply` that notifies
+ * every owner who answered and renders back on their bottle page for 30 days
+ * (routes/ownerInquiries.js). An owner who reads a back label for us and then
+ * hears nothing is unlikely to do it twice.
+ *
  * GDPR: registered in services/userDataRegistry.js — a recipient's entry
  * (and their answer) is pulled on account erasure, askedBy is nulled on the
  * asker's erasure, and both sides are exported. Retention (also enforced
@@ -81,7 +86,15 @@ const wineOwnerInquirySchema = new mongoose.Schema({
   // latter) — it is the TTL anchor for the 180-day hard-delete below.
   resolvedAt: { type: Date, default: null },
   // Resolve: what was done with the answers. Close: why it auto-closed.
+  // CURATOR-FACING ONLY — never rendered to an owner. See ownerReply below.
   resolutionNote: { type: String, trim: true, maxlength: 500 },
+  // The curator's reply BACK to the owners who answered — the one field here
+  // a bottle owner ever reads. Deliberately NOT resolutionNote reused: that
+  // note has always been the curator's private record, so publishing it
+  // retroactively would push candid internal wording at real users (the
+  // adminNotes→adminResponse lesson, v1.112.0). The split is the contract:
+  // anything written HERE is user-facing, anything in resolutionNote is not.
+  ownerReply: { type: String, trim: true, maxlength: RESPONSE_MAX, default: null },
   // Answer window: an open inquiry unanswered for 60 days is marked 'closed'
   // by the lazy sweep in services/ownerInquiryOps.js (no cron needed — the
   // sweep runs ahead of every queue read).

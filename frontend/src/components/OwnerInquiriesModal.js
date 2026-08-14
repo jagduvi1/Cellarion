@@ -18,10 +18,14 @@ const STATUS_KEYS = {
 /**
  * Admin review queue for OWNER INQUIRIES — curator questions sent to a wine's
  * bottle owners (asked here or over MCP via ask_bottle_owner), with the
- * owners' answers inline. Resolving records what was done with the answers;
- * the registry fix itself happens through the normal edit/merge/proposal
- * tools. This is the ONE surface where recipient identities (emails) show —
- * admin-gated; the somm MCP list and the owners' own views are anonymised.
+ * owners' answers inline. Resolving takes TWO texts and they are not
+ * interchangeable: the note is the curator record (stays here), the optional
+ * owner reply is NOTIFIED to every owner who answered and rendered on their
+ * bottle page — so the reply field is labelled as user-facing at the point of
+ * writing, not in a doc nobody reads. The registry fix itself still happens
+ * through the normal edit/merge/proposal tools. This is the ONE surface where
+ * recipient identities (emails) show — admin-gated; the somm MCP list and the
+ * owners' own views are anonymised.
  *
  * Interlocks follow WineProposalsModal exactly: functional state updaters,
  * every action + pagination + view switch disabled while a POST is pending,
@@ -45,6 +49,8 @@ function OwnerInquiriesModal({ apiFetch, onClose, onChanged }) {
   const [pendingId, setPendingId] = useState(null); // inquiry id with a POST in flight
   const [resolvingId, setResolvingId] = useState(null); // row showing the inline note input
   const [resolveNote, setResolveNote] = useState('');
+  // Separate from resolveNote on purpose: this one is sent to real owners.
+  const [ownerReply, setOwnerReply] = useState('');
   const fetchGen = useRef(0);
   // Rows this session resolved leave the active view — subtract what we
   // removed from the fixed page*limit offset (the proposals drain pattern).
@@ -88,6 +94,7 @@ function OwnerInquiriesModal({ apiFetch, onClose, onChanged }) {
     setItems(null);
     setResolvingId(null);
     setResolveNote('');
+    setOwnerReply('');
     setPage(1);
   };
 
@@ -115,11 +122,12 @@ function OwnerInquiriesModal({ apiFetch, onClose, onChanged }) {
     setPendingId(inquiry._id);
     setError(null);
     try {
-      const res = await adminResolveOwnerInquiry(apiFetch, inquiry._id, note);
+      const res = await adminResolveOwnerInquiry(apiFetch, inquiry._id, note, ownerReply.trim());
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setResolvingId(null);
         setResolveNote('');
+        setOwnerReply('');
         removeResolvedRow(inquiry);
         onChanged?.();
       } else {
@@ -249,47 +257,77 @@ function OwnerInquiriesModal({ apiFetch, onClose, onChanged }) {
                 {(i.status === 'resolved' || i.status === 'closed') && i.resolutionNote && (
                   <span>{t('admin.wines.ownerInquiries.resolvedWith', { note: i.resolutionNote })}</span>
                 )}
+                {i.ownerReply && (
+                  <span>{t('admin.wines.ownerInquiries.repliedWith', { reply: i.ownerReply })}</span>
+                )}
               </div>
 
               {(i.status === 'open' || i.status === 'answered') && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
                   {resolvingId === i._id ? (
-                    <>
-                      <input
-                        type="text"
-                        value={resolveNote}
-                        onChange={(e) => setResolveNote(e.target.value)}
-                        placeholder={t('admin.wines.ownerInquiries.resolvePlaceholder')}
-                        maxLength={500}
-                        disabled={!!pendingId}
-                        style={{ flex: '1 1 220px', minWidth: 180 }}
-                      />
-                      <button
-                        type="button"
-                        className="btn btn-primary btn-small"
-                        disabled={!!pendingId}
-                        onClick={() => resolve(i)}
-                      >
-                        {pendingId === i._id
-                          ? t('admin.wines.ownerInquiries.resolving')
-                          : t('admin.wines.ownerInquiries.resolveConfirm')}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-small"
-                        disabled={!!pendingId}
-                        onClick={() => { setResolvingId(null); setResolveNote(''); }}
-                      >
-                        {t('common.cancel')}
-                      </button>
-                    </>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
+                      <label style={{ fontSize: '0.78rem', ...mutedStyle }}>
+                        {t('admin.wines.ownerInquiries.noteLabel')}
+                        <input
+                          type="text"
+                          value={resolveNote}
+                          onChange={(e) => setResolveNote(e.target.value)}
+                          placeholder={t('admin.wines.ownerInquiries.resolvePlaceholder')}
+                          maxLength={500}
+                          disabled={!!pendingId}
+                          style={{ width: '100%', marginTop: 3 }}
+                        />
+                      </label>
+
+                      {/* Only offered when somebody actually answered — there
+                          is nobody to reply to otherwise, and the server
+                          notifies answerers only. */}
+                      {i.responseCount > 0 && (
+                        <label style={{ fontSize: '0.78rem', ...mutedStyle }}>
+                          {t('admin.wines.ownerInquiries.ownerReplyLabel', { count: i.responseCount })}
+                          <textarea
+                            value={ownerReply}
+                            onChange={(e) => setOwnerReply(e.target.value)}
+                            placeholder={t('admin.wines.ownerInquiries.ownerReplyPlaceholder')}
+                            maxLength={1000}
+                            rows={2}
+                            disabled={!!pendingId}
+                            style={{ width: '100%', marginTop: 3 }}
+                          />
+                          <span style={{ display: 'block', marginTop: 2 }}>
+                            {t('admin.wines.ownerInquiries.ownerReplyHint')}
+                          </span>
+                        </label>
+                      )}
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-small"
+                          disabled={!!pendingId}
+                          onClick={() => resolve(i)}
+                        >
+                          {pendingId === i._id
+                            ? t('admin.wines.ownerInquiries.resolving')
+                            : t('admin.wines.ownerInquiries.resolveConfirm')}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-small"
+                          disabled={!!pendingId}
+                          onClick={() => { setResolvingId(null); setResolveNote(''); setOwnerReply(''); }}
+                        >
+                          {t('common.cancel')}
+                        </button>
+                      </div>
+                    </div>
                   ) : (
                     <button
                       type="button"
                       className="btn btn-secondary btn-small"
                       disabled={!!pendingId}
                       title={t('admin.wines.ownerInquiries.resolveTitle')}
-                      onClick={() => { setResolvingId(i._id); setResolveNote(''); }}
+                      onClick={() => { setResolvingId(i._id); setResolveNote(''); setOwnerReply(''); }}
                     >
                       {t('admin.wines.ownerInquiries.resolve')}
                     </button>
