@@ -123,6 +123,16 @@ Each entry is `{ days, users, pct }`; tiers are **nested subsets** (the 4+ count
 
 **The two denominators differ on purpose.** A user with bottles who never logs in again still counts in `usersWithActivity`; a user who logs in weekly but never touches a bottle counts in `loginUsers` and in *no* activity tier. Don't sum or directly compare percentages across the two ladders.
 
+### Why `loginUsers` runs lower than `usersWithActivity`
+
+Seeing *more* users with bottle activity than users who ever logged in looks wrong but is expected. Three separate reasons stack up, and it's worth knowing them before treating the login ladder as a usage count:
+
+1. **The audit TTL.** Activity spans all history; logins only go back `AUDIT_TTL_DAYS` (90d). Anyone who added bottles a year ago and hasn't re-authenticated since appears in one ladder and not the other.
+2. **Registering is not logging in.** `POST /api/auth/register` issues tokens directly and logs `auth.register`. A user who signs up, adds bottles, and rides the rotating 30-day refresh cookie never hits `/login` and so never produces a login row.
+3. **Long-lived sessions.** The refresh cookie keeps users signed in for 30 days, rotating — the most loyal users re-authenticate *least* often.
+
+`LOGIN_ACTIONS` is the list of audit actions that count as a login. It **must** include `auth.oauth.success` alongside `auth.login.success`: Google SSO writes its own action, and matching only the password one silently dropped every SSO-only user from the login figures — a fourth, and unintended, reason the two sides disagreed. `auth.demo_login` is excluded (one shared account, not a returning person), as are `auth.register` / `auth.email_verified` (a session starts there, but calling it a "login" would change what the metric means).
+
 ## `excludeAdmins` filter chain
 
 **Admins are excluded by DEFAULT** (`excludeAdmins=true`) so the dashboard reflects real customers, not our own test/admin accounts. Pass `?excludeAdmins=false` to opt into the admin-inclusive view; the frontend toggle starts checked and sends the flag explicitly. When excluding, admin-owned data is filtered out of every per-user statistic (including the retention login audit, via `resource.id $nin adminIds`).
