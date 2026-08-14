@@ -14,6 +14,7 @@ jest.mock('../models/User', () => ({ find: jest.fn() }));
 jest.mock('../models/RegistryHealthSnapshot', () => ({ findOne: jest.fn(), create: jest.fn() }));
 jest.mock('./notifications', () => ({ createNotification: jest.fn() }));
 jest.mock('./crossFieldScan', () => ({ scanCrossFieldChecks: jest.fn() }));
+jest.mock('./registryFragmentation', () => ({ nearProducerPairs: jest.fn() }));
 
 const WineDefinition = require('../models/WineDefinition');
 const WineReport = require('../models/WineReport');
@@ -22,6 +23,7 @@ const User = require('../models/User');
 const RegistryHealthSnapshot = require('../models/RegistryHealthSnapshot');
 const { createNotification } = require('./notifications');
 const { scanCrossFieldChecks } = require('./crossFieldScan');
+const { nearProducerPairs } = require('./registryFragmentation');
 const { runRegistryHealthCheck, computeMetrics, METRIC_LABELS, crossFieldMetricKey } = require('./registryHealthJob');
 
 const leanChain = (result) => ({
@@ -47,6 +49,7 @@ beforeEach(() => {
   RegistryHealthSnapshot.create.mockResolvedValue({});
   createNotification.mockResolvedValue({});
   scanCrossFieldChecks.mockResolvedValue({ rows: [], ruleCounts: {}, total: 0, clearedCount: 0, scannedCount: 0 });
+  nearProducerPairs.mockResolvedValue({ pairs: [], total: 0, scannedCount: 0, skippedBuckets: 0 });
 });
 
 afterEach(() => console.log.mockRestore());
@@ -96,6 +99,20 @@ describe('computeMetrics', () => {
     ]));
     const m = await computeMetrics();
     expect(m.producerDisplaySplits).toBe(0);
+  });
+
+  // 2026-08-14 (PR #966 follow-up): mint-time adoption deliberately refuses
+  // edit-distance folds — "Philip Kuhn" beside "Philipp Kuhn" is a HUMAN call
+  // (Rockford/Rochford are two real estates one edit apart). The queue that
+  // holds those calls is the admin fragmentation page, which nobody opens
+  // unprompted — so its total rides the weekly bell, sourced from the SAME
+  // function the admin page calls (numbers-agree contract).
+  test('near-miss producer pairs land as a metric, with the label the alert message needs', async () => {
+    nearProducerPairs.mockResolvedValue({ pairs: [], total: 3, scannedCount: 100, skippedBuckets: 0 });
+    const m = await computeMetrics();
+    expect(m.nearProducerPairs).toBe(3);
+    expect(nearProducerPairs).toHaveBeenCalledWith({ limit: 0 });
+    expect(METRIC_LABELS.nearProducerPairs).toBeTruthy();
   });
 
   test('name-check flags respect per-row verifiedChecks clearances', async () => {
