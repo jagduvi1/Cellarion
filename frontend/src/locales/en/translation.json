@@ -3135,7 +3135,7 @@
     "activityTier": "Active {{days}}+ days",
     "activityTierTooltip": "Users who added or consumed bottles on {{days}} or more separate days. Computed from activity across all history.",
     "loginTier": "Logged in {{days}}+ days",
-    "loginTierTooltip": "Users who logged in on {{days}} or more separate days — several logins in one sitting count as one day. From the audit log, so bounded by its retention window and undercounting users whose sessions stay alive.",
+    "loginTierTooltip": "Users who logged in on {{days}} or more separate days — several logins in one sitting count as one day. Counts password and Google sign-ins, from the audit log, so bounded by its retention window. Signing up is not a login, and staying signed in never re-logs-in, so these run lower than the activity figures on the left.",
     "ofLoginUsers": "of users who logged in",
     "singleSessionUsers": "Single-session users",
     "singleSessionSub": "active on one day only",
