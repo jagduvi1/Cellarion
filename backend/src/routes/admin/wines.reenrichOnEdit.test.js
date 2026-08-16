@@ -54,14 +54,12 @@ jest.mock('../../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn(
 jest.mock('../../services/enrichmentJob', () => ({
   reenrichAfterRecordEdit: jest.fn(),
   enrichWineById: jest.fn(),
-  // Faithful-enough mirror of the real snapshot (unit-tested in
-  // enrichmentJob.test.js) — the route only ever compares two of these.
-  profileInputsSnapshot: jest.fn((w) => JSON.stringify({
-    name: w.name || '', producer: w.producer || '',
-    country: String(w.country || ''), region: String(w.region || ''),
-    appellation: w.appellation || '', classification: w.classification || '',
-    type: w.type || '', grapes: (w.grapes || []).map(String).sort(),
-  })),
+  releaseHeldProfile: jest.fn().mockResolvedValue(true),
+  // The REAL snapshot — pure and dependency-free, so nothing is gained by
+  // mirroring it, and a hand mirror rots the day the field list changes (it
+  // gained `classification` the very release this mock was written in;
+  // audit 2026-08-16).
+  profileInputsSnapshot: jest.requireActual('../../services/enrichmentJob').profileInputsSnapshot,
 }));
 
 const express = require('express');

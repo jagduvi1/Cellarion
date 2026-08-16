@@ -11,7 +11,7 @@ const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
 const { getOrCreateDailySnapshot } = require('../utils/exchangeRates');
 const { resolveRating } = require('../utils/ratingUtils');
-const { normalizeString } = require('../utils/normalize');
+const { normalizeString, resolveCountryName } = require('../utils/normalize');
 const { normalizeBottleSize, DEFAULT_SIZE } = require('../config/bottleSizes');
 const searchService = require('../services/search');
 const { identifyWineFromText } = require('../services/labelScan');
@@ -433,53 +433,79 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
       if (!aiRowsByProducer.has(prodKey)) aiRowsByProducer.set(prodKey, []);
       aiRowsByProducer.get(prodKey).push(pr);
     }
+    // Countries compare through the SAME fold the mint uses — alias resolve
+    // then normalize — so "USA" and "United States" are one country here
+    // exactly as they become one Country doc there (audit 2026-08-16:
+    // normalizeString alone treated aliases as two countries and the pass
+    // silently no-opped on the very splits it exists to prevent).
+    const countryKey = (v) =>
+      (typeof v === 'string' && v.trim()) ? normalizeString(resolveCountryName(v)) : '';
     for (const rows of aiRowsByProducer.values()) {
-      const aiCountryKey = (pr) =>
-        (typeof pr.aiIdentified.country === 'string' && pr.aiIdentified.country.trim())
-          ? normalizeString(pr.aiIdentified.country) : '';
-      const distinct = new Set(rows.map(aiCountryKey).filter(Boolean));
+      // The FILE is the anchor, and its STATED VALUE is the anchor value —
+      // not the AI's echo of it (audit 2026-08-16: anchoring on the echo let
+      // an AI that contradicted the file spread the contradiction to the
+      // whole group). Step one: any anchored row whose AI disagrees with its
+      // own file column is corrected back to the file's value, which is also
+      // what /confirm then mints.
+      for (const pr of rows) {
+        const fileKey = countryKey(pr.item.country);
+        if (fileKey && countryKey(pr.aiIdentified.country) !== fileKey) {
+          pr.aiIdentified.country = pr.item.country;
+        }
+      }
+      const rowKey = (pr) => countryKey(pr.aiIdentified.country);
+      const distinct = new Set(rows.map(rowKey).filter(Boolean));
       if (distinct.size === 0) continue; // no row knows a country — nothing to spread
-      const fileAnchored = rows.filter(pr => typeof pr.item.country === 'string' && pr.item.country.trim());
+      const anchors = rows.filter((pr) => countryKey(pr.item.country));
       let adopted = null;
       if (distinct.size === 1) {
         // Group already agrees — only rows the AI left countryless (which
         // could not mint at all) inherit it below.
-        adopted = rows.find(pr => aiCountryKey(pr)).aiIdentified.country;
-      } else if (fileAnchored.length > 0) {
+        adopted = rows.find((pr) => rowKey(pr)).aiIdentified.country;
+      } else if (anchors.length > 0) {
         // The file knows best — but only when it names ONE country. Two
         // file-backed countries for one producer is real information
         // (a brand genuinely bottling on two continents): touch nothing.
-        const anchorCountries = new Set(fileAnchored.map(aiCountryKey).filter(Boolean));
-        if (anchorCountries.size !== 1) continue;
-        adopted = fileAnchored.find(pr => aiCountryKey(pr)).aiIdentified.country;
+        const anchorKeys = new Set(anchors.map((pr) => countryKey(pr.item.country)));
+        if (anchorKeys.size !== 1) continue;
+        adopted = anchors[0].item.country;
       } else {
-        const best = rows.reduce((a, b) =>
+        // Highest-confidence row THAT HAS a country decides — a countryless
+        // 0.9 row must not null the adoption and silently no-op the pass
+        // (audit 2026-08-16).
+        const withCountry = rows.filter((pr) => rowKey(pr));
+        const best = withCountry.reduce((a, b) =>
           ((b.aiIdentified.confidence ?? 0) > (a.aiIdentified.confidence ?? 0) ? b : a));
         adopted = best.aiIdentified.country;
       }
       if (!adopted) continue;
+      const adoptedKey = countryKey(adopted);
       for (const pr of rows) {
-        // Never overwrite a row the file itself anchored, and when the group
-        // already agreed, only FILL gaps — never touch a stated value.
-        if (typeof pr.item.country === 'string' && pr.item.country.trim()) continue;
-        if (distinct.size === 1 && aiCountryKey(pr)) continue;
+        // Never overwrite a row the file itself anchored.
+        if (countryKey(pr.item.country)) continue;
+        const own = rowKey(pr);
+        if (own === adoptedKey) continue;
+        if (!own) { pr.aiIdentified.country = adopted; continue; } // fill the gap
+        // A row the model is CONFIDENT about keeps its own country: one
+        // producer string can be two wineries on two continents (Domaine
+        // Chandon FR vs Bodegas Chandon AR — the guard findOrCreateWine
+        // documents), and overriding it here would bypass that guard at the
+        // mint. Only sub-floor disagreements adopt the group country.
+        const conf = pr.aiIdentified.confidence;
+        if (typeof conf === 'number' && conf >= AI_GEOGRAPHY_MIN_CONFIDENCE) continue;
         pr.aiIdentified.country = adopted;
       }
     }
     //
-    // B) Low-confidence geography never mints. Applied to aiIdentified itself
-    //    (one mutation point), so matching, the aiProposed the client sees,
-    //    and the /confirm mint all agree. A missing/non-numeric confidence is
-    //    the "nobody can vouch for this" state and strips too — same stance
-    //    as the admin low-confidence queue.
-    for (const pr of preResults) {
-      if (!pr.aiIdentified) continue;
-      const conf = pr.aiIdentified.confidence;
-      if (!(typeof conf === 'number' && conf >= AI_GEOGRAPHY_MIN_CONFIDENCE)) {
-        pr.aiIdentified.region = null;
-        pr.aiIdentified.appellation = null;
-      }
-    }
+    // B) Low-confidence geography never MINTS — but it still MATCHES. The
+    //    strip is applied when the PROPOSAL is built in Pass 2, never to
+    //    aiIdentified itself: the exact/canonical dedup keys embed the
+    //    appellation, and stripping before matching made precisely the
+    //    low-confidence rows most likely to duplicate lose their registry
+    //    match and mint a twin (audit 2026-08-16 — an anti-fragmentation
+    //    change causing fragmentation). Matching with an uncertain
+    //    appellation is resolution, not assertion; nothing below the floor
+    //    is ever WRITTEN.
 
     // Pass 2: resolve AI-identified items against the registry, deduplicated by
     // wine key. findOrCreateWine internally does fuzzy matching using the
@@ -513,15 +539,35 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
             : pr.aiIdentified;
           const { wine, noMatch } = await findOrCreateWine(wineData, req.user.id, { matchOnly: true });
           if (noMatch) {
+            // A countryless identification can never mint — /confirm's
+            // findOrCreateWine throws 'Country is required' and the row
+            // error would silently cost the user their bottle (the exact
+            // shape allowPending exists to prevent, with no escape hatch for
+            // country; audit 2026-08-16). Demote to the no-match flow, where
+            // the user picks an existing wine or files a request instead of
+            // being offered a create that is guaranteed to fail.
+            if (!(typeof wineData.country === 'string' && wineData.country.trim())) {
+              const msg = 'The wine was recognised but its country could not be determined — match it to an existing wine or request it';
+              matchedWineCache.set(key, { error: msg });
+              pr.aiWineError = msg;
+              continue;
+            }
             // Explicit field list, not the raw AI object: this rides to the
             // client and back into /confirm, so it should carry exactly what
             // findOrCreateWine consumes (plus confidence for display).
+            //
+            // Geography floor (part B above): below AI_GEOGRAPHY_MIN_CONFIDENCE
+            // the model is inferring, not knowing — region/appellation are
+            // dropped from the PROPOSAL (what /confirm mints) while the
+            // matching above kept them (dedup keys embed the appellation).
+            const lowGeoConfidence =
+              !(typeof wineData.confidence === 'number' && wineData.confidence >= AI_GEOGRAPHY_MIN_CONFIDENCE);
             const proposed = {
               name: wineData.name,
               producer: wineData.producer,
               country: wineData.country,
-              region: wineData.region,
-              appellation: wineData.appellation,
+              region: lowGeoConfidence ? null : wineData.region,
+              appellation: lowGeoConfidence ? null : wineData.appellation,
               type: wineData.type,
               grapes: wineData.grapes,
               confidence: wineData.confidence,

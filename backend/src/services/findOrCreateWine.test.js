@@ -1141,10 +1141,27 @@ describe('taxonomy find-or-create dedup', () => {
  * Valley). Match-only: an appellation string never MINTS a Region.
  */
 describe('findOrCreateWine — region canon: appellation granularity wins', () => {
+  // The canon lookup is Region.find(...).limit(2) — TWO hits mean a taxonomy
+  // duplicate and the canon must refuse to pick (audit 2026-08-16). This
+  // dispatcher serves that shape for canon queries and keeps the chainable
+  // taxonomy default for everything else (cross-field reference loads).
+  const primeRegionCanon = (map) => {
+    Region.find.mockImplementation((q) => {
+      const key = q?.$or?.[0]?.normalizedName;
+      if (q && q.country && q.$or) {
+        return { limit: jest.fn().mockResolvedValue(map[key] || []) };
+      }
+      const c = {};
+      for (const m of ['select', 'sort', 'limit', 'populate']) c[m] = jest.fn(() => c);
+      c.lean = jest.fn().mockResolvedValue([]);
+      return c;
+    });
+  };
+
   test('an appellation naming a known region overrides the supplied parent region', async () => {
+    primeRegionCanon({ 'hunter valley': [{ _id: 'region-hunter' }] });
     Region.findOne.mockImplementation(async (q) => {
       const key = q?.$or?.[0]?.normalizedName;
-      if (key === 'hunter valley') return { _id: 'region-hunter' };
       if (key === 'new south wales') return { _id: 'region-nsw' };
       return null;
     });
@@ -1158,8 +1175,8 @@ describe('findOrCreateWine — region canon: appellation granularity wins', () =
   });
 
   test('the canon rule fills a missing region from the appellation too', async () => {
-    Region.findOne.mockImplementation(async (q) =>
-      (q?.$or?.[0]?.normalizedName === 'barossa valley' ? { _id: 'region-barossa' } : null));
+    primeRegionCanon({ 'barossa valley': [{ _id: 'region-barossa' }] });
+    Region.findOne.mockResolvedValue(null);
     const { wine } = await findOrCreateWine({
       name: 'Generations', producer: 'Kies', country: 'Australia',
       appellation: 'Barossa Valley', type: 'red', grapes: [],
@@ -1168,6 +1185,7 @@ describe('findOrCreateWine — region canon: appellation granularity wins', () =
   });
 
   test('an appellation naming no region falls back to the supplied region string', async () => {
+    primeRegionCanon({});
     Region.findOne.mockImplementation(async (q) =>
       (q?.$or?.[0]?.normalizedName === 'marlborough' ? { _id: 'region-marlborough' } : null));
     const { wine } = await findOrCreateWine({
@@ -1177,7 +1195,19 @@ describe('findOrCreateWine — region canon: appellation granularity wins', () =
     expect(wine.region).toBe('region-marlborough');
   });
 
+  test('TWO regions answering the appellation key → the canon refuses to pick; the supplied region stands', async () => {
+    primeRegionCanon({ 'la cote': [{ _id: 'region-a' }, { _id: 'region-b' }] });
+    Region.findOne.mockImplementation(async (q) =>
+      (q?.$or?.[0]?.normalizedName === 'vaud' ? { _id: 'region-vaud' } : null));
+    const { wine } = await findOrCreateWine({
+      name: 'Chasselas', producer: 'Domaine Bovard', country: 'Switzerland',
+      region: 'Vaud', appellation: 'La Cote', type: 'white', grapes: [],
+    }, USER_ID);
+    expect(wine.region).toBe('region-vaud'); // duplicate key → arbitrary pick refused
+  });
+
   test('an unmatched appellation never MINTS a region — with none supplied the wine stores null', async () => {
+    primeRegionCanon({});
     Region.findOne.mockResolvedValue(null);
     const { wine } = await findOrCreateWine({
       name: 'Cuvée X', producer: 'Some Estate', country: 'France',

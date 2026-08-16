@@ -38,6 +38,7 @@ jest.mock('../../models/Recommendation', () => ({}));
 jest.mock('../../models/RestockAlert', () => ({}));
 jest.mock('../../models/WineRequest', () => ({}));
 jest.mock('../../models/Country', () => ({ findById: jest.fn() }));
+jest.mock('../../services/enrichmentJob', () => ({ releaseHeldProfile: jest.fn().mockResolvedValue(true) }));
 jest.mock('../../services/vectorStore', () => ({}));
 jest.mock('../../services/imageProcessor', () => ({ unlinkImageFiles: jest.fn() }));
 jest.mock('../../services/embeddingJob', () => ({ embedSinglePair: jest.fn() }));
@@ -176,6 +177,27 @@ describe('GET /low-confidence', () => {
 });
 
 describe('profile-reviewed toggle', () => {
+  test('a HELD row is released, not stamped: the review lands only when the publish succeeds', async () => {
+    // Stamping first (v1.116.0) hid the row from the queue forever when the
+    // AI call failed — reviewedAt outran generatedAt and the incremental job
+    // skips held rows by design (audit 2026-08-16). The stamp now lives
+    // inside releaseHeldProfile, on success only.
+    const { releaseHeldProfile } = require('../../services/enrichmentJob');
+    WineDefinition.findById.mockReturnValue({
+      select: jest.fn().mockResolvedValue({ _id: WINE_ID, name: 'Douro Tinto', producer: 'Fabelhaft', aiProfile: { heldAt: new Date() } }),
+    });
+
+    const res = await fetch(`${baseUrl}/api/admin/wines/${WINE_ID}/profile-reviewed`, {
+      method: 'POST', headers: { Authorization: `Bearer ${adminToken()}` },
+    });
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).profileReviewedAt).toBeNull();
+    expect(releaseHeldProfile).toHaveBeenCalledWith(expect.anything());
+    // No direct stamp from the route — success stamping is the service’s job.
+    expect(WineDefinition.updateOne).not.toHaveBeenCalled();
+  });
+
   test('POST records the review with the current time and audits', async () => {
     WineDefinition.findById.mockReturnValue({
       select: jest.fn().mockResolvedValue({ _id: WINE_ID, name: 'Le Valet d’Épée', producer: 'Arcane' }),

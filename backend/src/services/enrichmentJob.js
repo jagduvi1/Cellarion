@@ -372,6 +372,20 @@ async function enrichWine(wine, model, { publishSuspect = false } = {}) {
         },
       }
     );
+    // Re-embed on HOLD too (audit 2026-08-16): a force re-enrich that ends in
+    // a hold has just nulled a previously PUBLISHED profile, and without this
+    // the old description keeps living in the Qdrant vectors — cellar chat
+    // would keep retrieving the wine by the very claims the hold silenced.
+    // embedSinglePair rebuilds from the now-profile-less text (textHash makes
+    // it a no-op for never-published rows). Best-effort, like the publish path.
+    try {
+      const vintages = await Bottle.distinct('vintage', { wineDefinition: wine._id, status: 'active' });
+      for (const v of vintages) {
+        await embedSinglePair(wine._id, v).catch(() => {});
+      }
+    } catch (embedErr) {
+      console.warn(`[enrichmentJob] re-embed after hold failed (${wine._id}):`, embedErr.message);
+    }
     return { result: 'held', reason: null };
   }
 
@@ -475,16 +489,22 @@ async function enrichWineById(wineDefId, { budgetUserId, force = false, publishS
       if (wine.aiProfile && wine.aiProfile.heldAt) return;
     }
 
+    // The OUTCOME is returned ('enriched' | 'held' | 'skipped' | undefined on
+    // guard/error) so a deliberate caller — releaseHeldProfile — can act only
+    // on success. Fire-and-forget callers keep ignoring it; this function
+    // still never throws.
+    let outcome;
     if (budgetUserId) {
       const debit = await tryDebitAi(String(budgetUserId));
       if (!debit.ok) {
         // Over the shared daily AI budget — skip silently; the next admin
         // batch run picks the wine up. The triggering action never fails.
         console.warn('[enrichmentJob] enrichWineById skipped (%s): ai budget exhausted (%s)', idStr, debit.reason);
-        return;
+        return undefined;
       }
       try {
         const { result, reason } = await enrichWine(wine, aiConfig.get().enrichmentModel, { publishSuspect });
+        outcome = result;
         // A transport-level failure never produced a billable completion
         if (result === 'skipped' && isRefundableFailure(reason)) await debit.refund();
       } catch (err) {
@@ -492,12 +512,37 @@ async function enrichWineById(wineDefId, { budgetUserId, force = false, publishS
         throw err; // handled by the outer catch below
       }
     } else {
-      await enrichWine(wine, aiConfig.get().enrichmentModel, { publishSuspect });
+      outcome = (await enrichWine(wine, aiConfig.get().enrichmentModel, { publishSuspect })).result;
     }
     console.log('[enrichmentJob] Auto-enriched new wine: %s', wine.name);
+    return outcome;
   } catch (err) {
     console.warn('[enrichmentJob] enrichWineById failed (%s): %s', idStr, err.message);
+    return undefined;
   }
+}
+
+/**
+ * Release a HELD profile after a human reviewed the doubt: force-regenerate,
+ * publish past the suspect flag, and stamp profileReviewedAt ONLY when the
+ * publish actually happened. Stamping first (the v1.116.0 shape) hid the row
+ * forever when the AI call failed — the outstanding queue compares
+ * reviewedAt against generatedAt and the incremental job skips held rows by
+ * design, so a failed release had no surface that would ever re-show it
+ * (audit 2026-08-16, confirmed by three independent traces). On failure the
+ * row simply STAYS in the queue, ready for another click.
+ *
+ * @returns {Promise<boolean>} true when the profile published and the review
+ *   stamp landed.
+ */
+async function releaseHeldProfile(wineDefId) {
+  const outcome = await enrichWineById(wineDefId, { force: true, publishSuspect: true });
+  if (outcome !== 'enriched') return false;
+  await WineDefinition.updateOne(
+    { _id: wineDefId },
+    { $set: { profileReviewedAt: new Date() } }
+  );
+  return true;
 }
 
 // ── Record-edit follow-through (shared by the deliberate curation surfaces) ──
@@ -549,7 +594,7 @@ function reenrichAfterRecordEdit(wine, changed) {
 }
 
 module.exports = {
-  start, requestStop, getStatus, enrichWineById,
+  start, requestStop, getStatus, enrichWineById, releaseHeldProfile,
   profileInputsSnapshot, reenrichAfterRecordEdit,
   // exported for unit tests
   cleanDescriptor, cleanStringList, cleanProse, cleanConfidence, suspectHoldsProfile,
