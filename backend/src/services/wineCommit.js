@@ -66,7 +66,7 @@ function validateNewWineFields(payload, { allowPending = false } = {}) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     return 'newWine must be an object';
   }
-  const { name, producer, country, region, appellation, grapes } = payload;
+  const { name, producer, country, region, appellation, grapes, classification } = payload;
   // typeof, not `?.` — a non-string here must be a 400, not a thrown TypeError
   // inside findOrCreateWine's .trim() (the identify-text hang, audit HIGH).
   if (typeof name !== 'string' || !name.trim()) {
@@ -80,7 +80,8 @@ function validateNewWineFields(payload, { allowPending = false } = {}) {
   }
   // region is capped too: findOrCreateRegion mints whatever arrives, and this
   // path receives machine-generated payloads (accepted AI suggestions).
-  for (const [field, value] of Object.entries({ name, producer, appellation, region })) {
+  // classification joins the cap for the same reason — the scan path fills it.
+  for (const [field, value] of Object.entries({ name, producer, appellation, region, classification })) {
     if (typeof value === 'string' && value.length > MAX_WINE_FIELD) {
       return `${field} must be ${MAX_WINE_FIELD} characters or fewer`;
     }
@@ -106,7 +107,7 @@ const MAX_SCAN_CONFLICTS = 8;
 // than imported so this module keeps its lazy-require test seams). A free-text
 // key here would be 4.8KB of attacker-chosen text rendered in the curator's
 // modal and model context (release-audit LOW-2).
-const CONFLICT_FIELDS = ['name', 'producer', 'vintage', 'country', 'region', 'appellation', 'type', 'grapes'];
+const CONFLICT_FIELDS = ['name', 'producer', 'vintage', 'country', 'region', 'appellation', 'type', 'grapes', 'classification'];
 
 /**
  * Validate the front/back label disagreements the client threads back from the
@@ -238,6 +239,10 @@ async function resolveOrMintWine(newWine, req, { allowPending = true } = {}) {
         country: newWine.country,
         region: newWine.region,
         appellation: newWine.appellation,
+        // Scan-extracted classification line ("Grand Cru Classé en 1855") —
+        // stored on creates only; before this rode along, the scan had no
+        // legitimate slot for it and it landed in the NAME (ticket 6a8162c5).
+        classification: newWine.classification,
         type: newWine.type,
         grapes: newWine.grapes || [],
       },

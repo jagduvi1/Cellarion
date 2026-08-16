@@ -31,12 +31,15 @@ Use all available information — text on the label, your knowledge of real wine
 - Infer the wine type and grapes from all available clues — appellation rules, producer style, label design, bottle shape, language
 
 Respond with ONLY a raw JSON object (no markdown, no code fences, no extra text):
-{"name":"wine name WITHOUT the vintage year and WITHOUT the producer name","producer":"producer or winery name","vintage":"4-digit year or null","country":"country","region":"wine region","appellation":"appellation/AOC/DOC/IGT/AVA or null","type":"red|white|rosé|sparkling|dessert|fortified","grapes":["grape varieties"],"confidence":0.0}
+{"name":"wine name WITHOUT the vintage year and WITHOUT the producer name","producer":"producer or winery name, or null if the producer is not printed","vintage":"4-digit year or null","country":"country","region":"wine region","appellation":"appellation/AOC/DOC/IGT/AVA or null","type":"red|white|rosé|sparkling|dessert|fortified","grapes":["grape varieties"],"classification":"the printed classification/tier line (e.g. Grand Cru Classé en 1855, Cru Bourgeois) or null","confidence":0.0}
 
 confidence: 1.0 = label clearly readable and matches a wine you know well, 0.7 = some fields inferred from appellation/producer knowledge, 0.4 = mostly inferred from limited clues, 0.2 = very uncertain.
 
 Important rules:
-- Never invent a wine that does not exist. If you can read a producer name or label text, use it exactly — do not guess or substitute a similar-sounding wine.
+- Never invent a wine that does not exist. If you can read the producer's name, use it exactly — do not guess or substitute a similar-sounding wine.
+- The producer field takes ONLY the actual estate/winery/house. Many labels lead with something else in the largest type: a brand or fantasy name the house created for one range (e.g. "Fabelhaft" is a Niepoort label), an artwork or cuvée title, or a distributor's line. Those are NOT the producer. If the actual producer is not printed anywhere you can read, return null for producer — never promote a brand line, artwork title, or any other prominent text into the producer field. A null producer with the rest filled in is a GOOD answer; the back label often resolves it.
+- Regulatory and bottler codes are never the producer: inspectorate acronyms and lot codes (e.g. Italy's ICQRF code, "L." lot numbers, importer registration lines) identify paperwork, not the winery.
+- Classification and ranking lines ("Grand Cru Classé en 1855", "Cru Bourgeois", "Classified Growth") go in the classification field, NEVER in the name. If the label names the wine only by its estate (a classed-growth grand vin), the name is the estate's wine name — not the classification line printed under it. Aging terms that are part of the displayed name (Reserva, Riserva, Spätlese) still follow the name rule above.
 - The name field must contain ONLY the wine's own cuvée/vineyard/variety name — never repeat the producer in it (producer "Chard Farm" + name "River Run Pinot Noir", NOT name "Chard Farm River Run Pinot Noir").
 - Labels often print a founder's or family name as part of the producer's crest/logo lockup (e.g. "DESIDERIUS" in small text above "PONGRÁCZ"). Such words belong to the producer identity, NOT the wine name. The name is the line that distinguishes this bottle within the producer's range (here "Blanc de Blancs") — include a person's name only when it genuinely names the cuvée itself (e.g. Pongrácz's separate prestige bottling "Desiderius").
 - Production-method terms are NOT part of the name — put "Méthode Cap Classique" / "Cap Classique", "Méthode Traditionnelle", "Metodo Classico" / "Traditional Method" in the appellation field instead (name "Blanc de Blancs" + appellation "Méthode Cap Classique", NOT name "Blanc de Blancs Méthode Cap Classique"). Legally-defined aging classifications that belong to the displayed name (Reserva, Gran Reserva, Riserva, Spätlese, Grosses Gewächs) and dosage words that are part of a cuvée name (e.g. "Brut Premier") stay in the name.
@@ -75,7 +78,7 @@ Rules:
 - Grapes: only varieties this specific wine actually contains, as stated on the back label.
 
 Respond with ONLY a raw JSON object (no markdown, no code fences, no extra text), using null for every field the back label does not state:
-{"name":"wine name or null","producer":"producer or winery name or null","vintage":"4-digit year or null","country":"country or null","region":"wine region or null","appellation":"appellation/AOC/DOC/IGT/AVA or null","type":"red|white|rosé|sparkling|dessert|fortified or null","grapes":["grape varieties"]}
+{"name":"wine name or null","producer":"producer or winery name or null","vintage":"4-digit year or null","country":"country or null","region":"wine region or null","appellation":"appellation/AOC/DOC/IGT/AVA or null","type":"red|white|rosé|sparkling|dessert|fortified or null","grapes":["grape varieties"],"classification":"the stated classification/tier line or null"}
 
 Only return {"error":"cannot read label"} if the image contains no wine label at all.`;
 
@@ -87,16 +90,17 @@ Wine: {{name}}
 Producer: {{producer}}
 {{vintage}}{{country}}
 Return ONLY a raw JSON object (no markdown, no code fences):
-{"name":"wine name","producer":"producer name","country":"country","region":"region or null","appellation":"appellation or null","type":"red|white|rosé|sparkling|dessert|fortified","grapes":["grape varieties"],"confidence":0.0}
+{"name":"wine name","producer":"producer name","country":"country or null","region":"region or null","appellation":"appellation or null","type":"red|white|rosé|sparkling|dessert|fortified","grapes":["grape varieties"],"confidence":0.0}
 
 Rules:
 - Use the wine name and producer exactly as given (correct only obvious typos)
 - The name field must contain ONLY the wine's own cuvée/vineyard/variety name — never prepend or repeat the producer in it. If the given name starts with the producer name, strip that prefix (producer "Penfolds" + name "Penfolds Bin 407" → name "Bin 407")
 - NEVER change the wine into a different wine: do not add a grape variety, cuvée, or vineyard to the name that the given data does not mention, and do not substitute another wine from the same producer. If the given name does not match a wine this producer actually makes, keep the name as given rather than "correcting" it to a similar-sounding wine
 - Production-method terms are NOT part of the name — move "Méthode Cap Classique" / "Cap Classique", "Méthode Traditionnelle", "Metodo Classico" / "Traditional Method" to the appellation field (name "Blanc de Blancs" + appellation "Méthode Cap Classique"). Aging classifications that belong to the displayed name (Reserva, Gran Reserva, Riserva, Spätlese, Grosses Gewächs) and dosage words that are part of a cuvée name (e.g. "Brut Premier") stay in the name
-- Fill in country, region, appellation, type, and grapes from your wine knowledge
-- Country is REQUIRED — always provide a country name; it is never acceptable to return null for country
+- Fill in country, region, appellation, type, and grapes from your wine knowledge — but ONLY what you actually know about THIS wine. A field you are not reasonably sure of is null, never a guess
+- Country: use the country the import data states, or the one you know this wine comes from. If you recognise the wine or producer you almost always know its country; return null ONLY when you truly cannot say — a guessed country is worse than none
 - Country must be the canonical English country name: "United States" (never "USA" or "America"), "Germany" (never "Deutschland"/"Tyskland"), "Italy" (never "Italia"/"Italie"), "England" for English wines — never a local-language or abbreviated name, even if the import data uses one
+- Region is where THIS specific wine is grown — NEVER assumed from where the producer is based. Producers routinely make wines in several regions (a Barossa-based brand can bottle a McLaren Vale Shiraz), so producer knowledge alone never sets the region. If the most precise place you know for this wine is its appellation, use that same place as the region (appellation "Barossa Valley" → region "Barossa Valley", not "South Australia"). When unsure, region is null
 - For any other field you are unsure about, use null — do NOT omit the field
 - Grapes: provide an empty array [] if unknown, never null for grapes. List only varieties you know THIS cuvée contains — single-variety appellations may be inferred (Barolo → Nebbiolo), but for multi-variety appellations (Champagne, southern-Rhône blends, Bordeaux) never default to the appellation's full permitted set; fewer correct grapes beat a complete-looking list
 - confidence: 1.0 = well-known wine you are certain about, 0.7 = confident from producer knowledge, 0.5 = reasonably sure

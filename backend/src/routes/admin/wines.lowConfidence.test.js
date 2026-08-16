@@ -107,6 +107,12 @@ describe('GET /low-confidence', () => {
     expect(filter.$or).toEqual([
       { 'aiProfile.confidence': null },
       { 'aiProfile.confidence': { $lte: 0.3 } },
+      // Suspect producers surface REGARDLESS of threshold (ticket 6a8162c5):
+      // the flag is a doubt about the identity, not the profile's confidence
+      // — Fabelhaft sat at 0.5 while the default threshold is 0.3, so the one
+      // row the flag existed for never appeared here. Held profiles land in
+      // this queue through this branch.
+      { 'aiProfile.producerSuspect': true },
     ]);
     // Scoped to rows that were actually enriched, or every un-enriched wine
     // would match the null branch.
@@ -141,6 +147,12 @@ describe('GET /low-confidence', () => {
     expect(filter.$or).toEqual([
       { 'aiProfile.confidence': null },
       { 'aiProfile.confidence': { $lte: 0.3 } },
+      // Suspect producers surface REGARDLESS of threshold (ticket 6a8162c5):
+      // the flag is a doubt about the identity, not the profile's confidence
+      // — Fabelhaft sat at 0.5 while the default threshold is 0.3, so the one
+      // row the flag existed for never appeared here. Held profiles land in
+      // this queue through this branch.
+      { 'aiProfile.producerSuspect': true },
     ]);
     // Scoped to rows that were actually enriched, or every un-enriched wine
     // would match the null branch.

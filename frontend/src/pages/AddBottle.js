@@ -159,6 +159,10 @@ function AddBottle() {
         country: e.country || '',
         region: e.region || '',
         appellation: e.appellation || '',
+        // Not a form field — rides invisibly into the commit payload so a
+        // scanned classification line ("Grand Cru Classé en 1855") lands in
+        // the registry's classification field instead of polluting the name.
+        classification: e.classification || '',
         type: e.type || 'red',
         grapes: (e.grapes || []).join(', '),
       });
@@ -209,6 +213,7 @@ function AddBottle() {
         country: merged.country || '',
         region: merged.region || '',
         appellation: merged.appellation || '',
+        classification: merged.classification || '',
         type: merged.type || 'red',
         grapes: (merged.grapes || []).join(', '),
       };
@@ -369,6 +374,7 @@ function AddBottle() {
           country: extracted.country || '',
           region: extracted.region || '',
           appellation: extracted.appellation || '',
+          classification: extracted.classification || '',
           type: extracted.type || 'red',
           grapes: extracted.grapes || []
         };
@@ -385,6 +391,7 @@ function AddBottle() {
       country: extracted.country || '',
       region: extracted.region || '',
       appellation: extracted.appellation || '',
+      classification: extracted.classification || '',
       type: extracted.type || 'red',
       grapes: (extracted.grapes || []).join(', ')
     });

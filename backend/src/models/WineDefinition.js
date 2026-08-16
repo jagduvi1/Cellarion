@@ -114,6 +114,19 @@ const wineDefinitionSchema = new mongoose.Schema({
     producerNote:    { type: String,  default: null, trim: true },
     model:        { type: String, default: null, trim: true }, // model that produced it
     generatedAt:  { type: Date,   default: null },             // when it was generated
+    // Generation ran but PUBLICATION was withheld: the model flagged the
+    // producer as suspect (a brand/range sold as a producer, a place, a
+    // label term), so describing "this producer's style" would be confident
+    // fiction about a company that may not exist (ticket 6a8162c5 —
+    // "Fabelhaft" got a négociant biography). A held profile stores only the
+    // doubt (confidence/producerSuspect/producerNote); description and the
+    // structured descriptors stay null, which is what keeps every read
+    // surface (bottle page, MCP, embeddings) naturally silent. Cleared by:
+    // a curator profile write, an admin identity edit (re-enrich under the
+    // corrected identity), or profile-reviewed (human overrides the doubt →
+    // forced publish). Guards in enrichmentJob treat heldAt as "already
+    // decided" so neither the per-add hook nor incremental batches loop on it.
+    heldAt:       { type: Date,   default: null },
     // Provenance. 'ai' = written by enrichmentJob; 'curator' = a sommelier or
     // admin corrected it by hand (routes/somm/wineProfile.js or the MCP
     // set_wine_profile tool). The distinction is load-bearing, not cosmetic:

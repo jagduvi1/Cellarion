@@ -291,6 +291,11 @@ function applyProfilePatch(wine, clean, userId, { now = new Date() } = {}) {
       wine.aiProfile.verifiedAt = now;
       wine.profileReviewedAt = now;
     }
+    // Either way the HOLD is over: a real write means a human supplied the
+    // truth the hold was waiting for; a pure clear is the documented reset
+    // signal ("this is wrong") and returns the wine to the enrichable pool —
+    // where, if the model still doubts the identity, it simply holds again.
+    wine.aiProfile.heldAt = null;
     wine.markModified('aiProfile');
   }
   return wine;

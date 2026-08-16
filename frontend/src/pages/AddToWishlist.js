@@ -161,6 +161,8 @@ function AddToWishlist() {
         country: e.country || '',
         region: e.region || '',
         appellation: e.appellation || '',
+        // Not a form field — rides invisibly into the commit payload (see AddBottle).
+        classification: e.classification || '',
         type: e.type || 'red',
         grapes: (e.grapes || []).join(', '),
       });
@@ -208,6 +210,7 @@ function AddToWishlist() {
         country: merged.country || '',
         region: merged.region || '',
         appellation: merged.appellation || '',
+        classification: merged.classification || '',
         type: merged.type || 'red',
         grapes: (merged.grapes || []).join(', '),
       };
@@ -300,6 +303,7 @@ function AddToWishlist() {
           country: extracted.country || '',
           region: extracted.region || '',
           appellation: extracted.appellation || '',
+          classification: extracted.classification || '',
           type: extracted.type || 'red',
           grapes: extracted.grapes || []
         };
@@ -315,6 +319,7 @@ function AddToWishlist() {
       country: extracted.country || '',
       region: extracted.region || '',
       appellation: extracted.appellation || '',
+      classification: extracted.classification || '',
       type: extracted.type || 'red',
       grapes: (extracted.grapes || []).join(', ')
     });

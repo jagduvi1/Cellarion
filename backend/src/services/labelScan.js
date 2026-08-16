@@ -277,7 +277,7 @@ async function scanLabelBack({ backImage, backMediaType = 'image/jpeg', frontIma
 }
 
 /** The scalar identity fields the back label may fill, in display order. */
-const MERGE_SCALARS = ['name', 'producer', 'vintage', 'country', 'region', 'appellation', 'type'];
+const MERGE_SCALARS = ['name', 'producer', 'vintage', 'country', 'region', 'appellation', 'type', 'classification'];
 
 /** A usable value is a non-empty string after trimming; everything else is a gap. */
 const mergeValue = (v) => (typeof v === 'string' && v.trim() ? v.trim() : '');
