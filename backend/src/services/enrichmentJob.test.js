@@ -425,3 +425,87 @@ describe('profileInputsSnapshot — the before/after comparison the routes use',
     }
   });
 });
+
+/**
+ * The NARROWED hold (2026-08-16). v1.116.0 held every producer-suspect
+ * profile; measured against the 390 suspect rows that predate it, only ~2
+ * were genuinely misleading and 370 were attached to real users' bottles —
+ * a large user-visible cost for a small harm. The doubt now withholds only
+ * when it could make the PROSE misleading: the model is also unsure of the
+ * wine, or the prose talks about the producer as an entity.
+ *
+ * The 0.45 line is the enrichment prompt's own scale: 0.5 = "grape/region
+ * knowledge only" (an honest appellation-level note, exactly right for a
+ * brand-labelled wine), 0.4 = "mostly inferred from limited clues".
+ */
+describe('suspectHoldsProfile — which suspicions withhold the profile', () => {
+  const { suspectHoldsProfile } = require('./enrichmentJob');
+  const clean = 'Bright red fruit and soft tannins, made for early drinking.';
+
+  test('unknown confidence holds — nobody can vouch for it', () => {
+    expect(suspectHoldsProfile({ confidence: null, description: clean })).toBe(true);
+  });
+
+  test('low confidence holds regardless of prose (the Epiphany shape)', () => {
+    expect(suspectHoldsProfile({ confidence: 0.4, description: clean })).toBe(true);
+    expect(suspectHoldsProfile({ confidence: 0.45, description: clean })).toBe(true); // boundary is inclusive
+  });
+
+  test('grape/region-level confidence with clean prose PUBLISHES (the brand-wine case)', () => {
+    expect(suspectHoldsProfile({ confidence: 0.5, description: clean })).toBe(false);
+    expect(suspectHoldsProfile({ confidence: 0.6, description: clean })).toBe(false);
+  });
+
+  test('prose that talks about the PRODUCER holds even at high confidence (the Fabelhaft harm)', () => {
+    for (const d of [
+      'A négociant label known for sourcing well-priced wines from established regions.',
+      'The family has farmed this estate for four generations.',
+      'Made at the winery in Mendoza by a respected producer.',
+    ]) {
+      expect(suspectHoldsProfile({ confidence: 0.8, description: d })).toBe(true);
+    }
+  });
+
+  test('an empty description with good confidence does not hold on the prose rule', () => {
+    expect(suspectHoldsProfile({ confidence: 0.7, description: null })).toBe(false);
+  });
+});
+
+describe('the narrowed hold end-to-end through enrichWine', () => {
+  const suspectWith = (over) => ({
+    data: {
+      body: 'medium', tannin: 'medium', acidity: 'medium', sweetness: 'dry',
+      flavors: ['plum'], foodPairings: ['stew'],
+      producerSuspect: true,
+      producerNote: 'Aldi is a supermarket retailer, not an estate.',
+      ...over,
+    },
+    debugReason: null,
+  });
+
+  test('a suspect producer with an honest grape/region note is PUBLISHED with the doubt recorded', async () => {
+    suggestProfile.mockResolvedValue(suspectWith({
+      confidence: 0.6,
+      description: 'An off-dry German Riesling with orchard fruit and bright acidity.',
+    }));
+    await enrichWineById(WINE_ID);
+    const p = persisted();
+    expect(p.heldAt).toBeNull();
+    expect(p.description).toMatch(/Riesling/);
+    // The doubt is not erased by publishing — the queue still lists it.
+    expect(p.producerSuspect).toBe(true);
+    expect(p.producerNote).toMatch(/supermarket/);
+  });
+
+  test('a suspect producer the model also cannot place is still HELD', async () => {
+    suggestProfile.mockResolvedValue(suspectWith({
+      confidence: 0.4,
+      description: 'A red wine, probably in a modern international style.',
+    }));
+    await enrichWineById(WINE_ID);
+    const p = persisted();
+    expect(p.heldAt).toBeInstanceOf(Date);
+    expect(p.description).toBeNull();
+    expect(p.producerSuspect).toBe(true);
+  });
+});
