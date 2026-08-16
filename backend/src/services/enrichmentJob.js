@@ -132,6 +132,48 @@ function sleep() {
   return new Promise(resolve => setTimeout(resolve, BATCH_PAUSE_MS));
 }
 
+// ── Which suspicions actually have to withhold the profile ──────────────────
+//
+// v1.116.0 held EVERY producer-suspect profile. Measured against the 390
+// suspect rows that predate it (prod, 2026-08-16): only 9 descriptions made
+// any producer-identity claim at all, and ~2 were genuinely misleading. The
+// rest were honest notes about wines that legitimately carry a brand or
+// retailer in the producer field — an Aldi Riesling has no better answer, and
+// withholding its tasting note serves nobody. 370 of those rows are attached
+// to real users' bottles, so a blanket hold is a large, user-visible cost for
+// a small harm.
+//
+// The doubt has to withhold the profile in exactly two cases:
+//   1. the model is ALSO unsure of the wine (low/unknown confidence) — the
+//      Epiphany shape: it could not place the bottling, so the prose is an
+//      appellation-level guess dressed as a description; and
+//   2. the prose makes claims about the PRODUCER AS AN ENTITY while we doubt
+//      the producer is real — the Fabelhaft harm exactly (a biography of a
+//      house that turned out to be a Niepoort label).
+// Anything else publishes with the doubt recorded: producerSuspect and
+// producerNote still ride on the row, and the admin queue still lists it
+// regardless of threshold.
+const SUSPECT_HOLD_CONFIDENCE_MAX = 0.45;
+// Words that only appear when a description is talking about the PRODUCER
+// rather than the wine. Deliberately generous — a false positive costs one
+// withheld tasting note that a curator can release in a click, a false
+// negative publishes a fabricated house.
+const PRODUCER_CLAIM_RX =
+  /\b(n[ée]gociant|winery|winemaker|domaine|estate|ch[âa]teau|house|producer|winehouse|family|founded|generation)\b/i;
+
+/**
+ * @param {object} profile — the CLEANED { confidence, description } about to
+ *   be stored (nulls already normalised by cleanConfidence/cleanProse).
+ * @returns {boolean} true when a producer-suspect profile must be held.
+ */
+function suspectHoldsProfile({ confidence, description }) {
+  // Unknown confidence is the "nobody can vouch for this" state — the same
+  // stance the admin low-confidence queue takes on a null.
+  if (typeof confidence !== 'number') return true;
+  if (confidence <= SUSPECT_HOLD_CONFIDENCE_MAX) return true;
+  return PRODUCER_CLAIM_RX.test(description || '');
+}
+
 // ── Main job logic ─────────────────────────────────────────────────────────
 
 /**
@@ -295,8 +337,10 @@ async function enrichWine(wine, model, { publishSuspect = false } = {}) {
   // old/custom prompts → false.
   const suspect = data.producerSuspect === true;
   const now = new Date();
+  const confidence = cleanConfidence(data.confidence);
+  const description = cleanProse(data.description);
   const meta = {
-    confidence:      cleanConfidence(data.confidence),
+    confidence,
     producerSuspect: suspect,
     producerNote:    cleanProse(data.producerNote, 300),
     model:           model || aiConfig.get().enrichmentModel,
@@ -304,16 +348,15 @@ async function enrichWine(wine, model, { publishSuspect = false } = {}) {
     generatedAt:     now,
   };
 
-  // HOLD, don't publish, when the producer is suspect (ticket 6a8162c5): a
-  // profile generated for a brand/range/place sold as a producer is confident
-  // fiction about a company that may not exist — "Fabelhaft" got a négociant
-  // biography this way, flagged suspect, and the flag sat unread in a passive
-  // queue while the fiction served. A held row stores ONLY the doubt; the null
-  // description keeps every read surface (bottle page, MCP, embedding text)
-  // naturally silent, and heldAt keeps the retry guards from looping on it.
-  // `publishSuspect` is the human override — profile-reviewed uses it after an
-  // admin has looked at the doubt and judged the identity fine.
-  if (suspect && !publishSuspect) {
+  // HOLD, don't publish, when the producer doubt could make the PROSE
+  // misleading (ticket 6a8162c5, narrowed 2026-08-16 — see
+  // suspectHoldsProfile for the evidence that "suspect" alone is too broad).
+  // A held row stores ONLY the doubt; the null description keeps every read
+  // surface (bottle page, MCP, embedding text) naturally silent, and heldAt
+  // keeps the retry guards from looping on it. `publishSuspect` is the human
+  // override — profile-reviewed uses it after an admin has looked at the
+  // doubt and judged the identity fine.
+  if (suspect && !publishSuspect && suspectHoldsProfile({ confidence, description })) {
     await WineDefinition.updateOne(
       { _id: wine._id },
       {
@@ -343,11 +386,12 @@ async function enrichWine(wine, model, { publishSuspect = false } = {}) {
           sweetness:    cleanDescriptor('sweetness', data.sweetness),
           flavors:      cleanStringList(data.flavors, 'flavors'),
           foodPairings: cleanStringList(data.foodPairings, 'foodPairings'),
-          // Strip markdown, don't just trim: the model reaches for emphasis even
-          // when told not to, and the raw string is served un-rendered by the MCP
-          // tools. Load-bearing half of the fix — the prompt is only advisory,
-          // and a self-hoster can override it via SiteConfig.
-          description:  cleanProse(data.description),
+          // Markdown-stripped, not just trimmed (computed above, beside the
+          // hold decision that reads it): the model reaches for emphasis even
+          // when told not to, and the raw string is served un-rendered by the
+          // MCP tools. Load-bearing half of the fix — the prompt is only
+          // advisory, and a self-hoster can override it via SiteConfig.
+          description,
           ...meta,
           heldAt: null,
         },
@@ -508,5 +552,5 @@ module.exports = {
   start, requestStop, getStatus, enrichWineById,
   profileInputsSnapshot, reenrichAfterRecordEdit,
   // exported for unit tests
-  cleanDescriptor, cleanStringList, cleanProse, cleanConfidence,
+  cleanDescriptor, cleanStringList, cleanProse, cleanConfidence, suspectHoldsProfile,
 };
