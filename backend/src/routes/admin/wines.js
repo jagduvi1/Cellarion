@@ -1294,6 +1294,12 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Wine not found' });
     }
 
+    // Snapshot the profile-feeding fields BEFORE any mutation — the re-enrich
+    // decision below compares against this, so only a REAL change (not the
+    // form re-sending every field on save) regenerates the AI profile.
+    const { profileInputsSnapshot, reenrichAfterRecordEdit } = require('../../services/enrichmentJob');
+    const beforeProfileInputs = profileInputsSnapshot(wine);
+
     // Update fields
     if (name) wine.name = name.trim();
     if (producer) wine.producer = producer.trim();
@@ -1347,6 +1353,9 @@ router.put('/:id', async (req, res) => {
     }
 
     await wine.save();
+    // Compared before populate (the snapshot folds ids either way, but the
+    // unpopulated doc is the apples-to-apples read).
+    const profileInputsChanged = profileInputsSnapshot(wine) !== beforeProfileInputs;
     await wine.populate(['country', 'region', 'grapes']);
 
     // Sync to search index (fire-and-forget). Bottle documents denormalize
@@ -1367,17 +1376,17 @@ router.put('/:id', async (req, res) => {
       { fields: Object.keys(req.body) }
     );
 
-    // An identity edit (name/producer) makes any AI profile a description of
-    // the WRONG wine — including a HELD one, whose whole point was "this
-    // producer looks fictional": the admin just fixed exactly that. Regenerate
-    // under the corrected identity (fire-and-forget, no user budget — this is
-    // a deliberate admin action). Curator-written profiles are never touched
-    // (enrichWineById refuses those, force or not); if the model still doubts
-    // the new identity it simply holds again, which is the correct outcome.
-    if ((name || producer) && wine.aiProfile?.generatedAt && wine.aiProfile?.source !== 'curator') {
-      const { enrichWineById } = require('../../services/enrichmentJob');
-      enrichWineById(wine._id, { force: true }).catch(() => {});
-    }
+    // An edit that changed any profile-feeding field (identity, geography,
+    // classification, type, grapes) makes the AI profile a description of the
+    // WRONG record — including a HELD one, whose whole point was "this
+    // producer looks fictional": the admin just fixed exactly that.
+    // Regenerate under the corrected record (fire-and-forget, no user budget
+    // — a deliberate admin action). Real-change only: the v1.116.0 check was
+    // presence-in-body, and the edit form re-sends every field on save, so it
+    // would have regenerated (and churned generatedAt) on EVERY save. Curator
+    // profiles are never touched; if the model still doubts the new identity
+    // it simply holds again, which is the correct outcome.
+    reenrichAfterRecordEdit(wine, profileInputsChanged);
 
     submitUrls(`/wines/${wine._id}`);
 

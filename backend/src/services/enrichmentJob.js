@@ -456,8 +456,57 @@ async function enrichWineById(wineDefId, { budgetUserId, force = false, publishS
   }
 }
 
+// ── Record-edit follow-through (shared by the deliberate curation surfaces) ──
+
+/**
+ * The record fields suggestProfile reads, folded into one comparable string.
+ * Snapshot BEFORE applying an edit, compare after save: the admin form
+ * re-sends every field on save, so presence-in-body says nothing — only a
+ * before/after difference means the stored profile now describes the wrong
+ * record. Robust to populated and unpopulated refs (ids are folded either
+ * way) and to grape order.
+ */
+function profileInputsSnapshot(wine) {
+  const idOf = (v) => String(v && v._id ? v._id : (v || ''));
+  return JSON.stringify({
+    name: wine.name || '',
+    producer: wine.producer || '',
+    country: idOf(wine.country),
+    region: idOf(wine.region),
+    appellation: wine.appellation || '',
+    classification: wine.classification || '',
+    type: wine.type || '',
+    grapes: (wine.grapes || []).map(idOf).sort(),
+  });
+}
+
+/**
+ * After a deliberate curation edit (admin wine PUT, proposal approve) changed
+ * a field the profile generator reads, the stored AI profile describes the
+ * OLD record — including a HELD one, whose doubt the edit may have just
+ * resolved (rename "Fabelhaft" → "Niepoort" and the hold's reason is gone;
+ * measured live 2026-08-16, where the approve path left the négociant
+ * fiction attached until a manual re-enrich). Fire-and-forget forced
+ * regeneration under the corrected record.
+ *
+ * Gates: `changed` is the CALLER's before/after profileInputsSnapshot
+ * comparison — this helper never guesses; a never-enriched wine has nothing
+ * stale (the bottle-add hook and batch runs cover fresh rows); curator
+ * profiles are never regenerated (double-guarded — enrichWineById refuses
+ * them too, force or not).
+ *
+ * Returns the floating promise so tests can await settlement; callers ignore it.
+ */
+function reenrichAfterRecordEdit(wine, changed) {
+  if (!changed) return Promise.resolve();
+  if (!wine || !wine.aiProfile || !wine.aiProfile.generatedAt) return Promise.resolve();
+  if (wine.aiProfile.source === 'curator') return Promise.resolve();
+  return enrichWineById(wine._id, { force: true }).catch(() => {});
+}
+
 module.exports = {
   start, requestStop, getStatus, enrichWineById,
+  profileInputsSnapshot, reenrichAfterRecordEdit,
   // exported for unit tests
   cleanDescriptor, cleanStringList, cleanProse, cleanConfidence,
 };

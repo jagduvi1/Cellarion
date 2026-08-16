@@ -363,3 +363,65 @@ describe('producer-suspect profiles are held, not published', () => {
     expect(persisted().description).toBe('Plain prose.');
   });
 });
+
+/**
+ * The record-edit follow-through (parity gap found live 2026-08-16: approving
+ * "Fabelhaft" → "Niepoort" left the négociant-fiction profile attached until
+ * a manual force re-enrich). The helper regenerates ONLY on a real change,
+ * never over curator work, and treats HELD as enriched-and-regenerable —
+ * an identity fix is exactly what resolves a hold.
+ */
+describe('reenrichAfterRecordEdit — the record-edit follow-through', () => {
+  const { reenrichAfterRecordEdit } = require('./enrichmentJob');
+  const enriched = (over = {}) => ({ _id: WINE_ID, aiProfile: { generatedAt: new Date(), source: 'ai', ...over } });
+
+  test('a real change on an ai-sourced profile regenerates (force path reaches the model)', async () => {
+    suggestProfile.mockResolvedValue(profile('Regenerated prose.'));
+    await reenrichAfterRecordEdit(enriched(), true);
+    expect(suggestProfile).toHaveBeenCalled();
+    expect(persisted().description).toBe('Regenerated prose.');
+  });
+
+  test('no change → nothing happens, not even a wine read', async () => {
+    await reenrichAfterRecordEdit(enriched(), false);
+    expect(WineDefinition.findById).not.toHaveBeenCalled();
+    expect(suggestProfile).not.toHaveBeenCalled();
+  });
+
+  test('a never-enriched wine has nothing stale → no call (the add hook covers fresh rows)', async () => {
+    await reenrichAfterRecordEdit({ _id: WINE_ID, aiProfile: {} }, true);
+    expect(suggestProfile).not.toHaveBeenCalled();
+  });
+
+  test('curator profiles are never regenerated from an edit', async () => {
+    await reenrichAfterRecordEdit(enriched({ source: 'curator' }), true);
+    expect(suggestProfile).not.toHaveBeenCalled();
+  });
+
+  test('a HELD profile counts as enriched — an identity fix regenerates it', async () => {
+    suggestProfile.mockResolvedValue(profile('Clean profile under the fixed identity.'));
+    await reenrichAfterRecordEdit(enriched({ heldAt: new Date(), description: null }), true);
+    expect(suggestProfile).toHaveBeenCalled();
+  });
+});
+
+describe('profileInputsSnapshot — the before/after comparison the routes use', () => {
+  const { profileInputsSnapshot } = require('./enrichmentJob');
+
+  test('folds populated docs and raw ids identically; grape order-insensitive', () => {
+    const a = profileInputsSnapshot({ name: 'X', producer: 'Y', country: 'c1', region: 'r1', grapes: ['g1', 'g2'], type: 'red' });
+    const b = profileInputsSnapshot({ name: 'X', producer: 'Y', country: { _id: 'c1' }, region: { _id: 'r1' }, grapes: [{ _id: 'g2' }, { _id: 'g1' }], type: 'red' });
+    expect(a).toBe(b);
+  });
+
+  test('differs when any profile-feeding field changes', () => {
+    const base = { name: 'X', producer: 'Y', country: 'c1', type: 'red' };
+    for (const change of [
+      { producer: 'Z' }, { name: 'X2' }, { country: 'c2' }, { region: 'r9' },
+      { appellation: 'Margaux' }, { classification: 'Grand Cru Classé en 1855' },
+      { type: 'white' }, { grapes: ['g1'] },
+    ]) {
+      expect(profileInputsSnapshot({ ...base, ...change })).not.toBe(profileInputsSnapshot(base));
+    }
+  });
+});

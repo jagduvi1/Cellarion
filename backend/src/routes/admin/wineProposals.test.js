@@ -28,6 +28,17 @@ jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../../services/indexNow', () => ({ submitUrls: jest.fn() }));
 jest.mock('../../services/search', () => ({ indexWine: jest.fn(), bulkIndexBottles: jest.fn() }));
 jest.mock('../../services/embeddingJob', () => ({ reembedActiveVintages: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../../services/enrichmentJob', () => ({
+  reenrichAfterRecordEdit: jest.fn(),
+  // Faithful-enough mirror of the real snapshot (unit-tested in
+  // enrichmentJob.test.js) — the route only ever compares two of these.
+  profileInputsSnapshot: jest.fn((w) => JSON.stringify({
+    name: w.name || '', producer: w.producer || '',
+    country: String(w.country || ''), region: String(w.region || ''),
+    appellation: w.appellation || '', classification: w.classification || '',
+    type: w.type || '', grapes: (w.grapes || []).map(String).sort(),
+  })),
+}));
 jest.mock('../../services/findOrCreateWine', () => ({ findOrCreateRegion: jest.fn() }));
 // Identity by default so the tier-strip assertions below still read the
 // normalizeAppellation output; the curated-registry test overrides it.
@@ -158,6 +169,33 @@ describe('POST /:id/approve', () => {
     // The receipt lands on the row.
     const noteSet = WineCorrectionProposal.updateOne.mock.calls.at(-1);
     expect(noteSet[1].$set.appliedNote).toMatch(/Applied/);
+  });
+
+  // Parity with the admin PUT (gap found live 2026-08-16: approving
+  // "Fabelhaft" → "Niepoort" left the négociant-fiction profile attached
+  // until a manual force re-enrich): an approved change to a profile-feeding
+  // field hands the wine to the re-enrich follow-through — and ONLY a real
+  // change does.
+  test('field_correction: a real producer change triggers the re-enrich follow-through', async () => {
+    claim({ _id: P1, kind: 'field_correction', wineDefinition: W1, proposedFields: { producer: 'Niepoort' } });
+    const wine = { _id: W1, name: 'Douro Tinto', producer: 'Fabelhaft', appellation: 'Douro', country: 'c1', save: jest.fn().mockResolvedValue(undefined) };
+    WineDefinition.findById.mockResolvedValue(wine);
+
+    const res = await post(`/${P1}/approve`);
+    expect(res.status).toBe(200);
+    const { reenrichAfterRecordEdit } = require('../../services/enrichmentJob');
+    expect(reenrichAfterRecordEdit).toHaveBeenCalledWith(wine, true);
+  });
+
+  test('field_correction: values identical to the record do NOT regenerate the profile', async () => {
+    claim({ _id: P1, kind: 'field_correction', wineDefinition: W1, proposedFields: { producer: 'Niepoort' } });
+    const wine = { _id: W1, name: 'Douro Tinto', producer: 'Niepoort', appellation: 'Douro', country: 'c1', save: jest.fn().mockResolvedValue(undefined) };
+    WineDefinition.findById.mockResolvedValue(wine);
+
+    const res = await post(`/${P1}/approve`);
+    expect(res.status).toBe(200);
+    const { reenrichAfterRecordEdit } = require('../../services/enrichmentJob');
+    expect(reenrichAfterRecordEdit).toHaveBeenCalledWith(wine, false);
   });
 
   // The "Yecla DO" case (prod, 2026-08-12): approving a proposal used to store
