@@ -186,9 +186,67 @@ describe('runScanImageRetentionSweep', () => {
       }),
     });
 
-    // Two clocks now: the 30-day unattached sweep above and the 7-day
-    // promoted-scan expiry (services/promotedScanGrace.test.js pins that one).
-    expect(await runScanImageRetentionSweep()).toEqual({ deleted: 0, expired: 0 });
+    // Three clocks now: the 30-day unattached scan sweep above, the 7-day
+    // promoted-scan expiry (services/promotedScanGrace.test.js pins that one)
+    // and the 30-day orphan bottle-photo sweep (pinned below).
+    expect(await runScanImageRetentionSweep()).toEqual({ deleted: 0, expired: 0, orphanPhotos: 0 });
+    expect(BottleImage.deleteMany).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The THIRD clock (2026-08-16): an ordinary bottle PHOTO attached to nothing.
+ *
+ * The add-bottle flow uploads before the bottle exists and links afterwards;
+ * an abandoned add leaves a photo with no bottle and no wine, which nothing
+ * swept (both clocks above only consider kind:'label-scan') and which sat in
+ * the admin moderation queue reading as an image belonging to nothing.
+ */
+describe('runUnattachedBottleImageSweep', () => {
+  const { runUnattachedBottleImageSweep } = require('./scanImageRetentionJob');
+
+  test('selects non-scan photos attached to nothing, past the window, files first', async () => {
+    const stale = [{ _id: 'p1', originalUrl: '/api/uploads/originals/p.jpg' }];
+    BottleImage.find.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        limit: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(stale) }),
+      }),
+    });
+    BottleImage.deleteMany.mockResolvedValue({ deletedCount: 1 });
+
+    const res = await runUnattachedBottleImageSweep();
+
+    const filter = BottleImage.find.mock.calls[0][0];
+    // Disjoint from both scan clocks by kind — a label scan is never swept here.
+    expect(filter.kind).toEqual({ $ne: 'label-scan' });
+    expect(filter.wineDefinition).toBeNull();
+    expect(filter.bottle).toBeNull();
+    // An image serving as a wine's official photo is never swept, whatever
+    // else its fields say (bottleOps detaches those from a deleted bottle).
+    expect(filter.assignedToWine).toEqual({ $ne: true });
+    const cutoff = filter.createdAt.$lt.getTime();
+    expect(Math.abs(cutoff - (Date.now() - SCAN_IMAGE_RETENTION_DAYS * 24 * 60 * 60 * 1000))).toBeLessThan(5000);
+
+    expect(unlinkImageFiles).toHaveBeenCalledWith(stale[0]);
+    // Predicate repeated in the delete: /link-to-bottle can bind one of these
+    // between the find and the delete (audit L-1, same argument).
+    const del = BottleImage.deleteMany.mock.calls[0][0];
+    expect(del._id).toEqual({ $in: ['p1'] });
+    expect(del.kind).toEqual({ $ne: 'label-scan' });
+    expect(del.wineDefinition).toBeNull();
+    expect(del.bottle).toBeNull();
+    expect(del.assignedToWine).toEqual({ $ne: true });
+    expect(res.deleted).toBe(1);
+  });
+
+  test('nothing stale → no unlink, no delete', async () => {
+    BottleImage.find.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        limit: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([]) }),
+      }),
+    });
+    expect(await runUnattachedBottleImageSweep()).toEqual({ deleted: 0 });
+    expect(unlinkImageFiles).not.toHaveBeenCalled();
     expect(BottleImage.deleteMany).not.toHaveBeenCalled();
   });
 });

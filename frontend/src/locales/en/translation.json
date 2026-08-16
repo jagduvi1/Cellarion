@@ -1788,6 +1788,8 @@
       "processing": "Processing...",
       "approve": "Approve",
       "noWineLinked": "No wine linked",
+      "viaBottle": "via the owner's bottle",
+      "notLinked": "Not linked to a bottle or a wine — an upload whose add was abandoned. Deleted automatically 30 days after upload.",
       "assignToWine": "Assign to Wine",
       "assignHint": "Set this image as the official image for a wine definition.",
       "linkedWine": "Linked wine:",

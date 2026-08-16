@@ -133,9 +133,22 @@ function AdminImages() {
     }
   };
 
+  // The wine an image belongs to, DIRECTLY or through its bottle. A photo
+  // added through the normal add-bottle flow carries `bottle` and a null
+  // `wineDefinition` by design (services/imageOps sets the direct ref only for
+  // wine-level uploads, and the by-wine query resolves the rest through the
+  // bottle) — so reading the direct ref alone made every ordinary bottle photo
+  // render as "no wine linked" on this page, which is what it looked like in
+  // review. The LIST already falls back this way; the detail did not.
+  const effectiveWine = (img) => img?.wineDefinition || img?.bottle?.wineDefinition || null;
+  const selectedWine = effectiveWine(selected);
+  // True orphan: no bottle AND no wine — an add abandoned between the upload
+  // and the link. Swept after 30 days (services/scanImageRetentionJob).
+  const selectedOrphan = !!selected && !selected.bottle && !selected.wineDefinition;
+
   const handleAssignToWine = async () => {
     if (!selected) return;
-    const wineDefId = assignWineId || selected.wineDefinition?._id;
+    const wineDefId = assignWineId || selectedWine?._id;
     if (!wineDefId) {
       setError('Please enter a wine definition ID');
       return;
@@ -299,8 +312,16 @@ function AdminImages() {
                   <p><strong>{t('admin.images.statusLabel')}</strong> <span className={`status-badge status-${selected.status}`}>{selected.status}</span></p>
                   <p><strong>{t('admin.images.uploadedBy')}</strong> {selected.uploadedBy?.username}</p>
                   <p><strong>{t('admin.images.dateLabel')}</strong> {new Date(selected.createdAt).toLocaleString()}</p>
-                  {selected.wineDefinition && (
-                    <p><strong>{t('admin.images.wineLabel')}</strong> {selected.wineDefinition.name} ({selected.wineDefinition.producer})</p>
+                  {selectedWine && (
+                    <p>
+                      <strong>{t('admin.images.wineLabel')}</strong> {selectedWine.name} ({selectedWine.producer})
+                      {!selected.wineDefinition && (
+                        <span className="help-text"> — {t('admin.images.viaBottle')}</span>
+                      )}
+                    </p>
+                  )}
+                  {selectedOrphan && (
+                    <p className="help-text">{t('admin.images.notLinked')}</p>
                   )}
                   {selected.reviewedBy && (
                     <p><strong>{t('admin.images.reviewedBy')}</strong> {selected.reviewedBy.username} on {new Date(selected.reviewedAt).toLocaleString()}</p>
@@ -387,9 +408,12 @@ function AdminImages() {
                   <p className="help-text">
                     {t('admin.images.assignHint')}
                   </p>
-                  {selected.wineDefinition ? (
+                  {selectedWine ? (
                     <p>
-                      {t('admin.images.linkedWine')} <strong>{selected.wineDefinition.name}</strong> ({selected.wineDefinition.producer})
+                      {t('admin.images.linkedWine')} <strong>{selectedWine.name}</strong> ({selectedWine.producer})
+                      {!selected.wineDefinition && (
+                        <span className="help-text"> — {t('admin.images.viaBottle')}</span>
+                      )}
                     </p>
                   ) : (
                     <div className="form-group">

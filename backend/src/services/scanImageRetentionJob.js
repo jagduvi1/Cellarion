@@ -19,10 +19,10 @@
  * files.) Unlink first, then delete — the doc is the only reference to the file.
  *
  * BOUND: an image is "attached" once it carries a wineDefinition (set by the
- * commit) or a bottle. Only kind:'label-scan' rows are ever considered, so an
- * ordinary bottle photo can never be swept by this.
+ * commit) or a bottle.
  *
- * TWO CLOCKS, disjoint by construction:
+ * THREE CLOCKS, disjoint by construction (the first two by their predicates,
+ * the third by `kind`):
  *   30 days, UNATTACHED  — the sweep described above: a scan that never became
  *                          part of any record (runUnattachedScanSweep).
  *    7 days, PROMOTED    — a scan whose wine is NOT in the pending-identity
@@ -38,8 +38,14 @@
  *                          services/wineCommit. The quiet failures are the ones
  *                          whose label a curator most needs; the window is what
  *                          bounds the retention, not queue membership.
- * A scan on a wine that is STILL pending is on neither clock: it is attached,
- * and it has no retainUntil until the row promotes.
+ *   30 days, ORPHAN PHOTO — an ordinary bottle photo (kind:'bottle') attached
+ *                          to nothing, from an add abandoned between the
+ *                          upload and the link (runUnattachedBottleImageSweep,
+ *                          2026-08-16). Until it existed, nothing swept these
+ *                          and they sat in the admin moderation queue reading
+ *                          as images belonging to nothing.
+ * A scan on a wine that is STILL pending is on none of the clocks: it is
+ * attached, and it has no retainUntil until the row promotes.
  */
 const BottleImage = require('../models/BottleImage');
 const { unlinkImageFiles } = require('./imageProcessor');
@@ -190,20 +196,88 @@ async function runUnattachedScanSweep() {
 }
 
 /**
- * The daily entry point — both clocks, in the order that matters least (they
- * select disjoint rows: an unattached scan has no wine and therefore no
- * promotion deadline, and a promoted scan has a wine).
+ * The THIRD clock: an ordinary bottle PHOTO attached to nothing (2026-08-16).
+ *
+ * The add-bottle flow uploads the photo before the bottle exists — POST
+ * /api/images/upload deliberately requires neither a bottle nor a wine, and
+ * POST /api/images/link-to-bottle binds it once the commit succeeds. A user
+ * who abandons the add between those two steps leaves a photo behind with no
+ * bottle and no wine, and until now NOTHING swept it: the two clocks above
+ * only ever consider kind:'label-scan'. Such a row also enters the admin
+ * moderation queue, where it reads as an image belonging to nothing.
+ *
+ * Same GDPR argument as the unattached-scan sweep, and the same 30-day window
+ * for the same reason: an image that never became part of a record has no
+ * purpose to justify keeping it, but a user may reasonably photograph today
+ * and finish the add next weekend.
+ *
+ * DISJOINT from both clocks above by the kind filter, and narrower than it
+ * needs to be on purpose:
+ *   - `wineDefinition: null` keeps every wine-level image out, including the
+ *     official ones services/bottleOps deliberately DETACHES from a deleted
+ *     bottle (`assignedToWine: true` → `bottle: null`); those carry a wine and
+ *     are never orphans.
+ *   - `assignedToWine: { $ne: true }` is the belt to that brace — an image
+ *     serving as some wine's official photo is never swept, whatever its
+ *     other fields say.
+ * Rejected rows ARE swept: a rejected photo attached to nothing is exactly
+ * what this window exists to clear.
+ */
+async function runUnattachedBottleImageSweep() {
+  const cutoff = new Date(Date.now() - SCAN_IMAGE_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  const selector = {
+    kind: { $ne: 'label-scan' },
+    wineDefinition: null,
+    bottle: null,
+    assignedToWine: { $ne: true },
+    createdAt: { $lt: cutoff },
+  };
+  const stale = await BottleImage.find(selector)
+    .select('originalUrl processedUrl')
+    .limit(SWEEP_LIMIT)
+    .lean();
+
+  if (stale.length === 0) return { deleted: 0 };
+
+  for (const img of stale) {
+    try { await unlinkImageFiles(img); } catch (err) {
+      console.warn('[scanImageRetention] unlink failed (continuing):', err.message);
+    }
+  }
+  // Predicate REPEATED in the delete, same reason as the sweep above (audit
+  // L-1): a user can link one of these to a bottle between the find and the
+  // delete — /link-to-bottle is a plain updateMany — and deleting by id alone
+  // would drop a row a live bottle now points at.
+  const res = await BottleImage.deleteMany({
+    _id: { $in: stale.map((i) => i._id) },
+    ...selector,
+  });
+  const deleted = res.deletedCount || 0;
+  if (deleted > 0) {
+    console.log(
+      `[scanImageRetention] Deleted ${deleted} unattached bottle photo(s) older than ${SCAN_IMAGE_RETENTION_DAYS} days`
+    );
+  }
+  return { deleted };
+}
+
+/**
+ * The daily entry point — all three clocks. The first two select disjoint rows
+ * (an unattached scan has no wine and therefore no promotion deadline, and a
+ * promoted scan has a wine); the third is disjoint from both by `kind`.
  */
 async function runScanImageRetentionSweep() {
   const { deleted } = await runUnattachedScanSweep();
   const { expired } = await runPromotedScanExpirySweep();
-  return { deleted, expired };
+  const { deleted: orphanPhotos } = await runUnattachedBottleImageSweep();
+  return { deleted, expired, orphanPhotos };
 }
 
 module.exports = {
   runScanImageRetentionSweep,
   runUnattachedScanSweep,
   runPromotedScanExpirySweep,
+  runUnattachedBottleImageSweep,
   SCAN_IMAGE_RETENTION_DAYS,
   PROMOTED_SCAN_GRACE_DAYS,
 };
