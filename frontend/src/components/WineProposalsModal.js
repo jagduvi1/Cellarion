@@ -2,7 +2,10 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import Modal from './Modal';
-import { adminGetWineProposals, adminApproveWineProposal, adminRejectWineProposal } from '../api/admin';
+import {
+  adminGetWineProposals, adminApproveWineProposal, adminRejectWineProposal,
+  adminBulkApproveWineProposals, adminBulkRejectWineProposals,
+} from '../api/admin';
 
 const PAGE_SIZE = 20;
 
@@ -53,9 +56,16 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
   const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [pendingId, setPendingId] = useState(null); // proposal id with a POST in flight
+  const [pendingId, setPendingId] = useState(null); // proposal id (or 'bulk') with a POST in flight
   const [rejectingId, setRejectingId] = useState(null); // row showing the inline reason input
   const [rejectReason, setRejectReason] = useState('');
+  // Bulk selection (pending view only). rowErrors carries per-proposal
+  // failures from the last bulk call — failed rows STAY listed and selected
+  // with their reason shown, so nothing silently drops out of the batch.
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkRejecting, setBulkRejecting] = useState(false); // shared-reason input visible
+  const [bulkReason, setBulkReason] = useState('');
+  const [rowErrors, setRowErrors] = useState({});
   const fetchGen = useRef(0);
   // Rows this session decided leave the pending view — the set shrinks under a
   // fixed page*limit offset, so subtract what we removed (the fragmentation
@@ -82,6 +92,10 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
       setTotal(data.total || 0);
       setPages(data.pages || 1);
       setPendingCount(data.pendingCount || 0);
+      // A fresh page is a fresh selection — post-bulk failure state is set
+      // AFTER the bulk call returns and never triggers a refetch itself.
+      setSelectedIds(new Set());
+      setRowErrors({});
     } catch {
       if (gen === fetchGen.current) setError(t('common.networkError'));
     } finally {
@@ -100,24 +114,30 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
     setItems(null);
     setRejectingId(null);
     setRejectReason('');
+    setSelectedIds(new Set());
+    setBulkRejecting(false);
+    setBulkReason('');
+    setRowErrors({});
     setPage(1);
   };
 
-  // Shared post-decision bookkeeping for the pending view: drop the row via
+  // Shared post-decision bookkeeping for the pending view: drop the row(s) via
   // functional updaters and refill the page when it drained empty.
-  const removeDecidedRow = (id) => {
-    decidedDelta.current += 1;
-    setItems(prev => (prev || []).filter(x => x._id !== id));
-    setTotal(prev => Math.max(0, prev - 1));
-    setPendingCount(prev => Math.max(0, prev - 1));
+  const removeDecidedRows = (ids) => {
+    const gone = new Set(ids);
+    decidedDelta.current += gone.size;
+    setItems(prev => (prev || []).filter(x => !gone.has(x._id)));
+    setTotal(prev => Math.max(0, prev - gone.size));
+    setPendingCount(prev => Math.max(0, prev - gone.size));
     // The drain check may use the closure: every interleaving path (second
     // decision, view switch, page change) is disabled while one is pending.
-    const remaining = (items || []).filter(x => x._id !== id).length;
-    if (remaining === 0 && total - 1 > 0) {
+    const remaining = (items || []).filter(x => !gone.has(x._id)).length;
+    if (remaining === 0 && total - gone.size > 0) {
       if (page > 1) setPage(p => p - 1);
       else fetchPage(1);
     }
   };
+  const removeDecidedRow = (id) => removeDecidedRows([id]);
 
   const approve = async (proposal) => {
     // Approving supersedes a half-typed reject on the same row — close the
@@ -171,6 +191,87 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
     }
   };
 
+  // ── Bulk selection + decisions (pending view only) ─────────────────────────
+  const toggleSelected = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const pendingOnPage = (items || []).filter(x => x.status === 'pending');
+  const allOnPageSelected = pendingOnPage.length > 0 && pendingOnPage.every(x => selectedIds.has(x._id));
+  const toggleSelectAll = () => {
+    setSelectedIds(allOnPageSelected ? new Set() : new Set(pendingOnPage.map(x => x._id)));
+  };
+
+  // Shared result handling: successful rows drain in ONE bookkeeping pass;
+  // failed rows stay listed AND selected with their per-row reason shown —
+  // deliberately no auto-refetch, so nothing the admin was deciding on moves
+  // under them.
+  const applyBulkResults = (results) => {
+    const okIds = results.filter(r => r.ok).map(r => r.proposalId);
+    const failed = results.filter(r => !r.ok);
+    if (okIds.length) {
+      removeDecidedRows(okIds);
+      onChanged?.();
+    }
+    setSelectedIds(new Set(failed.map(f => f.proposalId)));
+    if (failed.length) {
+      setRowErrors(Object.fromEntries(failed.map(f => [f.proposalId, f.error])));
+      setError(t('admin.wines.proposals.bulkPartial', { ok: okIds.length, failed: failed.length }));
+    } else {
+      setRowErrors({});
+    }
+  };
+
+  const bulkApprove = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    setPendingId('bulk');
+    setError(null);
+    try {
+      const res = await adminBulkApproveWineProposals(apiFetch, ids);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || t('admin.wines.proposals.approveError'));
+        return;
+      }
+      applyBulkResults(data.results || []);
+    } catch {
+      setError(t('common.networkError'));
+    } finally {
+      setPendingId(null);
+    }
+  };
+
+  const bulkReject = async () => {
+    const ids = [...selectedIds];
+    const reason = bulkReason.trim();
+    if (ids.length === 0) return;
+    if (reason.length < 5) {
+      setError(t('admin.wines.proposals.rejectReasonRequired'));
+      return;
+    }
+    setPendingId('bulk');
+    setError(null);
+    try {
+      const res = await adminBulkRejectWineProposals(apiFetch, ids, reason);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || t('admin.wines.proposals.rejectError'));
+        return;
+      }
+      setBulkRejecting(false);
+      setBulkReason('');
+      applyBulkResults(data.results || []);
+    } catch {
+      setError(t('common.networkError'));
+    } finally {
+      setPendingId(null);
+    }
+  };
+
   const kindBadgeStyle = {
     fontSize: '0.7rem', fontWeight: 600, padding: '0.1rem 0.45rem',
     borderRadius: 'var(--radius-sm)', background: 'var(--color-warning-bg)',
@@ -216,6 +317,77 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
         )}
       </div>
 
+      {statusView === 'pending' && pendingOnPage.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+          marginBottom: 12, padding: '0.45rem 0.65rem',
+          border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)',
+        }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={allOnPageSelected}
+              disabled={!!pendingId}
+              onChange={toggleSelectAll}
+            />
+            {t('admin.wines.proposals.selectAllPage')}
+          </label>
+          <span style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
+            {t('admin.wines.proposals.selectedCount', { count: selectedIds.size })}
+          </span>
+          <button
+            type="button"
+            className="btn btn-primary btn-small"
+            disabled={!!pendingId || selectedIds.size === 0}
+            onClick={bulkApprove}
+          >
+            {pendingId === 'bulk' && !bulkRejecting
+              ? t('admin.wines.proposals.bulkApproving')
+              : t('admin.wines.proposals.approveSelected', { count: selectedIds.size })}
+          </button>
+          {bulkRejecting ? (
+            <>
+              <input
+                type="text"
+                value={bulkReason}
+                onChange={(e) => setBulkReason(e.target.value)}
+                placeholder={t('admin.wines.proposals.bulkRejectPlaceholder')}
+                maxLength={500}
+                disabled={!!pendingId}
+                style={{ flex: '1 1 220px', minWidth: 180 }}
+              />
+              <button
+                type="button"
+                className="btn btn-secondary btn-small"
+                disabled={!!pendingId || selectedIds.size === 0}
+                onClick={bulkReject}
+              >
+                {pendingId === 'bulk'
+                  ? t('admin.wines.proposals.bulkRejecting')
+                  : t('admin.wines.proposals.rejectConfirm')}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary btn-small"
+                disabled={!!pendingId}
+                onClick={() => { setBulkRejecting(false); setBulkReason(''); }}
+              >
+                {t('common.cancel')}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-secondary btn-small"
+              disabled={!!pendingId || selectedIds.size === 0}
+              onClick={() => setBulkRejecting(true)}
+            >
+              {t('admin.wines.proposals.rejectSelected', { count: selectedIds.size })}
+            </button>
+          )}
+        </div>
+      )}
+
       {error && <div className="alert alert-error" style={{ marginBottom: 12 }}>{error}</div>}
 
       {loading || items === null ? (
@@ -233,6 +405,15 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
           {items.map(p => (
             <div key={p._id} style={boxStyle}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                {p.status === 'pending' && (
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(p._id)}
+                    disabled={!!pendingId}
+                    onChange={() => toggleSelected(p._id)}
+                    aria-label={t('admin.wines.proposals.selectRow')}
+                  />
+                )}
                 <span style={kindBadgeStyle}>{t(KIND_KEYS[p.kind] || KIND_KEYS.field_correction)}</span>
                 {p.wineDefinition ? (
                   <Link to={`/wines/${p.wineDefinition._id}`} target="_blank" rel="noopener noreferrer">
@@ -308,6 +489,12 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
                   <span>{t('admin.wines.proposals.rejectedWith', { reason: p.rejectReason })}</span>
                 )}
               </div>
+
+              {rowErrors[p._id] && (
+                <div className="alert alert-error" style={{ marginTop: 6, padding: '0.35rem 0.6rem', fontSize: '0.8rem' }}>
+                  {rowErrors[p._id]}
+                </div>
+              )}
 
               {p.status === 'pending' && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
