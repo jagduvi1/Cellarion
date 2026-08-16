@@ -509,3 +509,66 @@ describe('the narrowed hold end-to-end through enrichWine', () => {
     expect(p.producerSuspect).toBe(true);
   });
 });
+
+/**
+ * releaseHeldProfile — the review override with the stamp INSIDE the success
+ * path (audit 2026-08-16: stamping before the AI call hid a still-held row
+ * from the queue forever when the call failed).
+ */
+describe('releaseHeldProfile', () => {
+  const { releaseHeldProfile } = require('./enrichmentJob');
+  const heldWine = () => ({
+    _id: WINE_ID, name: 'Douro Tinto', producer: 'Fabelhaft', type: 'red',
+    country: { name: 'Portugal' }, region: null, grapes: [],
+    aiProfile: { generatedAt: new Date(), heldAt: new Date(), description: null, source: 'ai' },
+  });
+
+  test('publishes and THEN stamps the review — returns true', async () => {
+    WineDefinition.findById.mockReturnValue(chain(heldWine()));
+    suggestProfile.mockResolvedValue(profile('Now a real profile.'));
+
+    await expect(releaseHeldProfile(WINE_ID)).resolves.toBe(true);
+    // Two writes, in order: the published profile, then the review stamp.
+    expect(WineDefinition.updateOne).toHaveBeenCalledTimes(2);
+    expect(persisted().description).toBe('Now a real profile.');
+    const [, stamp] = WineDefinition.updateOne.mock.calls[1];
+    expect(stamp.$set.profileReviewedAt).toBeInstanceOf(Date);
+  });
+
+  test('a failed regeneration stamps NOTHING — the row stays in the queue for another click', async () => {
+    WineDefinition.findById.mockReturnValue(chain(heldWine()));
+    suggestProfile.mockResolvedValue({ data: null, debugReason: 'rate_limit_exceeded' });
+
+    await expect(releaseHeldProfile(WINE_ID)).resolves.toBe(false);
+    expect(WineDefinition.updateOne).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A hold that replaces a previously PUBLISHED profile must re-embed too —
+ * otherwise the old description keeps living in the Qdrant vectors and cellar
+ * chat retrieves the wine by the very claims the hold silenced
+ * (audit 2026-08-16).
+ */
+describe('the hold path re-embeds', () => {
+  const { embedSinglePair } = require('./embeddingJob');
+  const Bottle = require('../models/Bottle');
+
+  test('holding triggers embedSinglePair for each active vintage', async () => {
+    Bottle.distinct.mockResolvedValue(['2019', '2020']);
+    suggestProfile.mockResolvedValue({
+      data: {
+        body: 'medium', tannin: 'medium', acidity: 'medium', sweetness: 'dry',
+        flavors: ['plum'], foodPairings: ['stew'],
+        description: 'A generic guess.', confidence: 0.4,
+        producerSuspect: true, producerNote: 'Cannot place this producer.',
+      },
+      debugReason: null,
+    });
+
+    await enrichWineById(WINE_ID);
+    expect(persisted().heldAt).toBeInstanceOf(Date);
+    expect(embedSinglePair).toHaveBeenCalledWith(WINE_ID, '2019');
+    expect(embedSinglePair).toHaveBeenCalledWith(WINE_ID, '2020');
+  });
+});

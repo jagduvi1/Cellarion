@@ -30,14 +30,11 @@ jest.mock('../../services/search', () => ({ indexWine: jest.fn(), bulkIndexBottl
 jest.mock('../../services/embeddingJob', () => ({ reembedActiveVintages: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../../services/enrichmentJob', () => ({
   reenrichAfterRecordEdit: jest.fn(),
-  // Faithful-enough mirror of the real snapshot (unit-tested in
-  // enrichmentJob.test.js) — the route only ever compares two of these.
-  profileInputsSnapshot: jest.fn((w) => JSON.stringify({
-    name: w.name || '', producer: w.producer || '',
-    country: String(w.country || ''), region: String(w.region || ''),
-    appellation: w.appellation || '', classification: w.classification || '',
-    type: w.type || '', grapes: (w.grapes || []).map(String).sort(),
-  })),
+  // The REAL snapshot — pure and dependency-free, so nothing is gained by
+  // mirroring it, and a hand mirror rots the day the field list changes (it
+  // gained `classification` the very release this mock was written in;
+  // audit 2026-08-16).
+  profileInputsSnapshot: jest.requireActual('../../services/enrichmentJob').profileInputsSnapshot,
 }));
 jest.mock('../../services/findOrCreateWine', () => ({ findOrCreateRegion: jest.fn() }));
 // Identity by default so the tier-strip assertions below still read the
@@ -400,5 +397,45 @@ describe('POST /bulk-approve and /bulk-reject', () => {
     const res = await post('/bulk-reject', { ids: [P1], reason: 'x' });
     expect(res.status).toBe(400);
     expect(WineCorrectionProposal.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Bulk follow-through is deferred and per-WINE (audit 2026-08-16): firing per
+ * proposal let an early re-enrich race later same-batch applies, and cost one
+ * forced AI call per proposal instead of per wine.
+ */
+describe('bulk-approve follow-through', () => {
+  const { reenrichAfterRecordEdit } = require('../../services/enrichmentJob');
+  const { reembedActiveVintages } = require('../../services/embeddingJob');
+  const claimSeq = (...proposals) => {
+    for (const p of proposals) WineCorrectionProposal.findOneAndUpdate.mockResolvedValueOnce(p);
+  };
+
+  test('fires ONCE per wine after the loop; single approves still fire inline', async () => {
+    const P2 = '64b0000000000000000000a2';
+    claimSeq(
+      { _id: P1, kind: 'field_correction', wineDefinition: W1, proposedFields: { producer: 'Niepoort' } },
+      { _id: P2, kind: 'field_correction', wineDefinition: W2, proposedFields: { name: 'Margaux' } },
+    );
+    const mkWine = (id, over) => ({
+      _id: id, name: 'N', producer: 'P', appellation: null, country: 'c1',
+      save: jest.fn().mockResolvedValue(undefined), ...over,
+    });
+    const wine1 = mkWine(W1, { producer: 'Fabelhaft' });
+    const wine2 = mkWine(W2, { name: 'Grand Cru Classé' });
+    WineDefinition.findById
+      .mockResolvedValueOnce(wine1)
+      .mockResolvedValueOnce(wine2);
+
+    const res = await post('/bulk-approve', { ids: [P1, P2] });
+    expect(res.status).toBe(200);
+    expect((await res.json()).approved).toBe(2);
+
+    // One follow-through per distinct wine, with the real-change verdicts.
+    expect(reenrichAfterRecordEdit).toHaveBeenCalledTimes(2);
+    expect(reenrichAfterRecordEdit).toHaveBeenCalledWith(wine1, true);
+    expect(reenrichAfterRecordEdit).toHaveBeenCalledWith(wine2, true);
+    expect(reembedActiveVintages).toHaveBeenCalledTimes(2);
   });
 });

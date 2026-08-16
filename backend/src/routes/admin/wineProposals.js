@@ -173,7 +173,7 @@ router.post('/:id/approve', async (req, res) => {
  * performWineMerge extraction pattern, one layer up. Unexpected errors are
  * thrown (after the claim revert) for the caller to map to its own 500.
  */
-async function approveProposal(proposalId, req) {
+async function approveProposal(proposalId, req, { deferFollowThrough = false } = {}) {
     // Atomically CLAIM the pending row so only the first of two concurrent
     // decisions wins (the aiBudgetRequests check-then-act fix): a null result
     // means already-decided (409) or never-existed (404).
@@ -202,6 +202,11 @@ async function approveProposal(proposalId, req) {
     };
 
     let appliedNote = '';
+    // Set only by the field_correction branch when the caller defers — the
+    // bulk loop fires ONE follow-through per wine after every decision has
+    // applied (audit 2026-08-16: per-proposal firing raced same-wine batches
+    // and cost N forced AI calls for one wine).
+    let followThrough = null;
     try {
       if (proposal.kind === 'field_correction') {
         const wine = await WineDefinition.findById(proposal.wineDefinition);
@@ -280,12 +285,17 @@ async function approveProposal(proposalId, req) {
         Bottle.distinct('_id', { wineDefinition: wine._id })
           .then((ids) => searchService.bulkIndexBottles(ids))
           .catch((err) => console.error('Bottle re-index after proposal apply failed:', err.message));
-        reembedActiveVintages(wine._id).catch(() => {});
         // And the PUT's re-enrich (parity gap found live 2026-08-16: approving
         // "Fabelhaft" → "Niepoort" left the négociant-fiction profile attached
         // until a manual force re-enrich). Real-change only, curator-safe —
         // see reenrichAfterRecordEdit.
-        reenrichAfterRecordEdit(wine, profileInputsSnapshot(wine) !== beforeProfileInputs);
+        const profileInputsChanged = profileInputsSnapshot(wine) !== beforeProfileInputs;
+        if (deferFollowThrough) {
+          followThrough = { wineId: String(wine._id), wine, changed: profileInputsChanged };
+        } else {
+          reembedActiveVintages(wine._id).catch(() => {});
+          reenrichAfterRecordEdit(wine, profileInputsChanged);
+        }
 
         appliedNote = `Applied: ${applied.join(', ')}`;
       } else if (proposal.kind === 'merge') {
@@ -334,7 +344,11 @@ async function approveProposal(proposalId, req) {
         appliedNote,
       });
 
-    return { status: 200, body: { message: 'Proposal approved and applied', proposalId: proposal._id, status: 'approved', appliedNote } };
+    return {
+      status: 200,
+      body: { message: 'Proposal approved and applied', proposalId: proposal._id, status: 'approved', appliedNote },
+      ...(followThrough ? { followThrough } : {}),
+    };
 }
 
 // Reason hygiene shared by the single and bulk reject paths: plain text only,
@@ -405,9 +419,19 @@ router.post('/bulk-approve', async (req, res) => {
     const parsed = parseBulkIds(req.body);
     if (parsed.error) return res.status(400).json({ error: parsed.error });
     const results = [];
+    // wineId -> { wine, changed } — the LAST applied doc wins (it carries all
+    // earlier corrections of the batch), changed ORs across proposals.
+    const followThroughs = new Map();
     for (const id of parsed.ids) {
       try {
-        const { status, body } = await approveProposal(new mongoose.Types.ObjectId(id), req);
+        const { status, body, followThrough } = await approveProposal(new mongoose.Types.ObjectId(id), req, { deferFollowThrough: true });
+        if (followThrough) {
+          const prev = followThroughs.get(followThrough.wineId);
+          followThroughs.set(followThrough.wineId, {
+            wine: followThrough.wine,
+            changed: (prev?.changed || false) || followThrough.changed,
+          });
+        }
         results.push(status === 200
           ? { proposalId: id, ok: true, status, appliedNote: body.appliedNote }
           : { proposalId: id, ok: false, status, error: body.error });
@@ -415,6 +439,17 @@ router.post('/bulk-approve', async (req, res) => {
         console.error('Bulk approve item error:', id, err);
         results.push({ proposalId: id, ok: false, status: 500, error: 'Failed to approve proposal' });
       }
+    }
+    // ONE follow-through per wine, after every decision in the batch has
+    // applied. Per-proposal firing let an early proposal's re-enrich race the
+    // later applies on the same wine — the last writer was indeterminate and
+    // a profile could describe an intermediate identity — and spent one
+    // forced AI call per PROPOSAL instead of per wine (audit 2026-08-16).
+    // A wine absorbed by a merge later in the batch fails the re-enrich's
+    // findById silently, which is the correct outcome.
+    for (const { wine, changed } of followThroughs.values()) {
+      reembedActiveVintages(wine._id).catch(() => {});
+      reenrichAfterRecordEdit(wine, changed);
     }
     const approved = results.filter((r) => r.ok).length;
     res.json({ results, approved, failed: results.length - approved });

@@ -666,23 +666,29 @@ router.post('/:id/profile-reviewed', async (req, res) => {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const wine = await WineDefinition.findById(req.params.id).select('name producer aiProfile.heldAt');
     if (!wine) return res.status(404).json({ error: 'Wine not found' });
+
+    // A HELD profile + an admin review = the human override the hold was
+    // waiting for: regenerate and PUBLISH (the suspect flag stays on the row
+    // as provenance). The review stamp lands ONLY when the publish succeeds
+    // (inside releaseHeldProfile) — stamping first, as v1.116.0 did, hid the
+    // row from the queue forever when the AI call failed, because the
+    // outstanding filter compares reviewedAt to generatedAt and the
+    // incremental job skips held rows by design (audit 2026-08-16). On
+    // failure the row simply stays in the queue for another click. If the
+    // admin instead agrees the identity is wrong, the fix is the wine editor
+    // — the identity edit re-enriches.
+    if (wine.aiProfile?.heldAt) {
+      const { releaseHeldProfile } = require('../../services/enrichmentJob');
+      releaseHeldProfile(wine._id).catch(() => {});
+      logAudit(req, 'admin.wine.profileReviewed', { type: 'wine', id: wine._id },
+        { name: wine.name, producer: wine.producer, heldRelease: true });
+      return res.json({ message: 'Publishing the held profile', profileReviewedAt: null });
+    }
+
     const now = new Date();
     await WineDefinition.updateOne({ _id: wine._id }, { $set: { profileReviewedAt: now } });
     logAudit(req, 'admin.wine.profileReviewed', { type: 'wine', id: wine._id },
       { name: wine.name, producer: wine.producer });
-    // A HELD profile + an admin review = the human override the hold was
-    // waiting for: the admin looked at the model's producer doubt and judged
-    // the identity fine, so regenerate and PUBLISH (the suspect flag stays on
-    // the row as provenance). Fire-and-forget; on success the review stamp is
-    // re-bumped past the fresh generatedAt so the row doesn't instantly
-    // re-surface as unreviewed. If the admin instead agrees the identity is
-    // wrong, the fix is the wine editor — the identity edit re-enriches.
-    if (wine.aiProfile?.heldAt) {
-      const { enrichWineById } = require('../../services/enrichmentJob');
-      enrichWineById(wine._id, { force: true, publishSuspect: true })
-        .then(() => WineDefinition.updateOne({ _id: wine._id }, { $set: { profileReviewedAt: new Date() } }))
-        .catch(() => {});
-    }
     res.json({ message: 'Marked reviewed', profileReviewedAt: now });
   } catch (error) {
     console.error('Profile-reviewed error:', error);

@@ -375,6 +375,14 @@ async function nameSubsetPairs({ limit = 50, offset = 0 } = {}) {
   const dismissed = new Set(notDup.map((d) => `${d.wineA}|${d.wineB}`));
   const active = rawPairs.filter((p) => !dismissed.has(pairKey(p.short._id, p.long._id)));
 
+  // The health job asks only for the count (limit: 0) — total is known here,
+  // and everything below (the Bottle aggregate, entry building, the sort) is
+  // presentation. Computing it weekly just to slice(0, 0) was pure waste
+  // (audit 2026-08-16).
+  if (limit === 0) {
+    return { pairs: [], total: active.length, scannedCount: wines.length, skippedBuckets };
+  }
+
   const ids = [...new Set(active.flatMap((p) => [p.short._id, p.long._id]))];
   const { vintageSets, bottleCounts } = await collectVintageEvidence(ids);
 

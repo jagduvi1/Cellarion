@@ -175,9 +175,13 @@ describe('B) confidence floor on AI geography', () => {
     expect(row.aiProposed.appellation).toBeNull();
     // Country survives the floor — a wine cannot mint without one.
     expect(row.aiProposed.country).toBe('Australia');
-    // And the matcher saw the stripped shape too, not just the response.
-    expect(findOrCreateWine.mock.calls[0][0].region).toBeNull();
-    expect(findOrCreateWine.mock.calls[0][0].appellation).toBeNull();
+    // The MATCHER still saw the full geography (audit 2026-08-16): the dedup
+    // keys embed the appellation, and stripping before Pass 2 made exactly
+    // the low-confidence rows most likely to duplicate lose their registry
+    // match. Matching is resolution, not assertion — nothing below the floor
+    // is ever WRITTEN (the aiProposed asserts above).
+    expect(findOrCreateWine.mock.calls[0][0].region).toBe('Barossa Valley');
+    expect(findOrCreateWine.mock.calls[0][0].appellation).toBe('Barossa Valley');
   });
 
   test('a missing/non-numeric confidence strips too — unknown means nobody can vouch', async () => {
@@ -204,7 +208,7 @@ describe('B) confidence floor on AI geography', () => {
 });
 
 describe('A) one producer, one country per batch', () => {
-  test('two AI-guessed countries for one producer unify to the higher-confidence row', async () => {
+  test('a sub-floor country disagreement adopts the higher-confidence row', async () => {
     primeAi(
       aiResult({ name: 'Mistura', producer: 'Thomas Allen', country: 'South Africa', confidence: 0.5 }),
       aiResult({ name: 'Origins', producer: 'Thomas Allen', country: 'Australia', confidence: 0.7 }));
@@ -219,7 +223,7 @@ describe('A) one producer, one country per batch', () => {
     expect(b.aiProposed.country).toBe('Australia');
   });
 
-  test('rows whose FILE stated a country anchor the group and are never overwritten', async () => {
+  test('the file anchors the group, but a CONFIDENT different-country row is spared (homonym guard)', async () => {
     primeAi(
       aiResult({ name: 'Mistura', producer: 'Thomas Allen', country: 'South Africa', confidence: 0.9 }),
       aiResult({ name: 'Origins', producer: 'Thomas Allen', country: 'Australia', confidence: 0.5 }));
@@ -231,8 +235,94 @@ describe('A) one producer, one country per batch', () => {
     ]);
 
     const [a, b] = res.body.results;
-    expect(b.aiProposed.country).toBe('Australia');  // anchor untouched
-    expect(a.aiProposed.country).toBe('Australia');  // free row adopts the anchor
+    expect(b.aiProposed.country).toBe('Australia');    // anchor untouched
+    // A ≥0.6-confidence row keeps its own country: one producer string can be
+    // two wineries on two continents (Domaine Chandon FR vs Bodegas Chandon
+    // AR), and overriding it here would bypass the mint's different-country
+    // guard (audit 2026-08-16). Sub-floor rows still adopt (test below).
+    expect(a.aiProposed.country).toBe('South Africa');
+  });
+
+  test('a SUB-floor free row does adopt the file anchor', async () => {
+    primeAi(
+      aiResult({ name: 'Mistura', producer: 'Thomas Allen', country: 'South Africa', confidence: 0.5 }),
+      aiResult({ name: 'Origins', producer: 'Thomas Allen', country: 'Australia', confidence: 0.5 }));
+
+    const res = await validate([
+      { wineName: 'Mistura', producer: 'Thomas Allen' },
+      { wineName: 'Origins', producer: 'Thomas Allen', country: 'Australia' },
+    ]);
+
+    expect(res.body.results[0].aiProposed.country).toBe('Australia');
+    expect(res.body.results[1].aiProposed.country).toBe('Australia');
+  });
+
+  test('an anchored row whose AI contradicts its own file column is corrected to the FILE value', async () => {
+    // The anchor is the file's STATED value, not the AI's echo of it (audit
+    // 2026-08-16: anchoring on the echo let a contradicting AI spread its
+    // contradiction to the whole group).
+    primeAi(
+      aiResult({ name: 'Mistura', producer: 'Thomas Allen', country: null, confidence: 0.5 }),
+      aiResult({ name: 'Origins', producer: 'Thomas Allen', country: 'South Africa', confidence: 0.9 }));
+
+    const res = await validate([
+      { wineName: 'Mistura', producer: 'Thomas Allen' },
+      { wineName: 'Origins', producer: 'Thomas Allen', country: 'Australia' }, // file says Australia
+    ]);
+
+    expect(res.body.results[1].aiProposed.country).toBe('Australia'); // file wins on its own row
+    expect(res.body.results[0].aiProposed.country).toBe('Australia'); // and anchors the countryless sibling
+  });
+
+  test('country aliases fold before comparison — "USA" and "United States" are ONE country', async () => {
+    primeAi(
+      aiResult({ name: 'Zin A', producer: 'Ridge Alt', country: 'USA', confidence: 0.7 }),
+      aiResult({ name: 'Zin B', producer: 'Ridge Alt', country: 'United States', confidence: 0.7 }));
+
+    const res = await validate([
+      { wineName: 'Zin A', producer: 'Ridge Alt' },
+      { wineName: 'Zin B', producer: 'Ridge Alt' },
+    ]);
+
+    // Under normalizeString alone these counted as TWO countries and the
+    // pass no-opped (audit 2026-08-16). Folded, the group agrees and both
+    // stated values stand untouched.
+    expect(res.body.results[0].aiProposed.country).toBe('USA');
+    expect(res.body.results[1].aiProposed.country).toBe('United States');
+  });
+
+  test('adoption comes from the best row THAT HAS a country — a countryless 0.9 row cannot null the pass', async () => {
+    primeAi(
+      aiResult({ name: 'Mistura', producer: 'Thomas Allen', country: null, confidence: 0.9 }),
+      aiResult({ name: 'Origins', producer: 'Thomas Allen', country: 'South Africa', confidence: 0.5 }),
+      aiResult({ name: 'Reserve', producer: 'Thomas Allen', country: 'Australia', confidence: 0.4 }));
+
+    const res = await validate([
+      { wineName: 'Mistura', producer: 'Thomas Allen' },
+      { wineName: 'Origins', producer: 'Thomas Allen' },
+      { wineName: 'Reserve', producer: 'Thomas Allen' },
+    ]);
+
+    // Best-with-a-country = the 0.5 South Africa row; the countryless 0.9
+    // row inherits it and the 0.4 row (sub-floor) adopts it.
+    expect(res.body.results[0].aiProposed.country).toBe('South Africa');
+    expect(res.body.results[1].aiProposed.country).toBe('South Africa');
+    expect(res.body.results[2].aiProposed.country).toBe('South Africa');
+  });
+
+  test('a countryless identification is DEMOTED to no-match — never an ai_new whose confirm loses the bottle', async () => {
+    primeAi(aiResult({ name: 'Mystery Red', producer: 'Lone Producer', country: null, confidence: 0.7 }));
+
+    const res = await validate([{ wineName: 'Mystery Red', producer: 'Lone Producer' }]);
+
+    const row = res.body.results[0];
+    // /confirm's mint throws Country-required — offering ai_new here
+    // guaranteed a lost bottle (audit 2026-08-16). The row falls back to
+    // the no-match flow, where the user matches or requests instead.
+    expect(row.aiProposed).toBeUndefined();
+    expect(row.status).toBe('no_match');
+    expect(row.aiDebug).toMatchObject({ aiStatus: 'create_failed' });
+    expect(row.aiDebug.aiExplanation).toMatch(/country/i);
   });
 
   test('a row the AI left countryless inherits the group country instead of failing to mint', async () => {

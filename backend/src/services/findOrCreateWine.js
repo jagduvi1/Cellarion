@@ -141,10 +141,18 @@ async function regionForAppellation(appellationName, countryId) {
   if (!appellationName || !countryId) return null;
   const normalizedName = normalizeString(appellationName);
   if (!normalizedName) return null;
-  return Region.findOne({
+  // TWO docs answering one key means the taxonomy holds a duplicate — never
+  // pick one arbitrarily (the same doctrine as the canonical-identity match
+  // stages, and the same rows the batch normalize script holds out and
+  // reports; audit 2026-08-16: a bare findOne here silently adopted whichever
+  // doc natural order yielded while the script refused the identical rows).
+  // Falling back to the caller-supplied region is the honest state until the
+  // taxonomy is fixed.
+  const hits = await Region.find({
     country: countryId,
     $or: [{ normalizedName }, { normalizedSynonyms: normalizedName }],
-  });
+  }).limit(2);
+  return hits.length === 1 ? hits[0] : null;
 }
 
 async function findOrCreateGrapes(rawNames, userId) {

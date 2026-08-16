@@ -61,7 +61,7 @@ function AdminImages() {
       const res = await adminApproveImage(apiFetch, selected._id, { visibility });
       const data = await res.json();
       if (res.ok) {
-        setSelected(data.image);
+        adoptSelected(data.image);
         fetchImages();
       } else {
         setError(data.error);
@@ -101,7 +101,7 @@ function AdminImages() {
       const res = await adminSetImageVisibility(apiFetch, selected._id, visibility);
       const data = await res.json();
       if (res.ok) {
-        setSelected(data.image);
+        adoptSelected(data.image);
         fetchImages();
       } else {
         setError(data.error);
@@ -121,7 +121,7 @@ function AdminImages() {
       const res = await adminUnapproveImage(apiFetch, selected._id);
       const data = await res.json();
       if (res.ok) {
-        setSelected(data.image);
+        adoptSelected(data.image);
         fetchImages();
       } else {
         setError(data.error);
@@ -141,6 +141,20 @@ function AdminImages() {
   // render as "no wine linked" on this page, which is what it looked like in
   // review. The LIST already falls back this way; the detail did not.
   const effectiveWine = (img) => img?.wineDefinition || img?.bottle?.wineDefinition || null;
+
+  // Adopt an ACTION response as the selection without losing the populated
+  // bottle: approve/visibility/unapprove/assign responses populate only
+  // uploadedBy/reviewedBy/wineDefinition, so their `bottle` is a bare id —
+  // taking them wholesale degraded the via-bottle wine display one click
+  // after it worked (audit 2026-08-16). Keep the previously populated bottle
+  // whenever the response's isn't an object; a genuinely bottle-less image
+  // (null) stays null.
+  const adoptSelected = (img) => setSelected(prev => ({
+    ...img,
+    bottle: (img && img.bottle && typeof img.bottle !== 'object')
+      ? (prev && prev.bottle && typeof prev.bottle === 'object' ? prev.bottle : img.bottle)
+      : (img ? img.bottle : null),
+  }));
   const selectedWine = effectiveWine(selected);
   // True orphan: no bottle AND no wine — an add abandoned between the upload
   // and the link. Swept after 30 days (services/scanImageRetentionJob).
@@ -159,7 +173,7 @@ function AdminImages() {
       const res = await adminAssignImageToWine(apiFetch, selected._id, { wineDefinitionId: wineDefId });
       const data = await res.json();
       if (res.ok) {
-        setSelected(data.image);
+        adoptSelected(data.image);
         fetchImages();
         setAssignWineId('');
       } else {
@@ -237,7 +251,7 @@ function AdminImages() {
                     <div className="image-item-info">
                       <div className="image-item-header">
                         <span className="image-item-wine">
-                          {img.wineDefinition?.name || img.bottle?.wineDefinition?.name || t('admin.images.noWineLinked')}
+                          {effectiveWine(img)?.name || t('admin.images.noWineLinked')}
                         </span>
                         <span className={`status-badge status-${img.status}`}>{img.status}</span>
                         {img.status === 'approved' && img.visibility === 'private' && (
