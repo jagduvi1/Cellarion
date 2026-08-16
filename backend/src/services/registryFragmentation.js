@@ -37,6 +37,7 @@ const WineNotDuplicate = require('../models/WineNotDuplicate');
 const {
   normalizeProducerKey,
   normalizeAppellationKey,
+  normalizeString,
   levenshteinDistance,
 } = require('../utils/normalize');
 
@@ -304,4 +305,119 @@ async function nearProducerPairs({ limit = 50, offset = 0 } = {}) {
   };
 }
 
-module.exports = { sameProducerAppellationGroups, nearProducerPairs };
+/**
+ * Detector 3 — one producer, one name a strict token-PREFIX of another
+ * (ticket 6a800f39: a 226-row import minted "Vat 8" and "Vat 8 Shiraz
+ * Cabernet" seconds apart — same wine, two records — and nothing fired:
+ * detector 1 buries the pair inside the estate's whole same-appellation
+ * range, and every name-keyed net sees two genuinely different strings).
+ *
+ * The signal is the containment itself: an import file writes the same wine
+ * short on one row and long on another ("Vat 1" / "Vat 1 Semillon",
+ * "Belford" / "Belford Semillon", "Old Hut" / "Old Hut Vineyard Shiraz").
+ * PREFIX, not subset: suffix containment would pair every bare varietal row
+ * ("Chardonnay") against every longer cuvée ending in the variety — an
+ * estate's whole range — while every confirmed fragment pair from the
+ * evidence batch extends to the RIGHT. Buckets are producer-key only:
+ * fragments routinely differ in appellation granularity too (one row got the
+ * appellation, its twin got null), so appellation agreement must not be
+ * required.
+ *
+ * Legitimate prefix pairs exist ("Brut" / "Brut Rosé" are two wines), so this
+ * is a REVIEW queue like its siblings, with detector 1's vintage-axis
+ * discriminator: fragments of one wine split its vintages (disjoint sorts
+ * first), a real pair of cuvées overlaps most years. Pair dismissals use the
+ * same WineNotDuplicate store and keying as detector 1, so one "Not
+ * duplicates" click silences the pair across every queue.
+ *
+ * @returns {Promise<{pairs: Array, total: number, scannedCount: number,
+ *   skippedBuckets: number}>}
+ *   pairs sorted disjoint-with-evidence first (detector 1's tiering), each:
+ *   { key, producer, disjoint,
+ *     wines: [{ _id, name, producer, appellation, vintages, bottleCount }] × 2
+ *   } — the SHORT (prefix) record first.
+ */
+async function nameSubsetPairs({ limit = 50, offset = 0 } = {}) {
+  const wines = await WineDefinition.find({ nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
+    .select('name producer appellation')
+    .lean();
+
+  const byProducer = new Map(); // producerKey -> wines[]
+  for (const w of wines) {
+    const producerKey = normalizeProducerKey(w.producer || '');
+    if (!producerKey) continue; // all-stopword producers lump unrelated estates
+    let bucket = byProducer.get(producerKey);
+    if (!bucket) { bucket = []; byProducer.set(producerKey, bucket); }
+    bucket.push(w);
+  }
+
+  let skippedBuckets = 0;
+  const rawPairs = [];
+  for (const bucket of byProducer.values()) {
+    if (bucket.length < 2) continue;
+    if (bucket.length > MAX_PAIR_BUCKET) { skippedBuckets += 1; continue; }
+    const rows = bucket
+      .map((w) => ({ w, tokens: normalizeString(w.name || '').split(' ').filter(Boolean) }))
+      .filter((r) => r.tokens.length > 0);
+    for (const a of rows) {
+      for (const b of rows) {
+        if (a === b) continue;
+        if (a.tokens.length >= b.tokens.length) continue; // strict prefix: short → long only
+        if (!a.tokens.every((tok, idx) => b.tokens[idx] === tok)) continue;
+        rawPairs.push({ short: a.w, long: b.w });
+      }
+    }
+  }
+
+  // Same suppression store and keying as detector 1 — pair-level, so the
+  // existing dismiss endpoint works verbatim on [short, long].
+  const notDup = await WineNotDuplicate.find({}).select('wineA wineB').lean();
+  const dismissed = new Set(notDup.map((d) => `${d.wineA}|${d.wineB}`));
+  const active = rawPairs.filter((p) => !dismissed.has(pairKey(p.short._id, p.long._id)));
+
+  const ids = [...new Set(active.flatMap((p) => [p.short._id, p.long._id]))];
+  const { vintageSets, bottleCounts } = await collectVintageEvidence(ids);
+
+  const entry = (w) => ({
+    _id: w._id,
+    name: w.name,
+    producer: w.producer,
+    appellation: w.appellation || null,
+    vintages: [...(vintageSets.get(String(w._id)) || [])].sort(),
+    bottleCount: bottleCounts.get(String(w._id)) || 0,
+  });
+
+  const pairs = active.map((p) => {
+    const shortEntry = entry(p.short);
+    const longEntry = entry(p.long);
+    const shared = shortEntry.vintages.filter((v) => longEntry.vintages.includes(v));
+    return {
+      key: pairKey(p.short._id, p.long._id),
+      producer: p.short.producer,
+      disjoint: shared.length === 0,
+      wines: [shortEntry, longEntry],
+    };
+  });
+
+  // Detector 1's tiering: disjoint with BOTH sides carrying vintage evidence
+  // outranks vacuously-disjoint (no data), which outranks overlapping pairs.
+  const tier = (p) => {
+    if (!p.disjoint) return 0;
+    return p.wines.filter((w) => w.vintages.length > 0).length >= 2 ? 2 : 1;
+  };
+  pairs.sort((a, b) =>
+    (tier(b) - tier(a)) ||
+    ((b.wines[0].bottleCount + b.wines[1].bottleCount) -
+     (a.wines[0].bottleCount + a.wines[1].bottleCount)) ||
+    String(a.producer).localeCompare(String(b.producer)) ||
+    a.key.localeCompare(b.key));
+
+  return {
+    pairs: pairs.slice(offset, offset + limit),
+    total: pairs.length,
+    scannedCount: wines.length,
+    skippedBuckets,
+  };
+}
+
+module.exports = { sameProducerAppellationGroups, nearProducerPairs, nameSubsetPairs };

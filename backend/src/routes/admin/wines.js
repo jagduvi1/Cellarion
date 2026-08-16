@@ -13,7 +13,7 @@ const {
 } = require('../../utils/normalize');
 const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const { scoreWineMatch } = require('../../services/wineMatching');
-const { sameProducerAppellationGroups, nearProducerPairs } = require('../../services/registryFragmentation');
+const { sameProducerAppellationGroups, nearProducerPairs, nameSubsetPairs } = require('../../services/registryFragmentation');
 const WineDefinition = require('../../models/WineDefinition');
 const Bottle = require('../../models/Bottle');
 const BottleImage = require('../../models/BottleImage');
@@ -1105,13 +1105,22 @@ router.get('/fragmentation', async (req, res) => {
   try {
     const { limit, offset, page } = parsePagination(req.query, { limit: 50, maxLimit: 200 });
     const mode = req.query.mode || 'groups';
-    if (mode !== 'groups' && mode !== 'pairs') {
-      return res.status(400).json({ error: 'mode must be "groups" or "pairs"' });
+    if (mode !== 'groups' && mode !== 'pairs' && mode !== 'name-subsets') {
+      return res.status(400).json({ error: 'mode must be "groups", "pairs" or "name-subsets"' });
     }
 
     if (mode === 'groups') {
       const { groups, total, scannedCount } = await sameProducerAppellationGroups({ limit, offset });
       return res.json({ groups, total, page, pages: Math.ceil(total / limit), scannedCount });
+    }
+
+    if (mode === 'name-subsets') {
+      // Short-vs-full name fragments within one producer (ticket 6a800f39:
+      // "Vat 8" / "Vat 8 Shiraz Cabernet"). Pair-level dismissal works via
+      // POST /dismiss-duplicates with the pair's two wine ids — same store
+      // and keying as the groups mode.
+      const { pairs, total, scannedCount, skippedBuckets } = await nameSubsetPairs({ limit, offset });
+      return res.json({ pairs, total, page, pages: Math.ceil(total / limit), scannedCount, skippedBuckets });
     }
 
     const { pairs, total, scannedCount, skippedBuckets } = await nearProducerPairs({ limit, offset });

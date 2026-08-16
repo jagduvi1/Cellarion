@@ -14,7 +14,7 @@ jest.mock('../models/User', () => ({ find: jest.fn() }));
 jest.mock('../models/RegistryHealthSnapshot', () => ({ findOne: jest.fn(), create: jest.fn() }));
 jest.mock('./notifications', () => ({ createNotification: jest.fn() }));
 jest.mock('./crossFieldScan', () => ({ scanCrossFieldChecks: jest.fn() }));
-jest.mock('./registryFragmentation', () => ({ nearProducerPairs: jest.fn() }));
+jest.mock('./registryFragmentation', () => ({ nearProducerPairs: jest.fn(), nameSubsetPairs: jest.fn() }));
 
 const WineDefinition = require('../models/WineDefinition');
 const WineReport = require('../models/WineReport');
@@ -23,7 +23,7 @@ const User = require('../models/User');
 const RegistryHealthSnapshot = require('../models/RegistryHealthSnapshot');
 const { createNotification } = require('./notifications');
 const { scanCrossFieldChecks } = require('./crossFieldScan');
-const { nearProducerPairs } = require('./registryFragmentation');
+const { nearProducerPairs, nameSubsetPairs } = require('./registryFragmentation');
 const { runRegistryHealthCheck, computeMetrics, METRIC_LABELS, crossFieldMetricKey } = require('./registryHealthJob');
 
 const leanChain = (result) => ({
@@ -50,6 +50,7 @@ beforeEach(() => {
   createNotification.mockResolvedValue({});
   scanCrossFieldChecks.mockResolvedValue({ rows: [], ruleCounts: {}, total: 0, clearedCount: 0, scannedCount: 0 });
   nearProducerPairs.mockResolvedValue({ pairs: [], total: 0, scannedCount: 0, skippedBuckets: 0 });
+  nameSubsetPairs.mockResolvedValue({ pairs: [], total: 0, scannedCount: 0, skippedBuckets: 0 });
 });
 
 afterEach(() => console.log.mockRestore());
@@ -227,5 +228,29 @@ describe('runRegistryHealthCheck', () => {
     const res = await runRegistryHealthCheck();
     expect(res.notified).toBe(1);
     warn.mockRestore();
+  });
+});
+
+describe('the ticket-6a800f39 metrics (v-next)', () => {
+  test('nameSubsetPairs counts the admin name-subsets queue via the same function', async () => {
+    nameSubsetPairs.mockResolvedValue({ pairs: [], total: 5, scannedCount: 100, skippedBuckets: 0 });
+    const m = await computeMetrics();
+    expect(m.nameSubsetPairs).toBe(5);
+    expect(nameSubsetPairs).toHaveBeenCalledWith({ limit: 0 });
+    expect(METRIC_LABELS.nameSubsetPairs).toBeTruthy();
+  });
+
+  test('producerSuspectProfiles is its OWN key — lowConfidenceQueue keeps its baseline', async () => {
+    const m = await computeMetrics();
+    expect(m).toHaveProperty('producerSuspectProfiles');
+    expect(METRIC_LABELS.producerSuspectProfiles).toBeTruthy();
+    // The suspect count queries outstanding suspect rows, separately from the
+    // low-confidence mirror (definition change would have corrupted its baseline).
+    const suspectCall = WineDefinition.countDocuments.mock.calls.find(
+      (c) => c[0] && c[0]['aiProfile.producerSuspect'] === true);
+    expect(suspectCall).toBeTruthy();
+    const lowConfCall = WineDefinition.countDocuments.mock.calls.find(
+      (c) => c[0] && c[0].$or && !c[0]['aiProfile.producerSuspect']);
+    expect(JSON.stringify(lowConfCall[0].$or)).not.toMatch(/producerSuspect/);
   });
 });

@@ -20,7 +20,7 @@ const WineDefinition = require('../models/WineDefinition');
 const Bottle = require('../models/Bottle');
 const WineVintageProfile = require('../models/WineVintageProfile');
 const WineNotDuplicate = require('../models/WineNotDuplicate');
-const { sameProducerAppellationGroups, nearProducerPairs } = require('./registryFragmentation');
+const { sameProducerAppellationGroups, nearProducerPairs, nameSubsetPairs } = require('./registryFragmentation');
 
 const leanChain = (rows) => ({
   select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(rows) }),
@@ -284,5 +284,87 @@ describe('nearProducerPairs', () => {
     expect(page.total).toBe(2);
     expect(page.pairs).toHaveLength(1);
     expect(page.pairs[0].distance).toBe(2); // second after sorting
+  });
+});
+
+describe('nameSubsetPairs', () => {
+  const tyrrells = (over = {}) => ({ producer: "Tyrrell's", appellation: 'Hunter Valley', ...over });
+
+  test('one producer, short name a strict token-prefix of a longer one → pair, short first', async () => {
+    WineDefinition.find.mockReturnValue(leanChain([
+      tyrrells({ _id: 'w1', name: 'Vat 8' }),
+      tyrrells({ _id: 'w2', name: 'Vat 8 Shiraz Cabernet' }),
+      tyrrells({ _id: 'w3', name: 'Vat 47' }), // shares a token, not a prefix — no pair
+    ]));
+    const res = await nameSubsetPairs({});
+    expect(res.total).toBe(1);
+    expect(res.pairs[0].wines.map(w => w._id)).toEqual(['w1', 'w2']);
+    expect(res.pairs[0].producer).toBe("Tyrrell's");
+    expect(res.scannedCount).toBe(3);
+  });
+
+  test('suffix containment is NOT flagged — a bare varietal row would pair the whole range', async () => {
+    WineDefinition.find.mockReturnValue(leanChain([
+      tyrrells({ _id: 'w1', name: 'Semillon' }),
+      tyrrells({ _id: 'w2', name: 'Belford Semillon' }),
+    ]));
+    expect((await nameSubsetPairs({})).total).toBe(0);
+  });
+
+  test('pairs never cross producers', async () => {
+    WineDefinition.find.mockReturnValue(leanChain([
+      { _id: 'w1', name: 'Vat 8', producer: "Tyrrell's" },
+      { _id: 'w2', name: 'Vat 8 Shiraz Cabernet', producer: 'McWilliams' },
+    ]));
+    expect((await nameSubsetPairs({})).total).toBe(0);
+  });
+
+  test('appellation disagreement (including null) does not block the pair — the import shape', async () => {
+    WineDefinition.find.mockReturnValue(leanChain([
+      tyrrells({ _id: 'w1', name: 'Old Hut', appellation: null }),
+      tyrrells({ _id: 'w2', name: 'Old Hut Vineyard Shiraz' }),
+    ]));
+    const res = await nameSubsetPairs({});
+    expect(res.total).toBe(1);
+    expect(res.pairs[0].wines[0].appellation).toBeNull();
+    expect(res.pairs[0].wines[1].appellation).toBe('Hunter Valley');
+  });
+
+  test('a dismissed pair stops resurfacing — same store and keying as the group queue', async () => {
+    WineDefinition.find.mockReturnValue(leanChain([
+      tyrrells({ _id: 'a1', name: 'Vat 8' }),
+      tyrrells({ _id: 'a2', name: 'Vat 8 Shiraz Cabernet' }),
+    ]));
+    WineNotDuplicate.find.mockReturnValue(leanChain([{ wineA: 'a1', wineB: 'a2' }]));
+    expect((await nameSubsetPairs({})).total).toBe(0);
+  });
+
+  test('disjoint vintages with evidence tier first; a shared vintage sinks the pair', async () => {
+    WineDefinition.find.mockReturnValue(leanChain([
+      tyrrells({ _id: 'd1', name: 'Vat 1' }),
+      tyrrells({ _id: 'd2', name: 'Vat 1 Semillon' }),
+      tyrrells({ _id: 'o1', name: 'Belford' }),
+      tyrrells({ _id: 'o2', name: 'Belford Semillon' }),
+    ]));
+    Bottle.aggregate.mockResolvedValue([
+      { _id: 'd1', count: 1, vintages: ['2018'] },
+      { _id: 'd2', count: 1, vintages: ['2019'] }, // disjoint, evidence on both sides
+      { _id: 'o1', count: 5, vintages: ['2020'] },
+      { _id: 'o2', count: 5, vintages: ['2020'] }, // shared vintage → overlap
+    ]);
+    const res = await nameSubsetPairs({});
+    expect(res.total).toBe(2);
+    // Disjoint-with-evidence outranks the overlap pair despite fewer bottles.
+    expect(res.pairs[0].wines[0]._id).toBe('d1');
+    expect(res.pairs[0].disjoint).toBe(true);
+    expect(res.pairs[1].disjoint).toBe(false);
+  });
+
+  test('oversized producer buckets are skipped and counted, not scanned O(k²)', async () => {
+    const rows = Array.from({ length: 201 }, (_, i) => tyrrells({ _id: `w${i}`, name: `Cuvee ${i}` }));
+    WineDefinition.find.mockReturnValue(leanChain(rows));
+    const res = await nameSubsetPairs({});
+    expect(res.total).toBe(0);
+    expect(res.skippedBuckets).toBe(1);
   });
 });
