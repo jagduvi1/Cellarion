@@ -35,6 +35,7 @@ const { logAudit } = require('../../services/audit');
 const { submitUrls } = require('../../services/indexNow');
 const searchService = require('../../services/search');
 const { reembedActiveVintages } = require('../../services/embeddingJob');
+const { profileInputsSnapshot, reenrichAfterRecordEdit } = require('../../services/enrichmentJob');
 const { findOrCreateRegion } = require('../../services/findOrCreateWine');
 const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const { performWineMerge } = require('./wines');
@@ -194,6 +195,9 @@ router.post('/:id/approve', async (req, res) => {
           await revertClaim();
           return res.status(404).json({ error: 'The proposed wine no longer exists' });
         }
+        // Before-image for the re-enrich decision below — same real-change
+        // semantics as the admin PUT.
+        const beforeProfileInputs = profileInputsSnapshot(wine);
         const pf = proposal.proposedFields || {};
         const applied = [];
 
@@ -263,6 +267,11 @@ router.post('/:id/approve', async (req, res) => {
           .then((ids) => searchService.bulkIndexBottles(ids))
           .catch((err) => console.error('Bottle re-index after proposal apply failed:', err.message));
         reembedActiveVintages(wine._id).catch(() => {});
+        // And the PUT's re-enrich (parity gap found live 2026-08-16: approving
+        // "Fabelhaft" → "Niepoort" left the négociant-fiction profile attached
+        // until a manual force re-enrich). Real-change only, curator-safe —
+        // see reenrichAfterRecordEdit.
+        reenrichAfterRecordEdit(wine, profileInputsSnapshot(wine) !== beforeProfileInputs);
 
         appliedNote = `Applied: ${applied.join(', ')}`;
       } else if (proposal.kind === 'merge') {
