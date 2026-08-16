@@ -319,3 +319,86 @@ describe('POST /:id/reject', () => {
     expect(res.status).toBe(409);
   });
 });
+
+/**
+ * Bulk decisions (ticket 6a8162c5 ask #3 — the middle road): each id runs the
+ * EXACT single-decision machinery, so what these pin is the batch envelope —
+ * per-row outcomes, one row's failure never blocking the rest, dedupe, and
+ * the bounds/reason gates deciding NOTHING when they fail.
+ */
+describe('POST /bulk-approve and /bulk-reject', () => {
+  const P2 = '64b0000000000000000000a2';
+  const claimSeq = (...proposals) => {
+    for (const p of proposals) WineCorrectionProposal.findOneAndUpdate.mockResolvedValueOnce(p);
+  };
+
+  test('bulk-approve: per-row outcomes; a 409 on one row never blocks the rest', async () => {
+    claimSeq(
+      { _id: P1, kind: 'field_correction', wineDefinition: W1, proposedFields: { producer: 'Niepoort' } },
+      null, // second claim fails → decided-elsewhere path
+    );
+    WineCorrectionProposal.exists.mockResolvedValueOnce(true); // → 409 for the second id
+    const wine = { _id: W1, name: 'Douro Tinto', producer: 'Fabelhaft', appellation: 'Douro', country: 'c1', save: jest.fn().mockResolvedValue(undefined) };
+    WineDefinition.findById.mockResolvedValue(wine);
+
+    const res = await post('/bulk-approve', { ids: [P1, P2] });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.approved).toBe(1);
+    expect(data.failed).toBe(1);
+    expect(data.results[0]).toMatchObject({ proposalId: P1, ok: true, status: 200 });
+    expect(data.results[0].appliedNote).toMatch(/producer/);
+    expect(data.results[1]).toMatchObject({ proposalId: P2, ok: false, status: 409 });
+    // The applied row went through the real machinery: claim + apply + index.
+    expect(wine.save).toHaveBeenCalled();
+    expect(searchService.indexWine).toHaveBeenCalledWith(W1);
+  });
+
+  test('bulk-approve: duplicate ids dedupe to one decision', async () => {
+    claimSeq({ _id: P1, kind: 'field_correction', wineDefinition: W1, proposedFields: { producer: 'X' } });
+    const wine = { _id: W1, name: 'N', producer: 'P', appellation: null, country: 'c1', save: jest.fn().mockResolvedValue(undefined) };
+    WineDefinition.findById.mockResolvedValue(wine);
+
+    const res = await post('/bulk-approve', { ids: [P1, P1] });
+    const data = await res.json();
+    expect(data.results).toHaveLength(1);
+    expect(WineCorrectionProposal.findOneAndUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  test('bulk-approve bounds: empty, invalid and oversize id arrays are 400 with NOTHING decided', async () => {
+    for (const body of [
+      {},
+      { ids: [] },
+      { ids: ['not-an-id'] },
+      { ids: Array.from({ length: 51 }, () => P1) }, // length gate fires before dedupe
+    ]) {
+      const res = await post('/bulk-approve', body);
+      expect(res.status).toBe(400);
+    }
+    expect(WineCorrectionProposal.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  test('bulk-reject: one shared reason, per-row claims; a vanished row reports 404', async () => {
+    claimSeq(
+      { _id: P1, kind: 'field_correction', wineDefinition: W1 },
+      null,
+    );
+    WineCorrectionProposal.exists.mockResolvedValueOnce(false); // → 404 for the second id
+
+    const res = await post('/bulk-reject', { ids: [P1, P2], reason: 'Duplicate wave from one import session' });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.rejected).toBe(1);
+    expect(data.results[0]).toMatchObject({ proposalId: P1, ok: true, status: 200 });
+    expect(data.results[1]).toMatchObject({ proposalId: P2, ok: false, status: 404 });
+    // The reason landed via the same claim write the single route uses.
+    expect(WineCorrectionProposal.findOneAndUpdate.mock.calls[0][1].$set.rejectReason)
+      .toBe('Duplicate wave from one import session');
+  });
+
+  test('bulk-reject: a bad shared reason is 400 and decides NOTHING', async () => {
+    const res = await post('/bulk-reject', { ids: [P1], reason: 'x' });
+    expect(res.status).toBe(400);
+    expect(WineCorrectionProposal.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+});

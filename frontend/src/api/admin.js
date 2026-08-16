@@ -82,6 +82,20 @@ export const adminRejectWineProposal = (apiFetch, id, reason) =>
     body: JSON.stringify({ reason }),
   });
 
+export const adminBulkApproveWineProposals = (apiFetch, ids) =>
+  apiFetch('/api/admin/wine-proposals/bulk-approve', {
+    method: 'POST',
+    headers: J,
+    body: JSON.stringify({ ids }),
+  });
+
+export const adminBulkRejectWineProposals = (apiFetch, ids, reason) =>
+  apiFetch('/api/admin/wine-proposals/bulk-reject', {
+    method: 'POST',
+    headers: J,
+    body: JSON.stringify({ ids, reason }),
+  });
+
 // Owner inquiries: questions sent to a wine's bottle owners (curator→owner
 // channel for records only an owner can settle). The list is answered-first
 // and its envelope carries pendingCount + answeredCount for the toolbar

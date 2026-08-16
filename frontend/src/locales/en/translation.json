@@ -1702,7 +1702,19 @@
         "statusRejected": "Rejected",
         "loadError": "Failed to load proposals",
         "approveError": "Failed to approve the proposal",
-        "rejectError": "Failed to reject the proposal"
+        "rejectError": "Failed to reject the proposal",
+        "selectRow": "Select this proposal",
+        "selectAllPage": "Select all on this page",
+        "selectedCount_one": "{{count}} selected",
+        "selectedCount_other": "{{count}} selected",
+        "approveSelected_one": "Approve selected ({{count}})",
+        "approveSelected_other": "Approve selected ({{count}})",
+        "rejectSelected_one": "Reject selected ({{count}})…",
+        "rejectSelected_other": "Reject selected ({{count}})…",
+        "bulkApproving": "Applying selected…",
+        "bulkRejecting": "Rejecting selected…",
+        "bulkRejectPlaceholder": "One shared reason for every selected proposal (min 5 characters)",
+        "bulkPartial": "{{ok}} done, {{failed}} failed — failed rows stay listed with the reason"
       },
       "ownerInquiries": {
         "button": "Owner inquiries",

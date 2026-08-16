@@ -147,19 +147,33 @@ router.get('/', async (req, res) => {
 });
 
 // Already-decided vs never-existed, after a failed claim (aiBudgetRequests pattern).
-async function decideConflict(res, proposalId) {
+async function decideOutcome(proposalId) {
   const exists = await WineCorrectionProposal.exists({ _id: proposalId });
   return exists
-    ? res.status(409).json({ error: 'Proposal has already been decided' })
-    : res.status(404).json({ error: 'Proposal not found' });
+    ? { status: 409, body: { error: 'Proposal has already been decided' } }
+    : { status: 404, body: { error: 'Proposal not found' } };
 }
 
 // POST /api/admin/wine-proposals/:id/approve — claim, then apply by kind
 router.post('/:id/approve', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    const proposalId = new mongoose.Types.ObjectId(req.params.id);
+    const { status, body } = await approveProposal(new mongoose.Types.ObjectId(req.params.id), req);
+    res.status(status).json(body);
+  } catch (err) {
+    console.error('Approve wine proposal error:', err);
+    res.status(500).json({ error: 'Failed to approve proposal' });
+  }
+});
 
+/**
+ * Approve ONE proposal: atomic claim → apply by kind → per-proposal audit.
+ * Returns { status, body } instead of writing to a response, so the single
+ * route and the bulk loop run EXACTLY the same machinery — the
+ * performWineMerge extraction pattern, one layer up. Unexpected errors are
+ * thrown (after the claim revert) for the caller to map to its own 500.
+ */
+async function approveProposal(proposalId, req) {
     // Atomically CLAIM the pending row so only the first of two concurrent
     // decisions wins (the aiBudgetRequests check-then-act fix): a null result
     // means already-decided (409) or never-existed (404).
@@ -169,7 +183,7 @@ router.post('/:id/approve', async (req, res) => {
       { $set: { status: 'approved', decidedBy: req.user.id, decidedAt: now } },
       { new: true }
     );
-    if (!proposal) return decideConflict(res, proposalId);
+    if (!proposal) return decideOutcome(proposalId);
 
     // Any apply failure below reverts the claim so there is no half-approved
     // state. Best-effort by necessity: the moment our claim left 'pending',
@@ -193,7 +207,7 @@ router.post('/:id/approve', async (req, res) => {
         const wine = await WineDefinition.findById(proposal.wineDefinition);
         if (!wine) {
           await revertClaim();
-          return res.status(404).json({ error: 'The proposed wine no longer exists' });
+          return { status: 404, body: { error: 'The proposed wine no longer exists' } };
         }
         // Before-image for the re-enrich decision below — same real-change
         // semantics as the admin PUT.
@@ -225,7 +239,7 @@ router.post('/:id/approve', async (req, res) => {
           countryDoc = await Country.findOne({ normalizedName: normalizeString(resolveCountryName(pf.country)) });
           if (!countryDoc) {
             await revertClaim();
-            return res.status(400).json({ error: `Unknown country "${pf.country}" — add it in Admin → Taxonomy first, then approve` });
+            return { status: 400, body: { error: `Unknown country "${pf.country}" — add it in Admin → Taxonomy first, then approve` } };
           }
           wine.country = countryDoc._id;
           applied.push('country');
@@ -250,9 +264,9 @@ router.post('/:id/approve', async (req, res) => {
         } catch (err) {
           if (err.code === 11000) {
             await revertClaim();
-            return res.status(409).json({
+            return { status: 409, body: {
               error: 'Applying this correction would make the wine identical to an existing registry wine — use a merge proposal instead',
-            });
+            } };
           }
           throw err;
         }
@@ -279,7 +293,7 @@ router.post('/:id/approve', async (req, res) => {
         const result = await performWineMerge(String(proposal.wineDefinition), String(proposal.mergeTargetId), req);
         if (result.error) {
           await revertClaim();
-          return res.status(result.error.status).json({ error: result.error.message });
+          return { status: result.error.status, body: { error: result.error.message } };
         }
         const targetLabel = [result.target.producer, result.target.name].filter(Boolean).join(' — ');
         appliedNote = `Merged into ${targetLabel} (${result.bottlesMoved} bottle(s) moved)`;
@@ -287,7 +301,7 @@ router.post('/:id/approve', async (req, res) => {
         const wine = await WineDefinition.findById(proposal.wineDefinition);
         if (!wine) {
           await revertClaim();
-          return res.status(404).json({ error: 'The proposed wine no longer exists' });
+          return { status: 404, body: { error: 'The proposed wine no longer exists' } };
         }
         // Same semantics as POST /:id/non-wine value:true — flag + let the
         // self-healing index sync drop it from search.
@@ -320,43 +334,121 @@ router.post('/:id/approve', async (req, res) => {
         appliedNote,
       });
 
-    res.json({ message: 'Proposal approved and applied', proposalId: proposal._id, status: 'approved', appliedNote });
-  } catch (err) {
-    console.error('Approve wine proposal error:', err);
-    res.status(500).json({ error: 'Failed to approve proposal' });
+    return { status: 200, body: { message: 'Proposal approved and applied', proposalId: proposal._id, status: 'approved', appliedNote } };
+}
+
+// Reason hygiene shared by the single and bulk reject paths: plain text only,
+// bounded even after strip (reject_price_request hygiene).
+function parseRejectReason(raw) {
+  const reason = stripHtml(typeof raw === 'string' ? raw : '');
+  if (!reason || reason.length < REJECT_REASON_MIN) {
+    return { error: `A reject reason of at least ${REJECT_REASON_MIN} characters is required` };
   }
-});
+  if (reason.length > REJECT_REASON_MAX) {
+    return { error: `Reject reason must be at most ${REJECT_REASON_MAX} characters` };
+  }
+  return { reason };
+}
 
 // POST /api/admin/wine-proposals/:id/reject — reason required, stored on the row
 router.post('/:id/reject', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-
-    // Plain text only, bounded even after strip (reject_price_request hygiene).
-    const reason = stripHtml(typeof req.body?.reason === 'string' ? req.body.reason : '');
-    if (!reason || reason.length < REJECT_REASON_MIN) {
-      return res.status(400).json({ error: `A reject reason of at least ${REJECT_REASON_MIN} characters is required` });
-    }
-    if (reason.length > REJECT_REASON_MAX) {
-      return res.status(400).json({ error: `Reject reason must be at most ${REJECT_REASON_MAX} characters` });
-    }
-
-    const proposalId = new mongoose.Types.ObjectId(req.params.id);
-    const proposal = await WineCorrectionProposal.findOneAndUpdate(
-      { _id: proposalId, status: 'pending' },
-      { $set: { status: 'rejected', decidedBy: req.user.id, decidedAt: new Date(), rejectReason: reason } },
-      { new: true }
-    );
-    if (!proposal) return decideConflict(res, proposalId);
-
-    logAudit(req, 'admin.wineProposal.reject',
-      { type: 'WineCorrectionProposal', id: proposal._id },
-      { kind: proposal.kind, wineDefinitionId: proposal.wineDefinition, reason });
-
-    res.json({ message: 'Proposal rejected', proposalId: proposal._id, status: 'rejected' });
+    const parsed = parseRejectReason(req.body?.reason);
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    const { status, body } = await rejectProposal(new mongoose.Types.ObjectId(req.params.id), parsed.reason, req);
+    res.status(status).json(body);
   } catch (err) {
     console.error('Reject wine proposal error:', err);
     res.status(500).json({ error: 'Failed to reject proposal' });
+  }
+});
+
+/** Reject ONE proposal via the same atomic claim. Returns { status, body }. */
+async function rejectProposal(proposalId, reason, req) {
+  const proposal = await WineCorrectionProposal.findOneAndUpdate(
+    { _id: proposalId, status: 'pending' },
+    { $set: { status: 'rejected', decidedBy: req.user.id, decidedAt: new Date(), rejectReason: reason } },
+    { new: true }
+  );
+  if (!proposal) return decideOutcome(proposalId);
+
+  logAudit(req, 'admin.wineProposal.reject',
+    { type: 'WineCorrectionProposal', id: proposal._id },
+    { kind: proposal.kind, wineDefinitionId: proposal.wineDefinition, reason });
+
+  return { status: 200, body: { message: 'Proposal rejected', proposalId: proposal._id, status: 'rejected' } };
+}
+
+// ── Bulk decisions (ticket 6a8162c5, ask #3 — the middle road) ──────────────
+// The somm files evidence-backed proposals one at a time; clearing a batch
+// through per-row round trips was the queue's whole overhead. The review gate
+// STAYS — an admin still reads every row — the clicking goes. Each id runs
+// the EXACT single-decision machinery above, sequentially (registry applies
+// re-key, reindex and re-enrich; concurrency buys nothing and could
+// interleave writes on sibling wines), and reports a per-row outcome: one
+// row's 409 "merge instead" never blocks the rest of the batch. Per-proposal
+// audit entries come from the shared functions, so the audit stream reads the
+// same whether a decision arrived alone or in a batch.
+const MAX_BULK_DECISIONS = 50;
+
+function parseBulkIds(body) {
+  const ids = body?.ids;
+  if (!Array.isArray(ids) || ids.length === 0) return { error: 'ids must be a non-empty array' };
+  if (ids.length > MAX_BULK_DECISIONS) return { error: `At most ${MAX_BULK_DECISIONS} proposals per call` };
+  if (ids.some((id) => !isValidId(id))) return { error: 'Every id must be a valid proposal id' };
+  return { ids: [...new Set(ids.map(String))] };
+}
+
+router.post('/bulk-approve', async (req, res) => {
+  try {
+    const parsed = parseBulkIds(req.body);
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    const results = [];
+    for (const id of parsed.ids) {
+      try {
+        const { status, body } = await approveProposal(new mongoose.Types.ObjectId(id), req);
+        results.push(status === 200
+          ? { proposalId: id, ok: true, status, appliedNote: body.appliedNote }
+          : { proposalId: id, ok: false, status, error: body.error });
+      } catch (err) {
+        console.error('Bulk approve item error:', id, err);
+        results.push({ proposalId: id, ok: false, status: 500, error: 'Failed to approve proposal' });
+      }
+    }
+    const approved = results.filter((r) => r.ok).length;
+    res.json({ results, approved, failed: results.length - approved });
+  } catch (err) {
+    console.error('Bulk approve wine proposals error:', err);
+    res.status(500).json({ error: 'Failed to bulk-approve proposals' });
+  }
+});
+
+router.post('/bulk-reject', async (req, res) => {
+  try {
+    const parsed = parseBulkIds(req.body);
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    // ONE shared reason for the batch, validated once — nothing is decided on
+    // a bad reason.
+    const reasonParsed = parseRejectReason(req.body?.reason);
+    if (reasonParsed.error) return res.status(400).json({ error: reasonParsed.error });
+    const results = [];
+    for (const id of parsed.ids) {
+      try {
+        const { status, body } = await rejectProposal(new mongoose.Types.ObjectId(id), reasonParsed.reason, req);
+        results.push(status === 200
+          ? { proposalId: id, ok: true, status }
+          : { proposalId: id, ok: false, status, error: body.error });
+      } catch (err) {
+        console.error('Bulk reject item error:', id, err);
+        results.push({ proposalId: id, ok: false, status: 500, error: 'Failed to reject proposal' });
+      }
+    }
+    const rejected = results.filter((r) => r.ok).length;
+    res.json({ results, rejected, failed: results.length - rejected });
+  } catch (err) {
+    console.error('Bulk reject wine proposals error:', err);
+    res.status(500).json({ error: 'Failed to bulk-reject proposals' });
   }
 });
 
