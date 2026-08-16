@@ -14,6 +14,9 @@ const {
 const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const { scoreWineMatch } = require('../../services/wineMatching');
 const { sameProducerAppellationGroups, nearProducerPairs, nameSubsetPairs } = require('../../services/registryFragmentation');
+const {
+  incompleteGeographyRows, stillIncomplete, GEOGRAPHY_INCOMPLETE_CHECK_ID,
+} = require('../../services/registryCompleteness');
 const WineDefinition = require('../../models/WineDefinition');
 const Bottle = require('../../models/Bottle');
 const BottleImage = require('../../models/BottleImage');
@@ -1191,6 +1194,91 @@ router.get('/cross-field-checks', async (req, res) => {
   } catch (error) {
     console.error('Cross-field checks scan error:', error);
     res.status(500).json({ error: 'Failed to scan for cross-field checks' });
+  }
+});
+
+// GET /api/admin/wines/incomplete-geography — the COMPLETENESS queue: rows
+// that are not wrong, just blank (services/registryCompleteness). Every other
+// net keys off a value, so a region-less row trips nothing and sits invisible;
+// 180 such rows were on prod when this shipped, 112 of them owned by real
+// users. Sorted most-owned first, appellation leads before blank rows.
+// Query: limit (default 50, max 200), offset|page, includeCleared=1 (audit view)
+router.get('/incomplete-geography', async (req, res) => {
+  try {
+    const { limit, offset, page } = parsePagination(req.query, { limit: 50, maxLimit: 200 });
+    const includeCleared = req.query.includeCleared === '1' || req.query.includeCleared === 'true';
+    const { rows, total, scannedCount, clearedCount } =
+      await incompleteGeographyRows({ limit, offset, includeCleared });
+    res.json({ rows, total, page, pages: Math.ceil(total / limit), scannedCount, clearedCount });
+  } catch (error) {
+    console.error('Incomplete-geography scan error:', error);
+    res.status(500).json({ error: 'Failed to scan for incomplete geography' });
+  }
+});
+
+// POST /api/admin/wines/incomplete-geography/clear — record that an admin read
+// these wines and confirmed they legitimately have NO region (a country-wide
+// designation, a multi-region blend), so the completeness queue stops
+// surfacing them. DELETE undoes it. Body: { wineIds: [id, …] }.
+//
+// A THIRD parallel clearance endpoint rather than an extension of
+// /cross-checks-clear, for the reason that one gives for not extending
+// /verify-checks: each family's re-detect is its own, and dispatching them
+// through one handler would tangle checks whose verdicts read different
+// things. It writes to the SAME crossChecksCleared array — permitted by that
+// field's invariant, since this verdict reads only region + appellation, both
+// watched by the pre-validate hook, so filling either invalidates the
+// clearance exactly as it should. Same gates as its siblings: bounded id
+// list, server-side re-detect, $addToSet idempotence, no reindex (a clearance
+// is not public content) and no MCP tool (a human's verdict asserted by an AI
+// defeats the record).
+router.post('/incomplete-geography/clear', async (req, res) => {
+  try {
+    const ids = [...new Set((Array.isArray(req.body?.wineIds) ? req.body.wineIds : []).filter(isValidId))];
+    if (ids.length < 1) return res.status(400).json({ error: 'wineIds must contain at least 1 valid id' });
+    if (ids.length > 500) return res.status(400).json({ error: 'At most 500 wineIds per call' });
+
+    const oids = ids.map(id => new mongoose.Types.ObjectId(id));
+    const stillFlagged = await stillIncomplete(oids);
+    if (stillFlagged.size === 0) return res.status(404).json({ error: 'No matching wines' });
+
+    const now = new Date();
+    const result = await WineDefinition.updateMany(
+      { _id: { $in: [...stillFlagged].map(id => new mongoose.Types.ObjectId(id)) } },
+      {
+        $addToSet: { crossChecksCleared: GEOGRAPHY_INCOMPLETE_CHECK_ID },
+        $set: { crossChecksClearedAt: now },
+      }
+    );
+    logAudit(req, 'admin.wine.clearIncompleteGeography', { type: 'wine', id: ids[0] },
+      { wineIds: ids, updated: result.modifiedCount || 0, notFlagged: ids.length - stillFlagged.size });
+    res.json({
+      message: 'Recorded',
+      updated: result.modifiedCount || 0,
+      notFlagged: ids.length - stillFlagged.size,
+    });
+  } catch (error) {
+    console.error('Clear incomplete-geography error:', error);
+    res.status(500).json({ error: 'Failed to record the clearance' });
+  }
+});
+
+router.delete('/incomplete-geography/clear', async (req, res) => {
+  try {
+    const ids = [...new Set((Array.isArray(req.body?.wineIds) ? req.body.wineIds : []).filter(isValidId))];
+    if (ids.length < 1) return res.status(400).json({ error: 'wineIds must contain at least 1 valid id' });
+    if (ids.length > 500) return res.status(400).json({ error: 'At most 500 wineIds per call' });
+
+    const result = await WineDefinition.updateMany(
+      { _id: { $in: ids.map(id => new mongoose.Types.ObjectId(id)) } },
+      { $pull: { crossChecksCleared: GEOGRAPHY_INCOMPLETE_CHECK_ID } }
+    );
+    logAudit(req, 'admin.wine.unclearIncompleteGeography', { type: 'wine', id: ids[0] },
+      { wineIds: ids, updated: result.modifiedCount || 0 });
+    res.json({ message: 'Cleared', updated: result.modifiedCount || 0 });
+  } catch (error) {
+    console.error('Unclear incomplete-geography error:', error);
+    res.status(500).json({ error: 'Failed to undo the clearance' });
   }
 });
 

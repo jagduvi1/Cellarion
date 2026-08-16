@@ -15,6 +15,7 @@ import WineProducerInNameModal from '../components/WineProducerInNameModal';
 import WineLowConfidenceModal from '../components/WineLowConfidenceModal';
 import WineCanonicalCollisionsModal from '../components/WineCanonicalCollisionsModal';
 import WineFragmentationModal from '../components/WineFragmentationModal';
+import WineIncompleteGeographyModal from '../components/WineIncompleteGeographyModal';
 import WineCrossFieldChecksModal from '../components/WineCrossFieldChecksModal';
 import WinePendingIdentityModal from '../components/WinePendingIdentityModal';
 import WineProposalsModal from '../components/WineProposalsModal';
@@ -90,6 +91,7 @@ function AdminWines() {
   const [showLowConfidence, setShowLowConfidence] = useState(false);
   const [showCollisions, setShowCollisions] = useState(false);
   const [showFragmentation, setShowFragmentation] = useState(false);
+  const [showIncompleteGeo, setShowIncompleteGeo] = useState(false);
   const [showCrossField, setShowCrossField] = useState(false);
   const [showPendingIdentity, setShowPendingIdentity] = useState(false);
   const [showProposals, setShowProposals] = useState(false);
@@ -481,6 +483,9 @@ function AdminWines() {
           </button>
           <button className="btn btn-secondary" onClick={() => setShowCrossField(true)} title={t('admin.wines.crossField.buttonTitle')}>
             {t('admin.wines.crossField.button')}
+          </button>
+          <button className="btn btn-secondary" onClick={() => setShowIncompleteGeo(true)} title={t('admin.wines.incompleteGeo.buttonTitle')}>
+            {t('admin.wines.incompleteGeo.button')}
           </button>
           <button className="btn btn-secondary" onClick={() => setShowPendingIdentity(true)} title={t('admin.wines.pendingIdentity.buttonTitle')}>
             {t('admin.wines.pendingIdentity.button')}
@@ -1018,6 +1023,13 @@ function AdminWines() {
         <WineFragmentationModal
           apiFetch={apiFetch}
           onClose={() => setShowFragmentation(false)}
+        />
+      )}
+
+      {showIncompleteGeo && (
+        <WineIncompleteGeographyModal
+          apiFetch={apiFetch}
+          onClose={() => setShowIncompleteGeo(false)}
         />
       )}
 
