@@ -49,7 +49,9 @@ function WineFragmentationModal({ apiFetch, onClose }) {
     setLoading(true);
     setError(null);
     try {
-      const drained = mode === 'groups' ? dismissedDelta.current : 0;
+      // Groups AND name-subsets support dismissal (both key wine-id pairs into
+      // the shared store); producer-spelling pairs don't, so no drain there.
+      const drained = mode !== 'pairs' ? dismissedDelta.current : 0;
       const offset = Math.max(0, (p - 1) * PAGE_SIZE - drained);
       const params = new URLSearchParams({ mode, offset, limit: PAGE_SIZE });
       const res = await adminGetWineFragmentation(apiFetch, params);
@@ -61,6 +63,7 @@ function WineFragmentationModal({ apiFetch, onClose }) {
         return;
       }
       setItems(mode === 'groups' ? (data.groups || []) : (data.pairs || []));
+      // (name-subsets and pairs both arrive as `pairs`; their renderers differ.)
       setTotal(data.total || 0);
       setPages(data.pages || 1);
       setScanned(data.scannedCount || 0);
@@ -136,7 +139,9 @@ function WineFragmentationModal({ apiFetch, onClose }) {
 
   const countKey = mode === 'groups'
     ? 'admin.wines.fragmentation.countGroups'
-    : 'admin.wines.fragmentation.countPairs';
+    : (mode === 'name-subsets'
+      ? 'admin.wines.fragmentation.countSubsets'
+      : 'admin.wines.fragmentation.countPairs');
 
   return (
     <Modal title={t('admin.wines.fragmentation.title')} onClose={onClose} wide>
@@ -161,6 +166,14 @@ function WineFragmentationModal({ apiFetch, onClose }) {
         >
           {t('admin.wines.fragmentation.modePairs')}
         </button>
+        <button
+          type="button"
+          className={`btn ${mode === 'name-subsets' ? 'btn-primary' : 'btn-secondary'} btn-small`}
+          disabled={!!pendingKey}
+          onClick={() => switchMode('name-subsets')}
+        >
+          {t('admin.wines.fragmentation.modeSubsets')}
+        </button>
         {items !== null && !loading && (
           <span style={{ fontSize: '0.85rem', marginLeft: 'auto' }}>
             {t(countKey, { count: total, scanned })}
@@ -170,7 +183,7 @@ function WineFragmentationModal({ apiFetch, onClose }) {
 
       {error && <div className="alert alert-error" style={{ marginBottom: 12 }}>{error}</div>}
 
-      {mode === 'pairs' && skippedBuckets > 0 && (
+      {mode !== 'groups' && skippedBuckets > 0 && (
         <div className="alert alert-warning" style={{ marginBottom: 12, fontSize: '0.85rem' }}>
           {t('admin.wines.fragmentation.skippedBuckets', { count: skippedBuckets })}
         </div>
@@ -183,7 +196,9 @@ function WineFragmentationModal({ apiFetch, onClose }) {
           <p>
             {mode === 'groups'
               ? t('admin.wines.fragmentation.emptyGroups')
-              : t('admin.wines.fragmentation.emptyPairs')}
+              : (mode === 'name-subsets'
+                ? t('admin.wines.fragmentation.emptySubsets')
+                : t('admin.wines.fragmentation.emptyPairs'))}
           </p>
         </div>
       ) : (
@@ -226,6 +241,57 @@ function WineFragmentationModal({ apiFetch, onClose }) {
                       <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
                         {' '}— {w.producer}
                       </span>
+                    )}
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
+                    {w.vintages.length > 0 ? (
+                      w.vintages.map(v => <span key={v} style={chipStyle}>{v}</span>)
+                    ) : (
+                      <em>{t('admin.wines.fragmentation.noVintages')}</em>
+                    )}
+                    <span>{t('admin.wines.fragmentation.bottleCount', { count: w.bottleCount })}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          ))}
+
+          {/* Name-subset pairs reuse the group row anatomy (and dismissGroup —
+              a pair is a two-wine group as far as the not-duplicate store is
+              concerned); appellation shows per member because fragments
+              routinely disagree on it. */}
+          {mode === 'name-subsets' && items.map(pair => (
+            <div key={pair.key} style={boxStyle}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                <strong>{pair.producer}</strong>
+                {pair.disjoint && (
+                  <span style={badgeStyle} title={t('admin.wines.fragmentation.disjointTitle')}>
+                    {t('admin.wines.fragmentation.disjointBadge')}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-small"
+                  style={{ marginLeft: 'auto' }}
+                  disabled={!!pendingKey}
+                  onClick={() => dismissGroup(pair)}
+                  title={t('admin.wines.fragmentation.dismissTitle')}
+                >
+                  {pendingKey === pair.key
+                    ? t('admin.wines.fragmentation.dismissing')
+                    : t('admin.wines.fragmentation.dismiss')}
+                </button>
+              </div>
+              {pair.wines.map(w => (
+                <div key={w._id} style={memberRowStyle}>
+                  <span>
+                    <Link to={`/wines/${w._id}`} target="_blank" rel="noopener noreferrer">
+                      {w.name}
+                    </Link>
+                    {w.appellation && (
+                      <em style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
+                        {' '}· {w.appellation}
+                      </em>
                     )}
                   </span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
