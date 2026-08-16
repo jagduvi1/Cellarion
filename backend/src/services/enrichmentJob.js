@@ -103,6 +103,7 @@ let job = {
   total: 0,
   done: 0,
   enriched: 0,
+  held: 0,              // producer-suspect rows: generated but publication withheld
   skipped: 0,
   errors: 0,
   startedAt: null,
@@ -158,6 +159,7 @@ async function start({ mode = 'incremental', limit = 0 } = {}) {
     total: 0,
     done: 0,
     enriched: 0,
+    held: 0,
     skipped: 0,
     errors: 0,
     startedAt: new Date().toISOString(),
@@ -197,6 +199,12 @@ async function runJob(cfg) {
       ? keepCurated
       : {
           ...keepCurated,
+          // A HELD row (producer-suspect, publication withheld) has a null
+          // description by design — without this it would match the "not yet
+          // enriched" branch and every incremental run would re-spend on it.
+          // Held rows wait for a human (queue/identity fix/review override);
+          // only FULL mode re-generates them.
+          'aiProfile.heldAt': null,
           $or: [{ 'aiProfile.description': null }, { 'aiProfile.description': { $exists: false } }],
         };
 
@@ -222,6 +230,7 @@ async function runJob(cfg) {
       try {
         const { result, reason } = await enrichWine(wine, job.model);
         if (result === 'enriched') job.enriched++;
+        else if (result === 'held') job.held++;
         else {
           job.skipped++;
           if (reason) job.lastError = reason;
@@ -261,7 +270,7 @@ async function runJob(cfg) {
  *   to the module-level job state, so a fire-and-forget enrichWineById can't
  *   pollute the admin job status.
  */
-async function enrichWine(wine, model) {
+async function enrichWine(wine, model, { publishSuspect = false } = {}) {
   const { data, debugReason } = await suggestProfile({
     name: wine.name,
     producer: wine.producer,
@@ -280,6 +289,49 @@ async function enrichWine(wine, model) {
     return { result: 'skipped', reason };
   }
 
+  // The model's own doubt about the producer FIELD (registry audit follow-up:
+  // "Arcane" — a range sold as a producer — sailed past every string gate AND
+  // 49 audit agents; only this model hedged). Strict true-check: absent on
+  // old/custom prompts → false.
+  const suspect = data.producerSuspect === true;
+  const now = new Date();
+  const meta = {
+    confidence:      cleanConfidence(data.confidence),
+    producerSuspect: suspect,
+    producerNote:    cleanProse(data.producerNote, 300),
+    model:           model || aiConfig.get().enrichmentModel,
+    source:          'ai',
+    generatedAt:     now,
+  };
+
+  // HOLD, don't publish, when the producer is suspect (ticket 6a8162c5): a
+  // profile generated for a brand/range/place sold as a producer is confident
+  // fiction about a company that may not exist — "Fabelhaft" got a négociant
+  // biography this way, flagged suspect, and the flag sat unread in a passive
+  // queue while the fiction served. A held row stores ONLY the doubt; the null
+  // description keeps every read surface (bottle page, MCP, embedding text)
+  // naturally silent, and heldAt keeps the retry guards from looping on it.
+  // `publishSuspect` is the human override — profile-reviewed uses it after an
+  // admin has looked at the doubt and judged the identity fine.
+  if (suspect && !publishSuspect) {
+    await WineDefinition.updateOne(
+      { _id: wine._id },
+      {
+        $set: {
+          aiProfile: {
+            body: null, tannin: null, acidity: null, sweetness: null,
+            flavors: [], foodPairings: [],
+            description: null,
+            ...meta,
+            heldAt: now,
+          },
+          updatedAt: now,
+        },
+      }
+    );
+    return { result: 'held', reason: null };
+  }
+
   await WineDefinition.updateOne(
     { _id: wine._id },
     {
@@ -296,17 +348,10 @@ async function enrichWine(wine, model) {
           // tools. Load-bearing half of the fix — the prompt is only advisory,
           // and a self-hoster can override it via SiteConfig.
           description:  cleanProse(data.description),
-          confidence:   cleanConfidence(data.confidence),
-          // The model's own doubt about the producer FIELD (registry audit
-          // follow-up: "Arcane" — a range sold as a producer — sailed past
-          // every string gate AND 49 audit agents; only this model hedged).
-          // Strict true-check: absent on old/custom prompts → false.
-          producerSuspect: data.producerSuspect === true,
-          producerNote: cleanProse(data.producerNote, 300),
-          model:        model || aiConfig.get().enrichmentModel,
-          generatedAt:  new Date(),
+          ...meta,
+          heldAt: null,
         },
-        updatedAt: new Date(),
+        updatedAt: now,
       },
     }
   );
@@ -342,8 +387,15 @@ async function enrichWine(wine, model) {
  * @param {string|object} wineDefId
  * @param {object}  [opts]
  * @param {string}  [opts.budgetUserId] – user to debit for this AI call
+ * @param {boolean} [opts.force] – regenerate even when a profile exists or is
+ *   held. Used by the deliberate admin surfaces (identity edit, review
+ *   override) — never by the fire-and-forget bottle-add hook. Curator-written
+ *   profiles are still never regenerated, force or not.
+ * @param {boolean} [opts.publishSuspect] – publish even when the model flags
+ *   the producer as suspect (the human-override path: an admin reviewed the
+ *   doubt and judged the identity fine).
  */
-async function enrichWineById(wineDefId, { budgetUserId } = {}) {
+async function enrichWineById(wineDefId, { budgetUserId, force = false, publishSuspect = false } = {}) {
   // Validate + cast the (caller-supplied) id to a real ObjectId before it touches
   // the query, so a non-id value can never shape the database lookup. The cast
   // value (idStr/oid), never the raw input, is used everywhere below.
@@ -370,8 +422,14 @@ async function enrichWineById(wineDefId, { budgetUserId } = {}) {
     // so without it the very add that mints a pending row would immediately
     // spend the adding user's daily AI budget describing a producerless wine.
     if (wine.pendingIdentity === true) return;
-    if (wine.aiProfile && wine.aiProfile.description) return; // already enriched
-    if (wine.aiProfile && wine.aiProfile.source === 'curator') return; // hand-corrected — never regenerate
+    if (wine.aiProfile && wine.aiProfile.source === 'curator') return; // hand-corrected — never regenerate (force included)
+    if (!force) {
+      if (wine.aiProfile && wine.aiProfile.description) return; // already enriched
+      // HELD is a decision awaiting a human, not a gap to retry: without this
+      // guard every later bottle add of the same wine would re-spend the
+      // adder's AI budget re-generating a profile we would hold again.
+      if (wine.aiProfile && wine.aiProfile.heldAt) return;
+    }
 
     if (budgetUserId) {
       const debit = await tryDebitAi(String(budgetUserId));
@@ -382,7 +440,7 @@ async function enrichWineById(wineDefId, { budgetUserId } = {}) {
         return;
       }
       try {
-        const { result, reason } = await enrichWine(wine, aiConfig.get().enrichmentModel);
+        const { result, reason } = await enrichWine(wine, aiConfig.get().enrichmentModel, { publishSuspect });
         // A transport-level failure never produced a billable completion
         if (result === 'skipped' && isRefundableFailure(reason)) await debit.refund();
       } catch (err) {
@@ -390,7 +448,7 @@ async function enrichWineById(wineDefId, { budgetUserId } = {}) {
         throw err; // handled by the outer catch below
       }
     } else {
-      await enrichWine(wine, aiConfig.get().enrichmentModel);
+      await enrichWine(wine, aiConfig.get().enrichmentModel, { publishSuspect });
     }
     console.log('[enrichmentJob] Auto-enriched new wine: %s', wine.name);
   } catch (err) {

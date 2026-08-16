@@ -121,6 +121,32 @@ async function findOrCreateRegion(rawName, countryId, userId) {
   return region;
 }
 
+/**
+ * Registry canon (region-granularity policy, 2026-08-16 / ticket 6a8162c5):
+ * when the appellation itself names a region the taxonomy already has —
+ * appellation "Hunter Valley" and a Hunter Valley Region doc under the same
+ * country — the region field holds THAT region, the most specific
+ * granularity, regardless of what the caller supplied ("New South Wales",
+ * the producer's home region, or nothing). Import AI and label scans return
+ * region at whatever granularity they happened to think in, which is how one
+ * import batch minted the same producer's wines under both "Hunter Valley"
+ * and "New South Wales" — all with appellation Hunter Valley.
+ *
+ * MATCH-ONLY by design: an appellation string never MINTS a Region.
+ * Appellations are unvalidated free text, so only an existing doc (canonical
+ * name or synonym, country-scoped) may adopt the row; anything else falls
+ * back to the caller-supplied region via findOrCreateRegion.
+ */
+async function regionForAppellation(appellationName, countryId) {
+  if (!appellationName || !countryId) return null;
+  const normalizedName = normalizeString(appellationName);
+  if (!normalizedName) return null;
+  return Region.findOne({
+    country: countryId,
+    $or: [{ normalizedName }, { normalizedSynonyms: normalizedName }],
+  });
+}
+
 async function findOrCreateGrapes(rawNames, userId) {
   if (!Array.isArray(rawNames) || rawNames.length === 0) return [];
   // Same chokepoint argument as findOrCreateRegion: the route caps the count and
@@ -170,7 +196,10 @@ async function findOrCreateGrapes(rawNames, userId) {
  * Pass `confirmCreate: true` to bypass the soft-zone gate and force creation
  * — used when the user has explicitly confirmed "no, none of those, make a new one".
  *
- * @param {Object} wineData   - { name, producer, country, region, appellation, type, grapes[] }
+ * @param {Object} wineData   - { name, producer, country, region, appellation, type, grapes[], classification? }
+ *   `classification` (e.g. "Grand Cru Classé en 1855") is stored verbatim on a CREATE and
+ *   plays no part in matching or keys — the scan path extracts it so classification lines
+ *   stop landing in the name field (ticket 6a8162c5, the Giscours case).
  * @param {string} userId     - ObjectId string of the authenticated user (for createdBy)
  * @param {Object} [opts]
  * @param {boolean} [opts.confirmCreate=false] - Skip soft-zone candidate return and create directly
@@ -200,7 +229,7 @@ async function findOrCreateGrapes(rawNames, userId) {
  *   surfaces (routes/admin/wines.js, routes/admin/wineRequests.js, MCP
  *   admin_add_registry_wine): a curator typing "Bordeaux" as producer SHOULD be told.
  */
-async function findOrCreateWine({ name, producer, country, region, appellation, type, grapes }, userId, { confirmCreate = false, skipSiblingMatch = false, matchOnly = false, createdVia = null, allowPending = false } = {}) {
+async function findOrCreateWine({ name, producer, country, region, appellation, type, grapes, classification }, userId, { confirmCreate = false, skipSiblingMatch = false, matchOnly = false, createdVia = null, allowPending = false } = {}) {
   // Internal whitespace collapses too, not just the ends: a double space is
   // invisible in every UI and every normalized key, so "Wrights  Estate" and
   // "Wrights Estate" would otherwise coexist as two display spellings forever
@@ -619,7 +648,13 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     ? pendingWineKey(trimmedName, userId, trimmedAppellation)
     : generateWineKey(trimmedName, producerToStore, trimmedAppellation);
 
-  const regionDoc = await findOrCreateRegion(region, countryDoc._id, userId);
+  // Region canon: the appellation's own region wins when the taxonomy knows
+  // it (see regionForAppellation) — this is what keeps one producer's wines
+  // from splitting across "Hunter Valley" and "New South Wales" depending on
+  // which granularity the AI/import happened to supply per row. Only when the
+  // appellation names no known region does the supplied region string count.
+  let regionDoc = await regionForAppellation(trimmedAppellation, countryDoc._id);
+  if (!regionDoc) regionDoc = await findOrCreateRegion(region, countryDoc._id, userId);
   let grapeIds = await findOrCreateGrapes(grapes, userId);
 
   // Ticket #2A: when no grapes were supplied, infer them from the name
@@ -635,12 +670,20 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   const validTypes = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
   const wineType = validTypes.includes(type) ? type : 'red';
 
+  // Classification is display/curation data, not identity: stored on creates
+  // only, never matched or keyed on. Same whitespace fold + cap as the
+  // identity fields, so a scanned "Grand  Cru Classé" can't store raggedly.
+  const trimmedClassification = (typeof classification === 'string' && classification.trim())
+    ? classification.trim().replace(/\s+/g, ' ').slice(0, MAX_FIELD)
+    : null;
+
   const newWine = new WineDefinition({
     name: trimmedName,
     producer: producerToStore,
     country: countryDoc._id,
     region: regionDoc?._id || null,
     appellation: trimmedAppellation || null,
+    classification: trimmedClassification,
     type: wineType,
     grapes: grapeIds,
     normalizedKey: mintKey,
@@ -693,6 +736,7 @@ module.exports = {
   findOrCreateCountry,
   findOrCreateRegion,
   findOrCreateGrapes,
+  regionForAppellation,
   pendingProducerKey,
   pendingWineKey,
 };

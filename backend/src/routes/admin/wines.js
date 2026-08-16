@@ -664,12 +664,25 @@ router.post('/:id/non-wine', async (req, res) => {
 router.post('/:id/profile-reviewed', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    const wine = await WineDefinition.findById(req.params.id).select('name producer');
+    const wine = await WineDefinition.findById(req.params.id).select('name producer aiProfile.heldAt');
     if (!wine) return res.status(404).json({ error: 'Wine not found' });
     const now = new Date();
     await WineDefinition.updateOne({ _id: wine._id }, { $set: { profileReviewedAt: now } });
     logAudit(req, 'admin.wine.profileReviewed', { type: 'wine', id: wine._id },
       { name: wine.name, producer: wine.producer });
+    // A HELD profile + an admin review = the human override the hold was
+    // waiting for: the admin looked at the model's producer doubt and judged
+    // the identity fine, so regenerate and PUBLISH (the suspect flag stays on
+    // the row as provenance). Fire-and-forget; on success the review stamp is
+    // re-bumped past the fresh generatedAt so the row doesn't instantly
+    // re-surface as unreviewed. If the admin instead agrees the identity is
+    // wrong, the fix is the wine editor — the identity edit re-enriches.
+    if (wine.aiProfile?.heldAt) {
+      const { enrichWineById } = require('../../services/enrichmentJob');
+      enrichWineById(wine._id, { force: true, publishSuspect: true })
+        .then(() => WineDefinition.updateOne({ _id: wine._id }, { $set: { profileReviewedAt: new Date() } }))
+        .catch(() => {});
+    }
     res.json({ message: 'Marked reviewed', profileReviewedAt: now });
   } catch (error) {
     console.error('Profile-reviewed error:', error);
@@ -721,6 +734,13 @@ router.get('/low-confidence', async (req, res) => {
       $or: [
         { 'aiProfile.confidence': null },
         { 'aiProfile.confidence': { $lte: threshold } },
+        // A suspect producer is a doubt about the IDENTITY, not the profile's
+        // confidence — Fabelhaft's flagged at 0.5 while the default threshold
+        // is 0.3, so the one row the flag existed for never surfaced here
+        // (ticket 6a8162c5). Suspect rows now appear regardless of threshold;
+        // since v-this their profiles are also HELD unpublished until someone
+        // in this queue decides.
+        { 'aiProfile.producerSuspect': true },
       ],
       // Only rows that were actually enriched — without this, every wine that
       // has no aiProfile at all would match the null branch above.
@@ -739,7 +759,7 @@ router.get('/low-confidence', async (req, res) => {
     const filter = includeReviewed ? base : outstanding;
     const [rows, total, reviewedCount] = await Promise.all([
       WineDefinition.find(filter)
-        .select('name producer appellation nonWine profileReviewedAt aiProfile.confidence aiProfile.description aiProfile.producerSuspect aiProfile.producerNote aiProfile.generatedAt')
+        .select('name producer appellation nonWine profileReviewedAt aiProfile.confidence aiProfile.description aiProfile.producerSuspect aiProfile.producerNote aiProfile.generatedAt aiProfile.heldAt')
         .populate('region', 'name')
         .populate('country', 'name')
         .sort({ 'aiProfile.confidence': 1, producer: 1 })
@@ -773,6 +793,7 @@ router.get('/low-confidence', async (req, res) => {
         producerSuspect: w.aiProfile?.producerSuspect === true,
         producerNote: w.aiProfile?.producerNote || null,
         generatedAt: w.aiProfile?.generatedAt || null,
+        heldAt: w.aiProfile?.heldAt || null,
         profileReviewedAt: w.profileReviewedAt || null,
         bottleCount: bottleCounts.get(String(w._id)) || 0,
       })),
@@ -1345,6 +1366,18 @@ router.put('/:id', async (req, res) => {
       { type: 'wine', id: wine._id },
       { fields: Object.keys(req.body) }
     );
+
+    // An identity edit (name/producer) makes any AI profile a description of
+    // the WRONG wine — including a HELD one, whose whole point was "this
+    // producer looks fictional": the admin just fixed exactly that. Regenerate
+    // under the corrected identity (fire-and-forget, no user budget — this is
+    // a deliberate admin action). Curator-written profiles are never touched
+    // (enrichWineById refuses those, force or not); if the model still doubts
+    // the new identity it simply holds again, which is the correct outcome.
+    if ((name || producer) && wine.aiProfile?.generatedAt && wine.aiProfile?.source !== 'curator') {
+      const { enrichWineById } = require('../../services/enrichmentJob');
+      enrichWineById(wine._id, { force: true }).catch(() => {});
+    }
 
     submitUrls(`/wines/${wine._id}`);
 

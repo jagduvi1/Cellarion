@@ -52,6 +52,16 @@ router.use(requireAuth, requireNonDemo);
 const EXACT_THRESHOLD = IMPORT_EXACT_THRESHOLD;
 const FUZZY_THRESHOLD = IMPORT_FUZZY_THRESHOLD;
 
+// Below this identification confidence the AI is going on inference, not
+// knowledge ("0.5 = reasonably sure" in the prompt's own scale) — exactly the
+// band that wrote a producer's home region onto wines from elsewhere and split
+// one producer across region granularities (ticket 6a8162c5). Geography the
+// AI proposed under this floor is dropped before it can mint; the curation
+// backfill queue fills it from evidence instead. Import files carry no
+// region/appellation columns, so this only ever strips AI inference — never
+// user data.
+const AI_GEOGRAPHY_MIN_CONFIDENCE = 0.6;
+
 /**
  * Score a WineDefinition candidate against an import item.
  * Delegates to the shared wineMatching service. Variant-aware: import rows
@@ -401,6 +411,73 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
         pr.aiDebugReason = settled.value.debugReason;
       } else {
         pr.aiError = settled.reason?.message;
+      }
+    }
+
+    // ── Post-AI hygiene (ticket 6a8162c5) — BEFORE any matching, so the
+    // cleaned values feed Pass 2, the client preview, and /confirm alike. ──
+    //
+    // A) One producer, one country per batch. Rows are identified one at a
+    //    time, so an obscure producer can come back with a different guessed
+    //    country per row ("Thomas Allen": South Africa on one, Australia on
+    //    another — both minted, and the different-country guard then keeps
+    //    them apart forever). Rows whose FILE stated a country are anchors
+    //    and are never overwritten; when the file is silent, every row of a
+    //    producer adopts one country — the anchors' (when they agree), else
+    //    the highest-confidence AI row's.
+    const aiRowsByProducer = new Map();
+    for (const pr of preResults) {
+      if (!pr.aiIdentified || typeof pr.aiIdentified.producer !== 'string') continue;
+      const prodKey = normalizeString(pr.aiIdentified.producer);
+      if (!prodKey) continue;
+      if (!aiRowsByProducer.has(prodKey)) aiRowsByProducer.set(prodKey, []);
+      aiRowsByProducer.get(prodKey).push(pr);
+    }
+    for (const rows of aiRowsByProducer.values()) {
+      const aiCountryKey = (pr) =>
+        (typeof pr.aiIdentified.country === 'string' && pr.aiIdentified.country.trim())
+          ? normalizeString(pr.aiIdentified.country) : '';
+      const distinct = new Set(rows.map(aiCountryKey).filter(Boolean));
+      if (distinct.size === 0) continue; // no row knows a country — nothing to spread
+      const fileAnchored = rows.filter(pr => typeof pr.item.country === 'string' && pr.item.country.trim());
+      let adopted = null;
+      if (distinct.size === 1) {
+        // Group already agrees — only rows the AI left countryless (which
+        // could not mint at all) inherit it below.
+        adopted = rows.find(pr => aiCountryKey(pr)).aiIdentified.country;
+      } else if (fileAnchored.length > 0) {
+        // The file knows best — but only when it names ONE country. Two
+        // file-backed countries for one producer is real information
+        // (a brand genuinely bottling on two continents): touch nothing.
+        const anchorCountries = new Set(fileAnchored.map(aiCountryKey).filter(Boolean));
+        if (anchorCountries.size !== 1) continue;
+        adopted = fileAnchored.find(pr => aiCountryKey(pr)).aiIdentified.country;
+      } else {
+        const best = rows.reduce((a, b) =>
+          ((b.aiIdentified.confidence ?? 0) > (a.aiIdentified.confidence ?? 0) ? b : a));
+        adopted = best.aiIdentified.country;
+      }
+      if (!adopted) continue;
+      for (const pr of rows) {
+        // Never overwrite a row the file itself anchored, and when the group
+        // already agreed, only FILL gaps — never touch a stated value.
+        if (typeof pr.item.country === 'string' && pr.item.country.trim()) continue;
+        if (distinct.size === 1 && aiCountryKey(pr)) continue;
+        pr.aiIdentified.country = adopted;
+      }
+    }
+    //
+    // B) Low-confidence geography never mints. Applied to aiIdentified itself
+    //    (one mutation point), so matching, the aiProposed the client sees,
+    //    and the /confirm mint all agree. A missing/non-numeric confidence is
+    //    the "nobody can vouch for this" state and strips too — same stance
+    //    as the admin low-confidence queue.
+    for (const pr of preResults) {
+      if (!pr.aiIdentified) continue;
+      const conf = pr.aiIdentified.confidence;
+      if (!(typeof conf === 'number' && conf >= AI_GEOGRAPHY_MIN_CONFIDENCE)) {
+        pr.aiIdentified.region = null;
+        pr.aiIdentified.appellation = null;
       }
     }
 

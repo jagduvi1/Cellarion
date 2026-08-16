@@ -282,3 +282,84 @@ describe('pendingIdentity rows are never enriched', () => {
     expect(WineDefinition.updateOne).toHaveBeenCalled();
   });
 });
+
+/**
+ * Producer-suspect profiles are HELD, not published (ticket 6a8162c5).
+ *
+ * "Fabelhaft" — a Niepoort brand minted as a producer — got a confident
+ * négociant biography from the generator, which FLAGGED producerSuspect:true
+ * in the same response… and the flag sat in a passive queue while the fiction
+ * served on the bottle page. A suspect profile now stores only the doubt
+ * (confidence/flag/note + heldAt); the null description keeps every read
+ * surface naturally silent, and the guards keep the per-add hook and
+ * incremental batches from re-spending on a row that is waiting for a human.
+ */
+describe('producer-suspect profiles are held, not published', () => {
+  const suspectProfile = () => ({
+    data: {
+      body: 'medium', tannin: 'medium', acidity: 'medium', sweetness: 'dry',
+      flavors: ['plum'], foodPairings: ['stew'],
+      description: 'A juicy regional blend from a négociant label.',
+      confidence: 0.5,
+      producerSuspect: true,
+      producerNote: 'Fabelhaft is a Niepoort label, not an estate.',
+    },
+    debugReason: null,
+  });
+
+  test('suspect=true writes the doubt only: no description/axes, heldAt stamped', async () => {
+    suggestProfile.mockResolvedValue(suspectProfile());
+    await enrichWineById(WINE_ID);
+    const p = persisted();
+    expect(p.description).toBeNull();
+    expect(p.body).toBeNull();
+    expect(p.flavors).toEqual([]);
+    expect(p.foodPairings).toEqual([]);
+    expect(p.producerSuspect).toBe(true);
+    expect(p.producerNote).toMatch(/Niepoort/);
+    expect(p.confidence).toBe(0.5);
+    expect(p.heldAt).toBeInstanceOf(Date);
+    expect(p.generatedAt).toBeInstanceOf(Date);
+  });
+
+  test('a held wine is not re-enriched by the per-add hook', async () => {
+    WineDefinition.findById.mockReturnValue(chain({
+      _id: WINE_ID, name: 'Douro Tinto', producer: 'Fabelhaft', type: 'red',
+      country: { name: 'Portugal' }, region: null, grapes: [],
+      aiProfile: { heldAt: new Date(), description: null },
+    }));
+    await enrichWineById(WINE_ID);
+    expect(suggestProfile).not.toHaveBeenCalled();
+  });
+
+  test('force + publishSuspect publishes past the doubt (the review override)', async () => {
+    WineDefinition.findById.mockReturnValue(chain({
+      _id: WINE_ID, name: 'Douro Tinto', producer: 'Fabelhaft', type: 'red',
+      country: { name: 'Portugal' }, region: null, grapes: [],
+      aiProfile: { heldAt: new Date(), description: null },
+    }));
+    suggestProfile.mockResolvedValue(suspectProfile());
+    await enrichWineById(WINE_ID, { force: true, publishSuspect: true });
+    const p = persisted();
+    expect(p.description).toMatch(/juicy/);
+    expect(p.heldAt).toBeNull();
+    expect(p.producerSuspect).toBe(true); // provenance survives the override
+  });
+
+  test('curator profiles are never regenerated, force or not', async () => {
+    WineDefinition.findById.mockReturnValue(chain({
+      _id: WINE_ID, name: 'Douro Tinto', producer: 'Niepoort',
+      aiProfile: { source: 'curator', description: 'hand-written' },
+    }));
+    await enrichWineById(WINE_ID, { force: true, publishSuspect: true });
+    expect(suggestProfile).not.toHaveBeenCalled();
+  });
+
+  test('a clean profile publishes with heldAt null and suspect false', async () => {
+    suggestProfile.mockResolvedValue(profile('Plain prose.'));
+    await enrichWineById(WINE_ID);
+    expect(persisted().heldAt).toBeNull();
+    expect(persisted().producerSuspect).toBe(false);
+    expect(persisted().description).toBe('Plain prose.');
+  });
+});

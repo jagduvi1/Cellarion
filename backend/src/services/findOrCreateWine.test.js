@@ -641,6 +641,7 @@ describe('findOrCreateWine — creation', () => {
       country: 'country-1',
       region: 'region-1',
       appellation: 'Châteauneuf-du-Pape',
+      classification: null, // scan-supplied only — absent input stores null
       type: 'red',
       grapes: ['grape-grenache', 'grape-syrah'],
       normalizedKey: INPUT_KEY,
@@ -1128,5 +1129,80 @@ describe('taxonomy find-or-create dedup', () => {
     const ids = await findOrCreateGrapes(['Tempranillo', 'Tinta Roriz'], USER_ID);
 
     expect(ids).toEqual(['grape-tempranillo']);
+  });
+});
+
+/**
+ * Region canon (policy 2026-08-16, ticket 6a8162c5): when the appellation
+ * itself names a region the taxonomy has, the region field holds THAT region
+ * — the most specific granularity — regardless of what the caller supplied.
+ * This is what stops one import batch minting the same producer's wines under
+ * both "Hunter Valley" and "New South Wales" (all with appellation Hunter
+ * Valley). Match-only: an appellation string never MINTS a Region.
+ */
+describe('findOrCreateWine — region canon: appellation granularity wins', () => {
+  test('an appellation naming a known region overrides the supplied parent region', async () => {
+    Region.findOne.mockImplementation(async (q) => {
+      const key = q?.$or?.[0]?.normalizedName;
+      if (key === 'hunter valley') return { _id: 'region-hunter' };
+      if (key === 'new south wales') return { _id: 'region-nsw' };
+      return null;
+    });
+    const { wine, created } = await findOrCreateWine({
+      name: 'Vat 9', producer: "Tyrrell's", country: 'Australia',
+      region: 'New South Wales', appellation: 'Hunter Valley', type: 'red', grapes: [],
+    }, USER_ID);
+    expect(created).toBe(true);
+    expect(wine.region).toBe('region-hunter');
+    expect(wine.appellation).toBe('Hunter Valley');
+  });
+
+  test('the canon rule fills a missing region from the appellation too', async () => {
+    Region.findOne.mockImplementation(async (q) =>
+      (q?.$or?.[0]?.normalizedName === 'barossa valley' ? { _id: 'region-barossa' } : null));
+    const { wine } = await findOrCreateWine({
+      name: 'Generations', producer: 'Kies', country: 'Australia',
+      appellation: 'Barossa Valley', type: 'red', grapes: [],
+    }, USER_ID);
+    expect(wine.region).toBe('region-barossa');
+  });
+
+  test('an appellation naming no region falls back to the supplied region string', async () => {
+    Region.findOne.mockImplementation(async (q) =>
+      (q?.$or?.[0]?.normalizedName === 'marlborough' ? { _id: 'region-marlborough' } : null));
+    const { wine } = await findOrCreateWine({
+      name: 'Sauvignon Blanc', producer: 'Chard Farm', country: 'New Zealand',
+      region: 'Marlborough', appellation: 'Awatere', type: 'white', grapes: [],
+    }, USER_ID);
+    expect(wine.region).toBe('region-marlborough');
+  });
+
+  test('an unmatched appellation never MINTS a region — with none supplied the wine stores null', async () => {
+    Region.findOne.mockResolvedValue(null);
+    const { wine } = await findOrCreateWine({
+      name: 'Cuvée X', producer: 'Some Estate', country: 'France',
+      appellation: 'Lieu-dit Imaginaire', type: 'red', grapes: [],
+    }, USER_ID);
+    expect(wine.region).toBeNull();
+    expect(Region).not.toHaveBeenCalled(); // the Region CONSTRUCTOR — nothing minted
+  });
+});
+
+/**
+ * Classification (ticket 6a8162c5, the Giscours case): the scan prompt now
+ * has a slot for the printed classification line, and it is stored on a
+ * CREATE — folded and capped like the identity fields, but never matched or
+ * keyed on.
+ */
+describe('findOrCreateWine — classification is stored on create', () => {
+  test('whitespace-folded and stored', async () => {
+    const { wine } = await findOrCreateWine(
+      { ...INPUT, classification: '  Grand   Cru Classé en 1855 ' }, USER_ID);
+    expect(wine.classification).toBe('Grand Cru Classé en 1855');
+  });
+
+  test('absent classification stores null', async () => {
+    const { wine } = await findOrCreateWine(INPUT, USER_ID);
+    expect(wine.classification).toBeNull();
   });
 });
