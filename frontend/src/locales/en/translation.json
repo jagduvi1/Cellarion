@@ -1778,7 +1778,31 @@
       "reindexSearch": "Reindex search",
       "reindexSearchTitle": "Rebuild the search indexes from the database — required after restoring a backup, or whenever search results look stale",
       "reindexDone": "Search reindexed ({{winesMs}} ms wines, {{bottlesMs}} ms bottles)",
-      "reindexFailed": "Reindex failed"
+      "reindexFailed": "Reindex failed",
+      "incompleteGeo": {
+        "button": "Missing region",
+        "buttonTitle": "Published wines with no region at all — not wrong, just blank, and invisible to every other check",
+        "title": "Wines missing a region",
+        "explainer": "Every other check keys off a value, so a wine with no region trips none of them and stays invisible. These rows are not wrong, just incomplete — the region is lost information for the statistics map, the region filter and browsing by region. Most-owned first, and a wine whose appellation names its place is usually one edit away. Open the wine to fill it in; the row leaves this list as soon as it has a region.",
+        "viewOutstanding": "Outstanding",
+        "viewCleared_one": "Marked region-less ({{count}})",
+        "viewCleared_other": "Marked region-less ({{count}})",
+        "count_one": "{{count}} wine (of {{scanned}} scanned)",
+        "count_other": "{{count}} wines (of {{scanned}} scanned)",
+        "emptyOutstanding": "Every published wine has a region. Nothing to review.",
+        "emptyCleared": "No wines have been marked as legitimately region-less.",
+        "lead": "appellation: {{appellation}}",
+        "bottleCount_one": "{{count}} bottle",
+        "bottleCount_other": "{{count}} bottles",
+        "clear": "No region exists",
+        "clearTitle": "This wine legitimately has no region — a country-wide designation or a multi-region blend — so stop listing it here",
+        "unclear": "List again",
+        "unclearTitle": "Undo: put this wine back in the outstanding list",
+        "saving": "Saving…",
+        "fixHint": "To fix one: open the wine and set its region. A wine sold under a country-wide designation (Vin de France, American) or blended across regions genuinely has none — mark those instead.",
+        "loadError": "Failed to load the completeness queue",
+        "actionError": "Failed to record that"
+      }
     },
     "images": {
       "title": "Admin: Image Review",

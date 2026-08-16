@@ -65,6 +65,24 @@ export const adminGetCanonicalCollisions = (apiFetch) =>
 export const adminGetWineFragmentation = (apiFetch, params) =>
   apiFetch(`/api/admin/wines/fragmentation?${params}`);
 
+// The COMPLETENESS queue: published rows carrying no region at all. They trip
+// no other net (every one keys off a value), so nothing listed them until this.
+// ?includeCleared=1 is the audit view.
+export const adminGetIncompleteGeography = (apiFetch, params) =>
+  apiFetch(`/api/admin/wines/incomplete-geography?${params}`);
+
+// Record that these wines legitimately have NO region (a country-wide
+// designation, a multi-region blend) so the queue stops surfacing them.
+export const adminClearIncompleteGeography = (apiFetch, wineIds) =>
+  apiFetch('/api/admin/wines/incomplete-geography/clear', {
+    method: 'POST', headers: J, body: JSON.stringify({ wineIds }),
+  });
+
+export const adminUnclearIncompleteGeography = (apiFetch, wineIds) =>
+  apiFetch('/api/admin/wines/incomplete-geography/clear', {
+    method: 'DELETE', headers: J, body: JSON.stringify({ wineIds }),
+  });
+
 // Sommelier correction proposals: identity-field fixes, merges and non-wine
 // flags filed from the maturity queue (MCP propose_wine_correction). The list
 // is pending-first and its envelope carries pendingCount for the toolbar badge;
