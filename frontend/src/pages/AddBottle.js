@@ -9,6 +9,7 @@ import { BOTTLE_SIZES, bottleSizeLabel } from '../config/bottleSizes';
 import { validatePriceSanity } from '../utils/priceValidation';
 import { validateDrinkWindowFields, DRINK_YEAR_MIN, DRINK_YEAR_MAX } from '../utils/drinkStatus';
 import ImageUpload from '../components/ImageUpload';
+import ImageGallery from '../components/ImageGallery';
 import RatingInput from '../components/RatingInput';
 import WineImage from '../components/WineImage';
 import SimilarWinesModal from '../components/SimilarWinesModal';
@@ -70,6 +71,10 @@ function AddBottle() {
     consumedRatingScale: user?.preferences?.ratingScale || '5'
   });
   const [uploadedImages, setUploadedImages] = useState([]);
+  // How many public photos the registry already holds for the selected wine.
+  // null = not fetched yet, so the photo prompt stays neutral until we know
+  // rather than flashing the wrong message.
+  const [wineImageCount, setWineImageCount] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
 
   // Whether the user has worked the toggle themselves. Auto-expanding is a
@@ -532,6 +537,25 @@ function AddBottle() {
     setStep(2);
   };
 
+  // The registry wine this scan matched, when it matched one. The scan card
+  // used to read `match` only inside handleConfirmScan, so a matched scan and
+  // an unmatched one looked identical and our existing photo was never shown —
+  // the user re-photographed a wine we already had a picture of. Showing it
+  // next to their own shot also makes a WRONG match obvious while they are
+  // still holding the bottle, which is the cheapest correction signal we get.
+  const scanMatchedWine = scanResult?.match?.wine || null;
+
+  // Reset on every wine change so the photo prompt never describes the
+  // previous wine's gallery while the new one is still loading.
+  useEffect(() => { setWineImageCount(null); }, [selectedWine?._id]);
+
+  const handleWineImagesLoaded = useCallback((count) => setWineImageCount(count), []);
+
+  // A pending new wine has no _id, so there is no gallery to fetch — it is
+  // definitionally photo-less and the encouraging copy applies straight away.
+  const registryHasPhotos = !!selectedWine?._id && wineImageCount > 0;
+  const photoPromptReady = !selectedWine?._id || wineImageCount !== null;
+
   // One row renderer for both the registry-search list and the AI near-match
   // list, so the two can never drift. Takes a SAVED wine only.
   const renderWineRow = (wine) => (
@@ -827,13 +851,39 @@ function AddBottle() {
           {/* ── Scan result: unified wine card ──────────────────────────── */}
           {scanResult && !showManualForm && (
             <div className="scan-wine-card">
-              <div className="scan-wine-image-wrap">
-                {labelImage
-                  ? <img src={labelImage} alt={scanResult.extracted.name} className="scan-wine-label-img" />
-                  : <div className={`wine-row-placeholder scan-wine-placeholder ${scanResult.extracted.type || 'red'}`} />
-                }
+              <div className={`scan-wine-image-wrap${scanMatchedWine?.image ? ' scan-wine-image-wrap--compare' : ''}`}>
+                <figure className="scan-wine-shot">
+                  {labelImage
+                    ? <img src={labelImage} alt={scanResult.extracted.name} className="scan-wine-label-img" />
+                    : <div className={`wine-row-placeholder scan-wine-placeholder ${scanResult.extracted.type || 'red'}`} />
+                  }
+                  {scanMatchedWine?.image && (
+                    <figcaption className="scan-wine-shot-caption">{t('addBottle.scanYourPhoto')}</figcaption>
+                  )}
+                </figure>
+                {scanMatchedWine?.image && (
+                  <figure className="scan-wine-shot">
+                    <WineImage
+                      image={scanMatchedWine.image}
+                      alt={scanMatchedWine.name}
+                      className="scan-wine-label-img"
+                      wrapClass="scan-wine-shot-img-wrap"
+                      credit={scanMatchedWine.imageCredit}
+                      creditClass="wine-row-credit"
+                      wineType={scanMatchedWine.type}
+                      placeholder="wine-row-placeholder scan-wine-placeholder"
+                    />
+                    <figcaption className="scan-wine-shot-caption">{t('addBottle.scanRegistryPhoto')}</figcaption>
+                  </figure>
+                )}
               </div>
               <div className="scan-wine-body">
+                {scanMatchedWine && (
+                  <div className="ai-result-badge scan-wine-badge">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93L12 22"/><path d="M8 6a4 4 0 0 1 8 0"/><path d="M17 12H7"/></svg>
+                    {t('addBottle.aiFoundWine')}
+                  </div>
+                )}
                 <h2 className="scan-wine-name">{scanResult.extracted.name}</h2>
                 <p className="scan-wine-producer">{scanResult.extracted.producer}</p>
                 {scanResult.extracted.confidence != null && (
@@ -1124,14 +1174,15 @@ function AddBottle() {
         <div className="card">
           {/* Selected wine — compact summary bar */}
           <div className="selected-wine-bar">
-            {selectedWine.image && (
-              <img
-                src={selectedWine.image}
-                alt={selectedWine.name}
-                className="selected-wine-bar-img"
-                onError={(e) => { e.target.style.display = 'none'; }}
-              />
-            )}
+            {/* Via WineImage, not a bare <img>: a stored value that is a bare
+                filename or an /api/… path against a cross-origin API_URL needs
+                getWineImageUrl to resolve, and a raw src silently hid itself
+                on error instead. Every other wine thumbnail goes through this. */}
+            <WineImage
+              image={selectedWine.image}
+              alt={selectedWine.name}
+              className="selected-wine-bar-img"
+            />
             <div className="selected-wine-bar-info">
               <strong className="selected-wine-bar-name">{selectedWine.name}</strong>
               <span className="selected-wine-bar-producer">{selectedWine.producer}</span>
@@ -1241,6 +1292,25 @@ function AddBottle() {
                 </svg>
                 <span className="photo-section-title">{t('addBottle.bottlePhotos')}</span>
               </div>
+              {/* What the registry already holds for this wine. Shown BEFORE the
+                  uploader so a user who would have re-photographed a wine we can
+                  already illustrate can see that first. The prompt is softened,
+                  never removed: ~89% of the registry's official images started
+                  as a user's bottle photo, and most wines still have none. */}
+              {selectedWine?._id && (
+                <div className="photo-existing">
+                  <ImageGallery
+                    wineDefinitionId={selectedWine._id}
+                    size="small"
+                    onLoaded={handleWineImagesLoaded}
+                  />
+                </div>
+              )}
+              {photoPromptReady && (
+                <p className="photo-section-lead">
+                  {registryHasPhotos ? t('addBottle.photosExisting') : t('addBottle.photosNone')}
+                </p>
+              )}
               <ImageUpload
                 wineDefinitionId={selectedWine?._id}
                 onUploadComplete={(img) => setUploadedImages(prev => [...prev, img])}

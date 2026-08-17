@@ -639,6 +639,60 @@
   border-radius: 6px;
 }
 
+/* Two-shot compare — the user's own label photo beside the picture the registry
+   already holds. Side by side is the point: a wrong match is obvious at a glance
+   while the bottle is still in their hand. */
+.scan-wine-image-wrap--compare {
+  width: auto;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.scan-wine-shot {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.scan-wine-shot-img-wrap {
+  position: relative;
+  display: block;
+}
+
+.scan-wine-shot-caption {
+  font-size: 0.68rem;
+  color: var(--color-text-muted);
+  text-align: center;
+  line-height: 1.2;
+}
+
+.scan-wine-image-wrap--compare .scan-wine-label-img,
+.scan-wine-image-wrap--compare .scan-wine-placeholder {
+  width: 88px;
+}
+
+.scan-wine-image-wrap--compare .scan-wine-placeholder {
+  height: 140px;
+}
+
+.scan-wine-badge {
+  margin-bottom: 0.5rem;
+}
+
+/* Two thumbnails plus the body do not fit a narrow phone at full size. */
+@media (max-width: 600px) {
+  .scan-wine-image-wrap--compare .scan-wine-label-img,
+  .scan-wine-image-wrap--compare .scan-wine-placeholder {
+    width: 64px;
+  }
+
+  .scan-wine-image-wrap--compare .scan-wine-placeholder {
+    height: 102px;
+  }
+}
+
 .scan-wine-body {
   flex: 1;
   min-width: 0;
@@ -856,6 +910,17 @@
   font-size: 0.88rem;
   font-weight: 600;
   color: var(--color-text);
+}
+
+.photo-existing {
+  margin-bottom: 0.6rem;
+}
+
+.photo-section-lead {
+  margin: 0 0 0.6rem;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  line-height: 1.45;
 }
 
 .photo-section-notice {
