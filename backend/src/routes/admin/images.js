@@ -350,6 +350,13 @@ router.delete('/:id', async (req, res) => {
         _id: { $ne: image._id },
         contentHash: image.contentHash,
         status: { $ne: 'rejected' },
+        // Never a label scan. The promotion below sets approved+public, and a
+        // user who scanned a label and also uploaded that same file as a bottle
+        // photo has two rows with an identical contentHash — with the
+        // same-uploader preference right below actively selecting the scanner's
+        // own row. That would publish private curation evidence to a URL that
+        // /api/uploads serves unauthenticated and forever.
+        kind: { $ne: 'label-scan' },
         $or: [{ processedUrl: { $ne: null } }, { originalUrl: { $ne: null } }],
       }).sort({ createdAt: 1 }).lean();
       survivor = candidates.find(c => String(c.uploadedBy) === String(image.uploadedBy)) || candidates[0] || null;
