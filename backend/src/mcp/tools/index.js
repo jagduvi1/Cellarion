@@ -13,6 +13,7 @@ require('./racks');
 require('./stats');
 require('./wines');
 require('./personal');
+require('./personalData');
 require('./consume');
 require('./openBottle');
 require('./write');

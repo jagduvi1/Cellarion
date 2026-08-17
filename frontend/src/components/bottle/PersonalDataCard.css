@@ -1,0 +1,155 @@
+/* Personal wine data card (#986) — modal form + key chips.
+   Field chrome (border, focus ring, sizing) comes from the shared .form-group
+   rules in styles/common.css; this file only adds what those lack: a modern
+   custom-chevron select and the saved-key chips. */
+
+/* Native select with the browser arrow replaced by a neutral chevron that
+   reads in both themes. The list popup itself stays native (not stylable). */
+.pd-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23888f98' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.8rem center;
+  background-size: 12px 8px;
+  padding-right: 2.4rem;
+  cursor: pointer;
+}
+
+.pd-form .form-group {
+  margin-bottom: 1rem;
+}
+
+/* Value input + unit suffix on one line */
+.pd-value-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pd-value-row input {
+  flex: 1;
+}
+
+.pd-unit {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+/* Saved-key chips — one tap selects the key and brings its value list */
+.pd-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 0.35rem;
+}
+
+.pd-chip {
+  border: 1px solid var(--color-input-border);
+  background: var(--color-input-bg);
+  color: var(--color-text);
+  border-radius: 999px;
+  padding: 0.3rem 0.85rem;
+  font-size: 0.85rem;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.pd-chip:hover {
+  border-color: var(--color-border-focus);
+}
+
+.pd-chip--selected {
+  border-color: var(--color-primary, #7c2d3a);
+  background: rgba(var(--color-primary-rgb), 0.08);
+  box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb), 0.1);
+  font-weight: 600;
+}
+
+.pd-chips-label,
+.pd-key-note {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.pd-key-note {
+  margin: 0.35rem 0 0;
+}
+
+/* ── Entry rows: a clean key → value ledger ── */
+.pd-entries {
+  margin-top: 0.15rem;
+}
+
+.pd-entry {
+  display: grid;
+  grid-template-columns: minmax(110px, 34%) 1fr auto;
+  align-items: center;
+  column-gap: 0.75rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--color-border, rgba(0, 0, 0, 0.06));
+}
+
+.pd-entry:last-child {
+  border-bottom: none;
+}
+
+.pd-entry-key {
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.pd-entry-main {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.6rem;
+  min-width: 0;
+}
+
+.pd-entry-value {
+  font-weight: 600;
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+/* Chosen-from-a-list values (enum, yes/no) read as pills */
+.pd-value-pill {
+  display: inline-block;
+  padding: 0.1rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(var(--color-primary-rgb), 0.09);
+  color: var(--color-primary, #7c2d3a);
+  font-weight: 600;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.pd-entry-author {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.pd-entry-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.pd-entry-actions .btn {
+  padding: 0.2rem 0.55rem;
+  font-size: 0.75rem;
+}
+
+/* Phone width: key above value, actions tucked to the right of the key */
+@media (max-width: 480px) {
+  .pd-entry {
+    grid-template-columns: 1fr auto;
+  }
+  .pd-entry-main {
+    grid-column: 1 / -1;
+  }
+}

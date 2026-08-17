@@ -67,6 +67,8 @@ const WineRequest = require('../models/WineRequest');
 const WineVintagePrice = require('../models/WineVintagePrice');
 const WineVintageProfile = require('../models/WineVintageProfile');
 const WishlistItem = require('../models/WishlistItem');
+const PersonalDataKey = require('../models/PersonalDataKey');
+const PersonalDataEntry = require('../models/PersonalDataEntry');
 const AuditLog = require('../models/AuditLog');
 const BlogPost = require('../models/BlogPost');
 const WineDefinition = require('../models/WineDefinition');
@@ -298,6 +300,19 @@ const REGISTRY = [
     purge: (ctx) => WishlistItem.deleteMany({ user: ctx.userId }),
     // Trunc flag key kept as 'wishlistItems' to match the pre-refactor _truncated payload.
     exportFragment: async (ctx) => ({ wishlist: markTrunc(ctx, 'wishlistItems', await WishlistItem.find({ user: ctx.userId }).limit(EXPORT_MAX).lean()) }),
+  },
+  {
+    model: PersonalDataKey, category: 'personal-data', userFields: ['user'],
+    purge: (ctx) => PersonalDataKey.deleteMany({ user: ctx.userId }),
+    exportFragment: async (ctx) => ({ personalDataKeys: markTrunc(ctx, 'personalDataKeys', await PersonalDataKey.find({ user: ctx.userId }).limit(EXPORT_MAX).lean()) }),
+  },
+  {
+    // Hard delete, not anonymise: unlike forum threads, an entry has no
+    // multi-party thread to preserve — erasure removes the author's entries
+    // even where cellar co-members could see them (issue #986 requirement).
+    model: PersonalDataEntry, category: 'personal-data', userFields: ['author'],
+    purge: (ctx) => PersonalDataEntry.deleteMany({ author: ctx.userId }),
+    exportFragment: async (ctx) => ({ personalDataEntries: markTrunc(ctx, 'personalDataEntries', await PersonalDataEntry.find({ author: ctx.userId }).populate('key', 'name type unit').limit(EXPORT_MAX).lean()) }),
   },
 
   // ── Forum content: anonymise (preserve multi-party threads) ─────────────

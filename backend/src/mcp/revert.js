@@ -28,7 +28,7 @@ const CONSUME_REVERSIBLE = ['consume', 'restore', 'open', 'pour', 'close'];
 const WRITE_REVERSIBLE = ['add', 'update', 'bulk_add', 'somm_maturity', 'somm_maturity_remove',
   'somm_wine_profile', 'somm_price', 'somm_price_decline', 'somm_proposal',
   'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange', 'tasting_note', 'attach_image',
-  'winelist_add', 'winelist_price'];
+  'winelist_add', 'winelist_price', 'personal_data'];
 
 function reversibleActionsFor(scopes) {
   return (scopes || []).includes('write') ? [...CONSUME_REVERSIBLE, ...WRITE_REVERSIBLE] : CONSUME_REVERSIBLE;
@@ -259,6 +259,80 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     };
     await logAction(ctx, { tool: 'undo_last', action: 'winelist_price', viaUndo: true, cellar: row.cellar, detail: { undid: String(row._id) }, result: envelope });
     return ok(envelope.summary, envelope.data);
+  }
+
+  // Personal typed key/value data (#986) — entries are always the caller's
+  // own (only the author ever writes them), so every op is author-scoped and
+  // needs no cellar-role re-check.
+  if (row.action === 'personal_data') {
+    const PersonalDataEntry = require('../models/PersonalDataEntry');
+    const d = row.detail || {};
+
+    if (d.op === 'create') {
+      // Missing entry → already gone; claiming is the honest terminal state.
+      const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+      if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
+      const del = await PersonalDataEntry.findOneAndDelete({ _id: d.entryId, author: ctx.user.id });
+      const envelope = {
+        summary: `Undid personal data add${del ? ` — "${d.key}" removed` : ' — entry was already gone'}`,
+        data: { undone: 'add_personal_data', entry_removed: !!del },
+      };
+      await logAction(ctx, { tool: 'undo_last', action: 'personal_data', viaUndo: true, bottle: row.bottle, cellar: row.cellar, detail: { undid: String(row._id) }, result: envelope });
+      return ok(envelope.summary, envelope.data);
+    }
+
+    if (d.op === 'update') {
+      const entry = await PersonalDataEntry.findOne({ _id: d.entryId, author: ctx.user.id });
+      if (!entry) return fail('conflict', 'That entry no longer exists; nothing was changed.');
+      const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+      if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
+      entry.value = row.prev?.value;
+      try {
+        await entry.save();
+      } catch (err) {
+        await unclaim(row._id); // failed → let the undo be retried
+        if (err?.name === 'VersionError') return fail('conflict', 'The entry changed mid-undo — retry.');
+        throw err;
+      }
+      const envelope = {
+        summary: `Undid personal data update — "${d.key}" restored to ${JSON.stringify(row.prev?.value)}`,
+        data: { undone: 'update_personal_data', entry_id: d.entryId, restored: row.prev?.value },
+      };
+      await logAction(ctx, { tool: 'undo_last', action: 'personal_data', viaUndo: true, bottle: row.bottle, cellar: row.cellar, detail: { undid: String(row._id) }, result: envelope });
+      return ok(envelope.summary, envelope.data);
+    }
+
+    if (d.op === 'delete') {
+      const PersonalDataKey = require('../models/PersonalDataKey');
+      const prev = row.prev || {};
+      // The key must still exist (keys are never deleted by this feature, but
+      // an account purge could have raced us).
+      const key = await PersonalDataKey.findOne({ _id: prev.keyId, user: ctx.user.id });
+      if (!key) return fail('conflict', 'The key for that entry no longer exists; nothing was recreated.');
+      const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+      if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
+      let recreated;
+      try {
+        recreated = await PersonalDataEntry.create({
+          author: ctx.user.id,
+          key: key._id,
+          targetType: prev.level,
+          ...(prev.level === 'wine' ? { wineDefinition: prev.wineDefinition } : { bottle: prev.bottle }),
+          value: prev.value,
+        });
+      } catch (err) {
+        await unclaim(row._id); // failed → let the undo be retried
+        throw err;
+      }
+      const envelope = {
+        summary: `Undid personal data delete — "${d.key}" recreated`,
+        data: { undone: 'delete_personal_data', entry_id: recreated._id },
+      };
+      await logAction(ctx, { tool: 'undo_last', action: 'personal_data', viaUndo: true, bottle: row.bottle, cellar: row.cellar, detail: { undid: String(row._id) }, result: envelope });
+      return ok(envelope.summary, envelope.data);
+    }
+
+    return fail('unavailable', 'That personal-data action cannot be undone.');
   }
 
   // Somm curation of a wine's tasting profile — restores the previous values

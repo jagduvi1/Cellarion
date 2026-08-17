@@ -23,6 +23,7 @@ import EditForm from '../components/bottle/EditForm';
 import ViewDetails from '../components/bottle/ViewDetails';
 import BottleJourney from '../components/BottleJourney';
 import OwnerInquiryCard from '../components/bottle/OwnerInquiryCard';
+import PersonalDataCard from '../components/bottle/PersonalDataCard';
 import DialogBox from '../components/DialogBox';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
 import './BottleDetail.css';
@@ -583,6 +584,13 @@ function BottleDetail() {
           onRemove={() => setConsumeOpen(true)}
           onReportWine={(reason) => { setReportWineOpen(true); setReportDefaultReason(typeof reason === 'string' ? reason : null); }}
         />
+      )}
+
+      {/* ── Personal typed key/value data (#986) — content card, renders once.
+          Demo visitors are excluded: writes are requireNonDemo and their
+          ephemeral accounts would orphan shared-visible rows. ── */}
+      {!user?.isDemo && (
+        <PersonalDataCard apiFetch={apiFetch} bottleId={bottleId} currentUserId={user?.id} />
       )}
 
       {/* ── AI tasting profile (generated, vintage-neutral) ── */}
