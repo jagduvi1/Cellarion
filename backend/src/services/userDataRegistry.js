@@ -129,6 +129,11 @@ const REGISTRY = [
           roles: u.roles,
           plan: u.plan,
           stripeSubscriptionId: u.stripeSubscriptionId || null,
+          // When we sent the one-off supporter thank-you. Included because the
+          // export is an explicit field pick, so anything omitted here is
+          // simply absent from a subject access request — and "we emailed you
+          // on this date" is processing history the user is entitled to see.
+          supporterThankYouSentAt: u.supporterThankYouSentAt || null,
           preferences: u.preferences,
           profileVisibility: u.profileVisibility,
           emailVerified: u.emailVerified,

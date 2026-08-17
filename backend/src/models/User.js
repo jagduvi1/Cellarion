@@ -92,6 +92,16 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  // Set the first time this account is thanked for supporting the project, and
+  // never cleared. It is the ONLY thing that stops a second send: the plan
+  // webhook fires on renewals, payment-method changes and tier switches, so
+  // "have we already thanked them" cannot be inferred from the plan itself. A
+  // supporter who upgrades to patron has already been thanked and must not be
+  // thanked again.
+  supporterThankYouSentAt: {
+    type: Date,
+    default: null
+  },
   preferences: {
     currency: {
       type: String,

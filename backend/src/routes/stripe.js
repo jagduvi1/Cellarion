@@ -3,6 +3,7 @@ const { requireAuth } = require('../middleware/auth');
 const User = require('../models/User');
 const StripeWebhookEvent = require('../models/StripeWebhookEvent');
 const { logAudit } = require('../services/audit');
+const { maybeSendSupporterThankYou } = require('../services/supporterThankYou');
 const { PLAN_RANK } = require('../utils/cellarCred');
 
 const router = express.Router();
@@ -306,6 +307,9 @@ router.post('/webhook', async (req, res) => {
               logAudit(null, 'stripe.plan.changed', { type: 'user', id: userId },
                 { event: 'checkout.session.completed', eventId: event.id, ...change });
               console.log(`[stripe] User ${userId} subscribed to ${plan} (effective: ${change.to})`);
+              // Once per account, ever — the guard lives in the service, not
+              // here, because this handler also runs on redeliveries.
+              await maybeSendSupporterThankYou(userId);
             }
           }
         }
@@ -325,6 +329,11 @@ router.post('/webhook', async (req, res) => {
             if (change) {
               logAudit(null, 'stripe.plan.changed', { type: 'user', id: userId },
                 { event: 'customer.subscription.updated', eventId: event.id, ...change });
+              // Covers anyone whose paid plan starts on this event rather than
+              // on checkout.session.completed. This case also fires on every
+              // renewal and on a supporter -> patron switch, so it leans
+              // entirely on the once-ever stamp to stay quiet.
+              await maybeSendSupporterThankYou(userId);
             }
           } else {
             // Active subscription whose price doesn't map to any known plan —
