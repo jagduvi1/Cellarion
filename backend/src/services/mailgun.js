@@ -519,4 +519,55 @@ async function sendSecurityAlertEmail(toEmail, trigger) {
   });
 }
 
-module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendDrinkWindowDigest, sendRecommendationEmail, sendCellarInviteEmail, sendDiscussionReplyEmail, sendAccountLockoutAlert, sendSecurityAlertEmail, EMAIL_VERIFICATION_ENABLED };
+/**
+ * Thank someone for taking out a paid plan, and ask what they use and miss.
+ *
+ * Sent ONCE per account, ever — see User.supporterThankYouSentAt. This is a
+ * personal note, not a campaign, so it deliberately has no button, no banner
+ * and no marketing furniture.
+ *
+ * Reply-To is explicit and load-bearing: MAILGUN_FROM is unset in production,
+ * so FROM falls back to no-reply@, and the closing line promises a reply
+ * reaches a person. Without this header that promise is false.
+ *
+ * @param {string} toEmail
+ * @param {string} username
+ * @param {'supporter'|'patron'} tier - rendered verbatim, so nobody is called
+ *                                      the wrong thing after a tier switch
+ */
+async function sendSupporterThankYou(toEmail, username, tier) {
+  const replyTo = process.env.SUPPORT_REPLY_TO || 'info@cellarion.app';
+
+  await mg.messages.create(DOMAIN, {
+    from: FROM,
+    to: [toEmail],
+    'h:Reply-To': replyTo,
+    subject: 'Thanks for supporting Cellarion',
+    text: [
+      `Hi ${username},`,
+      '',
+      `You signed up as a ${tier} and I wanted to say thank you properly. Cellarion is a small project that a few friends and I build in our spare time, so it means a lot when someone decides it is worth paying for.`,
+      '',
+      'One thing I am curious about, if you have a minute: what do you use the most, and is there anything you are missing?',
+      '',
+      'There is no obligation to answer. You have already done the important part. If you do write back, it comes straight to me.',
+      '',
+      'Johan'
+    ].join('\n'),
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#2a2a2a;line-height:1.55;">
+        <p>Hi ${escapeHtml(username)},</p>
+        <p>You signed up as a ${escapeHtml(tier)} and I wanted to say thank you properly.
+           Cellarion is a small project that a few friends and I build in our spare time,
+           so it means a lot when someone decides it is worth paying for.</p>
+        <p>One thing I am curious about, if you have a minute: what do you use the most,
+           and is there anything you are missing?</p>
+        <p>There is no obligation to answer. You have already done the important part.
+           If you do write back, it comes straight to me.</p>
+        <p>Johan</p>
+      </div>
+    `
+  });
+}
+
+module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendDrinkWindowDigest, sendRecommendationEmail, sendCellarInviteEmail, sendDiscussionReplyEmail, sendAccountLockoutAlert, sendSecurityAlertEmail, sendSupporterThankYou, EMAIL_VERIFICATION_ENABLED };
