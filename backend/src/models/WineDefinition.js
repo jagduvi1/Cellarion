@@ -111,6 +111,23 @@ const wineDefinitionSchema = new mongoose.Schema({
     // suggested real producer when the model is sure of it. Feeds the admin
     // low-confidence review queue; never shown to end users.
     producerSuspect: { type: Boolean, default: false },
+    // The model recognises the producer as a REAL winery name but cannot
+    // place it — so the profile is an appellation-level estimate rather than
+    // knowledge of that house. Split out of producerSuspect on 2026-08-17.
+    //
+    // The two were one flag, and that conflated "this field is wrong"
+    // (Fabelhaft — a Niepoort label sold as a producer) with "I don't know
+    // this house" (Château Hautes Graves — a real Saint-Émilion property).
+    // Only the first justifies withholding the profile, but the hold fired on
+    // both, so most of the world's small estates lost their tasting note:
+    // measured on prod, ~47% of a 250-wine enrichment run was held, and the
+    // held rows blocked the sommelier's maturity queue because a held profile
+    // shows no tasting note to judge a drink window against.
+    //
+    // Ticket 6a6f94e5 asked that a description calling the producer
+    // undocumented must agree with a flag — that requirement now lands here,
+    // where it belongs, instead of on producerSuspect.
+    producerUnknown: { type: Boolean, default: false },
     producerNote:    { type: String,  default: null, trim: true },
     model:        { type: String, default: null, trim: true }, // model that produced it
     generatedAt:  { type: Date,   default: null },             // when it was generated

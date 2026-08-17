@@ -746,9 +746,16 @@ router.get('/low-confidence', async (req, res) => {
         // A suspect producer is a doubt about the IDENTITY, not the profile's
         // confidence — Fabelhaft's flagged at 0.5 while the default threshold
         // is 0.3, so the one row the flag existed for never surfaced here
-        // (ticket 6a8162c5). Suspect rows now appear regardless of threshold;
-        // since v-this their profiles are also HELD unpublished until someone
-        // in this queue decides.
+        // (ticket 6a8162c5). Suspect rows appear regardless of threshold, and
+        // their profiles are HELD unpublished until someone in this queue
+        // decides.
+        //
+        // Since the 2026-08-17 split this branch means what it says: the
+        // producer FIELD looks wrong. producerUnknown ("a real winery name I
+        // cannot place") is deliberately NOT a branch here — it describes most
+        // small estates in the registry and is not review work, so listing it
+        // would bury the rows that are genuinely wrong. It rides on each row
+        // for context instead.
         { 'aiProfile.producerSuspect': true },
       ],
       // Only rows that were actually enriched — without this, every wine that
@@ -768,7 +775,7 @@ router.get('/low-confidence', async (req, res) => {
     const filter = includeReviewed ? base : outstanding;
     const [rows, total, reviewedCount] = await Promise.all([
       WineDefinition.find(filter)
-        .select('name producer appellation nonWine profileReviewedAt aiProfile.confidence aiProfile.description aiProfile.producerSuspect aiProfile.producerNote aiProfile.generatedAt aiProfile.heldAt')
+        .select('name producer appellation nonWine profileReviewedAt aiProfile.confidence aiProfile.description aiProfile.producerSuspect aiProfile.producerUnknown aiProfile.producerNote aiProfile.generatedAt aiProfile.heldAt')
         .populate('region', 'name')
         .populate('country', 'name')
         .sort({ 'aiProfile.confidence': 1, producer: 1 })
@@ -800,6 +807,7 @@ router.get('/low-confidence', async (req, res) => {
         confidence: w.aiProfile?.confidence ?? null,
         description: w.aiProfile?.description || null,
         producerSuspect: w.aiProfile?.producerSuspect === true,
+        producerUnknown: w.aiProfile?.producerUnknown === true,
         producerNote: w.aiProfile?.producerNote || null,
         generatedAt: w.aiProfile?.generatedAt || null,
         heldAt: w.aiProfile?.heldAt || null,

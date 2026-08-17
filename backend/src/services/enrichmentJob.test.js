@@ -427,86 +427,108 @@ describe('profileInputsSnapshot — the before/after comparison the routes use',
 });
 
 /**
- * The NARROWED hold (2026-08-16). v1.116.0 held every producer-suspect
- * profile; measured against the 390 suspect rows that predate it, only ~2
- * were genuinely misleading and 370 were attached to real users' bottles —
- * a large user-visible cost for a small harm. The doubt now withholds only
- * when it could make the PROSE misleading: the model is also unsure of the
- * wine, or the prose talks about the producer as an entity.
+ * WHICH DOUBT WITHHOLDS A PROFILE (flag split, 2026-08-17).
  *
- * The 0.45 line is the enrichment prompt's own scale: 0.5 = "grape/region
- * knowledge only" (an honest appellation-level note, exactly right for a
- * brand-labelled wine), 0.4 = "mostly inferred from limited clues".
+ * One boolean used to answer two questions, and the hold fired on both:
+ *   producerSuspect  — the Producer FIELD is wrong (Fabelhaft, a Niepoort
+ *                      label sold as a house). The record is not a real
+ *                      producer, so the profile is fiction. HOLD.
+ *   producerUnknown  — a real winery name the model cannot place (Chateau
+ *                      Hautes Graves, Thomas Allen). The record is FINE and
+ *                      an appellation-level note is honest. PUBLISH.
+ *
+ * Measured cost of conflating them: ~47% of a 250-wine run withheld, almost
+ * all of it the second kind, and the held rows then blocked the sommelier's
+ * maturity queue because a held profile shows no tasting note.
  */
-describe('suspectHoldsProfile — which suspicions withhold the profile', () => {
-  const { suspectHoldsProfile } = require('./enrichmentJob');
+describe('shouldHoldProfile — which doubt withholds the profile', () => {
+  const { shouldHoldProfile } = require('./enrichmentJob');
   const clean = 'Bright red fruit and soft tannins, made for early drinking.';
 
-  test('unknown confidence holds — nobody can vouch for it', () => {
-    expect(suspectHoldsProfile({ confidence: null, description: clean })).toBe(true);
+  test('a wrong producer FIELD holds, at any confidence and with clean prose', () => {
+    expect(shouldHoldProfile({ producerSuspect: true, producerUnknown: false, description: clean })).toBe(true);
   });
 
-  test('low confidence holds regardless of prose (the Epiphany shape)', () => {
-    expect(suspectHoldsProfile({ confidence: 0.4, description: clean })).toBe(true);
-    expect(suspectHoldsProfile({ confidence: 0.45, description: clean })).toBe(true); // boundary is inclusive
+  test('a merely UNPLACEABLE producer publishes — the case that was over-held', () => {
+    expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: true, description: clean })).toBe(false);
   });
 
-  test('grape/region-level confidence with clean prose PUBLISHES (the brand-wine case)', () => {
-    expect(suspectHoldsProfile({ confidence: 0.5, description: clean })).toBe(false);
-    expect(suspectHoldsProfile({ confidence: 0.6, description: clean })).toBe(false);
+  test('no doubt at all publishes', () => {
+    expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: false, description: clean })).toBe(false);
   });
 
-  test('prose that talks about the PRODUCER holds even at high confidence (the Fabelhaft harm)', () => {
+  test('an unplaceable producer whose PROSE talks about the house still holds (the backstop)', () => {
     for (const d of [
       'A négociant label known for sourcing well-priced wines from established regions.',
       'The family has farmed this estate for four generations.',
       'Made at the winery in Mendoza by a respected producer.',
     ]) {
-      expect(suspectHoldsProfile({ confidence: 0.8, description: d })).toBe(true);
+      expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: true, description: d })).toBe(true);
     }
   });
 
-  test('an empty description with good confidence does not hold on the prose rule', () => {
-    expect(suspectHoldsProfile({ confidence: 0.7, description: null })).toBe(false);
+  test('confidence plays NO part — a low-confidence honest note publishes', () => {
+    // The old rule held everything at or below 0.45, which is precisely where
+    // an honest appellation-level note about a small estate lands.
+    expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: true, description: clean })).toBe(false);
+    expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: false, description: null })).toBe(false);
+  });
+
+  test('an empty description cannot trip the prose backstop', () => {
+    expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: true, description: null })).toBe(false);
   });
 });
 
-describe('the narrowed hold end-to-end through enrichWine', () => {
-  const suspectWith = (over) => ({
+describe('the split flags end-to-end through enrichWine', () => {
+  const withFlags = (over) => ({
     data: {
       body: 'medium', tannin: 'medium', acidity: 'medium', sweetness: 'dry',
       flavors: ['plum'], foodPairings: ['stew'],
-      producerSuspect: true,
-      producerNote: 'Aldi is a supermarket retailer, not an estate.',
+      producerSuspect: false, producerUnknown: false,
+      description: 'An off-dry German Riesling with orchard fruit and bright acidity.',
+      confidence: 0.6,
       ...over,
     },
     debugReason: null,
   });
 
-  test('a suspect producer with an honest grape/region note is PUBLISHED with the doubt recorded', async () => {
-    suggestProfile.mockResolvedValue(suspectWith({
-      confidence: 0.6,
-      description: 'An off-dry German Riesling with orchard fruit and bright acidity.',
+  test('an UNPLACEABLE producer is published, with both flags recorded on the row', async () => {
+    suggestProfile.mockResolvedValue(withFlags({
+      producerUnknown: true, confidence: 0.4,
+      producerNote: 'Chateau Hautes Graves is not a producer I can place.',
     }));
     await enrichWineById(WINE_ID);
     const p = persisted();
     expect(p.heldAt).toBeNull();
     expect(p.description).toMatch(/Riesling/);
-    // The doubt is not erased by publishing — the queue still lists it.
-    expect(p.producerSuspect).toBe(true);
-    expect(p.producerNote).toMatch(/supermarket/);
+    expect(p.producerUnknown).toBe(true);
+    expect(p.producerSuspect).toBe(false);
+    // The doubt is recorded, not erased, so a curator still has the context.
+    expect(p.producerNote).toMatch(/cannot place|can place/);
   });
 
-  test('a suspect producer the model also cannot place is still HELD', async () => {
-    suggestProfile.mockResolvedValue(suspectWith({
-      confidence: 0.4,
-      description: 'A red wine, probably in a modern international style.',
+  test('a WRONG producer field is still held, exactly as before', async () => {
+    suggestProfile.mockResolvedValue(withFlags({
+      producerSuspect: true, confidence: 0.7,
+      producerNote: 'Fabelhaft is a Niepoort label, not an estate.',
     }));
     await enrichWineById(WINE_ID);
     const p = persisted();
     expect(p.heldAt).toBeInstanceOf(Date);
     expect(p.description).toBeNull();
     expect(p.producerSuspect).toBe(true);
+  });
+
+  test('a missing producerUnknown on an old/custom prompt degrades to "no doubt", never to a hold', async () => {
+    const r = withFlags({});
+    delete r.data.producerUnknown;
+    delete r.data.producerSuspect;
+    suggestProfile.mockResolvedValue(r);
+    await enrichWineById(WINE_ID);
+    const p = persisted();
+    expect(p.heldAt).toBeNull();
+    expect(p.producerUnknown).toBe(false);
+    expect(p.producerSuspect).toBe(false);
   });
 });
 
@@ -570,5 +592,47 @@ describe('the hold path re-embeds', () => {
     expect(persisted().heldAt).toBeInstanceOf(Date);
     expect(embedSinglePair).toHaveBeenCalledWith(WINE_ID, '2019');
     expect(embedSinglePair).toHaveBeenCalledWith(WINE_ID, '2020');
+  });
+});
+
+/**
+ * The prompt must not assert what the record leaves blank (somm ticket
+ * 6a82bfb7, 2026-08-17). The field-level fix worked — unverifiable region and
+ * grapes are stored NULL rather than guessed — but the generator then wrote
+ * "from the Hunter Valley" into the first sentence of a region-null record and
+ * "a GSM blend" onto a record with no grapes. Same fabrication, one layer down,
+ * and a curator reading the maturity queue takes prose as established fact.
+ *
+ * The rule lives in the PROMPT (a model writes the prose, not this module), so
+ * what is pinned here is that the rule is present and specific — the same
+ * stance the markdown-strip tests take: the prompt is advisory, the guarantee
+ * is elsewhere, but the wording is load-bearing enough to protect.
+ */
+describe('the enrichment prompt forbids asserting unstated facts', () => {
+  // aiConfig is mocked at the top of this file for the job's own use — the
+  // prompt text itself has to come from the real module.
+  const { DEFAULT_ENRICHMENT_PROMPT } = jest.requireActual('../config/aiConfig');
+
+  test('it names the three blank fields the prose must not fill', () => {
+    expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/NEVER assert in the prose a fact the record above leaves blank/);
+    expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/If Region is blank, do not name a region/);
+    expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/If Grapes is empty, do not name grape varieties/);
+    expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/If Classification is blank, do not describe a quality tier/);
+  });
+
+  test('it keeps the legally-defined-grape exception, so Barolo can still say Nebbiolo', () => {
+    expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/appellation that legally defines its own grapes/i);
+  });
+
+  test('it tells the model a thin description is the CORRECT output, not a failure', () => {
+    expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/is the correct output, even when that is little/);
+  });
+
+  test('the two producer doubts are defined apart, and only the wrong-field one is a claim about the record', () => {
+    expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/producerSuspect: true ONLY when the Producer value is not a winery at all/);
+    expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/producerUnknown: true when the Producer reads like a genuine winery name/);
+    // Ticket 6a6f94e5's requirement (flag and prose must agree) must survive
+    // the split — pointed at producerUnknown now, which is where it belongs.
+    expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/Set producerUnknown, NOT producerSuspect, whenever your description would call the producer undocumented/);
   });
 });

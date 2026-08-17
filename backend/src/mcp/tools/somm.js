@@ -86,18 +86,48 @@ const wineLite = (wd) => (wd ? {
 // wrote them and how sure the generator was. `confidence` is the model's own
 // self-rating and is not a correctness score — a 0.6 profile inverted the
 // facts about a Vintage Port — so it is labelled, not thresholded.
-const profileLite = (ap) => (ap && (ap.description || ap.body) ? {
-  body: ap.body || null,
-  tannin: ap.tannin || null,
-  acidity: ap.acidity || null,
-  sweetness: ap.sweetness || null,
-  flavors: ap.flavors || [],
-  food_pairings: ap.foodPairings || [],
-  description: ap.description || null,
-  source: ap.source || 'ai',
-  ai_confidence: ap.source === 'curator' ? null : (ap.confidence ?? null),
-  verified_at: ap.verifiedAt || null,
-} : null);
+// A HELD profile carries the doubt but no prose, which made it look exactly
+// like a wine that was never enriched — the curator could not tell whether a
+// missing tasting note meant "not generated yet" or "generated and withheld
+// from the owner", and said so (somm ticket 6a82bfb7). It reports itself now.
+//
+// producer_unknown rides along on every shape: it is the difference between
+// "this record is wrong" and "this is a small estate the model cannot place",
+// and a curator judging a drink window should know which they are looking at.
+const profileLite = (ap) => {
+  if (!ap || !ap.generatedAt) return null; // never enriched — nothing to say
+  if (ap.heldAt) {
+    return {
+      withheld: true,
+      withheld_reason: ap.producerNote
+        || 'the producer field does not look like a real winery; awaiting review',
+      producer_suspect: ap.producerSuspect === true,
+      producer_unknown: ap.producerUnknown === true,
+      ai_confidence: ap.confidence ?? null,
+      description: null,
+      source: ap.source || 'ai',
+    };
+  }
+  if (!(ap.description || ap.body)) return null;
+  return {
+    body: ap.body || null,
+    tannin: ap.tannin || null,
+    acidity: ap.acidity || null,
+    sweetness: ap.sweetness || null,
+    flavors: ap.flavors || [],
+    food_pairings: ap.foodPairings || [],
+    description: ap.description || null,
+    source: ap.source || 'ai',
+    ai_confidence: ap.source === 'curator' ? null : (ap.confidence ?? null),
+    // Present on AI profiles so the curator can weigh the prose: an
+    // unplaceable producer means the note is appellation-level typicity, not
+    // knowledge of this house.
+    producer_suspect: ap.producerSuspect === true,
+    producer_unknown: ap.producerUnknown === true,
+    producer_note: ap.producerNote || null,
+    verified_at: ap.verifiedAt || null,
+  };
+};
 
 registerTool({
   name: 'list_maturity_queue',
