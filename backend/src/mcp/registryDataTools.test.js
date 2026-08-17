@@ -34,26 +34,29 @@ const parse = (res) => JSON.parse(res.content[0].text);
 
 beforeEach(() => jest.clearAllMocks());
 
-test('scopes: read for the getter, write for the rest', () => {
+test('scopes: read for the getter, write for the rest; admin tool is STRUCTURALLY gated', () => {
   expect(tool('get_wine_public_data').scope).toBe('read');
   expect(tool('suggest_wine_public_value').scope).toBe('write');
   expect(tool('propose_registry_key').scope).toBe('write');
   expect(tool('review_registry_data').scope).toBe('write');
+  // requireRole makes the tool invisible to non-admin connections (the
+  // registry filters on it) — the pattern every admin tool follows.
+  expect(tool('review_registry_data').requireRole).toEqual(['admin']);
 });
 
-test('get_wine_public_data returns fields with blanks and my pending suggestion', async () => {
+test('get_wine_public_data passes roles (visibility) and surfaces any-pending + mine', async () => {
   ops.dataForWine.mockResolvedValue({
     ok: true,
     fields: [
-      { key: { _id: KEY, name: 'ABV', type: 'decimal', unit: '%', enumOptions: null }, value: 13.5, contributedBy: 'kurt', mySuggestion: null },
-      { key: { _id: oid('e'), name: 'Organic', type: 'boolean', unit: null, enumOptions: null }, value: null, contributedBy: null, mySuggestion: { value: true } },
+      { key: { _id: KEY, name: 'ABV', type: 'decimal', unit: '%', enumOptions: null }, value: 13.5, contributedBy: 'kurt', hasPendingSuggestion: false, mySuggestion: null },
+      { key: { _id: oid('e'), name: 'Organic', type: 'boolean', unit: null, enumOptions: null }, value: null, contributedBy: null, hasPendingSuggestion: true, mySuggestion: { value: true } },
     ],
   });
   const res = await tool('get_wine_public_data').handler({ wine_id: WINE }, USER_CTX);
   const body = parse(res);
-  expect(ops.dataForWine).toHaveBeenCalledWith(WINE, ME);
-  expect(body.data.fields[0]).toMatchObject({ key: 'ABV', value: 13.5, contributed_by: 'kurt' });
-  expect(body.data.fields[1]).toMatchObject({ value: null, my_pending_suggestion: true });
+  expect(ops.dataForWine).toHaveBeenCalledWith(WINE, ME, { roles: USER_CTX.user.roles });
+  expect(body.data.fields[0]).toMatchObject({ key: 'ABV', value: 13.5, contributed_by: 'kurt', suggestion_pending: false });
+  expect(body.data.fields[1]).toMatchObject({ value: null, suggestion_pending: true, my_pending_suggestion: true });
 });
 
 test('suggest_wine_public_value delegates and maps limit → rate_limited', async () => {
@@ -79,12 +82,6 @@ test('propose_registry_key delegates with the full definition', async () => {
 });
 
 describe('review_registry_data', () => {
-  test('non-admin is refused before any service call', async () => {
-    const res = await tool('review_registry_data').handler({}, USER_CTX);
-    expect(parse(res).error.code).toBe('forbidden_scope');
-    expect(ops.listReviewQueues).not.toHaveBeenCalled();
-  });
-
   test('no ids → both queues', async () => {
     ops.listReviewQueues.mockResolvedValue({ ok: true, keys: [], values: [] });
     const res = await tool('review_registry_data').handler({}, ADMIN_CTX);
@@ -92,7 +89,7 @@ describe('review_registry_data', () => {
     expect(parse(res).data.suggested_values).toEqual([]);
   });
 
-  test('decides one row per call, with per-kind decision vocabulary', async () => {
+  test('decides one row per call; the SERVICE owns the decision vocabulary', async () => {
     ops.decideKey.mockResolvedValue({ ok: true, key: { _id: KEY, name: 'ABV', status: 'accepted' } });
     await tool('review_registry_data').handler({ key_id: KEY, decision: 'accept' }, ADMIN_CTX);
     expect(ops.decideKey).toHaveBeenCalledWith(ME, KEY, 'accept', undefined, { req: ADMIN_CTX.req });
@@ -100,8 +97,10 @@ describe('review_registry_data', () => {
     const both = await tool('review_registry_data').handler({ key_id: KEY, value_id: oid('9'), decision: 'accept' }, ADMIN_CTX);
     expect(both.isError).toBe(true);
 
+    // Wrong per-kind verb: delegated to the service, whose invalid → invalid_input
+    ops.decideValue.mockResolvedValue({ ok: false, code: 'invalid', message: "decision must be 'publish' or 'reject'" });
     const wrongVocab = await tool('review_registry_data').handler({ value_id: oid('9'), decision: 'accept' }, ADMIN_CTX);
     expect(parse(wrongVocab).error.code).toBe('invalid_input');
-    expect(ops.decideValue).not.toHaveBeenCalled();
+    expect(ops.decideValue).toHaveBeenCalledWith(ME, oid('9'), 'accept', undefined, { req: ADMIN_CTX.req });
   });
 });

@@ -5,21 +5,12 @@
 const express = require('express');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const ops = require('../services/registryDataOps');
+const { sendServiceFail: sendFail } = require('../utils/serviceResult');
 
 const router = express.Router();
 
 router.use(requireAuth);
 
-const CODE_STATUS = {
-  invalid: 400,
-  limit: 429,
-  banned: 403,
-  not_found: 404,
-  conflict: 409,
-};
-
-const sendFail = (res, result) =>
-  res.status(CODE_STATUS[result.code] || 400).json({ error: result.message });
 
 /** GET /api/registry-data/keys — the accepted vocabulary. */
 router.get('/keys', async (req, res, next) => {
@@ -49,7 +40,7 @@ router.post('/keys', requireNonDemo, async (req, res, next) => {
  */
 router.get('/wine/:id', async (req, res, next) => {
   try {
-    const result = await ops.dataForWine(req.params.id, req.user.id);
+    const result = await ops.dataForWine(req.params.id, req.user.id, { roles: req.user.roles });
     if (!result.ok) return sendFail(res, result);
     res.json({ fields: result.fields });
   } catch (err) {

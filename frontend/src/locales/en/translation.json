@@ -2003,6 +2003,8 @@
     "suggestFor": "Suggest a fix for {{field}}",
     "pending": "suggestion pending",
     "pendingTitle": "Your suggestion is awaiting curator review",
+    "pendingOtherTitle": "A suggestion for this field is awaiting curator review",
+    "introShort": "The shared registry’s record of this wine, curator-reviewed.",
     "thanks": "Thank you — your suggestion is in the review queue. You’ll see the outcome here.",
     "modalTitle": "Suggest a fix: {{field}}",
     "current": "Currently recorded",

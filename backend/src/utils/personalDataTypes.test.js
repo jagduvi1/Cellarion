@@ -42,6 +42,10 @@ describe('validateValue', () => {
       expect(validateValue({ type: 'integer' }, '3.5').ok).toBe(false);
       expect(validateValue({ type: 'integer' }, 'three').ok).toBe(false);
     });
+    test('whitespace-only never becomes 0 (Number("") === 0 trap)', () => {
+      expect(validateValue({ type: 'integer' }, ' ').ok).toBe(false);
+      expect(validateValue({ type: 'integer' }, '\t').ok).toBe(false);
+    });
   });
 
   describe('decimal', () => {
@@ -50,10 +54,11 @@ describe('validateValue', () => {
       expect(validateValue({ type: 'decimal' }, '13.5')).toEqual({ ok: true, value: 13.5 });
       expect(validateValue({ type: 'decimal' }, '13,5')).toEqual({ ok: true, value: 13.5 });
     });
-    test('rejects non-finite and non-numeric', () => {
+    test('rejects non-finite, non-numeric and whitespace-only', () => {
       expect(validateValue({ type: 'decimal' }, 'abc').ok).toBe(false);
       expect(validateValue({ type: 'decimal' }, Infinity).ok).toBe(false);
       expect(validateValue({ type: 'decimal' }, NaN).ok).toBe(false);
+      expect(validateValue({ type: 'decimal' }, '  ').ok).toBe(false);
     });
   });
 

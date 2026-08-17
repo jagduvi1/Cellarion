@@ -11,11 +11,16 @@
 jest.mock('../models/WineCorrectionProposal', () => ({
   create: jest.fn(), countDocuments: jest.fn(), find: jest.fn(),
 }));
+// The shared contribution gate counts across ALL suggestion collections.
+jest.mock('../models/RegistryDataKey', () => ({ countDocuments: jest.fn() }));
+jest.mock('../models/RegistryDataValue', () => ({ countDocuments: jest.fn() }));
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('./wineVisibility', () => ({ findVisibleWine: jest.fn() }));
 jest.mock('./audit', () => ({ logAudit: jest.fn() }));
 
 const WineCorrectionProposal = require('../models/WineCorrectionProposal');
+const RegistryDataKey = require('../models/RegistryDataKey');
+const RegistryDataValue = require('../models/RegistryDataValue');
 const User = require('../models/User');
 const { findVisibleWine } = require('./wineVisibility');
 const { logAudit } = require('./audit');
@@ -54,6 +59,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockUser();
   WineCorrectionProposal.countDocuments.mockResolvedValue(0);
+  RegistryDataKey.countDocuments.mockResolvedValue(0);
+  RegistryDataValue.countDocuments.mockResolvedValue(0);
   findVisibleWine.mockResolvedValue(wineDoc);
   WineCorrectionProposal.create.mockResolvedValue({ _id: oid('9'), proposedFields: GOOD.fields, status: 'pending' });
 });
@@ -83,7 +90,7 @@ describe('createFieldCorrection validation', () => {
   });
 });
 
-describe('tier budget', () => {
+describe('tier budget (shared across ALL suggestion families)', () => {
   test('newcomer stops at 3/day; ambassador at 30/day', async () => {
     WineCorrectionProposal.countDocuments.mockResolvedValue(3);
     expect((await ops.createFieldCorrection(ME, GOOD)).code).toBe('limit');
@@ -92,6 +99,13 @@ describe('tier budget', () => {
     WineCorrectionProposal.countDocuments.mockResolvedValue(29);
     expect((await ops.createFieldCorrection(ME, GOOD)).ok).toBe(true);
     WineCorrectionProposal.countDocuments.mockResolvedValue(30);
+    expect((await ops.createFieldCorrection(ME, GOOD)).code).toBe('limit');
+  });
+
+  test('registry key/value suggestions consume the SAME pool as corrections', async () => {
+    WineCorrectionProposal.countDocuments.mockResolvedValue(1);
+    RegistryDataKey.countDocuments.mockResolvedValue(1);
+    RegistryDataValue.countDocuments.mockResolvedValue(1); // 1+1+1 = newcomer cap 3
     expect((await ops.createFieldCorrection(ME, GOOD)).code).toBe('limit');
   });
 

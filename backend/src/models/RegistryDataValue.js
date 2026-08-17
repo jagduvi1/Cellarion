@@ -18,10 +18,11 @@ const registryDataValueSchema = new mongoose.Schema({
     index: true
   },
   key: {
+    // No standalone index: every key-filtered query also filters by
+    // wineDefinition, served by the compound partial unique index below.
     type: mongoose.Schema.Types.ObjectId,
     ref: 'RegistryDataKey',
-    required: true,
-    index: true
+    required: true
   },
   // Already cast/validated against the key's type by the service layer.
   value: {
@@ -29,10 +30,10 @@ const registryDataValueSchema = new mongoose.Schema({
     required: [true, 'Value is required']
   },
   status: {
+    // Indexed via the compound { status, createdAt } queue index below.
     type: String,
     enum: ['suggested', 'published', 'rejected'],
-    default: 'suggested',
-    index: true
+    default: 'suggested'
   },
   // Provenance — who contributed, who verified. Survives account deletion as
   // the anonymised deleted-user sentinel (shared content, like forum posts).
@@ -65,6 +66,8 @@ registryDataValueSchema.index(
   { wineDefinition: 1, key: 1, status: 1 },
   { unique: true, partialFilterExpression: { status: { $in: ['suggested', 'published'] } } }
 );
+// The review queue: status-filtered, oldest-first, bounded.
+registryDataValueSchema.index({ status: 1, createdAt: 1 });
 
 registryDataValueSchema.pre('save', function (next) {
   this.updatedAt = Date.now();

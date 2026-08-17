@@ -1,13 +1,9 @@
 /**
  * registryDataOps (#985 Slice B) — the public vocabulary + values engine
- * shared by REST (user + admin) and MCP.
- *
- * Pins: key proposal validation (type system, rationale, RESERVED names,
- * live-name collision), the shared daily tier budget across keys+values,
- * value suggestions only against ACCEPTED keys with type validation, the
- * same-as-published no-op conflict, one-suggested-per-(wine,key) E11000
- * mapping, dataForWine's blanks-included shape, and the admin decisions —
- * including publish superseding a previously published value.
+ * shared by REST (user + admin) and MCP. Updated for the 2026-08-17 audit
+ * fixes: wine-visibility gate on the read path, the shared contribution
+ * gate, key-by-name resolution, any-pending exposure, bounded queues, and
+ * history-preserving supersede.
  */
 
 jest.mock('../models/RegistryDataKey', () => ({
@@ -16,18 +12,18 @@ jest.mock('../models/RegistryDataKey', () => ({
 }));
 jest.mock('../models/RegistryDataValue', () => ({
   findOne: jest.fn(), find: jest.fn(), create: jest.fn(),
-  countDocuments: jest.fn(), deleteOne: jest.fn(),
+  countDocuments: jest.fn(), deleteOne: jest.fn(), updateOne: jest.fn(),
 }));
-jest.mock('../models/User', () => ({ findById: jest.fn() }));
+jest.mock('./contributionGate', () => ({
+  TIER_DAILY: { newcomer: 3, contributor: 5, enthusiast: 10, connoisseur: 20, ambassador: 30 },
+  checkContributionGate: jest.fn(),
+}));
 jest.mock('./wineVisibility', () => ({ findVisibleWine: jest.fn() }));
 jest.mock('./audit', () => ({ logAudit: jest.fn() }));
-// registryDataOps imports TIER_DAILY from wineProposalOps — use the real one
-// (it is a plain constant; no mocking needed) but keep its model deps quiet.
-jest.mock('../models/WineCorrectionProposal', () => ({ countDocuments: jest.fn(), find: jest.fn(), create: jest.fn() }));
 
 const RegistryDataKey = require('../models/RegistryDataKey');
 const RegistryDataValue = require('../models/RegistryDataValue');
-const User = require('../models/User');
+const { checkContributionGate } = require('./contributionGate');
 const { findVisibleWine } = require('./wineVisibility');
 const ops = require('./registryDataOps');
 
@@ -39,11 +35,6 @@ const ADMIN = oid('d');
 
 const acceptedKey = { _id: KEY, name: 'ABV', nameKey: 'abv', type: 'decimal', unit: '%', status: 'accepted' };
 
-const mockUser = (tier = 'newcomer', banned = false) =>
-  User.findById.mockReturnValue({
-    select: jest.fn().mockResolvedValue({ contribution: { tier }, isDiscussionBanned: () => banned }),
-  });
-
 const chain = (result) => {
   const c = {};
   for (const m of ['sort', 'populate', 'select', 'limit']) c[m] = jest.fn(() => c);
@@ -53,9 +44,8 @@ const chain = (result) => {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockUser();
-  RegistryDataKey.countDocuments.mockResolvedValue(0);
-  RegistryDataValue.countDocuments.mockResolvedValue(0);
+  ops.invalidateVocabCache();
+  checkContributionGate.mockResolvedValue({ ok: true, user: { contribution: { tier: 'newcomer' } } });
   findVisibleWine.mockResolvedValue({ _id: WINE, producer: 'Cloudy Bay', name: 'Sauvignon Blanc' });
 });
 
@@ -83,18 +73,14 @@ describe('proposeKey', () => {
     expect((await ops.proposeKey(ME, GOOD)).message).toContain('awaiting review');
   });
 
-  test('daily budget is SHARED across key proposals and value suggestions', async () => {
-    RegistryDataKey.findOne.mockResolvedValue(null);
-    RegistryDataKey.countDocuments.mockResolvedValue(2);
-    RegistryDataValue.countDocuments.mockResolvedValue(1); // 2 + 1 = newcomer cap 3
-    expect((await ops.proposeKey(ME, GOOD)).code).toBe('limit');
+  test('the shared contribution gate is consulted and its failure passes through', async () => {
+    checkContributionGate.mockResolvedValue({ ok: false, code: 'limit', message: 'cap' });
+    const res = await ops.proposeKey(ME, GOOD);
+    expect(res).toMatchObject({ ok: false, code: 'limit' });
+    expect(RegistryDataKey.create).not.toHaveBeenCalled();
   });
 
-  test('ban blocks; happy path creates the proposed key', async () => {
-    mockUser('newcomer', true);
-    expect((await ops.proposeKey(ME, GOOD)).code).toBe('banned');
-
-    mockUser();
+  test('happy path creates the proposed key', async () => {
     RegistryDataKey.findOne.mockResolvedValue(null);
     RegistryDataKey.create.mockResolvedValue({ ...acceptedKey, status: 'proposed' });
     const res = await ops.proposeKey(ME, GOOD);
@@ -108,10 +94,20 @@ describe('proposeKey', () => {
 describe('suggestValue', () => {
   const GOOD = { wineId: WINE, keyId: KEY, value: '13,5' };
 
-  test('only ACCEPTED keys accept values', async () => {
+  test('only ACCEPTED keys accept values; keyName resolves via nameKey', async () => {
     RegistryDataKey.findOne.mockResolvedValue(null);
     expect((await ops.suggestValue(ME, GOOD)).code).toBe('not_found');
     expect(RegistryDataKey.findOne).toHaveBeenCalledWith({ _id: { $eq: KEY }, status: 'accepted' });
+
+    RegistryDataKey.findOne.mockClear();
+    RegistryDataKey.findOne.mockResolvedValue(acceptedKey);
+    RegistryDataValue.findOne.mockResolvedValue(null);
+    RegistryDataValue.create.mockResolvedValue({ _id: oid('9'), value: 13.5, status: 'suggested' });
+    const res = await ops.suggestValue(ME, { wineId: WINE, keyName: '  ABV ', value: 13.5 });
+    expect(res.ok).toBe(true);
+    expect(RegistryDataKey.findOne).toHaveBeenCalledWith({ nameKey: { $eq: 'abv' }, status: 'accepted' });
+
+    expect((await ops.suggestValue(ME, { wineId: WINE, value: 1 })).code).toBe('invalid');
   });
 
   test('value validated against the key type before any write', async () => {
@@ -121,12 +117,15 @@ describe('suggestValue', () => {
     expect(RegistryDataValue.create).not.toHaveBeenCalled();
   });
 
-  test('same-as-published is a no-op conflict', async () => {
+  test('same-as-published is a no-op conflict; invisible wine is not_found', async () => {
     RegistryDataKey.findOne.mockResolvedValue(acceptedKey);
     RegistryDataValue.findOne.mockResolvedValue({ value: 13.5, status: 'published' });
     const res = await ops.suggestValue(ME, GOOD);
     expect(res).toMatchObject({ ok: false, code: 'conflict' });
-    expect(res.message).toContain('already says');
+
+    findVisibleWine.mockResolvedValue(null);
+    RegistryDataValue.findOne.mockResolvedValue(null);
+    expect((await ops.suggestValue(ME, GOOD)).code).toBe('not_found');
   });
 
   test('creates the suggestion with the CAST value; E11000 → friendly conflict', async () => {
@@ -146,19 +145,46 @@ describe('suggestValue', () => {
 });
 
 describe('dataForWine', () => {
-  test('every accepted key appears — blanks included — with published value + my pending suggestion', async () => {
+  test('gated on wine visibility: hidden or missing wine → not_found, no value query', async () => {
+    findVisibleWine.mockResolvedValue(null);
+    const res = await ops.dataForWine(WINE, ME, { roles: [] });
+    expect(res).toMatchObject({ ok: false, code: 'not_found' });
+    expect(RegistryDataValue.find).not.toHaveBeenCalled();
+  });
+
+  test('empty vocabulary short-circuits without value queries', async () => {
+    RegistryDataKey.find.mockReturnValue(chain([]));
+    const res = await ops.dataForWine(WINE, ME);
+    expect(res).toEqual({ ok: true, fields: [] });
+    expect(RegistryDataValue.find).not.toHaveBeenCalled();
+  });
+
+  test('blanks included; any pending suggestion exposed without attribution; mine flagged', async () => {
     RegistryDataKey.find.mockReturnValue(chain([
       acceptedKey,
       { _id: oid('e'), name: 'Organic', nameKey: 'organic', type: 'boolean', status: 'accepted' },
     ]));
     RegistryDataValue.find
       .mockReturnValueOnce(chain([{ key: KEY, value: 13.5, suggestedBy: { username: 'kurt' } }]))
-      .mockReturnValueOnce(chain([{ key: oid('e'), value: true, status: 'suggested' }]));
+      .mockReturnValueOnce(chain([{ key: oid('e'), value: true, status: 'suggested', suggestedBy: oid('9') }]));
 
     const res = await ops.dataForWine(WINE, ME);
-    expect(res.fields).toHaveLength(2);
-    expect(res.fields[0]).toMatchObject({ value: 13.5, contributedBy: 'kurt', mySuggestion: null });
-    expect(res.fields[1]).toMatchObject({ value: null, mySuggestion: { value: true } });
+    expect(res.fields[0]).toMatchObject({ value: 13.5, contributedBy: 'kurt', hasPendingSuggestion: false, mySuggestion: null });
+    // Someone ELSE's pending suggestion: slot shown occupied, value not mine
+    expect(res.fields[1]).toMatchObject({ value: null, hasPendingSuggestion: true, mySuggestion: null });
+  });
+
+  test('the vocabulary is cached between calls and invalidated on a key decision', async () => {
+    RegistryDataKey.find.mockReturnValue(chain([acceptedKey]));
+    RegistryDataValue.find.mockReturnValue(chain([]));
+    await ops.dataForWine(WINE, ME);
+    await ops.dataForWine(WINE, ME);
+    expect(RegistryDataKey.find).toHaveBeenCalledTimes(1);
+
+    RegistryDataKey.findOneAndUpdate.mockResolvedValue({ ...acceptedKey, status: 'accepted' });
+    await ops.decideKey(ADMIN, KEY, 'accept');
+    await ops.dataForWine(WINE, ME);
+    expect(RegistryDataKey.find).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -178,21 +204,30 @@ describe('admin decisions', () => {
     expect((await ops.decideKey(ADMIN, KEY, 'publish')).code).toBe('invalid');
   });
 
-  test('publish supersedes the previously published value for that wine+key', async () => {
+  test('publish DEMOTES the previously published value (never deletes) then promotes', async () => {
     const row = {
       _id: oid('9'), wineDefinition: WINE, key: acceptedKey, value: 14,
       status: 'suggested', save: jest.fn().mockResolvedValue(undefined),
     };
     RegistryDataValue.findOne.mockReturnValue({ populate: jest.fn().mockResolvedValue(row) });
-    RegistryDataValue.deleteOne.mockResolvedValue({ deletedCount: 1 });
+    RegistryDataValue.updateOne.mockResolvedValue({ modifiedCount: 1 });
 
     const res = await ops.decideValue(ADMIN, oid('9'), 'publish');
     expect(res.ok).toBe(true);
-    expect(RegistryDataValue.deleteOne).toHaveBeenCalledWith({
-      wineDefinition: WINE, key: KEY, status: 'published',
-    });
+    expect(RegistryDataValue.deleteOne).not.toHaveBeenCalled();
+    expect(RegistryDataValue.updateOne).toHaveBeenCalledWith(
+      { wineDefinition: WINE, key: KEY, status: 'published' },
+      expect.objectContaining({ $set: expect.objectContaining({ status: 'rejected', rejectReason: expect.stringContaining('Superseded') }) })
+    );
     expect(row.status).toBe('published');
     expect(row.save).toHaveBeenCalled();
+  });
+
+  test('a suggestion whose key is gone is refused cleanly, not a TypeError', async () => {
+    const row = { _id: oid('9'), wineDefinition: WINE, key: null, status: 'suggested' };
+    RegistryDataValue.findOne.mockReturnValue({ populate: jest.fn().mockResolvedValue(row) });
+    const res = await ops.decideValue(ADMIN, oid('9'), 'publish');
+    expect(res).toMatchObject({ ok: false, code: 'invalid' });
   });
 
   test('reject keeps the row as history and never touches the published slot', async () => {
@@ -204,6 +239,16 @@ describe('admin decisions', () => {
     const res = await ops.decideValue(ADMIN, oid('9'), 'reject', 'no evidence');
     expect(res.ok).toBe(true);
     expect(row.status).toBe('rejected');
-    expect(RegistryDataValue.deleteOne).not.toHaveBeenCalled();
+    expect(RegistryDataValue.updateOne).not.toHaveBeenCalled();
+  });
+
+  test('review queues are bounded', async () => {
+    const kChain = chain([]);
+    const vChain = chain([]);
+    RegistryDataKey.find.mockReturnValue(kChain);
+    RegistryDataValue.find.mockReturnValue(vChain);
+    await ops.listReviewQueues();
+    expect(kChain.limit).toHaveBeenCalledWith(ops.REVIEW_QUEUE_LIMIT);
+    expect(vChain.limit).toHaveBeenCalledWith(ops.REVIEW_QUEUE_LIMIT);
   });
 });

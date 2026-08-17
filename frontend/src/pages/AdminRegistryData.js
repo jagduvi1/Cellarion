@@ -41,8 +41,12 @@ function AdminRegistryData() {
   const decide = async (kind, id, decision) => {
     let rejectReason;
     if (decision === 'reject') {
-      rejectReason = window.prompt('Reason for rejecting (shown to the proposer):') || undefined;
-      if (rejectReason === undefined) return; // cancelled
+      // null = Cancel; '' = OK with no text — a reason is optional, so an
+      // empty OK must still send the rejection (audit: `|| undefined` made
+      // the Reject button silently dead without a typed reason).
+      const answer = window.prompt('Reason for rejecting (optional, shown to the proposer):');
+      if (answer === null) return; // cancelled
+      rejectReason = answer.trim() || undefined;
     }
     setBusy(id);
     setError(null);
@@ -51,7 +55,10 @@ function AdminRegistryData() {
       const res = await fn(apiFetch, id, decision, rejectReason);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) return setError(data.error || 'Decision failed');
-      await load();
+      // The server returned the decided row — drop it locally instead of
+      // refetching both full queues per click (audit: O(N²) queue clearing).
+      if (kind === 'key') setKeys((prev) => prev.filter((k) => k._id !== id));
+      else setValues((prev) => prev.filter((v) => v._id !== id));
     } catch {
       setError('Network error.');
     } finally {

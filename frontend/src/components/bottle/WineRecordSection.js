@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../Modal';
-import TypedValueInput from '../TypedValueInput';
+import TypedValueInput, { TYPES, formatTypedValue } from '../TypedValueInput';
 import { createWineProposal, getMyWineProposals } from '../../api/wineProposals';
 import { getWinePublicData, suggestWineValue, proposeRegistryKey } from '../../api/registryData';
 import './WineRecordSection.css';
@@ -118,14 +118,7 @@ function WineRecordSection({ wine, canSuggest, apiFetch }) {
 
   const fieldLabel = (f) => t(`wineRecord.field_${f}`, f.charAt(0).toUpperCase() + f.slice(1));
 
-  const formatPublicValue = (field) => {
-    if (field.value === null || field.value === undefined) return null;
-    if (field.key.type === 'boolean') {
-      return field.value ? t('personalData.yes', 'Yes') : t('personalData.no', 'No');
-    }
-    const s = String(field.value);
-    return field.key.unit ? `${s} ${field.key.unit}` : s;
-  };
+  const formatPublicValue = (field) => formatTypedValue(field.key, field.value, t);
 
   const submitValue = async (e) => {
     e.preventDefault();
@@ -198,11 +191,14 @@ function WineRecordSection({ wine, canSuggest, apiFetch }) {
           </button>
         )}
       </div>
-      {suggestMode && (
-        <p className="wr-intro">
-          {t('wineRecord.intro', 'The shared registry’s record of this wine. Spot something wrong or missing? Suggest a fix — a curator reviews every suggestion before it goes live.')}
-        </p>
-      )}
+      {/* The one-line framing stays for everyone (audit: read-only viewers
+          otherwise lose the only explanation of what this shared data is);
+          the longer suggest-specific sentence appears with the toggle. */}
+      <p className="wr-intro">
+        {suggestMode
+          ? t('wineRecord.intro', 'The shared registry’s record of this wine. Spot something wrong or missing? Suggest a fix — a curator reviews every suggestion before it goes live.')
+          : t('wineRecord.introShort', 'The shared registry’s record of this wine, curator-reviewed.')}
+      </p>
       <div className="wr-grid">
         {SUGGESTABLE.map((f) => (
           <div key={f} className="wr-row">
@@ -246,8 +242,13 @@ function WineRecordSection({ wine, canSuggest, apiFetch }) {
                       <span className="wr-contributor"> {t('wineRecord.contributedBy', 'by {{name}}', { name: field.contributedBy })}</span>
                     )}
                   </span>
-                  {canSuggest && field.mySuggestion ? (
-                    <span className="wr-pending" title={t('wineRecord.pendingTitle', 'Your suggestion is awaiting curator review')}>
+                  {/* ANY pending suggestion (yours or someone's) holds the
+                      key's single review slot — show status, never a button
+                      that can only 409 (audit: second-suggester dead-end). */}
+                  {canSuggest && (field.mySuggestion || field.hasPendingSuggestion) ? (
+                    <span className="wr-pending" title={field.mySuggestion
+                      ? t('wineRecord.pendingTitle', 'Your suggestion is awaiting curator review')
+                      : t('wineRecord.pendingOtherTitle', 'A suggestion for this field is awaiting curator review')}>
                       {t('wineRecord.pending', 'suggestion pending')}
                     </span>
                   ) : canSuggest && suggestMode ? (
@@ -403,7 +404,7 @@ function WineRecordSection({ wine, canSuggest, apiFetch }) {
                 value={keyForm.type}
                 onChange={(e) => setKeyForm({ ...keyForm, type: e.target.value })}
               >
-                {['text', 'integer', 'decimal', 'boolean', 'date', 'enum'].map((ty) => (
+                {TYPES.map((ty) => (
                   <option key={ty} value={ty}>{t(`personalData.type_${ty}`, ty)}</option>
                 ))}
               </select>

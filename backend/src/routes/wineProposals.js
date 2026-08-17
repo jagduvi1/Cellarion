@@ -7,21 +7,12 @@
 const express = require('express');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const ops = require('../services/wineProposalOps');
+const { sendServiceFail: sendFail } = require('../utils/serviceResult');
 
 const router = express.Router();
 
 router.use(requireAuth);
 
-const CODE_STATUS = {
-  invalid: 400,
-  limit: 429,
-  banned: 403,
-  not_found: 404,
-  conflict: 409,
-};
-
-const sendFail = (res, result) =>
-  res.status(CODE_STATUS[result.code] || 400).json({ error: result.message });
 
 /**
  * POST /api/wine-proposals

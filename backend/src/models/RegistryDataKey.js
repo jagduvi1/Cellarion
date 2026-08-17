@@ -52,10 +52,10 @@ const registryDataKeySchema = new mongoose.Schema({
     maxlength: [1000, 'Rationale too long']
   },
   status: {
+    // Indexed via the compound { status, createdAt } queue index below.
     type: String,
     enum: ['proposed', 'accepted', 'rejected'],
-    default: 'proposed',
-    index: true
+    default: 'proposed'
   },
   proposedBy: {
     type: mongoose.Schema.Types.ObjectId,
@@ -77,6 +77,8 @@ registryDataKeySchema.index(
   { nameKey: 1 },
   { unique: true, partialFilterExpression: { status: { $in: ['proposed', 'accepted'] } } }
 );
+// The review queue: status-filtered, oldest-first, bounded.
+registryDataKeySchema.index({ status: 1, createdAt: 1 });
 
 registryDataKeySchema.pre('validate', function (next) {
   if (this.name && !this.nameKey) this.nameKey = this.name.toLowerCase();

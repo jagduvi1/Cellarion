@@ -17,11 +17,6 @@ const FAIL_CODE = {
 };
 const svcFail = (r) => fail(FAIL_CODE[r.code] || 'invalid_input', r.message);
 
-const requireAdmin = (ctx) =>
-  (ctx.user?.roles || []).includes('admin')
-    ? null
-    : fail('forbidden_scope', 'This tool needs the admin role.');
-
 registerTool({
   name: 'get_wine_public_data',
   title: 'Public data fields on a registry wine',
@@ -32,7 +27,7 @@ registerTool({
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: { wine_id: objectId },
   handler: async (args, ctx) => {
-    const result = await ops.dataForWine(args.wine_id, ctx.user.id);
+    const result = await ops.dataForWine(args.wine_id, ctx.user.id, { roles: ctx.user.roles });
     if (!result.ok) return svcFail(result);
     const fields = result.fields.map((f) => ({
       key_id: f.key._id,
@@ -42,6 +37,9 @@ registerTool({
       ...(f.key.enumOptions ? { options: f.key.enumOptions } : {}),
       value: f.value,
       contributed_by: f.contributedBy,
+      // A pending suggestion (anyone's) holds this key's one review slot —
+      // do not file another; it would only conflict.
+      suggestion_pending: f.hasPendingSuggestion,
       my_pending_suggestion: f.mySuggestion ? f.mySuggestion.value : null,
     }));
     return ok(`${fields.length} public field(s), ${fields.filter((f) => f.value !== null).length} filled for this wine`, { fields });
@@ -118,6 +116,11 @@ registerTool({
     'decide "accept"/"reject" for a key_id, "publish"/"reject" for a value_id. Publishing a value supersedes any ' +
     'previously published value for that wine+key.',
   scope: 'write',
+  // Structural gate: the tool is INVISIBLE to non-admin connections (the
+  // registry filters on requireRole), matching every other admin tool —
+  // audit: an in-handler check alone leaves an admin tool listed to all
+  // write-scope users, who then hit forbidden_scope noise.
+  requireRole: ['admin'],
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   inputSchema: {
     key_id: objectId.optional(),
@@ -126,9 +129,6 @@ registerTool({
     reject_reason: z.string().max(500).optional(),
   },
   handler: async (args, ctx) => {
-    const denied = requireAdmin(ctx);
-    if (denied) return denied;
-
     if (!args.key_id && !args.value_id) {
       const result = await ops.listReviewQueues();
       return ok(`${result.keys.length} proposed key(s), ${result.values.length} suggested value(s)`, {
@@ -149,18 +149,13 @@ registerTool({
     if (!args.decision) return fail('invalid_input', 'Pass decision together with key_id or value_id.');
     if (args.key_id && args.value_id) return fail('invalid_input', 'Decide ONE row per call: key_id OR value_id.');
 
+    // Per-kind decision vocabulary is validated by the service (one owner).
     if (args.key_id) {
-      if (!['accept', 'reject'].includes(args.decision)) {
-        return fail('invalid_input', "A key decision is 'accept' or 'reject'.");
-      }
       const result = await ops.decideKey(ctx.user.id, args.key_id, args.decision, args.reject_reason, { req: ctx.req });
       if (!result.ok) return svcFail(result);
       return ok(`Key "${result.key.name}" ${result.key.status}`, { key: result.key });
     }
 
-    if (!['publish', 'reject'].includes(args.decision)) {
-      return fail('invalid_input', "A value decision is 'publish' or 'reject'.");
-    }
     const result = await ops.decideValue(ctx.user.id, args.value_id, args.decision, args.reject_reason, { req: ctx.req });
     if (!result.ok) return svcFail(result);
     return ok(`Value ${result.value.status}`, { value: result.value });

@@ -1,5 +1,24 @@
 import { useTranslation } from 'react-i18next';
 
+// The one frontend copy of the shared type list (backend authority:
+// utils/personalDataTypes.js TYPES) — both cards and the key-proposal
+// modal import it from here so a 7th type lands everywhere at once.
+export const TYPES = ['text', 'integer', 'decimal', 'boolean', 'date', 'enum'];
+
+/**
+ * The one display formatter for typed values: boolean → Yes/No, numeric →
+ * value + the key's unit, everything else as-is. Shared by the personal-data
+ * card and the wine-record section.
+ */
+export function formatTypedValue(keyDef, value, t) {
+  if (value === null || value === undefined) return null;
+  if (keyDef?.type === 'boolean') {
+    return value ? t('personalData.yes', 'Yes') : t('personalData.no', 'No');
+  }
+  const s = String(value);
+  return keyDef?.unit ? `${s} ${keyDef.unit}` : s;
+}
+
 /**
  * One value input driven by a typed key (#985/#986 shared type system):
  * text / integer / decimal (unit suffix) / boolean (yes-no select) /

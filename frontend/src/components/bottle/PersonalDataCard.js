@@ -5,7 +5,8 @@ import {
   getPersonalData, addPersonalData, updatePersonalDataEntry,
   deletePersonalDataEntry, getPersonalDataKeys,
 } from '../../api/personalData';
-import { getRegistryKeys, suggestWineValue, proposeRegistryKey } from '../../api/registryData';
+import { suggestWineValue, proposeRegistryKey } from '../../api/registryData';
+import TypedValueInput, { TYPES, formatTypedValue } from '../TypedValueInput';
 import './PersonalDataCard.css';
 
 /**
@@ -18,8 +19,6 @@ import './PersonalDataCard.css';
  * numeric keys), so the value input adapts to the chosen key and the backend
  * validates every value against the key's stored type.
  */
-
-const TYPES = ['text', 'integer', 'decimal', 'boolean', 'date', 'enum'];
 
 const emptyForm = {
   level: 'bottle',
@@ -160,34 +159,36 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId }) {
     setPromoteBusy(true);
     setPromoteError(null);
     try {
-      // The public vocabulary decides the path: a matching accepted key takes
-      // the value straight to review; otherwise the KEY itself is proposed
-      // first (values follow once an admin accepts it).
-      const keysRes = await getRegistryKeys(apiFetch);
-      const keysBody = keysRes.ok ? await keysRes.json().catch(() => ({})) : {};
-      const match = (keysBody.keys || []).find(
-        (k) => k.name.toLowerCase() === promote.key.name.toLowerCase() && k.type === promote.key.type
-      );
-      let res;
-      if (match) {
-        res = await suggestWineValue(apiFetch, wineId, {
-          keyId: match._id,
-          value: promote.value,
-          ...(promoteReason.trim() ? { reason: promoteReason.trim() } : {}),
-        });
-      } else {
-        res = await proposeRegistryKey(apiFetch, {
+      // Server-side resolution (audit fix): suggest by key NAME — the backend
+      // matches against its own nameKey rule. 404 = no such accepted key →
+      // propose the key itself; a type mismatch surfaces the type-validation
+      // message instead of a dead-end "already in the vocabulary" conflict.
+      const res = await suggestWineValue(apiFetch, wineId, {
+        keyName: promote.key.name,
+        value: promote.value,
+        ...(promoteReason.trim() ? { reason: promoteReason.trim() } : {}),
+      });
+      if (res.ok) {
+        setPromoteDone('value');
+        setPromote(null);
+        return;
+      }
+      const body = await res.json().catch(() => ({}));
+      if (res.status === 404) {
+        const kres = await proposeRegistryKey(apiFetch, {
           name: promote.key.name,
           type: promote.key.type,
           ...(promote.key.unit ? { unit: promote.key.unit } : {}),
           ...(promote.key.enumOptions ? { enumOptions: promote.key.enumOptions } : {}),
           rationale: promoteReason.trim(),
         });
-      }
-      const body = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setPromoteDone(match ? 'value' : 'key');
-        setPromote(null);
+        const kbody = await kres.json().catch(() => ({}));
+        if (kres.ok) {
+          setPromoteDone('key');
+          setPromote(null);
+        } else {
+          setPromoteError(kbody.error || t('common.networkError', 'Network error. Please try again.'));
+        }
       } else {
         setPromoteError(body.error || t('common.networkError', 'Network error. Please try again.'));
       }
@@ -198,14 +199,7 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId }) {
     }
   };
 
-  const formatValue = (entry) => {
-    const { type, unit } = entry.key;
-    if (type === 'boolean') {
-      return entry.value ? t('personalData.yes', 'Yes') : t('personalData.no', 'No');
-    }
-    const s = String(entry.value);
-    return unit ? `${s} ${unit}` : s;
-  };
+  const formatValue = (entry) => formatTypedValue(entry.key, entry.value, t);
 
   const authorName = (entry) =>
     entry.author?.displayName || entry.author?.username || t('personalData.someone', 'a cellar member');
@@ -474,55 +468,20 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId }) {
               <label htmlFor="pd-value-input">
                 {t('personalData.value', 'Value')}
               </label>
-              {effectiveType === 'boolean' ? (
-                <select
-                  id="pd-value-input"
-                  className="pd-select"
-                  value={form.value}
-                  onChange={(e) => setForm({ ...form, value: e.target.value })}
-                  required
-                >
-                  <option value="">{t('personalData.choose', 'Choose…')}</option>
-                  <option value="true">{t('personalData.yes', 'Yes')}</option>
-                  <option value="false">{t('personalData.no', 'No')}</option>
-                </select>
-              ) : effectiveType === 'enum' ? (
-                (() => {
-                  const options = matchedKey?.enumOptions
+              <TypedValueInput
+                id="pd-value-input"
+                keyDef={{
+                  type: effectiveType,
+                  unit: matchedKey?.unit || (modal.mode === 'edit' ? modal.entry.key.unit : form.unit.trim() || null),
+                  enumOptions: matchedKey?.enumOptions
                     || (modal.mode === 'edit' ? modal.entry.key.enumOptions : null)
-                    || form.enumOptions.split(',').map((o) => o.trim()).filter(Boolean);
-                  return (
-                    <select
-                      id="pd-value-input"
-                      className="pd-select"
-                      value={form.value}
-                      onChange={(e) => setForm({ ...form, value: e.target.value })}
-                      required
-                    >
-                      <option value="">{t('personalData.choose', 'Choose…')}</option>
-                      {options.map((o) => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                  );
-                })()
-              ) : (
-                <span className="pd-value-row">
-                  <input
-                    id="pd-value-input"
-                    type={effectiveType === 'date' ? 'date'
-                      : (effectiveType === 'integer' || effectiveType === 'decimal') ? 'number' : 'text'}
-                    step={effectiveType === 'decimal' ? 'any' : undefined}
-                    value={form.value}
-                    onChange={(e) => setForm({ ...form, value: e.target.value })}
-                    maxLength={effectiveType === 'text' ? 500 : undefined}
-                    required
-                  />
-                  {(matchedKey?.unit || (modal.mode === 'edit' && modal.entry.key.unit) || form.unit.trim()) && (
-                    <span className="pd-unit">
-                      {matchedKey?.unit || (modal.mode === 'edit' ? modal.entry.key.unit : form.unit.trim())}
-                    </span>
-                  )}
-                </span>
-              )}
+                    || (effectiveType === 'enum'
+                      ? form.enumOptions.split(',').map((o) => o.trim()).filter(Boolean)
+                      : null),
+                }}
+                value={form.value}
+                onChange={(v) => setForm({ ...form, value: v })}
+              />
             </div>
 
             <div className="modal-actions">

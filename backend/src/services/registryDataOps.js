@@ -13,10 +13,9 @@
  */
 const RegistryDataKey = require('../models/RegistryDataKey');
 const RegistryDataValue = require('../models/RegistryDataValue');
-const User = require('../models/User');
 const { findVisibleWine } = require('./wineVisibility');
 const { validateValue, validateKeyDefinition } = require('../utils/personalDataTypes');
-const { TIER_DAILY } = require('./wineProposalOps');
+const { checkContributionGate } = require('./contributionGate');
 const { stripHtml } = require('../utils/sanitize');
 const { isValidId } = require('../utils/validation');
 const { logAudit } = require('./audit');
@@ -31,25 +30,21 @@ const RESERVED_NAMES = [
 
 const fail = (code, message) => ({ ok: false, code, message });
 
-async function loadGatedUser(userId) {
-  const user = await User.findById(userId).select('contribution.tier discussionBan');
-  if (!user) return { error: fail('not_found', 'User not found') };
-  if (user.isDiscussionBanned && user.isDiscussionBanned()) {
-    return { error: fail('banned', 'You are banned from posting content visible to other users') };
-  }
-  return { user };
+// The accepted vocabulary is global, tiny, and changes only on an admin
+// decision — cache it in-process (audit: dataForWine rides the hottest page).
+let vocabCache = null;
+let vocabCacheAt = 0;
+const VOCAB_TTL_MS = 60 * 1000;
+
+async function acceptedKeys() {
+  if (vocabCache && Date.now() - vocabCacheAt < VOCAB_TTL_MS) return vocabCache;
+  vocabCache = await RegistryDataKey.find({ status: 'accepted' }).sort({ nameKey: 1 }).lean();
+  vocabCacheAt = Date.now();
+  return vocabCache;
 }
 
-/** Daily budget shared across BOTH suggestion types (keys + values), so the
- * tier cap is one number a user can reason about. */
-async function overDailyBudget(userId, tier) {
-  const daily = TIER_DAILY[tier] || TIER_DAILY.newcomer;
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const [keys, values] = await Promise.all([
-    RegistryDataKey.countDocuments({ proposedBy: userId, createdAt: { $gt: since } }),
-    RegistryDataValue.countDocuments({ suggestedBy: userId, createdAt: { $gt: since } }),
-  ]);
-  return keys + values >= daily ? daily : null;
+function invalidateVocabCache() {
+  vocabCache = null;
 }
 
 const serializeKey = (k) => ({
@@ -79,10 +74,8 @@ async function proposeKey(userId, { name, type, unit, enumOptions, rationale }, 
     return fail('conflict', `"${def.name}" is already a first-class field of the wine record.`);
   }
 
-  const gate = await loadGatedUser(userId);
-  if (gate.error) return gate.error;
-  const capped = await overDailyBudget(userId, gate.user.contribution?.tier);
-  if (capped) return fail('limit', `You have reached today's suggestion limit (${capped}). The limit rises as your accepted contributions grow.`);
+  const gate = await checkContributionGate(userId);
+  if (!gate.ok) return gate;
 
   const existing = await RegistryDataKey.findOne({
     nameKey: { $eq: def.name.toLowerCase() },
@@ -112,14 +105,29 @@ async function proposeKey(userId, { name, type, unit, enumOptions, rationale }, 
 
 /** The accepted vocabulary (for pickers and the wine-record display). */
 async function listAcceptedKeys() {
-  const keys = await RegistryDataKey.find({ status: 'accepted' }).sort({ nameKey: 1 }).lean();
+  const keys = await acceptedKeys();
   return { ok: true, keys: keys.map(serializeKey) };
 }
 
-/** Suggest a value for an ACCEPTED key on a visible wine. */
-async function suggestValue(userId, { wineId, keyId, value, reason, evidenceUrl }, { via, req } = {}) {
-  if (!isValidId(String(keyId))) return fail('invalid', 'Invalid key id');
-  const key = await RegistryDataKey.findOne({ _id: { $eq: String(keyId) }, status: 'accepted' });
+/**
+ * Suggest a value for an ACCEPTED key on a visible wine. The key may be
+ * addressed by id (keyId) or by NAME (keyName — the promotion path from a
+ * personal entry resolves against nameKey server-side, so clients never
+ * duplicate the matching rule).
+ */
+async function suggestValue(userId, { wineId, keyId, keyName, value, reason, evidenceUrl }, { via, req } = {}) {
+  let key;
+  if (keyId) {
+    if (!isValidId(String(keyId))) return fail('invalid', 'Invalid key id');
+    key = await RegistryDataKey.findOne({ _id: { $eq: String(keyId) }, status: 'accepted' });
+  } else if (typeof keyName === 'string' && keyName.trim()) {
+    key = await RegistryDataKey.findOne({
+      nameKey: { $eq: keyName.trim().toLowerCase() },
+      status: 'accepted',
+    });
+  } else {
+    return fail('invalid', 'Pass keyId or keyName');
+  }
   if (!key) return fail('not_found', 'No such key in the accepted vocabulary');
 
   const checked = validateValue(key, value);
@@ -135,10 +143,8 @@ async function suggestValue(userId, { wineId, keyId, value, reason, evidenceUrl 
   }
   const cleanReason = stripHtml(typeof reason === 'string' ? reason : '').trim().slice(0, 1000);
 
-  const gate = await loadGatedUser(userId);
-  if (gate.error) return gate.error;
-  const capped = await overDailyBudget(userId, gate.user.contribution?.tier);
-  if (capped) return fail('limit', `You have reached today's suggestion limit (${capped}). The limit rises as your accepted contributions grow.`);
+  const gate = await checkContributionGate(userId);
+  if (!gate.ok) return gate;
 
   if (!isValidId(String(wineId))) return fail('invalid', 'Invalid wine id');
   const wine = await findVisibleWine(String(wineId), { userId, roles: req?.user?.roles || [] });
@@ -177,34 +183,45 @@ async function suggestValue(userId, { wineId, keyId, value, reason, evidenceUrl 
 
 /**
  * Everything the wine-record section needs for one wine: the accepted
- * vocabulary, published values, and (when userId is given) the caller's own
- * pending suggestions.
+ * vocabulary, published values, whether ANY suggestion occupies a key's
+ * one-pending slot (audit: without this a second suggester dead-ends on a
+ * 409 the UI could not predict), and the caller's own pending suggestion.
+ *
+ * Gated on wine VISIBILITY like every other registry surface — a hidden
+ * pendingIdentity wine answers the same not_found a missing id does.
  */
-async function dataForWine(wineId, userId = null) {
+async function dataForWine(wineId, userId = null, { roles } = {}) {
   if (!isValidId(String(wineId))) return fail('invalid', 'Invalid wine id');
-  const wid = String(wineId);
-  const [keys, publishedRows, mine] = await Promise.all([
-    RegistryDataKey.find({ status: 'accepted' }).sort({ nameKey: 1 }).lean(),
+  const wine = await findVisibleWine(String(wineId), { userId, roles: roles || [] });
+  if (!wine) return fail('not_found', 'Wine not found');
+  const wid = String(wine._id);
+
+  const keys = await acceptedKeys();
+  if (keys.length === 0) return { ok: true, fields: [] };
+
+  const [publishedRows, pendingRows] = await Promise.all([
     RegistryDataValue.find({ wineDefinition: { $eq: wid }, status: 'published' })
       .populate('suggestedBy', 'username displayName').lean(),
-    userId
-      ? RegistryDataValue.find({ wineDefinition: { $eq: wid }, suggestedBy: userId, status: 'suggested' })
-          .select('key value status createdAt').lean()
-      : [],
+    RegistryDataValue.find({ wineDefinition: { $eq: wid }, status: 'suggested' })
+      .select('key value status suggestedBy createdAt').lean(),
   ]);
   const byKey = new Map(publishedRows.map((v) => [String(v.key), v]));
-  const mineByKey = new Map(mine.map((v) => [String(v.key), v]));
+  const pendingByKey = new Map(pendingRows.map((v) => [String(v.key), v]));
   return {
     ok: true,
     fields: keys.map((k) => {
       const pub = byKey.get(String(k._id));
-      const own = mineByKey.get(String(k._id));
+      const pending = pendingByKey.get(String(k._id));
+      const own = pending && userId && String(pending.suggestedBy) === String(userId) ? pending : null;
       return {
         key: serializeKey(k),
         value: pub ? pub.value : null,
         contributedBy: pub
           ? (pub.suggestedBy?.displayName || pub.suggestedBy?.username || null)
           : null,
+        // Someone's suggestion holds the slot (no attribution leaked) — the
+        // UI shows "pending" instead of an Add button that can only 409.
+        hasPendingSuggestion: !!pending,
         mySuggestion: own ? { value: own.value, status: own.status } : null,
       };
     }),
@@ -213,11 +230,16 @@ async function dataForWine(wineId, userId = null) {
 
 /* ── Admin operations ────────────────────────────────────────────────── */
 
+// Review pages and the MCP review tool work oldest-first in bounded pages —
+// an unbounded triple-populate find over a growing queue is how admin pages
+// die (audit finding).
+const REVIEW_QUEUE_LIMIT = 200;
+
 async function listReviewQueues() {
   const [keys, values] = await Promise.all([
-    RegistryDataKey.find({ status: 'proposed' }).sort({ createdAt: 1 })
+    RegistryDataKey.find({ status: 'proposed' }).sort({ createdAt: 1 }).limit(REVIEW_QUEUE_LIMIT)
       .populate('proposedBy', 'username displayName contribution.tier').lean(),
-    RegistryDataValue.find({ status: 'suggested' }).sort({ createdAt: 1 })
+    RegistryDataValue.find({ status: 'suggested' }).sort({ createdAt: 1 }).limit(REVIEW_QUEUE_LIMIT)
       .populate('key')
       .populate('suggestedBy', 'username displayName contribution.tier')
       .populate('wineDefinition', 'name producer slug').lean(),
@@ -241,6 +263,7 @@ async function decideKey(adminId, keyId, decision, rejectReason, { req } = {}) {
     { new: true }
   );
   if (!key) return fail('not_found', 'No proposed key with that id (already decided?)');
+  invalidateVocabCache();
   logAudit(req || null, `registry_data.key_${decision}`,
     { type: 'registry_key', id: key._id }, { name: key.name });
   return { ok: true, key: serializeKey(key) };
@@ -253,6 +276,7 @@ async function decideValue(adminId, valueId, decision, rejectReason, { req } = {
   const row = await RegistryDataValue.findOne({ _id: { $eq: String(valueId) }, status: 'suggested' })
     .populate('key');
   if (!row) return fail('not_found', 'No suggested value with that id (already decided?)');
+  if (!row.key) return fail('invalid', 'This suggestion’s key no longer exists — reject it instead.');
 
   if (decision === 'reject') {
     row.status = 'rejected';
@@ -265,12 +289,15 @@ async function decideValue(adminId, valueId, decision, rejectReason, { req } = {
     return { ok: true, value: { _id: row._id, status: row.status } };
   }
 
-  // Publishing supersedes any existing published value for (wine, key): the
-  // old row is removed (history lives in the audit log), then this row takes
-  // the published slot — the partial unique index allows exactly one.
-  await RegistryDataValue.deleteOne({
-    wineDefinition: row.wineDefinition, key: row.key._id, status: 'published',
-  });
+  // Publishing supersedes any existing published value for (wine, key). The
+  // old row is DEMOTED to rejected (not deleted — audit finding: a crash
+  // between two writes must never destroy the only durable copy of a
+  // published value; a demoted row can be re-published by hand), then this
+  // row takes the published slot the partial unique index keeps singular.
+  await RegistryDataValue.updateOne(
+    { wineDefinition: row.wineDefinition, key: row.key._id, status: 'published' },
+    { $set: { status: 'rejected', rejectReason: 'Superseded by a newer approval', decidedBy: adminId, decidedAt: new Date() } }
+  );
   row.status = 'published';
   row.decidedBy = adminId;
   row.decidedAt = new Date();
@@ -282,6 +309,7 @@ async function decideValue(adminId, valueId, decision, rejectReason, { req } = {
 
 module.exports = {
   RESERVED_NAMES,
+  REVIEW_QUEUE_LIMIT,
   proposeKey,
   listAcceptedKeys,
   suggestValue,
@@ -289,4 +317,6 @@ module.exports = {
   listReviewQueues,
   decideKey,
   decideValue,
+  // exported for tests
+  invalidateVocabCache,
 };

@@ -17,27 +17,18 @@
  * message } — codes: invalid | banned | limit | not_found | conflict.
  */
 const WineCorrectionProposal = require('../models/WineCorrectionProposal');
-const User = require('../models/User');
+
 const { findVisibleWine } = require('./wineVisibility');
 const { stripHtml } = require('../utils/sanitize');
 const { isValidId } = require('../utils/validation');
+
+const { TIER_DAILY, checkContributionGate } = require('./contributionGate');
 
 const FIELDS = ['producer', 'name', 'appellation', 'region', 'country', 'classification'];
 const REASON_MIN = 10;
 const REASON_MAX = 1000;
 const FIELD_MAX = 200;
 const URL_MAX = 500;
-
-// Daily proposal budget per contribution tier (User.contribution.tier).
-// Proven contributors fast-track; new accounts cannot swamp the queue the
-// bulk tooling just made efficient.
-const TIER_DAILY = {
-  newcomer: 3,
-  contributor: 5,
-  enthusiast: 10,
-  connoisseur: 20,
-  ambassador: 30,
-};
 
 const fail = (code, message) => ({ ok: false, code, message });
 
@@ -85,21 +76,10 @@ async function createFieldCorrection(userId, { wineId, fields, reason, evidenceU
     return fail('invalid', 'Suggest at least one changed field.');
   }
 
-  const user = await User.findById(userId).select('contribution.tier discussionBan username');
-  if (!user) return fail('not_found', 'User not found');
-  if (user.isDiscussionBanned && user.isDiscussionBanned()) {
-    return fail('banned', 'You are banned from posting content visible to other users');
-  }
-
-  const daily = TIER_DAILY[user.contribution?.tier] || TIER_DAILY.newcomer;
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const recent = await WineCorrectionProposal.countDocuments({
-    proposer: userId,
-    createdAt: { $gt: since },
-  });
-  if (recent >= daily) {
-    return fail('limit', `You have reached today's suggestion limit (${daily}). Suggestions are reviewed by a human — the limit rises as your accepted contributions grow.`);
-  }
+  // Ban + the ONE daily budget shared across all suggestion families.
+  const gate = await checkContributionGate(userId);
+  if (!gate.ok) return gate;
+  const { user } = gate;
 
   if (!isValidId(String(wineId))) return fail('invalid', 'Invalid wine id');
   // Visibility, not ownership: anyone who can SEE the wine may suggest a fix

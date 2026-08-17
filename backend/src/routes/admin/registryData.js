@@ -5,14 +5,12 @@
 const express = require('express');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const ops = require('../../services/registryDataOps');
+const { sendServiceFail: sendFail } = require('../../utils/serviceResult');
 
 const router = express.Router();
 
 router.use(requireAuth, requireRole('admin'));
 
-const CODE_STATUS = { invalid: 400, not_found: 404 };
-const sendFail = (res, result) =>
-  res.status(CODE_STATUS[result.code] || 400).json({ error: result.message });
 
 /** GET /api/admin/registry-data — both review queues. */
 router.get('/', async (req, res, next) => {

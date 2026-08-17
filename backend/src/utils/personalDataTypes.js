@@ -38,12 +38,15 @@ function validateValue(key, raw) {
     }
 
     case 'integer': {
+      // Number('') === 0 — a whitespace-only string must not become a real 0.
+      if (typeof raw === 'string' && raw.trim() === '') return { ok: false, error: 'A value is required' };
       const n = typeof raw === 'number' ? raw : Number(String(raw).trim());
       if (!Number.isInteger(n)) return { ok: false, error: 'Expected a whole number' };
       return { ok: true, value: n };
     }
 
     case 'decimal': {
+      if (typeof raw === 'string' && raw.trim() === '') return { ok: false, error: 'A value is required' };
       // Accept both 13.5 and the comma form 13,5 that a Swedish keyboard produces.
       const n = typeof raw === 'number' ? raw : Number(String(raw).trim().replace(',', '.'));
       if (!Number.isFinite(n)) return { ok: false, error: 'Expected a number' };
