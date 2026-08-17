@@ -2,7 +2,7 @@ import { useState, useEffect, useImperativeHandle, forwardRef, useCallback } fro
 import { useAuth } from '../contexts/AuthContext';
 import ImageCarousel from './ImageCarousel';
 
-const ImageGallery = forwardRef(function ImageGallery({ bottleId, wineDefinitionId, size = 'medium', onEmpty, defaultImageId: externalDefaultId, onSetDefault, showAll = false }, ref) {
+const ImageGallery = forwardRef(function ImageGallery({ bottleId, wineDefinitionId, size = 'medium', onEmpty, onLoaded, defaultImageId: externalDefaultId, onSetDefault, showAll = false }, ref) {
   const { apiFetch } = useAuth();
   const [images, setImages] = useState([]);
   const [defaultImageId, setDefaultImageId] = useState(null);
@@ -18,10 +18,20 @@ const ImageGallery = forwardRef(function ImageGallery({ bottleId, wineDefinition
       const res = await apiFetch(endpoint);
       const data = await res.json();
       if (res.ok) {
-        setImages(data.images);
+        // Coerce before storing: a 200 whose body has no `images` array used to
+        // put undefined into state and throw on the next render, taking the
+        // whole host page down with it. A gallery that cannot list images must
+        // degrade to "no images", never break the page embedding it.
+        const list = Array.isArray(data.images) ? data.images : [];
+        setImages(list);
         // For bottle images, the API returns defaultImageId
         if (data.defaultImageId) setDefaultImageId(data.defaultImageId);
-        if (data.images.length === 0 && onEmpty) onEmpty();
+        if (list.length === 0 && onEmpty) onEmpty();
+        // onEmpty only fires for the empty case, so a caller that needs to tell
+        // "no images" from "not fetched yet" (AddBottle changes its photo copy
+        // on exactly that distinction) has no positive signal. onLoaded gives
+        // it one: always called with the count once the fetch resolves.
+        if (onLoaded) onLoaded(list.length);
       } else if (onEmpty) {
         onEmpty();
       }
@@ -31,7 +41,7 @@ const ImageGallery = forwardRef(function ImageGallery({ bottleId, wineDefinition
     } finally {
       setLoading(false);
     }
-  }, [apiFetch, bottleId, wineDefinitionId, showAll, onEmpty]);
+  }, [apiFetch, bottleId, wineDefinitionId, showAll, onEmpty, onLoaded]);
 
   useEffect(() => {
     if (!bottleId && !wineDefinitionId) {
