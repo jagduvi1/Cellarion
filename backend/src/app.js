@@ -309,6 +309,7 @@ app.use('/api/somm/wine-profile', sommWineProfileRoute);
 app.use('/api/somm/pending-wines', sommPendingWinesRoute);
 app.use('/api/notifications', notificationsRoute);
 app.use('/api/personal-data', personalDataRoute);
+app.use('/api/wine-proposals', wineProposalsRoute);
 app.use('/api/stats', statsRoute);
 app.use('/api/superadmin', superAdminRoute);
 app.use('/api/chat', chatRoute);

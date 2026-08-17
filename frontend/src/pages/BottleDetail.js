@@ -598,6 +598,17 @@ function BottleDetail() {
         <div className="bd-ai-profile card">
           <div className="bd-ai-profile__header">
             <h2>{t('bottleDetail.tastingProfile', 'Tasting profile')}</h2>
+            {/* Provenance is load-bearing (#985): never present AI-generated
+                profile text as established fact. */}
+            {wine.aiProfile.source === 'curator' ? (
+              <span className="bd-ai-tag bd-ai-tag--curator" title={t('bottleDetail.provenanceCuratorTitle', 'A sommelier has verified this profile')}>
+                {t('bottleDetail.provenanceCurator', 'Curator-verified')}
+              </span>
+            ) : (
+              <span className="bd-ai-tag" title={t('bottleDetail.provenanceAiTitle', 'Written by AI from the wine’s identity — a starting point, not a fact')}>
+                {t('bottleDetail.provenanceAi', 'AI-generated')}
+              </span>
+            )}
           </div>
 
           {(() => {

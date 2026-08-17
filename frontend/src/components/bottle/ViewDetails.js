@@ -11,13 +11,14 @@ import { buildRackUrl } from '../../utils/rackNavigation';
 import safeUrl from '../../utils/safeUrl';
 import RatingDisplay from '../RatingDisplay';
 import ContributePrompt from './ContributePrompt';
+import WineRecordSection from './WineRecordSection';
 import MaturityPhaseTable from './MaturityPhaseTable';
 import PriceHistoryTimeline from './PriceHistoryTimeline';
 import PriceTrackingToggle from './PriceTrackingToggle';
 
 function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory, currentRelease, rates, userCurrency, canEdit, hasImage, onEdit, onSuggestGrapes, onRemove, onReportWine }) {
   const { t } = useTranslation();
-  const { user } = useAuth();
+  const { user, apiFetch } = useAuth();
   const anchorYear = bottleAnchorYear(bottle);
   const maturityStatus = getMaturityStatus(vintageProfile, anchorYear);
   // The user's OWN drink window (drinkFrom/drinkTo) — takes precedence over
@@ -148,6 +149,11 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
           <span className="bd-missing-hint">{t('bottleDetail.noGrapes', 'No grape varieties listed')}</span>
         )}
       </div>
+
+      {/* The full public record with visible blanks + per-field suggestions
+          (#985). Demo visitors see the record but not the suggest actions
+          (writes are requireNonDemo). */}
+      <WineRecordSection wine={wine} canSuggest={!user?.isDemo} apiFetch={apiFetch} />
 
       {/* Personal drink window — the user's own drinkFrom/drinkTo. Takes
           precedence over the sommelier profile status below, so the profile
