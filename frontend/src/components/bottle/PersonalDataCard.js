@@ -256,7 +256,7 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId }) {
                   </select>
                 </label>
 
-                <label style={{ display: 'block', marginBottom: 8 }}>
+                <label style={{ display: 'block', marginBottom: keys.length ? 4 : 8 }}>
                   {t('personalData.key', 'What is it?')}
                   <input
                     type="text"
@@ -272,6 +272,34 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId }) {
                     {keys.map((k) => <option key={k._id} value={k.name} />)}
                   </datalist>
                 </label>
+
+                {/* Saved keys as one-tap chips — the datalist alone is invisible
+                    until you type, which made reuse look broken (Johan, 08-17):
+                    a value list created on one wine seemed to vanish on the next. */}
+                {keys.length > 0 && (
+                  <div style={{ marginBottom: 8 }}>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
+                      {t('personalData.yourKeys', 'Your saved keys:')}
+                    </span>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                      {keys.map((k) => {
+                        const selected = matchedKey && matchedKey._id === k._id;
+                        return (
+                          <button
+                            key={k._id}
+                            type="button"
+                            className="btn btn-small"
+                            onClick={() => setForm({ ...form, keyName: k.name, value: '' })}
+                            style={selected ? { outline: '2px solid var(--color-primary, #7c2d3a)' } : undefined}
+                            title={k.type + (k.unit ? ` (${k.unit})` : '')}
+                          >
+                            {k.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {matchedKey ? (
                   <p style={{ margin: '0 0 8px', fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>

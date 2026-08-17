@@ -2007,6 +2007,7 @@
     "levelWine": "Every bottle of this wine",
     "key": "What is it?",
     "keyPlaceholder": "e.g. ABV, Provenance, Cork condition",
+    "yourKeys": "Your saved keys:",
     "existingKey": "Existing key — type: {{type}}",
     "type": "Value type",
     "type_text": "Text",

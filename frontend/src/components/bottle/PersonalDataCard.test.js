@@ -144,6 +144,32 @@ test('typing a key that matches an existing one locks its stored type', async ()
   ));
 });
 
+test('saved keys render as chips; clicking one selects it and offers its enum values', async () => {
+  getPersonalDataKeys.mockResolvedValue(ok({
+    keys: [{ _id: 'k9', name: 'Betyg', type: 'enum', unit: null, enumOptions: ['god', 'godare', 'godast'] }],
+  }));
+  addPersonalData.mockResolvedValue(ok({ entry: entry() }));
+  renderCard();
+  await screen.findByText('Nothing recorded yet.');
+
+  fireEvent.click(screen.getByText('+ Add'));
+  await screen.findByText('Add wine data');
+
+  // The saved key is visible up front, not hidden behind type-ahead.
+  expect(await screen.findByText('Your saved keys:')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Betyg' }));
+
+  // Chip click selects the key: stored type locks, its value list appears.
+  expect(await screen.findByText(/Existing key — type: enum/)).toBeInTheDocument();
+  const valueSelect = screen.getByLabelText(/^Value$/);
+  fireEvent.change(valueSelect, { target: { value: 'godast' } });
+  fireEvent.click(screen.getByText('Save'));
+
+  await waitFor(() => expect(addPersonalData).toHaveBeenCalledWith(
+    expect.any(Function), BOTTLE_ID, { level: 'bottle', value: 'godast', keyId: 'k9' }
+  ));
+});
+
 test('a rejected value surfaces the backend message and keeps the modal open', async () => {
   addPersonalData.mockResolvedValue({ ok: false, json: async () => ({ error: 'Expected a whole number' }) });
   renderCard();
