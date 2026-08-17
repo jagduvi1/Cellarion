@@ -141,5 +141,12 @@ const { logAudit } = require('../services/audit');
   }
   console.log(`Applied ${written} region rewrites.`);
   console.log('Region is part of the embedding text — start an incremental embed job to refresh Qdrant.');
+
+  // logAudit persists fire-and-forget, which suits a long-lived server and not
+  // a script that exits: disconnecting immediately races the last writes and
+  // silently drops audit rows for work that really happened (observed on the
+  // 2026-08-17 supporter backfill). Let them settle first.
+  await new Promise(resolve => setTimeout(resolve, 1000));
+
   await mongoose.disconnect();
 })();
