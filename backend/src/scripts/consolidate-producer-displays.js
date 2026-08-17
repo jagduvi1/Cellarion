@@ -226,5 +226,11 @@ const hasLegal = (s) => toks(s).some((t) => LEGAL.has(t));
   console.log(`[consolidate-producer-displays] written=${written} failed=${failed} blocked=${blocked}`);
   console.log('NOTE: producer is in the embedding text — start the embedding job (incremental) via POST /api/admin/ai/embed/start.');
 
+  // logAudit persists fire-and-forget, which suits a long-lived server and not
+  // a script that exits: disconnecting immediately races the last writes and
+  // silently drops audit rows for work that really happened (observed on the
+  // 2026-08-17 supporter backfill). Let them settle first.
+  await new Promise(resolve => setTimeout(resolve, 1000));
+
   await mongoose.disconnect();
 })().catch((e) => { console.error('ERR:', e.stack); process.exit(1); });
