@@ -661,6 +661,25 @@
   display: block;
 }
 
+/* The credit is normally hover-only (.wine-row-img-wrap:hover). This surface is
+   reached by pointing a camera at a label, so it is phone-first and hover never
+   fires — a hover-only credit here is a credit nobody ever sees. Attribution on
+   someone else's photograph is not optional, so it stays visible. */
+.scan-wine-shot-img-wrap .wine-row-credit {
+  display: block;
+}
+
+/* A fixed slot per shot. WineImage hides a broken <img> via onError, and
+   without this the column would collapse and knock the two captions off a
+   shared baseline — the exact raggedness the compare layout exists to avoid. */
+.scan-wine-image-wrap--compare .scan-wine-shot-img-wrap {
+  width: 88px;
+  height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .scan-wine-shot-caption {
   font-size: 0.68rem;
   color: var(--color-text-muted);
@@ -687,6 +706,11 @@
 
 /* Two thumbnails plus the body do not fit a narrow phone at full size. */
 @media (max-width: 600px) {
+  .scan-wine-image-wrap--compare .scan-wine-shot-img-wrap {
+    width: 64px;
+    height: 110px;
+  }
+
   .scan-wine-image-wrap--compare .scan-wine-label-img,
   .scan-wine-image-wrap--compare .scan-wine-placeholder {
     width: 64px;

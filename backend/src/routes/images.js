@@ -232,13 +232,33 @@ router.get('/wine/:wineDefinitionId', requireAuth, async (req, res) => {
 
     const filter = {
       wineDefinition: req.params.wineDefinitionId,
+      // Belt-and-braces, matching the MCP twin of this query (mcp/tools/somm.js).
+      // Label scans are the raw frames handed to the AI — private curator
+      // evidence that DOES carry a wineDefinition, so it sits inside this
+      // query's candidate set and is excluded only transitively by
+      // status/visibility. Two contentHash-keyed promotion paths can flip a row
+      // to approved+public without checking kind, and /api/uploads serves by
+      // unguessable filename with no auth, so a scan that ever leaked here
+      // would be permanently, anonymously fetchable. Exclude it by name.
+      kind: { $ne: 'label-scan' },
       ...(showAll
+        // The admin branch deliberately keeps private/unapproved rows, but
+        // never label scans — admin/images.js already removes them from every
+        // moderation surface (audit L-6) and refuses to promote them.
         ? { status: { $ne: 'rejected' } }
         : { status: 'approved', visibility: 'public' })
     };
 
-    const images = await BottleImage.find(filter)
-      .sort({ assignedToWine: -1, createdAt: -1 });
+    // Non-admins get a projection. The full document carries uploadedBy,
+    // reviewedBy, contentHash and the uploader's bottle id — and uploadedBy is
+    // joinable to a name via GET /api/users/public/:id, so shipping it to every
+    // user browsing a wine's photos attributes each one to a named account.
+    // Admin surfaces still need the full row (duplicate detection uses
+    // contentHash), so only the public branch is narrowed.
+    const query = BottleImage.find(filter).sort({ assignedToWine: -1, createdAt: -1 });
+    if (!showAll) query.select('_id processedUrl originalUrl credit assignedToWine status visibility kind side createdAt');
+
+    const images = await query;
 
     res.json({ images });
   } catch (error) {

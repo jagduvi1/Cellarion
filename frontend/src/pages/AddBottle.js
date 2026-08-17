@@ -71,10 +71,13 @@ function AddBottle() {
     consumedRatingScale: user?.preferences?.ratingScale || '5'
   });
   const [uploadedImages, setUploadedImages] = useState([]);
-  // How many public photos the registry already holds for the selected wine.
-  // null = not fetched yet, so the photo prompt stays neutral until we know
-  // rather than flashing the wrong message.
-  const [wineImageCount, setWineImageCount] = useState(null);
+  // How many public photos the registry holds, KEYED BY WINE ID. A single
+  // counter was wrong twice over: a passive reset effect runs a render late, so
+  // the first commit after a wine switch painted the previous wine's answer
+  // ("we already have a photo" for a wine that has none), and an out-of-order
+  // response could overwrite the current wine's count with a stale one. Keying
+  // makes both unrepresentable. Absent key = not fetched yet.
+  const [wineImageCounts, setWineImageCounts] = useState({});
   const [showDetails, setShowDetails] = useState(false);
 
   // Whether the user has worked the toggle themselves. Auto-expanding is a
@@ -545,16 +548,12 @@ function AddBottle() {
   // still holding the bottle, which is the cheapest correction signal we get.
   const scanMatchedWine = scanResult?.match?.wine || null;
 
-  // Reset on every wine change so the photo prompt never describes the
-  // previous wine's gallery while the new one is still loading.
-  useEffect(() => { setWineImageCount(null); }, [selectedWine?._id]);
-
-  const handleWineImagesLoaded = useCallback((count) => setWineImageCount(count), []);
-
   // A pending new wine has no _id, so there is no gallery to fetch — it is
   // definitionally photo-less and the encouraging copy applies straight away.
-  const registryHasPhotos = !!selectedWine?._id && wineImageCount > 0;
-  const photoPromptReady = !selectedWine?._id || wineImageCount !== null;
+  const selectedWineId = selectedWine?._id || null;
+  const wineImageCount = selectedWineId ? wineImageCounts[selectedWineId] : undefined;
+  const registryHasPhotos = wineImageCount > 0;
+  const photoPromptReady = !selectedWineId || wineImageCount !== undefined;
 
   // One row renderer for both the registry-search list and the AI near-match
   // list, so the two can never drift. Takes a SAVED wine only.
@@ -853,10 +852,16 @@ function AddBottle() {
             <div className="scan-wine-card">
               <div className={`scan-wine-image-wrap${scanMatchedWine?.image ? ' scan-wine-image-wrap--compare' : ''}`}>
                 <figure className="scan-wine-shot">
-                  {labelImage
-                    ? <img src={labelImage} alt={scanResult.extracted.name} className="scan-wine-label-img" />
-                    : <div className={`wine-row-placeholder scan-wine-placeholder ${scanResult.extracted.type || 'red'}`} />
-                  }
+                  {/* Wrapped so both shots have an identically sized slot: a
+                      failed image is hidden by WineImage's onError, and without
+                      a fixed box its column would collapse and knock the two
+                      captions off one baseline. */}
+                  <div className="scan-wine-shot-img-wrap">
+                    {labelImage
+                      ? <img src={labelImage} alt={scanResult.extracted.name} className="scan-wine-label-img" />
+                      : <div className={`wine-row-placeholder scan-wine-placeholder ${scanResult.extracted.type || 'red'}`} />
+                    }
+                  </div>
                   {scanMatchedWine?.image && (
                     <figcaption className="scan-wine-shot-caption">{t('addBottle.scanYourPhoto')}</figcaption>
                   )}
@@ -1297,12 +1302,17 @@ function AddBottle() {
                   already illustrate can see that first. The prompt is softened,
                   never removed: ~89% of the registry's official images started
                   as a user's bottle photo, and most wines still have none. */}
-              {selectedWine?._id && (
-                <div className="photo-existing">
+              {selectedWineId && (
+                // The wrapper's margin is applied only when something rendered:
+                // ImageGallery returns null while loading and when empty, and
+                // most wines have no photo, so an unconditional class left a
+                // gap in the common case. Keyed so a wine switch remounts.
+                <div className={registryHasPhotos ? 'photo-existing' : undefined}>
                   <ImageGallery
-                    wineDefinitionId={selectedWine._id}
+                    key={selectedWineId}
+                    wineDefinitionId={selectedWineId}
                     size="small"
-                    onLoaded={handleWineImagesLoaded}
+                    onLoaded={(count) => setWineImageCounts(prev => ({ ...prev, [selectedWineId]: count }))}
                   />
                 </div>
               )}

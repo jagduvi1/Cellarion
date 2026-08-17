@@ -30,14 +30,22 @@ const ImageGallery = forwardRef(function ImageGallery({ bottleId, wineDefinition
         // onEmpty only fires for the empty case, so a caller that needs to tell
         // "no images" from "not fetched yet" (AddBottle changes its photo copy
         // on exactly that distinction) has no positive signal. onLoaded gives
-        // it one: always called with the count once the fetch resolves.
+        // it one, and is called on EVERY settled outcome including failure —
+        // a caller gating UI on it would otherwise render nothing at all,
+        // permanently, whenever this endpoint errors.
         if (onLoaded) onLoaded(list.length);
-      } else if (onEmpty) {
-        onEmpty();
+      } else {
+        if (onEmpty) onEmpty();
+        // A failed load reports 0 rather than staying silent. Conflating
+        // "failed" with "none" is deliberate: every caller's fallback for zero
+        // is the safe one (offer the upload), whereas a caller left waiting
+        // forever shows a broken half-rendered section.
+        if (onLoaded) onLoaded(0);
       }
     } catch (err) {
       console.error('Failed to fetch images:', err);
       if (onEmpty) onEmpty();
+      if (onLoaded) onLoaded(0);
     } finally {
       setLoading(false);
     }

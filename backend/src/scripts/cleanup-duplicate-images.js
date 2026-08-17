@@ -64,6 +64,10 @@ async function main() {
     { $match: {
       status: { $ne: 'rejected' },
       contentHash: { $ne: null },
+      // Label scans are private curation evidence and must never be a keeper:
+      // the promotion below sets approved+public, which would publish the raw
+      // frame handed to the AI scanner to a permanently public URL.
+      kind: { $ne: 'label-scan' },
       $or: [{ processedUrl: { $ne: null } }, { originalUrl: { $ne: null } }],
     } },
     { $lookup: { from: 'bottles', localField: 'bottle', foreignField: '_id', as: '_b' } },
