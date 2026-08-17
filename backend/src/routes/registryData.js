@@ -51,10 +51,10 @@ router.get('/wine/:id', async (req, res, next) => {
 /** POST /api/registry-data/wine/:id — suggest a value for an accepted key. */
 router.post('/wine/:id', requireNonDemo, async (req, res, next) => {
   try {
-    const { keyId, value, reason, evidenceUrl } = req.body || {};
+    const { keyId, keyName, value, reason, evidenceUrl } = req.body || {};
     const result = await ops.suggestValue(
       req.user.id,
-      { wineId: req.params.id, keyId, value, reason, evidenceUrl },
+      { wineId: req.params.id, keyId, keyName, value, reason, evidenceUrl },
       { via: 'web', req }
     );
     if (!result.ok) return sendFail(res, result);
