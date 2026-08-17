@@ -5,6 +5,7 @@ import {
   getPersonalData, addPersonalData, updatePersonalDataEntry,
   deletePersonalDataEntry, getPersonalDataKeys,
 } from '../../api/personalData';
+import { getRegistryKeys, suggestWineValue, proposeRegistryKey } from '../../api/registryData';
 import './PersonalDataCard.css';
 
 /**
@@ -29,7 +30,7 @@ const emptyForm = {
   value: '',
 };
 
-function PersonalDataCard({ apiFetch, bottleId, currentUserId }) {
+function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId }) {
   const { t } = useTranslation();
   const [data, setData] = useState({ bottleEntries: [], wineEntries: [] });
   const [keys, setKeys] = useState([]);
@@ -38,6 +39,12 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [deleteBusy, setDeleteBusy] = useState(null);
+  // Promotion path (#985): "suggest this to the registry" on an own entry.
+  const [promote, setPromote] = useState(null); // entry
+  const [promoteReason, setPromoteReason] = useState('');
+  const [promoteBusy, setPromoteBusy] = useState(false);
+  const [promoteError, setPromoteError] = useState(null);
+  const [promoteDone, setPromoteDone] = useState(null); // 'value' | 'key'
 
   const load = useCallback(async () => {
     try {
@@ -147,6 +154,50 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId }) {
     }
   };
 
+  const submitPromote = async (e) => {
+    e.preventDefault();
+    if (promoteBusy) return;
+    setPromoteBusy(true);
+    setPromoteError(null);
+    try {
+      // The public vocabulary decides the path: a matching accepted key takes
+      // the value straight to review; otherwise the KEY itself is proposed
+      // first (values follow once an admin accepts it).
+      const keysRes = await getRegistryKeys(apiFetch);
+      const keysBody = keysRes.ok ? await keysRes.json().catch(() => ({})) : {};
+      const match = (keysBody.keys || []).find(
+        (k) => k.name.toLowerCase() === promote.key.name.toLowerCase() && k.type === promote.key.type
+      );
+      let res;
+      if (match) {
+        res = await suggestWineValue(apiFetch, wineId, {
+          keyId: match._id,
+          value: promote.value,
+          ...(promoteReason.trim() ? { reason: promoteReason.trim() } : {}),
+        });
+      } else {
+        res = await proposeRegistryKey(apiFetch, {
+          name: promote.key.name,
+          type: promote.key.type,
+          ...(promote.key.unit ? { unit: promote.key.unit } : {}),
+          ...(promote.key.enumOptions ? { enumOptions: promote.key.enumOptions } : {}),
+          rationale: promoteReason.trim(),
+        });
+      }
+      const body = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setPromoteDone(match ? 'value' : 'key');
+        setPromote(null);
+      } else {
+        setPromoteError(body.error || t('common.networkError', 'Network error. Please try again.'));
+      }
+    } catch {
+      setPromoteError(t('common.networkError', 'Network error. Please try again.'));
+    } finally {
+      setPromoteBusy(false);
+    }
+  };
+
   const formatValue = (entry) => {
     const { type, unit } = entry.key;
     if (type === 'boolean') {
@@ -182,6 +233,16 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId }) {
           </span>
           {isOwn(entry) && (
             <span className="pd-entry-actions">
+              {wineId && (
+                <button
+                  type="button"
+                  className="btn btn-small"
+                  title={t('personalData.promoteTitle', 'Offer this to the shared registry — a curator reviews it first')}
+                  onClick={() => { setPromote(entry); setPromoteReason(''); setPromoteError(null); setPromoteDone(null); }}
+                >
+                  {t('personalData.promote', 'Suggest to registry')}
+                </button>
+              )}
               <button type="button" className="btn btn-small" onClick={() => openEdit(entry)}>
                 {t('common.edit', 'Edit')}
               </button>
@@ -238,6 +299,49 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId }) {
           <h3 style={sectionTitleStyle}>{t('personalData.wineSection', 'This wine (all bottles of it)')}</h3>
           {renderEntries(data.wineEntries)}
         </>
+      )}
+
+      {promoteDone && (
+        <p role="status" style={{ margin: '0.5rem 0 0', fontSize: '0.85rem', fontWeight: 600 }}>
+          {promoteDone === 'value'
+            ? t('personalData.promotedValue', 'Thank you — your value is in the registry review queue.')
+            : t('personalData.promotedKey', 'Thank you — the field itself was proposed first; once a curator accepts it, values can follow.')}
+        </p>
+      )}
+
+      {promote && (
+        <Modal
+          title={t('personalData.promoteModalTitle', 'Suggest to the shared registry')}
+          onClose={() => !promoteBusy && setPromote(null)}
+        >
+          <form onSubmit={submitPromote} className="pd-form">
+            {promoteError && <div className="alert alert-error" style={{ marginBottom: 8 }}>{promoteError}</div>}
+            <p style={{ margin: '0 0 0.6rem', fontSize: '0.85rem' }}>
+              {t('personalData.promoteIntro', 'Offer “{{key}}: {{value}}” to the shared registry. A curator reviews it; if the field doesn’t exist in the public vocabulary yet, the field itself is proposed first.', { key: promote.key.name, value: String(promote.value) })}
+            </p>
+            <div className="form-group">
+              <label htmlFor="pd-promote-reason">{t('wineRecord.reason', 'How do you know?')}</label>
+              <textarea
+                id="pd-promote-reason"
+                value={promoteReason}
+                onChange={(e) => setPromoteReason(e.target.value)}
+                placeholder={t('wineRecord.reasonPlaceholder', 'e.g. It’s printed on the label of my bottle / the producer’s site says…')}
+                minLength={10}
+                maxLength={1000}
+                rows={3}
+                required
+              />
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="btn" onClick={() => setPromote(null)} disabled={promoteBusy}>
+                {t('common.cancel', 'Cancel')}
+              </button>
+              <button type="submit" className="btn btn-primary" disabled={promoteBusy || promoteReason.trim().length < 10}>
+                {promoteBusy ? t('wineRecord.sending', 'Sending…') : t('wineRecord.send', 'Send suggestion')}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {modal && (

@@ -198,6 +198,7 @@ function Layout({ children }) {
                     <Link to="/admin/images" className={`nav-link nav-link--admin ${isActive('/admin/images') ? 'active' : ''}`}>{t('nav.imageReview')}</Link>
                     <Link to="/admin/support" className={`nav-link nav-link--admin ${isActive('/admin/support') ? 'active' : ''}`}>{t('nav.supportTickets')}</Link>
                     <Link to="/admin/wine-reports" className={`nav-link nav-link--admin ${isActive('/admin/wine-reports') ? 'active' : ''}`}>{t('nav.wineReports')}</Link>
+                    <Link to="/admin/registry-data" className={`nav-link nav-link--admin ${isActive('/admin/registry-data') ? 'active' : ''}`}>{t('nav.registryData', 'Data Fields')}</Link>
                     <Link to="/admin/ai-budget-requests" className={`nav-link nav-link--admin ${isActive('/admin/ai-budget-requests') ? 'active' : ''}`}>{t('nav.aiBudgetRequests')}</Link>
                     <Link to="/admin/moderators" className={`nav-link nav-link--admin ${isActive('/admin/moderators') ? 'active' : ''}`}>{t('nav.moderators')}</Link>
                     <Link to="/admin/blog" className={`nav-link nav-link--admin ${isActive('/admin/blog') ? 'active' : ''}`}>{t('nav.blogAdmin')}</Link>
@@ -294,6 +295,7 @@ function Layout({ children }) {
                 <Link to="/admin/images" className={`mobile-menu-link ${isActive('/admin/images') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.imageReview')}</Link>
                 <Link to="/admin/support" className={`mobile-menu-link ${isActive('/admin/support') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.supportTickets')}</Link>
                 <Link to="/admin/wine-reports" className={`mobile-menu-link ${isActive('/admin/wine-reports') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.wineReports')}</Link>
+                <Link to="/admin/registry-data" className={`mobile-menu-link ${isActive('/admin/registry-data') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.registryData', 'Data Fields')}</Link>
                 <Link to="/admin/ai-budget-requests" className={`mobile-menu-link ${isActive('/admin/ai-budget-requests') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.aiBudgetRequests')}</Link>
                 <Link to="/admin/blog" className={`mobile-menu-link ${isActive('/admin/blog') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.blogAdmin')}</Link>
                 <Link to="/admin/stats" className={`mobile-menu-link ${isActive('/admin/stats') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.adminStats')}</Link>

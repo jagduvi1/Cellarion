@@ -90,6 +90,7 @@
     "support": "Support",
     "supportTickets": "Support Tickets",
     "wineReports": "Wine Reports",
+    "registryData": "Data Fields",
     "aiBudgetRequests": "AI Budget",
     "sommelier": "Sommelier",
     "admin": "Admin",
@@ -2015,7 +2016,20 @@
     "field_appellation": "Appellation",
     "field_region": "Region",
     "field_country": "Country",
-    "field_classification": "Classification"
+    "field_classification": "Classification",
+    "publicData": "More data",
+    "suggestValue": "Add value",
+    "suggestValueFor": "Suggest a value for {{field}}",
+    "contributedBy": "by {{name}}",
+    "valueModalTitle": "Suggest a value: {{field}}",
+    "valueReason": "How do you know? (optional)",
+    "proposeKey": "+ Propose a new data field",
+    "proposeKeySend": "Propose field",
+    "keyModalTitle": "Propose a new data field",
+    "keyModalIntro": "A new field becomes available on every wine once an admin accepts it. One field, one meaning — check the list above first.",
+    "keyName": "Field name",
+    "keyNamePlaceholder": "e.g. ABV",
+    "keyRationale": "Why should every wine have this field?"
   },
   "personalData": {
     "title": "Your wine data",
@@ -2049,7 +2063,13 @@
     "enumOptions": "Allowed values (comma-separated)",
     "enumPlaceholder": "e.g. cork, screwcap, crown",
     "value": "Value",
-    "choose": "Choose…"
+    "choose": "Choose…",
+    "promote": "Suggest to registry",
+    "promoteTitle": "Offer this to the shared registry — a curator reviews it first",
+    "promoteModalTitle": "Suggest to the shared registry",
+    "promoteIntro": "Offer “{{key}}: {{value}}” to the shared registry. A curator reviews it; if the field doesn’t exist in the public vocabulary yet, the field itself is proposed first.",
+    "promotedValue": "Thank you — your value is in the registry review queue.",
+    "promotedKey": "Thank you — the field itself was proposed first; once a curator accepts it, values can follow."
   },
   "priceTracking": {
     "trigger": "Track market price",

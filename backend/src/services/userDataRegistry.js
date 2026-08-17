@@ -69,6 +69,8 @@ const WineVintageProfile = require('../models/WineVintageProfile');
 const WishlistItem = require('../models/WishlistItem');
 const PersonalDataKey = require('../models/PersonalDataKey');
 const PersonalDataEntry = require('../models/PersonalDataEntry');
+const RegistryDataKey = require('../models/RegistryDataKey');
+const RegistryDataValue = require('../models/RegistryDataValue');
 const AuditLog = require('../models/AuditLog');
 const BlogPost = require('../models/BlogPost');
 const WineDefinition = require('../models/WineDefinition');
@@ -313,6 +315,26 @@ const REGISTRY = [
     model: PersonalDataEntry, category: 'personal-data', userFields: ['author'],
     purge: (ctx) => PersonalDataEntry.deleteMany({ author: ctx.userId }),
     exportFragment: async (ctx) => ({ personalDataEntries: markTrunc(ctx, 'personalDataEntries', await PersonalDataEntry.find({ author: ctx.userId }).populate('key', 'name type unit').limit(EXPORT_MAX).lean()) }),
+  },
+  {
+    // The PUBLIC vocabulary is shared content (#985): an accepted key belongs
+    // to the registry, not the proposer — anonymise provenance, keep the key.
+    model: RegistryDataKey, category: 'shared-content', userFields: ['proposedBy', 'decidedBy'],
+    purge: (ctx) => [
+      RegistryDataKey.updateMany({ proposedBy: ctx.userId }, { $set: { proposedBy: ctx.deletedUserId } }),
+      RegistryDataKey.updateMany({ decidedBy: ctx.userId }, { $unset: { decidedBy: '' } }),
+    ],
+    exportFragment: async (ctx) => ({ registryDataKeyProposals: markTrunc(ctx, 'registryDataKeyProposals', await RegistryDataKey.find({ proposedBy: ctx.userId }).select('name type unit enumOptions rationale status createdAt decidedAt rejectReason').limit(EXPORT_MAX).lean()) }),
+  },
+  {
+    // Published values are registry content; suggestions carry attribution.
+    // Anonymise both — the record survives its contributor (#985).
+    model: RegistryDataValue, category: 'shared-content', userFields: ['suggestedBy', 'decidedBy'],
+    purge: (ctx) => [
+      RegistryDataValue.updateMany({ suggestedBy: ctx.userId }, { $set: { suggestedBy: ctx.deletedUserId } }),
+      RegistryDataValue.updateMany({ decidedBy: ctx.userId }, { $unset: { decidedBy: '' } }),
+    ],
+    exportFragment: async (ctx) => ({ registryDataValueSuggestions: markTrunc(ctx, 'registryDataValueSuggestions', await RegistryDataValue.find({ suggestedBy: ctx.userId }).populate('key', 'name type unit').select('wineDefinition key value status reason evidenceUrl createdAt decidedAt rejectReason').limit(EXPORT_MAX).lean()) }),
   },
 
   // ── Forum content: anonymise (preserve multi-party threads) ─────────────

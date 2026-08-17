@@ -80,6 +80,18 @@
   font-size: 0.92rem;
 }
 
+.wr-contributor {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.wr-propose-key {
+  margin-top: 0.4rem;
+  padding-left: 0;
+  font-weight: 600;
+}
+
 @media (max-width: 480px) {
   .wr-row {
     grid-template-columns: 1fr auto;

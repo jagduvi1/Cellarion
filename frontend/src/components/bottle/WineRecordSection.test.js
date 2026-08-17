@@ -5,6 +5,12 @@ vi.mock('../../api/wineProposals', () => ({
   getMyWineProposals: vi.fn(),
 }));
 
+vi.mock('../../api/registryData', () => ({
+  getWinePublicData: vi.fn(),
+  suggestWineValue: vi.fn(),
+  proposeRegistryKey: vi.fn(),
+}));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key, fallback, vars) => {
@@ -15,6 +21,7 @@ vi.mock('react-i18next', () => ({
 }));
 
 const { createWineProposal, getMyWineProposals } = await import('../../api/wineProposals');
+const { getWinePublicData, suggestWineValue } = await import('../../api/registryData');
 const WineRecordSection = (await import('./WineRecordSection')).default;
 
 const WINE = {
@@ -32,6 +39,7 @@ const ok = (body) => ({ ok: true, json: async () => body });
 beforeEach(() => {
   vi.clearAllMocks();
   getMyWineProposals.mockResolvedValue(ok({ proposals: [] }));
+  getWinePublicData.mockResolvedValue(ok({ fields: [] }));
 });
 
 const renderSection = (props = {}) =>
@@ -85,6 +93,43 @@ test('demo/read-only mode renders the record without suggest actions', async () 
   expect(screen.getByText('Cloudy Bay')).toBeInTheDocument();
   expect(screen.queryByText('Suggest a fix')).not.toBeInTheDocument();
   expect(getMyWineProposals).not.toHaveBeenCalled();
+});
+
+test('public data fields render with values, attribution and blanks; a blank invites Add value', async () => {
+  getWinePublicData.mockResolvedValue(ok({
+    fields: [
+      { key: { _id: 'k1', name: 'ABV', type: 'decimal', unit: '%', enumOptions: null }, value: 13.5, contributedBy: 'Kurt', mySuggestion: null },
+      { key: { _id: 'k2', name: 'Organic', type: 'boolean', unit: null, enumOptions: null }, value: null, contributedBy: null, mySuggestion: null },
+    ],
+  }));
+  suggestWineValue.mockResolvedValue(ok({ value: { _id: 'v1', status: 'suggested' } }));
+  renderSection();
+
+  expect(await screen.findByText('More data')).toBeInTheDocument();
+  expect(screen.getByText('13.5 %')).toBeInTheDocument();
+  expect(screen.getByText('by Kurt')).toBeInTheDocument();
+
+  // Blank field offers "Add value" with the type-driven input (boolean → select)
+  fireEvent.click(screen.getByLabelText('Suggest a value for Organic'));
+  expect(await screen.findByText('Suggest a value: Organic')).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Value'), { target: { value: 'true' } });
+  fireEvent.click(screen.getByText('Send suggestion'));
+  await waitFor(() => expect(suggestWineValue).toHaveBeenCalledWith(expect.any(Function), 'w1', {
+    keyId: 'k2', value: true,
+  }));
+});
+
+test('my pending public suggestion shows the pending marker', async () => {
+  getWinePublicData.mockResolvedValue(ok({
+    fields: [
+      { key: { _id: 'k1', name: 'ABV', type: 'decimal', unit: '%', enumOptions: null }, value: null, contributedBy: null, mySuggestion: { value: 13.5, status: 'suggested' } },
+    ],
+  }));
+  renderSection();
+  expect(await screen.findByText('More data')).toBeInTheDocument();
+  // one pending marker for the public field, none for identity fields
+  expect(screen.getByText('suggestion pending')).toBeInTheDocument();
+  expect(screen.queryByLabelText('Suggest a value for ABV')).not.toBeInTheDocument();
 });
 
 test('server rejection (e.g. daily limit) surfaces in the modal', async () => {
