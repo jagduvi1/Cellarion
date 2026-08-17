@@ -1999,6 +1999,7 @@
     "intro": "The shared registry’s record of this wine. Spot something wrong or missing? Suggest a fix — a curator reviews every suggestion before it goes live.",
     "notRecorded": "not recorded",
     "suggest": "Suggest a fix",
+    "suggestDone": "Done",
     "suggestFor": "Suggest a fix for {{field}}",
     "pending": "suggestion pending",
     "pendingTitle": "Your suggestion is awaiting curator review",

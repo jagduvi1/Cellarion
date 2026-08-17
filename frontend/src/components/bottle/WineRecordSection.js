@@ -27,6 +27,9 @@ function WineRecordSection({ wine, canSuggest, apiFetch }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [sentField, setSentField] = useState(null);
+  // Most users never file a fix — the per-row actions stay hidden behind ONE
+  // section-level toggle so the record reads clean (Johan, 2026-08-17).
+  const [suggestMode, setSuggestMode] = useState(false);
   // Public key vocabulary + values (#985 Slice B)
   const [publicFields, setPublicFields] = useState([]);
   const [valueModal, setValueModal] = useState(null); // { field } from publicFields
@@ -181,10 +184,25 @@ function WineRecordSection({ wine, canSuggest, apiFetch }) {
 
   return (
     <div className="bd-section">
-      <span className="bd-section-label">{t('wineRecord.title', 'Wine record')}</span>
-      <p className="wr-intro">
-        {t('wineRecord.intro', 'The shared registry’s record of this wine. Spot something wrong or missing? Suggest a fix — a curator reviews every suggestion before it goes live.')}
-      </p>
+      <div className="wr-header">
+        <span className="bd-section-label">{t('wineRecord.title', 'Wine record')}</span>
+        {canSuggest && (
+          <button
+            type="button"
+            className={`wr-suggest-btn wr-mode-toggle${suggestMode ? ' wr-mode-toggle--active' : ''}`}
+            onClick={() => setSuggestMode((m) => !m)}
+          >
+            {suggestMode
+              ? t('wineRecord.suggestDone', 'Done')
+              : t('wineRecord.suggest', 'Suggest a fix')}
+          </button>
+        )}
+      </div>
+      {suggestMode && (
+        <p className="wr-intro">
+          {t('wineRecord.intro', 'The shared registry’s record of this wine. Spot something wrong or missing? Suggest a fix — a curator reviews every suggestion before it goes live.')}
+        </p>
+      )}
       <div className="wr-grid">
         {SUGGESTABLE.map((f) => (
           <div key={f} className="wr-row">
@@ -192,28 +210,26 @@ function WineRecordSection({ wine, canSuggest, apiFetch }) {
             <span className={values[f] ? 'wr-value' : 'wr-value wr-value--blank'}>
               {values[f] || t('wineRecord.notRecorded', 'not recorded')}
             </span>
-            {canSuggest && (
-              pendingFields.has(f) ? (
-                <span className="wr-pending" title={t('wineRecord.pendingTitle', 'Your suggestion is awaiting curator review')}>
-                  {t('wineRecord.pending', 'suggestion pending')}
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  className="wr-suggest-btn"
-                  onClick={() => openSuggest(f)}
-                  aria-label={t('wineRecord.suggestFor', 'Suggest a fix for {{field}}', { field: fieldLabel(f) })}
-                >
-                  {t('wineRecord.suggest', 'Suggest a fix')}
-                </button>
-              )
-            )}
+            {canSuggest && pendingFields.has(f) ? (
+              <span className="wr-pending" title={t('wineRecord.pendingTitle', 'Your suggestion is awaiting curator review')}>
+                {t('wineRecord.pending', 'suggestion pending')}
+              </span>
+            ) : canSuggest && suggestMode ? (
+              <button
+                type="button"
+                className="wr-suggest-btn"
+                onClick={() => openSuggest(f)}
+                aria-label={t('wineRecord.suggestFor', 'Suggest a fix for {{field}}', { field: fieldLabel(f) })}
+              >
+                {t('wineRecord.suggest', 'Suggest a fix')}
+              </button>
+            ) : null}
           </div>
         ))}
       </div>
       {/* ── Public data fields (#985 Slice B): the accepted vocabulary with
           published values; blanks invite value suggestions ── */}
-      {(publicFields.length > 0 || canSuggest) && (
+      {(publicFields.length > 0 || (canSuggest && suggestMode)) && (
         <>
           <span className="bd-section-label" style={{ marginTop: '0.8rem' }}>
             {t('wineRecord.publicData', 'More data')}
@@ -230,27 +246,25 @@ function WineRecordSection({ wine, canSuggest, apiFetch }) {
                       <span className="wr-contributor"> {t('wineRecord.contributedBy', 'by {{name}}', { name: field.contributedBy })}</span>
                     )}
                   </span>
-                  {canSuggest && (
-                    field.mySuggestion ? (
-                      <span className="wr-pending" title={t('wineRecord.pendingTitle', 'Your suggestion is awaiting curator review')}>
-                        {t('wineRecord.pending', 'suggestion pending')}
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        className="wr-suggest-btn"
-                        onClick={() => { setValueModal({ field }); setValueInput(''); setValueReason(''); setError(null); }}
-                        aria-label={t('wineRecord.suggestValueFor', 'Suggest a value for {{field}}', { field: field.key.name })}
-                      >
-                        {shown ? t('wineRecord.suggest', 'Suggest a fix') : t('wineRecord.suggestValue', 'Add value')}
-                      </button>
-                    )
-                  )}
+                  {canSuggest && field.mySuggestion ? (
+                    <span className="wr-pending" title={t('wineRecord.pendingTitle', 'Your suggestion is awaiting curator review')}>
+                      {t('wineRecord.pending', 'suggestion pending')}
+                    </span>
+                  ) : canSuggest && suggestMode ? (
+                    <button
+                      type="button"
+                      className="wr-suggest-btn"
+                      onClick={() => { setValueModal({ field }); setValueInput(''); setValueReason(''); setError(null); }}
+                      aria-label={t('wineRecord.suggestValueFor', 'Suggest a value for {{field}}', { field: field.key.name })}
+                    >
+                      {shown ? t('wineRecord.suggest', 'Suggest a fix') : t('wineRecord.suggestValue', 'Add value')}
+                    </button>
+                  ) : null}
                 </div>
               );
             })}
           </div>
-          {canSuggest && (
+          {canSuggest && suggestMode && (
             <button
               type="button"
               className="wr-suggest-btn wr-propose-key"
