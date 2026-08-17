@@ -5,6 +5,7 @@ import {
   getPersonalData, addPersonalData, updatePersonalDataEntry,
   deletePersonalDataEntry, getPersonalDataKeys,
 } from '../../api/personalData';
+import './PersonalDataCard.css';
 
 /**
  * Personal typed key/value data on this bottle and its wine (issue #986).
@@ -239,26 +240,28 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId }) {
             : t('personalData.addTitle', 'Add wine data')}
           onClose={closeModal}
         >
-          <form onSubmit={submit}>
+          <form onSubmit={submit} className="pd-form">
             {error && <div className="alert alert-error" style={{ marginBottom: 8 }}>{error}</div>}
 
             {modal.mode === 'add' && (
               <>
-                <label style={{ display: 'block', marginBottom: 8 }}>
-                  {t('personalData.level', 'Applies to')}
+                <div className="form-group">
+                  <label htmlFor="pd-level">{t('personalData.level', 'Applies to')}</label>
                   <select
+                    id="pd-level"
+                    className="pd-select"
                     value={form.level}
                     onChange={(e) => setForm({ ...form, level: e.target.value })}
-                    style={{ display: 'block', width: '100%', marginTop: 4 }}
                   >
                     <option value="bottle">{t('personalData.levelBottle', 'This bottle only')}</option>
                     <option value="wine">{t('personalData.levelWine', 'Every bottle of this wine')}</option>
                   </select>
-                </label>
+                </div>
 
-                <label style={{ display: 'block', marginBottom: keys.length ? 4 : 8 }}>
-                  {t('personalData.key', 'What is it?')}
+                <div className="form-group">
+                  <label htmlFor="pd-key-name">{t('personalData.key', 'What is it?')}</label>
                   <input
+                    id="pd-key-name"
                     type="text"
                     list="pd-key-suggestions"
                     value={form.keyName}
@@ -266,54 +269,55 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId }) {
                     placeholder={t('personalData.keyPlaceholder', 'e.g. ABV, Provenance, Cork condition')}
                     maxLength={60}
                     required
-                    style={{ display: 'block', width: '100%', marginTop: 4 }}
                   />
                   <datalist id="pd-key-suggestions">
                     {keys.map((k) => <option key={k._id} value={k.name} />)}
                   </datalist>
-                </label>
 
-                {/* Saved keys as one-tap chips — the datalist alone is invisible
-                    until you type, which made reuse look broken (Johan, 08-17):
-                    a value list created on one wine seemed to vanish on the next. */}
-                {keys.length > 0 && (
-                  <div style={{ marginBottom: 8 }}>
-                    <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
-                      {t('personalData.yourKeys', 'Your saved keys:')}
-                    </span>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
-                      {keys.map((k) => {
-                        const selected = matchedKey && matchedKey._id === k._id;
-                        return (
-                          <button
-                            key={k._id}
-                            type="button"
-                            className="btn btn-small"
-                            onClick={() => setForm({ ...form, keyName: k.name, value: '' })}
-                            style={selected ? { outline: '2px solid var(--color-primary, #7c2d3a)' } : undefined}
-                            title={k.type + (k.unit ? ` (${k.unit})` : '')}
-                          >
-                            {k.name}
-                          </button>
-                        );
-                      })}
+                  {/* Saved keys as one-tap chips — the datalist alone is invisible
+                      until you type, which made reuse look broken (Johan, 08-17):
+                      a value list created on one wine seemed to vanish on the next. */}
+                  {keys.length > 0 && (
+                    <div style={{ marginTop: '0.5rem' }}>
+                      <span className="pd-chips-label">
+                        {t('personalData.yourKeys', 'Your saved keys:')}
+                      </span>
+                      <div className="pd-chips">
+                        {keys.map((k) => {
+                          const selected = matchedKey && matchedKey._id === k._id;
+                          return (
+                            <button
+                              key={k._id}
+                              type="button"
+                              className={`pd-chip${selected ? ' pd-chip--selected' : ''}`}
+                              onClick={() => setForm({ ...form, keyName: k.name, value: '' })}
+                              title={k.type + (k.unit ? ` (${k.unit})` : '')}
+                            >
+                              {k.name}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {matchedKey ? (
-                  <p style={{ margin: '0 0 8px', fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
-                    {t('personalData.existingKey', 'Existing key — type: {{type}}', { type: matchedKey.type })}
-                    {matchedKey.unit ? ` (${matchedKey.unit})` : ''}
-                  </p>
-                ) : form.keyName.trim() && (
+                  {matchedKey && (
+                    <p className="pd-key-note">
+                      {t('personalData.existingKey', 'Existing key — type: {{type}}', { type: matchedKey.type })}
+                      {matchedKey.unit ? ` (${matchedKey.unit})` : ''}
+                    </p>
+                  )}
+                </div>
+
+                {!matchedKey && form.keyName.trim() && (
                   <>
-                    <label style={{ display: 'block', marginBottom: 8 }}>
-                      {t('personalData.type', 'Value type')}
+                    <div className="form-group">
+                      <label htmlFor="pd-key-type">{t('personalData.type', 'Value type')}</label>
                       <select
+                        id="pd-key-type"
+                        className="pd-select"
                         value={form.keyType}
                         onChange={(e) => setForm({ ...form, keyType: e.target.value, value: '' })}
-                        style={{ display: 'block', width: '100%', marginTop: 4 }}
                       >
                         {TYPES.map((ty) => (
                           <option key={ty} value={ty}>
@@ -321,51 +325,51 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId }) {
                           </option>
                         ))}
                       </select>
-                    </label>
+                    </div>
                     {(form.keyType === 'integer' || form.keyType === 'decimal') && (
-                      <label style={{ display: 'block', marginBottom: 8 }}>
-                        {t('personalData.unit', 'Unit (optional)')}
+                      <div className="form-group">
+                        <label htmlFor="pd-unit">{t('personalData.unit', 'Unit (optional)')}</label>
                         <input
+                          id="pd-unit"
                           type="text"
                           value={form.unit}
                           onChange={(e) => setForm({ ...form, unit: e.target.value })}
                           placeholder={t('personalData.unitPlaceholder', 'e.g. %, °C, kr')}
                           maxLength={20}
-                          style={{ display: 'block', width: '100%', marginTop: 4 }}
                         />
-                      </label>
+                      </div>
                     )}
                     {form.keyType === 'enum' && (
-                      <label style={{ display: 'block', marginBottom: 8 }}>
-                        {t('personalData.enumOptions', 'Allowed values (comma-separated)')}
+                      <div className="form-group">
+                        <label htmlFor="pd-enum-options">{t('personalData.enumOptions', 'Allowed values (comma-separated)')}</label>
                         <input
+                          id="pd-enum-options"
                           type="text"
                           value={form.enumOptions}
                           onChange={(e) => setForm({ ...form, enumOptions: e.target.value })}
                           placeholder={t('personalData.enumPlaceholder', 'e.g. cork, screwcap, crown')}
                           required
-                          style={{ display: 'block', width: '100%', marginTop: 4 }}
                         />
-                      </label>
+                      </div>
                     )}
                   </>
                 )}
               </>
             )}
 
-            <div style={{ marginBottom: 8 }}>
+            <div className="form-group">
               {/* Explicit htmlFor/id: the unit suffix lives beside the input,
                   and a wrapping label would fold it into the accessible name. */}
-              <label htmlFor="pd-value-input" style={{ display: 'block' }}>
+              <label htmlFor="pd-value-input">
                 {t('personalData.value', 'Value')}
               </label>
               {effectiveType === 'boolean' ? (
                 <select
                   id="pd-value-input"
+                  className="pd-select"
                   value={form.value}
                   onChange={(e) => setForm({ ...form, value: e.target.value })}
                   required
-                  style={{ display: 'block', width: '100%', marginTop: 4 }}
                 >
                   <option value="">{t('personalData.choose', 'Choose…')}</option>
                   <option value="true">{t('personalData.yes', 'Yes')}</option>
@@ -379,10 +383,10 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId }) {
                   return (
                     <select
                       id="pd-value-input"
+                      className="pd-select"
                       value={form.value}
                       onChange={(e) => setForm({ ...form, value: e.target.value })}
                       required
-                      style={{ display: 'block', width: '100%', marginTop: 4 }}
                     >
                       <option value="">{t('personalData.choose', 'Choose…')}</option>
                       {options.map((o) => <option key={o} value={o}>{o}</option>)}
@@ -390,7 +394,7 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId }) {
                   );
                 })()
               ) : (
-                <span style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                <span className="pd-value-row">
                   <input
                     id="pd-value-input"
                     type={effectiveType === 'date' ? 'date'
@@ -400,10 +404,9 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId }) {
                     onChange={(e) => setForm({ ...form, value: e.target.value })}
                     maxLength={effectiveType === 'text' ? 500 : undefined}
                     required
-                    style={{ flex: 1 }}
                   />
                   {(matchedKey?.unit || (modal.mode === 'edit' && modal.entry.key.unit) || form.unit.trim()) && (
-                    <span style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
+                    <span className="pd-unit">
                       {matchedKey?.unit || (modal.mode === 'edit' ? modal.entry.key.unit : form.unit.trim())}
                     </span>
                   )}
