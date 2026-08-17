@@ -25,7 +25,7 @@ const mcpActionLogSchema = new mongoose.Schema({
   // 'pending' is the idempotency CLAIM stub (see actionLedger.js): a row
   // reserved atomically BEFORE the mutation runs, overwritten with the real
   // action on success. Never shown in the timeline, never undo-eligible.
-  action: { type: String, enum: ['pending', 'consume', 'restore', 'add', 'update', 'undo_add', 'bulk_preview', 'bulk_add', 'somm_maturity', 'somm_maturity_remove', 'somm_wine_profile', 'somm_price', 'somm_price_decline', 'somm_proposal', 'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange_preview', 'arrange', 'tasting_note', 'attach_image', 'winelist_add', 'winelist_price', 'open', 'pour', 'close'], required: true },
+  action: { type: String, enum: ['pending', 'consume', 'restore', 'add', 'update', 'undo_add', 'bulk_preview', 'bulk_add', 'somm_maturity', 'somm_maturity_remove', 'somm_wine_profile', 'somm_price', 'somm_price_decline', 'somm_proposal', 'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange_preview', 'arrange', 'tasting_note', 'attach_image', 'winelist_add', 'winelist_price', 'open', 'pour', 'close', 'personal_data'], required: true },
   bottle: { type: mongoose.Schema.Types.ObjectId, ref: 'Bottle' },
   cellar: { type: mongoose.Schema.Types.ObjectId, ref: 'Cellar' },
   // Small, non-PII operational detail (reason, ml, …) for the timeline.
