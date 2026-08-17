@@ -132,46 +132,54 @@ function sleep() {
   return new Promise(resolve => setTimeout(resolve, BATCH_PAUSE_MS));
 }
 
-// ── Which suspicions actually have to withhold the profile ──────────────────
+// ── Which doubts actually have to withhold the profile ──────────────────────
 //
-// v1.116.0 held EVERY producer-suspect profile. Measured against the 390
-// suspect rows that predate it (prod, 2026-08-16): only 9 descriptions made
-// any producer-identity claim at all, and ~2 were genuinely misleading. The
-// rest were honest notes about wines that legitimately carry a brand or
-// retailer in the producer field — an Aldi Riesling has no better answer, and
-// withholding its tasting note serves nobody. 370 of those rows are attached
-// to real users' bottles, so a blanket hold is a large, user-visible cost for
-// a small harm.
+// The flag was split on 2026-08-17 (see models/WineDefinition.aiProfile
+// .producerUnknown) because one boolean was answering two questions:
 //
-// The doubt has to withhold the profile in exactly two cases:
-//   1. the model is ALSO unsure of the wine (low/unknown confidence) — the
-//      Epiphany shape: it could not place the bottling, so the prose is an
-//      appellation-level guess dressed as a description; and
-//   2. the prose makes claims about the PRODUCER AS AN ENTITY while we doubt
-//      the producer is real — the Fabelhaft harm exactly (a biography of a
-//      house that turned out to be a Niepoort label).
-// Anything else publishes with the doubt recorded: producerSuspect and
-// producerNote still ride on the row, and the admin queue still lists it
-// regardless of threshold.
-const SUSPECT_HOLD_CONFIDENCE_MAX = 0.45;
+//   producerSuspect  — the Producer FIELD is wrong: a brand line, a place, a
+//                      retailer, a label term. Fabelhaft, which is a Niepoort
+//                      label. The record is not describing a real house, so a
+//                      profile written for it is fiction about a company that
+//                      may not exist. HOLD, at any confidence.
+//   producerUnknown  — the name reads like a real winery, the model just
+//                      cannot place it. Chateau Hautes Graves, Thomas Allen,
+//                      most small estates on earth. The record is FINE and an
+//                      appellation-level note is honest and useful. PUBLISH,
+//                      with the doubt recorded on the row.
+//
+// Holding both was measurably wrong: ~47% of a 250-wine enrichment run was
+// withheld, almost all of it the second kind, and those held rows then blocked
+// the sommelier's maturity queue — a held profile shows no tasting note, and
+// a drink window cannot be judged without one.
+//
+// ONE case still holds an otherwise-fine unknown producer: prose that talks
+// about the house as an entity while admitting it cannot place it. The prompt
+// now forbids that directly, so this is a backstop rather than the main gate.
+// Confidence is deliberately NOT part of the decision any more — a low
+// confidence on a correctly-recorded wine is honesty about the note, not
+// doubt about the record, and gating on it is what withheld the honest
+// majority in the first place.
+//
 // Words that only appear when a description is talking about the PRODUCER
-// rather than the wine. Deliberately generous — a false positive costs one
-// withheld tasting note that a curator can release in a click, a false
-// negative publishes a fabricated house.
+// rather than the wine. Deliberately generous: a false positive costs one
+// withheld tasting note a curator can release in a click, a false negative
+// publishes a fabricated house.
 const PRODUCER_CLAIM_RX =
   /\b(n[ée]gociant|winery|winemaker|domaine|estate|ch[âa]teau|house|producer|winehouse|family|founded|generation)\b/i;
 
 /**
- * @param {object} profile — the CLEANED { confidence, description } about to
- *   be stored (nulls already normalised by cleanConfidence/cleanProse).
- * @returns {boolean} true when a producer-suspect profile must be held.
+ * @param {object} profile — the CLEANED profile about to be stored
+ *   (nulls already normalised by cleanConfidence/cleanProse).
+ * @param {boolean} profile.producerSuspect — the field is not a producer
+ * @param {boolean} profile.producerUnknown — real name, cannot be placed
+ * @param {string|null} profile.description
+ * @returns {boolean} true when the profile must be withheld from the owner.
  */
-function suspectHoldsProfile({ confidence, description }) {
-  // Unknown confidence is the "nobody can vouch for this" state — the same
-  // stance the admin low-confidence queue takes on a null.
-  if (typeof confidence !== 'number') return true;
-  if (confidence <= SUSPECT_HOLD_CONFIDENCE_MAX) return true;
-  return PRODUCER_CLAIM_RX.test(description || '');
+function shouldHoldProfile({ producerSuspect, producerUnknown, description }) {
+  if (producerSuspect) return true;
+  if (producerUnknown) return PRODUCER_CLAIM_RX.test(description || '');
+  return false;
 }
 
 // ── Main job logic ─────────────────────────────────────────────────────────
@@ -331,32 +339,33 @@ async function enrichWine(wine, model, { publishSuspect = false } = {}) {
     return { result: 'skipped', reason };
   }
 
-  // The model's own doubt about the producer FIELD (registry audit follow-up:
-  // "Arcane" — a range sold as a producer — sailed past every string gate AND
-  // 49 audit agents; only this model hedged). Strict true-check: absent on
-  // old/custom prompts → false.
+  // The two producer doubts, kept apart (see shouldHoldProfile). Strict
+  // true-checks: absent on an old or custom prompt → false, which degrades to
+  // "no doubt recorded" rather than to a spurious hold.
   const suspect = data.producerSuspect === true;
+  const unknown = data.producerUnknown === true;
   const now = new Date();
   const confidence = cleanConfidence(data.confidence);
   const description = cleanProse(data.description);
   const meta = {
     confidence,
     producerSuspect: suspect,
+    producerUnknown: unknown,
     producerNote:    cleanProse(data.producerNote, 300),
     model:           model || aiConfig.get().enrichmentModel,
     source:          'ai',
     generatedAt:     now,
   };
 
-  // HOLD, don't publish, when the producer doubt could make the PROSE
-  // misleading (ticket 6a8162c5, narrowed 2026-08-16 — see
-  // suspectHoldsProfile for the evidence that "suspect" alone is too broad).
+  // HOLD, don't publish, when the doubt is about the RECORD rather than the
+  // model's own reach — see shouldHoldProfile for why those are different
+  // questions and what happened when one flag answered both.
   // A held row stores ONLY the doubt; the null description keeps every read
   // surface (bottle page, MCP, embedding text) naturally silent, and heldAt
   // keeps the retry guards from looping on it. `publishSuspect` is the human
   // override — profile-reviewed uses it after an admin has looked at the
   // doubt and judged the identity fine.
-  if (suspect && !publishSuspect && suspectHoldsProfile({ confidence, description })) {
+  if (!publishSuspect && shouldHoldProfile({ producerSuspect: suspect, producerUnknown: unknown, description })) {
     await WineDefinition.updateOne(
       { _id: wine._id },
       {
@@ -597,5 +606,5 @@ module.exports = {
   start, requestStop, getStatus, enrichWineById, releaseHeldProfile,
   profileInputsSnapshot, reenrichAfterRecordEdit,
   // exported for unit tests
-  cleanDescriptor, cleanStringList, cleanProse, cleanConfidence, suspectHoldsProfile,
+  cleanDescriptor, cleanStringList, cleanProse, cleanConfidence, shouldHoldProfile,
 };
