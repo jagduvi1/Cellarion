@@ -161,37 +161,44 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId }) {
 
   const isOwn = (entry) => String(entry.author?._id) === String(currentUserId);
 
-  const rowStyle = {
-    display: 'flex', alignItems: 'baseline', gap: 8, padding: '0.3rem 0',
-    borderBottom: '1px solid var(--color-border, rgba(0,0,0,0.06))', fontSize: '0.92rem',
-  };
+  // Chosen values (enum) and yes/no read best as pills; free numbers, dates
+  // and text as plain strong values with their unit.
+  const isPillValue = (entry) => entry.key.type === 'enum' || entry.key.type === 'boolean';
 
-  const renderEntries = (entries) => entries.map((entry) => (
-    <div key={entry._id} style={rowStyle}>
-      <span style={{ fontWeight: 600 }}>{entry.key.name}</span>
-      <span>{formatValue(entry)}</span>
-      {!isOwn(entry) && (
-        <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
-          {t('personalData.by', 'by {{name}}', { name: authorName(entry) })}
-        </span>
-      )}
-      {isOwn(entry) && (
-        <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-          <button type="button" className="btn btn-small" onClick={() => openEdit(entry)}>
-            {t('common.edit', 'Edit')}
-          </button>
-          <button
-            type="button"
-            className="btn btn-small btn-danger"
-            onClick={() => remove(entry)}
-            disabled={deleteBusy === entry._id}
-          >
-            {t('common.delete', 'Delete')}
-          </button>
-        </span>
-      )}
+  const renderEntries = (entries) => (
+    <div className="pd-entries">
+      {entries.map((entry) => (
+        <div key={entry._id} className="pd-entry">
+          <span className="pd-entry-key">{entry.key.name}</span>
+          <span className="pd-entry-main">
+            <span className={isPillValue(entry) ? 'pd-value-pill' : 'pd-entry-value'}>
+              {formatValue(entry)}
+            </span>
+            {!isOwn(entry) && (
+              <span className="pd-entry-author">
+                {t('personalData.by', 'by {{name}}', { name: authorName(entry) })}
+              </span>
+            )}
+          </span>
+          {isOwn(entry) && (
+            <span className="pd-entry-actions">
+              <button type="button" className="btn btn-small" onClick={() => openEdit(entry)}>
+                {t('common.edit', 'Edit')}
+              </button>
+              <button
+                type="button"
+                className="btn btn-small btn-danger"
+                onClick={() => remove(entry)}
+                disabled={deleteBusy === entry._id}
+              >
+                {t('common.delete', 'Delete')}
+              </button>
+            </span>
+          )}
+        </div>
+      ))}
     </div>
-  ));
+  );
 
   const sectionTitleStyle = {
     margin: '0.6rem 0 0.2rem', fontSize: '0.8rem', fontWeight: 700,

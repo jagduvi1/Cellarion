@@ -77,3 +77,79 @@
 .pd-key-note {
   margin: 0.35rem 0 0;
 }
+
+/* ── Entry rows: a clean key → value ledger ── */
+.pd-entries {
+  margin-top: 0.15rem;
+}
+
+.pd-entry {
+  display: grid;
+  grid-template-columns: minmax(110px, 34%) 1fr auto;
+  align-items: center;
+  column-gap: 0.75rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--color-border, rgba(0, 0, 0, 0.06));
+}
+
+.pd-entry:last-child {
+  border-bottom: none;
+}
+
+.pd-entry-key {
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.pd-entry-main {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.6rem;
+  min-width: 0;
+}
+
+.pd-entry-value {
+  font-weight: 600;
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+/* Chosen-from-a-list values (enum, yes/no) read as pills */
+.pd-value-pill {
+  display: inline-block;
+  padding: 0.1rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(var(--color-primary-rgb), 0.09);
+  color: var(--color-primary, #7c2d3a);
+  font-weight: 600;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.pd-entry-author {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.pd-entry-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.pd-entry-actions .btn {
+  padding: 0.2rem 0.55rem;
+  font-size: 0.75rem;
+}
+
+/* Phone width: key above value, actions tucked to the right of the key */
+@media (max-width: 480px) {
+  .pd-entry {
+    grid-template-columns: 1fr auto;
+  }
+  .pd-entry-main {
+    grid-column: 1 / -1;
+  }
+}
