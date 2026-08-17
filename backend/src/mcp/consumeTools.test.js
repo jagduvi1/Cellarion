@@ -338,7 +338,7 @@ describe('undo_last walk-backward + scope gating (e2e-caught regression)', () =>
     expect(q.action.$in).toEqual(['consume', 'restore', 'open', 'pour', 'close', 'add', 'update', 'bulk_add', 'somm_maturity',
       'somm_maturity_remove', 'somm_wine_profile', 'somm_price', 'somm_price_decline', 'somm_proposal',
       'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange', 'tasting_note', 'attach_image',
-      'winelist_add', 'winelist_price']);
+      'winelist_add', 'winelist_price', 'personal_data']);
   });
 
   test('the reverse row is marked viaUndo and the undone row frees its idempotency key', async () => {
