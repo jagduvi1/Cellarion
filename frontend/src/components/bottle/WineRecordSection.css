@@ -1,0 +1,90 @@
+/* Wine record (#985 Slice A) — the full public record with visible blanks
+   and per-field suggest actions. Same key-value ledger language as the
+   personal-data card. */
+
+.wr-intro {
+  margin: 0.15rem 0 0.4rem;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.wr-grid {
+  margin-top: 0.15rem;
+}
+
+.wr-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 34%) 1fr auto;
+  align-items: center;
+  column-gap: 0.75rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--color-border, rgba(0, 0, 0, 0.06));
+}
+
+.wr-row:last-child {
+  border-bottom: none;
+}
+
+.wr-key {
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.wr-value {
+  font-weight: 600;
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+/* A blank is shown, not hidden — the visible gap invites the contribution */
+.wr-value--blank {
+  font-weight: 400;
+  font-style: italic;
+  color: var(--color-text-muted);
+}
+
+.wr-suggest-btn {
+  border: none;
+  background: none;
+  padding: 0.15rem 0.3rem;
+  font-size: 0.78rem;
+  color: var(--color-primary, #7c2d3a);
+  cursor: pointer;
+  opacity: 0.75;
+  transition: opacity var(--transition-fast);
+}
+
+.wr-suggest-btn:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.wr-pending {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+  white-space: nowrap;
+}
+
+.wr-thanks {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.wr-current {
+  padding: 0.45rem 0.65rem;
+  background: var(--color-surface, rgba(0, 0, 0, 0.04));
+  border-radius: var(--radius-sm);
+  font-size: 0.92rem;
+}
+
+@media (max-width: 480px) {
+  .wr-row {
+    grid-template-columns: 1fr auto;
+  }
+  .wr-value {
+    grid-column: 1 / -1;
+  }
+}

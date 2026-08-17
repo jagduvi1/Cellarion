@@ -989,6 +989,10 @@
       "curatorReply": "The curator’s reply"
     },
     "tastingProfile": "Tasting profile",
+    "provenanceAi": "AI-generated",
+    "provenanceAiTitle": "Written by AI from the wine’s identity — a starting point, not a fact",
+    "provenanceCurator": "Curator-verified",
+    "provenanceCuratorTitle": "A sommelier has verified this profile",
     "structure": "Structure",
     "flavours": "Flavours",
     "pairsWith": "Pairs with",
@@ -1988,6 +1992,30 @@
         "sweet": "Sweet"
       }
     }
+  },
+  "wineRecord": {
+    "title": "Wine record",
+    "intro": "The shared registry’s record of this wine. Spot something wrong or missing? Suggest a fix — a curator reviews every suggestion before it goes live.",
+    "notRecorded": "not recorded",
+    "suggest": "Suggest a fix",
+    "suggestFor": "Suggest a fix for {{field}}",
+    "pending": "suggestion pending",
+    "pendingTitle": "Your suggestion is awaiting curator review",
+    "thanks": "Thank you — your suggestion is in the review queue. You’ll see the outcome here.",
+    "modalTitle": "Suggest a fix: {{field}}",
+    "current": "Currently recorded",
+    "proposed": "Should be",
+    "reason": "How do you know?",
+    "reasonPlaceholder": "e.g. It’s printed on the label of my bottle / the producer’s site says…",
+    "evidence": "Link that backs it up (optional, speeds up review)",
+    "send": "Send suggestion",
+    "sending": "Sending…",
+    "field_producer": "Producer",
+    "field_name": "Wine name",
+    "field_appellation": "Appellation",
+    "field_region": "Region",
+    "field_country": "Country",
+    "field_classification": "Classification"
   },
   "personalData": {
     "title": "Your wine data",
