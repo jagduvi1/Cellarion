@@ -186,7 +186,7 @@ describe('createEntry', () => {
     PersonalDataKey.findOne.mockResolvedValue(null);
     const res = await svc.createEntry(ME, bottle, { level: 'wine', keyId: KEY_ID, value: 13.5 });
     expect(res).toMatchObject({ ok: false, code: 'not_found' });
-    expect(PersonalDataKey.findOne).toHaveBeenCalledWith({ _id: KEY_ID, user: ME });
+    expect(PersonalDataKey.findOne).toHaveBeenCalledWith({ _id: { $eq: KEY_ID }, user: ME });
   });
 });
 
@@ -196,7 +196,7 @@ describe('updateEntry', () => {
     PersonalDataEntry.findOne.mockReturnValue({ populate: jest.fn().mockResolvedValue(doc) });
 
     const res = await svc.updateEntry(ME, doc._id, '14,0');
-    expect(PersonalDataEntry.findOne).toHaveBeenCalledWith({ _id: doc._id, author: ME });
+    expect(PersonalDataEntry.findOne).toHaveBeenCalledWith({ _id: { $eq: String(doc._id) }, author: ME });
     expect(res.ok).toBe(true);
     expect(res.prevValue).toBe(13.5);
     expect(doc.value).toBe(14);
@@ -230,7 +230,7 @@ describe('deleteEntry', () => {
     PersonalDataEntry.findOneAndDelete.mockReturnValue({ populate: jest.fn().mockResolvedValue(doc) });
 
     const res = await svc.deleteEntry(ME, doc._id);
-    expect(PersonalDataEntry.findOneAndDelete).toHaveBeenCalledWith({ _id: doc._id, author: ME });
+    expect(PersonalDataEntry.findOneAndDelete).toHaveBeenCalledWith({ _id: { $eq: String(doc._id) }, author: ME });
     expect(res.ok).toBe(true);
     expect(res.target).toEqual({ wineDefinition: WINE, bottle: null });
   });

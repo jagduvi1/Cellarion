@@ -120,7 +120,10 @@ async function listForBottle(bottle, cellar) {
 async function resolveKey(userId, { keyId, newKey }) {
   if (keyId) {
     if (!isValidId(String(keyId))) return fail('invalid', 'Invalid key id');
-    const key = await PersonalDataKey.findOne({ _id: keyId, user: userId });
+    // $eq on the client-supplied id: isValidId already rejects operator
+    // objects, but the explicit $eq makes the no-injection property local to
+    // the query instead of depending on the guard above (CodeQL js/sql-injection).
+    const key = await PersonalDataKey.findOne({ _id: { $eq: String(keyId) }, user: userId });
     if (!key) return fail('not_found', 'Key not found');
     return { ok: true, key };
   }
@@ -129,9 +132,11 @@ async function resolveKey(userId, { keyId, newKey }) {
   if (!checked.ok) return fail('invalid', checked.error);
   const { def } = checked;
 
+  // def.name is guaranteed a plain string by validateKeyDefinition; $eq for
+  // the same local no-injection property as above.
   const existing = await PersonalDataKey.findOne({
     user: userId,
-    nameKey: def.name.toLowerCase(),
+    nameKey: { $eq: def.name.toLowerCase() },
   });
   if (existing) {
     if (existing.type !== def.type) {
@@ -194,7 +199,7 @@ async function createEntry(userId, bottle, { level, keyId, newKey, value }) {
 /** Author-only. Not-found for anyone else — no existence oracle. */
 async function updateEntry(userId, entryId, value) {
   if (!isValidId(String(entryId))) return fail('invalid', 'Invalid entry id');
-  const entry = await PersonalDataEntry.findOne({ _id: entryId, author: userId }).populate('key');
+  const entry = await PersonalDataEntry.findOne({ _id: { $eq: String(entryId) }, author: userId }).populate('key');
   if (!entry) return fail('not_found', 'Entry not found');
   if (await isBanned(userId)) {
     return fail('banned', 'You are banned from posting content visible to other users');
@@ -214,7 +219,7 @@ async function updateEntry(userId, entryId, value) {
 /** Author-only. Not-found for anyone else — no existence oracle. */
 async function deleteEntry(userId, entryId) {
   if (!isValidId(String(entryId))) return fail('invalid', 'Invalid entry id');
-  const entry = await PersonalDataEntry.findOneAndDelete({ _id: entryId, author: userId })
+  const entry = await PersonalDataEntry.findOneAndDelete({ _id: { $eq: String(entryId) }, author: userId })
     .populate('key');
   if (!entry) return fail('not_found', 'Entry not found');
   return {
