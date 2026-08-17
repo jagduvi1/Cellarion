@@ -49,6 +49,7 @@ const sommWineProfileRoute = require('./routes/somm/wineProfile');
 const sommPendingWinesRoute = require('./routes/somm/pendingWines');
 const notificationsRoute = require('./routes/notifications');
 const personalDataRoute = require('./routes/personalData');
+const wineProposalsRoute = require('./routes/wineProposals');
 const statsRoute = require('./routes/stats');
 const superAdminRoute = require('./routes/superadmin');
 const chatRoute = require('./routes/chat');
