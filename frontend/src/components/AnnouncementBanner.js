@@ -5,6 +5,13 @@ import './AnnouncementBanner.css';
 const API_BASE = import.meta.env.VITE_API_URL || '';
 const DISMISS_KEY = 'announcementDismissed';
 const CACHE_TTL = 60 * 1000;
+// How often an OPEN tab re-asks. The banner's whole job is to reach people
+// before something happens (a maintenance window, an incident), and fetching
+// only on mount meant it reached nobody who already had the app open —
+// found 2026-08-17, when a live banner was invisible to exactly the person
+// who had been sitting on the page. Comfortably longer than CACHE_TTL, so
+// each poll actually re-asks rather than reading its own cache.
+const POLL_MS = 5 * 60 * 1000;
 
 // Module-level cache: Layout remounts on every route change, but the banner
 // endpoint only needs to be asked about once a minute.
@@ -15,11 +22,22 @@ async function fetchAnnouncement() {
   if (cached !== null && Date.now() - cachedAt < CACHE_TTL) return cached;
   try {
     const res = await fetch(`${API_BASE}/api/site/announcement`);
-    cached = res.ok ? await res.json() : { enabled: false };
+    if (res.ok) {
+      cached = await res.json();
+      cachedAt = Date.now();
+    } else if (cached === null) {
+      // Never had an answer — treat as "no banner" but do NOT start the
+      // cache clock, so the next poll retries rather than waiting a minute.
+      cached = { enabled: false };
+    }
   } catch {
-    cached = { enabled: false };
+    // A transient network blip must not TAKE DOWN a banner that is already
+    // showing: keep whatever we last knew. Only the first-ever failure
+    // resolves to "no banner" (see above). This matters more with polling
+    // than it did with a single fetch — one dropped request in five minutes
+    // would otherwise blink the notice off the page.
+    if (cached === null) cached = { enabled: false };
   }
-  cachedAt = Date.now();
   return cached;
 }
 
@@ -37,8 +55,24 @@ function AnnouncementBanner() {
 
   useEffect(() => {
     let cancelled = false;
-    fetchAnnouncement().then(a => { if (!cancelled) setAnnouncement(a); });
-    return () => { cancelled = true; };
+    const load = () => fetchAnnouncement().then(a => { if (!cancelled) setAnnouncement(a); });
+    load();
+
+    // Poll, so a banner raised while someone is mid-session still reaches
+    // them. Both triggers go through the same CACHE_TTL-respecting fetch, so
+    // a tab that is switched to repeatedly cannot spam the endpoint.
+    const timer = setInterval(load, POLL_MS);
+    // Returning to the tab is the moment a stale banner is most likely and
+    // most wanted — a user coming back after an hour gets the current state
+    // without waiting out the interval.
+    const onVisibility = () => { if (document.visibilityState === 'visible') load(); };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, []);
 
   if (!announcement?.enabled || !announcement.message) return null;
