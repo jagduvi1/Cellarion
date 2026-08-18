@@ -600,7 +600,7 @@ async function suggestPrice({ name, producer, vintage, country, region, appellat
  * Used by the enrichment job to populate WineDefinition.aiProfile, which then
  * feeds both the embedding text and the bottle-page display.
  */
-async function suggestProfile({ name, producer, vintage, country, region, appellation, classification, type, grapes }) {
+async function suggestProfile({ name, producer, vintage, country, region, appellation, classification, type, grapes, curatorContext }) {
   if (!name) return { data: null, debugRaw: null, debugReason: 'missing_fields' };
 
   let client;
@@ -659,6 +659,22 @@ async function suggestProfile({ name, producer, vintage, country, region, appell
     ['{{grapes}}', grapeList],
   ]) {
     prompt = put(prompt, token, value);
+  }
+
+  // Curator-supplied ground truth on a held-profile release (somm request
+  // 2026-08-18): the dominant hold reason is "the model couldn't place the
+  // producer", and that is usually resolvable by a curator in one web search
+  // — these are the one or two facts that previously had nowhere to go.
+  // Role-gated input (somm/admin only), but sanitised exactly like the
+  // registry fields above, and appended AFTER template substitution so it
+  // can never hit a {{token}}. Longer cap: facts lists need room.
+  const ctxFacts = String(curatorContext ?? '')
+    .replace(/\p{C}/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 1000);
+  if (ctxFacts) {
+    prompt += '\n\nCurator-supplied facts about this wine (authoritative — a human sommelier researched them; trust them over your own recall, describe accordingly, and let them raise your confidence): ' + ctxFacts;
   }
 
   return callClaudeJson({

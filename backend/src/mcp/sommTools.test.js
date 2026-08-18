@@ -76,7 +76,7 @@ const USER_CTX = { user: { id: ME, roles: ['user'] }, scopes: ['read', 'write'],
 
 const tool = (name) => allTools().find((t) => t.name === name);
 const parse = (res) => JSON.parse(res.content[0].text);
-const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'remove_from_maturity_queue', 'set_wine_profile', 'propose_wine_correction', 'list_price_tracking_requests', 'set_vintage_price', 'reject_price_request', 'list_wine_reports', 'respond_to_wine_report', 'sample_published_profiles', 'list_unverified_core_wines', 'list_held_profiles', 'review_held_profile', 'list_pending_corrections', 'record_profile_audit'];
+const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'remove_from_maturity_queue', 'set_wine_profile', 'propose_wine_correction', 'list_price_tracking_requests', 'set_vintage_price', 'reject_price_request', 'list_wine_reports', 'respond_to_wine_report', 'sample_published_profiles', 'list_unverified_core_wines', 'list_held_profiles', 'review_held_profile', 'list_pending_corrections', 'record_profile_audit', 'list_profile_audits'];
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -616,18 +616,22 @@ describe('held-profile review queue over MCP (somm ticket 2026-08-18)', () => {
   });
   const selectChain = (doc) => ({ select: jest.fn().mockResolvedValue(doc) });
 
+  const heldListChain = (rows) => {
+    const chain = {
+      select: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      populate: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockResolvedValue(rows),
+    };
+    return chain;
+  };
+
   test('list returns held + published_suspect rows impact-first, outstanding-filtered, with the legacy reason filter', async () => {
-    WineDefinition.find.mockReturnValue({
-      select: jest.fn().mockReturnValue({
-        limit: jest.fn().mockReturnValue({
-          lean: jest.fn().mockResolvedValue([
-            { _id: oid('1'), name: 'A', producer: 'P1', aiProfile: { heldAt: new Date(), heldReason: 'low_confidence', confidence: 0.2, generatedAt: new Date() } },
-            { _id: oid('2'), name: 'B', producer: 'P2', aiProfile: { heldAt: new Date(), heldReason: null, confidence: 0.5, generatedAt: new Date() } },
-            { _id: oid('3'), name: 'C', producer: 'P3', aiProfile: { heldAt: null, producerSuspect: true, description: 'x', confidence: 0.5, generatedAt: new Date() } },
-          ]),
-        }),
-      }),
-    });
+    WineDefinition.find.mockImplementation(() => heldListChain([
+      { _id: oid('1'), name: 'A', producer: 'P1', grapes: [{ name: 'Shiraz' }], country: { name: 'Australia' }, aiProfile: { heldAt: new Date(), heldReason: 'low_confidence', confidence: 0.2, generatedAt: new Date() } },
+      { _id: oid('2'), name: 'B', producer: 'P2', aiProfile: { heldAt: new Date(), heldReason: null, confidence: 0.5, generatedAt: new Date() } },
+      { _id: oid('3'), name: 'C', producer: 'P3', aiProfile: { heldAt: null, producerSuspect: true, description: 'x', confidence: 0.5, generatedAt: new Date() } },
+    ]));
     Bottle.aggregate.mockResolvedValue([{ _id: oid('3'), ownerCount: 4 }, { _id: oid('1'), ownerCount: 1 }]);
 
     let body = parse(await tool('list_held_profiles').handler({ include_published_suspects: true, limit: 30, offset: 0 }, SOMM_CTX));
@@ -635,6 +639,8 @@ describe('held-profile review queue over MCP (somm ticket 2026-08-18)', () => {
     // Impact-first: the 4-owner suspect row leads; states are labelled.
     expect(body.data[0]).toMatchObject({ state: 'published_suspect', owner_count: 4 });
     expect(body.data.map((r) => r.state).sort()).toEqual(['held', 'held', 'published_suspect']);
+    // Registry facts ride inline (gap report 4) — never generated content.
+    expect(body.data.find((r) => String(r.wine_id) === oid('1'))).toMatchObject({ grapes: ['Shiraz'], country: 'Australia' });
     // The query never lists decided rows — the outstanding comparison is in the filter.
     const filter = WineDefinition.find.mock.calls[0][0];
     expect(JSON.stringify(filter.$expr)).toMatch(/profileReviewedAt/);
@@ -642,6 +648,67 @@ describe('held-profile review queue over MCP (somm ticket 2026-08-18)', () => {
     // held_reason "legacy" keeps only the reason-less held row (suspects untouched).
     body = parse(await tool('list_held_profiles').handler({ held_reason: 'legacy', include_published_suspects: true, limit: 30, offset: 0 }, SOMM_CTX));
     expect(body.data.filter((r) => r.state === 'held').map((r) => r.wine_id)).toEqual([oid('2')]);
+  });
+
+  test('producer filter reaches the query; group_by returns clusters; counts_only returns uncapped totals (gap report 2/5a)', async () => {
+    WineDefinition.find.mockImplementation(() => heldListChain([
+      { _id: oid('1'), producer: 'Thomas Allen', aiProfile: { heldAt: new Date(), heldReason: 'low_confidence' } },
+      { _id: oid('2'), producer: 'Thomas Allen', aiProfile: { heldAt: new Date(), heldReason: null } },
+      { _id: oid('3'), producer: 'Zeroine', aiProfile: { heldAt: null, producerSuspect: true, description: 'x' } },
+    ]));
+    Bottle.aggregate.mockResolvedValue([{ _id: oid('1'), ownerCount: 2 }]);
+
+    let body = parse(await tool('list_held_profiles').handler({ producer: 'thomas', include_published_suspects: true, group_by: 'producer', limit: 30, offset: 0 }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(WineDefinition.find.mock.calls[0][0].producer).toEqual({ $regex: 'thomas', $options: 'i' });
+    const ta = body.data.find((g) => g.producer === 'Thomas Allen');
+    expect(ta).toMatchObject({ row_count: 2, max_owner_count: 2 });
+    expect(ta.reasons).toMatchObject({ low_confidence: 1, legacy: 1 });
+
+    body = parse(await tool('list_held_profiles').handler({ include_published_suspects: true, counts_only: true, limit: 30, offset: 0 }, SOMM_CTX));
+    expect(body.data).toMatchObject({ total: 3, held: 2, published_suspect: 1 });
+    expect(body.data.held_by_reason).toMatchObject({ low_confidence: 1, legacy: 1 });
+    expect(body.data.by_owner_tier).toMatchObject({ 0: 2, 2: 1 });
+  });
+
+  test('batch confirm decides per-row; batch release and misplaced context are refused (gap report 3 / enh 1)', async () => {
+    WineDefinition.findById.mockImplementation(() => selectChain(heldWine()));
+    let body = parse(await tool('review_held_profile').handler({ wine_ids: [oid('7'), oid('8')], decision: 'confirm', limit: undefined }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(body.data).toHaveLength(2);
+    expect(body.data.every((r) => r.decision === 'confirm')).toBe(true);
+    expect(WineDefinition.updateOne).toHaveBeenCalledTimes(2);
+
+    body = parse(await tool('review_held_profile').handler({ wine_ids: [oid('7')], decision: 'release' }, SOMM_CTX));
+    expect(body.error.code).toBe('invalid_input');
+
+    body = parse(await tool('review_held_profile').handler({ wine_id: oid('7'), decision: 'confirm', context: 'facts' }, SOMM_CTX));
+    expect(body.error.code).toBe('invalid_input');
+  });
+
+  test('release forwards curator context into the regeneration (enh 1)', async () => {
+    WineDefinition.findById.mockReturnValue(selectChain(heldWine()));
+    releaseHeldProfile.mockResolvedValueOnce(true);
+    const body = parse(await tool('review_held_profile').handler(
+      { wine_id: oid('7'), decision: 'release', context: 'Hunter Valley; dry-farmed vines planted 1969' }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(releaseHeldProfile).toHaveBeenCalledWith(expect.anything(), { context: 'Hunter Valley; dry-farmed vines planted 1969' });
+  });
+
+  test('list_profile_audits reads the trend without writing a row (gap report 5b)', async () => {
+    const ProfileAuditSample = require('../models/ProfileAuditSample');
+    ProfileAuditSample.find.mockReturnValue({
+      sort: jest.fn().mockReturnThis(), limit: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockResolvedValue([
+        { recordedAt: new Date('2026-08-18'), sampleSize: 20, corrections: 2 },
+        { recordedAt: new Date('2026-08-11'), sampleSize: 20, corrections: 6 },
+      ]),
+    });
+    const body = parse(await tool('list_profile_audits').handler({ limit: 12 }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(ProfileAuditSample.create).not.toHaveBeenCalled();
+    expect(body.data.running_rate_pct).toBe(20);
+    expect(body.data.history).toHaveLength(2);
   });
 
   test('release awaits the shared helper — success reports published, failure leaves the row queued', async () => {

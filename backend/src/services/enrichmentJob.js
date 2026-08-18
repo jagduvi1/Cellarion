@@ -344,11 +344,12 @@ async function runJob(cfg) {
  *   to the module-level job state, so a fire-and-forget enrichWineById can't
  *   pollute the admin job status.
  */
-async function enrichWine(wine, model, { publishSuspect = false } = {}) {
+async function enrichWine(wine, model, { publishSuspect = false, curatorContext = null } = {}) {
   const { data, debugReason } = await suggestProfile({
     name: wine.name,
     producer: wine.producer,
     vintage: 'NV', // vintage-neutral profile
+    curatorContext,
     country: wine.country?.name,
     region: wine.region?.name,
     appellation: wine.appellation,
@@ -515,7 +516,7 @@ async function enrichWine(wine, model, { publishSuspect = false } = {}) {
  *   the producer as suspect (the human-override path: an admin reviewed the
  *   doubt and judged the identity fine).
  */
-async function enrichWineById(wineDefId, { budgetUserId, force = false, publishSuspect = false } = {}) {
+async function enrichWineById(wineDefId, { budgetUserId, force = false, publishSuspect = false, curatorContext = null } = {}) {
   // Validate + cast the (caller-supplied) id to a real ObjectId before it touches
   // the query, so a non-id value can never shape the database lookup. The cast
   // value (idStr/oid), never the raw input, is used everywhere below.
@@ -565,7 +566,7 @@ async function enrichWineById(wineDefId, { budgetUserId, force = false, publishS
         return undefined;
       }
       try {
-        const { result, reason } = await enrichWine(wine, aiConfig.get().enrichmentModel, { publishSuspect });
+        const { result, reason } = await enrichWine(wine, aiConfig.get().enrichmentModel, { publishSuspect, curatorContext });
         outcome = result;
         // A transport-level failure never produced a billable completion
         if (result === 'skipped' && isRefundableFailure(reason)) await debit.refund();
@@ -574,7 +575,7 @@ async function enrichWineById(wineDefId, { budgetUserId, force = false, publishS
         throw err; // handled by the outer catch below
       }
     } else {
-      outcome = (await enrichWine(wine, aiConfig.get().enrichmentModel, { publishSuspect })).result;
+      outcome = (await enrichWine(wine, aiConfig.get().enrichmentModel, { publishSuspect, curatorContext })).result;
     }
     console.log('[enrichmentJob] Auto-enriched new wine: %s', wine.name);
     return outcome;
@@ -597,8 +598,8 @@ async function enrichWineById(wineDefId, { budgetUserId, force = false, publishS
  * @returns {Promise<boolean>} true when the profile published and the review
  *   stamp landed.
  */
-async function releaseHeldProfile(wineDefId) {
-  const outcome = await enrichWineById(wineDefId, { force: true, publishSuspect: true });
+async function releaseHeldProfile(wineDefId, { context = null } = {}) {
+  const outcome = await enrichWineById(wineDefId, { force: true, publishSuspect: true, curatorContext: context });
   if (outcome !== 'enriched') return false;
   await WineDefinition.updateOne(
     { _id: wineDefId },

@@ -711,10 +711,14 @@ describe('the enrichment prompt forbids asserting unstated facts', () => {
 
   test('the two producer doubts are defined apart, and only the wrong-field one is a claim about the record', () => {
     expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/producerSuspect: true ONLY when the Producer value is not a winery at all/);
-    expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/producerUnknown: true when the Producer reads like a genuine winery name/);
+    expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/producerUnknown: true ONLY when you cannot place the PRODUCER ITSELF/);
+    // The 2026-08-18 defect report: known house + unverified bottling was
+    // being flagged producerUnknown and held. The distinction is now explicit.
+    expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/Knowing the house but not this specific bottling or cuvée is NOT producerUnknown/);
+    expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/honest, publishable estimate, not a reason to withhold/);
     // Ticket 6a6f94e5's requirement (flag and prose must agree) must survive
     // the split — pointed at producerUnknown now, which is where it belongs.
-    expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/Set producerUnknown, NOT producerSuspect, whenever your description would call the producer undocumented/);
+    expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/Set producerUnknown, NOT producerSuspect, whenever your description would call the PRODUCER undocumented/);
   });
 
   // Ticket 6a8464ea phase 1: the anti-regional-prior instruction. Ashes &
