@@ -145,6 +145,22 @@ export const adminAskOwnerInquiry = (apiFetch, wineId, question) =>
 export const adminGetUnmatchedAppellations = (apiFetch) =>
   apiFetch('/api/admin/taxonomy/appellations/unmatched');
 
+// Dismissed unmatched-appellation strings — the restorable reject record.
+export const adminGetDismissedAppellations = (apiFetch) =>
+  apiFetch('/api/admin/taxonomy/appellations/dismissed');
+
+/** Dismiss an unmatched appellation string (reviewed, not promotable). */
+export const adminDismissUnmatchedAppellation = (apiFetch, name, reason) =>
+  apiFetch('/api/admin/taxonomy/appellations/unmatched/dismiss', {
+    method: 'POST', headers: J, body: JSON.stringify({ name, reason }),
+  });
+
+/** Lift a dismissal so the string can resurface in the queue. */
+export const adminRestoreDismissedAppellation = (apiFetch, name) =>
+  apiFetch('/api/admin/taxonomy/appellations/dismissed/restore', {
+    method: 'POST', headers: J, body: JSON.stringify({ name }),
+  });
+
 /** Approve a user-minted region (clears its pendingReview flag). */
 export const adminApproveRegion = (apiFetch, regionId) =>
   apiFetch(`/api/admin/taxonomy/regions/${regionId}/approve`, { method: 'POST' });

@@ -163,6 +163,9 @@ jest.mock('../services/taxonomyReview', () => ({
   listPendingRegions: jest.fn(),
   listUnmatchedAppellations: jest.fn(),
   appellationRefsError: jest.fn(), // resolves undefined → guard passes
+  dismissUnmatchedAppellation: jest.fn(),
+  restoreDismissedAppellation: jest.fn(),
+  listDismissedAppellations: jest.fn(),
 }));
 jest.mock('../models/Region', () => ({ findById: jest.fn() }));
 jest.mock('../models/Appellation', () => {
@@ -170,15 +173,19 @@ jest.mock('../models/Appellation', () => {
   return M;
 });
 
-const { listPendingRegions, listUnmatchedAppellations, appellationRefsError } = require('../services/taxonomyReview');
+const {
+  listPendingRegions, listUnmatchedAppellations, appellationRefsError,
+  dismissUnmatchedAppellation, restoreDismissedAppellation, listDismissedAppellations,
+} = require('../services/taxonomyReview');
 const Region = require('../models/Region');
 const Appellation = require('../models/Appellation');
 
 describe('taxonomy review tools', () => {
-  test('all four are admin-only and correctly scoped', () => {
+  test('all six are admin-only and correctly scoped', () => {
     for (const [name, scope] of [
       ['list_region_review_queue', 'read'], ['approve_region', 'write'],
       ['list_unmatched_appellations', 'read'], ['promote_appellation', 'write'],
+      ['dismiss_appellation', 'write'], ['restore_appellation', 'write'],
     ]) {
       expect(tool(name)).toBeDefined();
       expect(tool(name).requireRole).toEqual(['admin']);
@@ -186,7 +193,7 @@ describe('taxonomy review tools', () => {
     }
     // Structural invisibility for non-admins — same guarantee as the somm tools.
     const plain = toolsForScopes(['read', 'write'], ['user']).map((t) => t.name);
-    for (const n of ['list_region_review_queue', 'approve_region', 'list_unmatched_appellations', 'promote_appellation']) {
+    for (const n of ['list_region_review_queue', 'approve_region', 'list_unmatched_appellations', 'promote_appellation', 'dismiss_appellation', 'restore_appellation']) {
       expect(plain).not.toContain(n);
     }
   });
@@ -239,5 +246,59 @@ describe('taxonomy review tools', () => {
     expect(body.error.message).toMatch(/different country/);
     expect(appellationRefsError).toHaveBeenCalledWith(oid('c'), oid('d'));
     expect(Appellation).not.toHaveBeenCalled();
+  });
+
+  // ── dismiss / restore — the queue's terminal state (ticket 6a842d5e) ──────
+
+  test('dismiss_appellation records the skip via the shared service and audits like the REST twin', async () => {
+    dismissUnmatchedAppellation.mockResolvedValue({ key: 'qualitatswein', name: 'Qualitätswein', created: true });
+    const body = parse(await tool('dismiss_appellation').handler(
+      { name: 'Qualitätswein', reason: 'German quality tier, not an appellation' }, ADMIN_CTX));
+    expect(body.error).toBeUndefined();
+    expect(body.data.already).toBe(false);
+    expect(dismissUnmatchedAppellation).toHaveBeenCalledWith(
+      { name: 'Qualitätswein', reason: 'German quality tier, not an appellation', userId: ADMIN_CTX.user.id });
+    expect(logAudit).toHaveBeenCalledWith(ADMIN_CTX.req, 'admin.taxonomy.appellationDismiss',
+      expect.anything(), expect.objectContaining({ key: 'qualitatswein', via: 'mcp' }));
+  });
+
+  test('a second dismissal of the same string is idempotent, not an error', async () => {
+    dismissUnmatchedAppellation.mockResolvedValue({ key: 'qualitatswein', name: 'Qualitätswein', created: false });
+    const body = parse(await tool('dismiss_appellation').handler(
+      { name: 'Qualitätswein', reason: 'German quality tier, not an appellation' }, ADMIN_CTX));
+    expect(body.error).toBeUndefined();
+    expect(body.data.already).toBe(true);
+  });
+
+  test('dismiss_appellation surfaces service validation as invalid_input', async () => {
+    dismissUnmatchedAppellation.mockResolvedValue({ error: 'A reason of at least 5 characters is required — it is the record of why this was rejected' });
+    const body = parse(await tool('dismiss_appellation').handler(
+      { name: 'Qualitätswein', reason: 'nope!' }, ADMIN_CTX));
+    expect(body.error.code).toBe('invalid_input');
+  });
+
+  test('restore_appellation lifts a dismissal; an unknown string is not_found', async () => {
+    restoreDismissedAppellation.mockResolvedValueOnce({ key: 'qualitatswein', restored: true });
+    let body = parse(await tool('restore_appellation').handler({ name: 'Qualitätswein' }, ADMIN_CTX));
+    expect(body.error).toBeUndefined();
+    expect(logAudit).toHaveBeenCalledWith(ADMIN_CTX.req, 'admin.taxonomy.appellationRestore',
+      expect.anything(), expect.objectContaining({ key: 'qualitatswein', via: 'mcp' }));
+
+    restoreDismissedAppellation.mockResolvedValueOnce({ key: 'never dismissed', restored: false });
+    body = parse(await tool('restore_appellation').handler({ name: 'Never Dismissed' }, ADMIN_CTX));
+    expect(body.error.code).toBe('not_found');
+  });
+
+  test('list_unmatched_appellations include_dismissed returns open + dismissed, and stays a bare array without the flag', async () => {
+    listUnmatchedAppellations.mockResolvedValue([{ name: 'Heathcote', wineCount: 2, countryName: null, countryId: null, regionName: null, regionId: null }]);
+    listDismissedAppellations.mockResolvedValue([{ key: 'qualitatswein', name: 'Qualitätswein', reason: 'quality tier', dismissedBy: 'johan', dismissedAt: new Date('2026-08-18') }]);
+
+    let body = parse(await tool('list_unmatched_appellations').handler({}, ADMIN_CTX));
+    expect(Array.isArray(body.data)).toBe(true);
+    expect(listDismissedAppellations).not.toHaveBeenCalled();
+
+    body = parse(await tool('list_unmatched_appellations').handler({ include_dismissed: true }, ADMIN_CTX));
+    expect(body.data.open[0].name).toBe('Heathcote');
+    expect(body.data.dismissed[0]).toMatchObject({ name: 'Qualitätswein', reason: 'quality tier' });
   });
 });

@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from './Modal';
-import { adminGetUnmatchedAppellations, adminCreateTaxonomy } from '../api/admin';
+import {
+  adminGetUnmatchedAppellations, adminCreateTaxonomy,
+  adminGetDismissedAppellations, adminDismissUnmatchedAppellation, adminRestoreDismissedAppellation,
+} from '../api/admin';
 
 /**
  * The appellation review queue (registry strategy 2026-07-29, R2).
@@ -13,6 +16,11 @@ import { adminGetUnmatchedAppellations, adminCreateTaxonomy } from '../api/admin
  * new variants stop forming. Unknown values are reviewed, never rejected:
  * adding a bottle is never blocked by taxonomy, which is why this queue
  * exists at all.
+ *
+ * "Dismiss" is the queue's terminal state (ticket 6a842d5e): a string
+ * reviewed and judged NOT an appellation (a quality tier, a fantasy name)
+ * leaves the queue for good instead of resurfacing on every visit. The
+ * dismissed list below the queue is the restorable record.
  *
  * The name is editable before promoting (the majority spelling of a rare
  * appellation can itself be the typo); country is required by the schema.
@@ -29,6 +37,12 @@ function AppellationUnmatchedModal({ apiFetch, countries, onClose, onPromoted })
   const [drafts, setDrafts] = useState({});      // normalized → { name, countryId }
   const [pendingKey, setPendingKey] = useState(null);
   const [rowErrors, setRowErrors] = useState({});
+  const [dismissKey, setDismissKey] = useState(null);   // row with the reason box open
+  const [dismissReason, setDismissReason] = useState('');
+  const [dismissBusy, setDismissBusy] = useState(false);
+  const [dismissed, setDismissed] = useState(null);
+  const [showDismissed, setShowDismissed] = useState(false);
+  const [restoreBusyKey, setRestoreBusyKey] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -45,7 +59,15 @@ function AppellationUnmatchedModal({ apiFetch, countries, onClose, onPromoted })
     }
   }, [apiFetch, t]);
 
-  useEffect(() => { load(); }, [load]);
+  const loadDismissed = useCallback(async () => {
+    try {
+      const res = await adminGetDismissedAppellations(apiFetch);
+      const data = await res.json();
+      if (res.ok) setDismissed(data.items || []);
+    } catch { /* the dismissed list is auxiliary — the queue still works without it */ }
+  }, [apiFetch]);
+
+  useEffect(() => { load(); loadDismissed(); }, [load, loadDismissed]);
 
   const draftFor = (item) => drafts[item.normalized] || { name: item.name, countryId: item.countryId || '' };
   const setDraft = (item, patch) =>
@@ -74,6 +96,42 @@ function AppellationUnmatchedModal({ apiFetch, countries, onClose, onPromoted })
       setRowErrors(prev => ({ ...prev, [item.normalized]: 'Network error' }));
     } finally {
       setPendingKey(null);
+    }
+  };
+
+  const dismiss = async (item) => {
+    const reason = dismissReason.trim();
+    if (reason.length < 5) return;
+    setDismissBusy(true);
+    setRowErrors(prev => ({ ...prev, [item.normalized]: null }));
+    try {
+      const res = await adminDismissUnmatchedAppellation(apiFetch, item.name, reason);
+      const data = await res.json();
+      if (res.ok) {
+        setItems(prev => prev.filter(i => i.normalized !== item.normalized));
+        setDismissKey(null);
+        setDismissReason('');
+        loadDismissed();
+      } else {
+        setRowErrors(prev => ({ ...prev, [item.normalized]: data.error || t('admin.taxonomy.unmatched.dismissError') }));
+      }
+    } catch {
+      setRowErrors(prev => ({ ...prev, [item.normalized]: 'Network error' }));
+    } finally {
+      setDismissBusy(false);
+    }
+  };
+
+  const restore = async (row) => {
+    setRestoreBusyKey(row.key);
+    try {
+      const res = await adminRestoreDismissedAppellation(apiFetch, row.name);
+      if (res.ok) {
+        setDismissed(prev => (prev || []).filter(d => d.key !== row.key));
+        load(); // the string may resurface in the queue
+      }
+    } catch { /* row keeps its Restore button; the admin can retry */ } finally {
+      setRestoreBusyKey(null);
     }
   };
 
@@ -126,7 +184,45 @@ function AppellationUnmatchedModal({ apiFetch, countries, onClose, onPromoted })
                   >
                     {pendingKey === item.normalized ? t('admin.taxonomy.unmatched.promoting') : t('admin.taxonomy.unmatched.promote')}
                   </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-small"
+                    title={t('admin.taxonomy.unmatched.dismissTitle')}
+                    onClick={() => {
+                      setDismissKey(prev => (prev === item.normalized ? null : item.normalized));
+                      setDismissReason('');
+                    }}
+                  >
+                    {t('admin.taxonomy.unmatched.dismiss')}
+                  </button>
                 </div>
+                {dismissKey === item.normalized && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+                    <input
+                      type="text"
+                      value={dismissReason}
+                      onChange={(e) => setDismissReason(e.target.value)}
+                      placeholder={t('admin.taxonomy.unmatched.dismissReasonPlaceholder')}
+                      style={{ flex: '1 1 240px', minWidth: 180 }}
+                      maxLength={500}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-small"
+                      disabled={dismissBusy || dismissReason.trim().length < 5}
+                      onClick={() => dismiss(item)}
+                    >
+                      {dismissBusy ? t('admin.taxonomy.unmatched.dismissing') : t('admin.taxonomy.unmatched.dismissConfirm')}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-small"
+                      onClick={() => { setDismissKey(null); setDismissReason(''); }}
+                    >
+                      {t('common.cancel')}
+                    </button>
+                  </div>
+                )}
                 {rowErrors[item.normalized] && (
                   <div className="alert alert-error" style={{ marginTop: 6, fontSize: '0.8rem', padding: '0.35rem 0.5rem' }}>
                     {rowErrors[item.normalized]}
@@ -135,6 +231,49 @@ function AppellationUnmatchedModal({ apiFetch, countries, onClose, onPromoted })
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Dismissed strings — the restorable record of what was rejected. */}
+      {dismissed !== null && dismissed.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-small"
+            onClick={() => setShowDismissed(s => !s)}
+          >
+            {t('admin.taxonomy.unmatched.dismissedTitle')} ({dismissed.length})
+          </button>
+          {showDismissed && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+              <p style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem', margin: 0 }}>
+                {t('admin.taxonomy.unmatched.dismissedExplainer')}
+              </p>
+              {dismissed.map(row => (
+                <div
+                  key={row.key}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                    border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', padding: '0.4rem 0.8rem',
+                  }}
+                >
+                  <strong style={{ fontSize: '0.85rem' }}>{row.name}</strong>
+                  <span style={{ flex: '1 1 160px', fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
+                    {row.reason}
+                    {row.dismissedBy && ` — ${row.dismissedBy}`}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-small"
+                    disabled={restoreBusyKey === row.key}
+                    onClick={() => restore(row)}
+                  >
+                    {t('admin.taxonomy.unmatched.restore')}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </Modal>

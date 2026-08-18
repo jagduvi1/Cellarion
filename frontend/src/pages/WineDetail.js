@@ -250,6 +250,22 @@ export default function WineDetail() {
         </div>
       )}
 
+      {/* No published profile — same honest pending state as the bottle page
+          (somm ticket 6a83e765): held and never-generated must read alike. */}
+      {!wine.aiProfile?.description && (
+        <div className="wd-card bd-ai-profile">
+          <div className="bd-ai-profile__header">
+            <h2>{t('wineDetail.tastingProfile', 'Tasting profile')}</h2>
+            <span className="bd-ai-tag" title={t('wineDetail.profilePendingTitle', 'This wine has not been through assessment yet — profiles are generated and reviewed over time')}>
+              {t('wineDetail.profilePending', 'Not yet assessed')}
+            </span>
+          </div>
+          <p style={{ color: 'var(--color-text-muted)', margin: 0, fontSize: '0.9rem' }}>
+            {t('wineDetail.profilePendingBody', 'This wine hasn’t been assessed yet. A tasting profile appears here once it has been.')}
+          </p>
+        </div>
+      )}
+
       {/* CTA banner for non-authenticated visitors */}
       {!user && (
         <div className="wd-cta">
