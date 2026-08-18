@@ -30,10 +30,21 @@
  * aiProfile values first (restore = re-publish from backup, or a somm
  * release from the admin queue).
  *
+ * --reasons=a,b restricts WHICH gate reasons re-hold (default: all). The
+ * 2026-08-18 prod run used --reasons=low_confidence,unknown_low_confidence:
+ * 57 published producer_suspect rows in the window carried no
+ * profileReviewedAt stamp but matched the v1.118 human-release batch
+ * (98/102 held profiles published 08-17) — indistinguishable from
+ * slipped-through, and they already surface in the admin queue's suspect
+ * branch, so the human decides those; the gate's own two confidence classes
+ * are what re-holds. Rows matching an excluded reason are counted and
+ * reported, never touched.
+ *
  * Usage:
  *   node src/scripts/rehold-low-confidence-profiles.js                 # dry run
  *   node src/scripts/rehold-low-confidence-profiles.js --apply
  *   node src/scripts/rehold-low-confidence-profiles.js --cutoff=2026-08-01
+ *   node src/scripts/rehold-low-confidence-profiles.js --reasons=low_confidence,unknown_low_confidence --apply
  */
 
 require('dotenv').config();
@@ -50,6 +61,8 @@ const { embedSinglePair } = require('../services/embeddingJob');
 const APPLY = process.argv.includes('--apply');
 const cutoffArg = (process.argv.find((a) => a.startsWith('--cutoff=')) || '').slice('--cutoff='.length);
 const CUTOFF = new Date(cutoffArg || '2026-08-16T00:00:00Z');
+const reasonsArg = (process.argv.find((a) => a.startsWith('--reasons=')) || '').slice('--reasons='.length);
+const REASONS = reasonsArg ? new Set(reasonsArg.split(',').map((s) => s.trim()).filter(Boolean)) : null;
 const tag = APPLY ? '✔' : '[dry]';
 
 async function run() {
@@ -91,6 +104,11 @@ async function run() {
       { floor, unknownBar }
     );
     if (!reason) continue;
+    if (REASONS && !REASONS.has(reason)) {
+      stats.excluded = stats.excluded || {};
+      stats.excluded[reason] = (stats.excluded[reason] || 0) + 1;
+      continue;
+    }
 
     stats.reheld += 1;
     stats.byReason[reason] = (stats.byReason[reason] || 0) + 1;
@@ -146,7 +164,8 @@ async function run() {
   console.log(`\nSummary: ${stats.scanned} published AI profiles in the window, ` +
     `${stats.reheld} ${APPLY ? 're-held' : 'would be re-held'} ` +
     `(${Object.entries(stats.byReason).map(([r, n]) => `${r}: ${n}`).join(', ') || 'none'}), ` +
-    `${stats.reviewedSkipped} skipped as human-reviewed.`);
+    `${stats.reviewedSkipped} skipped as human-reviewed` +
+    `${stats.excluded ? `, excluded by --reasons: ${Object.entries(stats.excluded).map(([r, n]) => `${r}: ${n}`).join(', ')}` : ''}.`);
   if (APPLY) console.log('Owners of affected bottles now see "Not yet assessed"; release the good ones from Admin → Wines → low-confidence queue.');
   await mongoose.disconnect();
 }

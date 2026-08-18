@@ -25,7 +25,7 @@ const { canonicalizeWineName } = require('../utils/producerPrefix');
 const { computeCanonicalKey, canonicalSiblingPrefix } = require('../utils/wineIdentity');
 const { buildSurfaceForms, inferGrapeIds } = require('./grapeInference');
 const { resolveCanonicalProducerSpelling } = require('./producerSpelling');
-const { resolveCanonicalAppellation } = require('./appellationResolve');
+const { resolveCanonicalAppellation, candidateKeys } = require('./appellationResolve');
 const { escapeRegex } = require('../utils/sanitize');
 
 // Auto-match when combined score >= SIMILARITY_THRESHOLD (near-identical — e.g.
@@ -237,6 +237,71 @@ async function findOrCreateGrapes(rawNames, userId) {
  *   surfaces (routes/admin/wines.js, routes/admin/wineRequests.js, MCP
  *   admin_add_registry_wine): a curator typing "Bordeaux" as producer SHOULD be told.
  */
+// ── Estate-name pollution guard (ticket 6a83f014) ───────────────────────────
+//
+// Four Bordeaux classed growths arrived as name "Grand Cru Classé (de
+// Graves)" / "Margaux" with the château in the producer field: the identify
+// prompts' "never repeat the producer in the name" rule left the model
+// nothing else on an estate label to reach for, so it grabbed the
+// classification or the appellation. Two NARROW, high-precision shapes only:
+//
+//   (a) the ENTIRE name is a Bordeaux classed-growth phrase. No real wine is
+//       named "Grand Cru Classé" — the phrase moves to classification (when
+//       that is empty) and the name falls back to the estate. Deliberately
+//       narrow vocabulary: "Reserva"/"Riserva"/bare "Premier Cru" are real
+//       name material elsewhere (Rioja, Champagne co-op cuvées) and are NOT
+//       matched.
+//   (b) a CHÂTEAU producer whose "name" resolves to a curated appellation.
+//       Château wines are named by the estate; the appellation belongs in its
+//       own field. Gated on the château word deliberately — for négociants
+//       (Jadot, Drouhin) and Burgundy domaines an appellation IS the wine's
+//       legitimate name, so 'domaine'/plain producers never match.
+//
+// Both shapes end in the estate convention name === producer (the ~139-row
+// legitimate cohort in utils/nameChecks name-equals-producer-estate.v1).
+// Shared with scripts/fix-classification-polluted-names.js so the mint guard
+// and the backfill cannot drift.
+const CLASSIFICATION_ONLY_NAME_RX =
+  /^(?:(?:grand|premier|deuxi[eè]me|troisi[eè]me|quatri[eè]me|cinqui[eè]me|1er|[2-5][eè]?me)\s+)?(?:grand\s+)?cru\s+(?:class[ée]|bourgeois)(?:\s+(?:de\s+graves|de\s+saint[- ][ée]milion|sup[ée]rieur|exceptionnel|en\s+\d{4}))?$/i;
+
+/**
+ * @returns {Promise<{name, appellation, classification, changed: false|'classification_as_name'|'appellation_as_name'}>}
+ *   Field values with the pollution shifted out, or the inputs untouched.
+ *   `appellation` comes back canonicalised (curated spelling) when set by (b).
+ */
+async function unpolluteEstateName({ name, producer, appellation, classification }) {
+  const unchanged = { name, appellation, classification, changed: false };
+  if (!producer || !name) return unchanged;
+  if (normalizeString(name) === normalizeString(producer)) return unchanged; // already the estate form
+
+  // (a) classification-only name — any producer shape.
+  if (CLASSIFICATION_ONLY_NAME_RX.test(name)) {
+    return {
+      name: producer,
+      appellation,
+      classification: (typeof classification === 'string' && classification.trim()) ? classification : name,
+      changed: 'classification_as_name',
+    };
+  }
+
+  // (b) château producer + a name that IS a curated appellation.
+  if ((normalizeString(producer).split(' ')[0] || '') !== 'chateau') return unchanged;
+  const nameKey = normalizeAppellationKey(normalizeAppellation(name) || name);
+  if (!nameKey) return unchanged;
+  const keys = candidateKeys(nameKey);
+  const hit = await Appellation.exists({
+    $or: [{ normalizedName: { $in: keys } }, { normalizedSynonyms: { $in: keys } }],
+  });
+  if (!hit) return unchanged;
+  const resolved = await resolveCanonicalAppellation(normalizeAppellation(name) || name);
+  return {
+    name: producer,
+    appellation: (typeof appellation === 'string' && appellation.trim()) ? appellation : resolved,
+    classification,
+    changed: 'appellation_as_name',
+  };
+}
+
 async function findOrCreateWine({ name, producer, country, region, appellation, type, grapes, classification }, userId, { confirmCreate = false, skipSiblingMatch = false, matchOnly = false, createdVia = null, allowPending = false } = {}) {
   // Internal whitespace collapses too, not just the ends: a double space is
   // invisible in every UI and every normalized key, so "Wrights  Estate" and
@@ -282,6 +347,22 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // "Felton Road Wines Ltd" — which the exact-string strip can't see (the
   // shape behind most July-2026 prod duplicates).
   trimmedName = canonicalizeWineName(trimmedName, trimmedProducer);
+
+  // Registry canon, name-field twin of the misplaced-producer gate below
+  // (ticket 6a83f014): shift a classification/appellation out of the name
+  // BEFORE any matching, so the corrected identity drives dedup keys instead
+  // of minting a wine named "Grand Cru Classé". See unpolluteEstateName.
+  if (!producerMissing && trimmedProducer) {
+    const shifted = await unpolluteEstateName({
+      name: trimmedName, producer: trimmedProducer,
+      appellation: trimmedAppellation, classification,
+    });
+    if (shifted.changed) {
+      trimmedName = shifted.name.slice(0, MAX_FIELD);
+      trimmedAppellation = shifted.appellation || trimmedAppellation;
+      classification = shifted.classification;
+    }
+  }
 
   // Different-country guard for every non-exact auto-link below: an identical
   // canonical producer+name can still be two wineries (Domaine Chandon, Napa
@@ -747,4 +828,5 @@ module.exports = {
   regionForAppellation,
   pendingProducerKey,
   pendingWineKey,
+  unpolluteEstateName,
 };
