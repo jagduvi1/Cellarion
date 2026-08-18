@@ -8,6 +8,7 @@
  * a notify failure is per-admin non-fatal.
  */
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), aggregate: jest.fn(), countDocuments: jest.fn() }));
+jest.mock('../models/Bottle', () => ({ aggregate: jest.fn() }));
 jest.mock('../models/WineReport', () => ({ countDocuments: jest.fn() }));
 jest.mock('../models/WineRequest', () => ({ countDocuments: jest.fn() }));
 jest.mock('../models/User', () => ({ find: jest.fn() }));
@@ -17,6 +18,7 @@ jest.mock('./crossFieldScan', () => ({ scanCrossFieldChecks: jest.fn() }));
 jest.mock('./registryFragmentation', () => ({ nearProducerPairs: jest.fn(), nameSubsetPairs: jest.fn() }));
 
 const WineDefinition = require('../models/WineDefinition');
+const Bottle = require('../models/Bottle');
 const WineReport = require('../models/WineReport');
 const WineRequest = require('../models/WineRequest');
 const User = require('../models/User');
@@ -42,6 +44,7 @@ beforeEach(() => {
   WineDefinition.find.mockReturnValue(leanChain([]));
   WineDefinition.aggregate.mockResolvedValue([]);
   WineDefinition.countDocuments.mockResolvedValue(0);
+  Bottle.aggregate.mockResolvedValue([]);
   WineReport.countDocuments.mockResolvedValue(0);
   WineRequest.countDocuments.mockResolvedValue(0);
   User.find.mockReturnValue(leanChain([{ _id: 'admin1' }]));
@@ -252,6 +255,22 @@ describe('the ticket-6a800f39 metrics (v-next)', () => {
     const lowConfCall = WineDefinition.countDocuments.mock.calls.find(
       (c) => c[0] && c[0].$or && !c[0]['aiProfile.producerSuspect']);
     expect(JSON.stringify(lowConfCall[0].$or)).not.toMatch(/producerSuspect/);
+  });
+
+  test('coreUnverifiedProfiles: ≥3-owner sets joined against non-curator wines; empty ownership short-circuits', async () => {
+    // No core wines → 0 without a WineDefinition query for the core join.
+    let m = await computeMetrics();
+    expect(m.coreUnverifiedProfiles).toBe(0);
+    expect(METRIC_LABELS.coreUnverifiedProfiles).toBeTruthy();
+
+    // Two core sets → counted through the non-curator wine filter.
+    Bottle.aggregate.mockResolvedValue([{ _id: 'w1', ownerCount: 5 }, { _id: 'w2', ownerCount: 3 }]);
+    WineDefinition.countDocuments.mockResolvedValue(2);
+    m = await computeMetrics();
+    expect(m.coreUnverifiedProfiles).toBe(2);
+    const coreCall = WineDefinition.countDocuments.mock.calls.find(
+      (c) => c[0] && c[0]._id && Array.isArray(c[0]._id.$in));
+    expect(coreCall[0]['aiProfile.source']).toEqual({ $ne: 'curator' });
   });
 
   test('heldProfiles is its OWN key; lowConfidenceQueue counts PUBLISHED rows only (gate 2026-08-18)', async () => {

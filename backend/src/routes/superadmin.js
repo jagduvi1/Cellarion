@@ -445,6 +445,34 @@ router.patch('/ai/chat-limit', async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// PATCH /api/superadmin/ai/enrichment-gate
+// The two publication-gate thresholds (ticket 6a83e765, calibrated 2026-08-18
+// — floor 0.40 / unknown-bar 0.55). Stored like every other aiConfig key, so
+// tuning never needs a release; load() clamps junk back to the defaults.
+// ---------------------------------------------------------------------------
+router.patch('/ai/enrichment-gate', async (req, res) => {
+  const floor = Number(req.body.floor);
+  const unknownBar = Number(req.body.unknownBar);
+  const bad = (v) => !Number.isFinite(v) || v < 0 || v > 1;
+  if (bad(floor) || bad(unknownBar)) {
+    return res.status(400).json({ error: 'floor and unknownBar must be numbers between 0 and 1' });
+  }
+  if (unknownBar < floor) {
+    return res.status(400).json({ error: 'unknownBar must be at or above floor — the unknown-producer hold is the stricter check' });
+  }
+  try {
+    const current = aiConfig.getRaw();
+    const updated = { ...current, enrichmentHoldConfidenceFloor: floor, enrichmentHoldUnknownConfidenceBar: unknownBar };
+    await updateSiteConfig('aiConfig', updated, req.user.id);
+    aiConfig.set(updated);
+    res.json({ enrichmentHoldConfidenceFloor: floor, enrichmentHoldUnknownConfidenceBar: unknownBar });
+  } catch (error) {
+    console.error('[superadmin] enrichment-gate error:', error);
+    res.status(500).json({ error: 'Failed to save gate thresholds' });
+  }
+});
+
 
 // ---------------------------------------------------------------------------
 // PATCH /api/superadmin/ai/<*>-prompt and /api/superadmin/ai/<*>-model
