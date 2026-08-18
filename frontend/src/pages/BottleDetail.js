@@ -590,7 +590,7 @@ function BottleDetail() {
           Demo visitors are excluded: writes are requireNonDemo and their
           ephemeral accounts would orphan shared-visible rows. ── */}
       {!user?.isDemo && (
-        <PersonalDataCard apiFetch={apiFetch} bottleId={bottleId} currentUserId={user?.id} />
+        <PersonalDataCard apiFetch={apiFetch} bottleId={bottleId} currentUserId={user?.id} wineId={wine?._id} />
       )}
 
       {/* ── AI tasting profile (generated, vintage-neutral) ── */}

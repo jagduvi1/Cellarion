@@ -15,6 +15,7 @@ require('./wines');
 require('./personal');
 require('./personalData');
 require('./corrections');
+require('./registryData');
 require('./consume');
 require('./openBottle');
 require('./write');

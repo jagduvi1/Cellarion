@@ -2,6 +2,24 @@
    and per-field suggest actions. Same key-value ledger language as the
    personal-data card. */
 
+.wr-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.wr-header .wr-mode-toggle {
+  margin-left: auto;
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
+.wr-mode-toggle--active {
+  font-weight: 700;
+  text-decoration: underline;
+  opacity: 1;
+}
+
 .wr-intro {
   margin: 0.15rem 0 0.4rem;
   font-size: 0.82rem;
@@ -78,6 +96,18 @@
   background: var(--color-surface, rgba(0, 0, 0, 0.04));
   border-radius: var(--radius-sm);
   font-size: 0.92rem;
+}
+
+.wr-contributor {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.wr-propose-key {
+  margin-top: 0.4rem;
+  padding-left: 0;
+  font-weight: 600;
 }
 
 @media (max-width: 480px) {

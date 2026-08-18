@@ -5,6 +5,8 @@ import {
   getPersonalData, addPersonalData, updatePersonalDataEntry,
   deletePersonalDataEntry, getPersonalDataKeys,
 } from '../../api/personalData';
+import { suggestWineValue, proposeRegistryKey } from '../../api/registryData';
+import TypedValueInput, { TYPES, formatTypedValue } from '../TypedValueInput';
 import './PersonalDataCard.css';
 
 /**
@@ -18,8 +20,6 @@ import './PersonalDataCard.css';
  * validates every value against the key's stored type.
  */
 
-const TYPES = ['text', 'integer', 'decimal', 'boolean', 'date', 'enum'];
-
 const emptyForm = {
   level: 'bottle',
   keyName: '',
@@ -29,7 +29,7 @@ const emptyForm = {
   value: '',
 };
 
-function PersonalDataCard({ apiFetch, bottleId, currentUserId }) {
+function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId }) {
   const { t } = useTranslation();
   const [data, setData] = useState({ bottleEntries: [], wineEntries: [] });
   const [keys, setKeys] = useState([]);
@@ -38,6 +38,12 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [deleteBusy, setDeleteBusy] = useState(null);
+  // Promotion path (#985): "suggest this to the registry" on an own entry.
+  const [promote, setPromote] = useState(null); // entry
+  const [promoteReason, setPromoteReason] = useState('');
+  const [promoteBusy, setPromoteBusy] = useState(false);
+  const [promoteError, setPromoteError] = useState(null);
+  const [promoteDone, setPromoteDone] = useState(null); // 'value' | 'key'
 
   const load = useCallback(async () => {
     try {
@@ -147,14 +153,53 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId }) {
     }
   };
 
-  const formatValue = (entry) => {
-    const { type, unit } = entry.key;
-    if (type === 'boolean') {
-      return entry.value ? t('personalData.yes', 'Yes') : t('personalData.no', 'No');
+  const submitPromote = async (e) => {
+    e.preventDefault();
+    if (promoteBusy) return;
+    setPromoteBusy(true);
+    setPromoteError(null);
+    try {
+      // Server-side resolution (audit fix): suggest by key NAME — the backend
+      // matches against its own nameKey rule. 404 = no such accepted key →
+      // propose the key itself; a type mismatch surfaces the type-validation
+      // message instead of a dead-end "already in the vocabulary" conflict.
+      const res = await suggestWineValue(apiFetch, wineId, {
+        keyName: promote.key.name,
+        value: promote.value,
+        ...(promoteReason.trim() ? { reason: promoteReason.trim() } : {}),
+      });
+      if (res.ok) {
+        setPromoteDone('value');
+        setPromote(null);
+        return;
+      }
+      const body = await res.json().catch(() => ({}));
+      if (res.status === 404) {
+        const kres = await proposeRegistryKey(apiFetch, {
+          name: promote.key.name,
+          type: promote.key.type,
+          ...(promote.key.unit ? { unit: promote.key.unit } : {}),
+          ...(promote.key.enumOptions ? { enumOptions: promote.key.enumOptions } : {}),
+          rationale: promoteReason.trim(),
+        });
+        const kbody = await kres.json().catch(() => ({}));
+        if (kres.ok) {
+          setPromoteDone('key');
+          setPromote(null);
+        } else {
+          setPromoteError(kbody.error || t('common.networkError', 'Network error. Please try again.'));
+        }
+      } else {
+        setPromoteError(body.error || t('common.networkError', 'Network error. Please try again.'));
+      }
+    } catch {
+      setPromoteError(t('common.networkError', 'Network error. Please try again.'));
+    } finally {
+      setPromoteBusy(false);
     }
-    const s = String(entry.value);
-    return unit ? `${s} ${unit}` : s;
   };
+
+  const formatValue = (entry) => formatTypedValue(entry.key, entry.value, t);
 
   const authorName = (entry) =>
     entry.author?.displayName || entry.author?.username || t('personalData.someone', 'a cellar member');
@@ -182,6 +227,16 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId }) {
           </span>
           {isOwn(entry) && (
             <span className="pd-entry-actions">
+              {wineId && (
+                <button
+                  type="button"
+                  className="btn btn-small"
+                  title={t('personalData.promoteTitle', 'Offer this to the shared registry — a curator reviews it first')}
+                  onClick={() => { setPromote(entry); setPromoteReason(''); setPromoteError(null); setPromoteDone(null); }}
+                >
+                  {t('personalData.promote', 'Suggest to registry')}
+                </button>
+              )}
               <button type="button" className="btn btn-small" onClick={() => openEdit(entry)}>
                 {t('common.edit', 'Edit')}
               </button>
@@ -238,6 +293,49 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId }) {
           <h3 style={sectionTitleStyle}>{t('personalData.wineSection', 'This wine (all bottles of it)')}</h3>
           {renderEntries(data.wineEntries)}
         </>
+      )}
+
+      {promoteDone && (
+        <p role="status" style={{ margin: '0.5rem 0 0', fontSize: '0.85rem', fontWeight: 600 }}>
+          {promoteDone === 'value'
+            ? t('personalData.promotedValue', 'Thank you — your value is in the registry review queue.')
+            : t('personalData.promotedKey', 'Thank you — the field itself was proposed first; once a curator accepts it, values can follow.')}
+        </p>
+      )}
+
+      {promote && (
+        <Modal
+          title={t('personalData.promoteModalTitle', 'Suggest to the shared registry')}
+          onClose={() => !promoteBusy && setPromote(null)}
+        >
+          <form onSubmit={submitPromote} className="pd-form">
+            {promoteError && <div className="alert alert-error" style={{ marginBottom: 8 }}>{promoteError}</div>}
+            <p style={{ margin: '0 0 0.6rem', fontSize: '0.85rem' }}>
+              {t('personalData.promoteIntro', 'Offer “{{key}}: {{value}}” to the shared registry. A curator reviews it; if the field doesn’t exist in the public vocabulary yet, the field itself is proposed first.', { key: promote.key.name, value: String(promote.value) })}
+            </p>
+            <div className="form-group">
+              <label htmlFor="pd-promote-reason">{t('wineRecord.reason', 'How do you know?')}</label>
+              <textarea
+                id="pd-promote-reason"
+                value={promoteReason}
+                onChange={(e) => setPromoteReason(e.target.value)}
+                placeholder={t('wineRecord.reasonPlaceholder', 'e.g. It’s printed on the label of my bottle / the producer’s site says…')}
+                minLength={10}
+                maxLength={1000}
+                rows={3}
+                required
+              />
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="btn" onClick={() => setPromote(null)} disabled={promoteBusy}>
+                {t('common.cancel', 'Cancel')}
+              </button>
+              <button type="submit" className="btn btn-primary" disabled={promoteBusy || promoteReason.trim().length < 10}>
+                {promoteBusy ? t('wineRecord.sending', 'Sending…') : t('wineRecord.send', 'Send suggestion')}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {modal && (
@@ -370,55 +468,20 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId }) {
               <label htmlFor="pd-value-input">
                 {t('personalData.value', 'Value')}
               </label>
-              {effectiveType === 'boolean' ? (
-                <select
-                  id="pd-value-input"
-                  className="pd-select"
-                  value={form.value}
-                  onChange={(e) => setForm({ ...form, value: e.target.value })}
-                  required
-                >
-                  <option value="">{t('personalData.choose', 'Choose…')}</option>
-                  <option value="true">{t('personalData.yes', 'Yes')}</option>
-                  <option value="false">{t('personalData.no', 'No')}</option>
-                </select>
-              ) : effectiveType === 'enum' ? (
-                (() => {
-                  const options = matchedKey?.enumOptions
+              <TypedValueInput
+                id="pd-value-input"
+                keyDef={{
+                  type: effectiveType,
+                  unit: matchedKey?.unit || (modal.mode === 'edit' ? modal.entry.key.unit : form.unit.trim() || null),
+                  enumOptions: matchedKey?.enumOptions
                     || (modal.mode === 'edit' ? modal.entry.key.enumOptions : null)
-                    || form.enumOptions.split(',').map((o) => o.trim()).filter(Boolean);
-                  return (
-                    <select
-                      id="pd-value-input"
-                      className="pd-select"
-                      value={form.value}
-                      onChange={(e) => setForm({ ...form, value: e.target.value })}
-                      required
-                    >
-                      <option value="">{t('personalData.choose', 'Choose…')}</option>
-                      {options.map((o) => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                  );
-                })()
-              ) : (
-                <span className="pd-value-row">
-                  <input
-                    id="pd-value-input"
-                    type={effectiveType === 'date' ? 'date'
-                      : (effectiveType === 'integer' || effectiveType === 'decimal') ? 'number' : 'text'}
-                    step={effectiveType === 'decimal' ? 'any' : undefined}
-                    value={form.value}
-                    onChange={(e) => setForm({ ...form, value: e.target.value })}
-                    maxLength={effectiveType === 'text' ? 500 : undefined}
-                    required
-                  />
-                  {(matchedKey?.unit || (modal.mode === 'edit' && modal.entry.key.unit) || form.unit.trim()) && (
-                    <span className="pd-unit">
-                      {matchedKey?.unit || (modal.mode === 'edit' ? modal.entry.key.unit : form.unit.trim())}
-                    </span>
-                  )}
-                </span>
-              )}
+                    || (effectiveType === 'enum'
+                      ? form.enumOptions.split(',').map((o) => o.trim()).filter(Boolean)
+                      : null),
+                }}
+                value={form.value}
+                onChange={(v) => setForm({ ...form, value: v })}
+              />
             </div>
 
             <div className="modal-actions">

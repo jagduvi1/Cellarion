@@ -8,21 +8,12 @@ const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const { requireBottleAccess } = require('../middleware/bottleAccess');
 const personalData = require('../services/personalData');
 const { logAudit } = require('../services/audit');
+const { sendServiceFail: sendFail } = require('../utils/serviceResult');
 
 const router = express.Router();
 
 router.use(requireAuth);
 
-const CODE_STATUS = {
-  invalid: 400,
-  limit: 400,
-  banned: 403,
-  not_found: 404,
-  type_conflict: 409,
-};
-
-const sendFail = (res, result) =>
-  res.status(CODE_STATUS[result.code] || 400).json({ error: result.message });
 
 /**
  * GET /api/personal-data/keys
