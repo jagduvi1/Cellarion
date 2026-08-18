@@ -139,6 +139,13 @@ describe('descriptor sanitization at the write point', () => {
   });
 
   test('valid values case-fold onto the enum', async () => {
+    // A grapeless wine for this one: high tannin on the default Pinot Noir
+    // fixture now trips the 6a8464ea taxonomy_conflict hold (by design), and
+    // this test is about case-folding, not the cross-check.
+    WineDefinition.findById.mockReturnValue(chain({
+      _id: WINE_ID, name: 'Red Blend', producer: 'Matua', type: 'red',
+      country: { name: 'New Zealand' }, region: { name: 'Marlborough' }, grapes: [],
+    }));
     const p = profile('Fine.');
     p.data.tannin = 'High';
     p.data.sweetness = ' Off-Dry ';
@@ -573,6 +580,24 @@ describe('the split flags end-to-end through enrichWine', () => {
     expect(p.heldAt).toBeInstanceOf(Date);
     expect(p.heldReason).toBe('unknown_low_confidence');
     expect(p.producerUnknown).toBe(true);
+  });
+
+  // 6a8464ea phase 2: the fixture wine is a Pinot Noir — a grape DEFINED by
+  // low tannin. The regional-prior hallucination carries no flag and high
+  // confidence, so only the factual cross-check can catch it.
+  test('a profile at the OPPOSITE structural extreme of the grape is HELD as taxonomy_conflict', async () => {
+    suggestProfile.mockResolvedValue(withFlags({ tannin: 'high', confidence: 0.8 }));
+    await enrichWineById(WINE_ID);
+    const p = persisted();
+    expect(p.heldAt).toBeInstanceOf(Date);
+    expect(p.heldReason).toBe('taxonomy_conflict');
+    expect(p.producerNote).toMatch(/pinot noir is defined by low tannin/);
+  });
+
+  test('the agreeing extreme and medium never conflict — the check is one-sided', async () => {
+    suggestProfile.mockResolvedValue(withFlags({ tannin: 'low', confidence: 0.8 }));
+    await enrichWineById(WINE_ID);
+    expect(persisted().heldAt).toBeNull();
   });
 
   test('a missing producerUnknown on an old/custom prompt degrades to "no doubt", never to a hold', async () => {
