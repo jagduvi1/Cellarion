@@ -35,7 +35,8 @@ jest.mock('../models/WineVintagePrice', () => {
 });
 jest.mock('../models/PriceTrackingRequest', () => ({ find: jest.fn(), findOne: jest.fn(), findById: jest.fn(), deleteOne: jest.fn(), findOneAndUpdate: jest.fn() }));
 jest.mock('../models/PriceTrackingSkip', () => ({ find: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn(), deleteOne: jest.fn() }));
-jest.mock('../models/WineCorrectionProposal', () => ({ create: jest.fn(), findById: jest.fn(), deleteOne: jest.fn() }));
+jest.mock('../models/WineCorrectionProposal', () => ({ create: jest.fn(), findById: jest.fn(), deleteOne: jest.fn(), find: jest.fn(), countDocuments: jest.fn() }));
+jest.mock('../models/ProfileAuditSample', () => ({ create: jest.fn(), find: jest.fn() }));
 jest.mock('../models/WineReport', () => ({ find: jest.fn(), findById: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../utils/cellarCred', () => ({ incrementCred: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../utils/rackGeometry', () => ({ getMaxPosition: jest.fn(() => 12) }));
@@ -75,7 +76,7 @@ const USER_CTX = { user: { id: ME, roles: ['user'] }, scopes: ['read', 'write'],
 
 const tool = (name) => allTools().find((t) => t.name === name);
 const parse = (res) => JSON.parse(res.content[0].text);
-const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'remove_from_maturity_queue', 'set_wine_profile', 'propose_wine_correction', 'list_price_tracking_requests', 'set_vintage_price', 'reject_price_request', 'list_wine_reports', 'respond_to_wine_report', 'sample_published_profiles', 'list_unverified_core_wines', 'list_held_profiles', 'review_held_profile'];
+const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'remove_from_maturity_queue', 'set_wine_profile', 'propose_wine_correction', 'list_price_tracking_requests', 'set_vintage_price', 'reject_price_request', 'list_wine_reports', 'respond_to_wine_report', 'sample_published_profiles', 'list_unverified_core_wines', 'list_held_profiles', 'review_held_profile', 'list_pending_corrections', 'record_profile_audit'];
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -539,6 +540,70 @@ describe('sample_published_profiles (6a8464ea phase 3 — the weekly spot-check)
     expect(WineDefinition.aggregate.mock.calls[0][0][1]).toEqual({ $sample: { size: 20 } });
     expect(body.data[0]).toMatchObject({ producer: 'Weingut X', grapes: ['Bacchus'], producer_unknown: true });
     expect(body.data[0].profile.acidity).toBe('high');
+  });
+});
+
+describe('gap-report items 2/3/5/6 (2026-08-18 evening)', () => {
+  const WineCorrectionProposal = require('../models/WineCorrectionProposal');
+  const ProfileAuditSample = require('../models/ProfileAuditSample');
+
+  test('core worklist inlines the profile for ai_published rows and pages with offset', async () => {
+    Bottle.aggregate.mockResolvedValue([
+      { _id: oid('1'), ownerCount: 6 }, { _id: oid('2'), ownerCount: 5 }, { _id: oid('3'), ownerCount: 4 },
+    ]);
+    WineDefinition.find.mockReturnValue({
+      select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([
+        { _id: oid('1'), name: 'A', producer: 'P', aiProfile: { description: 'x', body: 'light', acidity: 'high', flavors: ['pear'], foodPairings: [] } },
+        { _id: oid('2'), name: 'B', producer: 'P', aiProfile: { heldAt: new Date(), heldReason: 'low_confidence' } },
+        { _id: oid('3'), name: 'C', producer: 'P', aiProfile: { description: 'y' } },
+      ]) }),
+    });
+    let body = parse(await tool('list_unverified_core_wines').handler({ min_owners: 3, limit: 30, offset: 0 }, SOMM_CTX));
+    expect(body.data[0].profile).toMatchObject({ description: 'x', body: 'light', acidity: 'high' });
+    expect(body.data[1].profile).toBeNull(); // held rows store no content by design
+
+    body = parse(await tool('list_unverified_core_wines').handler({ min_owners: 3, limit: 30, offset: 2 }, SOMM_CTX));
+    expect(body.data.map((r) => String(r.wine_id))).toEqual([oid('3')]);
+  });
+
+  test('list_pending_corrections filters and maps decided fields only when decided', async () => {
+    const chain = {
+      sort: jest.fn().mockReturnThis(), skip: jest.fn().mockReturnThis(), limit: jest.fn().mockReturnThis(),
+      populate: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockResolvedValue([{
+        _id: oid('9'), wineDefinition: { _id: oid('1'), name: 'Crianza', producer: 'Finca X' },
+        kind: 'merge', status: 'pending', mergeTargetId: { _id: oid('2'), name: 'Crianza', producer: 'Finca X SA' },
+        reason: 'same wine, producer suffix split', createdAt: new Date('2026-08-18'),
+      }]),
+    };
+    WineCorrectionProposal.find.mockReturnValue(chain);
+    WineCorrectionProposal.countDocuments.mockResolvedValue(1);
+    const body = parse(await tool('list_pending_corrections').handler({ kind: 'merge', status: 'pending', limit: 30, offset: 0 }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(WineCorrectionProposal.find).toHaveBeenCalledWith({ status: 'pending', kind: 'merge' });
+    expect(body.data[0]).toMatchObject({ kind: 'merge', wine: 'Finca X — Crianza' });
+    expect(body.data[0].merge_target.wine).toBe('Finca X SA — Crianza');
+    expect(body.data[0].decided_at).toBeUndefined(); // pending rows carry no decision fields
+  });
+
+  test('record_profile_audit validates corrections <= sample_size, persists, returns the running rate', async () => {
+    let body = parse(await tool('record_profile_audit').handler({ sample_size: 20, corrections: 21 }, SOMM_CTX));
+    expect(body.error.code).toBe('invalid_input');
+    expect(ProfileAuditSample.create).not.toHaveBeenCalled();
+
+    ProfileAuditSample.create.mockResolvedValue({ sampleSize: 20, corrections: 3, recordedAt: new Date('2026-08-18') });
+    ProfileAuditSample.find.mockReturnValue({
+      sort: jest.fn().mockReturnThis(), limit: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockResolvedValue([
+        { recordedAt: new Date('2026-08-18'), sampleSize: 20, corrections: 3 },
+        { recordedAt: new Date('2026-08-11'), sampleSize: 20, corrections: 5 },
+      ]),
+    });
+    body = parse(await tool('record_profile_audit').handler({ sample_size: 20, corrections: 3 }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(ProfileAuditSample.create).toHaveBeenCalledWith(expect.objectContaining({ sampleSize: 20, corrections: 3, recordedBy: ME }));
+    expect(body.data.running_rate_pct).toBe(20); // 8 of 40
+    expect(body.data.history).toHaveLength(2);
   });
 });
 
