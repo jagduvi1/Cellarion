@@ -390,10 +390,33 @@ async function enrichWine(wine, model, { publishSuspect = false } = {}) {
   // override — profile-reviewed uses it after an admin has looked at the
   // doubt and judged the identity fine.
   const gateCfg = aiConfig.get();
-  const holdReason = shouldHoldProfile(
+  let holdReason = shouldHoldProfile(
     { producerSuspect: suspect, producerUnknown: unknown, description, confidence },
     { floor: gateCfg.enrichmentHoldConfidenceFloor, unknownBar: gateCfg.enrichmentHoldUnknownConfidenceBar }
   );
+  // Deterministic taxonomy cross-check (ticket 6a8464ea phase 2): a value at
+  // the OPPOSITE structural extreme of what every grape on the wine is
+  // defined by (a high-acid Bacchus) is a regional-prior hallucination no
+  // confidence gate can catch — the model believes it. Runs regardless of the
+  // gate outcome so the specific reason wins over a generic one, and BEFORE
+  // publishSuspect: the human override attests the IDENTITY, not a
+  // fact-contradicting profile — but since the check needs the cleaned
+  // values, a conflicting hold simply also lands in the release queue where
+  // that same human decides.
+  if (!holdReason) {
+    const { findGrapeStyleConflict } = require('../data/grapeStyleTypicals');
+    const conflict = findGrapeStyleConflict(
+      (wine.grapes || []).map((g) => g.name),
+      { acidity: cleanDescriptor('acidity', data.acidity), tannin: cleanDescriptor('tannin', data.tannin) },
+      require('../utils/normalize').normalizeString
+    );
+    if (conflict) {
+      holdReason = 'taxonomy_conflict';
+      // The conflict detail rides where the release queue already reads the
+      // model's doubt — producerNote is the row's free-text "why".
+      if (!meta.producerNote) meta.producerNote = `Style conflict: ${conflict}`;
+    }
+  }
   if (!publishSuspect && holdReason) {
     await WineDefinition.updateOne(
       { _id: wine._id },

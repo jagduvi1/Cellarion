@@ -815,6 +815,67 @@ registerTool({
   },
 });
 
+// The weekly spot-check (ticket 6a8464ea phase 3): regional-prior
+// hallucinations carry NO flag and mid-high confidence, so no gate sees them
+// — only a human sampling published profiles measures the real error rate,
+// and that rate decides whether heavier defences (two-pass generation,
+// web-grounded enrichment) are ever worth building.
+registerTool({
+  name: 'sample_published_profiles',
+  title: 'Sommelier: random sample of published AI profiles to spot-check',
+  description:
+    'Returns N random PUBLISHED, AI-written tasting profiles (never curator-verified or held ones) with the wine ' +
+    'identity and grapes — the weekly spot-check habit. Judge each against what you actually know of the producer, ' +
+    'grape and appellation; fix a wrong one with set_wine_profile (which also stamps it curator-verified). Keep a ' +
+    'tally of corrections per sample across weeks — that error rate is the number that decides whether stronger ' +
+    'anti-hallucination measures are worth building.',
+  scope: 'read',
+  requireRole: SOMM_ROLES,
+  annotations: { readOnlyHint: true, openWorldHint: false },
+  inputSchema: {
+    count: z.number().int().min(1).max(50).default(20).describe('Sample size — the weekly habit is 20'),
+  },
+  handler: async (args, ctx) => {
+    const denied = requireSomm(ctx);
+    if (denied) return denied;
+    const rows = await WineDefinition.aggregate([
+      { $match: {
+        nonWine: { $ne: true }, pendingIdentity: { $ne: true },
+        'aiProfile.description': { $ne: null },
+        'aiProfile.source': { $ne: 'curator' },
+        'aiProfile.heldAt': null,
+      } },
+      { $sample: { size: args.count || 20 } },
+      { $project: {
+        name: 1, producer: 1, appellation: 1, classification: 1, type: 1, grapes: 1,
+        'aiProfile.body': 1, 'aiProfile.tannin': 1, 'aiProfile.acidity': 1,
+        'aiProfile.sweetness': 1, 'aiProfile.flavors': 1, 'aiProfile.description': 1,
+        'aiProfile.confidence': 1, 'aiProfile.producerUnknown': 1,
+      } },
+    ]);
+    await WineDefinition.populate(rows, { path: 'grapes', select: 'name' });
+    return ok(`${rows.length} random published AI profile(s) — judge each against producer/grape/appellation facts`, rows.map((w) => ({
+      wine_id: w._id,
+      name: w.name,
+      producer: w.producer,
+      appellation: w.appellation || null,
+      classification: w.classification || null,
+      type: w.type || null,
+      grapes: (w.grapes || []).map((g) => g?.name).filter(Boolean),
+      profile: {
+        body: w.aiProfile?.body || null,
+        tannin: w.aiProfile?.tannin || null,
+        acidity: w.aiProfile?.acidity || null,
+        sweetness: w.aiProfile?.sweetness || null,
+        flavors: w.aiProfile?.flavors || [],
+        description: w.aiProfile?.description || null,
+      },
+      ai_confidence: w.aiProfile?.confidence ?? null,
+      producer_unknown: w.aiProfile?.producerUnknown === true,
+    })));
+  },
+});
+
 // Correction proposals — the human-gated tier of registry curation. Direct
 // somm writes cover type/grapes/tasting profile (set_wine_profile, recoverable
 // + undoable); IDENTITY fields drive dedup keys, URLs and every owner's

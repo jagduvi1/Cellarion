@@ -20,7 +20,7 @@ jest.mock('../models/Bottle', () => ({ find: jest.fn(), findById: jest.fn(), agg
 jest.mock('../models/Rack', () => ({ find: jest.fn(), findOne: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/WishlistItem', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/JournalEntry', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
-jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn() }));
+jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn(), aggregate: jest.fn(), populate: jest.fn() }));
 jest.mock('../models/Grape', () => ({ findOne: jest.fn() }));
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineEmbedding', () => ({ findOne: jest.fn() }));
@@ -73,7 +73,7 @@ const USER_CTX = { user: { id: ME, roles: ['user'] }, scopes: ['read', 'write'],
 
 const tool = (name) => allTools().find((t) => t.name === name);
 const parse = (res) => JSON.parse(res.content[0].text);
-const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'remove_from_maturity_queue', 'set_wine_profile', 'propose_wine_correction', 'list_price_tracking_requests', 'set_vintage_price', 'reject_price_request', 'list_wine_reports', 'respond_to_wine_report'];
+const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'remove_from_maturity_queue', 'set_wine_profile', 'propose_wine_correction', 'list_price_tracking_requests', 'set_vintage_price', 'reject_price_request', 'list_wine_reports', 'respond_to_wine_report', 'sample_published_profiles'];
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -517,6 +517,26 @@ describe('list_price_tracking_requests', () => {
     PriceTrackingSkip.find.mockReturnValue(chain([{ wineDefinition: oid('f'), vintage: '2016' }]));
     const body = parse(await tool('list_price_tracking_requests').handler({}, SOMM_CTX));
     expect(body.data).toHaveLength(1);
+  });
+});
+
+describe('sample_published_profiles (6a8464ea phase 3 — the weekly spot-check)', () => {
+  test('samples only published, AI-sourced, un-held rows and returns judgeable shapes', async () => {
+    WineDefinition.aggregate.mockResolvedValue([{
+      _id: oid('9'), name: 'Bacchus Trocken', producer: 'Weingut X', appellation: 'Rheinhessen',
+      type: 'white', grapes: [{ name: 'Bacchus' }],
+      aiProfile: { body: 'light', tannin: null, acidity: 'high', sweetness: 'dry', flavors: ['pear'], description: 'Crisp and bright.', confidence: 0.6, producerUnknown: true },
+    }]);
+    WineDefinition.populate.mockResolvedValue(undefined);
+    const body = parse(await tool('sample_published_profiles').handler({ count: 20 }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    // The sample never draws curator or held rows — those are not spot-check material.
+    const match = WineDefinition.aggregate.mock.calls[0][0][0].$match;
+    expect(match['aiProfile.heldAt']).toBeNull();
+    expect(match['aiProfile.source']).toEqual({ $ne: 'curator' });
+    expect(WineDefinition.aggregate.mock.calls[0][0][1]).toEqual({ $sample: { size: 20 } });
+    expect(body.data[0]).toMatchObject({ producer: 'Weingut X', grapes: ['Bacchus'], producer_unknown: true });
+    expect(body.data[0].profile.acidity).toBe('high');
   });
 });
 
