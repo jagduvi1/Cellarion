@@ -12,7 +12,10 @@ const { logAudit } = require('../../services/audit');
 const { isValidId } = require('../../utils/validation');
 const { distinctSizes, normalizeAll, remap } = require('../../services/bottleSizeMaintenance');
 const { mergeGrapes, mergeRegions, mergeCountries } = require('../../services/taxonomyMerge');
-const { listUnmatchedAppellations, appellationRefsError } = require('../../services/taxonomyReview');
+const {
+  listUnmatchedAppellations, appellationRefsError,
+  dismissUnmatchedAppellation, restoreDismissedAppellation, listDismissedAppellations,
+} = require('../../services/taxonomyReview');
 const { BOTTLE_SIZES } = require('../../config/bottleSizes');
 
 const router = express.Router();
@@ -848,6 +851,54 @@ router.get('/appellations/unmatched', async (req, res) => {
   } catch (error) {
     console.error('Unmatched appellations error:', error);
     res.status(500).json({ error: 'Failed to list unmatched appellations' });
+  }
+});
+
+// POST /api/admin/taxonomy/appellations/unmatched/dismiss — reviewed and
+// judged NOT promotable (a quality tier, a fantasy name, a label slogan).
+// Persists a skip so the live aggregate stops resurfacing the string
+// (ticket 6a842d5e — the terminal state the price queue got with declines).
+// The audit target carries no ObjectId (the subject is a string key, and
+// target.id is typed ObjectId) — key and name ride in the details.
+router.post('/appellations/unmatched/dismiss', async (req, res) => {
+  try {
+    const result = await dismissUnmatchedAppellation({
+      name: req.body?.name, reason: req.body?.reason, userId: req.user.id,
+    });
+    if (result.error) return res.status(400).json({ error: result.error });
+    logAudit(req, 'admin.taxonomy.appellationDismiss', { type: 'appellation' },
+      { key: result.key, name: result.name, reason: req.body?.reason, already: !result.created });
+    res.status(result.created ? 201 : 200).json(result);
+  } catch (error) {
+    console.error('Dismiss unmatched appellation error:', error);
+    res.status(500).json({ error: 'Failed to dismiss appellation' });
+  }
+});
+
+// GET /api/admin/taxonomy/appellations/dismissed — the restorable record of
+// what was reviewed and rejected, newest first.
+router.get('/appellations/dismissed', async (req, res) => {
+  try {
+    const items = await listDismissedAppellations();
+    res.json({ total: items.length, items });
+  } catch (error) {
+    console.error('Dismissed appellations error:', error);
+    res.status(500).json({ error: 'Failed to list dismissed appellations' });
+  }
+});
+
+// POST /api/admin/taxonomy/appellations/dismissed/restore — lift a dismissal;
+// the string re-enters the unmatched queue while wines still carry it.
+router.post('/appellations/dismissed/restore', async (req, res) => {
+  try {
+    const result = await restoreDismissedAppellation(req.body?.name);
+    if (result.error) return res.status(400).json({ error: result.error });
+    if (!result.restored) return res.status(404).json({ error: 'No dismissal recorded for that string' });
+    logAudit(req, 'admin.taxonomy.appellationRestore', { type: 'appellation' }, { key: result.key });
+    res.json(result);
+  } catch (error) {
+    console.error('Restore dismissed appellation error:', error);
+    res.status(500).json({ error: 'Failed to restore appellation' });
   }
 });
 

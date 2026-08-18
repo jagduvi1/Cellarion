@@ -87,7 +87,9 @@ const tokenize = (str) => {
 // below). dop/doq/vqa/wo added per the 2026-07-26 registry audit (RC-4:
 // "Ontario VQA", "Swartland WO", "Priorat DOQ", ~20 "… DOP" rows survived the
 // old set). 'dac' stays out — "Kamptal DAC" is the official appellation form.
-const APPELLATION_TIER_TOKENS = new Set(['docg', 'doca', 'doc', 'aoc', 'aop', 'ava', 'igt', 'igp', 'dop', 'doq', 'vqa', 'wo']);
+// pdo/pgi added per ticket 6a842d54 ("Samos PDO" sat unmatched over a curated
+// "Samos") — the English EU marks are pure tier text on either side.
+const APPELLATION_TIER_TOKENS = new Set(['docg', 'doca', 'doc', 'aoc', 'aop', 'ava', 'igt', 'igp', 'dop', 'doq', 'vqa', 'wo', 'pdo', 'pgi']);
 
 // Tier tokens that may open an appellation ("DO Alicante", "DOCa Rioja",
 // "D.O. Valle Central", "IGT Toscana") — the majority of the tier pollution
@@ -95,7 +97,71 @@ const APPELLATION_TIER_TOKENS = new Set(['docg', 'doca', 'doc', 'aoc', 'aop', 'a
 // Narrower than the trailing set on purpose: "VQA Ontario" and "Wine of
 // Origin Western Cape" are the official forms of real appellations (audit
 // leave-alone list), so 'vqa'/'wo' are trailing-only.
-const APPELLATION_LEADING_TIER_TOKENS = new Set(['do', 'doca', 'docg', 'doc', 'aoc', 'aop', 'ava', 'igt', 'igp', 'dop', 'doq']);
+const APPELLATION_LEADING_TIER_TOKENS = new Set(['do', 'doca', 'docg', 'doc', 'aoc', 'aop', 'ava', 'igt', 'igp', 'dop', 'doq', 'pdo', 'pgi']);
+
+// Spelled-out tier PHRASES ("Denominación de Origen Valencia", "Chianti
+// Denominazione di Origine Controllata") — multi-token, so the single-token
+// loops below can never see them (ticket 6a842d54). Compared accent- and
+// punctuation-folded (so "Denominació d'Origen" probes as
+// ['denominacio','dorigen']), but only the DECORATION is dropped — the
+// surviving name keeps its typed spelling, exactly like the token loops.
+// Within a family, longest first, so "… de Origen Calificada" wins over its
+// "… de Origen" prefix. These phrases are pure tier text in every language
+// they appear in and none BEGINS a real appellation name, which is what makes
+// a blind strip safe here while the ambiguous forms (trailing 'do', the
+// name-wrapping "Appellation … Contrôlée") stay membership-gated in
+// services/appellationResolve.
+const APPELLATION_TIER_PHRASES = [
+  ['denominacion', 'de', 'origen', 'calificada'],
+  ['denominacion', 'de', 'origen', 'protegida'],
+  ['denominacion', 'de', 'origen'],
+  ['denominacio', 'dorigen', 'qualificada'],
+  ['denominacio', 'dorigen', 'protegida'],
+  ['denominacio', 'dorigen'],
+  ['denominacao', 'de', 'origem', 'controlada'],
+  ['denominacao', 'de', 'origem', 'protegida'],
+  ['denominacao', 'de', 'origem'],
+  ['denominazione', 'di', 'origine', 'controllata', 'e', 'garantita'],
+  ['denominazione', 'di', 'origine', 'controllata'],
+  ['denominazione', 'di', 'origine', 'protetta'],
+  ['indicazione', 'geografica', 'tipica'],
+  ['indicacion', 'geografica', 'protegida'],
+  ['indication', 'geographique', 'protegee'],
+  ['protected', 'designation', 'of', 'origin'],
+  ['protected', 'geographical', 'indication'],
+];
+
+// Fold ONE display token to the shape the phrase table is written in:
+// punctuation out ("d'Origen" → "dOrigen"), lowercased, accents stripped
+// ("Denominación" → "denominacion", "Denominação" → "denominacao").
+const foldTierWord = (token) => token
+  .replace(/[.,'’]/g, '')
+  .toLowerCase()
+  .normalize('NFD')
+  .replace(/[̀-ͯ]/g, '');
+
+// Strip tier phrases off either END of the token list, repeating until stable
+// ("PDO Denominación de Origen X" is unrealistic but costs nothing to
+// handle). Mutates `parts`. The > guard means an input that IS only the
+// phrase survives untouched — same never-empty rule as the token loops.
+const stripTierPhrases = (parts) => {
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const phrase of APPELLATION_TIER_PHRASES) {
+      if (parts.length > phrase.length && phrase.every((w, i) => foldTierWord(parts[i]) === w)) {
+        parts.splice(0, phrase.length);
+        changed = true;
+      }
+      if (parts.length > phrase.length &&
+          phrase.every((w, i) => foldTierWord(parts[parts.length - phrase.length + i]) === w)) {
+        parts.splice(parts.length - phrase.length, phrase.length);
+        changed = true;
+      }
+    }
+  }
+  return parts;
+};
 
 // Strip trailing characters (any in `chars`) without a `$`-anchored quantifier
 // regex — a plain scan, so it can never be a polynomial-ReDoS shape.
@@ -131,6 +197,8 @@ const normalizeAppellation = (appellation) => {
   if (appellation == null) return appellation;
   const original = String(appellation).trim();
   const parts = original.split(/\s+/);
+  // Spelled-out wrappers first — the single-token loops below can't see them.
+  stripTierPhrases(parts);
   // Drop leading tier token(s) — dots tolerated so "D.O." matches 'do'.
   while (parts.length > 1) {
     const first = parts[0].replace(/[.,]/g, '').toLowerCase();

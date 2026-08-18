@@ -124,6 +124,30 @@ describe('normalizeAppellation (ticket #2C: tier-suffix proliferation)', () => {
     expect(normalizeAppellation('Swartland WO')).toBe('Swartland');
   });
 
+  // Ticket 6a842d54: "Denominación de Origen Valencia" and "Samos PDO" sat in
+  // the unmatched queue over curated "Valencia"/"Samos" — spelled-out phrases
+  // are invisible to the single-token loops, and the English EU marks were in
+  // neither token set.
+  test('strips spelled-out tier phrases from either end (ticket 6a842d54)', () => {
+    expect(normalizeAppellation('Denominación de Origen Valencia')).toBe('Valencia');
+    expect(normalizeAppellation('Denominación de Origen Calificada Rioja')).toBe('Rioja');
+    expect(normalizeAppellation('Chianti Denominazione di Origine Controllata e Garantita')).toBe('Chianti');
+    expect(normalizeAppellation("Denominació d'Origen Penedès")).toBe('Penedès');
+    expect(normalizeAppellation('Denominação de Origem Controlada Douro')).toBe('Douro');
+    expect(normalizeAppellation('Toscana Indicazione Geografica Tipica')).toBe('Toscana');
+    // The phrase alone is never emptied — same rule as bare 'DOCG'.
+    expect(normalizeAppellation('Denominación de Origen')).toBe('Denominación de Origen');
+    // Names that merely CONTAIN phrase words are untouched.
+    expect(normalizeAppellation('Ribera del Duero')).toBe('Ribera del Duero');
+  });
+
+  test('PDO/PGI tier marks strip from both sides (ticket 6a842d54)', () => {
+    expect(normalizeAppellation('Samos PDO')).toBe('Samos');
+    expect(normalizeAppellation('PDO Santorini')).toBe('Santorini');
+    expect(normalizeAppellation('Peloponnese PGI')).toBe('Peloponnese');
+    expect(normalizeAppellation('Samos P.D.O.')).toBe('Samos'); // dotted form, same fold as the loops
+  });
+
   // Prod 2026-08-13: "Lison Classico D.O.C.G." kept its tier. The LEADING loop
   // has always folded dots out of the candidate token ("D.O. Valle Central"
   // above); the trailing loop only trimmed dots off the END, so 'd.o.c.g'

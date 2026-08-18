@@ -14,9 +14,11 @@ const WineDefinition = require('../models/WineDefinition');
 const Region = require('../models/Region');
 const Country = require('../models/Country');
 const Appellation = require('../models/Appellation');
+const AppellationReviewSkip = require('../models/AppellationReviewSkip');
 const { normalizeAppellation, normalizeAppellationKey } = require('../utils/normalize');
 const { candidateKeys } = require('./appellationResolve');
 const { isValidId } = require('../utils/validation');
+const { stripHtml } = require('../utils/sanitize');
 
 /**
  * Ref validation for an Appellation write (code audit 2026-07-30: "appellation
@@ -86,18 +88,23 @@ async function listPendingRegions() {
  * before grouping so pre-guard rows ("… DO") fold into their clean form.
  */
 async function listUnmatchedAppellations() {
-  const [existing, rows] = await Promise.all([
+  const [existing, rows, skips] = await Promise.all([
     Appellation.find({}).select('normalizedName normalizedSynonyms').lean(),
     WineDefinition.aggregate([
       { $match: { appellation: { $nin: [null, ''] }, nonWine: { $ne: true }, pendingIdentity: { $ne: true } } },
       { $group: { _id: { ap: '$appellation', country: '$country', region: '$region' }, n: { $sum: 1 } } },
     ]),
+    AppellationReviewSkip.find({}).select('normalizedKey').lean(),
   ]);
   const matched = new Set();
   for (const a of existing) {
     if (a.normalizedName) matched.add(a.normalizedName);
     for (const s of a.normalizedSynonyms || []) matched.add(s);
   }
+  // Dismissed keys suppress exactly like curated coverage does (ticket
+  // 6a842d5e): judged through candidateKeys below, so a dismissal of
+  // "somewhere" also silences a later "Somewhere DO".
+  const dismissed = new Set(skips.map((s) => s.normalizedKey));
 
   const groups = new Map();
   for (const r of rows) {
@@ -109,7 +116,7 @@ async function listUnmatchedAppellations() {
     // promote the decorated form, whose exact-match hit would then permanently
     // beat the stripped variant and split the appellation in two. What remains
     // in this queue is only what NO variant of covers — the genuinely unknown.
-    if (!key || candidateKeys(key).some((k) => matched.has(k))) continue;
+    if (!key || candidateKeys(key).some((k) => matched.has(k) || dismissed.has(k))) continue;
     let g = groups.get(key);
     if (!g) { g = { spellings: new Map(), countries: new Map(), regions: new Map(), total: 0 }; groups.set(key, g); }
     g.total += r.n;
@@ -150,4 +157,73 @@ async function listUnmatchedAppellations() {
   });
 }
 
-module.exports = { listPendingRegions, listUnmatchedAppellations, appellationRefsError };
+const DISMISS_REASON_MIN = 5;
+const DISMISS_REASON_MAX = 500;
+
+/**
+ * The queue's group key for an appellation STRING — dismissals and the
+ * listing must derive it identically or a dismissal misses its row.
+ */
+function unmatchedGroupKey(name) {
+  const raw = String(name || '');
+  const cleaned = normalizeAppellation(raw) || raw;
+  return normalizeAppellationKey(cleaned);
+}
+
+/**
+ * Dismiss an unmatched-appellation string: reviewed and judged NOT
+ * promotable (ticket 6a842d5e — the queue's missing terminal state).
+ * Suppression is by group key, so every spelling variant that folds onto it
+ * goes quiet too. First dismisser wins a race ($setOnInsert, same stance as
+ * the price-queue skip); the reason is the durable record of the judgement.
+ *
+ * @returns {{key, name, created}} or {{error}} on invalid input.
+ */
+async function dismissUnmatchedAppellation({ name, reason, userId }) {
+  const display = stripHtml(String(name || '')).slice(0, 200).trim();
+  const key = unmatchedGroupKey(display);
+  if (!key) return { error: 'A non-empty appellation string is required' };
+  const cleanReason = stripHtml(typeof reason === 'string' ? reason : '').trim().slice(0, DISMISS_REASON_MAX);
+  if (cleanReason.length < DISMISS_REASON_MIN) {
+    return { error: `A reason of at least ${DISMISS_REASON_MIN} characters is required — it is the record of why this was rejected` };
+  }
+  const res = await AppellationReviewSkip.findOneAndUpdate(
+    { normalizedKey: key },
+    { $setOnInsert: { normalizedKey: key, name: display, reason: cleanReason, skippedBy: userId, skippedAt: new Date() } },
+    { upsert: true, new: false, includeResultMetadata: true }
+  );
+  const created = !res?.lastErrorObject?.updatedExisting;
+  return { key, name: display, created };
+}
+
+/** Lift a dismissal — the string re-enters the queue while wines still carry it. */
+async function restoreDismissedAppellation(name) {
+  const key = unmatchedGroupKey(name);
+  if (!key) return { error: 'A non-empty appellation string is required' };
+  const res = await AppellationReviewSkip.deleteOne({ normalizedKey: key });
+  return { key, restored: res.deletedCount > 0 };
+}
+
+/** Dismissed strings, newest first — the restorable record of what was rejected. */
+async function listDismissedAppellations() {
+  const rows = await AppellationReviewSkip.find({})
+    .sort({ skippedAt: -1 })
+    .populate('skippedBy', 'username')
+    .lean();
+  return rows.map((r) => ({
+    key: r.normalizedKey,
+    name: r.name || r.normalizedKey,
+    reason: r.reason || null,
+    dismissedBy: r.skippedBy?.username || null,
+    dismissedAt: r.skippedAt,
+  }));
+}
+
+module.exports = {
+  listPendingRegions,
+  listUnmatchedAppellations,
+  appellationRefsError,
+  dismissUnmatchedAppellation,
+  restoreDismissedAppellation,
+  listDismissedAppellations,
+};

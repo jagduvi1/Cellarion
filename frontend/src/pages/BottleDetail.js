@@ -665,6 +665,24 @@ function BottleDetail() {
         </div>
       )}
 
+      {/* No published profile — an honest "not yet assessed" instead of a
+          silent blank (somm ticket 6a83e765 rollout note). Held-by-the-gate
+          and never-generated are deliberately indistinguishable here, so the
+          card can never leak WHY a profile is missing. */}
+      {wine && !wine.aiProfile?.description && (
+        <div className="bd-ai-profile card">
+          <div className="bd-ai-profile__header">
+            <h2>{t('bottleDetail.tastingProfile', 'Tasting profile')}</h2>
+            <span className="bd-ai-tag" title={t('bottleDetail.profilePendingTitle', 'This wine has not been through assessment yet — profiles are generated and reviewed over time')}>
+              {t('bottleDetail.profilePending', 'Not yet assessed')}
+            </span>
+          </div>
+          <p style={{ color: 'var(--color-text-muted)', margin: 0, fontSize: '0.9rem' }}>
+            {t('bottleDetail.profilePendingBody', 'This wine hasn’t been assessed yet. A tasting profile appears here once it has been.')}
+          </p>
+        </div>
+      )}
+
       {/* ── Reviews section ── */}
       {wine && (
         <div className="bd-reviews card">

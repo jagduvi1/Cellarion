@@ -219,26 +219,36 @@ registerTool({
   description:
     'ADMIN ONLY. Wines store appellations as free text; this lists every distinct normalized string that no curated ' +
     'Appellation entry (name or synonym) covers, with the majority display spelling, wine count and suggested ' +
-    'country/region. Promote the real ones with promote_appellation — new wines then adopt the canonical spelling ' +
-    'automatically. Rare/new appellations are normal here; users are never blocked by this queue.',
+    'country/region. Promote the real ones with promote_appellation; dismiss the ones that are NOT appellations ' +
+    'with dismiss_appellation — dismissed strings stay out of this queue (include_dismissed:true shows them too). ' +
+    'Rare/new appellations are normal here; users are never blocked by this queue.',
   scope: 'read',
   requireRole: ['admin'],
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {
     limit: z.number().int().min(1).max(100).default(30).describe('Largest-first; the long tail is mostly 1-wine oddities'),
+    include_dismissed: z.boolean().optional().describe('Also return the dismissed strings (as a separate `dismissed` array) — needed to pick a restore_appellation target'),
   },
   handler: async (args, _ctx) => {
-    const { listUnmatchedAppellations } = require('../../services/taxonomyReview');
+    const { listUnmatchedAppellations, listDismissedAppellations } = require('../../services/taxonomyReview');
     const items = await listUnmatchedAppellations();
     const page = items.slice(0, args.limit || 30);
-    return ok(`${items.length} unmatched appellation string(s) (showing ${page.length}, largest first)`, page.map(i => ({
+    const open = page.map(i => ({
       name: i.name,
       wine_count: i.wineCount,
       suggested_country: i.countryName,
       suggested_country_id: i.countryId,
       suggested_region: i.regionName,
       suggested_region_id: i.regionId,
-    })));
+    }));
+    if (!args.include_dismissed) {
+      return ok(`${items.length} unmatched appellation string(s) (showing ${page.length}, largest first)`, open);
+    }
+    const dismissed = await listDismissedAppellations();
+    return ok(
+      `${items.length} unmatched appellation string(s) (showing ${page.length}, largest first) + ${dismissed.length} dismissed`,
+      { open, dismissed: dismissed.map(d => ({ name: d.name, reason: d.reason, dismissed_by: d.dismissedBy, dismissed_at: d.dismissedAt })) }
+    );
   },
 });
 
@@ -291,6 +301,64 @@ registerTool({
       appellation_id: appellation._id,
       name: appellation.name,
     });
+  },
+});
+
+registerTool({
+  name: 'dismiss_appellation',
+  title: 'ADMIN: dismiss an unmatched appellation string for good',
+  description:
+    'ADMIN ONLY. Marks an unmatched appellation string as reviewed and REJECTED — it leaves ' +
+    'list_unmatched_appellations and stays out until restore_appellation lifts the dismissal. Spelling variants ' +
+    'that fold to the same string go quiet with it. Use for strings that are NOT appellations (quality tiers like ' +
+    '"Qualitätswein", fantasy names, label slogans); for a real appellation use promote_appellation instead. The ' +
+    'wines keep their free-text value either way — this only silences the review queue. Same terminal-state ' +
+    'pattern as reject_price_request (ticket 6a842d5e).',
+  scope: 'write',
+  requireRole: ['admin'],
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  inputSchema: {
+    name: z.string().trim().min(1).max(200).describe('The string exactly as list_unmatched_appellations shows it'),
+    reason: z.string().min(5).max(500).describe('Why it is not an appellation — kept as the durable review record'),
+  },
+  handler: async (args, ctx) => {
+    const { dismissUnmatchedAppellation } = require('../../services/taxonomyReview');
+    const result = await dismissUnmatchedAppellation({ name: args.name, reason: args.reason, userId: ctx.user.id });
+    if (result.error) return fail('invalid_input', result.error);
+    // Same audit action string as the REST dismiss — the two surfaces audit
+    // identically. No target ObjectId: the subject is a string key.
+    logAudit(ctx.req, 'admin.taxonomy.appellationDismiss', { type: 'appellation' },
+      { key: result.key, name: result.name, reason: args.reason, already: !result.created, via: 'mcp' });
+    return ok(
+      result.created
+        ? `Dismissed "${result.name}" — it will not resurface in the unmatched queue. restore_appellation reverses this.`
+        : `"${result.name}" was already dismissed — nothing to do.`,
+      { key: result.key, name: result.name, already: !result.created }
+    );
+  },
+});
+
+registerTool({
+  name: 'restore_appellation',
+  title: 'ADMIN: lift an appellation dismissal',
+  description:
+    'ADMIN ONLY. Removes a dismissal recorded by dismiss_appellation, so the string re-enters ' +
+    'list_unmatched_appellations while wines still carry it. Find dismissed strings via ' +
+    'list_unmatched_appellations with include_dismissed:true.',
+  scope: 'write',
+  requireRole: ['admin'],
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  inputSchema: {
+    name: z.string().trim().min(1).max(200).describe('The dismissed string (any spelling that folds to it works)'),
+  },
+  handler: async (args, ctx) => {
+    const { restoreDismissedAppellation } = require('../../services/taxonomyReview');
+    const result = await restoreDismissedAppellation(args.name);
+    if (result.error) return fail('invalid_input', result.error);
+    if (!result.restored) return fail('not_found', 'No dismissal recorded for that string — list_unmatched_appellations include_dismissed:true shows what is dismissed.');
+    logAudit(ctx.req, 'admin.taxonomy.appellationRestore', { type: 'appellation' },
+      { key: result.key, via: 'mcp' });
+    return ok(`Dismissal lifted — "${args.name}" can appear in the unmatched queue again.`, { key: result.key });
   },
 });
 

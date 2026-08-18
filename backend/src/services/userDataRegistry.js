@@ -78,6 +78,7 @@ const Country = require('../models/Country');
 const Region = require('../models/Region');
 const Grape = require('../models/Grape');
 const Appellation = require('../models/Appellation');
+const AppellationReviewSkip = require('../models/AppellationReviewSkip');
 const SiteConfig = require('../models/SiteConfig');
 const { getOrCreateDeletedUser } = require('../utils/deletedUser');
 const { deleteLogoFilesFor } = require('./wineListLogos');
@@ -996,6 +997,15 @@ const REGISTRY = [
     purge: (ctx) => Appellation.updateMany({ createdBy: ctx.userId }, { $set: { createdBy: ctx.deletedUserId } }),
     exportFragment: null,
     note: 'shared taxonomy; required createdBy reassigned to [deleted] on erasure',
+  },
+  {
+    model: AppellationReviewSkip, category: 'creator-ref', userFields: ['skippedBy'],
+    // A dismissal is registry curation state — deleting it on erasure would
+    // resurrect reviewed-and-rejected strings in the unmatched queue. Only
+    // the person is anonymised, exactly like taxonomy createdBy.
+    purge: (ctx) => AppellationReviewSkip.updateMany({ skippedBy: ctx.userId }, { $set: { skippedBy: ctx.deletedUserId } }),
+    exportFragment: null,
+    note: 'shared curation state; required skippedBy reassigned to [deleted] on erasure',
   },
   {
     model: SiteConfig, category: 'creator-ref', userFields: ['updatedBy'],
