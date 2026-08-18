@@ -58,6 +58,7 @@ jest.mock('./mutationBudget', () => ({ takeMutationSlot: jest.fn(() => true), WR
 const WineVintageProfile = require('../models/WineVintageProfile');
 const WineVintagePrice = require('../models/WineVintagePrice');
 const WineDefinition = require('../models/WineDefinition');
+const Bottle = require('../models/Bottle');
 const Grape = require('../models/Grape');
 const McpActionLog = require('../models/McpActionLog');
 const WineReport = require('../models/WineReport');
@@ -73,7 +74,7 @@ const USER_CTX = { user: { id: ME, roles: ['user'] }, scopes: ['read', 'write'],
 
 const tool = (name) => allTools().find((t) => t.name === name);
 const parse = (res) => JSON.parse(res.content[0].text);
-const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'remove_from_maturity_queue', 'set_wine_profile', 'propose_wine_correction', 'list_price_tracking_requests', 'set_vintage_price', 'reject_price_request', 'list_wine_reports', 'respond_to_wine_report', 'sample_published_profiles'];
+const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'remove_from_maturity_queue', 'set_wine_profile', 'propose_wine_correction', 'list_price_tracking_requests', 'set_vintage_price', 'reject_price_request', 'list_wine_reports', 'respond_to_wine_report', 'sample_published_profiles', 'list_unverified_core_wines'];
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -537,6 +538,33 @@ describe('sample_published_profiles (6a8464ea phase 3 — the weekly spot-check)
     expect(WineDefinition.aggregate.mock.calls[0][0][1]).toEqual({ $sample: { size: 20 } });
     expect(body.data[0]).toMatchObject({ producer: 'Weingut X', grapes: ['Bacchus'], producer_unknown: true });
     expect(body.data[0].profile.acidity).toBe('high');
+  });
+});
+
+describe('list_unverified_core_wines (curated core — rethink decision 3)', () => {
+  test('owner-count sets join against non-curator wines, highest ownership first; verified wines drop out', async () => {
+    Bottle.aggregate.mockResolvedValue([
+      { _id: oid('1'), ownerCount: 7 },
+      { _id: oid('2'), ownerCount: 4 },  // curator-verified → not returned by the wine query
+      { _id: oid('3'), ownerCount: 3 },
+    ]);
+    WineDefinition.find.mockReturnValue({
+      select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([
+        { _id: oid('1'), name: 'Barolo', producer: 'Vajra', appellation: 'Barolo', type: 'red', aiProfile: { description: 'x', heldAt: null, confidence: 0.6 } },
+        { _id: oid('3'), name: 'Rioja', producer: 'X', appellation: 'Rioja', type: 'red', aiProfile: { description: null, heldAt: new Date(), heldReason: 'low_confidence' } },
+      ]) }),
+    });
+    const body = parse(await tool('list_unverified_core_wines').handler({ min_owners: 3, limit: 30 }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(body.data.map((r) => r.owner_count)).toEqual([7, 3]);
+    expect(body.data[0].profile_state).toBe('ai_published');
+    expect(body.data[1]).toMatchObject({ profile_state: 'held', held_reason: 'low_confidence' });
+    // The wine filter excludes curator-verified rows — the core is DONE there.
+    const filter = WineDefinition.find.mock.calls[0][0];
+    expect(filter['aiProfile.source']).toEqual({ $ne: 'curator' });
+    // Ownership threshold reached the aggregate.
+    const match = Bottle.aggregate.mock.calls[0][0].find((s) => s.$match && s.$match.ownerCount);
+    expect(match.$match.ownerCount).toEqual({ $gte: 3 });
   });
 });
 

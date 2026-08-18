@@ -438,6 +438,61 @@ function EnrichmentPromptPanel({ prompt, apiFetch }) {
   );
 }
 
+function EnrichmentGatePanel({ floor, unknownBar, apiFetch }) {
+  const [f, setF] = useState(floor ?? 0.4);
+  const [u, setU] = useState(unknownBar ?? 0.55);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const save = async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await apiFetch('/api/superadmin/ai/enrichment-gate', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ floor: parseFloat(f), unknownBar: parseFloat(u) }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        setMsg({ ok: false, text: d.error || 'Save failed' });
+      } else {
+        setMsg({ ok: true, text: 'Saved — applies to the next enrichment/hold decision' });
+      }
+    } catch {
+      setMsg({ ok: false, text: 'Network error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const numStyle = { width: 70, background: 'var(--sa-bg)', border: '1px solid var(--sa-border)', color: 'var(--sa-text)', padding: '2px 6px', borderRadius: 3, fontFamily: 'monospace', fontSize: 12 };
+  return (
+    <div className="sa-panel" style={{ marginTop: 16 }}>
+      <div className="sa-panel-header">
+        <span className="sa-panel-title">Enrichment — Publication Gate</span>
+        <button className="sa-btn" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
+      </div>
+      <div className="sa-panel-body">
+        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 12 }}>
+          Generated profiles below the floor are held for review instead of published; unknown-producer profiles hold below the higher bar. Calibrated 2026-08-18 on 5,836 profiles: 0.40 / 0.55 (0.45 held 1,158 — too aggressive).
+        </div>
+        <div className="sa-kv">
+          <div className="sa-kv-row">
+            <span className="sa-kv-key">Confidence floor</span>
+            <input type="number" min="0" max="1" step="0.05" value={f} onChange={e => setF(e.target.value)} style={numStyle} />
+          </div>
+          <div className="sa-kv-row">
+            <span className="sa-kv-key">Unknown-producer bar</span>
+            <input type="number" min="0" max="1" step="0.05" value={u} onChange={e => setU(e.target.value)} style={numStyle} />
+          </div>
+        </div>
+        {msg && <div style={{ fontSize: 11, marginTop: 8, color: msg.ok ? 'var(--sa-ok, #7c7)' : 'var(--sa-err, #c77)' }}>{msg.text}</div>}
+      </div>
+    </div>
+  );
+}
+
 function ChatLimitPanel({ limit, apiFetch }) {
   const [val, setVal] = useState(limit ?? 50);
   const [saving, setSaving] = useState(false);
@@ -1120,6 +1175,7 @@ export default function TabAI() {
       <EnrichmentModelPanel currentModel={config.enrichmentModel || 'claude-sonnet-5'} apiFetch={apiFetch} />
       <EnrichmentPromptPanel prompt={config.enrichmentPrompt || ''} apiFetch={apiFetch} />
       <ChatLimitPanel limit={config.chatDailyLimit ?? 50} apiFetch={apiFetch} />
+      <EnrichmentGatePanel floor={config.enrichmentHoldConfidenceFloor ?? 0.4} unknownBar={config.enrichmentHoldUnknownConfidenceBar ?? 0.55} apiFetch={apiFetch} />
       <ChatUsagePanel />
     </>
   );

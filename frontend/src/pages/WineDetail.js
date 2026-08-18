@@ -204,6 +204,17 @@ export default function WineDetail() {
         <div className="wd-card bd-ai-profile">
           <div className="bd-ai-profile__header">
             <h2>{t('wineDetail.tastingProfile', 'Tasting profile')}</h2>
+            {/* Provenance is load-bearing here too (#985): the public page
+                must never present AI-generated text as established fact. */}
+            {wine.aiProfile.source === 'curator' ? (
+              <span className="bd-ai-tag bd-ai-tag--curator" title={t('wineDetail.provenanceCuratorTitle', 'A sommelier has verified this profile')}>
+                {t('wineDetail.provenanceCurator', 'Curator-verified')}
+              </span>
+            ) : (
+              <span className="bd-ai-tag" title={t('wineDetail.provenanceAiTitle', 'Written by AI from the wine’s identity — a starting point, not a fact')}>
+                {t('wineDetail.provenanceAi', 'AI-generated')}
+              </span>
+            )}
           </div>
 
           {(() => {

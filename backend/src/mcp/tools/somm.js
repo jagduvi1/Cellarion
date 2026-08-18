@@ -16,6 +16,7 @@ const WineVintagePrice = require('../../models/WineVintagePrice');
 const PriceTrackingRequest = require('../../models/PriceTrackingRequest');
 const PriceTrackingSkip = require('../../models/PriceTrackingSkip');
 const WineDefinition = require('../../models/WineDefinition');
+const Bottle = require('../../models/Bottle');
 const WineCorrectionProposal = require('../../models/WineCorrectionProposal');
 const WineOwnerInquiry = require('../../models/WineOwnerInquiry');
 const { registerTool } = require('../registry');
@@ -873,6 +874,70 @@ registerTool({
       ai_confidence: w.aiProfile?.confidence ?? null,
       producer_unknown: w.aiProfile?.producerUnknown === true,
     })));
+  },
+});
+
+// The curated core (rethink decision 3, 2026-08-18): a wine ≥N owners is the
+// registry's high-traffic tier and MUST reach a curator-verified profile —
+// everything outside the core may live as a labelled AI estimate
+// indefinitely. This is the somm's impact-ranked worklist: owner count IS the
+// priority order. (Maturity-queue wines are the core's other half and already
+// have their own standing surface — list_maturity_queue.)
+registerTool({
+  name: 'list_unverified_core_wines',
+  title: 'Sommelier: high-ownership wines still lacking a curator-verified profile',
+  description:
+    'The curated-core worklist, owner-count first: registry wines that at least min_owners different users own ' +
+    'bottles of, whose tasting profile is NOT yet curator-verified (state: an AI profile, a held profile, or none). ' +
+    'These are the wines the most people see — verify each with set_wine_profile (which stamps curator provenance) ' +
+    'or judge the held ones from the admin queue. Everything outside this core is allowed to stay a labelled AI ' +
+    'estimate; this list is where proactive curation time pays best.',
+  scope: 'read',
+  requireRole: SOMM_ROLES,
+  annotations: { readOnlyHint: true, openWorldHint: false },
+  inputSchema: {
+    min_owners: z.number().int().min(2).max(50).default(3).describe('Core threshold — the agreed default is 3 distinct owners'),
+    limit: z.number().int().min(1).max(100).default(30).describe('Highest ownership first'),
+  },
+  handler: async (args, ctx) => {
+    const denied = requireSomm(ctx);
+    if (denied) return denied;
+    const minOwners = args.min_owners || 3;
+    const owned = await Bottle.aggregate([
+      { $match: { status: 'active' } },
+      { $group: { _id: '$wineDefinition', owners: { $addToSet: '$user' } } },
+      { $project: { ownerCount: { $size: '$owners' } } },
+      { $match: { ownerCount: { $gte: minOwners } } },
+      { $sort: { ownerCount: -1 } },
+    ]);
+    if (owned.length === 0) return ok(`No wines reach ${minOwners} distinct owners yet.`, []);
+    const wines = await WineDefinition.find({
+      _id: { $in: owned.map((o) => o._id) },
+      nonWine: { $ne: true }, pendingIdentity: { $ne: true },
+      'aiProfile.source': { $ne: 'curator' },
+    }).select('name producer appellation type aiProfile.description aiProfile.heldAt aiProfile.heldReason aiProfile.confidence').lean();
+    const byId = new Map(wines.map((w) => [String(w._id), w]));
+    const rows = [];
+    for (const o of owned) {
+      const w = byId.get(String(o._id));
+      if (!w) continue; // curator-verified or excluded — not core work
+      rows.push({
+        wine_id: w._id,
+        name: w.name,
+        producer: w.producer,
+        appellation: w.appellation || null,
+        type: w.type || null,
+        owner_count: o.ownerCount,
+        profile_state: w.aiProfile?.heldAt ? 'held' : (w.aiProfile?.description ? 'ai_published' : 'none'),
+        held_reason: w.aiProfile?.heldReason || null,
+        ai_confidence: w.aiProfile?.confidence ?? null,
+      });
+      if (rows.length >= (args.limit || 30)) break;
+    }
+    return ok(
+      `${rows.length} core wine(s) (≥${minOwners} owners) without a curator-verified profile — highest ownership first`,
+      rows
+    );
   },
 });
 
