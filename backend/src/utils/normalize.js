@@ -218,6 +218,13 @@ const normalizeAppellation = (appellation) => {
     if (!APPELLATION_TIER_TOKENS.has(last)) break;
     parts.pop();
   }
+  // Separator debris (found on prod 2026-08-18): stripping a phrase or tier
+  // written after a separator leaves the separator dangling — "Vin du Québec
+  // - Indication géographique protégée" → "Vin du Québec -". A token that is
+  // ONLY punctuation at either end is never part of a name; same never-empty
+  // rule as every loop above.
+  while (parts.length > 1 && /^[-–—·|/]+$/.test(parts[0])) parts.shift();
+  while (parts.length > 1 && /^[-–—·|/]+$/.test(parts[parts.length - 1])) parts.pop();
   const result = trimTrailingChars(parts.join(' '), ' ,').trim();
   return result || original;
 };

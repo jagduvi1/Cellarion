@@ -148,6 +148,19 @@ describe('normalizeAppellation (ticket #2C: tier-suffix proliferation)', () => {
     expect(normalizeAppellation('Samos P.D.O.')).toBe('Samos'); // dotted form, same fold as the loops
   });
 
+  // Prod 2026-08-18: the phrase strip left the separator behind —
+  // "Vin du Québec - Indication géographique protégée" → "Vin du Québec -",
+  // one hand-fixed row. A bare punctuation token at either end is debris.
+  test('a separator left dangling by a strip is dropped from either end', () => {
+    expect(normalizeAppellation('Vin du Québec - Indication géographique protégée')).toBe('Vin du Québec');
+    expect(normalizeAppellation('Rioja – DOCa')).toBe('Rioja');
+    expect(normalizeAppellation('DO - Yecla')).toBe('Yecla');
+    // Hyphens INSIDE a name are one token and untouched.
+    expect(normalizeAppellation('Châteauneuf-du-Pape')).toBe('Châteauneuf-du-Pape');
+    // A lone separator input is left alone (never-empty rule).
+    expect(normalizeAppellation('-')).toBe('-');
+  });
+
   // Prod 2026-08-13: "Lison Classico D.O.C.G." kept its tier. The LEADING loop
   // has always folded dots out of the candidate token ("D.O. Valle Central"
   // above); the trailing loop only trimmed dots off the END, so 'd.o.c.g'

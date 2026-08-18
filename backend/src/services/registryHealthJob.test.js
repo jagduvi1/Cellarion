@@ -253,4 +253,19 @@ describe('the ticket-6a800f39 metrics (v-next)', () => {
       (c) => c[0] && c[0].$or && !c[0]['aiProfile.producerSuspect']);
     expect(JSON.stringify(lowConfCall[0].$or)).not.toMatch(/producerSuspect/);
   });
+
+  test('heldProfiles is its OWN key; lowConfidenceQueue counts PUBLISHED rows only (gate 2026-08-18)', async () => {
+    const m = await computeMetrics();
+    expect(m).toHaveProperty('heldProfiles');
+    expect(METRIC_LABELS.heldProfiles).toBeTruthy();
+    // The held count queries heldAt-set rows under its own key…
+    const heldCall = WineDefinition.countDocuments.mock.calls.find(
+      (c) => c[0] && c[0]['aiProfile.heldAt'] && c[0]['aiProfile.heldAt'].$ne === null);
+    expect(heldCall).toBeTruthy();
+    // …and the low-confidence mirror excludes held rows: they leave the
+    // metric (shrink only — never alerts) and count under heldProfiles.
+    const lowConfCall = WineDefinition.countDocuments.mock.calls.find(
+      (c) => c[0] && c[0].$or && !c[0]['aiProfile.producerSuspect']);
+    expect(lowConfCall[0]['aiProfile.heldAt']).toBeNull();
+  });
 });

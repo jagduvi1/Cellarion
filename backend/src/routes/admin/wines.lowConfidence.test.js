@@ -111,9 +111,12 @@ describe('GET /low-confidence', () => {
       // Suspect producers surface REGARDLESS of threshold (ticket 6a8162c5):
       // the flag is a doubt about the identity, not the profile's confidence
       // — Fabelhaft sat at 0.5 while the default threshold is 0.3, so the one
-      // row the flag existed for never appeared here. Held profiles land in
-      // this queue through this branch.
+      // row the flag existed for never appeared here.
       { 'aiProfile.producerSuspect': true },
+      // Every HELD row surfaces too (gate 2026-08-18, ticket 6a83e765): an
+      // unknown-producer hold can sit at 0.5 with no suspect flag, and this
+      // queue is the only place a hold gets released.
+      { 'aiProfile.heldAt': { $ne: null } },
     ]);
     // Scoped to rows that were actually enriched, or every un-enriched wine
     // would match the null branch.
@@ -151,9 +154,12 @@ describe('GET /low-confidence', () => {
       // Suspect producers surface REGARDLESS of threshold (ticket 6a8162c5):
       // the flag is a doubt about the identity, not the profile's confidence
       // — Fabelhaft sat at 0.5 while the default threshold is 0.3, so the one
-      // row the flag existed for never appeared here. Held profiles land in
-      // this queue through this branch.
+      // row the flag existed for never appeared here.
       { 'aiProfile.producerSuspect': true },
+      // Every HELD row surfaces too (gate 2026-08-18, ticket 6a83e765): an
+      // unknown-producer hold can sit at 0.5 with no suspect flag, and this
+      // queue is the only place a hold gets released.
+      { 'aiProfile.heldAt': { $ne: null } },
     ]);
     // Scoped to rows that were actually enriched, or every un-enriched wine
     // would match the null branch.

@@ -17,7 +17,13 @@ jest.mock('./labelScan', () => ({ suggestProfile: jest.fn() }));
 jest.mock('./aiProvider', () => ({ isConfigured: jest.fn(() => true) }));
 jest.mock('./embeddingJob', () => ({ embedSinglePair: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('./aiBudget', () => ({ tryDebitAi: jest.fn(), isRefundableFailure: jest.fn(() => false) }));
-jest.mock('../config/aiConfig', () => ({ get: jest.fn(() => ({ enrichmentModel: 'claude-sonnet-5' })) }));
+jest.mock('../config/aiConfig', () => ({ get: jest.fn(() => ({
+  enrichmentModel: 'claude-sonnet-5',
+  // The publication gate's calibrated defaults (ticket 6a83e765) — the
+  // end-to-end tests below exercise holds on both sides of them.
+  enrichmentHoldConfidenceFloor: 0.4,
+  enrichmentHoldUnknownConfidenceBar: 0.55,
+})) }));
 
 const WineDefinition = require('../models/WineDefinition');
 const { suggestProfile } = require('./labelScan');
@@ -427,7 +433,7 @@ describe('profileInputsSnapshot — the before/after comparison the routes use',
 });
 
 /**
- * WHICH DOUBT WITHHOLDS A PROFILE (flag split, 2026-08-17).
+ * WHICH DOUBT WITHHOLDS A PROFILE (flag split 2026-08-17, gate 2026-08-18).
  *
  * One boolean used to answer two questions, and the hold fired on both:
  *   producerSuspect  — the Producer FIELD is wrong (Fabelhaft, a Niepoort
@@ -440,21 +446,29 @@ describe('profileInputsSnapshot — the before/after comparison the routes use',
  * Measured cost of conflating them: ~47% of a 250-wine run withheld, almost
  * all of it the second kind, and the held rows then blocked the sommelier's
  * maturity queue because a held profile shows no tasting note.
+ *
+ * The day after the split, confidence was read by NOBODY: profiles published
+ * at 0.2 while a held row sat at 0.3 (ticket 6a83e765). Confidence rejoined
+ * as a calibrated FLOOR plus an unknown-producer bar — thresholds passed in
+ * from aiConfig, missing thresholds disable the check (degrade open). The
+ * function now returns the hold REASON (stored as aiProfile.heldReason) or
+ * null to publish.
  */
 describe('shouldHoldProfile — which doubt withholds the profile', () => {
   const { shouldHoldProfile } = require('./enrichmentJob');
   const clean = 'Bright red fruit and soft tannins, made for early drinking.';
+  const GATE = { floor: 0.4, unknownBar: 0.55 };
 
   test('a wrong producer FIELD holds, at any confidence and with clean prose', () => {
-    expect(shouldHoldProfile({ producerSuspect: true, producerUnknown: false, description: clean })).toBe(true);
+    expect(shouldHoldProfile({ producerSuspect: true, producerUnknown: false, description: clean, confidence: 0.9 }, GATE)).toBe('producer_suspect');
   });
 
-  test('a merely UNPLACEABLE producer publishes — the case that was over-held', () => {
-    expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: true, description: clean })).toBe(false);
+  test('a merely UNPLACEABLE producer with solid confidence publishes — the case that was over-held', () => {
+    expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: true, description: clean, confidence: 0.6 }, GATE)).toBeNull();
   });
 
   test('no doubt at all publishes', () => {
-    expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: false, description: clean })).toBe(false);
+    expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: false, description: clean, confidence: 0.7 }, GATE)).toBeNull();
   });
 
   test('an unplaceable producer whose PROSE talks about the house still holds (the backstop)', () => {
@@ -463,19 +477,36 @@ describe('shouldHoldProfile — which doubt withholds the profile', () => {
       'The family has farmed this estate for four generations.',
       'Made at the winery in Mendoza by a respected producer.',
     ]) {
-      expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: true, description: d })).toBe(true);
+      expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: true, description: d, confidence: 0.8 }, GATE)).toBe('producer_claim');
     }
   });
 
-  test('confidence plays NO part — a low-confidence honest note publishes', () => {
-    // The old rule held everything at or below 0.45, which is precisely where
-    // an honest appellation-level note about a small estate lands.
-    expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: true, description: clean })).toBe(false);
-    expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: false, description: null })).toBe(false);
+  // Gate 2026-08-18 (ticket 6a83e765): the floor is strict-below, so the
+  // calibrated boundary value itself publishes.
+  test('below the floor holds regardless of flags; at the floor publishes', () => {
+    expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: false, description: clean, confidence: 0.2 }, GATE)).toBe('low_confidence');
+    expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: false, description: clean, confidence: 0.39 }, GATE)).toBe('low_confidence');
+    expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: false, description: clean, confidence: 0.4 }, GATE)).toBeNull();
+  });
+
+  test('an unknown producer holds below the higher bar — weak confidence there is regional guesswork', () => {
+    expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: true, description: clean, confidence: 0.5 }, GATE)).toBe('unknown_low_confidence');
+    expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: true, description: clean, confidence: 0.55 }, GATE)).toBeNull();
+    // The same 0.5 with a KNOWN producer publishes — the bar is unknown-only.
+    expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: false, description: clean, confidence: 0.5 }, GATE)).toBeNull();
+  });
+
+  test('a null confidence skips both checks — degrade open, like the flags', () => {
+    expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: true, description: clean, confidence: null }, GATE)).toBeNull();
+    expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: false, description: null, confidence: null }, GATE)).toBeNull();
+  });
+
+  test('missing thresholds disable the confidence gate — never a spurious hold', () => {
+    expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: true, description: clean, confidence: 0.1 })).toBeNull();
   });
 
   test('an empty description cannot trip the prose backstop', () => {
-    expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: true, description: null })).toBe(false);
+    expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: true, description: null, confidence: 0.8 }, GATE)).toBeNull();
   });
 });
 
@@ -494,7 +525,9 @@ describe('the split flags end-to-end through enrichWine', () => {
 
   test('an UNPLACEABLE producer is published, with both flags recorded on the row', async () => {
     suggestProfile.mockResolvedValue(withFlags({
-      producerUnknown: true, confidence: 0.4,
+      // 0.6 clears the unknown bar (0.55) — the honest appellation-level
+      // majority the split released stays released under the gate.
+      producerUnknown: true, confidence: 0.6,
       producerNote: 'Chateau Hautes Graves is not a producer I can place.',
     }));
     await enrichWineById(WINE_ID);
@@ -517,6 +550,29 @@ describe('the split flags end-to-end through enrichWine', () => {
     expect(p.heldAt).toBeInstanceOf(Date);
     expect(p.description).toBeNull();
     expect(p.producerSuspect).toBe(true);
+    expect(p.heldReason).toBe('producer_suspect');
+  });
+
+  // Gate 2026-08-18 (ticket 6a83e765): the two confidence holds, end to end,
+  // with the reason persisted where the release queue reads it.
+  test('a below-floor profile is HELD with heldReason low_confidence', async () => {
+    suggestProfile.mockResolvedValue(withFlags({ confidence: 0.2 }));
+    await enrichWineById(WINE_ID);
+    const p = persisted();
+    expect(p.heldAt).toBeInstanceOf(Date);
+    expect(p.heldReason).toBe('low_confidence');
+    expect(p.description).toBeNull();
+    // The number that fired the hold is preserved for the reviewer.
+    expect(p.confidence).toBe(0.2);
+  });
+
+  test('an unknown producer under the bar is HELD as unknown_low_confidence', async () => {
+    suggestProfile.mockResolvedValue(withFlags({ producerUnknown: true, confidence: 0.45 }));
+    await enrichWineById(WINE_ID);
+    const p = persisted();
+    expect(p.heldAt).toBeInstanceOf(Date);
+    expect(p.heldReason).toBe('unknown_low_confidence');
+    expect(p.producerUnknown).toBe(true);
   });
 
   test('a missing producerUnknown on an old/custom prompt degrades to "no doubt", never to a hold', async () => {
@@ -634,5 +690,14 @@ describe('the enrichment prompt forbids asserting unstated facts', () => {
     // Ticket 6a6f94e5's requirement (flag and prose must agree) must survive
     // the split — pointed at producerUnknown now, which is where it belongs.
     expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/Set producerUnknown, NOT producerSuspect, whenever your description would call the producer undocumented/);
+  });
+
+  // Ticket 6a8464ea phase 1: the anti-regional-prior instruction. Ashes &
+  // Diamonds got the blockbuster Napa profile the winery was founded to
+  // reject; Ganevat's ouillé whites were described as oxidative from the
+  // Jura prior. The prompt must name the failure mode directly.
+  test('the prompt forbids substituting the regional flagship style for producer knowledge', () => {
+    expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/A region's dominant or most famous style is NOT evidence about this producer/);
+    expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/two established house styles .*describe what is common to both/);
   });
 });
