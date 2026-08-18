@@ -568,6 +568,10 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
               country: wineData.country,
               region: lowGeoConfidence ? null : wineData.region,
               appellation: lowGeoConfidence ? null : wineData.appellation,
+              // Same floor as geography: a classification is an assertion of
+              // knowledge, and below the floor the model is inferring
+              // (ticket 6a83f014 added the field to the identify prompt).
+              classification: lowGeoConfidence ? null : (wineData.classification || null),
               type: wineData.type,
               grapes: wineData.grapes,
               confidence: wineData.confidence,
@@ -1016,6 +1020,7 @@ router.post('/confirm', async (req, res) => {
               country: str(ai.country),
               region: str(ai.region),
               appellation: str(ai.appellation),
+              classification: str(ai.classification),
               type: str(ai.type),
               grapes: sanitizeGrapeNames(ai.grapes),
             }, req.user.id, { createdVia: 'import', allowPending: true });

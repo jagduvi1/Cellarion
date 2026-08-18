@@ -90,11 +90,13 @@ Wine: {{name}}
 Producer: {{producer}}
 {{vintage}}{{country}}
 Return ONLY a raw JSON object (no markdown, no code fences):
-{"name":"wine name","producer":"producer name","country":"country or null","region":"region or null","appellation":"appellation or null","type":"red|white|rosé|sparkling|dessert|fortified","grapes":["grape varieties"],"confidence":0.0}
+{"name":"wine name","producer":"producer name","country":"country or null","region":"region or null","appellation":"appellation or null","classification":"official classification or null","type":"red|white|rosé|sparkling|dessert|fortified","grapes":["grape varieties"],"confidence":0.0}
 
 Rules:
 - Use the wine name and producer exactly as given (correct only obvious typos)
 - The name field must contain ONLY the wine's own cuvée/vineyard/variety name — never prepend or repeat the producer in it. If the given name starts with the producer name, strip that prefix (producer "Penfolds" + name "Penfolds Bin 407" → name "Bin 407")
+- EXCEPTION — estate wines with no separate cuvée name (a Bordeaux classed-growth Château, a Quinta): the estate name IS the wine's name, so name and producer being identical is CORRECT (producer "Château Talbot" → name "Château Talbot"). Never fill the name with something else just to avoid the repetition: the name must NEVER be an appellation ("Margaux", "Saint-Julien") or a classification ("Grand Cru Classé", "Cru Bourgeois") standing in for a real name
+- classification: the wine's official classification when you know it ("4ème Cru Classé", "Grand Cru Classé de Graves", "Cru Bourgeois", "Premier Grand Cru Classé B"), else null. It never goes in the name
 - NEVER change the wine into a different wine: do not add a grape variety, cuvée, or vineyard to the name that the given data does not mention, and do not substitute another wine from the same producer. If the given name does not match a wine this producer actually makes, keep the name as given rather than "correcting" it to a similar-sounding wine
 - Production-method terms are NOT part of the name — move "Méthode Cap Classique" / "Cap Classique", "Méthode Traditionnelle", "Metodo Classico" / "Traditional Method" to the appellation field (name "Blanc de Blancs" + appellation "Méthode Cap Classique"). Aging classifications that belong to the displayed name (Reserva, Gran Reserva, Riserva, Spätlese, Grosses Gewächs) and dosage words that are part of a cuvée name (e.g. "Brut Premier") stay in the name
 - Fill in country, region, appellation, type, and grapes from your wine knowledge — but ONLY what you actually know about THIS wine. A field you are not reasonably sure of is null, never a guess
@@ -114,11 +116,13 @@ const DEFAULT_TEXT_SEARCH_PROMPT =
 
 Identify the wine they are looking for and return complete details.
 Return ONLY a raw JSON object (no markdown, no code fences, no extra text):
-{"name":"wine name","producer":"producer name","country":"country","region":"region or null","appellation":"appellation or null","type":"red|white|rosé|sparkling|dessert|fortified","grapes":["grape varieties"],"confidence":0.0}
+{"name":"wine name","producer":"producer name","country":"country","region":"region or null","appellation":"appellation or null","classification":"official classification or null","type":"red|white|rosé|sparkling|dessert|fortified","grapes":["grape varieties"],"confidence":0.0}
 
 Rules:
 - Extract the wine name and producer from the query
 - The name field must contain ONLY the wine's own cuvée/vineyard/variety name — never prepend or repeat the producer in it (producer "Penfolds" + name "Bin 407", NOT name "Penfolds Bin 407")
+- EXCEPTION — estate wines with no separate cuvée name (a Bordeaux classed-growth Château, a Quinta): the estate name IS the wine's name, so name and producer being identical is CORRECT. The name must NEVER be an appellation ("Margaux") or a classification ("Grand Cru Classé") standing in for a real name
+- classification: the wine's official classification when you know it ("4ème Cru Classé", "Cru Bourgeois"), else null. It never goes in the name
 - Do not add a grape variety or cuvée to the name that the query does not mention, and do not substitute a different wine from the same producer
 - Production-method terms are NOT part of the name — move "Méthode Cap Classique" / "Cap Classique", "Méthode Traditionnelle", "Metodo Classico" / "Traditional Method" to the appellation field (name "Blanc de Blancs" + appellation "Méthode Cap Classique"). Aging classifications (Reserva, Gran Reserva, Riserva, Spätlese, Grosses Gewächs) and dosage words that are part of a cuvée name (e.g. "Brut Premier") stay in the name
 - Fill in country, region, appellation, type, and grapes from your wine knowledge
