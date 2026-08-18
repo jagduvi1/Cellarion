@@ -1094,6 +1094,9 @@ registerTool({
   inputSchema: {
     held_reason: z.string().max(40).optional().describe('Filter the HELD set to one reason (e.g. "taxonomy_conflict"); "legacy" = rows with no recorded reason'),
     include_published_suspects: z.boolean().optional().describe('Also list PUBLISHED producer-suspect rows awaiting judgement (state "published_suspect")'),
+    producer: z.string().max(200).optional().describe('Only rows whose producer contains this text (case-insensitive) — the queue clusters hard by producer, and one producer judgement often decides many rows'),
+    group_by: z.enum(['producer']).optional().describe('Return producer CLUSTERS instead of rows: {producer, row_count, reasons, max_owner_count, wine_ids} — the unit of judgement is usually the producer'),
+    counts_only: z.boolean().optional().describe('Uncapped totals by state, held_reason and owner-tier — sizes the real backlog without paging'),
     min_owners: z.number().int().min(0).max(50).optional().describe('Only rows at least this many distinct users own bottles of'),
     limit: z.number().int().min(1).max(100).default(30),
     offset: z.number().int().min(0).default(0),
@@ -1105,14 +1108,80 @@ registerTool({
     if (args.include_published_suspects) {
       or.push({ 'aiProfile.heldAt': null, 'aiProfile.producerSuspect': true, 'aiProfile.description': { $ne: null } });
     }
-    const rows = await WineDefinition.find({
+    const match = {
       nonWine: { $ne: true }, pendingIdentity: { $ne: true },
       'aiProfile.generatedAt': { $ne: null },
       $or: or,
       $expr: OUTSTANDING_EXPR, // a decided row (reviewedAt >= generatedAt) is done — never re-listed
-    })
-      .select('name producer appellation type aiProfile.confidence aiProfile.heldAt aiProfile.heldReason aiProfile.producerSuspect aiProfile.producerUnknown aiProfile.producerNote aiProfile.description aiProfile.generatedAt')
+    };
+    if (args.producer) {
+      match.producer = { $regex: args.producer.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
+    }
+    const reasonKey = (w) => (w.aiProfile?.heldAt ? (w.aiProfile?.heldReason || 'legacy') : 'published_suspect');
+    const ownerCounts = async (ids) => {
+      if (ids.length === 0) return new Map();
+      const owned = await Bottle.aggregate([
+        { $match: { status: 'active', wineDefinition: { $in: ids } } },
+        { $group: { _id: '$wineDefinition', owners: { $addToSet: '$user' } } },
+        { $project: { ownerCount: { $size: '$owners' } } },
+      ]);
+      return new Map(owned.map((o) => [String(o._id), o.ownerCount]));
+    };
+
+    // Uncapped backlog sizing (gap report 5a): id+reason projection only, so
+    // "how big is this really" never depends on the row cap.
+    if (args.counts_only) {
+      const idRows = await WineDefinition.find(match).select('aiProfile.heldAt aiProfile.heldReason').lean();
+      const heldByReason = {};
+      let held = 0;
+      for (const r of idRows) {
+        if (!r.aiProfile?.heldAt) continue;
+        held += 1;
+        const k = r.aiProfile.heldReason || 'legacy';
+        heldByReason[k] = (heldByReason[k] || 0) + 1;
+      }
+      const cmap = await ownerCounts(idRows.map((r) => r._id));
+      const tiers = { 0: 0, 1: 0, 2: 0, '3+': 0 };
+      for (const r of idRows) {
+        const c = cmap.get(String(r._id)) || 0;
+        tiers[c >= 3 ? '3+' : c] += 1;
+      }
+      return ok(
+        `${idRows.length} total awaiting judgement — ${held} held, ${idRows.length - held} published_suspect (uncapped)`,
+        { total: idRows.length, held, published_suspect: idRows.length - held, held_by_reason: heldByReason, by_owner_tier: tiers }
+      );
+    }
+
+    // Producer clusters (gap report 2): the queue arrives in import bursts and
+    // clusters by producer — "is Thomas Allen a real winery?" decides nine
+    // rows at once. Uncapped scan on a three-field projection.
+    if (args.group_by === 'producer') {
+      const rows = await WineDefinition.find(match).select('producer aiProfile.heldAt aiProfile.heldReason').lean();
+      const groups = new Map();
+      for (const r of rows) {
+        const key = r.producer || '(no producer)';
+        let g = groups.get(key);
+        if (!g) { g = { producer: key, row_count: 0, reasons: {}, wine_ids: [] }; groups.set(key, g); }
+        g.row_count += 1;
+        const k = reasonKey(r);
+        g.reasons[k] = (g.reasons[k] || 0) + 1;
+        if (g.wine_ids.length < 50) g.wine_ids.push(r._id);
+      }
+      const cmap = await ownerCounts(rows.map((r) => r._id));
+      for (const g of groups.values()) {
+        g.max_owner_count = g.wine_ids.reduce((m, id) => Math.max(m, cmap.get(String(id)) || 0), 0);
+      }
+      const shaped = [...groups.values()]
+        .sort((a, b) => b.row_count - a.row_count)
+        .slice(args.offset || 0, (args.offset || 0) + (args.limit || 30));
+      return ok(`${groups.size} producer cluster(s) over ${rows.length} row(s) — largest first`, shaped);
+    }
+
+    const rows = await WineDefinition.find(match)
+      .select('name producer appellation type grapes country aiProfile.confidence aiProfile.heldAt aiProfile.heldReason aiProfile.producerSuspect aiProfile.producerUnknown aiProfile.producerNote aiProfile.description aiProfile.generatedAt')
       .limit(HELD_LIST_CAP)
+      .populate('grapes', 'name')
+      .populate('country', 'name')
       .lean();
 
     const wanted = rows.filter((w) => {
@@ -1123,15 +1192,7 @@ registerTool({
       return w.aiProfile?.heldReason === args.held_reason;
     });
 
-    const counts = new Map();
-    if (wanted.length > 0) {
-      const owned = await Bottle.aggregate([
-        { $match: { status: 'active', wineDefinition: { $in: wanted.map((w) => w._id) } } },
-        { $group: { _id: '$wineDefinition', owners: { $addToSet: '$user' } } },
-        { $project: { ownerCount: { $size: '$owners' } } },
-      ]);
-      for (const o of owned) counts.set(String(o._id), o.ownerCount);
-    }
+    const counts = await ownerCounts(wanted.map((w) => w._id));
 
     const shaped = wanted
       .map((w) => ({
@@ -1140,6 +1201,11 @@ registerTool({
         producer: w.producer,
         appellation: w.appellation || null,
         type: w.type || null,
+        // Registry facts, not generated content (gap report 4): the "held rows
+        // store no profile" rule is about the PROFILE — grapes and country are
+        // what the curator judges hand-curatability with.
+        grapes: (w.grapes || []).map((g) => g?.name).filter(Boolean),
+        country: w.country?.name || null,
         state: w.aiProfile?.heldAt ? 'held' : 'published_suspect',
         held_reason: w.aiProfile?.heldAt ? (w.aiProfile?.heldReason || null) : null,
         producer_suspect: w.aiProfile?.producerSuspect === true,
@@ -1155,7 +1221,7 @@ registerTool({
     const page = shaped.slice(args.offset || 0, (args.offset || 0) + (args.limit || 30));
     return ok(
       `${shaped.length} profile(s) awaiting judgement (showing ${page.length}, impact-first)` +
-      (rows.length >= HELD_LIST_CAP ? ` — capped at ${HELD_LIST_CAP} rows scanned` : ''),
+      (rows.length >= HELD_LIST_CAP ? ` — capped at ${HELD_LIST_CAP} rows scanned; counts_only:true gives uncapped totals` : ''),
       page
     );
   },
@@ -1178,77 +1244,142 @@ registerTool({
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
-    wine_id: objectId.describe('From list_held_profiles'),
+    wine_id: objectId.optional().describe('One wine, from list_held_profiles'),
+    wine_ids: z.array(z.string()).min(1).max(40).optional().describe('BATCH confirm/reject (one call, per-row results). release is deliberately single-wine — it spends an AI call and takes curator context'),
     decision: z.enum(['release', 'confirm', 'reject']),
-    reason: z.string().max(300).optional().describe('Why — recorded in the audit trail'),
+    reason: z.string().max(300).optional().describe('Why — recorded in the audit trail (applies to every row of a batch)'),
+    context: z.string().max(1000).optional().describe('release only: curator-supplied ground truth injected into the regeneration prompt — the one or two facts the model was missing (e.g. "Hunter Valley, dry-farmed vines planted 1969; The Mango Tree cuvée = Chardonnay")'),
   },
   handler: async (args, ctx) => {
     const denied = requireSomm(ctx);
     if (denied) return denied;
     const reason = stripHtml(typeof args.reason === 'string' ? args.reason : '').slice(0, 300) || null;
-    const wine = await WineDefinition.findById(args.wine_id)
-      .select('name producer aiProfile.heldAt aiProfile.heldReason aiProfile.producerSuspect aiProfile.description aiProfile.generatedAt aiProfile.source');
-    if (!wine) return fail('not_found', 'No registry wine with that id.');
-    const ap = wine.aiProfile || {};
-    const held = !!ap.heldAt;
-    const flaggedPublished = !held && ap.producerSuspect === true && !!ap.description;
-    if (!held && !flaggedPublished) {
-      return fail('invalid_input', 'This wine has no held or suspect-flagged profile to review — list_held_profiles shows the queue.');
+    const context = stripHtml(typeof args.context === 'string' ? args.context : '').slice(0, 1000) || null;
+    const ids = args.wine_ids || (args.wine_id ? [args.wine_id] : []);
+    if (ids.length === 0) return fail('invalid_input', 'Provide wine_id or wine_ids.');
+    if (args.wine_id && args.wine_ids) return fail('invalid_input', 'Provide wine_id OR wine_ids, not both.');
+    if (args.wine_ids && args.decision === 'release') {
+      return fail('invalid_input', 'release is one wine at a time — it regenerates via an AI call and is where curator context belongs. Batch is for confirm/reject.');
     }
-    const label = `${wine.name} — ${wine.producer}`;
+    if (context && args.decision !== 'release') {
+      return fail('invalid_input', 'context only applies to decision "release" — it feeds the regeneration prompt.');
+    }
+    for (const id of ids) {
+      if (!isValidId(id)) return fail('invalid_input', `Not a valid wine id: ${id}`);
+    }
 
-    if (args.decision === 'release') {
-      if (!held) return fail('invalid_input', 'Already published — use decision "confirm" to keep it, or set_wine_profile to correct it.');
-      const { releaseHeldProfile } = require('../../services/enrichmentJob');
-      const published = await releaseHeldProfile(wine._id);
-      if (!published) {
-        return fail('unavailable', `Release generation failed for ${label} — the row stays in the queue; try again, or write the profile yourself with set_wine_profile.`);
+    // One wine, one decision — shared by the single and batch paths so the
+    // semantics (and the stamp rule) cannot fork.
+    const decideOne = async (id) => {
+      const wine = await WineDefinition.findById(id)
+        .select('name producer aiProfile.heldAt aiProfile.heldReason aiProfile.producerSuspect aiProfile.description aiProfile.generatedAt aiProfile.source');
+      if (!wine) return { wine_id: id, error: 'not_found' };
+      const ap = wine.aiProfile || {};
+      const held = !!ap.heldAt;
+      const flaggedPublished = !held && ap.producerSuspect === true && !!ap.description;
+      if (!held && !flaggedPublished) return { wine_id: id, error: 'nothing_to_review' };
+      const label = `${wine.name} — ${wine.producer}`;
+
+      if (args.decision === 'release') {
+        if (!held) return { wine_id: id, error: 'already_published — use confirm, or set_wine_profile to correct' };
+        const { releaseHeldProfile } = require('../../services/enrichmentJob');
+        const published = await releaseHeldProfile(wine._id, { context });
+        if (!published) return { wine_id: id, error: 'generation_failed — row stays queued; retry or set_wine_profile' };
+        // releaseHeldProfile stamps profileReviewedAt INSIDE its success path —
+        // the stamp-on-release rule the 57 unstamped rows exist to teach.
+        logAudit(ctx.req, 'admin.wine.profileReviewed', { type: 'wine', id: wine._id },
+          { name: wine.name, producer: wine.producer, heldRelease: true, decision: 'release', reason, withContext: !!context, via: 'mcp' });
+        return { wine_id: wine._id, label, decision: 'release', published: true };
       }
-      // releaseHeldProfile stamps profileReviewedAt INSIDE its success path —
-      // the stamp-on-release rule this ticket exists to enforce.
-      logAudit(ctx.req, 'admin.wine.profileReviewed', { type: 'wine', id: wine._id },
-        { name: wine.name, producer: wine.producer, heldRelease: true, decision: 'release', reason, via: 'mcp' });
-      return ok(`Released and published the held profile for ${label} (regenerated under the human override; review stamped).`,
-        { wine_id: wine._id, decision: 'release', published: true });
-    }
 
-    if (args.decision === 'confirm') {
+      if (args.decision === 'confirm') {
+        const now = new Date();
+        await WineDefinition.updateOne({ _id: wine._id }, { $set: { profileReviewedAt: now } });
+        logAudit(ctx.req, 'admin.wine.profileReviewed', { type: 'wine', id: wine._id },
+          { name: wine.name, producer: wine.producer, decision: 'confirm', state: held ? 'held' : 'published_suspect', reason, via: 'mcp' });
+        return { wine_id: wine._id, label, decision: 'confirm', state: held ? 'held' : 'published_suspect', reviewed_at: now };
+      }
+
+      // reject — held rows only: nothing published means nothing embedded, so
+      // a full clear needs no vector cleanup. A published row wanting removal
+      // is a different operation (set_wine_profile, or an identity fix).
+      if (!held) return { wine_id: id, error: 'reject_is_held_only — for a published profile, set_wine_profile or confirm' };
       const now = new Date();
-      await WineDefinition.updateOne({ _id: wine._id }, { $set: { profileReviewedAt: now } });
-      logAudit(ctx.req, 'admin.wine.profileReviewed', { type: 'wine', id: wine._id },
-        { name: wine.name, producer: wine.producer, decision: 'confirm', state: held ? 'held' : 'published_suspect', reason, via: 'mcp' });
-      return ok(
-        held
-          ? `Confirmed the hold on ${label} — it stays unpublished (owners see "Not yet assessed") and leaves the queue.`
-          : `Confirmed ${label} as published — the suspect flag stays as provenance and the row leaves the queue.`,
-        { wine_id: wine._id, decision: 'confirm', state: held ? 'held' : 'published_suspect', reviewed_at: now }
+      await WineDefinition.updateOne(
+        { _id: wine._id },
+        {
+          $set: {
+            aiProfile: {
+              body: null, tannin: null, acidity: null, sweetness: null,
+              flavors: [], foodPairings: [], description: null,
+              confidence: null, producerSuspect: false, producerUnknown: false,
+              producerNote: null, model: null, source: 'ai',
+              generatedAt: null, heldAt: null, heldReason: null,
+            },
+            updatedAt: now,
+          },
+        }
       );
+      logAudit(ctx.req, 'somm.profile.rejectHeld', { type: 'wine', id: wine._id },
+        { name: wine.name, producer: wine.producer, previousReason: ap.heldReason || null, reason, via: 'mcp' });
+      return { wine_id: wine._id, label, decision: 'reject', requeued_for_enrichment: true };
+    };
+
+    if (!args.wine_ids) {
+      const r = await decideOne(ids[0]);
+      if (r.error === 'not_found') return fail('not_found', 'No registry wine with that id.');
+      if (r.error === 'nothing_to_review') return fail('invalid_input', 'This wine has no held or suspect-flagged profile to review — list_held_profiles shows the queue.');
+      if (r.error) return fail(r.error.startsWith('generation_failed') ? 'unavailable' : 'invalid_input', `${r.error} (${ids[0]})`);
+      const msg = r.decision === 'release'
+        ? `Released and published the held profile for ${r.label} (regenerated under the human override${context ? ', with curator context' : ''}; review stamped).`
+        : r.decision === 'confirm'
+          ? (r.state === 'held'
+            ? `Confirmed the hold on ${r.label} — it stays unpublished (owners see "Not yet assessed") and leaves the queue.`
+            : `Confirmed ${r.label} as published — the suspect flag stays as provenance and the row leaves the queue.`)
+          : `Rejected the held generation for ${r.label} — profile cleared; the wine returns to the enrichment pool for a fresh attempt.`;
+      const { label, ...data } = r;
+      return ok(msg, data);
     }
 
-    // reject — held rows only: nothing published means nothing embedded, so a
-    // full clear needs no vector cleanup. A published row wanting removal is a
-    // different operation (set_wine_profile, or an identity fix).
-    if (!held) return fail('invalid_input', 'reject only applies to HELD rows — for a published profile, correct it with set_wine_profile or confirm it.');
-    const now = new Date();
-    await WineDefinition.updateOne(
-      { _id: wine._id },
+    const results = [];
+    for (const id of ids) results.push(await decideOne(id));
+    const done = results.filter((r) => !r.error).length;
+    return ok(`Batch ${args.decision}: ${done}/${ids.length} decided, ${ids.length - done} skipped (per-row detail attached).`,
+      results.map(({ label, ...r }) => r));
+  },
+});
+
+// Read-only trend access (gap report 5b): record_profile_audit returns the
+// history only as a side effect of WRITING a row — reading the trend must
+// not require polluting the series with a dummy sample.
+registerTool({
+  name: 'list_profile_audits',
+  title: 'Sommelier: spot-check history and running error rate',
+  description:
+    'The recorded sample_published_profiles outcomes, newest first, with the running corrections-per-sample rate — ' +
+    'the trend the scaling review reads. Read-only twin of record_profile_audit.',
+  scope: 'read',
+  requireRole: SOMM_ROLES,
+  annotations: { readOnlyHint: true, openWorldHint: false },
+  inputSchema: {
+    limit: z.number().int().min(1).max(50).default(12),
+  },
+  handler: async (args, ctx) => {
+    const denied = requireSomm(ctx);
+    if (denied) return denied;
+    const ProfileAuditSample = require('../../models/ProfileAuditSample');
+    const rows = await ProfileAuditSample.find({}).sort({ recordedAt: -1 }).limit(args.limit || 12).lean();
+    const sampled = rows.reduce((n, r) => n + r.sampleSize, 0);
+    const corrected = rows.reduce((n, r) => n + r.corrections, 0);
+    return ok(
+      rows.length === 0
+        ? 'No spot-checks recorded yet — run sample_published_profiles, then record_profile_audit.'
+        : `${rows.length} sample(s): ${corrected}/${sampled} corrected (${Math.round((corrected / sampled) * 100)}%).`,
       {
-        $set: {
-          aiProfile: {
-            body: null, tannin: null, acidity: null, sweetness: null,
-            flavors: [], foodPairings: [], description: null,
-            confidence: null, producerSuspect: false, producerUnknown: false,
-            producerNote: null, model: null, source: 'ai',
-            generatedAt: null, heldAt: null, heldReason: null,
-          },
-          updatedAt: now,
-        },
+        running_rate_pct: sampled ? Math.round((corrected / sampled) * 1000) / 10 : 0,
+        history: rows.map((r) => ({ at: r.recordedAt, sample_size: r.sampleSize, corrections: r.corrections, notes: r.notes || null })),
       }
     );
-    logAudit(ctx.req, 'somm.profile.rejectHeld', { type: 'wine', id: wine._id },
-      { name: wine.name, producer: wine.producer, previousReason: ap.heldReason || null, reason, via: 'mcp' });
-    return ok(`Rejected the held generation for ${label} — profile cleared; the wine returns to the enrichment pool for a fresh attempt.`,
-      { wine_id: wine._id, decision: 'reject', requeued_for_enrichment: true });
   },
 });
 
