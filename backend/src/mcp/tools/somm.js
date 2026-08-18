@@ -890,7 +890,7 @@ registerTool({
     'The curated-core worklist, owner-count first: registry wines that at least min_owners different users own ' +
     'bottles of, whose tasting profile is NOT yet curator-verified (state: an AI profile, a held profile, or none). ' +
     'These are the wines the most people see — verify each with set_wine_profile (which stamps curator provenance) ' +
-    'or judge the held ones from the admin queue. Everything outside this core is allowed to stay a labelled AI ' +
+    'or judge the held ones with review_held_profile. Everything outside this core is allowed to stay a labelled AI ' +
     'estimate; this list is where proactive curation time pays best.',
   scope: 'read',
   requireRole: SOMM_ROLES,
@@ -938,6 +938,196 @@ registerTool({
       `${rows.length} core wine(s) (≥${minOwners} owners) without a curator-verified profile — highest ownership first`,
       rows
     );
+  },
+});
+
+// ── The held-profile review queue over MCP (somm ticket 2026-08-18) ─────────
+// The publication gate holds profiles; judging those holds lived only in the
+// web admin queue, so ~230 rows of judgement work could not be done over MCP
+// at all. One list + one decision verb, and every decision path leaves the
+// row OUT of the queue by construction — the 57 unstamped rows from the
+// 08-17 bulk release exist precisely because a release path skipped the
+// profileReviewedAt stamp, and this surface must not recreate that bug.
+
+const HELD_LIST_CAP = 500;
+const OUTSTANDING_EXPR = {
+  $or: [
+    { $eq: ['$profileReviewedAt', null] },
+    { $lt: ['$profileReviewedAt', '$aiProfile.generatedAt'] },
+  ],
+};
+
+registerTool({
+  name: 'list_held_profiles',
+  title: 'Sommelier: profiles held by the publication gate, awaiting judgement',
+  description:
+    'The hold-review queue: registry wines whose generated tasting profile is HELD unpublished (producer_suspect / ' +
+    'low_confidence / unknown_low_confidence / producer_claim / taxonomy_conflict — held_reason says which; null on ' +
+    'rows held before the field existed). include_published_suspects:true ALSO lists the published rows whose ' +
+    'producer the model flagged as suspect (the 08-17 batch) — same judgement work, different state. Owner-count ' +
+    'rides on every row and the list is impact-first (owners desc, then confidence asc). Judge each with ' +
+    'review_held_profile; rows you have decided disappear from this list.',
+  scope: 'read',
+  requireRole: SOMM_ROLES,
+  annotations: { readOnlyHint: true, openWorldHint: false },
+  inputSchema: {
+    held_reason: z.string().max(40).optional().describe('Filter the HELD set to one reason (e.g. "taxonomy_conflict"); "legacy" = rows with no recorded reason'),
+    include_published_suspects: z.boolean().optional().describe('Also list PUBLISHED producer-suspect rows awaiting judgement (state "published_suspect")'),
+    min_owners: z.number().int().min(0).max(50).optional().describe('Only rows at least this many distinct users own bottles of'),
+    limit: z.number().int().min(1).max(100).default(30),
+    offset: z.number().int().min(0).default(0),
+  },
+  handler: async (args, ctx) => {
+    const denied = requireSomm(ctx);
+    if (denied) return denied;
+    const or = [{ 'aiProfile.heldAt': { $ne: null } }];
+    if (args.include_published_suspects) {
+      or.push({ 'aiProfile.heldAt': null, 'aiProfile.producerSuspect': true, 'aiProfile.description': { $ne: null } });
+    }
+    const rows = await WineDefinition.find({
+      nonWine: { $ne: true }, pendingIdentity: { $ne: true },
+      'aiProfile.generatedAt': { $ne: null },
+      $or: or,
+      $expr: OUTSTANDING_EXPR, // a decided row (reviewedAt >= generatedAt) is done — never re-listed
+    })
+      .select('name producer appellation type aiProfile.confidence aiProfile.heldAt aiProfile.heldReason aiProfile.producerSuspect aiProfile.producerUnknown aiProfile.producerNote aiProfile.description aiProfile.generatedAt')
+      .limit(HELD_LIST_CAP)
+      .lean();
+
+    const wanted = rows.filter((w) => {
+      const held = !!w.aiProfile?.heldAt;
+      if (!held) return true; // published_suspect rows pass the reason filter untouched
+      if (!args.held_reason) return true;
+      if (args.held_reason === 'legacy') return !w.aiProfile?.heldReason;
+      return w.aiProfile?.heldReason === args.held_reason;
+    });
+
+    const counts = new Map();
+    if (wanted.length > 0) {
+      const owned = await Bottle.aggregate([
+        { $match: { status: 'active', wineDefinition: { $in: wanted.map((w) => w._id) } } },
+        { $group: { _id: '$wineDefinition', owners: { $addToSet: '$user' } } },
+        { $project: { ownerCount: { $size: '$owners' } } },
+      ]);
+      for (const o of owned) counts.set(String(o._id), o.ownerCount);
+    }
+
+    const shaped = wanted
+      .map((w) => ({
+        wine_id: w._id,
+        name: w.name,
+        producer: w.producer,
+        appellation: w.appellation || null,
+        type: w.type || null,
+        state: w.aiProfile?.heldAt ? 'held' : 'published_suspect',
+        held_reason: w.aiProfile?.heldAt ? (w.aiProfile?.heldReason || null) : null,
+        producer_suspect: w.aiProfile?.producerSuspect === true,
+        producer_unknown: w.aiProfile?.producerUnknown === true,
+        producer_note: w.aiProfile?.producerNote || null,
+        ai_confidence: w.aiProfile?.confidence ?? null,
+        owner_count: counts.get(String(w._id)) || 0,
+        generated_at: w.aiProfile?.generatedAt || null,
+      }))
+      .filter((r) => !args.min_owners || r.owner_count >= args.min_owners)
+      .sort((a, b) => (b.owner_count - a.owner_count) || ((a.ai_confidence ?? 1) - (b.ai_confidence ?? 1)));
+
+    const page = shaped.slice(args.offset || 0, (args.offset || 0) + (args.limit || 30));
+    return ok(
+      `${shaped.length} profile(s) awaiting judgement (showing ${page.length}, impact-first)` +
+      (rows.length >= HELD_LIST_CAP ? ` — capped at ${HELD_LIST_CAP} rows scanned` : ''),
+      page
+    );
+  },
+});
+
+registerTool({
+  name: 'review_held_profile',
+  title: 'Sommelier: decide one held/flagged profile — release, confirm, or reject',
+  description:
+    'The decision verb for list_held_profiles. decision "release" (HELD rows): the doubt was unfounded — the ' +
+    'profile REGENERATES under the human override and publishes; costs one AI call, and on generation failure the ' +
+    'row simply stays in the queue for another try. decision "confirm": the CURRENT state is correct — a held row ' +
+    'stays held (its owner keeps seeing "Not yet assessed"), a published_suspect row stays published; either way ' +
+    'the row is stamped reviewed and leaves the queue. decision "reject" (HELD rows only): this generation is ' +
+    'garbage — the profile clears entirely and the wine returns to the enrichment pool for a fresh attempt (which ' +
+    'may hold again, with fresh reasons). Every path removes the row from the queue by construction — release and ' +
+    'confirm stamp profileReviewedAt, reject clears the generation itself. To instead WRITE the correct profile ' +
+    'yourself, use set_wine_profile (curator-verifies in one step).',
+  scope: 'write',
+  requireRole: SOMM_ROLES,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  inputSchema: {
+    wine_id: objectId.describe('From list_held_profiles'),
+    decision: z.enum(['release', 'confirm', 'reject']),
+    reason: z.string().max(300).optional().describe('Why — recorded in the audit trail'),
+  },
+  handler: async (args, ctx) => {
+    const denied = requireSomm(ctx);
+    if (denied) return denied;
+    const reason = stripHtml(typeof args.reason === 'string' ? args.reason : '').slice(0, 300) || null;
+    const wine = await WineDefinition.findById(args.wine_id)
+      .select('name producer aiProfile.heldAt aiProfile.heldReason aiProfile.producerSuspect aiProfile.description aiProfile.generatedAt aiProfile.source');
+    if (!wine) return fail('not_found', 'No registry wine with that id.');
+    const ap = wine.aiProfile || {};
+    const held = !!ap.heldAt;
+    const flaggedPublished = !held && ap.producerSuspect === true && !!ap.description;
+    if (!held && !flaggedPublished) {
+      return fail('invalid_input', 'This wine has no held or suspect-flagged profile to review — list_held_profiles shows the queue.');
+    }
+    const label = `${wine.name} — ${wine.producer}`;
+
+    if (args.decision === 'release') {
+      if (!held) return fail('invalid_input', 'Already published — use decision "confirm" to keep it, or set_wine_profile to correct it.');
+      const { releaseHeldProfile } = require('../../services/enrichmentJob');
+      const published = await releaseHeldProfile(wine._id);
+      if (!published) {
+        return fail('unavailable', `Release generation failed for ${label} — the row stays in the queue; try again, or write the profile yourself with set_wine_profile.`);
+      }
+      // releaseHeldProfile stamps profileReviewedAt INSIDE its success path —
+      // the stamp-on-release rule this ticket exists to enforce.
+      logAudit(ctx.req, 'admin.wine.profileReviewed', { type: 'wine', id: wine._id },
+        { name: wine.name, producer: wine.producer, heldRelease: true, decision: 'release', reason, via: 'mcp' });
+      return ok(`Released and published the held profile for ${label} (regenerated under the human override; review stamped).`,
+        { wine_id: wine._id, decision: 'release', published: true });
+    }
+
+    if (args.decision === 'confirm') {
+      const now = new Date();
+      await WineDefinition.updateOne({ _id: wine._id }, { $set: { profileReviewedAt: now } });
+      logAudit(ctx.req, 'admin.wine.profileReviewed', { type: 'wine', id: wine._id },
+        { name: wine.name, producer: wine.producer, decision: 'confirm', state: held ? 'held' : 'published_suspect', reason, via: 'mcp' });
+      return ok(
+        held
+          ? `Confirmed the hold on ${label} — it stays unpublished (owners see "Not yet assessed") and leaves the queue.`
+          : `Confirmed ${label} as published — the suspect flag stays as provenance and the row leaves the queue.`,
+        { wine_id: wine._id, decision: 'confirm', state: held ? 'held' : 'published_suspect', reviewed_at: now }
+      );
+    }
+
+    // reject — held rows only: nothing published means nothing embedded, so a
+    // full clear needs no vector cleanup. A published row wanting removal is a
+    // different operation (set_wine_profile, or an identity fix).
+    if (!held) return fail('invalid_input', 'reject only applies to HELD rows — for a published profile, correct it with set_wine_profile or confirm it.');
+    const now = new Date();
+    await WineDefinition.updateOne(
+      { _id: wine._id },
+      {
+        $set: {
+          aiProfile: {
+            body: null, tannin: null, acidity: null, sweetness: null,
+            flavors: [], foodPairings: [], description: null,
+            confidence: null, producerSuspect: false, producerUnknown: false,
+            producerNote: null, model: null, source: 'ai',
+            generatedAt: null, heldAt: null, heldReason: null,
+          },
+          updatedAt: now,
+        },
+      }
+    );
+    logAudit(ctx.req, 'somm.profile.rejectHeld', { type: 'wine', id: wine._id },
+      { name: wine.name, producer: wine.producer, previousReason: ap.heldReason || null, reason, via: 'mcp' });
+    return ok(`Rejected the held generation for ${label} — profile cleared; the wine returns to the enrichment pool for a fresh attempt.`,
+      { wine_id: wine._id, decision: 'reject', requeued_for_enrichment: true });
   },
 });
 
