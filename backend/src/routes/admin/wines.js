@@ -757,6 +757,11 @@ router.get('/low-confidence', async (req, res) => {
         // would bury the rows that are genuinely wrong. It rides on each row
         // for context instead.
         { 'aiProfile.producerSuspect': true },
+        // Every HELD row surfaces regardless of threshold (gate 2026-08-18,
+        // ticket 6a83e765): an unknown-producer hold can sit at 0.5 —
+        // above the default threshold with no suspect flag — and this queue
+        // is the only place a hold gets released. heldReason says why.
+        { 'aiProfile.heldAt': { $ne: null } },
       ],
       // Only rows that were actually enriched — without this, every wine that
       // has no aiProfile at all would match the null branch above.
@@ -775,7 +780,7 @@ router.get('/low-confidence', async (req, res) => {
     const filter = includeReviewed ? base : outstanding;
     const [rows, total, reviewedCount] = await Promise.all([
       WineDefinition.find(filter)
-        .select('name producer appellation nonWine profileReviewedAt aiProfile.confidence aiProfile.description aiProfile.producerSuspect aiProfile.producerUnknown aiProfile.producerNote aiProfile.generatedAt aiProfile.heldAt')
+        .select('name producer appellation nonWine profileReviewedAt aiProfile.confidence aiProfile.description aiProfile.producerSuspect aiProfile.producerUnknown aiProfile.producerNote aiProfile.generatedAt aiProfile.heldAt aiProfile.heldReason')
         .populate('region', 'name')
         .populate('country', 'name')
         .sort({ 'aiProfile.confidence': 1, producer: 1 })
@@ -811,6 +816,7 @@ router.get('/low-confidence', async (req, res) => {
         producerNote: w.aiProfile?.producerNote || null,
         generatedAt: w.aiProfile?.generatedAt || null,
         heldAt: w.aiProfile?.heldAt || null,
+        heldReason: w.aiProfile?.heldReason || null,
         profileReviewedAt: w.profileReviewedAt || null,
         bottleCount: bottleCounts.get(String(w._id)) || 0,
       })),

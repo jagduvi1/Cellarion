@@ -156,10 +156,22 @@ function sleep() {
 // ONE case still holds an otherwise-fine unknown producer: prose that talks
 // about the house as an entity while admitting it cannot place it. The prompt
 // now forbids that directly, so this is a backstop rather than the main gate.
-// Confidence is deliberately NOT part of the decision any more — a low
-// confidence on a correctly-recorded wine is honesty about the note, not
-// doubt about the record, and gating on it is what withheld the honest
-// majority in the first place.
+//
+// CONFIDENCE REJOINED THE DECISION on 2026-08-18 (ticket 6a83e765) — as a
+// calibrated FLOOR, not the old hold-on-any-doubt. The split above was right
+// about the flags, but it left confidence read by NOBODY: the day after it
+// shipped, profiles were publishing at 0.2 while the one held row sat at 0.3.
+// Calibrated on prod over 5,836 published AI profiles: the confidence mass
+// sits at 0.5–0.7, a 0.40 floor holds ~300 all-time, and 0.45 is measurably
+// too aggressive (1,158 — the mass sits in the 0.4 band). An UNKNOWN producer
+// additionally holds below a higher bar (0.55): unknown + weak confidence is
+// regional guesswork, while unknown + strong confidence is the honest
+// appellation-level majority the split released (171 of 190 unknown-flagged
+// rows sat under 0.55). A null confidence (old/custom prompt, unusable model
+// output) skips both checks — the same degrade-to-no-doubt rule as the flags;
+// the admin low-confidence queue still catches those rows. Thresholds live in
+// aiConfig (enrichmentHoldConfidenceFloor / enrichmentHoldUnknownConfidenceBar)
+// so tuning never needs a release.
 //
 // Words that only appear when a description is talking about the PRODUCER
 // rather than the wine. Deliberately generous: a false positive costs one
@@ -174,12 +186,24 @@ const PRODUCER_CLAIM_RX =
  * @param {boolean} profile.producerSuspect — the field is not a producer
  * @param {boolean} profile.producerUnknown — real name, cannot be placed
  * @param {string|null} profile.description
- * @returns {boolean} true when the profile must be withheld from the owner.
+ * @param {number|null} profile.confidence — cleanConfidence output
+ * @param {object} [thresholds] — aiConfig gate values; a missing/non-numeric
+ *   threshold disables that check (degrade open, never to a spurious hold).
+ * @param {number} [thresholds.floor] — hold ANY profile under this
+ * @param {number} [thresholds.unknownBar] — hold unknown-producer rows under this
+ * @returns {string|null} the hold reason ('producer_suspect' |
+ *   'low_confidence' | 'unknown_low_confidence' | 'producer_claim'), or null
+ *   to publish. Stored as aiProfile.heldReason so the release queue can say
+ *   WHY a row is held.
  */
-function shouldHoldProfile({ producerSuspect, producerUnknown, description }) {
-  if (producerSuspect) return true;
-  if (producerUnknown) return PRODUCER_CLAIM_RX.test(description || '');
-  return false;
+function shouldHoldProfile({ producerSuspect, producerUnknown, description, confidence }, { floor, unknownBar } = {}) {
+  if (producerSuspect) return 'producer_suspect';
+  if (typeof confidence === 'number') {
+    if (typeof floor === 'number' && confidence < floor) return 'low_confidence';
+    if (producerUnknown && typeof unknownBar === 'number' && confidence < unknownBar) return 'unknown_low_confidence';
+  }
+  if (producerUnknown && PRODUCER_CLAIM_RX.test(description || '')) return 'producer_claim';
+  return null;
 }
 
 // ── Main job logic ─────────────────────────────────────────────────────────
@@ -358,14 +382,19 @@ async function enrichWine(wine, model, { publishSuspect = false } = {}) {
   };
 
   // HOLD, don't publish, when the doubt is about the RECORD rather than the
-  // model's own reach — see shouldHoldProfile for why those are different
-  // questions and what happened when one flag answered both.
+  // model's own reach, or the confidence sits under the calibrated floor —
+  // see shouldHoldProfile for the reasons and their history.
   // A held row stores ONLY the doubt; the null description keeps every read
   // surface (bottle page, MCP, embedding text) naturally silent, and heldAt
   // keeps the retry guards from looping on it. `publishSuspect` is the human
   // override — profile-reviewed uses it after an admin has looked at the
   // doubt and judged the identity fine.
-  if (!publishSuspect && shouldHoldProfile({ producerSuspect: suspect, producerUnknown: unknown, description })) {
+  const gateCfg = aiConfig.get();
+  const holdReason = shouldHoldProfile(
+    { producerSuspect: suspect, producerUnknown: unknown, description, confidence },
+    { floor: gateCfg.enrichmentHoldConfidenceFloor, unknownBar: gateCfg.enrichmentHoldUnknownConfidenceBar }
+  );
+  if (!publishSuspect && holdReason) {
     await WineDefinition.updateOne(
       { _id: wine._id },
       {
@@ -376,6 +405,7 @@ async function enrichWine(wine, model, { publishSuspect = false } = {}) {
             description: null,
             ...meta,
             heldAt: now,
+            heldReason: holdReason,
           },
           updatedAt: now,
         },
@@ -395,7 +425,7 @@ async function enrichWine(wine, model, { publishSuspect = false } = {}) {
     } catch (embedErr) {
       console.warn(`[enrichmentJob] re-embed after hold failed (${wine._id}):`, embedErr.message);
     }
-    return { result: 'held', reason: null };
+    return { result: 'held', reason: holdReason };
   }
 
   await WineDefinition.updateOne(

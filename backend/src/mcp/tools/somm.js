@@ -100,7 +100,13 @@ const profileLite = (ap) => {
     return {
       withheld: true,
       withheld_reason: ap.producerNote
-        || 'the producer field does not look like a real winery; awaiting review',
+        || (ap.heldReason === 'low_confidence' || ap.heldReason === 'unknown_low_confidence'
+          ? 'generated below the publication confidence floor; awaiting review'
+          : 'the producer field does not look like a real winery; awaiting review'),
+      // Machine-readable WHY (gate 2026-08-18): 'producer_suspect' |
+      // 'low_confidence' | 'unknown_low_confidence' | 'producer_claim'.
+      // null on rows held before the field existed (producer_suspect era).
+      held_reason: ap.heldReason || null,
       producer_suspect: ap.producerSuspect === true,
       producer_unknown: ap.producerUnknown === true,
       ai_confidence: ap.confidence ?? null,

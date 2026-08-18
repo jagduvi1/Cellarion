@@ -144,6 +144,12 @@ const wineDefinitionSchema = new mongoose.Schema({
     // forced publish). Guards in enrichmentJob treat heldAt as "already
     // decided" so neither the per-add hook nor incremental batches loop on it.
     heldAt:       { type: Date,   default: null },
+    // WHY the hold fired — 'producer_suspect' | 'low_confidence' |
+    // 'unknown_low_confidence' | 'producer_claim' (enrichmentJob.
+    // shouldHoldProfile). Plain String on purpose: held rows from before
+    // 2026-08-18 predate the field (null = producer_suspect era), and a
+    // future gate reason must not need a schema change.
+    heldReason:   { type: String, default: null, trim: true },
     // Provenance. 'ai' = written by enrichmentJob; 'curator' = a sommelier or
     // admin corrected it by hand (routes/somm/wineProfile.js or the MCP
     // set_wine_profile tool). The distinction is load-bearing, not cosmetic:

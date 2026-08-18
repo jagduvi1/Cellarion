@@ -294,6 +294,7 @@ Rules:
 - foodPairings: real dishes/categories (e.g. "grilled lamb", "hard cheese", "roast chicken").
 - description: 2-3 sentences, warm but not pretentious, about the wine ONLY. Never mention vintages or their absence, your confidence, missing information, or how this profile was derived — no sentences like "without a confirmed vintage..." or "this profile reflects...". State the style directly. PLAIN TEXT ONLY — no Markdown of any kind: no **bold**, no *italics*, no headings, lists, links, or tables. The field is shown verbatim in places that do not render Markdown.
 - Describe THIS wine, not its category: never assert a trait (aging need, quality level, everyday-vs-serious) merely because it is typical for the appellation, region or country.
+- A region's dominant or most famous style is NOT evidence about this producer. When you know THIS producer's style, describe it — even where it contradicts the regional norm; many estates exist precisely to break it. When you do not know the producer, describe grape-and-appellation typicity at the modest end, never the region's flagship or most commercial expression. Where a region has two established house styles (e.g. oxidative vs topped-up whites in the Jura), describe what is common to both rather than asserting one, and lower confidence.
 - The Type field is authoritative, not a hint. Many estates bottle several colours/styles under one name (a red and a white "Château X"): describe ONLY the bottling that matches Type. If you mainly know a different colour's bottling from this estate, do not describe that one — infer the Type-matching wine from its grapes, region and classification instead, and lower confidence accordingly. If Type contradicts everything you know about the wine (you are certain no such bottling exists), return {"error":"unknown"} rather than describing the other colour.
 - confidence: 1.0 = you know this exact wine well, 0.7 = confident from producer + style, 0.5 = grape/region knowledge only, 0.3 = rough inference.
 - producerSuspect: true ONLY when the Producer value is not a winery at all — a cuvée range or brand line belonging to another house (e.g. "Arcane" is Xavier Vignon's range, "Montes Alpha" is Viña Montes's line), a place name, a retailer/importer/bottler, or a label term. This is a judgement about the FIELD being wrong, never about the limits of your own knowledge. Not knowing a winery is not a reason to set it.
@@ -371,9 +372,23 @@ const defaults = {
   // is a knowledge-recall task where the quality gap over Haiku is meaningful.
   enrichmentPrompt: DEFAULT_ENRICHMENT_PROMPT,
   enrichmentModel: 'claude-sonnet-5',
+  // Enrichment publication gate (ticket 6a83e765; calibrated on prod
+  // 2026-08-18 over 5,836 published AI profiles). Below the floor a generated
+  // profile is HELD whatever the flags say; an UNKNOWN producer holds below
+  // the higher bar (unknown + weak confidence = regional guesswork, unknown +
+  // strong confidence = the honest appellation-level majority the 2026-08-17
+  // flag split released). 0.45 was measurably too aggressive — the published
+  // confidence mass sits in the 0.4 band. See enrichmentJob.shouldHoldProfile.
+  enrichmentHoldConfidenceFloor: 0.4,
+  enrichmentHoldUnknownConfidenceBar: 0.55,
 };
 
 let cache = { ...defaults };
+
+// Gate thresholds are numbers in [0,1]; anything else stored falls back to
+// the default rather than silently disabling or over-tightening the gate.
+const clamp01 = (raw, fallback) =>
+  (typeof raw === 'number' && Number.isFinite(raw) && raw >= 0 && raw <= 1) ? raw : fallback;
 
 async function load() {
   try {
@@ -405,6 +420,8 @@ async function load() {
         priceSuggestModel:     VALID_CHAT_MODELS.includes(doc.value.priceSuggestModel) ? doc.value.priceSuggestModel : defaults.priceSuggestModel,
         enrichmentPrompt:      doc.value.enrichmentPrompt     ?? defaults.enrichmentPrompt,
         enrichmentModel:       VALID_CHAT_MODELS.includes(doc.value.enrichmentModel) ? doc.value.enrichmentModel : defaults.enrichmentModel,
+        enrichmentHoldConfidenceFloor:      clamp01(doc.value.enrichmentHoldConfidenceFloor, defaults.enrichmentHoldConfidenceFloor),
+        enrichmentHoldUnknownConfidenceBar: clamp01(doc.value.enrichmentHoldUnknownConfidenceBar, defaults.enrichmentHoldUnknownConfidenceBar),
       };
 
       // One-time migration: a stored config from before the embedding-quality
