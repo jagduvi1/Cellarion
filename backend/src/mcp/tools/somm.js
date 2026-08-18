@@ -827,9 +827,9 @@ registerTool({
   description:
     'Returns N random PUBLISHED, AI-written tasting profiles (never curator-verified or held ones) with the wine ' +
     'identity and grapes — the weekly spot-check habit. Judge each against what you actually know of the producer, ' +
-    'grape and appellation; fix a wrong one with set_wine_profile (which also stamps it curator-verified). Keep a ' +
-    'tally of corrections per sample across weeks — that error rate is the number that decides whether stronger ' +
-    'anti-hallucination measures are worth building.',
+    'grape and appellation; fix a wrong one with set_wine_profile (which also stamps it curator-verified). When the ' +
+    'sample is done, persist the outcome with record_profile_audit — that stored corrections-per-sample rate is the ' +
+    'number that decides whether stronger anti-hallucination measures are worth building.',
   scope: 'read',
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: true, openWorldHint: false },
@@ -898,6 +898,7 @@ registerTool({
   inputSchema: {
     min_owners: z.number().int().min(2).max(50).default(3).describe('Core threshold — the agreed default is 3 distinct owners'),
     limit: z.number().int().min(1).max(100).default(30).describe('Highest ownership first'),
+    offset: z.number().int().min(0).default(0).describe('Skip this many rows — pages past 100 within one min_owners tier'),
   },
   handler: async (args, ctx) => {
     const denied = requireSomm(ctx);
@@ -915,12 +916,15 @@ registerTool({
       _id: { $in: owned.map((o) => o._id) },
       nonWine: { $ne: true }, pendingIdentity: { $ne: true },
       'aiProfile.source': { $ne: 'curator' },
-    }).select('name producer appellation type aiProfile.description aiProfile.heldAt aiProfile.heldReason aiProfile.confidence').lean();
+    }).select('name producer appellation type aiProfile.description aiProfile.body aiProfile.tannin aiProfile.acidity aiProfile.sweetness aiProfile.flavors aiProfile.foodPairings aiProfile.heldAt aiProfile.heldReason aiProfile.confidence').lean();
     const byId = new Map(wines.map((w) => [String(w._id), w]));
     const rows = [];
+    let skipped = 0;
     for (const o of owned) {
       const w = byId.get(String(o._id));
       if (!w) continue; // curator-verified or excluded — not core work
+      if (skipped < (args.offset || 0)) { skipped += 1; continue; }
+      const ap = w.aiProfile || {};
       rows.push({
         wine_id: w._id,
         name: w.name,
@@ -928,15 +932,129 @@ registerTool({
         appellation: w.appellation || null,
         type: w.type || null,
         owner_count: o.ownerCount,
-        profile_state: w.aiProfile?.heldAt ? 'held' : (w.aiProfile?.description ? 'ai_published' : 'none'),
-        held_reason: w.aiProfile?.heldReason || null,
-        ai_confidence: w.aiProfile?.confidence ?? null,
+        profile_state: ap.heldAt ? 'held' : (ap.description ? 'ai_published' : 'none'),
+        held_reason: ap.heldReason || null,
+        ai_confidence: ap.confidence ?? null,
+        // The profile being judged, inline (gap report item 2 — judging 20
+        // rows must not cost 20 get_wine calls). null when held/none: a held
+        // row stores no content by design.
+        profile: ap.description ? {
+          body: ap.body || null, tannin: ap.tannin || null, acidity: ap.acidity || null,
+          sweetness: ap.sweetness || null, flavors: ap.flavors || [],
+          food_pairings: ap.foodPairings || [], description: ap.description,
+        } : null,
       });
       if (rows.length >= (args.limit || 30)) break;
     }
     return ok(
-      `${rows.length} core wine(s) (≥${minOwners} owners) without a curator-verified profile — highest ownership first`,
+      `${rows.length} core wine(s) (≥${minOwners} owners) without a curator-verified profile — highest ownership first` +
+      (args.offset ? ` (offset ${args.offset})` : ''),
       rows
+    );
+  },
+});
+
+// Pending-proposal visibility (gap report item 3): propose_wine_correction
+// enforces one pending proposal per (wine, kind) and 409s on a repeat — but
+// nothing LISTED what was pending, so across sessions the only way to
+// discover an existing proposal was to collide with it.
+registerTool({
+  name: 'list_pending_corrections',
+  title: 'Sommelier: correction proposals already filed',
+  description:
+    'Lists wine-correction proposals — default the PENDING ones awaiting an admin decision — so research is never ' +
+    'repeated and the one-pending-per-(wine,kind) rule stops being discovered by collision. Filter by kind ' +
+    '(field_correction | merge | non_wine), wine_id, or status (pending | approved | rejected — decided rows carry ' +
+    'the decision and any reject reason). Note: MERGE proposals are filed over MCP but DECIDED in Admin → Wines on ' +
+    'the web — deliberate, a wine merge moves bottles and rewrites references (same stance as taxonomy merge).',
+  scope: 'read',
+  requireRole: SOMM_ROLES,
+  annotations: { readOnlyHint: true, openWorldHint: false },
+  inputSchema: {
+    kind: z.enum(['field_correction', 'merge', 'non_wine']).optional(),
+    wine_id: z.string().optional().describe('Only proposals for this registry wine'),
+    status: z.enum(['pending', 'approved', 'rejected']).default('pending'),
+    limit: z.number().int().min(1).max(100).default(30),
+    offset: z.number().int().min(0).default(0),
+  },
+  handler: async (args, ctx) => {
+    const denied = requireSomm(ctx);
+    if (denied) return denied;
+    if (args.wine_id && !isValidId(args.wine_id)) return fail('invalid_input', 'wine_id must be a 24-hex Mongo id.');
+    const filter = { status: args.status || 'pending' };
+    if (args.kind) filter.kind = args.kind;
+    if (args.wine_id) filter.wineDefinition = args.wine_id;
+    const [rows, total] = await Promise.all([
+      WineCorrectionProposal.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(args.offset || 0)
+        .limit(args.limit || 30)
+        .populate('wineDefinition', 'name producer')
+        .populate('mergeTargetId', 'name producer')
+        .lean(),
+      WineCorrectionProposal.countDocuments(filter),
+    ]);
+    const label = (w) => (w ? [w.producer, w.name].filter(Boolean).join(' — ') : null);
+    return ok(`${total} ${filter.status} proposal(s) (showing ${rows.length})`, rows.map((p) => ({
+      proposal_id: p._id,
+      wine_id: p.wineDefinition?._id || null,
+      wine: label(p.wineDefinition),
+      kind: p.kind,
+      status: p.status,
+      proposed_fields: p.proposedFields || null,
+      merge_target: p.mergeTargetId ? { wine_id: p.mergeTargetId._id, wine: label(p.mergeTargetId) } : null,
+      evidence_url: p.evidenceUrl || null,
+      reason: p.reason,
+      created_at: p.createdAt,
+      ...(p.status !== 'pending' ? { decided_at: p.decidedAt, reject_reason: p.rejectReason || null, applied_note: p.appliedNote || null } : {}),
+    })));
+  },
+});
+
+// The durable spot-check tally (gap report item 5): sample_published_profiles
+// asks for a corrections-per-sample rate tracked across weeks — the number
+// that decides whether heavier anti-hallucination work is worth building —
+// and it previously lived only in chat.
+registerTool({
+  name: 'record_profile_audit',
+  title: 'Sommelier: record a spot-check result (corrections per sample)',
+  description:
+    'Persists one sample_published_profiles outcome: how many of the sampled profiles needed correcting. The ' +
+    'response returns the recent history and the running error rate, so the trend is visible immediately and the ' +
+    'scaling review reads it later. Record ONE row per completed sample, right after finishing it.',
+  scope: 'write',
+  requireRole: SOMM_ROLES,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  inputSchema: {
+    sample_size: z.number().int().min(1).max(100).describe('How many profiles were sampled (the habit is 20)'),
+    corrections: z.number().int().min(0).max(100).describe('How many of them you corrected or judged wrong'),
+    notes: z.string().max(500).optional().describe('Patterns seen — e.g. "2× regional-prior on Jura whites"'),
+  },
+  handler: async (args, ctx) => {
+    const denied = requireSomm(ctx);
+    if (denied) return denied;
+    if (args.corrections > args.sample_size) {
+      return fail('invalid_input', 'corrections cannot exceed sample_size.');
+    }
+    const ProfileAuditSample = require('../../models/ProfileAuditSample');
+    const row = await ProfileAuditSample.create({
+      sampleSize: args.sample_size,
+      corrections: args.corrections,
+      notes: stripHtml(typeof args.notes === 'string' ? args.notes : '').slice(0, 500) || undefined,
+      recordedBy: ctx.user.id,
+    });
+    logAudit(ctx.req, 'somm.profile.auditSample', { type: 'wine' },
+      { sampleSize: args.sample_size, corrections: args.corrections, via: 'mcp' });
+    const recent = await ProfileAuditSample.find({}).sort({ recordedAt: -1 }).limit(12).lean();
+    const sampled = recent.reduce((n, r) => n + r.sampleSize, 0);
+    const corrected = recent.reduce((n, r) => n + r.corrections, 0);
+    return ok(
+      `Recorded: ${args.corrections}/${args.sample_size} corrected. Running rate over the last ${recent.length} sample(s): ${corrected}/${sampled} (${sampled ? Math.round((corrected / sampled) * 100) : 0}%).`,
+      {
+        recorded: { sample_size: row.sampleSize, corrections: row.corrections, at: row.recordedAt },
+        running_rate_pct: sampled ? Math.round((corrected / sampled) * 1000) / 10 : 0,
+        history: recent.map((r) => ({ at: r.recordedAt, sample_size: r.sampleSize, corrections: r.corrections, notes: r.notes || null })),
+      }
     );
   },
 });
@@ -963,10 +1081,13 @@ registerTool({
   description:
     'The hold-review queue: registry wines whose generated tasting profile is HELD unpublished (producer_suspect / ' +
     'low_confidence / unknown_low_confidence / producer_claim / taxonomy_conflict — held_reason says which; null on ' +
-    'rows held before the field existed). include_published_suspects:true ALSO lists the published rows whose ' +
-    'producer the model flagged as suspect (the 08-17 batch) — same judgement work, different state. Owner-count ' +
-    'rides on every row and the list is impact-first (owners desc, then confidence asc). Judge each with ' +
-    'review_held_profile; rows you have decided disappear from this list.',
+    'rows held before the field existed; for taxonomy_conflict the producer_note carries the computed detail, e.g. ' +
+    '"bacchus is defined by low acidity; profile says high"). A held row stores NO profile content by design — ' +
+    'publication withheld means never written, which is why release REGENERATES rather than publishing something ' +
+    'stored. include_published_suspects:true ALSO lists the published rows whose producer the model flagged as ' +
+    'suspect (the 08-17 batch) — same judgement work, different state. Owner-count rides on every row and the list ' +
+    'is impact-first (owners desc, then confidence asc). Judge each with review_held_profile; rows you have decided ' +
+    'disappear from this list.',
   scope: 'read',
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: true, openWorldHint: false },
@@ -1157,7 +1278,9 @@ registerTool({
     'registry wine (merge_target_id = the wine that should SURVIVE), and kind "non_wine" when the row is not wine at ' +
     'all (spirits/cider/sake) and should be quarantined out of search and the maturity queue. Always give the reason ' +
     'the somm established, and cite an evidence_url (producer site, appellation register) — evidence is what makes a ' +
-    'one-click approval possible. One pending proposal per wine and kind. Reversible via undo_last while pending.',
+    'one-click approval possible. One pending proposal per wine and kind — list_pending_corrections shows what is ' +
+    'already filed. MERGE proposals are decided in Admin → Wines on the web, DELIBERATELY not over MCP: a wine ' +
+    'merge moves bottles and rewrites references (same stance as taxonomy merge). Reversible via undo_last while pending.',
   scope: 'write',
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },

@@ -79,6 +79,7 @@ const Region = require('../models/Region');
 const Grape = require('../models/Grape');
 const Appellation = require('../models/Appellation');
 const AppellationReviewSkip = require('../models/AppellationReviewSkip');
+const ProfileAuditSample = require('../models/ProfileAuditSample');
 const SiteConfig = require('../models/SiteConfig');
 const { getOrCreateDeletedUser } = require('../utils/deletedUser');
 const { deleteLogoFilesFor } = require('./wineListLogos');
@@ -1006,6 +1007,15 @@ const REGISTRY = [
     purge: (ctx) => AppellationReviewSkip.updateMany({ skippedBy: ctx.userId }, { $set: { skippedBy: ctx.deletedUserId } }),
     exportFragment: null,
     note: 'shared curation state; required skippedBy reassigned to [deleted] on erasure',
+  },
+  {
+    model: ProfileAuditSample, category: 'creator-ref', userFields: ['recordedBy'],
+    // The spot-check tally is registry quality telemetry, not the curator's
+    // personal data — the trend must survive their departure; only the
+    // person is anonymised.
+    purge: (ctx) => ProfileAuditSample.updateMany({ recordedBy: ctx.userId }, { $set: { recordedBy: ctx.deletedUserId } }),
+    exportFragment: null,
+    note: 'registry quality telemetry; required recordedBy reassigned to [deleted] on erasure',
   },
   {
     model: SiteConfig, category: 'creator-ref', userFields: ['updatedBy'],
