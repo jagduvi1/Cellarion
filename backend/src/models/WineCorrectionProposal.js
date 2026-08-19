@@ -31,6 +31,22 @@ const proposedFieldsSchema = new mongoose.Schema({
   region:         { type: String, trim: true, maxlength: 200 },
   country:        { type: String, trim: true, maxlength: 200 },
   classification: { type: String, trim: true, maxlength: 200 },
+  // Added 2026-08-19 (somm ticket 6a85ad44). Until now a curator could see a
+  // wine stored red on nothing but white grapes and had no way to propose the
+  // fix — type and grapes were the only identity fields with no route through
+  // this pipeline, so every one came back to an admin by hand.
+  //
+  // Validated at BOTH ends rather than here: the MCP tool rejects a bad type or
+  // an unknown variety at file time (so the curator learns immediately), and
+  // the approve path re-checks against live taxonomy (because a grape can be
+  // renamed or merged between filing and approval). A plain String here matches
+  // how country and region are already carried.
+  type:           { type: String, trim: true, maxlength: 20 },
+  // Variety NAMES, not ids: the proposal records what the curator meant, and
+  // resolution to taxonomy happens at approval — same reason country travels as
+  // a name. A proposed list REPLACES the wine's list; `default: undefined`
+  // keeps "not proposed" distinct from "proposed empty".
+  grapes:         { type: [{ type: String, trim: true, maxlength: 60 }], default: undefined },
 }, { _id: false });
 
 const wineCorrectionProposalSchema = new mongoose.Schema({

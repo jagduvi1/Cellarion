@@ -43,6 +43,13 @@ jest.mock('../../services/appellationResolve', () => ({ resolveCanonicalAppellat
 // The extracted merge helper — the whole point of the extraction is that this
 // route invokes IT rather than re-implementing the machinery.
 jest.mock('./wines', () => ({ performWineMerge: jest.fn() }));
+// Grape resolution is the somm's own set_wine_profile helper; the route must
+// call it rather than touching the Grape collection itself, so it is mocked
+// and asserted on. WINE_TYPES stays real — it is a constant list.
+jest.mock('../../services/wineProfileOps', () => ({
+  WINE_TYPES: ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'],
+  resolveGrapeIdsStrict: jest.fn(),
+}));
 
 const express = require('express');
 const http = require('http');
@@ -182,6 +189,87 @@ describe('POST /:id/approve', () => {
     expect(res.status).toBe(200);
     const { reenrichAfterRecordEdit } = require('../../services/enrichmentJob');
     expect(reenrichAfterRecordEdit).toHaveBeenCalledWith(wine, true);
+  });
+
+  // Type and grapes became proposable on 2026-08-19 (somm ticket 6a85ad44):
+  // until then a curator could SEE a wine stored red on nothing but white
+  // grapes and had no route to propose the fix, so every one came back to an
+  // admin by hand.
+  describe('type and grapes (the fields a curator could not propose before)', () => {
+    const { resolveGrapeIdsStrict } = require('../../services/wineProfileOps');
+
+    test('applies a corrected type', async () => {
+      claim({ _id: P1, kind: 'field_correction', wineDefinition: W1, proposedFields: { type: 'white' } });
+      const wine = { _id: W1, name: 'Sauvignon Blanc', producer: 'Screaming Eagle', type: 'red', country: 'c1', save: jest.fn().mockResolvedValue(undefined) };
+      WineDefinition.findById.mockResolvedValue(wine);
+
+      const res = await post(`/${P1}/approve`);
+      expect(res.status).toBe(200);
+      expect(wine.type).toBe('white');
+      expect((await res.json()).appliedNote).toMatch(/type/);
+    });
+
+    test('refuses a type outside the enum instead of letting save() reject it', async () => {
+      claim({ _id: P1, kind: 'field_correction', wineDefinition: W1, proposedFields: { type: 'orange' } });
+      const wine = { _id: W1, name: 'X', producer: 'Y', type: 'red', country: 'c1', save: jest.fn() };
+      WineDefinition.findById.mockResolvedValue(wine);
+
+      const res = await post(`/${P1}/approve`);
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toMatch(/Unknown wine type "orange"/);
+      expect(wine.save).not.toHaveBeenCalled();
+    });
+
+    test('resolves grape NAMES to taxonomy ids and stores the ids', async () => {
+      resolveGrapeIdsStrict.mockResolvedValue({ ok: true, ids: ['g1', 'g2'], names: ['Chenin Blanc', 'Chardonnay'], substitutions: [] });
+      claim({ _id: P1, kind: 'field_correction', wineDefinition: W1, proposedFields: { grapes: ['Chenin Blanc', 'Chardonnay'] } });
+      const wine = { _id: W1, name: 'Les Pélioches', producer: 'Clos des Bretèches', grapes: ['old'], country: 'c1', save: jest.fn().mockResolvedValue(undefined) };
+      WineDefinition.findById.mockResolvedValue(wine);
+
+      const res = await post(`/${P1}/approve`);
+      expect(res.status).toBe(200);
+      expect(resolveGrapeIdsStrict).toHaveBeenCalledWith(['Chenin Blanc', 'Chardonnay']);
+      // REPLACES the list rather than appending to it.
+      expect(wine.grapes).toEqual(['g1', 'g2']);
+    });
+
+    test('an unknown variety is a 400, never a minted Grape — same rule as country', async () => {
+      resolveGrapeIdsStrict.mockResolvedValue({ ok: false, unmatched: ['Cabernet Blanc'] });
+      claim({ _id: P1, kind: 'field_correction', wineDefinition: W1, proposedFields: { grapes: ['Cabernet Blanc'] } });
+      const wine = { _id: W1, name: 'X', producer: 'Y', country: 'c1', save: jest.fn() };
+      WineDefinition.findById.mockResolvedValue(wine);
+
+      const res = await post(`/${P1}/approve`);
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toMatch(/Unknown grape "Cabernet Blanc" — add it in Admin → Taxonomy first/);
+      expect(wine.save).not.toHaveBeenCalled();
+    });
+
+    test('says so in the receipt when a synonym was folded to its canonical name', async () => {
+      resolveGrapeIdsStrict.mockResolvedValue({
+        ok: true, ids: ['g1'], names: ['Tempranillo'],
+        substitutions: [{ from: 'Tinta Roriz', to: 'Tempranillo' }],
+      });
+      claim({ _id: P1, kind: 'field_correction', wineDefinition: W1, proposedFields: { grapes: ['Tinta Roriz'] } });
+      const wine = { _id: W1, name: 'X', producer: 'Y', country: 'c1', save: jest.fn().mockResolvedValue(undefined) };
+      WineDefinition.findById.mockResolvedValue(wine);
+
+      const res = await post(`/${P1}/approve`);
+      expect(res.status).toBe(200);
+      expect((await res.json()).appliedNote).toMatch(/Tinta Roriz → Tempranillo/);
+    });
+
+    test('both are profile-feeding, so a real change triggers the re-enrich follow-through', async () => {
+      resolveGrapeIdsStrict.mockResolvedValue({ ok: true, ids: ['g1'], names: ['Chenin Blanc'], substitutions: [] });
+      claim({ _id: P1, kind: 'field_correction', wineDefinition: W1, proposedFields: { type: 'white', grapes: ['Chenin Blanc'] } });
+      const wine = { _id: W1, name: 'X', producer: 'Y', type: 'red', grapes: ['other'], country: 'c1', save: jest.fn().mockResolvedValue(undefined) };
+      WineDefinition.findById.mockResolvedValue(wine);
+
+      const res = await post(`/${P1}/approve`);
+      expect(res.status).toBe(200);
+      const { reenrichAfterRecordEdit } = require('../../services/enrichmentJob');
+      expect(reenrichAfterRecordEdit).toHaveBeenCalledWith(wine, true);
+    });
   });
 
   test('field_correction: values identical to the record do NOT regenerate the profile', async () => {

@@ -1444,7 +1444,11 @@ registerTool({
 // the curator's research preserved as structured data instead of a prose
 // ticket the admin re-types.
 const PROPOSAL_KINDS = ['field_correction', 'merge', 'non_wine'];
+// The plain-STRING proposable fields. `type` and `grapes` are proposable too
+// (added 2026-08-19, somm ticket 6a85ad44) but validate differently — an enum
+// and a taxonomy-resolved list — so they are handled apart from this loop.
 const PROPOSAL_FIELDS = ['producer', 'name', 'appellation', 'region', 'country', 'classification'];
+const PROPOSAL_ALL_FIELDS = [...PROPOSAL_FIELDS, 'type', 'grapes'];
 const PROPOSAL_REASON_MIN = 10;
 const PROPOSAL_REASON_MAX = 1000;
 const PROPOSAL_FIELD_MAX = 200;
@@ -1477,7 +1481,9 @@ registerTool({
       region: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional(),
       country: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional(),
       classification: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional(),
-    }).optional().describe('kind "field_correction" only: the corrected value per field (omit fields that are right). Region/country as plain names.'),
+      type: z.enum(WINE_TYPES).optional(),
+      grapes: z.array(z.string().min(1).max(GRAPE_NAME_MAX)).min(1).max(GRAPES_MAX).optional(),
+    }).optional().describe('kind "field_correction" only: the corrected value per field (omit fields that are right). Region/country as plain names. `type` is the wine colour/style; `grapes` REPLACES the whole variety list (send every variety the wine has, not just the added one) and each name must already exist in the taxonomy — synonyms resolve, unknown names are refused so an approval can never mint a variety.'),
     merge_target_id: objectId.optional().describe('kind "merge" only: the duplicate\'s SURVIVING wine — must differ from wine_id'),
     evidence_url: z.string().max(PROPOSAL_URL_MAX).optional()
       .describe('http(s) URL backing the claim — cite one whenever the somm has it; it is what makes approval fast'),
@@ -1530,8 +1536,25 @@ registerTool({
         }
         proposedFields[f] = v;
       }
+      // type: the zod enum already refused anything outside WINE_TYPES.
+      if (src.type) proposedFields.type = src.type;
+      // grapes: resolved against the taxonomy HERE so the curator finds out now
+      // rather than when an admin tries to approve. The approve path resolves
+      // again (taxonomy moves), but a name that is unknown today is almost
+      // always a typo, and telling them immediately is the whole point.
+      if (Array.isArray(src.grapes) && src.grapes.length) {
+        const resolved = await resolveGrapeIdsStrict(src.grapes);
+        if (!resolved.ok) {
+          return fail('invalid_input',
+            `These grape names are not in the taxonomy: ${resolved.unmatched.map((g) => `"${g}"`).join(', ')}. ` +
+            'Check the spelling, or use describe_grape to find the canonical name. A proposal cannot create a variety.');
+        }
+        // Store the CANONICAL names: the proposal should record what will
+        // actually be written, not a synonym the admin then has to decode.
+        proposedFields.grapes = resolved.names;
+      }
       if (Object.keys(proposedFields).length === 0) {
-        return fail('invalid_input', `field_correction needs at least one non-empty field in proposed_fields (${PROPOSAL_FIELDS.join(', ')}).`);
+        return fail('invalid_input', `field_correction needs at least one non-empty field in proposed_fields (${PROPOSAL_ALL_FIELDS.join(', ')}).`);
       }
     } else {
       if (args.proposed_fields && Object.keys(args.proposed_fields).length > 0) {
@@ -1551,7 +1574,7 @@ registerTool({
 
     if (!isValidId(args.wine_id)) return fail('invalid_input', 'wine_id must be a 24-hex id.');
     const wine = await WineDefinition.findById(args.wine_id)
-      .populate('country', 'name').populate('region', 'name');
+      .populate('country', 'name').populate('region', 'name').populate('grapes', 'name');
     if (!wine) return fail('not_found', 'No such wine. Use search_registry to find it.');
 
     let target = null;
@@ -1570,6 +1593,11 @@ registerTool({
       region: wine.region?.name || null,
       country: wine.country?.name || null,
       classification: wine.classification || null,
+      // Both sides of the admin drift check compare against this, so the two
+      // new proposable fields have to be in it — otherwise every type/grapes
+      // proposal would render as "drifted since filing" against undefined.
+      type: wine.type || null,
+      grapes: (wine.grapes || []).map((g) => g && g.name).filter(Boolean).join(', ') || null,
     };
 
     let proposal;

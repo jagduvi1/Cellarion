@@ -1002,6 +1002,9 @@ describe('propose_wine_correction', () => {
     expect(created.currentSnapshot).toEqual({
       producer: 'Pira', name: 'Barolo', appellation: 'Barolo',
       region: 'Piedmont', country: 'Italy', classification: 'DOCG',
+      // Both proposable since 2026-08-19, so both must ride in the snapshot —
+      // the admin drift check compares against it field by field.
+      type: null, grapes: null,
     });
 
     const row = McpActionLog.create.mock.calls[0][0];
@@ -1009,6 +1012,61 @@ describe('propose_wine_correction', () => {
     expect(row.detail).toEqual({ proposalId: 'prop-1', wineId: WINE_ID, kind: 'field_correction' });
     expect(logAudit).toHaveBeenCalledWith(SOMM_CTX.req, 'somm.wineProposal.create',
       expect.anything(), expect.objectContaining({ kind: 'field_correction', via: 'mcp' }));
+  });
+
+  // Somm ticket 6a85ad44: type and grapes were the only identity fields with
+  // no route through this pipeline, so a curator who spotted a red stored on
+  // nothing but white grapes had to hand it to an admin.
+  describe('type and grapes', () => {
+    test('files a type correction', async () => {
+      mkWine({ type: 'red' });
+      WineCorrectionProposal.create.mockResolvedValue({ _id: 'prop-t' });
+      const body = parse(await tool('propose_wine_correction').handler({
+        wine_id: WINE_ID, kind: 'field_correction',
+        proposed_fields: { type: 'white' }, reason: REASON,
+      }, SOMM_CTX));
+      expect(body.error).toBeUndefined();
+      expect(WineCorrectionProposal.create.mock.calls[0][0].proposedFields).toEqual({ type: 'white' });
+    });
+
+    test('resolves grape names to CANONICAL ones before storing them', async () => {
+      mkWine();
+      // "Tinta Roriz" is a synonym; the proposal should record what will
+      // actually be written so the admin is not decoding it at review time.
+      Grape.findOne.mockReturnValue(chain({ _id: oid('9'), name: 'Tempranillo' }));
+      WineCorrectionProposal.create.mockResolvedValue({ _id: 'prop-g' });
+      const body = parse(await tool('propose_wine_correction').handler({
+        wine_id: WINE_ID, kind: 'field_correction',
+        proposed_fields: { grapes: ['Tinta Roriz'] }, reason: REASON,
+      }, SOMM_CTX));
+      expect(body.error).toBeUndefined();
+      expect(WineCorrectionProposal.create.mock.calls[0][0].proposedFields).toEqual({ grapes: ['Tempranillo'] });
+    });
+
+    test('refuses a variety that is not in the taxonomy, at FILE time', async () => {
+      mkWine();
+      Grape.findOne.mockReturnValue(chain(null));
+      const body = parse(await tool('propose_wine_correction').handler({
+        wine_id: WINE_ID, kind: 'field_correction',
+        proposed_fields: { grapes: ['Cabernet Blanc'] }, reason: REASON,
+      }, SOMM_CTX));
+      expect(body.error.code).toBe('invalid_input');
+      expect(body.error.message).toMatch(/not in the taxonomy/);
+      expect(body.error.message).toMatch(/cannot create a variety/);
+      expect(WineCorrectionProposal.create).not.toHaveBeenCalled();
+    });
+
+    test('the snapshot carries the wine\'s current type and grapes', async () => {
+      mkWine({ type: 'red', grapes: [{ name: 'Merlot' }, { name: 'Cabernet Sauvignon' }] });
+      WineCorrectionProposal.create.mockResolvedValue({ _id: 'prop-s' });
+      await tool('propose_wine_correction').handler({
+        wine_id: WINE_ID, kind: 'field_correction',
+        proposed_fields: { type: 'white' }, reason: REASON,
+      }, SOMM_CTX);
+      expect(WineCorrectionProposal.create.mock.calls[0][0].currentSnapshot).toMatchObject({
+        type: 'red', grapes: 'Merlot, Cabernet Sauvignon',
+      });
+    });
   });
 
   test('merge kind: the target must differ from the wine and must exist', async () => {
