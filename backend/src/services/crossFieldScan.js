@@ -174,17 +174,25 @@ async function loadContextUncached() {
     Appellation.find({}).select('name normalizedName normalizedSynonyms').lean(),
     Region.find({}).select('name normalizedName normalizedSynonyms').lean(),
     Country.find({}).select('name normalizedName').lean(),
-    Grape.find({}).select('name normalizedName normalizedSynonyms').lean(),
+    Grape.find({}).select('name normalizedName normalizedSynonyms color').lean(),
   ]);
   return {
     refs: buildCrossFieldRefs({ appellations, regions, countries, grapes }),
     regionNamesById: new Map(regions.map(r => [String(r._id), r.name])),
     countryNamesById: new Map(countries.map(c => [String(c._id), c.name])),
+    // id → { name, color } for grape-colour-contradiction.v1. Same
+    // fetch-once-flatten-in-Node shape as the region/country name maps above;
+    // `color` is null on ~2% of the taxonomy and the rule treats an unknown
+    // colour as "not evaluable", never as a verdict.
+    grapesById: new Map(grapes.map(g => [String(g._id), { name: g.name, color: g.color || null }])),
   };
 }
 
-/** The string-only row shape the rules (and the queue UI) consume. */
-const flattenWine = (w, regionNamesById, countryNamesById) => ({
+/**
+ * The row shape the rules (and the queue UI) consume: strings, plus the one
+ * structured field grape-colour-contradiction.v1 needs.
+ */
+const flattenWine = (w, regionNamesById, countryNamesById, grapesById) => ({
   _id: w._id,
   // String-coerce: one raw-driver-written non-string row must not throw and
   // take the whole scan (and the weekly metrics run) down with it.
@@ -196,6 +204,13 @@ const flattenWine = (w, regionNamesById, countryNamesById) => ({
   // Read only by colour-contradiction.v2 — the one rule in the family whose
   // verdict is about the wine's own colour rather than a reference list.
   type: w.type || null,
+  // …and by grape-colour-contradiction.v1, which needs the same wine's grape
+  // COLOURS. Resolved here rather than populated, so the scan keeps its one
+  // query per collection. Unresolvable ids drop out and the rule then sees an
+  // incomplete colour set, which it treats as not-evaluable.
+  grapes: grapesById
+    ? (w.grapes || []).map(id => grapesById.get(String(id))).filter(Boolean)
+    : [],
   crossChecksCleared: w.crossChecksCleared,
 });
 
@@ -212,7 +227,7 @@ const flattenWine = (w, regionNamesById, countryNamesById) => ({
  *   what the weekly watchdog snapshots.
  */
 async function scanCrossFieldChecks({ checkIds = DEFAULT_CROSS_FIELD_CHECK_IDS, ignoreCleared = false } = {}) {
-  const { refs, regionNamesById, countryNamesById } = await loadContext();
+  const { refs, regionNamesById, countryNamesById, grapesById } = await loadContext();
   const wines = await WineDefinition.find({ nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
     .select(CROSS_FIELD_CHECK_SELECT)
     .sort({ producer: 1, name: 1 })
@@ -223,7 +238,7 @@ async function scanCrossFieldChecks({ checkIds = DEFAULT_CROSS_FIELD_CHECK_IDS, 
   for (const id of checkIds) ruleCounts[id] = 0;
   let clearedCount = 0;
 
-  const flatWines = wines.map(w => flattenWine(w, regionNamesById, countryNamesById));
+  const flatWines = wines.map(w => flattenWine(w, regionNamesById, countryNamesById, grapesById));
   // The DB-backed rule runs ONCE over the whole pool (it is a pairwise question,
   // not a per-row one), then merges into each row's hits below.
   const nearMiss = checkIds.includes(CUVEE_NEAR_MISS) ? detectCuveeNearMiss(flatWines) : new Map();
@@ -259,7 +274,7 @@ async function scanCrossFieldChecks({ checkIds = DEFAULT_CROSS_FIELD_CHECK_IDS, 
  *   (empty array = found but clean); ids absent from the map were not found.
  */
 async function detectCrossFieldForWines(wineIds, checkIds) {
-  const { refs, regionNamesById, countryNamesById } = await loadContext();
+  const { refs, regionNamesById, countryNamesById, grapesById } = await loadContext();
   const wines = await WineDefinition.find({ _id: { $in: wineIds } })
     .select(CROSS_FIELD_CHECK_SELECT)
     .lean();
@@ -275,12 +290,12 @@ async function detectCrossFieldForWines(wineIds, checkIds) {
     const pool = await WineDefinition.find({ nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
       .select(CROSS_FIELD_CHECK_SELECT)
       .lean();
-    nearMiss = detectCuveeNearMiss(pool.map(w => flattenWine(w, regionNamesById, countryNamesById)));
+    nearMiss = detectCuveeNearMiss(pool.map(w => flattenWine(w, regionNamesById, countryNamesById, grapesById)));
   }
 
   const hitsById = new Map();
   for (const w of wines) {
-    const flat = flattenWine(w, regionNamesById, countryNamesById);
+    const flat = flattenWine(w, regionNamesById, countryNamesById, grapesById);
     const hits = (runCrossFieldChecks(flat, refs, { checkIds, ignoreCleared: true }) || []).map(h => h.check);
     if (nearMiss.has(String(w._id))) hits.push(CUVEE_NEAR_MISS);
     hitsById.set(String(w._id), hits);

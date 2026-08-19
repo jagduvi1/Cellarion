@@ -1095,9 +1095,12 @@ registerTool({
   title: 'Sommelier: profiles held by the publication gate, awaiting judgement',
   description:
     'The hold-review queue: registry wines whose generated tasting profile is HELD unpublished (producer_suspect / ' +
-    'low_confidence / unknown_low_confidence / producer_claim / taxonomy_conflict — held_reason says which; null on ' +
-    'rows held before the field existed; for taxonomy_conflict the producer_note carries the computed detail, e.g. ' +
-    '"bacchus is defined by low acidity; profile says high"). A held row stores NO profile content by design — ' +
+    'low_confidence / unknown_low_confidence / producer_claim / taxonomy_conflict / grape_colour_conflict — ' +
+    'held_reason says which; null on rows held before the field existed; for taxonomy_conflict the producer_note ' +
+    'carries the computed detail, e.g. "bacchus is defined by low acidity; profile says high", and for ' +
+    'grape_colour_conflict it names the clash, e.g. "stored red, but every grape is white (Sauvignon Blanc)" — ' +
+    'that one is a fact about the RECORD, not the model, so the fix is an identity edit: either the type or the ' +
+    'grape list is wrong, and the note does not presume which). A held row stores NO profile content by design — ' +
     'publication withheld means never written, which is why release REGENERATES rather than publishing something ' +
     'stored. include_published_suspects:true ALSO lists the published rows whose producer the model flagged as ' +
     'suspect (the 08-17 batch) — same judgement work, different state. Owner-count rides on every row and the list ' +

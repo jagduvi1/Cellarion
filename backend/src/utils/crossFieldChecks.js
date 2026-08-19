@@ -58,6 +58,9 @@ const {
   isUnknownName,
   tokenize,
 } = require('./normalize');
+// Shared with the enrichment hold (services/enrichmentJob) so the review queue
+// and the publication gate can never disagree about what a colour clash is.
+const { findGrapeColourConflict } = require('./grapeColourCheck');
 
 /**
  * Probe a reference map with BOTH normalization folds of a wine-side value,
@@ -435,6 +438,28 @@ const CROSS_FIELD_CHECKS = [
       return null;
     },
   },
+  {
+    // The GRAPE-side sibling of colour-contradiction.v2, and not a superset of
+    // it: that rule reads the wine's name, this one reads its varieties, and
+    // each sees rows the other cannot. "Domaine des Bosquets / Séguret" is
+    // stored red on Viognier, Roussanne and Marsanne with no colour word in
+    // sight; "Château Bianco" with red grapes is the reverse case.
+    //
+    // Detection lives in utils/grapeColourCheck (shared with the enrichment
+    // hold, so the queue and the gate can never drift), and the asymmetry
+    // between the two directions is documented there — briefly: a red from
+    // only-white grapes is impossible, a white from only-red grapes is a
+    // blanc de noirs unless the name is silent about it.
+    //
+    // Needs `grapes` populated with colour on the flattened row, which is why
+    // CROSS_FIELD_CHECK_SELECT carries `grapes` and crossFieldScan resolves
+    // them; on any row shape without them the detect stays silent.
+    id: 'grape-colour-contradiction.v1',
+    labelKey: 'grapeColourContradiction',
+    field: 'type',
+    defaultActive: true,
+    detect: (w) => findGrapeColourConflict(w),
+  },
 ];
 
 /**
@@ -550,7 +575,7 @@ function runCrossFieldChecks(wine, refs, { checkIds = DEFAULT_CROSS_FIELD_CHECK_
  * region/country arrive as ObjectIds here; the scan service resolves them to
  * names before the rules run.
  */
-const CROSS_FIELD_CHECK_SELECT = 'name producer appellation region country type crossChecksCleared';
+const CROSS_FIELD_CHECK_SELECT = 'name producer appellation region country type grapes crossChecksCleared';
 
 /** id → i18n leaf / offending field, for the admin queue's column headers. */
 const CROSS_FIELD_CHECK_LABEL_KEYS = ALL_CROSS_FIELD_CHECKS.reduce((m, c) => (m[c.id] = c.labelKey, m), {});
