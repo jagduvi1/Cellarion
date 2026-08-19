@@ -151,7 +151,9 @@ const wineDefinitionSchema = new mongoose.Schema({
     // WHY the hold fired — 'producer_suspect' | 'low_confidence' |
     // 'unknown_low_confidence' | 'producer_claim' (enrichmentJob.
     // shouldHoldProfile) | 'taxonomy_conflict' (grapeStyleTypicals cross-
-    // check, 6a8464ea phase 2). Plain String on purpose: held rows from
+    // check, 6a8464ea phase 2) | 'grape_colour_conflict' (utils/
+    // grapeColourCheck: the record's own type disagrees with every grape's
+    // curated colour, 6a85ad44). Plain String on purpose: held rows from
     // before 2026-08-18 predate the field (null = producer_suspect era), and
     // a future gate reason must not need a schema change.
     heldReason:   { type: String, default: null, trim: true },

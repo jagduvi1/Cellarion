@@ -1646,7 +1646,8 @@
           "appellationIsGrape": "Appellation is a grape",
           "regionIsCountry": "Region is a country",
           "colourContradiction": "Name colour contradicts the type",
-          "cuveeNearMiss": "Almost the same name as another wine by this producer"
+          "cuveeNearMiss": "Almost the same name as another wine by this producer",
+          "grapeColourContradiction": "Grape colours contradict the type"
         },
         "empty": "No wines are flagged by the selected checks.",
         "networkError": "Network error"

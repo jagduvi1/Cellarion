@@ -330,7 +330,7 @@ async function runJob(cfg) {
     let q = WineDefinition.find(filter)
       .populate('country', 'name')
       .populate('region', 'name')
-      .populate('grapes', 'name');
+      .populate('grapes', 'name color');
     // Cap the batch when a limit is set (cheap test runs).
     if (job.limit > 0) q = q.limit(job.limit);
     const wines = await q.lean();
@@ -457,6 +457,21 @@ async function enrichWine(wine, model, { publishSuspect = false, curatorContext 
       if (conflict) {
         holdReason = 'taxonomy_conflict';
         if (!meta.producerNote) meta.producerNote = `Style conflict: ${conflict}`;
+      }
+    }
+    // Second deterministic cross-check (somm ticket 6a85ad44): the wine's own
+    // type against the curated colour of its grapes. Unlike the style conflict
+    // above this reads NO model output — it is a fact about the record — so a
+    // profile generated on top of it would be a careful description of a wine
+    // that cannot exist. Hold rather than publish, and let a curator say which
+    // of the two fields is the wrong one. See utils/grapeColourCheck for why
+    // the two directions are treated differently.
+    if (!holdReason) {
+      const { findGrapeColourConflict } = require('../utils/grapeColourCheck');
+      const clash = findGrapeColourConflict(wine);
+      if (clash) {
+        holdReason = 'grape_colour_conflict';
+        if (!meta.producerNote) meta.producerNote = `Colour conflict: ${clash}`;
       }
     }
     return { data: d, description, meta, holdReason };
@@ -635,7 +650,7 @@ async function enrichWineById(wineDefId, { budgetUserId, force = false, publishS
     const wine = await WineDefinition.findById(oid)
       .populate('country', 'name')
       .populate('region', 'name')
-      .populate('grapes', 'name')
+      .populate('grapes', 'name color')
       .lean();
     if (!wine) return;
     // Same rule as the batch filter above, and it matters MORE here: this is

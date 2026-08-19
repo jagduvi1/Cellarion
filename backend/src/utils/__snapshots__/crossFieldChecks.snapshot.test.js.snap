@@ -20,6 +20,8 @@ exports[`detect() source of colour-contradiction.v2 is unchanged — bump the id
   }"
 `;
 
+exports[`detect() source of grape-colour-contradiction.v1 is unchanged — bump the id if you edited it 1`] = `"w => findGrapeColourConflict(w)"`;
+
 exports[`detect() source of name-in-producer.v1 is unchanged — bump the id if you edited it 1`] = `
 "w => {
     const name = normalizeString(w.name || '');
@@ -123,5 +125,6 @@ exports[`rule ids are pinned (adding/removing/renaming a rule must be deliberate
   "appellation-is-grape.v1",
   "region-is-country.v1",
   "colour-contradiction.v2",
+  "grape-colour-contradiction.v1",
 ]
 `;
