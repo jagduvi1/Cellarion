@@ -419,10 +419,25 @@ async function enrichWine(wine, model, { publishSuspect = false, curatorContext 
   // absent on an old or custom prompt → false, degrading to "no doubt
   // recorded" rather than to a spurious hold.
   const assess = (d, searchUsed) => {
-    const suspect = d.producerSuspect === true;
-    const unknown = d.producerUnknown === true;
+    let suspect = d.producerSuspect === true;
+    let unknown = d.producerUnknown === true;
     const confidence = cleanConfidence(d.confidence);
     const description = cleanProse(d.description);
+    // Deterministic contradiction check (somm ticket 6a85f961): the generator
+    // keeps setting producerSuspect on records whose own note calls the entity
+    // a cooperative, an estate or a grower. That is a real producer the model
+    // cannot place — producerUnknown — and leaving it suspect puts a permanent
+    // "cannot be verified" caveat on a small winery's wine and inflates
+    // upheld-count. Prompt rules have failed to stop two classes like this
+    // already; a rule that reads the model's own words does not need it to
+    // cooperate. See utils/producerSuspectCheck for the discrimination.
+    if (suspect) {
+      const { noteAssertsProducer } = require('../utils/producerSuspectCheck');
+      if (noteAssertsProducer(cleanProse(d.producerNote, 300), wine.producer)) {
+        suspect = false;
+        unknown = true;
+      }
+    }
     const meta = {
       confidence,
       producerSuspect: suspect,
