@@ -4351,7 +4351,7 @@
     "clearApplied": "Clear filters",
     "removeFilter": "Remove filter",
     "sortHint": "Click to sort",
-    "notSortable": "Not sortable yet",
+    "notSortable": "Not sortable",
     "prev": "‹ Previous",
     "next": "Next ›",
     "pageInfo": "{{from}}–{{to}} of {{total}}",
@@ -4373,6 +4373,41 @@
       "maturity": "Maturity",
       "personal": "My data",
       "registry": "Registry data"
+    },
+    "group": "Group",
+    "groupBy": "Group by",
+    "measures": "Measures",
+    "countAlways": "Bottle count (always)",
+    "noMeasure": "— none —",
+    "noSecondDimension": "— no second dimension —",
+    "count": "Bottles",
+    "currencyNote": "Monetary values converted to {{code}}",
+    "unconvertible": "{{n}} row(s) had no exchange rate and are excluded",
+    "noRates": "no exchange rates available; monetary measures are empty",
+    "bucketsCapped": "Showing the top {{n}} groups — narrow the scope or filters for the rest",
+    "oneDimOnly": "One dimension only",
+    "chart": {
+      "table": "Table",
+      "bar": "Bars",
+      "donut": "Donut",
+      "line": "Line"
+    },
+    "presets": "Pre-built views",
+    "preset": {
+      "moneyByRegion": "Where my money sits",
+      "cellarByType": "What I buy (cellar by type)",
+      "vintageSpread": "Vintage spread",
+      "topProducers": "Top producers",
+      "drankLastYear": "What I drank this past year",
+      "drinkSoon": "Drink soon (my windows)",
+      "priciest": "My priciest bottles",
+      "favouriteRegions": "My favourite regions (by my ratings)",
+      "whatIDrink": "What I actually drink (by type)",
+      "agingRunway": "Aging runway (bottles per drink-to year)",
+      "pastWindow": "Past their window (still in the rack)",
+      "forgottenBottles": "Forgotten bottles (in the cellar 2+ years)",
+      "whereIShop": "Where I shop (and what it costs me)",
+      "giftedVsDrunk": "How bottles leave (drunk, gifted, sold)"
     }
   }
 }

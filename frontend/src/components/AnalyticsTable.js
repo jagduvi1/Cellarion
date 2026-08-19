@@ -5,6 +5,8 @@ import { getAnalyticsCatalogue, runAnalyticsQuery } from '../api/analytics';
 import { listCellars } from '../api/cellars';
 import { csvEscape } from '../utils/importReport';
 import downloadBlob from '../utils/downloadBlob';
+import AnalyticsCharts from './AnalyticsCharts';
+import { ANALYTICS_PRESETS } from '../utils/analyticsPresets';
 import './AnalyticsTable.css';
 
 /**
@@ -110,6 +112,13 @@ export default function AnalyticsTable({ cellarId }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [scopeOpen, setScopeOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  // Grouped mode (R-B): when on, the table pivots — 1-2 dimensions, count
+  // always as the first measure, up to two more picked from measure-capable
+  // fields. Off = the flat rows table.
+  const [grouping, setGrouping] = useState({ on: false, dim1: 'wine.type', dim2: '', measures: [] });
+  // R-C: how the grouped result renders — the table stays the default.
+  const [chartType, setChartType] = useState('table'); // 'table' | 'bar' | 'donut' | 'line'
+  const [chartMeasure, setChartMeasure] = useState(0);
   const queryRef = useRef(0);
 
   const byKey = useMemo(() => new Map(catalogue.map((f) => [f.key, f])), [catalogue]);
@@ -122,6 +131,15 @@ export default function AnalyticsTable({ cellarId }) {
     }
     return [...grouped.entries()].sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
   }, [catalogue]);
+
+  // Follow in-place navigation between cellars (audit F6): the component
+  // stays mounted when only the route param changes, so the scope must track
+  // the prop or the table keeps showing the previous cellar's bottles under
+  // the new cellar's header.
+  useEffect(() => {
+    setScopeCellars(cellarId ? [cellarId] : 'all');
+    setOffset(0);
+  }, [cellarId]);
 
   useEffect(() => {
     let live = true;
@@ -139,14 +157,25 @@ export default function AnalyticsTable({ cellarId }) {
     return () => { live = false; };
   }, [apiFetch]);
 
-  const query = useMemo(() => ({
-    scope: { cellars: scopeCellars, bottles: bottleScope },
-    columns,
-    filters: filters.length ? filters : undefined,
-    sort: sort || undefined,
-    limit: PAGE_SIZE,
-    offset,
-  }), [scopeCellars, bottleScope, columns, filters, sort, offset]);
+  const query = useMemo(() => {
+    if (grouping.on && grouping.dim1) {
+      return {
+        mode: 'grouped',
+        scope: { cellars: scopeCellars, bottles: bottleScope },
+        filters: filters.length ? filters : undefined,
+        dimensions: [grouping.dim1, ...(grouping.dim2 ? [grouping.dim2] : [])],
+        measures: [{ field: '*', agg: 'count' }, ...grouping.measures.filter((m) => m.field && m.agg)],
+      };
+    }
+    return {
+      scope: { cellars: scopeCellars, bottles: bottleScope },
+      columns,
+      filters: filters.length ? filters : undefined,
+      sort: sort || undefined,
+      limit: PAGE_SIZE,
+      offset,
+    };
+  }, [scopeCellars, bottleScope, columns, filters, sort, offset, grouping]);
 
   useEffect(() => {
     let live = true;
@@ -190,6 +219,24 @@ export default function AnalyticsTable({ cellarId }) {
     setOffset(0);
   };
 
+  // A preset is one click that sets the WHOLE table state — scope, filters,
+  // grouping, chart, columns, sort. Everything it does is visible in the
+  // controls afterwards, so a preset is a starting point, never a black box.
+  const applyPreset = (key) => {
+    const preset = ANALYTICS_PRESETS.find((p) => p.key === key);
+    if (!preset) return;
+    const s = preset.build();
+    setBottleScope(s.bottleScope || 'active');
+    setGrouping(s.grouping || { on: false, dim1: 'wine.type', dim2: '', measures: [] });
+    setChartType(s.chartType || 'table');
+    setChartMeasure(s.chartType && s.grouping?.measures?.length ? 1 : 0);
+    setFilters(s.filters || []);
+    setDraftFilters(s.filters || []);
+    if (s.columns) setColumns(s.columns);
+    setSort(s.sort || null);
+    setOffset(0);
+  };
+
   const addDraftFilter = () => {
     const first = catalogue.find((f) => f.filterable);
     if (!first) return;
@@ -206,26 +253,44 @@ export default function AnalyticsTable({ cellarId }) {
   const exportCsv = useCallback(async () => {
     setExporting(true);
     try {
-      const rows = [];
-      let at = 0;
-      let total = Infinity;
-      while (at < Math.min(total, CSV_MAX_ROWS)) {
-        const res = await runAnalyticsQuery(apiFetch, { ...query, limit: 200, offset: at });
+      let csv;
+      if (query.mode === 'grouped') {
+        // Grouped exports are one bounded response — the current buckets.
+        const res = await runAnalyticsQuery(apiFetch, query);
         const body = await res.json();
         if (!res.ok) throw new Error(body.error || 'export failed');
-        total = body.total;
-        rows.push(...body.rows);
-        if (!body.rows.length) break;
-        at += body.rows.length;
+        const header = [
+          ...body.dimensionKeys.map((k) => csvEscape(byKey.get(k)?.label || k)),
+          ...body.measureLabels.map(csvEscape),
+        ].join(',');
+        const lines = body.buckets.map((b) => [
+          ...b.dimensions.map((d) => csvEscape(d ?? '')),
+          ...b.measures.map((m) => csvEscape(m ?? '')),
+        ].join(','));
+        csv = header + '\n' + lines.join('\n');
+      } else {
+        const rows = [];
+        let at = 0;
+        let total = Infinity;
+        while (at < Math.min(total, CSV_MAX_ROWS)) {
+          const res = await runAnalyticsQuery(apiFetch, { ...query, limit: 200, offset: at });
+          const body = await res.json();
+          if (!res.ok) throw new Error(body.error || 'export failed');
+          total = body.total;
+          rows.push(...body.rows);
+          if (!body.rows.length) break;
+          at += body.rows.length;
+        }
+        const header = columns.map((k) => csvEscape(byKey.get(k)?.label || k)).join(',');
+        const lines = rows.map((r) => columns.map((k) => {
+          const v = r.values[k];
+          return csvEscape(Array.isArray(v) ? v.join('; ') : v ?? '');
+        }).join(','));
+        const truncated = total > CSV_MAX_ROWS ? `\n"— truncated at ${CSV_MAX_ROWS} of ${total} rows"` : '';
+        csv = header + '\n' + lines.join('\n') + truncated;
       }
-      const header = columns.map((k) => csvEscape(byKey.get(k)?.label || k)).join(',');
-      const lines = rows.map((r) => columns.map((k) => {
-        const v = r.values[k];
-        return csvEscape(Array.isArray(v) ? v.join('; ') : v ?? '');
-      }).join(','));
-      const truncated = total > CSV_MAX_ROWS ? `\n"— truncated at ${CSV_MAX_ROWS} of ${total} rows"` : '';
       // UTF-8 BOM so Excel opens Swedish/French characters correctly.
-      downloadBlob('﻿' + header + '\n' + lines.join('\n') + truncated, 'cellarion-analytics.csv', 'text/csv;charset=utf-8');
+      downloadBlob('﻿' + csv, 'cellarion-analytics.csv', 'text/csv;charset=utf-8');
     } catch {
       setError(t('analytics.exportFailed', 'Export failed — try again'));
     } finally {
@@ -290,14 +355,89 @@ export default function AnalyticsTable({ cellarId }) {
           )}
         </div>
         <div className="at-actions">
-          <button className="at-chip" onClick={() => setPickerOpen((o) => !o)} aria-expanded={pickerOpen}>
-            {t('analytics.columns', 'Columns')} ({shownColumns.length})
+          <select
+            className="at-preset-select"
+            value=""
+            onChange={(e) => { if (e.target.value) applyPreset(e.target.value); }}
+            aria-label={t('analytics.presets', 'Pre-built views')}
+          >
+            <option value="">{t('analytics.presets', 'Pre-built views')}…</option>
+            {ANALYTICS_PRESETS.map((p) => (
+              <option key={p.key} value={p.key}>{t(`analytics.preset.${p.key}`, p.label)}</option>
+            ))}
+          </select>
+          <button
+            className={`at-chip ${grouping.on ? 'at-apply' : ''}`}
+            onClick={() => setGrouping((g) => ({ ...g, on: !g.on }))}
+            aria-pressed={grouping.on}
+          >
+            {t('analytics.group', 'Group')}
           </button>
+          {!grouping.on && (
+            <button className="at-chip" onClick={() => setPickerOpen((o) => !o)} aria-expanded={pickerOpen}>
+              {t('analytics.columns', 'Columns')} ({shownColumns.length})
+            </button>
+          )}
           <button className="at-chip" onClick={exportCsv} disabled={exporting || !data}>
             {exporting ? t('analytics.exporting', 'Exporting…') : t('analytics.exportCsv', 'Export CSV')}
           </button>
         </div>
       </div>
+
+      {grouping.on && (
+        <div className="at-picker at-grouping">
+          <div className="at-picker-domain">
+            <strong>{t('analytics.groupBy', 'Group by')}</strong>
+            <select value={grouping.dim1} onChange={(e) => setGrouping((g) => ({ ...g, dim1: e.target.value }))}>
+              {catalogue.filter((f) => f.groupable).map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+            </select>
+            <select value={grouping.dim2} onChange={(e) => setGrouping((g) => ({ ...g, dim2: e.target.value }))}>
+              <option value="">{t('analytics.noSecondDimension', '— no second dimension —')}</option>
+              {catalogue.filter((f) => f.groupable && f.key !== grouping.dim1).map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+            </select>
+          </div>
+          <div className="at-picker-domain">
+            <strong>{t('analytics.measures', 'Measures')}</strong>
+            <span className="at-measure-fixed">{t('analytics.countAlways', 'Bottle count (always)')}</span>
+            {[0, 1].map((i) => {
+              const m = grouping.measures[i] || { field: '', agg: '' };
+              const fieldDef = byKey.get(m.field);
+              return (
+                <span key={i} className="at-measure-row">
+                  <select
+                    value={m.field}
+                    onChange={(e) => {
+                      const f = byKey.get(e.target.value);
+                      setGrouping((g) => {
+                        const ms = [...g.measures];
+                        ms[i] = e.target.value ? { field: e.target.value, agg: f?.aggregations?.[0] || 'avg' } : undefined;
+                        return { ...g, measures: ms.filter(Boolean) };
+                      });
+                    }}
+                  >
+                    <option value="">{t('analytics.noMeasure', '— none —')}</option>
+                    {catalogue.filter((f) => (f.aggregations || []).length).map((f) => (
+                      <option key={f.key} value={f.key}>{f.label}</option>
+                    ))}
+                  </select>
+                  {m.field && (
+                    <select
+                      value={m.agg}
+                      onChange={(e) => setGrouping((g) => {
+                        const ms = [...g.measures];
+                        ms[i] = { ...ms[i], agg: e.target.value };
+                        return { ...g, measures: ms };
+                      })}
+                    >
+                      {(fieldDef?.aggregations || []).map((a) => <option key={a} value={a}>{a}</option>)}
+                    </select>
+                  )}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {pickerOpen && (
         <div className="at-picker">
@@ -365,59 +505,137 @@ export default function AnalyticsTable({ cellarId }) {
 
       {error && <div className="at-error">{error}</div>}
 
-      <div className="at-scroll">
-        <table>
-          <thead>
-            <tr>
-              {shownColumns.map((k) => {
-                const f = byKey.get(k);
-                const sorted = sort && sort.field === k;
-                return (
-                  <th
-                    key={k}
-                    className={f.sortable ? 'at-sortable' : ''}
-                    onClick={() => headerSort(f)}
-                    title={f.sortable ? t('analytics.sortHint', 'Click to sort') : t('analytics.notSortable', 'Not sortable yet')}
-                  >
-                    {f.label}{f.unit && f.unit !== 'currency' ? ` (${f.unit})` : ''}
-                    {sorted ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {(data?.rows || []).map((r) => (
-              <tr key={r.id}>
-                {shownColumns.map((k) => (
-                  <td key={k} data-label={byKey.get(k)?.label}>{formatValue(r.values[k], byKey.get(k))}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {loading && <div className="at-loading">{t('analytics.loading', 'Loading…')}</div>}
-        {!loading && data && !data.rows.length && (
-          <div className="at-empty">{t('analytics.empty', 'No bottles match this scope and these filters.')}</div>
-        )}
-      </div>
-
-      {data && (
-        <div className="at-pager">
-          <button className="at-chip" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>
-            {t('analytics.prev', '‹ Previous')}
-          </button>
-          <span>
-            {t('analytics.pageInfo', '{{from}}–{{to}} of {{total}}', {
-              from: data.total === 0 ? 0 : offset + 1,
-              to: offset + (data.rows?.length || 0),
-              total: data.total,
+      {data?.mode === 'grouped' ? (
+        <>
+          <div className="at-chart-toolbar">
+            {['table', 'bar', 'donut', 'line'].map((ct) => {
+              const disabled = (ct === 'donut' || ct === 'line') && data.dimensionKeys.length === 2;
+              return (
+                <button
+                  key={ct}
+                  className={`at-chip ${chartType === ct ? 'at-apply' : ''}`}
+                  disabled={disabled}
+                  title={disabled ? t('analytics.oneDimOnly', 'One dimension only') : undefined}
+                  onClick={() => setChartType(ct)}
+                >
+                  {t(`analytics.chart.${ct}`, ct === 'table' ? 'Table' : ct === 'bar' ? 'Bars' : ct === 'donut' ? 'Donut' : 'Line')}
+                </button>
+              );
             })}
-          </span>
-          <button className="at-chip" disabled={offset + PAGE_SIZE >= data.total} onClick={() => setOffset(offset + PAGE_SIZE)}>
-            {t('analytics.next', 'Next ›')}
-          </button>
-        </div>
+            {chartType !== 'table' && data.measureLabels.length > 1 && (
+              <select value={chartMeasure} onChange={(e) => setChartMeasure(Number(e.target.value))}>
+                {data.measureLabels.map((l, i) => (
+                  <option key={l} value={i}>{l === 'count' ? t('analytics.count', 'Bottles') : l}</option>
+                ))}
+              </select>
+            )}
+          </div>
+          {chartType !== 'table' && data.buckets.length > 0 && (
+            <AnalyticsCharts data={data} chartType={chartType} measureIndex={chartMeasure} />
+          )}
+          {data.currency && (
+            <div className="at-note">
+              {t('analytics.currencyNote', 'Monetary values converted to {{code}}', { code: data.currency.target })}
+              {data.currency.unconvertibleRows > 0 && ' — ' + t('analytics.unconvertible', '{{n}} row(s) had no exchange rate and are excluded', { n: data.currency.unconvertibleRows })}
+              {!data.currency.ratesAvailable && ' — ' + t('analytics.noRates', 'no exchange rates available; monetary measures are empty')}
+            </div>
+          )}
+          {data.capped && (
+            <div className="at-note">{t('analytics.bucketsCapped', 'Showing the top {{n}} groups — narrow the scope or filters for the rest', { n: data.capped.at })}</div>
+          )}
+          {chartType === 'table' && (
+            <div className="at-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    {data.dimensionKeys.map((k) => (
+                      <th key={k}>{byKey.get(k)?.label || k}</th>
+                    ))}
+                    {data.measureLabels.map((l) => <th key={l}>{l === 'count' ? t('analytics.count', 'Bottles') : l}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.buckets.map((b, i) => (
+                    <tr key={i}>
+                      {b.dimensions.map((d, j) => (
+                        <td key={j} data-label={byKey.get(data.dimensionKeys[j])?.label}>{formatValue(d, byKey.get(data.dimensionKeys[j]))}</td>
+                      ))}
+                      {b.measures.map((m, j) => (
+                        <td key={`m${j}`} data-label={data.measureLabels[j]}>
+                          {m === null || m === undefined ? '—' : typeof m === 'number' ? Math.round(m * 100) / 100 : String(m)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {loading && <div className="at-loading">{t('analytics.loading', 'Loading…')}</div>}
+              {!loading && !data.buckets.length && (
+                <div className="at-empty">{t('analytics.empty', 'No bottles match this scope and these filters.')}</div>
+              )}
+            </div>
+          )}
+          {chartType !== 'table' && !data.buckets.length && !loading && (
+            <div className="at-empty">{t('analytics.empty', 'No bottles match this scope and these filters.')}</div>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="at-scroll">
+            <table>
+              <thead>
+                <tr>
+                  {shownColumns.map((k) => {
+                    const f = byKey.get(k);
+                    const sorted = sort && sort.field === k;
+                    return (
+                      <th
+                        key={k}
+                        className={f.sortable ? 'at-sortable' : ''}
+                        onClick={() => headerSort(f)}
+                        title={f.sortable ? t('analytics.sortHint', 'Click to sort') : t('analytics.notSortable', 'Not sortable')}
+                      >
+                        {f.label}{f.unit && f.unit !== 'currency' ? ` (${f.unit})` : ''}
+                        {sorted ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {(data?.rows || []).map((r) => (
+                  <tr key={r.id}>
+                    {shownColumns.map((k) => (
+                      <td key={k} data-label={byKey.get(k)?.label}>{formatValue(r.values[k], byKey.get(k))}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {loading && <div className="at-loading">{t('analytics.loading', 'Loading…')}</div>}
+            {!loading && data && !(data.rows || []).length && (
+              <div className="at-empty">{t('analytics.empty', 'No bottles match this scope and these filters.')}</div>
+            )}
+          </div>
+
+          {data && data.mode !== 'grouped' && (
+            <div className="at-pager">
+              <button className="at-chip" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>
+                {t('analytics.prev', '‹ Previous')}
+              </button>
+              <span>
+                {t('analytics.pageInfo', '{{from}}–{{to}} of {{total}}', {
+                  from: data.total === 0 ? 0 : offset + 1,
+                  to: offset + (data.rows?.length || 0),
+                  total: data.total,
+                })}
+              </span>
+              <button className="at-chip" disabled={offset + PAGE_SIZE >= data.total} onClick={() => setOffset(offset + PAGE_SIZE)}>
+                {t('analytics.next', 'Next ›')}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
