@@ -487,7 +487,7 @@ function EnrichmentGatePanel({ floor, unknownBar, apiFetch }) {
             <input type="number" min="0" max="1" step="0.05" value={u} onChange={e => setU(e.target.value)} style={numStyle} />
           </div>
         </div>
-        {msg && <div style={{ fontSize: 11, marginTop: 8, color: msg.ok ? 'var(--sa-ok, #7c7)' : 'var(--sa-err, #c77)' }}>{msg.text}</div>}
+        {msg && <div style={{ fontSize: 11, marginTop: 8, color: msg.ok ? 'var(--sa-green)' : 'var(--sa-red)' }}>{msg.text}</div>}
       </div>
     </div>
   );
