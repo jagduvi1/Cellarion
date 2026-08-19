@@ -82,6 +82,9 @@ describe('listForBottle', () => {
     expect(PersonalDataEntry.find).toHaveBeenCalledWith({
       wineDefinition: WINE,
       author: { $in: [ME, OTHER] },
+      // Vintage-scoped entries only surface on matching-vintage bottles
+      // (ticket 6a853211); a vintage-less bottle sees only unscoped entries.
+      $or: [{ vintage: null }, { vintage: null }],
     });
   });
 
