@@ -166,3 +166,9 @@
     flex-shrink: 0;
   }
 }
+
+/* R-B grouping */
+.at-grouping select { max-width: 220px; margin-bottom: 4px; background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border); border-radius: 6px; padding: 4px 8px; font-size: 0.85rem; }
+.at-measure-fixed { font-size: 0.82rem; color: var(--color-text-secondary); }
+.at-measure-row { display: flex; gap: 6px; }
+.at-note { font-size: 0.8rem; color: var(--color-text-secondary); padding: 2px 2px; }

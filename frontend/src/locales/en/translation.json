@@ -4351,7 +4351,7 @@
     "clearApplied": "Clear filters",
     "removeFilter": "Remove filter",
     "sortHint": "Click to sort",
-    "notSortable": "Not sortable yet",
+    "notSortable": "Not sortable",
     "prev": "‹ Previous",
     "next": "Next ›",
     "pageInfo": "{{from}}–{{to}} of {{total}}",
@@ -4373,6 +4373,17 @@
       "maturity": "Maturity",
       "personal": "My data",
       "registry": "Registry data"
-    }
+    },
+    "group": "Group",
+    "groupBy": "Group by",
+    "measures": "Measures",
+    "countAlways": "Bottle count (always)",
+    "noMeasure": "— none —",
+    "noSecondDimension": "— no second dimension —",
+    "count": "Bottles",
+    "currencyNote": "Monetary values converted to {{code}}",
+    "unconvertible": "{{n}} row(s) had no exchange rate and are excluded",
+    "noRates": "no exchange rates available; monetary measures are empty",
+    "bucketsCapped": "Showing the top {{n}} groups — narrow the scope or filters for the rest"
   }
 }

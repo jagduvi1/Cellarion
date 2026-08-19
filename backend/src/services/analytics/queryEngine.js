@@ -375,6 +375,82 @@ const WINE_LOOKUP = [
   { $unwind: { path: '$wd', preserveNullAndEmptyArrays: true } },
 ];
 
+/**
+ * R-B: join ONE key/value field's resolved value into the pipeline as
+ * `$<alias>`, so KV fields can be sorted, grouped and aggregated server-side.
+ * Personal entries apply the same precedence as the bottle page — bottle
+ * entry beats a vintage-scoped wine entry beats a vintage-null wine entry —
+ * enforced by the _prio sort inside the sub-pipeline. Registry reads the one
+ * published row per (wine, key). Both sub-pipelines are $limit 1 and run on
+ * indexed keys, bounded by the outer maxTimeMS like everything else.
+ */
+function kvJoinStages(field, alias, userId) {
+  const keyOid = new mongoose.Types.ObjectId(field.keyId);
+  if (field.source === 'registry') {
+    return [
+      {
+        $lookup: {
+          from: 'registrydatavalues',
+          let: { wid: '$wineDefinition' },
+          pipeline: [
+            { $match: { $expr: { $and: [
+              { $eq: ['$wineDefinition', '$$wid'] },
+              { $eq: ['$key', keyOid] },
+              { $eq: ['$status', 'published'] },
+            ] } } },
+            { $limit: 1 },
+            { $project: { _id: 0, value: 1 } },
+          ],
+          as: `${alias}_j`,
+        },
+      },
+      { $addFields: { [alias]: { $first: `$${alias}_j.value` } } },
+    ];
+  }
+  const userOid = new mongoose.Types.ObjectId(String(userId));
+  return [
+    {
+      $lookup: {
+        from: 'personaldataentries',
+        let: { bid: '$_id', wid: '$wineDefinition', vint: '$vintage' },
+        pipeline: [
+          { $match: { $expr: { $and: [
+            { $eq: ['$author', userOid] },
+            { $eq: ['$key', keyOid] },
+            { $or: [
+              { $eq: ['$bottle', '$$bid'] },
+              { $and: [
+                { $eq: ['$wineDefinition', '$$wid'] },
+                { $in: ['$vintage', [null, '$$vint']] },
+              ] },
+            ] },
+          ] } } },
+          { $addFields: { _prio: { $switch: {
+            branches: [
+              { case: { $eq: ['$targetType', 'bottle'] }, then: 0 },
+              { case: { $ne: ['$vintage', null] }, then: 1 },
+            ],
+            default: 2,
+          } } } },
+          { $sort: { _prio: 1 } },
+          { $limit: 1 },
+          { $project: { _id: 0, value: 1 } },
+        ],
+        as: `${alias}_j`,
+      },
+    },
+    { $addFields: { [alias]: { $first: `$${alias}_j.value` } } },
+  ];
+}
+
+/** Taxonomy sort: join the small name collection and sort by the name. */
+function taxonomySortStages(field, alias) {
+  return [
+    { $lookup: { from: field.taxonomyCollection, localField: field.path, foreignField: '_id', as: `${alias}_j` } },
+    { $addFields: { [alias]: { $first: `$${alias}_j.name` } } },
+  ];
+}
+
 function baseMatch(scopeCellarIds, bottleScope, preConds) {
   const match = {
     cellar: { $in: scopeCellarIds },
@@ -389,7 +465,10 @@ async function runRows({ userId, scopeCellars, bottleScope, filters, sort, limit
   const { pre, post, needsWine: filterNeedsWine } = await compileFilters(filters, userId);
 
   // Sort: one field, validated; default = newest first. _id tiebreaker always.
+  // Taxonomy and KV sorts join their value in first (R-B) — the join stages
+  // run after the filters so they touch only the surviving rows.
   let sortStage = { createdAt: -1, _id: 1 };
+  let sortJoin = [];
   let sortField = null;
   if (sort) {
     if (!sort.field || !['asc', 'desc'].includes(sort.dir || 'asc')) {
@@ -397,11 +476,20 @@ async function runRows({ userId, scopeCellars, bottleScope, filters, sort, limit
     }
     sortField = await resolveField(sort.field, userId);
     if (!sortField) throw new QueryError(400, `Unknown sort field "${sort.field}"`);
-    if (!sortField.sortable) throw new QueryError(400, `Field "${sort.field}" is not sortable yet`);
+    if (!sortField.sortable) throw new QueryError(400, `Field "${sort.field}" is not sortable`);
     const dir = sort.dir === 'desc' ? -1 : 1;
-    sortStage = { [sortField.path]: dir, _id: 1 };
+    if (sortField.source === 'taxonomy') {
+      sortJoin = taxonomySortStages(sortField, '_sortVal');
+      sortStage = { _sortVal: dir, _id: 1 };
+    } else if (sortField.source === 'personal' || sortField.source === 'registry') {
+      sortJoin = kvJoinStages(sortField, '_sortVal', userId);
+      sortStage = { _sortVal: dir, _id: 1 };
+    } else {
+      sortStage = { [sortField.path]: dir, _id: 1 };
+    }
   }
-  const needsWine = filterNeedsWine || (sortField && sortField.path.startsWith('wd.'));
+  const needsWine = filterNeedsWine
+    || (sortField && (sortField.source === 'taxonomy' || (sortField.path || '').startsWith('wd.')));
 
   const cellarIds = scopeCellars.map((c) => c._id);
   const pageLimit = Math.min(Math.max(1, limit || 50), ROWS_LIMIT_MAX);
@@ -411,6 +499,7 @@ async function runRows({ userId, scopeCellars, bottleScope, filters, sort, limit
     { $match: baseMatch(cellarIds, bottleScope, pre) },
     ...(needsWine ? WINE_LOOKUP : []),
     ...(post.length ? [{ $match: { $and: post } }] : []),
+    ...sortJoin,
     { $sort: sortStage },
     {
       $facet: {
@@ -560,12 +649,22 @@ async function runGrouped({ userId, scopeCellars, bottleScope, filters, dimensio
   }
 
   let needsWine = filterNeedsWine;
+  const joinStages = [];
   const dimFields = [];
-  for (const d of dimensions) {
-    const f = await resolveField(d, userId);
-    if (!f) throw new QueryError(400, `Unknown dimension "${d}"`);
-    if (!f.groupable) throw new QueryError(400, `Field "${d}" cannot be grouped yet`);
-    if (f.path && f.path.startsWith('wd.')) needsWine = true;
+  const dimExprs = [];
+  for (let i = 0; i < dimensions.length; i++) {
+    const f = await resolveField(dimensions[i], userId);
+    if (!f) throw new QueryError(400, `Unknown dimension "${dimensions[i]}"`);
+    if (!f.groupable) throw new QueryError(400, `Field "${dimensions[i]}" cannot be grouped`);
+    if (f.source === 'personal' || f.source === 'registry') {
+      // R-B: group by the joined KV value (non-numeric keys only, per the
+      // catalogue flag — numeric readings would bucket per distinct value).
+      joinStages.push(...kvJoinStages(f, `_d${i}v`, userId));
+      dimExprs.push(`$_d${i}v`);
+    } else {
+      if (f.path && f.path.startsWith('wd.')) needsWine = true;
+      dimExprs.push(`$${f.path}`);
+    }
     dimFields.push(f);
   }
 
@@ -585,7 +684,17 @@ async function runGrouped({ userId, scopeCellars, bottleScope, filters, dimensio
       throw new QueryError(400, `Field "${m.field}" does not support "${m.agg}"`);
     }
     if (f.source === 'personal' || f.source === 'registry') {
-      throw new QueryError(400, `Field "${m.field}" cannot be aggregated yet`);
+      // R-B: numeric KV measures aggregate the joined value. The $isNumber
+      // guard keeps a stray non-numeric entry (possible on rows written
+      // before a key existed, or via import) out of the accumulator instead
+      // of poisoning it.
+      joinStages.push(...kvJoinStages(f, `_m${i}v`, userId));
+      measureSpecs.push({
+        out: `m${i}`, label: `${m.agg}(${f.label})`, agg: m.agg,
+        valueExpr: { $cond: [{ $isNumber: `$_m${i}v` }, `$_m${i}v`, null] },
+        field: f,
+      });
+      continue;
     }
     let valueExpr = `$${f.path}`;
     if (f.unit === 'currency') {
@@ -630,7 +739,7 @@ async function runGrouped({ userId, scopeCellars, bottleScope, filters, dimensio
   }
 
   const groupId = {};
-  dimFields.forEach((f, i) => { groupId[`d${i}`] = `$${f.path}`; });
+  dimFields.forEach((f, i) => { groupId[`d${i}`] = dimExprs[i]; });
 
   const groupStage = { _id: groupId };
   for (const spec of measureSpecs) {
@@ -643,6 +752,7 @@ async function runGrouped({ userId, scopeCellars, bottleScope, filters, dimensio
     { $match: baseMatch(cellarIds, bottleScope, pre) },
     ...(needsWine ? WINE_LOOKUP : []),
     ...(post.length ? [{ $match: { $and: post } }] : []),
+    ...joinStages,
     { $group: groupStage },
     { $sort: { m0: -1, _id: 1 } },
     { $limit: BUCKET_CAP + 1 },

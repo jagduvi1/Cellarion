@@ -60,12 +60,12 @@ const STATIC_FIELDS = [
   dim({ key: 'wine.type', label: 'Wine type', domain: 'wine', type: 'enum', source: 'wine', path: 'wd.type', enumOptions: ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'] }),
   dim({ key: 'wine.appellation', label: 'Appellation', domain: 'wine', type: 'text', source: 'wine', path: 'wd.appellation' }),
   dim({ key: 'wine.classification', label: 'Classification', domain: 'wine', type: 'text', source: 'wine', path: 'wd.classification' }),
-  // Taxonomy refs: the stored value is an ObjectId, so a server-side sort
-  // would order by id, not name — sortable stays false until R-B adds the
-  // name lookup. Filters resolve the typed name to ids first.
-  dim({ key: 'wine.country', label: 'Country', domain: 'wine', type: 'text', source: 'taxonomy', path: 'wd.country', taxonomyModel: 'Country', sortable: false }),
-  dim({ key: 'wine.region', label: 'Region', domain: 'wine', type: 'text', source: 'taxonomy', path: 'wd.region', taxonomyModel: 'Region', sortable: false }),
-  // Grapes is an ARRAY ref — a filter means "has this grape".
+  // Taxonomy refs: the stored value is an ObjectId; sorting joins the name
+  // (R-B). Filters resolve the typed name to ids first. taxonomyCollection is
+  // the raw collection name the sort $lookup reads.
+  dim({ key: 'wine.country', label: 'Country', domain: 'wine', type: 'text', source: 'taxonomy', path: 'wd.country', taxonomyModel: 'Country', taxonomyCollection: 'countries' }),
+  dim({ key: 'wine.region', label: 'Region', domain: 'wine', type: 'text', source: 'taxonomy', path: 'wd.region', taxonomyModel: 'Region', taxonomyCollection: 'regions' }),
+  // Grapes is an ARRAY ref — a filter means "has this grape"; no scalar order.
   dim({ key: 'wine.grapes', label: 'Grapes', domain: 'wine', type: 'text', source: 'taxonomy', path: 'wd.grapes', taxonomyModel: 'Grape', sortable: false }),
 
   // Inventory
@@ -109,17 +109,20 @@ const KV_ID_RX = /^(personal|registry)\.([0-9a-f]{24})$/;
 
 /** A dynamic KV key document → catalogue entry. */
 function kvEntry(kind, doc) {
+  const numeric = doc.type === 'integer' || doc.type === 'decimal';
   return {
     key: `${kind}.${String(doc._id)}`,
     label: doc.name,
     domain: kind, // 'personal' | 'registry'
     type: doc.type,
     unit: doc.unit || null,
-    role: (doc.type === 'integer' || doc.type === 'decimal') ? 'both' : 'dimension',
-    aggregations: (doc.type === 'integer' || doc.type === 'decimal') ? ['avg', 'min', 'max', 'sum'] : [],
-    // Honest flags: sorting/grouping KV columns needs the R-B $lookup work.
-    sortable: false,
-    groupable: false,
+    role: numeric ? 'both' : 'dimension',
+    aggregations: numeric ? ['avg', 'min', 'max', 'sum'] : [],
+    // Sort and non-numeric grouping join the entries collection (R-B).
+    // Numeric KV stays measure-only as a dimension: every distinct reading
+    // would be its own bucket — a wall, not an answer.
+    sortable: true,
+    groupable: !numeric,
     filterable: true,
     enumOptions: doc.enumOptions || undefined,
     source: kind,

@@ -295,9 +295,38 @@ describe('bounds and caps', () => {
     expect(sort).toEqual({ price: -1, _id: 1 });
   });
 
-  test('a non-sortable field is refused as a sort, honestly', async () => {
-    await expect(runQuery(USER, { sort: { field: 'wine.country', dir: 'asc' } }))
+  test('a non-sortable field is refused as a sort, honestly (grapes is an array ref)', async () => {
+    await expect(runQuery(USER, { sort: { field: 'wine.grapes', dir: 'asc' } }))
       .rejects.toThrow(/not sortable/);
+  });
+
+  test('R-B: a taxonomy sort joins the name collection and sorts by it, tiebroken', async () => {
+    const cap = aggReturning([{ ids: [], total: [] }]);
+    await runQuery(USER, { sort: { field: 'wine.country', dir: 'asc' } });
+    const p = cap.pipelines[0];
+    const lookup = p.find((s) => s.$lookup && s.$lookup.from === 'countries');
+    expect(lookup.$lookup.localField).toBe('wd.country');
+    expect(p.find((s) => s.$sort).$sort).toEqual({ _sortVal: 1, _id: 1 });
+    // The wine lookup precedes the taxonomy join.
+    expect(p.findIndex((s) => s.$lookup && s.$lookup.from === 'winedefinitions'))
+      .toBeLessThan(p.findIndex((s) => s.$lookup && s.$lookup.from === 'countries'));
+  });
+
+  test('R-B: a personal KV sort joins entries with the bottle>vintage>null precedence', async () => {
+    const KEY_ID = 'd'.repeat(24);
+    PersonalDataKey.findOne.mockReturnValue({
+      lean: async () => ({ _id: KEY_ID, user: USER, name: 'ABV', type: 'decimal', unit: '%' }),
+    });
+    const cap = aggReturning([{ ids: [], total: [] }]);
+    await runQuery(USER, { sort: { field: `personal.${KEY_ID}`, dir: 'desc' } });
+    const p = cap.pipelines[0];
+    const lookup = p.find((s) => s.$lookup && s.$lookup.from === 'personaldataentries');
+    expect(lookup).toBeDefined();
+    const inner = lookup.$lookup.pipeline;
+    // Precedence is enforced INSIDE the sub-pipeline: prio sort then limit 1.
+    expect(inner.find((s) => s.$sort)).toEqual({ $sort: { _prio: 1 } });
+    expect(inner.find((s) => s.$limit)).toEqual({ $limit: 1 });
+    expect(p.find((s) => s.$sort && s.$sort._sortVal !== undefined).$sort).toEqual({ _sortVal: -1, _id: 1 });
   });
 
   test('grouped mode refuses a third dimension', async () => {
@@ -318,13 +347,48 @@ describe('bounds and caps', () => {
     expect(out.capped).toEqual({ type: 'buckets', at: BUCKET_CAP });
   });
 
-  test('a KV field is refused as a grouped dimension until R-B', async () => {
+  test('a NUMERIC KV field stays refused as a grouped dimension — every reading would be a bucket', async () => {
     PersonalDataKey.findOne.mockReturnValue({
       lean: async () => ({ _id: 'd'.repeat(24), user: USER, name: 'ABV', type: 'decimal' }),
     });
     await expect(runQuery(USER, {
       mode: 'grouped', dimensions: [`personal.${'d'.repeat(24)}`], measures: [{ field: '*', agg: 'count' }],
     })).rejects.toThrow(/cannot be grouped/);
+  });
+
+  test('R-B: an ENUM KV field groups by its joined value', async () => {
+    const KEY_ID = 'd'.repeat(24);
+    PersonalDataKey.findOne.mockReturnValue({
+      lean: async () => ({ _id: KEY_ID, user: USER, name: 'Source', type: 'enum', enumOptions: ['shop', 'auction'] }),
+    });
+    const cap = aggReturning([{ _id: { d0: 'shop' }, m0: 4 }, { _id: { d0: 'auction' }, m0: 2 }]);
+    const out = await runQuery(USER, {
+      mode: 'grouped', dimensions: [`personal.${KEY_ID}`], measures: [{ field: '*', agg: 'count' }],
+    });
+    const p = cap.pipelines[0];
+    expect(p.find((s) => s.$lookup && s.$lookup.from === 'personaldataentries')).toBeDefined();
+    expect(p.find((s) => s.$group).$group._id).toEqual({ d0: '$_d0v' });
+    expect(out.buckets).toEqual([
+      { dimensions: ['shop'], measures: [4] },
+      { dimensions: ['auction'], measures: [2] },
+    ]);
+  });
+
+  test('R-B: a numeric KV MEASURE aggregates the joined value behind an $isNumber guard', async () => {
+    const KEY_ID = 'd'.repeat(24);
+    PersonalDataKey.findOne.mockReturnValue({
+      lean: async () => ({ _id: KEY_ID, user: USER, name: 'ABV', type: 'decimal', unit: '%' }),
+    });
+    const cap = aggReturning([{ _id: { d0: 'red' }, m0: 3, m1: 13.8 }]);
+    const out = await runQuery(USER, {
+      mode: 'grouped', dimensions: ['wine.type'],
+      measures: [{ field: '*', agg: 'count' }, { field: `personal.${KEY_ID}`, agg: 'avg' }],
+    });
+    const p = cap.pipelines[0];
+    const group = p.find((s) => s.$group).$group;
+    expect(group.m1.$avg).toEqual({ $cond: [{ $isNumber: '$_m1v' }, '$_m1v', null] });
+    expect(out.measureLabels[1]).toBe('avg(ABV)');
+    expect(out.buckets[0].measures).toEqual([3, 13.8]);
   });
 });
 
