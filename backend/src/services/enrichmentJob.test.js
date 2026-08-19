@@ -503,6 +503,16 @@ describe('shouldHoldProfile — which doubt withholds the profile', () => {
     expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: false, description: clean, confidence: 0.5 }, GATE)).toBeNull();
   });
 
+  // Ticket 6a855285: the bar applies only to DATA-INSUFFICIENT identities —
+  // "you can know Pommard perfectly well and have never heard of the grower".
+  test('a DATA-SUFFICIENT unknown-producer record publishes at the base floor as a labelled estimate', () => {
+    expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: true, description: clean, confidence: 0.45, dataSufficient: true }, GATE)).toBeNull();
+    // …but the junk floor still holds it regardless of richness.
+    expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: true, description: clean, confidence: 0.3, dataSufficient: true }, GATE)).toBe('low_confidence');
+    // …and the prose backstop still applies to rich records too.
+    expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: true, description: 'The family has farmed this estate for generations.', confidence: 0.6, dataSufficient: true }, GATE)).toBe('producer_claim');
+  });
+
   test('a null confidence skips both checks — degrade open, like the flags', () => {
     expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: true, description: clean, confidence: null }, GATE)).toBeNull();
     expect(shouldHoldProfile({ producerSuspect: false, producerUnknown: false, description: null, confidence: null }, GATE)).toBeNull();
@@ -573,13 +583,28 @@ describe('the split flags end-to-end through enrichWine', () => {
     expect(p.confidence).toBe(0.2);
   });
 
-  test('an unknown producer under the bar is HELD as unknown_low_confidence', async () => {
+  test('an unknown producer under the bar is HELD — when the identity is data-INSUFFICIENT', async () => {
+    // A thin record: no appellation, no region → the bar applies.
+    WineDefinition.findById.mockReturnValue(chain({
+      _id: WINE_ID, name: 'Mystery Red', producer: 'Unknown House', type: 'red',
+      country: { name: 'Australia' }, region: null, appellation: null, grapes: [],
+    }));
     suggestProfile.mockResolvedValue(withFlags({ producerUnknown: true, confidence: 0.45 }));
     await enrichWineById(WINE_ID);
     const p = persisted();
     expect(p.heldAt).toBeInstanceOf(Date);
     expect(p.heldReason).toBe('unknown_low_confidence');
     expect(p.producerUnknown).toBe(true);
+  });
+
+  test('the SAME unknown producer at the same confidence PUBLISHES on the data-rich default fixture (6a855285)', async () => {
+    // Default fixture: region Marlborough + grapes + type → sufficient.
+    suggestProfile.mockResolvedValue(withFlags({ producerUnknown: true, confidence: 0.45 }));
+    await enrichWineById(WINE_ID);
+    const p = persisted();
+    expect(p.heldAt).toBeNull();
+    expect(p.description).toMatch(/Riesling/);
+    expect(p.producerUnknown).toBe(true); // the doubt stays recorded on the row
   });
 
   // 6a8464ea phase 2: the fixture wine is a Pinot Noir — a grape DEFINED by
@@ -732,5 +757,11 @@ describe('the enrichment prompt forbids asserting unstated facts', () => {
   test('the prompt forbids substituting the regional flagship style for producer knowledge', () => {
     expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/A region's dominant or most famous style is NOT evidence about this producer/);
     expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/two established house styles .*describe what is common to both/);
+  });
+
+  // Ticket 6a855285: confidence must score writability, not bottle recognition.
+  test('the prompt scores confidence on truth-given-data, not producer recognition', () => {
+    expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/NOT whether you recognise this specific bottling/);
+    expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/never having heard of the grower merits 0\.5-0\.6/);
   });
 });

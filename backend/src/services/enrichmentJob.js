@@ -187,23 +187,45 @@ const PRODUCER_CLAIM_RX =
  * @param {boolean} profile.producerUnknown — real name, cannot be placed
  * @param {string|null} profile.description
  * @param {number|null} profile.confidence — cleanConfidence output
+ * @param {boolean} profile.dataSufficient — the RECORD carries enough to
+ *   write a true regional estimate: (appellation OR region) AND
+ *   (grapes OR type). Somm ticket 6a855285 (2026-08-19): the queue's bulk
+ *   was data-rich wines held only because the model didn't recognise the
+ *   BOTTLING — "you can know Pommard perfectly well and have never heard of
+ *   the grower". The unknown-producer bar therefore applies only when the
+ *   identity is data-INSUFFICIENT; a rich record's unknown-producer profile
+ *   publishes at the base floor as a labelled regional estimate — the exact
+ *   population the 2026-08-17 flag split released, which the 08-18 bar had
+ *   re-caught. The junk floor itself is unchanged.
  * @param {object} [thresholds] — aiConfig gate values; a missing/non-numeric
  *   threshold disables that check (degrade open, never to a spurious hold).
  * @param {number} [thresholds.floor] — hold ANY profile under this
- * @param {number} [thresholds.unknownBar] — hold unknown-producer rows under this
+ * @param {number} [thresholds.unknownBar] — hold DATA-INSUFFICIENT
+ *   unknown-producer rows under this
  * @returns {string|null} the hold reason ('producer_suspect' |
  *   'low_confidence' | 'unknown_low_confidence' | 'producer_claim'), or null
  *   to publish. Stored as aiProfile.heldReason so the release queue can say
  *   WHY a row is held.
  */
-function shouldHoldProfile({ producerSuspect, producerUnknown, description, confidence }, { floor, unknownBar } = {}) {
+function shouldHoldProfile({ producerSuspect, producerUnknown, description, confidence, dataSufficient = false }, { floor, unknownBar } = {}) {
   if (producerSuspect) return 'producer_suspect';
   if (typeof confidence === 'number') {
     if (typeof floor === 'number' && confidence < floor) return 'low_confidence';
-    if (producerUnknown && typeof unknownBar === 'number' && confidence < unknownBar) return 'unknown_low_confidence';
+    if (producerUnknown && !dataSufficient && typeof unknownBar === 'number' && confidence < unknownBar) return 'unknown_low_confidence';
   }
   if (producerUnknown && PRODUCER_CLAIM_RX.test(description || '')) return 'producer_claim';
   return null;
+}
+
+/**
+ * Enough registry identity to write a TRUE appellation/grape-level estimate:
+ * a place axis (appellation or region) AND a what axis (grapes or type).
+ * Shared by the gate and the reset-misheld migration — one definition.
+ */
+function identityDataSufficient(wine) {
+  const hasPlace = !!(wine.appellation || wine.region);
+  const hasWhat = (Array.isArray(wine.grapes) && wine.grapes.length > 0) || !!wine.type;
+  return hasPlace && hasWhat;
 }
 
 // ── Main job logic ─────────────────────────────────────────────────────────
@@ -392,7 +414,7 @@ async function enrichWine(wine, model, { publishSuspect = false, curatorContext 
   // doubt and judged the identity fine.
   const gateCfg = aiConfig.get();
   let holdReason = shouldHoldProfile(
-    { producerSuspect: suspect, producerUnknown: unknown, description, confidence },
+    { producerSuspect: suspect, producerUnknown: unknown, description, confidence, dataSufficient: identityDataSufficient(wine) },
     { floor: gateCfg.enrichmentHoldConfidenceFloor, unknownBar: gateCfg.enrichmentHoldUnknownConfidenceBar }
   );
   // Deterministic taxonomy cross-check (ticket 6a8464ea phase 2): a value at
@@ -659,6 +681,6 @@ function reenrichAfterRecordEdit(wine, changed) {
 module.exports = {
   start, requestStop, getStatus, enrichWineById, releaseHeldProfile,
   profileInputsSnapshot, reenrichAfterRecordEdit,
-  // exported for unit tests
-  cleanDescriptor, cleanStringList, cleanProse, cleanConfidence, shouldHoldProfile,
+  // exported for unit tests + the reset-misheld migration
+  cleanDescriptor, cleanStringList, cleanProse, cleanConfidence, shouldHoldProfile, identityDataSufficient,
 };
