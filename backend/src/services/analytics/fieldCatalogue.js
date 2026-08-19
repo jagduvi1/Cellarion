@@ -65,8 +65,11 @@ const STATIC_FIELDS = [
   // the raw collection name the sort $lookup reads.
   dim({ key: 'wine.country', label: 'Country', domain: 'wine', type: 'text', source: 'taxonomy', path: 'wd.country', taxonomyModel: 'Country', taxonomyCollection: 'countries' }),
   dim({ key: 'wine.region', label: 'Region', domain: 'wine', type: 'text', source: 'taxonomy', path: 'wd.region', taxonomyModel: 'Region', taxonomyCollection: 'regions' }),
-  // Grapes is an ARRAY ref — a filter means "has this grape"; no scalar order.
-  dim({ key: 'wine.grapes', label: 'Grapes', domain: 'wine', type: 'text', source: 'taxonomy', path: 'wd.grapes', taxonomyModel: 'Grape', sortable: false }),
+  // Grapes is an ARRAY ref — a filter means "has this grape". Neither sortable
+  // nor groupable: $group on an array keys buckets by the whole combination
+  // ("[Grenache, Syrah]" ≠ "Grenache"), which reads as data and lies. Per-grape
+  // grouping needs an $unwind stage — a later slice, honestly flagged out.
+  dim({ key: 'wine.grapes', label: 'Grapes', domain: 'wine', type: 'text', source: 'taxonomy', path: 'wd.grapes', taxonomyModel: 'Grape', sortable: false, groupable: false }),
 
   // Inventory
   dim({ key: 'bottle.vintage', label: 'Vintage', domain: 'inventory', type: 'text', source: 'bottle', path: 'vintage' }),

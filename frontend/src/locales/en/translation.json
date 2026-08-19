@@ -4391,6 +4391,23 @@
       "bar": "Bars",
       "donut": "Donut",
       "line": "Line"
+    },
+    "presets": "Pre-built views",
+    "preset": {
+      "moneyByRegion": "Where my money sits",
+      "cellarByType": "What I buy (cellar by type)",
+      "vintageSpread": "Vintage spread",
+      "topProducers": "Top producers",
+      "drankLastYear": "What I drank this past year",
+      "drinkSoon": "Drink soon (my windows)",
+      "priciest": "My priciest bottles",
+      "favouriteRegions": "My favourite regions (by my ratings)",
+      "whatIDrink": "What I actually drink (by type)",
+      "agingRunway": "Aging runway (bottles per drink-to year)",
+      "pastWindow": "Past their window (still in the rack)",
+      "forgottenBottles": "Forgotten bottles (in the cellar 2+ years)",
+      "whereIShop": "Where I shop (and what it costs me)",
+      "giftedVsDrunk": "How bottles leave (drunk, gifted, sold)"
     }
   }
 }

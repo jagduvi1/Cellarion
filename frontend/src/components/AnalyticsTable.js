@@ -6,6 +6,7 @@ import { listCellars } from '../api/cellars';
 import { csvEscape } from '../utils/importReport';
 import downloadBlob from '../utils/downloadBlob';
 import AnalyticsCharts from './AnalyticsCharts';
+import { ANALYTICS_PRESETS } from '../utils/analyticsPresets';
 import './AnalyticsTable.css';
 
 /**
@@ -209,6 +210,24 @@ export default function AnalyticsTable({ cellarId }) {
     setOffset(0);
   };
 
+  // A preset is one click that sets the WHOLE table state — scope, filters,
+  // grouping, chart, columns, sort. Everything it does is visible in the
+  // controls afterwards, so a preset is a starting point, never a black box.
+  const applyPreset = (key) => {
+    const preset = ANALYTICS_PRESETS.find((p) => p.key === key);
+    if (!preset) return;
+    const s = preset.build();
+    setBottleScope(s.bottleScope || 'active');
+    setGrouping(s.grouping || { on: false, dim1: 'wine.type', dim2: '', measures: [] });
+    setChartType(s.chartType || 'table');
+    setChartMeasure(s.chartType && s.grouping?.measures?.length ? 1 : 0);
+    setFilters(s.filters || []);
+    setDraftFilters(s.filters || []);
+    if (s.columns) setColumns(s.columns);
+    setSort(s.sort || null);
+    setOffset(0);
+  };
+
   const addDraftFilter = () => {
     const first = catalogue.find((f) => f.filterable);
     if (!first) return;
@@ -327,6 +346,17 @@ export default function AnalyticsTable({ cellarId }) {
           )}
         </div>
         <div className="at-actions">
+          <select
+            className="at-preset-select"
+            value=""
+            onChange={(e) => { if (e.target.value) applyPreset(e.target.value); }}
+            aria-label={t('analytics.presets', 'Pre-built views')}
+          >
+            <option value="">{t('analytics.presets', 'Pre-built views')}…</option>
+            {ANALYTICS_PRESETS.map((p) => (
+              <option key={p.key} value={p.key}>{t(`analytics.preset.${p.key}`, p.label)}</option>
+            ))}
+          </select>
           <button
             className={`at-chip ${grouping.on ? 'at-apply' : ''}`}
             onClick={() => setGrouping((g) => ({ ...g, on: !g.on }))}
