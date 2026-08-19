@@ -552,11 +552,13 @@ describe('gap-report items 2/3/5/6 (2026-08-18 evening)', () => {
       { _id: oid('1'), ownerCount: 6 }, { _id: oid('2'), ownerCount: 5 }, { _id: oid('3'), ownerCount: 4 },
     ]);
     WineDefinition.find.mockReturnValue({
-      select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([
-        { _id: oid('1'), name: 'A', producer: 'P', aiProfile: { description: 'x', body: 'light', acidity: 'high', flavors: ['pear'], foodPairings: [] } },
+      select: jest.fn().mockReturnThis(),
+      populate: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockResolvedValue([
+        { _id: oid('1'), name: 'A', producer: 'P', region: { name: 'Hunter Valley' }, aiProfile: { description: 'x', body: 'light', acidity: 'high', flavors: ['pear'], foodPairings: [] } },
         { _id: oid('2'), name: 'B', producer: 'P', aiProfile: { heldAt: new Date(), heldReason: 'low_confidence' } },
         { _id: oid('3'), name: 'C', producer: 'P', aiProfile: { description: 'y' } },
-      ]) }),
+      ]),
     });
     let body = parse(await tool('list_unverified_core_wines').handler({ min_owners: 3, limit: 30, offset: 0 }, SOMM_CTX));
     expect(body.data[0].profile).toMatchObject({ description: 'x', body: 'light', acidity: 'high' });
@@ -767,10 +769,12 @@ describe('list_unverified_core_wines (curated core — rethink decision 3)', () 
       { _id: oid('3'), ownerCount: 3 },
     ]);
     WineDefinition.find.mockReturnValue({
-      select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([
+      select: jest.fn().mockReturnThis(),
+      populate: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockResolvedValue([
         { _id: oid('1'), name: 'Barolo', producer: 'Vajra', appellation: 'Barolo', type: 'red', aiProfile: { description: 'x', heldAt: null, confidence: 0.6 } },
         { _id: oid('3'), name: 'Rioja', producer: 'X', appellation: 'Rioja', type: 'red', aiProfile: { description: null, heldAt: new Date(), heldReason: 'low_confidence' } },
-      ]) }),
+      ]),
     });
     const body = parse(await tool('list_unverified_core_wines').handler({ min_owners: 3, limit: 30 }, SOMM_CTX));
     expect(body.error).toBeUndefined();

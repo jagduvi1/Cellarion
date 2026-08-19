@@ -53,9 +53,9 @@ router.get('/bottle/:id', requireBottleAccess('viewer'), async (req, res, next) 
  */
 router.post('/bottle/:id', requireNonDemo, requireBottleAccess('viewer'), async (req, res, next) => {
   try {
-    const { level, keyId, newKey, value } = req.body || {};
+    const { level, keyId, newKey, value, vintageScoped } = req.body || {};
     const result = await personalData.createEntry(req.user.id, req.bottle, {
-      level, keyId, newKey, value,
+      level, keyId, newKey, value, vintageScoped: vintageScoped === true,
     });
     if (!result.ok) return sendFail(res, result);
     logAudit(

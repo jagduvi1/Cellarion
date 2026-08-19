@@ -848,18 +848,19 @@ registerTool({
       } },
       { $sample: { size: args.count || 20 } },
       { $project: {
-        name: 1, producer: 1, appellation: 1, classification: 1, type: 1, grapes: 1,
+        name: 1, producer: 1, appellation: 1, classification: 1, type: 1, grapes: 1, region: 1,
         'aiProfile.body': 1, 'aiProfile.tannin': 1, 'aiProfile.acidity': 1,
         'aiProfile.sweetness': 1, 'aiProfile.flavors': 1, 'aiProfile.description': 1,
         'aiProfile.confidence': 1, 'aiProfile.producerUnknown': 1,
       } },
     ]);
-    await WineDefinition.populate(rows, { path: 'grapes', select: 'name' });
+    await WineDefinition.populate(rows, [{ path: 'grapes', select: 'name' }, { path: 'region', select: 'name' }]);
     return ok(`${rows.length} random published AI profile(s) — judge each against producer/grape/appellation facts`, rows.map((w) => ({
       wine_id: w._id,
       name: w.name,
       producer: w.producer,
       appellation: w.appellation || null,
+      region: w.region?.name || null,
       classification: w.classification || null,
       type: w.type || null,
       grapes: (w.grapes || []).map((g) => g?.name).filter(Boolean),
@@ -916,7 +917,9 @@ registerTool({
       _id: { $in: owned.map((o) => o._id) },
       nonWine: { $ne: true }, pendingIdentity: { $ne: true },
       'aiProfile.source': { $ne: 'curator' },
-    }).select('name producer appellation type aiProfile.description aiProfile.body aiProfile.tannin aiProfile.acidity aiProfile.sweetness aiProfile.flavors aiProfile.foodPairings aiProfile.heldAt aiProfile.heldReason aiProfile.confidence').lean();
+    }).select('name producer appellation region type aiProfile.description aiProfile.body aiProfile.tannin aiProfile.acidity aiProfile.sweetness aiProfile.flavors aiProfile.foodPairings aiProfile.heldAt aiProfile.heldReason aiProfile.confidence')
+      .populate('region', 'name')
+      .lean();
     const byId = new Map(wines.map((w) => [String(w._id), w]));
     const rows = [];
     let skipped = 0;
@@ -930,6 +933,7 @@ registerTool({
         name: w.name,
         producer: w.producer,
         appellation: w.appellation || null,
+        region: w.region?.name || null,
         type: w.type || null,
         owner_count: o.ownerCount,
         profile_state: ap.heldAt ? 'held' : (ap.description ? 'ai_published' : 'none'),
@@ -1178,10 +1182,11 @@ registerTool({
     }
 
     const rows = await WineDefinition.find(match)
-      .select('name producer appellation type grapes country aiProfile.confidence aiProfile.heldAt aiProfile.heldReason aiProfile.producerSuspect aiProfile.producerUnknown aiProfile.producerNote aiProfile.description aiProfile.generatedAt')
+      .select('name producer appellation type grapes country region aiProfile.confidence aiProfile.heldAt aiProfile.heldReason aiProfile.producerSuspect aiProfile.producerUnknown aiProfile.producerNote aiProfile.description aiProfile.generatedAt')
       .limit(HELD_LIST_CAP)
       .populate('grapes', 'name')
       .populate('country', 'name')
+      .populate('region', 'name')
       .lean();
 
     const wanted = rows.filter((w) => {
@@ -1206,6 +1211,11 @@ registerTool({
         // what the curator judges hand-curatability with.
         grapes: (w.grapes || []).map((g) => g?.name).filter(Boolean),
         country: w.country?.name || null,
+        // Region carries the judgement a country cannot (somm ticket
+        // 6a84c8e8: Hunter Valley vs "Australia") — and note: regeneration
+        // writes ONLY the aiProfile subdoc, it can never set region or any
+        // identity field; those stay behind the proposal gate.
+        region: w.region?.name || null,
         state: w.aiProfile?.heldAt ? 'held' : 'published_suspect',
         held_reason: w.aiProfile?.heldAt ? (w.aiProfile?.heldReason || null) : null,
         producer_suspect: w.aiProfile?.producerSuspect === true,
@@ -1294,10 +1304,17 @@ registerTool({
 
       if (args.decision === 'confirm') {
         const now = new Date();
-        await WineDefinition.updateOne({ _id: wine._id }, { $set: { profileReviewedAt: now } });
+        const set = { profileReviewedAt: now };
+        // Confirming a PUBLISHED suspect row means a human adjudicated the
+        // doubt and kept the row — so the owner-visible caveat must go
+        // (somm ticket 6a84c8dc: five documented-domaine rows carried a
+        // false "cannot be verified" disclaimer even after review). The
+        // producerNote stays for curator context; only the flag clears.
+        if (!held) set['aiProfile.producerSuspect'] = false;
+        await WineDefinition.updateOne({ _id: wine._id }, { $set: set });
         logAudit(ctx.req, 'admin.wine.profileReviewed', { type: 'wine', id: wine._id },
-          { name: wine.name, producer: wine.producer, decision: 'confirm', state: held ? 'held' : 'published_suspect', reason, via: 'mcp' });
-        return { wine_id: wine._id, label, decision: 'confirm', state: held ? 'held' : 'published_suspect', reviewed_at: now };
+          { name: wine.name, producer: wine.producer, decision: 'confirm', state: held ? 'held' : 'published_suspect', ...(held ? {} : { suspectCleared: true }), reason, via: 'mcp' });
+        return { wine_id: wine._id, label, decision: 'confirm', state: held ? 'held' : 'published_suspect', ...(held ? {} : { suspect_cleared: true }), reviewed_at: now };
       }
 
       // reject — held rows only: nothing published means nothing embedded, so
@@ -1335,7 +1352,7 @@ registerTool({
         : r.decision === 'confirm'
           ? (r.state === 'held'
             ? `Confirmed the hold on ${r.label} — it stays unpublished (owners see "Not yet assessed") and leaves the queue.`
-            : `Confirmed ${r.label} as published — the suspect flag stays as provenance and the row leaves the queue.`)
+            : `Confirmed ${r.label} as published — the suspect flag is CLEARED (a human adjudicated the doubt); producer_note stays for context.`)
           : `Rejected the held generation for ${r.label} — profile cleared; the wine returns to the enrichment pool for a fresh attempt.`;
       const { label, ...data } = r;
       return ok(msg, data);

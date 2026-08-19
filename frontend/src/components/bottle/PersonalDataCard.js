@@ -29,7 +29,7 @@ const emptyForm = {
   value: '',
 };
 
-function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId }) {
+function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage }) {
   const { t } = useTranslation();
   const [data, setData] = useState({ bottleEntries: [], wineEntries: [] });
   const [keys, setKeys] = useState([]);
@@ -113,7 +113,13 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId }) {
       if (modal.mode === 'edit') {
         res = await updatePersonalDataEntry(apiFetch, modal.entry._id, formValue());
       } else {
-        const payload = { level: form.level, value: formValue() };
+        // 'wine-vintage' is UI sugar (user ticket 6a853211): a wine-level
+        // entry the server scopes to THIS bottle's vintage.
+        const payload = {
+          level: form.level === 'wine-vintage' ? 'wine' : form.level,
+          ...(form.level === 'wine-vintage' ? { vintageScoped: true } : {}),
+          value: formValue(),
+        };
         if (matchedKey) {
           payload.keyId = matchedKey._id;
         } else {
@@ -214,7 +220,17 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId }) {
     <div className="pd-entries">
       {entries.map((entry) => (
         <div key={entry._id} className="pd-entry">
-          <span className="pd-entry-key">{entry.key.name}</span>
+          <span className="pd-entry-key">
+            {entry.key.name}
+            {entry.vintage && (
+              <span
+                style={{ marginLeft: 4, fontSize: '0.75rem', fontWeight: 400, color: 'var(--color-text-muted)' }}
+                title={t('personalData.vintageScopeTitle', 'Applies only to bottles of this vintage')}
+              >
+                ({entry.vintage})
+              </span>
+            )}
+          </span>
           <span className="pd-entry-main">
             <span className={isPillValue(entry) ? 'pd-value-pill' : 'pd-entry-value'}>
               {formatValue(entry)}
@@ -359,7 +375,10 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId }) {
                     onChange={(e) => setForm({ ...form, level: e.target.value })}
                   >
                     <option value="bottle">{t('personalData.levelBottle', 'This bottle only')}</option>
-                    <option value="wine">{t('personalData.levelWine', 'Every bottle of this wine')}</option>
+                    {vintage && (
+                      <option value="wine-vintage">{t('personalData.levelWineVintage', 'Every bottle of this vintage ({{vintage}})', { vintage })}</option>
+                    )}
+                    <option value="wine">{t('personalData.levelWine', 'Every bottle of this wine (all vintages)')}</option>
                   </select>
                 </div>
 

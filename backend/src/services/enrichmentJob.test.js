@@ -711,6 +711,10 @@ describe('the enrichment prompt forbids asserting unstated facts', () => {
 
   test('the two producer doubts are defined apart, and only the wrong-field one is a claim about the record', () => {
     expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/producerSuspect: true ONLY when the Producer value is not a winery at all/);
+    // Ticket 6a84c8dc (Vignoble Guillaume ×5): the flag fired on
+    // obscure-but-real houses. Suspicion now requires naming the alternative.
+    expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/producerSuspect requires EVIDENCE, not unfamiliarity/);
+    expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/"Vignoble X", "Cave de X"/);
     expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/producerUnknown: true ONLY when you cannot place the PRODUCER ITSELF/);
     // The 2026-08-18 defect report: known house + unverified bottling was
     // being flagged producerUnknown and held. The distinction is now explicit.
