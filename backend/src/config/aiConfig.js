@@ -387,6 +387,15 @@ const defaults = {
   // confidence mass sits in the 0.4 band. See enrichmentJob.shouldHoldProfile.
   enrichmentHoldConfidenceFloor: 0.4,
   enrichmentHoldUnknownConfidenceBar: 0.55,
+  // Web-search rescue pilot (Johan-approved 2026-08-19, cost-capped): when a
+  // generation would HOLD for low/unknown confidence, ONE search-assisted
+  // retry may run — the gate itself is the difficulty detector, so wines the
+  // model handles fine never spend a search. Anthropic-provider only. The
+  // daily cap bounds worst-case spend (~$0.02-0.05 per searched wine);
+  // kill-switch = enabled:false. Counted in-memory per UTC day (a backend
+  // restart resets the counter — acceptable for the pilot's bound).
+  enrichmentSearchEnabled: true,
+  enrichmentSearchDailyCap: 5,
 };
 
 let cache = { ...defaults };
@@ -428,6 +437,9 @@ async function load() {
         enrichmentModel:       VALID_CHAT_MODELS.includes(doc.value.enrichmentModel) ? doc.value.enrichmentModel : defaults.enrichmentModel,
         enrichmentHoldConfidenceFloor:      clamp01(doc.value.enrichmentHoldConfidenceFloor, defaults.enrichmentHoldConfidenceFloor),
         enrichmentHoldUnknownConfidenceBar: clamp01(doc.value.enrichmentHoldUnknownConfidenceBar, defaults.enrichmentHoldUnknownConfidenceBar),
+        enrichmentSearchEnabled: typeof doc.value.enrichmentSearchEnabled === 'boolean' ? doc.value.enrichmentSearchEnabled : defaults.enrichmentSearchEnabled,
+        enrichmentSearchDailyCap: (Number.isInteger(doc.value.enrichmentSearchDailyCap) && doc.value.enrichmentSearchDailyCap >= 0 && doc.value.enrichmentSearchDailyCap <= 100)
+          ? doc.value.enrichmentSearchDailyCap : defaults.enrichmentSearchDailyCap,
       };
 
       // One-time migration: a stored config from before the embedding-quality

@@ -388,11 +388,15 @@ function mergeBackScan(front = {}, back = {}, { suspectProducer = false } = {}) 
  * error-reason string to reject the payload, or null to accept it.
  * On 429 the call is retried once after waiting out the retry-after header.
  */
-async function callClaudeJson({ client, model, maxTokens, prompt, validate }) {
+async function callClaudeJson({ client, model, maxTokens, prompt, validate, tools }) {
   const apiParams = {
     model,
     max_tokens: maxTokens,
     ...thinkingOff(model),
+    // Server-side tools (Anthropic web_search): the API runs the searches and
+    // the response still ends in text blocks — textFromResponse filters the
+    // tool blocks out, so parsing is unchanged.
+    ...(tools ? { tools } : {}),
     messages: [
       { role: 'user', content: prompt }
     ]
@@ -600,7 +604,7 @@ async function suggestPrice({ name, producer, vintage, country, region, appellat
  * Used by the enrichment job to populate WineDefinition.aiProfile, which then
  * feeds both the embedding text and the bottle-page display.
  */
-async function suggestProfile({ name, producer, vintage, country, region, appellation, classification, type, grapes, curatorContext }) {
+async function suggestProfile({ name, producer, vintage, country, region, appellation, classification, type, grapes, curatorContext, allowSearch }) {
   if (!name) return { data: null, debugRaw: null, debugReason: 'missing_fields' };
 
   let client;
@@ -677,10 +681,18 @@ async function suggestProfile({ name, producer, vintage, country, region, appell
     prompt += '\n\nCurator-supplied facts about this wine (authoritative — a human sommelier researched them; trust them over your own recall, describe accordingly, and let them raise your confidence): ' + ctxFacts;
   }
 
+  // Web-search rescue (pilot 2026-08-19): the retry path for would-hold rows.
+  // The instruction keeps the output contract intact — searched or not, the
+  // answer is the bare JSON object.
+  if (allowSearch) {
+    prompt += '\n\nYou may use web_search (at most 2 searches) to look up this producer and this wine before answering — the producer is likely a small estate; one search usually settles the region, style and grapes. Base the profile on what you find, cite nothing inside the JSON, raise confidence to match verified facts, and still return ONLY the raw JSON object exactly as specified above.';
+  }
+
   return callClaudeJson({
     client,
     model: aiConfig.get().enrichmentModel,
-    maxTokens: 1400,
+    maxTokens: allowSearch ? 2400 : 1400,
+    ...(allowSearch ? { tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 2 }] } : {}),
     prompt,
     validate: (parsed) => {
       // Normalise arrays so the caller can store them directly.

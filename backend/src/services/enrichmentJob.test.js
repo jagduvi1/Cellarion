@@ -14,7 +14,7 @@
 jest.mock('../models/WineDefinition', () => ({ findById: jest.fn(), updateOne: jest.fn() }));
 jest.mock('../models/Bottle', () => ({ distinct: jest.fn().mockResolvedValue([]) }));
 jest.mock('./labelScan', () => ({ suggestProfile: jest.fn() }));
-jest.mock('./aiProvider', () => ({ isConfigured: jest.fn(() => true) }));
+jest.mock('./aiProvider', () => ({ isConfigured: jest.fn(() => true), effectiveModels: jest.fn(() => null) }));
 jest.mock('./embeddingJob', () => ({ embedSinglePair: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('./aiBudget', () => ({ tryDebitAi: jest.fn(), isRefundableFailure: jest.fn(() => false) }));
 jest.mock('../config/aiConfig', () => ({ get: jest.fn(() => ({
@@ -763,5 +763,155 @@ describe('the enrichment prompt forbids asserting unstated facts', () => {
   test('the prompt scores confidence on truth-given-data, not producer recognition', () => {
     expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/NOT whether you recognise this specific bottling/);
     expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/never having heard of the grower merits 0\.5-0\.6/);
+  });
+});
+
+/**
+ * Web-search rescue (pilot 2026-08-19) — a generation that would HOLD for a
+ * confidence reason gets ONE search-assisted retry. The gate is the difficulty
+ * detector: ordinary wines never reach the retry, so the daily cap is spent
+ * only on the rows a search can actually save. What's pinned here:
+ *
+ *  - only low_confidence / unknown_low_confidence retry (a suspect field or a
+ *    taxonomy conflict is not a knowledge gap a search fixes)
+ *  - the searched result replaces the first WHATEVER its outcome, and
+ *    searchUsed records the attempt on hit and miss alike — the pilot's
+ *    rescue-rate numbers depend on misses being counted
+ *  - kill-switch, cap 0, cap exhaustion, and non-Anthropic provider all mean
+ *    a single un-searched attempt (web_search is an Anthropic server tool)
+ */
+describe('web-search rescue on confidence holds', () => {
+  const aiConfig = require('../config/aiConfig');
+  const aiProvider = require('./aiProvider');
+  const { _resetSearchSlots } = require('./enrichmentJob');
+
+  const BASE = {
+    enrichmentModel: 'claude-sonnet-5',
+    enrichmentHoldConfidenceFloor: 0.4,
+    enrichmentHoldUnknownConfidenceBar: 0.55,
+  };
+  // High cap by default so slot availability never depends on test order.
+  const searchCfg = (over) => ({ ...BASE, enrichmentSearchEnabled: true, enrichmentSearchDailyCap: 50, ...over });
+
+  const attempt = (confidence, over = {}) => ({
+    data: {
+      body: 'medium', tannin: 'low', acidity: 'medium', sweetness: 'dry',
+      flavors: ['plum'], foodPairings: ['stew'],
+      producerSuspect: false, producerUnknown: false,
+      description: 'A structured red with dark plum fruit.',
+      confidence,
+      ...over,
+    },
+    debugReason: null,
+  });
+
+  beforeEach(() => {
+    // clearAllMocks (outer beforeEach) does NOT undo mockImplementation /
+    // mockReturnValue set inside a test — re-set both shared knobs here so
+    // each test starts from search-enabled Anthropic, whatever ran before.
+    _resetSearchSlots();
+    aiConfig.get.mockImplementation(() => searchCfg());
+    aiProvider.effectiveModels.mockReturnValue(null);
+  });
+  afterAll(() => {
+    aiConfig.get.mockImplementation(() => BASE);
+  });
+
+  test('a low_confidence hold retries WITH search; a clearing second attempt publishes with searchUsed', async () => {
+    suggestProfile
+      .mockResolvedValueOnce(attempt(0.2))
+      .mockResolvedValueOnce(attempt(0.8, { description: 'Verified: an old-vine Carignan from Maury.' }));
+    await enrichWineById(WINE_ID);
+    expect(suggestProfile).toHaveBeenCalledTimes(2);
+    // The first attempt is search-less; the retry — and only the retry — asks.
+    expect(suggestProfile.mock.calls[0][0].allowSearch).toBeUndefined();
+    expect(suggestProfile.mock.calls[1][0]).toMatchObject({ allowSearch: true, name: 'Pinot Noir', producer: 'Matua' });
+    const p = persisted();
+    expect(p.heldAt).toBeNull();
+    expect(p.searchUsed).toBe(true);
+    expect(p.confidence).toBe(0.8);
+    expect(p.description).toMatch(/Maury/);
+  });
+
+  test('a searched result that still fails the gate holds — searchUsed records the spent miss', async () => {
+    suggestProfile.mockResolvedValue(attempt(0.2));
+    await enrichWineById(WINE_ID);
+    expect(suggestProfile).toHaveBeenCalledTimes(2);
+    const p = persisted();
+    expect(p.heldReason).toBe('low_confidence');
+    expect(p.heldAt).toBeInstanceOf(Date);
+    expect(p.searchUsed).toBe(true);
+  });
+
+  test('unknown_low_confidence is rescue-eligible — the search finding the producer publishes the row', async () => {
+    // Thin record (no region/appellation) so the unknown bar applies.
+    WineDefinition.findById.mockReturnValue(chain({
+      _id: WINE_ID, name: 'Mystery Red', producer: 'Unknown House', type: 'red',
+      country: { name: 'Australia' }, region: null, appellation: null, grapes: [],
+    }));
+    suggestProfile
+      .mockResolvedValueOnce(attempt(0.45, { producerUnknown: true }))
+      .mockResolvedValueOnce(attempt(0.7, { producerUnknown: false }));
+    await enrichWineById(WINE_ID);
+    expect(suggestProfile).toHaveBeenCalledTimes(2);
+    expect(persisted().heldAt).toBeNull();
+    expect(persisted().searchUsed).toBe(true);
+  });
+
+  test('producer_suspect never spends a search — a wrong FIELD is not a knowledge gap', async () => {
+    suggestProfile.mockResolvedValue(attempt(0.7, {
+      producerSuspect: true, producerNote: 'Fabelhaft is a Niepoort label, not an estate.',
+    }));
+    await enrichWineById(WINE_ID);
+    expect(suggestProfile).toHaveBeenCalledTimes(1);
+    const p = persisted();
+    expect(p.heldReason).toBe('producer_suspect');
+    expect(p.searchUsed).toBe(false);
+  });
+
+  test('taxonomy_conflict never spends a search — the model already believes its hallucination', async () => {
+    // Pinot Noir fixture: high tannin is the opposite structural extreme.
+    suggestProfile.mockResolvedValue(attempt(0.8, { tannin: 'high' }));
+    await enrichWineById(WINE_ID);
+    expect(suggestProfile).toHaveBeenCalledTimes(1);
+    expect(persisted().heldReason).toBe('taxonomy_conflict');
+  });
+
+  test('kill-switch: enrichmentSearchEnabled=false means a single attempt and a plain hold', async () => {
+    aiConfig.get.mockImplementation(() => searchCfg({ enrichmentSearchEnabled: false }));
+    suggestProfile.mockResolvedValue(attempt(0.2));
+    await enrichWineById(WINE_ID);
+    expect(suggestProfile).toHaveBeenCalledTimes(1);
+    expect(persisted().searchUsed).toBe(false);
+  });
+
+  test('a cap of 0 disables the rescue', async () => {
+    aiConfig.get.mockImplementation(() => searchCfg({ enrichmentSearchDailyCap: 0 }));
+    suggestProfile.mockResolvedValue(attempt(0.2));
+    await enrichWineById(WINE_ID);
+    expect(suggestProfile).toHaveBeenCalledTimes(1);
+  });
+
+  test('the cap is consumed per rescued wine — the wine after the last slot holds without a search', async () => {
+    aiConfig.get.mockImplementation(() => searchCfg({ enrichmentSearchDailyCap: 1 }));
+    suggestProfile.mockResolvedValue(attempt(0.2));
+    await enrichWineById(WINE_ID); // spends the only slot: 2 model calls
+    await enrichWineById(WINE_ID); // no slot left: 1 model call
+    expect(suggestProfile).toHaveBeenCalledTimes(3);
+  });
+
+  test('a non-Anthropic provider never gets the tool — web_search is an Anthropic server tool', async () => {
+    aiProvider.effectiveModels.mockReturnValue({ text: 'gpt-4o', vision: 'gpt-4o' });
+    suggestProfile.mockResolvedValue(attempt(0.2));
+    await enrichWineById(WINE_ID);
+    expect(suggestProfile).toHaveBeenCalledTimes(1);
+    expect(persisted().searchUsed).toBe(false);
+  });
+
+  test('a clean publish records searchUsed:false — the pilot flag never lies', async () => {
+    suggestProfile.mockResolvedValue(attempt(0.8));
+    await enrichWineById(WINE_ID);
+    expect(suggestProfile).toHaveBeenCalledTimes(1);
+    expect(persisted().searchUsed).toBe(false);
   });
 });

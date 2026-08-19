@@ -473,6 +473,33 @@ router.patch('/ai/enrichment-gate', async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// PATCH /api/superadmin/ai/enrichment-search
+// The web-search rescue pilot's two knobs (2026-08-19): kill-switch + daily
+// cap. Same aiConfig storage as the gate above — turning the pilot off never
+// needs a release, and load() clamps junk back to the defaults (on / 5).
+// ---------------------------------------------------------------------------
+router.patch('/ai/enrichment-search', async (req, res) => {
+  const enabled = req.body.enabled;
+  const dailyCap = Number(req.body.dailyCap);
+  if (typeof enabled !== 'boolean') {
+    return res.status(400).json({ error: 'enabled must be a boolean' });
+  }
+  if (!Number.isInteger(dailyCap) || dailyCap < 0 || dailyCap > 100) {
+    return res.status(400).json({ error: 'dailyCap must be an integer between 0 and 100' });
+  }
+  try {
+    const current = aiConfig.getRaw();
+    const updated = { ...current, enrichmentSearchEnabled: enabled, enrichmentSearchDailyCap: dailyCap };
+    await updateSiteConfig('aiConfig', updated, req.user.id);
+    aiConfig.set(updated);
+    res.json({ enrichmentSearchEnabled: enabled, enrichmentSearchDailyCap: dailyCap });
+  } catch (error) {
+    console.error('[superadmin] enrichment-search error:', error);
+    res.status(500).json({ error: 'Failed to save search settings' });
+  }
+});
+
 
 // ---------------------------------------------------------------------------
 // PATCH /api/superadmin/ai/<*>-prompt and /api/superadmin/ai/<*>-model
