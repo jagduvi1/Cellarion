@@ -4408,6 +4408,8 @@
       "forgottenBottles": "Forgotten bottles (in the cellar 2+ years)",
       "whereIShop": "Where I shop (and what it costs me)",
       "giftedVsDrunk": "How bottles leave (drunk, gifted, sold)"
-    }
+    },
+    "beta": "Beta",
+    "betaHint": "Analytics is new and still settling in. If a number looks wrong or something misbehaves, please tell us via Support — it helps more than you would think."
   }
 }

@@ -181,3 +181,20 @@
 
 /* Presets */
 .at-preset-select { background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border); border-radius: 16px; padding: 5px 10px; font-size: 0.82rem; max-width: 180px; }
+
+/* Beta badge — the feature ships early on purpose; the badge says so. */
+.at-beta {
+  display: inline-block;
+  background: var(--color-info-bg);
+  color: var(--color-info);
+  border: 1px solid var(--color-info-border);
+  border-radius: 10px;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-right: 8px;
+  vertical-align: middle;
+  cursor: help;
+}
