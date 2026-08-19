@@ -88,6 +88,14 @@ describe('noteAssertsProducer', () => {
       expect(noteAssertsProducer('Foo is a bottling name.', 'Foo')).toBe(false);
     });
 
+    // Second prod dry run, 2026-08-19. Both matched "estate" inside a clause
+    // that DENIES one, and both are the identity-blocking family — the producer
+    // field holds a place or an appellation, which is the flag's core purpose.
+    it('a note saying the FIELD holds a place or appellation never downgrades', () => {
+      expect(noteAssertsProducer('The producer field simply repeats the appellation name, so no specific estate can be identified; this profile reflects the Monbazillac appellation style.', 'Monbazillac')).toBe(false);
+      expect(noteAssertsProducer('Turckheim is also the name of an Alsace village and a well known cooperative (Cave de Turckheim); without a specific cuvée it is unclear.', 'Turckheim')).toBe(false);
+    });
+
     it('text after "rather than" describes what it is NOT and never counts', () => {
       expect(noteAssertsProducer('Foo appears to be a brand rather than an estate.', 'Foo')).toBe(false);
       expect(noteAssertsProducer('Foo is a label, not an estate.', 'Foo')).toBe(false);
