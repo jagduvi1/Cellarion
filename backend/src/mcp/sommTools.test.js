@@ -76,7 +76,7 @@ const USER_CTX = { user: { id: ME, roles: ['user'] }, scopes: ['read', 'write'],
 
 const tool = (name) => allTools().find((t) => t.name === name);
 const parse = (res) => JSON.parse(res.content[0].text);
-const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'remove_from_maturity_queue', 'set_wine_profile', 'propose_wine_correction', 'list_price_tracking_requests', 'set_vintage_price', 'reject_price_request', 'list_wine_reports', 'respond_to_wine_report', 'sample_published_profiles', 'list_unverified_core_wines', 'list_held_profiles', 'review_held_profile', 'list_pending_corrections', 'record_profile_audit', 'list_profile_audits'];
+const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'remove_from_maturity_queue', 'set_wine_profile', 'propose_wine_correction', 'list_price_tracking_requests', 'set_vintage_price', 'reject_price_request', 'list_wine_reports', 'respond_to_wine_report', 'sample_published_profiles', 'list_unverified_core_wines', 'list_held_profiles', 'review_held_profile', 'list_pending_corrections', 'record_profile_audit', 'list_profile_audits', 'list_colour_conflicts'];
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -735,6 +735,47 @@ describe('held-profile review queue over MCP (somm ticket 2026-08-18)', () => {
     expect(body.error).toBeUndefined();
     const [, update] = WineDefinition.updateOne.mock.calls[0];
     expect(update.$set.profileReviewedAt).toBeInstanceOf(Date);
+  });
+
+  // Somm ticket 6a85f5e8: profileReviewedAt was doing two jobs. A curator
+  // profile write stamps it, so fixing a wine's grapes silently closed the
+  // producer-suspect question nobody had answered — 23 prod rows left that way
+  // against ONE genuine uphold, and upheld-count is the number the scaling
+  // review reads. The verdict now lives in its own field.
+  describe('the suspect verdict is recorded separately from "a human looked"', () => {
+    const publishedSuspect = (over = {}) => heldWine({
+      aiProfile: { heldAt: null, producerSuspect: true, description: 'x', generatedAt: new Date(), source: 'ai', ...over },
+    });
+
+    test('uphold records suspectDecision, not just the reviewed stamp', async () => {
+      WineDefinition.findById.mockReturnValue(selectChain(publishedSuspect()));
+      const body = parse(await tool('review_held_profile').handler({ wine_id: oid('7'), decision: 'uphold' }, SOMM_CTX));
+      expect(body.error).toBeUndefined();
+      const [, update] = WineDefinition.updateOne.mock.calls[0];
+      expect(update.$set['aiProfile.suspectDecision']).toBe('upheld');
+      expect(update.$set['aiProfile.suspectDecidedAt']).toBeInstanceOf(Date);
+      // Still stamped, because that field still means "a human looked" elsewhere.
+      expect(update.$set.profileReviewedAt).toBeInstanceOf(Date);
+      // And the flag survives — that is the whole point of uphold.
+      expect(update.$set['aiProfile.producerSuspect']).toBeUndefined();
+    });
+
+    test('confirm on a published suspect records the opposite verdict and clears the flag', async () => {
+      WineDefinition.findById.mockReturnValue(selectChain(publishedSuspect()));
+      const body = parse(await tool('review_held_profile').handler({ wine_id: oid('7'), decision: 'confirm' }, SOMM_CTX));
+      expect(body.error).toBeUndefined();
+      const [, update] = WineDefinition.updateOne.mock.calls[0];
+      expect(update.$set['aiProfile.producerSuspect']).toBe(false);
+      expect(update.$set['aiProfile.suspectDecision']).toBe('confirmed');
+    });
+
+    test('a HELD row records no suspect verdict — different question, different queue', async () => {
+      WineDefinition.findById.mockReturnValue(selectChain(heldWine()));
+      await tool('review_held_profile').handler({ wine_id: oid('7'), decision: 'confirm' }, SOMM_CTX);
+      const [, update] = WineDefinition.updateOne.mock.calls[0];
+      expect(update.$set.profileReviewedAt).toBeInstanceOf(Date);
+      expect(update.$set['aiProfile.suspectDecision']).toBeUndefined();
+    });
   });
 
   test('reject clears the generation entirely (generatedAt null → out of every queue, re-enrichable); published rows refuse it', async () => {

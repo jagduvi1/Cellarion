@@ -1083,10 +1083,26 @@ registerTool({
 // profileReviewedAt stamp, and this surface must not recreate that bug.
 
 const HELD_LIST_CAP = 500;
+// What still needs judging — and the two states answer DIFFERENT questions, so
+// they cannot share a marker (somm ticket 6a85f5e8):
+//
+//   HELD          — "is this generated profile publishable?" profileReviewedAt
+//                   is the right signal: any human write to the profile
+//                   answers it, which is why applyProfilePatch stamps it.
+//   PUBLISHED     — "is the producer field real?" A tasting-profile write does
+//   SUSPECT         NOT answer that, yet it stamped profileReviewedAt and the
+//                   row vanished from this queue undecided. Only an explicit
+//                   uphold/confirm closes it now.
 const OUTSTANDING_EXPR = {
-  $or: [
-    { $eq: ['$profileReviewedAt', null] },
-    { $lt: ['$profileReviewedAt', '$aiProfile.generatedAt'] },
+  $cond: [
+    { $ne: ['$aiProfile.heldAt', null] },
+    {
+      $or: [
+        { $eq: ['$profileReviewedAt', null] },
+        { $lt: ['$profileReviewedAt', '$aiProfile.generatedAt'] },
+      ],
+    },
+    { $eq: [{ $ifNull: ['$aiProfile.suspectDecision', null] }, null] },
   ],
 };
 
@@ -1329,7 +1345,14 @@ registerTool({
         // (somm ticket 6a84c8dc: five documented-domaine rows carried a
         // false "cannot be verified" disclaimer even after review). The
         // producerNote stays for curator context; only the flag clears.
-        if (!held) set['aiProfile.producerSuspect'] = false;
+        if (!held) {
+          set['aiProfile.producerSuspect'] = false;
+          // Record the verdict, not just its side effect. The flag going false
+          // already removes the row from the queue, but the decision is worth
+          // counting on its own — and it keeps confirm and uphold symmetrical.
+          set['aiProfile.suspectDecision'] = 'confirmed';
+          set['aiProfile.suspectDecidedAt'] = now;
+        }
         await WineDefinition.updateOne({ _id: wine._id }, { $set: set });
         logAudit(ctx.req, 'admin.wine.profileReviewed', { type: 'wine', id: wine._id },
           { name: wine.name, producer: wine.producer, decision: 'confirm', state: held ? 'held' : 'published_suspect', ...(held ? {} : { suspectCleared: true }), reason, via: 'mcp' });
@@ -1344,7 +1367,17 @@ registerTool({
         // residue — upheld-count is the true cannot-identify number.
         if (held) return { wine_id: id, error: 'uphold_is_published_only — for a held row whose flag is right, confirm keeps it held' };
         const now = new Date();
-        await WineDefinition.updateOne({ _id: wine._id }, { $set: { profileReviewedAt: now } });
+        // suspectDecision is what closes the row now; profileReviewedAt rides
+        // along because it still means "a human looked" for the other queues.
+        // The split exists because a curator profile write also stamps
+        // profileReviewedAt, and that silently closed 23 rows nobody judged.
+        await WineDefinition.updateOne({ _id: wine._id }, {
+          $set: {
+            profileReviewedAt: now,
+            'aiProfile.suspectDecision': 'upheld',
+            'aiProfile.suspectDecidedAt': now,
+          },
+        });
         logAudit(ctx.req, 'admin.wine.profileReviewed', { type: 'wine', id: wine._id },
           { name: wine.name, producer: wine.producer, decision: 'uphold', suspectKept: true, reason, via: 'mcp' });
         return { wine_id: wine._id, label, decision: 'uphold', suspect_kept: true, reviewed_at: now };
@@ -2473,5 +2506,69 @@ registerTool({
       result: envelope,
     });
     return ok(envelope.summary, envelope.data);
+  },
+});
+
+// ── Colour-conflict worklist (somm ticket 6a85f256, 2026-08-19) ────────────
+// v1.141.0 shipped the grape_colour_conflict HOLD, which gates new
+// generations — but the rows already in the registry were found by a
+// retroactive scan and were never held, so `held_reason:"grape_colour_conflict"`
+// returned nothing and the only way to reach them was a list pasted into a
+// support ticket. Work that lives outside the app is work that does not get
+// done, and it is not countable.
+//
+// These rows deliberately are NOT held: holding would unpublish a profile that
+// is live on a bottle page, and the contradiction is in the RECORD (type vs
+// grapes), not in the profile. So they get their own worklist instead, reading
+// the same rule the admin cross-field queue reads — one source of truth.
+registerTool({
+  name: 'list_colour_conflicts',
+  title: 'Sommelier: wines whose stored type contradicts every grape on them',
+  description:
+    'Registry wines where the stored type disagrees with the curated colour of EVERY grape on the record — a red ' +
+    'made only from white varieties, or a white made only from red ones whose name makes no white claim. Purely ' +
+    'deterministic: it reads stored fields against curated Grape.color and involves no model output, so a hit is a ' +
+    'fact about the record rather than an opinion about the wine. It does NOT presume which field is wrong — ' +
+    'Tyrrell\'s "Old Hut Semillon" stored white with Syrah is a wrong GRAPE, not a wrong type — so read the row and ' +
+    'decide. Fix with propose_wine_correction (type and/or grapes; admin-approved) or set_wine_profile (immediate, ' +
+    'and it stamps curator-verified). Two exclusions are deliberate and not misses: rosé is never judged, because ' +
+    'Grape.color is a Red/White binary that cannot express the pink skins behind ramato, pink Muscat and orange ' +
+    'wines; and a white from red grapes is exempt when the name says so (Blanc de Noirs, Bianco, Pinotage Blanc).',
+  scope: 'read',
+  requireRole: SOMM_ROLES,
+  annotations: { readOnlyHint: true, openWorldHint: false },
+  inputSchema: {
+    counts_only: z.boolean().optional().describe('Return just the total, for tracking the queue without paging it'),
+    limit: z.number().int().min(1).max(100).default(50),
+    offset: z.number().int().min(0).default(0),
+  },
+  handler: async (args, ctx) => {
+    const denied = requireSomm(ctx);
+    if (denied) return denied;
+    const { scanCrossFieldChecks } = require('../../services/crossFieldScan');
+    const RULE = 'grape-colour-contradiction.v1';
+    // ignoreCleared:false — an admin who cleared the rule on a row has judged
+    // it, and this list honours that exactly like the web queue does.
+    const scan = await scanCrossFieldChecks({ checkIds: [RULE] });
+    const all = scan.rows.filter((r) => r.hits.some((h) => h.check === RULE));
+
+    if (args.counts_only) {
+      return ok(`${all.length} wine(s) whose stored type contradicts every grape on them.`, { total: all.length });
+    }
+
+    const page = all.slice(args.offset, args.offset + args.limit);
+    const rows = page.map((r) => ({
+      wine_id: String(r.wine._id),
+      producer: r.wine.producer || null,
+      name: r.wine.name || null,
+      type: r.wine.type || null,
+      grapes: (r.wine.grapes || []).map((g) => g.name),
+      conflict: r.hits.find((h) => h.check === RULE)?.detail || null,
+    }));
+    return ok(
+      `${all.length} colour conflict(s); showing ${rows.length} from ${args.offset}. Either the type or the grape ` +
+      'list is wrong on each — the check does not presume which.',
+      { total: all.length, limit: args.limit, offset: args.offset, wines: rows }
+    );
   },
 });
