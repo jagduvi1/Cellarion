@@ -90,7 +90,7 @@ Wine: {{name}}
 Producer: {{producer}}
 {{vintage}}{{country}}
 Return ONLY a raw JSON object (no markdown, no code fences):
-{"name":"wine name","producer":"producer name","country":"country or null","region":"region or null","appellation":"appellation or null","classification":"official classification or null","type":"red|white|rosé|sparkling|dessert|fortified","grapes":["grape varieties"],"confidence":0.0}
+{"name":"wine name","producer":"producer name","country":"country or null","region":"region or null","appellation":"appellation or null","classification":"official classification or null","type":"red|white|rosé|sparkling|dessert|fortified or null","grapes":["grape varieties"],"confidence":0.0}
 
 Rules:
 - Use the wine name and producer exactly as given (correct only obvious typos)
@@ -104,6 +104,8 @@ Rules:
 - Country must be the canonical English country name: "United States" (never "USA" or "America"), "Germany" (never "Deutschland"/"Tyskland"), "Italy" (never "Italia"/"Italie"), "England" for English wines — never a local-language or abbreviated name, even if the import data uses one
 - Region is where THIS specific wine is grown — NEVER assumed from where the producer is based. Producers routinely make wines in several regions (a Barossa-based brand can bottle a McLaren Vale Shiraz), so producer knowledge alone never sets the region. If the most precise place you know for this wine is its appellation, use that same place as the region (appellation "Barossa Valley" → region "Barossa Valley", not "South Australia"). When unsure, region is null
 - For any other field you are unsure about, use null — do NOT omit the field
+- type: ONLY when the import data states it or you know THIS wine's colour — a type guessed from region, producer or price is null, never a guess. A wrong type misdirects filtering, serving temperature and drink windows; null prompts a curator to look (curator audit 2026-08-19: an import burst stored four whites as red)
+- Grapes are never inferred from regional plausibility alone — "commonly planted there" is not knowledge of THIS wine
 - Grapes: provide an empty array [] if unknown, never null for grapes. List only varieties you know THIS cuvée contains — single-variety appellations may be inferred (Barolo → Nebbiolo), but for multi-variety appellations (Champagne, southern-Rhône blends, Bordeaux) never default to the appellation's full permitted set; fewer correct grapes beat a complete-looking list
 - confidence: 1.0 = well-known wine you are certain about, 0.7 = confident from producer knowledge, 0.5 = reasonably sure
 - IMPORTANT: if you recognise the producer or the wine name, return a result even if some fields are null — partial information is always better than returning unknown
