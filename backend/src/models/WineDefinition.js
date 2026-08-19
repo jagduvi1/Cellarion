@@ -133,6 +133,21 @@ const wineDefinitionSchema = new mongoose.Schema({
     // where it belongs, instead of on producerSuspect.
     producerUnknown: { type: Boolean, default: false },
     producerNote:    { type: String,  default: null, trim: true },
+    // The verdict on producerSuspect, and ONLY that verdict (somm ticket
+    // 6a85f5e8, 2026-08-19). It used to be inferred from profileReviewedAt,
+    // which is the wrong signal for two reasons:
+    //   - applyProfilePatch stamps profileReviewedAt on ANY curator profile
+    //     write, so fixing a wine's grapes silently dropped it out of the
+    //     suspect queue without anyone judging the producer. 23 prod rows had
+    //     left that way against ONE genuine uphold.
+    //   - upheld-count is the number the scaling review reads as "wines the
+    //     registry genuinely cannot identify". Sharing a field with routine
+    //     curation deflated exactly the rows a curator looked hardest at.
+    // Now: 'upheld' (flag is right, keep it and stop asking) | 'confirmed'
+    // (flag was wrong, cleared). null = still awaiting judgement, whatever
+    // else has been written to the row.
+    suspectDecision:   { type: String, default: null, trim: true },
+    suspectDecidedAt:  { type: Date,   default: null },
     model:        { type: String, default: null, trim: true }, // model that produced it
     generatedAt:  { type: Date,   default: null },             // when it was generated
     // Generation ran but PUBLICATION was withheld: the model flagged the
