@@ -22,6 +22,10 @@ const FIELD_KEYS = {
   region: 'admin.wines.proposals.fields.region',
   country: 'admin.wines.proposals.fields.country',
   classification: 'admin.wines.proposals.fields.classification',
+  // Proposable since 2026-08-19 (somm ticket 6a85ad44). Grapes arrive as a
+  // joined string from the route, so the generic diff row renders them as-is.
+  type: 'admin.wines.proposals.fields.type',
+  grapes: 'admin.wines.proposals.fields.grapes',
 };
 
 const wineLabel = (w) => (w ? [w.producer, w.name].filter(Boolean).join(' — ') : null);

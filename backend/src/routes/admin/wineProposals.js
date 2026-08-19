@@ -37,6 +37,9 @@ const searchService = require('../../services/search');
 const { reembedActiveVintages } = require('../../services/embeddingJob');
 const { profileInputsSnapshot, reenrichAfterRecordEdit } = require('../../services/enrichmentJob');
 const { findOrCreateRegion } = require('../../services/findOrCreateWine');
+// Same helpers the somm's own set_wine_profile writes through, so an approved
+// proposal and a direct curator edit resolve varieties identically.
+const { WINE_TYPES, resolveGrapeIdsStrict } = require('../../services/wineProfileOps');
 const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const { performWineMerge } = require('./wines');
 const { generateWineKey, normalizeAppellation, normalizeString, resolveCountryName } = require('../../utils/normalize');
@@ -49,7 +52,13 @@ router.use(requireAuth, requireRole('admin'));
 // Keep in sync with the WineCorrectionProposal schema enums. 'decided' is a
 // list-only alias for approved+rejected (the review modal's second tab).
 const PROPOSAL_STATUSES = ['pending', 'approved', 'rejected'];
-const IDENTITY_FIELDS = ['producer', 'name', 'appellation', 'region', 'country', 'classification'];
+// `grapes` is deliberately NOT here: it is a LIST, and the diff/drift shape
+// this list feeds is string-to-string. It is rendered by joining the names,
+// alongside these, in the diff builder below.
+const IDENTITY_FIELDS = ['producer', 'name', 'appellation', 'region', 'country', 'classification', 'type'];
+
+/** Grape names for display in a diff row — the same join both sides use. */
+const grapeLabel = (names) => (Array.isArray(names) && names.length ? names.join(', ') : null);
 
 const REJECT_REASON_MIN = 5;
 const REJECT_REASON_MAX = 500;
@@ -62,6 +71,10 @@ const liveIdentity = (wine) => ({
   region: wine.region?.name || null,
   country: wine.country?.name || null,
   classification: wine.classification || null,
+  type: wine.type || null,
+  // Populated when the caller asked for it; a bare id array joins to nothing
+  // and the row simply reads "—", which is honest for an unpopulated read.
+  grapes: grapeLabel((wine.grapes || []).map((g) => g && g.name).filter(Boolean)),
 });
 
 // GET /api/admin/wine-proposals — list, pending first, newest first within status
@@ -98,8 +111,13 @@ router.get('/', async (req, res) => {
       { path: 'proposer', select: 'username' },
       {
         path: 'wineDefinition',
-        select: 'name producer appellation classification type nonWine country region',
-        populate: [{ path: 'country', select: 'name' }, { path: 'region', select: 'name' }],
+        select: 'name producer appellation classification type nonWine country region grapes',
+        populate: [
+          { path: 'country', select: 'name' },
+          { path: 'region', select: 'name' },
+          // For the grapes diff row's CURRENT side.
+          { path: 'grapes', select: 'name' },
+        ],
       },
       { path: 'mergeTargetId', select: 'name producer appellation type' },
     ]);
@@ -115,6 +133,11 @@ router.get('/', async (req, res) => {
           const proposed = p.proposedFields[f];
           if (proposed === undefined || proposed === null || proposed === '') continue;
           diff[f] = { current: live ? live[f] : null, proposed };
+        }
+        // Grapes render like every other row — joined names on both sides —
+        // so the modal needs no list-aware branch.
+        if (Array.isArray(p.proposedFields.grapes) && p.proposedFields.grapes.length) {
+          diff.grapes = { current: live ? live.grapes : null, proposed: grapeLabel(p.proposedFields.grapes) };
         }
       }
       return {
@@ -257,6 +280,40 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false } =
           const regionDoc = await findOrCreateRegion(pf.region, countryDoc?._id || wine.country, req.user.id);
           wine.region = regionDoc?._id || null;
           applied.push(regionDoc ? 'region' : 'region (cleared — name failed the mint gates)');
+        }
+
+        // Type is re-validated here even though the MCP tool already refused a
+        // bad one: this route is the only guarantee, and a proposal filed
+        // before an enum change would otherwise write a value the schema
+        // rejects at save() with a far worse error.
+        if (pf.type) {
+          if (!WINE_TYPES.includes(pf.type)) {
+            await revertClaim();
+            return { status: 400, body: { error: `Unknown wine type "${pf.type}" — must be one of: ${WINE_TYPES.join(', ')}` } };
+          }
+          wine.type = pf.type;
+          applied.push('type');
+        }
+
+        // Grapes resolve against LIVE taxonomy at approval, not at filing: a
+        // variety can be renamed or merged into its canonical entry in between
+        // (17 were merged on 2026-08-19 alone), and the curator's names should
+        // still land on the right rows afterwards. Match-only, exactly like
+        // country above — approving a proposal must never MINT taxonomy.
+        if (Array.isArray(pf.grapes) && pf.grapes.length) {
+          const resolved = await resolveGrapeIdsStrict(pf.grapes);
+          if (!resolved.ok) {
+            await revertClaim();
+            return { status: 400, body: {
+              error: `Unknown grape${resolved.unmatched.length > 1 ? 's' : ''} ${resolved.unmatched.map((g) => `"${g}"`).join(', ')} — add ${resolved.unmatched.length > 1 ? 'them' : 'it'} in Admin → Taxonomy first, then approve`,
+            } };
+          }
+          wine.grapes = resolved.ids;
+          // Say when a synonym was folded ("Tinta Roriz" → Tempranillo) rather
+          // than silently storing something the curator did not type.
+          applied.push(resolved.substitutions.length
+            ? `grapes (${resolved.substitutions.map((s) => `${s.from} → ${s.to}`).join(', ')})`
+            : 'grapes');
         }
 
         // Same rule as the PUT: the dedup key follows name/producer/appellation.
