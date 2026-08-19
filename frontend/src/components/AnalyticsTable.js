@@ -5,6 +5,7 @@ import { getAnalyticsCatalogue, runAnalyticsQuery } from '../api/analytics';
 import { listCellars } from '../api/cellars';
 import { csvEscape } from '../utils/importReport';
 import downloadBlob from '../utils/downloadBlob';
+import AnalyticsCharts from './AnalyticsCharts';
 import './AnalyticsTable.css';
 
 /**
@@ -114,6 +115,9 @@ export default function AnalyticsTable({ cellarId }) {
   // always as the first measure, up to two more picked from measure-capable
   // fields. Off = the flat rows table.
   const [grouping, setGrouping] = useState({ on: false, dim1: 'wine.type', dim2: '', measures: [] });
+  // R-C: how the grouped result renders — the table stays the default.
+  const [chartType, setChartType] = useState('table'); // 'table' | 'bar' | 'donut' | 'line'
+  const [chartMeasure, setChartMeasure] = useState(0);
   const queryRef = useRef(0);
 
   const byKey = useMemo(() => new Map(catalogue.map((f) => [f.key, f])), [catalogue]);
@@ -464,6 +468,32 @@ export default function AnalyticsTable({ cellarId }) {
 
       {data?.mode === 'grouped' ? (
         <>
+          <div className="at-chart-toolbar">
+            {['table', 'bar', 'donut', 'line'].map((ct) => {
+              const disabled = (ct === 'donut' || ct === 'line') && data.dimensionKeys.length === 2;
+              return (
+                <button
+                  key={ct}
+                  className={`at-chip ${chartType === ct ? 'at-apply' : ''}`}
+                  disabled={disabled}
+                  title={disabled ? t('analytics.oneDimOnly', 'One dimension only') : undefined}
+                  onClick={() => setChartType(ct)}
+                >
+                  {t(`analytics.chart.${ct}`, ct === 'table' ? 'Table' : ct === 'bar' ? 'Bars' : ct === 'donut' ? 'Donut' : 'Line')}
+                </button>
+              );
+            })}
+            {chartType !== 'table' && data.measureLabels.length > 1 && (
+              <select value={chartMeasure} onChange={(e) => setChartMeasure(Number(e.target.value))}>
+                {data.measureLabels.map((l, i) => (
+                  <option key={l} value={i}>{l === 'count' ? t('analytics.count', 'Bottles') : l}</option>
+                ))}
+              </select>
+            )}
+          </div>
+          {chartType !== 'table' && data.buckets.length > 0 && (
+            <AnalyticsCharts data={data} chartType={chartType} measureIndex={chartMeasure} />
+          )}
           {data.currency && (
             <div className="at-note">
               {t('analytics.currencyNote', 'Monetary values converted to {{code}}', { code: data.currency.target })}
@@ -474,36 +504,41 @@ export default function AnalyticsTable({ cellarId }) {
           {data.capped && (
             <div className="at-note">{t('analytics.bucketsCapped', 'Showing the top {{n}} groups — narrow the scope or filters for the rest', { n: data.capped.at })}</div>
           )}
-          <div className="at-scroll">
-            <table>
-              <thead>
-                <tr>
-                  {data.dimensionKeys.map((k) => (
-                    <th key={k}>{byKey.get(k)?.label || k}</th>
-                  ))}
-                  {data.measureLabels.map((l) => <th key={l}>{l === 'count' ? t('analytics.count', 'Bottles') : l}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {data.buckets.map((b, i) => (
-                  <tr key={i}>
-                    {b.dimensions.map((d, j) => (
-                      <td key={j} data-label={byKey.get(data.dimensionKeys[j])?.label}>{formatValue(d, byKey.get(data.dimensionKeys[j]))}</td>
+          {chartType === 'table' && (
+            <div className="at-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    {data.dimensionKeys.map((k) => (
+                      <th key={k}>{byKey.get(k)?.label || k}</th>
                     ))}
-                    {b.measures.map((m, j) => (
-                      <td key={`m${j}`} data-label={data.measureLabels[j]}>
-                        {m === null || m === undefined ? '—' : typeof m === 'number' ? Math.round(m * 100) / 100 : String(m)}
-                      </td>
-                    ))}
+                    {data.measureLabels.map((l) => <th key={l}>{l === 'count' ? t('analytics.count', 'Bottles') : l}</th>)}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-            {loading && <div className="at-loading">{t('analytics.loading', 'Loading…')}</div>}
-            {!loading && !data.buckets.length && (
-              <div className="at-empty">{t('analytics.empty', 'No bottles match this scope and these filters.')}</div>
-            )}
-          </div>
+                </thead>
+                <tbody>
+                  {data.buckets.map((b, i) => (
+                    <tr key={i}>
+                      {b.dimensions.map((d, j) => (
+                        <td key={j} data-label={byKey.get(data.dimensionKeys[j])?.label}>{formatValue(d, byKey.get(data.dimensionKeys[j]))}</td>
+                      ))}
+                      {b.measures.map((m, j) => (
+                        <td key={`m${j}`} data-label={data.measureLabels[j]}>
+                          {m === null || m === undefined ? '—' : typeof m === 'number' ? Math.round(m * 100) / 100 : String(m)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {loading && <div className="at-loading">{t('analytics.loading', 'Loading…')}</div>}
+              {!loading && !data.buckets.length && (
+                <div className="at-empty">{t('analytics.empty', 'No bottles match this scope and these filters.')}</div>
+              )}
+            </div>
+          )}
+          {chartType !== 'table' && !data.buckets.length && !loading && (
+            <div className="at-empty">{t('analytics.empty', 'No bottles match this scope and these filters.')}</div>
+          )}
         </>
       ) : (
         <>

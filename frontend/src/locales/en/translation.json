@@ -4384,6 +4384,13 @@
     "currencyNote": "Monetary values converted to {{code}}",
     "unconvertible": "{{n}} row(s) had no exchange rate and are excluded",
     "noRates": "no exchange rates available; monetary measures are empty",
-    "bucketsCapped": "Showing the top {{n}} groups — narrow the scope or filters for the rest"
+    "bucketsCapped": "Showing the top {{n}} groups — narrow the scope or filters for the rest",
+    "oneDimOnly": "One dimension only",
+    "chart": {
+      "table": "Table",
+      "bar": "Bars",
+      "donut": "Donut",
+      "line": "Line"
+    }
   }
 }
