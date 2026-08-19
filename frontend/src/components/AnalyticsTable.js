@@ -306,6 +306,9 @@ export default function AnalyticsTable({ cellarId }) {
       {/* Scope pill + toolbar — the scope is ALWAYS visible */}
       <div className="at-toolbar">
         <div className="at-scope">
+          <span className="at-beta" title={t('analytics.betaHint', 'Analytics is new and still settling in. If a number looks wrong or something misbehaves, please tell us via Support — it helps more than you would think.')}>
+            {t('analytics.beta', 'Beta')}
+          </span>
           <button className="at-chip" onClick={() => setScopeOpen((o) => !o)} aria-expanded={scopeOpen}>
             {t(`analytics.scope.${bottleScope}`, bottleScope === 'active' ? 'Active bottles' : bottleScope === 'consumed' ? 'Consumed bottles' : 'All bottles')}
             {' · '}
