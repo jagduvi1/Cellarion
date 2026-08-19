@@ -42,9 +42,11 @@ function BillingToggle({ billingInterval, onIntervalChange, t }) {
 /**
  * One tier card. Every tier grants the identical app, so the card sells the
  * SIZE of the gift, not a feature set: an amount, what that amount is worth in
- * wine, and what it covers. The middle tier is marked `suggested` in the plan
- * config and lifted here — with three amounts the extremes frame the middle,
- * which is the one most people actually want permission to choose.
+ * wine, and what it covers.
+ *
+ * All three cards are presented as equals — no badge, no lift, no highlighted
+ * button. Marking one as suggested reads as an expectation to pay, and there is
+ * none; the middle amount simply sits in the middle.
  */
 function TierCard({ tier, yearly, available, loading, onCheckout, t }) {
   const plan = PLANS[tier];
@@ -52,10 +54,7 @@ function TierCard({ tier, yearly, available, loading, onCheckout, t }) {
   const perMonth = formatAmount(plan.price);
 
   return (
-    <div className={`tier-card${plan.suggested ? ' tier-card--suggested' : ''}`}>
-      {plan.suggested && (
-        <span className="tier-card-flag">{t('supporter.suggestedFlag')}</span>
-      )}
+    <div className="tier-card">
       <h3 className="tier-card-name">{plan.label}</h3>
 
       <p className="tier-card-price">
@@ -75,7 +74,7 @@ function TierCard({ tier, yearly, available, loading, onCheckout, t }) {
 
       {available ? (
         <button
-          className={`btn ${plan.suggested ? 'btn-primary' : 'btn-secondary'} tier-card-btn`}
+          className="btn btn-secondary tier-card-btn"
           onClick={() => onCheckout(tier)}
           disabled={loading === tier}
         >

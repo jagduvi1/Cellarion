@@ -62,14 +62,28 @@ describe('Supporter page — tiers', () => {
     }
   });
 
-  test('flags exactly one tier as suggested, and it is the middle one', async () => {
+  test('singles out no tier as recommended', async () => {
+    // Supporting is voluntary, so the page must not imply a right answer: no
+    // badge, and no card styled differently from its neighbours.
     const { container } = render(<Supporter />);
-    const flagged = container.querySelectorAll('.tier-card--suggested');
-    expect(flagged).toHaveLength(1);
-    // The middle card must be the flagged one — that positioning is the whole
-    // point of a three-tier ladder, so a config reorder should fail here.
-    const cards = [...container.querySelectorAll('.tier-card')];
-    expect(cards.indexOf(flagged[0])).toBe(Math.floor(cards.length / 2));
+    expect(container.querySelector('.tier-card--suggested')).toBeNull();
+    expect(screen.queryByText(/suggested/i)).not.toBeInTheDocument();
+
+    const classes = [...container.querySelectorAll('.tier-card')].map((c) => c.className);
+    expect(new Set(classes).size).toBe(1);
+  });
+
+  test('gives every tier the same button treatment', async () => {
+    render(<Supporter />);
+    await waitFor(() => expect(getAvailability).toHaveBeenCalled());
+    const classes = tierButtons().map((b) => b.className);
+    expect(new Set(classes).size).toBe(1);
+  });
+
+  test('renders the tiers cheapest-first, so the middle amount is in the middle', async () => {
+    const { container } = render(<Supporter />);
+    const names = [...container.querySelectorAll('.tier-card-name')].map((n) => n.textContent);
+    expect(names).toEqual(PAID_PLAN_NAMES.map((p) => PLANS[p].label));
   });
 });
 
@@ -103,7 +117,7 @@ describe('Supporter page — billing cadence', () => {
     render(<Supporter />);
     await waitFor(() => expect(getAvailability).toHaveBeenCalled());
 
-    fireEvent.click(tierButtons()[1]); // the suggested tier
+    fireEvent.click(tierButtons()[1]); // the middle tier
     await waitFor(() => expect(createCheckout).toHaveBeenCalled());
     expect(createCheckout).toHaveBeenCalledWith(apiFetch, PAID_PLAN_NAMES[1], 'year');
   });

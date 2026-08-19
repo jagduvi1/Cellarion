@@ -93,7 +93,6 @@
 }
 
 .tier-card {
-  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
@@ -101,41 +100,17 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg);
-  transition: border-color 0.15s, transform 0.15s;
+  transition: border-color 0.15s;
 }
 
 .tier-card:hover {
   border-color: var(--color-primary);
 }
 
-/* The suggested tier sits slightly proud of its neighbours — the amount most
-   people are looking for permission to choose. */
-.tier-card--suggested {
-  border-color: var(--color-primary);
-  border-width: 2px;
-  background: rgba(var(--color-primary-rgb), 0.05);
-  box-shadow: 0 4px 16px rgb(0 0 0 / 8%);
-}
-
-.tier-card-flag {
-  position: absolute;
-  top: -0.62rem;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--color-primary);
-  color: var(--color-bg);
-  font-size: 0.62rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  padding: 0.2rem 0.65rem;
-  border-radius: 20px;
-  white-space: nowrap;
-}
-
-/* Deliberately NOT colour-coded per tier: in dark mode --color-primary and
-   --color-accent resolve to the same gold, so per-tier colours would collapse
-   into each other. The suggested card carries the only colour emphasis. */
+/* Deliberately NOT colour-coded or ranked per tier. Two reasons: in dark mode
+   --color-primary and --color-accent resolve to the same gold, so per-tier
+   colours would collapse into each other; and singling one tier out reads as an
+   expectation to pay, which this page must never imply. */
 .tier-card-name {
   margin: 0;
   font-size: 0.82rem;
@@ -143,10 +118,6 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--color-text-muted);
-}
-
-.tier-card--suggested .tier-card-name {
-  color: var(--color-primary);
 }
 
 .tier-card-price {
@@ -267,11 +238,6 @@
   .tier-grid {
     grid-template-columns: 1fr;
     gap: 1.1rem;
-  }
-
-  /* The lift reads as a mistake once the cards are stacked. */
-  .tier-card--suggested {
-    box-shadow: none;
   }
 }
 

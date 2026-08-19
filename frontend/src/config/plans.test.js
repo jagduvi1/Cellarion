@@ -22,10 +22,11 @@ describe('PLAN_NAMES', () => {
     expect(prices).toEqual([...prices].sort((a, b) => a - b));
   });
 
-  it('marks exactly one paid tier as suggested, and it is the middle one', () => {
-    const suggested = PAID_PLAN_NAMES.filter((p) => PLANS[p].suggested);
-    expect(suggested).toHaveLength(1);
-    expect(suggested[0]).toBe(PAID_PLAN_NAMES[Math.floor(PAID_PLAN_NAMES.length / 2)]);
+  it('marks no tier as recommended', () => {
+    // Deliberate: a "Suggested" badge reads as an expectation to pay, and
+    // supporting is entirely voluntary. Ordering alone puts the middle amount
+    // in the middle.
+    expect(PAID_PLAN_NAMES.filter((p) => PLANS[p].suggested)).toEqual([]);
   });
 });
 
@@ -66,10 +67,9 @@ describe('backend config sync', () => {
     }
   });
 
-  it('has the same annual price and suggested flag as the backend config', () => {
+  it('has the same annual price for every plan as the backend config', () => {
     for (const name of PLAN_NAMES) {
       expect(PLANS[name].annualPrice).toBe(backendPlans.PLANS[name].annualPrice);
-      expect(!!PLANS[name].suggested).toBe(!!backendPlans.PLANS[name].suggested);
     }
   });
 });

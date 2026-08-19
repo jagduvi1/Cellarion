@@ -11,8 +11,9 @@
  *              the amount actually charged comes from the Stripe Price whose
  *              id is in STRIPE_<TIER>_ANNUAL_PRICE_ID, so if you change one you
  *              must change the other.
- * suggested:   marks the tier the /supporter page highlights. Exactly one paid
- *              tier should carry it.
+ * The paid tiers are rendered in declaration order, and no tier is marked or
+ * highlighted as the recommended one: the page must never imply that giving is
+ * expected. Ordering alone puts the middle amount in the middle.
  *
  * The annual price is deliberately EXACTLY 12x the monthly one — there is no
  * yearly discount. Yearly is steered by being the default cadence and by the
@@ -56,7 +57,6 @@ const PLANS = {
     description: 'Support Cellarion at a higher level — no extra features, just bigger thanks.',
     price: 5,
     annualPrice: 60,
-    suggested: true,
     featureList: [
       'Everything in Enthusiast (all features are free)',
       'Support independent development even more',

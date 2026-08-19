@@ -628,7 +628,6 @@
     "perMonth": "/month",
     "equivPerMonth": "That's {{amount}} a month",
     "equivPerYear": "{{amount}} a year, all told",
-    "suggestedFlag": "Suggested",
     "chooseCta": "Support",
     "tierUnavailable": "Not available right now",
     "analogy": {

@@ -13,8 +13,9 @@
  * monthly price: there is no yearly discount, only the honest "one card fee
  * instead of twelve" framing. See the backend config for the fee arithmetic.
  *
- * `suggested` marks the tier this page highlights — the middle one, so the
- * extremes frame it rather than the other way round.
+ * No tier is flagged as recommended. All three are presented as equals and the
+ * middle amount is simply in the middle — a "Suggested" badge reads as an
+ * expectation to pay, and nothing here is expected.
  */
 export const PLANS = {
   free: {
@@ -51,7 +52,6 @@ export const PLANS = {
     description: 'Support Cellarion at a higher level — no extra features, just bigger thanks.',
     price: 5,
     annualPrice: 60,
-    suggested: true,
     featureList: [
       'Everything in Enthusiast (all features are free)',
       'Support independent development even more',
