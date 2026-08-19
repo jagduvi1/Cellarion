@@ -104,6 +104,7 @@ let job = {
   done: 0,
   enriched: 0,
   held: 0,              // producer-suspect rows: generated but publication withheld
+  kept: 0,              // reviewed published rows a would-hold regen preserved (stamp cleared)
   skipped: 0,
   errors: 0,
   startedAt: null,
@@ -277,6 +278,7 @@ async function start({ mode = 'incremental', limit = 0 } = {}) {
     done: 0,
     enriched: 0,
     held: 0,
+    kept: 0,
     skipped: 0,
     errors: 0,
     startedAt: new Date().toISOString(),
@@ -348,6 +350,7 @@ async function runJob(cfg) {
         const { result, reason } = await enrichWine(wine, job.model);
         if (result === 'enriched') job.enriched++;
         else if (result === 'held') job.held++;
+        else if (result === 'kept') job.kept++; // reviewed profile preserved, stamp cleared — not an error
         else {
           job.skipped++;
           if (reason) job.lastError = reason;
@@ -498,6 +501,20 @@ async function enrichWine(wine, model, { publishSuspect = false, curatorContext 
   // row stores ONLY the doubt; the null description keeps every read surface
   // naturally silent, and heldAt keeps the retry guards from looping on it.
   if (!publishSuspect && a.holdReason) {
+    // A REVIEWED published profile is a human decision — an automated
+    // regeneration (identity edit, full batch) must never null it (somm
+    // report 2026-08-19: proposal approvals re-generated curator-released
+    // rows). The doubtful regen is discarded, the old profile stays, and the
+    // cleared stamp drops the row back into the review worklists — a human
+    // decides, exactly like the first time.
+    if (wine.profileReviewedAt && wine.aiProfile && wine.aiProfile.description) {
+      await WineDefinition.updateOne(
+        { _id: wine._id },
+        { $set: { profileReviewedAt: null, updatedAt: now } }
+      );
+      console.log(`[enrichmentJob] kept reviewed profile ${wine._id}: regen would hold (${a.holdReason}) — review stamp cleared instead`);
+      return { result: 'kept', reason: a.holdReason };
+    }
     await WineDefinition.updateOne(
       { _id: wine._id },
       {
@@ -552,6 +569,10 @@ async function enrichWine(wine, model, { publishSuspect = false, curatorContext 
           heldAt: null,
         },
         updatedAt: now,
+        // Fresh content is unreviewed content: a stamp from before this
+        // regeneration attested the OLD profile, and carrying it forward
+        // would fake the audit trail the scaling review depends on.
+        ...(wine.profileReviewedAt ? { profileReviewedAt: null } : {}),
       },
     }
   );

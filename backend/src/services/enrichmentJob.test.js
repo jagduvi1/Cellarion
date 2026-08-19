@@ -915,3 +915,79 @@ describe('web-search rescue on confidence holds', () => {
     expect(persisted().searchUsed).toBe(false);
   });
 });
+
+/**
+ * The reviewed-profile guard (somm report 2026-08-19): an automated
+ * regeneration — proposal approval via reenrichAfterRecordEdit, or a full
+ * batch — must never NULL a profile a human attested. A would-hold regen on
+ * a reviewed published row keeps the old profile and clears only the review
+ * stamp (back into the worklists, a human decides again); a publishing regen
+ * writes the fresh content but also clears the stamp, because the review
+ * attested the OLD prose and carrying it forward would fake the audit trail.
+ * Unreviewed rows keep the original behavior in full.
+ */
+describe('regeneration never destroys a reviewed published profile', () => {
+  const reviewedWine = (over = {}) => ({
+    _id: WINE_ID, name: 'Encore Zinfandel', producer: 'Thomas Allen', type: 'red',
+    country: { name: 'Australia' }, region: { name: 'Hunter Valley' }, grapes: [],
+    profileReviewedAt: new Date('2026-08-18T10:00:00Z'),
+    aiProfile: { description: 'The curator-attested prose.', generatedAt: new Date('2026-08-18T09:00:00Z'), source: 'ai' },
+    ...over,
+  });
+  const regen = (confidence) => ({
+    data: {
+      body: 'medium', tannin: 'medium', acidity: 'medium', sweetness: 'dry',
+      flavors: ['plum'], foodPairings: ['stew'],
+      producerSuspect: false, producerUnknown: false,
+      description: 'Fresh regenerated prose.', confidence,
+    },
+    debugReason: null,
+  });
+
+  test('a would-hold regen KEEPS the old profile and clears only the stamp', async () => {
+    WineDefinition.findById.mockReturnValue(chain(reviewedWine()));
+    suggestProfile.mockResolvedValue(regen(0.2)); // under the floor → would hold
+    await enrichWineById(WINE_ID, { force: true });
+    expect(WineDefinition.updateOne).toHaveBeenCalledTimes(1);
+    const $set = WineDefinition.updateOne.mock.calls[0][1].$set;
+    expect($set.profileReviewedAt).toBeNull();
+    expect($set.aiProfile).toBeUndefined(); // the attested profile is untouched
+  });
+
+  test('a publishing regen writes the fresh profile AND clears the stamp', async () => {
+    WineDefinition.findById.mockReturnValue(chain(reviewedWine()));
+    suggestProfile.mockResolvedValue(regen(0.8));
+    await enrichWineById(WINE_ID, { force: true });
+    const $set = WineDefinition.updateOne.mock.calls[0][1].$set;
+    expect($set.aiProfile.description).toBe('Fresh regenerated prose.');
+    expect($set.aiProfile.heldAt).toBeNull();
+    expect($set.profileReviewedAt).toBeNull();
+  });
+
+  test('an UNREVIEWED published row still holds the old way — the gate is for unattested content', async () => {
+    WineDefinition.findById.mockReturnValue(chain(reviewedWine({ profileReviewedAt: null })));
+    suggestProfile.mockResolvedValue(regen(0.2));
+    await enrichWineById(WINE_ID, { force: true });
+    const $set = WineDefinition.updateOne.mock.calls[0][1].$set;
+    expect($set.aiProfile.description).toBeNull();
+    expect($set.aiProfile.heldReason).toBe('low_confidence');
+  });
+
+  test('a reviewed row whose profile is HELD (no prose) has nothing to preserve — normal hold write', async () => {
+    WineDefinition.findById.mockReturnValue(chain(reviewedWine({
+      aiProfile: { description: null, generatedAt: new Date(), heldAt: new Date(), source: 'ai' },
+    })));
+    suggestProfile.mockResolvedValue(regen(0.2));
+    await enrichWineById(WINE_ID, { force: true });
+    const $set = WineDefinition.updateOne.mock.calls[0][1].$set;
+    expect($set.aiProfile.heldReason).toBe('low_confidence');
+  });
+
+  test('a publish on a row with NO stamp does not touch profileReviewedAt at all', async () => {
+    WineDefinition.findById.mockReturnValue(chain(reviewedWine({ profileReviewedAt: null, aiProfile: null })));
+    suggestProfile.mockResolvedValue(regen(0.8));
+    await enrichWineById(WINE_ID);
+    const $set = WineDefinition.updateOne.mock.calls[0][1].$set;
+    expect('profileReviewedAt' in $set).toBe(false);
+  });
+});
