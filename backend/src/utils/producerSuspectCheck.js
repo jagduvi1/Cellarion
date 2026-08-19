@@ -75,6 +75,18 @@ const BRAND_CLASS = /\b(brands?|labels?|ranges?|retailers?|supermarkets?|bottler
 // the second one names a producer noun while DENYING it, so it has to cut too.
 const CONTRAST = /\b(rather than|instead of|not an? |but not |could not be|cannot be|can not be|can't be|unable to|never been|does not|do not|did not|no longer)/i;
 
+// Notes saying the producer FIELD holds a place or an appellation, not a house.
+// These are the identity-blocking family (producer-is-appellation,
+// producer-is-region) and they must never downgrade, however many producer
+// nouns the sentence contains — both of the ones below were caught in the
+// second prod dry run, matching "estate" inside a clause that denies one:
+//
+//   "The producer field simply repeats the appellation name, so no specific
+//    estate can be identified"                                  (Monbazillac)
+//   "Turckheim is also the name of an Alsace village and a well known
+//    cooperative"                                               (Turckheim)
+const FIELD_IS_PLACE = /\b(repeats? the (appellation|region|village|commune)|is also the name of|simply repeats|no specific (estate|producer|winery|house))\b/i;
+
 const escapeRx = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
@@ -86,6 +98,9 @@ const escapeRx = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
  */
 function noteAssertsProducer(note, producerName) {
   if (typeof note !== 'string' || !note.trim()) return false;
+  // Checked on the RAW note, before any stripping: if the note says the field
+  // holds a place or an appellation, no later producer noun can rescue it.
+  if (FIELD_IS_PLACE.test(note)) return false;
 
   let text = note;
   const name = typeof producerName === 'string' ? producerName.trim() : '';
