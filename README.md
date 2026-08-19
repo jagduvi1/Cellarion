@@ -374,7 +374,7 @@ Copy `.env.example` to `.env` — **it is fully commented and is the authoritati
 |-------|-----------|---------|
 | Self-hosted AI | `AI_PROVIDER`, `OPENAI_BASE_URL`, `OPENAI_API_KEY`, `AI_MODEL`, `AI_VISION_MODEL`, `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `EMBEDDING_DIMENSION`, … | Any OpenAI-compatible endpoint instead of Anthropic/Voyage — see [Self-hosted AI](#self-hosted-ai-openai-compatible-endpoints) |
 | Google SSO | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL` | Sign in with Google |
-| Supporter payments | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_{SUPPORTER,PATRON,BENEFACTOR}_PRICE_ID` + `_ANNUAL_` variants | Stripe Checkout for the optional tiers. Each price var takes a comma-separated list — current price first, then any retired prices that still have live subscribers |
+| Supporter payments | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_{SUPPORTER,PATRON,BENEFACTOR}_PRICE_ID` + `_ANNUAL_` variants | Stripe Checkout for the optional tiers. Give each tier its own Stripe **Product** (one monthly + one yearly price), or the Customer Portal can't offer tier switching. Each price var takes a comma-separated list — current price first, then any retired prices that still have live subscribers |
 | Push notifications | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_EMAIL` | Web-push for drink alerts and events |
 | Climate monitoring | `CLIMATE_RETENTION_DAYS`, `CLIMATE_MAX_DEVICES_PER_USER`, `CLIMATE_MAX_READINGS_PER_DAY`, … | Sensor ingest limits + GDPR retention |
 | Analytics | `UMAMI_DB_PASSWORD`, `UMAMI_APP_SECRET`, `VITE_UMAMI_URL`, `VITE_UMAMI_WEBSITE_ID` | Self-hosted cookie-free Umami (`--profile analytics`; `VITE_*` are build-time) |
