@@ -50,13 +50,21 @@
 // "producer" does not — these notes use it constantly to refer to the FIELD
 // ("cannot place this producer", "the producer name is unfamiliar"), so it
 // only counts inside an actual assertion: "a Loire Valley producer".
+// DELIBERATELY CASE-SENSITIVE, lowercase only. A capitalised producer noun is
+// part of a proper NAME, not a claim about the entity — "Davey Estate appears
+// to be a label", "Domaine des Granges de Mirabel appears to be a Pays d'Oc
+// label". Both are the flag working correctly, and matching the capital
+// inverted them. "is a small Fronsac estate" is the claim, and it is lowercase.
 const PRODUCER_CLASS = new RegExp(
   '\\b(?:estates?|winer(?:y|ies)|growers?|domaines?|weing(?:ut|üter)|bodegas?'
   + '|quintas?|aziendas?|co[-\\s]?operatives?|co[-\\s]?ops?|vignerons?'
   + '|houses?|châteaux|chateaux)\\b'
-  + '|\\ban?\\s+(?:[\\w\\u00C0-\\u024F\'’-]+\\s+){0,3}producers?\\b',
-  'i'
+  + '|\\ban?\\s+(?:[\\w\\u00C0-\\u024F\'’-]+\\s+){0,3}producers?\\b'
 );
+
+// "a house or cuvee name", "a bottling name" — the noun describes a NAME,
+// which is the brand reading however producer-ish the noun looks alone.
+const NAME_PHRASE = /^.{0,24}\bnames?\b/i;
 
 // The note asserts it is a COMMERCIAL NAME rather than a producer.
 const BRAND_CLASS = /\b(brands?|labels?|ranges?|retailers?|supermarkets?|bottlers?|bottling|importers?|merchants?|lines?|own[-\s]?label|private[-\s]?label|marketing|cuvée name|cuvee name|trade name|generic)\b/i;
@@ -65,7 +73,7 @@ const BRAND_CLASS = /\b(brands?|labels?|ranges?|retailers?|supermarkets?|bottler
 // occur in prod: the contrastive ("a brand rather than an estate") and the
 // failed-verification ("could not be verified as an established winery") —
 // the second one names a producer noun while DENYING it, so it has to cut too.
-const CONTRAST = /\b(rather than|instead of|not an? |but not |could not be|cannot be|can not be|can't be|unable to|never been)/i;
+const CONTRAST = /\b(rather than|instead of|not an? |but not |could not be|cannot be|can not be|can't be|unable to|never been|does not|do not|did not|no longer)/i;
 
 const escapeRx = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -93,6 +101,9 @@ function noteAssertsProducer(note, producerName) {
 
   const p = text.search(PRODUCER_CLASS);
   if (p === -1) return false;          // no positive producer claim → leave alone
+  // "a house or cuvee name" — naming a name, not an entity.
+  const matched = text.slice(p).match(PRODUCER_CLASS)?.[0] || '';
+  if (NAME_PHRASE.test(text.slice(p + matched.length))) return false;
   const b = text.search(BRAND_CLASS);
   if (b === -1) return true;           // producer claim, nothing contradicting it
   return p < b;                        // whichever the note reached for first
