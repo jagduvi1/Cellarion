@@ -1253,24 +1253,26 @@ registerTool({
 
 registerTool({
   name: 'review_held_profile',
-  title: 'Sommelier: decide one held/flagged profile — release, confirm, or reject',
+  title: 'Sommelier: decide one held/flagged profile — release, confirm, uphold, or reject',
   description:
     'The decision verb for list_held_profiles. decision "release" (HELD rows): the doubt was unfounded — the ' +
     'profile REGENERATES under the human override and publishes; costs one AI call, and on generation failure the ' +
     'row simply stays in the queue for another try. decision "confirm": the CURRENT state is correct — a held row ' +
-    'stays held (its owner keeps seeing "Not yet assessed"), a published_suspect row stays published; either way ' +
-    'the row is stamped reviewed and leaves the queue. decision "reject" (HELD rows only): this generation is ' +
-    'garbage — the profile clears entirely and the wine returns to the enrichment pool for a fresh attempt (which ' +
-    'may hold again, with fresh reasons). Every path removes the row from the queue by construction — release and ' +
-    'confirm stamp profileReviewedAt, reject clears the generation itself. To instead WRITE the correct profile ' +
-    'yourself, use set_wine_profile (curator-verifies in one step).',
+    'stays held (its owner keeps seeing "Not yet assessed"), a published_suspect row stays published WITH THE ' +
+    'SUSPECT FLAG CLEARED (a human adjudicated the doubt away). decision "uphold" (published_suspect rows only): ' +
+    'the flag is CORRECT — the producer value really is a brand/style/non-winery — so the row stays published, ' +
+    'KEEPS the flag and the owner-visible caveat, and leaves the queue as the registry\'s honest residue; ' +
+    'upheld-count is the true cannot-identify number the scaling review reads. decision "reject" (HELD rows only): ' +
+    'this generation is garbage — the profile clears entirely and the wine returns to the enrichment pool. Every ' +
+    'path removes the row from the queue by construction — release/confirm/uphold stamp profileReviewedAt, reject ' +
+    'clears the generation itself. To instead WRITE the correct profile yourself, use set_wine_profile.',
   scope: 'write',
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
     wine_id: objectId.optional().describe('One wine, from list_held_profiles'),
-    wine_ids: z.array(z.string()).min(1).max(40).optional().describe('BATCH confirm/reject (one call, per-row results). release is deliberately single-wine — it spends an AI call and takes curator context'),
-    decision: z.enum(['release', 'confirm', 'reject']),
+    wine_ids: z.array(z.string()).min(1).max(40).optional().describe('BATCH confirm/uphold/reject (one call, per-row results). release is deliberately single-wine — it spends an AI call and takes curator context'),
+    decision: z.enum(['release', 'confirm', 'uphold', 'reject']),
     reason: z.string().max(300).optional().describe('Why — recorded in the audit trail (applies to every row of a batch)'),
     context: z.string().max(1000).optional().describe('release only: curator-supplied ground truth injected into the regeneration prompt — the one or two facts the model was missing (e.g. "Hunter Valley, dry-farmed vines planted 1969; The Mango Tree cuvée = Chardonnay")'),
   },
@@ -1331,10 +1333,24 @@ registerTool({
         return { wine_id: wine._id, label, decision: 'confirm', state: held ? 'held' : 'published_suspect', ...(held ? {} : { suspect_cleared: true }), reviewed_at: now };
       }
 
+      if (args.decision === 'uphold') {
+        // Somm ticket 6a856e97 (2026-08-19): the flag is CORRECT and the only
+        // queue-clearing verb used to be the one that damaged the data
+        // (confirm clears the flag). Uphold keeps flag + caveat + published
+        // state, stamps reviewed, and the row leaves the queue as honest
+        // residue — upheld-count is the true cannot-identify number.
+        if (held) return { wine_id: id, error: 'uphold_is_published_only — for a held row whose flag is right, confirm keeps it held' };
+        const now = new Date();
+        await WineDefinition.updateOne({ _id: wine._id }, { $set: { profileReviewedAt: now } });
+        logAudit(ctx.req, 'admin.wine.profileReviewed', { type: 'wine', id: wine._id },
+          { name: wine.name, producer: wine.producer, decision: 'uphold', suspectKept: true, reason, via: 'mcp' });
+        return { wine_id: wine._id, label, decision: 'uphold', suspect_kept: true, reviewed_at: now };
+      }
+
       // reject — held rows only: nothing published means nothing embedded, so
       // a full clear needs no vector cleanup. A published row wanting removal
       // is a different operation (set_wine_profile, or an identity fix).
-      if (!held) return { wine_id: id, error: 'reject_is_held_only — for a published profile, set_wine_profile or confirm' };
+      if (!held) return { wine_id: id, error: 'reject_is_held_only — for a published profile, set_wine_profile, confirm (clears the flag) or uphold (keeps it)' };
       const now = new Date();
       await WineDefinition.updateOne(
         { _id: wine._id },
@@ -1367,7 +1383,9 @@ registerTool({
           ? (r.state === 'held'
             ? `Confirmed the hold on ${r.label} — it stays unpublished (owners see "Not yet assessed") and leaves the queue.`
             : `Confirmed ${r.label} as published — the suspect flag is CLEARED (a human adjudicated the doubt); producer_note stays for context.`)
-          : `Rejected the held generation for ${r.label} — profile cleared; the wine returns to the enrichment pool for a fresh attempt.`;
+          : r.decision === 'uphold'
+            ? `Upheld the flag on ${r.label} — stays published WITH the caveat, review stamped; the row is now honest residue, not queue.`
+            : `Rejected the held generation for ${r.label} — profile cleared; the wine returns to the enrichment pool for a fresh attempt.`;
       const { label, ...data } = r;
       return ok(msg, data);
     }

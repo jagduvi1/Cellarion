@@ -66,9 +66,13 @@ const wineDefinitionSchema = new mongoose.Schema({
     ref: 'Grape'
   }],
   type: {
+    // NO default (somm ticket 6a85ad44, HIGH): defaulting to 'red' stamped
+    // every thin-data mint as a red wine — 4/4 in one import burst were
+    // white, and the wrong type drives filtering, serving guidance and
+    // drink-window shape. Unknown colour is stored as ABSENT; a null prompts
+    // a curator to look, a wrong value closes the question.
     type: String,
     enum: ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'],
-    default: 'red'
   },
   image: {
     type: String,

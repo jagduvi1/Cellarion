@@ -184,7 +184,7 @@ router.put('/:id/resolve', async (req, res) => {
         region: region || null,
         appellation: cleanAppellation,
         grapes: grapes || [],
-        type: type || 'red',
+        type: type || null, // no guessed red (ticket 6a85ad44)
         image: image || wineRequest.image || null,
         normalizedKey,
         createdBy: req.user.id,

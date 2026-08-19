@@ -198,7 +198,7 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
 
     if (b.price && wd) {
       const v = toTarget(b.price, b.currency || 'USD');
-      if (v != null) topValueArr.push({ name: wd.name || 'Unknown', producer: wd.producer || '', vintage: b.vintage || 'NV', type: wd.type || 'red', price: Math.round(v * 100) / 100 });
+      if (v != null) topValueArr.push({ name: wd.name || 'Unknown', producer: wd.producer || '', vintage: b.vintage || 'NV', type: wd.type || 'unknown', price: Math.round(v * 100) / 100 });
     }
   }
 

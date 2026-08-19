@@ -72,3 +72,20 @@
 @media (max-width: 768px) {
   .ad-grid { grid-template-columns: 1fr; }
 }
+
+/* Audit UX-4: containment for the mini table + the board selector. */
+.ad-mini-scroll { overflow-x: auto; }
+.ad-mini-scroll table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.ad-mini-scroll td { padding: 4px 8px; border-bottom: 1px solid var(--color-border); white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.ad-mini-scroll tr:last-child td { border-bottom: none; }
+.ad-more { padding: 6px 8px 2px; font-size: 0.78rem; color: var(--color-text-secondary); }
+.ad-board-select {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  max-width: 60vw;
+}

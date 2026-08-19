@@ -8,8 +8,13 @@ const mongoose = require('mongoose');
 // The stored `query` is DATA, revalidated by the analytics engine on every
 // render — persisting it grants nothing the live endpoint would refuse (the
 // engine re-derives scope per request; a stale cellar id simply narrows to
-// nothing). One dashboard per user for now; the unique index makes the
-// upsert honest.
+// nothing).
+//
+// MULTI-DASHBOARD (Johan 2026-08-19): several named dashboards per user,
+// unique on (user, name), capped in the route. ⚠️ The first release shipped
+// one-per-user with a UNIQUE index on `user` alone — that index must be
+// DROPPED on prod at deploy (scripts/migrate-dashboards-multi.js) or the
+// second dashboard insert throws E11000.
 
 const widgetSchema = new mongoose.Schema({
   title: { type: String, trim: true, maxlength: [80, 'Widget title too long'], required: true },
@@ -29,7 +34,13 @@ const savedDashboardSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true,
-    unique: true,
+    index: true,
+  },
+  name: {
+    type: String,
+    trim: true,
+    maxlength: [60, 'Dashboard name too long'],
+    default: 'My cellar',
   },
   widgets: {
     type: [widgetSchema],
@@ -42,6 +53,8 @@ const savedDashboardSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
+
+savedDashboardSchema.index({ user: 1, name: 1 }, { unique: true });
 
 savedDashboardSchema.pre('save', function (next) {
   this.updatedAt = Date.now();

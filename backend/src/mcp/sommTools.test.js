@@ -759,6 +759,38 @@ describe('held-profile review queue over MCP (somm ticket 2026-08-18)', () => {
     const body = parse(await tool('review_held_profile').handler({ wine_id: oid('7'), decision: 'confirm' }, SOMM_CTX));
     expect(body.error.code).toBe('invalid_input');
   });
+
+  // Somm ticket 6a856e97: the verb that upholds a CORRECT flag. Confirm
+  // clears the flag; uphold keeps it — both stamp reviewed, both clear the
+  // queue, and only one of them damages the data when the flag is right.
+  test('uphold on a published_suspect KEEPS the flag and stamps reviewed — flag survives, queue does not', async () => {
+    WineDefinition.findById.mockReturnValue(selectChain(heldWine({
+      aiProfile: { heldAt: null, producerSuspect: true, description: 'x', generatedAt: new Date(), source: 'ai' },
+    })));
+    const body = parse(await tool('review_held_profile').handler({ wine_id: oid('7'), decision: 'uphold' }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(body.data.suspect_kept).toBe(true);
+    const [, update] = WineDefinition.updateOne.mock.calls[0];
+    expect(update.$set.profileReviewedAt).toBeInstanceOf(Date);
+    // The one assertion that IS the ticket: no field write touches the flag.
+    expect(update.$set['aiProfile.producerSuspect']).toBeUndefined();
+  });
+
+  test('uphold on a HELD row is refused — confirm is the keep-it-held verb', async () => {
+    WineDefinition.findById.mockReturnValue(selectChain(heldWine()));
+    const body = parse(await tool('review_held_profile').handler({ wine_id: oid('7'), decision: 'uphold' }, SOMM_CTX));
+    expect(body.error.code).toBe('invalid_input');
+    expect(body.error.message).toMatch(/uphold_is_published_only/);
+  });
+
+  test('uphold batches like confirm/reject', async () => {
+    WineDefinition.findById.mockReturnValue(selectChain(heldWine({
+      aiProfile: { heldAt: null, producerSuspect: true, description: 'x', generatedAt: new Date(), source: 'ai' },
+    })));
+    const body = parse(await tool('review_held_profile').handler({ wine_ids: [oid('7'), oid('8')], decision: 'uphold' }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(body.summary).toMatch(/2\/2 decided/);
+  });
 });
 
 describe('list_unverified_core_wines (curated core — rethink decision 3)', () => {

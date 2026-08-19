@@ -70,6 +70,7 @@ const WishlistItem = require('../models/WishlistItem');
 const PersonalDataKey = require('../models/PersonalDataKey');
 const PersonalDataEntry = require('../models/PersonalDataEntry');
 const SavedDashboard = require('../models/SavedDashboard');
+const SavedView = require('../models/SavedView');
 const RegistryDataKey = require('../models/RegistryDataKey');
 const RegistryDataValue = require('../models/RegistryDataValue');
 const AuditLog = require('../models/AuditLog');
@@ -320,11 +321,17 @@ const REGISTRY = [
     exportFragment: async (ctx) => ({ personalDataEntries: markTrunc(ctx, 'personalDataEntries', await PersonalDataEntry.find({ author: ctx.userId }).populate('key', 'name type unit').limit(EXPORT_MAX).lean()) }),
   },
   {
-    // The analytics dashboard (#987 R-E): one row per user, pure preference
+    // Analytics dashboards (#987): named per-user boards, pure preference
     // data — hard delete, full export.
     model: SavedDashboard, category: 'personal-data', userFields: ['user'],
     purge: (ctx) => SavedDashboard.deleteMany({ user: ctx.userId }),
-    exportFragment: async (ctx) => ({ analyticsDashboard: await SavedDashboard.findOne({ user: ctx.userId }).lean() }),
+    exportFragment: async (ctx) => ({ analyticsDashboards: await SavedDashboard.find({ user: ctx.userId }).lean() }),
+  },
+  {
+    // Saved analytics views + preset stars (#987 saved-views slice).
+    model: SavedView, category: 'personal-data', userFields: ['user'],
+    purge: (ctx) => SavedView.deleteMany({ user: ctx.userId }),
+    exportFragment: async (ctx) => ({ analyticsSavedViews: markTrunc(ctx, 'analyticsSavedViews', await SavedView.find({ user: ctx.userId }).limit(EXPORT_MAX).lean()) }),
   },
   {
     // The PUBLIC vocabulary is shared content (#985): an accepted key belongs
