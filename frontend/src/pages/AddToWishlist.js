@@ -163,7 +163,7 @@ function AddToWishlist() {
         appellation: e.appellation || '',
         // Not a form field — rides invisibly into the commit payload (see AddBottle).
         classification: e.classification || '',
-        type: e.type || 'red',
+        type: e.type || '',
         grapes: (e.grapes || []).join(', '),
       });
       setShowManualForm(true);
@@ -211,7 +211,7 @@ function AddToWishlist() {
         region: merged.region || '',
         appellation: merged.appellation || '',
         classification: merged.classification || '',
-        type: merged.type || 'red',
+        type: merged.type || '',
         grapes: (merged.grapes || []).join(', '),
       };
       if (!prev) return fromMerged;
@@ -294,7 +294,7 @@ function AddToWishlist() {
           country: match.wine.country?.name || extracted.country || '',
           region: match.wine.region?.name || extracted.region || '',
           appellation: match.wine.appellation || extracted.appellation || '',
-          type: match.wine.type || extracted.type || 'red',
+          type: match.wine.type || extracted.type || '',
           grapes: (match.wine.grapes || []).map(g => g.name)
         }
       : {
@@ -304,7 +304,7 @@ function AddToWishlist() {
           region: extracted.region || '',
           appellation: extracted.appellation || '',
           classification: extracted.classification || '',
-          type: extracted.type || 'red',
+          type: extracted.type || '',
           grapes: extracted.grapes || []
         };
 
@@ -320,7 +320,7 @@ function AddToWishlist() {
       region: extracted.region || '',
       appellation: extracted.appellation || '',
       classification: extracted.classification || '',
-      type: extracted.type || 'red',
+      type: extracted.type || '',
       grapes: (extracted.grapes || []).join(', ')
     });
     setShowManualForm(true);
@@ -413,7 +413,7 @@ function AddToWishlist() {
       country: aiIdentified.country || '',
       region: aiIdentified.region || '',
       appellation: aiIdentified.appellation || '',
-      type: aiIdentified.type || 'red',
+      type: aiIdentified.type || '',
       grapes: (aiIdentified.grapes || []).join(', '),
       source: 'ai',
     });
@@ -433,7 +433,7 @@ function AddToWishlist() {
       country: aiIdentified.country,
       region: aiIdentified.region || '',
       appellation: aiIdentified.appellation || '',
-      type: aiIdentified.type || 'red',
+      type: aiIdentified.type || '',
       grapes: aiIdentified.grapes || [],
       source: 'ai',
     });
@@ -637,7 +637,7 @@ function AddToWishlist() {
               <div className="scan-wine-image-wrap">
                 {labelImage
                   ? <img src={labelImage} alt={scanResult.extracted.name} className="scan-wine-label-img" />
-                  : <div className={`wine-row-placeholder scan-wine-placeholder ${scanResult.extracted.type || 'red'}`} />
+                  : <div className={`wine-row-placeholder scan-wine-placeholder ${scanResult.extracted.type || 'unknown'}`} />
                 }
               </div>
               <div className="scan-wine-body">
@@ -654,8 +654,8 @@ function AddToWishlist() {
                   {scanResult.extracted.country && <span>{scanResult.extracted.country}</span>}
                   {scanResult.extracted.region && <span>• {scanResult.extracted.region}</span>}
                   {scanResult.extracted.appellation && <span>• {scanResult.extracted.appellation}</span>}
-                  <span className={`wine-type-pill ${scanResult.extracted.type || 'red'}`}>
-                    {scanResult.extracted.type || 'red'}
+                  <span className={`wine-type-pill ${scanResult.extracted.type || 'unknown'}`}>
+                    {scanResult.extracted.type || t('common.unknown')}
                   </span>
                 </div>
                 {scanResult.extracted.grapes?.length > 0 && (
@@ -718,6 +718,8 @@ function AddToWishlist() {
                   <label>{t('addToWishlist.type')}</label>
                   <select value={pendingWineData.type}
                     onChange={e => setPendingWineData(p => ({ ...p, type: e.target.value }))}>
+                    {/* See AddBottle: unknown is a real answer, not a gap. */}
+                    <option value="">{t('common.unknown')}</option>
                     {WINE_TYPES.map(wt => <option key={wt} value={wt}>{wt}</option>)}
                   </select>
                 </div>
@@ -821,7 +823,7 @@ function AddToWishlist() {
                           {countryName && <span>{countryName}</span>}
                           {regionName && <span>• {regionName}</span>}
                           {card.appellation && <span>• {card.appellation}</span>}
-                          <span className={`wine-type-pill ${card.type || 'red'}`}>{card.type || 'red'}</span>
+                          <span className={`wine-type-pill ${card.type || 'unknown'}`}>{card.type || t('common.unknown')}</span>
                         </div>
                         {grapeNames.length > 0 && (
                           <p className="wine-grapes">{grapeNames.join(', ')}</p>

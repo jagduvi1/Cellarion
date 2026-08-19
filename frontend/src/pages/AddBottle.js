@@ -171,7 +171,7 @@ function AddBottle() {
         // scanned classification line ("Grand Cru Classé en 1855") lands in
         // the registry's classification field instead of polluting the name.
         classification: e.classification || '',
-        type: e.type || 'red',
+        type: e.type || '',
         grapes: (e.grapes || []).join(', '),
       });
       setShowManualForm(true);
@@ -222,7 +222,7 @@ function AddBottle() {
         region: merged.region || '',
         appellation: merged.appellation || '',
         classification: merged.classification || '',
-        type: merged.type || 'red',
+        type: merged.type || '',
         grapes: (merged.grapes || []).join(', '),
       };
       // Nothing typed yet (the front scan 422'd and the user had not opened the
@@ -373,7 +373,7 @@ function AddBottle() {
           country: match.wine.country?.name || extracted.country || '',
           region: match.wine.region?.name || extracted.region || '',
           appellation: match.wine.appellation || extracted.appellation || '',
-          type: match.wine.type || extracted.type || 'red',
+          type: match.wine.type || extracted.type || '',
           grapes: (match.wine.grapes || []).map(g => g.name)
         }
       : {
@@ -383,7 +383,7 @@ function AddBottle() {
           region: extracted.region || '',
           appellation: extracted.appellation || '',
           classification: extracted.classification || '',
-          type: extracted.type || 'red',
+          type: extracted.type || '',
           grapes: extracted.grapes || []
         };
 
@@ -400,7 +400,7 @@ function AddBottle() {
       region: extracted.region || '',
       appellation: extracted.appellation || '',
       classification: extracted.classification || '',
-      type: extracted.type || 'red',
+      type: extracted.type || '',
       grapes: (extracted.grapes || []).join(', ')
     });
     setShowManualForm(true);
@@ -501,7 +501,7 @@ function AddBottle() {
       country: aiIdentified.country || '',
       region: aiIdentified.region || '',
       appellation: aiIdentified.appellation || '',
-      type: aiIdentified.type || 'red',
+      type: aiIdentified.type || '',
       grapes: (aiIdentified.grapes || []).join(', '),
       source: 'ai',
     });
@@ -526,7 +526,7 @@ function AddBottle() {
       country: aiIdentified.country,
       region: aiIdentified.region || '',
       appellation: aiIdentified.appellation || '',
-      type: aiIdentified.type || 'red',
+      type: aiIdentified.type || '',
       grapes: aiIdentified.grapes || [],
       source: 'ai',
     });
@@ -859,7 +859,7 @@ function AddBottle() {
                   <div className="scan-wine-shot-img-wrap">
                     {labelImage
                       ? <img src={labelImage} alt={scanResult.extracted.name} className="scan-wine-label-img" />
-                      : <div className={`wine-row-placeholder scan-wine-placeholder ${scanResult.extracted.type || 'red'}`} />
+                      : <div className={`wine-row-placeholder scan-wine-placeholder ${scanResult.extracted.type || 'unknown'}`} />
                     }
                   </div>
                   {scanMatchedWine?.image && (
@@ -902,8 +902,8 @@ function AddBottle() {
                   {scanResult.extracted.country && <span>{scanResult.extracted.country}</span>}
                   {scanResult.extracted.region && <span>• {scanResult.extracted.region}</span>}
                   {scanResult.extracted.appellation && <span>• {scanResult.extracted.appellation}</span>}
-                  <span className={`wine-type-pill ${scanResult.extracted.type || 'red'}`}>
-                    {scanResult.extracted.type || 'red'}
+                  <span className={`wine-type-pill ${scanResult.extracted.type || 'unknown'}`}>
+                    {scanResult.extracted.type || t('common.unknown')}
                   </span>
                 </div>
                 {scanResult.extracted.grapes?.length > 0 && (
@@ -976,6 +976,11 @@ function AddBottle() {
                   <label>{t('addBottle.scanType')}</label>
                   <select value={pendingWineData.type}
                     onChange={e => setPendingWineData(p => ({ ...p, type: e.target.value }))}>
+                    {/* Unknown is a real answer: the scan and the AI now return
+                        null rather than defaulting to red (ticket 6a85ad44), so
+                        the form must be able to carry that through instead of
+                        making the user pick a colour to get past it. */}
+                    <option value="">{t('common.unknown')}</option>
                     {WINE_TYPES.map(wt => <option key={wt} value={wt}>{wt}</option>)}
                   </select>
                 </div>
@@ -1080,7 +1085,7 @@ function AddBottle() {
                           {countryName && <span>{countryName}</span>}
                           {regionName && <span>• {regionName}</span>}
                           {card.appellation && <span>• {card.appellation}</span>}
-                          <span className={`wine-type-pill ${card.type || 'red'}`}>{card.type || 'red'}</span>
+                          <span className={`wine-type-pill ${card.type || 'unknown'}`}>{card.type || t('common.unknown')}</span>
                         </div>
                         {grapeNames.length > 0 && (
                           <p className="wine-grapes">{grapeNames.join(', ')}</p>
