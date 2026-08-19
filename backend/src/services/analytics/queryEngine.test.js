@@ -380,7 +380,7 @@ describe('bounds and caps', () => {
       mode: 'grouped',
       dimensions: ['bottle.status', 'wine.type', 'bottle.vintage'],
       measures: [{ field: '*', agg: 'count' }],
-    })).rejects.toThrow(/1–2 dimensions/);
+    })).rejects.toThrow(/0–2 dimensions/);
   });
 
   test('grouped mode reports the bucket cap when it fires', async () => {
@@ -584,4 +584,29 @@ describe('AUDIT fixes 2026-08-19 — the rest of the confirmed nine', () => {
       mode: 'grouped', dimensions: ['bottle.addedAt'], measures: [{ field: '*', agg: 'count' }],
     })).rejects.toThrow(/cannot be grouped/);
   });
+});
+
+describe('KPI shape — zero dimensions (dashboards R-E)', () => {
+  test('an empty dimensions array groups the whole scoped set into one bucket', async () => {
+    // A currency measure makes THREE aggregate calls: the modal-currency
+    // probe, the unconvertible count, then the main pipeline — each needs
+    // its own shaped result.
+    const captured = { pipelines: [] };
+    const results = [[{ _id: 'USD', n: 9 }], [], [{ _id: {}, m0: 42, m1: 12345 }]];
+    Bottle.aggregate.mockImplementation((pipeline) => {
+      captured.pipelines.push(pipeline);
+      const r = results[captured.pipelines.length - 1] || [];
+      return { option: jest.fn(async () => r) };
+    });
+    const out = await runQuery(USER, {
+      mode: 'grouped', dimensions: [],
+      measures: [{ field: '*', agg: 'count' }, { field: 'purchase.price', agg: 'sum' }],
+    });
+    const main = captured.pipelines[captured.pipelines.length - 1];
+    expect(main.find((s) => s.$group).$group._id).toEqual({});
+    expect(out.buckets).toEqual([{ dimensions: [], measures: [42, 12345] }]);
+    expect(out.dimensionKeys).toEqual([]);
+    expect(out.currency.target).toBe('USD');
+  });
+
 });

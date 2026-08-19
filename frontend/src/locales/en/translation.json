@@ -99,7 +99,8 @@
     "systemMonitor": "System Monitor",
     "mainNavigation": "Main navigation",
     "switchToDark": "Switch to dark mode",
-    "switchToLight": "Switch to light mode"
+    "switchToLight": "Switch to light mode",
+    "dashboard": "Dashboard"
   },
   "auth": {
     "login": "Login",
@@ -4410,6 +4411,14 @@
       "giftedVsDrunk": "How bottles leave (drunk, gifted, sold)"
     },
     "beta": "Beta",
-    "betaHint": "Analytics is new and still settling in. If a number looks wrong or something misbehaves, please tell us via Support — it helps more than you would think."
+    "betaHint": "Analytics is new and still settling in. If a number looks wrong or something misbehaves, please tell us via Support — it helps more than you would think.",
+    "dashboardTitle": "Dashboard",
+    "dashboardHint": "Widgets come from the analytics table: open a cellar, switch to the table view, group something interesting, and press \"Add to dashboard\".",
+    "addToDashboard": "Add to dashboard",
+    "widgetTitlePrompt": "Name this dashboard widget:",
+    "removeWidget": "Remove widget",
+    "resetDashboard": "Reset to default",
+    "saving": "Saving…",
+    "saveFailed": "Could not save"
   }
 }

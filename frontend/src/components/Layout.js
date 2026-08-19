@@ -91,6 +91,12 @@ function Layout({ children }) {
                   {t('nav.myCellars')}
                 </Link>
                 <Link
+                  to="/dashboard"
+                  className={`nav-link ${isActive('/dashboard') ? 'active' : ''}`}
+                >
+                  {t('nav.dashboard', 'Dashboard')}
+                </Link>
+                <Link
                   to="/statistics"
                   className={`nav-link ${isActive('/statistics') ? 'active' : ''}`}
                 >

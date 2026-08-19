@@ -7,6 +7,7 @@ import { csvEscape } from '../utils/importReport';
 import downloadBlob from '../utils/downloadBlob';
 import AnalyticsCharts from './AnalyticsCharts';
 import { ANALYTICS_PRESETS } from '../utils/analyticsPresets';
+import { getDashboard, saveDashboard } from '../api/analytics';
 import './AnalyticsTable.css';
 
 /**
@@ -384,6 +385,40 @@ export default function AnalyticsTable({ cellarId }) {
           <button className="at-chip" onClick={exportCsv} disabled={exporting || !data}>
             {exporting ? t('analytics.exporting', 'Exporting…') : t('analytics.exportCsv', 'Export CSV')}
           </button>
+          {grouping.on && data?.mode === 'grouped' && (
+            <button
+              className="at-chip"
+              onClick={async () => {
+                // A grouped view becomes a dashboard widget verbatim — the
+                // stored query is exactly what this table just ran.
+                const title = window.prompt(
+                  t('analytics.widgetTitlePrompt', 'Name this dashboard widget:'),
+                  byKey.get(grouping.dim1)?.label || t('analytics.dashboardTitle', 'Dashboard')
+                );
+                if (!title) return;
+                try {
+                  const res = await getDashboard(apiFetch);
+                  const body = await res.json();
+                  const existing = (res.ok && body.dashboard?.widgets) || [];
+                  const widget = {
+                    title: title.trim().slice(0, 80),
+                    viz: chartType === 'table' ? 'bar' : chartType,
+                    size: 'half',
+                    query,
+                  };
+                  const save = await saveDashboard(apiFetch, [...existing, widget]);
+                  if (!save.ok) {
+                    const d = await save.json();
+                    setError(d.error || t('analytics.saveFailed', 'Could not save'));
+                  }
+                } catch {
+                  setError(t('analytics.saveFailed', 'Could not save'));
+                }
+              }}
+            >
+              {t('analytics.addToDashboard', 'Add to dashboard')}
+            </button>
+          )}
         </div>
       </div>
 

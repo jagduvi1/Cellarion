@@ -39,6 +39,7 @@ const SommPrices      = lazy(() => import('./pages/SommPrices'));
 const Settings        = lazy(() => import('./pages/Settings'));
 const Supporter       = lazy(() => import('./pages/Supporter'));
 const Statistics      = lazy(() => import('./pages/Statistics'));
+const AnalyticsDashboard = lazy(() => import('./pages/AnalyticsDashboard'));
 const Bottles         = lazy(() => import('./pages/Bottles'));
 const StatsCard       = lazy(() => import('./pages/StatsCard'));
 const AdminWines      = lazy(() => import('./pages/AdminWines'));
@@ -341,6 +342,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <Layout><Statistics /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Layout><AnalyticsDashboard /></Layout>
             </ProtectedRoute>
           }
         />
