@@ -764,6 +764,15 @@ describe('the enrichment prompt forbids asserting unstated facts', () => {
     expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/NOT whether you recognise this specific bottling/);
     expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/never having heard of the grower merits 0\.5-0\.6/);
   });
+
+  // Curator audit 2026-08-19: notes NAMING the actual entity were 6/6 right;
+  // "appears to be a negociant/private-label" category guesses were 0/3 —
+  // and the specific-sounding wording made the wrong ones look evidenced.
+  test('a suspect note must name the entity or say "cannot verify" — never speculate a category', () => {
+    expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/never dress a guess as a finding/);
+    expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/no negociant\/private-label\/generic\/novelty speculation/);
+    expect(DEFAULT_ENRICHMENT_PROMPT).toMatch(/an unspecific claim in specific costume misleads/);
+  });
 });
 
 /**
