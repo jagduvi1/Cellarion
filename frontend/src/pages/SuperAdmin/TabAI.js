@@ -493,6 +493,61 @@ function EnrichmentGatePanel({ floor, unknownBar, apiFetch }) {
   );
 }
 
+function EnrichmentSearchPanel({ enabled, dailyCap, apiFetch }) {
+  const [on, setOn] = useState(enabled ?? true);
+  const [cap, setCap] = useState(dailyCap ?? 5);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const save = async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await apiFetch('/api/superadmin/ai/enrichment-search', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !!on, dailyCap: parseInt(cap, 10) }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        setMsg({ ok: false, text: d.error || 'Save failed' });
+      } else {
+        setMsg({ ok: true, text: 'Saved — applies to the next enrichment' });
+      }
+    } catch {
+      setMsg({ ok: false, text: 'Network error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const numStyle = { width: 70, background: 'var(--sa-bg)', border: '1px solid var(--sa-border)', color: 'var(--sa-text)', padding: '2px 6px', borderRadius: 3, fontFamily: 'monospace', fontSize: 12 };
+  return (
+    <div className="sa-panel" style={{ marginTop: 16 }}>
+      <div className="sa-panel-header">
+        <span className="sa-panel-title">Enrichment — Web-Search Rescue (pilot)</span>
+        <button className="sa-btn" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
+      </div>
+      <div className="sa-panel-body">
+        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 12 }}>
+          A profile that would be HELD for low confidence gets one retry with Anthropic web search (max 2 searches, ~$0.01 each plus a second model call). The gate is the difficulty detector — ordinary wines never spend a search. Cap 0 or the switch off disables it; Anthropic provider only.
+        </div>
+        <div className="sa-kv">
+          <div className="sa-kv-row">
+            <span className="sa-kv-key">Enabled</span>
+            <input type="checkbox" checked={!!on} onChange={e => setOn(e.target.checked)} />
+          </div>
+          <div className="sa-kv-row">
+            <span className="sa-kv-key">Searched retries per day</span>
+            <input type="number" min="0" max="100" step="1" value={cap} onChange={e => setCap(e.target.value)} style={numStyle} />
+          </div>
+        </div>
+        {msg && <div style={{ fontSize: 11, marginTop: 8, color: msg.ok ? 'var(--sa-green)' : 'var(--sa-red)' }}>{msg.text}</div>}
+      </div>
+    </div>
+  );
+}
+
 function ChatLimitPanel({ limit, apiFetch }) {
   const [val, setVal] = useState(limit ?? 50);
   const [saving, setSaving] = useState(false);
@@ -1176,6 +1231,7 @@ export default function TabAI() {
       <EnrichmentPromptPanel prompt={config.enrichmentPrompt || ''} apiFetch={apiFetch} />
       <ChatLimitPanel limit={config.chatDailyLimit ?? 50} apiFetch={apiFetch} />
       <EnrichmentGatePanel floor={config.enrichmentHoldConfidenceFloor ?? 0.4} unknownBar={config.enrichmentHoldUnknownConfidenceBar ?? 0.55} apiFetch={apiFetch} />
+      <EnrichmentSearchPanel enabled={config.enrichmentSearchEnabled ?? true} dailyCap={config.enrichmentSearchDailyCap ?? 5} apiFetch={apiFetch} />
       <ChatUsagePanel />
     </>
   );

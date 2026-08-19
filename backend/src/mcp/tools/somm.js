@@ -113,6 +113,10 @@ const profileLite = (ap) => {
       ai_confidence: ap.confidence ?? null,
       description: null,
       source: ap.source || 'ai',
+      // Pilot 2026-08-19: a search-assisted retry ALSO failed the gate — this
+      // row's doubt survived a web search, so releasing it needs real curator
+      // facts, not another plain regeneration.
+      ...(ap.searchUsed === true ? { search_assisted: true } : {}),
     };
   }
   if (!(ap.description || ap.body)) return null;
@@ -133,6 +137,10 @@ const profileLite = (ap) => {
     producer_unknown: ap.producerUnknown === true,
     producer_note: ap.producerNote || null,
     verified_at: ap.verifiedAt || null,
+    // Pilot 2026-08-19: this profile came from the web-search rescue retry.
+    // Flagged so quality judgements on searched rows can be tallied apart —
+    // the pilot's go/no-go number. Omitted when false to keep payloads lean.
+    ...(ap.searchUsed === true ? { search_assisted: true } : {}),
   };
 };
 
@@ -851,7 +859,7 @@ registerTool({
         name: 1, producer: 1, appellation: 1, classification: 1, type: 1, grapes: 1, region: 1,
         'aiProfile.body': 1, 'aiProfile.tannin': 1, 'aiProfile.acidity': 1,
         'aiProfile.sweetness': 1, 'aiProfile.flavors': 1, 'aiProfile.description': 1,
-        'aiProfile.confidence': 1, 'aiProfile.producerUnknown': 1,
+        'aiProfile.confidence': 1, 'aiProfile.producerUnknown': 1, 'aiProfile.searchUsed': 1,
       } },
     ]);
     await WineDefinition.populate(rows, [{ path: 'grapes', select: 'name' }, { path: 'region', select: 'name' }]);
@@ -874,6 +882,9 @@ registerTool({
       },
       ai_confidence: w.aiProfile?.confidence ?? null,
       producer_unknown: w.aiProfile?.producerUnknown === true,
+      // Pilot 2026-08-19: judge search-assisted rows apart — their error rate
+      // vs the un-searched population is the pilot's go/no-go number.
+      ...(w.aiProfile?.searchUsed === true ? { search_assisted: true } : {}),
     })));
   },
 });
@@ -1182,7 +1193,7 @@ registerTool({
     }
 
     const rows = await WineDefinition.find(match)
-      .select('name producer appellation type grapes country region aiProfile.confidence aiProfile.heldAt aiProfile.heldReason aiProfile.producerSuspect aiProfile.producerUnknown aiProfile.producerNote aiProfile.description aiProfile.generatedAt')
+      .select('name producer appellation type grapes country region aiProfile.confidence aiProfile.heldAt aiProfile.heldReason aiProfile.producerSuspect aiProfile.producerUnknown aiProfile.producerNote aiProfile.description aiProfile.generatedAt aiProfile.searchUsed')
       .limit(HELD_LIST_CAP)
       .populate('grapes', 'name')
       .populate('country', 'name')
@@ -1224,6 +1235,9 @@ registerTool({
         ai_confidence: w.aiProfile?.confidence ?? null,
         owner_count: counts.get(String(w._id)) || 0,
         generated_at: w.aiProfile?.generatedAt || null,
+        // Pilot 2026-08-19: a web-search retry already failed on this row —
+        // releasing it without curator facts would just re-hold.
+        ...(w.aiProfile?.searchUsed === true ? { search_assisted: true } : {}),
       }))
       .filter((r) => !args.min_owners || r.owner_count >= args.min_owners)
       .sort((a, b) => (b.owner_count - a.owner_count) || ((a.ai_confidence ?? 1) - (b.ai_confidence ?? 1)));

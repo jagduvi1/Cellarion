@@ -151,6 +151,11 @@ const wineDefinitionSchema = new mongoose.Schema({
     // before 2026-08-18 predate the field (null = producer_suspect era), and
     // a future gate reason must not need a schema change.
     heldReason:   { type: String, default: null, trim: true },
+    // This generation used the web-search rescue (pilot 2026-08-19). The
+    // pilot's three numbers all derive from this flag: rescue rate
+    // (searchUsed ∧ published vs held), searched-profile quality (curator
+    // overwrites on searchUsed rows), and spend (searchUsed per day).
+    searchUsed:   { type: Boolean, default: false },
     // Provenance. 'ai' = written by enrichmentJob; 'curator' = a sommelier or
     // admin corrected it by hand (routes/somm/wineProfile.js or the MCP
     // set_wine_profile tool). The distinction is load-bearing, not cosmetic:

@@ -132,6 +132,27 @@ function sleep() {
   return new Promise(resolve => setTimeout(resolve, BATCH_PAUSE_MS));
 }
 
+// ── Web-search rescue: daily slot counter (pilot 2026-08-19) ────────────────
+// In-memory per UTC day — a backend restart resets it, which for a pilot
+// bound of ~5/day is an acceptable slack, not a budget hole. The searchUsed
+// flag on rows is the durable record; this counter only enforces the cap.
+let searchSlotDay = '';
+let searchSlotsUsed = 0;
+function takeSearchSlot(cap) {
+  if (!(Number.isInteger(cap) && cap > 0)) return false;
+  const today = new Date().toISOString().slice(0, 10);
+  if (today !== searchSlotDay) { searchSlotDay = today; searchSlotsUsed = 0; }
+  if (searchSlotsUsed >= cap) return false;
+  searchSlotsUsed += 1;
+  return true;
+}
+
+/** Test hook — the slot counter is module state, shared across a test file. */
+function _resetSearchSlots() {
+  searchSlotDay = '';
+  searchSlotsUsed = 0;
+}
+
 // ── Which doubts actually have to withhold the profile ──────────────────────
 //
 // The flag was split on 2026-08-17 (see models/WineDefinition.aiProfile
@@ -386,61 +407,97 @@ async function enrichWine(wine, model, { publishSuspect = false, curatorContext 
     return { result: 'skipped', reason };
   }
 
-  // The two producer doubts, kept apart (see shouldHoldProfile). Strict
-  // true-checks: absent on an old or custom prompt → false, which degrades to
-  // "no doubt recorded" rather than to a spurious hold.
-  const suspect = data.producerSuspect === true;
-  const unknown = data.producerUnknown === true;
   const now = new Date();
-  const confidence = cleanConfidence(data.confidence);
-  const description = cleanProse(data.description);
-  const meta = {
-    confidence,
-    producerSuspect: suspect,
-    producerUnknown: unknown,
-    producerNote:    cleanProse(data.producerNote, 300),
-    model:           model || aiConfig.get().enrichmentModel,
-    source:          'ai',
-    generatedAt:     now,
+  const gateCfg = aiConfig.get();
+
+  // Derive everything the gate and the writes need from ONE model response.
+  // A closure so the search-rescue retry below can re-derive from a second
+  // response without duplicating the rules. Strict true-checks on the flags:
+  // absent on an old or custom prompt → false, degrading to "no doubt
+  // recorded" rather than to a spurious hold.
+  const assess = (d, searchUsed) => {
+    const suspect = d.producerSuspect === true;
+    const unknown = d.producerUnknown === true;
+    const confidence = cleanConfidence(d.confidence);
+    const description = cleanProse(d.description);
+    const meta = {
+      confidence,
+      producerSuspect: suspect,
+      producerUnknown: unknown,
+      producerNote:    cleanProse(d.producerNote, 300),
+      model:           model || aiConfig.get().enrichmentModel,
+      source:          'ai',
+      generatedAt:     now,
+      // Pilot marker (2026-08-19): this generation used the web-search
+      // rescue. Rescue rate and searched-profile quality are queryable
+      // from this flag alone.
+      searchUsed:      searchUsed === true,
+    };
+    // HOLD, don't publish, when the doubt is about the RECORD rather than
+    // the model's own reach, or the confidence sits under the calibrated
+    // floor — see shouldHoldProfile for the reasons and their history.
+    let holdReason = shouldHoldProfile(
+      { producerSuspect: suspect, producerUnknown: unknown, description, confidence, dataSufficient: identityDataSufficient(wine) },
+      { floor: gateCfg.enrichmentHoldConfidenceFloor, unknownBar: gateCfg.enrichmentHoldUnknownConfidenceBar }
+    );
+    // Deterministic taxonomy cross-check (ticket 6a8464ea phase 2): a value
+    // at the OPPOSITE structural extreme of what every grape on the wine is
+    // defined by (a high-acid Bacchus) is a regional-prior hallucination no
+    // confidence gate can catch — the model believes it.
+    if (!holdReason) {
+      const { findGrapeStyleConflict } = require('../data/grapeStyleTypicals');
+      const conflict = findGrapeStyleConflict(
+        (wine.grapes || []).map((g) => g.name),
+        { acidity: cleanDescriptor('acidity', d.acidity), tannin: cleanDescriptor('tannin', d.tannin) },
+        require('../utils/normalize').normalizeString
+      );
+      if (conflict) {
+        holdReason = 'taxonomy_conflict';
+        if (!meta.producerNote) meta.producerNote = `Style conflict: ${conflict}`;
+      }
+    }
+    return { data: d, description, meta, holdReason };
   };
 
-  // HOLD, don't publish, when the doubt is about the RECORD rather than the
-  // model's own reach, or the confidence sits under the calibrated floor —
-  // see shouldHoldProfile for the reasons and their history.
-  // A held row stores ONLY the doubt; the null description keeps every read
-  // surface (bottle page, MCP, embedding text) naturally silent, and heldAt
-  // keeps the retry guards from looping on it. `publishSuspect` is the human
-  // override — profile-reviewed uses it after an admin has looked at the
-  // doubt and judged the identity fine.
-  const gateCfg = aiConfig.get();
-  let holdReason = shouldHoldProfile(
-    { producerSuspect: suspect, producerUnknown: unknown, description, confidence, dataSufficient: identityDataSufficient(wine) },
-    { floor: gateCfg.enrichmentHoldConfidenceFloor, unknownBar: gateCfg.enrichmentHoldUnknownConfidenceBar }
-  );
-  // Deterministic taxonomy cross-check (ticket 6a8464ea phase 2): a value at
-  // the OPPOSITE structural extreme of what every grape on the wine is
-  // defined by (a high-acid Bacchus) is a regional-prior hallucination no
-  // confidence gate can catch — the model believes it. Runs regardless of the
-  // gate outcome so the specific reason wins over a generic one, and BEFORE
-  // publishSuspect: the human override attests the IDENTITY, not a
-  // fact-contradicting profile — but since the check needs the cleaned
-  // values, a conflicting hold simply also lands in the release queue where
-  // that same human decides.
-  if (!holdReason) {
-    const { findGrapeStyleConflict } = require('../data/grapeStyleTypicals');
-    const conflict = findGrapeStyleConflict(
-      (wine.grapes || []).map((g) => g.name),
-      { acidity: cleanDescriptor('acidity', data.acidity), tannin: cleanDescriptor('tannin', data.tannin) },
-      require('../utils/normalize').normalizeString
-    );
-    if (conflict) {
-      holdReason = 'taxonomy_conflict';
-      // The conflict detail rides where the release queue already reads the
-      // model's doubt — producerNote is the row's free-text "why".
-      if (!meta.producerNote) meta.producerNote = `Style conflict: ${conflict}`;
+  let a = assess(data, false);
+
+  // Web-search rescue (pilot, Johan-approved 2026-08-19): a generation that
+  // would HOLD for a confidence reason gets ONE search-assisted retry — the
+  // gate itself is the difficulty detector, so ordinary wines never spend a
+  // search. Confidence reasons only: a suspect field or a taxonomy conflict
+  // is not a knowledge gap a search fixes. Anthropic-provider only; capped
+  // per UTC day; kill-switch in aiConfig. The searched result replaces the
+  // first attempt WHATEVER its outcome — a still-held searched row records
+  // the attempt (searchUsed) so the pilot's rescue rate counts misses too.
+  const SEARCH_RETRYABLE = new Set(['low_confidence', 'unknown_low_confidence']);
+  if (!publishSuspect && a.holdReason && SEARCH_RETRYABLE.has(a.holdReason)
+      && gateCfg.enrichmentSearchEnabled
+      && !aiProvider.effectiveModels() // Anthropic-only: web_search is an Anthropic server-side tool
+      && takeSearchSlot(gateCfg.enrichmentSearchDailyCap)) {
+    const second = await suggestProfile({
+      name: wine.name,
+      producer: wine.producer,
+      vintage: 'NV',
+      curatorContext,
+      allowSearch: true,
+      country: wine.country?.name,
+      region: wine.region?.name,
+      appellation: wine.appellation,
+      classification: wine.classification,
+      type: wine.type,
+      grapes: (wine.grapes || []).map(g => g.name).filter(Boolean),
+    });
+    if (second.data) {
+      a = assess(second.data, true);
+      console.log(`[enrichmentJob] search rescue ${wine._id}: ${a.holdReason || 'published'}`);
     }
   }
-  if (!publishSuspect && holdReason) {
+
+  // `publishSuspect` is the human override — profile-reviewed uses it after
+  // an admin has looked at the doubt and judged the identity fine. A held
+  // row stores ONLY the doubt; the null description keeps every read surface
+  // naturally silent, and heldAt keeps the retry guards from looping on it.
+  if (!publishSuspect && a.holdReason) {
     await WineDefinition.updateOne(
       { _id: wine._id },
       {
@@ -449,9 +506,9 @@ async function enrichWine(wine, model, { publishSuspect = false, curatorContext 
             body: null, tannin: null, acidity: null, sweetness: null,
             flavors: [], foodPairings: [],
             description: null,
-            ...meta,
+            ...a.meta,
             heldAt: now,
-            heldReason: holdReason,
+            heldReason: a.holdReason,
           },
           updatedAt: now,
         },
@@ -471,7 +528,7 @@ async function enrichWine(wine, model, { publishSuspect = false, curatorContext 
     } catch (embedErr) {
       console.warn(`[enrichmentJob] re-embed after hold failed (${wine._id}):`, embedErr.message);
     }
-    return { result: 'held', reason: holdReason };
+    return { result: 'held', reason: a.holdReason };
   }
 
   await WineDefinition.updateOne(
@@ -479,19 +536,19 @@ async function enrichWine(wine, model, { publishSuspect = false, curatorContext 
     {
       $set: {
         aiProfile: {
-          body:         cleanDescriptor('body', data.body),
-          tannin:       cleanDescriptor('tannin', data.tannin),
-          acidity:      cleanDescriptor('acidity', data.acidity),
-          sweetness:    cleanDescriptor('sweetness', data.sweetness),
-          flavors:      cleanStringList(data.flavors, 'flavors'),
-          foodPairings: cleanStringList(data.foodPairings, 'foodPairings'),
+          body:         cleanDescriptor('body', a.data.body),
+          tannin:       cleanDescriptor('tannin', a.data.tannin),
+          acidity:      cleanDescriptor('acidity', a.data.acidity),
+          sweetness:    cleanDescriptor('sweetness', a.data.sweetness),
+          flavors:      cleanStringList(a.data.flavors, 'flavors'),
+          foodPairings: cleanStringList(a.data.foodPairings, 'foodPairings'),
           // Markdown-stripped, not just trimmed (computed above, beside the
           // hold decision that reads it): the model reaches for emphasis even
           // when told not to, and the raw string is served un-rendered by the
           // MCP tools. Load-bearing half of the fix — the prompt is only
           // advisory, and a self-hoster can override it via SiteConfig.
-          description,
-          ...meta,
+          description: a.description,
+          ...a.meta,
           heldAt: null,
         },
         updatedAt: now,
@@ -683,4 +740,5 @@ module.exports = {
   profileInputsSnapshot, reenrichAfterRecordEdit,
   // exported for unit tests + the reset-misheld migration
   cleanDescriptor, cleanStringList, cleanProse, cleanConfidence, shouldHoldProfile, identityDataSufficient,
+  _resetSearchSlots,
 };
