@@ -7,6 +7,7 @@ import { csvEscape } from '../utils/importReport';
 import downloadBlob from '../utils/downloadBlob';
 import AnalyticsCharts from './AnalyticsCharts';
 import { ANALYTICS_PRESETS } from '../utils/analyticsPresets';
+import { humanMeasureLabel } from '../utils/analyticsLabels';
 import {
   listDashboards, createDashboard, updateDashboard,
   listViews, saveView, updateView, deleteView, starPreset,
@@ -131,6 +132,7 @@ export default function AnalyticsTable({ cellarId }) {
   const [pinOpen, setPinOpen] = useState(false);
   const [pinTitle, setPinTitle] = useState('');
   const [pinDash, setPinDash] = useState('');
+  const [pinBoardName, setPinBoardName] = useState('');
   const queryRef = useRef(0);
 
   const byKey = useMemo(() => new Map(catalogue.map((f) => [f.key, f])), [catalogue]);
@@ -177,12 +179,12 @@ export default function AnalyticsTable({ cellarId }) {
   }, [apiFetch]);
 
   const query = useMemo(() => {
-    if (grouping.on && grouping.dim1) {
+    if (grouping.on) {
       return {
         mode: 'grouped',
         scope: { cellars: scopeCellars, bottles: bottleScope },
         filters: filters.length ? filters : undefined,
-        dimensions: [grouping.dim1, ...(grouping.dim2 ? [grouping.dim2] : [])],
+        dimensions: grouping.dim1 ? [grouping.dim1, ...(grouping.dim2 ? [grouping.dim2] : [])] : [],
         measures: [{ field: '*', agg: 'count' }, ...grouping.measures.filter((m) => m.field && m.agg)],
       };
     }
@@ -291,7 +293,7 @@ export default function AnalyticsTable({ cellarId }) {
       const res = await saveView(apiFetch, {
         name: name.trim(),
         viz: grouping.on ? chartType : 'table',
-        query,
+        query: widgetQuery(), // page position never belongs in a saved view (audit F4)
       });
       const body = await res.json();
       if (!res.ok) setError(body.error || t('analytics.saveFailed', 'Could not save'));
@@ -322,29 +324,52 @@ export default function AnalyticsTable({ cellarId }) {
   };
 
   const removeOwnView = async (view) => {
+    // Audit F6: one misclick used to destroy a view irrecoverably.
+    if (!window.confirm(t('analytics.deleteViewConfirm', 'Delete the view "{{name}}"?', { name: view.name }))) return;
     const res = await deleteView(apiFetch, view.id).catch(() => null);
     if (res && res.ok) setViews((v) => ({ ...v, own: v.own.filter((x) => x.id !== view.id) }));
+  };
+
+  // The stored widget query must not carry the table's PAGE position (audit
+  // F4: a pinned list opened at offset 150 showed a mid-list slice or a
+  // false empty state on the dashboard).
+  const widgetQuery = () => {
+    const { limit, offset, ...rest } = query;
+    return rest;
   };
 
   const pinToDashboard = async () => {
     const title = pinTitle.trim().slice(0, 80);
     if (!title) return;
-    const widget = { title, viz: grouping.on ? (chartType === 'table' ? 'bar' : chartType) : 'table', size: 'half', query };
+    // Viz stays honest (UX-1): a grouped view looked at as a table pins as a
+    // table widget; nothing is coerced to bars.
+    const widget = { title, viz: grouping.on ? chartType : 'table', size: 'half', query: widgetQuery() };
     try {
+      // Fresh dashboard list FIRST (audit F3): pinning onto a mount-time
+      // snapshot replaced the whole widgets array and silently deleted
+      // anything another tab had added since.
+      const dashRes = await listDashboards(apiFetch);
+      const fresh = dashRes.ok ? ((await dashRes.json()).dashboards || []) : dashboards;
+      setDashboards(fresh);
       let res;
-      if (pinDash && pinDash !== '__new') {
-        const target = dashboards.find((d) => d.id === pinDash);
-        res = await updateDashboard(apiFetch, pinDash, { widgets: [...(target?.widgets || []), widget] });
+      if (pinDash && pinDash !== '__new' && fresh.some((d) => d.id === pinDash)) {
+        const target = fresh.find((d) => d.id === pinDash);
+        res = await updateDashboard(apiFetch, pinDash, { widgets: [...(target.widgets || []), widget] });
       } else {
-        res = await createDashboard(apiFetch, t('analytics.defaultBoardName', 'My cellar'), [widget]);
+        // New board with a USER-EDITABLE name (audit F1: the hardcoded
+        // 'My cellar' 409'd forever once such a board existed — now a
+        // collision is an error the user can fix by typing another name).
+        const name = pinBoardName.trim().slice(0, 60) || t('analytics.defaultBoardName', 'My cellar');
+        res = await createDashboard(apiFetch, name, [widget]);
       }
       const body = await res.json();
       if (!res.ok) setError(body.error || t('analytics.saveFailed', 'Could not save'));
       else {
-        const dashRes = await listDashboards(apiFetch);
-        if (dashRes.ok) setDashboards((await dashRes.json()).dashboards || []);
+        const after = await listDashboards(apiFetch);
+        if (after.ok) setDashboards((await after.json()).dashboards || []);
         setPinOpen(false);
         setPinTitle('');
+        setError(null);
       }
     } catch {
       setError(t('analytics.saveFailed', 'Could not save'));
@@ -524,10 +549,10 @@ export default function AnalyticsTable({ cellarId }) {
           <button className="at-chip" onClick={saveCurrentView}>{t('analytics.saveView', 'Save view')}</button>
           <button
             className={`at-chip ${grouping.on ? 'at-apply' : ''}`}
-            onClick={() => setGrouping((g) => ({ ...g, on: !g.on }))}
+            onClick={() => { setGrouping((g) => { if (!g.on && chartType === 'table') setChartType('bar'); return { ...g, on: !g.on }; }); }}
             aria-pressed={grouping.on}
           >
-            {t('analytics.group', 'Group')}
+            {t('analytics.summarize', 'Summarize')}
           </button>
           {!grouping.on && (
             <button className="at-chip" onClick={() => setPickerOpen((o) => !o)} aria-expanded={pickerOpen}>
@@ -543,6 +568,7 @@ export default function AnalyticsTable({ cellarId }) {
               onClick={() => {
                 setPinTitle(grouping.on ? (byKey.get(grouping.dim1)?.label || '') : t('analytics.tableWidget', 'Bottle list'));
                 setPinDash(dashboards[0]?.id || '__new');
+                setPinBoardName(t('analytics.suggestedBoardName', 'Dashboard {{n}}', { n: dashboards.length + 1 }));
                 setPinOpen((o) => !o);
               }}
               aria-expanded={pinOpen}
@@ -559,6 +585,14 @@ export default function AnalyticsTable({ cellarId }) {
                       {dashboards.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
                       <option value="__new">{t('analytics.newDashboardOption', '+ new dashboard')}</option>
                     </select>
+                  )}
+                  {(pinDash === '__new' || dashboards.length === 0) && (
+                    <input
+                      value={pinBoardName}
+                      onChange={(e) => setPinBoardName(e.target.value)}
+                      maxLength={60}
+                      placeholder={t('analytics.newDashboardPrompt', 'Name the new dashboard:')}
+                    />
                   )}
                   <button className="at-chip at-apply" onClick={pinToDashboard} disabled={!pinTitle.trim()}>
                     {t('analytics.pin', 'Pin it')}
@@ -717,7 +751,7 @@ export default function AnalyticsTable({ cellarId }) {
               <span className="at-measure-fixed">{t('analytics.chartMeasure', 'Chart shows:')}</span>
               <select value={chartMeasure} onChange={(e) => setChartMeasure(Number(e.target.value))}>
                 {data.measureLabels.map((l, i) => (
-                  <option key={l} value={i}>{l === 'count' ? t('analytics.count', 'Bottles') : l}</option>
+                  <option key={l} value={i}>{humanMeasureLabel(l, byKey, t)}</option>
                 ))}
               </select>
             </div>
@@ -743,7 +777,7 @@ export default function AnalyticsTable({ cellarId }) {
                     {data.dimensionKeys.map((k) => (
                       <th key={k}>{byKey.get(k)?.label || k}</th>
                     ))}
-                    {data.measureLabels.map((l) => <th key={l}>{l === 'count' ? t('analytics.count', 'Bottles') : l}</th>)}
+                    {data.measureLabels.map((l) => <th key={l}>{humanMeasureLabel(l, byKey, t)}</th>)}
                   </tr>
                 </thead>
                 <tbody>
@@ -806,7 +840,18 @@ export default function AnalyticsTable({ cellarId }) {
             </table>
             {loading && <div className="at-loading">{t('analytics.loading', 'Loading…')}</div>}
             {!loading && data && !(data.rows || []).length && (
-              <div className="at-empty">{t('analytics.empty', 'No bottles match this scope and these filters.')}</div>
+              <div className="at-empty">
+                {filters.length > 0 ? (
+                  <>
+                    {t('analytics.emptyFiltered', 'No bottles match these filters.')}{' '}
+                    <button className="at-chip" onClick={clearFilters}>{t('analytics.clearApplied', 'Clear filters')}</button>
+                  </>
+                ) : bottleScope === 'consumed' ? (
+                  t('analytics.emptyConsumed', 'No consumed bottles in this scope — the history view fills as you drink.')
+                ) : (
+                  t('analytics.empty', 'No bottles match this scope and these filters.')
+                )}
+              </div>
             )}
           </div>
 

@@ -187,11 +187,22 @@ router.delete('/views/:id', async (req, res, next) => {
   }
 });
 
+// The built-in preset keys, mirrored from frontend/src/utils/analyticsPresets.js
+// (audit 2026-08-19 F7: an unvalidated presetKey allowed unbounded row
+// creation under arbitrary strings). Keep in sync when presets change — a
+// missing key here means "cannot star that preset", never data damage.
+const ANALYTICS_PRESET_KEYS = new Set([
+  'moneyByRegion', 'favouriteRegions', 'cellarByType', 'whatIDrink', 'agingRunway',
+  'pastWindow', 'forgottenBottles', 'whereIShop', 'giftedVsDrunk',
+  'vintageSpread', 'topProducers', 'drankLastYear', 'drinkSoon', 'priciest',
+]);
+
 // Toggle a star on a BUILT-IN preset: existence of the row is the star.
 router.post('/views/star-preset', async (req, res, next) => {
   try {
     const presetKey = cleanName(req.body?.presetKey, 60, '');
     if (!presetKey) return res.status(400).json({ error: 'presetKey required' });
+    if (!ANALYTICS_PRESET_KEYS.has(presetKey)) return res.status(400).json({ error: 'Unknown preset' });
     const existing = await SavedView.findOne({ user: req.user.id, kind: 'preset-star', presetKey });
     if (existing) {
       await SavedView.deleteOne({ _id: existing._id });

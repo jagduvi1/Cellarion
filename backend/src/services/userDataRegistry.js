@@ -331,7 +331,7 @@ const REGISTRY = [
     // Saved analytics views + preset stars (#987 saved-views slice).
     model: SavedView, category: 'personal-data', userFields: ['user'],
     purge: (ctx) => SavedView.deleteMany({ user: ctx.userId }),
-    exportFragment: async (ctx) => ({ analyticsSavedViews: await SavedView.find({ user: ctx.userId }).lean() }),
+    exportFragment: async (ctx) => ({ analyticsSavedViews: markTrunc(ctx, 'analyticsSavedViews', await SavedView.find({ user: ctx.userId }).limit(EXPORT_MAX).lean()) }),
   },
   {
     // The PUBLIC vocabulary is shared content (#985): an accepted key belongs

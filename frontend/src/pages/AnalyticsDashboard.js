@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { listDashboards, createDashboard, updateDashboard, deleteDashboard, runAnalyticsQuery } from '../api/analytics';
 import AnalyticsCharts from '../components/AnalyticsCharts';
+import { humanMeasureLabel } from '../utils/analyticsLabels';
 // Shares .at-chip / .at-beta with the analytics table so the two surfaces
 // stay visually one feature.
 import '../components/AnalyticsTable.css';
@@ -80,7 +81,7 @@ function KpiWidget({ data, t }) {
               {v === null || v === undefined ? '—' : typeof v === 'number' ? Math.round(v * 100) / 100 : String(v)}
             </div>
             <div className="ad-kpi-label">
-              {label === 'count' ? t('analytics.count', 'Bottles') : label}
+              {humanMeasureLabel(label, null, t)}
               {label.includes('purchase.price') && data.currency ? ` (${data.currency.target})` : ''}
             </div>
           </div>
@@ -155,9 +156,30 @@ function Widget({ widget, onRemove }) {
       {!error && !data && <div className="ad-empty">{t('analytics.loading', 'Loading…')}</div>}
       {!error && data && data.mode === 'rows' && <RowsWidget data={data} t={t} />}
       {!error && data && data.mode === 'grouped' && widget.viz === 'kpi' && <KpiWidget data={data} t={t} />}
-      {!error && data && data.mode === 'grouped' && widget.viz !== 'kpi' && (
+      {!error && data && data.mode === 'grouped' && widget.viz === 'table' && (
+        // A grouped view pinned AS A TABLE renders as a table (UX-1: no
+        // silent coercion to bars).
         data.buckets.length
-          ? <AnalyticsCharts data={data} chartType={widget.viz === 'table' ? 'bar' : widget.viz} measureIndex={data.measureLabels.length > 1 ? 1 : 0} />
+          ? (
+            <div className="ad-mini-scroll">
+              <table>
+                <tbody>
+                  {data.buckets.slice(0, 8).map((b, i) => (
+                    <tr key={i}>
+                      {b.dimensions.map((d, j) => <td key={`d${j}`}>{d ?? '—'}</td>)}
+                      {b.measures.map((m, j) => <td key={`m${j}`}>{m == null ? '—' : typeof m === 'number' ? Math.round(m * 100) / 100 : String(m)}</td>)}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {data.buckets.length > 8 && <div className="ad-more">{t('analytics.andMore', '…and {{n}} more', { n: data.buckets.length - 8 })}</div>}
+            </div>
+          )
+          : <div className="ad-empty">{t('analytics.empty', 'No bottles match this scope and these filters.')}</div>
+      )}
+      {!error && data && data.mode === 'grouped' && widget.viz !== 'kpi' && widget.viz !== 'table' && (
+        data.buckets.length
+          ? <AnalyticsCharts data={data} chartType={widget.viz} measureIndex={data.measureLabels.length > 1 ? 1 : 0} />
           : <div className="ad-empty">{t('analytics.empty', 'No bottles match this scope and these filters.')}</div>
       )}
     </div>
@@ -186,7 +208,9 @@ export default function AnalyticsDashboard() {
 
   useEffect(() => { reload(); }, [reload]);
 
-  const active = boards?.find((d) => d.id === activeId) || null;
+  // With saved boards present, one of them is ALWAYS the active board — the
+  // client-side default only exists for zero-board users (audit F2).
+  const active = boards?.length ? (boards.find((d) => d.id === activeId) || boards[0]) : null;
   const widgets = active ? active.widgets : DEFAULT_WIDGETS;
 
   const mutate = useCallback(async (fn) => {
@@ -202,9 +226,31 @@ export default function AnalyticsDashboard() {
 
   const removeWidget = (i) => {
     const next = widgets.filter((_, j) => j !== i);
-    if (active) mutate(() => updateDashboard(apiFetch, active.id, { widgets: next }));
+    if (active) {
+      mutate(() => updateDashboard(apiFetch, active.id, { widgets: next }));
+      return;
+    }
     // Removing from the client-side default materializes it as a saved board.
-    else mutate(() => createDashboard(apiFetch, t('analytics.defaultBoardName', 'My cellar'), next));
+    // The default pseudo-board only renders when NO boards exist (audit F2:
+    // with a saved 'My cellar' present, this create 409'd forever), but a
+    // board created in another tab can still collide — fall back to UPDATING
+    // the same-named board instead of failing.
+    mutate(async () => {
+      const res = await createDashboard(apiFetch, t('analytics.defaultBoardName', 'My cellar'), next);
+      if (res.status === 409) {
+        const listRes = await listDashboards(apiFetch);
+        const body = await listRes.json();
+        const twin = (body.dashboards || []).find((d) => d.name === t('analytics.defaultBoardName', 'My cellar'));
+        if (twin) {
+          setActiveId(twin.id);
+          return updateDashboard(apiFetch, twin.id, { widgets: next });
+        }
+      } else if (res.ok) {
+        const body = await res.json();
+        setActiveId(body.dashboard.id);
+      }
+      return res;
+    });
   };
 
   const newBoard = async () => {
@@ -232,11 +278,10 @@ export default function AnalyticsDashboard() {
           {boards && boards.length > 0 ? (
             <select
               className="ad-board-select"
-              value={activeId ?? '__default'}
-              onChange={(e) => setActiveId(e.target.value === '__default' ? null : e.target.value)}
+              value={activeId ?? boards[0].id}
+              onChange={(e) => setActiveId(e.target.value)}
             >
               {boards.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-              <option value="__default">{t('analytics.defaultBoardName', 'My cellar')} ({t('analytics.defaultBoard', 'default')})</option>
             </select>
           ) : (
             t('analytics.dashboardTitle', 'Dashboard')

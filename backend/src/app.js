@@ -251,7 +251,12 @@ const writeLimiter = rateLimit({
   keyGenerator: (req) => rateLimitKey(req),
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => isStripeWebhook(req) || isMcp(req) || req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
+  // /api/analytics/query is a READ that uses POST for its body (audit
+  // 2026-08-19 F9): counting it here let a dashboard's widget fan-out burn
+  // the shared write budget until real writes 429'd. It stays under
+  // apiLimiter like every other read.
+  skip: (req) => isStripeWebhook(req) || isMcp(req) || req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS'
+    || (req.method === 'POST' && req.path === '/analytics/query'),
   handler: (req, res) => {
     logAudit(req, 'system.rate_limit_exceeded', {}, { limiter: 'write', limit: rateLimitsConfig.get().write.max });
     res.status(429).json({ error: 'Too many write requests, please try again later' });

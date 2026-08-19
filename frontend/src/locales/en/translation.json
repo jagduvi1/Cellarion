@@ -4440,6 +4440,18 @@
     "defaultBoard": "default",
     "emptyBoard": "This dashboard is empty — pin views to it from the analytics table.",
     "andMore": "…and {{n}} more",
-    "chartMeasure": "Chart shows:"
+    "chartMeasure": "Chart shows:",
+    "summarize": "Summarize",
+    "wholeCellar": "— whole cellar (totals only) —",
+    "suggestedBoardName": "Dashboard {{n}}",
+    "deleteViewConfirm": "Delete the view \"{{name}}\"?",
+    "emptyFiltered": "No bottles match these filters.",
+    "emptyConsumed": "No consumed bottles in this scope — the history view fills as you drink.",
+    "agg": {
+      "sum": "Sum of",
+      "avg": "Average",
+      "min": "Lowest",
+      "max": "Highest"
+    }
   }
 }
