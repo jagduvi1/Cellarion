@@ -28,10 +28,10 @@ Use all available information — text on the label, your knowledge of real wine
 - Cross-reference what you read with your wine knowledge to confirm and fill in gaps
 - If you recognize an appellation (e.g. "Pauillac", "Barolo", "Châteauneuf-du-Pape"), use your knowledge of its grapes, country, and region
 - If you recognize a producer (e.g. "Chapoutier", "Antinori", "Opus One"), use what you know about them
-- Infer the wine type and grapes from all available clues — appellation rules, producer style, label design, bottle shape, language
+- Infer the wine type and grapes from all available clues — appellation rules, producer style, label design, bottle shape, language. Inference means a clue actually points somewhere; where nothing settles the colour, the answer is null
 
 Respond with ONLY a raw JSON object (no markdown, no code fences, no extra text):
-{"name":"wine name WITHOUT the vintage year and WITHOUT the producer name","producer":"producer or winery name, or null if the producer is not printed","vintage":"4-digit year or null","country":"country","region":"wine region","appellation":"appellation/AOC/DOC/IGT/AVA or null","type":"red|white|rosé|sparkling|dessert|fortified","grapes":["grape varieties"],"classification":"the printed classification/tier line (e.g. Grand Cru Classé en 1855, Cru Bourgeois) or null","confidence":0.0}
+{"name":"wine name WITHOUT the vintage year and WITHOUT the producer name","producer":"producer or winery name, or null if the producer is not printed","vintage":"4-digit year or null","country":"country","region":"wine region","appellation":"appellation/AOC/DOC/IGT/AVA or null","type":"red|white|rosé|sparkling|dessert|fortified, or null if the colour is not determinable","grapes":["grape varieties"],"classification":"the printed classification/tier line (e.g. Grand Cru Classé en 1855, Cru Bourgeois) or null","confidence":0.0}
 
 confidence: 1.0 = label clearly readable and matches a wine you know well, 0.7 = some fields inferred from appellation/producer knowledge, 0.4 = mostly inferred from limited clues, 0.2 = very uncertain.
 
@@ -45,6 +45,7 @@ Important rules:
 - Production-method terms are NOT part of the name — put "Méthode Cap Classique" / "Cap Classique", "Méthode Traditionnelle", "Metodo Classico" / "Traditional Method" in the appellation field instead (name "Blanc de Blancs" + appellation "Méthode Cap Classique", NOT name "Blanc de Blancs Méthode Cap Classique"). Legally-defined aging classifications that belong to the displayed name (Reserva, Gran Reserva, Riserva, Spätlese, Grosses Gewächs) and dosage words that are part of a cuvée name (e.g. "Brut Premier") stay in the name.
 - Do not hallucinate appellation names, producer names, or grape varieties. Only use names you are confident are real and match what is visible on the label or your knowledge of that specific producer/appellation.
 - Grapes: only varieties this specific wine actually contains. Single-variety appellations may be inferred (Barolo → Nebbiolo); for multi-variety appellations (Champagne, southern-Rhône blends, Bordeaux) list only what you know about THIS cuvée — never the appellation's full permitted set by default. Fewer correct grapes beat a complete-looking list.
+- Type: return null when the label and your knowledge do not settle the colour. Cuvée-name-only labels, houses whose range spans colours, and natural/low-intervention bottlings are exactly where a default is wrong — an unknown type sends a curator to look, a wrong one closes the question, and colour drives filtering, serving temperature and drink-window shape.
 - Country must be the canonical English country name: "United States" (never "USA" or "America"), "Germany" (never "Deutschland" or a local-language name like "Tyskland"), "Italy" (never "Italia"/"Italie"), "England" for English wines. Never return a country name in the label's language.
 - If a field is genuinely unknown and cannot be reliably inferred, set it to null rather than guessing.
 - Only return {"error":"cannot read label"} if the image contains no wine label at all.`;
@@ -118,7 +119,7 @@ const DEFAULT_TEXT_SEARCH_PROMPT =
 
 Identify the wine they are looking for and return complete details.
 Return ONLY a raw JSON object (no markdown, no code fences, no extra text):
-{"name":"wine name","producer":"producer name","country":"country","region":"region or null","appellation":"appellation or null","classification":"official classification or null","type":"red|white|rosé|sparkling|dessert|fortified","grapes":["grape varieties"],"confidence":0.0}
+{"name":"wine name","producer":"producer name","country":"country","region":"region or null","appellation":"appellation or null","classification":"official classification or null","type":"red|white|rosé|sparkling|dessert|fortified, or null if you do not know this wine's colour","grapes":["grape varieties"],"confidence":0.0}
 
 Rules:
 - Extract the wine name and producer from the query
@@ -131,6 +132,7 @@ Rules:
 - Country is REQUIRED — always provide a country name; it is never acceptable to return null for country
 - Country must be the canonical English country name: "United States" (never "USA" or "America"), "Germany" (never "Deutschland"/"Tyskland"), "Italy" (never "Italia"/"Italie"), "England" for English wines — never a local-language or abbreviated name, even if the query uses one
 - For any other unknown field use null; use [] for unknown grapes, never null
+- Type is one of those fields: null when you do not know this specific wine's colour. A producer whose range spans colours, or a cuvée name you do not recognise, is not evidence of red — and colour drives filtering, serving temperature and drink-window shape, so a guess there is worse than a blank
 - Grapes: only varieties you know THIS cuvée contains — single-variety appellations may be inferred (Barolo → Nebbiolo), but never default a multi-variety appellation (Champagne, southern-Rhône blends, Bordeaux) to its full permitted set; fewer correct grapes beat a complete-looking list
 - confidence: 1.0 = certain, 0.7 = confident, 0.5 = reasonably sure
 - IMPORTANT: if you recognise the producer or wine name, return a result even if some fields are null — partial information is always better than returning unknown
