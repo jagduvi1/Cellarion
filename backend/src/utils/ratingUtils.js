@@ -113,4 +113,7 @@ function resolveRating(rawRating, rawScale) {
   return { rating: parseFloat(rawRating), ratingScale };
 }
 
-module.exports = { SCALE_META, VALID_SCALES, toNormalized, fromNormalized, isValidRating, resolveRating };
+// ANCHORS/COL are exported for the analytics engine (#987), which GENERATES a
+// Mongo aggregation expression from the same anchor table so in-pipeline
+// normalization can never drift from toNormalized — a parity test pins them.
+module.exports = { SCALE_META, VALID_SCALES, ANCHORS, COL, toNormalized, fromNormalized, isValidRating, resolveRating };

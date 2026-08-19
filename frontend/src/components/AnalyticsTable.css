@@ -1,0 +1,168 @@
+/* Self-service analytics table (#987 Phase 1).
+   Desktop: a real wide table inside its own horizontal scroll container so
+   the page body never scrolls sideways. Mobile (≤768px): record cards — no
+   chosen column is ever silently dropped. */
+
+.analytics-table {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.at-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.at-scope { position: relative; }
+.at-actions { display: flex; gap: 6px; }
+
+.at-chip {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  padding: 5px 12px;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.at-chip:hover:not(:disabled) { border-color: var(--color-accent); }
+.at-chip:disabled { opacity: 0.5; cursor: default; }
+.at-apply { border-color: var(--color-accent); color: var(--color-accent); }
+
+.at-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+  padding: 12px;
+  display: flex;
+  gap: 18px;
+  min-width: 260px;
+}
+.at-popover-section { display: flex; flex-direction: column; gap: 4px; }
+.at-popover-section strong { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-secondary); }
+.at-popover-section label { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; cursor: pointer; }
+
+.at-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 12px;
+}
+.at-picker-domain { display: flex; flex-direction: column; gap: 4px; min-width: 140px; }
+.at-picker-domain strong { font-size: 0.78rem; text-transform: capitalize; color: var(--color-text-secondary); }
+.at-picker-domain label { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; cursor: pointer; }
+
+.at-filters { display: flex; flex-direction: column; gap: 6px; }
+.at-filter-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.at-filter-row select,
+.at-filter-row input {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 0.85rem;
+  max-width: 220px;
+}
+.at-between { display: inline-flex; align-items: center; gap: 4px; }
+.at-between input { width: 110px; }
+.at-enum-multi { display: inline-flex; gap: 10px; flex-wrap: wrap; font-size: 0.85rem; }
+.at-enum-multi label { display: inline-flex; align-items: center; gap: 4px; }
+.at-filter-actions { display: flex; gap: 6px; }
+.at-x {
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.at-error {
+  background: var(--color-danger-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-danger-border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+}
+
+.at-scroll { overflow-x: auto; border: 1px solid var(--color-border); border-radius: 8px; }
+.at-scroll table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.at-scroll th, .at-scroll td {
+  text-align: left;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.at-scroll th {
+  position: sticky;
+  top: 0;
+  background: var(--color-surface);
+  font-weight: 600;
+  user-select: none;
+}
+.at-sortable { cursor: pointer; }
+.at-sortable:hover { color: var(--color-accent); }
+.at-scroll td { font-variant-numeric: tabular-nums; }
+.at-scroll tbody tr:hover { background: color-mix(in srgb, var(--color-accent) 6%, transparent); }
+
+.at-loading, .at-empty {
+  padding: 18px;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+}
+
+.at-pager {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+/* Mobile: record cards. Every chosen column renders as a label:value line. */
+@media (max-width: 768px) {
+  .at-scroll { border: none; }
+  .at-scroll table, .at-scroll tbody { display: block; }
+  .at-scroll thead { display: none; }
+  .at-scroll tr {
+    display: block;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    padding: 8px 10px;
+    background: var(--color-surface);
+  }
+  .at-scroll td {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    border: none;
+    padding: 2px 0;
+    white-space: normal;
+    max-width: none;
+  }
+  .at-scroll td::before {
+    content: attr(data-label);
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+  }
+}
