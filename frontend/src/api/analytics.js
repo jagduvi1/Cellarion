@@ -12,3 +12,13 @@ export const runAnalyticsQuery = (apiFetch, query) =>
     headers: JSON_HEADERS,
     body: JSON.stringify(query),
   });
+
+// Dashboard (#987 R-E): one per user; null until first customized.
+export const getDashboard = (apiFetch) => apiFetch('/api/analytics/dashboard');
+
+export const saveDashboard = (apiFetch, widgets) =>
+  apiFetch('/api/analytics/dashboard', {
+    method: 'PUT',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ widgets }),
+  });

@@ -800,8 +800,10 @@ async function hydrateRows({ userId, pageIds, columns, scopeCellars }) {
 async function runGrouped({ userId, scopeCellars, bottleScope, filters, dimensions, measures }) {
   const { pre, post, exprFilters, needsWine: filterNeedsWine } = await compileFilters(filters, userId);
 
-  if (!Array.isArray(dimensions) || !dimensions.length || dimensions.length > MAX_DIMENSIONS) {
-    throw new QueryError(400, `grouped mode takes 1–${MAX_DIMENSIONS} dimensions`);
+  // ZERO dimensions is the KPI shape (dashboards, R-E): one bucket holding
+  // the whole scoped set — "total bottles", "total value", "average rating".
+  if (!Array.isArray(dimensions) || dimensions.length > MAX_DIMENSIONS) {
+    throw new QueryError(400, `grouped mode takes 0–${MAX_DIMENSIONS} dimensions (0 = one summary bucket)`);
   }
   if (!Array.isArray(measures) || !measures.length || measures.length > 5) {
     throw new QueryError(400, 'grouped mode takes 1–5 measures');
@@ -811,7 +813,7 @@ async function runGrouped({ userId, scopeCellars, bottleScope, filters, dimensio
   const joinStages = [];
   const dimFields = [];
   const dimExprs = [];
-  for (let i = 0; i < dimensions.length; i++) {
+  for (let i = 0; i < (dimensions || []).length; i++) {
     const f = await resolveField(dimensions[i], userId);
     if (!f) throw new QueryError(400, `Unknown dimension "${dimensions[i]}"`);
     if (!f.groupable) throw new QueryError(400, `Field "${dimensions[i]}" cannot be grouped`);

@@ -69,6 +69,7 @@ const WineVintageProfile = require('../models/WineVintageProfile');
 const WishlistItem = require('../models/WishlistItem');
 const PersonalDataKey = require('../models/PersonalDataKey');
 const PersonalDataEntry = require('../models/PersonalDataEntry');
+const SavedDashboard = require('../models/SavedDashboard');
 const RegistryDataKey = require('../models/RegistryDataKey');
 const RegistryDataValue = require('../models/RegistryDataValue');
 const AuditLog = require('../models/AuditLog');
@@ -317,6 +318,13 @@ const REGISTRY = [
     model: PersonalDataEntry, category: 'personal-data', userFields: ['author'],
     purge: (ctx) => PersonalDataEntry.deleteMany({ author: ctx.userId }),
     exportFragment: async (ctx) => ({ personalDataEntries: markTrunc(ctx, 'personalDataEntries', await PersonalDataEntry.find({ author: ctx.userId }).populate('key', 'name type unit').limit(EXPORT_MAX).lean()) }),
+  },
+  {
+    // The analytics dashboard (#987 R-E): one row per user, pure preference
+    // data — hard delete, full export.
+    model: SavedDashboard, category: 'personal-data', userFields: ['user'],
+    purge: (ctx) => SavedDashboard.deleteMany({ user: ctx.userId }),
+    exportFragment: async (ctx) => ({ analyticsDashboard: await SavedDashboard.findOne({ user: ctx.userId }).lean() }),
   },
   {
     // The PUBLIC vocabulary is shared content (#985): an accepted key belongs
