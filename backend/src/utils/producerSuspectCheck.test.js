@@ -71,6 +71,23 @@ describe('noteAssertsProducer', () => {
       expect(noteAssertsProducer('Foo is a Loire Valley producer.', 'Foo')).toBe(true);
     });
 
+    // All three were FALSE DOWNGRADES the prod dry run caught on 2026-08-19,
+    // before anything was written. 46 rows would have moved; 3 of the first 25
+    // shown were wrong.
+    it('a capitalised producer noun is part of a proper NAME, not a claim', () => {
+      expect(noteAssertsProducer('Davey Estate appears to be a label or tier rather than a well-documented standalone producer.', 'Shingleback')).toBe(false);
+      expect(noteAssertsProducer("Domaine des Granges de Mirabel appears to be a Pays d'Oc entry-level label associated with Chapoutier.", 'M. Chapoutier')).toBe(false);
+    });
+
+    it('"does not match a known X house" is a denial, not a claim', () => {
+      expect(noteAssertsProducer('Carbon does not match a known Champagne house and may be a private label or brand name.', 'Carbon')).toBe(false);
+    });
+
+    it('a producer noun describing a NAME is the brand reading', () => {
+      expect(noteAssertsProducer('Émeraude appears to be a house or cuvee name rather than a widely recognised Champagne producer.', 'Dominique Crété')).toBe(false);
+      expect(noteAssertsProducer('Foo is a bottling name.', 'Foo')).toBe(false);
+    });
+
     it('text after "rather than" describes what it is NOT and never counts', () => {
       expect(noteAssertsProducer('Foo appears to be a brand rather than an estate.', 'Foo')).toBe(false);
       expect(noteAssertsProducer('Foo is a label, not an estate.', 'Foo')).toBe(false);
