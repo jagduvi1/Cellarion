@@ -2,7 +2,9 @@ const User = require('../models/User');
 const { sendSupporterThankYou, EMAIL_VERIFICATION_ENABLED } = require('./mailgun');
 const { logAudit } = require('./audit');
 
-const PAID_PLANS = ['supporter', 'patron'];
+const { PLANS, PLAN_NAMES } = require('../config/plans');
+
+const PAID_PLANS = PLAN_NAMES.filter((p) => PLANS[p].price > 0);
 
 /**
  * Thank a user for taking out a paid plan — at most once per account, ever.

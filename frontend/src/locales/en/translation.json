@@ -621,18 +621,29 @@
     "whereDev": "Development",
     "whereDevDesc": "Bug fixes & what's next",
     "whereCaption": "Honest, qualitative buckets — no tier buys anything different.",
-    "donateLead": "Want to help split the tab?",
-    "donateBody": "Same app, same features either way — just our genuine thanks.",
-    "supporterCta": "Support · {{amount}}/mo",
-    "patronCta": "Become a Patron · {{amount}}/mo",
-    "supporterCtaYear": "Support · {{amount}}/yr",
-    "patronCtaYear": "Become a Patron · {{amount}}/yr",
+    "pickerHeading": "Choose what feels right",
+    "yearlyNote": "One card fee a year instead of twelve, so a little more of the same gift actually reaches the server. Cancel anytime.",
+    "monthlyNote": "Smaller, and easy to stop whenever you like. Yearly sends slightly more of the same gift to the server.",
+    "perYear": "/year",
+    "perMonth": "/month",
+    "equivPerMonth": "That's {{amount}} a month",
+    "equivPerYear": "{{amount}} a year, all told",
+    "suggestedFlag": "Suggested",
+    "chooseCta": "Support",
+    "tierUnavailable": "Not available right now",
+    "analogy": {
+      "supporter": "About two glasses of wine. A year.",
+      "patron": "A good bottle, once a year.",
+      "benefactor": "A good bottle twice a year — and a real dent in the monthly bills."
+    },
+    "sameAppNote": "All three unlock exactly the same Cellarion: everything. You're not buying features — there are none to buy. You're keeping the lights on, and you get our genuine thanks and nothing else.",
+    "customTitle": "Any amount you like",
+    "customDesc": "One-off or your own recurring amount, through GitHub Sponsors.",
     "reassure": "Cancel anytime · same app either way 💛",
-    "reassureYear": "Billed once a year · fewer card fees, so more of it reaches Cellarion · cancel anytime 💛",
     "alreadySupporting": "💛 You're supporting Cellarion — thank you! You can change or cancel anytime.",
     "donateNote": "Payments are handled securely by Stripe. Cellarion stays free and open whether you support or not.",
-    "oneTimeLead": "Prefer a one-time gift, any amount you like?",
-    "oneTimeCta": "Sponsor once on GitHub"
+    "closingLead": "Just here for the wine? That's genuinely fine.",
+    "closingBody": "Nothing changes if you never give a penny — no nags, no locked buttons, no countdown in the corner. Cellarion is yours either way. If it ever earns a place in your cellar, the levels are one screen up."
   },
   "cellars": {
     "title": "My Cellars",
@@ -2949,7 +2960,7 @@
         "title": "Other Features",
         "summary": "Blog, plans, support, and NFC tags.",
         "d1": "Blog (/blog): wine articles and guides.",
-        "d2": "Support Us (/supporter): supporter tiers — Enthusiast (free), Supporter ($1.50/mo), Patron ($5.50/mo).",
+        "d2": "Support Us (/supporter): supporter tiers — Enthusiast (free), Supporter ($2/mo), Patron ($5/mo), Benefactor ($10/mo), each also available yearly. A custom or one-time amount can be given through GitHub Sponsors.",
         "d3": "Support (/support): submit support tickets for help.",
         "d4": "NFC tags: attach NFC tags to racks — scan with your phone to open the rack directly."
       }

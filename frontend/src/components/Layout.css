@@ -167,6 +167,7 @@
 .badge--plan-free      { background: var(--badge-plan-free-bg); color: var(--badge-plan-free-text); }
 .badge--plan-supporter { background: var(--badge-plan-basic-bg); color: var(--badge-plan-basic-text); }
 .badge--plan-patron    { background: var(--badge-plan-premium-bg); color: var(--badge-plan-premium-text); }
+.badge--plan-benefactor { background: var(--badge-plan-elite-bg); color: var(--badge-plan-elite-text); }
 
 /* ── Icon buttons in nav ── */
 .btn-icon-nav {

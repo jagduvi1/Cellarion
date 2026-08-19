@@ -41,7 +41,13 @@ test('the claim only matches an account that has NEVER been thanked', async () =
   const [filter, update] = User.findOneAndUpdate.mock.calls[0];
   // The null check is what makes this once-ever; without it every renewal sends.
   expect(filter.supporterThankYouSentAt).toBeNull();
-  expect(filter.plan).toEqual({ $in: ['supporter', 'patron'] });
+  // Derived from the plan config, not hand-listed: a new supporter tier must be
+  // thanked like any other, and a stale literal here would only fail the test
+  // rather than catch a real omission.
+  const { PLANS, PLAN_NAMES } = require('../config/plans');
+  const paidPlans = PLAN_NAMES.filter((p) => PLANS[p].price > 0);
+  expect(paidPlans.length).toBeGreaterThan(1);
+  expect(filter.plan).toEqual({ $in: paidPlans });
   expect(update.$set.supporterThankYouSentAt).toBeInstanceOf(Date);
 });
 

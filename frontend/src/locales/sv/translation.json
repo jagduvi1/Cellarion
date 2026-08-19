@@ -604,10 +604,6 @@
     "whereDev": "Utveckling",
     "whereDevDesc": "Buggfixar & nästa steg",
     "whereCaption": "Ärliga, ungefärliga kategorier — ingen nivå ger något annat.",
-    "donateLead": "Vill du hjälpa till att dela på notan?",
-    "donateBody": "Samma app, samma funktioner oavsett — bara vårt uppriktiga tack.",
-    "supporterCta": "Stöd · {{amount}}/mån",
-    "patronCta": "Bli Patron · {{amount}}/mån",
     "reassure": "Avsluta när som helst · samma app oavsett 💛",
     "alreadySupporting": "💛 Du stödjer Cellarion — tack! Du kan ändra eller avsluta när som helst.",
     "donateNote": "Betalningar hanteras säkert av Stripe. Cellarion förblir gratis och öppet oavsett om du stödjer eller inte."

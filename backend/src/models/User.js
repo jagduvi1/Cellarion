@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { CURRENT_PRIVACY_POLICY_VERSION } = require('../config/legal');
+const { PLAN_NAMES } = require('../config/plans');
 
 // Single source of truth for the bcrypt work factor. The login route's dummy
 // hash (routes/auth.js) MUST be generated at this same cost — a cheaper dummy
@@ -73,7 +74,9 @@ const userSchema = new mongoose.Schema({
   },
   plan: {
     type: String,
-    enum: ['free', 'supporter', 'patron'],
+    // Derived from the plan config so adding a supporter tier there cannot
+    // leave the schema rejecting the very plan Stripe just granted.
+    enum: PLAN_NAMES,
     default: 'free'
   },
   planStartedAt: {

@@ -230,7 +230,7 @@ const sections = [
     summary: 'Blog, plans, support, and NFC tags.',
     details: [
       'Blog (/blog): wine articles and guides.',
-      'Plans (/plans): supporter tiers — Enthusiast (free), Supporter, and Patron. All tiers are functionally identical: every feature is free for everyone, and the paid tiers are purely voluntary contributions that fund development.',
+      'Supporter tiers (/supporter): Enthusiast (free), Supporter, Patron, and Benefactor, each billable monthly or yearly. All tiers are functionally identical: every feature is free for everyone, and the paid tiers are purely voluntary contributions that fund development. A custom or one-time amount can be given through GitHub Sponsors instead.',
       'Support (/support): submit support tickets for help.',
       'NFC tags: attach NFC tags to racks — scan with your phone to open the rack directly.',
     ],

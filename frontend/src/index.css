@@ -109,6 +109,11 @@
   --badge-plan-basic-text: #A67C4A;
   --badge-plan-premium-bg: rgba(122, 30, 45, 0.1);
   --badge-plan-premium-text: var(--color-primary);
+  /* Top supporter tier — solid rather than tinted, so it stays distinct from
+     the tinted premium badge in dark mode, where primary and accent collapse
+     to the same gold. */
+  --badge-plan-elite-bg: rgba(122, 30, 45, 0.92);
+  --badge-plan-elite-text: #FDF9F6;
 
   /* Drink status */
   --drink-overdue-bg: #FDF0F0;
@@ -209,6 +214,8 @@
   --badge-plan-basic-text: #B89263;
   --badge-plan-premium-bg: rgba(184, 146, 99, 0.15);
   --badge-plan-premium-text: #B89263;
+  --badge-plan-elite-bg: rgba(184, 146, 99, 0.92);
+  --badge-plan-elite-text: #17150F;
 
   --drink-overdue-bg: #2d1414;
   --drink-overdue-text: #E07060;

@@ -20,241 +20,39 @@
   font-size: 0.95rem;
 }
 
-/* ── Current plan banner ── */
-.plans-current-banner {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
-  margin-bottom: 2rem;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg);
-  flex-wrap: wrap;
-}
-
-.plans-current-label {
-  font-size: 0.82rem;
-  color: var(--color-text-muted);
-  font-weight: 500;
-}
-
-.plans-current-expiry {
-  font-size: 0.82rem;
-  color: var(--color-text-muted);
-  margin-left: auto;
-}
-
-.plans-expiry--expired {
-  color: var(--color-danger);
-  font-weight: 600;
-}
-
-/* ── Plan badge (current banner) ── */
-.plans-badge {
-  display: inline-block;
-  font-size: 0.72rem;
-  font-weight: 700;
-  padding: 0.2rem 0.6rem;
-  border-radius: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.plans-badge--free      { background: rgba(154,148,132,0.15); color: var(--color-text-muted); }
-.plans-badge--supporter { background: rgba(200,168,126,0.15); color: var(--color-accent); }
-.plans-badge--patron    { background: rgba(var(--color-primary-rgb),0.18); color: var(--color-primary); }
-
-/* ── Comparison grid ── */
-.plans-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-@media (max-width: 640px) {
-  .plans-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* ── Plan card ── */
-.plans-card {
-  position: relative;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 1.25rem;
-  background: var(--color-bg);
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  transition: border-color 0.15s;
-}
-
-.plans-card--current {
-  border-color: var(--color-primary);
-  background: rgba(var(--color-primary-rgb), 0.06);
-}
-
-.plans-card-current-tag {
-  position: absolute;
-  top: -0.6rem;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--color-primary);
-  color: var(--color-bg);
-  font-size: 0.65rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  padding: 0.15rem 0.6rem;
-  border-radius: 20px;
-  white-space: nowrap;
-}
-
-.plans-card-header {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.plans-card-name {
-  margin: 0;
-  font-size: 1.15rem;
-  font-weight: 700;
-}
-
-.plans-card-name--free      { color: var(--color-text-muted); }
-.plans-card-name--supporter { color: var(--color-accent); }
-.plans-card-name--patron    { color: var(--color-primary); }
-
-.plans-card-price {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--color-text);
-}
-
-.plans-card-desc {
-  margin: 0;
-  font-size: 0.82rem;
-  color: var(--color-text-muted);
-  line-height: 1.4;
-}
-
-.plans-card-chat {
-  margin: 0;
-  font-size: 0.82rem;
-  color: var(--color-text-secondary);
-}
-
-/* ── Feature list ── */
-.plans-feature-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.plans-feature-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-  color: var(--color-text-secondary);
-  line-height: 1.3;
-}
-
-.plans-feature-check {
-  color: var(--color-primary);
-  font-weight: 700;
-  flex-shrink: 0;
-  margin-top: 0.05rem;
-}
-
-/* ── Trial CTA ── */
-.plans-trial-wrap {
-  margin-top: 1.25rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.plans-trial-btn {
-  width: 100%;
-}
-
 .plans-trial-error {
   font-size: 0.8rem;
   color: var(--color-danger);
-  margin: 0;
+  margin: 0.75rem 0 0;
+  text-align: center;
 }
 
-/* ── Admin note ── */
 .plans-manage-wrap {
   text-align: center;
   margin: 1.5rem 0 0.5rem;
 }
 
-.plans-admin-note {
-  text-align: center;
-  font-size: 0.78rem;
-  color: var(--color-input-placeholder);
-  margin: 0;
-}
-
-/* ── Donation card ── */
-.donate-card {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 1.75rem;
-  background: var(--color-bg);
+/* ── Support picker (cadence toggle + tier cards + custom amount) ── */
+.support-picker {
+  margin: 0.5rem 0 2rem;
   text-align: center;
 }
 
-/* Warm accent rule on the focal CTA card */
-.donate-card--accent {
-  border-top: 3px solid var(--color-accent);
-}
-
-/* Top CTA — the support buttons shown directly under the header */
-.donate-top {
-  margin: 0.5rem 0 1.75rem;
-}
-
-.donate-lead {
+.support-picker-heading {
   margin: 0 0 0.9rem;
-  font-size: 1rem;
+  font-size: 1.05rem;
   font-weight: 600;
   color: var(--color-text);
-  line-height: 1.45;
 }
 
-.donate-body {
-  margin: 0 0 1.5rem;
-  font-size: 0.9rem;
-  color: var(--color-text-muted);
-  line-height: 1.55;
-}
-
-/* Monthly / yearly segmented control, sat directly above the donate buttons */
+/* Monthly / yearly segmented control */
 .billing-toggle {
   display: inline-flex;
-  margin: 0 auto 0.9rem;
+  margin: 0 auto;
   padding: 0.2rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg);
-}
-
-.donate-top .billing-toggle,
-.donate-card .billing-toggle {
-  display: flex;
-  width: fit-content;
 }
 
 .billing-toggle-btn {
@@ -276,15 +74,234 @@
   box-shadow: 0 1px 3px rgb(0 0 0 / 12%);
 }
 
-.donate-buttons {
-  display: flex;
-  justify-content: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+.billing-note {
+  margin: 0.6rem 0 1.25rem;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
 }
 
-.donate-btn {
-  min-width: 160px;
+/* ── Tier cards ── */
+/* auto-fit rather than a hardcoded 3, so adding a tier to the plan config does
+   not silently overflow the row. */
+.tier-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 0.85rem;
+  align-items: stretch;
+  text-align: left;
+}
+
+.tier-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 1.35rem 1.15rem 1.15rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.tier-card:hover {
+  border-color: var(--color-primary);
+}
+
+/* The suggested tier sits slightly proud of its neighbours — the amount most
+   people are looking for permission to choose. */
+.tier-card--suggested {
+  border-color: var(--color-primary);
+  border-width: 2px;
+  background: rgba(var(--color-primary-rgb), 0.05);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 8%);
+}
+
+.tier-card-flag {
+  position: absolute;
+  top: -0.62rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-primary);
+  color: var(--color-bg);
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 0.2rem 0.65rem;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+/* Deliberately NOT colour-coded per tier: in dark mode --color-primary and
+   --color-accent resolve to the same gold, so per-tier colours would collapse
+   into each other. The suggested card carries the only colour emphasis. */
+.tier-card-name {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.tier-card--suggested .tier-card-name {
+  color: var(--color-primary);
+}
+
+.tier-card-price {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  margin: 0.15rem 0 0;
+}
+
+.tier-card-amount {
+  font-family: var(--font-heading);
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--color-text);
+  line-height: 1.1;
+}
+
+.tier-card-period {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.tier-card-equiv {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.tier-card-analogy {
+  margin: 0.6rem 0 1rem;
+  font-size: 0.83rem;
+  color: var(--color-text-secondary);
+  line-height: 1.45;
+  /* Push the button to the card foot so all three line up regardless of how
+     long the analogy wraps. */
+  flex-grow: 1;
+}
+
+.tier-card-btn {
+  width: 100%;
+}
+
+.tier-card-unavailable {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--color-input-placeholder);
+  text-align: center;
+  line-height: 1.4;
+}
+
+.tier-grid-note {
+  margin: 1rem 0 0;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+/* ── Custom / one-time amount (GitHub Sponsors) ── */
+.custom-amount {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-top: 1.25rem;
+  padding: 0.9rem 1.1rem;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  text-align: left;
+  text-decoration: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.custom-amount:hover {
+  border-color: var(--color-primary);
+  background: rgba(var(--color-primary-rgb), 0.04);
+}
+
+.custom-amount-icon {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background: rgba(var(--color-primary-rgb), 0.08);
+  color: var(--color-primary);
+  font-size: 0.95rem;
+}
+
+.custom-amount-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.custom-amount-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.custom-amount-desc {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  line-height: 1.45;
+}
+
+.custom-amount-arrow {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .tier-grid {
+    grid-template-columns: 1fr;
+    gap: 1.1rem;
+  }
+
+  /* The lift reads as a mistake once the cards are stacked. */
+  .tier-card--suggested {
+    box-shadow: none;
+  }
+}
+
+/* ── Donation / closing card ── */
+.donate-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 1.75rem;
+  background: var(--color-bg);
+  text-align: center;
+}
+
+/* Warm accent rule on the focal CTA card */
+.donate-card--accent {
+  border-top: 3px solid var(--color-accent);
+}
+
+.donate-lead {
+  margin: 0 0 0.9rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text);
+  line-height: 1.45;
+}
+
+.donate-body {
+  margin: 0 0 1.5rem;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  line-height: 1.55;
 }
 
 .donate-thanks {
@@ -302,29 +319,10 @@
 }
 
 .donate-reassure {
-  margin: 0.75rem 0 0;
+  margin: 1.25rem 0 0;
   text-align: center;
   font-size: 0.78rem;
   color: var(--color-text-muted);
-}
-
-/* One-time GitHub Sponsors alternative under the subscription buttons */
-.donate-onetime {
-  margin: 0.9rem 0 0;
-  text-align: center;
-  font-size: 0.82rem;
-  color: var(--color-text-muted);
-}
-
-.donate-onetime-link {
-  color: var(--color-primary);
-  font-weight: 600;
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.donate-onetime-link:hover {
-  text-decoration: underline;
 }
 
 /* ── Support page: header open-source chips ── */
