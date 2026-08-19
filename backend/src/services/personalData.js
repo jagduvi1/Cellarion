@@ -46,6 +46,8 @@ function serializeEntry(entry) {
   return {
     _id: entry._id,
     level: entry.targetType,
+    // null on wine-level = every vintage; set = only bottles of that vintage.
+    vintage: entry.vintage || null,
     key: {
       _id: key._id,
       name: key.name,
@@ -97,6 +99,9 @@ async function listForBottle(bottle, cellar) {
       ? PersonalDataEntry.find({
           wineDefinition: bottle.wineDefinition,
           author: { $in: cellarMemberIds(cellar) },
+          // Vintage-scoped wine entries only surface on bottles of that
+          // vintage (user ticket 6a853211 — ABV drifts year to year).
+          $or: [{ vintage: null }, { vintage: bottle.vintage || null }],
         })
           .sort({ createdAt: 1 })
           .populate('key')
@@ -160,12 +165,20 @@ async function resolveKey(userId, { keyId, newKey }) {
  * Create an entry on a bottle (level 'bottle') or its wine (level 'wine').
  * Caller has already resolved bottle access for userId.
  */
-async function createEntry(userId, bottle, { level, keyId, newKey, value }) {
+async function createEntry(userId, bottle, { level, keyId, newKey, value, vintageScoped = false }) {
   if (level !== 'wine' && level !== 'bottle') {
     return fail('invalid', "level must be 'wine' or 'bottle'");
   }
   if (level === 'wine' && !bottle.wineDefinition) {
     return fail('invalid', 'This bottle has no wine record to attach wine-level data to');
+  }
+  // "Every bottle of this vintage" (user ticket 6a853211): a wine-level entry
+  // narrowed to THE BOTTLE'S vintage — derived server-side, never client text.
+  if (vintageScoped && level !== 'wine') {
+    return fail('invalid', 'vintage scope only applies to wine-level entries — a bottle-level entry already has its vintage');
+  }
+  if (vintageScoped && !(typeof bottle.vintage === 'string' && bottle.vintage.trim())) {
+    return fail('invalid', 'This bottle has no vintage to scope to');
   }
   if (await isBanned(userId)) {
     return fail('banned', 'You are banned from posting content visible to other users');
@@ -190,6 +203,7 @@ async function createEntry(userId, bottle, { level, keyId, newKey, value }) {
     key: key._id,
     targetType: level,
     ...target,
+    ...(vintageScoped ? { vintage: bottle.vintage.trim() } : {}),
     value: checked.value,
   });
   await entry.populate([{ path: 'key' }, { path: 'author', select: AUTHOR_SELECT }]);

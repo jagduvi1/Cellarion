@@ -41,6 +41,18 @@ const personalDataEntrySchema = new mongoose.Schema({
     required: function () { return this.targetType === 'bottle'; },
     index: true
   },
+  // Optional vintage scope on WINE-level entries (user ticket 6a853211: ABV
+  // drifts year to year). null = every vintage of the wine; a value (matching
+  // Bottle.vintage, incl. 'NV') narrows the entry to bottles of that vintage.
+  // Derived server-side from the bottle the entry was created on — never
+  // client-supplied free text. Meaningless on bottle-level entries (that
+  // bottle already has its vintage), so validation forbids it there.
+  vintage: {
+    type: String,
+    trim: true,
+    maxlength: 10,
+    default: null
+  },
   value: {
     type: mongoose.Schema.Types.Mixed,
     required: [true, 'Value is required']
@@ -66,6 +78,9 @@ personalDataEntrySchema.pre('validate', function (next) {
   }
   if (this.targetType === 'bottle' && this.wineDefinition) {
     return next(new Error('A bottle-level entry must not reference a wine definition'));
+  }
+  if (this.targetType === 'bottle' && this.vintage) {
+    return next(new Error('A bottle-level entry must not carry a vintage — the bottle already has one'));
   }
   next();
 });

@@ -126,6 +126,7 @@ describe('add_personal_data', () => {
 
     expect(svc.createEntry).toHaveBeenCalledWith(ME, expect.objectContaining({ _id: BOTTLE_ID }), {
       level: 'wine',
+      vintageScoped: false,
       newKey: { name: 'ABV', type: 'decimal', unit: '%', enumOptions: undefined },
       value: 13.5,
     });

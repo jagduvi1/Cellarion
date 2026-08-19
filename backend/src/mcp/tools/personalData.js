@@ -33,6 +33,8 @@ const VALUE_SCHEMA = z.union([z.string().max(500), z.number(), z.boolean()]);
 const entryOut = (e) => ({
   entry_id: e._id,
   level: e.level,
+  // null on wine-level = every vintage; set = only bottles of that vintage.
+  ...(e.vintage ? { vintage: e.vintage } : {}),
   key: e.key.name,
   type: e.key.type,
   unit: e.key.unit,
@@ -71,7 +73,8 @@ registerTool({
   title: 'Add a personal data entry to a bottle or its wine',
   description:
     'Adds one typed key/value entry the user owns. level "bottle" = true of this bottle alone; level "wine" = true ' +
-    'of every bottle of this wine. Keys are the user\'s own vocabulary: reusing a key name keeps its stored type; a ' +
+    'of every bottle of this wine — add vintage_scoped:true to narrow a wine-level entry to bottles of THIS ' +
+    'bottle\'s vintage (for values that drift by year, like ABV). Keys are the user\'s own vocabulary: reusing a key name keeps its stored type; a ' +
     'NEW key needs key_type (and enum_options for enum keys, optionally unit for numeric ones). The value is ' +
     'validated against the key\'s type. Entries are visible to everyone who can see the bottle, attributed to the ' +
     'user. Reversible via undo_last. Pass an idempotency_key when retrying.',
@@ -85,6 +88,7 @@ registerTool({
     unit: z.string().max(20).optional().describe('For new integer/decimal keys: unit on the KEY (e.g. "%", "°C")'),
     enum_options: z.array(z.string().max(40)).min(2).max(20).optional().describe('For new enum keys: the allowed values'),
     value: VALUE_SCHEMA,
+    vintage_scoped: z.boolean().optional().describe('With level "wine": apply only to bottles of THIS bottle\'s vintage'),
     idempotency_key: z.string().max(100).optional(),
   },
   handler: async (args, ctx) => {
@@ -96,6 +100,7 @@ registerTool({
 
     const result = await personalData.createEntry(ctx.user.id, access.bottle, {
       level: args.level,
+      vintageScoped: args.vintage_scoped === true,
       newKey: {
         name: args.key,
         // When the key already exists its stored type wins; for a NEW key a
