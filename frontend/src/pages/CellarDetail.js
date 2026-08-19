@@ -13,6 +13,10 @@ import CellarNav from '../components/CellarNav';
 import CellarPageHeader from '../components/CellarPageHeader';
 import './CellarDetail.css';
 
+// The analytics table (#987) loads lazily — it ships its own catalogue fetch,
+// query engine client and CSV assembly, none of which the list/card views pay for.
+const AnalyticsTable = lazy(() => import('../components/AnalyticsTable'));
+
 // Stable empty rack map for the cross-cellar view (rack placement is per-cellar,
 // so it doesn't apply when several cellars are combined).
 const EMPTY_RACKMAP = new Map();
@@ -815,8 +819,23 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
         </button>
+        <button
+          className={`view-toggle-btn ${viewMode === 'table' ? 'active' : ''}`}
+          onClick={() => setView('table')}
+          aria-label={t('analytics.tableView', 'Table view')}
+          aria-pressed={viewMode === 'table'}
+          title={t('analytics.tableView', 'Table view')}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="1"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+        </button>
       </div>
 
+      {viewMode === 'table' ? (
+        <Suspense fallback={<div className="load-more-wrap">{t('common.loading')}</div>}>
+          <AnalyticsTable cellarId={multi ? null : cellarId} />
+        </Suspense>
+      ) : (
+      <>
       <div className={viewMode === 'list' ? 'bottles-list' : 'bottles-grid'}>
         {bottles.map(item => {
           // Cross-cellar view: flat bottles, each linked to + badged with its cellar.
@@ -891,6 +910,8 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
             {loadingMore ? t('common.loading') : t('cellarDetail.loadMore')}
           </button>
         </div>
+      )}
+      </>
       )}
     </>
   );

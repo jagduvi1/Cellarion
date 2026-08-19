@@ -4335,5 +4335,44 @@
       "appellation": "Appellation",
       "type": "Wine type"
     }
+  },
+  "analytics": {
+    "tableView": "Table view",
+    "columns": "Columns",
+    "exportCsv": "Export CSV",
+    "exporting": "Exporting…",
+    "exportFailed": "Export failed — try again",
+    "networkError": "Could not reach the server",
+    "loading": "Loading…",
+    "empty": "No bottles match this scope and these filters.",
+    "addFilter": "+ Filter",
+    "apply": "Apply",
+    "clear": "Clear",
+    "clearApplied": "Clear filters",
+    "removeFilter": "Remove filter",
+    "sortHint": "Click to sort",
+    "notSortable": "Not sortable yet",
+    "prev": "‹ Previous",
+    "next": "Next ›",
+    "pageInfo": "{{from}}–{{to}} of {{total}}",
+    "scope": {
+      "active": "Active bottles",
+      "consumed": "Consumed bottles",
+      "all": "All bottles",
+      "bottlesTitle": "Bottles",
+      "cellarsTitle": "Cellars",
+      "allCellars": "All cellars"
+    },
+    "domain": {
+      "wine": "Wine",
+      "inventory": "Inventory",
+      "purchase": "Purchase",
+      "rating": "Ratings",
+      "consumption": "Consumption",
+      "open": "Open bottles",
+      "maturity": "Maturity",
+      "personal": "My data",
+      "registry": "Registry data"
+    }
   }
 }
