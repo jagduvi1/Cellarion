@@ -11,6 +11,7 @@ require('./cellars');
 require('./bottles');
 require('./racks');
 require('./stats');
+require('./analytics');
 require('./wines');
 require('./personal');
 require('./personalData');
