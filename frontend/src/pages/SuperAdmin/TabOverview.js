@@ -1,4 +1,5 @@
 import { num, ago, PlanBadge, RoleBadge, Sparkline, useApi } from './helpers';
+import { PLAN_NAMES } from '../../config/plans';
 
 export default function TabOverview() {
   const { data, loading, error, reload } = useApi('/api/superadmin/overview');
@@ -37,7 +38,7 @@ export default function TabOverview() {
           <div className="sa-panel-header"><span className="sa-panel-title">Users by Tier</span></div>
           <div className="sa-panel-body">
             <div className="sa-kv">
-              {['free', 'supporter', 'patron'].map(p => (
+              {PLAN_NAMES.map(p => (
                 <div key={p} className="sa-kv-row">
                   <span className="sa-kv-key"><PlanBadge plan={p} /></span>
                   <span className="sa-kv-val">{num(byPlan[p] || 0)}</span>

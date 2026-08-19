@@ -616,10 +616,6 @@
     "whereDev": "Développement",
     "whereDevDesc": "Corrections de bugs et suite du programme",
     "whereCaption": "Des catégories honnêtes et qualitatives — aucun niveau n'achète quoi que ce soit de différent.",
-    "donateLead": "Envie de participer à l'addition ?",
-    "donateBody": "Même application, mêmes fonctionnalités dans tous les cas — juste nos remerciements sincères.",
-    "supporterCta": "Soutenir · {{amount}}/mois",
-    "patronCta": "Devenir mécène · {{amount}}/mois",
     "reassure": "Annulable à tout moment · la même application dans tous les cas 💛",
     "alreadySupporting": "💛 Tu soutiens Cellarion — merci ! Tu peux changer ou annuler à tout moment.",
     "donateNote": "Les paiements sont traités en toute sécurité par Stripe. Cellarion reste gratuit et ouvert, que tu soutiennes ou non."

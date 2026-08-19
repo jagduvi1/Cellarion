@@ -173,8 +173,16 @@ services:
       - VAPID_EMAIL=${VAPID_EMAIL:-}
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      # One var per (tier, interval). The backend enumerates env explicitly, so
+      # an id set in .env but not forwarded here is invisible to the container —
+      # which is exactly why the yearly buttons never worked: the two ANNUAL
+      # vars existed in .env.example but were never passed through.
       - STRIPE_SUPPORTER_PRICE_ID=${STRIPE_SUPPORTER_PRICE_ID:-}
       - STRIPE_PATRON_PRICE_ID=${STRIPE_PATRON_PRICE_ID:-}
+      - STRIPE_BENEFACTOR_PRICE_ID=${STRIPE_BENEFACTOR_PRICE_ID:-}
+      - STRIPE_SUPPORTER_ANNUAL_PRICE_ID=${STRIPE_SUPPORTER_ANNUAL_PRICE_ID:-}
+      - STRIPE_PATRON_ANNUAL_PRICE_ID=${STRIPE_PATRON_ANNUAL_PRICE_ID:-}
+      - STRIPE_BENEFACTOR_ANNUAL_PRICE_ID=${STRIPE_BENEFACTOR_ANNUAL_PRICE_ID:-}
       # Google Sign-In (SSO) — optional; unset leaves email/password login
       # untouched. The backend env block enumerates vars explicitly, so these
       # must be forwarded or the container never sees them even when set in .env.

@@ -1,6 +1,7 @@
 import {
   PLANS,
   PLAN_NAMES,
+  PAID_PLAN_NAMES,
   getPlanConfig,
 } from './plans';
 import backendPlans from '../../../backend/src/config/plans.js';
@@ -10,8 +11,41 @@ import backendPlans from '../../../backend/src/config/plans.js';
 // ---------------------------------------------------------------------------
 describe('PLAN_NAMES', () => {
   it('contains all supporter tier keys', () => {
-    expect(PLAN_NAMES).toEqual(expect.arrayContaining(['free', 'supporter', 'patron']));
-    expect(PLAN_NAMES).toHaveLength(3);
+    expect(PLAN_NAMES).toEqual(['free', 'supporter', 'patron', 'benefactor']);
+  });
+
+  it('lists the paid tiers in ascending price order', () => {
+    // The /supporter page renders them in this order and relies on the middle
+    // one being the suggested tier — a reorder here silently moves the anchor.
+    expect(PAID_PLAN_NAMES).toEqual(['supporter', 'patron', 'benefactor']);
+    const prices = PAID_PLAN_NAMES.map((p) => PLANS[p].price);
+    expect(prices).toEqual([...prices].sort((a, b) => a - b));
+  });
+
+  it('marks no tier as recommended', () => {
+    // Deliberate: a "Suggested" badge reads as an expectation to pay, and
+    // supporting is entirely voluntary. Ordering alone puts the middle amount
+    // in the middle.
+    expect(PAID_PLAN_NAMES.filter((p) => PLANS[p].suggested)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Pricing invariants
+// ---------------------------------------------------------------------------
+describe('pricing', () => {
+  it('prices every paid tier annually at exactly 12x the monthly price', () => {
+    // There is deliberately NO yearly discount — yearly is steered by being the
+    // default cadence and by the card-fee framing, not by charging less. A drift
+    // here would make the page's "same gift, fewer fees" copy a lie.
+    for (const name of PAID_PLAN_NAMES) {
+      expect(PLANS[name].annualPrice).toBe(PLANS[name].price * 12);
+    }
+  });
+
+  it('gives the free tier no price of either cadence', () => {
+    expect(PLANS.free.price).toBe(0);
+    expect(PLANS.free.annualPrice).toBeUndefined();
   });
 });
 
@@ -32,6 +66,12 @@ describe('backend config sync', () => {
       expect(PLANS[name].label).toBe(backendPlans.PLANS[name].label);
     }
   });
+
+  it('has the same annual price for every plan as the backend config', () => {
+    for (const name of PLAN_NAMES) {
+      expect(PLANS[name].annualPrice).toBe(backendPlans.PLANS[name].annualPrice);
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -47,13 +87,22 @@ describe('getPlanConfig', () => {
   it('returns correct config for supporter tier', () => {
     const config = getPlanConfig('supporter');
     expect(config.label).toBe('Supporter');
-    expect(config.price).toBe(1.5);
+    expect(config.price).toBe(2);
+    expect(config.annualPrice).toBe(24);
   });
 
   it('returns correct config for patron tier', () => {
     const config = getPlanConfig('patron');
     expect(config.label).toBe('Patron');
-    expect(config.price).toBe(5.5);
+    expect(config.price).toBe(5);
+    expect(config.annualPrice).toBe(60);
+  });
+
+  it('returns correct config for benefactor tier', () => {
+    const config = getPlanConfig('benefactor');
+    expect(config.label).toBe('Benefactor');
+    expect(config.price).toBe(10);
+    expect(config.annualPrice).toBe(120);
   });
 
   it('falls back to free for unknown plan', () => {

@@ -332,6 +332,11 @@
 .sa-badge.premium { background: #2b2410; color: var(--sa-warn); }
 .sa-badge.basic   { background: #1a241a; color: #86efac; }
 .sa-badge.free    { background: var(--color-border-light); color: var(--sa-text-dim); }
+/* Plan badges render the plan name verbatim as a class, so each supporter tier
+   needs its own rule or it falls through to the unstyled base badge. */
+.sa-badge.supporter  { background: #241a10; color: var(--sa-warn); }
+.sa-badge.patron     { background: #2b2410; color: var(--sa-warn); }
+.sa-badge.benefactor { background: #3b2f14; color: #f5d68a; }
 .sa-badge.ok      { background: #0d2b16; color: var(--sa-accent); }
 .sa-badge.error   { background: #2b0d0d; color: var(--sa-danger); }
 

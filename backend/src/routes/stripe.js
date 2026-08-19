@@ -30,25 +30,55 @@ const INTERVALS = ['month', 'year'];
 const PRICE_ENV = {
   supporter: { month: 'STRIPE_SUPPORTER_PRICE_ID', year: 'STRIPE_SUPPORTER_ANNUAL_PRICE_ID' },
   patron: { month: 'STRIPE_PATRON_PRICE_ID', year: 'STRIPE_PATRON_ANNUAL_PRICE_ID' },
+  benefactor: { month: 'STRIPE_BENEFACTOR_PRICE_ID', year: 'STRIPE_BENEFACTOR_ANNUAL_PRICE_ID' },
 };
 
 /**
- * Resolve the Stripe Price ID for a (tier, interval) pair, or undefined when
- * that combination has no price configured. The annual prices are OPTIONAL —
- * a self-hoster who only created the two monthly prices keeps working, and the
- * checkout route refuses the unconfigured interval rather than quietly billing
- * a different cadence than the one the user clicked.
+ * Tiers checkout will accept. Derived from PRICE_ENV rather than written out
+ * again — the previous hardcoded list meant a tier added above was rejected
+ * with "Invalid plan" despite having prices configured.
  */
-function priceIdFor(plan, interval) {
-  return process.env[PRICE_ENV[plan]?.[interval]] || undefined;
+const PAID_TIERS = Object.keys(PRICE_ENV);
+
+/**
+ * Every price env var holds a COMMA-SEPARATED list: the price new checkouts
+ * use, followed by any retired prices that still have live subscribers on them.
+ *
+ *   STRIPE_PATRON_PRICE_ID=price_current,price_retired_2026
+ *
+ * This matters when a price is repriced. Archiving a Price in Stripe does not
+ * touch existing subscriptions — they keep renewing at the old amount forever —
+ * so those renewals keep arriving as customer.subscription.updated carrying the
+ * OLD price id. If that id is no longer mapped, planFromPriceId returns null and
+ * the handler logs "maps to no known plan" and leaves the subscriber's plan to
+ * go stale. Keeping the retired ids listed here is what grandfathers them.
+ */
+function priceIdsFor(plan, interval) {
+  const raw = process.env[PRICE_ENV[plan]?.[interval]] || '';
+  return raw.split(',').map((s) => s.trim()).filter(Boolean);
 }
 
-/** Map Stripe Price IDs → Cellarion plan names, across both billing intervals. */
+/**
+ * Resolve the Stripe Price ID new checkouts should use for a (tier, interval)
+ * pair — the FIRST entry — or undefined when that combination has no price
+ * configured. The annual prices are OPTIONAL — a self-hoster who only created
+ * the monthly prices keeps working, and the checkout route refuses the
+ * unconfigured interval rather than quietly billing a different cadence than
+ * the one the user clicked.
+ */
+function priceIdFor(plan, interval) {
+  return priceIdsFor(plan, interval)[0] || undefined;
+}
+
+/**
+ * Map a Stripe Price ID → Cellarion plan name, across both billing intervals
+ * AND retired prices, so a grandfathered subscriber's renewal still resolves.
+ */
 function planFromPriceId(priceId) {
   if (!priceId) return null;
   for (const plan of Object.keys(PRICE_ENV)) {
     for (const interval of INTERVALS) {
-      if (priceId === priceIdFor(plan, interval)) return plan;
+      if (priceIdsFor(plan, interval).includes(priceId)) return plan;
     }
   }
   return null;
@@ -95,11 +125,30 @@ async function applyStripePlan(userId, plan, subscriptionId) {
   return { from: user.plan, to: update.plan || user.plan };
 }
 
+// ── GET /api/stripe/availability — which (tier, interval) pairs are buyable ──
+/**
+ * The /supporter page renders a button per tier per cadence, but every price is
+ * an OPTIONAL env var — a self-hoster (or a prod box mid-rollout) may have only
+ * some of them set. Without this the page happily renders a button that dies on
+ * "Stripe price not configured" after the user has committed to giving money.
+ *
+ * Returns only booleans, never the Price IDs themselves.
+ */
+router.get('/availability', requireAuth, (req, res) => {
+  const tiers = {};
+  for (const tier of PAID_TIERS) {
+    tiers[tier] = Object.fromEntries(
+      INTERVALS.map((interval) => [interval, !!priceIdFor(tier, interval)])
+    );
+  }
+  res.json({ configured: !!process.env.STRIPE_SECRET_KEY, tiers });
+});
+
 // ── POST /api/stripe/checkout — Create a Stripe Checkout Session ──
 router.post('/checkout', requireAuth, async (req, res) => {
   try {
     const { plan, interval = 'month' } = req.body;
-    if (!plan || !['supporter', 'patron'].includes(plan)) {
+    if (!plan || !PAID_TIERS.includes(plan)) {
       return res.status(400).json({ error: 'Invalid plan' });
     }
     // Defaults to 'month' so an older client (or the MCP/API caller that only
@@ -404,3 +453,6 @@ router.post('/webhook', async (req, res) => {
 module.exports = router;
 // Exported for unit tests (the webhook handlers above are exercised in Docker).
 module.exports.applyStripePlan = applyStripePlan;
+// planFromPriceId is what grandfathers a repriced subscriber — worth testing
+// directly rather than through a webhook that needs signature verification.
+module.exports.planFromPriceId = planFromPriceId;

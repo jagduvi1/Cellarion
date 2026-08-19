@@ -12,6 +12,7 @@
  */
 
 const User = require('../models/User');
+const { PLAN_NAMES } = require('../config/plans');
 
 // ── Point values per event ──────────────────────────────────────────────────
 const POINT_VALUES = {
@@ -53,7 +54,11 @@ const TIERS = [
 // Plan ranking — retained because routes/stripe.js imports it to compare an
 // incoming Stripe plan against the user's current grant. Cellar Cred itself no
 // longer grants plans (see module header).
-const PLAN_RANK = { free: 0, supporter: 1, patron: 2 };
+// Rank == position in the plan ladder, taken from the config's declaration
+// order (free first, then ascending price). Deriving it means a new tier is
+// ranked automatically; a hardcoded map would silently rank it 0 and make
+// applyStripePlan treat every upgrade to it as a downgrade.
+const PLAN_RANK = Object.fromEntries(PLAN_NAMES.map((name, i) => [name, i]));
 
 /** Return the tier name for a given total score. */
 function getTier(totalScore) {
