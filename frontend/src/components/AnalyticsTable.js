@@ -7,7 +7,10 @@ import { csvEscape } from '../utils/importReport';
 import downloadBlob from '../utils/downloadBlob';
 import AnalyticsCharts from './AnalyticsCharts';
 import { ANALYTICS_PRESETS } from '../utils/analyticsPresets';
-import { getDashboard, saveDashboard } from '../api/analytics';
+import {
+  listDashboards, createDashboard, updateDashboard,
+  listViews, saveView, updateView, deleteView, starPreset,
+} from '../api/analytics';
 import './AnalyticsTable.css';
 
 /**
@@ -120,6 +123,14 @@ export default function AnalyticsTable({ cellarId }) {
   // R-C: how the grouped result renders — the table stays the default.
   const [chartType, setChartType] = useState('table'); // 'table' | 'bar' | 'donut' | 'line'
   const [chartMeasure, setChartMeasure] = useState(0);
+  // Saved views + preset stars (saved-views slice): the Views menu leads with
+  // the user's starred set; own views are applied exactly like presets.
+  const [views, setViews] = useState({ own: [], starredPresets: [] });
+  const [viewsOpen, setViewsOpen] = useState(false);
+  const [dashboards, setDashboards] = useState([]);
+  const [pinOpen, setPinOpen] = useState(false);
+  const [pinTitle, setPinTitle] = useState('');
+  const [pinDash, setPinDash] = useState('');
   const queryRef = useRef(0);
 
   const byKey = useMemo(() => new Map(catalogue.map((f) => [f.key, f])), [catalogue]);
@@ -146,13 +157,20 @@ export default function AnalyticsTable({ cellarId }) {
     let live = true;
     (async () => {
       try {
-        const [catRes, celRes] = await Promise.all([getAnalyticsCatalogue(apiFetch), listCellars(apiFetch)]);
+        const [catRes, celRes, viewRes, dashRes] = await Promise.all([
+          getAnalyticsCatalogue(apiFetch), listCellars(apiFetch), listViews(apiFetch), listDashboards(apiFetch),
+        ]);
         if (!live) return;
         if (catRes.ok) setCatalogue((await catRes.json()).fields || []);
         if (celRes.ok) {
           const body = await celRes.json();
           setCellars(Array.isArray(body) ? body : body.cellars || []);
         }
+        if (viewRes.ok) {
+          const body = await viewRes.json();
+          setViews({ own: body.views || [], starredPresets: body.starredPresets || [] });
+        }
+        if (dashRes.ok) setDashboards((await dashRes.json()).dashboards || []);
       } catch { /* the query error path reports */ }
     })();
     return () => { live = false; };
@@ -236,6 +254,101 @@ export default function AnalyticsTable({ cellarId }) {
     if (s.columns) setColumns(s.columns);
     setSort(s.sort || null);
     setOffset(0);
+    setViewsOpen(false);
+  };
+
+  // A saved view stores the exact query body — unpack it back into the
+  // controls, same visibility promise as presets.
+  const applySavedView = (v) => {
+    const q = v.query || {};
+    setBottleScope(q.scope?.bottles || 'active');
+    if (q.scope?.cellars) setScopeCellars(q.scope.cellars);
+    setFilters(q.filters || []);
+    setDraftFilters(q.filters || []);
+    if (q.mode === 'grouped') {
+      setGrouping({
+        on: true,
+        dim1: q.dimensions?.[0] || 'wine.type',
+        dim2: q.dimensions?.[1] || '',
+        measures: (q.measures || []).filter((m) => m.field !== '*'),
+      });
+      setChartType(v.viz && v.viz !== 'kpi' ? v.viz : 'table');
+      setChartMeasure((q.measures || []).length > 1 ? 1 : 0);
+    } else {
+      setGrouping({ on: false, dim1: 'wine.type', dim2: '', measures: [] });
+      setChartType('table');
+      if (q.columns) setColumns(q.columns);
+      setSort(q.sort || null);
+    }
+    setOffset(0);
+    setViewsOpen(false);
+  };
+
+  const saveCurrentView = async () => {
+    const name = window.prompt(t('analytics.saveViewPrompt', 'Name this view:'), '');
+    if (!name || !name.trim()) return;
+    try {
+      const res = await saveView(apiFetch, {
+        name: name.trim(),
+        viz: grouping.on ? chartType : 'table',
+        query,
+      });
+      const body = await res.json();
+      if (!res.ok) setError(body.error || t('analytics.saveFailed', 'Could not save'));
+      else setViews((v) => ({ ...v, own: [...v.own, body.view] }));
+    } catch {
+      setError(t('analytics.saveFailed', 'Could not save'));
+    }
+  };
+
+  const toggleOwnStar = async (view) => {
+    const res = await updateView(apiFetch, view.id, { starred: !view.starred }).catch(() => null);
+    if (res && res.ok) {
+      setViews((v) => ({ ...v, own: v.own.map((x) => (x.id === view.id ? { ...x, starred: !view.starred } : x)) }));
+    }
+  };
+
+  const togglePresetStar = async (key) => {
+    const res = await starPreset(apiFetch, key).catch(() => null);
+    if (res && res.ok) {
+      const body = await res.json();
+      setViews((v) => ({
+        ...v,
+        starredPresets: body.starred
+          ? [...v.starredPresets, key]
+          : v.starredPresets.filter((k) => k !== key),
+      }));
+    }
+  };
+
+  const removeOwnView = async (view) => {
+    const res = await deleteView(apiFetch, view.id).catch(() => null);
+    if (res && res.ok) setViews((v) => ({ ...v, own: v.own.filter((x) => x.id !== view.id) }));
+  };
+
+  const pinToDashboard = async () => {
+    const title = pinTitle.trim().slice(0, 80);
+    if (!title) return;
+    const widget = { title, viz: grouping.on ? (chartType === 'table' ? 'bar' : chartType) : 'table', size: 'half', query };
+    try {
+      let res;
+      if (pinDash && pinDash !== '__new') {
+        const target = dashboards.find((d) => d.id === pinDash);
+        res = await updateDashboard(apiFetch, pinDash, { widgets: [...(target?.widgets || []), widget] });
+      } else {
+        res = await createDashboard(apiFetch, t('analytics.defaultBoardName', 'My cellar'), [widget]);
+      }
+      const body = await res.json();
+      if (!res.ok) setError(body.error || t('analytics.saveFailed', 'Could not save'));
+      else {
+        const dashRes = await listDashboards(apiFetch);
+        if (dashRes.ok) setDashboards((await dashRes.json()).dashboards || []);
+        setPinOpen(false);
+        setPinTitle('');
+      }
+    } catch {
+      setError(t('analytics.saveFailed', 'Could not save'));
+    }
   };
 
   const addDraftFilter = () => {
@@ -359,17 +472,56 @@ export default function AnalyticsTable({ cellarId }) {
           )}
         </div>
         <div className="at-actions">
-          <select
-            className="at-preset-select"
-            value=""
-            onChange={(e) => { if (e.target.value) applyPreset(e.target.value); }}
-            aria-label={t('analytics.presets', 'Pre-built views')}
-          >
-            <option value="">{t('analytics.presets', 'Pre-built views')}…</option>
-            {ANALYTICS_PRESETS.map((p) => (
-              <option key={p.key} value={p.key}>{t(`analytics.preset.${p.key}`, p.label)}</option>
-            ))}
-          </select>
+          <div className="at-views">
+            <button className="at-chip" onClick={() => setViewsOpen((o) => !o)} aria-expanded={viewsOpen}>
+              {t('analytics.views', 'Views')}
+            </button>
+            {viewsOpen && (
+              <div className="at-popover at-views-popover">
+                {(views.own.some((v) => v.starred) || views.starredPresets.length > 0) && (
+                  <div className="at-popover-section">
+                    <strong>★ {t('analytics.starred', 'Starred')}</strong>
+                    {views.own.filter((v) => v.starred).map((v) => (
+                      <div key={v.id} className="at-view-row">
+                        <button className="at-view-name" onClick={() => applySavedView(v)}>{v.name}</button>
+                        <button className="at-star on" onClick={() => toggleOwnStar(v)} aria-label={t('analytics.unstar', 'Remove star')}>★</button>
+                      </div>
+                    ))}
+                    {ANALYTICS_PRESETS.filter((p) => views.starredPresets.includes(p.key)).map((p) => (
+                      <div key={p.key} className="at-view-row">
+                        <button className="at-view-name" onClick={() => applyPreset(p.key)}>{t(`analytics.preset.${p.key}`, p.label)}</button>
+                        <button className="at-star on" onClick={() => togglePresetStar(p.key)} aria-label={t('analytics.unstar', 'Remove star')}>★</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {views.own.length > 0 && (
+                  <div className="at-popover-section">
+                    <strong>{t('analytics.myViews', 'My views')}</strong>
+                    {views.own.map((v) => (
+                      <div key={v.id} className="at-view-row">
+                        <button className="at-view-name" onClick={() => applySavedView(v)}>{v.name}</button>
+                        <button className={`at-star ${v.starred ? 'on' : ''}`} onClick={() => toggleOwnStar(v)} aria-label={t('analytics.star', 'Star')}>{v.starred ? '★' : '☆'}</button>
+                        <button className="at-x" onClick={() => removeOwnView(v)} aria-label={t('analytics.deleteView', 'Delete view')}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="at-popover-section">
+                  <strong>{t('analytics.presets', 'Pre-built views')}</strong>
+                  {ANALYTICS_PRESETS.map((p) => (
+                    <div key={p.key} className="at-view-row">
+                      <button className="at-view-name" onClick={() => applyPreset(p.key)}>{t(`analytics.preset.${p.key}`, p.label)}</button>
+                      <button className={`at-star ${views.starredPresets.includes(p.key) ? 'on' : ''}`} onClick={() => togglePresetStar(p.key)} aria-label={t('analytics.star', 'Star')}>
+                        {views.starredPresets.includes(p.key) ? '★' : '☆'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <button className="at-chip" onClick={saveCurrentView}>{t('analytics.saveView', 'Save view')}</button>
           <button
             className={`at-chip ${grouping.on ? 'at-apply' : ''}`}
             onClick={() => setGrouping((g) => ({ ...g, on: !g.on }))}
@@ -385,47 +537,43 @@ export default function AnalyticsTable({ cellarId }) {
           <button className="at-chip" onClick={exportCsv} disabled={exporting || !data}>
             {exporting ? t('analytics.exporting', 'Exporting…') : t('analytics.exportCsv', 'Export CSV')}
           </button>
-          {grouping.on && data?.mode === 'grouped' && (
+          <div className="at-pin">
             <button
               className="at-chip"
-              onClick={async () => {
-                // A grouped view becomes a dashboard widget verbatim — the
-                // stored query is exactly what this table just ran.
-                const title = window.prompt(
-                  t('analytics.widgetTitlePrompt', 'Name this dashboard widget:'),
-                  byKey.get(grouping.dim1)?.label || t('analytics.dashboardTitle', 'Dashboard')
-                );
-                if (!title) return;
-                try {
-                  const res = await getDashboard(apiFetch);
-                  const body = await res.json();
-                  const existing = (res.ok && body.dashboard?.widgets) || [];
-                  const widget = {
-                    title: title.trim().slice(0, 80),
-                    viz: chartType === 'table' ? 'bar' : chartType,
-                    size: 'half',
-                    query,
-                  };
-                  const save = await saveDashboard(apiFetch, [...existing, widget]);
-                  if (!save.ok) {
-                    const d = await save.json();
-                    setError(d.error || t('analytics.saveFailed', 'Could not save'));
-                  }
-                } catch {
-                  setError(t('analytics.saveFailed', 'Could not save'));
-                }
+              onClick={() => {
+                setPinTitle(grouping.on ? (byKey.get(grouping.dim1)?.label || '') : t('analytics.tableWidget', 'Bottle list'));
+                setPinDash(dashboards[0]?.id || '__new');
+                setPinOpen((o) => !o);
               }}
+              aria-expanded={pinOpen}
             >
               {t('analytics.addToDashboard', 'Add to dashboard')}
             </button>
-          )}
+            {pinOpen && (
+              <div className="at-popover at-pin-popover">
+                <div className="at-popover-section">
+                  <strong>{t('analytics.widgetTitlePrompt', 'Name this dashboard widget:')}</strong>
+                  <input value={pinTitle} onChange={(e) => setPinTitle(e.target.value)} maxLength={80} />
+                  {dashboards.length > 0 && (
+                    <select value={pinDash} onChange={(e) => setPinDash(e.target.value)}>
+                      {dashboards.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                      <option value="__new">{t('analytics.newDashboardOption', '+ new dashboard')}</option>
+                    </select>
+                  )}
+                  <button className="at-chip at-apply" onClick={pinToDashboard} disabled={!pinTitle.trim()}>
+                    {t('analytics.pin', 'Pin it')}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {grouping.on && (
         <div className="at-picker at-grouping">
           <div className="at-picker-domain">
-            <strong>{t('analytics.groupBy', 'Group by')}</strong>
+            <strong>1 · {t('analytics.groupBy', 'Group by')}</strong>
             <select value={grouping.dim1} onChange={(e) => setGrouping((g) => ({ ...g, dim1: e.target.value }))}>
               {catalogue.filter((f) => f.groupable).map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
             </select>
@@ -435,7 +583,7 @@ export default function AnalyticsTable({ cellarId }) {
             </select>
           </div>
           <div className="at-picker-domain">
-            <strong>{t('analytics.measures', 'Measures')}</strong>
+            <strong>2 · {t('analytics.measures', 'Measures')}</strong>
             <span className="at-measure-fixed">{t('analytics.countAlways', 'Bottle count (always)')}</span>
             {[0, 1].map((i) => {
               const m = grouping.measures[i] || { field: '', agg: '' };
@@ -473,6 +621,25 @@ export default function AnalyticsTable({ cellarId }) {
                 </span>
               );
             })}
+          </div>
+          <div className="at-picker-domain">
+            <strong>3 · {t('analytics.chart.section', 'Show as')}</strong>
+            <div className="at-chart-picks">
+              {['table', 'bar', 'donut', 'line'].map((ct) => {
+                const disabled = (ct === 'donut' || ct === 'line') && !!grouping.dim2;
+                return (
+                  <button
+                    key={ct}
+                    className={`at-chip ${chartType === ct ? 'at-apply' : ''}`}
+                    disabled={disabled}
+                    title={disabled ? t('analytics.oneDimOnly', 'One dimension only') : undefined}
+                    onClick={() => setChartType(ct)}
+                  >
+                    {t(`analytics.chart.${ct}`, ct === 'table' ? 'Table' : ct === 'bar' ? 'Bars' : ct === 'donut' ? 'Donut' : 'Line')}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
@@ -545,29 +712,16 @@ export default function AnalyticsTable({ cellarId }) {
 
       {data?.mode === 'grouped' ? (
         <>
-          <div className="at-chart-toolbar">
-            {['table', 'bar', 'donut', 'line'].map((ct) => {
-              const disabled = (ct === 'donut' || ct === 'line') && data.dimensionKeys.length === 2;
-              return (
-                <button
-                  key={ct}
-                  className={`at-chip ${chartType === ct ? 'at-apply' : ''}`}
-                  disabled={disabled}
-                  title={disabled ? t('analytics.oneDimOnly', 'One dimension only') : undefined}
-                  onClick={() => setChartType(ct)}
-                >
-                  {t(`analytics.chart.${ct}`, ct === 'table' ? 'Table' : ct === 'bar' ? 'Bars' : ct === 'donut' ? 'Donut' : 'Line')}
-                </button>
-              );
-            })}
-            {chartType !== 'table' && data.measureLabels.length > 1 && (
+          {chartType !== 'table' && data.measureLabels.length > 1 && (
+            <div className="at-chart-toolbar">
+              <span className="at-measure-fixed">{t('analytics.chartMeasure', 'Chart shows:')}</span>
               <select value={chartMeasure} onChange={(e) => setChartMeasure(Number(e.target.value))}>
                 {data.measureLabels.map((l, i) => (
                   <option key={l} value={i}>{l === 'count' ? t('analytics.count', 'Bottles') : l}</option>
                 ))}
               </select>
-            )}
-          </div>
+            </div>
+          )}
           {chartType !== 'table' && data.buckets.length > 0 && (
             <AnalyticsCharts data={data} chartType={chartType} measureIndex={chartMeasure} />
           )}

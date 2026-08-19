@@ -4391,7 +4391,8 @@
       "table": "Table",
       "bar": "Bars",
       "donut": "Donut",
-      "line": "Line"
+      "line": "Line",
+      "section": "Show as"
     },
     "presets": "Pre-built views",
     "preset": {
@@ -4419,6 +4420,26 @@
     "removeWidget": "Remove widget",
     "resetDashboard": "Reset to default",
     "saving": "Saving…",
-    "saveFailed": "Could not save"
+    "saveFailed": "Could not save",
+    "views": "Views",
+    "starred": "Starred",
+    "myViews": "My views",
+    "saveView": "Save view",
+    "saveViewPrompt": "Name this view:",
+    "star": "Star",
+    "unstar": "Remove star",
+    "deleteView": "Delete view",
+    "pin": "Pin it",
+    "tableWidget": "Bottle list",
+    "newDashboard": "+ New dashboard",
+    "newDashboardPrompt": "Name the new dashboard:",
+    "newDashboardOption": "+ new dashboard",
+    "deleteDashboard": "Delete",
+    "deleteDashboardConfirm": "Delete the dashboard \"{{name}}\"? Its widgets are gone for good.",
+    "defaultBoardName": "My cellar",
+    "defaultBoard": "default",
+    "emptyBoard": "This dashboard is empty — pin views to it from the analytics table.",
+    "andMore": "…and {{n}} more",
+    "chartMeasure": "Chart shows:"
   }
 }

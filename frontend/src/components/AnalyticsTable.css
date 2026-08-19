@@ -198,3 +198,15 @@
   vertical-align: middle;
   cursor: help;
 }
+
+/* Saved views menu + pin popover (saved-views slice) */
+.at-views, .at-pin { position: relative; }
+.at-views-popover { flex-direction: column; max-height: 420px; overflow-y: auto; min-width: 300px; right: 0; left: auto; }
+.at-pin-popover { right: 0; left: auto; min-width: 260px; }
+.at-pin-popover input, .at-pin-popover select { background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border); border-radius: 6px; padding: 4px 8px; font-size: 0.85rem; }
+.at-view-row { display: flex; align-items: center; gap: 4px; }
+.at-view-name { flex: 1; text-align: left; background: none; border: none; color: var(--color-text); font-size: 0.85rem; padding: 3px 4px; cursor: pointer; border-radius: 4px; }
+.at-view-name:hover { background: var(--color-surface-hover); }
+.at-star { background: none; border: none; color: var(--color-text-secondary); cursor: pointer; font-size: 0.9rem; padding: 0 2px; }
+.at-star.on { color: var(--color-warning); }
+.at-chart-picks { display: flex; gap: 6px; flex-wrap: wrap; }

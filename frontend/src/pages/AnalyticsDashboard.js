@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { getDashboard, saveDashboard, runAnalyticsQuery } from '../api/analytics';
+import { listDashboards, createDashboard, updateDashboard, deleteDashboard, runAnalyticsQuery } from '../api/analytics';
 import AnalyticsCharts from '../components/AnalyticsCharts';
 // Shares .at-chip / .at-beta with the analytics table so the two surfaces
 // stay visually one feature.
@@ -9,13 +9,12 @@ import '../components/AnalyticsTable.css';
 import './AnalyticsDashboard.css';
 
 /**
- * The analytics dashboard (#987 R-E) — cube.dev-style "a page you just look
- * at". Each widget is one stored analytics query + a visualization; the page
- * runs them in parallel through the same bounded engine as the table. Until
- * the user customizes, the DEFAULT set below renders (no DB row exists) —
- * analytics opens as answers, not as an empty tool. Widgets stack to one
- * column on mobile, which is the point: this is the phone-first surface the
- * wide table can never be.
+ * The analytics dashboards (#987) — cube.dev-style "pages you just look at",
+ * SEVERAL of them since the saved-views slice: a dropdown switches between
+ * named boards, each a grid of widgets running in parallel through the same
+ * bounded engine as the table. A user with no saved board sees the DEFAULT
+ * set below (client-side, no DB row until they customize). One column on
+ * mobile — the phone-first surface the wide table can never be.
  */
 
 const DEFAULT_WIDGETS = [
@@ -91,6 +90,30 @@ function KpiWidget({ data, t }) {
   );
 }
 
+function RowsWidget({ data, t }) {
+  if (!data.rows.length) return <div className="ad-empty">{t('analytics.empty', 'No bottles match this scope and these filters.')}</div>;
+  const cols = Object.keys(data.rows[0].values);
+  return (
+    <div className="ad-mini-scroll">
+      <table>
+        <tbody>
+          {data.rows.map((r) => (
+            <tr key={r.id}>
+              {cols.map((k) => {
+                const v = r.values[k];
+                return <td key={k}>{v === null || v === undefined ? '—' : Array.isArray(v) ? v.join(', ') : String(v)}</td>;
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {data.total > data.rows.length && (
+        <div className="ad-more">{t('analytics.andMore', '…and {{n}} more', { n: data.total - data.rows.length })}</div>
+      )}
+    </div>
+  );
+}
+
 function Widget({ widget, onRemove }) {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
@@ -101,7 +124,10 @@ function Widget({ widget, onRemove }) {
     let live = true;
     (async () => {
       try {
-        const res = await runAnalyticsQuery(apiFetch, widget.query);
+        const q = widget.query?.mode === 'rows' || (!widget.query?.mode && widget.query?.columns)
+          ? { ...widget.query, mode: 'rows', limit: 8 }
+          : widget.query;
+        const res = await runAnalyticsQuery(apiFetch, q);
         const body = await res.json();
         if (!live) return;
         if (!res.ok) setError(body.error || 'Query failed');
@@ -127,8 +153,9 @@ function Widget({ widget, onRemove }) {
       </div>
       {error && <div className="ad-error">{error}</div>}
       {!error && !data && <div className="ad-empty">{t('analytics.loading', 'Loading…')}</div>}
-      {!error && data && widget.viz === 'kpi' && <KpiWidget data={data} t={t} />}
-      {!error && data && widget.viz !== 'kpi' && data.mode === 'grouped' && (
+      {!error && data && data.mode === 'rows' && <RowsWidget data={data} t={t} />}
+      {!error && data && data.mode === 'grouped' && widget.viz === 'kpi' && <KpiWidget data={data} t={t} />}
+      {!error && data && data.mode === 'grouped' && widget.viz !== 'kpi' && (
         data.buckets.length
           ? <AnalyticsCharts data={data} chartType={widget.viz === 'table' ? 'bar' : widget.viz} measureIndex={data.measureLabels.length > 1 ? 1 : 0} />
           : <div className="ad-empty">{t('analytics.empty', 'No bottles match this scope and these filters.')}</div>
@@ -140,52 +167,80 @@ function Widget({ widget, onRemove }) {
 export default function AnalyticsDashboard() {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
-  const [widgets, setWidgets] = useState(null); // null = loading
-  const [customized, setCustomized] = useState(false);
+  const [boards, setBoards] = useState(null);   // null = loading; [] = none saved
+  const [activeId, setActiveId] = useState(null); // null = the client-side default
   const [saveState, setSaveState] = useState(null);
 
-  useEffect(() => {
-    let live = true;
-    (async () => {
-      try {
-        const res = await getDashboard(apiFetch);
-        const body = await res.json();
-        if (!live) return;
-        if (res.ok && body.dashboard && body.dashboard.widgets.length) {
-          setWidgets(body.dashboard.widgets);
-          setCustomized(true);
-        } else {
-          setWidgets(DEFAULT_WIDGETS);
-        }
-      } catch {
-        if (live) setWidgets(DEFAULT_WIDGETS);
-      }
-    })();
-    return () => { live = false; };
-  }, [apiFetch]);
-
-  const persist = useCallback(async (next) => {
-    setWidgets(next);
-    setCustomized(true);
-    setSaveState('saving');
+  const reload = useCallback(async () => {
     try {
-      const res = await saveDashboard(apiFetch, next);
-      setSaveState(res.ok ? 'saved' : 'error');
+      const res = await listDashboards(apiFetch);
+      const body = await res.json();
+      if (res.ok) {
+        setBoards(body.dashboards);
+        setActiveId((cur) => (cur && body.dashboards.some((d) => d.id === cur) ? cur : (body.dashboards[0]?.id ?? null)));
+      } else setBoards([]);
     } catch {
-      setSaveState('error');
+      setBoards([]);
     }
   }, [apiFetch]);
 
-  const removeWidget = (i) => persist(widgets.filter((_, j) => j !== i));
-  const resetDefault = () => persist(DEFAULT_WIDGETS);
+  useEffect(() => { reload(); }, [reload]);
 
-  const grid = useMemo(() => widgets || [], [widgets]);
+  const active = boards?.find((d) => d.id === activeId) || null;
+  const widgets = active ? active.widgets : DEFAULT_WIDGETS;
+
+  const mutate = useCallback(async (fn) => {
+    setSaveState('saving');
+    try {
+      const res = await fn();
+      setSaveState(res && res.ok === false ? 'error' : 'saved');
+      await reload();
+    } catch {
+      setSaveState('error');
+    }
+  }, [reload]);
+
+  const removeWidget = (i) => {
+    const next = widgets.filter((_, j) => j !== i);
+    if (active) mutate(() => updateDashboard(apiFetch, active.id, { widgets: next }));
+    // Removing from the client-side default materializes it as a saved board.
+    else mutate(() => createDashboard(apiFetch, t('analytics.defaultBoardName', 'My cellar'), next));
+  };
+
+  const newBoard = async () => {
+    const name = window.prompt(t('analytics.newDashboardPrompt', 'Name the new dashboard:'), '');
+    if (!name || !name.trim()) return;
+    await mutate(async () => {
+      const res = await createDashboard(apiFetch, name.trim(), []);
+      const body = await res.json();
+      if (res.ok) setActiveId(body.dashboard.id);
+      return res;
+    });
+  };
+
+  const deleteBoard = async () => {
+    if (!active) return;
+    if (!window.confirm(t('analytics.deleteDashboardConfirm', 'Delete the dashboard "{{name}}"? Its widgets are gone for good.', { name: active.name }))) return;
+    await mutate(() => deleteDashboard(apiFetch, active.id));
+    setActiveId(null);
+  };
 
   return (
     <div className="analytics-dashboard">
       <div className="ad-head">
         <h1>
-          {t('analytics.dashboardTitle', 'Dashboard')}
+          {boards && boards.length > 0 ? (
+            <select
+              className="ad-board-select"
+              value={activeId ?? '__default'}
+              onChange={(e) => setActiveId(e.target.value === '__default' ? null : e.target.value)}
+            >
+              {boards.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+              <option value="__default">{t('analytics.defaultBoardName', 'My cellar')} ({t('analytics.defaultBoard', 'default')})</option>
+            </select>
+          ) : (
+            t('analytics.dashboardTitle', 'Dashboard')
+          )}
           <span className="at-beta" title={t('analytics.betaHint', 'Analytics is new and still settling in. If a number looks wrong or something misbehaves, please tell us via Support — it helps more than you would think.')}>
             {t('analytics.beta', 'Beta')}
           </span>
@@ -193,8 +248,9 @@ export default function AnalyticsDashboard() {
         <div className="ad-head-actions">
           {saveState === 'saving' && <span className="ad-save-note">{t('analytics.saving', 'Saving…')}</span>}
           {saveState === 'error' && <span className="ad-save-note ad-save-error">{t('analytics.saveFailed', 'Could not save')}</span>}
-          {customized && (
-            <button className="at-chip" onClick={resetDefault}>{t('analytics.resetDashboard', 'Reset to default')}</button>
+          <button className="at-chip" onClick={newBoard}>{t('analytics.newDashboard', '+ New dashboard')}</button>
+          {active && (
+            <button className="at-chip" onClick={deleteBoard}>{t('analytics.deleteDashboard', 'Delete')}</button>
           )}
         </div>
       </div>
@@ -202,10 +258,13 @@ export default function AnalyticsDashboard() {
         {t('analytics.dashboardHint', 'Widgets come from the analytics table: open a cellar, switch to the table view, group something interesting, and press "Add to dashboard".')}
       </p>
       <div className="ad-grid">
-        {widgets === null && <div className="ad-empty">{t('analytics.loading', 'Loading…')}</div>}
-        {grid.map((w, i) => (
+        {boards === null && <div className="ad-empty">{t('analytics.loading', 'Loading…')}</div>}
+        {boards !== null && widgets.map((w, i) => (
           <Widget key={`${w.title}-${i}`} widget={w} onRemove={() => removeWidget(i)} />
         ))}
+        {boards !== null && active && !widgets.length && (
+          <div className="ad-empty">{t('analytics.emptyBoard', 'This dashboard is empty — pin views to it from the analytics table.')}</div>
+        )}
       </div>
     </div>
   );
