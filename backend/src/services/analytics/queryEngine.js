@@ -40,7 +40,7 @@ const PersonalDataEntry = require('../../models/PersonalDataEntry');
 const RegistryDataValue = require('../../models/RegistryDataValue');
 const { resolveField, opsForType } = require('./fieldCatalogue');
 const { validateValue } = require('../../utils/personalDataTypes');
-const { ANCHORS, COL } = require('../../utils/ratingUtils');
+const { ANCHORS, COL, toNormalized, fromNormalized } = require('../../utils/ratingUtils');
 const { getOrCreateDailySnapshot, convertCurrency } = require('../../utils/exchangeRates');
 const { classifyMaturity, buildProfileMap } = require('../../utils/maturityUtils');
 
@@ -106,12 +106,20 @@ function castStatic(field, raw) {
       return s;
     }
     case 'integer': {
+      // Number('') and Number(null) are both 0 — an absent value must be a
+      // 400, never a silent zero bound (audit 2026-08-19 F8).
+      if (raw === null || raw === undefined || (typeof raw === 'string' && raw.trim() === '')) {
+        throw new QueryError(400, `Filter on ${field.key}: a value is required`);
+      }
       const n = Number(raw);
       if (!Number.isInteger(n)) throw new QueryError(400, `Filter on ${field.key}: expected a whole number`);
       return n;
     }
     case 'decimal': {
-      const n = typeof raw === 'number' ? raw : Number(String(raw ?? '').trim().replace(',', '.'));
+      if (raw === null || raw === undefined || (typeof raw === 'string' && raw.trim() === '')) {
+        throw new QueryError(400, `Filter on ${field.key}: a value is required`);
+      }
+      const n = typeof raw === 'number' ? raw : Number(String(raw).trim().replace(',', '.'));
       if (!Number.isFinite(n)) throw new QueryError(400, `Filter on ${field.key}: expected a number`);
       return n;
     }
@@ -144,11 +152,41 @@ function castKv(field, raw) {
   return res.value;
 }
 
+/**
+ * STATIC date fields hold real event timestamps (createdAt, consumedAt,
+ * openedAt), while the filter value names a calendar DAY. Comparing the raw
+ * midnight instant made 'eq' match nothing and inclusive upper bounds drop
+ * the entire named day (audit 2026-08-19 F2) — so date predicates expand to
+ * day ranges. KV date values are canonical 'YYYY-MM-DD' strings and never
+ * come through here.
+ */
+function datePredicate(field, op, value, castOne) {
+  const dayAfter = (d) => new Date(d.getTime() + 86400000);
+  switch (op) {
+    case 'eq': { const d = castOne(value); return { $gte: d, $lt: dayAfter(d) }; }
+    case 'gte': return { $gte: castOne(value) };
+    case 'gt': { const d = castOne(value); return { $gte: dayAfter(d) }; }
+    case 'lt': return { $lt: castOne(value) };
+    case 'lte': { const d = castOne(value); return { $lt: dayAfter(d) }; }
+    case 'between': {
+      if (!Array.isArray(value) || value.length !== 2) {
+        throw new QueryError(400, `Filter on ${field.key}: "between" takes [min, max]`);
+      }
+      return { $gte: castOne(value[0]), $lt: dayAfter(castOne(value[1])) };
+    }
+    default:
+      throw new QueryError(400, `Filter on ${field.key}: operator "${op}" not allowed for dates`);
+  }
+}
+
 /** op + cast value(s) → a Mongo comparison for one path. */
 function predicate(field, op, value, castOne) {
   const allowed = opsForType(field.type);
   if (!allowed.includes(op)) {
     throw new QueryError(400, `Filter on ${field.key}: operator "${op}" not allowed for type ${field.type}`);
+  }
+  if (field.type === 'date' && (field.source === 'bottle' || field.source === 'wine')) {
+    return datePredicate(field, op, value, castOne);
   }
   switch (op) {
     case 'eq': return castOne(value);
@@ -201,15 +239,71 @@ async function taxonomyIds(field, op, value) {
 }
 
 /**
- * A KV filter resolves matching ENTRY rows first (indexed), then narrows the
- * bottle match — never a $lookup per filter. Returns a Mongo condition on the
- * Bottle collection.
+ * Evaluate one whitelisted operator against an already-cast entry value in
+ * JS — the personal-KV filter resolves precedence before Mongo ever sees a
+ * condition, so the predicate has to run here too. Mirrors predicate()'s
+ * semantics exactly; a mismatch between the two is a bug the KV filter tests
+ * exist to catch.
+ */
+function evalKvPredicate(op, castValue, entryValue) {
+  switch (op) {
+    case 'eq': return entryValue === castValue;
+    case 'neq': return entryValue !== castValue;
+    case 'gt': return entryValue > castValue;
+    case 'gte': return entryValue >= castValue;
+    case 'lt': return entryValue < castValue;
+    case 'lte': return entryValue <= castValue;
+    case 'between': return entryValue >= castValue[0] && entryValue <= castValue[1];
+    case 'contains': return typeof entryValue === 'string' && entryValue.toLowerCase().includes(String(castValue).toLowerCase());
+    case 'in': return Array.isArray(castValue) && castValue.includes(entryValue);
+    default: return false;
+  }
+}
+
+/** Cast the filter value(s) once for JS evaluation, per the op's shape. */
+function castKvForEval(field, op, value) {
+  const castOne = (raw) => castKv(field, raw);
+  if (op === 'between') {
+    if (!Array.isArray(value) || value.length !== 2) {
+      throw new QueryError(400, `Filter on "${field.label}": "between" takes [min, max]`);
+    }
+    return [castOne(value[0]), castOne(value[1])];
+  }
+  if (op === 'in') {
+    if (!Array.isArray(value) || !value.length || value.length > 20) {
+      throw new QueryError(400, `Filter on "${field.label}": "in" takes 1–20 values`);
+    }
+    return value.map(castOne);
+  }
+  if (op === 'contains') {
+    const s = castOne(value);
+    if (typeof s !== 'string') throw new QueryError(400, `Filter on "${field.label}": expected text`);
+    return s;
+  }
+  return castOne(value);
+}
+
+/**
+ * A KV filter resolves ENTRY rows first (indexed), then narrows the bottle
+ * match — never a $lookup per filter.
+ *
+ * Personal entries apply the SAME precedence the display, sort, group and
+ * measure paths apply — bottle entry beats wine-vintage beats wine-null
+ * (audit 2026-08-19 F1: filtering on any-level matches admitted rows whose
+ * EFFECTIVE value contradicted the user's own filter). So: all of the
+ * caller's entries for the key are fetched predicate-free, the predicate
+ * runs in JS per entry, and the condition is layered — a failing
+ * higher-precedence entry vetoes a matching lower one:
+ *   include: matching bottle entries; matching wine-vintage entries;
+ *            matching wine-null entries MINUS vintages a failing
+ *            wine-vintage entry overrides
+ *   exclude: bottles with a FAILING bottle-level entry, always
  */
 async function kvCondition(field, op, value, userId) {
-  const castOne = (raw) => castKv(field, raw);
-  const valuePred = predicate(field, op, value, castOne);
-
   if (field.source === 'registry') {
+    // One published value per (wine, key) — no precedence to resolve, the
+    // predicate can stay in the query.
+    const valuePred = predicate(field, op, value, (raw) => castKv(field, raw));
     const rows = await RegistryDataValue.find({
       key: field.keyId, status: 'published', value: valuePred,
     }).select('wineDefinition').limit(KV_MATCH_CAP + 1).lean();
@@ -219,27 +313,48 @@ async function kvCondition(field, op, value, userId) {
     return { wineDefinition: { $in: rows.map((r) => r.wineDefinition) } };
   }
 
-  // personal — the CALLER'S OWN entries only (the catalogue already ownership-
-  // checked the key; the author match makes the row query self-scoping too).
+  const cast = castKvForEval(field, op, value);
   const rows = await PersonalDataEntry.find({
-    author: userId, key: field.keyId, value: valuePred,
-  }).select('targetType bottle wineDefinition vintage').limit(KV_MATCH_CAP + 1).lean();
+    author: userId, key: field.keyId,
+  }).select('targetType bottle wineDefinition vintage value').limit(KV_MATCH_CAP + 1).lean();
   if (rows.length > KV_MATCH_CAP) {
     throw new QueryError(422, `Filter on "${field.label}" matches too many entries — narrow it first`);
   }
-  const bottleIds = rows.filter((r) => r.targetType === 'bottle').map((r) => r.bottle);
-  const wineConds = rows
-    .filter((r) => r.targetType === 'wine')
-    .map((r) => (r.vintage
-      ? { wineDefinition: r.wineDefinition, vintage: r.vintage }
-      : { wineDefinition: r.wineDefinition }));
+
+  const bottleMatch = [];
+  const bottleFail = [];
+  const wvMatch = [];               // { wineDefinition, vintage }
+  const wvFailByWine = new Map();   // wineId -> [vintage, ...]
+  const wnMatch = [];               // wineId
+  for (const r of rows) {
+    const hit = evalKvPredicate(op, cast, r.value);
+    if (r.targetType === 'bottle') (hit ? bottleMatch : bottleFail).push(r.bottle);
+    else if (r.vintage) {
+      if (hit) wvMatch.push({ wineDefinition: r.wineDefinition, vintage: r.vintage });
+      else {
+        const k = String(r.wineDefinition);
+        if (!wvFailByWine.has(k)) wvFailByWine.set(k, []);
+        wvFailByWine.get(k).push(r.vintage);
+      }
+    } else if (hit) wnMatch.push(r.wineDefinition);
+  }
+
   const or = [];
-  if (bottleIds.length) or.push({ _id: { $in: bottleIds } });
-  or.push(...wineConds);
+  if (bottleMatch.length) or.push({ _id: { $in: bottleMatch } });
+  or.push(...wvMatch);
+  for (const wid of wnMatch) {
+    const failVints = wvFailByWine.get(String(wid));
+    or.push(failVints
+      ? { wineDefinition: wid, vintage: { $nin: failVints } }
+      : { wineDefinition: wid });
+  }
   // No matching entries → a condition that matches nothing (honest empty
   // result, not an error).
   if (!or.length) return { _id: { $in: [] } };
-  return { $or: or };
+  const include = { $or: or };
+  return bottleFail.length
+    ? { $and: [include, { _id: { $nin: bottleFail } }] }
+    : include;
 }
 
 /**
@@ -248,12 +363,13 @@ async function kvCondition(field, op, value, userId) {
  * it (wd.* paths).
  */
 async function compileFilters(filters, userId) {
-  if (filters === undefined) return { pre: [], post: [], needsWine: false };
+  if (filters === undefined) return { pre: [], post: [], exprFilters: [], needsWine: false };
   if (!Array.isArray(filters) || filters.length > MAX_FILTERS) {
     throw new QueryError(400, `filters must be an array of at most ${MAX_FILTERS}`);
   }
   const pre = [];
   const post = [];
+  const exprFilters = [];
   let needsWine = false;
   for (const f of filters) {
     if (!f || typeof f !== 'object' || typeof f.field !== 'string' || typeof f.op !== 'string') {
@@ -263,7 +379,20 @@ async function compileFilters(filters, userId) {
     if (!field) throw new QueryError(400, `Unknown field "${f.field}"`);
     if (!field.filterable) throw new QueryError(400, `Field "${f.field}" is not filterable`);
 
-    if (field.source === 'personal' || field.source === 'registry') {
+    if (field.normalized) {
+      // Ratings filter in STARS against the converted expression (audit F3):
+      // the raw stored values mix three scales, so a raw comparison ranks a
+      // 60-point Parker above a 5-star bottle.
+      const castStars = (raw) => {
+        const n = castStatic({ ...field, type: 'decimal' }, raw);
+        if (n < 0 || n > 5) throw new QueryError(400, `Filter on ${field.key}: stars run 0–5`);
+        return n;
+      };
+      exprFilters.push({
+        expr: ratingConversionExpr(field.path, field.scalePath, '5'),
+        pred: predicate({ ...field, type: 'decimal' }, f.op, f.value, castStars),
+      });
+    } else if (field.source === 'personal' || field.source === 'registry') {
       pre.push(await kvCondition(field, f.op, f.value, userId));
     } else if (field.source === 'taxonomy') {
       if (!['eq', 'in', 'contains', 'neq'].includes(f.op)) {
@@ -284,27 +413,39 @@ async function compileFilters(filters, userId) {
       throw new QueryError(400, `Field "${f.field}" cannot be filtered`);
     }
   }
-  return { pre, post, needsWine };
+  return { pre, post, exprFilters, needsWine };
+}
+
+/** The $addFields+$match stage pairs for expression filters (ratings). */
+function exprFilterStages(exprFilters) {
+  return exprFilters.flatMap((ef, i) => [
+    { $addFields: { [`_f${i}`]: ef.expr } },
+    { $match: { [`_f${i}`]: ef.pred } },
+  ]);
 }
 
 // ── Generated normalization expressions ────────────────────────────────────
 
 /**
- * Piecewise-linear 0–100 rating normalization as an aggregation expression,
- * generated from ratingUtils.ANCHORS — the same table toNormalized() reads.
+ * Piecewise-linear rating conversion as an aggregation expression, generated
+ * from ratingUtils.ANCHORS — the same table toNormalized/fromNormalized read.
+ * `toKey` picks the target column: 'norm' (0–100) or '5' (stars — the one
+ * scale this surface speaks after audit F3). A direct from→to piecewise
+ * equals the toNormalized∘fromNormalized composition because both walk the
+ * same anchor rows; the parity tests pin that.
  */
-function normalizedRatingExpr(valuePath, scalePath) {
+function ratingConversionExpr(valuePath, scalePath, toKey = '5') {
   const perScale = (scaleKey) => {
     const fromCol = COL[scaleKey];
-    const normCol = COL.norm;
+    const toCol = COL[toKey];
     const v = `$${valuePath}`;
     // Below first anchor / above last anchor clamp; between: linear blend.
     const segs = [];
     for (let i = 0; i < ANCHORS.length - 1; i++) {
       const lo = ANCHORS[i][fromCol];
       const hi = ANCHORS[i + 1][fromCol];
-      const nLo = ANCHORS[i][normCol];
-      const nHi = ANCHORS[i + 1][normCol];
+      const nLo = ANCHORS[i][toCol];
+      const nHi = ANCHORS[i + 1][toCol];
       segs.push({
         case: { $lte: [v, hi] },
         then: {
@@ -317,16 +458,15 @@ function normalizedRatingExpr(valuePath, scalePath) {
         },
       });
     }
-    expr = {
+    return {
       $switch: {
         branches: [
-          { case: { $lte: [v, ANCHORS[0][fromCol]] }, then: ANCHORS[0][normCol] },
+          { case: { $lte: [v, ANCHORS[0][fromCol]] }, then: ANCHORS[0][toCol] },
           ...segs,
         ],
-        default: ANCHORS[ANCHORS.length - 1][normCol],
+        default: ANCHORS[ANCHORS.length - 1][toCol],
       },
     };
-    return expr;
   };
   return {
     $cond: [
@@ -343,6 +483,11 @@ function normalizedRatingExpr(valuePath, scalePath) {
       },
     ],
   };
+}
+
+/** Back-compat alias for the 0–100 form (parity tests pin it). */
+function normalizedRatingExpr(valuePath, scalePath) {
+  return ratingConversionExpr(valuePath, scalePath, 'norm');
 }
 
 /**
@@ -462,7 +607,7 @@ function baseMatch(scopeCellarIds, bottleScope, preConds) {
 // ── rows mode ──────────────────────────────────────────────────────────────
 
 async function runRows({ userId, scopeCellars, bottleScope, filters, sort, limit, offset, columns }) {
-  const { pre, post, needsWine: filterNeedsWine } = await compileFilters(filters, userId);
+  const { pre, post, exprFilters, needsWine: filterNeedsWine } = await compileFilters(filters, userId);
 
   // Sort: one field, validated; default = newest first. _id tiebreaker always.
   // Taxonomy and KV sorts join their value in first (R-B) — the join stages
@@ -484,6 +629,11 @@ async function runRows({ userId, scopeCellars, bottleScope, filters, sort, limit
     } else if (sortField.source === 'personal' || sortField.source === 'registry') {
       sortJoin = kvJoinStages(sortField, '_sortVal', userId);
       sortStage = { _sortVal: dir, _id: 1 };
+    } else if (sortField.normalized) {
+      // Ratings order by the star-converted value (audit F3), same scale as
+      // the filter and the displayed column.
+      sortJoin = [{ $addFields: { _sortVal: ratingConversionExpr(sortField.path, sortField.scalePath, '5') } }];
+      sortStage = { _sortVal: dir, _id: 1 };
     } else {
       sortStage = { [sortField.path]: dir, _id: 1 };
     }
@@ -499,6 +649,7 @@ async function runRows({ userId, scopeCellars, bottleScope, filters, sort, limit
     { $match: baseMatch(cellarIds, bottleScope, pre) },
     ...(needsWine ? WINE_LOOKUP : []),
     ...(post.length ? [{ $match: { $and: post } }] : []),
+    ...exprFilterStages(exprFilters),
     ...sortJoin,
     { $sort: sortStage },
     {
@@ -598,6 +749,14 @@ async function hydrateRows({ userId, pageIds, columns, scopeCellars }) {
     switch (f.source) {
       case 'bottle': {
         const v = f.path.split('.').reduce((o, k) => (o == null ? o : o[k]), b);
+        if (f.normalized) {
+          // Ratings display in STARS (audit F3), the same scale the filter
+          // takes and the sort orders by — one decimal, honest across a
+          // cellar whose rows mix 5/20/100-scale entries.
+          if (v == null) return null;
+          const stars = fromNormalized(toNormalized(v, b[f.scalePath]), '5');
+          return stars == null ? null : Math.round(stars * 10) / 10;
+        }
         return f.type === 'date' ? iso(v) : v ?? null;
       }
       case 'wine': {
@@ -639,7 +798,7 @@ async function hydrateRows({ userId, pageIds, columns, scopeCellars }) {
 // ── grouped mode ───────────────────────────────────────────────────────────
 
 async function runGrouped({ userId, scopeCellars, bottleScope, filters, dimensions, measures }) {
-  const { pre, post, needsWine: filterNeedsWine } = await compileFilters(filters, userId);
+  const { pre, post, exprFilters, needsWine: filterNeedsWine } = await compileFilters(filters, userId);
 
   if (!Array.isArray(dimensions) || !dimensions.length || dimensions.length > MAX_DIMENSIONS) {
     throw new QueryError(400, `grouped mode takes 1–${MAX_DIMENSIONS} dimensions`);
@@ -702,7 +861,9 @@ async function runGrouped({ userId, scopeCellars, bottleScope, filters, dimensio
       currencyMeta.fields.push({ i, path: f.path, currencyPath: 'currency' });
       valueExpr = null; // filled in below once the target currency is known
     } else if (f.normalized) {
-      valueExpr = normalizedRatingExpr(f.path, f.scalePath);
+      // Stars, not the 0–100 normal form (audit F3) — the same scale the
+      // filter takes, the sort orders by and the column displays.
+      valueExpr = ratingConversionExpr(f.path, f.scalePath, '5');
     }
     measureSpecs.push({ out: `m${i}`, label: `${m.agg}(${f.key})`, agg: m.agg, valueExpr, field: f });
   }
@@ -725,13 +886,17 @@ async function runGrouped({ userId, scopeCellars, bottleScope, filters, dimensio
       const spec = measureSpecs[cf.i];
       spec.valueExpr = expr; // null when no rates → measure yields null
     }
-    // Count rows whose price exists but cannot convert, over the same match.
+    // Count rows whose price exists but cannot convert — over the SAME
+    // filtered population as the buckets (audit F5: counting before the
+    // wine-side and expression filters overstated the exclusions).
     if (rates && rates[targetCurrency]) {
       const known = Object.keys(rates);
       const [uc] = await Bottle.aggregate([
         { $match: baseMatch(cellarIds, bottleScope, pre) },
-        { $match: { price: { $ne: null } } },
-        { $match: { currency: { $nin: known } } },
+        ...(needsWine ? WINE_LOOKUP : []),
+        ...(post.length ? [{ $match: { $and: post } }] : []),
+        ...exprFilterStages(exprFilters),
+        { $match: { price: { $ne: null }, currency: { $nin: known } } },
         { $count: 'n' },
       ]).option({ maxTimeMS: MAX_TIME_MS });
       unconvertibleRows = uc?.n || 0;
@@ -752,6 +917,7 @@ async function runGrouped({ userId, scopeCellars, bottleScope, filters, dimensio
     { $match: baseMatch(cellarIds, bottleScope, pre) },
     ...(needsWine ? WINE_LOOKUP : []),
     ...(post.length ? [{ $match: { $and: post } }] : []),
+    ...exprFilterStages(exprFilters),
     ...joinStages,
     { $group: groupStage },
     { $sort: { m0: -1, _id: 1 } },
@@ -765,6 +931,17 @@ async function runGrouped({ userId, scopeCellars, bottleScope, filters, dimensio
   // Taxonomy dimension ids → names (small: at most BUCKET_CAP ids per dim).
   for (let i = 0; i < dimFields.length; i++) {
     const f = dimFields[i];
+    // The cellar dimension groups by the cellar ObjectId — resolve to names
+    // from the scope set, which by construction contains every id that can
+    // appear (audit F4: raw hex ids were the bucket labels).
+    if (f.key === 'bottle.cellar') {
+      const names = new Map(scopeCellars.map((c) => [String(c._id), c.name]));
+      for (const b of buckets) {
+        const v = b._id[`d${i}`];
+        b._id[`d${i}`] = v == null ? null : (names.get(String(v)) || String(v));
+      }
+      continue;
+    }
     if (f.source !== 'taxonomy') continue;
     const Model = mongoose.model(f.taxonomyModel);
     const ids = [...new Set(buckets.map((b) => String(b._id[`d${i}`])).filter((x) => x && x !== 'null'))];
@@ -830,6 +1007,6 @@ module.exports = {
   runQuery,
   QueryError,
   // exported for unit tests
-  deriveScope, compileFilters, normalizedRatingExpr, convertedPriceExpr,
+  deriveScope, compileFilters, normalizedRatingExpr, ratingConversionExpr, convertedPriceExpr,
   MAX_TIME_MS, ROWS_LIMIT_MAX, BUCKET_CAP,
 };

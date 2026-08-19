@@ -32,9 +32,10 @@ const PersonalDataKey = require('../../models/PersonalDataKey');
 const { toNormalized } = require('../../utils/ratingUtils');
 const { convertCurrency } = require('../../utils/exchangeRates');
 const {
-  runQuery, QueryError, compileFilters, normalizedRatingExpr, convertedPriceExpr,
+  runQuery, QueryError, compileFilters, normalizedRatingExpr, ratingConversionExpr, convertedPriceExpr,
   MAX_TIME_MS, ROWS_LIMIT_MAX, BUCKET_CAP,
 } = require('./queryEngine');
+const { toNormalized: toNorm, fromNormalized: fromNorm } = require('../../utils/ratingUtils');
 
 const USER = 'a'.repeat(24);
 const CELLAR_A = 'b'.repeat(24);
@@ -117,6 +118,21 @@ describe('normalizedRatingExpr parity with toNormalized', () => {
   });
 });
 
+describe('AUDIT F3: the star-conversion expression matches the JS composition', () => {
+  const starExpr = ratingConversionExpr('rating', 'ratingScale', '5');
+  test.each([
+    [4.5, '5'], [1, '5'], [17.5, '20'], [8, '20'], [92, '100'], [60, '100'], [100, '100'],
+  ])('%p on scale %s converts to the same stars as fromNormalized∘toNormalized', (v, scale) => {
+    expect(evalExpr(starExpr, { rating: v, ratingScale: scale }))
+      .toBeCloseTo(fromNorm(toNorm(v, scale), '5'), 6);
+  });
+  test('a 60-point Parker bottle no longer outranks a 5-star one', () => {
+    const parker60 = evalExpr(starExpr, { rating: 60, ratingScale: '100' });
+    const fiveStar = evalExpr(starExpr, { rating: 5, ratingScale: '5' });
+    expect(parker60).toBeLessThan(fiveStar);
+  });
+});
+
 describe('convertedPriceExpr parity with convertCurrency', () => {
   const rates = { USD: 1, EUR: 0.9, SEK: 10 };
   const { expr } = convertedPriceExpr('price', 'currency', rates, 'SEK');
@@ -195,9 +211,9 @@ describe('personal key/value filters', () => {
 
   test('entries narrow the bottle match: bottle-level ids OR wine-level (with vintage scope)', async () => {
     PersonalDataEntry.find.mockReturnValue(chainLean([
-      { targetType: 'bottle', bottle: 'e'.repeat(24) },
-      { targetType: 'wine', wineDefinition: 'f'.repeat(24), vintage: '2019' },
-      { targetType: 'wine', wineDefinition: '1'.repeat(24), vintage: null },
+      { targetType: 'bottle', bottle: 'e'.repeat(24), value: 15 },
+      { targetType: 'wine', wineDefinition: 'f'.repeat(24), vintage: '2019', value: 14.5 },
+      { targetType: 'wine', wineDefinition: '1'.repeat(24), vintage: null, value: 14.2 },
     ]));
     const { pre } = await compileFilters(
       [{ field: `personal.${KEY_ID}`, op: 'gte', value: 14 }], USER
@@ -207,10 +223,40 @@ describe('personal key/value filters', () => {
       { wineDefinition: 'f'.repeat(24), vintage: '2019' },
       { wineDefinition: '1'.repeat(24) },
     ]);
-    // The entry query was value-predicated and author-scoped.
-    expect(PersonalDataEntry.find).toHaveBeenCalledWith(
-      expect.objectContaining({ author: USER, key: KEY_ID, value: { $gte: 14 } })
+    // Audit F1: the entry query is predicate-FREE (precedence resolves in JS)
+    // and author-scoped.
+    expect(PersonalDataEntry.find).toHaveBeenCalledWith({ author: USER, key: KEY_ID });
+  });
+
+  test('AUDIT F1: a failing bottle-level entry vetoes a matching wine-level one', async () => {
+    // Wine-null ABV 14.5 matches '>= 14'; the bottle-level override 13.0
+    // fails it — the bottle's EFFECTIVE value is 13.0, so it must be OUT.
+    PersonalDataEntry.find.mockReturnValue(chainLean([
+      { targetType: 'wine', wineDefinition: 'f'.repeat(24), vintage: null, value: 14.5 },
+      { targetType: 'bottle', bottle: 'e'.repeat(24), value: 13.0 },
+    ]));
+    const { pre } = await compileFilters(
+      [{ field: `personal.${KEY_ID}`, op: 'gte', value: 14 }], USER
     );
+    expect(pre[0]).toEqual({
+      $and: [
+        { $or: [{ wineDefinition: 'f'.repeat(24) }] },
+        { _id: { $nin: ['e'.repeat(24)] } },
+      ],
+    });
+  });
+
+  test('AUDIT F1: a failing wine-VINTAGE entry carves its vintage out of a matching wine-null include', async () => {
+    PersonalDataEntry.find.mockReturnValue(chainLean([
+      { targetType: 'wine', wineDefinition: 'f'.repeat(24), vintage: null, value: 14.5 },
+      { targetType: 'wine', wineDefinition: 'f'.repeat(24), vintage: '2019', value: 12.0 },
+    ]));
+    const { pre } = await compileFilters(
+      [{ field: `personal.${KEY_ID}`, op: 'gte', value: 14 }], USER
+    );
+    expect(pre[0].$or).toEqual([
+      { wineDefinition: 'f'.repeat(24), vintage: { $nin: ['2019'] } },
+    ]);
   });
 
   test('no matching entries → a match-nothing condition, not an error', async () => {
@@ -455,5 +501,87 @@ describe('rows mode hydration', () => {
     Bottle.find.mockReturnValue(chainLean([{ _id: B1, cellar: CELLAR_A, wineDefinition: null }]));
     const out = await runQuery(USER, { columns: ['wine.producer', 'purchase.price'] });
     expect(out.rows[0].values).toEqual({ 'wine.producer': null, 'purchase.price': null });
+  });
+
+  test('AUDIT F3: a rating column hydrates in stars, whatever scale the row stored', async () => {
+    aggReturning([{ ids: [{ _id: B1 }], total: [{ n: 1 }] }]);
+    Bottle.find.mockReturnValue(chainLean([{
+      _id: B1, cellar: CELLAR_A, wineDefinition: null, rating: 92, ratingScale: '100',
+    }]));
+    const out = await runQuery(USER, { columns: ['rating.current'] });
+    expect(out.rows[0].values['rating.current']).toBeCloseTo(4.1, 5);
+  });
+});
+
+describe('AUDIT fixes 2026-08-19 — the rest of the confirmed nine', () => {
+  test('F2: a date eq filter compiles to a full-day range, not a midnight instant', async () => {
+    const { pre } = await compileFilters(
+      [{ field: 'bottle.addedAt', op: 'eq', value: '2026-08-18' }], USER
+    );
+    const cond = pre[0].createdAt;
+    expect(cond.$gte.toISOString()).toBe('2026-08-18T00:00:00.000Z');
+    expect(cond.$lt.toISOString()).toBe('2026-08-19T00:00:00.000Z');
+  });
+
+  test('F2: between includes the entire named end day', async () => {
+    const { pre } = await compileFilters(
+      [{ field: 'consumption.date', op: 'between', value: ['2026-08-01', '2026-08-31'] }], USER
+    );
+    const cond = pre[0].consumedAt;
+    expect(cond.$gte.toISOString()).toBe('2026-08-01T00:00:00.000Z');
+    expect(cond.$lt.toISOString()).toBe('2026-09-01T00:00:00.000Z');
+  });
+
+  test('F3: a rating filter compiles to an expression filter in stars, never a raw path match', async () => {
+    const { pre, post, exprFilters } = await compileFilters(
+      [{ field: 'rating.current', op: 'gte', value: 4 }], USER
+    );
+    expect(pre).toEqual([]);
+    expect(post).toEqual([]);
+    expect(exprFilters).toHaveLength(1);
+    expect(exprFilters[0].pred).toEqual({ $gte: 4 });
+    // The pipeline stage pair lands after the match: verified end-to-end.
+    const cap = aggReturning([{ ids: [], total: [] }]);
+    await runQuery(USER, { filters: [{ field: 'rating.current', op: 'gte', value: 4 }] });
+    const p = cap.pipelines[0];
+    const af = p.find((s) => s.$addFields && s.$addFields._f0);
+    expect(af).toBeDefined();
+    expect(p.find((s) => s.$match && s.$match._f0)).toEqual({ $match: { _f0: { $gte: 4 } } });
+  });
+
+  test('F3: a rating filter value outside 0–5 stars is rejected', async () => {
+    await expect(compileFilters([{ field: 'rating.current', op: 'gte', value: 92 }], USER))
+      .rejects.toThrow(/stars run 0–5/);
+  });
+
+  test('F3: sorting by rating orders by the star expression with the tiebreaker', async () => {
+    const cap = aggReturning([{ ids: [], total: [] }]);
+    await runQuery(USER, { sort: { field: 'rating.current', dir: 'desc' } });
+    const p = cap.pipelines[0];
+    expect(p.find((s) => s.$addFields && s.$addFields._sortVal)).toBeDefined();
+    expect(p.find((s) => s.$sort).$sort).toEqual({ _sortVal: -1, _id: 1 });
+  });
+
+  test('F4: grouping by Cellar returns cellar NAMES as bucket labels', async () => {
+    aggReturning([
+      { _id: { d0: CELLAR_A }, m0: 5 },
+      { _id: { d0: CELLAR_B }, m0: 2 },
+    ]);
+    const out = await runQuery(USER, {
+      mode: 'grouped', dimensions: ['bottle.cellar'], measures: [{ field: '*', agg: 'count' }],
+    });
+    expect(out.buckets.map((b) => b.dimensions[0])).toEqual(['Home', 'Shared']);
+  });
+
+  test('F8: an empty string in a numeric filter is a 400, never a silent zero', async () => {
+    await expect(compileFilters(
+      [{ field: 'purchase.price', op: 'between', value: ['', '100'] }], USER
+    )).rejects.toThrow(/value is required/);
+  });
+
+  test('F9: date fields refuse to group until calendar bucketing exists', async () => {
+    await expect(runQuery(USER, {
+      mode: 'grouped', dimensions: ['bottle.addedAt'], measures: [{ field: '*', agg: 'count' }],
+    })).rejects.toThrow(/cannot be grouped/);
   });
 });

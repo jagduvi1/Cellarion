@@ -79,31 +79,42 @@ const STATIC_FIELDS = [
   dim({ key: 'bottle.location', label: 'Rack location', domain: 'inventory', type: 'text', source: 'bottle', path: 'location' }),
   dim({ key: 'bottle.occasion', label: 'Occasion note', domain: 'inventory', type: 'text', source: 'bottle', path: 'occasion' }),
   dim({ key: 'bottle.reservedFor', label: 'Reserved for', domain: 'inventory', type: 'text', source: 'bottle', path: 'reservedFor' }),
-  dim({ key: 'bottle.addedAt', label: 'Date added', domain: 'inventory', type: 'date', source: 'bottle', path: 'createdAt' }),
+  // Date fields are not groupable (audit 2026-08-19 F9): without calendar
+  // bucketing, $group on a timestamp makes one bucket per bottle — 200 rows
+  // of count:1 is a wall, not an answer. Month bucketing is the dashboards
+  // slice's problem; until then the flag is honest.
+  dim({ key: 'bottle.addedAt', label: 'Date added', domain: 'inventory', type: 'date', source: 'bottle', path: 'createdAt', groupable: false }),
 
   // Purchase
   measure({ key: 'purchase.price', label: 'Price', domain: 'purchase', type: 'decimal', unit: 'currency', source: 'bottle', path: 'price', aggregations: ['sum', 'avg', 'min', 'max'] }),
   dim({ key: 'purchase.currency', label: 'Currency', domain: 'purchase', type: 'text', source: 'bottle', path: 'currency' }),
-  dim({ key: 'purchase.date', label: 'Purchase date', domain: 'purchase', type: 'date', source: 'bottle', path: 'purchaseDate' }),
+  dim({ key: 'purchase.date', label: 'Purchase date', domain: 'purchase', type: 'date', source: 'bottle', path: 'purchaseDate', groupable: false }),
   dim({ key: 'purchase.location', label: 'Purchase location', domain: 'purchase', type: 'text', source: 'bottle', path: 'purchaseLocation' }),
 
-  // Ratings — normalized 0–100 across the three scales before any aggregation
-  measure({ key: 'rating.current', label: 'My rating', domain: 'rating', type: 'decimal', source: 'bottle', path: 'rating', scalePath: 'ratingScale', normalized: true, aggregations: ['avg', 'min', 'max'] }),
-  measure({ key: 'rating.consumed', label: 'Rating at consumption', domain: 'rating', type: 'decimal', source: 'bottle', path: 'consumedRating', scalePath: 'consumedRatingScale', normalized: true, aggregations: ['avg', 'min', 'max'] }),
+  // Ratings live in ONE scale everywhere on this surface: stars (audit
+  // 2026-08-19 F3). Values are stored per-bottle in '5'/'20'/'100' scales —
+  // mixed after imports — so raw filter/sort/display made a 60-point Parker
+  // outrank a 5-star bottle. Filters take stars, sort orders by the
+  // star-converted expression, hydration returns stars, grouped measures
+  // aggregate stars — all generated from the same ratingUtils anchor table.
+  measure({ key: 'rating.current', label: 'My rating (stars)', domain: 'rating', type: 'decimal', source: 'bottle', path: 'rating', scalePath: 'ratingScale', normalized: true, aggregations: ['avg', 'min', 'max'] }),
+  measure({ key: 'rating.consumed', label: 'Rating at consumption (stars)', domain: 'rating', type: 'decimal', source: 'bottle', path: 'consumedRating', scalePath: 'consumedRatingScale', normalized: true, aggregations: ['avg', 'min', 'max'] }),
 
   // Consumption
-  dim({ key: 'consumption.date', label: 'Consumed date', domain: 'consumption', type: 'date', source: 'bottle', path: 'consumedAt' }),
+  dim({ key: 'consumption.date', label: 'Consumed date', domain: 'consumption', type: 'date', source: 'bottle', path: 'consumedAt', groupable: false }),
   dim({ key: 'consumption.reason', label: 'Consumed reason', domain: 'consumption', type: 'enum', source: 'bottle', path: 'consumedReason', enumOptions: ['drank', 'gifted', 'sold', 'other'] }),
 
   // Open bottles
-  dim({ key: 'open.openedAt', label: 'Opened date', domain: 'open', type: 'date', source: 'bottle', path: 'openedAt' }),
+  dim({ key: 'open.openedAt', label: 'Opened date', domain: 'open', type: 'date', source: 'bottle', path: 'openedAt', groupable: false }),
   dim({ key: 'open.preservation', label: 'Preservation', domain: 'open', type: 'enum', source: 'bottle', path: 'preservationMethod', enumOptions: ['coravin', 'inert-gas', 'vacuum', 'sparkling-stopper', 'recorked'] }),
 
   // Maturity — the user's own per-bottle window (integers, filter/sortable);
   // the derived drink status is computed per hydrated row and says so.
   dim({ key: 'maturity.drinkFrom', label: 'Drink from (year)', domain: 'maturity', type: 'integer', source: 'bottle', path: 'drinkFrom' }),
   dim({ key: 'maturity.drinkTo', label: 'Drink to (year)', domain: 'maturity', type: 'integer', source: 'bottle', path: 'drinkTo' }),
-  dim({ key: 'maturity.status', label: 'Drink status', domain: 'maturity', type: 'enum', source: 'computed', path: null, sortable: false, groupable: false, filterable: false, enumOptions: ['too-young', 'approaching', 'ready', 'peak', 'declining', 'past', 'unknown'] }),
+  // enumOptions mirror what classifyMaturity actually returns (audit F7) —
+  // 'unknown' is this module's own fallback for rows with no window at all.
+  dim({ key: 'maturity.status', label: 'Drink status', domain: 'maturity', type: 'enum', source: 'computed', path: null, sortable: false, groupable: false, filterable: false, enumOptions: ['not-ready', 'early', 'peak', 'late', 'declining', 'unknown'] }),
 ];
 
 const STATIC_BY_KEY = new Map(STATIC_FIELDS.map((f) => [f.key, f]));

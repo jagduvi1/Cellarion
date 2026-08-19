@@ -132,6 +132,15 @@ export default function AnalyticsTable({ cellarId }) {
     return [...grouped.entries()].sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
   }, [catalogue]);
 
+  // Follow in-place navigation between cellars (audit F6): the component
+  // stays mounted when only the route param changes, so the scope must track
+  // the prop or the table keeps showing the previous cellar's bottles under
+  // the new cellar's header.
+  useEffect(() => {
+    setScopeCellars(cellarId ? [cellarId] : 'all');
+    setOffset(0);
+  }, [cellarId]);
+
   useEffect(() => {
     let live = true;
     (async () => {
