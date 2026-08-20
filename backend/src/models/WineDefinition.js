@@ -148,8 +148,32 @@ const wineDefinitionSchema = new mongoose.Schema({
     // else has been written to the row.
     suspectDecision:   { type: String, default: null, trim: true },
     suspectDecidedAt:  { type: Date,   default: null },
+    // Which deterministic rule cleared producerSuspect, when one did — see
+    // utils/producerSuspectCheck DOWNGRADE_RULES. Requested by the sommelier
+    // (6a86baca): a rule that moves rows out of the queue must leave them
+    // queryable as a set, so a rule that turns out to be wrong can be found
+    // and reversed without re-deriving which rows it touched. Distinct from
+    // suspectDecision, which records a HUMAN verdict.
+    suspectDowngradedBy: { type: String, default: null, trim: true },
     model:        { type: String, default: null, trim: true }, // model that produced it
     generatedAt:  { type: Date,   default: null },             // when it was generated
+    // The identity fields this profile was generated FROM, as
+    // enrichmentJob.profileInputsSnapshot() renders them. Compare against the
+    // record's current values to know — exactly, not heuristically — whether
+    // the stored profile still describes this wine.
+    //
+    // WHY (somm ticket 6a86bb3b, 2026-08-20). reenrichAfterRecordEdit already
+    // fires on the three deliberate curation surfaces, but a BULK SCRIPT
+    // writing straight to the collection bypasses all of them. The 08-11
+    // cross-field triage did exactly that, and left two Friuli benchmarks —
+    // Le Vigne di Zamò and Venica & Venica — carrying a suspect flag and a
+    // note about "Giuli Ballarin", the wine those rows used to be. The note
+    // was never wrong; the row stopped being the wine it described.
+    //
+    // Storing the inputs makes staleness a property of the DATA rather than
+    // of whether a code path remembered to call a hook, so the next bulk edit
+    // is caught whoever writes it.
+    inputsSnapshot: { type: String, default: null },
     // Generation ran but PUBLICATION was withheld: the model flagged the
     // producer as suspect (a brand/range sold as a producer, a place, a
     // label term), so describing "this producer's style" would be confident

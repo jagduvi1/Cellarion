@@ -2661,3 +2661,77 @@ registerTool({
     return ok(`Back in the worklist: ${wine.producer} — ${wine.name}.`, { wine_id: String(wine._id), dismissed: false });
   },
 });
+
+// Somm ticket 6a86baca (2026-08-20). A deterministic rule that moves rows OUT
+// of a queue is invisible by construction: the rows stop appearing anywhere,
+// so a rule that is subtly wrong keeps being right as far as anyone can see.
+// Their condition for accepting the epistemic rule was that the moved rows
+// stay findable as a set — "residue should be a query, not a queue" — which is
+// what aiProfile.suspectDowngradedBy records and this reads back.
+registerTool({
+  name: 'list_rule_downgrades',
+  title: 'Sommelier: wines a deterministic rule moved out of the suspect queue',
+  description:
+    'Registry wines whose producer_suspect flag was cleared by a RULE rather than by a human, tagged with which ' +
+    'rule did it. Two rules exist. `note_asserts_producer` fires when the note calls the entity a real producer ' +
+    '("a cooperative cellar in Burgundy") while the flag says the field is not one. `note_epistemic_only` fires ' +
+    'when the note reports only that the model could not place the name ("not a producer I can verify") and makes ' +
+    'no claim about what the field is instead — producer_suspect asserts a positive suspicion, and an epistemic ' +
+    'note contains no such assertion. Both leave the row as producerUnknown: a real winery we cannot place, ' +
+    'published without an owner-visible caveat. This list exists so a rule that turns out to be wrong can be found ' +
+    'and reversed as a set instead of re-derived — spot-check a sample, and if a row should not have moved, ' +
+    'propose_wine_correction or set_wine_profile still work on it normally. A row a HUMAN judged carries ' +
+    'suspectDecision instead and never appears here.',
+  scope: 'read',
+  requireRole: SOMM_ROLES,
+  annotations: { readOnlyHint: true, openWorldHint: false },
+  inputSchema: {
+    rule: z.enum(['note_asserts_producer', 'note_epistemic_only']).optional()
+      .describe('Only rows moved by this rule; omit for both'),
+    counts_only: z.boolean().optional().describe('Return just the totals, per rule'),
+    limit: z.number().int().min(1).max(100).default(50),
+    offset: z.number().int().min(0).default(0),
+  },
+  handler: async (args, ctx) => {
+    const denied = requireSomm(ctx);
+    if (denied) return denied;
+
+    const filter = {
+      'aiProfile.suspectDowngradedBy': args.rule ? args.rule : { $ne: null },
+      nonWine: { $ne: true },
+    };
+
+    if (args.counts_only) {
+      const per = await WineDefinition.aggregate([
+        { $match: { 'aiProfile.suspectDowngradedBy': { $ne: null }, nonWine: { $ne: true } } },
+        { $group: { _id: '$aiProfile.suspectDowngradedBy', n: { $sum: 1 } } },
+      ]);
+      const by = Object.fromEntries(per.map((r) => [r._id, r.n]));
+      const total = per.reduce((s, r) => s + r.n, 0);
+      return ok(`${total} wine(s) downgraded by rule.`, { total, by_rule: by });
+    }
+
+    const total = await WineDefinition.countDocuments(filter);
+    const page = await WineDefinition.find(filter)
+      .select('name producer appellation aiProfile.producerNote aiProfile.suspectDowngradedBy aiProfile.confidence aiProfile.generatedAt')
+      .populate('country', 'name')
+      .sort({ 'aiProfile.generatedAt': -1 })
+      .skip(args.offset).limit(args.limit).lean();
+
+    const rows = page.map((w) => ({
+      wine_id: String(w._id),
+      producer: w.producer || null,
+      name: w.name || null,
+      country: w.country?.name || null,
+      appellation: w.appellation || null,
+      rule: w.aiProfile?.suspectDowngradedBy || null,
+      confidence: w.aiProfile?.confidence ?? null,
+      producer_note: w.aiProfile?.producerNote || null,
+    }));
+    return ok(
+      `${total} rule-downgraded wine(s); showing ${rows.length} from ${args.offset}. Each is now producerUnknown — ` +
+      'read the note against the producer field and say if any should not have moved.',
+      { total, limit: args.limit, offset: args.offset, wines: rows }
+    );
+  },
+});
