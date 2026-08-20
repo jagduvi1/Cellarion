@@ -681,6 +681,75 @@ async function enrichWine(wine, model, { publishSuspect = false, curatorContext 
     }
   }
 
+  // ── Generation gate (somm 6a82bfb7, the ticket's last open build) ─────────
+  // On a record with NO region and NO appellation, every geographic claim in
+  // the candidate prose is ungrounded by construction — the class that taught
+  // a curator four wrong drink windows. The prompt asks for disclosure-shaped
+  // prose up front; this is the guarantee the prompt cannot give. An
+  // assertion-grade draft gets ONE corrective retry naming exactly what it
+  // asserted; a second violation HOLDS rather than publishes. Disclosure
+  // prose (the Petersons shape) passes by design — forcing silence would
+  // train enrichment toward blank confidence, the somm's own warning.
+  // Grounded records are out of scope entirely: prose legitimately goes finer
+  // than the record, and judging that needs a gazetteer (the 1,612 lesson).
+  const placeless = !wine.region && !wine.appellation;
+  if (!publishSuspect && placeless && !a.holdReason && a.description) {
+    const { gradeDescription } = require('../utils/descriptionGrounding');
+    // The record's grapes ground under every name they carry — a "Moscato"
+    // mention on a Muscat Blanc à Petits Grains record is the record's own
+    // grape, not a claim (same synonym rule as the note-conflict check).
+    const ownNames = (wine.grapes || []).map((g) => g.name).filter(Boolean);
+    const { normPlace } = require('../utils/descriptionGrounding');
+    const ownNorm = new Set(ownNames.map(normPlace));
+    const grapeForms = [
+      ...ownNames,
+      ...grapeVocab.filter((e) => e.forms.some((f) => ownNorm.has(f))).flatMap((e) => e.forms),
+    ];
+    const grounding = {
+      country: wine.country?.name,
+      producer: wine.producer,
+      grapes: grapeForms,
+      varietyVocabulary: grapeVocab.map((e) => e.name),
+    };
+    const firstGrade = gradeDescription(a.description, grounding);
+    if (firstGrade.grade === 'assertion') {
+      const asserted = firstGrade.claims.filter((c) => !c.framed).map((c) => c.claim).join(', ');
+      const second = await suggestProfile({
+        name: wine.name,
+        producer: wine.producer,
+        vintage: 'NV',
+        curatorContext,
+        retryDirective:
+          `Your previous draft stated the following as facts about this wine: ${asserted}. ` +
+          'This record does not carry them, so they are unverified. Rewrite the description without asserting ' +
+          'any of them — style-only prose, or name explicitly what is unknown.',
+        country: wine.country?.name,
+        region: wine.region?.name,
+        appellation: wine.appellation,
+        classification: wine.classification,
+        type: wine.type,
+        grapes: (wine.grapes || []).map(g => g.name).filter(Boolean),
+      });
+      if (second.data) {
+        const b = assess(second.data, a.meta.searchUsed === true);
+        const secondGrade = b.description ? gradeDescription(b.description, grounding) : { grade: 'ok' };
+        a = b;
+        if (!a.holdReason && secondGrade.grade === 'assertion') {
+          a.holdReason = 'ungrounded_description';
+          if (!a.meta.producerNote) {
+            a.meta.producerNote = `Ungrounded description: asserted ${secondGrade.claims.filter((c) => !c.framed).map((c) => c.claim).join(', ').slice(0, 200)}`;
+          }
+        }
+        console.log(`[enrichmentJob] grounding retry ${wine._id}: ${a.holdReason || 'published'}`);
+      } else {
+        // Retry failed to generate — the violating first draft must not
+        // publish as-is. Hold with the first draft's evidence.
+        a.holdReason = 'ungrounded_description';
+        if (!a.meta.producerNote) a.meta.producerNote = `Ungrounded description: asserted ${asserted.slice(0, 200)}`;
+      }
+    }
+  }
+
   // `publishSuspect` is the human override — profile-reviewed uses it after
   // an admin has looked at the doubt and judged the identity fine. A held
   // row stores ONLY the doubt; the null description keeps every read surface

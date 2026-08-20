@@ -604,7 +604,7 @@ async function suggestPrice({ name, producer, vintage, country, region, appellat
  * Used by the enrichment job to populate WineDefinition.aiProfile, which then
  * feeds both the embedding text and the bottle-page display.
  */
-async function suggestProfile({ name, producer, vintage, country, region, appellation, classification, type, grapes, curatorContext, allowSearch }) {
+async function suggestProfile({ name, producer, vintage, country, region, appellation, classification, type, grapes, curatorContext, allowSearch, retryDirective }) {
   if (!name) return { data: null, debugRaw: null, debugReason: 'missing_fields' };
 
   let client;
@@ -679,6 +679,29 @@ async function suggestProfile({ name, producer, vintage, country, region, appell
     .slice(0, 1000);
   if (ctxFacts) {
     prompt += '\n\nCurator-supplied facts about this wine (authoritative — a human sommelier researched them; trust them over your own recall, describe accordingly, and let them raise your confidence): ' + ctxFacts;
+  }
+
+  // Identity-starved records (somm 6a82bfb7, generation gate 2026-08-20): when
+  // the record carries NO region and NO appellation, every geographic claim in
+  // the prose is ungrounded by construction — and the failure mode this class
+  // produced was a curator carrying "from the Hunter Valley" onto a wine whose
+  // fruit nobody verified, into four published drink windows. The directive
+  // asks for the disclosure shape (name what is unknown) or style-only prose.
+  // Advisory, like every prompt line — the write-path grade check in
+  // enrichmentJob is the guarantee; this exists to make the retry rare.
+  if (!field(region) && !field(appellation)) {
+    const grapesEmpty = !grapeList;
+    prompt += '\n\nThis record carries no region and no appellation' + (grapesEmpty ? ', and no grape varieties' : '') +
+      '. Do not state any region, appellation' + (grapesEmpty ? ' or grape variety' : '') + ' as a fact about THIS wine. ' +
+      'Either write style-only prose with no geographic' + (grapesEmpty ? ' or varietal' : '') + ' claims, or name explicitly what is unknown ' +
+      '("the region could not be identified") — naming places in order to say the answer is open is welcome; asserting one is not.';
+  }
+
+  // Corrective retry (generation gate): the first draft asserted ungrounded
+  // facts; say exactly which, and ask again. Appended after template
+  // substitution so it can never hit a {{token}}.
+  if (retryDirective) {
+    prompt += '\n\n' + String(retryDirective).replace(/\p{C}/gu, ' ').slice(0, 600);
   }
 
   // Web-search rescue (pilot 2026-08-19): the retry path for would-hold rows.
