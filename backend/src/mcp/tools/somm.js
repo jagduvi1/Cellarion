@@ -2765,3 +2765,101 @@ registerTool({
     );
   },
 });
+
+// Somm ticket 6a82bfb7 (design settled 2026-08-20): descriptions asserting
+// geography on records whose place fields are deliberately null. The check
+// grades by FRAME, not truth — their correction to my first design, argued
+// from their own Petersons disclosure paragraph, which names eight regions in
+// order to say the region is unknown and must never be flagged as if it had
+// asserted one. This is the published-row AUDIT surface; it deliberately does
+// not share strictness with the enrichment-side notePlaceConflict blocker.
+registerTool({
+  name: 'list_ungrounded_descriptions',
+  title: 'Sommelier: published descriptions claiming places the record does not carry',
+  description:
+    'Registry wines whose PUBLISHED AI description names a place or variety on a record that has NO region and NO ' +
+    'appellation — so every geographic claim in the prose is ungrounded by construction. Graded, never just ' +
+    'counted: `assertion` = an ungrounded place stated as fact for the wine ("a red blend from the Hunter Valley" ' +
+    'on a null-region row) — the class that taught a curator four wrong drink windows; `disclosure` = ungrounded ' +
+    'places framed by uncertainty ("could not be identified", "the region is genuinely open", "likely…") — the ' +
+    'BEST available prose for an unidentified record, listed only for completeness and NOT defects. Fix an ' +
+    'assertion row by either grounding the record (propose_wine_correction with the region the description ' +
+    'correctly knows — several rows are exactly this) or rewriting the prose (set_wine_profile, or a re-enrich ' +
+    'via review). Never fix one by just deleting the geography sentence — silence about region always passes, and ' +
+    'training enrichment toward blank confidence is the failure mode this grading exists to avoid. Curator-written ' +
+    'descriptions are out of scope by construction (the 6a86dad6 exclusion, one layer up). Records that HAVE a ' +
+    'region or appellation are also out of scope: prose legitimately goes finer than the record (a La Morra ' +
+    'mention on a Barolo row), and judging that needs a gazetteer, not a substring.',
+  scope: 'read',
+  requireRole: SOMM_ROLES,
+  annotations: { readOnlyHint: true, openWorldHint: false },
+  inputSchema: {
+    grade: z.enum(['assertion', 'disclosure', 'all']).default('assertion')
+      .describe('assertion (default) = the defect class; disclosure = framed rows, for completeness; all = both'),
+    counts_only: z.boolean().optional().describe('Return just the totals per grade'),
+    limit: z.number().int().min(1).max(50).default(25),
+    offset: z.number().int().min(0).default(0),
+  },
+  handler: async (args, ctx) => {
+    const denied = requireSomm(ctx);
+    if (denied) return denied;
+    const { gradeDescription } = require('../../utils/descriptionGrounding');
+
+    const rows = await WineDefinition.find({
+      'aiProfile.description': { $ne: null },
+      'aiProfile.heldAt': null,
+      'aiProfile.source': { $ne: 'curator' },
+      nonWine: { $ne: true },
+      region: null,
+      appellation: null,
+    })
+      .select('producer name appellation aiProfile.description aiProfile.confidence')
+      .populate('region', 'name')
+      .populate('country', 'name')
+      .populate('grapes', 'name')
+      .lean();
+
+    const graded = [];
+    let okCount = 0;
+    for (const w of rows) {
+      const r = gradeDescription(w.aiProfile.description, {
+        region: w.region?.name,
+        appellation: w.appellation,
+        country: w.country?.name,
+        grapes: (w.grapes || []).map((g) => g.name),
+      });
+      if (r.grade === 'ok') { okCount++; continue; }
+      graded.push({ w, r });
+    }
+    const byGrade = {
+      assertion: graded.filter((g) => g.r.grade === 'assertion'),
+      disclosure: graded.filter((g) => g.r.grade === 'disclosure'),
+    };
+
+    if (args.counts_only) {
+      return ok(
+        `${byGrade.assertion.length} assertion / ${byGrade.disclosure.length} disclosure / ${okCount} ok, over ${rows.length} placeless published AI descriptions.`,
+        { assertion: byGrade.assertion.length, disclosure: byGrade.disclosure.length, ok: okCount, scanned: rows.length }
+      );
+    }
+
+    const pool = args.grade === 'all' ? graded : byGrade[args.grade];
+    const page = pool.slice(args.offset, args.offset + args.limit);
+    const out = page.map(({ w, r }) => ({
+      wine_id: String(w._id),
+      producer: w.producer || null,
+      name: w.name || null,
+      country: w.country?.name || null,
+      grapes: (w.grapes || []).map((g) => g.name),
+      grade: r.grade,
+      ungrounded_claims: r.claims.map((c) => ({ place: c.place, framed: c.framed })),
+      confidence: w.aiProfile?.confidence ?? null,
+      description: String(w.aiProfile.description).slice(0, 400),
+    }));
+    return ok(
+      `${pool.length} ${args.grade === 'all' ? 'graded' : args.grade} row(s); showing ${out.length} from ${args.offset}. ` +
+      'Ground the record where the prose knows the region, rewrite where it invented one.',
+      { total: pool.length, limit: args.limit, offset: args.offset, wines: out }
+    );
+  },
+});
