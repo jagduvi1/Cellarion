@@ -1110,6 +1110,11 @@ registerTool({
   name: 'list_held_profiles',
   title: 'Sommelier: profiles held by the publication gate, awaiting judgement',
   description:
+    'Rows carrying open_owner_inquiry have already been escalated to the person holding the bottle by a previous ' +
+    'curator who judged research insufficient — read that question before deciding, because a release or uphold ' +
+    'over the top of it discards the escalation and the row can then only be settled on the evidence that was ' +
+    'already not enough. It is not a block: new evidence beats a pending question, and resolve_owner_inquiry closes ' +
+    'it honestly. ' +
     'The hold-review queue: registry wines whose generated tasting profile is HELD unpublished (producer_suspect / ' +
     'low_confidence / unknown_low_confidence / producer_claim / taxonomy_conflict / grape_colour_conflict — ' +
     'held_reason says which; null on rows held before the field existed; for taxonomy_conflict the producer_note ' +
@@ -1229,6 +1234,22 @@ registerTool({
 
     const counts = await ownerCounts(wanted.map((w) => w._id));
 
+    // An OPEN owner inquiry means a previous curator judged that research
+    // could not settle this row and asked the person holding the bottle
+    // (somm 6a872b98: a held profile was released over the top of an inquiry
+    // asking whether that very label reads Hunter Valley or Lodi). Surfacing
+    // it here is the cheap half of the fix — the expensive half would be
+    // blocking the verbs, and blocking is wrong: the curator may have new
+    // evidence the inquiry was waiting for.
+    const WineOwnerInquiry = require('../../models/WineOwnerInquiry');
+    const openInquiries = new Map(
+      (await WineOwnerInquiry.find({
+        wineDefinition: { $in: wanted.map((w) => w._id) },
+        status: 'open',
+      }).select('wineDefinition question createdAt expiresAt').lean())
+        .map((i) => [String(i.wineDefinition), i])
+    );
+
     const shaped = wanted
       .map((w) => ({
         wine_id: w._id,
@@ -1257,6 +1278,16 @@ registerTool({
         // Pilot 2026-08-19: a web-search retry already failed on this row —
         // releasing it without curator facts would just re-hold.
         ...(w.aiProfile?.searchUsed === true ? { search_assisted: true } : {}),
+        // A previous curator already escalated this row to its owner; deciding
+        // over the top of that discards the escalation (somm 6a872b98).
+        ...(openInquiries.has(String(w._id)) ? {
+          open_owner_inquiry: {
+            inquiry_id: String(openInquiries.get(String(w._id))._id),
+            question: openInquiries.get(String(w._id)).question || null,
+            asked_at: openInquiries.get(String(w._id)).createdAt || null,
+            expires_at: openInquiries.get(String(w._id)).expiresAt || null,
+          },
+        } : {}),
       }))
       .filter((r) => !args.min_owners || r.owner_count >= args.min_owners)
       .sort((a, b) => (b.owner_count - a.owner_count) || ((a.ai_confidence ?? 1) - (b.ai_confidence ?? 1)));

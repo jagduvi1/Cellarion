@@ -23,6 +23,12 @@ jest.mock('../models/JournalEntry', () => ({ find: jest.fn(), countDocuments: je
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn(), aggregate: jest.fn(), populate: jest.fn(), updateOne: jest.fn() }));
 jest.mock('../services/enrichmentJob', () => ({ releaseHeldProfile: jest.fn() }));
 jest.mock('../models/Grape', () => ({ findOne: jest.fn() }));
+// list_held_profiles flags rows with an open owner inquiry (somm 6a872b98).
+// Default: none open — individual tests override to assert the flag.
+jest.mock('../models/WineOwnerInquiry', () => ({
+  find: jest.fn(() => ({ select: () => ({ lean: () => Promise.resolve([]) }) })),
+  findOne: jest.fn(),
+}));
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineEmbedding', () => ({ findOne: jest.fn() }));
 jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
@@ -650,6 +656,32 @@ describe('held-profile review queue over MCP (somm ticket 2026-08-18)', () => {
     // held_reason "legacy" keeps only the reason-less held row (suspects untouched).
     body = parse(await tool('list_held_profiles').handler({ held_reason: 'legacy', include_published_suspects: true, limit: 30, offset: 0 }, SOMM_CTX));
     expect(body.data.filter((r) => r.state === 'held').map((r) => r.wine_id)).toEqual([oid('2')]);
+  });
+
+  // Somm 6a872b98: a held profile was released over the top of an open
+  // inquiry asking the owner whether that very label reads Hunter Valley or
+  // Lodi. The flag makes the escalation visible where the decision is made.
+  test('a row with an open owner inquiry carries open_owner_inquiry; others do not', async () => {
+    const WineOwnerInquiry = require('../models/WineOwnerInquiry');
+    WineDefinition.find.mockImplementation(() => heldListChain([
+      { _id: oid('1'), name: 'A', producer: 'P1', aiProfile: { heldAt: new Date(), heldReason: 'producer_suspect', confidence: 0.3, generatedAt: new Date() } },
+      { _id: oid('2'), name: 'B', producer: 'P2', aiProfile: { heldAt: new Date(), heldReason: 'low_confidence', confidence: 0.3, generatedAt: new Date() } },
+    ]));
+    Bottle.aggregate.mockResolvedValue([]);
+    WineOwnerInquiry.find.mockImplementation(() => ({
+      select: () => ({
+        lean: () => Promise.resolve([
+          { _id: oid('9'), wineDefinition: oid('1'), question: 'What does the label say the region is?', createdAt: new Date('2026-08-18'), expiresAt: new Date('2026-10-17') },
+        ]),
+      }),
+    }));
+
+    const body = parse(await tool('list_held_profiles').handler({ limit: 30, offset: 0 }, SOMM_CTX));
+    const flagged = body.data.find((r) => String(r.wine_id) === oid('1'));
+    const clean = body.data.find((r) => String(r.wine_id) === oid('2'));
+    expect(flagged.open_owner_inquiry).toMatchObject({ inquiry_id: oid('9'), question: expect.stringMatching(/label/) });
+    // Absent, not null — the field only appears when there is something to see.
+    expect(clean).not.toHaveProperty('open_owner_inquiry');
   });
 
   test('producer filter reaches the query; group_by returns clusters; counts_only returns uncapped totals (gap report 2/5a)', async () => {
