@@ -24,7 +24,7 @@ describe('gradeDescription', () => {
       // Ungrounded places, every one framed — including the producer-biography
       // sentence AHEAD of the disclosure markers, which is why a strong marker
       // frames the whole document.
-      const places = r.claims.map((c) => c.place);
+      const places = r.claims.map((c) => c.claim);
       expect(places).toEqual(expect.arrayContaining(['Mount View', 'Hunter Valley']));
       expect(r.claims.every((c) => c.framed)).toBe(true);
     });
@@ -32,7 +32,7 @@ describe('gradeDescription', () => {
     it('the 17 Aug AI line grades assertion — the class the check exists for', () => {
       const r = gradeDescription(PETERSONS_ASSERTION, PETERSONS_RECORD);
       expect(r.grade).toBe('assertion');
-      expect(r.claims.some((c) => /hunter valley/i.test(c.place) && !c.framed)).toBe(true);
+      expect(r.claims.some((c) => /hunter valley/i.test(c.claim) && !c.framed)).toBe(true);
     });
   });
 
@@ -80,7 +80,7 @@ describe('gradeDescription', () => {
         { country: 'United States', grapes: [] }
       );
       expect(r.grade).toBe('disclosure');
-      expect(r.claims).toEqual([{ place: 'Tempranillo', framed: true }]);
+      expect(r.claims).toEqual([{ claim: 'Tempranillo', framed: true }]);
     });
 
     it('a weak hedge frames only its own sentence, not the paragraph', () => {
@@ -101,6 +101,62 @@ describe('gradeDescription', () => {
     it('empty and non-string descriptions grade ok', () => {
       expect(gradeDescription('', {}).grade).toBe('ok');
       expect(gradeDescription(null, {}).grade).toBe('ok');
+    });
+  });
+
+  // Every case below is from the somm's full read of the v1.147 worklist
+  // (all 25 rows, not a sample). Items are numbered as in their ticket.
+  describe('the v1.147 extractor audit', () => {
+    // Item 1, their top priority: span-substring grounding let the record's
+    // country swallow the finer place — the row was flagged only on a grape,
+    // and a curator who fixed that claim would believe the row finished.
+    // Under-reporting on a flagged row is false assurance.
+    it('the record\'s country must not ground the finer place beside it (Peñalolen)', () => {
+      const r = gradeDescription(
+        "This is a Cabernet Sauvignon-led red from Chile's Maipo Valley, typically blended with small amounts of Cabernet Franc, Petit Verdot and Merlot.",
+        { country: 'Chile', grapes: ['Cabernet Sauvignon'] }
+      );
+      const claims = r.claims.map((c) => c.claim);
+      expect(claims).toEqual(expect.arrayContaining(['Maipo Valley', 'Cabernet Franc']));
+      expect(r.grade).toBe('assertion');
+    });
+
+    // Item 2: three of four disclosure rows were the producer's own name —
+    // the entire disclosure bucket was extraction noise wearing a calibrated
+    // look. The producer's tokens are subtracted like the record's own.
+    it('the producer\'s own name is never a place claim', () => {
+      expect(gradeDescription(
+        "Grown at altitude in Bodega Fernando Dupont's Jujuy vineyards, this Syrah shows dark fruit.",
+        { country: 'Argentina', producer: 'Bodega Fernando Dupont', grapes: ['Syrah'] }
+      ).claims.map((c) => c.claim)).toEqual(['Jujuy']);
+
+      expect(gradeDescription(
+        'Château Bois d\'Arlène is likely a small estate; this is an approachable southern French red.',
+        { country: 'France', producer: 'Château Bois d\'Arlène' }
+      ).claims.map((c) => c.claim)).toEqual([]);
+    });
+
+    // Item 5: a place after a creation verb is where the VARIETY was bred,
+    // not where this wine is from.
+    it('a breeding location is not an origin claim (Minnesota)', () => {
+      expect(gradeDescription(
+        'Made from Marquette — a cold-hardy hybrid grape bred in Minnesota — this is a juicy red.',
+        { country: 'France', grapes: ['Marquette'] }
+      ).grade).toBe('ok');
+    });
+
+    // Item 6: "Castilla y León" split at the conjunction and reported a
+    // truncated claim; possessives kept their apostrophe-s.
+    it('conjunction connectors and possessives keep spans whole and clean', () => {
+      expect(gradeDescription(
+        'A fresh, pale rosado from Castilla y León, made mainly from Tempranillo.',
+        { country: 'Spain', grapes: ['Tempranillo'] }
+      ).claims.map((c) => c.claim)).toEqual(['Castilla y León']);
+
+      expect(gradeDescription(
+        "Old vines at altitude near Vistalba in Mendoza's oldest district.",
+        { country: 'Argentina' }
+      ).claims.map((c) => c.claim)).toEqual(expect.arrayContaining(['Vistalba', 'Mendoza']));
     });
   });
 });

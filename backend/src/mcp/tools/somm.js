@@ -2778,7 +2778,11 @@ registerTool({
   title: 'Sommelier: published descriptions claiming places the record does not carry',
   description:
     'Registry wines whose PUBLISHED AI description names a place or variety on a record that has NO region and NO ' +
-    'appellation — so every geographic claim in the prose is ungrounded by construction. Graded, never just ' +
+    'appellation — so every such claim in the prose is ungrounded by construction. Each ungrounded claim is ' +
+    'labelled kind: place | variety (varieties were in the original 6a82bfb7 test; the label keeps the two ' +
+    'readable at a glance). The producer\'s own name and the record\'s country are subtracted from claim spans ' +
+    'rather than grounding them wholesale — "Chile\'s Maipo Valley" on a Chile record reports Maipo Valley, and a ' +
+    'mention of the producer is never a claim. Graded, never just ' +
     'counted: `assertion` = an ungrounded place stated as fact for the wine ("a red blend from the Hunter Valley" ' +
     'on a null-region row) — the class that taught a curator four wrong drink windows; `disclosure` = ungrounded ' +
     'places framed by uncertainty ("could not be identified", "the region is genuinely open", "likely…") — the ' +
@@ -2819,6 +2823,15 @@ registerTool({
       .populate('grapes', 'name')
       .lean();
 
+    // The full curated grape list, for labelling each claim place vs variety
+    // (somm v1.147 audit, item 4: a field called "place" holding "Cabernet
+    // Franc" reads as a broken grader to a first reader; the extraction was
+    // correct — varieties were in the original 6a82bfb7 test — the label
+    // wasn't).
+    const Grape = require('../../models/Grape');
+    const { normPlace } = require('../../utils/descriptionGrounding');
+    const grapeNames = new Set((await Grape.find({}).select('name').lean()).map((g) => normPlace(g.name)));
+
     const graded = [];
     let okCount = 0;
     for (const w of rows) {
@@ -2826,6 +2839,7 @@ registerTool({
         region: w.region?.name,
         appellation: w.appellation,
         country: w.country?.name,
+        producer: w.producer,
         grapes: (w.grapes || []).map((g) => g.name),
       });
       if (r.grade === 'ok') { okCount++; continue; }
@@ -2852,7 +2866,11 @@ registerTool({
       country: w.country?.name || null,
       grapes: (w.grapes || []).map((g) => g.name),
       grade: r.grade,
-      ungrounded_claims: r.claims.map((c) => ({ place: c.place, framed: c.framed })),
+      ungrounded_claims: r.claims.map((c) => ({
+        claim: c.claim,
+        kind: grapeNames.has(normPlace(c.claim)) ? 'variety' : 'place',
+        framed: c.framed,
+      })),
       confidence: w.aiProfile?.confidence ?? null,
       description: String(w.aiProfile.description).slice(0, 400),
     }));

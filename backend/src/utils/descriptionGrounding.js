@@ -58,8 +58,10 @@ const normPlace = (s) => String(s || '')
 // Île de Ré) — a bare "in"/"the" ends the chain, otherwise "Mount View in the
 // Hunter Valley" captures as one mangled claim and swallows the real one.
 // Longest-first, with a trailing boundary — "de" listed ahead of "del" bites
-// the first two letters of "Ribera del Duero" and truncates the claim.
-const PLACE_CONNECTOR = "(?:della|delle|del|des|de|di|du|da|dos|das|la|les|le|los|von|van|der|den|sur|en)(?=\\s)";
+// the first two letters of "Ribera del Duero" and truncates the claim. "y"
+// added from the somm's v1.147 audit: without it "Castilla y León" broke at
+// the conjunction and reported a truncated claim.
+const PLACE_CONNECTOR = "(?:della|delle|del|des|de|di|du|da|dos|das|la|les|le|los|von|van|der|den|sur|en|y)(?=\\s)";
 const PREP_CLAIM = new RegExp(
   "\\b(?:from|in|at|of|across|near)\\s+(?:the\\s+)?" +
   "([A-ZÀ-Þ][\\wÀ-ɏ'’-]*(?:\\s+(?:" + PLACE_CONNECTOR + "|[A-ZÀ-Þ][\\wÀ-ɏ'’-]*)){0,3})",
@@ -84,7 +86,11 @@ const MATERIAL_NOISE = /\b(oak|barriques?|barrels?|casks?|cooperage|hogsheads?|m
 // CATEGORY, not a place ("the traditional Reserva style"). A claim that is
 // nothing but tier words is dropped; a real place carrying one ("Rioja
 // Reserva") survives because grounding runs on the whole phrase.
-const TIER_WORD = /^(reservas?|riservas?|crianzas?|gran|brut|extra|demi-sec|sec|secco?|dolce|trocken|halbtrocken|feinherb|classico|superiore|premium|prestige|tradition|traditional|vintage|blanc|rouge|rosé|rosado|tinto)$/i;
+const TIER_WORD = /^(reservas?|riservas?|crianzas?|gran|brut|extra|demi-sec|sec|secco?|dolce|trocken|halbtrocken|feinherb|classico|superiore|premium|prestige|tradition|traditional|vintage|blanc|rouge|rosé|rosado|tinto|crémants?|cremants?|reserve)$/i;
+
+// Climate adjectives are weather, not origin — "Atlantic-influenced whites"
+// asserts nothing about where the wine is from (found in the v1.148 re-count).
+const CLIMATE_WORD = /^(atlantic|mediterranean|continental)/i;
 
 // Frames strong enough to cover the whole description — the vocabulary of a
 // paragraph whose JOB is saying what is unknown.
@@ -112,6 +118,12 @@ const DEMONYMS = {
   'south african': 'south africa', 'new zealand': 'new zealand',
 };
 
+// A place after one of these verbs is where something was CREATED, not where
+// this wine is from — "a cold-hardy hybrid grape bred in Minnesota" on a
+// French wine (somm v1.147 audit, item 5; one row, but the shape is a verb
+// governing the phrase, so the rule is cheap and principled).
+const CREATION_VERB = /\b(?:bred|crossed|hybridi[sz]ed|developed)\s*$/i;
+
 function extractClaims(sentence) {
   const out = [];
   for (const rx of [PREP_CLAIM, KEYWORD_CLAIM]) {
@@ -120,6 +132,7 @@ function extractClaims(sentence) {
     while ((m = rx.exec(sentence)) !== null) {
       const raw = m[1].trim();
       if (MATERIAL_NOISE.test(raw)) continue;
+      if (CREATION_VERB.test(sentence.slice(0, m.index))) continue;
       // The connector-aware chain stops BEFORE a lowercase material word, so
       // "in French oak" captures bare "French" — look one word past the match:
       // a material/technique noun means this names a thing, not an origin.
@@ -138,40 +151,82 @@ function extractClaims(sentence) {
   return [...new Set(out)];
 }
 
+// Strip a possessive before normalising a token — "Chile's" and "Mendoza's"
+// are the places, not new words (somm v1.147 audit, item 6).
+const tokenNorm = (t) => normPlace(String(t).replace(/['’]s$/i, ''));
+
 /**
  * @param {string} description  aiProfile.description as stored
- * @param {object} record       { region, appellation, country } — names, and
- *                              optionally grapes: [names] for variety grounding
+ * @param {object} record       { region, appellation, country, producer } —
+ *                              names, and optionally grapes: [names]
  * @returns {{ grade: 'ok'|'disclosure'|'assertion',
- *             claims: Array<{place: string, framed: boolean}> }}
+ *             claims: Array<{claim: string, framed: boolean}> }}
  *          claims lists only the UNGROUNDED ones — grounded mentions are the
  *          description doing its job and are not reported.
+ *
+ * Grounding is TOKEN SUBTRACTION, not span substring (somm v1.147 audit,
+ * item 1 — the decisive one). Span-substring let the record's country ground
+ * "Chile's Maipo Valley" wholesale, silently swallowing the finer place, and
+ * a check that under-reports on rows it already flags gives a curator false
+ * assurance — worse than over-reporting. Instead: remove every token the
+ * record accounts for (its places, its grapes, its country's adjective, the
+ * producer's own name) and whatever CAPITALISED tokens survive are the claim.
+ * "Chile's Maipo Valley" − Chile → "Maipo Valley". "Bodega Fernando Dupont's
+ * Jujuy" − producer → "Jujuy". Nothing capitalised left → nothing claimed.
  */
-function gradeDescription(description, { region, appellation, country, grapes } = {}) {
+function gradeDescription(description, { region, appellation, country, grapes, producer } = {}) {
   if (typeof description !== 'string' || !description.trim()) return { grade: 'ok', claims: [] };
 
-  const ground = [region, appellation, country, ...(Array.isArray(grapes) ? grapes : [])]
-    .map(normPlace)
-    .filter(Boolean);
+  // Everything the record itself accounts for, kept as WHOLE token sequences.
+  // The producer's tokens are in the same pool: a description mentioning the
+  // producer is not claiming a place, however place-like the name reads (somm
+  // item 2 — three of four disclosure rows were the producer's own name, so
+  // the whole disclosure bucket was extraction noise wearing a calibrated
+  // look). Sequences, not a token set, because grapes share tokens: with the
+  // record carrying Cabernet SAUVIGNON, a loose-token pool subtracts the
+  // "Cabernet" out of an ungrounded Cabernet FRANC claim and reports "Franc".
+  const grounds = [];
+  for (const src of [region, appellation, country, producer, ...(Array.isArray(grapes) ? grapes : [])]) {
+    const seq = String(src || '').split(/\s+/).map(tokenNorm).filter(Boolean);
+    if (seq.length) grounds.push(seq);
+  }
+  const nCountry = normPlace(country);
+  for (const [adj, c] of Object.entries(DEMONYMS)) {
+    if (c === nCountry) grounds.push(adj.split(' '));
+  }
 
   const docFramed = STRONG_FRAME.test(description);
   const sentences = description.split(/(?<=[.!?])\s+/);
+  const seen = new Set();
   const claims = [];
 
   for (const sentence of sentences) {
     const sentenceFramed = docFramed || STRONG_FRAME.test(sentence) || WEAK_FRAME.test(sentence);
-    for (const place of extractClaims(sentence)) {
-      const n = normPlace(place);
-      // Expand country adjectives before comparing, so "Canadian" can ground
-      // against a Canada record the way "Spanish"/"Spain" grounds by luck.
-      const expanded = Object.entries(DEMONYMS).reduce(
-        (acc, [adj, country]) => (acc.includes(adj) ? acc.replace(adj, country) : acc), n
-      );
-      const grounded = ground.some((g) =>
-        g.includes(n) || n.includes(g) || g.includes(expanded) || expanded.includes(g)
-      );
-      if (grounded) continue;
-      claims.push({ place, framed: sentenceFramed });
+    for (const span of extractClaims(sentence)) {
+      const tokens = span.split(/\s+/).map((t) => t.replace(/['’]s$/i, ''));
+      const norms = tokens.map(tokenNorm);
+      // Remove every CONTIGUOUS occurrence of a ground sequence.
+      const removed = new Array(tokens.length).fill(false);
+      for (const seq of grounds) {
+        for (let i = 0; i + seq.length <= norms.length; i++) {
+          if (seq.every((g, j) => norms[i + j] === g)) {
+            for (let j = 0; j < seq.length; j++) removed[i + j] = true;
+          }
+        }
+      }
+      // Survivors also shed tier and climate words: once the record's own
+      // tokens are subtracted, "French Crémant" leaves bare "Crémant" — a
+      // style noun that only LOOKED like a place while attached to one.
+      const left = tokens.filter((t, i) => !removed[i] && norms[i] && !TIER_WORD.test(t) && !CLIMATE_WORD.test(t));
+      // Only capitalised survivors assert anything — "Barossa Valley shiraz"
+      // on a Barossa Valley record leaves lowercase "shiraz", which is prose,
+      // not a claim.
+      if (!left.some((t) => /^[A-ZÀ-Þ]/.test(t))) continue;
+      const claim = left.join(' ');
+      const key = normPlace(claim);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      claims.push({ claim, framed: sentenceFramed });
     }
   }
 
