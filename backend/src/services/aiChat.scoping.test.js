@@ -48,6 +48,11 @@ jest.mock('./vectorStore', () => ({ searchSimilar: jest.fn(async () => []) }));
 jest.mock('../models/Bottle', () => ({
   distinct: jest.fn(), countDocuments: jest.fn(), find: jest.fn(), aggregate: jest.fn(async () => []),
 }));
+// Cellar.find({...}).distinct('_id') — the live-cellar resolution added for
+// ticket 6a86268f.
+jest.mock('../models/Cellar', () => ({
+  find: jest.fn(() => ({ distinct: jest.fn(async () => []) })),
+}));
 jest.mock('../models/WineVintagePrice', () => ({ aggregate: jest.fn(async () => []) }));
 jest.mock('../utils/maturityUtils', () => ({
   buildProfileMap: jest.fn(async () => new Map()),
@@ -57,12 +62,17 @@ jest.mock('../utils/maturityUtils', () => ({
 
 const mongoose = require('mongoose');
 const Bottle = require('../models/Bottle');
+const Cellar = require('../models/Cellar');
 const vectorStore = require('./vectorStore');
 const aiProvider = require('./aiProvider');
 const { chat } = require('./aiChat');
 
 const USER = 'a'.repeat(24);
 const WD = new mongoose.Types.ObjectId();
+const LIVE_CELLAR = new mongoose.Types.ObjectId();
+
+/** What Cellar.find({deletedAt:null,...}).distinct('_id') should return. */
+const withLiveCellars = (ids) => Cellar.find.mockReturnValue({ distinct: jest.fn(async () => ids) });
 
 /** Wire the mocked Claude client; returns a getter for the sent user content. */
 function wireClient() {
@@ -74,7 +84,10 @@ function wireClient() {
   };
 }
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  withLiveCellars([LIVE_CELLAR]);   // one live cellar unless a test says otherwise
+});
 
 describe('chat context honest scoping', () => {
   test('matches: context states the cellar total and that the list is a selection', async () => {
@@ -117,5 +130,72 @@ describe('chat context honest scoping', () => {
     await chat(USER, 'what do I own?', { useQueryExpansion: false });
     expect(sent()).toMatch(/no active bottles in their cellar/);
     expect(vectorStore.searchSimilar).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Deleting a cellar is a SOFT delete: the bottles keep deletedAt: null so a
+ * restore can bring them back. Scoping by `user` alone therefore counts wine
+ * the user believes they threw away — support ticket 6a86268f (2026-08-20),
+ * where a 71-bottle cellar was reported as 779 because four deleted cellars
+ * still held 708. The same user had raised it on 2026-08-12; the fix then made
+ * the total prominent, which only published the wrong number more loudly.
+ */
+describe('deleted cellars are not the cellar', () => {
+  test('every bottle query is scoped to LIVE cellars', async () => {
+    wireClient();
+    Bottle.distinct.mockResolvedValue([String(WD)]);
+    Bottle.countDocuments.mockResolvedValue(71);
+    vectorStore.searchSimilar.mockResolvedValue([
+      { score: 0.9, payload: { wineDefinitionId: String(WD), vintage: '2015' } },
+    ]);
+    Bottle.find.mockReturnValue(chain([{
+      _id: new mongoose.Types.ObjectId(), vintage: '2015',
+      wineDefinition: { _id: WD, name: 'Barolo', producer: 'P', type: 'red', grapes: [], region: null, country: null },
+    }]));
+
+    await chat(USER, 'something red?', { useQueryExpansion: false });
+
+    // Only live cellars are ever asked for.
+    expect(Cellar.find).toHaveBeenCalledWith(expect.objectContaining({ deletedAt: null }));
+    // The wine pre-filter, the total, and the wine list all carry the same
+    // cellar constraint — if they ever diverge the model is told two different
+    // cellars in one prompt.
+    expect(Bottle.distinct.mock.calls[0][1]).toMatchObject({ cellar: { $in: [LIVE_CELLAR] } });
+    expect(Bottle.countDocuments.mock.calls[0][0]).toMatchObject({ cellar: { $in: [LIVE_CELLAR] } });
+    expect(Bottle.find.mock.calls[0][0]).toMatchObject({ cellar: { $in: [LIVE_CELLAR] } });
+  });
+
+  test('per-wine bottle counts are scoped too, so "you have N" cannot overstate', async () => {
+    wireClient();
+    Bottle.distinct.mockResolvedValue([String(WD)]);
+    Bottle.countDocuments.mockResolvedValue(71);
+    vectorStore.searchSimilar.mockResolvedValue([
+      { score: 0.9, payload: { wineDefinitionId: String(WD), vintage: '2015' } },
+    ]);
+    Bottle.find.mockReturnValue(chain([{
+      _id: new mongoose.Types.ObjectId(), vintage: '2015',
+      wineDefinition: { _id: WD, name: 'Barolo', producer: 'P', type: 'red', grapes: [], region: null, country: null },
+    }]));
+
+    await chat(USER, 'how many Barolo?', { useQueryExpansion: false });
+
+    const countStage = Bottle.aggregate.mock.calls[0][0][0].$match;
+    expect(countStage).toMatchObject({ cellar: { $in: [LIVE_CELLAR] } });
+  });
+
+  test('a user whose only cellars are deleted matches NOTHING, not everything', async () => {
+    // The empty-array trap: `if (cellarIds?.length)` would skip the filter and
+    // silently widen the scope back to every bottle the user has ever owned.
+    // One prod user is in exactly this state — 0 live bottles, 132 stranded.
+    withLiveCellars([]);
+    const sent = wireClient();
+    Bottle.distinct.mockResolvedValue([]);
+    Bottle.countDocuments.mockResolvedValue(0);
+
+    await chat(USER, 'what do I own?', { useQueryExpansion: false });
+
+    expect(Bottle.distinct.mock.calls[0][1]).toMatchObject({ cellar: { $in: [] } });
+    expect(sent()).toMatch(/no active bottles in their cellar/);
   });
 });

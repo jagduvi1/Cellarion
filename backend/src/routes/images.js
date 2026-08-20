@@ -15,6 +15,7 @@ const { sanitizeImageBuffer } = require('../services/imageSanitizer');
 const { ingestBottleImage } = require('../services/imageOps');
 const { mayCurationReadScan } = require('../services/labelScanAccess');
 const { isValidId } = require('../utils/validation');
+const { stripHtml } = require('../utils/sanitize');
 const rateLimitsConfig = require('../config/rateLimits');
 const { logAudit } = require('../services/audit');
 
@@ -502,6 +503,115 @@ router.post('/:id/retry', requireAuth, requireNonDemo, async (req, res) => {
   } catch (error) {
     console.error('Retry error:', error);
     res.status(500).json({ error: 'Failed to retry processing' });
+  }
+});
+
+// ── Removing a photo ────────────────────────────────────────────────────────
+//
+// Support ticket 6a865f60 (2026-08-20): "How do I remove a picture — the webcam
+// picked up too much to my taste." They could not. Until now a photo was only
+// ever deleted as a SIDE EFFECT of deleting the bottle, the cellar or the whole
+// account, so the smallest available remedy for one unwanted webcam frame was
+// destroying something much larger. An admin had no surface either: label scans
+// are deliberately excluded from the review queue (audit L-6), so the only way
+// to honour that request was a script against the database.
+//
+// The line between the two verbs is whether the photo is still ONLY the
+// uploader's. A photo assigned to a wine has become registry content that other
+// people's pages render, so withdrawing it is a decision with more than one
+// stakeholder — that is a report, and an admin resolves it with the existing
+// reject flow. Everything else is just someone's own picture, and they may
+// delete it without asking.
+
+const REPORT_REASONS = ['private-info', 'not-this-wine', 'poor-quality', 'offensive', 'other'];
+const REPORTS_MAX = 20;
+
+// DELETE /api/images/:id — the uploader removes their own, still-personal photo
+router.delete('/:id', requireAuth, async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+    const image = await BottleImage.findById(req.params.id);
+    if (!image) return res.status(404).json({ error: 'Image not found' });
+
+    // 404 rather than 403 for someone else's photo: a stranger's image id is
+    // not something this endpoint should confirm the existence of.
+    if (String(image.uploadedBy) !== String(req.user.id)) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+    if (image.assignedToWine) {
+      return res.status(409).json({
+        error: 'This photo is being used as the wine\'s picture in the shared registry, so removing it would change the wine page for everyone. Report it instead and an admin will take it down.',
+        code: 'assigned_to_wine',
+      });
+    }
+
+    // Clear every reference before the files go, so nothing renders a hole.
+    await Bottle.updateMany({ defaultImage: image._id }, { $set: { defaultImage: null } });
+    if (image.wineDefinition) {
+      const WineDefinition = require('../models/WineDefinition');
+      await WineDefinition.updateOne(
+        { _id: image.wineDefinition, scanImage: image._id }, { $set: { scanImage: null } }
+      );
+      await WineDefinition.updateOne(
+        { _id: image.wineDefinition, scanImageBack: image._id }, { $set: { scanImageBack: null } }
+      );
+    }
+
+    const { unlinkImageFiles } = require('../services/imageProcessor');
+    try { await unlinkImageFiles(image); } catch (err) {
+      // The row is what makes the photo reachable; a stranded file is a
+      // janitorial problem, not a reason to tell the user it is still there.
+      console.warn('[images] unlink failed during user delete (continuing):', err.message);
+    }
+    await BottleImage.deleteOne({ _id: image._id });
+
+    logAudit(req, 'image.delete', { type: 'image', id: image._id },
+      { kind: image.kind, visibility: image.visibility, status: image.status, byOwner: true });
+
+    res.json({ message: 'Photo deleted' });
+  } catch (error) {
+    console.error('Delete image error:', error);
+    res.status(500).json({ error: 'Failed to delete photo' });
+  }
+});
+
+// POST /api/images/:id/report — raise it for an admin instead of deleting
+router.post('/:id/report', requireAuth, requireNonDemo, async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+    const { reason, detail } = req.body || {};
+    if (!REPORT_REASONS.includes(reason)) {
+      return res.status(400).json({ error: `reason must be one of: ${REPORT_REASONS.join(', ')}` });
+    }
+    const cleanDetail = typeof detail === 'string' ? stripHtml(detail).trim().slice(0, 500) : '';
+
+    const image = await BottleImage.findById(req.params.id);
+    if (!image) return res.status(404).json({ error: 'Image not found' });
+
+    // Only report what you can actually see: your own, or a published one.
+    const mine = String(image.uploadedBy) === String(req.user.id);
+    const published = image.status === 'approved' && image.visibility === 'public';
+    if (!mine && !published) return res.status(404).json({ error: 'Image not found' });
+
+    if ((image.reports || []).some((r) => String(r.user) === String(req.user.id))) {
+      return res.status(409).json({ error: 'You have already reported this photo — an admin will look at it.' });
+    }
+    if ((image.reports || []).length >= REPORTS_MAX) {
+      // Already loudly reported; record nothing further but answer honestly.
+      return res.json({ message: 'Thanks — this photo is already flagged for review.' });
+    }
+
+    image.reports.push({ user: req.user.id, reason, detail: cleanDetail || null });
+    if (!image.reportedAt) image.reportedAt = new Date();
+    await image.save();
+
+    logAudit(req, 'image.report', { type: 'image', id: image._id },
+      { reason, ownPhoto: mine, reportCount: image.reports.length });
+
+    res.json({ message: 'Thanks — an admin will review this photo.' });
+  } catch (error) {
+    console.error('Report image error:', error);
+    res.status(500).json({ error: 'Failed to report photo' });
   }
 });
 

@@ -1516,7 +1516,7 @@ registerTool({
       classification: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional(),
       type: z.enum(WINE_TYPES).optional(),
       grapes: z.array(z.string().min(1).max(GRAPE_NAME_MAX)).min(1).max(GRAPES_MAX).optional(),
-    }).optional().describe('kind "field_correction" only: the corrected value per field (omit fields that are right). Region/country as plain names. `type` is the wine colour/style; `grapes` REPLACES the whole variety list (send every variety the wine has, not just the added one) and each name must already exist in the taxonomy — synonyms resolve, unknown names are refused so an approval can never mint a variety.'),
+    }).optional().describe('kind "field_correction" only: the corrected value per field (omit fields that are right). Region/country as plain names. `type` is the wine colour/style; `grapes` REPLACES the whole variety list (send every variety the wine has, not just the added one) and each name must already exist in the taxonomy — synonyms resolve, unknown names are refused so an approval can never mint a variety. A BRAND THAT CHANGED HANDS (somm ticket 6a8698d5): registry wines are vintage-neutral, so a producer that was acquired has no single true value. The convention is CURRENT OWNER WINS — put today\'s owner in `producer` and record the predecessor in the reason, e.g. "ZAREA acquired the brand from Domeniile Tohani in 2019". Do not uphold a suspect flag on a wine whose producer is knowable just because ownership moved: that leaves a permanent cannot-identify caveat on an identifiable wine and inflates the residue count the scaling review reads.'),
     merge_target_id: objectId.optional().describe('kind "merge" only: the duplicate\'s SURVIVING wine — must differ from wine_id'),
     evidence_url: z.string().max(PROPOSAL_URL_MAX).optional()
       .describe('http(s) URL backing the claim — cite one whenever the somm has it; it is what makes approval fast'),
@@ -2570,5 +2570,94 @@ registerTool({
       'list is wrong on each — the check does not presume which.',
       { total: all.length, limit: args.limit, offset: args.offset, wines: rows }
     );
+  },
+});
+
+// Somm ticket 6a869911 (2026-08-20): list_colour_conflicts shipped read-only,
+// so a row only a LABEL can settle was re-researched every session — Palazzo
+// Maffei's "Conte di Valle" is a range spanning a Sauvignon, a Lugana, a
+// Ripasso and an Amarone, so red + Sauvignon Blanc could be a mis-typed white
+// or a clobbered grape list, and no amount of desk research decides which.
+//
+// This needs no new state. crossChecksCleared already exists, the admin queue
+// already writes it, and list_colour_conflicts already honours it because it
+// runs through scanCrossFieldChecks — so one dismissal drops the row out of
+// BOTH surfaces, and it is restorable. Reusing that beats inventing a parallel
+// "awaiting label" status that would then need its own queue, its own counts
+// and its own way of being wrong.
+const COLOUR_RULE = 'grape-colour-contradiction.v1';
+
+registerTool({
+  name: 'dismiss_colour_conflict',
+  title: 'Sommelier: set a colour conflict aside as un-settleable from stored data',
+  description:
+    'Drops a row out of list_colour_conflicts (and the admin cross-field queue) after you have looked at it and ' +
+    'concluded the record cannot be settled without evidence we do not have — typically a producer whose range ' +
+    'uses one name across several colours, where only the label decides. This records a REVIEW, not a fix: the ' +
+    'record keeps its contradiction and the reason is kept as the durable note of why it was set aside. Use ' +
+    'restore_colour_conflict to bring it back when a label or an owner answer arrives, and consider ask_bottle_owner ' +
+    'first — the owner is holding the evidence. Do NOT dismiss a row you simply have not researched yet.',
+  scope: 'write',
+  requireRole: SOMM_ROLES,
+  annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  inputSchema: {
+    wine_id: objectId.describe('From list_colour_conflicts'),
+    reason: z.string().min(10).max(500).describe('Why it cannot be settled from stored data — kept as the review record'),
+  },
+  handler: async (args, ctx) => {
+    const denied = requireSomm(ctx);
+    if (denied) return denied;
+    if (!isValidId(args.wine_id)) return fail('invalid_input', 'wine_id must be a 24-hex id.');
+
+    const wine = await WineDefinition.findById(args.wine_id).select('name producer crossChecksCleared');
+    if (!wine) return fail('not_found', 'No such wine.');
+    if ((wine.crossChecksCleared || []).includes(COLOUR_RULE)) {
+      return fail('conflict', 'That row is already set aside — restore_colour_conflict brings it back.');
+    }
+
+    // Re-detect rather than trust the caller: the row may have been FIXED since
+    // the list was read, and setting aside a wine that no longer conflicts
+    // would hide a clean record from a check it now passes.
+    const { findGrapeColourConflict } = require('../../utils/grapeColourCheck');
+    const full = await WineDefinition.findById(args.wine_id).populate('grapes', 'name color').lean();
+    if (!findGrapeColourConflict(full)) {
+      return fail('invalid_input', 'That wine no longer trips the colour check — nothing to set aside.');
+    }
+
+    await WineDefinition.updateOne({ _id: wine._id }, {
+      $addToSet: { crossChecksCleared: COLOUR_RULE },
+      $set: { crossChecksClearedAt: new Date() },
+    });
+    logAudit(ctx.req, 'somm.colourConflict.dismiss', { type: 'wine', id: wine._id },
+      { name: wine.name, producer: wine.producer, reason: args.reason, via: 'mcp' });
+
+    return ok(`Set aside: ${wine.producer} — ${wine.name}. It will not reappear in list_colour_conflicts until restored.`,
+      { wine_id: String(wine._id), dismissed: true });
+  },
+});
+
+registerTool({
+  name: 'restore_colour_conflict',
+  title: 'Sommelier: return a set-aside colour conflict to the worklist',
+  description:
+    'Undoes dismiss_colour_conflict — use when a label photo, an owner answer or a producer reply arrives and the ' +
+    'row can finally be decided. The record itself is never changed by either verb.',
+  scope: 'write',
+  requireRole: SOMM_ROLES,
+  annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  inputSchema: { wine_id: objectId.describe('A wine previously passed to dismiss_colour_conflict') },
+  handler: async (args, ctx) => {
+    const denied = requireSomm(ctx);
+    if (denied) return denied;
+    if (!isValidId(args.wine_id)) return fail('invalid_input', 'wine_id must be a 24-hex id.');
+    const wine = await WineDefinition.findById(args.wine_id).select('name producer crossChecksCleared');
+    if (!wine) return fail('not_found', 'No such wine.');
+    if (!(wine.crossChecksCleared || []).includes(COLOUR_RULE)) {
+      return fail('invalid_input', 'That row is not set aside.');
+    }
+    await WineDefinition.updateOne({ _id: wine._id }, { $pull: { crossChecksCleared: COLOUR_RULE } });
+    logAudit(ctx.req, 'somm.colourConflict.restore', { type: 'wine', id: wine._id },
+      { name: wine.name, producer: wine.producer, via: 'mcp' });
+    return ok(`Back in the worklist: ${wine.producer} — ${wine.name}.`, { wine_id: String(wine._id), dismissed: false });
   },
 });

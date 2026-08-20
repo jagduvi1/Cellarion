@@ -39,13 +39,20 @@ const leanFind = (rows) => ({ select: jest.fn().mockReturnValue({ lean: jest.fn(
 
 beforeEach(() => jest.clearAllMocks());
 
+// The export now runs TWO queries — the user's own images, then the reports
+// they filed on other people's. Both arrive through BottleImage.find, so the
+// mock answers in call order.
+const exportQueries = (imageRows, reportRows = []) => {
+  BottleImage.find
+    .mockReturnValueOnce({ limit: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(imageRows) }) })
+    .mockReturnValueOnce({ select: jest.fn().mockReturnValue({ limit: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(reportRows) }) }) });
+};
+
 test('the export labels every image with its kind (bottle vs label-scan)', async () => {
-  BottleImage.find.mockReturnValue({
-    limit: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([
-      { originalUrl: '/api/uploads/originals/a.jpg', processedUrl: null, createdAt: new Date(0), kind: 'label-scan' },
-      { originalUrl: '/api/uploads/originals/b.jpg', processedUrl: '/api/uploads/processed/b.png', createdAt: new Date(0) },
-    ]) }),
-  });
+  exportQueries([
+    { originalUrl: '/api/uploads/originals/a.jpg', processedUrl: null, createdAt: new Date(0), kind: 'label-scan' },
+    { originalUrl: '/api/uploads/originals/b.jpg', processedUrl: '/api/uploads/processed/b.png', createdAt: new Date(0) },
+  ]);
 
   const frag = await entry.exportFragment({ userId: USER, truncated: {} });
 
@@ -54,6 +61,37 @@ test('the export labels every image with its kind (bottle vs label-scan)', async
     // Rows predating the field default to 'bottle' — no backfill needed.
     { originalUrl: '/api/uploads/originals/b.jpg', processedUrl: '/api/uploads/processed/b.png', uploadedAt: new Date(0), kind: 'bottle', side: 'front' },
   ]);
+});
+
+// Ticket 6a865f60: a report is the user's own words about someone else's photo,
+// so portability covers it — but the photo is not theirs and must not ride
+// along. The image is named by id only.
+test('the export includes reports the user filed, WITHOUT the reported photo', async () => {
+  exportQueries([], [
+    { _id: 'img-1', reports: [
+      { user: USER, reason: 'private-info', detail: 'my kitchen', createdAt: new Date(0) },
+      { user: 'someone-else', reason: 'offensive', detail: 'not mine', createdAt: new Date(0) },
+    ] },
+  ]);
+
+  const frag = await entry.exportFragment({ userId: USER, truncated: {} });
+
+  expect(frag.imageReports).toEqual([
+    { imageId: 'img-1', reason: 'private-info', detail: 'my kitchen', reportedAt: new Date(0) },
+  ]);
+  // Another reporter's words are not this user's data.
+  expect(JSON.stringify(frag.imageReports)).not.toMatch(/not mine/);
+  // Nor is the photo they reported.
+  expect(JSON.stringify(frag.imageReports)).not.toMatch(/originalUrl/);
+});
+
+test('erasure withdraws the reports the user filed, leaving other reporters alone', async () => {
+  BottleImage.find.mockReturnValue(leanFind([]));
+  await entry.purge({ userId: USER, deletedUserId: DELETED });
+  expect(BottleImage.updateMany).toHaveBeenCalledWith(
+    { 'reports.user': USER },
+    { $pull: { reports: { user: USER } } }
+  );
 });
 
 test('erasure unlinks the files, deletes the docs, and NULLS every wine pointing at them', async () => {

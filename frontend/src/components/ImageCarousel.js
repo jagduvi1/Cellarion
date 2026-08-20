@@ -3,7 +3,7 @@ import './ImageCarousel.css';
 import AuthImage from './AuthImage';
 import { API_URL } from '../api/apiConstants';
 
-function ImageCarousel({ images, size = 'medium', defaultImageId, onSetDefault }) {
+function ImageCarousel({ images, size = 'medium', defaultImageId, onSetDefault, currentUserId, onDelete, onReport }) {
   const [currentIndex, setCurrentIndex] = useState(0);
 
   if (!images || images.length === 0) return null;
@@ -41,6 +41,43 @@ function ImageCarousel({ images, size = 'medium', defaultImageId, onSetDefault }
         {currentImage.credit && (
           <div className="carousel-credit">© {currentImage.credit}</div>
         )}
+        {/* Removing a photo (ticket 6a865f60). Which verb you get depends on
+            whether the photo is still only yours: once it is the wine's
+            picture in the shared registry, taking it down changes other
+            people's pages, so it becomes a report an admin decides. */}
+        {(onDelete || onReport) && (() => {
+          const mine = currentUserId && String(currentImage.uploadedBy) === String(currentUserId);
+          const canDelete = mine && !currentImage.assignedToWine;
+          if (canDelete && onDelete) {
+            return (
+              <button
+                type="button"
+                className="carousel-action-btn"
+                onClick={() => onDelete(currentImage)}
+                aria-label="Delete this photo"
+                title="Delete this photo"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                </svg>
+              </button>
+            );
+          }
+          if (!onReport) return null;
+          return (
+            <button
+              type="button"
+              className="carousel-action-btn"
+              onClick={() => onReport(currentImage)}
+              aria-label="Report this photo"
+              title="Report this photo"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" /><line x1="4" y1="22" x2="4" y2="15" />
+              </svg>
+            </button>
+          );
+        })()}
         {onSetDefault && (
           <button
             type="button"
