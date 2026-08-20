@@ -21,6 +21,7 @@ jest.mock('../models/Grape', () => ({
       lean: () => Promise.resolve([
         { name: 'Pinot Noir' }, { name: 'Chardonnay' },
         { name: 'Cabernet Sauvignon' }, { name: 'Tempranillo' },
+        { name: 'Muscat Blanc à Petits Grains', synonyms: ['Moscato', 'Moscato Bianco'] },
       ]),
     }),
   })),
@@ -707,6 +708,83 @@ describe('the split flags end-to-end through enrichWine', () => {
     }));
     await enrichWineById(WINE_ID);
     expect(persisted().heldAt).toBeNull();
+  });
+
+  // ── Generation gate (6a82bfb7's last open build, 2026-08-20) ──────────────
+  // On a record with NO region and NO appellation, an assertion-grade draft
+  // gets one corrective retry; a second violation holds. Disclosure prose
+  // passes by design.
+  describe('the ungrounded-description generation gate', () => {
+    const placeless = (over = {}) => chain({
+      _id: WINE_ID, name: "Maureen's", producer: 'Petersons', type: 'red',
+      country: { name: 'Australia' }, region: null, appellation: null, grapes: [],
+      ...over,
+    });
+
+    test('an assertion-grade draft is retried once, and a clean second draft publishes', async () => {
+      WineDefinition.findById.mockReturnValue(placeless());
+      suggestProfile
+        .mockResolvedValueOnce(withFlags({
+          description: 'A soft, approachable red blend from the Hunter Valley with plum fruit.',
+        }))
+        .mockResolvedValueOnce(withFlags({
+          description: 'A soft, approachable red. The region could not be identified from this record.',
+        }));
+      await enrichWineById(WINE_ID);
+      expect(suggestProfile).toHaveBeenCalledTimes(2);
+      // The retry names exactly what the first draft asserted.
+      expect(suggestProfile.mock.calls[1][0].retryDirective).toMatch(/Hunter Valley/);
+      const p = persisted();
+      expect(p.heldAt).toBeNull();
+      expect(p.description).toMatch(/could not be identified/);
+    });
+
+    test('a persistent violation HOLDS as ungrounded_description', async () => {
+      WineDefinition.findById.mockReturnValue(placeless());
+      suggestProfile.mockResolvedValue(withFlags({
+        description: 'A soft, approachable red blend from the Hunter Valley with plum fruit.',
+      }));
+      await enrichWineById(WINE_ID);
+      expect(suggestProfile).toHaveBeenCalledTimes(2);
+      const p = persisted();
+      expect(p.heldAt).toBeInstanceOf(Date);
+      expect(p.heldReason).toBe('ungrounded_description');
+      expect(p.description).toBeNull();
+      expect(p.producerNote).toMatch(/Hunter Valley/);
+    });
+
+    test('disclosure prose passes without a retry — silence is not the goal', async () => {
+      WineDefinition.findById.mockReturnValue(placeless());
+      suggestProfile.mockResolvedValue(withFlags({
+        description: 'This bottling could not be identified. They draw fruit from the Hunter as well as Barossa, so the region is genuinely open.',
+      }));
+      await enrichWineById(WINE_ID);
+      expect(suggestProfile).toHaveBeenCalledTimes(1);
+      expect(persisted().heldAt).toBeNull();
+    });
+
+    test('a grounded record is out of the gate\'s scope entirely', async () => {
+      // The default fixture carries Marlborough — finer-grained prose is
+      // legitimate there and judging it needs a gazetteer (the 1,612 lesson).
+      suggestProfile.mockResolvedValue(withFlags({
+        description: 'A Wairau Valley Pinot Noir with bright cherry fruit.',
+      }));
+      await enrichWineById(WINE_ID);
+      expect(suggestProfile).toHaveBeenCalledTimes(1);
+      expect(persisted().heldAt).toBeNull();
+    });
+
+    test('the record\'s own grape under a synonym is not an assertion', async () => {
+      WineDefinition.findById.mockReturnValue(placeless({
+        grapes: [{ name: 'Muscat Blanc à Petits Grains' }],
+      }));
+      suggestProfile.mockResolvedValue(withFlags({
+        description: 'A gently sparkling white in the classic Moscato style, light and grapey.',
+      }));
+      await enrichWineById(WINE_ID);
+      expect(suggestProfile).toHaveBeenCalledTimes(1);
+      expect(persisted().heldAt).toBeNull();
+    });
   });
 
   // Gate 2026-08-18 (ticket 6a83e765): the two confidence holds, end to end,
