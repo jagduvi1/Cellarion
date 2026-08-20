@@ -185,8 +185,12 @@ describe('REPORT — raising it for an admin instead of deleting', () => {
   test('detail is stripped and bounded rather than trusted', async () => {
     const img = image({ visibility: 'public', status: 'approved', uploadedBy: STRANGER });
     BottleImage.findById.mockResolvedValue(img);
-    await report(IMG, tokenFor(OWNER), { reason: 'other', detail: '<script>alert(1)</script>x'.padEnd(900, 'y') });
-    expect(img.reports[0].detail).not.toMatch(/<script>/);
+    await report(IMG, tokenFor(OWNER), { reason: 'other', detail: '<SCRIPT>alert(1)</SCRIPT>x'.padEnd(900, 'y') });
+    // No markup survives at all — asserted on the characters rather than on a
+    // tag pattern, which would only prove the lowercase spelling was handled
+    // (CodeQL flagged exactly that on the first version of this test).
+    expect(img.reports[0].detail).not.toContain('<');
+    expect(img.reports[0].detail).not.toContain('>');
     expect(img.reports[0].detail.length).toBeLessThanOrEqual(500);
   });
 });
