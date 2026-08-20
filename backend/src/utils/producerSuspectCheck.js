@@ -337,10 +337,11 @@ function producerFieldLooksPlaceholder(producer, wineName) {
 const DOWNGRADE_RULES = {
   ASSERTS_PRODUCER: 'note_asserts_producer',
   EPISTEMIC_ONLY: 'note_epistemic_only',
+  CUVEE_NOT_PRODUCER: 'note_doubts_cuvee_not_producer',
 };
 
 module.exports = {
-  noteAssertsProducer, noteIsEpistemicOnly, DOWNGRADE_RULES,
+  noteAssertsProducer, noteIsEpistemicOnly, noteDoubtsCuveeNotProducer, DOWNGRADE_RULES,
   notePlaceConflict, producerFieldLooksPlaceholder,
   PRODUCER_CLASS, BRAND_CLASS, CONTRAST,
   // Exported so the A/B split can be MEASURED separately from the combined
@@ -349,3 +350,86 @@ module.exports = {
   // the rule's own shape.
   EPISTEMIC, OTHER_CATEGORY, CLASSIFIES_AS_TRADE, FIELD_IS_PLACE, NEGATED_TAIL,
 };
+
+// ── Third rule: the doubt is about the cuvée, not the producer ───────────────
+//
+// Somm ticket 6a872291 (2026-08-20). producer_suspect asserts the producer
+// VALUE is not a winery — but the generator keeps writing notes whose doubt is
+// scoped to the WINE NAME while affirming the producer in the same breath:
+//
+//   "La Libertad appears to be a label or line from Bodega Benegas, not a
+//    separate producer."                       ← affirms Benegas, doubts the cuvée
+//   "'The Rolland Collection' appears to be a marketing or import range name
+//    rather than the winery itself; Yacochuya is produced by Bodega
+//    Yacochuya…"                               ← names the actual maker
+//
+// Eleven documented estates carried owner-visible cannot-identify caveats this
+// way. Why the ASSERTS_PRODUCER rule never catches them: the affirmation sits
+// AFTER the contrast cut ("rather than…"), and that rule only reads the text
+// before the first contrast — the model's house style leads with the doubt.
+//
+// This rule is clause-based instead. It fires only when ALL hold:
+//   1. some clause doubts (brand/range/label vocabulary) a subject that is
+//      NOT the producer — it is the wine name, or a quoted other entity;
+//   2. NO clause doubts the producer itself (producer-subject + brand vocab,
+//      or a field-is-place claim);
+//   3. the producer is actually named somewhere in the note — the affirmation
+//      the somm's examples all carry.
+// Deliberately misses the judgement-heavy shapes (Turckheim, Bouchard Aîné) —
+// those need a human, and the rule only ever clears what it is sure of.
+
+// Leading conjunctions are stripped before the subject test — "and Amand
+// Chaperon is likely a négociant house name" doubts the PRODUCER, and the
+// bare "and" token broke the subset test in the first prod dry run, letting
+// the row move when its note doubts both fields.
+const CLAUSE_SUBJECT = /^\s*(?:(?:and|but|while|though|however|so|yet|also)\s+)?['"‘“]?([^.,;:'"‘’“”]{2,60}?)['"’”]?\s+(?:is|was|were|are|appears?|reads?|looks?|seems?|may|might|could)\b/i;
+const QUOTED_START = /^\s*(?:(?:and|but|while|though|however|so|yet|also)\s+)?['"‘“]/;
+
+const tokensOf = (s) => String(s || '').split(/\s+/).map((t) => normPlace(t)).filter((t) => t && t.length > 1);
+
+/**
+ * @returns {false | { unknown: boolean }}
+ *   false — the rule declines (including whenever the producer itself is
+ *   doubted anywhere in the note);
+ *   { unknown } — the flag should clear. `unknown` is true when the note ALSO
+ *   carries first-person doubt about the producer ("unfamiliar", "not one I
+ *   can identify") — the honest landing state is then producerUnknown rather
+ *   than clean, exactly the epistemic rule's outcome for the same words.
+ */
+function noteDoubtsCuveeNotProducer(note, producerName, wineName) {
+  if (typeof note !== 'string' || !note.trim()) return false;
+  if (FIELD_IS_PLACE.test(note)) return false;
+
+  const producerTokens = new Set(tokensOf(producerName));
+  const nameTokens = new Set(tokensOf(wineName));
+  if (!producerTokens.size) return false;
+
+  // Comma-joined conjunctions are clause boundaries too — "…bottling rather
+  // than an estate wine, and Amand Chaperon is likely a négociant house name"
+  // is one sentence doubting BOTH fields, and the second doubt must bail.
+  const clauses = note.split(/[.;]|,\s+(?=(?:and|but|while|though)\b)/i);
+  let cuveeDoubt = false;
+
+  for (const clause of clauses) {
+    const doubts = BRAND_CLASS.test(clause) || CLASSIFIES_AS_TRADE.test(clause);
+    if (!doubts) continue;
+    const m = CLAUSE_SUBJECT.exec(clause);
+    if (!m) continue;
+    const subj = tokensOf(m[1]);
+    if (!subj.length) continue;
+    const subjIsProducer = subj.every((t) => producerTokens.has(t));
+    if (subjIsProducer) return false;          // the producer itself is doubted
+    const subjIsName = subj.every((t) => nameTokens.has(t));
+    if (subjIsName || QUOTED_START.test(clause)) cuveeDoubt = true;
+  }
+  if (!cuveeDoubt) return false;
+
+  // The affirmation: the producer named somewhere in the note, outside a
+  // doubt clause (checked above — a producer-subject doubt already bailed).
+  const noteNorms = normPlace(note).split(' ').filter(Boolean);
+  const distinctive = [...producerTokens].filter((t) => t.length >= 4);
+  const anchor = distinctive.length ? distinctive : [...producerTokens];
+  if (!anchor.some((t) => noteNorms.includes(t))) return false;
+
+  return { unknown: EPISTEMIC.test(note) };
+}

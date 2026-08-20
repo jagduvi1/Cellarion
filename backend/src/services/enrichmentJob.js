@@ -537,7 +537,7 @@ async function enrichWine(wine, model, { publishSuspect = false, curatorContext 
     let downgradedBy = null;
     if (suspect) {
       const {
-        noteAssertsProducer, noteIsEpistemicOnly,
+        noteAssertsProducer, noteIsEpistemicOnly, noteDoubtsCuveeNotProducer,
         notePlaceConflict, producerFieldLooksPlaceholder, DOWNGRADE_RULES,
       } = require('../utils/producerSuspectCheck');
       const note = cleanProse(d.producerNote, 300);
@@ -568,6 +568,19 @@ async function enrichWine(wine, model, { publishSuspect = false, curatorContext 
         suspect = false;
         unknown = true;
         downgradedBy = DOWNGRADE_RULES.EPISTEMIC_ONLY;
+      } else if (!blocked) {
+        // Third rule (somm 6a872291): the doubt is about the CUVÉE while the
+        // producer is affirmed in the same note — eleven documented estates
+        // carried owner-visible caveats this way, and the assertion rule can
+        // never reach them because the affirmation sits after the contrast
+        // cut. Lands clean, or on producerUnknown when the note also carries
+        // first-person doubt about the producer.
+        const cuvee = noteDoubtsCuveeNotProducer(note, wine.producer, wine.name);
+        if (cuvee) {
+          suspect = false;
+          unknown = cuvee.unknown === true;
+          downgradedBy = DOWNGRADE_RULES.CUVEE_NOT_PRODUCER;
+        }
       }
     }
     const meta = {
