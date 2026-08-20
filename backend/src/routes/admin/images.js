@@ -37,6 +37,13 @@ router.get('/', async (req, res) => {
       }
       filter.status = status;
     }
+    // ?reported=true — photos a user has raised (ticket 6a865f60). These are
+    // mostly ALREADY approved, so they never appear under the pending filter an
+    // admin normally works; without their own filter a report would sit unseen.
+    // The label-scan exclusion above still holds and costs nothing here: a scan
+    // is visible only to the person who took it, and they can delete it
+    // outright, so there is no one who could report one.
+    if (req.query.reported === 'true') filter.reportedAt = { $ne: null };
 
     const [images, total] = await Promise.all([
       BottleImage.find(filter)
@@ -47,7 +54,10 @@ router.get('/', async (req, res) => {
         .populate('wineDefinition', 'name producer type')
         .populate('uploadedBy', 'username')
         .populate('reviewedBy', 'username')
-        .sort({ createdAt: -1 })
+        .populate('reports.user', 'username')
+        // Reported photos first when that is what was asked for — a report is
+        // a person waiting on an answer, unlike the rest of this queue.
+        .sort(req.query.reported === 'true' ? { reportedAt: 1 } : { createdAt: -1 })
         .skip(offset)
         .limit(limit),
       BottleImage.countDocuments(filter)
@@ -195,6 +205,10 @@ router.put('/:id/approve', async (req, res) => {
     image.visibility = visibility;
     image.reviewedBy = req.user.id;
     image.reviewedAt = new Date();
+    // An admin approving a REPORTED photo is the answer to that report: clear
+    // the needs-a-look flag, but keep the reports themselves so a photo raised
+    // repeatedly still shows its history (ticket 6a865f60).
+    image.reportedAt = null;
     deleteOriginalFile(image);
     await image.save();
 
@@ -287,6 +301,7 @@ router.put('/:id/reject', async (req, res) => {
     image.status = 'rejected';
     image.reviewedBy = req.user.id;
     image.reviewedAt = new Date();
+    image.reportedAt = null;   // resolved — the photo is coming down
 
     // Delete the files from disk — reference-safe: import dedup can point two
     // records at the same file, and a shared file must survive for the record

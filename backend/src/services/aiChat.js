@@ -20,6 +20,7 @@ const { textFromResponse, thinkingOff } = require('../utils/aiResponse');
 const { embedSingle, isEmbeddingConfigured } = require('./embedding');
 const vectorStore = require('./vectorStore');
 const Bottle = require('../models/Bottle');
+const Cellar = require('../models/Cellar');
 const WineVintagePrice = require('../models/WineVintagePrice');
 const { classifyMaturity, buildProfileMap, maturityLabel } = require('../utils/maturityUtils');
 
@@ -62,6 +63,35 @@ function getEventLog() {
  * @param {number} maxResults
  * @returns {Promise<Array>}
  */
+/**
+ * The cellars that ARE the user's cellar right now.
+ *
+ * Deleting a cellar is a SOFT delete — the bottles keep `deletedAt: null` so a
+ * restore can bring them back — so scoping bottles by `user` alone counts wine
+ * the user believes they threw away. Support ticket 6a86268f (2026-08-20): a
+ * user with 71 bottles was told they owned 779, because four deleted cellars
+ * still held 708. On prod that day: 8 deleted cellars, 1,266 live bottles, 4
+ * users, one of whom has an EMPTY cellar and was being quoted 132.
+ *
+ * Every sibling surface already does this (insightsService, mcp/tools/stats,
+ * routes/stats, the analytics engine's deriveScope); the chat was the one that
+ * did not. Members are included because a bottle can live in a cellar shared
+ * with the user, exactly as deriveScope treats it.
+ *
+ * @returns {Promise<Array>} always an ARRAY — an empty one means "no live
+ *   cellars", which must still filter everything out rather than mean "no
+ *   filter". Callers therefore test `Array.isArray`, never truthiness.
+ */
+async function liveCellarIds(userId, requested) {
+  const live = await Cellar.find({
+    deletedAt: null,
+    $or: [{ user: userId }, { 'members.user': userId }],
+  }).distinct('_id');
+  if (!requested?.length) return live;
+  const liveSet = new Set(live.map(String));
+  return requested.filter((id) => liveSet.has(String(id)));
+}
+
 async function filterToUserCellar(userId, hits, maxResults, { cellarIds } = {}) {
   if (!hits.length) return [];
 
@@ -82,7 +112,10 @@ async function filterToUserCellar(userId, hits, maxResults, { cellarIds } = {}) 
     status: 'active',
     wineDefinition: { $in: wineDefIds }
   };
-  if (cellarIds?.length) {
+  // Array.isArray, not truthiness: an EMPTY list means the user has no live
+  // cellars and must match nothing. Treating it as "no filter" would list
+  // bottles from cellars they deleted (ticket 6a86268f).
+  if (Array.isArray(cellarIds)) {
     bottleFilter.cellar = { $in: cellarIds };
   }
   // Region/country/grapes are refs on the wine definition, so they must be
@@ -180,7 +213,10 @@ function formatWineList(matches, { profileMap, countMap, priceMap } = {}) {
  * Batch-fetch enrichment data for a set of matched wines.
  * Queries profiles, prices, and bottle counts in parallel.
  */
-async function fetchEnrichmentData(userId, matches) {
+// scopedCellarIds: the caller's live-cellar list. The per-wine "you have N
+// bottles" counts below must be scoped the same way as everything else, or a
+// wine shown once would report the total including deleted cellars.
+async function fetchEnrichmentData(userId, matches, scopedCellarIds = null) {
   if (!matches.length) return { profileMap: new Map(), countMap: new Map(), priceMap: new Map() };
 
   const bottles = matches.map(m => m.bottle);
@@ -195,7 +231,12 @@ async function fetchEnrichmentData(userId, matches) {
 
     // Bottle counts per (wineDefinition, vintage)
     Bottle.aggregate([
-      { $match: { user: new mongoose.Types.ObjectId(String(userId)), status: 'active', wineDefinition: { $in: wineDefObjectIds } } },
+      { $match: {
+        user: new mongoose.Types.ObjectId(String(userId)),
+        status: 'active',
+        wineDefinition: { $in: wineDefObjectIds },
+        ...(Array.isArray(scopedCellarIds) ? { cellar: { $in: scopedCellarIds } } : {}),
+      } },
       { $group: { _id: { wineDefinition: '$wineDefinition', vintage: '$vintage' }, count: { $sum: 1 } } }
     ]),
 
@@ -357,8 +398,13 @@ async function _prepareChatContext(userId, message, { useQueryExpansion = true, 
     // Restrict Qdrant search to wines the user actually owns. Without this,
     // top-K is pulled from the global catalogue and small cellars get filtered
     // out entirely (see issue #386).
-    const bottleScope = { user: userId, status: 'active' };
-    if (cellarIds?.length) bottleScope.cellar = { $in: cellarIds };
+    // Resolved ONCE and threaded through everything below, so the count, the
+    // vector pre-filter and the wine list cannot disagree with each other —
+    // which is the same invariant the HONEST SCOPING note further down cares
+    // about, just applied to which cellars exist rather than how many wines
+    // are shown.
+    const scopedCellarIds = await liveCellarIds(userId, cellarIds);
+    const bottleScope = { user: userId, status: 'active', cellar: { $in: scopedCellarIds } };
     const userWineDefIds = await Bottle.distinct('wineDefinition', bottleScope);
 
     let hits = [];
@@ -373,10 +419,10 @@ async function _prepareChatContext(userId, message, { useQueryExpansion = true, 
         }
       });
     }
-    matches = await filterToUserCellar(userId, hits, cfg.chatMaxResults, { cellarIds });
+    matches = await filterToUserCellar(userId, hits, cfg.chatMaxResults, { cellarIds: scopedCellarIds });
 
     // Enrich matches with maturity, price, and count data
-    const enrichment = await fetchEnrichmentData(userId, matches);
+    const enrichment = await fetchEnrichmentData(userId, matches, scopedCellarIds);
 
     // HONEST SCOPING (support ticket 2026-08-12 "IA bottles known false"): the
     // model only ever sees the chatMaxResults most relevant bottles, and

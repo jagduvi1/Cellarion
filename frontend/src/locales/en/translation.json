@@ -4466,5 +4466,22 @@
       "min": "Lowest",
       "max": "Highest"
     }
+  },
+  "imageActions": {
+    "deleteTitle": "Delete this photo?",
+    "deleteMessage": "The photo and its file are removed from the server. This cannot be undone.",
+    "deleteConfirm": "Delete photo",
+    "deleteFailed": "Could not delete the photo.",
+    "reportTitle": "Report this photo",
+    "reportLead": "What is wrong with it? An admin will look — nothing is removed automatically.",
+    "reportThanks": "Thanks — an admin will review this photo.",
+    "reportFailed": "Could not report the photo.",
+    "reason": {
+      "private-info": "Shows something private",
+      "not-this-wine": "Not this wine",
+      "poor-quality": "Too blurry or dark",
+      "offensive": "Offensive",
+      "other": "Something else"
+    }
   }
 }

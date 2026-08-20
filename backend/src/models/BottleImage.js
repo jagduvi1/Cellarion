@@ -120,6 +120,30 @@ const bottleImageSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  // Reports raised by users who can SEE this image (support ticket 6a865f60,
+  // 2026-08-20). Two populations need this and only one of them is abuse:
+  //   - someone else's photo on a shared wine page: the only lever a viewer has
+  //   - the uploader's OWN photo once it has been assigned to a wine, which
+  //     makes it registry content they can no longer simply delete
+  // A report never removes anything; an admin decides, using the existing
+  // reject flow. Bounded at REPORTS_MAX because this array rides along on
+  // every gallery read, and one determined reporter must not grow a document.
+  reports: {
+    type: [{
+      user:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+      reason: { type: String, required: true, trim: true, maxlength: 40 },
+      detail: { type: String, default: null, trim: true, maxlength: 500 },
+      createdAt: { type: Date, default: Date.now },
+    }],
+    default: [],
+  },
+  // First unresolved report — the admin queue sorts on it, and its presence is
+  // the "needs a look" flag. Cleared when an admin approves the image as fine.
+  reportedAt: {
+    type: Date,
+    default: null,
+    index: true,
+  },
   createdAt: {
     type: Date,
     default: Date.now

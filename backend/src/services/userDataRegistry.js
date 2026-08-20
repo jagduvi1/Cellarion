@@ -214,6 +214,16 @@ const REGISTRY = [
         BottleImage.deleteMany({ uploadedBy: ctx.userId, assignedToWine: { $ne: true } }),
         BottleImage.updateMany({ uploadedBy: ctx.userId, assignedToWine: true }, { $set: { uploadedBy: ctx.deletedUserId } }),
         BottleImage.updateMany({ reviewedBy: ctx.userId }, { $unset: { reviewedBy: '' } }),
+        // Reports this user filed on OTHER people's photos (ticket 6a865f60).
+        // The report is the user's own statement, so it leaves with them — but
+        // the photo it concerns belongs to someone else and stays. reportedAt
+        // is deliberately NOT cleared here: an admin may still be mid-review,
+        // and a queue item that vanishes because an unrelated account closed
+        // is worse than one whose reporter reads "a former user".
+        BottleImage.updateMany(
+          { 'reports.user': ctx.userId },
+          { $pull: { reports: { user: ctx.userId } } }
+        ),
         // scanFieldConflicts goes with the pointers (release-audit L-4): the
         // "front said X, back said Y" record is a statement ABOUT those photos,
         // and evidence that outlives the images it refers to cannot be checked
@@ -236,6 +246,15 @@ const REGISTRY = [
       // you hold about me" than one that names them.
       images: markTrunc(ctx, 'images', await BottleImage.find({ uploadedBy: ctx.userId }).limit(EXPORT_MAX).lean())
         .map(i => ({ originalUrl: i.originalUrl, processedUrl: i.processedUrl, uploadedAt: i.createdAt, kind: i.kind || 'bottle', side: i.side || 'front' })),
+      // Reports the user filed on photos — their words about someone else's
+      // image, so they belong in "what do you hold about me". The image is
+      // named by id only: including its URL would put another user's photo
+      // into this export.
+      imageReports: markTrunc(ctx, 'imageReports',
+        await BottleImage.find({ 'reports.user': ctx.userId }).select('reports').limit(EXPORT_MAX).lean())
+        .flatMap((i) => (i.reports || [])
+          .filter((r) => String(r.user) === String(ctx.userId))
+          .map((r) => ({ imageId: String(i._id), reason: r.reason, detail: r.detail || null, reportedAt: r.createdAt }))),
     }),
   },
   {

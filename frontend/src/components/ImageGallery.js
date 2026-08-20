@@ -1,12 +1,23 @@
 import { useState, useEffect, useImperativeHandle, forwardRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import ImageCarousel from './ImageCarousel';
+import ConfirmModal from './ConfirmModal';
+import Modal from './Modal';
+
+// Why a photo might need to come down. Mirrors REPORT_REASONS on
+// routes/images.js — the server validates, this only labels.
+const REPORT_REASONS = ['private-info', 'not-this-wine', 'poor-quality', 'offensive', 'other'];
 
 const ImageGallery = forwardRef(function ImageGallery({ bottleId, wineDefinitionId, size = 'medium', onEmpty, onLoaded, defaultImageId: externalDefaultId, onSetDefault, showAll = false }, ref) {
-  const { apiFetch } = useAuth();
+  const { apiFetch, user } = useAuth();
+  const { t } = useTranslation();
   const [images, setImages] = useState([]);
   const [defaultImageId, setDefaultImageId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [pendingReport, setPendingReport] = useState(null);
+  const [actionError, setActionError] = useState('');
 
   const fetchImages = useCallback(async () => {
     try {
@@ -101,13 +112,82 @@ const ImageGallery = forwardRef(function ImageGallery({ bottleId, wineDefinition
     }
   } : undefined;
 
+  // Delete removes the row locally first: the photo is gone from the server by
+  // the time this resolves, and leaving it on screen until a refetch lands
+  // reads as "it didn't work" on the one action where that matters most.
+  const confirmDelete = async () => {
+    const img = pendingDelete;
+    setPendingDelete(null);
+    setActionError('');
+    try {
+      const res = await apiFetch(`/api/images/${img._id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setActionError(body.error || t('imageActions.deleteFailed', 'Could not delete the photo.'));
+        return;
+      }
+      setImages((prev) => prev.filter((i) => i._id !== img._id));
+    } catch {
+      setActionError(t('imageActions.deleteFailed', 'Could not delete the photo.'));
+    }
+  };
+
+  const submitReport = async (reason) => {
+    const img = pendingReport;
+    setPendingReport(null);
+    setActionError('');
+    try {
+      const res = await apiFetch(`/api/images/${img._id}/report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      });
+      const body = await res.json().catch(() => ({}));
+      setActionError(res.ok
+        ? (body.message || t('imageActions.reportThanks', 'Thanks — an admin will review this photo.'))
+        : (body.error || t('imageActions.reportFailed', 'Could not report the photo.')));
+    } catch {
+      setActionError(t('imageActions.reportFailed', 'Could not report the photo.'));
+    }
+  };
+
   return (
-    <ImageCarousel
-      images={images}
-      size={size}
-      defaultImageId={resolvedDefaultId}
-      onSetDefault={handleSetDefault}
-    />
+    <>
+      <ImageCarousel
+        images={images}
+        size={size}
+        defaultImageId={resolvedDefaultId}
+        onSetDefault={handleSetDefault}
+        currentUserId={user?._id || user?.id}
+        onDelete={setPendingDelete}
+        onReport={setPendingReport}
+      />
+      {actionError && <p className="gallery-action-note">{actionError}</p>}
+      {pendingDelete && (
+        <ConfirmModal
+          title={t('imageActions.deleteTitle', 'Delete this photo?')}
+          message={t('imageActions.deleteMessage', 'The photo and its file are removed from the server. This cannot be undone.')}
+          confirmLabel={t('imageActions.deleteConfirm', 'Delete photo')}
+          confirmClass="btn-danger"
+          onConfirm={confirmDelete}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
+      {pendingReport && (
+        <Modal title={t('imageActions.reportTitle', 'Report this photo')} onClose={() => setPendingReport(null)}>
+          <p className="gallery-report-lead">
+            {t('imageActions.reportLead', 'What is wrong with it? An admin will look — nothing is removed automatically.')}
+          </p>
+          <div className="gallery-report-reasons">
+            {REPORT_REASONS.map((r) => (
+              <button key={r} type="button" className="btn btn-secondary" onClick={() => submitReport(r)}>
+                {t(`imageActions.reason.${r}`, r)}
+              </button>
+            ))}
+          </div>
+        </Modal>
+      )}
+    </>
   );
 });
 
