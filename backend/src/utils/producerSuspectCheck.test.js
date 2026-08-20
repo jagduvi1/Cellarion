@@ -353,3 +353,76 @@ describe('producerFieldLooksPlaceholder', () => {
     });
   });
 });
+
+// Third rule (somm 6a872291): every string is a real prod note; the eleven
+// validation targets were hand-confirmed by the somm before the rule existed,
+// so each FIRE below reproduces an independent human verdict.
+describe('noteDoubtsCuveeNotProducer', () => {
+  const { noteDoubtsCuveeNotProducer } = require('./producerSuspectCheck');
+
+  describe('FIRE — the doubt is about the cuvée, the producer is affirmed', () => {
+    it('label-or-line from a named producer (Benegas) — lands clean', () => {
+      expect(noteDoubtsCuveeNotProducer(
+        'La Libertad appears to be a label or line from Bodega Benegas, not a separate producer.',
+        'Bodega Benegas Lynch', 'La Libertad Cabernet Franc'
+      )).toEqual({ unknown: false });
+    });
+
+    it('a quoted other entity doubted, the actual maker named (Yacochuya)', () => {
+      expect(noteDoubtsCuveeNotProducer(
+        "'The Rolland Collection' appears to be a marketing or import range name rather than the winery itself; Yacochuya is produced by Bodega Yacochuya, a joint venture involving Michel Rolland and the Etchart family.",
+        'Bodega San Pedro de Yacochuya', 'Yacochuya'
+      )).toEqual({ unknown: false });
+    });
+
+    it('epistemic producer doubt alongside cuvée doubt lands on producerUnknown', () => {
+      expect(noteDoubtsCuveeNotProducer(
+        'Carte Or reads like a cuvée name rather than the producer; the producer name Paques et Fils is unfamiliar and may be a smaller grower whose Carte Or bottling this refers to.',
+        'Paques et Fils', 'Carte Or'
+      )).toEqual({ unknown: true });
+    });
+
+    it('range doubted, house affirmed (De Bortoli Journey)', () => {
+      expect(noteDoubtsCuveeNotProducer(
+        "Journey appears to be an entry-level or supermarket range rather than De Bortoli's core estate label, so exact details are uncertain.",
+        'De Bortoli', 'Journey Pinot Noir'
+      )).toEqual({ unknown: false });
+    });
+  });
+
+  describe('DECLINE — the producer itself is doubted, or nothing affirms it', () => {
+    // Caught in the first prod dry run: ONE comma-joined sentence doubting
+    // BOTH fields. The comma-conjunction clause split is what bails it.
+    it('a comma-joined producer doubt bails the whole note (Amand Chaperon)', () => {
+      expect(noteDoubtsCuveeNotProducer(
+        'Cheval de Montenac appears to be a négociant or brand bottling rather than an estate wine, and Amand Chaperon is likely a négociant house name rather than a château.',
+        'Amand Chaperon', 'Cheval de Montenac'
+      )).toBe(false);
+    });
+
+    it('a producer-subject brand claim declines (Grande Arche)', () => {
+      expect(noteDoubtsCuveeNotProducer(
+        'Grande Arche appears to be a brand or negociant label rather than an established Saint-Émilion chateau I can confirm.',
+        'Grande Arche', 'Saint-Émilion Grand Cru'
+      )).toBe(false);
+    });
+
+    // The judgement-heavy shapes the somm listed that a rule must NOT decide:
+    // subject == producer, however wrong the note's geography knowledge is.
+    it('producer-subject doubt is a human call (Turckheim, Thomas Allen)', () => {
+      expect(noteDoubtsCuveeNotProducer(
+        'Turckheim is also the name of an Alsace village and a well known cooperative (Cave de Turckheim); without a specific cuvée or vineyard named it is unclear which single Grand Cru bottling this refers to.',
+        'Turckheim', 'Brand Riesling Alsace Grand Cru'
+      )).toBe(false);
+      expect(noteDoubtsCuveeNotProducer(
+        'Thomas Allen is not a producer I can confidently place; this may be a branded or private-label range rather than an established winery.',
+        'Thomas Allen', 'Origins Chardonnay Sauvignon Blanc Semillon'
+      )).toBe(false);
+    });
+
+    it('empty and null notes decline', () => {
+      expect(noteDoubtsCuveeNotProducer(null, 'X', 'Y')).toBe(false);
+      expect(noteDoubtsCuveeNotProducer('', 'X', 'Y')).toBe(false);
+    });
+  });
+});

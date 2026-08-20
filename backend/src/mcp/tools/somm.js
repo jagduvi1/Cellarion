@@ -2700,12 +2700,16 @@ registerTool({
   title: 'Sommelier: wines a deterministic rule moved out of the suspect queue',
   description:
     'Registry wines whose producer_suspect flag was cleared by a RULE rather than by a human, tagged with which ' +
-    'rule did it. Two rules exist. `note_asserts_producer` fires when the note calls the entity a real producer ' +
+    'rule did it. Three rules exist. `note_asserts_producer` fires when the note calls the entity a real producer ' +
     '("a cooperative cellar in Burgundy") while the flag says the field is not one. `note_epistemic_only` fires ' +
     'when the note reports only that the model could not place the name ("not a producer I can verify") and makes ' +
     'no claim about what the field is instead — producer_suspect asserts a positive suspicion, and an epistemic ' +
     'note contains no such assertion. Both leave the row as producerUnknown: a real winery we cannot place, ' +
-    'published without an owner-visible caveat. This list exists so a rule that turns out to be wrong can be found ' +
+    'published without an owner-visible caveat. `note_doubts_cuvee_not_producer` (somm 6a872291) fires when the ' +
+    'doubt is scoped to the WINE NAME or a quoted other entity while the producer is named affirmatively — "La ' +
+    'Libertad appears to be a label or line from Bodega Benegas" doubts the cuvée, not the estate; it declines ' +
+    'whenever any clause doubts the producer itself, and lands clean, or on producerUnknown when the note also ' +
+    'carries first-person doubt about the producer. This list exists so a rule that turns out to be wrong can be found ' +
     'and reversed as a set instead of re-derived — spot-check a sample, and if a row should not have moved, ' +
     'propose_wine_correction or set_wine_profile still work on it normally. A row a HUMAN judged carries ' +
     'suspectDecision instead and never appears here. One documented semantic (audit 6a86dad6): the tag records ' +
@@ -2716,8 +2720,8 @@ registerTool({
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {
-    rule: z.enum(['note_asserts_producer', 'note_epistemic_only']).optional()
-      .describe('Only rows moved by this rule; omit for both'),
+    rule: z.enum(['note_asserts_producer', 'note_epistemic_only', 'note_doubts_cuvee_not_producer']).optional()
+      .describe('Only rows moved by this rule; omit for all'),
     counts_only: z.boolean().optional().describe('Return just the totals, per rule'),
     limit: z.number().int().min(1).max(100).default(50),
     offset: z.number().int().min(0).default(0),

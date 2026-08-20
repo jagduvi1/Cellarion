@@ -32,7 +32,7 @@ const WineDefinition = require('../models/WineDefinition');
 require('../models/Region');
 require('../models/Country');
 const {
-  noteAssertsProducer, noteIsEpistemicOnly,
+  noteAssertsProducer, noteIsEpistemicOnly, noteDoubtsCuveeNotProducer,
   notePlaceConflict, producerFieldLooksPlaceholder, DOWNGRADE_RULES,
 } = require('../utils/producerSuspectCheck');
 
@@ -74,6 +74,12 @@ const APPLY = process.argv.includes('--apply');
       move.push({ w, rule: DOWNGRADE_RULES.ASSERTS_PRODUCER });
     } else if (noteIsEpistemicOnly(note, w.producer)) {
       move.push({ w, rule: DOWNGRADE_RULES.EPISTEMIC_ONLY });
+    } else {
+      // Third rule (somm 6a872291): the doubt is about the cuvée while the
+      // producer is affirmed. Lands clean, or on producerUnknown when the
+      // note also carries first-person doubt about the producer.
+      const cuvee = noteDoubtsCuveeNotProducer(note, w.producer, w.name);
+      if (cuvee) move.push({ w, rule: DOWNGRADE_RULES.CUVEE_NOT_PRODUCER, unknown: cuvee.unknown === true });
     }
   }
   console.log(`blocked from downgrading (placeholder / place conflict): ${blockedCount}`);
@@ -93,7 +99,7 @@ const APPLY = process.argv.includes('--apply');
   }
 
   let n = 0;
-  for (const { w, rule } of move) {
+  for (const { w, rule, unknown } of move) {
     // Clearing heldAt too: the hold existed because the producer field was
     // believed wrong. Once the flag says "real winery we cannot place", the
     // reason to withhold is gone — that is exactly the producerUnknown
@@ -104,7 +110,7 @@ const APPLY = process.argv.includes('--apply');
       {
         $set: {
           'aiProfile.producerSuspect': false,
-          'aiProfile.producerUnknown': true,
+          'aiProfile.producerUnknown': rule === DOWNGRADE_RULES.CUVEE_NOT_PRODUCER ? unknown === true : true,
           'aiProfile.suspectDowngradedBy': rule,
         },
       }
