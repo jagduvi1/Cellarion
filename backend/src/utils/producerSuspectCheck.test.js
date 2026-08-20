@@ -167,12 +167,17 @@ describe('noteIsEpistemicOnly', () => {
       )).toBe(false);
     });
 
-    // Caught in the second dry run: stated outright rather than by comparison.
-    it('a note saying the value is an appellation is a claim, however tentative', () => {
+    // REVERSED by the somm's full-population audit (6a86dad6). A dry run
+    // taught this row as a keep — "the value is an appellation" — and a guard
+    // was built for it. Château de l'Étoile is a REAL Jura estate whose name
+    // legitimately repeats its AOC (like half of Bordeaux), so the downgrade
+    // was correct and the guard was protecting the error. The guard is gone;
+    // the note (prod's actual prepositional form) downgrades.
+    it('Chateau Etoile — a name repeating its appellation is not a place claim', () => {
       expect(noteIsEpistemicOnly(
-        'Chateau Etoile is not a producer I can verify; Château d\'Etoile / L\'Etoile is an appellation in the Jura, so this may be a mislabeling or an unfamiliar small producer.',
+        "Chateau Etoile is not a producer I can verify in the Jura appellation of L'Etoile; this profile is based on the appellation and grape rather than a verified house style.",
         'Chateau Etoile'
-      )).toBe(false);
+      )).toBe(true);
     });
 
     const cases = [
@@ -216,5 +221,135 @@ describe('noteIsEpistemicOnly', () => {
     expect(noteIsEpistemicOnly(null, 'Foo')).toBe(false);
     expect(noteIsEpistemicOnly(undefined, undefined)).toBe(false);
     expect(noteIsEpistemicOnly('   ', 'Foo')).toBe(false);
+  });
+});
+
+// Downgrade blockers from the somm's full-population audit (6a86dad6): every
+// positive case below is a real prod note from one of the 14 rows that should
+// not have moved; every negative case is a real note from the 152 that were
+// correct. Written FROM the audit, not composed.
+describe('notePlaceConflict', () => {
+  const { notePlaceConflict } = require('./producerSuspectCheck');
+
+  describe('BLOCK — the note grounds its estimate in a place the record contradicts', () => {
+    it('Champagne profile on a Côtes de Gascogne record (Haut-Marin)', () => {
+      expect(notePlaceConflict(
+        'Haut-Marin is not a producer I can confidently place; this profile is estimated from the Champagne appellation and style.',
+        { appellation: 'Côtes de Gascogne', country: 'France' }
+      )).toBe(true);
+    });
+
+    it('Champagne style on a Loire mousseux (Henri Aupy)', () => {
+      expect(notePlaceConflict(
+        'Henri Aupy is not a producer I can verify; this profile is based on general Champagne Demi-Sec style.',
+        { appellation: 'Vin Mousseux', country: 'France' }
+      )).toBe(true);
+    });
+
+    it('Loire rosé style on a Franche-Comté producer (Vignoble Guillaume)', () => {
+      expect(notePlaceConflict(
+        'Vignoble Guillaume is not a producer I can confidently place, so this profile is based on the Loire rosé style generally.',
+        { country: 'France' }
+      )).toBe(true);
+    });
+
+    // The invented-appellation case is why this is extraction, not a curated
+    // vocabulary lookup: "Île de Ré" is in no taxonomy, so only a non-match
+    // against the record itself can catch it.
+    it('an invented "Île de Ré appellation" on a Vin de France (Domaine Ariça)', () => {
+      expect(notePlaceConflict(
+        'Domaine Ariça is not a producer I can confidently place, so this profile is based on the grape and Île de Ré appellation style.',
+        { appellation: 'Vin de France', country: 'France' }
+      )).toBe(true);
+    });
+
+    it('asserting geography on a record with no place at all blocks too', () => {
+      expect(notePlaceConflict(
+        'X is not a producer I can place; this profile is based on the Rioja region generally.',
+        {}
+      )).toBe(true);
+    });
+  });
+
+  describe('ALLOW — the note grounds itself in the record\'s own geography', () => {
+    it('the named appellation matches the record', () => {
+      expect(notePlaceConflict(
+        'Ugo Lequio is not a producer I can confidently document, so this profile is based on the Barbaresco appellation and Nebbiolo grape.',
+        { appellation: 'Barbaresco', country: 'Italy' }
+      )).toBe(false);
+    });
+
+    it('partial forms ground each other both ways (Barossa Valley shiraz style)', () => {
+      expect(notePlaceConflict(
+        'Rosenvale Vineyards is not a producer I can verify; this profile is based on typical Barossa Valley shiraz style.',
+        { region: 'Barossa Valley', country: 'Australia' }
+      )).toBe(false);
+    });
+
+    it('a named region matching the record grounds the note (Maldonado)', () => {
+      expect(notePlaceConflict(
+        'This producer name is unfamiliar to me, so this profile is based on the grape and Maldonado region generally rather than confirmed knowledge of the specific winery.',
+        { region: 'Maldonado', country: 'Uruguay' }
+      )).toBe(false);
+    });
+
+    it('a note naming no place makes no claim (Duffour)', () => {
+      expect(notePlaceConflict(
+        'Domaine Duffour is not a producer I can confidently place; this profile is based on the appellation and grape varieties typical of Côtes de Gascogne.',
+        { appellation: 'Côtes de Gascogne', country: 'France' }
+      )).toBe(false);
+    });
+
+    it('the methodology phrase "profile is an appellation-level estimate" is not a place', () => {
+      expect(notePlaceConflict(
+        'Montlobre is not a producer I can confidently place; this profile is an appellation and style-level estimate.',
+        { country: 'France' }
+      )).toBe(false);
+    });
+
+    it('empty and non-string notes make no claim', () => {
+      expect(notePlaceConflict('', { region: 'Jura' })).toBe(false);
+      expect(notePlaceConflict(null, { region: 'Jura' })).toBe(false);
+    });
+  });
+});
+
+describe('producerFieldLooksPlaceholder', () => {
+  const { producerFieldLooksPlaceholder } = require('./producerSuspectCheck');
+
+  describe('BLOCK — the field is a placeholder, not a verifiable name', () => {
+    it('the field literally says unknown', () => {
+      expect(producerFieldLooksPlaceholder('Domaine unknown', 'La Combe Tourmentée')).toBe(true);
+      expect(producerFieldLooksPlaceholder('Unknown', 'Merlot')).toBe(true);
+    });
+
+    it('a bare single word repeating the wine name (import artifact)', () => {
+      expect(producerFieldLooksPlaceholder('Increíble', 'Increíble')).toBe(true);
+      expect(producerFieldLooksPlaceholder('Padulone', 'Padulone')).toBe(true);
+    });
+
+    it('an empty field has nothing to verify', () => {
+      expect(producerFieldLooksPlaceholder('', 'Some Wine')).toBe(true);
+      expect(producerFieldLooksPlaceholder(null, 'Some Wine')).toBe(true);
+    });
+  });
+
+  describe('ALLOW — producer == name is also just the Bordeaux convention', () => {
+    // The carve-outs are the somm's own correction to their first proposal
+    // (6a86dad6 part 2C): a bare producer == name guard would have re-flagged
+    // a dozen working châteaux. Prefix or multi-word = a name, not a filler.
+    it('a producer-type prefix makes it a name (Château Rousset)', () => {
+      expect(producerFieldLooksPlaceholder('Château Rousset', 'Château Rousset')).toBe(false);
+      expect(producerFieldLooksPlaceholder('Weingut Hornstein', 'Weingut Hornstein')).toBe(false);
+    });
+
+    it('a multi-word name is a name (La Garricq, Haut Barrail)', () => {
+      expect(producerFieldLooksPlaceholder('La Garricq', 'La Garricq')).toBe(false);
+      expect(producerFieldLooksPlaceholder('Haut Barrail', 'Haut Barrail')).toBe(false);
+    });
+
+    it('an ordinary distinct producer/name pair never fires', () => {
+      expect(producerFieldLooksPlaceholder('Matua', 'Pinot Noir')).toBe(false);
+    });
   });
 });

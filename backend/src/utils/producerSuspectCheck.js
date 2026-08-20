@@ -85,19 +85,18 @@ const CONTRAST = /\b(rather than|instead of|not an? |but not |could not be|canno
 //    estate can be identified"                                  (Monbazillac)
 //   "Turckheim is also the name of an Alsace village and a well known
 //    cooperative"                                               (Turckheim)
-// The third alternation was added 2026-08-20 from the epistemic-rule dry run,
-// which caught a note stating the value outright instead of by comparison:
-//   "Chateau Etoile is not a producer I can verify; Château d'Etoile / L'Etoile
-//    is an appellation in the Jura, so this may be a mislabeling"
-// Epistemic in form, but it names what the field actually is, so it is a real
-// suspicion. Requires "is a/an <place noun>" directly — "a producer in the
-// Chablis appellation" is a producer claim and must not match.
-// The lookbehind is load-bearing. Without it the alternation matches the
-// METHODOLOGY these notes end with, whose subject is the profile rather than
-// the producer, and a correct downgrade is blocked:
-//   "Montlobre is not a producer I can confidently place; this profile IS AN
-//    APPELLATION and style-level estimate."
-const FIELD_IS_PLACE = /\b(repeats? the (appellation|region|village|commune)|is also the name of|simply repeats|no specific (estate|producer|winery|house)|(?<!\bprofile )is (?:also )?an? (?:appellation|village|commune|sub[-\s]?region|region|denomination|AOC|DOC|DOCG))\b/i;
+// A third alternation briefly lived here (2026-08-20, same-day removal): "is
+// an appellation…", added when a dry run surfaced a note calling Chateau
+// Etoile's value an appellation. The sommelier's full-population audit
+// (ticket 6a86dad6) killed it twice over: Château de l'Étoile is a REAL Jura
+// estate whose name legitimately repeats its AOC — so the row the guard was
+// built to protect was a correct downgrade being blocked — and the guard
+// missed the prod note anyway, which uses the prepositional form ("not a
+// producer I can verify in the Jura appellation of L'Etoile"). A name
+// repeating a place is how half of Bordeaux is named; it is not evidence the
+// field holds a place. The alternations below survive because their shapes
+// state it outright ("simply repeats the appellation").
+const FIELD_IS_PLACE = /\b(repeats? the (appellation|region|village|commune)|is also the name of|simply repeats|no specific (estate|producer|winery|house))\b/i;
 
 const escapeRx = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -242,6 +241,92 @@ function noteIsEpistemicOnly(note, producerName) {
   return true;
 }
 
+// ── Downgrade blockers (somm audit 6a86dad6, 2026-08-20) ─────────────────────
+//
+// The full-population audit of the first 166 downgrades found 14 that should
+// not have moved. These two guards encode the two mechanical classes; they
+// BLOCK a downgrade (row stays suspect, caveat stays visible, a human judges)
+// and never fire one.
+
+/**
+ * The note grounds its estimate in a place the record contradicts.
+ *
+ * Four of the audit's 14 were this shape — the profile describes a different
+ * wine's geography, and downgrading published that fabrication with its
+ * caveat removed:
+ *
+ *   "…estimated from the Champagne appellation and style"   (Côtes de Gascogne)
+ *   "…based on general Champagne Demi-Sec style"            (Loire mousseux)
+ *   "…based on the Loire rosé style generally"              (Franche-Comté)
+ *   "…based on the grape and Île de Ré appellation style"   (Vin de France —
+ *                                                            no such appellation)
+ *
+ * Extraction, not vocabulary: the capitalised phrase in front of
+ * appellation/region/AOC/style is compared against the record's own place
+ * strings (region, appellation, country). An invented place ("Île de Ré")
+ * matches no curated list, so a vocabulary lookup could never catch the worst
+ * case; a non-match against the record catches it by construction. Substring
+ * comparison runs both ways so "Gascogne" grounds a "Côtes de Gascogne"
+ * record and vice versa.
+ *
+ * Direction of failure is deliberate: a false positive here keeps a row
+ * suspect for a human — annoying. A false negative publishes fiction with the
+ * caveat stripped — the thing the audit caught. When the record carries NO
+ * place at all, a note asserting one is grounded in nothing and blocks too
+ * (the 6a82bfb7 family).
+ */
+const PLACE_PHRASE = /\b([A-ZÀ-Þ][\wÀ-ɏ'’-]*(?:\s+[\wÀ-ɏ'’-]+){0,3})\s+(?:appellation|AOC|AOP|DOCG?|region|style)\b/g;
+
+const normPlace = (s) => String(s || '')
+  .normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+function notePlaceConflict(note, { region, appellation, country } = {}) {
+  if (typeof note !== 'string' || !note.trim()) return false;
+  const places = [region, appellation, country].map(normPlace).filter(Boolean);
+  let m;
+  PLACE_PHRASE.lastIndex = 0;
+  while ((m = PLACE_PHRASE.exec(note)) !== null) {
+    const captured = normPlace(m[1]);
+    if (!captured || captured.length < 3) continue;
+    // Generic sentence-start captures ("This", "The", "Expect") are not places.
+    if (/^(this|the|that|these|those|expect|its?|an?)\b/.test(captured) && !captured.includes(' ')) continue;
+    if (!places.length) return true; // asserting geography on a placeless record
+    const grounded = places.some((p) => p.includes(captured) || captured.includes(p));
+    if (!grounded) return true;
+  }
+  return false;
+}
+
+/**
+ * The producer field is a placeholder, not a name that could be verified.
+ *
+ * Five of the audit's 14: the field literally reads "Domaine unknown", or it
+ * simply repeats the wine's own name as a bare word ("Increíble" /
+ * "Increíble") — an import artifact, not an entity. producerUnknown means "a
+ * real winery name we cannot place"; a placeholder is not a name at all, so
+ * the honest flag is suspect and the honest fix is identification.
+ *
+ * The producer-type-prefix carve-out is the sommelier's own correction to
+ * their first proposal (ticket 6a86dad6 part 2C): bare producer == name would
+ * over-fire on the Bordeaux convention where the château IS the wine name
+ * (La Garricq, Rousset, Haut Barrail…). A prefixed name is a producer-shaped
+ * name; and their multi-word examples escape via the single-word requirement.
+ */
+const UNKNOWN_WORD = /\b(unknown|unbekannt|okänd|inconnue?|sconosciuto|desconocido)\b/i;
+const PRODUCER_PREFIX = /^(ch[âa]teau|domaine|dom\.|quinta|weingut|bodegas?|tenuta|azienda|cascina|clos|mas|castello|villa|cantina|celler|cave|maison|finca|vi[ñn]a)\b/i;
+
+function producerFieldLooksPlaceholder(producer, wineName) {
+  const p = typeof producer === 'string' ? producer.trim() : '';
+  if (!p) return true;
+  if (UNKNOWN_WORD.test(p)) return true;
+  const n = typeof wineName === 'string' ? wineName.trim() : '';
+  if (!n) return false;
+  if (normPlace(p) !== normPlace(n)) return false;
+  if (PRODUCER_PREFIX.test(p)) return false;   // "Château Rousset" — a name, not a placeholder
+  return !p.includes(' ');                     // bare single word repeating the wine name
+}
+
 /**
  * Rule identifiers stamped on `aiProfile.suspectDowngradedBy` when either rule
  * clears a flag, so the moved rows stay queryable as a set (somm request
@@ -256,6 +341,7 @@ const DOWNGRADE_RULES = {
 
 module.exports = {
   noteAssertsProducer, noteIsEpistemicOnly, DOWNGRADE_RULES,
+  notePlaceConflict, producerFieldLooksPlaceholder,
   PRODUCER_CLASS, BRAND_CLASS, CONTRAST,
   // Exported so the A/B split can be MEASURED separately from the combined
   // predicate — the sommelier asked for a four-way population breakdown
