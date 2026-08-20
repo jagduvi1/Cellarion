@@ -62,9 +62,13 @@ const normPlace = (s) => String(s || '')
 // added from the somm's v1.147 audit: without it "Castilla y León" broke at
 // the conjunction and reported a truncated claim.
 const PLACE_CONNECTOR = "(?:della|delle|del|des|de|di|du|da|dos|das|la|les|le|los|von|van|der|den|sur|en|y)(?=\\s)";
+// Elided tokens — d'Avola, l'Étoile — start lowercase but are PART of the
+// name, not a chain break (somm 6a87053b: stopping before them captured bare
+// "Nero" out of the record's own Nero d'Avola).
+const ELIDED_TOKEN = "[dl]['’][A-ZÀ-Þ][\\wÀ-ɏ'’-]*";
 const PREP_CLAIM = new RegExp(
   "\\b(?:from|in|at|of|across|near)\\s+(?:the\\s+)?" +
-  "([A-ZÀ-Þ][\\wÀ-ɏ'’-]*(?:\\s+(?:" + PLACE_CONNECTOR + "|[A-ZÀ-Þ][\\wÀ-ɏ'’-]*)){0,3})",
+  "([A-ZÀ-Þ][\\wÀ-ɏ'’-]*(?:\\s+(?:" + PLACE_CONNECTOR + "|" + ELIDED_TOKEN + "|[A-ZÀ-Þ][\\wÀ-ɏ'’-]*)){0,3})",
   'g'
 );
 
@@ -73,7 +77,7 @@ const PREP_CLAIM = new RegExp(
 // a free continuation captured junk like "It's a crowd-pleasing style" and
 // "Details on producer and origin" in the first prod dry run.
 const KEYWORD_CLAIM = new RegExp(
-  "\\b([A-ZÀ-Þ][\\wÀ-ɏ'’-]*(?:\\s+(?:" + PLACE_CONNECTOR + "|[A-ZÀ-Þ][\\wÀ-ɏ'’-]*)){0,3})" +
+  "\\b([A-ZÀ-Þ][\\wÀ-ɏ'’-]*(?:\\s+(?:" + PLACE_CONNECTOR + "|" + ELIDED_TOKEN + "|[A-ZÀ-Þ][\\wÀ-ɏ'’-]*)){0,3})" +
   "\\s+(?:appellation|AOC|AOP|DOCG?|region|style|styles)\\b",
   'g'
 );
@@ -174,7 +178,7 @@ const tokenNorm = (t) => normPlace(String(t).replace(/['’]s$/i, ''));
  * "Chile's Maipo Valley" − Chile → "Maipo Valley". "Bodega Fernando Dupont's
  * Jujuy" − producer → "Jujuy". Nothing capitalised left → nothing claimed.
  */
-function gradeDescription(description, { region, appellation, country, grapes, producer } = {}) {
+function gradeDescription(description, { region, appellation, country, grapes, producer, varietyVocabulary } = {}) {
   if (typeof description !== 'string' || !description.trim()) return { grade: 'ok', claims: [] };
 
   // Everything the record itself accounts for, kept as WHOLE token sequences.
@@ -195,13 +199,57 @@ function gradeDescription(description, { region, appellation, country, grapes, p
     if (c === nCountry) grounds.push(adj.split(' '));
   }
 
+  // A norm-token run sitting INSIDE a ground sequence is grounded — "Château
+  // Bois" inside producer "Chateau Bois D'Arlene", bare "Nero" inside grape
+  // "Nero d'Avola" (somm 6a87053b). A truncated capture of a name the record
+  // accounts for grounds even when shorter than the name. NOT the inverse:
+  // "Cabernet Franc" is not inside "Cabernet Sauvignon".
+  const insideAnyGround = (runNorms) => {
+    if (!runNorms.length) return false;
+    return grounds.some((seq) => {
+      for (let i = 0; i + runNorms.length <= seq.length; i++) {
+        if (runNorms.every((n, j) => seq[i + j] === n)) return true;
+      }
+      return false;
+    });
+  };
+
   const docFramed = STRONG_FRAME.test(description);
   const sentences = description.split(/(?<=[.!?])\s+/);
   const seen = new Set();
   const claims = [];
 
+  const vocabSeqs = (Array.isArray(varietyVocabulary) ? varietyVocabulary : [])
+    .filter((name) => !NON_VARIETY_VOCAB.has(normPlace(name)))
+    .map((name) => ({ name, seq: String(name).split(/\s+/).map(tokenNorm).filter(Boolean) }))
+    .filter((v) => v.seq.length);
+
   for (const sentence of sentences) {
     const sentenceFramed = docFramed || STRONG_FRAME.test(sentence) || WEAK_FRAME.test(sentence);
+
+    // Variety pass FIRST (somm 6a870548): the extraction grammar catches only
+    // the variety a preposition happens to introduce — "blended with small
+    // amounts of Cabernet Franc, Petit Verdot and Merlot" reported one of
+    // three. A vocabulary scan over the whole normalised sentence reports
+    // every ungrounded variety regardless of position, including bare varietal
+    // openers ("a full-bodied Tempranillo from…") and hyphen compounds
+    // ("Syrah-led" normalises to "syrah led").
+    if (vocabSeqs.length) {
+      const sentNorms = normPlace(sentence).split(' ').filter(Boolean);
+      for (const { name, seq } of vocabSeqs) {
+        let found = false;
+        for (let i = 0; i + seq.length <= sentNorms.length && !found; i++) {
+          found = seq.every((n, j) => sentNorms[i + j] === n);
+        }
+        if (!found) continue;
+        if (insideAnyGround(seq)) continue; // the record's own grape
+        const key = normPlace(name);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        claims.push({ claim: name, kind: 'variety', framed: sentenceFramed });
+      }
+    }
+
     for (const span of extractClaims(sentence)) {
       const tokens = span.split(/\s+/).map((t) => t.replace(/['’]s$/i, ''));
       const norms = tokens.map(tokenNorm);
@@ -217,16 +265,20 @@ function gradeDescription(description, { region, appellation, country, grapes, p
       // Survivors also shed tier and climate words: once the record's own
       // tokens are subtracted, "French Crémant" leaves bare "Crémant" — a
       // style noun that only LOOKED like a place while attached to one.
-      const left = tokens.filter((t, i) => !removed[i] && norms[i] && !TIER_WORD.test(t) && !CLIMATE_WORD.test(t));
+      const left = tokens
+        .map((t, i) => ({ t, n: norms[i], removed: removed[i] }))
+        .filter(({ t, n, removed: r }) => !r && n && !TIER_WORD.test(t) && !CLIMATE_WORD.test(t));
+      if (insideAnyGround(left.map(({ n }) => n))) continue;
       // Only capitalised survivors assert anything — "Barossa Valley shiraz"
       // on a Barossa Valley record leaves lowercase "shiraz", which is prose,
       // not a claim.
-      if (!left.some((t) => /^[A-ZÀ-Þ]/.test(t))) continue;
-      const claim = left.join(' ');
+      if (!left.some(({ t }) => /^[A-ZÀ-Þ]/.test(t))) continue;
+      const claim = left.map(({ t }) => t).join(' ');
       const key = normPlace(claim);
       if (seen.has(key)) continue;
       seen.add(key);
-      claims.push({ claim, framed: sentenceFramed });
+      const isVariety = vocabSeqs.some((v) => normPlace(v.name) === key);
+      claims.push({ claim, kind: isVariety ? 'variety' : 'place', framed: sentenceFramed });
     }
   }
 
@@ -234,4 +286,11 @@ function gradeDescription(description, { region, appellation, country, grapes, p
   return { grade: claims.some((c) => !c.framed) ? 'assertion' : 'disclosure', claims };
 }
 
-module.exports = { gradeDescription, extractClaims, STRONG_FRAME, WEAK_FRAME, normPlace };
+// Taxonomy entries that exist ONLY for quarantined non-wine rows (cider,
+// mead — see ticket 6a86bb5f): they are legitimate grape-collection entries
+// but poison a variety vocabulary, because every tasting note mentioning
+// "green apple acidity" or "pear fruit" would report a variety claim. 17 of
+// 21 assertion rows in the first vocabulary-pass dry run were this.
+const NON_VARIETY_VOCAB = new Set(['apple', 'pear', 'quince', 'honey']);
+
+module.exports = { gradeDescription, extractClaims, STRONG_FRAME, WEAK_FRAME, normPlace, NON_VARIETY_VOCAB };

@@ -80,7 +80,9 @@ describe('gradeDescription', () => {
         { country: 'United States', grapes: [] }
       );
       expect(r.grade).toBe('disclosure');
-      expect(r.claims).toEqual([{ claim: 'Tempranillo', framed: true }]);
+      // No vocabulary passed here, so kind defaults to place — the tool layer
+      // always passes the grape vocabulary and gets 'variety'.
+      expect(r.claims).toEqual([{ claim: 'Tempranillo', kind: 'place', framed: true }]);
     });
 
     it('a weak hedge frames only its own sentence, not the paragraph', () => {
@@ -147,6 +149,49 @@ describe('gradeDescription', () => {
 
     // Item 6: "Castilla y León" split at the conjunction and reported a
     // truncated claim; possessives kept their apostrophe-s.
+    // 6a87053b: elision is not a chain break — stopping before d'Avola
+    // captured bare "Nero" out of the record's OWN grape, and the truncated
+    // "Château Bois" could never match the full stored producer.
+    it('elided tokens stay attached, and truncated captures ground inside their name', () => {
+      expect(gradeDescription(
+        'A soft, juicy red blending the bright red-fruit character of Tempranillo with the darker plum notes of Nero d\'Avola.',
+        { country: 'Netherlands', producer: 'Chateau Amsterdam', grapes: ['Tempranillo', "Nero d'Avola"] }
+      ).grade).toBe('ok');
+      expect(gradeDescription(
+        'RENEsens from Château Bois d\'Arléne is a fresh, approachable dry white with citrus blossom character.',
+        { country: 'France', producer: "Chateau Bois D'Arlene", grapes: [] }
+      ).grade).toBe('ok');
+    });
+
+    // 6a870548: the extraction grammar reports only the variety a preposition
+    // introduces; the vocabulary pass reports every ungrounded one.
+    it('every ungrounded variety in an enumeration is reported', () => {
+      const VOCAB = ['Cabernet Sauvignon', 'Cabernet Franc', 'Petit Verdot', 'Merlot', 'Pinot Noir', 'Chardonnay', 'Tempranillo'];
+      const r = gradeDescription(
+        "This is a Cabernet Sauvignon-led red from Chile's Maipo Valley, typically blended with small amounts of Cabernet Franc, Petit Verdot and Merlot.",
+        { country: 'Chile', grapes: ['Cabernet Sauvignon'], varietyVocabulary: VOCAB }
+      );
+      const varieties = r.claims.filter((c) => c.kind === 'variety').map((c) => c.claim).sort();
+      expect(varieties).toEqual(['Cabernet Franc', 'Merlot', 'Petit Verdot']);
+      expect(r.claims.some((c) => c.claim === 'Maipo Valley' && c.kind === 'place')).toBe(true);
+
+      const r2 = gradeDescription(
+        'A small-batch sparkling wine made from an equal blend of Pinot Noir and Chardonnay, aged on lees.',
+        { country: 'France', grapes: [], varietyVocabulary: VOCAB }
+      );
+      expect(r2.claims.map((c) => c.claim).sort()).toEqual(['Chardonnay', 'Pinot Noir']);
+    });
+
+    it('a bare varietal opener with no preposition is still reported (Crudabendita)', () => {
+      const r = gradeDescription(
+        'A rich, full-bodied Tempranillo from Ribera del Duero, built for extended aging.',
+        { country: 'Spain', grapes: [], varietyVocabulary: ['Tempranillo'] }
+      );
+      const kinds = Object.fromEntries(r.claims.map((c) => [c.claim, c.kind]));
+      expect(kinds['Tempranillo']).toBe('variety');
+      expect(kinds['Ribera del Duero']).toBe('place');
+    });
+
     it('conjunction connectors and possessives keep spans whole and clean', () => {
       expect(gradeDescription(
         'A fresh, pale rosado from Castilla y León, made mainly from Tempranillo.',

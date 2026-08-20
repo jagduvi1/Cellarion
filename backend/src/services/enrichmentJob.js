@@ -41,6 +41,67 @@ const Bottle = require('../models/Bottle');
 // embedding text, so both collapse to null.
 const SENTINEL_VALUE_RX = /^(null|none|n\/?a|undefined|unknown|nil|-+|)$/i;
 
+// ── Note-vs-record variety conflict (somm 6a870531) ─────────────────────────
+// The curated grape vocabulary, cached: names change rarely and a batch run
+// must not query per wine. 10-minute TTL so taxonomy edits land without a
+// restart.
+let grapeVocabCache = { at: 0, entries: [] };
+async function grapeVocabulary() {
+  if (Date.now() - grapeVocabCache.at > 10 * 60 * 1000) {
+    const Grape = require('../models/Grape');
+    const { normPlace, NON_VARIETY_VOCAB } = require('../utils/descriptionGrounding');
+    const rows = await Grape.find({}).select('name synonyms').lean();
+    grapeVocabCache = {
+      at: Date.now(),
+      entries: rows
+        .filter((r) => !NON_VARIETY_VOCAB.has(normPlace(r.name)))
+        .map((r) => ({
+          name: r.name,
+          forms: [r.name, ...(Array.isArray(r.synonyms) ? r.synonyms : [])].map(normPlace).filter(Boolean),
+        })),
+    };
+  }
+  return grapeVocabCache.entries;
+}
+
+// The clause must ASSERT what the bottling is, not describe what the producer
+// is known for. Prod scan 2026-08-20: without this, "Braida is a known
+// Barbera producer" (bio, on a Moscato) and "primarily known for Napa
+// Cabernet" (bio) would hold rows whose notes are fine — while the real
+// class always carries an assertion verb: "more commonly DOCUMENTED AS a
+// Pinot Noir" (Les Gaudrettes), "is ACTUALLY a Viognier-Chardonnay blend"
+// (Cantina Marilina).
+const NOTE_ASSERTS_BOTTLING = /\b(documented as|actually an?|in fact an?|is really|listed as|labell?ed as|instead of|rather than|mislabell?ed|not an? )\b/i;
+
+/**
+ * Does the note ASSERT the bottling is a curated variety the record does not
+ * carry? Synonym-aware — a note saying "Moscato" on a Muscat Blanc à Petits
+ * Grains record names the record's own grape under another form and never
+ * fires. Clause-scoped (split on ./;) so an assertion verb in one clause
+ * cannot license a bio-mention in another. Returns the conflicting variety
+ * name, or null.
+ */
+function findNoteVarietyConflict(note, recordGrapeNames, vocabEntries) {
+  const { normPlace } = require('../utils/descriptionGrounding');
+  const ownForms = new Set((recordGrapeNames || []).map((n) => normPlace(n)).filter(Boolean));
+  const clauses = String(note || '').split(/[.;]/);
+  for (const clause of clauses) {
+    if (!NOTE_ASSERTS_BOTTLING.test(clause)) continue;
+    const clauseNorms = normPlace(clause).split(' ').filter(Boolean);
+    for (const entry of vocabEntries || []) {
+      // The record's own grape, under any of its names, is never a conflict.
+      if (entry.forms.some((f) => ownForms.has(f))) continue;
+      for (const form of entry.forms) {
+        const seq = form.split(' ');
+        for (let i = 0; i + seq.length <= clauseNorms.length; i++) {
+          if (seq.every((n, j) => clauseNorms[i + j] === n)) return entry.name;
+        }
+      }
+    }
+  }
+  return null;
+}
+
 function cleanDescriptor(field, raw) {
   if (typeof raw !== 'string') return null;
   const v = raw.trim().toLowerCase();
@@ -451,6 +512,9 @@ async function enrichWine(wine, model, { publishSuspect = false, curatorContext 
 
   const now = new Date();
   const gateCfg = aiConfig.get();
+  // Loaded once per wine (module-cached) — assess() is a sync closure and the
+  // note-vs-record check inside it must not await.
+  const grapeVocab = await grapeVocabulary();
 
   // Derive everything the gate and the writes need from ONE model response.
   // A closure so the search-rescue retry below can re-derive from a second
@@ -544,6 +608,25 @@ async function enrichWine(wine, model, { publishSuspect = false, curatorContext 
       if (conflict) {
         holdReason = 'taxonomy_conflict';
         if (!meta.producerNote) meta.producerNote = `Style conflict: ${conflict}`;
+      }
+    }
+    // Third deterministic cross-check (somm ticket 6a870531, HIGH): the
+    // generator's own note against the record's grape list. Les Gaudrettes
+    // published a Chardonnay profile while its producerNote said the cuvée is
+    // "more commonly documented as a Pinot Noir" — the model recorded a
+    // record-contradiction in the one field nothing reads, then published.
+    // If the note names a curated variety the record does not carry (and the
+    // record HAS grapes — on a grapeless record a named variety is added
+    // information, not contradiction), the row holds and a curator decides
+    // which side is wrong. The note itself is the evidence and stays.
+    if (!holdReason && meta.producerNote && (wine.grapes || []).length) {
+      const mentioned = findNoteVarietyConflict(
+        meta.producerNote,
+        wine.grapes.map((g) => g.name),
+        grapeVocab
+      );
+      if (mentioned) {
+        holdReason = 'note_record_conflict';
       }
     }
     // Second deterministic cross-check (somm ticket 6a85ad44): the wine's own
@@ -879,6 +962,6 @@ module.exports = {
   start, requestStop, getStatus, enrichWineById, releaseHeldProfile,
   profileInputsSnapshot, reenrichAfterRecordEdit, isProfileStale,
   // exported for unit tests + the reset-misheld migration
-  cleanDescriptor, cleanStringList, cleanProse, cleanConfidence, shouldHoldProfile, identityDataSufficient,
+  cleanDescriptor, cleanStringList, cleanProse, cleanConfidence, shouldHoldProfile, identityDataSufficient, findNoteVarietyConflict,
   _resetSearchSlots,
 };

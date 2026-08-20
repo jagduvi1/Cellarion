@@ -2829,8 +2829,7 @@ registerTool({
     // correct — varieties were in the original 6a82bfb7 test — the label
     // wasn't).
     const Grape = require('../../models/Grape');
-    const { normPlace } = require('../../utils/descriptionGrounding');
-    const grapeNames = new Set((await Grape.find({}).select('name').lean()).map((g) => normPlace(g.name)));
+    const grapeVocabulary = (await Grape.find({}).select('name').lean()).map((g) => g.name);
 
     const graded = [];
     let okCount = 0;
@@ -2841,6 +2840,10 @@ registerTool({
         country: w.country?.name,
         producer: w.producer,
         grapes: (w.grapes || []).map((g) => g.name),
+        // The vocabulary pass reports EVERY ungrounded variety, not just the
+        // one a preposition introduces (somm 6a870548 — "Cabernet Franc,
+        // Petit Verdot and Merlot" reported one of three).
+        varietyVocabulary: grapeVocabulary,
       });
       if (r.grade === 'ok') { okCount++; continue; }
       graded.push({ w, r });
@@ -2866,11 +2869,7 @@ registerTool({
       country: w.country?.name || null,
       grapes: (w.grapes || []).map((g) => g.name),
       grade: r.grade,
-      ungrounded_claims: r.claims.map((c) => ({
-        claim: c.claim,
-        kind: grapeNames.has(normPlace(c.claim)) ? 'variety' : 'place',
-        framed: c.framed,
-      })),
+      ungrounded_claims: r.claims.map((c) => ({ claim: c.claim, kind: c.kind || 'place', framed: c.framed })),
       confidence: w.aiProfile?.confidence ?? null,
       description: String(w.aiProfile.description).slice(0, 400),
     }));
