@@ -13,6 +13,18 @@
 
 jest.mock('../models/WineDefinition', () => ({ findById: jest.fn(), updateOne: jest.fn() }));
 jest.mock('../models/Bottle', () => ({ distinct: jest.fn().mockResolvedValue([]) }));
+// The note-vs-record check (6a870531) loads the curated grape vocabulary; an
+// unmocked model would buffer on the missing test DB for 10s per suite.
+jest.mock('../models/Grape', () => ({
+  find: jest.fn(() => ({
+    select: () => ({
+      lean: () => Promise.resolve([
+        { name: 'Pinot Noir' }, { name: 'Chardonnay' },
+        { name: 'Cabernet Sauvignon' }, { name: 'Tempranillo' },
+      ]),
+    }),
+  })),
+}));
 jest.mock('./labelScan', () => ({ suggestProfile: jest.fn() }));
 jest.mock('./aiProvider', () => ({ isConfigured: jest.fn(() => true), effectiveModels: jest.fn(() => null) }));
 jest.mock('./embeddingJob', () => ({ embedSinglePair: jest.fn().mockResolvedValue(undefined) }));
@@ -644,6 +656,57 @@ describe('the split flags end-to-end through enrichWine', () => {
     const p = persisted();
     expect(p.producerSuspect).toBe(true);
     expect(p.suspectDowngradedBy).toBeNull();
+  });
+
+  // Somm 6a870531 (HIGH): Les Gaudrettes published a Chardonnay profile while
+  // its own producerNote said the cuvée is documented as a Pinot Noir — the
+  // model recorded a record-contradiction in the one field nothing read.
+  test('a note naming a variety the record does not carry HOLDS the row', async () => {
+    // Fixture record carries Pinot Noir; the note asserts Chardonnay.
+    suggestProfile.mockResolvedValue(withFlags({
+      confidence: 0.6,
+      producerNote: 'The Les Gaudrettes cuvée is more commonly documented as a Chardonnay, so this profile is inferred from the producer\'s general style.',
+    }));
+    await enrichWineById(WINE_ID);
+    const p = persisted();
+    expect(p.heldAt).toBeInstanceOf(Date);
+    expect(p.heldReason).toBe('note_record_conflict');
+    expect(p.description).toBeNull();
+    // The note IS the evidence and stays for the curator.
+    expect(p.producerNote).toMatch(/Chardonnay/);
+  });
+
+  test('a producer-bio mention is not an assertion about this bottling', async () => {
+    // Prod scan: "Braida is a known Barbera producer" on a Moscato — the note
+    // describes the HOUSE, not the wine, and must not hold.
+    suggestProfile.mockResolvedValue(withFlags({
+      confidence: 0.6,
+      producerNote: 'Matua is primarily known for Chardonnay and single-vineyard bottlings.',
+    }));
+    await enrichWineById(WINE_ID);
+    expect(persisted().heldAt).toBeNull();
+  });
+
+  test('a note naming the record\'s OWN grape does not hold', async () => {
+    suggestProfile.mockResolvedValue(withFlags({
+      confidence: 0.6,
+      producerNote: 'A benchmark Pinot Noir house; this bottling follows their usual style.',
+    }));
+    await enrichWineById(WINE_ID);
+    expect(persisted().heldAt).toBeNull();
+  });
+
+  test('on a GRAPELESS record a named variety is information, not conflict', async () => {
+    WineDefinition.findById.mockReturnValue(chain({
+      _id: WINE_ID, name: 'Red Blend', producer: 'Matua', type: 'red',
+      country: { name: 'New Zealand' }, region: { name: 'Marlborough' }, grapes: [],
+    }));
+    suggestProfile.mockResolvedValue(withFlags({
+      confidence: 0.6,
+      producerNote: 'Likely a Chardonnay-led blend based on the producer range.',
+    }));
+    await enrichWineById(WINE_ID);
+    expect(persisted().heldAt).toBeNull();
   });
 
   // Gate 2026-08-18 (ticket 6a83e765): the two confidence holds, end to end,
