@@ -217,3 +217,38 @@ describe('extractClaims', () => {
     expect(extractClaims('This wine shows bright fruit. Expect gentle tannins.')).toEqual([]);
   });
 });
+
+// Somm 6a872807: two false-positive classes from the five post-v1.149
+// assertion rows — all real prod prose.
+describe('style references and habitual hedges (6a872807)', () => {
+  it('a stylistic comparison is not an origin claim (Bordeaux-inspired claret)', () => {
+    expect(gradeDescription(
+      'A smooth red styled in the Bordeaux-inspired claret tradition, with cassis and cedar.',
+      { country: 'United States', grapes: [] }
+    ).grade).toBe('ok');
+  });
+
+  it('bare adjectival style forms never claim (Burgundian, supranational terms)', () => {
+    expect(gradeDescription(
+      'A silky red with Burgundian elegance, sourced from European vineyards.',
+      { country: 'Netherlands', grapes: [] }
+    ).grade).toBe('ok');
+  });
+
+  it('habitual markers frame their sentence — typical-content prose grades disclosure (Lumière)', () => {
+    const r = gradeDescription(
+      'A warm-climate Moroccan red, typically built around Mediterranean varieties such as Cinsault, Carignan or Syrah.',
+      { country: 'Morocco', grapes: [], varietyVocabulary: ['Cinsault', 'Carignan', 'Syrah'] }
+    );
+    expect(r.grade).toBe('disclosure');
+    expect(r.claims.every((c) => c.framed)).toBe(true);
+    expect(r.claims.map((c) => c.claim).sort()).toEqual(['Carignan', 'Cinsault', 'Syrah']);
+  });
+
+  it('an unhedged variety assertion still grades assertion', () => {
+    expect(gradeDescription(
+      'Built from Cinsault and Carignan in equal parts.',
+      { country: 'Morocco', grapes: [], varietyVocabulary: ['Cinsault', 'Carignan'] }
+    ).grade).toBe('assertion');
+  });
+});

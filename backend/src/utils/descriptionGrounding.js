@@ -96,12 +96,28 @@ const TIER_WORD = /^(reservas?|riservas?|crianzas?|gran|brut|extra|demi-sec|sec|
 // asserts nothing about where the wine is from (found in the v1.148 re-count).
 const CLIMATE_WORD = /^(atlantic|mediterranean|continental)/i;
 
+// A stylistic comparison is not an origin claim (somm 6a872807): "styled in
+// the Bordeaux-inspired claret tradition" compares, it does not locate.
+// Covers the hyphenated compounds (-inspired, -style, -like, -influenced),
+// bare adjectival forms (Burgundian), and supranational terms (European,
+// New World) that can never ground against any single record.
+const STYLE_REFERENCE = /(?:-(?:inspired|styled?|like|influenced|esque)|ian)$/i;
+const SUPRANATIONAL = /^(european|international|new world|old world|alpine|nordic|iberian|transalpine)$/i;
+
 // Frames strong enough to cover the whole description — the vocabulary of a
 // paragraph whose JOB is saying what is unknown.
 const STRONG_FRAME = /\b(could not be (?:identified|verified|confirmed)|cannot be (?:identified|verified|confirmed)|unconfirmed|unverified|unidentified|not (?:yet )?(?:known|identified|verified|confirmed)|genuinely open|unavailable|no drink window|if your label)\b/i;
 
 // Hedges that frame only their own sentence.
 const WEAK_FRAME = /\b(likely|probably|possibly|perhaps|presumably|may be|might be|appears? to be|seems? to be|uncertain)\b/i;
+
+// Habitual markers frame only what FOLLOWS them (somm 6a872807, on rows
+// chosen independently of the artifact set): "typically built around …
+// such as X, Y or Z" describes what the style usually contains, not what is
+// in this bottle — but the same word must not launder an assertion that
+// precedes it: "…from Chile's Maipo Valley, typically blended with small
+// amounts of Cabernet Franc" asserts the region and hedges only the blend.
+const HABITUAL = /\b(typically|usually|often|commonly|generally|traditionally|such as|tends? to)\b/i;
 
 const STOP_FIRST = new Set(['this', 'the', 'that', 'these', 'those', 'it', 'its', "it's", 'it’s', 'a', 'an', 'if', 'they', 'expect', 'details']);
 
@@ -117,6 +133,7 @@ const DEMONYMS = {
   australian: 'australia', canadian: 'canada', chilean: 'chile',
   argentine: 'argentina', argentinian: 'argentina', dutch: 'netherlands',
   swiss: 'switzerland', georgian: 'georgia', croatian: 'croatia',
+  moroccan: 'morocco', lebanese: 'lebanon',
   romanian: 'romania', bulgarian: 'bulgaria', moldovan: 'moldova',
   slovenian: 'slovenia', uruguayan: 'uruguay', mexican: 'mexico',
   'south african': 'south africa', 'new zealand': 'new zealand',
@@ -225,7 +242,18 @@ function gradeDescription(description, { region, appellation, country, grapes, p
     .filter((v) => v.seq.length);
 
   for (const sentence of sentences) {
-    const sentenceFramed = docFramed || STRONG_FRAME.test(sentence) || WEAK_FRAME.test(sentence);
+    const baseFramed = docFramed || STRONG_FRAME.test(sentence) || WEAK_FRAME.test(sentence);
+    // A habitual marker splits the sentence: what follows it is framed, what
+    // precedes it keeps the base framing — Peñalolén's "…from Chile's Maipo
+    // Valley, typically blended with Cabernet Franc" asserts the region and
+    // hedges only the blend, while Lumière's early "typically built around…"
+    // frames everything after it.
+    const habIdx = sentence.search(HABITUAL);
+    const segments = habIdx > -1
+      ? [{ text: sentence.slice(0, habIdx), framed: baseFramed }, { text: sentence.slice(habIdx), framed: true }]
+      : [{ text: sentence, framed: baseFramed }];
+
+    for (const { text: segment, framed: sentenceFramed } of segments) {
 
     // Variety pass FIRST (somm 6a870548): the extraction grammar catches only
     // the variety a preposition happens to introduce — "blended with small
@@ -235,7 +263,7 @@ function gradeDescription(description, { region, appellation, country, grapes, p
     // openers ("a full-bodied Tempranillo from…") and hyphen compounds
     // ("Syrah-led" normalises to "syrah led").
     if (vocabSeqs.length) {
-      const sentNorms = normPlace(sentence).split(' ').filter(Boolean);
+      const sentNorms = normPlace(segment).split(' ').filter(Boolean);
       for (const { name, seq } of vocabSeqs) {
         let found = false;
         for (let i = 0; i + seq.length <= sentNorms.length && !found; i++) {
@@ -250,7 +278,7 @@ function gradeDescription(description, { region, appellation, country, grapes, p
       }
     }
 
-    for (const span of extractClaims(sentence)) {
+    for (const span of extractClaims(segment)) {
       const tokens = span.split(/\s+/).map((t) => t.replace(/['’]s$/i, ''));
       const norms = tokens.map(tokenNorm);
       // Remove every CONTIGUOUS occurrence of a ground sequence.
@@ -267,7 +295,7 @@ function gradeDescription(description, { region, appellation, country, grapes, p
       // style noun that only LOOKED like a place while attached to one.
       const left = tokens
         .map((t, i) => ({ t, n: norms[i], removed: removed[i] }))
-        .filter(({ t, n, removed: r }) => !r && n && !TIER_WORD.test(t) && !CLIMATE_WORD.test(t));
+        .filter(({ t, n, removed: r }) => !r && n && !TIER_WORD.test(t) && !CLIMATE_WORD.test(t) && !STYLE_REFERENCE.test(t) && !SUPRANATIONAL.test(n));
       if (insideAnyGround(left.map(({ n }) => n))) continue;
       // Only capitalised survivors assert anything — "Barossa Valley shiraz"
       // on a Barossa Valley record leaves lowercase "shiraz", which is prose,
@@ -279,6 +307,7 @@ function gradeDescription(description, { region, appellation, country, grapes, p
       seen.add(key);
       const isVariety = vocabSeqs.some((v) => normPlace(v.name) === key);
       claims.push({ claim, kind: isVariety ? 'variety' : 'place', framed: sentenceFramed });
+    }
     }
   }
 
