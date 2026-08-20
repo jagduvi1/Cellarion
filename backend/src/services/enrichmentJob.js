@@ -472,16 +472,35 @@ async function enrichWine(wine, model, { publishSuspect = false, curatorContext 
     // cooperate. See utils/producerSuspectCheck for the discrimination.
     let downgradedBy = null;
     if (suspect) {
-      const { noteAssertsProducer, noteIsEpistemicOnly, DOWNGRADE_RULES } = require('../utils/producerSuspectCheck');
+      const {
+        noteAssertsProducer, noteIsEpistemicOnly,
+        notePlaceConflict, producerFieldLooksPlaceholder, DOWNGRADE_RULES,
+      } = require('../utils/producerSuspectCheck');
       const note = cleanProse(d.producerNote, 300);
+      // Blockers before rules (somm audit 6a86dad6: 14 of the first 166
+      // downgrades should not have moved). A placeholder producer field has
+      // nothing to verify, and a note grounding its estimate in a place the
+      // record contradicts is describing a different wine — downgrading
+      // either publishes the problem with its caveat removed. Blocked rows
+      // stay suspect and a human judges them.
+      const blocked =
+        producerFieldLooksPlaceholder(wine.producer, wine.name) ||
+        notePlaceConflict(note, {
+          region: wine.region?.name,
+          appellation: wine.appellation,
+          country: wine.country?.name,
+        });
       // Two disjoint rules, checked strongest-claim first. The second was the
       // population the first deliberately left alone on 2026-08-19; see
       // noteIsEpistemicOnly for why that call was reversed (somm 6a86baca).
-      if (noteAssertsProducer(note, wine.producer)) {
+      // The tag records which rule FIRED under this precedence, not which
+      // shape the note best fits — accepted trade (6a86dad6 part 2A) over
+      // loosening PRODUCER_CLASS, which shipped five false downgrades once.
+      if (!blocked && noteAssertsProducer(note, wine.producer)) {
         suspect = false;
         unknown = true;
         downgradedBy = DOWNGRADE_RULES.ASSERTS_PRODUCER;
-      } else if (noteIsEpistemicOnly(note, wine.producer)) {
+      } else if (!blocked && noteIsEpistemicOnly(note, wine.producer)) {
         suspect = false;
         unknown = true;
         downgradedBy = DOWNGRADE_RULES.EPISTEMIC_ONLY;

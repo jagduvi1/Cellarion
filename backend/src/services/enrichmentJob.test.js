@@ -600,6 +600,52 @@ describe('the split flags end-to-end through enrichWine', () => {
     expect(p.heldReason).toBe('producer_suspect');
   });
 
+  // The epistemic downgrade rule and its blockers, end to end (v1.145 rule,
+  // v1.146 blockers from the somm's full-population audit 6a86dad6).
+  test('an epistemic note grounded in the record\'s own region downgrades to producerUnknown, tagged', async () => {
+    suggestProfile.mockResolvedValue(withFlags({
+      producerSuspect: true, confidence: 0.7,
+      producerNote: 'Matua is not a producer I can verify; this profile is based on the Marlborough region and grape typicity.',
+    }));
+    await enrichWineById(WINE_ID);
+    const p = persisted();
+    expect(p.producerSuspect).toBe(false);
+    expect(p.producerUnknown).toBe(true);
+    expect(p.suspectDowngradedBy).toBe('note_epistemic_only');
+    expect(p.heldAt).toBeNull(); // published — that is the point of the rule
+  });
+
+  test('an epistemic note grounded in a CONTRADICTING place blocks the downgrade — row stays held suspect', async () => {
+    // Audit class 1: the profile describes a different wine's geography.
+    // Downgrading would publish that fabrication with its caveat removed.
+    suggestProfile.mockResolvedValue(withFlags({
+      producerSuspect: true, confidence: 0.7,
+      producerNote: 'Matua is not a producer I can verify; this profile is estimated from the Champagne appellation and style.',
+    }));
+    await enrichWineById(WINE_ID);
+    const p = persisted();
+    expect(p.producerSuspect).toBe(true);
+    expect(p.suspectDowngradedBy).toBeNull();
+    expect(p.heldAt).toBeInstanceOf(Date);
+    expect(p.heldReason).toBe('producer_suspect');
+  });
+
+  test('a placeholder producer field blocks the downgrade — nothing to verify', async () => {
+    // Audit class 3: producer repeats the wine name as a bare word.
+    WineDefinition.findById.mockReturnValue(chain({
+      _id: WINE_ID, name: 'Increíble', producer: 'Increíble', type: 'red',
+      country: { name: 'Spain' }, region: null, grapes: [],
+    }));
+    suggestProfile.mockResolvedValue(withFlags({
+      producerSuspect: true, confidence: 0.7,
+      producerNote: 'The producer name is unfamiliar and could not be verified as an established winery, so this is an estimate based on style.',
+    }));
+    await enrichWineById(WINE_ID);
+    const p = persisted();
+    expect(p.producerSuspect).toBe(true);
+    expect(p.suspectDowngradedBy).toBeNull();
+  });
+
   // Gate 2026-08-18 (ticket 6a83e765): the two confidence holds, end to end,
   // with the reason persisted where the release queue reads it.
   test('a below-floor profile is HELD with heldReason low_confidence', async () => {

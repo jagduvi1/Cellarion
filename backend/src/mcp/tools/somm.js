@@ -1278,7 +1278,10 @@ registerTool({
     'profile REGENERATES under the human override and publishes; costs one AI call, and on generation failure the ' +
     'row simply stays in the queue for another try. decision "confirm": the CURRENT state is correct — a held row ' +
     'stays held (its owner keeps seeing "Not yet assessed"), a published_suspect row stays published WITH THE ' +
-    'SUSPECT FLAG CLEARED (a human adjudicated the doubt away). decision "uphold" (published_suspect rows only): ' +
+    'SUSPECT FLAG CLEARED (a human adjudicated the doubt away), and producerUnknown clears too when set — confirm ' +
+    'also works on a published row whose ONLY doubt flag is producerUnknown ("I have placed this producer"; the ' +
+    'route a documented estate needed once its profile was fixed but the flag had no verb). decision "uphold" ' +
+    '(published_suspect rows only): ' +
     'the flag is CORRECT — the producer value really is a brand/style/non-winery — so the row stays published, ' +
     'KEEPS the flag and the owner-visible caveat, and leaves the queue as the registry\'s honest residue; ' +
     'upheld-count is the true cannot-identify number the scaling review reads. decision "reject" (HELD rows only): ' +
@@ -1317,12 +1320,18 @@ registerTool({
     // semantics (and the stamp rule) cannot fork.
     const decideOne = async (id) => {
       const wine = await WineDefinition.findById(id)
-        .select('name producer aiProfile.heldAt aiProfile.heldReason aiProfile.producerSuspect aiProfile.description aiProfile.generatedAt aiProfile.source');
+        .select('name producer aiProfile.heldAt aiProfile.heldReason aiProfile.producerSuspect aiProfile.producerUnknown aiProfile.description aiProfile.generatedAt aiProfile.source');
       if (!wine) return { wine_id: id, error: 'not_found' };
       const ap = wine.aiProfile || {};
       const held = !!ap.heldAt;
       const flaggedPublished = !held && ap.producerSuspect === true && !!ap.description;
-      if (!held && !flaggedPublished) return { wine_id: id, error: 'nothing_to_review' };
+      // producerUnknown-only rows are confirmable too (somm 6a86dad6: a
+      // documented 180 ha estate carried the flag with no verb able to clear
+      // it — set_wine_profile writes the profile, not the doubt fields).
+      const unknownOnly = !held && !flaggedPublished && ap.producerUnknown === true;
+      if (!held && !flaggedPublished && !(unknownOnly && args.decision === 'confirm')) {
+        return { wine_id: id, error: 'nothing_to_review' };
+      }
       const label = `${wine.name} — ${wine.producer}`;
 
       if (args.decision === 'release') {
@@ -1346,17 +1355,35 @@ registerTool({
         // false "cannot be verified" disclaimer even after review). The
         // producerNote stays for curator context; only the flag clears.
         if (!held) {
-          set['aiProfile.producerSuspect'] = false;
-          // Record the verdict, not just its side effect. The flag going false
-          // already removes the row from the queue, but the decision is worth
-          // counting on its own — and it keeps confirm and uphold symmetrical.
-          set['aiProfile.suspectDecision'] = 'confirmed';
-          set['aiProfile.suspectDecidedAt'] = now;
+          if (flaggedPublished) {
+            set['aiProfile.producerSuspect'] = false;
+            // Record the verdict, not just its side effect. The flag going false
+            // already removes the row from the queue, but the decision is worth
+            // counting on its own — and it keeps confirm and uphold symmetrical.
+            set['aiProfile.suspectDecision'] = 'confirmed';
+            set['aiProfile.suspectDecidedAt'] = now;
+          }
+          // confirm also clears producerUnknown when set: the curator is
+          // saying "I have placed this producer", which is that flag's exact
+          // negation (somm 6a86dad6 — Haut-Marin). No suspectDecision stamp
+          // on an unknown-only row: that field is the verdict on
+          // producerSuspect, and ONLY that (6a85f5e8).
+          if (ap.producerUnknown === true) set['aiProfile.producerUnknown'] = false;
         }
         await WineDefinition.updateOne({ _id: wine._id }, { $set: set });
+        const state = held ? 'held' : (flaggedPublished ? 'published_suspect' : 'published_unknown');
+        const cleared = {
+          ...(flaggedPublished ? { suspectCleared: true } : {}),
+          ...(!held && ap.producerUnknown === true ? { unknownCleared: true } : {}),
+        };
         logAudit(ctx.req, 'admin.wine.profileReviewed', { type: 'wine', id: wine._id },
-          { name: wine.name, producer: wine.producer, decision: 'confirm', state: held ? 'held' : 'published_suspect', ...(held ? {} : { suspectCleared: true }), reason, via: 'mcp' });
-        return { wine_id: wine._id, label, decision: 'confirm', state: held ? 'held' : 'published_suspect', ...(held ? {} : { suspect_cleared: true }), reviewed_at: now };
+          { name: wine.name, producer: wine.producer, decision: 'confirm', state, ...cleared, reason, via: 'mcp' });
+        return {
+          wine_id: wine._id, label, decision: 'confirm', state,
+          ...(cleared.suspectCleared ? { suspect_cleared: true } : {}),
+          ...(cleared.unknownCleared ? { unknown_cleared: true } : {}),
+          reviewed_at: now,
+        };
       }
 
       if (args.decision === 'uphold') {
@@ -2681,7 +2708,10 @@ registerTool({
     'published without an owner-visible caveat. This list exists so a rule that turns out to be wrong can be found ' +
     'and reversed as a set instead of re-derived — spot-check a sample, and if a row should not have moved, ' +
     'propose_wine_correction or set_wine_profile still work on it normally. A row a HUMAN judged carries ' +
-    'suspectDecision instead and never appears here.',
+    'suspectDecision instead and never appears here. One documented semantic (audit 6a86dad6): the tag records ' +
+    'which rule FIRED under strongest-claim-first precedence, not which shape the note best fits — a note that ' +
+    'textually asserts a producer can carry the epistemic tag when the assertion regex did not match it; the ' +
+    'outcome is identical either way.',
   scope: 'read',
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: true, openWorldHint: false },

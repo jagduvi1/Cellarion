@@ -29,7 +29,12 @@
  */
 const mongoose = require('mongoose');
 const WineDefinition = require('../models/WineDefinition');
-const { noteAssertsProducer, noteIsEpistemicOnly, DOWNGRADE_RULES } = require('../utils/producerSuspectCheck');
+require('../models/Region');
+require('../models/Country');
+const {
+  noteAssertsProducer, noteIsEpistemicOnly,
+  notePlaceConflict, producerFieldLooksPlaceholder, DOWNGRADE_RULES,
+} = require('../utils/producerSuspectCheck');
 
 const APPLY = process.argv.includes('--apply');
 
@@ -41,12 +46,28 @@ const APPLY = process.argv.includes('--apply');
     'aiProfile.producerNote': { $ne: null },
     // A curator verdict outranks any rule.
     'aiProfile.suspectDecision': { $in: [null, undefined] },
+    // A curator-authored profile is a human judgement about this exact row —
+    // no rule overrides it (somm audit 6a86dad6: The Parish moved despite a
+    // curator verification two days earlier).
+    'aiProfile.source': { $ne: 'curator' },
     nonWine: { $ne: true },
-  }).select('name producer aiProfile.producerNote aiProfile.heldAt').lean();
+  })
+    .select('name producer appellation aiProfile.producerNote aiProfile.heldAt aiProfile.source')
+    .populate('region', 'name')
+    .populate('country', 'name')
+    .lean();
 
   const move = [];
+  let blockedCount = 0;
   for (const w of rows) {
     const note = w.aiProfile.producerNote || '';
+    // Blockers before rules — see the same composition at the enrichment
+    // write site (somm audit 6a86dad6: placeholder fields and place-conflict
+    // notes must stay suspect for a human).
+    if (
+      producerFieldLooksPlaceholder(w.producer, w.name) ||
+      notePlaceConflict(note, { region: w.region?.name, appellation: w.appellation, country: w.country?.name })
+    ) { blockedCount++; continue; }
     // Strongest claim first, so the two rules stay disjoint and the tag on
     // each row names the rule that actually decided it.
     if (noteAssertsProducer(note, w.producer)) {
@@ -55,6 +76,7 @@ const APPLY = process.argv.includes('--apply');
       move.push({ w, rule: DOWNGRADE_RULES.EPISTEMIC_ONLY });
     }
   }
+  console.log(`blocked from downgrading (placeholder / place conflict): ${blockedCount}`);
 
   const held = move.filter((m) => m.w.aiProfile.heldAt).length;
   console.log(`suspect rows considered : ${rows.length}`);
