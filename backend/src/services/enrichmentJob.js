@@ -335,6 +335,45 @@ async function runJob(cfg) {
     if (job.limit > 0) q = q.limit(job.limit);
     const wines = await q.lean();
 
+    // Incremental mode also reclaims STALE rows: a profile whose stored inputs
+    // no longer match the record was generated against an identity this wine
+    // no longer has, so its description — and its producer-suspect flag — are
+    // about a different wine (somm 6a86bb3b; the 08-11 bulk triage left two
+    // Friuli benchmarks flagged over a note about "Giuli Ballarin"). Full mode
+    // regenerates everything anyway, so it needs no second pass.
+    //
+    // Filtered in JS, not Mongo: the snapshot is a JSON rendering of eight
+    // fields including sorted grape ids, and expressing that as an aggregation
+    // would encode the format twice and let the two drift apart. The candidate
+    // set is bounded — only rows enriched since the field shipped have one.
+    //
+    // NOT gated on heldAt: a changed identity is exactly what can void a hold
+    // ("Fabelhaft" → "Niepoort" and the doubt is gone), which is the same
+    // reasoning reenrichAfterRecordEdit carries.
+    if (job.mode !== 'full') {
+      const seen = new Set(wines.map((w) => String(w._id)));
+      const candidates = await WineDefinition.find({
+        ...keepCurated,
+        'aiProfile.inputsSnapshot': { $ne: null },
+        // A profile a human deliberately released is never regenerated
+        // unattended: the release is a judgement about doubt the model had,
+        // and a re-run that re-holds would null the description they chose to
+        // publish. Those surface in the sommelier's stale list instead.
+        profileReviewedAt: null,
+      })
+        .populate('country', 'name')
+        .populate('region', 'name')
+        .populate('grapes', 'name color')
+        .lean();
+      const stale = candidates.filter(
+        (w) => !seen.has(String(w._id)) && w.aiProfile.inputsSnapshot !== profileInputsSnapshot(w)
+      );
+      if (stale.length) {
+        console.log(`[enrichmentJob] +${stale.length} stale profile(s) queued for regeneration`);
+        wines.push(...(job.limit > 0 ? stale.slice(0, Math.max(0, job.limit - wines.length)) : stale));
+      }
+    }
+
     job.total = wines.length;
     console.log(`[enrichmentJob] Starting ${job.mode} job: ${job.total} wines${job.limit ? ` (capped at ${job.limit})` : ''}, model=${job.model}`);
 
@@ -431,11 +470,21 @@ async function enrichWine(wine, model, { publishSuspect = false, curatorContext 
     // upheld-count. Prompt rules have failed to stop two classes like this
     // already; a rule that reads the model's own words does not need it to
     // cooperate. See utils/producerSuspectCheck for the discrimination.
+    let downgradedBy = null;
     if (suspect) {
-      const { noteAssertsProducer } = require('../utils/producerSuspectCheck');
-      if (noteAssertsProducer(cleanProse(d.producerNote, 300), wine.producer)) {
+      const { noteAssertsProducer, noteIsEpistemicOnly, DOWNGRADE_RULES } = require('../utils/producerSuspectCheck');
+      const note = cleanProse(d.producerNote, 300);
+      // Two disjoint rules, checked strongest-claim first. The second was the
+      // population the first deliberately left alone on 2026-08-19; see
+      // noteIsEpistemicOnly for why that call was reversed (somm 6a86baca).
+      if (noteAssertsProducer(note, wine.producer)) {
         suspect = false;
         unknown = true;
+        downgradedBy = DOWNGRADE_RULES.ASSERTS_PRODUCER;
+      } else if (noteIsEpistemicOnly(note, wine.producer)) {
+        suspect = false;
+        unknown = true;
+        downgradedBy = DOWNGRADE_RULES.EPISTEMIC_ONLY;
       }
     }
     const meta = {
@@ -443,9 +492,13 @@ async function enrichWine(wine, model, { publishSuspect = false, curatorContext 
       producerSuspect: suspect,
       producerUnknown: unknown,
       producerNote:    cleanProse(d.producerNote, 300),
+      suspectDowngradedBy: downgradedBy,
       model:           model || aiConfig.get().enrichmentModel,
       source:          'ai',
       generatedAt:     now,
+      // What this profile was generated FROM, so a later bulk edit that
+      // bypasses reenrichAfterRecordEdit is still detectable as staleness.
+      inputsSnapshot:  profileInputsSnapshot(wine),
       // Pilot marker (2026-08-19): this generation used the web-search
       // rescue. Rescue rate and searched-profile quality are queryable
       // from this flag alone.
@@ -763,6 +816,23 @@ function profileInputsSnapshot(wine) {
 }
 
 /**
+ * Does the stored profile still describe this record?
+ *
+ * Exact, not heuristic: compares the inputs the profile was generated from
+ * against the record's current values. A row enriched before the snapshot
+ * shipped has nothing to compare and is reported NOT stale — unknown is not
+ * the same as wrong, and treating it as stale would queue the whole registry
+ * for a re-spend.
+ *
+ * @param {object} wine  WineDefinition, populated or not
+ */
+function isProfileStale(wine) {
+  const snap = wine && wine.aiProfile && wine.aiProfile.inputsSnapshot;
+  if (!snap) return false;
+  return snap !== profileInputsSnapshot(wine);
+}
+
+/**
  * After a deliberate curation edit (admin wine PUT, proposal approve) changed
  * a field the profile generator reads, the stored AI profile describes the
  * OLD record — including a HELD one, whose doubt the edit may have just
@@ -788,7 +858,7 @@ function reenrichAfterRecordEdit(wine, changed) {
 
 module.exports = {
   start, requestStop, getStatus, enrichWineById, releaseHeldProfile,
-  profileInputsSnapshot, reenrichAfterRecordEdit,
+  profileInputsSnapshot, reenrichAfterRecordEdit, isProfileStale,
   // exported for unit tests + the reset-misheld migration
   cleanDescriptor, cleanStringList, cleanProse, cleanConfidence, shouldHoldProfile, identityDataSufficient,
   _resetSearchSlots,

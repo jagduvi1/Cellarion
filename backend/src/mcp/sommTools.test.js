@@ -76,7 +76,7 @@ const USER_CTX = { user: { id: ME, roles: ['user'] }, scopes: ['read', 'write'],
 
 const tool = (name) => allTools().find((t) => t.name === name);
 const parse = (res) => JSON.parse(res.content[0].text);
-const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'remove_from_maturity_queue', 'set_wine_profile', 'propose_wine_correction', 'list_price_tracking_requests', 'set_vintage_price', 'reject_price_request', 'list_wine_reports', 'respond_to_wine_report', 'sample_published_profiles', 'list_unverified_core_wines', 'list_held_profiles', 'review_held_profile', 'list_pending_corrections', 'record_profile_audit', 'list_profile_audits', 'list_colour_conflicts', 'dismiss_colour_conflict', 'restore_colour_conflict'];
+const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'remove_from_maturity_queue', 'set_wine_profile', 'propose_wine_correction', 'list_price_tracking_requests', 'set_vintage_price', 'reject_price_request', 'list_wine_reports', 'respond_to_wine_report', 'sample_published_profiles', 'list_unverified_core_wines', 'list_held_profiles', 'review_held_profile', 'list_pending_corrections', 'record_profile_audit', 'list_profile_audits', 'list_colour_conflicts', 'dismiss_colour_conflict', 'restore_colour_conflict', 'list_rule_downgrades'];
 
 beforeEach(() => {
   jest.clearAllMocks();

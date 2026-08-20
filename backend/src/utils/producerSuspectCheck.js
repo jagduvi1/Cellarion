@@ -85,7 +85,19 @@ const CONTRAST = /\b(rather than|instead of|not an? |but not |could not be|canno
 //    estate can be identified"                                  (Monbazillac)
 //   "Turckheim is also the name of an Alsace village and a well known
 //    cooperative"                                               (Turckheim)
-const FIELD_IS_PLACE = /\b(repeats? the (appellation|region|village|commune)|is also the name of|simply repeats|no specific (estate|producer|winery|house))\b/i;
+// The third alternation was added 2026-08-20 from the epistemic-rule dry run,
+// which caught a note stating the value outright instead of by comparison:
+//   "Chateau Etoile is not a producer I can verify; Château d'Etoile / L'Etoile
+//    is an appellation in the Jura, so this may be a mislabeling"
+// Epistemic in form, but it names what the field actually is, so it is a real
+// suspicion. Requires "is a/an <place noun>" directly — "a producer in the
+// Chablis appellation" is a producer claim and must not match.
+// The lookbehind is load-bearing. Without it the alternation matches the
+// METHODOLOGY these notes end with, whose subject is the profile rather than
+// the producer, and a correct downgrade is blocked:
+//   "Montlobre is not a producer I can confidently place; this profile IS AN
+//    APPELLATION and style-level estimate."
+const FIELD_IS_PLACE = /\b(repeats? the (appellation|region|village|commune)|is also the name of|simply repeats|no specific (estate|producer|winery|house)|(?<!\bprofile )is (?:also )?an? (?:appellation|village|commune|sub[-\s]?region|region|denomination|AOC|DOC|DOCG))\b/i;
 
 const escapeRx = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -124,4 +136,130 @@ function noteAssertsProducer(note, producerName) {
   return p < b;                        // whichever the note reached for first
 }
 
-module.exports = { noteAssertsProducer, PRODUCER_CLASS, BRAND_CLASS, CONTRAST };
+// ── Sibling rule: the note asserts nothing at all ────────────────────────────
+
+/**
+ * A "rather than X" tail states what the thing is NOT, so brand vocabulary
+ * inside it is not a claim that the field IS a brand. These notes end with a
+ * methodology clause that constantly does this:
+ *
+ *   "…based on the grape and region rather than the specific bottling"
+ *                                                          (Venica & Venica)
+ *   "…based on the grapes and Heathcote region rather than a known house style"
+ *
+ * `bottling` is in BRAND_CLASS, so judging the raw string reads that as
+ * evidence the field is a brand.
+ *
+ * Strip only the negated tail — NOT the whole methodology clause. A real claim
+ * can follow one, and cutting at "so this profile is…" silently swallowed it:
+ *
+ *   "Palladium is not a producer I can confidently place for this wine; this
+ *    profile is based on the McLaren Vale Shiraz style generally, likely a
+ *    private-label or retailer brand."          ← caught in the first dry run
+ *
+ * That note is epistemic AND names what it probably is. The brand claim wins,
+ * and it survives this narrower strip because nothing negates it.
+ */
+const NEGATED_TAIL = /\b(?:rather than|instead of)\b[^.;]*/gi;
+
+// First-person knowledge vocabulary: the note is reporting the limits of what
+// the MODEL knows, not a property of the entity.
+const EPISTEMIC = new RegExp(
+  '\\bI can(?:not|\'t)?\\b|\\bto me\\b|\\bknown to me\\b|\\bunfamiliar\\b'
+  + '|\\bnot (?:widely |well )?documented\\b|\\bwell[-\\s]?documented\\b|\\bpoorly documented\\b'
+  + '|\\bno (?:widely |publicly )?(?:available )?(?:public )?(?:information|records?|documentation)\\b'
+  + '|\\bunable to (?:verify|identify|place|confirm)\\b',
+  'i'
+);
+
+/**
+ * The note claims the field is some OTHER kind of thing — a style, a grape, a
+ * translation. That is a positive suspicion and producer_suspect is correct:
+ *
+ *   "Roșu Demidulce translates to Red Semi-Sweet in Romanian and is a wine
+ *    style rather than a producer"                          (correctly suspect)
+ */
+const OTHER_CATEGORY = /\b(wine style|style rather|grape variet|translates? to|is a (?:designation|term|classification|category|blend)|generic (?:red|white|wine))\b/i;
+
+/**
+ * 'négociant' is deliberately in NEITHER of the two classes above, because it
+ * sits on the boundary: "a cellar/négociant bottling name" is a brand, while
+ * "a Loire producer/negociant" is a house. That ambiguity is fatal for
+ * noteAssertsProducer, which needs it to vote one way.
+ *
+ * For THIS rule it is not ambiguous, because the question is different: the
+ * test is whether the note makes any claim about the entity at all. "This may
+ * be a négociant" is a claim, hedged or not — which is the precedence the
+ * sommelier asked for ("B beating A is the knob"), with their own example:
+ *
+ *   "Jean XXII is not a producer I can confidently place; this may be a
+ *    negociant or lesser-known bottling"     ← epistemic AND a claim → suspect
+ */
+const CLASSIFIES_AS_TRADE = /\b(n[ée]gociants?|negociants?|co[-\s]?packer|contract (?:producer|winery)|sourced (?:by|from)|used by multiple producers)\b/i;
+
+/**
+ * Does the note record only that the model could not place the name — with no
+ * assertion about what the producer field actually is?
+ *
+ * WHY (somm ticket 6a86baca, 2026-08-20). `producer_suspect` asserts a positive
+ * suspicion: this value is a brand, a range, a retailer, a place. An epistemic
+ * note asserts no such thing — it says the model could not verify the name,
+ * which is what `producerUnknown` means. Both flags describe our knowledge;
+ * only one adds a claim the note never made.
+ *
+ * The somm's own counter-example settled it: La Spia carried a pure epistemic
+ * note and turned out to be a real Valtellina winery, confirmed in the same
+ * session it was sitting in the suspect queue. Left as suspect, a real estate
+ * wears a permanent "cannot be verified" caveat on its wine.
+ *
+ * This is the population {@link noteAssertsProducer} deliberately declined to
+ * touch on 2026-08-19 ("left ALONE… stays for a human or a search"). That call
+ * was wrong for the reason above, and this is its reversal — narrowly, because
+ * the guards below still refuse anything making a positive claim.
+ *
+ * @param {string} note          aiProfile.producerNote as stored
+ * @param {string} producerName  the wine's producer field
+ * @returns {boolean} true when the note is purely epistemic and the suspect
+ *                    flag should be a producerUnknown instead
+ */
+function noteIsEpistemicOnly(note, producerName) {
+  if (typeof note !== 'string' || !note.trim()) return false;
+  // Raw note, before any cutting: a field-is-a-place note is a positive claim
+  // however tentatively it is worded.
+  if (FIELD_IS_PLACE.test(note)) return false;
+
+  if (!EPISTEMIC.test(note)) return false;
+  // Any positive claim about what the field IS instead → a real suspicion,
+  // and producer_suspect is the right flag. Judged with the negated tails
+  // removed, so "rather than the specific bottling" cannot vote.
+  const positive = note.replace(NEGATED_TAIL, ' ');
+  if (BRAND_CLASS.test(positive)) return false;
+  if (OTHER_CATEGORY.test(positive)) return false;
+  if (CLASSIFIES_AS_TRADE.test(positive)) return false;
+  // A note that positively calls it a producer is the sibling rule's business,
+  // so the two rules stay disjoint and their tags stay meaningful.
+  if (noteAssertsProducer(note, producerName)) return false;
+  return true;
+}
+
+/**
+ * Rule identifiers stamped on `aiProfile.suspectDowngradedBy` when either rule
+ * clears a flag, so the moved rows stay queryable as a set (somm request
+ * 6a86baca — "residue should be a query, not a queue"). Never reused for
+ * anything else, and never set by a human decision: a curator verdict goes to
+ * suspectDecision, which is a judgement, not a rule application.
+ */
+const DOWNGRADE_RULES = {
+  ASSERTS_PRODUCER: 'note_asserts_producer',
+  EPISTEMIC_ONLY: 'note_epistemic_only',
+};
+
+module.exports = {
+  noteAssertsProducer, noteIsEpistemicOnly, DOWNGRADE_RULES,
+  PRODUCER_CLASS, BRAND_CLASS, CONTRAST,
+  // Exported so the A/B split can be MEASURED separately from the combined
+  // predicate — the sommelier asked for a four-way population breakdown
+  // (6a86baca), and deriving it from the folded rule would only ever confirm
+  // the rule's own shape.
+  EPISTEMIC, OTHER_CATEGORY, CLASSIFIES_AS_TRADE, FIELD_IS_PLACE, NEGATED_TAIL,
+};

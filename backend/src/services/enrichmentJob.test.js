@@ -440,6 +440,36 @@ describe('profileInputsSnapshot — the before/after comparison the routes use',
 });
 
 /**
+ * Staleness (somm 6a86bb3b). reenrichAfterRecordEdit covers the three curation
+ * surfaces, but a bulk script writing straight to the collection reaches none
+ * of them — which is how two Friuli benchmarks ended up flagged over a note
+ * about "Giuli Ballarin", the wine those rows used to be. Comparing stored
+ * inputs against current ones makes that a property of the data instead.
+ */
+describe('isProfileStale', () => {
+  const { profileInputsSnapshot, isProfileStale } = require('./enrichmentJob');
+  const wine = { name: 'Ronco delle Mele', producer: 'Venica & Venica', country: 'c1', type: 'white' };
+
+  test('a profile generated from the current record is not stale', () => {
+    expect(isProfileStale({ ...wine, aiProfile: { inputsSnapshot: profileInputsSnapshot(wine) } })).toBe(false);
+  });
+
+  test('a producer rewritten underneath the profile is stale', () => {
+    const snap = profileInputsSnapshot({ ...wine, producer: 'Alberto Ballarin' });
+    expect(isProfileStale({ ...wine, aiProfile: { inputsSnapshot: snap } })).toBe(true);
+  });
+
+  // Every row enriched before the field shipped has no snapshot. Reporting
+  // those stale would queue the entire registry for a re-spend on no evidence.
+  test('a profile with no stored snapshot is unknown, not stale', () => {
+    expect(isProfileStale({ ...wine, aiProfile: { inputsSnapshot: null } })).toBe(false);
+    expect(isProfileStale({ ...wine, aiProfile: {} })).toBe(false);
+    expect(isProfileStale({ ...wine })).toBe(false);
+    expect(isProfileStale(null)).toBe(false);
+  });
+});
+
+/**
  * WHICH DOUBT WITHHOLDS A PROFILE (flag split 2026-08-17, gate 2026-08-18).
  *
  * One boolean used to answer two questions, and the hold fired on both:

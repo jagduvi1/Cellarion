@@ -1,4 +1,4 @@
-const { noteAssertsProducer } = require('./producerSuspectCheck');
+const { noteAssertsProducer, noteIsEpistemicOnly } = require('./producerSuspectCheck');
 
 // Every string below is a real producerNote from prod on 2026-08-19.
 describe('noteAssertsProducer', () => {
@@ -111,5 +111,110 @@ describe('noteAssertsProducer', () => {
     it('a regex-special producer name does not break the strip', () => {
       expect(noteAssertsProducer('C++ (Wines) is a small estate.', 'C++ (Wines)')).toBe(true);
     });
+  });
+});
+
+// Every string below is a real producerNote taken from the prod dry run on
+// 2026-08-20, and each was read against its wine before being written down —
+// the previous round of this rule shipped five false downgrades precisely
+// because its tests were composed from notes rather than measured against them.
+describe('noteIsEpistemicOnly', () => {
+  describe('DOWNGRADE — the note reports only what the model could not verify', () => {
+    const cases = [
+      ['Domaine Duffour', 'Domaine Duffour is not a producer I can confidently place; this profile is based on the appellation and grape varieties typical of Côtes de Gascogne.'],
+      ['Compañía Uruguaya de Vinos de Mar', 'This producer name is unfamiliar to me, so this profile is based on the grape and Maldonado region generally rather than confirmed knowledge of the specific winery.'],
+      ['Ugo Lequio', 'Ugo Lequio is not a producer I can confidently document, so this profile is based on the Barbaresco appellation and Nebbiolo grape.'],
+      ['Cagliero', 'Cagliero is not a Barolo producer clearly known to me, so this profile is based on appellation and grape typicity rather than the specific house.'],
+      ['Montlobre', 'Montlobre is not a producer I can confidently place; this profile is an appellation and style-level estimate.'],
+      ['Vale da Mata', 'Vale da Mata is not a producer I can confidently place, so this profile is based on the region and grape varieties.'],
+    ];
+    it.each(cases)('%s', (producer, note) => {
+      expect(noteIsEpistemicOnly(note, producer)).toBe(true);
+    });
+
+    // The fixture that matters most: the sommelier argued the rule FROM this
+    // row, and had already cleared it by hand with `confirm` after confirming
+    // it is a real Valtellina winery. The rule reproducing an independent
+    // human verdict is the strongest evidence it is reading the notes right.
+    it('La Spia — the A-path fixture the rule was argued from', () => {
+      expect(noteIsEpistemicOnly(
+        'La Spia is not a producer I can confidently place, so this profile is based on the Rosso di Valtellina appellation and Nebbiolo grape rather than a verified house style.',
+        'La Spia'
+      )).toBe(true);
+    });
+
+    // The methodology tail is where these notes reach for brand vocabulary
+    // while claiming nothing — judging the raw string keeps them suspect.
+    it('a brand noun on the negated side of "rather than" is not a claim', () => {
+      expect(noteIsEpistemicOnly(
+        'Giuli Ballarin is not a producer I can verify, so this profile is based on the grape and region rather than the specific bottling.',
+        'Venica & Venica'
+      )).toBe(true);
+      expect(noteIsEpistemicOnly(
+        'Eisenstone is not a producer I can confidently place, so this profile is based on the Marananga sub-region and Shiraz grape rather than a verified house style.',
+        'Eisenstone'
+      )).toBe(true);
+    });
+  });
+
+  describe('KEEP — the note names what the field actually is, so the suspicion is real', () => {
+    // Caught in the first dry run: cutting the whole "so this profile is…"
+    // clause swallowed a genuine brand claim that FOLLOWED it.
+    it('a positive brand claim after the methodology clause still counts', () => {
+      expect(noteIsEpistemicOnly(
+        'Palladium is not a producer I can confidently place for this wine; this profile is based on the McLaren Vale Shiraz style generally, likely a private-label or retailer brand.',
+        'Palladium'
+      )).toBe(false);
+    });
+
+    // Caught in the second dry run: stated outright rather than by comparison.
+    it('a note saying the value is an appellation is a claim, however tentative', () => {
+      expect(noteIsEpistemicOnly(
+        'Chateau Etoile is not a producer I can verify; Château d\'Etoile / L\'Etoile is an appellation in the Jura, so this may be a mislabeling or an unfamiliar small producer.',
+        'Chateau Etoile'
+      )).toBe(false);
+    });
+
+    const cases = [
+      ['Aldi', 'Aldi is a supermarket retailer that sources this wine from a contract producer rather than owning an estate itself.'],
+      ['Grande Arche', 'Grande Arche appears to be a brand or negociant label rather than an established Saint-Émilion chateau I can confirm.'],
+      ['Bodega Catena Zapata', 'DV Catena appears to be a value-tier range associated with Catena, but this specific bottling is not one I can verify in detail.'],
+      ['Unknown', "'Merlot' here names the grape variety rather than an actual winery, so the true producer is unidentified."],
+      ['Veuve du Vernay', 'Veuve du Vernay is a large-volume sparkling wine brand owned by the Belgian group Compagnie des Vins, not a traditional single estate producer.'],
+      ['Domaine de la Gaffeliere', 'Les Hauts de la Gaffeliere is the second wine of Chateau la Gaffeliere, not a separate domaine.'],
+    ];
+    it.each(cases)('%s', (producer, note) => {
+      expect(noteIsEpistemicOnly(note, producer)).toBe(false);
+    });
+
+    // The sommelier's own example of the precedence they asked for: a hedged
+    // trade classification is still a claim, so B beats A.
+    it('"may be a negociant" is a claim even though it is hedged', () => {
+      expect(noteIsEpistemicOnly(
+        'Jean XXII is not a producer I can confidently place; this may be a negociant or lesser-known bottling.',
+        'Jean XXII'
+      )).toBe(false);
+    });
+
+    it('a note with no epistemic marker at all is not this rule\'s business', () => {
+      expect(noteIsEpistemicOnly('Quatre Seigneurs is a négociant brand used within Châteauneuf-du-Pape.', 'Quatre Seigneurs')).toBe(false);
+    });
+  });
+
+  describe('the two rules stay disjoint, so their tags stay meaningful', () => {
+    // Both epistemic AND a producer claim: ASSERTS_PRODUCER owns it, so this
+    // rule must decline it or a row would carry the wrong provenance tag.
+    it('a note that calls the entity a producer belongs to the sibling rule', () => {
+      const note = 'Cascina Ballarin is a small Piedmont producer I cannot confidently verify, so this profile is largely appellation-level.';
+      expect(noteAssertsProducer(note, 'Cascina Ballarin')).toBe(true);
+      expect(noteIsEpistemicOnly(note, 'Cascina Ballarin')).toBe(false);
+    });
+  });
+
+  it('empty, missing and non-string notes are no evidence', () => {
+    expect(noteIsEpistemicOnly('', 'Foo')).toBe(false);
+    expect(noteIsEpistemicOnly(null, 'Foo')).toBe(false);
+    expect(noteIsEpistemicOnly(undefined, undefined)).toBe(false);
+    expect(noteIsEpistemicOnly('   ', 'Foo')).toBe(false);
   });
 });
