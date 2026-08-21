@@ -11,6 +11,7 @@ const DiscussionRead = require('../models/DiscussionRead');
 const DiscussionReport = require('../models/DiscussionReport');
 const User = require('../models/User');
 const WineDefinition = require('../models/WineDefinition');
+const BlogPost = require('../models/BlogPost');
 const { stripHtml } = require('../utils/sanitize');
 const { sanitizeForumHtml, visibleTextLength } = require('../utils/sanitizeHtml');
 const { logAudit } = require('../services/audit');
@@ -21,7 +22,7 @@ const { extractMentions } = require('../utils/mentionParser');
 const searchService = require('../services/search');
 const { sendDiscussionReplyEmail, EMAIL_VERIFICATION_ENABLED } = require('../services/mailgun');
 const { parsePagination } = require('../utils/pagination');
-const { isValidId } = require('../utils/validation');
+const { isValidId, coerceStringQuery } = require('../utils/validation');
 const { DISCUSSIONS_PER_PAGE, DISCUSSIONS_MAX_PER_PAGE, DISCUSSION_MAX_LENGTHS } = require('../config/constants');
 
 const router = express.Router();
@@ -75,6 +76,19 @@ router.get('/', optionalAuth, async (req, res) => {
     // `js/sql-injection` rule satisfied without changing behaviour.
     if (validCategory) {
       filter.category = { $eq: validCategory };
+    }
+
+    // Threads opened from one blog post — what the post page lists under
+    // "Discuss this post". Applied to the Mongo path only: the Meili branch
+    // below is a relevance search and this is an exact scope, so mixing them
+    // would silently return the wrong set. A blogPost filter with a `q` is not
+    // a combination the post page issues.
+    const blogPostId = coerceStringQuery(req.query.blogPost).trim();
+    if (blogPostId && isValidId(blogPostId)) {
+      filter.blogPost = { $eq: new mongoose.Types.ObjectId(blogPostId) };
+    } else if (blogPostId) {
+      // A malformed id must not silently widen the scope to every discussion.
+      return res.json({ discussions: [], total: 0, page, pages: 0 });
     }
 
     // Meilisearch path: fuzzy match on title/body/authorName/wineName,
@@ -409,7 +423,7 @@ router.post('/', requireAuth, requireNonDemo, async (req, res) => {
   try {
     if (await checkDiscussionBan(req, res)) return;
 
-    const { title, body, category, wineDefinition } = req.body;
+    const { title, body, category, wineDefinition, blogPost } = req.body;
 
     if (!title || !body || !category) {
       return res.status(400).json({ error: 'Title, body, and category are required' });
@@ -419,6 +433,23 @@ router.post('/', requireAuth, requireNonDemo, async (req, res) => {
     }
     if (wineDefinition && !isValidId(wineDefinition)) {
       return res.status(400).json({ error: 'Invalid wine definition ID' });
+    }
+    // A thread opened from a blog post. Verified to EXIST and to be PUBLISHED,
+    // for the same reason the wine above is verified: a discussion is
+    // anonymously readable and crawler-rendered, so a bad ref would publish a
+    // link to a draft or to nothing. Cast after validating to clear taint.
+    let blogOid = null;
+    if (blogPost) {
+      if (!isValidId(blogPost)) {
+        return res.status(400).json({ error: 'Invalid blog post ID' });
+      }
+      const post = await BlogPost.findOne({
+        _id: new mongoose.Types.ObjectId(String(blogPost)), status: 'published',
+      }).select('_id');
+      if (!post) {
+        return res.status(400).json({ error: 'No such published blog post' });
+      }
+      blogOid = post._id;
     }
     // Verify the wine actually exists (the reply path does the same) — a
     // stale picker id would create a thread whose wine chip silently never
@@ -451,7 +482,8 @@ router.post('/', requireAuth, requireNonDemo, async (req, res) => {
       title: cleanTitle,
       body: cleanBody,
       category,
-      wineDefinition: wineDefinition || null
+      wineDefinition: wineDefinition || null,
+      blogPost: blogOid
     });
 
     await discussion.save();

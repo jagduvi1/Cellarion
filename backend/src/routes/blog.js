@@ -3,9 +3,14 @@ const { requireAuth, requireRole } = require('../middleware/auth');
 const BlogPost = require('../models/BlogPost');
 const { logAudit } = require('../services/audit');
 const { submitUrls } = require('../services/indexNow');
-const { isValidId } = require('../utils/validation');
+const { isValidId, coerceStringQuery } = require('../utils/validation');
+const { escapeRegex } = require('../utils/sanitize');
 
 const router = express.Router();
+
+// Bounded before it ever reaches a RegExp. A 10k-char needle cannot match a
+// 200-char title, so the only thing an unbounded one buys is scan cost.
+const MAX_SEARCH_LEN = 120;
 
 function generateSlug(title) {
   return title
@@ -29,6 +34,25 @@ router.get('/', async (req, res) => {
     const filter = { status: 'published' };
     if (typeof req.query.tag === 'string' && req.query.tag.trim()) {
       filter.tags = String(req.query.tag).toLowerCase();
+    }
+
+    // Free-text search (user request 2026-08-21). Deliberately a Mongo regex
+    // over title/excerpt/tags rather than a Meilisearch index: the corpus is 27
+    // posts, and standing up a second search engine for 27 documents costs more
+    // to run and reason about than it can possibly return. Revisit at a few
+    // hundred — the shape of the endpoint does not change if the backing does.
+    //
+    // Why this exists at all with tag filtering already present: 27 posts carry
+    // 91 distinct tags, so the tag list reads as navigation, not as a filter.
+    //
+    // escapeRegex + coerceStringQuery are load-bearing, not decoration:
+    // `?q[$gt]=` arrives as an OBJECT, and an unescaped `(((((` is a ReDoS.
+    const q = coerceStringQuery(req.query.q).trim().slice(0, MAX_SEARCH_LEN);
+    if (q) {
+      const rx = new RegExp(escapeRegex(q), 'i');
+      // Tags are stored lowercased; an exact tag hit is included so searching
+      // "mcp" finds tagged posts whose prose never says the word.
+      filter.$or = [{ title: rx }, { excerpt: rx }, { tags: q.toLowerCase() }];
     }
 
     const [posts, total] = await Promise.all([

@@ -2,9 +2,10 @@ import { JSON_HEADERS } from './apiConstants';
 
 // ── Public ──
 
-export const getBlogPosts = (apiFetch, { page = 1, limit = 12, tag } = {}) => {
+export const getBlogPosts = (apiFetch, { page = 1, limit = 12, tag, q } = {}) => {
   const params = new URLSearchParams({ page, limit });
   if (tag) params.set('tag', tag);
+  if (q) params.set('q', q);
   return apiFetch(`/api/blog?${params}`);
 };
 

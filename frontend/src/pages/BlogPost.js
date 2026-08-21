@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import DOMPurify from 'dompurify';
 import { getBlogPost } from '../api/blog';
+import { getDiscussions } from '../api/discussions';
 import { useAuth } from '../contexts/AuthContext';
 import SEOHead from '../components/SEOHead';
 import SITE_URL from '../config/siteUrl';
@@ -11,8 +12,9 @@ import './Blog.css';
 function BlogPost() {
   const { t } = useTranslation();
   const { slug } = useParams();
-  const { apiFetch } = useAuth();
+  const { apiFetch, user } = useAuth();
   const [post, setPost] = useState(null);
+  const [threads, setThreads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -33,6 +35,22 @@ function BlogPost() {
     fetchPost();
     return () => { cancelled = true; };
   }, [apiFetch, slug, t]);
+
+  // Threads for THIS post, fetched once the post id is known. Failure is
+  // silent on purpose: the discussion list is an extra, and an unreachable
+  // community endpoint must never stop the article rendering.
+  useEffect(() => {
+    if (!post?._id) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await getDiscussions(apiFetch, `?blogPost=${post._id}&limit=10`);
+        const data = await res.json();
+        if (!cancelled && res.ok) setThreads(data.discussions || []);
+      } catch { /* no threads shown */ }
+    })();
+    return () => { cancelled = true; };
+  }, [apiFetch, post?._id]);
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
@@ -153,6 +171,42 @@ function BlogPost() {
           dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.content) }}
         />
       </article>
+
+      {/* "Discuss this post" instead of a comment section. A thread lands in
+          the existing community, which already
+          has moderation, reports and the GDPR export/erasure cascade — a
+          bespoke comment model would have had to re-earn all three, and would
+          have been a second community surface next to a quiet first one. */}
+      <section className="blog-discuss">
+        <h2>{t('blog.discussTitle')}</h2>
+        <p>{t('blog.discussIntro')}</p>
+        {threads.length > 0 && (
+          <ul className="blog-discuss-list">
+            {threads.map((d) => (
+              <li key={d._id}>
+                <Link to={`/community/discussions/${d.slug || d._id}`}>{d.title}</Link>
+                {d.replyCount > 0 && <span className="blog-discuss-count"> · {d.replyCount}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+        {user ? (
+          <Link
+            className="btn btn-secondary"
+            to="/community/discussions"
+            // Route state, matching the wine page's existing "start a
+            // discussion about this wine" CTA — it opens the create modal
+            // prefilled instead of inventing a second creation surface.
+            state={{ newDiscussionBlogPost: { _id: post._id, title: post.title } }}
+          >
+            {t('blog.discussStart')}
+          </Link>
+        ) : (
+          // Signed-out readers are most of a blog's traffic, so say what to do
+          // rather than showing a button that bounces them to a login wall.
+          <p className="blog-discuss-signedout">{t('blog.discussSignedOut')}</p>
+        )}
+      </section>
 
       <div className="blog-post-footer">
         <Link to="/blog" className="btn btn-secondary">{t('blog.backToList')}</Link>
