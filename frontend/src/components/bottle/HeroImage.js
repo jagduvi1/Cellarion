@@ -1,4 +1,5 @@
-import { useState, lazy, Suspense } from 'react';
+import { useState, Suspense } from 'react';
+import { lazy } from '../../utils/lazyWithReload';
 import { useTranslation } from 'react-i18next';
 import AuthImage from '../AuthImage';
 

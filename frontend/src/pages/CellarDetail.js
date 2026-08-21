@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, lazy, Suspense, Fragment } from 'react';
+import { useState, useEffect, useRef, Suspense, Fragment } from 'react';
+import { lazy } from '../utils/lazyWithReload';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';

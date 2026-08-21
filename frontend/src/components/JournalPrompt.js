@@ -1,4 +1,5 @@
-import { lazy, Suspense, useId, useState } from 'react';
+import { Suspense, useId, useState } from 'react';
+import { lazy } from '../utils/lazyWithReload';
 import { useTranslation } from 'react-i18next';
 import { useDialogA11y } from '../utils/useDialogA11y';
 
