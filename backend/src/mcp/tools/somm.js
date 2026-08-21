@@ -95,8 +95,32 @@ const wineLite = (wd) => (wd ? {
 // producer_unknown rides along on every shape: it is the difference between
 // "this record is wrong" and "this is a small estate the model cannot place",
 // and a curator judging a drink window should know which they are looking at.
-const profileLite = (ap) => {
-  if (!ap || !ap.generatedAt) return null; // never enriched — nothing to say
+/**
+ * @param {object} ap    aiProfile subdoc
+ * @param {object} wine  the wine, for the absent-profile explanation
+ */
+const profileLite = (ap, wine) => {
+  // NO PROFILE. This used to be a silent null meaning "the batch has not
+  // reached it yet". Since the enrichmentOnAdd policy (2026-08-21) it usually
+  // means automatic enrichment DECLINED the record — permanently, for a
+  // record too thin to say anything true — so the curator writing the drink
+  // window is the one who will write the profile. A null could not say that.
+  if (!ap || !ap.generatedAt) {
+    const { identityDataSufficient } = require('../../services/enrichmentJob');
+    // Degrade to the softer message rather than throwing: this runs inside a
+    // row mapper, so a missing export would take out the whole queue listing
+    // over a cosmetic label.
+    const thin = wine && typeof identityDataSufficient === 'function'
+      ? !identityDataSufficient({ ...wine, grapes: wine.grapes || [] })
+      : false;
+    return {
+      absent: true,
+      reason: thin
+        ? 'no region or appellation on the record, so automatic enrichment skips it — this profile is yours to write'
+        : 'not enriched yet',
+      auto_enrich: thin ? 'skipped_thin_identity' : 'pending',
+    };
+  }
   if (ap.heldAt) {
     return {
       withheld: true,
@@ -152,7 +176,13 @@ registerTool({
     'first. Call when the somm asks "anything in my maturity queue?" or before a review session. Pass wine_id ' +
     '(and optionally vintage) to fetch ONE wine\'s rows — including curator notes, which the public drink_window_for ' +
     'deliberately omits; a wine-scoped call defaults to status "all" so reviewed rows show without paginating the ' +
-    'whole queue. Use the returned profile_id with set_vintage_maturity (which also accepts wine_id + vintage directly).',
+    'whole queue. Use the returned profile_id with set_vintage_maturity (which also accepts wine_id + vintage directly). ' +
+    'THIS QUEUE IS A TWO-OUTPUT PASS: the research you do to set a drink window — the producer, the vintage, the ' +
+    'style — is the same research a tasting profile needs, so write both while you have it. Read tasting_profile on ' +
+    'each row: absent:true with auto_enrich "skipped_thin_identity" means the record carries no region or ' +
+    'appellation, automatic enrichment deliberately declines those, and nothing will ever write it but you; ' +
+    '"pending" means it may still be enriched. withheld:true means a generated profile exists but is held for the ' +
+    'stated reason — judge it through list_held_profiles rather than overwriting blind. Write with set_wine_profile.',
   scope: 'read',
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: true, openWorldHint: false },
@@ -187,7 +217,9 @@ registerTool({
       WineVintageProfile.find(filter)
         .sort({ status: 1, createdAt: -1 })
         .skip(offset).limit(limit)
-        .populate({ path: 'wineDefinition', select: 'name producer type appellation aiProfile', populate: ['country', 'region'] })
+        // grapes rides along for identityDataSufficient, which decides whether
+        // an absent profile is "yours to write" or merely "not yet enriched".
+        .populate({ path: 'wineDefinition', select: 'name producer type appellation aiProfile grapes', populate: ['country', 'region'] })
         .lean(),
     ]);
     const data = profiles.map((p) => ({
@@ -202,7 +234,7 @@ registerTool({
       // pass with set_wine_profile, instead of the curator silently working
       // around it and the bad prose surviving (support ticket 2026-07-28).
       // `source` tells the model whether a human has already vetted this.
-      tasting_profile: profileLite(p.wineDefinition?.aiProfile),
+      tasting_profile: profileLite(p.wineDefinition?.aiProfile, p.wineDefinition),
       // Somm-gated tool, so the curator's own note comes back with the row.
       // Kept out of drink_window_for, which is public — see publicContent.js.
       somm_notes: p.sommNotes || null,
@@ -419,15 +451,18 @@ registerTool({
 
 registerTool({
   name: 'set_wine_profile',
-  title: 'Sommelier: correct a wine\'s tasting profile, type or grapes',
+  title: 'Sommelier: write or correct a wine\'s tasting profile, type or grapes',
   description:
-    'Corrects the AI-generated tasting profile on a registry wine — body, tannin, acidity, sweetness, flavours, food ' +
+    'WRITES or corrects the tasting profile on a registry wine — body, tannin, acidity, sweetness, flavours, food ' +
     'pairings and the prose description — and the wine\'s structural record fields type and grapes (a wrong type ' +
     'changes filtering, serving and storage guidance; use when e.g. a vin jaune is typed "fortified" or a cider ' +
     '"rosé"). Get wine_id from list_maturity_queue, search_registry or get_wine. FIELD-LEVEL: omit a field to leave ' +
     'it alone, pass null to CLEAR it — except type, which can only be corrected, never cleared. Grape values are ' +
     'variety NAMES resolved against the taxonomy (synonyms work: "Shiraz" finds Syrah); an unknown variety is ' +
-    'refused, never created. A write that sets profile values marks the profile curator-verified, which permanently ' +
+    'refused, never created. Authoring from nothing is now the NORMAL path, not the exception: records with no ' +
+    'region or appellation are deliberately never auto-enriched, so on those the only profile a reader will ever ' +
+    'see is the one you write here — and writing it during the maturity pass costs one extra step on research you ' +
+    'have already done. A write that sets profile values marks the profile curator-verified, which permanently ' +
     'stops the AI regenerating over it; a write that ONLY clears does NOT verify — the wine stays eligible for ' +
     'enrichment, so clearing fiction you cannot replace is still better than leaving it. This is SHARED data shown ' +
     'to every owner of the wine — confirm the values with the somm first. Reversible via undo_last.',
