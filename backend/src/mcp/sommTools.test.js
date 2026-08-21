@@ -1579,3 +1579,44 @@ describe('respond_to_wine_report', () => {
     expect(McpActionLog.create.mock.calls.at(-1)[0]).toMatchObject({ action: 'somm_wine_report_close' });
   });
 });
+
+// Somm ticket 6a887619: grapes were the ONE identity field the queue row hid,
+// so creation-time grapes surfacing on a later get_wine read as "populated by
+// an unidentified path during curation" — four instances filed before the
+// cause was found. The rule under test: emit names honestly, or omit the key.
+describe('wineLite carries grapes honestly (ticket 6a887619)', () => {
+  const listQueue = async (wineDefinition) => {
+    WineVintageProfile.countDocuments.mockResolvedValueOnce(1).mockResolvedValueOnce(1);
+    WineVintageProfile.find.mockReturnValue(chain([{
+      _id: oid('1'), vintage: '2020', status: 'pending', relative: false, wineDefinition,
+    }]));
+    return parse(await tool('list_maturity_queue').handler({}, SOMM_CTX)).data[0].wine;
+  };
+
+  test('populated grape docs emit their names', async () => {
+    const wine = await listQueue({
+      _id: oid('f'), name: 'Shiraz', producer: 'Lights Valley', type: 'red',
+      grapes: [{ _id: oid('a'), name: 'Syrah' }],
+    });
+    expect(wine.grapes).toEqual(['Syrah']);
+  });
+
+  test('a genuinely empty list is [], a real "no grapes"', async () => {
+    const wine = await listQueue({ _id: oid('f'), name: 'Rosso', producer: 'P', grapes: [] });
+    expect(wine.grapes).toEqual([]);
+  });
+
+  test('UNPOPULATED ids omit the key — never claim "no grapes" about a wine that has them', async () => {
+    const wine = await listQueue({
+      _id: oid('f'), name: 'Shiraz', producer: 'P',
+      grapes: [oid('a'), oid('b')], // raw ObjectIds: a caller that selected but did not populate
+    });
+    expect(wine.grapes).toBeUndefined();
+    expect('grapes' in wine).toBe(false);
+  });
+
+  test('a surface that never selected grapes omits the key too', async () => {
+    const wine = await listQueue({ _id: oid('f'), name: 'Barolo', producer: 'P' });
+    expect('grapes' in wine).toBe(false);
+  });
+});
