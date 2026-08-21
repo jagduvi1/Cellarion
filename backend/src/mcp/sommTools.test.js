@@ -48,6 +48,16 @@ jest.mock('../models/WineVintagePrice', () => {
 jest.mock('../models/PriceTrackingRequest', () => ({ find: jest.fn(), findOne: jest.fn(), findById: jest.fn(), deleteOne: jest.fn(), findOneAndUpdate: jest.fn() }));
 jest.mock('../models/PriceTrackingSkip', () => ({ find: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn(), deleteOne: jest.fn() }));
 jest.mock('../models/WineCorrectionProposal', () => ({ create: jest.fn(), findById: jest.fn(), deleteOne: jest.fn(), find: jest.fn(), countDocuments: jest.fn() }));
+// The self-apply path (2026-08-21) reaches the admin route's own approveProposal
+// rather than duplicating the write. Mocked so this suite stays a unit test of
+// the TOOL's routing; the apply itself is covered by wineProposals.test.js and
+// the direct/gated decision by services/proposalDirectApply.test.js.
+jest.mock('../routes/admin/wineProposals', () => ({ approveProposal: jest.fn() }));
+// Defaults to GATED so every pre-existing proposal test keeps asserting the
+// admin-review path it was written for; the self-apply tests opt in.
+jest.mock('../services/proposalDirectApply', () => ({
+  classifyProposal: jest.fn(async () => ({ direct: false, reason: 'admin-reviewed' })),
+}));
 jest.mock('../models/ProfileAuditSample', () => ({ create: jest.fn(), find: jest.fn() }));
 jest.mock('../models/WineReport', () => ({ find: jest.fn(), findById: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../utils/cellarCred', () => ({ incrementCred: jest.fn().mockResolvedValue(undefined) }));
@@ -1054,6 +1064,99 @@ describe('propose_wine_correction', () => {
     WineDefinition.findById.mockReturnValue(chain(w));
     return w;
   };
+
+  // --- self-apply (2026-08-21) ---------------------------------------------
+  // The tool's job here is ROUTING: ask the classifier, and either apply
+  // through the admin route's own approveProposal or leave the row pending.
+  describe('self-apply', () => {
+    const { classifyProposal } = require('../services/proposalDirectApply');
+    const { approveProposal } = require('../routes/admin/wineProposals');
+
+    test('a blank-fill correction applies on filing and reports it as applied', async () => {
+      mkWine({ appellation: null });
+      WineCorrectionProposal.create.mockResolvedValue({ _id: 'prop-2' });
+      classifyProposal.mockResolvedValueOnce({ direct: true, reason: 'blank, reversible' });
+      approveProposal.mockResolvedValueOnce({ status: 200, body: { appliedNote: 'Applied: appellation, region' } });
+
+      const body = parse(await tool('propose_wine_correction').handler({
+        wine_id: WINE_ID, kind: 'field_correction',
+        proposed_fields: { appellation: 'Barolo', region: 'Piedmont' },
+        reason: REASON,
+      }, SOMM_CTX));
+
+      expect(body.data.status).toBe('approved');
+      expect(body.data.applied_note).toBe('Applied: appellation, region');
+      expect(body.summary).toMatch(/^Applied to/);
+      // Applied through the ONE write path, with the proposal id — not a
+      // second implementation that could drift from canonicalization.
+      expect(approveProposal).toHaveBeenCalledWith('prop-2', expect.anything());
+      // The row is still written first: review-after, not no-review.
+      expect(WineCorrectionProposal.create).toHaveBeenCalled();
+    });
+
+    test('a failed apply reports PENDING — never a false success', async () => {
+      // If the apply loses a race or 409s, the curator must not be told the
+      // registry changed. The row stays pending and an admin picks it up.
+      mkWine({ appellation: null });
+      WineCorrectionProposal.create.mockResolvedValue({ _id: 'prop-3' });
+      classifyProposal.mockResolvedValueOnce({ direct: true, reason: 'blank, reversible' });
+      approveProposal.mockResolvedValueOnce({ status: 409, body: { error: 'already decided' } });
+
+      const body = parse(await tool('propose_wine_correction').handler({
+        wine_id: WINE_ID, kind: 'field_correction',
+        proposed_fields: { appellation: 'Barolo' }, reason: REASON,
+      }, SOMM_CTX));
+
+      expect(body.data.status).toBe('pending');
+      expect(body.data.applied_note).toBeUndefined();
+    });
+
+    test('a THROWN apply also reports pending rather than 500-ing the tool', async () => {
+      mkWine({ appellation: null });
+      WineCorrectionProposal.create.mockResolvedValue({ _id: 'prop-4' });
+      classifyProposal.mockResolvedValueOnce({ direct: true, reason: 'blank, reversible' });
+      approveProposal.mockRejectedValueOnce(new Error('mongo went away'));
+
+      const body = parse(await tool('propose_wine_correction').handler({
+        wine_id: WINE_ID, kind: 'field_correction',
+        proposed_fields: { appellation: 'Barolo' }, reason: REASON,
+      }, SOMM_CTX));
+
+      expect(body.error).toBeUndefined();
+      expect(body.data.status).toBe('pending');
+    });
+
+    test('a gated correction is never applied, and says why it is being reviewed', async () => {
+      mkWine();
+      WineCorrectionProposal.create.mockResolvedValue({ _id: 'prop-5' });
+      classifyProposal.mockResolvedValueOnce({
+        direct: false, reason: 'The wine\'s name states "Rosso Veronese" but the proposal says "Veneto IGT"',
+      });
+
+      const body = parse(await tool('propose_wine_correction').handler({
+        wine_id: WINE_ID, kind: 'field_correction',
+        proposed_fields: { appellation: 'Veneto IGT' }, reason: REASON,
+      }, SOMM_CTX));
+
+      expect(body.data.status).toBe('pending');
+      expect(body.data.why_reviewed).toMatch(/Rosso Veronese/);
+      expect(approveProposal).not.toHaveBeenCalled();
+    });
+
+    test('merges never reach the classifier at all', async () => {
+      mkWine();
+      WineDefinition.findById.mockReturnValueOnce(chain(mkWine()))
+        .mockReturnValueOnce(chain({ _id: TARGET_ID, name: 'Barolo', producer: 'Pira' }));
+      WineCorrectionProposal.create.mockResolvedValue({ _id: 'prop-6' });
+
+      const body = parse(await tool('propose_wine_correction').handler({
+        wine_id: WINE_ID, kind: 'merge', merge_target_id: TARGET_ID, reason: REASON,
+      }, SOMM_CTX));
+
+      expect(body.data.status).toBe('pending');
+      expect(approveProposal).not.toHaveBeenCalled();
+    });
+  });
 
   test('files a field_correction: snapshot captured, ledger row + audit written, nothing applied', async () => {
     mkWine();
