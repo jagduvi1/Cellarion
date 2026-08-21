@@ -39,6 +39,7 @@ function Discussions() {
   const [form, setForm] = useState({ title: '', body: '', category: 'general' });
   const [bodyTextLength, setBodyTextLength] = useState(0);
   const [linkedWine, setLinkedWine] = useState(null);
+  const [linkedBlogPost, setLinkedBlogPost] = useState(null);
   const [formError, setFormError] = useState(null);
   const BODY_VISIBLE_MAX = 5000;
 
@@ -105,6 +106,19 @@ function Discussions() {
     }
   }, [user, location.state]);
 
+  // Same pattern for "Discuss this post" on a blog article. Route state again
+  // rather than a query param, so the post's title can seed the thread title
+  // without a refetch and the URL stays clean.
+  useEffect(() => {
+    if (user && location.state?.newDiscussionBlogPost) {
+      const bp = location.state.newDiscussionBlogPost;
+      setLinkedBlogPost(bp);
+      setForm((f) => ({ ...f, title: bp.title ? `Re: ${bp.title}`.slice(0, 200) : f.title }));
+      setShowCreate(true);
+      window.history.replaceState({}, '');
+    }
+  }, [user, location.state]);
+
   const handleCreate = async (e) => {
     e.preventDefault();
     setFormError(null);
@@ -120,6 +134,7 @@ function Discussions() {
     try {
       const payload = { ...form };
       if (linkedWine) payload.wineDefinition = linkedWine._id;
+      if (linkedBlogPost) payload.blogPost = linkedBlogPost._id;
       const res = await createDiscussion(apiFetch, payload);
       const data = await res.json();
 
@@ -128,6 +143,7 @@ function Discussions() {
         setForm({ title: '', body: '', category: 'general' });
         setBodyTextLength(0);
         setLinkedWine(null);
+        setLinkedBlogPost(null);
         // Prepend new discussion to list
         setDiscussions(prev => [data.discussion, ...prev]);
       } else {

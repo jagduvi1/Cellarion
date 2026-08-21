@@ -38,6 +38,27 @@ const discussionSchema = new mongoose.Schema({
     ref: 'WineDefinition',
     default: null
   },
+  // The blog post this thread discusses, when it was opened from one (user
+  // request 2026-08-21: "a comment section on every blog post").
+  //
+  // A ref rather than a comment system, deliberately. Blog comments would have
+  // been a second community surface, and the first one is quiet — 5 threads and
+  // 12 replies from users who are already logged in and invested. Blog readers
+  // arrive from search and mostly aren't signed in, so an authenticated comment
+  // box would be quieter still, while an anonymous one on a crawlable page is a
+  // spam target with a single moderator.
+  //
+  // Pointing at Discussion inherits the parts that are expensive to get right
+  // and already correct here: the report queue and moderator role, the
+  // GDPR export and deletion cascade registered in services/userDataRegistry,
+  // and Meili indexing. A bespoke BlogComment model would have had to re-earn
+  // all four.
+  blogPost: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'BlogPost',
+    default: null,
+    index: true
+  },
   isPinned: {
     type: Boolean,
     default: false

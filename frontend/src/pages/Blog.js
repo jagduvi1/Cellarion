@@ -63,13 +63,18 @@ function Blog() {
 
   const page = Math.max(1, parseInt(searchParams.get('page'), 10) || 1);
   const activeTag = searchParams.get('tag') || '';
+  // The query lives in the URL, like the tag and page do — so a search is
+  // shareable, survives a reload, and the back button steps through it.
+  const activeQuery = searchParams.get('q') || '';
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
     try {
       // apiFetch doesn't throw on non-2xx — an error body ({error}) has no
       // posts array, and rendering would crash on posts.length.
-      const res = await getBlogPosts(apiFetch, { page, tag: activeTag || undefined });
+      const res = await getBlogPosts(apiFetch, {
+        page, tag: activeTag || undefined, q: activeQuery || undefined,
+      });
       const data = await res.json();
       if (!res.ok) {
         setPosts([]);
@@ -83,7 +88,7 @@ function Blog() {
     } finally {
       setLoading(false);
     }
-  }, [apiFetch, page, activeTag]);
+  }, [apiFetch, page, activeTag, activeQuery]);
 
   const fetchTags = useCallback(async () => {
     try {
@@ -112,6 +117,28 @@ function Blog() {
   const setTag = (tag) => {
     const params = new URLSearchParams();
     if (tag) params.set('tag', tag);
+    // A tag click keeps the query: they narrow the same list together.
+    if (activeQuery) params.set('q', activeQuery);
+    setSearchParams(params);
+  };
+
+  // Submitted, not live-filtered: every keystroke would be a request, and the
+  // URL history would fill with one entry per letter typed.
+  const submitSearch = (e) => {
+    e.preventDefault();
+    const raw = new FormData(e.currentTarget).get('q');
+    const next = typeof raw === 'string' ? raw.trim() : '';
+    const params = new URLSearchParams();
+    if (next) params.set('q', next);
+    if (activeTag) params.set('tag', activeTag);
+    setSearchParams(params); // page resets to 1 — results start at the top
+  };
+
+  // Drops the query, KEEPS the tag — the opposite of setTag, which keeps the
+  // query and changes the tag. Clearing one filter should not clear the other.
+  const clearSearch = () => {
+    const params = new URLSearchParams();
+    if (activeTag) params.set('tag', activeTag);
     setSearchParams(params);
   };
 
@@ -162,6 +189,33 @@ function Blog() {
         <p className="blog-subtitle">{t('blog.subtitle')}</p>
       </header>
 
+      <form className="blog-search" onSubmit={submitSearch} role="search">
+        <input
+          type="search"
+          name="q"
+          // Uncontrolled + key: the field starts from the URL, and remounts
+          // when the URL query changes (a tag click, back button) so it never
+          // shows a stale term next to fresh results. Between those, typing is
+          // local — no re-render per keystroke.
+          key={activeQuery}
+          defaultValue={activeQuery}
+          placeholder={t('blog.searchPlaceholder')}
+          aria-label={t('blog.searchPlaceholder')}
+        />
+        <button type="submit">{t('blog.search')}</button>
+        {activeQuery && (
+          <button type="button" className="blog-search-clear" onClick={clearSearch}>
+            {t('blog.clearSearch')}
+          </button>
+        )}
+      </form>
+
+      {activeQuery && !loading && (
+        <p className="blog-search-summary">
+          {t('blog.searchResults', { count: total, query: activeQuery })}
+        </p>
+      )}
+
       {tags.length > 0 && (
         <div className="blog-tags">
           <button
@@ -199,7 +253,11 @@ function Blog() {
       {loading ? (
         <div className="blog-loading">{t('blog.loading')}</div>
       ) : posts.length === 0 ? (
-        <div className="blog-empty">{t('blog.noPosts')}</div>
+        <div className="blog-empty">
+          {/* "No blog posts yet" is wrong when the archive is full and the
+              search simply missed — say which of the two happened. */}
+          {activeQuery ? t('blog.noSearchResults', { query: activeQuery }) : t('blog.noPosts')}
+        </div>
       ) : (
         <>
           <div className="blog-grid">
