@@ -24,6 +24,7 @@ const { logAudit } = require('../../services/audit');
 const { SUPPORTED_CURRENCIES } = require('../../config/currencies');
 const { isValidId } = require('../../utils/validation');
 const { stripHtml } = require('../../utils/sanitize');
+const { classifyProposal } = require('../../services/proposalDirectApply');
 const { ok, fail, objectId, pageParams } = require('../toolUtil');
 const { logAction } = require('../actionLedger');
 const {
@@ -1582,18 +1583,26 @@ const PROPOSAL_URL_MAX = 500;
 
 registerTool({
   name: 'propose_wine_correction',
-  title: 'Sommelier: propose an identity fix, merge or non-wine flag (admin-reviewed)',
+  title: 'Sommelier: correct an identity field, merge or flag a non-wine',
   description:
-    'Files a correction PROPOSAL on a registry wine for an admin to review — nothing changes until they approve. ' +
+    'Files a correction on a registry wine. A correction that only FILLS BLANK appellation, region or classification '
+    + 'fields, and does not contradict the wine\'s own name, APPLIES IMMEDIATELY — the reply says "Applied" and gives '
+    + 'the applied_note. Everything else is filed for an admin and the reply says "awaiting admin review" with '
+    + 'why_reviewed: producer and name (they drive the dedup key and the public URL), country, any OVERWRITE of a '
+    + 'field that already has a value, merges, non-wine flags, and any appellation that disagrees with an appellation '
+    + 'stated in the wine\'s name. That last one is a ROUTING rule, not a verdict — an Australian "Prosecco" really is '
+    + 'a King Valley wine and not the Italian DOC, so file it with your evidence and an admin will read it. ' +
     'THIS is the path for the identity fields set_wine_profile deliberately does not cover: producer, name, ' +
     'appellation, region, country and classification (kind "field_correction", region/country as plain names — ' +
-    'resolved against the taxonomy at approval, never minted). Also: kind "merge" when this wine duplicates another ' +
+    'resolved against the taxonomy when it applies, never minted). Also: kind "merge" when this wine duplicates another ' +
     'registry wine (merge_target_id = the wine that should SURVIVE), and kind "non_wine" when the row is not wine at ' +
     'all (spirits/cider/sake) and should be quarantined out of search and the maturity queue. Always give the reason ' +
     'the somm established, and cite an evidence_url (producer site, appellation register) — evidence is what makes a ' +
     'one-click approval possible. One pending proposal per wine and kind — list_pending_corrections shows what is ' +
     'already filed. MERGE proposals are decided in Admin → Wines on the web, DELIBERATELY not over MCP: a wine ' +
-    'merge moves bottles and rewrites references (same stance as taxonomy merge). Reversible via undo_last while pending.',
+    'merge moves bottles and rewrites references (same stance as taxonomy merge), and the merge DELETES the absorbed '
+    + 'record — there is no unmerge. undo_last withdraws a proposal that is still pending; one that already applied is '
+    + 'changed by filing a further correction.',
   scope: 'write',
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
@@ -1756,10 +1765,65 @@ registerTool({
         via: 'mcp',
       });
 
+    // SELF-APPLY (2026-08-21). A correction that only FILLS BLANKS on
+    // reversible fields, and does not contradict the wine's own name, applies
+    // on filing instead of waiting for an admin — see
+    // services/proposalDirectApply for why that line and not another.
+    //
+    // The proposal row is still written first and still carries the reason and
+    // evidence: oversight moves from approve-BEFORE to review-AFTER, it does
+    // not disappear. Applying through the admin route's own approveProposal
+    // (rather than a second write path) is what keeps canonicalization, the
+    // dedup key, the search/embed/IndexNow follow-through and the re-enrich
+    // identical between the two doors.
+    let applied = null;
+    let reviewReason = null;
+    if (args.kind === 'field_correction') {
+      // Required lazily: wineProposals pulls in the whole admin route tree
+      // (which requires the MCP registry back), so a top-level require here
+      // would close a cycle.
+      const { approveProposal } = require('../../routes/admin/wineProposals');
+      const verdict = await classifyProposal(wine, args.kind, proposedFields);
+      if (verdict.direct) {
+        // approveProposal reads req.user.id for decidedBy and for its audit
+        // attribution. ctx.req IS the express req on every real call; the
+        // fallback keeps unit contexts (ctx.req: null) working.
+        const asReq = ctx.req && ctx.req.user ? ctx.req : { user: { id: ctx.user.id } };
+        try {
+          const outcome = await approveProposal(proposal._id, asReq);
+          if (outcome.status === 200) {
+            applied = outcome.body?.appliedNote || 'Applied';
+          } else {
+            // The proposal stays pending and an admin picks it up — a failed
+            // self-apply must never look like a success to the curator.
+            console.warn(`[somm] self-apply declined for proposal ${proposal._id}: ${outcome.status} ${outcome.body?.error || ''}`);
+          }
+        } catch (err) {
+          console.error(`[somm] self-apply threw for proposal ${proposal._id}:`, err.message);
+        }
+      } else {
+        reviewReason = verdict.reason;
+      }
+    }
+
     const kindLabel = args.kind === 'merge'
       ? `merge into ${target.producer ? `${target.producer} — ` : ''}${target.name}`
       : args.kind === 'non_wine' ? 'non-wine quarantine' : 'identity-field correction';
-    const envelope = {
+    const envelope = applied ? {
+      summary: `Applied to ${wine.producer} — ${wine.name}: ${applied}`,
+      data: {
+        proposal_id: proposal._id,
+        wine_id: wine._id,
+        kind: args.kind,
+        status: 'approved',
+        ...(proposedFields ? { proposed_fields: proposedFields } : {}),
+        evidence_url: evidenceUrl || null,
+        applied_note: applied,
+        note: 'Live on the wine now. Blank identity fields that agree with the name apply on filing; '
+          + 'the proposal is kept with your reason so an admin can review it afterwards.',
+        undo: 'This is already applied — file a further correction to change it again.',
+      },
+    } : {
       summary: `Proposal filed: ${kindLabel} for ${wine.producer} — ${wine.name} (awaiting admin review)`,
       data: {
         proposal_id: proposal._id,
@@ -1769,6 +1833,7 @@ registerTool({
         ...(proposedFields ? { proposed_fields: proposedFields } : {}),
         ...(target ? { merge_target: { wine_id: target._id, name: target.name, producer: target.producer || null } } : {}),
         evidence_url: evidenceUrl || null,
+        ...(reviewReason ? { why_reviewed: reviewReason } : {}),
         note: 'Nothing has changed — the wine stays as-is until an admin reviews the diff and approves.',
         undo: 'undo_last withdraws the proposal while it is still pending',
       },

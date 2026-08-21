@@ -545,3 +545,10 @@ router.post('/bulk-reject', async (req, res) => {
 });
 
 module.exports = router;
+// Exported for the MCP self-apply path (services/proposalDirectApply decides
+// WHICH proposals may take it). Deliberately the same function the admin route
+// calls rather than a second write path: canonicalization, the dedup-key regen,
+// the search/embedding/IndexNow follow-through and the re-enrich all live here,
+// and a parallel implementation would drift from them silently — which is
+// exactly how "Yecla DO" once reached a wine unresolved.
+module.exports.approveProposal = approveProposal;
