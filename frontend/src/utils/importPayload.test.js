@@ -90,6 +90,37 @@ describe('buildImportItem', () => {
     expect(out.rackPosition).toBe(11);
   });
 
+  test('forwards the geography the parsers read (country/region/appellation/classification)', () => {
+    // Dropped here until 2026-08-21: the parsers had read CT's Appellation
+    // column all along, /validate matched on it, and then the wine was minted
+    // without it — so a curator hand-filled appellations the user's own file
+    // had stated. Same disappearance this file's docblock warns about.
+    const out = buildImportItem({
+      item: {
+        wineName: 'Barolo', producer: 'Cà di Bruno', vintage: '2016',
+        country: 'Italy', region: 'Piedmont', appellation: 'Barolo', classification: 'DOCG',
+      },
+    }, 'create');
+    expect(out.country).toBe('Italy');
+    expect(out.region).toBe('Piedmont');
+    expect(out.appellation).toBe('Barolo');
+    expect(out.classification).toBe('DOCG');
+  });
+
+  test('full pipeline: a real CT export\'s appellations reach the payload', () => {
+    const { text } = decodeImportBuffer(toArrayBuffer(readFileSync(FIXTURE)));
+    const parsed = parseAndMap(text);
+
+    const withAppellation = parsed.items.filter((i) => i.appellation);
+    // If the fixture stops carrying appellations this assertion is the alarm:
+    // a passing test over an empty set would prove nothing.
+    expect(withAppellation.length).toBeGreaterThan(0);
+
+    for (const item of withAppellation) {
+      expect(buildImportItem({ item }, 'create').appellation).toBe(item.appellation);
+    }
+  });
+
   test('full pipeline: real CT Inventory fixture placements survive to the payload', () => {
     const { text } = decodeImportBuffer(toArrayBuffer(readFileSync(FIXTURE)));
     const parsed = parseAndMap(text);

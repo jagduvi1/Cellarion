@@ -205,6 +205,42 @@ describe('B) confidence floor on AI geography', () => {
     expect(res.body.results[0].aiProposed.region).toBe('Hunter Valley');
     expect(res.body.results[0].aiProposed.appellation).toBe('Hunter Valley');
   });
+
+  // The floor is about the MODEL asserting a place it inferred. It has no
+  // business deleting a column the user filled in — and until 2026-08-21 it
+  // did, because nothing downstream of the parser ever read that column.
+  test('THE FILE outranks the floor: a stated appellation survives a 0.5 identification', async () => {
+    primeAi(aiResult({
+      name: 'Epiphany', producer: "Sister's Run",
+      region: null, appellation: null, confidence: 0.5,
+    }));
+
+    const res = await validate([{
+      wineName: 'Epiphany', producer: "Sister's Run", vintage: '2021',
+      // What a CellarTracker export actually carries.
+      region: 'Barossa', appellation: 'Barossa Valley',
+    }]);
+
+    const row = res.body.results[0];
+    expect(row.aiProposed.appellation).toBe('Barossa Valley');
+    expect(row.aiProposed.region).toBe('Barossa');
+    // And the identifier was TOLD what the file said, rather than being asked
+    // to place a wine while we withheld the label.
+    expect(identifyWineFromText).toHaveBeenCalledWith(
+      expect.objectContaining({ appellation: 'Barossa Valley', region: 'Barossa' }));
+  });
+
+  test('a file appellation beats a CONFIDENT contradicting identification', async () => {
+    primeAi(aiResult({
+      name: 'Epiphany', producer: "Sister's Run",
+      region: 'Barossa Valley', appellation: 'Barossa Valley', confidence: 0.95,
+    }));
+
+    const res = await validate([{
+      wineName: 'Epiphany', producer: "Sister's Run", appellation: 'Eden Valley',
+    }]);
+    expect(res.body.results[0].aiProposed.appellation).toBe('Eden Valley');
+  });
 });
 
 describe('A) one producer, one country per batch', () => {

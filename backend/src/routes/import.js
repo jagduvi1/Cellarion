@@ -57,10 +57,63 @@ const FUZZY_THRESHOLD = IMPORT_FUZZY_THRESHOLD;
 // band that wrote a producer's home region onto wines from elsewhere and split
 // one producer across region granularities (ticket 6a8162c5). Geography the
 // AI proposed under this floor is dropped before it can mint; the curation
-// backfill queue fills it from evidence instead. Import files carry no
-// region/appellation columns, so this only ever strips AI inference — never
-// user data.
+// backfill queue fills it from evidence instead.
+//
+// ⚠️ THIS FLOOR APPLIES TO AI-DERIVED GEOGRAPHY ONLY. It used to be justified
+// by "import files carry no region/appellation columns, so this only ever
+// strips AI inference — never user data", and that stopped being true:
+// importMappers maps CellarTracker's Appellation, its
+// Country/Region/SubRegion/Appellation Locale path, SubRegion and a generic
+// appellation column, and findExactRegistryWine/scoreCandidate below have been
+// matching on item.appellation all along. So the floor WAS deleting what the
+// user typed. Measured 2026-08-21: one 231-wine import produced 86 null/null
+// registry rows, and over half of a curation day went on putting back
+// appellations the file had supplied. File geography now wins outright and is
+// never subject to this floor — see buildProposedWine.
 const AI_GEOGRAPHY_MIN_CONFIDENCE = 0.6;
+
+/**
+ * The wine a no-match row proposes to mint, built from the AI identification
+ * and the user's own file row.
+ *
+ * PRECEDENCE: file geography beats AI geography, always. The file is what the
+ * label says as the owner read it; the AI is recalling. The confidence floor
+ * exists to stop the model ASSERTING a place it inferred, and it has no
+ * business deleting a column the user filled in.
+ *
+ * Kept as a named function (rather than inline in the /validate loop) so the
+ * precedence is unit-testable — it is the rule that decides what enters the
+ * shared registry, and it was previously an expression buried 500 lines in.
+ */
+function buildProposedWine(aiData, item) {
+  const clean = (v) => {
+    const s = typeof v === 'string' ? v.trim() : '';
+    return s || null;
+  };
+  // Below the floor the model is inferring, not knowing (part B below).
+  const lowGeoConfidence =
+    !(typeof aiData.confidence === 'number' && aiData.confidence >= AI_GEOGRAPHY_MIN_CONFIDENCE);
+  const fromAi = (v) => (lowGeoConfidence ? null : clean(v));
+
+  return {
+    name: aiData.name,
+    producer: aiData.producer,
+    // Country keeps the AI's value first: it is fed the file's country as a
+    // hint and normalizes local-language names ("Deutschland" → "Germany"),
+    // which the raw column does not. The file is the fallback, which is new —
+    // a countryless identification used to cost the user the row entirely.
+    country: clean(aiData.country) || clean(item && item.country),
+    region: clean(item && item.region) || fromAi(aiData.region),
+    appellation: clean(item && item.appellation) || fromAi(aiData.appellation),
+    // Same floor as geography: a classification is an assertion of knowledge
+    // (ticket 6a83f014 added the field to the identify prompt), and the file's
+    // own value outranks it for the same reason.
+    classification: clean(item && item.classification) || fromAi(aiData.classification),
+    type: aiData.type,
+    grapes: aiData.grapes,
+    confidence: aiData.confidence,
+  };
+}
 
 /**
  * Score a WineDefinition candidate against an import item.
@@ -373,7 +426,14 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
             name: pr.item.wineName,
             producer: pr.item.producer,
             vintage: pr.item.vintage,
-            country: pr.item.country
+            country: pr.item.country,
+            // The file's own geography, as hints. Asking the model to place a
+            // wine while withholding the appellation the user's export states
+            // was making it infer what we had already been handed — and the
+            // confidence floor then deleted the inference. Precedence still
+            // lives in buildProposedWine; this only stops the blind guess.
+            appellation: pr.item.appellation,
+            region: pr.item.region,
           });
           // A transport-level failure never produced a billable completion —
           // give the debit back so failed calls don't burn the user's budget.
@@ -546,7 +606,12 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
             // country; audit 2026-08-16). Demote to the no-match flow, where
             // the user picks an existing wine or files a request instead of
             // being offered a create that is guaranteed to fail.
-            if (!(typeof wineData.country === 'string' && wineData.country.trim())) {
+            //
+            // Tested against the PROPOSAL, not the AI object: the file's own
+            // country column is a legitimate fallback now, so a row the model
+            // could not place but the user could is minted instead of refused.
+            const proposedCountry = buildProposedWine(wineData, pr.item).country;
+            if (!(typeof proposedCountry === 'string' && proposedCountry.trim())) {
               const msg = 'The wine was recognised but its country could not be determined — match it to an existing wine or request it';
               matchedWineCache.set(key, { error: msg });
               pr.aiWineError = msg;
@@ -555,27 +620,9 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
             // Explicit field list, not the raw AI object: this rides to the
             // client and back into /confirm, so it should carry exactly what
             // findOrCreateWine consumes (plus confidence for display).
-            //
-            // Geography floor (part B above): below AI_GEOGRAPHY_MIN_CONFIDENCE
-            // the model is inferring, not knowing — region/appellation are
-            // dropped from the PROPOSAL (what /confirm mints) while the
-            // matching above kept them (dedup keys embed the appellation).
-            const lowGeoConfidence =
-              !(typeof wineData.confidence === 'number' && wineData.confidence >= AI_GEOGRAPHY_MIN_CONFIDENCE);
-            const proposed = {
-              name: wineData.name,
-              producer: wineData.producer,
-              country: wineData.country,
-              region: lowGeoConfidence ? null : wineData.region,
-              appellation: lowGeoConfidence ? null : wineData.appellation,
-              // Same floor as geography: a classification is an assertion of
-              // knowledge, and below the floor the model is inferring
-              // (ticket 6a83f014 added the field to the identify prompt).
-              classification: lowGeoConfidence ? null : (wineData.classification || null),
-              type: wineData.type,
-              grapes: wineData.grapes,
-              confidence: wineData.confidence,
-            };
+            // buildProposedWine holds the file-beats-AI precedence and the
+            // geography floor (part B above) in one testable place.
+            const proposed = buildProposedWine(wineData, pr.item);
             matchedWineCache.set(key, { proposed });
             pr.aiProposed = proposed;
           } else {
@@ -1685,3 +1732,8 @@ router.delete('/sessions/:id', async (req, res) => {
 });
 
 module.exports = router;
+// Exported for its own unit test: this function decides what geography enters
+// the SHARED registry from an import, and the rule it encodes (file beats AI,
+// and the confidence floor never touches the file) is worth pinning
+// independently of the 700-line /validate route around it.
+module.exports.buildProposedWine = buildProposedWine;
