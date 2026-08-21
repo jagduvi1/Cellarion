@@ -50,3 +50,20 @@ describe('plan distribution', () => {
     expect(buildDistribution([])).toEqual(PLAN_NAMES.map((plan) => ({ plan, count: 0 })));
   });
 });
+
+// Audit 2026-08-21 H-1. The shape of the CHURN query, pinned as data because
+// the wrong shape shipped and measured 7 where the truth was 3: Stripe
+// customers are created at checkout-session time, BEFORE payment, so keying
+// churn on stripeCustomerId counts abandoned checkouts as former supporters.
+describe('formerSupporters query shape (H-1)', () => {
+  const fs = require('fs');
+  const src = fs.readFileSync(require.resolve('./globalStatsService'), 'utf8');
+
+  it('keys on planStartedAt, which is stamped only when a tier is granted', () => {
+    expect(src).toMatch(/plan:\s*'free',\s*planStartedAt:\s*\{\s*\$ne:\s*null\s*\}/);
+  });
+
+  it('never again keys churn on stripeCustomerId', () => {
+    expect(src).not.toMatch(/plan:\s*'free',\s*stripeCustomerId/);
+  });
+});
