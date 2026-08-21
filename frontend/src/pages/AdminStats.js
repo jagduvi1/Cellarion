@@ -233,9 +233,7 @@ function AdminStats() {
         <section>
           <h2>{t('adminStats.section.retention')}</h2>
           <p className="admin-stats-section-note">
-            {retention.loginWindowDays
-              ? t('adminStats.retentionNote', { days: retention.loginWindowDays })
-              : t('adminStats.retentionNoteAllTime')}
+            {t('adminStats.retentionNote')}
           </p>
           <h3 className="admin-stats-subhead">{t('adminStats.retentionByActivity')}</h3>
           <div className="admin-stats-cards">
@@ -274,31 +272,6 @@ function AdminStats() {
             />
           </div>
 
-          <h3 className="admin-stats-subhead">{t('adminStats.retentionByLogin')}</h3>
-          <div className="admin-stats-cards">
-            {(retention.loginTiers || []).map(tier => (
-              <StatCard
-                key={`login-${tier.days}`}
-                accent={tier.days <= 4 ? 'ok' : undefined}
-                label={t('adminStats.loginTier', { days: tier.days })}
-                value={fmt(tier.users)}
-                sublabel={`${fmtPct(tier.pct)} ${t('adminStats.ofLoginUsers')}`}
-                tooltip={t('adminStats.loginTierTooltip', { days: tier.days })}
-              />
-            ))}
-            <StatCard
-              label={t('adminStats.loggedIn30d')}
-              value={fmt(retention.loggedIn30d)}
-              sublabel={t('adminStats.loggedIn7d', { count: retention.loggedIn7d ?? 0 })}
-              tooltip={t('adminStats.loginAuditTooltip')}
-            />
-            <StatCard
-              label={t('adminStats.repeatLoginUsers')}
-              value={fmt(retention.repeatLoginUsers)}
-              sublabel={t('adminStats.loginUsers', { count: retention.loginUsers ?? 0 })}
-              tooltip={t('adminStats.loginAuditTooltip')}
-            />
-          </div>
         </section>
       )}
 
@@ -339,9 +312,39 @@ function AdminStats() {
       <section>
         <h2>{t('adminStats.section.subscriptions')}</h2>
         <div className="admin-stats-cards">
-          <StatCard label={t('adminStats.paidUsers')}          value={fmt(plans.paidUsers)} />
-          <StatCard label={t('adminStats.expiringIn7d')}       value={fmt(plans.expiringIn7d)} sublabel={t('adminStats.in30Days', { count: plans.expiringIn30d ?? 0 })} accent={plans.expiringIn7d > 0 ? 'warn' : null} />
+          <StatCard
+            accent="ok"
+            label={t('adminStats.paidUsers')}
+            value={fmt(plans.paidUsers)}
+            sublabel={t('adminStats.newSupporters30', { count: plans.newSupporters30d ?? 0 })}
+            tooltip={t('adminStats.paidUsersTooltip')}
+          />
+          {/* The churn number, and the only place on this page it appears. */}
+          <StatCard
+            label={t('adminStats.formerSupporters')}
+            value={fmt(plans.formerSupporters)}
+            sublabel={t('adminStats.formerSupportersSub')}
+            accent={plans.formerSupporters > 0 ? 'warn' : null}
+            tooltip={t('adminStats.formerSupportersTooltip')}
+          />
+          <StatCard
+            label={t('adminStats.newSupporters90')}
+            value={fmt(plans.newSupporters90d)}
+            tooltip={t('adminStats.newSupportersTooltip')}
+          />
           <StatCard label={t('adminStats.withStripeCustomer')} value={fmt(plans.withStripeCustomer)} />
+          {/* Only meaningful when a tier actually has an end date. A live
+              Stripe subscription renews instead of expiring, so this reads 0
+              for every ordinary supporter and would otherwise be a card that
+              says nothing on every single load. */}
+          {(plans.expiringIn30d > 0 || plans.expiringIn7d > 0) && (
+            <StatCard
+              label={t('adminStats.expiringIn7d')}
+              value={fmt(plans.expiringIn7d)}
+              sublabel={t('adminStats.in30Days', { count: plans.expiringIn30d ?? 0 })}
+              accent={plans.expiringIn7d > 0 ? 'warn' : null}
+            />
+          )}
         </div>
         {plans.distribution && plans.distribution.length > 0 && (
           <div className="admin-stats-panel">
