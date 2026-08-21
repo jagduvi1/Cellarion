@@ -474,6 +474,52 @@ router.patch('/ai/enrichment-gate', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// PATCH /api/superadmin/ai/enrichment-on-add
+// Who pays for a new wine's first profile (Johan 2026-08-21). At ~120 new
+// wines a day the per-add hook — not the admin batch runs — is the steady API
+// spend, and it targets the least reliable population: freshly scanned labels
+// with no region, where the generation gate spends two calls and publishes
+// nothing. Same aiConfig storage as the knobs above, so changing the policy
+// (or turning it off entirely) never needs a release.
+// ---------------------------------------------------------------------------
+const ENRICHMENT_ON_ADD_MODES = ['always', 'sufficient', 'off'];
+router.patch('/ai/enrichment-on-add', async (req, res) => {
+  const mode = req.body.mode;
+  const { sommMaturitySuggestEnabled, sommPriceSuggestEnabled } = req.body;
+  if (!ENRICHMENT_ON_ADD_MODES.includes(mode)) {
+    return res.status(400).json({ error: `mode must be one of: ${ENRICHMENT_ON_ADD_MODES.join(', ')}` });
+  }
+  for (const [k, v] of [['sommMaturitySuggestEnabled', sommMaturitySuggestEnabled], ['sommPriceSuggestEnabled', sommPriceSuggestEnabled]]) {
+    if (v !== undefined && typeof v !== 'boolean') {
+      return res.status(400).json({ error: `${k} must be a boolean` });
+    }
+  }
+  try {
+    const current = aiConfig.getRaw();
+    const updated = {
+      ...current,
+      enrichmentOnAdd: mode,
+      // Absent means unchanged, so a caller that only flips the policy does
+      // not silently reset the sommelier switches.
+      ...(sommMaturitySuggestEnabled !== undefined ? { sommMaturitySuggestEnabled } : {}),
+      ...(sommPriceSuggestEnabled !== undefined ? { sommPriceSuggestEnabled } : {}),
+    };
+    await updateSiteConfig('aiConfig', updated, req.user.id);
+    aiConfig.set(updated);
+    // Attribution rides on updateSiteConfig(req.user.id), same as the gate
+    // and search knobs above — no separate audit row.
+    res.json({
+      enrichmentOnAdd: updated.enrichmentOnAdd,
+      sommMaturitySuggestEnabled: updated.sommMaturitySuggestEnabled,
+      sommPriceSuggestEnabled: updated.sommPriceSuggestEnabled,
+    });
+  } catch (error) {
+    console.error('[superadmin] enrichment-on-add error:', error);
+    res.status(500).json({ error: 'Failed to save the on-add policy' });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // PATCH /api/superadmin/ai/enrichment-search
 // The web-search rescue pilot's two knobs (2026-08-19): kill-switch + daily
 // cap. Same aiConfig storage as the gate above — turning the pilot off never

@@ -401,7 +401,38 @@ const defaults = {
   // restart resets the counter — acceptable for the pilot's bound).
   enrichmentSearchEnabled: true,
   enrichmentSearchDailyCap: 5,
+  // Who pays for a new wine's first profile (Johan, 2026-08-21). Adding a
+  // bottle fires an enrichment per newly-minted wine, and at ~120 new wines a
+  // day that drip — not the batch runs — is the steady API spend. It is also
+  // the LEAST reliable population: a freshly scanned label often has no
+  // region and no appellation, which is exactly where the generation gate now
+  // spends TWO calls (draft + corrective retry) and then publishes nothing.
+  //
+  //   'always'     — legacy behaviour: every new wine is enriched
+  //   'sufficient' — only when the record can support a true statement
+  //                  (region or appellation, AND grapes or type). Thin
+  //                  records wait for a curator, who researches them anyway
+  //                  while setting the drink window.
+  //   'off'        — no automatic enrichment on add at all; profiles come
+  //                  from the sommelier's maturity pass and from users
+  //                  reporting what looks wrong.
+  //
+  // Batch runs are unaffected — they are admin-triggered and simply not run.
+  enrichmentOnAdd: 'sufficient',
+  // The sommelier's two AI helpers (Johan, 2026-08-21). Both answer questions
+  // the curator is already researching by hand — setting a drink window means
+  // reading the producer, the vintage and the style, which is the same work
+  // the suggestion does. The curator works on a flat-rate subscription, so
+  // moving these to them costs nothing per call.
+  //
+  // Deliberately NOT bundled with the user-facing paths: label scan, AI wine
+  // search and cellar chat stay on, because they ARE the add-bottle
+  // experience and the product. These two are conveniences for one operator.
+  sommMaturitySuggestEnabled: true,
+  sommPriceSuggestEnabled: true,
 };
+
+const ENRICHMENT_ON_ADD_MODES = ['always', 'sufficient', 'off'];
 
 let cache = { ...defaults };
 
@@ -445,6 +476,14 @@ async function load() {
         enrichmentSearchEnabled: typeof doc.value.enrichmentSearchEnabled === 'boolean' ? doc.value.enrichmentSearchEnabled : defaults.enrichmentSearchEnabled,
         enrichmentSearchDailyCap: (Number.isInteger(doc.value.enrichmentSearchDailyCap) && doc.value.enrichmentSearchDailyCap >= 0 && doc.value.enrichmentSearchDailyCap <= 100)
           ? doc.value.enrichmentSearchDailyCap : defaults.enrichmentSearchDailyCap,
+        // An unrecognised stored mode falls back to the default rather than
+        // to 'always' — a typo must never silently restore full spend.
+        enrichmentOnAdd: ENRICHMENT_ON_ADD_MODES.includes(doc.value.enrichmentOnAdd)
+          ? doc.value.enrichmentOnAdd : defaults.enrichmentOnAdd,
+        sommMaturitySuggestEnabled: typeof doc.value.sommMaturitySuggestEnabled === 'boolean'
+          ? doc.value.sommMaturitySuggestEnabled : defaults.sommMaturitySuggestEnabled,
+        sommPriceSuggestEnabled: typeof doc.value.sommPriceSuggestEnabled === 'boolean'
+          ? doc.value.sommPriceSuggestEnabled : defaults.sommPriceSuggestEnabled,
       };
 
       // One-time migration: a stored config from before the embedding-quality

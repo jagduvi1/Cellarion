@@ -6,6 +6,7 @@ const { isValidId } = require('../../utils/validation');
 const { parsePagination } = require('../../utils/pagination');
 const { logAudit } = require('../../services/audit');
 
+const aiConfig = require('../../config/aiConfig');
 const { suggestDrinkWindow } = require('../../services/labelScan');
 
 const router = express.Router();
@@ -214,6 +215,16 @@ router.post('/:id/ai-suggest', requireSommOrAdmin, async (req, res) => {
     }
 
     const wine = profile.wineDefinition;
+    // Cost control (Johan 2026-08-21): the suggestion answers a question the
+    // curator is already researching by hand, and they work on a flat-rate
+    // subscription. 503 rather than a silent empty result, with the reason
+    // spelled out so the caller knows to research rather than retry.
+    if (!aiConfig.get().sommMaturitySuggestEnabled) {
+      return res.status(503).json({
+        error: 'AI drink-window suggestions are turned off — set the window from your own research.',
+        code: 'suggestion_disabled',
+      });
+    }
     const result = await suggestDrinkWindow({
       name: wine?.name,
       producer: wine?.producer,

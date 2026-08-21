@@ -32,6 +32,8 @@ jest.mock('./embeddingJob', () => ({ embedSinglePair: jest.fn().mockResolvedValu
 jest.mock('./aiBudget', () => ({ tryDebitAi: jest.fn(), isRefundableFailure: jest.fn(() => false) }));
 jest.mock('../config/aiConfig', () => ({ get: jest.fn(() => ({
   enrichmentModel: 'claude-sonnet-5',
+  // Default policy for the per-add hook; individual tests override.
+  enrichmentOnAdd: 'always',
   // The publication gate's calibrated defaults (ticket 6a83e765) — the
   // end-to-end tests below exercise holds on both sides of them.
   enrichmentHoldConfidenceFloor: 0.4,
@@ -1215,5 +1217,78 @@ describe('regeneration never destroys a reviewed published profile', () => {
     await enrichWineById(WINE_ID);
     const $set = WineDefinition.updateOne.mock.calls[0][1].$set;
     expect('profileReviewedAt' in $set).toBe(false);
+  });
+});
+
+/**
+ * The per-add enrichment policy (Johan 2026-08-21).
+ *
+ * Adding a bottle fires an enrichment per newly-minted wine — ~120 a day, and
+ * the steady API spend once batch runs stop. It is also the least reliable
+ * population: a freshly scanned label often has no region, which is where the
+ * generation gate spends two calls and publishes nothing. The policy gates
+ * ONLY that automatic hook; deliberate calls are never gated.
+ */
+describe('enrichmentOnAdd policy', () => {
+  const aiConfig = require('../config/aiConfig');
+  const base = {
+    enrichmentModel: 'claude-sonnet-5',
+    enrichmentHoldConfidenceFloor: 0.4,
+    enrichmentHoldUnknownConfidenceBar: 0.55,
+  };
+  const setMode = (enrichmentOnAdd) => aiConfig.get.mockReturnValue({ ...base, enrichmentOnAdd });
+
+  const thin = { _id: WINE_ID, name: 'Mystery', producer: 'Someone', type: 'red', country: { name: 'France' }, region: null, appellation: null, grapes: [] };
+  const rich = { ...thin, region: { name: 'Marlborough' }, grapes: [{ name: 'Pinot Noir' }] };
+
+  const profile = () => ({
+    data: { body: 'medium', tannin: 'low', acidity: 'medium', sweetness: 'dry', flavors: ['cherry'], foodPairings: ['duck'], description: 'A bright, easy red.', confidence: 0.7 },
+    debugReason: null,
+  });
+
+  afterEach(() => setMode('always'));
+
+  test("'off' skips the add hook entirely — no model call, no write", async () => {
+    setMode('off');
+    WineDefinition.findById.mockReturnValue(chain(rich));
+    suggestProfile.mockResolvedValue(profile());
+    await enrichWineById(WINE_ID, { trigger: 'add' });
+    expect(suggestProfile).not.toHaveBeenCalled();
+    expect(WineDefinition.updateOne).not.toHaveBeenCalled();
+  });
+
+  test("'sufficient' skips a record that cannot support a true statement", async () => {
+    setMode('sufficient');
+    WineDefinition.findById.mockReturnValue(chain(thin)); // no region, no appellation
+    suggestProfile.mockResolvedValue(profile());
+    await enrichWineById(WINE_ID, { trigger: 'add' });
+    expect(suggestProfile).not.toHaveBeenCalled();
+  });
+
+  test("'sufficient' still enriches a well-identified wine — the add stays instant", async () => {
+    setMode('sufficient');
+    WineDefinition.findById.mockReturnValue(chain(rich));
+    suggestProfile.mockResolvedValue(profile());
+    await enrichWineById(WINE_ID, { trigger: 'add' });
+    expect(suggestProfile).toHaveBeenCalledTimes(1);
+    expect(persisted().description).toMatch(/bright/);
+  });
+
+  // The policy is about incidental spend, never about deliberate curation:
+  // a release, an identity-edit follow-through or a batch run must always run.
+  test('a DELIBERATE call is never gated, even with the policy off', async () => {
+    setMode('off');
+    WineDefinition.findById.mockReturnValue(chain(thin));
+    suggestProfile.mockResolvedValue(profile());
+    await enrichWineById(WINE_ID); // no trigger — batch / release / re-enrich
+    expect(suggestProfile).toHaveBeenCalledTimes(1);
+  });
+
+  test("'always' preserves the legacy behaviour on a thin record", async () => {
+    setMode('always');
+    WineDefinition.findById.mockReturnValue(chain(thin));
+    suggestProfile.mockResolvedValue(profile());
+    await enrichWineById(WINE_ID, { trigger: 'add' });
+    expect(suggestProfile).toHaveBeenCalledTimes(1);
   });
 });

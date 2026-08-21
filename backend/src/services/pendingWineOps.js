@@ -551,6 +551,11 @@ async function runPromotionFollowThrough(wine) {
   // HAS a producer, so a tasting profile can finally be about something. No
   // budgetUserId: this is curation work, not a user action, so it is not
   // debited to whoever happened to add the bottle.
+  //
+  // Deliberately NOT passed trigger:'add' (2026-08-21): the enrichmentOnAdd
+  // policy exists to stop paying for profiles on records nobody has looked
+  // at, and this is the opposite — a curator has just supplied the identity
+  // by hand. Same family as reenrichAfterRecordEdit: chosen, not incidental.
   require('./enrichmentJob').enrichWineById(wine._id).catch?.(() => {});
   // The maturity queue refused to seed this wine while pending; seed it from
   // the bottles that are already in cellars, so the drink windows the owners

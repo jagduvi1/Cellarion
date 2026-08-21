@@ -12,6 +12,7 @@ const { logAudit } = require('../../services/audit');
 const { stripHtml } = require('../../utils/sanitize');
 const { SUPPORTED_CURRENCIES } = require('../../config/currencies');
 
+const aiConfig = require('../../config/aiConfig');
 const { suggestPrice } = require('../../services/labelScan');
 
 const router = express.Router();
@@ -208,6 +209,14 @@ router.post('/ai-suggest', requireSommOrAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Wine definition not found' });
     }
 
+    // Cost control (Johan 2026-08-21) — see the same gate on the maturity
+    // suggestion. The curator researches market prices anyway.
+    if (!aiConfig.get().sommPriceSuggestEnabled) {
+      return res.status(503).json({
+        error: 'AI price suggestions are turned off — set the price from your own research.',
+        code: 'suggestion_disabled',
+      });
+    }
     const result = await suggestPrice({
       name: wine.name,
       producer: wine.producer,
