@@ -21,7 +21,13 @@ jest.mock('../models/Rack', () => ({ find: jest.fn(), findOne: jest.fn(), countD
 jest.mock('../models/WishlistItem', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/JournalEntry', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn(), aggregate: jest.fn(), populate: jest.fn(), updateOne: jest.fn() }));
-jest.mock('../services/enrichmentJob', () => ({ releaseHeldProfile: jest.fn() }));
+jest.mock('../services/enrichmentJob', () => ({
+  releaseHeldProfile: jest.fn(),
+  // list_maturity_queue asks whether an ABSENT profile is one automatic
+  // enrichment will never write (thin identity) or merely one it has not
+  // reached — the real predicate, so the branch is genuinely exercised.
+  identityDataSufficient: (w) => !!(w.appellation || w.region) && !!((w.grapes && w.grapes.length) || w.type),
+}));
 jest.mock('../models/Grape', () => ({ findOne: jest.fn() }));
 // list_held_profiles flags rows with an open owner inquiry (somm 6a872b98).
 // Default: none open — individual tests override to assert the flag.
