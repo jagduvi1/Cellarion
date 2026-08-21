@@ -354,8 +354,21 @@ function AdminStats() {
                 {plans.distribution.map((p, i) => {
                   const pp = overview.totalUsers > 0 ? Math.round((p.count / overview.totalUsers) * 100) : 0;
                   return (
-                    <tr key={`${p.plan || 'unknown'}-${i}`}>
-                      <td className="admin-stats-name">{p.plan || '—'}</td>
+                    // A configured tier with nobody on it renders dimmed rather
+                    // than being absent — "nobody chose benefactor" and
+                    // "benefactor doesn't exist" are different answers, and
+                    // only one of them is worth acting on.
+                    <tr
+                      key={`${p.plan || 'unknown'}-${i}`}
+                      className={p.count === 0 ? 'admin-stats-row-empty' : undefined}
+                    >
+                      <td className="admin-stats-name">
+                        {p.plan || '—'}
+                        {/* A plan value in the data that the config doesn't
+                            define — retired, or set by hand. Shown, not
+                            dropped: it's still real users. */}
+                        {p.unconfigured && <span className="admin-stats-tag"> {t('adminStats.planUnconfigured')}</span>}
+                      </td>
                       <td className="admin-stats-count">{fmt(p.count)}</td>
                       <td className="admin-stats-pct">{pp}%</td>
                     </tr>

@@ -3414,7 +3414,8 @@
     "newSupportersTooltip": "Users whose supporter tier started in the last 90 days, by the date the tier was granted rather than the date they signed up.",
     "formerSupporters": "Former supporters",
     "formerSupportersSub": "supported, not currently",
-    "formerSupportersTooltip": "Users who have a Stripe customer record but sit on the free plan — they supported at some point and do not now. A floor, not a count: someone comped by hand never reaches Stripe, and someone who resubscribed counts as current."
+    "formerSupportersTooltip": "Users who have a Stripe customer record but sit on the free plan — they supported at some point and do not now. A floor, not a count: someone comped by hand never reaches Stripe, and someone who resubscribed counts as current.",
+    "planUnconfigured": "(not a configured tier)"
   },
   "announcement": {
     "dismiss": "Dismiss"
