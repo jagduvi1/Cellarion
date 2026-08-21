@@ -158,7 +158,11 @@ describe('addBottle (real execution)', () => {
     expect(b.cellarHistory).toEqual([{ cellar: 'c1', cellarName: 'Main Cellar', enteredAt: b.createdAt }]);
     expect(b.user).toBe('owner1');             // owner = cellar owner
     expect(embedSinglePair).toHaveBeenCalledWith('w1', '2019');
-    expect(enrichWineById).toHaveBeenCalledWith('w1', { budgetUserId: 'u1' });
+    // trigger:'add' marks this as the automatic per-add hook, which the
+    // enrichmentOnAdd policy gates (aiConfig, 2026-08-21). Deliberate calls
+    // — release, identity-edit re-enrich, batch — pass no trigger and always
+    // run, so this argument is what separates incidental spend from chosen.
+    expect(enrichWineById).toHaveBeenCalledWith('w1', { budgetUserId: 'u1', trigger: 'add' });
     // wineName rides along so the Cellar Audit page shows what was added (M5).
     expect(logAudit).toHaveBeenCalledWith(REQ, 'bottle.add', expect.anything(), { wineName: 'Barolo', vintage: '2019' });
   });
