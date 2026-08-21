@@ -449,6 +449,64 @@ describe('resolveCountryName', () => {
     expect(resolveCountryName('America')).toBe('United States');
   });
 
+  // A 48-row import on 2026-08-21 lost HALF its rows here: 24 rejected as
+  // unrecognized countries, every one an ISO code (de ×11, fr ×5, ro ×5, it,
+  // pl, es). The codes below are exactly the ones that file used, plus the
+  // rest of the wine world.
+  describe('ISO 3166-1 alpha-2 codes', () => {
+    test.each([
+      ['de', 'Germany'], ['fr', 'France'], ['ro', 'Romania'],
+      ['it', 'Italy'], ['pl', 'Poland'], ['es', 'Spain'],
+    ])('the codes that actually failed: %s -> %s', (code, expected) => {
+      expect(resolveCountryName(code)).toBe(expected);
+    });
+
+    test('covers the rest of the wine world', () => {
+      expect(resolveCountryName('pt')).toBe('Portugal');
+      expect(resolveCountryName('at')).toBe('Austria');
+      expect(resolveCountryName('za')).toBe('South Africa');
+      expect(resolveCountryName('nz')).toBe('New Zealand');
+      expect(resolveCountryName('ar')).toBe('Argentina');
+      expect(resolveCountryName('cl')).toBe('Chile');
+      expect(resolveCountryName('ge')).toBe('Georgia');
+      expect(resolveCountryName('am')).toBe('Armenia');
+    });
+
+    test('is case- and whitespace-insensitive like every other alias', () => {
+      expect(resolveCountryName('DE')).toBe('Germany');
+      expect(resolveCountryName('  Fr  ')).toBe('France');
+    });
+
+    test('GB follows the wine-world convention set by UK, not ISO politics', () => {
+      expect(resolveCountryName('gb')).toBe('England');
+    });
+
+    test('does not shadow the existing US/UK entries', () => {
+      expect(resolveCountryName('us')).toBe('United States');
+      expect(resolveCountryName('uk')).toBe('England');
+    });
+
+    test('an unassigned or nonsense code still passes through unresolved', () => {
+      // The mint gate must keep rejecting these — resolving everything
+      // two-letter would let junk become a Country document.
+      expect(resolveCountryName('zz')).toBe('zz');
+      expect(resolveCountryName('qq')).toBe('qq');
+      expect(isRecognizedCountry('zz')).toBe(false);
+    });
+
+    test('every mapped code resolves to a RECOGNIZED country', () => {
+      // A typo in the map would otherwise mint a Country named after nothing.
+      for (const code of ['fr', 'it', 'es', 'pt', 'de', 'at', 'ch', 'gr', 'hu', 'ro',
+        'bg', 'hr', 'si', 'rs', 'me', 'mk', 'ba', 'al', 'md', 'ua', 'ru', 'ge', 'am',
+        'az', 'cz', 'sk', 'pl', 'lu', 'be', 'nl', 'gb', 'ie', 'dk', 'se', 'no', 'fi',
+        'cy', 'mt', 'tr', 'is', 'lt', 'lv', 'ee', 'xk', 'ca', 'mx', 'ar', 'cl', 'uy',
+        'br', 'pe', 'bo', 'za', 'au', 'nz', 'cn', 'jp', 'in', 'il', 'lb', 'ma', 'dz',
+        'tn', 'eg', 'kr', 'th', 'vn']) {
+        expect([code, isRecognizedCountry(code)]).toEqual([code, true]);
+      }
+    });
+  });
+
   test('maps local-language names to canonical English (the prod duplicates)', () => {
     // Each of these existed as a duplicate Country document on prod
     expect(resolveCountryName('Tyskland')).toBe('Germany');   // Swedish

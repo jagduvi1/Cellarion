@@ -817,6 +817,59 @@ const COUNTRY_ALIASES = {
   'argentine':                'Argentina', // fr
   'argentinien':              'Argentina', // de
   'chili':                    'Chile',     // fr + nl
+
+  // ── ISO 3166-1 alpha-2 codes ───────────────────────────────────────────
+  //
+  // Real files use them. A 48-row import on 2026-08-21 lost HALF its rows to
+  // this — 24 rejected as unrecognized countries, every one a two-letter code
+  // (de ×11, fr ×5, ro ×5, it, pl, es). The user had no way to see why until
+  // the import audit started recording failure reasons that morning.
+  //
+  // This is the right place for it rather than the importer: isRecognizedCountry
+  // resolves through this map before the mint gate, so one entry fixes the
+  // import path, the label scan and the AI lookup together. `us` and `uk`
+  // already lived here, so the two-letter form is not a new idea — it was just
+  // incomplete.
+  //
+  // Scoped to the wine world plus its neighbours rather than all 249 codes:
+  // every entry here is a country somebody could plausibly type in a wine
+  // file, and a shorter list is one a human can still audit.
+  //
+  // ⚠️ Several of these collide with ordinary words — `it`, `at`, `is`, `in`,
+  // `no`, `be`, `me`, `am`, `de`, `es`. That is safe ONLY because this map is
+  // consulted for values already claiming to be a COUNTRY (a country column, a
+  // label-scan country field), never for free text: in a country field, "de"
+  // is Germany. Do not reuse this map for general text normalisation.
+  //
+  // GB → England follows the same wine-world convention as the existing `uk`
+  // entry above, not ISO's political one.
+
+  // Europe — the classical wine countries
+  'fr': 'France',            'it': 'Italy',              'es': 'Spain',
+  'pt': 'Portugal',          'de': 'Germany',            'at': 'Austria',
+  'ch': 'Switzerland',       'gr': 'Greece',             'hu': 'Hungary',
+  'ro': 'Romania',           'bg': 'Bulgaria',           'hr': 'Croatia',
+  'si': 'Slovenia',          'rs': 'Serbia',             'me': 'Montenegro',
+  'mk': 'North Macedonia',   'ba': 'Bosnia and Herzegovina',
+  'al': 'Albania',           'md': 'Moldova',            'ua': 'Ukraine',
+  'ru': 'Russian Federation', 'ge': 'Georgia',           'am': 'Armenia',
+  'az': 'Azerbaijan',        'cz': 'Czech Republic',     'sk': 'Slovakia',
+  'pl': 'Poland',            'lu': 'Luxembourg',         'be': 'Belgium',
+  'nl': 'Netherlands',       'gb': 'England',            'ie': 'Ireland',
+  'dk': 'Denmark',           'se': 'Sweden',             'no': 'Norway',
+  'fi': 'Finland',           'cy': 'Cyprus',             'mt': 'Malta',
+  'tr': 'Turkey',            'is': 'Iceland',            'lt': 'Lithuania',
+  'lv': 'Latvia',            'ee': 'Estonia',            'xk': 'Kosovo',
+
+  // The New World and beyond
+  'ca': 'Canada',            'mx': 'Mexico',             'ar': 'Argentina',
+  'cl': 'Chile',             'uy': 'Uruguay',            'br': 'Brazil',
+  'pe': 'Peru',              'bo': 'Bolivia',            'za': 'South Africa',
+  'au': 'Australia',         'nz': 'New Zealand',        'cn': 'China',
+  'jp': 'Japan',             'in': 'India',              'il': 'Israel',
+  'lb': 'Lebanon',           'ma': 'Morocco',            'dz': 'Algeria',
+  'tn': 'Tunisia',           'eg': 'Egypt',              'kr': 'South Korea',
+  'th': 'Thailand',          'vn': 'Vietnam',
 };
 
 /**
