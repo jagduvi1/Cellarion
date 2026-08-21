@@ -6,6 +6,7 @@ const WineVintageProfile = require('../models/WineVintageProfile');
 const WineRequest = require('../models/WineRequest');
 const BottleImage = require('../models/BottleImage');
 const Rack = require('../models/Rack');
+const { PLAN_NAMES } = require('../config/plans');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,33 @@ const tierRows = (row, total) => DAY_TIERS.map(n => ({
   users: row[`t${n}`] || 0,
   pct:   pct(row[`t${n}`] || 0, total),
 }));
+
+/**
+ * Turn raw `{_id: plan, count}` groups into the distribution the page renders.
+ *
+ * Extracted so it is TESTED rather than re-implemented in a test file — a copy
+ * of the rule next to the rule passes even when the two drift apart, which is
+ * the one thing a regression test must not do.
+ *
+ * Two rules, each fixing a way a number could vanish:
+ *   • every CONFIGURED tier appears, at 0 if nobody is on it — $group only
+ *     emits values that exist, so `benefactor` was absent from the table
+ *     entirely and "nobody chose it" read as "it doesn't exist"
+ *   • a plan value NOT in the config is kept and flagged, never dropped — a
+ *     retired or hand-set tier is still real users
+ *
+ * Ordered by the config ladder, because the ladder is the price order.
+ */
+const buildPlanDistribution = (planCounts) => {
+  const countByPlan = new Map(planCounts.map((r) => [r._id, r.count]));
+  return [
+    ...PLAN_NAMES.map((plan) => ({ plan, count: countByPlan.get(plan) || 0 })),
+    ...planCounts
+      .filter((r) => !PLAN_NAMES.includes(r._id))
+      .sort((a, b) => b.count - a.count)
+      .map((r) => ({ plan: r._id, count: r.count, unconfigured: true })),
+  ];
+};
 
 const safeAggregate = async (model, pipeline) => {
   try { return await model.aggregate(pipeline); }
@@ -434,12 +462,25 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
   // every SSO-only user — lives in docs/admin-global-stats-architecture.md.
 
   // ── Plans / subscriptions ───────────────────────────────────────────────
-  const planDistribution = await safeAggregate(User, [
+  // Every CONFIGURED tier appears, including the ones nobody has chosen.
+  //
+  // Grouping alone only emits tiers that have at least one user, so a tier with
+  // zero supporters vanished from the table entirely — and "nobody picked
+  // benefactor" then looked identical to "benefactor does not exist". That is
+  // precisely the question worth asking after a repricing, and the page could
+  // not answer it (found 2026-08-21, benefactor absent since the tiers shipped
+  // in v1.140).
+  //
+  // Ordered by the config ladder rather than by count, because the ladder IS
+  // the price order and reading it that way is the point. Any plan value found
+  // in the data but NOT in the config is appended rather than dropped: a
+  // retired or hand-set tier still represents real users, and silently hiding
+  // them would be the same bug in the other direction.
+  const planCounts = await safeAggregate(User, [
     { $match: userMatch },
     { $group: { _id: '$plan', count: { $sum: 1 } } },
-    { $sort: { count: -1 } },
-    { $project: { _id: 0, plan: '$_id', count: 1 } },
   ]);
+  const planDistribution = buildPlanDistribution(planCounts);
 
   const in7d  = new Date(Date.now() + 7 * 86400000);
   const in30d = new Date(Date.now() + 30 * 86400000);
@@ -860,5 +901,5 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
 module.exports = {
   computeGlobalStats,
   // Exported for tests: the retention day-ladder and its two halves.
-  __testing: { DAY_TIERS, tierAccumulators, tierRows },
+  __testing: { DAY_TIERS, tierAccumulators, tierRows, buildPlanDistribution },
 };

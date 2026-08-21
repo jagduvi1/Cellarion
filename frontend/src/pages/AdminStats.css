@@ -348,3 +348,13 @@
     font-size: 0.8rem;
   }
 }
+
+/* A configured plan tier nobody is on. Shown rather than omitted — "nobody
+   chose benefactor" and "benefactor doesn't exist" are different answers —
+   but dimmed, so a live tier still reads as the live one at a glance. */
+.admin-stats-row-empty { opacity: 0.5; }
+.admin-stats-tag {
+  font-size: 0.75rem;
+  font-style: italic;
+  color: var(--color-text-muted);
+}
