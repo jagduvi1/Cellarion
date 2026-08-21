@@ -67,12 +67,34 @@ function fieldIsEmpty(wine, field) {
   return String(v).trim() === '';
 }
 
+/** An id from either a populated ref or a raw ObjectId, as a string. */
+function idOf(v) {
+  if (!v) return null;
+  return String(v._id || v);
+}
+
 /**
  * The curated appellation a wine's NAME states, if any — longest match wins so
  * "Chianti Classico" beats "Chianti" and the check compares like with like.
  * Returns the Appellation doc, or null when the name claims no place.
+ *
+ * COUNTRY-SCOPED (2026-08-21). Without this, a name-derived appellation from
+ * the wrong country reads as a place claim. Found live while dry-running a
+ * backfill: Nockie's "Palette Pinot Noir" is a NEW ZEALAND wine and "Palette
+ * Rose" a SOUTH AFRICAN one, and Palette is an AOC in Provence. Same producer,
+ * two hemispheres, one French name — "Palette" there is a range name, not a
+ * place, and the backfill would have written Provence onto both.
+ *
+ * The cost of missing it was not hypothetical in the other direction either:
+ * a curator correcting that Pinot Noir to Marlborough would have been routed
+ * for review because the name "disagreed", making them wait on a correction
+ * that should apply instantly.
+ *
+ * A wine with no country cannot be checked, so the match stands — that is the
+ * conservative reading (route rather than auto-apply), matching the old
+ * behaviour exactly.
  */
-async function appellationImpliedByName(name) {
+async function appellationImpliedByName(name, countryId) {
   const tokens = String(name || '').trim().split(/\s+/).filter(Boolean).slice(0, MAX_NAME_TOKENS);
   if (!tokens.length) return null;
 
@@ -92,10 +114,19 @@ async function appellationImpliedByName(name) {
   if (!byKey.size) return null;
 
   const keys = [...byKey.keys()];
-  const docs = await Appellation.find({
+  let docs = await Appellation.find({
     $or: [{ normalizedName: { $in: keys } }, { normalizedSynonyms: { $in: keys } }],
   }).lean();
   if (!docs.length) return null;
+
+  // Same appellation NAME can exist per country as separate docs (the model's
+  // unique index is on country+normalizedName), so filtering here also picks
+  // the RIGHT doc rather than an arbitrary one.
+  const want = idOf(countryId);
+  if (want) {
+    docs = docs.filter((d) => idOf(d.country) === want);
+    if (!docs.length) return null;
+  }
 
   // Longest matched PHRASE wins, measured on the doc's own canonical name so a
   // short synonym cannot outrank the full appellation it stands for.
@@ -121,6 +152,37 @@ function appellationsAgree(nameDoc, proposed) {
   if (!proposedKey) return false;
   const nameKeys = [nameDoc.normalizedName, ...(nameDoc.normalizedSynonyms || [])].filter(Boolean);
   return nameKeys.some((k) => k === proposedKey || k.includes(proposedKey) || proposedKey.includes(k));
+}
+
+/**
+ * Is the PROPOSED appellation a curated one belonging to a different country
+ * than the wine? Returns the conflicting doc, or null.
+ *
+ * This is the other half of the country rule, and the more important half.
+ * Scoping the NAME check by country makes an Australian "Prosecco" stop
+ * implying the Italian DOC — which is right, but on its own it would then let
+ * a proposal WRITE "Prosecco" onto that Australian wine unchallenged. That is
+ * precisely the error the curator warned about: Italy renamed the grape Glera
+ * in 2009 and registered Prosecco as an EU GI, so the Italian DOC is exactly
+ * what a careless rule stamps onto a King Valley wine while every field still
+ * looks plausible.
+ *
+ * Free-text appellations that match no curated doc are NOT flagged: they carry
+ * no country to disagree with, and appellations are deliberately open-ended
+ * (see services/appellationResolve). Silence there is honest, not a gap.
+ */
+async function proposedAppellationCountryConflict(proposed, countryId) {
+  const want = idOf(countryId);
+  if (!want) return null;
+  const key = normalizeAppellationKey(proposed);
+  if (!key) return null;
+  const docs = await Appellation.find({
+    $or: [{ normalizedName: key }, { normalizedSynonyms: key }],
+  }).lean();
+  if (!docs.length) return null;
+  // Curated somewhere, but nowhere in this wine's country.
+  if (docs.some((d) => idOf(d.country) === want)) return null;
+  return docs[0];
 }
 
 /**
@@ -153,11 +215,23 @@ async function classifyProposal(wine, kind, proposedFields) {
   }
 
   if (proposedFields.appellation) {
-    const implied = await appellationImpliedByName(wine.name);
+    const countryId = wine.country;
+
+    // Checked BEFORE the name rule: a cross-border appellation is a claim
+    // about the wine's own country, which outranks anything its name says.
+    const foreign = await proposedAppellationCountryConflict(proposedFields.appellation, countryId);
+    if (foreign) {
+      return {
+        direct: false,
+        reason: `"${proposedFields.appellation}" is a curated appellation, but not in this wine's country — an admin reads that. If the wine really is from there, the country is what needs correcting first.`,
+      };
+    }
+
+    const implied = await appellationImpliedByName(wine.name, countryId);
     if (implied && !appellationsAgree(implied, proposedFields.appellation)) {
       return {
         direct: false,
-        reason: `The wine's name states "${implied.name}" but the proposal says "${proposedFields.appellation}" — an admin reads that difference. This is not a rejection: the name is often the wrong one (an Australian "Prosecco" is a King Valley wine, not the Italian DOC).`,
+        reason: `The wine's name states "${implied.name}" but the proposal says "${proposedFields.appellation}" — an admin reads that difference. This is not a rejection: a name and a label genuinely disagree sometimes.`,
       };
     }
   }
@@ -168,6 +242,7 @@ async function classifyProposal(wine, kind, proposedFields) {
 module.exports = {
   classifyProposal,
   appellationImpliedByName,
+  proposedAppellationCountryConflict,
   appellationsAgree,
   fieldIsEmpty,
   DIRECT_FIELDS,
