@@ -12,7 +12,7 @@ const DiscussionReport = require('../models/DiscussionReport');
 const User = require('../models/User');
 const WineDefinition = require('../models/WineDefinition');
 const BlogPost = require('../models/BlogPost');
-const { stripHtml } = require('../utils/sanitize');
+const { stripHtml, escapeRegex } = require('../utils/sanitize');
 const { sanitizeForumHtml, visibleTextLength } = require('../utils/sanitizeHtml');
 const { logAudit } = require('../services/audit');
 const { incrementCred, decrementCred } = require('../utils/cellarCred');
@@ -79,13 +79,18 @@ router.get('/', optionalAuth, async (req, res) => {
     }
 
     // Threads opened from one blog post — what the post page lists under
-    // "Discuss this post". Applied to the Mongo path only: the Meili branch
-    // below is a relevance search and this is an exact scope, so mixing them
-    // would silently return the wrong set. A blogPost filter with a `q` is not
-    // a combination the post page issues.
+    // "Discuss this post".
     const blogPostId = coerceStringQuery(req.query.blogPost).trim();
     if (blogPostId && isValidId(blogPostId)) {
       filter.blogPost = { $eq: new mongoose.Types.ObjectId(blogPostId) };
+      // A q combined with the blogPost scope is answered HERE, not by Meili
+      // (whose index doesn't carry blogPost — see the skip below). The scoped
+      // set is one post's threads, so a title regex over it is trivially
+      // cheap; escaped and bounded exactly like the blog search, because the
+      // needle is user input (`(((((` is a ReDoS, `?q[$gt]=` is an object).
+      if (query) {
+        filter.title = new RegExp(escapeRegex(query.slice(0, 120)), 'i');
+      }
     } else if (blogPostId) {
       // A malformed id must not silently widen the scope to every discussion.
       return res.json({ discussions: [], total: 0, page, pages: 0 });
@@ -93,7 +98,14 @@ router.get('/', optionalAuth, async (req, res) => {
 
     // Meilisearch path: fuzzy match on title/body/authorName/wineName,
     // hydrate hits from MongoDB to keep the response shape consistent.
-    if (query && searchService.getIsAvailable()) {
+    //
+    // Skipped when a blogPost scope is present (audit 2026-08-21 M-2): the
+    // Meili index doesn't carry blogPost, so this branch used to ignore the
+    // filter and a q+blogPost request silently widened from "threads about
+    // this post" to "all threads matching q" — answering a different question
+    // than the one asked. Exact scope beats fuzzy relevance for a post's own
+    // thread list, and the Mongo path below applies both together honestly.
+    if (query && !filter.blogPost && searchService.getIsAvailable()) {
       try {
         const { ids, estimatedTotalHits } = await searchService.searchDiscussions(query, {
           category: validCategory,

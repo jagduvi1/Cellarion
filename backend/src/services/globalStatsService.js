@@ -577,9 +577,17 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
     // support rather than the account.
     User.countDocuments({ ...userMatch, plan: { $ne: 'free' }, planStartedAt: { $gte: since30 } }),
     User.countDocuments({ ...userMatch, plan: { $ne: 'free' }, planStartedAt: { $gte: since90 } }),
-    // Churn: a Stripe customer record outlives the subscription, so a user who
-    // has one but sits on `free` supported at some point and does not now.
-    User.countDocuments({ ...userMatch, plan: 'free', stripeCustomerId: { $nin: [null, ''] } }),
+    // Churn: a user on `free` whose planStartedAt is stamped had a tier
+    // GRANTED at some point — that stamp is written only when support actually
+    // starts, and it survives the downgrade.
+    //
+    // ⚠️ NOT stripeCustomerId, which this shipped as for a few hours
+    // (audit 2026-08-21 H-1). Stripe customers are created at CHECKOUT-SESSION
+    // time, before any payment — so that shape counted abandoned checkouts as
+    // churned supporters. Measured on prod the day it shipped: the card said 7
+    // former supporters and only 3 had ever paid. An overstated churn number
+    // points the admin at a retention problem that does not exist.
+    User.countDocuments({ ...userMatch, plan: 'free', planStartedAt: { $ne: null } }),
   ]);
 
   // ── Maturity (drink-window phase distribution) ──────────────────────────

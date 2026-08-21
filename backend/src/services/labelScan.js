@@ -498,10 +498,17 @@ async function identifyWineFromText({ name, producer, vintage, country, appellat
   // would make .replace() a silent no-op and the hint would vanish with no
   // error. For the same reason each hint carries its OWN instruction inline
   // instead of relying on a rule in the template.
+  // Bounded before they touch the prompt (audit 2026-08-21 M-1). These come
+  // straight from a client CSV column with no earlier length validation — the
+  // wine-field caps apply at COMMIT, and this call runs at /validate. Unbounded,
+  // a pathological column inflates every identify call's token count (billed to
+  // the user's own AI budget) and widens the prompt-injection surface for no
+  // benefit: no real appellation approaches 200 characters.
+  const hint = (v) => String(v).slice(0, 200);
   const hints = [
-    country ? `Country hint: ${country}` : '',
-    appellation ? `Appellation stated in the user's import file (trust it unless it is clearly not a wine appellation): ${appellation}` : '',
-    region ? `Region stated in the user's import file (trust it unless clearly wrong): ${region}` : '',
+    country ? `Country hint: ${hint(country)}` : '',
+    appellation ? `Appellation stated in the user's import file (trust it unless it is clearly not a wine appellation): ${hint(appellation)}` : '',
+    region ? `Region stated in the user's import file (trust it unless clearly wrong): ${hint(region)}` : '',
   ].filter(Boolean);
   const countryHint = hints.length ? `${hints.join('\n')}\n` : '';
 
