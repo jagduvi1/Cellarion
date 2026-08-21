@@ -72,6 +72,39 @@ const FUZZY_THRESHOLD = IMPORT_FUZZY_THRESHOLD;
 // never subject to this floor — see buildProposedWine.
 const AI_GEOGRAPHY_MIN_CONFIDENCE = 0.6;
 
+// Distinct failure reasons kept in one import's audit row, and the length each
+// is truncated to. Enough to name every failure mode a real file hits without
+// letting a pathological one bloat the document.
+const AUDIT_REASON_MAX_KINDS = 12;
+const AUDIT_REASON_MAX_LEN = 160;
+
+/**
+ * Group per-row {reason} entries into { reason: count } for the audit.
+ *
+ * Deliberately reason-only: the row's wine name, producer and notes are the
+ * user's data and the audit needs the failure MODE, not the record. Messages
+ * that embed a caught err.message can vary per row, so they are truncated and
+ * the tail is folded into one "+N more" bucket rather than dropped silently —
+ * a cap that hides its own truncation is how you end up trusting a partial
+ * picture.
+ */
+function summariseReasons(entries) {
+  const counts = new Map();
+  for (const e of entries) {
+    const raw = (e && typeof e.reason === 'string' && e.reason.trim()) ? e.reason.trim() : '(no reason recorded)';
+    const key = raw.length > AUDIT_REASON_MAX_LEN ? `${raw.slice(0, AUDIT_REASON_MAX_LEN)}…` : raw;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  const kept = ranked.slice(0, AUDIT_REASON_MAX_KINDS);
+  const out = Object.fromEntries(kept);
+  const spilled = ranked.slice(AUDIT_REASON_MAX_KINDS);
+  if (spilled.length) {
+    out[`+${spilled.length} more reason kind(s)`] = spilled.reduce((s, [, n]) => s + n, 0);
+  }
+  return out;
+}
+
 /**
  * The wine a no-match row proposes to mint, built from the AI identification
  * and the user's own file row.
@@ -1473,6 +1506,21 @@ router.post('/confirm', async (req, res) => {
       wishlistCreated,
       skipped: skipped.length,
       errors: errors.length,
+      // WHY rows failed, not just how many (2026-08-21). A real import
+      // rejected 15 of 46 rows at 06:05; the user fixed their file and re-ran
+      // the 15 six minutes later. The audit recorded the COUNT and threw the
+      // reasons away, so afterwards the cause could only be guessed at — four
+      // separate prod queries reconstructed which wines were involved and
+      // still could not say WHY, because the reason strings this route builds
+      // per row were never persisted anywhere.
+      //
+      // Reasons, not rows: grouped with counts so one line stays readable and
+      // no wine name, producer or note enters the audit — a row's identity is
+      // the user's data and the audit only needs the failure mode. Capped
+      // because a pathological file could otherwise carry hundreds of
+      // distinct messages into one document.
+      ...(errors.length ? { errorReasons: summariseReasons(errors) } : {}),
+      ...(skipped.length ? { skippedReasons: summariseReasons(skipped) } : {}),
       total: items.length,
       racksCreated: createdRacks.length,
       placed: placedCount,
@@ -1737,3 +1785,4 @@ module.exports = router;
 // and the confidence floor never touches the file) is worth pinning
 // independently of the 700-line /validate route around it.
 module.exports.buildProposedWine = buildProposedWine;
+module.exports.summariseReasons = summariseReasons;

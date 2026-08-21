@@ -21,7 +21,7 @@ jest.mock('../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn(), 
 jest.mock('../middleware/aiBurstLimiter', () => (req, res, next) => next());
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 
-const { buildProposedWine } = require('./import');
+const { buildProposedWine, summariseReasons } = require('./import');
 
 // Below AI_GEOGRAPHY_MIN_CONFIDENCE (0.6) the model is inferring, not knowing.
 const SURE = 0.8;
@@ -80,6 +80,44 @@ describe('country keeps AI-first precedence, with the file as a fallback', () =>
 
   it('is null when neither knows, so the caller can still refuse the row', () => {
     expect(buildProposedWine(ai({ country: null }), {}).country).toBeNull();
+  });
+});
+
+describe('summariseReasons — why rows failed, not just how many', () => {
+  it('groups reasons with counts', () => {
+    expect(summariseReasons([
+      { index: 0, reason: 'Wine definition not found' },
+      { index: 1, reason: 'Wine definition not found' },
+      { index: 2, reason: 'Invalid consumed reason' },
+    ])).toEqual({ 'Wine definition not found': 2, 'Invalid consumed reason': 1 });
+  });
+
+  it('carries no wine name, producer or note — only the failure mode', () => {
+    // The audit needs the mode; the row's identity is the user's own data.
+    const out = summariseReasons([{ index: 0, reason: 'Invalid wine definition ID', wineName: 'Areni' }]);
+    expect(JSON.stringify(out)).not.toMatch(/Areni/);
+  });
+
+  it('never loses count when it truncates the tail', () => {
+    // A cap that hides its own truncation is how you end up trusting a
+    // partial picture — the spill is reported, not dropped.
+    const many = Array.from({ length: 20 }, (_, i) => ({ index: i, reason: `distinct failure ${i}` }));
+    const out = summariseReasons(many);
+    const total = Object.values(out).reduce((s, n) => s + n, 0);
+    expect(total).toBe(20);
+    expect(Object.keys(out).some((k) => /more reason kind/.test(k))).toBe(true);
+  });
+
+  it('truncates a long caught err.message rather than storing it whole', () => {
+    const out = summariseReasons([{ index: 0, reason: 'x'.repeat(500) }]);
+    const key = Object.keys(out)[0];
+    expect(key.length).toBeLessThan(200);
+    expect(key.endsWith('…')).toBe(true);
+  });
+
+  it('records a missing reason as such instead of "undefined"', () => {
+    expect(summariseReasons([{ index: 0 }, { index: 1, reason: '  ' }]))
+      .toEqual({ '(no reason recorded)': 2 });
   });
 });
 
