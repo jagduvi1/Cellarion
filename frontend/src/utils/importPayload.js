@@ -28,6 +28,16 @@ export function buildImportItem(r, selection) {
     // CellarTracker imports carry grape varieties and a personal drink
     // window; the backend importer consumes these when present.
     grapes: r.item.grapes,
+    // …and geography. The parsers have read these all along (CT Appellation,
+    // the Country/Region/SubRegion/Appellation Locale path, SubRegion, and a
+    // generic appellation column) and they were never forwarded — so a wine
+    // minted from an import lost the appellation the user's own file stated,
+    // and a curator put it back by hand later. Exactly the disappearance this
+    // file's docblock warns about, on a different field.
+    country: r.item.country,
+    region: r.item.region,
+    appellation: r.item.appellation,
+    classification: r.item.classification,
     drinkFrom: r.item.drinkFrom ?? undefined,
     drinkTo: r.item.drinkTo ?? undefined,
     dateAdded: r.item.dateAdded || r.item.purchaseDate,

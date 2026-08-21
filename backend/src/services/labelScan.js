@@ -477,14 +477,33 @@ function validateWineIdentity(parsed) {
  *   debugRaw    – raw string from the model (or error message)
  *   debugReason – short explanation when data is null
  */
-async function identifyWineFromText({ name, producer, vintage, country }) {
+async function identifyWineFromText({ name, producer, vintage, country, appellation, region }) {
   if (!name || !producer) return { data: null, debugRaw: null, debugReason: 'missing_fields' };
 
   let client;
   try { client = getClient(); } catch { return { data: null, debugRaw: null, debugReason: 'no_api_key' }; }
 
   const vintageHint = vintage && vintage !== 'NV' ? `Vintage: ${vintage}\n` : '';
-  const countryHint = country ? `Country hint: ${country}\n` : '';
+
+  // The user's own file already states the geography on most exports
+  // (CellarTracker has Appellation and a Country/Region/SubRegion/Appellation
+  // Locale path), and asking the model to identify a wine WITHOUT telling it
+  // what the label says was making it infer what it had been handed. Passed as
+  // hints, not answers: the caller decides precedence, and file geography wins
+  // there — this only stops the model guessing blind.
+  //
+  // ⚠️ These ride in the {{country}} slot rather than new placeholders on
+  // purpose. importLookupPrompt is admin-editable and prod may hold a
+  // customised copy; a {{appellation}} placeholder that a stored prompt lacks
+  // would make .replace() a silent no-op and the hint would vanish with no
+  // error. For the same reason each hint carries its OWN instruction inline
+  // instead of relying on a rule in the template.
+  const hints = [
+    country ? `Country hint: ${country}` : '',
+    appellation ? `Appellation stated in the user's import file (trust it unless it is clearly not a wine appellation): ${appellation}` : '',
+    region ? `Region stated in the user's import file (trust it unless clearly wrong): ${region}` : '',
+  ].filter(Boolean);
+  const countryHint = hints.length ? `${hints.join('\n')}\n` : '';
 
   const prompt = aiConfig.get().importLookupPrompt
     .replace('{{name}}', name)
