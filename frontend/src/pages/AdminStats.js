@@ -254,7 +254,11 @@ function AdminStats() {
                 />
               </div>
               <div className="admin-stats-panel">
-                <table className="admin-stats-table">
+                {/* Own class, not just admin-stats-table: this table's right
+                    cell holds "7 · 44%", and on a phone that must never split
+                    across lines (it read as broken data when it did). The
+                    other admin tables are unaffected. */}
+                <table className="admin-stats-table admin-stats-cohorts">
                   <tbody>
                     {retention.signupCohorts.map((c) => (
                       <tr key={c.daysAgoFrom} className={c.tooNew ? 'admin-stats-row-empty' : undefined}>
