@@ -883,7 +883,14 @@ async function enrichWine(wine, model, { publishSuspect = false, curatorContext 
  *   the producer as suspect (the human-override path: an admin reviewed the
  *   doubt and judged the identity fine).
  */
-async function enrichWineById(wineDefId, { budgetUserId, force = false, publishSuspect = false, curatorContext = null } = {}) {
+/**
+ * @param {object} [opts]
+ * @param {'add'} [opts.trigger] — this call is the automatic per-add hook, so
+ *   the enrichmentOnAdd policy applies. Absent means a deliberate call (batch
+ *   loop, curator release, identity-edit follow-through) which the policy
+ *   never gates: those are chosen, not incidental.
+ */
+async function enrichWineById(wineDefId, { budgetUserId, force = false, publishSuspect = false, curatorContext = null, trigger = null } = {}) {
   // Validate + cast the (caller-supplied) id to a real ObjectId before it touches
   // the query, so a non-id value can never shape the database lookup. The cast
   // value (idStr/oid), never the raw input, is used everywhere below.
@@ -911,6 +918,21 @@ async function enrichWineById(wineDefId, { budgetUserId, force = false, publishS
     // spend the adding user's daily AI budget describing a producerless wine.
     if (wine.pendingIdentity === true) return;
     if (wine.aiProfile && wine.aiProfile.source === 'curator') return; // hand-corrected — never regenerate (force included)
+    // Per-add policy (Johan 2026-08-21). Checked AFTER the wine is loaded
+    // because 'sufficient' reads the record, and before any spend. Only the
+    // automatic hook is gated: a curator release or an identity-edit
+    // follow-through is a deliberate act and always runs.
+    if (trigger === 'add') {
+      const mode = aiConfig.get().enrichmentOnAdd;
+      if (mode === 'off') return;
+      if (mode === 'sufficient' && !identityDataSufficient(wine)) {
+        // Not a failure: the record cannot support a true statement about
+        // place or variety yet, and the sommelier researches exactly this
+        // while setting its drink window.
+        console.log(`[enrichmentJob] on-add skipped (${idStr}): identity too thin for an honest profile`);
+        return undefined;
+      }
+    }
     if (!force) {
       if (wine.aiProfile && wine.aiProfile.description) return; // already enriched
       // HELD is a decision awaiting a human, not a gap to retry: without this

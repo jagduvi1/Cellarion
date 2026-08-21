@@ -461,7 +461,8 @@ async function addBottle(cellarDoc, wineDoc, fields = {}, req) {
   const { embedSinglePair } = require('./embeddingJob');
   embedSinglePair(wineDoc._id, bottle.vintage).catch(() => {});
   const { enrichWineById } = require('./enrichmentJob');
-  enrichWineById(wineDoc._id, { budgetUserId: req && req.user ? req.user.id : undefined }).catch(() => {});
+  // trigger:'add' — subject to the enrichmentOnAdd policy (aiConfig).
+  enrichWineById(wineDoc._id, { budgetUserId: req && req.user ? req.user.id : undefined, trigger: 'add' }).catch(() => {});
   const { resolveRestockAlerts } = require('./restockChecker');
   resolveRestockAlerts(req?.user?.id || cellarDoc.user, wineDoc._id, bottle._id).catch(() => {});
 

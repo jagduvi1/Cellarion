@@ -493,6 +493,81 @@ function EnrichmentGatePanel({ floor, unknownBar, apiFetch }) {
   );
 }
 
+// Who pays for a new wine's first profile. Adding a bottle fires one
+// enrichment per newly-minted wine — at ~120 new wines a day that drip, not
+// the admin batch runs, is the steady API spend.
+function EnrichmentOnAddPanel({ mode, maturitySuggest, priceSuggest, apiFetch }) {
+  const [val, setVal] = useState(mode ?? 'sufficient');
+  const [mat, setMat] = useState(maturitySuggest ?? true);
+  const [price, setPrice] = useState(priceSuggest ?? true);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const save = async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await apiFetch('/api/superadmin/ai/enrichment-on-add', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: val, sommMaturitySuggestEnabled: !!mat, sommPriceSuggestEnabled: !!price }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        setMsg({ ok: false, text: d.error || 'Save failed' });
+      } else {
+        setMsg({ ok: true, text: 'Saved — applies to the next bottle added' });
+      }
+    } catch {
+      setMsg({ ok: false, text: 'Network error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const selStyle = { background: 'var(--sa-bg)', border: '1px solid var(--sa-border)', color: 'var(--sa-text)', padding: '2px 6px', borderRadius: 3, fontFamily: 'monospace', fontSize: 12 };
+  return (
+    <div className="sa-panel" style={{ marginTop: 16 }}>
+      <div className="sa-panel-header">
+        <span className="sa-panel-title">AI Spend Controls</span>
+        <button className="sa-btn" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
+      </div>
+      <div className="sa-panel-body">
+        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 12 }}>
+          The paths that spend API credit without a user asking. Label scan, AI wine search and cellar chat are
+          deliberately NOT here — they are the add-bottle experience and the product. Batch enrichment is separate and
+          only runs when you start one. Curator work — releases, identity-edit re-enrichment, promoting a pending
+          wine — is never gated.
+        </div>
+        <div className="sa-kv">
+          <div className="sa-kv-row">
+            <span className="sa-kv-key">Enrich on bottle add</span>
+            <select value={val} onChange={e => setVal(e.target.value)} style={selStyle}>
+              <option value="always">always — enrich every new wine</option>
+              <option value="sufficient">sufficient — only with a region/appellation and a grape or type</option>
+              <option value="off">off — profiles come from the sommelier only</option>
+            </select>
+          </div>
+          <div className="sa-kv-row">
+            <span className="sa-kv-key">Sommelier drink-window suggestions</span>
+            <input type="checkbox" checked={!!mat} onChange={e => setMat(e.target.checked)} />
+          </div>
+          <div className="sa-kv-row">
+            <span className="sa-kv-key">Sommelier price suggestions</span>
+            <input type="checkbox" checked={!!price} onChange={e => setPrice(e.target.checked)} />
+          </div>
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginTop: 10 }}>
+          The two sommelier switches answer questions the curator already researches by hand while setting a window or
+          a price — and they work on a flat-rate subscription, so turning these off moves the cost, not the work. Both
+          return a clear &ldquo;turned off, research it yourself&rdquo; message rather than failing silently.
+        </div>
+        {msg && <div style={{ fontSize: 11, marginTop: 8, color: msg.ok ? 'var(--sa-green)' : 'var(--sa-red)' }}>{msg.text}</div>}
+      </div>
+    </div>
+  );
+}
+
 function EnrichmentSearchPanel({ enabled, dailyCap, apiFetch }) {
   const [on, setOn] = useState(enabled ?? true);
   const [cap, setCap] = useState(dailyCap ?? 5);
@@ -1232,6 +1307,12 @@ export default function TabAI() {
       <ChatLimitPanel limit={config.chatDailyLimit ?? 50} apiFetch={apiFetch} />
       <EnrichmentGatePanel floor={config.enrichmentHoldConfidenceFloor ?? 0.4} unknownBar={config.enrichmentHoldUnknownConfidenceBar ?? 0.55} apiFetch={apiFetch} />
       <EnrichmentSearchPanel enabled={config.enrichmentSearchEnabled ?? true} dailyCap={config.enrichmentSearchDailyCap ?? 5} apiFetch={apiFetch} />
+      <EnrichmentOnAddPanel
+        mode={config.enrichmentOnAdd ?? 'sufficient'}
+        maturitySuggest={config.sommMaturitySuggestEnabled ?? true}
+        priceSuggest={config.sommPriceSuggestEnabled ?? true}
+        apiFetch={apiFetch}
+      />
       <ChatUsagePanel />
     </>
   );
