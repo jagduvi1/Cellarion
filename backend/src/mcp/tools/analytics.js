@@ -69,7 +69,27 @@ registerTool({
     filters: z.array(z.object({
       field: z.string(),
       op: z.string(),
-      value: z.any(),
+      // NEVER z.any() here, and never z.array(z.any()) inside it. Both
+      // serialise to a bare `{}`, and Home Assistant's MCP client converts
+      // every tool schema through voluptuous_openapi.convert_to_voluptuous
+      // (homeassistant/components/mcp/coordinator.py), which raises
+      // "Invalid schema, missing type" on a node with no `type` keyword —
+      // and HA aborts the WHOLE config entry on one tool's failure, so a
+      // single untyped node takes every Cellarion tool offline in HA.
+      // Reported 2026-08-21 and reproduced against HA's own converter: the
+      // naive union with z.array(z.any()) still fails, because the empty {}
+      // simply moves down into `items`.
+      //
+      // The union below is the engine's real contract, so nothing is coerced:
+      // scalars for eq/gt/contains, arrays for `in` and the two-element
+      // `between`. anyOf itself is fine — HA has converted the 26 anyOf nodes
+      // in our other tools since July, and that was verified too.
+      value: z.union([
+        z.string(),
+        z.number(),
+        z.boolean(),
+        z.array(z.union([z.string(), z.number()])),
+      ]),
     })).max(12).optional(),
     dimensions: z.array(z.string()).max(2).optional().describe('grouped mode: 1-2 groupable field keys'),
     measures: z.array(z.object({
