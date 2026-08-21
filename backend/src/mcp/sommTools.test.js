@@ -817,6 +817,70 @@ describe('held-profile review queue over MCP (somm ticket 2026-08-18)', () => {
       expect(update.$set['aiProfile.suspectDecision']).toBe('confirmed');
     });
 
+    // Somm ticket 6a882f3e. The note used to be kept "for curator context"
+    // after the flag it explained was cleared — so a confirmed row could still
+    // read "the true producing estate is unclear to me" with nothing left to
+    // qualify it, and no lever existed to correct it.
+    describe('the producerNote goes with the flag it explains', () => {
+      test('confirm clears the note alongside producerSuspect', async () => {
+        WineDefinition.findById.mockReturnValue(selectChain(publishedSuspect({
+          producerNote: 'This appears to be a branded line rather than a wine made by Donnafugata.',
+        })));
+        const body = parse(await tool('review_held_profile').handler({ wine_id: oid('7'), decision: 'confirm' }, SOMM_CTX));
+        const [, update] = WineDefinition.updateOne.mock.calls[0];
+        expect(update.$set['aiProfile.producerNote']).toBeNull();
+        // Told, not silent — the curator can no longer see it to check.
+        expect(body.data.producer_note_cleared).toBe(true);
+      });
+
+      test('the cleared note survives in the audit, not just in the void', async () => {
+        const note = 'Alessandro is not a producer I can identify';
+        WineDefinition.findById.mockReturnValue(selectChain(publishedSuspect({ producerNote: note })));
+        await tool('review_held_profile').handler({ wine_id: oid('7'), decision: 'confirm' }, SOMM_CTX);
+        const detail = logAudit.mock.calls.at(-1)[3];
+        expect(detail.clearedProducerNote).toBe(note);
+      });
+
+      test('confirm on an unknown-only row clears the note too', async () => {
+        WineDefinition.findById.mockReturnValue(selectChain(publishedSuspect({
+          producerSuspect: false, producerUnknown: true, producerNote: 'cannot place this producer',
+        })));
+        await tool('review_held_profile').handler({ wine_id: oid('7'), decision: 'confirm' }, SOMM_CTX);
+        const [, update] = WineDefinition.updateOne.mock.calls[0];
+        expect(update.$set['aiProfile.producerUnknown']).toBe(false);
+        expect(update.$set['aiProfile.producerNote']).toBeNull();
+      });
+
+      test('UPHOLD keeps the note — the doubt stands, so its explanation must', async () => {
+        WineDefinition.findById.mockReturnValue(selectChain(publishedSuspect({ producerNote: 'genuinely unidentifiable' })));
+        const body = parse(await tool('review_held_profile').handler({ wine_id: oid('7'), decision: 'uphold' }, SOMM_CTX));
+        const [, update] = WineDefinition.updateOne.mock.calls[0];
+        expect(update.$set['aiProfile.producerNote']).toBeUndefined();
+        expect(body.data.producer_note_cleared).toBeUndefined();
+      });
+
+      test('a HELD row keeps the note — confirm keeps it held, so the doubt is unresolved', async () => {
+        // heldWine() spreads `over` at the TOP level, not into aiProfile, so
+        // the note has to be placed explicitly or this test would assert
+        // nothing about the field it is named for.
+        const held = heldWine();
+        held.aiProfile = { ...held.aiProfile, producerNote: 'unclear' };
+        WineDefinition.findById.mockReturnValue(selectChain(held));
+        await tool('review_held_profile').handler({ wine_id: oid('7'), decision: 'confirm' }, SOMM_CTX);
+        const [, update] = WineDefinition.updateOne.mock.calls[0];
+        expect(update.$set['aiProfile.producerNote']).toBeUndefined();
+      });
+
+      test('a row with no note is not reported as having cleared one', async () => {
+        WineDefinition.findById.mockReturnValue(selectChain(publishedSuspect({ producerNote: null })));
+        const body = parse(await tool('review_held_profile').handler({ wine_id: oid('7'), decision: 'confirm' }, SOMM_CTX));
+        const [, update] = WineDefinition.updateOne.mock.calls[0];
+        expect(update.$set['aiProfile.producerNote']).toBeUndefined();
+        expect(body.data.producer_note_cleared).toBeUndefined();
+        expect(logAudit.mock.calls.at(-1)[3].clearedProducerNote).toBeUndefined();
+      });
+    });
+
     test('a HELD row records no suspect verdict — different question, different queue', async () => {
       WineDefinition.findById.mockReturnValue(selectChain(heldWine()));
       await tool('review_held_profile').handler({ wine_id: oid('7'), decision: 'confirm' }, SOMM_CTX);

@@ -1419,8 +1419,7 @@ registerTool({
         // Confirming a PUBLISHED suspect row means a human adjudicated the
         // doubt and kept the row — so the owner-visible caveat must go
         // (somm ticket 6a84c8dc: five documented-domaine rows carried a
-        // false "cannot be verified" disclaimer even after review). The
-        // producerNote stays for curator context; only the flag clears.
+        // false "cannot be verified" disclaimer even after review).
         if (!held) {
           if (flaggedPublished) {
             set['aiProfile.producerSuspect'] = false;
@@ -1436,19 +1435,52 @@ registerTool({
           // on an unknown-only row: that field is the verdict on
           // producerSuspect, and ONLY that (6a85f5e8).
           if (ap.producerUnknown === true) set['aiProfile.producerUnknown'] = false;
+
+          // …and the NOTE goes with the flag it explains (somm ticket
+          // 6a882f3e). It used to be kept "for curator context", and that was
+          // backwards: once a human has adjudicated the doubt, the model's
+          // account of the doubt has no remaining audience, and where the note
+          // asserted something false it outlived the flag that qualified it.
+          //
+          // Their worked example: Donnafugata's "Isolano" — the estate's own
+          // Etna Bianco — sat confirmed while its note still read "the true
+          // producing estate is unclear to me". No curator lever existed to
+          // correct that: set_wine_profile does not expose the field and
+          // `release` is held-rows-only, which is the wrong population.
+          //
+          // Scoped to a flag actually clearing. A confirm on a HELD row keeps
+          // the row held, so the doubt is unresolved and the note is still
+          // live context — clearing there would delete a caveat that still
+          // applies. The note is copied into the audit detail below rather
+          // than dropped silently: it is the record of what the model claimed,
+          // and an admin asking "why was this ever flagged?" deserves an
+          // answer after the fact.
+          if ((flaggedPublished || ap.producerUnknown === true) && ap.producerNote) {
+            set['aiProfile.producerNote'] = null;
+          }
         }
         await WineDefinition.updateOne({ _id: wine._id }, { $set: set });
         const state = held ? 'held' : (flaggedPublished ? 'published_suspect' : 'published_unknown');
+        const noteCleared = set['aiProfile.producerNote'] === null ? ap.producerNote : null;
         const cleared = {
           ...(flaggedPublished ? { suspectCleared: true } : {}),
           ...(!held && ap.producerUnknown === true ? { unknownCleared: true } : {}),
         };
         logAudit(ctx.req, 'admin.wine.profileReviewed', { type: 'wine', id: wine._id },
-          { name: wine.name, producer: wine.producer, decision: 'confirm', state, ...cleared, reason, via: 'mcp' });
+          {
+            name: wine.name, producer: wine.producer, decision: 'confirm', state, ...cleared,
+            // The cleared note, preserved where it can still be read. Bounded:
+            // an audit detail is not a place to store an essay.
+            ...(noteCleared ? { clearedProducerNote: String(noteCleared).slice(0, 500) } : {}),
+            reason, via: 'mcp',
+          });
         return {
           wine_id: wine._id, label, decision: 'confirm', state,
           ...(cleared.suspectCleared ? { suspect_cleared: true } : {}),
           ...(cleared.unknownCleared ? { unknown_cleared: true } : {}),
+          // Told, not silent: the curator should know the caveat went with the
+          // flag, because they can no longer see it to check.
+          ...(noteCleared ? { producer_note_cleared: true } : {}),
           reviewed_at: now,
         };
       }
