@@ -38,8 +38,10 @@ const discussionSchema = new mongoose.Schema({
     ref: 'WineDefinition',
     default: null
   },
-  // The blog post this thread discusses, when it was opened from one (user
-  // request 2026-08-21: "a comment section on every blog post").
+  // The blog post this thread discusses, when it was opened from one.
+  //
+  // Origin (2026-08-21): a user asked for blog post SEARCH; comments were a
+  // separate idea raised alongside it, and this is the form they took.
   //
   // A ref rather than a comment system, deliberately. Blog comments would have
   // been a second community surface, and the first one is quiet — 5 threads and

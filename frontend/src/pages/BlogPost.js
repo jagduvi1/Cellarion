@@ -172,8 +172,8 @@ function BlogPost() {
         />
       </article>
 
-      {/* "Discuss this post" instead of a comment section (user request
-          2026-08-21). A thread lands in the existing community, which already
+      {/* "Discuss this post" instead of a comment section. A thread lands in
+          the existing community, which already
           has moderation, reports and the GDPR export/erasure cascade — a
           bespoke comment model would have had to re-earn all three, and would
           have been a second community surface next to a quiet first one. */}
