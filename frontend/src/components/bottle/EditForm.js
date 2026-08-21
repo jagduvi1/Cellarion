@@ -1,4 +1,5 @@
-import { useState, useRef, lazy, Suspense } from 'react';
+import { useState, useRef, Suspense } from 'react';
+import { lazy } from '../../utils/lazyWithReload';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import { updateBottle, setBottleDefaultImage } from '../../api/bottles';
