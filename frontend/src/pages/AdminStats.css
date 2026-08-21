@@ -358,3 +358,18 @@
   font-style: italic;
   color: var(--color-text-muted);
 }
+
+/* ── Signup-cohort table (mobile fix, 2026-08-21) ─────────────────────────
+   On a phone the long row labels forced the numeric cells to wrap, splitting
+   "7 · 44%" across lines — which reads as broken data, not layout. Numbers
+   never wrap; the label column is the one allowed to give way. */
+.admin-stats-cohorts .admin-stats-count,
+.admin-stats-cohorts .admin-stats-pct {
+  white-space: nowrap;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.admin-stats-cohorts .admin-stats-name {
+  word-break: normal;
+  overflow-wrap: anywhere;
+}

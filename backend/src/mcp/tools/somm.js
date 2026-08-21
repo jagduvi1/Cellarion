@@ -82,7 +82,27 @@ const wineLite = (wd) => (wd ? {
   country: wd.country?.name || null,
   region: wd.region?.name || null,
   appellation: wd.appellation || null,
+  // Somm ticket 6a887619 (2026-08-21): every OTHER identity field showed here
+  // but grapes did not, so grapes written at wine creation became visible only
+  // on a later get_wine — and read as "populated by an unidentified path
+  // during curation". Four instances were filed before the cause was found.
+  //
+  // Emitted HONESTLY or not at all. Callers differ in what they select and
+  // populate, and an unpopulated ref array must not collapse to `grapes: []` —
+  // that is a claim of "no grapes" on a wine that has them, which is the exact
+  // shape of misreading this ticket came from. So: populated docs → names;
+  // a genuinely empty array → []; unpopulated ids or an unselected field →
+  // the key is omitted, meaning "not carried on this surface".
+  // Output-only change: no reconnect needed.
+  ...(grapesLite(wd.grapes)),
 } : null);
+
+const grapesLite = (grapes) => {
+  if (!Array.isArray(grapes)) return {};
+  const names = grapes.map((g) => g?.name).filter(Boolean);
+  if (grapes.length > 0 && names.length === 0) return {}; // ids, not docs
+  return { grapes: names };
+};
 
 // The tasting profile as a curator needs to judge it: the values, plus WHO
 // wrote them and how sure the generator was. `confidence` is the model's own
@@ -220,7 +240,10 @@ registerTool({
         .skip(offset).limit(limit)
         // grapes rides along for identityDataSufficient, which decides whether
         // an absent profile is "yours to write" or merely "not yet enriched".
-        .populate({ path: 'wineDefinition', select: 'name producer type appellation aiProfile grapes', populate: ['country', 'region'] })
+        // grapes populated to NAMES, not just selected as ids: the queue row
+        // is where the curator decides whether a wine needs work, and grapes
+        // invisible here is what ticket 6a887619 mistook for a phantom writer.
+        .populate({ path: 'wineDefinition', select: 'name producer type appellation aiProfile grapes', populate: ['country', 'region', { path: 'grapes', select: 'name' }] })
         .lean(),
     ]);
     const data = profiles.map((p) => ({
