@@ -6,22 +6,6 @@ const WineVintageProfile = require('../models/WineVintageProfile');
 const WineRequest = require('../models/WineRequest');
 const BottleImage = require('../models/BottleImage');
 const Rack = require('../models/Rack');
-const AuditLog = require('../models/AuditLog');
-
-// Audit actions that mean "this user logged in". Google SSO writes its OWN
-// action (routes/oauth.js) — matching only 'auth.login.success' silently drops
-// every SSO-only user from the login figures while their bottles still count
-// in the activity figures, which is what made "users with bottles" exceed
-// "users who logged in". Both carry the user in `resource.id`.
-// Deliberately NOT included: 'auth.demo_login' (one shared demo account, not a
-// returning person) and 'auth.register' / 'auth.email_verified' (a session
-// starts there without a login — see the doc note on what this metric means).
-const LOGIN_ACTIONS = ['auth.login.success', 'auth.oauth.success'];
-
-// How far back the audit log retains entries (all LOGIN_ACTIONS included).
-// Login-based retention figures are bounded by this window. Mirrors the TTL in
-// models/AuditLog.js so the UI can caption "within the last N days".
-const AUDIT_WINDOW_DAYS = parseInt(process.env.AUDIT_TTL_DAYS || '90', 10);
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -33,12 +17,14 @@ const round = (n, d = 2) => {
 const pct = (count, total) => total > 0 ? round((count / total) * 100, 1) : 0;
 
 // Retention ladder: how many distinct days a user has to show up on to land in
-// each tier. Applied to BOTH signals (bottle activity and logins) so the two
-// read side by side. 2 = came back at all, 4 = a habit forming, 7 = committed.
-// Deliberately stops at 7: the login ladder is bounded by the audit TTL
-// (AUDIT_TTL_DAYS, 90d), so a 30-day tier would mean "30 of the last 90" and
-// read as broken sitting at 0. Add a tier here and both the API payload and
-// the dashboard pick it up — nothing else to change.
+// each tier. 2 = came back at all, 4 = a habit forming, 7 = committed. Add a
+// tier here and both the API payload and the dashboard pick it up — nothing
+// else to change.
+//
+// It stopped at 7 because the login ladder alongside it was bounded by the
+// audit TTL, and that ladder is gone (2026-08-21). The bottle-activity ladder
+// this now serves runs over ALL history, so a longer tier is no longer
+// structurally broken — just unmeasured. Adding one is a product call.
 const DAY_TIERS = [2, 4, 7];
 
 // $group accumulators counting users at or above each tier, e.g. { t2: {…}, t4: {…} }.
@@ -433,53 +419,19 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
   const coreUsers = ret.t4 || 0;        // 4+ — a stickier tier, subset of the above
   const singleSessionUsers = Math.max(0, ret.usersWithActivity - returningUsers);
 
-  // Login-based signals, derived from the AUDIT LOG (see LOGIN_ACTIONS — both
-  // password and Google SSO logins) rather than a per-user field — so we store
-  // NO new personal data for this feature (data minimisation) and the numbers
-  // are retroactive. Login audit entries record the user in `resource.id`
-  // (actor is anonymous at login time,
-  // pre-auth). Bounded by the audit TTL (AUDIT_WINDOW_DAYS), so "repeat logins"
-  // means within that window. Persistent refresh-token sessions don't re-hit
-  // /login, so these undercount the most loyal users by design — the
-  // activity-based metric above is the headline for exactly that reason.
-  const loginAuditMatch = {
-    action: { $in: LOGIN_ACTIONS },
-    'resource.id': excludeAdmins && adminIds.length
-      ? { $ne: null, $nin: adminIds }
-      : { $ne: null },
-  };
-  // Two shapes come out of the same scan:
-  //   • logins    — raw login EVENTS (five logins in one evening = 5)
-  //   • loginDays — distinct calendar days with a login, the login-side mirror
-  //     of the activity tiers above, so "returning" means the same thing on
-  //     both sides: came back on another day, not just clicked twice.
-  const loginAgg = await safeAggregate(AuditLog, [
-    { $match: loginAuditMatch },
-    // Collapse to user×day first, then per user, so a burst of logins in one
-    // sitting counts once — same reasoning as the activity metric.
-    { $group: {
-      _id:    { user: '$resource.id', day: { $dateToString: { format: '%Y-%m-%d', date: '$timestamp' } } },
-      hits:   { $sum: 1 },
-      lastAt: { $max: '$timestamp' },
-    }},
-    { $group: {
-      _id:       '$_id.user',
-      logins:    { $sum: '$hits' },
-      loginDays: { $sum: 1 },
-      lastAt:    { $max: '$lastAt' },
-    }},
-    { $group: {
-      _id: null,
-      loginUsers:       { $sum: 1 },
-      repeatLoginUsers: { $sum: { $cond: [{ $gte: ['$logins', 2] }, 1, 0] } },
-      loggedIn30d:      { $sum: { $cond: [{ $gte: ['$lastAt', since30] }, 1, 0] } },
-      loggedIn7d:       { $sum: { $cond: [{ $gte: ['$lastAt', since7d] }, 1, 0] } },
-      // Same ladder as the activity metric, on distinct login days.
-      ...tierAccumulators('$loginDays'),
-    }},
-  ]);
-  const login = loginAgg[0] || { loginUsers: 0, repeatLoginUsers: 0, loggedIn30d: 0, loggedIn7d: 0 };
-  const loginTiers = tierRows(login, login.loginUsers || 0);
+  // Login-derived retention was REMOVED 2026-08-21. It answered a question the
+  // activity ladder above already answers better, and it cost the single most
+  // expensive query on this page: a full AuditLog scan over every login event,
+  // grouped user×day then twice more. Login figures also structurally
+  // undercount — a long-lived refresh session never re-hits /login — so the
+  // two ladders disagreed by design and invited exactly the comparison the
+  // docs had to warn against.
+  //
+  // The LOGIN_ACTIONS constant went with it rather than being kept "for
+  // documentation": nothing read it, and a constant nobody reads is litter
+  // wearing a comment. The one fact worth not relearning — Google SSO writes
+  // its OWN audit action, so matching only 'auth.login.success' silently drops
+  // every SSO-only user — lives in docs/admin-global-stats-architecture.md.
 
   // ── Plans / subscriptions ───────────────────────────────────────────────
   const planDistribution = await safeAggregate(User, [
@@ -491,11 +443,21 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
 
   const in7d  = new Date(Date.now() + 7 * 86400000);
   const in30d = new Date(Date.now() + 30 * 86400000);
-  const [paidUsers, expiringIn7d, expiringIn30d, withStripeCustomer] = await Promise.all([
+  const [
+    paidUsers, expiringIn7d, expiringIn30d, withStripeCustomer,
+    newSupporters30d, newSupporters90d, formerSupporters,
+  ] = await Promise.all([
     User.countDocuments({ ...userMatch, plan: { $ne: 'free' } }),
     User.countDocuments({ ...userMatch, planExpiresAt: { $gte: new Date(), $lte: in7d } }),
     User.countDocuments({ ...userMatch, planExpiresAt: { $gte: new Date(), $lte: in30d } }),
     User.countDocuments({ ...userMatch, stripeCustomerId: { $ne: null } }),
+    // planStartedAt is stamped when a tier is granted, so it dates the
+    // support rather than the account.
+    User.countDocuments({ ...userMatch, plan: { $ne: 'free' }, planStartedAt: { $gte: since30 } }),
+    User.countDocuments({ ...userMatch, plan: { $ne: 'free' }, planStartedAt: { $gte: since90 } }),
+    // Churn: a Stripe customer record outlives the subscription, so a user who
+    // has one but sits on `free` supported at some point and does not now.
+    User.countDocuments({ ...userMatch, plan: 'free', stripeCustomerId: { $nin: [null, ''] } }),
   ]);
 
   // ── Maturity (drink-window phase distribution) ──────────────────────────
@@ -822,18 +784,6 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
       // Full ladder: [{ days, users, pct }] for every DAY_TIERS threshold,
       // percentages over usersWithActivity.
       activityTiers,
-      // The same ladder counted on distinct LOGIN days instead of bottle
-      // activity — percentages over loginUsers (anyone who logged in at all
-      // within the audit window), so the two ladders aren't over the same base.
-      loginTiers,
-      // Login-based, from the audit log — bounded by the audit TTL window.
-      // null when the TTL is disabled (AUDIT_TTL_DAYS<=0): the audit log is then
-      // retained indefinitely, so the figures cover all recorded history.
-      loginWindowDays:  AUDIT_WINDOW_DAYS > 0 ? AUDIT_WINDOW_DAYS : null,
-      loginUsers:       login.loginUsers,
-      repeatLoginUsers: login.repeatLoginUsers,
-      loggedIn30d:      login.loggedIn30d,
-      loggedIn7d:       login.loggedIn7d,
     },
     plans: {
       distribution: planDistribution,
@@ -841,6 +791,22 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
       expiringIn7d,
       expiringIn30d,
       withStripeCustomer,
+      // Supporter signal the page was missing entirely (2026-08-21). The plan
+      // distribution showed who pays TODAY and nothing else, so the two
+      // questions worth asking had no answer: is anyone new, and did anyone
+      // leave.
+      //
+      // formerSupporters is the churn number, and it is only visible because a
+      // Stripe customer record outlives the subscription: 12 customers against
+      // 4 paying users is 8 people who supported and stopped. Nothing else on
+      // this page could have told you that.
+      //
+      // ⚠️ It is a FLOOR, not a count. A supporter who never reached Stripe
+      // (comped, or granted by hand) leaves no customer record, and one who
+      // resubscribes is counted as current, not as having churned.
+      newSupporters30d,
+      newSupporters90d,
+      formerSupporters,
     },
     maturity: {
       ...maturity,
@@ -894,5 +860,5 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
 module.exports = {
   computeGlobalStats,
   // Exported for tests: the retention day-ladder and its two halves.
-  __testing: { DAY_TIERS, tierAccumulators, tierRows, LOGIN_ACTIONS },
+  __testing: { DAY_TIERS, tierAccumulators, tierRows },
 };
