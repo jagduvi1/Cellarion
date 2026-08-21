@@ -235,6 +235,51 @@ function AdminStats() {
           <p className="admin-stats-section-note">
             {t('adminStats.retentionNote')}
           </p>
+          {/* Do NEW users come back? The ladder below measures the whole
+              population at once, so it is dominated by whoever has been here
+              longest; this asks the question that tracks growth. */}
+          {retention.signupCohorts && retention.signupCohorts.length > 0 && (
+            <>
+              <h3 className="admin-stats-subhead">{t('adminStats.cohortsHead')}</h3>
+              <div className="admin-stats-cards">
+                <StatCard
+                  accent="ok"
+                  label={t('adminStats.cohortReturned')}
+                  value={fmtPct(retention.cohortReturnedPct)}
+                  sublabel={t('adminStats.cohortReturnedSub', {
+                    returned: retention.cohortReturned ?? 0,
+                    total: retention.cohortSignups ?? 0,
+                  })}
+                  tooltip={t('adminStats.cohortReturnedTooltip')}
+                />
+              </div>
+              <div className="admin-stats-panel">
+                <table className="admin-stats-table">
+                  <tbody>
+                    {retention.signupCohorts.map((c) => (
+                      <tr key={c.daysAgoFrom} className={c.tooNew ? 'admin-stats-row-empty' : undefined}>
+                        <td className="admin-stats-name">
+                          {t('adminStats.cohortRange', { from: c.daysAgoFrom, to: c.daysAgoTo })}
+                        </td>
+                        <td className="admin-stats-count">{fmt(c.signedUp)}</td>
+                        <td className="admin-stats-pct">
+                          {/* The newest cohort shows its intake and NO rate:
+                              its members are "active in the last 7 days"
+                              because they signed up in them. A number here
+                              would read as ~97% retention and mean nothing. */}
+                          {c.tooNew
+                            ? t('adminStats.cohortTooNew')
+                            : `${fmt(c.returned)} · ${fmtPct(c.pct)}`}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="admin-stats-section-note">{t('adminStats.cohortNote')}</p>
+              </div>
+            </>
+          )}
+
           <h3 className="admin-stats-subhead">{t('adminStats.retentionByActivity')}</h3>
           <div className="admin-stats-cards">
             <StatCard

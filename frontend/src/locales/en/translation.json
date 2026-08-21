@@ -3415,7 +3415,14 @@
     "formerSupporters": "Former supporters",
     "formerSupportersSub": "supported, not currently",
     "formerSupportersTooltip": "Users who have a Stripe customer record but sit on the free plan — they supported at some point and do not now. A floor, not a count: someone comped by hand never reaches Stripe, and someone who resubscribed counts as current.",
-    "planUnconfigured": "(not a configured tier)"
+    "planUnconfigured": "(not a configured tier)",
+    "cohortsHead": "Do new users come back?",
+    "cohortReturned": "New users returning",
+    "cohortReturnedSub": "{{returned}} of {{total}} recent signups",
+    "cohortReturnedTooltip": "Of everyone who signed up between 1 and 4 weeks ago, the share who used Cellarion in the last 7 days. Counts any activity, not just logging in — a signed-in session can last 30 days without a fresh login. The most recent week is excluded because its members were active in the window by virtue of signing up in it.",
+    "cohortRange": "Signed up {{from}}–{{to}} days ago",
+    "cohortTooNew": "too recent to ask",
+    "cohortNote": "Came back = any activity in the last 7 days. The newest group shows its intake only: those users were active in the window because they joined during it, so a percentage there would measure nothing."
   },
   "announcement": {
     "dismiss": "Dismiss"

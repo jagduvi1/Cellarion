@@ -6,6 +6,7 @@ const WineVintageProfile = require('../models/WineVintageProfile');
 const WineRequest = require('../models/WineRequest');
 const BottleImage = require('../models/BottleImage');
 const Rack = require('../models/Rack');
+const AuditLog = require('../models/AuditLog');
 const { PLAN_NAMES } = require('../config/plans');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -65,6 +66,47 @@ const buildPlanDistribution = (planCounts) => {
       .sort((a, b) => b.count - a.count)
       .map((r) => ({ plan: r._id, count: r.count, unconfigured: true })),
   ];
+};
+
+// Signup cohorts: "of the people who joined N weeks ago, how many came back?"
+const COHORT_WINDOW_DAYS = 7;   // what "came back" means, and the cohort width
+const COHORT_SPAN_DAYS = 28;    // how far back cohorts go
+
+/**
+ * Bucket users by signup age and count who was active in the window.
+ *
+ * ⚠️ THE NEWEST COHORT IS NOT ASKED. Its members are "active in the last 7
+ * days" because they SIGNED UP in the last 7 days — measured live that reads
+ * ~97%, which is a tautology, not retention. It returns { returned: null,
+ * pct: null, tooNew: true } so the caller can show the intake without
+ * inviting the false reading, and the headline percentage skips it.
+ *
+ * `now` is injected so the test can pin time instead of racing the clock.
+ */
+const buildSignupCohorts = (users, activeIds, now) => {
+  const out = [];
+  for (let start = 0; start < COHORT_SPAN_DAYS; start += COHORT_WINDOW_DAYS) {
+    const end = start + COHORT_WINDOW_DAYS;
+    const from = new Date(now - end * 86400000);
+    // Buckets are [now-end, now-start) so each user lands in exactly one. The
+    // NEWEST bucket has no upper bound at all rather than `< now`: a user
+    // created at the query instant would otherwise fall out of every bucket
+    // and silently vanish from the intake count, and clock skew between the
+    // app and Mongo puts a createdAt fractionally in the future within reach.
+    const to = start === 0 ? null : new Date(now - start * 86400000);
+    const members = users.filter((u) => u.createdAt >= from && (to === null || u.createdAt < to));
+    const tooNew = start === 0;
+    const returned = tooNew ? null : members.filter((u) => activeIds.has(String(u._id))).length;
+    out.push({
+      daysAgoFrom: start,
+      daysAgoTo: end,
+      signedUp: members.length,
+      returned,
+      pct: returned == null ? null : pct(returned, members.length),
+      tooNew,
+    });
+  }
+  return out;
 };
 
 const safeAggregate = async (model, pipeline) => {
@@ -447,6 +489,45 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
   const coreUsers = ret.t4 || 0;        // 4+ — a stickier tier, subset of the above
   const singleSessionUsers = Math.max(0, ret.usersWithActivity - returningUsers);
 
+  // ── Signup cohorts: do new users come back? ─────────────────────────────
+  //
+  // "Of the people who signed up N weeks ago, how many used Cellarion in the
+  // last 7 days." The activity ladder above measures the whole population at
+  // once and so is dominated by whoever has been here longest; this asks the
+  // question that actually tracks growth.
+  //
+  // ⚠️ THE MOST RECENT COHORT CANNOT BE ASKED. Someone who joined three days
+  // ago is "active in the last 7 days" because of the session they signed up
+  // in — measured live it reads 97%, which is not retention, it is a tautology.
+  // That cohort is returned with returned/pct NULL and a tooNew flag so the UI
+  // shows the intake without inviting the false reading. The headline
+  // percentage covers the MATURE cohorts only.
+  //
+  // Cost: ONE audit query, bounded to 7 days and served by the timestamp
+  // index, intersected in memory — not one query per cohort. Deliberately
+  // modest, because the login retention removed above was the most expensive
+  // thing on this page and replacing it with something worse would be a poor
+  // trade.
+  const cohortUsers = await User.find({
+    ...userMatch,
+    createdAt: { $gte: new Date(Date.now() - COHORT_SPAN_DAYS * 86400000) },
+  }).select('_id createdAt').lean();
+
+  // Anyone who did ANYTHING in the window. Deliberately not "logged in": the
+  // refresh cookie keeps a session alive for 30 rotating days, so an active
+  // user may not hit /login for weeks. Deliberately not "touched a bottle"
+  // either — that measures activation, which is a different question and
+  // already has its own figures.
+  const activeIds = new Set(
+    (await AuditLog.distinct('actor.userId', { timestamp: { $gte: since7d } }))
+      .filter(Boolean).map(String),
+  );
+
+  const signupCohorts = buildSignupCohorts(cohortUsers, activeIds, Date.now());
+  const mature = signupCohorts.filter((c) => !c.tooNew);
+  const matureSignups = mature.reduce((s, c) => s + c.signedUp, 0);
+  const matureReturned = mature.reduce((s, c) => s + c.returned, 0);
+
   // Login-derived retention was REMOVED 2026-08-21. It answered a question the
   // activity ladder above already answers better, and it cost the single most
   // expensive query on this page: a full AuditLog scan over every login event,
@@ -825,6 +906,15 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
       // Full ladder: [{ days, users, pct }] for every DAY_TIERS threshold,
       // percentages over usersWithActivity.
       activityTiers,
+      // "Of the people who signed up N weeks ago, how many used Cellarion in
+      // the last 7 days." cohortReturnedPct covers the MATURE cohorts only —
+      // the newest one cannot be asked, because its members are active in the
+      // window by virtue of having signed up in it.
+      signupCohorts,
+      cohortWindowDays: COHORT_WINDOW_DAYS,
+      cohortSignups: matureSignups,
+      cohortReturned: matureReturned,
+      cohortReturnedPct: pct(matureReturned, matureSignups),
     },
     plans: {
       distribution: planDistribution,
@@ -901,5 +991,8 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
 module.exports = {
   computeGlobalStats,
   // Exported for tests: the retention day-ladder and its two halves.
-  __testing: { DAY_TIERS, tierAccumulators, tierRows, buildPlanDistribution },
+  __testing: {
+    DAY_TIERS, tierAccumulators, tierRows,
+    buildPlanDistribution, buildSignupCohorts, COHORT_WINDOW_DAYS, COHORT_SPAN_DAYS,
+  },
 };
