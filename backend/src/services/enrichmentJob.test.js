@@ -1161,28 +1161,33 @@ describe('web-search rescue on confidence holds', () => {
       appellation: 'Dahlonega Plateau', grapes: [], aiProfile,
     }));
 
+    // Asserted on the DB WRITE rather than the return value: enrichWineById
+    // hands back the bare outcome string, and what actually matters is whether
+    // the stored profile was replaced.
+    const wroteProfile = () => WineDefinition.updateOne.mock.calls
+      .some((c) => c[1] && c[1].$set && c[1].$set.aiProfile);
+
     test('the reported case: lost search AND lower confidence keeps the old profile', async () => {
       wineWith(searched());
       aiConfig.get.mockImplementation(() => searchCfg({ enrichmentSearchEnabled: false })); // no slot
       suggestProfile.mockResolvedValue(attempt(0.4));
       const out = await enrichWineById(WINE_ID, { force: true });
-      expect(out).toEqual({ result: 'kept', reason: 'would_downgrade_searched_profile' });
-      // The profile itself is untouched; only the review stamp is cleared so
+      expect(out).toBe('kept');
+      // The profile itself is untouched; only the review stamp is cleared, so
       // the row returns to a human worklist.
-      const set = WineDefinition.updateOne.mock.calls[0][1].$set;
-      expect(set.aiProfile).toBeUndefined();
-      expect(set.profileReviewedAt).toBeNull();
+      expect(wroteProfile()).toBe(false);
+      expect(WineDefinition.updateOne.mock.calls[0][1].$set.profileReviewedAt).toBeNull();
     });
 
     test('an honest re-assessment that lowers confidence on its OWN merits still lands', async () => {
-      // Search was kept — the model simply became less sure. That is a real
+      // Search was KEPT — the model simply became less sure. That is a real
       // signal and must not be suppressed.
       wineWith(searched());
       suggestProfile
         .mockResolvedValueOnce(attempt(0.2))
         .mockResolvedValueOnce(attempt(0.45, { description: 'Searched, and still thin.' }));
-      const out = await enrichWineById(WINE_ID, { force: true });
-      expect(out.result).toBe('enriched');
+      await enrichWineById(WINE_ID, { force: true });
+      expect(wroteProfile()).toBe(true);
       expect(persisted().searchUsed).toBe(true);
       expect(persisted().confidence).toBe(0.45);
     });
@@ -1191,8 +1196,8 @@ describe('web-search rescue on confidence holds', () => {
       wineWith(searched());
       aiConfig.get.mockImplementation(() => searchCfg({ enrichmentSearchEnabled: false }));
       suggestProfile.mockResolvedValue(attempt(0.8));
-      const out = await enrichWineById(WINE_ID, { force: true });
-      expect(out.result).toBe('enriched');
+      await enrichWineById(WINE_ID, { force: true });
+      expect(wroteProfile()).toBe(true);
       expect(persisted().confidence).toBe(0.8);
     });
 
@@ -1200,8 +1205,8 @@ describe('web-search rescue on confidence holds', () => {
       wineWith(searched({ searchUsed: false }));
       aiConfig.get.mockImplementation(() => searchCfg({ enrichmentSearchEnabled: false }));
       suggestProfile.mockResolvedValue(attempt(0.4));
-      const out = await enrichWineById(WINE_ID, { force: true });
-      expect(out.result).toBe('enriched');
+      await enrichWineById(WINE_ID, { force: true });
+      expect(wroteProfile()).toBe(true);
       expect(persisted().confidence).toBe(0.4);
     });
 
@@ -1209,8 +1214,8 @@ describe('web-search rescue on confidence holds', () => {
       wineWith(searched({ description: null }));
       aiConfig.get.mockImplementation(() => searchCfg({ enrichmentSearchEnabled: false }));
       suggestProfile.mockResolvedValue(attempt(0.4));
-      const out = await enrichWineById(WINE_ID, { force: true });
-      expect(out.result).toBe('enriched');
+      await enrichWineById(WINE_ID, { force: true });
+      expect(wroteProfile()).toBe(true);
     });
   });
 
