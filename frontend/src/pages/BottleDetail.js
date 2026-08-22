@@ -9,8 +9,6 @@ import { getBottle, consumeBottle, setBottleDefaultImage, undoBottle, openBottle
 import { isReserved, reservationSummary } from '../utils/reservation';
 import OpenBottlePanel from '../components/bottle/OpenBottlePanel';
 import { PRESERVATION_METHODS } from '../utils/openBottle';
-import { getRacks } from '../api/racks';
-import { getCellarLayout } from '../api/cellarLayout';
 import { fetchRates } from '../utils/currency';
 import SITE_URL from '../config/siteUrl';
 import { API_URL } from '../api/apiConstants';
@@ -104,8 +102,13 @@ function BottleDetail() {
         setUserRole(data.userRole);
         setCellarColor(data.cellarColor || null);
         setCurrentRelease(data.currentRelease || null);
-        // Only fetch rack info for active bottles
-        if (data.bottle.status === 'active') fetchRackInfo();
+        // The bottle's rack placement now arrives ON the bottle response
+        // (2026-08-22). The old fetchRackInfo downloaded every rack with all
+        // slots plus the full 3D layout — the two heaviest requests on this
+        // page — to find one bottle id in the browser; the server answers the
+        // same question with one indexed query. That per-open cost is what
+        // let an ordinary editing session hit the API rate limit.
+        setRackInfo(data.rackInfo || null);
         if (data.pendingImageUrl) {
           const url = data.pendingImageUrl.startsWith('http')
             ? data.pendingImageUrl
@@ -206,33 +209,6 @@ function BottleDetail() {
     } catch {
       setPriceHistory([]);
     }
-  };
-
-  const fetchRackInfo = async () => {
-    try {
-      const [racksRes, layoutRes] = await Promise.all([
-        getRacks(apiFetch, cellarId),
-        getCellarLayout(apiFetch, cellarId),
-      ]);
-      const racksData = await racksRes.json();
-      const layoutData = await layoutRes.json();
-      if (racksRes.ok) {
-        for (const rack of racksData.racks) {
-          for (const slot of rack.slots) {
-            const bid = slot.bottle?._id || slot.bottle;
-            if (bid && bid.toString() === bottleId) {
-              // Check if this rack is placed in the 3D room layout
-              const placements = layoutData.layout?.rackPlacements || [];
-              const inRoom = placements.some(
-                rp => (rp.rack?._id || rp.rack) === rack._id
-              );
-              setRackInfo({ rackId: rack._id, rackName: rack.name, position: slot.position, inRoom });
-              return;
-            }
-          }
-        }
-      }
-    } catch {}
   };
 
   const handleBottleUpdated = (updated) => {

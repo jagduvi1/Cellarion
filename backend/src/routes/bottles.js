@@ -552,8 +552,41 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
       currentRelease = await getCurrentRelease(wineId, bottle.currency);
     }
 
+    // Where this bottle sits, answered HERE rather than by the client
+    // (2026-08-22, from the rate-limit analysis). BottleDetail used to
+    // download EVERY rack with all slots plus the full 3D layout — two
+    // requests and the two heaviest payloads on the page — and scan them in
+    // the browser for one bottle id. `slots.bottle` carries a unique multikey
+    // index, so the server answers with one indexed findOne and a few dozen
+    // bytes. That per-open cost is what let an ordinary editing session hit
+    // the API rate limit.
+    let rackInfo = null;
+    if (bottle.status === 'active') {
+      // Own try/catch: placement is auxiliary, and its lookup failing must
+      // degrade to "no rack shown", never 500 the bottle page.
+      try {
+        const Rack = require('../models/Rack');
+        const rack = await Rack.findOne({
+          cellar: cellar._id, 'slots.bottle': bottle._id, deletedAt: null,
+        }).select('name slots').lean();
+        if (rack) {
+          const slot = rack.slots.find((s) => s.bottle && s.bottle.toString() === bottle._id.toString());
+          // inRoom drives the "show me in the 3D room" affordance; one more
+          // narrow query, and only when the bottle is actually racked.
+          const CellarLayout = require('../models/CellarLayout');
+          const layout = await CellarLayout.findOne({ cellar: cellar._id }).select('rackPlacements.rack').lean();
+          const inRoom = !!layout?.rackPlacements?.some(
+            (rp) => (rp.rack?._id || rp.rack)?.toString() === rack._id.toString()
+          );
+          rackInfo = { rackId: rack._id, rackName: rack.name, position: slot ? slot.position : null, inRoom };
+        }
+      } catch (err) {
+        console.error('Bottle rackInfo lookup failed:', err.message);
+      }
+    }
+
     const ucEntry = cellar.userColors?.find(uc => uc.user.toString() === req.user.id.toString());
-    res.json({ bottle: bottleObj, userRole: role, cellarColor: ucEntry?.color || null, pendingImageUrl, defaultImageUrl, currentRelease });
+    res.json({ bottle: bottleObj, userRole: role, cellarColor: ucEntry?.color || null, pendingImageUrl, defaultImageUrl, currentRelease, rackInfo });
   } catch (error) {
     console.error('Get bottle error:', error);
     res.status(500).json({ error: 'Failed to get bottle' });
