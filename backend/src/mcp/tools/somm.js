@@ -24,6 +24,7 @@ const { logAudit } = require('../../services/audit');
 const { SUPPORTED_CURRENCIES } = require('../../config/currencies');
 const { isValidId } = require('../../utils/validation');
 const { stripHtml } = require('../../utils/sanitize');
+const { normalizeString, sanitizeTaxonomyName } = require('../../utils/normalize');
 const { classifyProposal } = require('../../services/proposalDirectApply');
 const { ok, fail, objectId, pageParams } = require('../toolUtil');
 const { logAction } = require('../actionLedger');
@@ -1320,7 +1321,10 @@ registerTool({
     }
     const stateOf = (w) => {
       if (w.aiProfile?.heldAt) return 'held';
-      if (w.aiProfile?.generatedAt) return 'published_suspect';
+      // A published suspect is identified by having CONTENT — generatedAt or
+      // a written description. unprofiled means neither: nothing generated,
+      // nothing written. (Matches the query's own unprofiled branch.)
+      if (w.aiProfile?.generatedAt || w.aiProfile?.description) return 'published_suspect';
       return 'unprofiled';
     };
     const reasonKey = (w) => (w.aiProfile?.heldAt ? (w.aiProfile?.heldReason || 'legacy') : stateOf(w));
