@@ -815,6 +815,33 @@ async function enrichWine(wine, model, { publishSuspect = false, curatorContext 
     return { result: 'held', reason: a.holdReason };
   }
 
+  // A regeneration must not trade a BETTER profile for a WORSE one (somm
+  // ticket 6a894676, 2026-08-22). Frogtown Cellars carried a search-assisted
+  // profile at 0.6 with the producer identified; a curator filled in the
+  // correct appellation, the forced re-enrich that followed could not get a
+  // search slot — the rescue is capped per UTC day and curation burns the cap
+  // in minutes — and the search-less rerun landed 0.4 with producerUnknown
+  // true and a thinner description. Filling in a correct field made the
+  // record worse, which is the opposite of what re-enrichment is for.
+  //
+  // Narrow on purpose. Only a regen that lost the web search AND came back
+  // less confident is refused; an honest re-assessment that lowers confidence
+  // on its own merits still lands, because the record really may have got
+  // harder to describe. Like the reviewed-profile guard above, the old
+  // profile stays and the row drops back into the worklists for a human.
+  const prev = wine.aiProfile;
+  const lostSearch = prev && prev.searchUsed === true && a.meta.searchUsed !== true;
+  const lessSure = prev && Number.isFinite(prev.confidence)
+    && Number.isFinite(a.meta.confidence) && a.meta.confidence < prev.confidence;
+  if (prev && prev.description && lostSearch && lessSure) {
+    await WineDefinition.updateOne(
+      { _id: wine._id },
+      { $set: { profileReviewedAt: null, updatedAt: now } }
+    );
+    console.log(`[enrichmentJob] kept searched profile ${wine._id}: regen lost search and dropped ${prev.confidence} → ${a.meta.confidence}`);
+    return { result: 'kept', reason: 'would_downgrade_searched_profile' };
+  }
+
   await WineDefinition.updateOne(
     { _id: wine._id },
     {
