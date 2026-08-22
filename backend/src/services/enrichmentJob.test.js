@@ -154,9 +154,11 @@ describe('descriptor sanitization at the write point', () => {
   });
 
   test('valid values case-fold onto the enum', async () => {
-    // A grapeless wine for this one: high tannin on the default Pinot Noir
-    // fixture now trips the 6a8464ea taxonomy_conflict hold (by design), and
-    // this test is about case-folding, not the cross-check.
+    // A grapeless wine for this one, so the case-folding assertion cannot be
+    // perturbed by the 6a8464ea taxonomy cross-check whatever the table holds.
+    // (It was originally grapeless because high tannin on the default Pinot
+    // Noir fixture tripped the conflict hold — that entry was the ticket
+    // 6a896b7e false positive and is gone; the isolation is still worth it.)
     WineDefinition.findById.mockReturnValue(chain({
       _id: WINE_ID, name: 'Red Blend', producer: 'Matua', type: 'red',
       country: { name: 'New Zealand' }, region: { name: 'Marlborough' }, grapes: [],
@@ -826,22 +828,51 @@ describe('the split flags end-to-end through enrichWine', () => {
     expect(p.producerUnknown).toBe(true); // the doubt stays recorded on the row
   });
 
-  // 6a8464ea phase 2: the fixture wine is a Pinot Noir — a grape DEFINED by
-  // low tannin. The regional-prior hallucination carries no flag and high
-  // confidence, so only the factual cross-check can catch it.
+  // 6a8464ea phase 2. These used the default Pinot Noir fixture with high
+  // tannin, which stopped being a conflict when the pinot-noir entry came out
+  // of the table (somm ticket 6a896b7e — Pommard is legitimately tannic).
+  // Nebbiolo carries the surviving direction: thick skins put a FLOOR under
+  // tannin, so a low-tannin Nebbiolo is the regional-prior hallucination the
+  // cross-check exists for. No flag, high confidence — only a factual check
+  // can catch it.
+  const nebbioloWine = () => WineDefinition.findById.mockReturnValue(chain({
+    _id: WINE_ID, name: 'Barolo', producer: 'Cà di Bruno', type: 'red',
+    country: { name: 'Italy' }, region: { name: 'Piedmont' }, grapes: [{ name: 'Nebbiolo' }],
+  }));
+
   test('a profile at the OPPOSITE structural extreme of the grape is HELD as taxonomy_conflict', async () => {
-    suggestProfile.mockResolvedValue(withFlags({ tannin: 'high', confidence: 0.8 }));
+    nebbioloWine();
+    suggestProfile.mockResolvedValue(withFlags({ tannin: 'low', confidence: 0.8 }));
     await enrichWineById(WINE_ID);
     const p = persisted();
     expect(p.heldAt).toBeInstanceOf(Date);
     expect(p.heldReason).toBe('taxonomy_conflict');
-    expect(p.producerNote).toMatch(/pinot noir is defined by low tannin/);
+    expect(p.producerNote).toMatch(/nebbiolo is defined by high tannin/);
   });
 
   test('the agreeing extreme and medium never conflict — the check is one-sided', async () => {
-    suggestProfile.mockResolvedValue(withFlags({ tannin: 'low', confidence: 0.8 }));
+    nebbioloWine();
+    for (const tannin of ['high', 'medium']) {
+      jest.clearAllMocks();
+      nebbioloWine();
+      WineDefinition.updateOne.mockResolvedValue({});
+      suggestProfile.mockResolvedValue(withFlags({ tannin, confidence: 0.8 }));
+      await enrichWineById(WINE_ID);
+      expect(persisted().heldAt).toBeNull();
+    }
+  });
+
+  test('a firm Pommard no longer conflicts — the variety is not in the table at all', async () => {
+    // The regression the somm reported: the default fixture IS a Pinot Noir,
+    // and high tannin on it used to hold the row and stamp an owner-visible
+    // note saying the correct value was wrong.
+    suggestProfile.mockResolvedValue(withFlags({ tannin: 'high', confidence: 0.8 }));
     await enrichWineById(WINE_ID);
-    expect(persisted().heldAt).toBeNull();
+    const p = persisted();
+    expect(p.heldAt).toBeNull();
+    // Coalesced: the note is null here, and toMatch throws on null rather
+    // than passing, so a bare .not.toMatch would fail for the wrong reason.
+    expect(p.producerNote ?? '').not.toMatch(/Style conflict/);
   });
 
   test('a missing producerUnknown on an old/custom prompt degrades to "no doubt", never to a hold', async () => {
@@ -1098,8 +1129,14 @@ describe('web-search rescue on confidence holds', () => {
   });
 
   test('taxonomy_conflict never spends a search — the model already believes its hallucination', async () => {
-    // Pinot Noir fixture: high tannin is the opposite structural extreme.
-    suggestProfile.mockResolvedValue(attempt(0.8, { tannin: 'high' }));
+    // Nebbiolo fixture: LOW tannin is the opposite structural extreme. (The
+    // fixture was a high-tannin Pinot Noir until ticket 6a896b7e established
+    // that firm Pinot is Pommard, not a hallucination.)
+    WineDefinition.findById.mockReturnValue(chain({
+      _id: WINE_ID, name: 'Barolo', producer: 'Cà di Bruno', type: 'red',
+      country: { name: 'Italy' }, region: { name: 'Piedmont' }, grapes: [{ name: 'Nebbiolo' }],
+    }));
+    suggestProfile.mockResolvedValue(attempt(0.8, { tannin: 'low' }));
     await enrichWineById(WINE_ID);
     expect(suggestProfile).toHaveBeenCalledTimes(1);
     expect(persisted().heldReason).toBe('taxonomy_conflict');
