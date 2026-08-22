@@ -154,9 +154,11 @@ describe('descriptor sanitization at the write point', () => {
   });
 
   test('valid values case-fold onto the enum', async () => {
-    // A grapeless wine for this one: high tannin on the default Pinot Noir
-    // fixture now trips the 6a8464ea taxonomy_conflict hold (by design), and
-    // this test is about case-folding, not the cross-check.
+    // A grapeless wine for this one, so the case-folding assertion cannot be
+    // perturbed by the 6a8464ea taxonomy cross-check whatever the table holds.
+    // (It was originally grapeless because high tannin on the default Pinot
+    // Noir fixture tripped the conflict hold — that entry was the ticket
+    // 6a896b7e false positive and is gone; the isolation is still worth it.)
     WineDefinition.findById.mockReturnValue(chain({
       _id: WINE_ID, name: 'Red Blend', producer: 'Matua', type: 'red',
       country: { name: 'New Zealand' }, region: { name: 'Marlborough' }, grapes: [],

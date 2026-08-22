@@ -16,6 +16,34 @@
  * in ANY normal expression of the variety, late-harvest/appassimento oddities
  * aside — that asymmetry is what keeps false positives ~zero.
  *
+ * ---------------------------------------------------------------------------
+ * NO 'low' TANNIN ENTRIES. EVER. (somm ticket 6a896b7e, 2026-08-22)
+ *
+ * The table shipped with `pinot noir: { tannin: 'low' }` and it was wrong on
+ * both records it ever fired on — two correct Pommards, flagged for having
+ * the firm tannin Pommard is *known* for. 588 single-variety Pinot Noir rows
+ * were exposed to it, including Nuits-Saint-Georges, Gevrey-Chambertin and
+ * Central Otago, all appellations where grip is typical rather than anomalous.
+ *
+ * The reason is structural, not a matter of picking better varieties:
+ *
+ *   ACIDITY is set by the grape. A variety that ripens with low malic acid
+ *   cannot be made high-acid, so "defined by low acidity" is a real claim.
+ *
+ *   HIGH TANNIN is set by the grape too — thick skins and high polyphenols
+ *   put a FLOOR under it, so a low-tannin Nebbiolo really is a defect.
+ *
+ *   LOW TANNIN is set by the WINEMAKER. Extraction time, whole-cluster,
+ *   new oak and press fraction can all carry a thin-skinned variety well
+ *   past "low", and entire appellations are famous for exactly that. It is
+ *   a ceiling nobody enforces, so it cannot be asserted as definitional.
+ *
+ * So: `tannin: 'high'` entries are legitimate; `tannin: 'low'` entries are
+ * not, whatever the variety. Gamay went out with Pinot Noir under the same
+ * rule — cru Beaujolais (Moulin-à-Vent, Morgon) is structured on purpose and
+ * would have been the next false positive. An invariant test enforces this.
+ * ---------------------------------------------------------------------------
+ *
  * Keys are normalizeString-folded grape names (lowercase, accents folded).
  */
 const GRAPE_STYLE_TYPICALS = {
@@ -30,9 +58,8 @@ const GRAPE_STYLE_TYPICALS = {
   gewurztraminer:    { acidity: 'low' },
   viognier:          { acidity: 'low' },
   marsanne:          { acidity: 'low' },
-  // Tannin-defined reds
-  'pinot noir':      { tannin: 'low' },
-  gamay:             { tannin: 'low' },
+  // Tannin-defined reds. HIGH only — see the note above on why 'low' tannin
+  // is a winemaking outcome rather than a varietal definition.
   nebbiolo:          { tannin: 'high' },
   tannat:            { tannin: 'high' },
   sagrantino:        { tannin: 'high' },

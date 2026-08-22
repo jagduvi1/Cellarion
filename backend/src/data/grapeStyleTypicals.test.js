@@ -32,8 +32,57 @@ test('a blend fires only when EVERY grape asserts the opposite extreme', () => {
   expect(check(['Gewürztraminer', 'Viognier'], { acidity: 'high' })).toMatch(/defined by low acidity/);
 });
 
-test('tannin axis works the same way — a high-tannin Pinot Noir fires', () => {
-  expect(check(['Pinot Noir'], { tannin: 'high' })).toMatch(/pinot noir is defined by low tannin/);
+test('tannin axis works the same way — a low-tannin Nebbiolo fires', () => {
+  expect(check(['Nebbiolo'], { tannin: 'low' })).toMatch(/nebbiolo is defined by high tannin/);
+});
+
+// ---------------------------------------------------------------------------
+// The false positive, and the invariant that stops it coming back.
+// Until 2026-08-22 the assertion directly above this block read
+//   check(['Pinot Noir'], { tannin: 'high' })  →  fires
+// which is to say the suite asserted the bug as correct behaviour and then
+// protected it. It fired twice in production, on two correct Pommards.
+// ---------------------------------------------------------------------------
+describe('no variety is defined by LOW tannin (somm ticket 6a896b7e)', () => {
+  test('a high-tannin Pinot Noir is silent — that is Pommard, not an error', () => {
+    expect(check(['Pinot Noir'], { tannin: 'high' })).toBeNull();
+  });
+
+  test('the appellations that actually own this: firm Pinot is normal', () => {
+    // Nuits-Saint-Georges, Gevrey-Chambertin, Corton and Central Otago all
+    // hold single-variety Pinot in this registry; every one of them is
+    // legitimately capable of high tannin.
+    for (const profile of [{ tannin: 'high' }, { tannin: 'medium' }, { tannin: 'low' }]) {
+      expect(check(['Pinot Noir'], profile)).toBeNull();
+    }
+  });
+
+  test('Gamay too — cru Beaujolais is structured on purpose', () => {
+    expect(check(['Gamay'], { tannin: 'high' })).toBeNull();
+  });
+
+  test('INVARIANT: the table may never assert tannin: low for any variety', () => {
+    // Acidity is grape chemistry and high tannin has a skin-chemistry floor,
+    // so both are assertable. Low tannin is a ceiling the winemaker sets —
+    // extraction, whole-cluster and oak carry thin-skinned varieties past it
+    // routinely. An entry here would flag correct data, as Pinot Noir did.
+    const offenders = Object.entries(GRAPE_STYLE_TYPICALS)
+      .filter(([, spec]) => spec.tannin === 'low')
+      .map(([grape]) => grape);
+    expect(offenders).toEqual([]);
+  });
+
+  test('high-tannin entries are still asserted — the rule keeps its teeth', () => {
+    const highTannin = Object.entries(GRAPE_STYLE_TYPICALS)
+      .filter(([, spec]) => spec.tannin === 'high')
+      .map(([grape]) => grape);
+    expect(highTannin).toEqual(expect.arrayContaining(['nebbiolo', 'tannat', 'sagrantino']));
+  });
+
+  test('the acidity axis is untouched by all of this', () => {
+    expect(check(['Bacchus'], { acidity: 'high' })).toMatch(/defined by low acidity/);
+    expect(check(['Riesling'], { acidity: 'low' })).toMatch(/defined by high acidity/);
+  });
 });
 
 test('accent folding matches the table key', () => {
