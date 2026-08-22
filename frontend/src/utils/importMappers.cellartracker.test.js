@@ -278,14 +278,30 @@ describe('CT List table (bundle, 20 wines)', () => {
     expect(pruem[0].wineName).toBe('Wehlener Sonnenuhr Riesling Auslese');
   });
 
-  it('maps NV Lagavulin (Spirits, 700ml) without corrupting it', () => {
+  it('maps NV Lagavulin (Spirits, 700ml) without corrupting it, and without calling it wine', () => {
     const lag = result.items.find((i) => i.producer === 'Lagavulin');
     expect(lag).toMatchObject({
       wineName: '16 Year Old',
       vintage: 'NV',        // vintage 1001
       bottleSize: '700ml',
-      type: 'fortified',    // closest Cellarion bucket for Spirits
+      type: null,
+      nonWineHint: true,    // CT Category "Distilled" / Type "Spirits"
     });
+  });
+
+  // This assertion USED to read type: 'fortified', commented "closest
+  // Cellarion bucket for Spirits" — a reasonable call at the time, because the
+  // parsed type was dropped at the payload boundary and reached nothing.
+  //
+  // Forwarding type (2026-08-22) changed the calculus: WineDefinition is
+  // SHARED, so one user's whisky filed as a fortified wine becomes everyone's
+  // fortified wine — the same shape as writing a Provence AOC onto a New
+  // Zealand Pinot. The bottle still imports; it just arrives without a claimed
+  // colour and flagged, which is what nonWine quarantine exists for.
+  it('still imports the spirit as a bottle — flagged, not dropped', () => {
+    const lag = result.items.find((i) => i.producer === 'Lagavulin');
+    expect(lag).toBeDefined();
+    expect(lag.wineName).toBe('16 Year Old');
   });
 
   it('survives a comma inside the quoted Designation field (Vega Sicilia)', () => {

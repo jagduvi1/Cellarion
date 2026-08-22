@@ -471,16 +471,38 @@ function mapRackFields(get) {
 // Vivino's "Average rating" is the community score and is never imported —
 // same policy as CellarTracker's `CT` column. Only "Your rating" is.
 
+// Values that mean "not a wine at all" — CellarTracker tracks spirits
+// alongside wine (Category "Distilled", Type "Spirits"). They must never be
+// coerced into a wine colour: a whisky called `fortified` is a claim, and a
+// whisky called `red` is a worse one.
+const NON_WINE_HINTS = ['spirit', 'whisky', 'whiskey', 'distilled', 'liqueur', 'gin', 'rum', 'vodka', 'brandy', 'cognac', 'armagnac'];
+export function looksNonWine(...values) {
+  const t = values.filter(Boolean).join(' ').toLowerCase();
+  return NON_WINE_HINTS.some((h) => t.includes(h));
+}
+
+// Returns a wine colour, or NULL when the input does not state one.
+//
+// ⚠️ It used to return 'red' for both an empty value and an unrecognised one —
+// the 15th instance of the colour-guessing class fixed across the app in
+// v1.140 (prompts made nullable, 14 client `|| 'red'` fallbacks removed). It
+// was harmless only because the parsed type was dropped at the payload
+// boundary and never reached a wine; now that type IS forwarded, a guess here
+// would become a stored fact. Unknown is null, and the AI or a curator fills
+// it honestly.
 function mapWineType(typeStr) {
-  if (!typeStr) return 'red';
+  if (!typeStr) return null;
   const t = typeStr.toLowerCase().trim();
-  if (t.includes('red')) return 'red';
-  if (t.includes('white')) return 'white';
+  if (looksNonWine(t)) return null;
   if (t.includes('rosé') || t.includes('rose')) return 'rosé';
   if (t.includes('sparkling') || t.includes('champagne') || t.includes('cava') || t.includes('prosecco')) return 'sparkling';
   if (t.includes('dessert') || t.includes('sweet') || t.includes('ice wine')) return 'dessert';
   if (t.includes('fortified') || t.includes('port') || t.includes('sherry') || t.includes('madeira')) return 'fortified';
-  return 'red';
+  // Colour last: "White - Sweet/Dessert" and "White - Sparkling" are CT Type
+  // strings whose STYLE is the useful half, so the style tests run first.
+  if (t.includes('white')) return 'white';
+  if (t.includes('red')) return 'red';
+  return null;
 }
 
 /**
@@ -643,16 +665,27 @@ function parseCtLocale(locale) {
  * the style suffix must win over the base colour, so check fortified/
  * sparkling/dessert BEFORE red/white.
  */
-function mapCellarTrackerType(typeStr) {
+// CellarTracker's `Type` mixes colour and style ("White - Sweet/Dessert"), and
+// its `Color`/`Category` columns state them separately. All three are read:
+// Type first because it is the richest, then Color as the plain colour, with
+// Category available to the caller for the style.
+//
+// ⚠️ `spirits` and `whisky` used to map to 'fortified'. They are not fortified
+// WINE — a CT cellar routinely holds whisky, and calling it a fortified wine
+// put a spirit into the wine registry wearing a wine type. They now return
+// null, and looksNonWine() lets the caller flag the row instead.
+function mapCellarTrackerType(typeStr, colorStr) {
   const t = (typeStr || '').toLowerCase();
-  if (t.includes('fortified') || t.includes('port') || t.includes('sherry') ||
-      t.includes('madeira') || t.includes('spirits') || t.includes('whisky')) return 'fortified';
+  if (looksNonWine(t)) return null;
+  if (t.includes('fortified') || t.includes('port') || t.includes('sherry') || t.includes('madeira')) return 'fortified';
   if (t.includes('sparkling') || t.includes('champagne')) return 'sparkling';
   if (t.includes('sweet') || t.includes('dessert') || t.includes('ice wine')) return 'dessert';
   if (t.includes('rosé') || t.includes('rose')) return 'rosé';
   if (t.includes('white')) return 'white';
   if (t.includes('red')) return 'red';
-  return mapWineType(typeStr);
+  // Type said nothing usable — fall back to the dedicated Color column, which
+  // carries a clean Red/White/Rosé/Other, then to the generic mapper.
+  return mapWineType(typeStr) || mapWineType(colorStr);
 }
 
 /**
@@ -779,7 +812,9 @@ function ctCommonFields(get, { sizeKeys = ['Size'] } = {}) {
     country: get(['Country']) || locale.country,
     region: get(['Region']) || locale.region,
     appellation: ctClean(get(['Appellation'])) || locale.appellation,
-    type: mapCellarTrackerType(get(['Type'])),
+    type: mapCellarTrackerType(get(['Type']), get(['Color', 'Colour'])),
+    // CT tracks spirits beside wine; the caller flags rather than guesses.
+    nonWineHint: looksNonWine(get(['Type']), get(['Category'])) || undefined,
     bottleSize: normalizeBottleSize(get(sizeKeys)) || '750ml',
     ...ctPlacementFields(get),
     rating,
@@ -943,7 +978,8 @@ function mapCellarTrackerRow(row) {
     country: get(['Country', 'country']) || locale.country,
     region: get(['Region', 'region', 'Sub-Region']) || locale.region,
     appellation: ctClean(get(['Appellation', 'appellation', 'SubRegion'])) || locale.appellation,
-    type: mapCellarTrackerType(get(['Type', 'type', 'Color', 'Colour', 'Category'])),
+    type: mapCellarTrackerType(get(['Type', 'type']), get(['Color', 'Colour', 'Category', 'category'])),
+    nonWineHint: looksNonWine(get(['Type', 'type']), get(['Category', 'category'])) || undefined,
     price: isNaN(price) ? undefined : price,
     currency: get(['Currency', 'currency']) || undefined,
     bottleSize: normalizeBottleSize(get(['Size', 'size', 'Bottle Size', 'BottleSize'])) || '750ml',

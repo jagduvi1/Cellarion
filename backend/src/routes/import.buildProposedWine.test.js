@@ -145,3 +145,28 @@ describe('hygiene', () => {
     });
   });
 });
+
+describe('type: the file states, the model recalls (2026-08-22)', () => {
+  it('prefers the file type over the AI type', () => {
+    expect(buildProposedWine(ai({ type: 'red' }), { type: 'white' }).type).toBe('white');
+  });
+
+  it('falls back to the AI when the file says nothing', () => {
+    // The parsers now emit null for an unknown colour rather than guessing
+    // 'red', so a null here is an honest "the file did not say".
+    expect(buildProposedWine(ai({ type: 'red' }), { type: null }).type).toBe('red');
+    expect(buildProposedWine(ai({ type: 'red' }), {}).type).toBe('red');
+  });
+
+  it('IGNORES a file type the schema would reject, rather than failing the mint', () => {
+    // A client can send anything; an invalid colour must fall through to the
+    // AI, not poison the row or 400 the whole import.
+    for (const bad of ['orange', 'RED', 'vin jaune', '', '  ', 42, {}]) {
+      expect(buildProposedWine(ai({ type: 'red' }), { type: bad }).type).toBe('red');
+    }
+  });
+
+  it('leaves type null when neither the file nor the model states one', () => {
+    expect(buildProposedWine(ai({ type: null }), { type: null }).type).toBeNull();
+  });
+});

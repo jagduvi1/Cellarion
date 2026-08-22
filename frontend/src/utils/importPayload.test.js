@@ -147,3 +147,18 @@ describe('buildImportItem', () => {
     expect(typeof fridgePayload.col).toBe('number');
   });
 });
+
+describe('type and the non-wine hint reach the payload', () => {
+  // `type` was computed by every parser and forwarded by nothing — the same
+  // disappearance as the geography, one field over. A stored wine colour came
+  // only from the AI.
+  test('forwards the file type', () => {
+    const out = buildImportItem({ item: { wineName: 'X', producer: 'Y', type: 'white' } }, 'create');
+    expect(out.type).toBe('white');
+  });
+
+  test('forwards the non-wine hint so a spirit can be flagged, not filed as wine', () => {
+    const out = buildImportItem({ item: { wineName: 'Lagavulin 16', producer: 'Lagavulin', nonWineHint: true } }, 'create');
+    expect(out.nonWineHint).toBe(true);
+  });
+});

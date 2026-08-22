@@ -914,3 +914,33 @@ describe('parseOenoExport', () => {
     expect(result.oenoRackSpecs).toBeDefined();
   });
 });
+
+describe('wine colour is stated, never guessed', () => {
+  // The parsed type used to default to 'red' for BOTH an empty value and an
+  // unrecognised one — the 15th instance of the colour-guessing class fixed
+  // across the app in v1.140. Harmless only while the value was dropped at the
+  // payload boundary; now that it is forwarded, a guess becomes a stored fact.
+  test('an unknown or empty colour is null, not red', () => {
+    expect(parseAndMap('Wine Name,Producer,Type\nX,Y,\n').items[0].type).toBeNull();
+    expect(parseAndMap('Wine Name,Producer,Type\nX,Y,Perpetual Motion\n').items[0].type).toBeNull();
+  });
+
+  test('a stated colour still maps', () => {
+    expect(parseAndMap('Wine Name,Producer,Type\nX,Y,Red\n').items[0].type).toBe('red');
+    expect(parseAndMap('Wine Name,Producer,Type\nX,Y,Rosé\n').items[0].type).toBe('rosé');
+  });
+
+  test('a spirit is NOT a fortified wine, and not a red one either', () => {
+    // CellarTracker tracks whisky beside wine; "Spirits" used to map to
+    // 'fortified', putting a spirit in the registry wearing a wine type.
+    for (const v of ['Spirits', 'Distilled', 'Whisky', 'Gin']) {
+      expect(parseAndMap(`Wine Name,Producer,Type\nX,Y,${v}\n`).items[0].type).toBeNull();
+    }
+  });
+
+  test('style beats colour inside a CellarTracker Type string', () => {
+    // "White - Sparkling" is sparkling; reading the colour first would lose it.
+    expect(parseAndMap('Wine,Producer,Type,Vintage,Locale\nX,Y,White - Sparkling,2020,France\n').items[0].type).toBe('sparkling');
+    expect(parseAndMap('Wine,Producer,Type,Vintage,Locale\nX,Y,White - Sweet/Dessert,2020,France\n').items[0].type).toBe('dessert');
+  });
+});
