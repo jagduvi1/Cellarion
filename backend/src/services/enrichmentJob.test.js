@@ -433,6 +433,23 @@ describe('reenrichAfterRecordEdit — the record-edit follow-through', () => {
     await reenrichAfterRecordEdit(enriched({ heldAt: new Date(), description: null }), true);
     expect(suggestProfile).toHaveBeenCalled();
   });
+
+  test('enrichmentOnAdd "off" silences this hook too — somm-owned data means NO automatic AI writes', async () => {
+    // Johan 2026-08-22, and the deferred half of somm ticket 6a872818: an
+    // approval-triggered regeneration recomputed doubt flags from scratch and
+    // removed queue rows with nobody deciding. Under somm-owned data the somm
+    // rewrites the profile in the same correction session instead.
+    const aiConfig = require('../config/aiConfig');
+    const base = aiConfig.get();
+    aiConfig.get.mockImplementation(() => ({ ...base, enrichmentOnAdd: 'off' }));
+    try {
+      await reenrichAfterRecordEdit(enriched(), true);
+      expect(WineDefinition.findById).not.toHaveBeenCalled();
+      expect(suggestProfile).not.toHaveBeenCalled();
+    } finally {
+      aiConfig.get.mockImplementation(() => base);
+    }
+  });
 });
 
 describe('profileInputsSnapshot — the before/after comparison the routes use', () => {
