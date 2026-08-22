@@ -870,7 +870,9 @@ describe('the split flags end-to-end through enrichWine', () => {
     await enrichWineById(WINE_ID);
     const p = persisted();
     expect(p.heldAt).toBeNull();
-    expect(p.producerNote).not.toMatch(/Style conflict/);
+    // Coalesced: the note is null here, and toMatch throws on null rather
+    // than passing, so a bare .not.toMatch would fail for the wrong reason.
+    expect(p.producerNote ?? '').not.toMatch(/Style conflict/);
   });
 
   test('a missing producerUnknown on an old/custom prompt degrades to "no doubt", never to a hold', async () => {
