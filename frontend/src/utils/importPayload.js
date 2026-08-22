@@ -38,6 +38,16 @@ export function buildImportItem(r, selection) {
     region: r.item.region,
     appellation: r.item.appellation,
     classification: r.item.classification,
+    // `type` was the same disappearance as the geography above, one field over:
+    // every parser computed a wine colour and nothing ever forwarded it, so a
+    // stored type came only from the AI. Forwarded now — and the mappers were
+    // changed to return null rather than guessing 'red', because a value that
+    // goes nowhere can be wrong for free while a stored one cannot.
+    type: r.item.type,
+    // CellarTracker tracks spirits beside wine (Category "Distilled", Type
+    // "Spirits"). Passed through so the row can be flagged rather than
+    // silently filed as a fortified wine, which is what used to happen.
+    nonWineHint: r.item.nonWineHint,
     drinkFrom: r.item.drinkFrom ?? undefined,
     drinkTo: r.item.drinkTo ?? undefined,
     dateAdded: r.item.dateAdded || r.item.purchaseDate,

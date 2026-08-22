@@ -30,6 +30,7 @@ const {
   AI_CONCURRENCY,
 } = require('../config/constants');
 const { stripHtml, escapeRegex, sanitizeGrapeNames } = require('../utils/sanitize');
+const { WINE_TYPES } = require('../services/wineProfileOps');
 const { parseAndValidateVintage, parseDrinkYear } = require('../utils/validation');
 const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
 const { extractAiExplanation } = require('../utils/jsonExtract');
@@ -142,7 +143,13 @@ function buildProposedWine(aiData, item) {
     // (ticket 6a83f014 added the field to the identify prompt), and the file's
     // own value outranks it for the same reason.
     classification: clean(item && item.classification) || fromAi(aiData.classification),
-    type: aiData.type,
+    // Same precedence as the geography above: the file states what the label
+    // says, the model recalls. Only ever a value the schema accepts — a
+    // client can send anything, and an invalid colour must fall through to
+    // the AI rather than fail the mint. The parsers now emit null for an
+    // unknown colour instead of guessing 'red', so a null here is an honest
+    // "the file did not say", not a lost value.
+    type: (WINE_TYPES.includes(clean(item && item.type)) ? clean(item.type) : null) || aiData.type,
     grapes: aiData.grapes,
     confidence: aiData.confidence,
   };
