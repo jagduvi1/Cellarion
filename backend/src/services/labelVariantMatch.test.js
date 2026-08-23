@@ -123,7 +123,10 @@ describe('reduceName', () => {
     expect([...reduceName('MC Shiraz', { grapeTokens: G }).core]).toEqual(['mc']);
   });
 
-  test('accents and punctuation fold', () => {
-    expect([...reduceName('Château Bel-Air', { grapeTokens: G }).core].sort()).toEqual(['air', 'bel', 'chateau']);
+  test('accents fold and a hyphen joins rather than splits', () => {
+    // normalizeString is the registry-wide fold: "Bel-Air" becomes one token
+    // "belair", not two. That is what every other identity comparison sees,
+    // so the detector inherits it rather than re-deciding punctuation.
+    expect([...reduceName('Château Bel-Air', { grapeTokens: G }).core].sort()).toEqual(['belair', 'chateau']);
   });
 });
