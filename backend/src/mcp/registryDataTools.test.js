@@ -28,6 +28,7 @@ const WINE = oid('b');
 const KEY = oid('c');
 const USER_CTX = { user: { id: ME, roles: ['user'] }, scopes: ['read', 'write'], req: { user: { id: ME }, headers: {} } };
 const ADMIN_CTX = { user: { id: ME, roles: ['admin'] }, scopes: ['read', 'write'], req: { user: { id: ME }, headers: {} } };
+const SOMM_CTX = { user: { id: ME, roles: ['somm'] }, scopes: ['read', 'write'], req: { user: { id: ME }, headers: {} } };
 
 const tool = (name) => allTools().find((t) => t.name === name);
 const parse = (res) => JSON.parse(res.content[0].text);
@@ -102,5 +103,51 @@ describe('review_registry_data', () => {
     const wrongVocab = await tool('review_registry_data').handler({ value_id: oid('9'), decision: 'accept' }, ADMIN_CTX);
     expect(parse(wrongVocab).error.code).toBe('invalid_input');
     expect(ops.decideValue).toHaveBeenCalledWith(ME, oid('9'), 'accept', undefined, { req: ADMIN_CTX.req });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sommeliers review public wine data (Johan, 2026-08-23). The queue is fed by
+// ordinary users and was gated to admin, so the project owner was clearing it
+// by hand — the same bottleneck somm-owned wine data exists to remove.
+// ---------------------------------------------------------------------------
+describe('sommelier access to the review queues', () => {
+  const { toolsForScopes } = require('./registry');
+
+  test('the tool is visible to somm and admin, invisible to a plain user', () => {
+    const named = (roles) => toolsForScopes(['read', 'write'], roles).map((t) => t.name);
+    expect(named(['somm'])).toContain('review_registry_data');
+    expect(named(['admin'])).toContain('review_registry_data');
+    expect(named(['user'])).not.toContain('review_registry_data');
+  });
+
+  test('a somm can list both queues', async () => {
+    ops.listReviewQueues.mockResolvedValue({ keys: [], values: [] });
+    const res = await tool('review_registry_data').handler({}, SOMM_CTX);
+    expect(parse(res).error).toBeUndefined();
+    expect(ops.listReviewQueues).toHaveBeenCalled();
+  });
+
+  test('a somm can publish a suggested VALUE — ordinary wine curation', async () => {
+    ops.decideValue.mockResolvedValue({ ok: true, value: { _id: oid('9'), status: 'published' } });
+    const res = await tool('review_registry_data').handler(
+      { value_id: oid('9'), decision: 'publish' }, SOMM_CTX);
+    expect(parse(res).error).toBeUndefined();
+    expect(ops.decideValue).toHaveBeenCalled();
+  });
+
+  test('a somm can accept a proposed KEY — the vocabulary decision, guided by the description', async () => {
+    ops.decideKey.mockResolvedValue({ ok: true, key: { _id: KEY, name: 'ABV', status: 'accepted' } });
+    const res = await tool('review_registry_data').handler(
+      { key_id: KEY, decision: 'accept' }, SOMM_CTX);
+    expect(parse(res).error).toBeUndefined();
+    expect(ops.decideKey).toHaveBeenCalled();
+  });
+
+  test('the description tells the reviewer the two queues are judged differently', () => {
+    const d = tool('review_registry_data').description;
+    expect(d).toMatch(/JUDGE THE TWO QUEUES DIFFERENTLY/);
+    expect(d).toMatch(/what the registry TRACKS AT ALL/);
+    expect(d).not.toMatch(/ADMIN only/);
   });
 });
