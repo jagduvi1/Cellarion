@@ -24,6 +24,7 @@ const { scoreAllMatches } = require('./wineMatching');
 const { canonicalizeWineName } = require('../utils/producerPrefix');
 const { computeCanonicalKey, canonicalSiblingPrefix } = require('../utils/wineIdentity');
 const { buildSurfaceForms, inferGrapeIds } = require('./grapeInference');
+const { isLabelVariant, grapeTokenSet } = require('./labelVariantMatch');
 const { resolveCanonicalProducerSpelling } = require('./producerSpelling');
 const { resolveCanonicalAppellation, candidateKeys } = require('./appellationResolve');
 const { escapeRegex } = require('../utils/sanitize');
@@ -742,6 +743,47 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // from splitting across "Hunter Valley" and "New South Wales" depending on
   // which granularity the AI/import happened to supply per row. Only when the
   // appellation names no known region does the supplied region string count.
+  // ── Label-variant stage (somm ticket e9b346ba, 2026-08-23) ────────────────
+  //
+  // Last chance to NOT create a duplicate. One import file carried the same
+  // wine repeatedly under variant names — "Bin 389" and "Bin 389 Cabernet
+  // Shiraz", "Kangarilla" and "Old Vines Grenache Kangarilla" — and nothing
+  // above caught them: normalizedKey is exact, and all 17 pairs a curator
+  // merged by hand that day scored BELOW the 0.85 soft-zone floor, so the
+  // fuzzy stage never even offered them as candidates. See
+  // services/labelVariantMatch for the measurements and the guard that stops
+  // a multi-varietal range collapsing.
+  //
+  // Producer-scoped so the scan is small, and it only ever LINKS to an
+  // existing row — never merges, never deletes. Getting this wrong costs a
+  // bottle on a near-identical wine; getting the absence of it wrong is the
+  // duplicate registry this ticket is about.
+  if (!producerMissing && !skipSiblingMatch) {
+    try {
+      const siblings = (await WineDefinition.find({
+        producer: producerToStore,
+        _id: { $ne: null },
+      }).limit(60).populate(POPULATE)).filter((c) => !pendingBlocked(c));
+      if (siblings.length > 0) {
+        const grapeDocs = await Grape.find({}).select('name normalizedName normalizedSynonyms').lean();
+        const gTokens = grapeTokenSet(buildSurfaceForms(grapeDocs));
+        const query = { name: trimmedName, appellation: trimmedAppellation, grapes };
+        for (const cand of siblings) {
+          if (conflictsCountry(cand)) continue;
+          const verdict = isLabelVariant(query, cand, gTokens);
+          if (verdict.match) {
+            console.log(`[findOrCreateWine] label variant: "${trimmedName}" → existing "${cand.name}" (${verdict.reason})`);
+            return { wine: cand, created: false, labelVariantOf: cand.name };
+          }
+        }
+      }
+    } catch (err) {
+      // Never block a create on the detector failing — a missing dedup is
+      // recoverable, a failed add is not.
+      console.warn('[findOrCreateWine] label-variant stage failed:', err.message);
+    }
+  }
+
   let regionDoc = await regionForAppellation(trimmedAppellation, countryDoc._id);
   if (!regionDoc) regionDoc = await findOrCreateRegion(region, countryDoc._id, userId);
   let grapeIds = await findOrCreateGrapes(grapes, userId);
