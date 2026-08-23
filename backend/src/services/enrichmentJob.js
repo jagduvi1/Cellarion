@@ -1084,6 +1084,16 @@ function isProfileStale(wine) {
  */
 function reenrichAfterRecordEdit(wine, changed) {
   if (!changed) return Promise.resolve();
+  // enrichmentOnAdd 'off' means wine data is somm-owned (Johan, 2026-08-22):
+  // the AI writes NOTHING automatically, and that includes this hook. It also
+  // settles the deferred half of somm ticket 6a872818 — an approval-triggered
+  // regeneration recomputed doubt flags from scratch, silently removing held
+  // and suspect rows from the queue with nobody deciding, and once discarded
+  // a curator's prepared release context. Under somm-owned data the somm
+  // rewrites the profile as part of the same correction session (exactly what
+  // they already did on the Gritelles row), so the staleness this hook fixed
+  // resolves by hand instead.
+  if (aiConfig.get().enrichmentOnAdd === 'off') return Promise.resolve();
   if (!wine || !wine.aiProfile || !wine.aiProfile.generatedAt) return Promise.resolve();
   if (wine.aiProfile.source === 'curator') return Promise.resolve();
   return enrichWineById(wine._id, { force: true }).catch(() => {});

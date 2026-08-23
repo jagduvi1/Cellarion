@@ -28,7 +28,17 @@ jest.mock('../services/enrichmentJob', () => ({
   // reached — the real predicate, so the branch is genuinely exercised.
   identityDataSufficient: (w) => !!(w.appellation || w.region) && !!((w.grapes && w.grapes.length) || w.type),
 }));
-jest.mock('../models/Grape', () => ({ findOne: jest.fn() }));
+jest.mock('../models/Grape', () => {
+  // Constructable (add_grape does `new Grape().save()`) while keeping the
+  // findOne static the resolver tests use.
+  const ctor = jest.fn(function (doc) {
+    Object.assign(this, doc);
+    this._id = this._id || 'b'.repeat(24);
+    this.save = jest.fn().mockResolvedValue(this);
+  });
+  ctor.findOne = jest.fn();
+  return ctor;
+});
 // list_held_profiles flags rows with an open owner inquiry (somm 6a872b98).
 // Default: none open — individual tests override to assert the flag.
 jest.mock('../models/WineOwnerInquiry', () => ({
@@ -98,7 +108,7 @@ const USER_CTX = { user: { id: ME, roles: ['user'] }, scopes: ['read', 'write'],
 
 const tool = (name) => allTools().find((t) => t.name === name);
 const parse = (res) => JSON.parse(res.content[0].text);
-const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'remove_from_maturity_queue', 'set_wine_profile', 'propose_wine_correction', 'list_price_tracking_requests', 'set_vintage_price', 'reject_price_request', 'list_wine_reports', 'respond_to_wine_report', 'sample_published_profiles', 'list_unverified_core_wines', 'list_held_profiles', 'review_held_profile', 'list_pending_corrections', 'record_profile_audit', 'list_profile_audits', 'list_colour_conflicts', 'dismiss_colour_conflict', 'restore_colour_conflict', 'list_rule_downgrades', 'list_ungrounded_descriptions'];
+const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'remove_from_maturity_queue', 'set_wine_profile', 'add_grape', 'propose_wine_correction', 'list_price_tracking_requests', 'set_vintage_price', 'reject_price_request', 'list_wine_reports', 'respond_to_wine_report', 'sample_published_profiles', 'list_unverified_core_wines', 'list_held_profiles', 'review_held_profile', 'list_pending_corrections', 'record_profile_audit', 'list_profile_audits', 'list_colour_conflicts', 'dismiss_colour_conflict', 'restore_colour_conflict', 'list_rule_downgrades', 'list_ungrounded_descriptions'];
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -943,6 +953,131 @@ describe('held-profile review queue over MCP (somm ticket 2026-08-18)', () => {
     const body = parse(await tool('review_held_profile').handler({ wine_ids: [oid('7'), oid('8')], decision: 'uphold' }, SOMM_CTX));
     expect(body.error).toBeUndefined();
     expect(body.summary).toMatch(/2\/2 decided/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Somm-owned wine data (Johan, 2026-08-22): automatic AI enrichment is OFF,
+// so a new wine arrives with NO profile at all. list_held_profiles is the one
+// place the somm can see it — as state "unprofiled" — and add_grape is the
+// unblock for the taxonomy gaps that previously needed a support ticket each
+// (seven varieties in one week: Norton, St. Pepin, Souzão, Vidal, …).
+// ---------------------------------------------------------------------------
+describe('the unprofiled intake queue (somm-owned data, 2026-08-22)', () => {
+  const heldListChain = (rows) => ({
+    select: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockReturnThis(),
+    populate: jest.fn().mockReturnThis(),
+    lean: jest.fn().mockResolvedValue(rows),
+  });
+  const noInquiries = () => {
+    const WineOwnerInquiry = require('../models/WineOwnerInquiry');
+    WineOwnerInquiry.find.mockImplementation(() => ({ select: () => ({ lean: () => Promise.resolve([]) }) }));
+  };
+
+  test('the default query asks for all three states — held, suspect (flagged), unprofiled', async () => {
+    WineDefinition.find.mockImplementation(() => heldListChain([]));
+    noInquiries();
+    Bottle.aggregate.mockResolvedValue([]);
+    await tool('list_held_profiles').handler({ include_published_suspects: true, limit: 30, offset: 0 }, SOMM_CTX);
+    const or = WineDefinition.find.mock.calls[0][0].$or;
+    expect(or).toHaveLength(3);
+    // The intake branch: never generated AND never written — the 188 curator
+    // rows that predate the generatedAt stamp have a description and stay out.
+    expect(or[2]).toEqual({ 'aiProfile.generatedAt': null, 'aiProfile.description': null });
+  });
+
+  test('state:"unprofiled" narrows the query to the intake branch alone', async () => {
+    WineDefinition.find.mockImplementation(() => heldListChain([]));
+    noInquiries();
+    Bottle.aggregate.mockResolvedValue([]);
+    await tool('list_held_profiles').handler({ state: 'unprofiled', limit: 30, offset: 0 }, SOMM_CTX);
+    const or = WineDefinition.find.mock.calls[0][0].$or;
+    expect(or).toEqual([{ 'aiProfile.generatedAt': null, 'aiProfile.description': null }]);
+  });
+
+  test('an explicit state:"published_suspect" implies the include flag — no second switch to forget', async () => {
+    WineDefinition.find.mockImplementation(() => heldListChain([]));
+    noInquiries();
+    Bottle.aggregate.mockResolvedValue([]);
+    await tool('list_held_profiles').handler({ state: 'published_suspect', limit: 30, offset: 0 }, SOMM_CTX);
+    const or = WineDefinition.find.mock.calls[0][0].$or;
+    expect(or).toHaveLength(1);
+    expect(or[0]).toMatchObject({ 'aiProfile.producerSuspect': true });
+  });
+
+  test('an unprofiled row is shaped with state "unprofiled" and sorts after flagged rows of equal impact', async () => {
+    WineDefinition.find.mockImplementation(() => heldListChain([
+      { _id: oid('1'), name: 'New Arrival', producer: 'Fresh Estate' }, // no aiProfile at all
+      { _id: oid('2'), name: 'Doubted', producer: 'P2', aiProfile: { heldAt: new Date(), heldReason: 'low_confidence', confidence: 0.3, generatedAt: new Date() } },
+    ]));
+    noInquiries();
+    Bottle.aggregate.mockResolvedValue([]);
+    const body = parse(await tool('list_held_profiles').handler({ limit: 30, offset: 0 }, SOMM_CTX));
+    const fresh = body.data.find((r) => String(r.wine_id) === oid('1'));
+    expect(fresh).toMatchObject({ state: 'unprofiled', held_reason: null, ai_confidence: null });
+    // Equal owner counts: the held 0.3-confidence row outranks the blank one
+    // (confidence asc, null coalesces to 1) — doubt already measured beats
+    // doubt not yet assessed.
+    expect(body.data.map((r) => r.state)).toEqual(['held', 'unprofiled']);
+  });
+
+  test('counts_only sizes the three states separately', async () => {
+    WineDefinition.find.mockImplementation(() => heldListChain([
+      { _id: oid('1'), aiProfile: { heldAt: new Date(), heldReason: 'low_confidence', generatedAt: new Date() } },
+      { _id: oid('2') },
+      { _id: oid('3') },
+    ]));
+    Bottle.aggregate.mockResolvedValue([]);
+    const body = parse(await tool('list_held_profiles').handler({ counts_only: true, limit: 30, offset: 0 }, SOMM_CTX));
+    expect(body.data).toMatchObject({ total: 3, held: 1, published_suspect: 0, unprofiled: 2 });
+    expect(body.summary).toMatch(/2 unprofiled/);
+  });
+});
+
+describe('add_grape (somm-owned taxonomy, 2026-08-22)', () => {
+  const Grape = require('../models/Grape');
+  const probeReturns = (doc) => Grape.findOne.mockReturnValue({
+    select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(doc) }),
+  });
+
+  test('adds a variety with folded synonyms, audited and ledgered', async () => {
+    probeReturns(null);
+    const body = parse(await tool('add_grape').handler({
+      name: 'St. Pepin', colour: 'White', synonyms: ['St-Pepin', 'Saint Pepin'],
+      origin: 'United States', description: 'Cold-hardy Swenson hybrid.',
+    }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(body.summary).toMatch(/St\. Pepin/);
+    const doc = Grape.mock.calls[0][0];
+    expect(doc).toMatchObject({ name: 'St. Pepin', color: 'White', normalizedName: expect.any(String) });
+    expect(doc.synonyms).toEqual(['St-Pepin', 'Saint Pepin']);
+    // The collision probe covers the canonical name AND every synonym.
+    const probe = Grape.findOne.mock.calls[0][0];
+    expect(probe.$or[0].normalizedName.$in).toHaveLength(3);
+    expect(logAudit).toHaveBeenCalledWith(SOMM_CTX.req, 'somm.taxonomy.create',
+      expect.objectContaining({ type: 'grape' }), expect.objectContaining({ name: 'St. Pepin' }));
+    expect(McpActionLog.create).toHaveBeenCalledWith(expect.objectContaining({ action: 'somm_grape' }));
+  });
+
+  test('an already-claimed name creates nothing and names the variety it resolves to', async () => {
+    probeReturns({ name: 'Norton', synonyms: ['Cynthiana'] });
+    const body = parse(await tool('add_grape').handler({ name: 'Cynthiana', colour: 'Red' }, SOMM_CTX));
+    expect(body.error.code).toBe('conflict');
+    expect(body.error.message).toMatch(/Norton/);
+    expect(Grape).not.toHaveBeenCalled();
+  });
+
+  test('a synonym that repeats the canonical name is dropped, not double-claimed', async () => {
+    probeReturns(null);
+    const body = parse(await tool('add_grape').handler({ name: 'Vidal', colour: 'White', synonyms: ['VIDAL', 'Vidal Blanc'] }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(Grape.mock.calls[0][0].synonyms).toEqual(['Vidal Blanc']);
+  });
+
+  test('write scope + somm role are both required', async () => {
+    const body = parse(await tool('add_grape').handler({ name: 'Norton', colour: 'Red' }, USER_CTX));
+    expect(body.error).toBeDefined();
   });
 });
 

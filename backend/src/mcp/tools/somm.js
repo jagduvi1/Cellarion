@@ -24,6 +24,7 @@ const { logAudit } = require('../../services/audit');
 const { SUPPORTED_CURRENCIES } = require('../../config/currencies');
 const { isValidId } = require('../../utils/validation');
 const { stripHtml } = require('../../utils/sanitize');
+const { normalizeString, sanitizeTaxonomyName } = require('../../utils/normalize');
 const { classifyProposal } = require('../../services/proposalDirectApply');
 const { ok, fail, objectId, pageParams } = require('../toolUtil');
 const { logAction } = require('../actionLedger');
@@ -626,6 +627,87 @@ registerTool({
 });
 
 registerTool({
+  name: 'add_grape',
+  title: 'Sommelier: add a variety to the grape taxonomy',
+  description:
+    'Adds a NEW grape variety to the shared taxonomy — the unblock for set_wine_profile/propose_wine_correction ' +
+    'failing with "not in the grape taxonomy". Until 2026-08-22 this needed an admin and a support ticket (Norton, ' +
+    'St. Pepin, Souzão, Vidal and three more were all filed that way in one week); wine data is somm-owned now, and ' +
+    'taxonomy is wine data. Match-first: if the name or any synonym already resolves to an existing variety, ' +
+    'nothing is created and the tool tells you what it resolves to — so calling it "just in case" is safe. Include ' +
+    'the synonyms owners actually write (accents, hyphens, Cynthiana-for-Norton) — they are what the resolver ' +
+    'matches label text against. colour follows the registry rule: the colour of the BERRY (Red/White), null only ' +
+    'for genuine edge cases. Adds are audited and attributed to you.',
+  scope: 'write',
+  requireRole: SOMM_ROLES,
+  annotations: { readOnlyHint: false, openWorldHint: false },
+  inputSchema: {
+    name: z.string().min(1).max(60).describe('Canonical variety name, e.g. "St. Pepin"'),
+    colour: z.enum(['Red', 'White']).nullable().describe('Berry colour. Red covers rosé-capable reds; null only for a genuine edge case'),
+    synonyms: z.array(z.string().min(1).max(60)).max(8).optional()
+      .describe('Alternative spellings and true synonyms, e.g. ["St-Pepin","Saint Pepin"] — what the resolver matches against'),
+    origin: z.string().max(80).optional().describe('Country or region of origin, e.g. "Portugal"'),
+    description: z.string().max(500).optional().describe('One or two plain-text sentences: what the variety is and where it matters'),
+  },
+  handler: async (args, ctx) => {
+    const denied = requireSomm(ctx);
+    if (denied) return denied;
+    const Grape = require('../../models/Grape');
+
+    const name = sanitizeTaxonomyName(args.name);
+    if (!name) return fail('invalid_input', 'name is empty after sanitising');
+    const synonyms = [...new Set((args.synonyms || []).map((s) => sanitizeTaxonomyName(s)).filter(Boolean))]
+      .filter((s) => normalizeString(s) !== normalizeString(name));
+
+    // Every string this row would claim — canonical name and all synonyms —
+    // must be unclaimed. Two varieties answering to one string would make
+    // resolveGrapeIdsStrict ambiguous for every later profile write.
+    const claims = [name, ...synonyms].map((s) => normalizeString(s));
+    const taken = await Grape.findOne({
+      $or: [{ normalizedName: { $in: claims } }, { normalizedSynonyms: { $in: claims } }],
+    }).select('name synonyms').lean();
+    if (taken) {
+      return fail('conflict',
+        `Already in the taxonomy: "${taken.name}"${taken.synonyms?.length ? ` (synonyms: ${taken.synonyms.join(', ')})` : ''} ` +
+        'claims one of these names. Use that variety, or propose a rename instead of a second row.');
+    }
+
+    const grape = new Grape({
+      name,
+      normalizedName: normalizeString(name),
+      color: args.colour ?? null,
+      synonyms,
+      origin: args.origin ? String(args.origin).trim() : null,
+      description: args.description ? stripHtml(String(args.description)).trim() : '',
+      createdBy: ctx.user.id,
+    });
+    await grape.save();
+
+    logAudit(ctx.req, 'somm.taxonomy.create',
+      { type: 'grape', id: grape._id }, { name: grape.name, colour: grape.color, synonyms });
+
+    const envelope = {
+      summary: `Added "${grape.name}" (${grape.color || 'no colour'}) to the grape taxonomy${synonyms.length ? ` with ${synonyms.length} synonym(s)` : ''}`,
+      data: {
+        grape_id: String(grape._id),
+        name: grape.name,
+        colour: grape.color,
+        synonyms,
+        note: 'Resolves immediately — re-run the set_wine_profile or correction that failed on it.',
+      },
+    };
+    await logAction(ctx, {
+      tool: 'add_grape',
+      action: 'somm_grape',
+      detail: { grapeId: String(grape._id), name: grape.name },
+      prev: null,
+      result: envelope,
+    });
+    return ok(envelope.summary, envelope.data);
+  },
+});
+
+registerTool({
   name: 'list_price_tracking_requests',
   title: 'Sommelier: list the price-request queue',
   description:
@@ -1185,12 +1267,18 @@ registerTool({
     'stored. include_published_suspects:true ALSO lists the published rows whose producer the model flagged as ' +
     'suspect (the 08-17 batch) — same judgement work, different state. Owner-count rides on every row and the list ' +
     'is impact-first (owners desc, then confidence asc). Judge each with review_held_profile; rows you have decided ' +
-    'disappear from this list.',
+    'disappear from this list. ' +
+    'SINCE 2026-08-22 this is also the INTAKE queue: automatic AI enrichment is off (wine data is somm-owned), so ' +
+    'every new registry wine appears here as state "unprofiled" — no flags, no confidence, just a wine awaiting its ' +
+    'first profile. Write it with set_wine_profile (type/grape fixes ride the same call); identity gaps go through ' +
+    'propose_wine_correction as usual. state:"unprofiled" lists only these.',
   scope: 'read',
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {
     held_reason: z.string().max(40).optional().describe('Filter the HELD set to one reason (e.g. "taxonomy_conflict"); "legacy" = rows with no recorded reason'),
+    state: z.enum(['held', 'published_suspect', 'unprofiled']).optional()
+      .describe('One state only. "unprofiled" = wines with NO profile at all — since automatic AI enrichment was turned off (2026-08-22, somm-owned data) every new wine lands here and set_wine_profile is how it leaves. Omit for all states.'),
     include_published_suspects: z.boolean().optional().describe('Also list PUBLISHED producer-suspect rows awaiting judgement (state "published_suspect")'),
     producer: z.string().max(200).optional().describe('Only rows whose producer contains this text (case-insensitive) — the queue clusters hard by producer, and one producer judgement often decides many rows'),
     group_by: z.enum(['producer']).optional().describe('Return producer CLUSTERS instead of rows: {producer, row_count, reasons, max_owner_count, wine_ids} — the unit of judgement is usually the producer'),
@@ -1202,20 +1290,44 @@ registerTool({
   handler: async (args, ctx) => {
     const denied = requireSomm(ctx);
     if (denied) return denied;
-    const or = [{ 'aiProfile.heldAt': { $ne: null } }];
-    if (args.include_published_suspects) {
-      or.push({ 'aiProfile.heldAt': null, 'aiProfile.producerSuspect': true, 'aiProfile.description': { $ne: null } });
+    // Three states, three $or branches, each gated by the `state` filter.
+    // held and published_suspect require generatedAt (a profile must exist to
+    // be held or suspect); unprofiled is the 2026-08-22 intake queue:
+    // automatic AI enrichment is OFF (somm-owned data), so a new wine arrives
+    // with NO profile at all and this list is the only place the somm can see
+    // it. `description: null` keeps the 188 curator rows that predate the
+    // generatedAt stamp out of the unprofiled state — a wine with a written
+    // description is not awaiting a profile.
+    const wantState = (s) => args.state === undefined || args.state === s;
+    const or = [];
+    if (wantState('held')) {
+      or.push({ 'aiProfile.heldAt': { $ne: null }, 'aiProfile.generatedAt': { $ne: null } });
+    }
+    // An explicit state ask implies the include flag — asking for suspects
+    // and getting nothing because a second switch was off would be a trap.
+    if ((args.include_published_suspects && wantState('published_suspect')) || args.state === 'published_suspect') {
+      or.push({ 'aiProfile.heldAt': null, 'aiProfile.generatedAt': { $ne: null }, 'aiProfile.producerSuspect': true, 'aiProfile.description': { $ne: null } });
+    }
+    if (wantState('unprofiled')) {
+      or.push({ 'aiProfile.generatedAt': null, 'aiProfile.description': null });
     }
     const match = {
       nonWine: { $ne: true }, pendingIdentity: { $ne: true },
-      'aiProfile.generatedAt': { $ne: null },
       $or: or,
       $expr: OUTSTANDING_EXPR, // a decided row (reviewedAt >= generatedAt) is done — never re-listed
     };
     if (args.producer) {
       match.producer = { $regex: args.producer.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
     }
-    const reasonKey = (w) => (w.aiProfile?.heldAt ? (w.aiProfile?.heldReason || 'legacy') : 'published_suspect');
+    const stateOf = (w) => {
+      if (w.aiProfile?.heldAt) return 'held';
+      // A published suspect is identified by having CONTENT — generatedAt or
+      // a written description. unprofiled means neither: nothing generated,
+      // nothing written. (Matches the query's own unprofiled branch.)
+      if (w.aiProfile?.generatedAt || w.aiProfile?.description) return 'published_suspect';
+      return 'unprofiled';
+    };
+    const reasonKey = (w) => (w.aiProfile?.heldAt ? (w.aiProfile?.heldReason || 'legacy') : stateOf(w));
     const ownerCounts = async (ids) => {
       if (ids.length === 0) return new Map();
       const owned = await Bottle.aggregate([
@@ -1229,12 +1341,12 @@ registerTool({
     // Uncapped backlog sizing (gap report 5a): id+reason projection only, so
     // "how big is this really" never depends on the row cap.
     if (args.counts_only) {
-      const idRows = await WineDefinition.find(match).select('aiProfile.heldAt aiProfile.heldReason').lean();
+      const idRows = await WineDefinition.find(match).select('aiProfile.heldAt aiProfile.heldReason aiProfile.generatedAt').lean();
       const heldByReason = {};
-      let held = 0;
+      const byState = { held: 0, published_suspect: 0, unprofiled: 0 };
       for (const r of idRows) {
+        byState[stateOf(r)] += 1;
         if (!r.aiProfile?.heldAt) continue;
-        held += 1;
         const k = r.aiProfile.heldReason || 'legacy';
         heldByReason[k] = (heldByReason[k] || 0) + 1;
       }
@@ -1245,8 +1357,8 @@ registerTool({
         tiers[c >= 3 ? '3+' : c] += 1;
       }
       return ok(
-        `${idRows.length} total awaiting judgement — ${held} held, ${idRows.length - held} published_suspect (uncapped)`,
-        { total: idRows.length, held, published_suspect: idRows.length - held, held_by_reason: heldByReason, by_owner_tier: tiers }
+        `${idRows.length} total awaiting work — ${byState.held} held, ${byState.published_suspect} published_suspect, ${byState.unprofiled} unprofiled (uncapped)`,
+        { total: idRows.length, held: byState.held, published_suspect: byState.published_suspect, unprofiled: byState.unprofiled, held_by_reason: heldByReason, by_owner_tier: tiers }
       );
     }
 
@@ -1254,7 +1366,7 @@ registerTool({
     // clusters by producer — "is Thomas Allen a real winery?" decides nine
     // rows at once. Uncapped scan on a three-field projection.
     if (args.group_by === 'producer') {
-      const rows = await WineDefinition.find(match).select('producer aiProfile.heldAt aiProfile.heldReason').lean();
+      const rows = await WineDefinition.find(match).select('producer aiProfile.heldAt aiProfile.heldReason aiProfile.generatedAt').lean();
       const groups = new Map();
       for (const r of rows) {
         const key = r.producer || '(no producer)';
@@ -1285,7 +1397,7 @@ registerTool({
 
     const wanted = rows.filter((w) => {
       const held = !!w.aiProfile?.heldAt;
-      if (!held) return true; // published_suspect rows pass the reason filter untouched
+      if (!held) return true; // published_suspect and unprofiled rows pass the reason filter untouched
       if (!args.held_reason) return true;
       if (args.held_reason === 'legacy') return !w.aiProfile?.heldReason;
       return w.aiProfile?.heldReason === args.held_reason;
@@ -1326,7 +1438,7 @@ registerTool({
         // writes ONLY the aiProfile subdoc, it can never set region or any
         // identity field; those stay behind the proposal gate.
         region: w.region?.name || null,
-        state: w.aiProfile?.heldAt ? 'held' : 'published_suspect',
+        state: stateOf(w),
         held_reason: w.aiProfile?.heldAt ? (w.aiProfile?.heldReason || null) : null,
         producer_suspect: w.aiProfile?.producerSuspect === true,
         producer_unknown: w.aiProfile?.producerUnknown === true,
