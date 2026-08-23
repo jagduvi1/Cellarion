@@ -110,17 +110,34 @@ registerTool({
 
 registerTool({
   name: 'review_registry_data',
-  title: 'Admin: review proposed keys and suggested values',
+  title: 'Sommelier: review proposed keys and suggested values',
   description:
-    'ADMIN only. Lists the two review queues (proposed public keys, suggested values), or decides one row: ' +
-    'decide "accept"/"reject" for a key_id, "publish"/"reject" for a value_id. Publishing a value supersedes any ' +
-    'previously published value for that wine+key.',
+    'The public-data review queues: proposed keys (the vocabulary itself) and suggested values users have offered ' +
+    'for a wine. Call with no arguments to list both, or decide one row: "accept"/"reject" for a key_id, ' +
+    '"publish"/"reject" for a value_id. Publishing a value supersedes any previously published value for that ' +
+    'wine+key. ' +
+    'JUDGE THE TWO QUEUES DIFFERENTLY. A suggested VALUE is a fact about one wine — is 14.5% the right ABV for ' +
+    'this bottling? — and that is ordinary curation, same as any other wine data. A proposed KEY is a decision ' +
+    'about what the registry TRACKS AT ALL: accepting one adds it to the public vocabulary every wine can carry ' +
+    'and to the analytics fields, and values then accumulate against it. Judge a key on whether it is a durable, ' +
+    'objective property of a wine that owners would actually fill in — not merely whether the suggestion is ' +
+    'true. When a key is really a product question rather than a wine question, reject it with that as the ' +
+    'reason and say so in a support ticket rather than accepting on your own.',
   scope: 'write',
-  // Structural gate: the tool is INVISIBLE to non-admin connections (the
-  // registry filters on requireRole), matching every other admin tool —
-  // audit: an in-handler check alone leaves an admin tool listed to all
-  // write-scope users, who then hit forbidden_scope noise.
-  requireRole: ['admin'],
+  // Sommelier + admin (Johan, 2026-08-23). Public wine data IS wine data, and
+  // the admin-only gate made the project owner the bottleneck on a queue fed
+  // by users — the same bottleneck somm-owned data exists to remove.
+  //
+  // Deliberately MORE permissive than the REST twin at
+  // /api/admin/registry-data, which stays requireRole('admin'): that route
+  // backs the admin web UI, while MCP is the sommelier's surface. Not drift —
+  // the same split as the maturity queue (somm over MCP, admin over REST).
+  //
+  // Structural gate: the tool is INVISIBLE to connections without the role
+  // (the registry filters on requireRole) — an in-handler check alone would
+  // leave it listed to every write-scope user, who then hit forbidden_scope
+  // noise.
+  requireRole: ['somm', 'admin'],
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   inputSchema: {
     key_id: objectId.optional(),
