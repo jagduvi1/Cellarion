@@ -10,6 +10,7 @@ import {
   parseLocaleNumber,
   parseVivinoDrinkWindow,
   isVivinoScanHistory,
+  splitClassificationFromName,
 } from './importMappers';
 
 // ---------------------------------------------------------------------------
@@ -942,5 +943,82 @@ describe('wine colour is stated, never guessed', () => {
     // "White - Sparkling" is sparkling; reading the colour first would lose it.
     expect(parseAndMap('Wine,Producer,Type,Vintage,Locale\nX,Y,White - Sparkling,2020,France\n').items[0].type).toBe('sparkling');
     expect(parseAndMap('Wine,Producer,Type,Vintage,Locale\nX,Y,White - Sweet/Dessert,2020,France\n').items[0].type).toBe('dessert');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Classification-in-name guard (somm ticket 0063bb76). Producer-stripping a
+// Bordeaux CT name like "Château Talbot Grand Cru Classé" used to leave the
+// bare TIER as the wine's name — prod grew 19 such rows, three distinct wines
+// all named "Grand Cru Classé", six duplicating a properly-named record.
+// ---------------------------------------------------------------------------
+describe('splitClassificationFromName', () => {
+
+  it('routes a pure-tier name to classification, name falls back to the producer (grand-vin convention)', () => {
+    expect(splitClassificationFromName('Grand Cru Classé', { producer: 'Château Talbot', appellation: 'Saint-Julien' }))
+      .toEqual({ wineName: 'Château Talbot', classification: 'Grand Cru Classé' });
+  });
+
+  it('keeps a real cuvée that survives the strip', () => {
+    expect(splitClassificationFromName('Clos des Jacobins Grand Cru Classé', { producer: 'Domaine Cordier', appellation: 'Saint-Émilion Grand Cru' }))
+      .toEqual({ wineName: 'Clos des Jacobins', classification: 'Grand Cru Classé' });
+    expect(splitClassificationFromName('Réserve du Château Cru Classé', { producer: 'Château de Brégançon', appellation: 'Côtes de Provence' }))
+      .toEqual({ wineName: 'Réserve du Château', classification: 'Cru Classé' });
+  });
+
+  it('appellation tokens and label furniture are not a name', () => {
+    // remainder "Margaux" = the appellation, not a cuvée
+    expect(splitClassificationFromName('Second Grand Cru Classé Margaux', { producer: 'Château Rauzan-Gassies', appellation: 'Margaux' }))
+      .toEqual({ wineName: 'Château Rauzan-Gassies', classification: 'Second Grand Cru Classé' });
+    // "Grand Vin" is furniture
+    expect(splitClassificationFromName('Grand Vin Premier Grand Cru Classé', { producer: 'Château Margaux', appellation: 'Margaux' }))
+      .toEqual({ wineName: 'Château Margaux', classification: 'Premier Grand Cru Classé' });
+  });
+
+  it('handles the parenthesised forms, including tier-in-parens after appellation noise', () => {
+    expect(splitClassificationFromName('Margaux (Grand Cru Classé)', { producer: 'Château Malescot St. Exupéry', appellation: 'Margaux' }))
+      .toEqual({ wineName: 'Château Malescot St. Exupéry', classification: 'Grand Cru Classé' });
+    expect(splitClassificationFromName('Saint-Émilion Grand Cru (Premier Grand Cru Classé)', { producer: 'Château Angelus', appellation: 'Saint-Émilion Grand Cru' }))
+      .toEqual({ wineName: 'Château Angelus', classification: 'Premier Grand Cru Classé' });
+  });
+
+  it('NEVER fires on Burgundy 1er Cru names — classé/bourgeois is required', () => {
+    expect(splitClassificationFromName('Chassagne-Montrachet 1er Cru Les Fairendes', { producer: 'Florent Moingeon', appellation: 'Chassagne-Montrachet 1er Cru' }))
+      .toEqual({ wineName: 'Chassagne-Montrachet 1er Cru Les Fairendes', classification: undefined });
+    expect(splitClassificationFromName('Grand Cru', { producer: 'X', appellation: 'Chablis Grand Cru' }).classification).toBeUndefined();
+  });
+
+  it('folds accents onto the canonical tier spelling', () => {
+    expect(splitClassificationFromName('Grand Cru Classe', { producer: 'Château Batailley', appellation: 'Pauillac' }).classification)
+      .toBe('Grand Cru Classé');
+    expect(splitClassificationFromName('Cru Bourgeois', { producer: 'Château Mazails', appellation: 'Médoc' }).classification)
+      .toBe('Cru Bourgeois');
+  });
+
+  it('a name with no tier passes through untouched', () => {
+    expect(splitClassificationFromName('Pavillon Rouge', { producer: 'Château Margaux', appellation: 'Margaux' }))
+      .toEqual({ wineName: 'Pavillon Rouge', classification: undefined });
+  });
+
+  it('no producer to fall back on keeps the original name rather than minting an empty one', () => {
+    expect(splitClassificationFromName('Grand Cru Classé', { producer: '', appellation: 'Pauillac' }).wineName)
+      .toBe('Grand Cru Classé');
+  });
+});
+
+describe('classification reaches the mapped item', () => {
+  it('generic rows: tier-only Wine name lands in classification, name is the producer', () => {
+    const { items } = parseAndMap('Wine,Producer,Appellation,Vintage\nGrand Cru Classé,Château Talbot,Saint-Julien,2016\n');
+    expect(items[0]).toMatchObject({
+      wineName: 'Château Talbot',
+      producer: 'Château Talbot',
+      classification: 'Grand Cru Classé',
+      appellation: 'Saint-Julien',
+    });
+  });
+
+  it('generic rows: an explicit Classification column is honoured when the name is clean', () => {
+    const { items } = parseAndMap('Wine,Producer,Classification,Vintage\nPavillon Rouge,Château Margaux,Second Vin,2018\n');
+    expect(items[0]).toMatchObject({ wineName: 'Pavillon Rouge', classification: 'Second Vin' });
   });
 });
