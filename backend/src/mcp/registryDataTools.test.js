@@ -3,7 +3,7 @@
  * suggest_wine_public_value, propose_registry_key, review_registry_data.
  *
  * Pins: scope split; delegation to the SHARED registryDataOps service; the
- * admin gate on review_registry_data; and the one-row-per-decision rule.
+ * role gate on review_registry_data (somm+admin since 2026-08-23); and the one-row-per-decision rule.
  */
 
 jest.mock('../services/registryDataOps', () => ({
@@ -40,9 +40,11 @@ test('scopes: read for the getter, write for the rest; admin tool is STRUCTURALL
   expect(tool('suggest_wine_public_value').scope).toBe('write');
   expect(tool('propose_registry_key').scope).toBe('write');
   expect(tool('review_registry_data').scope).toBe('write');
-  // requireRole makes the tool invisible to non-admin connections (the
-  // registry filters on it) — the pattern every admin tool follows.
-  expect(tool('review_registry_data').requireRole).toEqual(['admin']);
+  // requireRole makes the tool invisible to connections without the role
+  // (the registry filters on it). Sommeliers gained it on 2026-08-23: public
+  // wine data is wine data, and admin-only made the project owner the
+  // bottleneck on a queue ordinary users feed.
+  expect(tool('review_registry_data').requireRole).toEqual(['somm', 'admin']);
 });
 
 test('get_wine_public_data passes roles (visibility) and surfaces any-pending + mine', async () => {
