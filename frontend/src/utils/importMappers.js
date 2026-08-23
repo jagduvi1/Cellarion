@@ -790,6 +790,87 @@ export function stripProducerPrefix(wineName, producer) {
   return wineName;
 }
 
+// ── Classification-in-name guard (somm ticket 0063bb76) ─────────────────────
+//
+// Once the producer prefix is stripped, a Bordeaux "Wine" value like
+// "Château Talbot Grand Cru Classé" leaves just the CLASSIFICATION tier —
+// and that string used to be stored as the wine's NAME. Prod grew 19 such
+// rows (three distinct wines all named "Grand Cru Classé"), six of them
+// duplicating a properly-named record of the same château. A tier is routed
+// to `classification`; the name gets whatever substantive part remains, or
+// falls back to the producer (the grand-vin convention — Château Margaux's
+// wine IS "Château Margaux").
+//
+// Deliberately requires "classé"/"bourgeois": Burgundy's "1er Cru" alone is
+// part of real appellation-carrying names ("Chassagne-Montrachet 1er Cru Les
+// Fairendes") and must never trip this.
+
+const TIER_RE = /(premier\s+grand\s+cru\s+class[eé]s?|second\s+grand\s+cru\s+class[eé]s?|deuxi[eè]me\s+cru\s+class[eé]s?|grand\s+cru\s+class[eé]s?|premier\s+cru\s+class[eé]s?|cru\s+class[eé]s?|cru\s+bourgeois(?:\s+sup[eé]rieur)?)/i;
+
+const TIER_CANONICAL = new Map([
+  ['premier grand cru classe', 'Premier Grand Cru Classé'],
+  ['second grand cru classe', 'Second Grand Cru Classé'],
+  ['deuxieme cru classe', 'Deuxième Cru Classé'],
+  ['grand cru classe', 'Grand Cru Classé'],
+  ['premier cru classe', 'Premier Cru Classé'],
+  ['cru classe', 'Cru Classé'],
+  ['cru bourgeois', 'Cru Bourgeois'],
+  ['cru bourgeois superieur', 'Cru Bourgeois Supérieur'],
+]);
+
+const foldAccents = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+const normTier = (s) => TIER_CANONICAL.get(foldAccents(s).toLowerCase().replace(/s$/, '').replace(/\s+/g, ' ').trim()) || null;
+
+// Words that don't make a leftover a real cuvée name: the row's own
+// appellation/region tokens, plus label furniture ("Grand Vin", AOC noise).
+const NAME_NOISE = new Set(['grand', 'vin', 'cru', 'aoc', 'ac', 'appellation', 'controlee', 'de', 'du', 'la', 'le', 'les', 'des']);
+function isAppellationNoise(remainder, appellation, region) {
+  const allowed = new Set(NAME_NOISE);
+  for (const src of [appellation, region]) {
+    for (const t of foldAccents(src).toLowerCase().split(/[^a-z0-9]+/)) if (t) allowed.add(t);
+  }
+  return foldAccents(remainder).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
+    .every((t) => allowed.has(t));
+}
+
+/**
+ * Split a classification tier out of a wine name. Returns
+ * { wineName, classification } — classification undefined when no tier found.
+ */
+export function splitClassificationFromName(wineName, { producer, appellation, region } = {}) {
+  const name = String(wineName || '').trim();
+  if (!name) return { wineName, classification: undefined };
+
+  // Trailing parenthesised tier: "Margaux (Grand Cru Classé)". The remainder
+  // re-runs through the splitter — "Saint-Émilion Grand Cru (Grand Cru
+  // Classé)" still has appellation noise to shed.
+  const paren = name.match(/^(.*?)\s*\(\s*([^)]*(?:cru\s+class[eé]|cru\s+bourgeois)[^)]*)\s*\)\s*$/i);
+  if (paren) {
+    const inner = normTier(paren[2]) || paren[2].trim();
+    const again = splitClassificationFromName(paren[1], { producer, appellation, region });
+    // The part before the parens gets the same "is it a real name" test as
+    // the inline case — "Margaux (Grand Cru Classé)" leaves only appellation.
+    const base = again.wineName && !isAppellationNoise(again.wineName, appellation, region)
+      ? again.wineName
+      : ((producer || '').trim() || name);
+    return { wineName: base, classification: again.classification || inner };
+  }
+
+  const m = name.match(TIER_RE);
+  if (!m) return { wineName: name, classification: undefined };
+  const tier = normTier(m[0]) || m[0].trim();
+  const remainder = (name.slice(0, m.index) + ' ' + name.slice(m.index + m[0].length))
+    .replace(/[\s,;:()–—-]+/g, ' ').trim();
+  if (remainder && !isAppellationNoise(remainder, appellation, region)) {
+    // A real cuvée survives the strip: "Clos des Jacobins", "Réserve du Château".
+    return { wineName: remainder, classification: tier };
+  }
+  // Nothing substantive left — a designation is not a name; the grand vin
+  // carries the estate's own. No producer to fall back on leaves the name
+  // unchanged rather than minting an empty one.
+  return { wineName: (producer || '').trim() || name, classification: tier };
+}
+
 /** wineName + producer from a CT row (Producer column or heuristic). */
 function ctIdentity(get) {
   const rawWine = get(['Wine', 'wine', 'WineName']);
@@ -802,16 +883,23 @@ function ctIdentity(get) {
 
 /** Fields shared by all CT table mappers. */
 function ctCommonFields(get, { sizeKeys = ['Size'] } = {}) {
-  const { wineName, producer } = ctIdentity(get);
+  const identity = ctIdentity(get);
   const locale = parseCtLocale(get(['Locale']));
+  const region = get(['Region']) || locale.region;
+  const appellation = ctClean(get(['Appellation'])) || locale.appellation;
+  // After producer-stripping, a Bordeaux Wine value can be pure tier
+  // ("Grand Cru Classé") — route it to classification, never the name.
+  const { wineName, classification } = splitClassificationFromName(
+    identity.wineName, { producer: identity.producer, appellation, region });
   const rating = ctMyRating(get);
   return {
     wineName,
-    producer,
+    producer: identity.producer,
+    classification,
     vintage: ctVintage(get(['Vintage'])) || 'NV',
     country: get(['Country']) || locale.country,
-    region: get(['Region']) || locale.region,
-    appellation: ctClean(get(['Appellation'])) || locale.appellation,
+    region,
+    appellation,
     type: mapCellarTrackerType(get(['Type']), get(['Color', 'Colour'])),
     // CT tracks spirits beside wine; the caller flags rather than guesses.
     nonWineHint: looksNonWine(get(['Type']), get(['Category'])) || undefined,
@@ -1011,13 +1099,23 @@ function mapGenericRow(row) {
   const parsedRack = parseCombinedRackLocation(combined);
   const rackFields = mapRackFields(get);
 
+  const producer = get(['Producer', 'producer', 'Winery', 'winery', 'Maker', 'maker']);
+  const region = get(['Region', 'region']);
+  const appellation = get(['Appellation', 'appellation', 'Sub-Region', 'SubRegion']);
+  // Same tier-in-name guard as the CT path (somm ticket 0063bb76) — plus an
+  // explicit Classification column, which some hand-written files carry.
+  const { wineName, classification } = splitClassificationFromName(
+    get(['Wine', 'wine', 'Wine Name', 'WineName', 'Name', 'name']),
+    { producer, appellation, region });
+
   return {
-    wineName: get(['Wine', 'wine', 'Wine Name', 'WineName', 'Name', 'name']),
-    producer: get(['Producer', 'producer', 'Winery', 'winery', 'Maker', 'maker']),
+    wineName,
+    producer,
+    classification: classification || get(['Classification', 'classification']) || undefined,
     vintage: get(['Vintage', 'vintage', 'Year', 'year']) || 'NV',
     country: get(['Country', 'country']),
-    region: get(['Region', 'region']),
-    appellation: get(['Appellation', 'appellation', 'Sub-Region', 'SubRegion']),
+    region,
+    appellation,
     type: mapWineType(get(['Type', 'type', 'Color', 'Colour', 'Category', 'category'])),
     price: isNaN(price) ? undefined : price,
     currency: get(['Currency', 'currency']) || undefined,
