@@ -71,7 +71,12 @@ beforeEach(() => {
   // the test keeps the old one, so nothing configured below reaches the
   // handler. Tests use distinct addresses instead, so each gets its own bucket.
   jest.clearAllMocks();
-  WineDefinition.findOne.mockReturnValue({ select: () => Promise.resolve(WINE) });
+  // The handler chains .populate(...).select(...) — both must be present or
+  // it throws and every request 500s, which would make the limiter assertions
+  // measure a broken handler instead of the cap.
+  WineDefinition.findOne.mockReturnValue({
+    populate: () => ({ select: () => Promise.resolve(WINE) }),
+  });
 });
 
 describe('anonymous registry reads are capped against enumeration', () => {
