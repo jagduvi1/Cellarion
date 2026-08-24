@@ -107,7 +107,7 @@ const taxonomyChain = (rows) => {
  *   { _id: { $in: ids } }     → .populate(...)           (Meilisearch id fetch)
  *   { $text: ... }            → .populate(...).limit(20) (Mongo text fallback)
  */
-function primeFind({ canonicalHits = [], canonicalSiblings = [], siblings = [], meiliDocs = [], textDocs = [] } = {}) {
+function primeFind({ canonicalHits = [], canonicalSiblings = [], siblings = [], meiliDocs = [], textDocs = [], producerRows = [] } = {}) {
   WineDefinition.find.mockImplementation((q) => {
     if (q && q.canonicalKey) {
       const docs = q.canonicalKey instanceof RegExp ? canonicalSiblings : canonicalHits;
@@ -116,6 +116,14 @@ function primeFind({ canonicalHits = [], canonicalSiblings = [], siblings = [], 
     if (q && q.normalizedKey) {
       return { limit: jest.fn().mockReturnValue({ populate: jest.fn().mockResolvedValue(siblings) }) };
     }
+    // Label-variant stage (somm ticket e9b346ba): producer-scoped sweep.
+
+    if (q && q.producer && !q.canonicalKey && !q.normalizedKey) {
+
+      return { limit: jest.fn().mockReturnValue({ populate: jest.fn().mockResolvedValue(producerRows) }) };
+
+    }
+
     if (q && q.$text) {
       return { populate: jest.fn().mockReturnValue({ limit: jest.fn().mockResolvedValue(textDocs) }) };
     }
@@ -137,6 +145,11 @@ let warnSpy;
 beforeEach(() => {
   jest.clearAllMocks();
   warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+  // The label-variant stage reads the grape taxonomy for its variety
+  // vocabulary; default it to empty so the stage runs rather than throwing
+  // into its own catch and silently no-opping.
+  Grape.find.mockReturnValue({ select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([]) }) });
 
   // Instance mocks: constructor assigns the doc, save/populate resolve to self
   WineDefinition.mockImplementation(function (doc) {
@@ -1234,5 +1247,103 @@ describe('findOrCreateWine — classification is stored on create', () => {
   test('absent classification stores null', async () => {
     const { wine } = await findOrCreateWine(INPUT, USER_ID);
     expect(wine.classification).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Label-variant detection must survive confirmCreate (somm ticket e9b346ba).
+//
+// v1.171.0 shipped this stage gated on skipSiblingMatch, which wineCommit sets
+// from confirmCreate. Five hours later HALL "The North End Cabernet Sauvignon"
+// was minted through the UI, duplicating "The North End" — because the pair
+// scores 0.748, BELOW the 0.85 soft-zone floor, so the existing wine was never
+// in the candidate list the user rejected. confirmCreate means "I reviewed the
+// suggestions"; it cannot mean "I rejected a wine nobody showed me".
+// ---------------------------------------------------------------------------
+describe('findOrCreateWine — label variants are caught even on confirmCreate', () => {
+  const HALL_EXISTING = {
+    _id: 'wine-north-end',
+    name: 'The North End',
+    producer: 'HALL',
+    appellation: 'Napa Valley',
+    grapes: [],
+  };
+  const TYPED = {
+    name: 'The North End Cabernet Sauvignon',
+    producer: 'HALL',
+    country: 'United States',
+    appellation: 'Napa Valley',
+  };
+
+  const primeGrapes = (names) => Grape.find.mockReturnValue({
+    select: jest.fn().mockReturnValue({
+      lean: jest.fn().mockResolvedValue(names.map((n) => ({ _id: n, name: n, normalizedName: n.toLowerCase() }))),
+    }),
+  });
+
+  test('the reported regression: confirmCreate no longer bypasses the check', async () => {
+    primeGrapes(['Cabernet Sauvignon']);
+    primeFind({ producerRows: [HALL_EXISTING] });
+    // Nothing in the fuzzy stage — that is the whole point, it scores 0.748.
+    scoreAllMatches.mockReturnValue([]);
+
+    const result = await findOrCreateWine(TYPED, USER_ID, {
+      confirmCreate: true, skipSiblingMatch: true,
+    });
+
+    expect(result.created).toBe(false);
+    expect(result.wine).toBe(HALL_EXISTING);
+    expect(result.labelVariantOf).toBe('The North End');
+  });
+
+  test('and without confirmCreate too', async () => {
+    primeGrapes(['Cabernet Sauvignon']);
+    primeFind({ producerRows: [HALL_EXISTING] });
+    scoreAllMatches.mockReturnValue([]);
+
+    const result = await findOrCreateWine(TYPED, USER_ID, {});
+    expect(result.created).toBe(false);
+    expect(result.wine).toBe(HALL_EXISTING);
+  });
+
+  test('a genuine second wine of the range still creates — different varieties', async () => {
+    primeGrapes(['Cabernet Franc', 'Malbec']);
+    primeFind({ producerRows: [{ _id: 'q-cf', name: 'Q Cabernet Franc', producer: 'Zuccardi', grapes: [] }] });
+    scoreAllMatches.mockReturnValue([]);
+
+    const result = await findOrCreateWine(
+      { name: 'Q Malbec', producer: 'Zuccardi', country: 'Argentina' }, USER_ID, { confirmCreate: true });
+
+    expect(result.created).toBe(true);
+  });
+
+  test('an unrelated cuvée of the same producer still creates', async () => {
+    primeGrapes(['Cabernet Sauvignon']);
+    primeFind({ producerRows: [HALL_EXISTING] });
+    scoreAllMatches.mockReturnValue([]);
+
+    const result = await findOrCreateWine(
+      { ...TYPED, name: 'Jack\'s Masterpiece Cabernet Sauvignon' }, USER_ID, { confirmCreate: true });
+
+    expect(result.created).toBe(true);
+  });
+
+  test('the stage failing never blocks the create', async () => {
+    // Break the stage SPECIFICALLY — its own producer-scoped query — rather
+    // than a shared dependency. Grape.find is also used by crossFieldScan on
+    // an earlier, uncaught path, so throwing there tests the wrong thing.
+    primeGrapes(['Cabernet Sauvignon']);
+    const realFind = WineDefinition.find.getMockImplementation();
+    primeFind({ producerRows: [HALL_EXISTING] });
+    const dispatch = WineDefinition.find.getMockImplementation();
+    WineDefinition.find.mockImplementation((q) => {
+      if (q && q.producer && !q.canonicalKey && !q.normalizedKey) throw new Error('index rebuild in progress');
+      return dispatch(q);
+    });
+    scoreAllMatches.mockReturnValue([]);
+
+    const result = await findOrCreateWine(TYPED, USER_ID, { confirmCreate: true });
+    expect(result.created).toBe(true);
+    void realFind;
   });
 });
