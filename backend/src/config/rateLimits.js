@@ -64,6 +64,24 @@ const defaults = {
   // punished exactly the most engaged first-day behaviour. Worst-case disk
   // bound doubles to ~14 GB/day per user, still sweepable and tunable below.
   imageUploadBurst: { max: 60, windowMs: 60 * 60 * 1000 },
+  // ANONYMOUS registry reads: GET /api/wines/:idOrSlug/public, the only wine
+  // endpoint that needs no account. It exists so wine pages are public and
+  // indexable, which is worth keeping — but it sat under the general /api/
+  // limiter, so one address could walk the whole registry in about forty
+  // minutes. (That limiter was raised to 2500/15min on 2026-08-23 for a
+  // legitimate editing case, which incidentally made bulk reading faster.)
+  //
+  // Sized against MEASURED traffic rather than a guess: this endpoint served
+  // FIVE requests in 24 hours across the entire site, from one address, all
+  // real browsers — and no search crawler touched it at all, so a tight cap
+  // costs nothing in indexing. 120 per 15 minutes is a wine page every 7.5
+  // seconds sustained, far beyond any human session, while taking a
+  // single-address scrape of the full registry from ~40 minutes to ~14 hours.
+  //
+  // This does NOT stop a determined actor spreading across many addresses;
+  // nothing that also serves public pages can. It makes casual scraping not
+  // worth the trouble, which is the achievable goal.
+  publicWineRead: { max: 120, windowMs: 15 * 60 * 1000 },
   // Ephemeral public-demo accounts (POST /api/auth/demo-login). Cloning a
   // snapshot cellar per visitor is write-heavy, so this is bounded on three
   // axes: per-IP creation rate, a DURABLE global ceiling on concurrent live
@@ -128,6 +146,7 @@ let cache = {
   aiImportPerRequestCap: { ...defaults.aiImportPerRequestCap },
   aiGlobalDailyCap: { ...defaults.aiGlobalDailyCap },
   imageUploadBurst: { ...defaults.imageUploadBurst },
+  publicWineRead: { ...defaults.publicWineRead },
   demo: { ...defaults.demo },
   mcp: { ...defaults.mcp },
 };
@@ -171,6 +190,12 @@ async function load() {
         imageUploadBurst: {
           max:      doc.value.imageUploadBurst?.max      ?? defaults.imageUploadBurst.max,
           windowMs: doc.value.imageUploadBurst?.windowMs ?? defaults.imageUploadBurst.windowMs,
+        },
+
+        publicWineRead: {
+          max:      doc.value.publicWineRead?.max      ?? defaults.publicWineRead.max,
+          windowMs: doc.value.publicWineRead?.windowMs ?? defaults.publicWineRead.windowMs,
+
         },
         demo: {
           createMax:      doc.value.demo?.createMax      ?? defaults.demo.createMax,
