@@ -67,8 +67,10 @@ async function hit(a, n, ip = '203.0.113.7') {
 }
 
 beforeEach(() => {
+  // NO resetModules here: it hands the route a fresh copy of these mocks while
+  // the test keeps the old one, so nothing configured below reaches the
+  // handler. Tests use distinct addresses instead, so each gets its own bucket.
   jest.clearAllMocks();
-  jest.resetModules();
   WineDefinition.findOne.mockReturnValue({ select: () => Promise.resolve(WINE) });
 });
 
@@ -101,7 +103,7 @@ describe('anonymous registry reads are capped against enumeration', () => {
     jest.spyOn(rateLimitsConfig, 'get').mockReturnValue({
       ...rateLimitsConfig.get(), publicWineRead: { max: 3, windowMs: 60000 },
     });
-    const codes = await hit(app(), 5);
+    const codes = await hit(app(), 5, '203.0.113.21');
     expect(codes.slice(0, 3).every((c) => c === 200)).toBe(true);
     expect(codes.slice(3)).toEqual([429, 429]);
   });
@@ -110,7 +112,7 @@ describe('anonymous registry reads are capped against enumeration', () => {
     jest.spyOn(rateLimitsConfig, 'get').mockReturnValue({
       ...rateLimitsConfig.get(), publicWineRead: { max: 1, windowMs: 60000 },
     });
-    await hit(app(), 2);
+    await hit(app(), 2, '203.0.113.22');
     expect(logAudit).toHaveBeenCalledWith(
       expect.anything(), 'system.rate_limit_exceeded', {},
       expect.objectContaining({ limiter: 'publicWineRead' })

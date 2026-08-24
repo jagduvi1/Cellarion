@@ -931,7 +931,10 @@ const PUBLIC_PROJECTION = 'name producer slug country region appellation grapes 
 // cannot reach it, so a breach is either a scraper or a real usage pattern
 // nobody predicted. Both are things to know about, hence the audit row.
 const publicWineLimiter = rateLimit({
-  windowMs: () => rateLimitsConfig.get().publicWineRead.windowMs,
+  // Static window, dynamic max — the same shape as apiLimiter and
+  // aiBurstLimiter. express-rate-limit resolves max() per request but wants a
+  // real number for the window at construction.
+  windowMs: rateLimitsConfig.get().publicWineRead.windowMs,
   max: () => rateLimitsConfig.get().publicWineRead.max,
   keyGenerator: (req) => rateLimitKey(req),
   standardHeaders: true,
