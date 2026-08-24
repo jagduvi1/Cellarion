@@ -29,7 +29,12 @@ jest.mock('../models/Bottle', () => ({ find: jest.fn(), countDocuments: jest.fn(
 jest.mock('../models/Country', () => ({ find: jest.fn(), findOne: jest.fn() }));
 jest.mock('../models/Region', () => ({ find: jest.fn(), findOne: jest.fn() }));
 jest.mock('../models/Grape', () => ({ find: jest.fn(), findOne: jest.fn() }));
-jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findOne: jest.fn(), findById: jest.fn(), countDocuments: jest.fn() }));
+jest.mock('../models/WineDefinition', () => ({
+  find: jest.fn(), findOne: jest.fn(), findById: jest.fn(), countDocuments: jest.fn(),
+  // The route resolves slugs (including superseded ones) through this static;
+  // without it the handler 500s and the limiter never gets exercised.
+  slugFilter: jest.fn((slug) => ({ $or: [{ slug: String(slug).toLowerCase() }] })),
+}));
 
 const rateLimitsConfig = require('../config/rateLimits');
 const { logAudit } = require('../services/audit');
