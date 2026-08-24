@@ -28,6 +28,8 @@ jest.mock('../services/enrichmentJob', () => ({
   // reached — the real predicate, so the branch is genuinely exercised.
   identityDataSufficient: (w) => !!(w.appellation || w.region) && !!((w.grapes && w.grapes.length) || w.type),
 }));
+jest.mock('../models/Country', () => ({ findOne: jest.fn() }));
+jest.mock('../models/Region', () => ({ findOne: jest.fn() }));
 jest.mock('../models/Grape', () => {
   // Constructable (add_grape does `new Grape().save()`) while keeping the
   // findOne static the resolver tests use.
@@ -108,7 +110,7 @@ const USER_CTX = { user: { id: ME, roles: ['user'] }, scopes: ['read', 'write'],
 
 const tool = (name) => allTools().find((t) => t.name === name);
 const parse = (res) => JSON.parse(res.content[0].text);
-const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'remove_from_maturity_queue', 'set_wine_profile', 'add_grape', 'propose_wine_correction', 'list_price_tracking_requests', 'set_vintage_price', 'reject_price_request', 'list_wine_reports', 'respond_to_wine_report', 'sample_published_profiles', 'list_unverified_core_wines', 'list_held_profiles', 'review_held_profile', 'list_pending_corrections', 'record_profile_audit', 'list_profile_audits', 'list_colour_conflicts', 'dismiss_colour_conflict', 'restore_colour_conflict', 'list_rule_downgrades', 'list_ungrounded_descriptions'];
+const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'remove_from_maturity_queue', 'set_wine_profile', 'add_grape', 'edit_grape', 'propose_wine_correction', 'list_price_tracking_requests', 'set_vintage_price', 'reject_price_request', 'list_wine_reports', 'respond_to_wine_report', 'sample_published_profiles', 'list_unverified_core_wines', 'list_held_profiles', 'review_held_profile', 'list_pending_corrections', 'record_profile_audit', 'list_profile_audits', 'list_colour_conflicts', 'dismiss_colour_conflict', 'restore_colour_conflict', 'list_rule_downgrades', 'list_ungrounded_descriptions'];
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -1032,6 +1034,92 @@ describe('the unprofiled intake queue (somm-owned data, 2026-08-22)', () => {
     const body = parse(await tool('list_held_profiles').handler({ counts_only: true, limit: 30, offset: 0 }, SOMM_CTX));
     expect(body.data).toMatchObject({ total: 3, held: 1, published_suspect: 0, unprofiled: 2 });
     expect(body.summary).toMatch(/2 unprofiled/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// edit_grape (somm ticket 3504c122). add_grape only CREATED, so a variety that
+// arrived with a null colour could never acquire one through MCP — and a null
+// colour is not a cosmetic gap: findGrapeColourConflict cannot evaluate a wine
+// whose grape has no colour, so those wines are skipped by a live check that
+// then reports zero and reads as clean.
+// ---------------------------------------------------------------------------
+describe('edit_grape (2026-08-24)', () => {
+  const Grape = require('../models/Grape');
+  const Country = require('../models/Country');
+  const Region = require('../models/Region');
+
+  const grapeDoc = (over = {}) => ({
+    _id: oid('e'), name: 'Tinta Cão', color: null, synonyms: [], regionalNames: [],
+    origin: null, description: '', save: jest.fn().mockResolvedValue(true), ...over,
+  });
+
+  test('fills a null colour — the case the ticket is about', async () => {
+    const doc = grapeDoc();
+    Grape.findOne.mockResolvedValueOnce(doc);
+    const body = parse(await tool('edit_grape').handler({ grape: 'Tinta Cão', colour: 'Red' }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(doc.color).toBe('Red');
+    expect(doc.save).toHaveBeenCalled();
+    expect(body.data.note).toMatch(/colour-conflict check/);
+    expect(logAudit).toHaveBeenCalledWith(SOMM_CTX.req, 'somm.taxonomy.update',
+      expect.objectContaining({ type: 'grape' }), expect.objectContaining({ applied: expect.arrayContaining(['colour Red']) }));
+  });
+
+  test('refuses to CHANGE an established colour — that re-judges every wine built on it', async () => {
+    const doc = grapeDoc({ color: 'White' });
+    Grape.findOne.mockResolvedValueOnce(doc);
+    const body = parse(await tool('edit_grape').handler({ grape: 'Tinta Cão', colour: 'Red' }, SOMM_CTX));
+    expect(body.error.code).toBe('conflict');
+    expect(body.error.message).toMatch(/already White/);
+    expect(doc.save).not.toHaveBeenCalled();
+  });
+
+  test('setting the SAME colour again is a no-op, not a conflict', async () => {
+    const doc = grapeDoc({ color: 'Red' });
+    Grape.findOne.mockResolvedValueOnce(doc);
+    const body = parse(await tool('edit_grape').handler({ grape: 'Tinta Cão', colour: 'Red' }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(body.summary).toMatch(/Nothing to change/);
+  });
+
+  test('a synonym another variety already answers to is refused', async () => {
+    const doc = grapeDoc();
+    Grape.findOne.mockResolvedValueOnce(doc)
+      .mockResolvedValueOnce({ select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue({ name: 'Syrah' }) }) });
+    const body = parse(await tool('edit_grape').handler({ grape: 'Tinta Cão', add_synonyms: ['Shiraz'] }, SOMM_CTX));
+    expect(body.error.code).toBe('conflict');
+    expect(body.error.message).toMatch(/Syrah/);
+  });
+
+  test('a regional name needs a country — a label form is only true somewhere', async () => {
+    Grape.findOne.mockResolvedValueOnce(grapeDoc());
+    const body = parse(await tool('edit_grape').handler({ grape: 'Tinta Cão', regional_name: 'Durif' }, SOMM_CTX));
+    expect(body.error.code).toBe('invalid_input');
+    expect(body.error.message).toMatch(/needs a country/);
+  });
+
+  test('a region-scoped regional name resolves country AND region — the Carignan case', async () => {
+    const doc = grapeDoc({ name: 'Carignan' });
+    Grape.findOne.mockResolvedValueOnce(doc);
+    Country.findOne.mockReturnValue({ select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue({ _id: oid('c'), name: 'Spain' }) }) });
+    Region.findOne.mockReturnValue({ select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue({ _id: oid('r'), name: 'Rioja' }) }) });
+    const body = parse(await tool('edit_grape').handler(
+      { grape: 'Carignan', regional_name: 'Mazuelo', country: 'Spain', region: 'Rioja' }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(doc.regionalNames).toEqual([{ country: oid('c'), region: oid('r'), name: 'Mazuelo' }]);
+  });
+
+  test('an unknown variety is a not_found, pointing at add_grape', async () => {
+    Grape.findOne.mockResolvedValueOnce(null);
+    const body = parse(await tool('edit_grape').handler({ grape: 'Nonesuch', colour: 'Red' }, SOMM_CTX));
+    expect(body.error.code).toBe('not_found');
+    expect(body.error.message).toMatch(/add_grape/);
+  });
+
+  test('somm role required', async () => {
+    const body = parse(await tool('edit_grape').handler({ grape: 'Tinta Cão', colour: 'Red' }, USER_CTX));
+    expect(body.error).toBeDefined();
   });
 });
 

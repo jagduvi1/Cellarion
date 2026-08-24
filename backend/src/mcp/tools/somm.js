@@ -708,6 +708,137 @@ registerTool({
 });
 
 registerTool({
+  name: 'edit_grape',
+  title: 'Sommelier: correct an existing grape — colour, synonyms, regional names',
+  description:
+    'Edits a variety ALREADY in the taxonomy. add_grape only creates, which left no route to fix a row that ' +
+    'arrived incomplete — a curator could see the hole and not fill it. ' +
+    'COLOUR IS THE ONE THAT MATTERS MOST. A grape with no colour cannot take part in the colour-conflict check ' +
+    'at all: wines built on it are not failing that check, they are never evaluated, so the queue reports zero ' +
+    'and reads as clean. Filling seven null colours on 2026-08-23 immediately surfaced a wine typed red whose ' +
+    'only grape was white. If you see a variety with no colour, that is a silent hole in a live validation rule. ' +
+    'REGIONAL NAMES render the label a drinker in that country would actually see — Gouveio on a Douro wine ' +
+    'rather than Godello, Durif in Australia rather than Petite Sirah — while storage keeps ONE canonical ' +
+    'variety. Pass region as well as country where a variety has several (Carignan is Mazuelo in Rioja and ' +
+    'Carignano in Sardinia), and add the same string as a synonym so label text and imports resolve INBOUND too, ' +
+    'not only render outbound. Synonyms and regional names are additive; nothing is ever removed.',
+  scope: 'write',
+  requireRole: SOMM_ROLES,
+  annotations: { readOnlyHint: false, openWorldHint: false },
+  inputSchema: {
+    grape: z.string().min(1).max(60).describe('The variety to edit, by canonical name or an existing synonym'),
+    colour: z.enum(['Red', 'White']).optional()
+      .describe('Berry colour. Only settable while it is unset — changing an established colour is a merge-shaped decision, so it is refused.'),
+    add_synonyms: z.array(z.string().min(1).max(60)).max(8).optional()
+      .describe('Alternative spellings to resolve INBOUND. Additive.'),
+    regional_name: z.string().min(1).max(60).optional()
+      .describe('The label form used in one country, e.g. "Durif". Requires country.'),
+    country: z.string().min(1).max(60).optional().describe('Country the regional_name applies in, by name, e.g. "Australia"'),
+    region: z.string().min(1).max(60).optional()
+      .describe('Narrow the regional_name to one region, e.g. "Rioja" for Mazuelo. Omit for country-wide.'),
+    origin: z.string().max(80).optional(),
+    description: z.string().max(500).optional(),
+  },
+  handler: async (args, ctx) => {
+    const denied = requireSomm(ctx);
+    if (denied) return denied;
+    const Grape = require('../../models/Grape');
+    const Country = require('../../models/Country');
+    const Region = require('../../models/Region');
+
+    const key = normalizeString(args.grape);
+    const grape = await Grape.findOne({ $or: [{ normalizedName: key }, { normalizedSynonyms: key }] });
+    if (!grape) return fail('not_found', `No variety resolves from "${args.grape}" — add_grape creates a new one.`);
+
+    const before = { color: grape.color, synonyms: [...(grape.synonyms || [])], regionalNames: (grape.regionalNames || []).length };
+    const applied = [];
+
+    if (args.colour !== undefined) {
+      // An established colour is load-bearing: the conflict check and the
+      // registry's colour rule both read it, and flipping one would re-judge
+      // every wine built on the variety. Setting an UNSET one is the fix this
+      // tool exists for; overwriting is a different, larger decision.
+      if (grape.color && grape.color !== args.colour) {
+        return fail('conflict',
+          `"${grape.name}" is already ${grape.color}. Changing an established colour re-judges every wine built on it — ` +
+          'file a support ticket with the evidence rather than flipping it here.');
+      }
+      if (!grape.color) { grape.color = args.colour; applied.push(`colour ${args.colour}`); }
+    }
+
+    if (Array.isArray(args.add_synonyms) && args.add_synonyms.length) {
+      const claims = args.add_synonyms.map((s) => sanitizeTaxonomyName(s)).filter(Boolean);
+      for (const s of claims) {
+        const n = normalizeString(s);
+        // A synonym another variety already answers to would make the
+        // resolver ambiguous for every later write.
+        const taken = await Grape.findOne({
+          _id: { $ne: grape._id },
+          $or: [{ normalizedName: n }, { normalizedSynonyms: n }],
+        }).select('name').lean();
+        if (taken) return fail('conflict', `"${s}" already resolves to "${taken.name}" — one string cannot mean two varieties.`);
+        if (n === normalizeString(grape.name)) continue;
+        if (!(grape.synonyms || []).some((x) => normalizeString(x) === n)) {
+          grape.synonyms.push(s);
+          applied.push(`synonym ${s}`);
+        }
+      }
+    }
+
+    if (args.regional_name) {
+      if (!args.country) return fail('invalid_input', 'regional_name needs a country — a label form is only true somewhere.');
+      const country = await Country.findOne({ normalizedName: normalizeString(args.country) }).select('_id name').lean();
+      if (!country) return fail('not_found', `Unknown country "${args.country}".`);
+      let regionDoc = null;
+      if (args.region) {
+        regionDoc = await Region.findOne({ country: country._id, normalizedName: normalizeString(args.region) }).select('_id name').lean();
+        if (!regionDoc) return fail('not_found', `No region "${args.region}" in ${country.name}.`);
+      }
+      const rn = sanitizeTaxonomyName(args.regional_name);
+      const dup = (grape.regionalNames || []).some((x) =>
+        String(x.country) === String(country._id) &&
+        String(x.region || '') === String(regionDoc ? regionDoc._id : '') &&
+        normalizeString(x.name) === normalizeString(rn));
+      if (!dup) {
+        grape.regionalNames.push({ country: country._id, region: regionDoc ? regionDoc._id : null, name: rn });
+        applied.push(`regional name ${rn} (${country.name}${regionDoc ? ' / ' + regionDoc.name : ''})`);
+      }
+    }
+
+    if (args.origin && !grape.origin) { grape.origin = String(args.origin).trim(); applied.push('origin'); }
+    if (args.description && !grape.description) { grape.description = stripHtml(String(args.description)).trim(); applied.push('description'); }
+
+    if (applied.length === 0) return ok(`Nothing to change on "${grape.name}" — every value given is already set.`, { grape: grape.name });
+    await grape.save();
+
+    logAudit(ctx.req, 'somm.taxonomy.update', { type: 'grape', id: grape._id },
+      { name: grape.name, applied, from: before });
+
+    const envelope = {
+      summary: `Updated "${grape.name}": ${applied.join(', ')}`,
+      data: {
+        grape_id: String(grape._id),
+        name: grape.name,
+        colour: grape.color,
+        synonyms: grape.synonyms,
+        applied,
+        note: args.colour
+          ? 'Wines built on this variety are now visible to the colour-conflict check — worth running list_colour_conflicts.'
+          : 'Regional names render on owner-facing surfaces; the stored variety is unchanged.',
+      },
+    };
+    await logAction(ctx, {
+      tool: 'edit_grape',
+      action: 'somm_grape',
+      detail: { grapeId: String(grape._id), name: grape.name, applied },
+      prev: before,
+      result: envelope,
+    });
+    return ok(envelope.summary, envelope.data);
+  },
+});
+
+registerTool({
   name: 'list_price_tracking_requests',
   title: 'Sommelier: list the price-request queue',
   description:
