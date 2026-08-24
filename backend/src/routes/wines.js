@@ -4,6 +4,10 @@ const WineDefinition = require('../models/WineDefinition');
 const Discussion = require('../models/Discussion');
 const searchService = require('../services/search');
 const { requireAuth, requireNonDemo, optionalAuth } = require('../middleware/auth');
+const rateLimit = require('express-rate-limit');
+const rateLimitsConfig = require('../config/rateLimits');
+const { rateLimitKey } = require('../utils/clientIp');
+const { logAudit } = require('../services/audit');
 const { scanLabelFull, scanLabelBack, mergeBackScan, identifyWineFromQuery } = require('../services/labelScan');
 const { sanitizeImageBuffer, detectImageFormat } = require('../services/imageSanitizer');
 const { persistLabelScan } = require('../services/imageOps');
@@ -907,7 +911,40 @@ router.post('/ai-info', requireAuth, aiBurstLimiter, asyncHandler(async (req, re
 // Accepts both ObjectId and slug. Used for shared links and social previews.
 const PUBLIC_PROJECTION = 'name producer slug country region appellation grapes type image communityRating classification aiProfile';
 
-router.get('/:idOrSlug/public', async (req, res) => {
+// Anti-enumeration limit for the ONE wine endpoint that needs no account.
+//
+// Public wine pages are deliberate — they are how a wine is shared and
+// indexed, and the slugs are not going anywhere. But "readable" and
+// "downloadable in bulk" are different things, and until now they were the
+// same thing: this route sat under the general /api/ limiter at 2500 per 15
+// minutes, so a single address could walk the entire registry in about the
+// time it takes to make lunch.
+//
+// The cap is sized from measured traffic, not caution: across 24 hours this
+// endpoint served FIVE requests, from one address, all real browsers, and no
+// search crawler touched it at all. 120 per 15 minutes is therefore about
+// twenty times the entire site's daily use of it, per address — invisible to
+// anyone reading wine pages, including a logged-in user (the frontend calls
+// this route for everyone, so the cap must clear real browsing and does).
+//
+// A 429 here is worth SEEING rather than silently absorbing: ordinary use
+// cannot reach it, so a breach is either a scraper or a real usage pattern
+// nobody predicted. Both are things to know about, hence the audit row.
+const publicWineLimiter = rateLimit({
+  windowMs: () => rateLimitsConfig.get().publicWineRead.windowMs,
+  max: () => rateLimitsConfig.get().publicWineRead.max,
+  keyGenerator: (req) => rateLimitKey(req),
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    logAudit(req, 'system.rate_limit_exceeded', {}, {
+      limiter: 'publicWineRead',
+      limit: rateLimitsConfig.get().publicWineRead.max,
+    });
+    res.status(429).json({ error: 'Too many requests, please try again later' });
+  },
+});
+router.get('/:idOrSlug/public', publicWineLimiter, async (req, res) => {
   try {
     const { idOrSlug } = req.params;
     // Unauthenticated share/preview surface — quarantined non-wines are hidden
