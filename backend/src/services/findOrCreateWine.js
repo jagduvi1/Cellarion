@@ -758,12 +758,25 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // existing row — never merges, never deletes. Getting this wrong costs a
   // bottle on a near-identical wine; getting the absence of it wrong is the
   // duplicate registry this ticket is about.
-  if (!producerMissing && !skipSiblingMatch) {
+  //
+  // DELIBERATELY NOT GATED ON skipSiblingMatch, same as the canonical-key
+  // stage above, and for a sharper reason. skipSiblingMatch is set from
+  // confirmCreate, which means "the user reviewed the suggested matches and
+  // rejected them" — but the suggestions come from the soft zone, floor 0.85.
+  // This detector exists precisely because label variants score BELOW that:
+  // measured on the pairs a curator merged by hand, 0.58 to 0.85. So the row
+  // it finds was never offered, and a user cannot have rejected what they were
+  // never shown.
+  //
+  // Proven the hard way: HALL "The North End Cabernet Sauvignon" was minted
+  // five hours after this guard shipped, through the UI (the majority path —
+  // 46 wines to MCP's 18 in that window), duplicating "The North End" at a
+  // score of 0.748. The user clicked "create new" against a candidate list
+  // that could not contain the wine they were duplicating.
+  if (!producerMissing) {
     try {
-      const siblings = (await WineDefinition.find({
-        producer: producerToStore,
-        _id: { $ne: null },
-      }).limit(60).populate(POPULATE)).filter((c) => !pendingBlocked(c));
+      const siblings = (await WineDefinition.find({ producer: producerToStore })
+        .limit(60).populate(POPULATE)).filter((c) => !pendingBlocked(c));
       if (siblings.length > 0) {
         const grapeDocs = await Grape.find({}).select('name normalizedName normalizedSynonyms').lean();
         const gTokens = grapeTokenSet(buildSurfaceForms(grapeDocs));
