@@ -1329,11 +1329,21 @@ describe('findOrCreateWine — label variants are caught even on confirmCreate',
   });
 
   test('the stage failing never blocks the create', async () => {
-    Grape.find.mockImplementation(() => { throw new Error('taxonomy unavailable'); });
+    // Break the stage SPECIFICALLY — its own producer-scoped query — rather
+    // than a shared dependency. Grape.find is also used by crossFieldScan on
+    // an earlier, uncaught path, so throwing there tests the wrong thing.
+    primeGrapes(['Cabernet Sauvignon']);
+    const realFind = WineDefinition.find.getMockImplementation();
     primeFind({ producerRows: [HALL_EXISTING] });
+    const dispatch = WineDefinition.find.getMockImplementation();
+    WineDefinition.find.mockImplementation((q) => {
+      if (q && q.producer && !q.canonicalKey && !q.normalizedKey) throw new Error('index rebuild in progress');
+      return dispatch(q);
+    });
     scoreAllMatches.mockReturnValue([]);
 
     const result = await findOrCreateWine(TYPED, USER_ID, { confirmCreate: true });
     expect(result.created).toBe(true);
+    void realFind;
   });
 });
