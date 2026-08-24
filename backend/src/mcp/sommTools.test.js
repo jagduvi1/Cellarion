@@ -1085,8 +1085,11 @@ describe('edit_grape (2026-08-24)', () => {
 
   test('a synonym another variety already answers to is refused', async () => {
     const doc = grapeDoc();
-    Grape.findOne.mockResolvedValueOnce(doc)
-      .mockResolvedValueOnce({ select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue({ name: 'Syrah' }) }) });
+    Grape.findOne
+      .mockResolvedValueOnce(doc)
+      // The claim probe CHAINS .select().lean(), so this call returns a
+      // chainable, not a promise — mockReturnValueOnce, not mockResolvedValueOnce.
+      .mockReturnValueOnce({ select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue({ name: 'Syrah' }) }) });
     const body = parse(await tool('edit_grape').handler({ grape: 'Tinta Cão', add_synonyms: ['Shiraz'] }, SOMM_CTX));
     expect(body.error.code).toBe('conflict');
     expect(body.error.message).toMatch(/Syrah/);
