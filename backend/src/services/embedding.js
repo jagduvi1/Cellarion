@@ -236,7 +236,7 @@ function buildEmbeddingText(wine, vintage) {
   const grapeNames = (wine.grapes || [])
     .filter(g => g && g.name)
     .map(g => {
-      const display = resolveGrapeDisplayName(g, { countryId: wine.country, regionId: wine.region });
+      const display = resolveGrapeDisplayName(g, { countryId: wine.country, regionId: wine.region, wineName: wine.name });
       return display && display !== g.name ? `${g.name} (${display})` : g.name;
     })
     .join(', ');

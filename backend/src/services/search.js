@@ -182,7 +182,7 @@ function wineGrapeSearchNames(wine) {
   for (const g of wine.grapes || []) {
     if (!g || !g.name) continue;
     names.push(g.name);
-    const display = resolveGrapeDisplayName(g, { countryId: wine.country, regionId: wine.region });
+    const display = resolveGrapeDisplayName(g, { countryId: wine.country, regionId: wine.region, wineName: wine.name });
     if (display && display !== g.name) names.push(display);
   }
   return names.join(', ');
