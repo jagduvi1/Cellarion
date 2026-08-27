@@ -145,10 +145,47 @@ async function resolveCanonicalAppellation(rawAppellation) {
   }
 }
 
+/**
+ * Does this appellation string resolve to a curated entry that PLACES the
+ * wine — i.e. one carrying a region link? (Somm ticket 6a8eb2a9: the
+ * producer-suspect narrowing — "a négociant bottling in Graves still has a
+ * knowable house behind it".)
+ *
+ * The test is deliberately about the CURATED ENTRY's geography, not about
+ * the field being populated: "Vin de France" is curated but nationwide
+ * (region null) → false; "Qualitätswein" is a quality tier, not curated →
+ * false — both were named by the somm as rows a naive non-empty check would
+ * wrongly clear. Multi-doc keys (same name across countries) must agree:
+ * EVERY matched doc needs a region, mirroring lookupCanonical's
+ * all-must-agree stance — suppressing a suspicion is a publish decision, so
+ * ambiguity counts as no.
+ *
+ * Never throws; a lookup failure returns false — a flag must not be
+ * suppressed over taxonomy trouble.
+ */
+async function appellationHasGeography(rawAppellation) {
+  if (!rawAppellation) return false;
+  const normalized = normalizeAppellationKey(rawAppellation);
+  if (!normalized) return false;
+  try {
+    for (const key of candidateKeys(normalized)) {
+      const docs = await Appellation.find({
+        $or: [{ normalizedName: key }, { normalizedSynonyms: key }],
+      }).select('region').sort({ _id: 1 }).limit(4).lean();
+      if (docs.length === 0) continue; // unknown key — try the next variant
+      return docs.every(d => d.region != null);
+    }
+    return false;
+  } catch (err) {
+    console.warn('[appellationResolve] geography lookup failed (non-fatal, keeping flag):', err.message);
+    return false;
+  }
+}
+
 // candidateKeys is exported for services/taxonomyReview: the unmatched queue
 // must consider a string COVERED when any of its stripped variants matches a
 // curated doc (release-audit F2) — otherwise "Yecla DO" sits in the queue,
 // an admin promotes it, and the minted doc's exact-match hit permanently
 // disables the very stripping that would have folded it. One key function,
 // two consumers, no drift.
-module.exports = { resolveCanonicalAppellation, candidateKeys };
+module.exports = { resolveCanonicalAppellation, candidateKeys, appellationHasGeography };

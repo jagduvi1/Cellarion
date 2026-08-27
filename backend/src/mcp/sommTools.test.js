@@ -733,6 +733,25 @@ describe('held-profile review queue over MCP (somm ticket 2026-08-18)', () => {
     expect(body.data.by_owner_tier).toMatchObject({ 0: 2, 2: 1 });
   });
 
+  test('counts_only counts published_suspect WITHOUT the include flag (ticket 6a8ffaa1)', async () => {
+    // The listing default exists to keep suspects out of held-row paging; a
+    // count has no paging to protect. The regression reported suspect as a
+    // hard 0 — "adjudicated clear" — while three quarters of the backlog sat
+    // in the uncounted state. Assert on the QUERY, not just the totals: the
+    // suspect $or branch must be present with no include flag passed.
+    WineDefinition.find.mockImplementation(() => heldListChain([
+      { _id: oid('1'), producer: 'Thomas Allen', aiProfile: { heldAt: new Date(), heldReason: 'low_confidence' } },
+      { _id: oid('3'), producer: 'Zeroine', aiProfile: { heldAt: null, producerSuspect: true, description: 'x' } },
+    ]));
+    Bottle.aggregate.mockResolvedValue([]);
+
+    const body = parse(await tool('list_held_profiles').handler({ counts_only: true, limit: 30, offset: 0 }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    const or = WineDefinition.find.mock.calls[0][0].$or;
+    expect(or.some((b) => b['aiProfile.producerSuspect'] === true)).toBe(true);
+    expect(body.data).toMatchObject({ total: 2, held: 1, published_suspect: 1 });
+  });
+
   test('batch confirm decides per-row; batch release and misplaced context are refused (gap report 3 / enh 1)', async () => {
     WineDefinition.findById.mockImplementation(() => selectChain(heldWine()));
     let body = parse(await tool('review_held_profile').handler({ wine_ids: [oid('7'), oid('8')], decision: 'confirm', limit: undefined }, SOMM_CTX));
