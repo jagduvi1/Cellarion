@@ -108,7 +108,9 @@
   left: 0;
   z-index: 30;
   width: max-content;
-  max-width: 15rem;
+  /* Never wider than the phone minus margins — the JS clamp slides the box
+     into view, this keeps it from being unslideable in the first place. */
+  max-width: min(15rem, calc(100vw - 16px));
   white-space: normal;
   text-align: left;
   font-size: 0.72rem;
