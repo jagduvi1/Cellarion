@@ -74,7 +74,7 @@ export default function DiscussionCard({ discussion }) {
             )}
             {!authorIsDeleted && author.roles?.includes('moderator') && <span className="badge badge--mod">{t('discussions.mod')}</span>}
             {!authorIsDeleted && author.roles?.includes('admin') && <span className="badge badge--admin">{t('discussions.admin')}</span>}
-            {!authorIsDeleted && <CellarCredBadge tier={author.contribution?.tier} specialty={author.contribution?.specialty} />}
+            {!authorIsDeleted && <CellarCredBadge tier={author.contribution?.tier} specialty={author.contribution?.specialty} plan={author.plan} />}
           </span>
         </div>
       </div>

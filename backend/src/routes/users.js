@@ -172,7 +172,7 @@ router.get('/public/:userId', requireAuth, async (req, res) => {
   try {
     if (!isValidId(req.params.userId)) return res.status(400).json({ error: 'Invalid ID' });
     const user = await User.findById(req.params.userId)
-      .select('username displayName bio followersCount followingCount reviewCount profileVisibility createdAt preferences.ratingScale contribution');
+      .select('username displayName bio followersCount followingCount reviewCount profileVisibility createdAt preferences.ratingScale contribution plan');
 
     if (!user) return res.status(404).json({ error: 'User not found' });
 
@@ -201,6 +201,9 @@ router.get('/public/:userId', requireAuth, async (req, res) => {
         profileVisibility: user.profileVisibility,
         ratingScale: user.preferences?.ratingScale || '5',
         createdAt: user.createdAt,
+        // Supporter-tier badge (2026-08-27): the paid plan is worn publicly as
+        // a thank-you chip. Tier name only — never amounts or billing state.
+        plan: user.plan || 'free',
         contribution: {
           totalScore: user.contribution?.totalScore || 0,
           tier: user.contribution?.tier || 'newcomer',

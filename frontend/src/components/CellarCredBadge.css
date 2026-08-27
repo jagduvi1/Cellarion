@@ -1,12 +1,27 @@
-/* ── Cellar Cred Badge ─────────────────────────────────────────────────────── */
+/* ── Cellar Cred + Supporter Badges ────────────────────────────────────────── */
+.cred-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  vertical-align: middle;
+}
+
+/* Each chip is a real button (the tap-to-reveal needs one), restyled to look
+   exactly like the old inline chip. */
 .cred-badge {
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
   border-radius: var(--radius-full);
   font-weight: 500;
+  font-family: inherit;
   white-space: nowrap;
   vertical-align: middle;
+  cursor: pointer;
+}
+.cred-badge:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 1px;
 }
 
 /* Size variants */
@@ -18,6 +33,27 @@
 .cred-badge--md {
   font-size: 0.75rem;
   padding: 2px 8px;
+}
+
+/* Icon-only at rest: the label collapses to nothing and reveals on hover,
+   keyboard focus, or tap (.is-open). max-width carries the transition —
+   12rem comfortably fits the longest "Connoisseur · Photographer". */
+.cred-badge__label {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-width 180ms ease, opacity 140ms ease, margin-left 180ms ease;
+  margin-left: 0;
+}
+.cred-badge:hover .cred-badge__label,
+.cred-badge:focus-visible .cred-badge__label,
+.cred-badge.is-open .cred-badge__label {
+  max-width: 12rem;
+  opacity: 1;
+  margin-left: 0.15rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cred-badge__label { transition: none; }
 }
 
 /* Tier colours — mapped to the theme-aware semantic token families so the chips
@@ -46,14 +82,18 @@
   border: 1px solid var(--color-danger-border);
 }
 
-/* Icon sizing */
-.cred-badge__icon,
-.cred-badge__spec-icon {
-  font-size: 0.7em;
-  line-height: 1;
+/* Supporter plan chips share the accent family — visually one "thank you"
+   colour across all three tiers; the icon (❤️ 🥂 🍾) tells them apart. */
+.cred-badge--plan-supporter,
+.cred-badge--plan-patron,
+.cred-badge--plan-benefactor {
+  background: var(--color-accent-light);
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
 }
 
-.cred-badge__sep {
-  opacity: 0.5;
-  margin: 0 0.05rem;
+/* Icon sizing */
+.cred-badge__icon {
+  font-size: 0.7em;
+  line-height: 1;
 }

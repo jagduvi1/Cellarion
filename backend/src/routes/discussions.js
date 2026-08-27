@@ -118,7 +118,7 @@ router.get('/', optionalAuth, async (req, res) => {
         }
 
         const docs = await Discussion.find({ _id: { $in: ids } })
-          .populate('author', 'username displayName roles contribution.tier contribution.specialty')
+          .populate('author', 'username displayName roles plan contribution.tier contribution.specialty')
           .populate({ path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } });
 
         // Preserve Meilisearch relevance ordering
@@ -165,7 +165,7 @@ router.get('/', optionalAuth, async (req, res) => {
         .sort(sortObj)
         .skip(skip)
         .limit(limit)
-        .populate('author', 'username displayName roles contribution.tier contribution.specialty')
+        .populate('author', 'username displayName roles plan contribution.tier contribution.specialty')
         .populate({ path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } }),
       Discussion.countDocuments(filter)
     ]);
@@ -383,7 +383,7 @@ router.get('/:idOrSlug', optionalAuth, async (req, res) => {
       : { slug: String(idOrSlug).toLowerCase() };
 
     const discussion = await Discussion.findOne(filter)
-      .populate('author', 'username displayName roles contribution.tier contribution.specialty')
+      .populate('author', 'username displayName roles plan contribution.tier contribution.specialty')
       .populate({ path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } });
 
     if (!discussion) return res.status(404).json({ error: 'Discussion not found' });
@@ -514,7 +514,7 @@ router.post('/', requireAuth, requireNonDemo, async (req, res) => {
     // Index in Meilisearch for in-forum search (fire-and-forget)
     searchService.indexDiscussion(discussion._id);
 
-    await discussion.populate('author', 'username displayName roles contribution.tier contribution.specialty');
+    await discussion.populate('author', 'username displayName roles plan contribution.tier contribution.specialty');
 
     // Notify @mentioned users — dispatched after the response would normally be
     // optimal, but since createNotification is fire-and-forget internally, calling
@@ -646,7 +646,7 @@ router.get('/:idOrSlug/replies', optionalAuth, async (req, res) => {
         .sort({ createdAt: 1 })
         .skip(skip)
         .limit(limit)
-        .populate('author', 'username displayName roles contribution.tier contribution.specialty')
+        .populate('author', 'username displayName roles plan contribution.tier contribution.specialty')
         .populate({ path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } }),
       DiscussionReply.countDocuments({ discussion: discussionId })
     ]);
@@ -930,7 +930,7 @@ router.post('/:idOrSlug/replies', requireAuth, requireNonDemo, async (req, res) 
 
     logAudit(req, 'discussion_reply.create', { type: 'discussion_reply', id: reply._id }, { discussion: discussion._id });
 
-    await reply.populate('author', 'username displayName roles contribution.tier contribution.specialty');
+    await reply.populate('author', 'username displayName roles plan contribution.tier contribution.specialty');
     await reply.populate({ path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } });
 
     res.status(201).json({ reply });
@@ -970,7 +970,7 @@ router.put('/:discussionId/replies/:replyId', requireAuth, async (req, res) => {
     // reply content. Fire-and-forget; never blocks the response.
     searchService.indexDiscussion(reply.discussion);
 
-    await reply.populate('author', 'username displayName roles contribution.tier contribution.specialty');
+    await reply.populate('author', 'username displayName roles plan contribution.tier contribution.specialty');
     res.json({ reply });
   } catch (err) {
     console.error('Update reply error:', err);

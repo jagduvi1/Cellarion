@@ -180,7 +180,7 @@ export default function ReplyCard({ reply, discussionId, onReply, onEdit, onDele
         )}
         {!authorDeleted && author.roles?.includes('moderator') && <span className="badge badge--mod">{t('discussions.mod')}</span>}
         {!authorDeleted && author.roles?.includes('admin') && <span className="badge badge--admin">{t('discussions.admin')}</span>}
-        {!authorDeleted && <CellarCredBadge tier={author.contribution?.tier} specialty={author.contribution?.specialty} />}
+        {!authorDeleted && <CellarCredBadge tier={author.contribution?.tier} specialty={author.contribution?.specialty} plan={author.plan} />}
         <span className="reply-card__time">{timeAgo(reply.createdAt)}</span>
         {reply.updatedAt !== reply.createdAt && (
           <span className="reply-card__edited">{t('discussions.editedSuffix')}</span>
