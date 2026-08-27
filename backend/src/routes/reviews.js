@@ -95,7 +95,7 @@ router.post('/', requireNonDemo, async (req, res) => {
 
     // Populate for response
     await review.populate([
-      { path: 'author', select: 'username displayName contribution.tier contribution.specialty' },
+      { path: 'author', select: 'username displayName plan contribution.tier contribution.specialty' },
       { path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } }
     ]);
 
@@ -147,7 +147,7 @@ router.get('/wine/:wineId', async (req, res) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate('author', 'username displayName contribution.tier contribution.specialty'),
+        .populate('author', 'username displayName plan contribution.tier contribution.specialty'),
       Review.countDocuments(filter)
     ]);
 
@@ -240,7 +240,7 @@ router.get('/feed', async (req, res) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate('author', 'username displayName contribution.tier contribution.specialty')
+        .populate('author', 'username displayName plan contribution.tier contribution.specialty')
         .populate({ path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } }),
       Review.countDocuments(feedFilter)
     ]);
@@ -292,7 +292,7 @@ router.get('/discover', async (req, res) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate('author', 'username displayName contribution.tier contribution.specialty')
+        .populate('author', 'username displayName plan contribution.tier contribution.specialty')
         .populate({ path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } }),
       Review.countDocuments(discoverFilter)
     ]);
@@ -365,7 +365,7 @@ router.put('/:id', async (req, res) => {
     logAudit(req, 'review.update', { type: 'review', id: review._id });
 
     await review.populate([
-      { path: 'author', select: 'username displayName contribution.tier contribution.specialty' },
+      { path: 'author', select: 'username displayName plan contribution.tier contribution.specialty' },
       { path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } }
     ]);
 

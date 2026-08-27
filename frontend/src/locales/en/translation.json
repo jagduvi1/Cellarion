@@ -3202,7 +3202,10 @@
     "critic": "Critic",
     "community": "Community",
     "allrounder": "All-Rounder",
-    "score": "Cellar Cred"
+    "score": "Cellar Cred",
+    "plan_supporter": "Supporter",
+    "plan_patron": "Patron",
+    "plan_benefactor": "Benefactor"
   },
   "adminAiBudget": {
     "title": "AI Budget Requests",

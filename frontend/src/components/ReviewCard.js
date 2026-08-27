@@ -74,7 +74,7 @@ export default function ReviewCard({ review, showWine = true, onUpdate, onDelete
           <Link to={`/users/${author._id}`} className="review-card__author-link">
             {authorName}
           </Link>
-          <CellarCredBadge tier={author.contribution?.tier} specialty={author.contribution?.specialty} />
+          <CellarCredBadge tier={author.contribution?.tier} specialty={author.contribution?.specialty} plan={author.plan} />
           {review.vintage && (
             <span className="review-card__vintage">{review.vintage}</span>
           )}

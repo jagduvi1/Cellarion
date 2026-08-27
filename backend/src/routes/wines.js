@@ -1068,7 +1068,7 @@ router.get('/:idOrSlug/discussions', optionalAuth, async (req, res) => {
         .sort({ isPinned: -1, lastActivityAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate('author', 'username displayName roles contribution.tier contribution.specialty')
+        .populate('author', 'username displayName roles plan contribution.tier contribution.specialty')
         .select('title slug body category replyCount lastActivityAt createdAt isPinned isLocked author wineDefinition'),
       Discussion.countDocuments({ wineDefinition: wine._id })
     ]);

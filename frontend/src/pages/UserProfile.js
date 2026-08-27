@@ -145,7 +145,7 @@ function UserProfile() {
           <div className="user-profile__details">
             <h1 className="user-profile__name">
               {displayName}
-              {' '}<CellarCredBadge tier={profile.contribution?.tier} specialty={profile.contribution?.specialty} size="md" />
+              {' '}<CellarCredBadge tier={profile.contribution?.tier} specialty={profile.contribution?.specialty} plan={profile.plan} size="md" />
             </h1>
             {profile.displayName && profile.displayName !== profile.username && (
               <p className="user-profile__username">@{profile.username}</p>
