@@ -273,6 +273,7 @@ router.get('/', async (req, res) => {
             const display = resolveGrapeDisplayName(g, {
               countryId: b.wineDefinition.country,
               regionId: b.wineDefinition.region,
+              wineName: b.wineDefinition.name,
             });
             if (display && display !== g?.name) names.push(display);
             return names;

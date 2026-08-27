@@ -9,7 +9,31 @@
  * resolves the right one for a wine's own country/region at serialize time.
  * Display-only: nothing here writes, and matching typed input to a grape
  * stays the job of Grape.synonyms/normalizedSynonyms.
+ *
+ * THE WINE'S OWN NAME OUTRANKS ANY MAPPING (somm ticket 6a8c8a68, decided by
+ * Johan 2026-08-27). Australians write "Syrah" on a Shiraz-country label as a
+ * deliberate style signal — cool-climate, Rhône-leaning — so an Australia-wide
+ * "Shiraz" entry must NOT relabel a wine literally named "… Syrah". When the
+ * wine's name carries the canonical variety as whole words, the canonical is
+ * shown; the mapping applies only when the name says the regional form or
+ * names no variety at all (the somm's conservative option (b), generalized).
  */
+const { normalizeString } = require('./normalize');
+
+/**
+ * Does the wine's name carry `phrase` as whole words? Hyphens fold to spaces
+ * BEFORE normalizeString (which deletes punctuation outright — the same
+ * pre-fold normalizeAppellation uses), then padded-token containment on the
+ * case/diacritics-folded strings. So "Jaraman Syrah" and "Syrah-Grenache"
+ * both carry "Syrah", while "Petite Sirah" and "Syrahs" do not.
+ */
+function nameCarries(wineName, phrase) {
+  if (!wineName || !phrase) return false;
+  const fold = (s) => normalizeString(String(s).replace(/-/g, ' '));
+  const needle = fold(phrase);
+  if (!needle) return false;
+  return ` ${fold(wineName)} `.includes(` ${needle} `);
+}
 
 /**
  * String id of an ObjectId, hex string, or populated doc ({ _id }); null when
@@ -46,9 +70,12 @@ function idOf(value) {
  * @param {object} [ctx]
  * @param {*}      [ctx.countryId]      – wine's country (id, hex string, or populated doc)
  * @param {*}      [ctx.regionId]       – wine's region (id, hex string, or populated doc)
+ * @param {string} [ctx.wineName]       – wine's own name; when it carries the
+ *                                        canonical variety as whole words, the
+ *                                        canonical is kept over any mapping
  * @returns {string|null} the display name, or null when grape is missing
  */
-function resolveGrapeDisplayName(grape, { countryId, regionId } = {}) {
+function resolveGrapeDisplayName(grape, { countryId, regionId, wineName } = {}) {
   if (!grape) return null;
   const canonical = grape.name || null;
   const entries = Array.isArray(grape.regionalNames) ? grape.regionalNames : [];
@@ -59,19 +86,29 @@ function resolveGrapeDisplayName(grape, { countryId, regionId } = {}) {
   // Every entry carries a country, so a wine without one can never match.
   if (!wineCountry) return canonical;
 
+  let regionLevelMatch = null;
   let countryLevelMatch = null;
   for (const entry of entries) {
     if (!entry || typeof entry.name !== 'string' || !entry.name.trim()) continue;
     if (idOf(entry.country) !== wineCountry) continue;
     const entryRegion = idOf(entry.region);
     if (entryRegion) {
-      // Region-level entry: most specific — first hit wins outright.
-      if (wineRegion && entryRegion === wineRegion) return entry.name;
+      // Region-level entry: most specific — first hit wins.
+      if (wineRegion && entryRegion === wineRegion && !regionLevelMatch) {
+        regionLevelMatch = entry.name;
+      }
     } else if (!countryLevelMatch) {
       countryLevelMatch = entry.name;
     }
   }
-  return countryLevelMatch || canonical;
+  const resolved = regionLevelMatch || countryLevelMatch || canonical;
+  // The producer's own label beats the mapping — at BOTH levels: even a
+  // region-level entry must not relabel a wine literally named for the
+  // canonical variety (the Australian "Syrah" style signal, see header).
+  if (resolved !== canonical && canonical && nameCarries(wineName, canonical)) {
+    return canonical;
+  }
+  return resolved;
 }
 
 /**
@@ -93,7 +130,7 @@ function decorateGrapes(wine) {
   if (!wine) return wine;
   const out = typeof wine.toObject === 'function' ? wine.toObject() : { ...wine };
   if (!Array.isArray(out.grapes) || out.grapes.length === 0) return out;
-  const ctx = { countryId: out.country, regionId: out.region };
+  const ctx = { countryId: out.country, regionId: out.region, wineName: out.name };
   out.grapes = out.grapes.map((g) => {
     if (!g || typeof g !== 'object' || !g.name) return g; // unpopulated ref — leave untouched
     const plain = typeof g.toObject === 'function' ? g.toObject() : { ...g };

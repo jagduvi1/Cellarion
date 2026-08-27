@@ -167,3 +167,81 @@ describe('decorateGrapes', () => {
     expect(out.grapes[0].displayName).toBe('Tinta Roriz');
   });
 });
+
+/**
+ * The wine's own name outranks any mapping (somm ticket 6a8c8a68, decided
+ * 2026-08-27): Australians write "Syrah" on a label as a deliberate
+ * cool-climate style signal, so an Australia-wide "Shiraz" entry must never
+ * relabel a wine literally named for the canonical variety. The mapping
+ * applies when the name says the regional form or names no variety at all —
+ * the somm's conservative option (b), generalized to every variety.
+ */
+describe('resolveGrapeDisplayName – the wine name outranks the mapping', () => {
+  const AUSTRALIA = oid('1');
+  const BAROSSA = oid('2');
+  const syrah = (overrides = {}) => ({
+    _id: oid('3'),
+    name: 'Syrah',
+    regionalNames: [{ country: AUSTRALIA, region: null, name: 'Shiraz' }],
+    ...overrides,
+  });
+
+  test('applies when the wine name says the regional form', () => {
+    expect(resolveGrapeDisplayName(syrah(), {
+      countryId: AUSTRALIA, wineName: 'Jaraman Shiraz',
+    })).toBe('Shiraz');
+  });
+
+  test('applies when the wine name names no variety at all', () => {
+    expect(resolveGrapeDisplayName(syrah(), {
+      countryId: AUSTRALIA, wineName: 'Grange',
+    })).toBe('Shiraz');
+  });
+
+  test('suppressed when the wine name carries the canonical variety', () => {
+    expect(resolveGrapeDisplayName(syrah(), {
+      countryId: AUSTRALIA, wineName: 'The Factor Syrah',
+    })).toBe('Syrah');
+  });
+
+  test('whole words only: "Syrahs" and unrelated tokens do not suppress', () => {
+    expect(resolveGrapeDisplayName(syrah(), {
+      countryId: AUSTRALIA, wineName: 'Old Syrahs Block',
+    })).toBe('Shiraz');
+  });
+
+  test('hyphenated blend names still carry the variety ("Syrah-Grenache")', () => {
+    expect(resolveGrapeDisplayName(syrah(), {
+      countryId: AUSTRALIA, wineName: 'Estate Syrah-Grenache',
+    })).toBe('Syrah');
+  });
+
+  test('case- and diacritics-folded comparison', () => {
+    expect(resolveGrapeDisplayName(syrah(), {
+      countryId: AUSTRALIA, wineName: 'CUVÉE SYRAH RÉSERVE',
+    })).toBe('Syrah');
+  });
+
+  test('suppression also beats a REGION-level entry (the label always wins)', () => {
+    const grape = syrah({
+      regionalNames: [{ country: AUSTRALIA, region: BAROSSA, name: 'Shiraz' }],
+    });
+    expect(resolveGrapeDisplayName(grape, {
+      countryId: AUSTRALIA, regionId: BAROSSA, wineName: 'Single Vineyard Syrah',
+    })).toBe('Syrah');
+    // …and without the canonical in the name, the region entry still applies.
+    expect(resolveGrapeDisplayName(grape, {
+      countryId: AUSTRALIA, regionId: BAROSSA, wineName: 'Single Vineyard',
+    })).toBe('Shiraz');
+  });
+
+  test('no wineName in ctx keeps today\'s behaviour (mapping applies)', () => {
+    expect(resolveGrapeDisplayName(syrah(), { countryId: AUSTRALIA })).toBe('Shiraz');
+  });
+
+  test('decorateGrapes threads the wine\'s own name into the resolution', () => {
+    const base = { country: AUSTRALIA, grapes: [syrah()] };
+    expect(decorateGrapes({ ...base, name: 'The Factor Syrah' }).grapes[0].displayName).toBe('Syrah');
+    expect(decorateGrapes({ ...base, name: 'Jaraman Shiraz' }).grapes[0].displayName).toBe('Shiraz');
+  });
+});
