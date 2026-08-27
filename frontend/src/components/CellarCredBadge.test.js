@@ -15,7 +15,8 @@ describe('CellarCredBadge', () => {
   test('cred chip carries tier and specialty in one accessible label', () => {
     render(<CellarCredBadge tier="contributor" specialty="photographer" />);
     const chip = screen.getByRole('button', {
-      name: 'cellarCred.contributor · cellarCred.photographer',
+      name: 'cellarCred.contributor · cellarCred.photographer. ' +
+        'cellarCred.explain_contributor cellarCred.explain_photographer',
     });
     expect(chip).toBeInTheDocument();
     // Both icons render; the visible text is decorative (aria-hidden) because
@@ -30,7 +31,9 @@ describe('CellarCredBadge', () => {
     ['benefactor', '🍾'],
   ])('paid plan %s renders its own chip with the %s icon', (plan, icon) => {
     render(<CellarCredBadge plan={plan} />);
-    const chip = screen.getByRole('button', { name: `cellarCred.plan_${plan}` });
+    const chip = screen.getByRole('button', {
+      name: `cellarCred.plan_${plan}. cellarCred.explain_plan_${plan}`,
+    });
     expect(chip).toHaveTextContent(icon);
   });
 
@@ -58,8 +61,38 @@ describe('CellarCredBadge', () => {
     expect(chip).toHaveAttribute('aria-expanded', 'false');
   });
 
+  test('tap opens a popover explaining what the badge means', () => {
+    const { container } = render(<CellarCredBadge plan="patron" />);
+    expect(container.querySelector('.cred-badge__pop')).toBeNull(); // closed at rest
+    fireEvent.click(screen.getByRole('button'));
+    const pop = container.querySelector('.cred-badge__pop');
+    expect(pop).toHaveTextContent('cellarCred.explain_plan_patron');
+    expect(pop.querySelector('.cred-badge__pop-title')).toHaveTextContent('cellarCred.plan_patron');
+  });
+
+  test('the cred popover explains the tier AND the specialty — photographer included', () => {
+    const { container } = render(
+      <CellarCredBadge tier="contributor" specialty="photographer" />
+    );
+    fireEvent.click(screen.getByRole('button'));
+    const pop = container.querySelector('.cred-badge__pop');
+    expect(pop).toHaveTextContent('cellarCred.explain_contributor');
+    expect(pop).toHaveTextContent('cellarCred.explain_photographer');
+  });
+
+  test('the explanation always rides the accessible name, popover open or not', () => {
+    render(<CellarCredBadge plan="benefactor" />);
+    expect(
+      screen.getByRole('button', {
+        name: 'cellarCred.plan_benefactor. cellarCred.explain_plan_benefactor',
+      })
+    ).toBeInTheDocument();
+  });
+
   test('showSpecialty=false keeps the tier label alone', () => {
     render(<CellarCredBadge tier="connoisseur" specialty="critic" showSpecialty={false} />);
-    expect(screen.getByRole('button', { name: 'cellarCred.connoisseur' })).toBeInTheDocument();
+    expect(screen.getByRole('button', {
+      name: 'cellarCred.connoisseur. cellarCred.explain_connoisseur',
+    })).toBeInTheDocument();
   });
 });

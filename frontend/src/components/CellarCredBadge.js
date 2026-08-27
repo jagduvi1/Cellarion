@@ -27,18 +27,20 @@ const PLAN_CONFIG = {
 };
 
 /**
- * One compact chip: icon-only at rest, the text label revealed on hover,
- * keyboard focus, or tap (mobile has no hover — the tap toggle is the whole
- * reason this is a button). The full text always rides aria-label, so the
- * collapsed state loses nothing for screen readers.
+ * One compact chip: icon-only at rest, the text label revealed on hover or
+ * keyboard focus, and a small popover with the label PLUS a one-line
+ * explanation on tap (mobile has no hover — the tap toggle is the whole
+ * reason this is a button). Label and explanation both ride aria-label, so
+ * the collapsed state loses nothing for screen readers; the popover itself
+ * is a decorative duplicate.
  */
-function Chip({ cls, size, icons, label }) {
+function Chip({ cls, size, icons, label, explain }) {
   const [open, setOpen] = useState(false);
   return (
     <button
       type="button"
       className={`cred-badge ${cls} cred-badge--${size}${open ? ' is-open' : ''}`}
-      aria-label={label}
+      aria-label={explain ? `${label}. ${explain}` : label}
       aria-expanded={open}
       onClick={() => setOpen((o) => !o)}
       onBlur={() => setOpen(false)}
@@ -47,6 +49,12 @@ function Chip({ cls, size, icons, label }) {
         <span key={i} className="cred-badge__icon" aria-hidden="true">{icon}</span>
       ))}
       <span className="cred-badge__label" aria-hidden="true">{label}</span>
+      {explain && open && (
+        <span className="cred-badge__pop" aria-hidden="true">
+          <span className="cred-badge__pop-title">{label}</span>
+          {explain}
+        </span>
+      )}
     </button>
   );
 }
@@ -69,23 +77,29 @@ function CellarCredBadge({ tier, specialty, plan, size = 'sm', showSpecialty = t
 
   let credLabel = null;
   let credIcons = [];
+  let credExplain = null;
   if (cred) {
     const tierLabel = t(`cellarCred.${tier}`);
     const specialtyLabel = specialty && showSpecialty ? t(`cellarCred.${specialty}`) : null;
     credLabel = specialtyLabel ? `${tierLabel} · ${specialtyLabel}` : tierLabel;
     credIcons = [cred.icon];
     if (specialtyLabel && SPECIALTY_ICONS[specialty]) credIcons.push(SPECIALTY_ICONS[specialty]);
+    credExplain = t(`cellarCred.explain_${tier}`);
+    if (specialtyLabel) credExplain += ` ${t(`cellarCred.explain_${specialty}`)}`;
   }
 
   return (
     <span className="cred-badges">
-      {cred && <Chip cls={cred.cls} size={size} icons={credIcons} label={credLabel} />}
+      {cred && (
+        <Chip cls={cred.cls} size={size} icons={credIcons} label={credLabel} explain={credExplain} />
+      )}
       {paid && (
         <Chip
           cls={paid.cls}
           size={size}
           icons={[paid.icon]}
           label={t(`cellarCred.plan_${plan}`)}
+          explain={t(`cellarCred.explain_plan_${plan}`)}
         />
       )}
     </span>
