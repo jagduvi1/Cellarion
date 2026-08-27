@@ -54,6 +54,7 @@ jest.mock('../services/mailgun', () => ({
 
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../services/notifications', () => ({ createNotification: jest.fn() }));
+jest.mock('../services/mcpOAuth', () => ({ revokeOAuthConnectionsForUser: jest.fn().mockResolvedValue(2) }));
 
 // Only touched by the register / verify-email paths (resolvePendingShares) —
 // mocked so requiring the router doesn't pull real mongoose schemas.
@@ -528,6 +529,12 @@ describe('POST /api/auth/reset-password', () => {
     // Every existing session is killed server-side + cookie cleared client-side
     expect(user.refreshTokenHash).toBeNull();
     expectClearedCookies(res);
+
+    // Connected AI assistants (OAuth grants) are revoked too — a reset is the
+    // account-recovery signal, so a phished third-party grant must not survive
+    // it (security report 2026-08-27). Personal PATs are spared by the helper.
+    const { revokeOAuthConnectionsForUser } = require('../services/mcpOAuth');
+    expect(revokeOAuthConnectionsForUser).toHaveBeenCalledWith(user._id);
 
     // Brute-force lockout cleared (explicit recovery signal)…
     expect(user.failedLoginAttempts.count).toBe(0);

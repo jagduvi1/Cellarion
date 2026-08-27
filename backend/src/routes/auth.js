@@ -7,6 +7,7 @@ const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const { checkIsSuperAdmin } = require('../middleware/superAdmin');
 const { logAudit } = require('../services/audit');
 const eventBus = require('../services/eventBus');
+const { revokeOAuthConnectionsForUser } = require('../services/mcpOAuth');
 const { CURRENT_PRIVACY_POLICY_VERSION } = require('../config/legal');
 const rateLimitsConfig = require('../config/rateLimits');
 const { sendVerificationEmail, sendPasswordResetEmail, sendAccountLockoutAlert, EMAIL_VERIFICATION_ENABLED } = require('../services/mailgun');
@@ -525,11 +526,15 @@ router.post('/change-password', requireAuth, requireNonDemo, authLimiter, async 
     // refresh sessions (docs/ha-push-events.md §1).
     eventBus.dropUser(user._id);
 
-    const accessToken = await issueTokens(user, res);
+    const accessToken = await issueTokens(user, res); // persists the new password
+    // Revoke connected AI assistants (OAuth consent grants) — a third-party
+    // grant must not outlive the "secure my account" action (security report
+    // 2026-08-27). Personal API tokens (HA, climate) keep PAT semantics.
+    const revokedConnections = await revokeOAuthConnectionsForUser(user._id);
 
     logAudit(req, 'auth.change_password',
       { type: 'user', id: user._id },
-      { username: user.username }
+      { username: user.username, oauthConnectionsRevoked: revokedConnections }
     );
 
     res.json({
@@ -666,10 +671,15 @@ router.post('/reset-password', authLimiter, async (req, res) => {
     resetLoginAttempts(user);
 
     await user.save();
+    // Revoke connected AI assistants (OAuth consent grants): a password reset
+    // is the user's explicit account-recovery signal, so a phished third-party
+    // grant must not survive it (security report 2026-08-27). Personal API
+    // tokens (HA, climate) carry a null oauthClientId and keep PAT semantics.
+    const revokedConnections = await revokeOAuthConnectionsForUser(user._id);
 
     logAudit(req, 'auth.password_reset',
       { type: 'user', id: user._id },
-      { username: user.username }
+      { username: user.username, oauthConnectionsRevoked: revokedConnections }
     );
 
     clearRefreshCookie(res);

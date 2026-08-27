@@ -144,6 +144,31 @@ function tokenResponse(rawAccess, rawRefresh, scopes) {
   };
 }
 
+/**
+ * Revoke every OAuth-connection token a user holds — the AI-assistant
+ * connections minted through the consent flow (`oauthClientId` set), NOT the
+ * user's own personal API tokens (HA integration, climate devices), which
+ * carry a null `oauthClientId` and keep their deliberate PAT semantics
+ * (survive password change — Johan's call on the HA-tokens PR).
+ *
+ * Called when a user changes or resets their password (security report
+ * 2026-08-27, second analysis): a phished OAuth connection is a third-party
+ * grant, and the natural "secure my account" reflex must end it — the same
+ * trust boundary already applied to login sessions and SSE streams two lines
+ * away in the auth handlers. Soft revoke (`revokedAt`) so the connection
+ * still shows as revoked in the Settings list; the MCP auth middleware
+ * filters `revokedAt: null`, so access dies on the next request.
+ *
+ * Returns the number of connections revoked (0 when the user had none).
+ */
+async function revokeOAuthConnectionsForUser(userId) {
+  const res = await ApiToken.updateMany(
+    { user: userId, oauthClientId: { $ne: null }, revokedAt: null },
+    { $set: { revokedAt: new Date() } }
+  );
+  return res.modifiedCount || 0;
+}
+
 module.exports = {
   ACCESS_TOKEN_TTL_SEC,
   GRANTABLE_SCOPES,
@@ -158,4 +183,5 @@ module.exports = {
   redirectUriRegistered,
   rotateCredentials,
   tokenResponse,
+  revokeOAuthConnectionsForUser,
 };
