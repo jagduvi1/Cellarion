@@ -96,3 +96,41 @@ describe('CellarCredBadge', () => {
     })).toBeInTheDocument();
   });
 });
+
+describe('popover viewport clamp', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  test('a popover overflowing the right edge slides back into view', () => {
+    // A chip at the end of the author row on a 400px phone: the unshifted
+    // popover box hangs past the right edge. dx = (400 - 8) - 508 = -116.
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function () {
+      return this.classList?.contains('cred-badge__pop')
+        ? { left: 260, right: 508, width: 248 }
+        : { left: 0, right: 0, width: 0 };
+    });
+    Object.defineProperty(window, 'innerWidth', { value: 400, configurable: true });
+    const { container } = render(<CellarCredBadge plan="supporter" />);
+    fireEvent.click(screen.getByRole('button'));
+    expect(container.querySelector('.cred-badge__pop').style.transform)
+      .toBe('translateX(-116px)');
+  });
+
+  test('a popover that fits stays where it is', () => {
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function () {
+      return this.classList?.contains('cred-badge__pop')
+        ? { left: 20, right: 260, width: 240 }
+        : { left: 0, right: 0, width: 0 };
+    });
+    Object.defineProperty(window, 'innerWidth', { value: 400, configurable: true });
+    const { container } = render(<CellarCredBadge plan="patron" />);
+    fireEvent.click(screen.getByRole('button'));
+    expect(container.querySelector('.cred-badge__pop').style.transform).toBe('');
+  });
+
+  test('zero-size rects (jsdom default) leave the popover unshifted', () => {
+    const { container } = render(<CellarCredBadge plan="benefactor" />);
+    fireEvent.click(screen.getByRole('button'));
+    const pop = container.querySelector('.cred-badge__pop');
+    expect(pop.style.transform).toBe('');
+  });
+});

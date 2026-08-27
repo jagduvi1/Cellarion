@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import './CellarCredBadge.css';
 
@@ -36,6 +36,26 @@ const PLAN_CONFIG = {
  */
 function Chip({ cls, size, icons, label, explain }) {
   const [open, setOpen] = useState(false);
+  // Viewport clamp for the popover (bug seen live on v1.179.0): the chip
+  // often sits at the END of the author row, so a left-anchored popover runs
+  // off the right edge of a phone. Measure once per open (shift starts at 0,
+  // so the measurement is of the unshifted box) and slide it just enough to
+  // stay on screen with an 8px margin. jsdom reports zero-size rects — the
+  // width guard keeps tests inert.
+  const popRef = useRef(null);
+  const [shift, setShift] = useState(0);
+  useLayoutEffect(() => {
+    if (!open) { setShift(0); return; }
+    const el = popRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    if (!r.width) return;
+    const margin = 8;
+    let dx = 0;
+    if (r.right > window.innerWidth - margin) dx = window.innerWidth - margin - r.right;
+    if (r.left + dx < margin) dx = margin - r.left;
+    if (dx !== 0) setShift(dx);
+  }, [open]);
   return (
     <button
       type="button"
@@ -50,7 +70,12 @@ function Chip({ cls, size, icons, label, explain }) {
       ))}
       <span className="cred-badge__label" aria-hidden="true">{label}</span>
       {explain && open && (
-        <span className="cred-badge__pop" aria-hidden="true">
+        <span
+          className="cred-badge__pop"
+          aria-hidden="true"
+          ref={popRef}
+          style={shift ? { transform: `translateX(${shift}px)` } : undefined}
+        >
           <span className="cred-badge__pop-title">{label}</span>
           {explain}
         </span>
