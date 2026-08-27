@@ -9,6 +9,7 @@
 /* Each chip is a real button (the tap-to-reveal needs one), restyled to look
    exactly like the old inline chip. */
 .cred-badge {
+  position: relative; /* anchors the tap popover */
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
@@ -96,4 +97,35 @@
 .cred-badge__icon {
   font-size: 0.7em;
   line-height: 1;
+}
+
+/* Tap popover: what the badge MEANS, not just its name. Anchored under the
+   chip, wraps freely, sits above card content. Decorative for screen
+   readers — the button's aria-label carries the same text. */
+.cred-badge__pop {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  z-index: 30;
+  width: max-content;
+  max-width: 15rem;
+  white-space: normal;
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--color-text-secondary);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: var(--shadow-card, 0 4px 14px rgba(0, 0, 0, 0.12));
+  padding: 6px 9px;
+  cursor: default;
+}
+
+.cred-badge__pop-title {
+  display: block;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 1px;
 }

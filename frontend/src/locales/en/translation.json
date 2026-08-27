@@ -3205,7 +3205,19 @@
     "score": "Cellar Cred",
     "plan_supporter": "Supporter",
     "plan_patron": "Patron",
-    "plan_benefactor": "Benefactor"
+    "plan_benefactor": "Benefactor",
+    "explain_contributor": "Earns Cellar Cred by contributing to the community: accepted wine-data fixes, bottle photos, reviews and discussions.",
+    "explain_enthusiast": "A seasoned community contributor — wine-data fixes, bottle photos, reviews and discussions. The second contribution level.",
+    "explain_connoisseur": "A top community contributor — wine-data fixes, bottle photos, reviews and discussions. The third contribution level.",
+    "explain_ambassador": "Among the community’s most active contributors — the highest contribution level.",
+    "explain_curator": "Their strongest area: accepted corrections to the shared wine registry.",
+    "explain_photographer": "Their strongest area: approved bottle photos.",
+    "explain_critic": "Their strongest area: wine reviews.",
+    "explain_community": "Their strongest area: discussions and replies.",
+    "explain_allrounder": "Contributes evenly across wine data, photos, reviews and discussions.",
+    "explain_plan_supporter": "Voluntarily helps fund Cellarion’s development. Every feature is free for everyone — supporters simply chip in.",
+    "explain_plan_patron": "Voluntarily funds Cellarion’s development at a higher level. Every feature is free for everyone.",
+    "explain_plan_benefactor": "Voluntarily covers a real share of Cellarion’s running costs. Every feature is free for everyone."
   },
   "adminAiBudget": {
     "title": "AI Budget Requests",
