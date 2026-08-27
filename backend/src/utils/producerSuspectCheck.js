@@ -338,6 +338,15 @@ const DOWNGRADE_RULES = {
   ASSERTS_PRODUCER: 'note_asserts_producer',
   EPISTEMIC_ONLY: 'note_epistemic_only',
   CUVEE_NOT_PRODUCER: 'note_doubts_cuvee_not_producer',
+  // Record-based, not note-based (somm 6a8eb2a9): the wine carries an
+  // appellation that resolves to a curated entry WITH geography, so whatever
+  // the producer string is — brand, négociant label, jokey cuvée — a knowable
+  // house stands behind it. The suspect claim ("the record is wrong") cannot
+  // support an owner-visible caveat there; producerUnknown is the honest
+  // state. The predicate lives in services/appellationResolve
+  // (appellationHasGeography) because it reads the taxonomy; this file stays
+  // DB-free.
+  APPELLATION_GEOGRAPHY: 'appellation_has_geography',
 };
 
 module.exports = {

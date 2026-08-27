@@ -515,6 +515,12 @@ async function enrichWine(wine, model, { publishSuspect = false, curatorContext 
   // Loaded once per wine (module-cached) — assess() is a sync closure and the
   // note-vs-record check inside it must not await.
   const grapeVocab = await grapeVocabulary();
+  // Same constraint, same shape: resolved once per wine so the suspect
+  // downgrade chain inside assess() stays sync. Reads the wine's appellation
+  // against the curated taxonomy (somm 6a8eb2a9) — false on lookup trouble,
+  // so a taxonomy hiccup can only ever KEEP a flag, never clear one.
+  const { appellationHasGeography } = require('./appellationResolve');
+  const apHasGeo = await appellationHasGeography(wine.appellation);
 
   // Derive everything the gate and the writes need from ONE model response.
   // A closure so the search-rescue retry below can re-derive from a second
@@ -580,6 +586,22 @@ async function enrichWine(wine, model, { publishSuspect = false, curatorContext 
           suspect = false;
           unknown = cuvee.unknown === true;
           downgradedBy = DOWNGRADE_RULES.CUVEE_NOT_PRODUCER;
+        } else if (apHasGeo) {
+          // Fourth rule (somm 6a8eb2a9): record-based, the fallback when no
+          // note rule fires. The wine's appellation resolves to a curated
+          // entry WITH geography — a Châteauneuf or a Coonawarra has a
+          // knowable house behind whatever the producer string is, so the
+          // "record is wrong" claim cannot carry an owner-visible caveat.
+          // producerUnknown stays true: the house was still not identified.
+          // Ordered last on purpose — the note rules say WHY the model's own
+          // words disagree with its flag; this one only says the flag cannot
+          // matter here. Shares the placeholder/place-conflict blockers: a
+          // placeholder producer has nothing to verify however real the
+          // appellation is, and a note describing a different place puts the
+          // appellation itself in doubt.
+          suspect = false;
+          unknown = true;
+          downgradedBy = DOWNGRADE_RULES.APPELLATION_GEOGRAPHY;
         }
       }
     }

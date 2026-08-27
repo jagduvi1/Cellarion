@@ -159,3 +159,52 @@ describe('membership-gated decoration stripping', () => {
     expect(Appellation.find).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * appellationHasGeography (somm 6a8eb2a9): the producer-suspect narrowing's
+ * predicate. Deliberately about the curated ENTRY's geography, not the field
+ * being populated — the somm's counter-examples pin both failure modes:
+ * "Vin de France" (curated, nationwide, region null) and "Qualitätswein"
+ * (a tier, not curated) must both return false.
+ */
+const { appellationHasGeography } = require('./appellationResolve');
+
+describe('appellationHasGeography', () => {
+  const geoChain = (docs) => ({
+    select: jest.fn().mockReturnValue({
+      sort: jest.fn().mockReturnValue({
+        limit: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(docs) }),
+      }),
+    }),
+  });
+
+  test('curated entry with a region → true', async () => {
+    Appellation.find.mockReturnValue(geoChain([{ region: 'r'.repeat(24) }]));
+    await expect(appellationHasGeography('Châteauneuf-du-Pape')).resolves.toBe(true);
+  });
+
+  test('curated but nationwide (region null) → false — "Vin de France"', async () => {
+    Appellation.find.mockReturnValue(geoChain([{ region: null }]));
+    await expect(appellationHasGeography('Vin de France')).resolves.toBe(false);
+  });
+
+  test('not curated at all → false — "Qualitätswein"', async () => {
+    Appellation.find.mockReturnValue(geoChain([]));
+    await expect(appellationHasGeography('Qualitätswein')).resolves.toBe(false);
+  });
+
+  test('cross-country namesakes must ALL carry geography', async () => {
+    Appellation.find.mockReturnValue(geoChain([{ region: 'r'.repeat(24) }, { region: null }]));
+    await expect(appellationHasGeography('Ambiguous')).resolves.toBe(false);
+  });
+
+  test('empty / null input → false', async () => {
+    await expect(appellationHasGeography('')).resolves.toBe(false);
+    await expect(appellationHasGeography(null)).resolves.toBe(false);
+  });
+
+  test('a lookup failure keeps the flag: false, never a throw', async () => {
+    Appellation.find.mockImplementation(() => { throw new Error('db down'); });
+    await expect(appellationHasGeography('Sauternes')).resolves.toBe(false);
+  });
+});

@@ -1436,7 +1436,12 @@ registerTool({
     }
     // An explicit state ask implies the include flag — asking for suspects
     // and getting nothing because a second switch was off would be a trap.
-    if ((args.include_published_suspects && wantState('published_suspect')) || args.state === 'published_suspect') {
+    // counts_only implies it too (somm ticket 6a8ffaa1): the listing default
+    // exists to keep suspects out of a curator's held-row PAGING, but a count
+    // has no paging to protect — carrying the default into it reported
+    // published_suspect as a hard 0 (not "uncounted") and under-sized the
+    // backlog by three quarters. A count counts every state.
+    if (((args.include_published_suspects || args.counts_only) && wantState('published_suspect')) || args.state === 'published_suspect') {
       or.push({ 'aiProfile.heldAt': null, 'aiProfile.generatedAt': { $ne: null }, 'aiProfile.producerSuspect': true, 'aiProfile.description': { $ne: null } });
     }
     if (wantState('unprofiled')) {

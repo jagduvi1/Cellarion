@@ -29,6 +29,10 @@ jest.mock('../models/Grape', () => ({
 jest.mock('./labelScan', () => ({ suggestProfile: jest.fn() }));
 jest.mock('./aiProvider', () => ({ isConfigured: jest.fn(() => true), effectiveModels: jest.fn(() => null) }));
 jest.mock('./embeddingJob', () => ({ embedSinglePair: jest.fn().mockResolvedValue(undefined) }));
+// The appellation-geography downgrade (somm 6a8eb2a9) reads the curated
+// taxonomy; default FALSE so every pre-existing expectation about suspect
+// persistence stays exactly as written. Tests for the rule flip it to true.
+jest.mock('./appellationResolve', () => ({ appellationHasGeography: jest.fn().mockResolvedValue(false) }));
 jest.mock('./aiBudget', () => ({ tryDebitAi: jest.fn(), isRefundableFailure: jest.fn(() => false) }));
 jest.mock('../config/aiConfig', () => ({ get: jest.fn(() => ({
   enrichmentModel: 'claude-sonnet-5',
@@ -391,6 +395,82 @@ describe('producer-suspect profiles are held, not published', () => {
     expect(persisted().heldAt).toBeNull();
     expect(persisted().producerSuspect).toBe(false);
     expect(persisted().description).toBe('Plain prose.');
+  });
+});
+
+/**
+ * The appellation-geography downgrade (somm 6a8eb2a9): a record whose
+ * appellation resolves to a curated entry WITH geography has a knowable house
+ * behind whatever the producer string is, so a suspect flag there cannot
+ * carry an owner-visible caveat — it downgrades to producerUnknown. Fourth
+ * branch of the chain: fires only when no note rule spoke, and never past
+ * the placeholder/place-conflict blockers.
+ */
+describe('appellation-geography suspect downgrade (somm 6a8eb2a9)', () => {
+  const { appellationHasGeography } = require('./appellationResolve');
+  // mockResolvedValue survives clearAllMocks (implementations are not calls),
+  // so restore the file default after every test — later describes assert
+  // the pre-narrowing hold behaviour and must not inherit geography=true.
+  afterEach(() => appellationHasGeography.mockResolvedValue(false));
+  // Confidence 0.7 clears the 0.55 unknown bar, and the prose makes NO
+  // producer claim (that would re-hold the downgraded row as
+  // 'producer_claim'), so the profile PUBLISHES — the point of the narrowing.
+  const suspectInGeo = () => ({
+    data: {
+      body: 'medium', tannin: 'medium', acidity: 'medium', sweetness: 'dry',
+      flavors: ['plum'], foodPairings: ['stew'],
+      description: 'A juicy plum-driven red with soft tannins.',
+      confidence: 0.7,
+      producerSuspect: true,
+      producerNote: 'Reads as a brand or bottling line, not a winery.',
+    },
+    debugReason: null,
+  });
+
+  test('suspect + curated geography publishes as producerUnknown, tagged', async () => {
+    appellationHasGeography.mockResolvedValue(true);
+    suggestProfile.mockResolvedValue(suspectInGeo());
+    await enrichWineById(WINE_ID);
+    const p = persisted();
+    expect(p.producerSuspect).toBe(false);
+    expect(p.producerUnknown).toBe(true);
+    expect(p.suspectDowngradedBy).toBe('appellation_has_geography');
+    expect(p.heldAt).toBeNull();
+    expect(p.description).toMatch(/juicy/);
+  });
+
+  test('without geography the same response stays suspect and held', async () => {
+    appellationHasGeography.mockResolvedValue(false);
+    suggestProfile.mockResolvedValue(suspectInGeo());
+    await enrichWineById(WINE_ID);
+    const p = persisted();
+    expect(p.producerSuspect).toBe(true);
+    expect(p.suspectDowngradedBy).toBeNull();
+    expect(p.heldAt).toBeInstanceOf(Date);
+  });
+
+  test('a note rule keeps precedence — the tag names WHY, not just that', async () => {
+    appellationHasGeography.mockResolvedValue(true);
+    const r = suspectInGeo();
+    // Lowercase producer-class noun asserting the entity IS a producer —
+    // noteAssertsProducer fires first and its tag survives.
+    r.data.producerNote = 'Matua is a family-run estate in Marlborough.';
+    suggestProfile.mockResolvedValue(r);
+    await enrichWineById(WINE_ID);
+    expect(persisted().producerSuspect).toBe(false);
+    expect(persisted().suspectDowngradedBy).toBe('note_asserts_producer');
+  });
+
+  test('the placeholder blocker outranks geography — an echoed producer stays suspect', async () => {
+    appellationHasGeography.mockResolvedValue(true);
+    WineDefinition.findById.mockReturnValue(chain({
+      _id: WINE_ID, name: 'Increíble', producer: 'Increíble', type: 'red',
+      country: { name: 'Spain' }, region: null, grapes: [],
+    }));
+    suggestProfile.mockResolvedValue(suspectInGeo());
+    await enrichWineById(WINE_ID);
+    expect(persisted().producerSuspect).toBe(true);
+    expect(persisted().suspectDowngradedBy).toBeNull();
   });
 });
 
