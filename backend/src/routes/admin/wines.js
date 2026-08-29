@@ -13,6 +13,7 @@ const {
 } = require('../../utils/normalize');
 const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const { scoreWineMatch } = require('../../services/wineMatching');
+const { conflictingStyleTerms } = require('../../utils/styleTerms');
 const { sameProducerAppellationGroups, nearProducerPairs, nameSubsetPairs } = require('../../services/registryFragmentation');
 const {
   incompleteGeographyRows, stillIncomplete, GEOGRAPHY_INCOMPLETE_CHECK_ID,
@@ -412,6 +413,16 @@ router.get('/duplicate-clusters', async (req, res) => {
           if (!parent.has(bId)) parent.set(bId, bId);
           const key = aId < bId ? `${aId}|${bId}` : `${bId}|${aId}`;
           if (dismissed.has(key)) continue; // admin marked these as not duplicates
+          // Names stating a DIFFERENT Prädikat/sweetness are a producer's
+          // range, not duplicates (#1134 follow-up): a Mosel estate's whole
+          // range scores 0.83–0.90 pairwise, far above the default 0.6 floor,
+          // and would cluster as the scan's top proposal — one admin merge
+          // from collapsing every user's bottles across it. Same shape as
+          // the dismissed-edge skip above, and reject-only like every other
+          // consumer of this guard: it can only drop a proposed merge, never
+          // propose one, and it spares the n² manual dismissals a surfaced
+          // range would otherwise cost.
+          if (conflictingStyleTerms(a.name, b.name)) continue;
           const score = scoreWineMatch(
             { name: a.name, producer: a.producer, appellation: a.appellation },
             { name: b.name, producer: b.producer, appellation: b.appellation },
