@@ -27,6 +27,7 @@ const { buildSurfaceForms, inferGrapeIds } = require('./grapeInference');
 const { isLabelVariant, grapeTokenSet } = require('./labelVariantMatch');
 const { resolveCanonicalProducerSpelling } = require('./producerSpelling');
 const { resolveCanonicalAppellation, candidateKeys } = require('./appellationResolve');
+const { conflictingStyleTerms } = require('../utils/styleTerms');
 const { escapeRegex } = require('../utils/sanitize');
 
 // Auto-match when combined score >= SIMILARITY_THRESHOLD (near-identical — e.g.
@@ -381,6 +382,17 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     return Boolean(candidateCountry && candidateCountry !== queryCountryKey);
   };
 
+  // Different-style guard, the same shape as the country one and for the same
+  // reason (issue #1134): a scanned Mosel range — "… Riesling Spätlese Alte
+  // Reben", "… Riesling Auslese", "… Riesling Spätlese Trocken" — shares one
+  // producer and one vineyard, so 0.55 of the composite is settled before the
+  // name is read and every sibling scores 0.83–0.90 against every other. Where
+  // both names STATE a Prädikat or a sweetness and the two disagree, that is
+  // not a spelling variant, it is the next bottle in the range. Never link it
+  // silently; fall through and let the soft zone ask.
+  const conflictsStyle = (candidate) =>
+    Boolean(candidate && conflictingStyleTerms(trimmedName, candidate.name));
+
   // Pending-identity ISOLATION. A pending row is invisible to everyone but its
   // creator and curation, and that has to hold in the RESOLVER too — otherwise
   // user B's add silently attaches to user A's half-identified wine and the
@@ -508,10 +520,12 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
       { redistribute: false }
     );
 
-    // Auto-match: best confident hit that doesn't conflict on country. A
-    // conflicting >=0.95 candidate falls through to the soft zone below, so
-    // the caller/user still sees it — it just never links silently.
-    const autoHit = ranked.find(r => r.score >= SIMILARITY_THRESHOLD && !conflictsCountry(r.wine));
+    // Auto-match: best confident hit that doesn't conflict on country or on
+    // stated style. A conflicting >=0.95 candidate falls through to the soft
+    // zone below, so the caller/user still sees it — it just never links
+    // silently.
+    const autoHit = ranked.find(r => r.score >= SIMILARITY_THRESHOLD
+      && !conflictsCountry(r.wine) && !conflictsStyle(r.wine));
     if (autoHit) {
       return { wine: autoHit.wine, created: false };
     }

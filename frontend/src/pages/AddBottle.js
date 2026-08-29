@@ -327,7 +327,7 @@ function AddBottle() {
   // Resolve confirmed wine data against the registry (READ-ONLY — nothing is
   // created in step 1 any more), handling the three response shapes: matched
   // wine, soft-zone candidates, or no match (→ the data rides to the commit).
-  const resolveSelectedWine = useCallback(async (wineData, carriedVintage) => {
+  const resolveSelectedWine = useCallback(async (wineData, carriedVintage, opts = {}) => {
     setError(null);
     setFindingWine(true);
     try {
@@ -337,19 +337,32 @@ function AddBottle() {
         setError(data.error || t('addBottle.scanFailedToSaveWine'));
         return;
       }
+      // queryLabel: quote what the USER typed in the modal, not the AI's
+      // cleaned-up name, so the comparison reads the way they think of it.
+      // A scan passes its own label — the search box may still hold whatever
+      // was typed before the camera was opened.
+      const queryLabel = opts.queryLabel || search.trim() || wineData.name;
       if (data.candidates && data.candidates.length > 0) {
         setSoftCandidates(data.candidates);
-        // queryLabel: quote what the USER typed in the modal, not the AI's
-        // cleaned-up name, so the comparison reads the way they think of it.
-        setSoftPending({ wineData, carriedVintage, queryLabel: search.trim() || wineData.name });
+        setSoftPending({ wineData, carriedVintage, queryLabel });
         return;
       }
       if (data.wine) {
         applyResolvedWine(data.wine, carriedVintage);
         return;
       }
-      // noMatch: not in the registry. Nothing was minted — the fields carry
-      // forward and POST /api/bottles creates the wine WITH the first bottle.
+      // noMatch — but the label scan may have found a registry row this
+      // resolve did not (the scan matcher looks from 0.75, the resolver's
+      // "did you mean?" floor is 0.85). Ask instead of minting a duplicate.
+      // The scan's match NEVER links by itself: it is one more candidate the
+      // user picks, exactly like the resolver's own (issue #1134).
+      if (opts.fallback?.wine) {
+        setSoftCandidates([{ wine: opts.fallback.wine, score: opts.fallback.confidence || 0 }]);
+        setSoftPending({ wineData, carriedVintage, queryLabel });
+        return;
+      }
+      // Not in the registry. Nothing was minted — the fields carry forward
+      // and POST /api/bottles creates the wine WITH the first bottle.
       applyPendingNewWine(wineData, carriedVintage);
     } catch {
       setError(t('addBottle.scanFailedToSaveWine'));
@@ -362,32 +375,33 @@ function AddBottle() {
   // label image is NOT part of the wine payload (the old find-or-create route
   // ignored it, and it must not bloat the bottle commit): bottle photos go
   // through the separate /api/images upload + link-to-bottle flow.
+  //
+  // Resolve on WHAT THE LABEL SAID — never on the matched row (issue #1134).
+  // This used to substitute `match.wine`'s name/producer/appellation wholesale
+  // whenever the scan matcher returned anything at all, which it does from
+  // 0.75. The card above still showed `extracted.name`, so a wine filed under
+  // its neighbour looked completely correct: a Mosel estate's Spätlese Alte
+  // Reben, Auslese and Spätlese Feinherb all committed to the Feinherb row and
+  // nothing on screen said so. Handing the scanned identity to the resolver
+  // puts the decision back on the one ladder that has a visible answer for
+  // every band — link at >=0.95, ASK between 0.85 and 0.95, and the scan's own
+  // match offered below that (see resolveSelectedWine).
   const handleConfirmScan = useCallback(async () => {
     const { extracted, match } = scanResult;
-    // If there's a match, use the matched wine's canonical data for the lookup
-    // so the normalizedKey lookup on the backend is instant and correct
-    const wineData = match?.wine
-      ? {
-          name: match.wine.name,
-          producer: match.wine.producer,
-          country: match.wine.country?.name || extracted.country || '',
-          region: match.wine.region?.name || extracted.region || '',
-          appellation: match.wine.appellation || extracted.appellation || '',
-          type: match.wine.type || extracted.type || '',
-          grapes: (match.wine.grapes || []).map(g => g.name)
-        }
-      : {
-          name: extracted.name,
-          producer: extracted.producer,
-          country: extracted.country || '',
-          region: extracted.region || '',
-          appellation: extracted.appellation || '',
-          classification: extracted.classification || '',
-          type: extracted.type || '',
-          grapes: extracted.grapes || []
-        };
-
-    await resolveSelectedWine(wineData, extracted.vintage);
+    await resolveSelectedWine(
+      {
+        name: extracted.name,
+        producer: extracted.producer,
+        country: extracted.country || '',
+        region: extracted.region || '',
+        appellation: extracted.appellation || '',
+        classification: extracted.classification || '',
+        type: extracted.type || '',
+        grapes: extracted.grapes || []
+      },
+      extracted.vintage,
+      { fallback: match, queryLabel: extracted.name }
+    );
   }, [scanResult, resolveSelectedWine]);
 
   // Switch to the editable manual form (user says "not the right wine")
@@ -883,10 +897,20 @@ function AddBottle() {
                 )}
               </div>
               <div className="scan-wine-body">
+                {/* NAMES the matched row (issue #1134). It used to read only
+                    "Already in the registry" while the card showed the scanned
+                    name — so a wine about to be filed under its neighbour in
+                    the same range looked perfect. The registry-photo compare
+                    beside it is the other half of the answer, and small
+                    estates have no photo, which left this badge as the only
+                    signal there was a match at all. */}
                 {scanMatchedWine && (
                   <div className="ai-result-badge scan-wine-badge">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93L12 22"/><path d="M8 6a4 4 0 0 1 8 0"/><path d="M17 12H7"/></svg>
-                    {t('addBottle.aiFoundWine')}
+                    {t('addBottle.scanRegistryMatch', {
+                      name: scanMatchedWine.name,
+                      percent: Math.round((scanResult.match?.confidence || 0) * 100),
+                    })}
                   </div>
                 )}
                 <h2 className="scan-wine-name">{scanResult.extracted.name}</h2>

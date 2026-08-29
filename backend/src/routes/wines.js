@@ -14,6 +14,7 @@ const { persistLabelScan } = require('../services/imageOps');
 const { findOrCreateWine } = require('../services/findOrCreateWine');
 const { generateWineKey } = require('../utils/normalize');
 const { findBestMatch } = require('../services/wineMatching');
+const { conflictingStyleTerms } = require('../utils/styleTerms');
 const { parsePagination } = require('../utils/pagination');
 const { isValidId } = require('../utils/validation');
 // Read-surface decoration: each populated grape gains `displayName` — the
@@ -173,10 +174,19 @@ function sendAiBudgetExhausted(res, debit) {
  * shared by the front scan and the back-label rescue scan.
  *
  * Extracted rather than duplicated the moment a second scan endpoint needed it:
- * the three-step ladder below (exact normalizedKey → Meilisearch candidates →
- * $text fallback → shared composite scorer at ≥0.75) is the dedup contract, and
- * two copies of it drifting apart would mean the same bottle matched on the
- * front scan and minted a duplicate on the back scan.
+ * the ladder below (exact normalizedKey → Meilisearch candidates → $text
+ * fallback → style guard → shared composite scorer at ≥0.75) is the dedup
+ * contract, and two copies of it drifting apart would mean the same bottle
+ * matched on the front scan and minted a duplicate on the back scan.
+ *
+ * ADVISORY, NOT THE COMMIT (issue #1134). What comes back is a SUGGESTION the
+ * client shows by name and may offer as a "did you mean?" candidate — it is
+ * not what gets saved. The bottle/wishlist commit resolves the SCANNED
+ * identity through findOrCreateWine, whose own ladder links at ≥0.95 and asks
+ * between 0.85 and 0.95. 0.75 is deliberately below both: it is the floor for
+ * "worth showing the user", not for "file their bottle here". It used to be
+ * the latter, and a Mosel estate's Kabinett, Auslese and two Spätlesen all
+ * committed to one row because of it.
  *
  * Tolerates a PARTIAL identity by design: a half-read label reaching here with
  * a name and no producer still gets a lookup — findBestMatch scores the fields
@@ -223,6 +233,15 @@ async function matchScannedIdentity({ name, producer, appellation }) {
       // No text match — no candidates
     }
   }
+
+  // Drop candidates whose name states a DIFFERENT Prädikat or sweetness than
+  // the scanned one (issue #1134). A producer's range from one vineyard shares
+  // the producer and appellation axes — 0.55 of the composite — so every
+  // sibling scores 0.83–0.90 against every other and the top one here is
+  // decided by string distance between "Feinherb" and "Trocken". Filtered
+  // BEFORE scoring, not after: dropping only the winner would hand the match
+  // to the next wine in the same range. See utils/styleTerms.
+  candidates = candidates.filter((c) => !conflictingStyleTerms(name, c.name));
 
   // Use the shared scorer so scan-label, find-or-create and import all
   // dedup with one implementation. redistribute:false preserves this
@@ -387,6 +406,9 @@ router.get('/', requireAuth, async (req, res) => {
 //   extracted: { name, producer, vintage, country, region, appellation, type,
 //                grapes[], partial?: true, producer_suspect?: "<rule id>" },
 //   match: { wine: WineDefinition, confidence: number } | null,
+//        (ADVISORY — a suggestion the client names on the scan card and may
+//         offer as a "did you mean?" candidate. The commit resolves the
+//         SCANNED identity, not this row. See matchScannedIdentity.)
 //   labelImage: "data:image/png;base64,..." (background-removed label, or original as fallback),
 //   scanImageId: "<BottleImage id>" | null
 // }
