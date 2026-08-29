@@ -123,7 +123,14 @@ export function autoSelectionsFor(rows) {
       (r.status === 'exact' || r.status === 'fuzzy' || r.status === 'ai_match') &&
       Array.isArray(r.matches) && r.matches.length > 0
     ) {
-      sel[r.index] = r.matches[0].wineId;
+      // Never preselect a match the server marked styleConflict: the row and
+      // that candidate NAME a different Prädikat/sweetness, so they are two
+      // wines from one producer's range — bulk-confirming the preselection is
+      // exactly how issue #1134 replays at import scale. The best
+      // non-conflicting candidate (list is score-ordered) is preselected
+      // instead; if every candidate conflicts, the row is left for the user.
+      const top = r.matches.find((m) => !m.styleConflict);
+      if (top) sel[r.index] = top.wineId;
     } else if (r.status === 'ai_new' && r.aiProposed != null) {
       // AI-identified NEW wines default to 'create' — the wine is minted at
       // /confirm, so leaving the row unselected would silently drop it from

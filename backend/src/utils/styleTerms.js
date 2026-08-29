@@ -77,7 +77,18 @@ const PRADIKAT_WORDS = new Set([
 const PRADIKAT_ALIASES = new Map([
   ['spaetlese', 'spatlese'],
   ['icewine', 'eiswein'],
-  ['eiswein', 'eiswein'],
+]);
+
+// The sweetness twin of PRADIKAT_ALIASES, for the same keyboard: "Süß" typed
+// without the umlaut is "Suess", which normalizeString leaves alone — without
+// this the guard silently fails open for the standard ue-transliteration
+// (found by the post-release audit, verified by execution). NAME side only,
+// like the Prädikat map: the producer-field rules in crossFieldChecks read
+// SWEETNESS_WORDS directly and must NOT gain 'suess' — Suess is a real
+// surname, and flagging every "Weingut Suess" as a style-term producer is
+// the 'dry'/'sweet' problem over again.
+const SWEETNESS_ALIASES = new Map([
+  ['suess', 'suss'],
 ]);
 
 // Style words that are also ordinary name words. "Dry Creek Zinfandel" states
@@ -105,7 +116,12 @@ const JOINED_PHRASES = [
  * @returns {{pradikat: Set<string>, sweetness: Set<string>}}
  */
 function statedStyle(name) {
-  let folded = normalizeString(String(name == null ? '' : name).replace(/ß/g, 'ss'));
+  // Lowercase BEFORE the ß-fold: the capital eszett ẞ (U+1E9E — the official
+  // uppercase form, routine on all-caps German labels) only becomes ß under
+  // toLowerCase, and folding first left it for normalizeString to delete as
+  // punctuation, silently dropping the sweetness term (post-release audit,
+  // verified by execution: "SÜẞ" read as stating nothing).
+  let folded = normalizeString(String(name == null ? '' : name).toLowerCase().replace(/ß/g, 'ss'));
   for (const [re, joined] of JOINED_PHRASES) folded = folded.replace(re, joined);
 
   const pradikat = new Set();
@@ -113,8 +129,9 @@ function statedStyle(name) {
   for (const token of folded.split(/[^a-z0-9]+/)) {
     if (!token) continue;
     const tier = PRADIKAT_ALIASES.get(token) || token;
-    if (PRADIKAT_WORDS.has(tier)) pradikat.add(tier);
-    else if (SWEETNESS_WORDS.has(token) && !NAME_AMBIGUOUS_WORDS.has(token)) sweetness.add(token);
+    if (PRADIKAT_WORDS.has(tier)) { pradikat.add(tier); continue; }
+    const sweet = SWEETNESS_ALIASES.get(token) || token;
+    if (SWEETNESS_WORDS.has(sweet) && !NAME_AMBIGUOUS_WORDS.has(sweet)) sweetness.add(sweet);
   }
   return { pradikat, sweetness };
 }

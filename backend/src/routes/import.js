@@ -18,6 +18,7 @@ const { identifyWineFromText } = require('../services/labelScan');
 const aiProvider = require('../services/aiProvider');
 const { findOrCreateWine } = require('../services/findOrCreateWine');
 const { scoreWineMatchVariants, stripProducerPrefix } = require('../services/wineMatching');
+const { conflictingStyleTerms } = require('../utils/styleTerms');
 const { wineVisibilityFilter } = require('../services/wineVisibility');
 const { tryDebitAi, isRefundableFailure } = require('../services/aiBudget');
 const rateLimitsConfig = require('../config/rateLimits');
@@ -315,10 +316,17 @@ async function findWineMatches(item, viewer = {}) {
     }
   }
 
-  // Sort by score descending, return top 5
+  // Sort by score descending, return top 5. Each match carries the style
+  // verdict (issue #1134 follow-up): where the import row and the candidate
+  // NAME a different Prädikat or sweetness they are two wines from one range,
+  // and no similarity score may auto-link them — a Trocken/Halbtrocken pair
+  // from one vineyard measures 0.9543 through this scorer. Annotated here,
+  // at the single place all three consumers get their matches, so the
+  // >= EXACT_THRESHOLD gates and the client's preselection read one verdict.
   const sorted = [...candidates.values()]
     .sort((a, b) => b.score - a.score)
-    .slice(0, 5);
+    .slice(0, 5)
+    .map((m) => ({ ...m, styleConflict: conflictingStyleTerms(item.wineName, m.wine.name) }));
 
   return sorted;
 }
@@ -430,7 +438,12 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
       }
       const matches = await findWineMatches(pr.item, viewer);
       pr.preMatches = matches; // reused by Pass 3 if this row ends up on the fuzzy path
-      if (matches.length > 0 && matches[0].score >= EXACT_THRESHOLD) {
+      // styleConflict gate: findOrCreateWine refuses a style-conflicting
+      // >=0.95 hit and asks, so without the same gate here the (b) comment's
+      // "outcome-identical" claim is false and the import files a Trocken
+      // under its Halbtrocken sibling with status 'exact'. A conflicted top
+      // match falls through to the AI/fuzzy path, where the user chooses.
+      if (matches.length > 0 && matches[0].score >= EXACT_THRESHOLD && !matches[0].styleConflict) {
         pr.registryWine = { wine: matches[0].wine, score: matches[0].score };
       }
     }
@@ -744,12 +757,16 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
           appellation: m.wine.appellation || null,
           type: m.wine.type,
           image: m.wine.image || null,
-          score: Math.round(m.score * 100) / 100
+          score: Math.round(m.score * 100) / 100,
+          styleConflict: m.styleConflict || null
         }));
       } else if (pr.matches.length > 0) {
-        // AI failed or unavailable, but fuzzy matching found candidates
+        // AI failed or unavailable, but fuzzy matching found candidates.
+        // A style-conflicting top match never earns 'exact' — that status
+        // tells the user no review is needed, which is precisely wrong for
+        // a range sibling (see the findWineMatches annotation).
         const { matches } = pr;
-        if (matches[0].score >= EXACT_THRESHOLD) {
+        if (matches[0].score >= EXACT_THRESHOLD && !matches[0].styleConflict) {
           status = 'exact';
         } else {
           status = 'fuzzy';
@@ -763,7 +780,8 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
           appellation: m.wine.appellation || null,
           type: m.wine.type,
           image: m.wine.image || null,
-          score: Math.round(m.score * 100) / 100
+          score: Math.round(m.score * 100) / 100,
+          styleConflict: m.styleConflict || null
         }));
       } else {
         // No match from either AI or fuzzy
@@ -1692,7 +1710,9 @@ router.get('/sessions/:id', async (req, res) => {
       if (!result?.item) continue;
       try {
         const matches = await findWineMatches(result.item, { userId: req.user.id, roles: req.user.roles });
-        if (matches.length > 0 && matches[0].score >= EXACT_THRESHOLD) {
+        // Same styleConflict gate as Pass 1a: this path silently re-points a
+        // row the user marked 'request', so a range sibling must never pass.
+        if (matches.length > 0 && matches[0].score >= EXACT_THRESHOLD && !matches[0].styleConflict) {
           const m = matches[0];
           refreshed[idx] = {
             wineId: m.wine._id,

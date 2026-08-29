@@ -208,6 +208,22 @@ describe('autoSelectionsFor', () => {
     expect(autoSelectionsFor(rows)).toEqual({ 0: 'a', 1: 'b', 2: 'd' });
   });
 
+  it('never pre-selects a styleConflict match — the next clean one wins, or nothing', () => {
+    // Issue #1134 at import scale: with AI unavailable, a Trocken row against
+    // its Halbtrocken sibling comes back 'fuzzy' with the sibling on top.
+    // Bulk-confirming that preselection files the whole range under one wine.
+    const conflicted = [
+      { index: 0, status: 'fuzzy', matches: [
+        { wineId: 'sibling', styleConflict: 'each name states a different sweetness (trocken vs halbtrocken)' },
+        { wineId: 'clean', styleConflict: null },
+      ] },
+      { index: 1, status: 'fuzzy', matches: [
+        { wineId: 'only-sibling', styleConflict: 'each name states a different Prädikat (auslese vs spatlese)' },
+      ] },
+    ];
+    expect(autoSelectionsFor(conflicted)).toEqual({ 0: 'clean' });
+  });
+
   it("pre-selects 'create' for ai_new rows with a proposal — and nothing without one", () => {
     const aiRows = [
       { index: 6, status: 'ai_new', matches: [], aiProposed: { name: 'X', producer: 'Y' } },

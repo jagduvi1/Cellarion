@@ -23,6 +23,23 @@ describe('statedStyle', () => {
       .toEqual([...statedStyle('Riesling Spätlese').pradikat]);
   });
 
+  it('reads the capital eszett off an all-caps label', () => {
+    // ẞ (U+1E9E) is the official uppercase ß and only folds to ß under
+    // toLowerCase — the v1.181.0 order folded first and read "SÜẞ" as
+    // stating nothing, so the guard failed open for all-caps labels.
+    expect([...statedStyle('RIESLING SPÄTLESE SÜẞ').sweetness]).toEqual(['suss']);
+    expect(conflictingStyleTerms('RIESLING SPÄTLESE SÜẞ', 'Riesling Spätlese Trocken'))
+      .toMatch(/different sweetness/);
+  });
+
+  it('folds the "ue" transliteration of Süß', () => {
+    expect([...statedStyle('Riesling Spätlese Suess').sweetness]).toEqual(['suss']);
+    expect(conflictingStyleTerms('Riesling Spätlese Suess', 'Riesling Spätlese Trocken'))
+      .toMatch(/different sweetness/);
+    // …and the two spellings of the same wine are NOT a conflict.
+    expect(conflictingStyleTerms('Riesling Spätlese Suess', 'Riesling Spätlese Süß')).toBeNull();
+  });
+
   it('keeps the nested tier names apart', () => {
     // 'trockenbeerenauslese' contains 'beerenauslese' contains 'auslese' as
     // substrings — whole-token matching must see three different tiers, and
