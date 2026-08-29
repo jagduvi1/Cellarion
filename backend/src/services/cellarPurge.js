@@ -26,6 +26,7 @@ const PendingShare = require('../models/PendingShare');
 const WineList = require('../models/WineList');
 const ClimateDevice = require('../models/ClimateDevice');
 const Cellar = require('../models/Cellar');
+const WineRequest = require('../models/WineRequest');
 const { deleteLogoFilesFor } = require('./wineListLogos');
 const { unlinkImageFiles } = require('./imageProcessor');
 const searchService = require('./search');
@@ -40,6 +41,30 @@ const searchService = require('./search');
  */
 async function purgeCellarPermanently(cellarId) {
   const bottleIds = await Bottle.find({ cellar: cellarId }).distinct('_id');
+
+  // Wine requests that exist only because of this cellar's bottles go with
+  // them — a request whose every referencing bottle is being purged can never
+  // be resolved into anything (soft-delete already withdrew it from the admin
+  // queue; this closes the loop). Resolved/rejected requests are HISTORY and
+  // stay; a request also feeding another cellar's bottles stays pending
+  // there. Computed BEFORE Bottle.deleteMany below, or the "referenced
+  // elsewhere" check would see an already-emptied collection.
+  const reqIds = await Bottle.distinct('pendingWineRequest', {
+    cellar: cellarId, pendingWineRequest: { $ne: null },
+  });
+  if (reqIds.length > 0) {
+    const elsewhere = await Bottle.distinct('pendingWineRequest', {
+      cellar: { $ne: cellarId }, pendingWineRequest: { $in: reqIds },
+    });
+    const elsewhereSet = new Set(elsewhere.map(String));
+    const onlyHere = reqIds.filter((id) => !elsewhereSet.has(String(id)));
+    if (onlyHere.length > 0) {
+      await WineRequest.deleteMany({
+        _id: { $in: onlyHere },
+        status: { $in: ['pending', 'withdrawn'] },
+      });
+    }
+  }
 
   let imagesDeleted = 0;
   if (bottleIds.length > 0) {

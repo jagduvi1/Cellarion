@@ -2,6 +2,7 @@ const express = require('express');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const Cellar = require('../../models/Cellar');
 const Rack = require('../../models/Rack');
+const WineRequest = require('../../models/WineRequest');
 const { purgeCellarPermanently } = require('../../services/cellarPurge');
 const { logAudit } = require('../../services/audit');
 const { parsePagination } = require('../../utils/pagination');
@@ -70,6 +71,14 @@ router.post('/:id/restore', async (req, res) => {
     // Restore only the racks cascade-deleted WITH this cellar (matching its
     // exact deletedAt).
     await Rack.updateMany({ cellar: cellar._id, deletedAt: cellarDeletedAt }, { $set: { deletedAt: null } });
+
+    // Re-pend exactly the wine requests this deletion withdrew (same
+    // exact-timestamp pattern as the racks). A request withdrawn by some
+    // OTHER event keeps its status — withdrawnAt is the receipt.
+    await WineRequest.updateMany(
+      { status: 'withdrawn', withdrawnAt: cellarDeletedAt, user: cellar.user },
+      { $set: { status: 'pending', withdrawnAt: null } }
+    );
 
     logAudit(req, 'cellar.restore', { cellarId: cellar._id }, { name: restoredName, owner: cellar.user });
 

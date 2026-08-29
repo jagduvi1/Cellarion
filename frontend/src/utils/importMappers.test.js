@@ -629,6 +629,30 @@ describe('parseAndMap', () => {
     expect(result.warnings).toEqual([{ code: 'no-identity-skipped', count: 1 }]);
   });
 
+  it('skips PRODUCER-ONLY rows too — a producer is not a wine name', () => {
+    // The 2026-08-28 cal import: a generic CSV whose name column never
+    // mapped produced 148 producer-only rows, and the old AND-gate
+    // (`!wineName && !producer`) let every one through — each then filed a
+    // WineRequest with the PRODUCER as the wine's name ("Hewitson —
+    // Hewitson", ×131). wineName is required, exactly as the master-format
+    // doc at the top of this module has always said.
+    const csv = 'Wine,Producer,Vintage\n,Hewitson,2005\n,Tahbilk,2019\nMargaux,CM,2016';
+    const result = parseAndMap(csv);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].wineName).toBe('Margaux');
+    expect(result.warnings).toEqual([{ code: 'no-identity-skipped', count: 2 }]);
+  });
+
+  it('name-only rows (no producer) still import', () => {
+    // The other half of the same import: "Fulyunton P18 Shiraz" had a name
+    // and no producer, and resolved fine. The gate must not lose these.
+    const csv = 'Wine,Producer,Vintage\nFulyunton P18 Shiraz,,2018';
+    const result = parseAndMap(csv);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].wineName).toBe('Fulyunton P18 Shiraz');
+    expect(result.warnings ?? []).toEqual([]); // warnings is unset when empty
+  });
+
   it('handles BOM-prefixed CSV', () => {
     const csv = '\uFEFFWine name,Winery,Vintage\nMargaux,Chateau Margaux,2015';
     const result = parseAndMap(csv);
