@@ -8,6 +8,7 @@
 jest.mock('../models/Bottle', () => ({
   find: jest.fn(),
   deleteMany: jest.fn(),
+  distinct: jest.fn(),
 }));
 jest.mock('../models/BottleImage', () => ({
   find: jest.fn(),
@@ -22,6 +23,7 @@ jest.mock('../models/PendingShare', () => ({ deleteMany: jest.fn() }));
 jest.mock('../models/WineList', () => ({ deleteMany: jest.fn() }));
 jest.mock('../models/ClimateDevice', () => ({ updateMany: jest.fn() }));
 jest.mock('../models/Cellar', () => ({ deleteOne: jest.fn() }));
+jest.mock('../models/WineRequest', () => ({ deleteMany: jest.fn() }));
 jest.mock('./wineListLogos', () => ({ deleteLogoFilesFor: jest.fn() }));
 jest.mock('./imageProcessor', () => ({ unlinkImageFiles: jest.fn() }));
 jest.mock('./search', () => ({ removeBottles: jest.fn() }));
@@ -36,6 +38,7 @@ const PendingShare = require('../models/PendingShare');
 const WineList = require('../models/WineList');
 const ClimateDevice = require('../models/ClimateDevice');
 const Cellar = require('../models/Cellar');
+const WineRequest = require('../models/WineRequest');
 const { deleteLogoFilesFor } = require('./wineListLogos');
 const { unlinkImageFiles } = require('./imageProcessor');
 const searchService = require('./search');
@@ -51,6 +54,8 @@ const OWN_IMAGES = [
 
 function setupMocks({ bottleIds = BOTTLE_IDS, ownImages = OWN_IMAGES } = {}) {
   Bottle.find.mockReturnValue({ distinct: jest.fn().mockResolvedValue(bottleIds) });
+  Bottle.distinct.mockResolvedValue([]);
+  WineRequest.deleteMany.mockResolvedValue({ deletedCount: 0 });
   BottleImage.find.mockReturnValue({
     select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(ownImages) }),
   });
@@ -167,5 +172,28 @@ describe('purgeCellarPermanently', () => {
     expect(searchService.removeBottles).toHaveBeenCalledWith([]);
     expect(Cellar.deleteOne).toHaveBeenCalledWith({ _id: CELLAR_ID });
     expect(result).toEqual({ racksDeleted: 2, bottlesDeleted: 0, imagesDeleted: 0 });
+  });
+
+  // ── Wine-request cascade (fix/import-empty-winename) ─────────────────────
+  // A request whose every referencing bottle is being purged can never be
+  // resolved into anything — it goes with the bottles. Requests also feeding
+  // another cellar's bottles stay; resolved/rejected are history and stay.
+
+  test('deletes pending/withdrawn requests referenced only by this cellar', async () => {
+    Bottle.distinct.mockImplementation(async (field, filter) =>
+      (filter && filter.cellar === CELLAR_ID) ? ['r1', 'r2', 'r3'] : ['r2']);
+
+    await purgeCellarPermanently(CELLAR_ID);
+
+    expect(WineRequest.deleteMany).toHaveBeenCalledWith({
+      _id: { $in: ['r1', 'r3'] },                 // r2 is referenced elsewhere
+      status: { $in: ['pending', 'withdrawn'] },  // resolved/rejected = history
+    });
+  });
+
+  test('no request refs → the request collection is never touched', async () => {
+    Bottle.distinct.mockResolvedValue([]);
+    await purgeCellarPermanently(CELLAR_ID);
+    expect(WineRequest.deleteMany).not.toHaveBeenCalled();
   });
 });

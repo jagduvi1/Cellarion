@@ -7,11 +7,12 @@ const Cellar = require('../models/Cellar');
 const Rack = require('../models/Rack');
 const WineDefinition = require('../models/WineDefinition');
 const Country = require('../models/Country');
+const Grape = require('../models/Grape');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
 const { getOrCreateDailySnapshot } = require('../utils/exchangeRates');
 const { resolveRating } = require('../utils/ratingUtils');
-const { normalizeString, resolveCountryName } = require('../utils/normalize');
+const { normalizeString, resolveCountryName, isRecognizedCountry, isUnknownName } = require('../utils/normalize');
 const { normalizeBottleSize, DEFAULT_SIZE } = require('../config/bottleSizes');
 const searchService = require('../services/search');
 const { identifyWineFromText } = require('../services/labelScan');
@@ -153,6 +154,71 @@ function buildProposedWine(aiData, item) {
     type: (WINE_TYPES.includes(clean(item && item.type)) ? clean(item.type) : null) || aiData.type,
     grapes: aiData.grapes,
     confidence: aiData.confidence,
+  };
+}
+
+/**
+ * Complete-row AI bypass (2026-08-29, Johan's call: "the somm is free and we
+ * pay for AI"). A row whose FILE already states the identity does not need a
+ * model to restate it: findOrCreateWine's ladder does the normalization work
+ * deterministically (producer-prefix canon, trailing-vintage strip,
+ * estate-name unpollution, appellation resolution), the somm/enrichment
+ * pipeline fills the tail, and the AI call would mostly echo the row back.
+ * One large import measured 430 debited calls; most rows carried full data.
+ * The AI keeps the rows it is actually FOR: incomplete or messy ones.
+ *
+ * The gate is "can this row mint cleanly and match correctly without AI",
+ * NOT "is every column filled":
+ *   - producer + wineName + country: required. Identity plus the one field
+ *     the mint hard-requires — and the country must RESOLVE (the file may
+ *     say "AU"; resolveCountryName normalizes it, and an unrecognizable
+ *     country would only turn into a /confirm-time error).
+ *   - type: the file's, or inferred from the file's grapes when they all
+ *     share one taxonomy colour (Riesling → white). Without either the row
+ *     goes to AI — findOrCreateWine defaults a missing type to 'red', and a
+ *     white minted red is exactly the silent error the AI's answer prevents.
+ *     (Known limit: a red-grape rosé with no type column infers 'red' — the
+ *     file's own type column always wins when present.)
+ *   - grapes, region, appellation: NEVER gate the bypass. Grapes are
+ *     inferable from the name and enrichable later; region derives from the
+ *     appellation (regionForAppellation — the appellation's region
+ *     deliberately outranks the file's); appellation was never required.
+ *
+ * Returns an aiIdentified-shaped object (confidence null) so Pass 2 and the
+ * result builder treat the row exactly like an AI-identified one — same
+ * matchOnly probe, same buildProposedWine precedence, no third path — or
+ * null when the row genuinely needs (or lacks the data to skip) the model.
+ */
+function fileCompleteIdentity(item, grapeColourOf) {
+  const clean = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+  const name = clean(item.wineName);
+  const producer = clean(item.producer);
+  if (!name || !producer) return null;
+  if (isUnknownName(name) || isUnknownName(producer)) return null;
+
+  const country = resolveCountryName(clean(item.country) || '');
+  if (!country || !isRecognizedCountry(country)) return null;
+
+  const grapes = sanitizeGrapeNames(item.grapes);
+
+  let type = clean(item.type);
+  if (!WINE_TYPES.includes(type)) type = null;
+  if (!type && grapes.length > 0 && typeof grapeColourOf === 'function') {
+    const colours = new Set(grapes.map((g) => grapeColourOf(g)).filter(Boolean));
+    if (colours.size === 1) type = colours.has('Red') ? 'red' : 'white';
+  }
+  if (!type) return null;
+
+  return {
+    name,
+    producer,
+    country,
+    region: clean(item.region),
+    appellation: clean(item.appellation),
+    classification: clean(item.classification),
+    type,
+    grapes,
+    confidence: null,
   };
 }
 
@@ -425,7 +491,27 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     // (b) existing fuzzy scorer at the exact threshold (>= 0.95) — at that
     //     score the AI path's findOrCreateWine would auto-match the same
     //     registry wine, so skipping AI is outcome-identical;
-    // (c) everything else goes to AI exactly as before.
+    // (c) complete-data rows skip AI too (see fileCompleteIdentity): the file
+    //     itself becomes the identification and Pass 2 treats it exactly like
+    //     an AI answer — matchOnly probe, proposal, the lot;
+    // (d) everything else goes to AI exactly as before.
+    //
+    // Grape-colour lookup for (c)'s type inference — built lazily, once, and
+    // only if some row actually lacks a type column.
+    let grapeColourOf = null;
+    const getGrapeColourOf = async () => {
+      if (grapeColourOf) return grapeColourOf;
+      const docs = await Grape.find({}).select('name normalizedName normalizedSynonyms color').lean();
+      const byKey = new Map();
+      for (const g of docs) {
+        if (!g.color) continue;
+        for (const k of [g.normalizedName, normalizeString(g.name || ''), ...(g.normalizedSynonyms || [])]) {
+          if (k) byKey.set(k, g.color);
+        }
+      }
+      grapeColourOf = (grapeName) => byKey.get(normalizeString(String(grapeName || ''))) || null;
+      return grapeColourOf;
+    };
     for (const pr of uniquePrs) {
       if (clientDisconnected) break; // requester gone — stop the cascade, skip AI entirely
       // forceAi bypasses the cascade only when there is an AI to reach; with
@@ -445,6 +531,19 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
       // match falls through to the AI/fuzzy path, where the user chooses.
       if (matches.length > 0 && matches[0].score >= EXACT_THRESHOLD && !matches[0].styleConflict) {
         pr.registryWine = { wine: matches[0].wine, score: matches[0].score };
+        continue;
+      }
+      // (c) the complete-row bypass. Needs the colour map only when the row
+      // has grapes but no type, so the taxonomy read is lazy.
+      const identity = fileCompleteIdentity(
+        pr.item,
+        (!pr.item.type && Array.isArray(pr.item.grapes) && pr.item.grapes.length > 0)
+          ? await getGrapeColourOf()
+          : null
+      );
+      if (identity) {
+        pr.aiIdentified = identity;
+        pr.aiBypassed = true;
       }
     }
 
@@ -454,7 +553,9 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     // refunded on transport failure), and a client-disconnect check that
     // stops LAUNCHING new calls once the requester has gone away. All three
     // degrade gracefully to the fuzzy path (aiSkipped: true) — never an error.
-    const needAi = aiConfigured ? uniquePrs.filter(pr => !pr.registryWine) : [];
+    // aiIdentified may already be set by the Pass 1a complete-row bypass —
+    // those rows have their identification and must not spend a call on it.
+    const needAi = aiConfigured ? uniquePrs.filter(pr => !pr.registryWine && !pr.aiIdentified) : [];
     const perRequestCap = rateLimitsConfig.get().aiImportPerRequestCap?.max
       ?? rateLimitsConfig.defaults.aiImportPerRequestCap.max;
     const aiRun = needAi.slice(0, perRequestCap);
@@ -808,6 +909,9 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
       // per-request cap, or client disconnect) — they fell through to the
       // fuzzy path above. Informational only; the row itself never errors.
       if (pr.aiSkipped) result.aiSkipped = true;
+      // Complete-data rows resolved without spending an AI call (Pass 1a's
+      // fileCompleteIdentity) — informational, for transparency and debugging.
+      if (pr.aiBypassed) result.aiBypassed = true;
       results.push(result);
     }
 
@@ -1228,9 +1332,15 @@ router.post('/confirm', async (req, res) => {
         }
 
         if (item.requestWine) {
-          // No match — create a pending WineRequest and bottle without wineDefinition
-          if (!item.wineName && !item.producer) {
-            errors.push({ index: i, reason: 'Wine name or producer is required' });
+          // No match — create a pending WineRequest and bottle without wineDefinition.
+          // wineName is REQUIRED, not wineName-or-producer: the old fallback
+          // filed the PRODUCER as the wine's name, and one broken export did
+          // that 131 times in one import — junk requests no curator can
+          // resolve, since many distinct cuvées sit behind one producer
+          // string. The frontend mapper now skips nameless rows before they
+          // get here; this is the API-side mirror for other clients.
+          if (!item.wineName || !String(item.wineName).trim()) {
+            errors.push({ index: i, reason: 'A wine name is required to request a wine' });
             continue;
           }
 
@@ -1245,7 +1355,7 @@ router.post('/confirm', async (req, res) => {
             const suggestedGrapes = sanitizeGrapeNames(item.grapes);
             wineRequest = new WineRequest({
               requestType: 'new_wine',
-              wineName: (item.wineName || item.producer || '').trim(),
+              wineName: String(item.wineName).trim(),
               producer: (item.producer || '').trim() || undefined,
               user: req.user.id,
               status: 'pending',

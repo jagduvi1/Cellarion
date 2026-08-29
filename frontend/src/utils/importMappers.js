@@ -1748,10 +1748,18 @@ export function parseAndMap(text, forceFormat) {
     if (mapped.consumedAt)   mapped.consumedAt   = tryParseDate(mapped.consumedAt);
     if (mapped.dateAdded)    mapped.dateAdded    = tryParseDate(mapped.dateAdded);
 
-    // Skip rows with no wine name and no producer \u2014 counted so the upload
-    // step can say so instead of the rows just vanishing (Vivino scan
-    // history routinely contains label-image-only rows for failed scans).
-    if (!mapped.wineName && !mapped.producer) { noIdentitySkipped++; continue; }
+    // Skip rows with no wine name \u2014 counted so the upload step can say so
+    // instead of the rows just vanishing (Vivino scan history routinely
+    // contains label-image-only rows for failed scans). This used to be
+    // `!wineName && !producer`, an AND, so a producer-only row slipped
+    // through \u2014 and the import then filed a WineRequest with the PRODUCER as
+    // the wine's name. One broken generic-CSV export did that 131 times in a
+    // single import ("Hewitson \u2014 Hewitson", 2026-08-28): a whole cellar
+    // parked on junk requests no curator can resolve, because 250 distinct
+    // cuv\u00e9es sat behind one producer string. The module's own master-format
+    // doc has always said wineName is required; now the gate agrees.
+    // Name-only rows (no producer) still pass \u2014 those resolve fine.
+    if (!mapped.wineName) { noIdentitySkipped++; continue; }
 
     // `?? 1` not `|| 1`: CT List rows can legitimately carry quantity 0
     // (fully pending wines) and must expand to zero items. All other

@@ -69,8 +69,10 @@ router.get('/', async (req, res) => {
     const { status } = req.query;
     const filter = { user: req.user.id };
 
-    // Must match the WineRequest schema enum — resolve sets 'resolved', not 'approved'
-    const validStatuses = ['pending', 'resolved', 'rejected'];
+    // Must match the WineRequest schema enum — resolve sets 'resolved', not 'approved'.
+    // 'withdrawn' (request left the queue with its deleted cellar) stays
+    // visible in the user's OWN list — it is their history — and filterable.
+    const validStatuses = ['pending', 'resolved', 'rejected', 'withdrawn'];
     if (status) {
       if (!validStatuses.includes(status)) {
         return res.status(400).json({ error: `Invalid status filter. Must be one of: ${validStatuses.join(', ')}` });

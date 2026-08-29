@@ -335,7 +335,10 @@ function AdminRequests() {
         {/* Left panel: request list */}
         <div className="requests-panel">
           <div className="panel-filters">
-            {['pending', 'resolved', 'rejected', ''].map(s => (
+            {/* 'withdrawn' = requests that left the queue with their deleted
+                cellar — excluded from every other view (including All, which
+                the backend now defaults to non-withdrawn), reachable here. */}
+            {['pending', 'resolved', 'rejected', 'withdrawn', ''].map(s => (
               <button
                 key={s || 'all'}
                 className={`filter-btn ${statusFilter === s ? 'active' : ''}`}

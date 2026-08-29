@@ -324,3 +324,9 @@
   font-size: 0.85em;
   color: var(--color-text-secondary, #888);
 }
+
+/* Withdrawn = left the queue with its deleted cellar; muted, not alarming. */
+.status-badge.status-withdrawn {
+  background: var(--color-border-light, #f0ece8);
+  color: var(--color-text-secondary, #888);
+}

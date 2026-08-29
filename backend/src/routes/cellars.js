@@ -9,6 +9,7 @@ const BottleImage = require('../models/BottleImage');
 const WineDefinition = require('../models/WineDefinition');
 const PendingShare = require('../models/PendingShare');
 const ClimateDevice = require('../models/ClimateDevice');
+const WineRequest = require('../models/WineRequest');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
 const { createCellar } = require('../services/rackOps');
@@ -1475,6 +1476,33 @@ router.delete('/:id', async (req, res) => {
     // for restore. Both are hard-deleted by the permanent-delete cascade
     // (services/cellarPurge.js) — and the public wine-list routes 404 while
     // the cellar is soft-deleted, so nothing stays reachable meanwhile.
+
+    // Withdraw the cellar's pending wine requests from the admin queue. A
+    // deleted cellar's requests used to linger as ghosts a curator could
+    // spend real time on (131 of them after one abandoned import,
+    // 2026-08-28) — and resolving one would have bound bottles the user had
+    // already thrown away. Withdrawn, not rejected: rejection notifies the
+    // user and detaches their bottles; a user deleting their own cellar has
+    // asked for neither. Stamped with the cellar's own deletedAt (the rack
+    // cascade's exact-timestamp pattern) so restore re-pends precisely these.
+    // Only requests whose EVERY referencing bottle is inside this cellar —
+    // a request also feeding another cellar's bottles must stay pending.
+    const reqIds = await Bottle.distinct('pendingWineRequest', {
+      cellar: cellar._id, pendingWineRequest: { $ne: null },
+    });
+    if (reqIds.length > 0) {
+      const elsewhere = await Bottle.distinct('pendingWineRequest', {
+        cellar: { $ne: cellar._id }, pendingWineRequest: { $in: reqIds },
+      });
+      const elsewhereSet = new Set(elsewhere.map(String));
+      const onlyHere = reqIds.filter((id) => !elsewhereSet.has(String(id)));
+      if (onlyHere.length > 0) {
+        await WineRequest.updateMany(
+          { _id: { $in: onlyHere }, status: 'pending' },
+          { $set: { status: 'withdrawn', withdrawnAt: now } }
+        );
+      }
+    }
 
     // Bottles are preserved — they remain in history via their status field
 

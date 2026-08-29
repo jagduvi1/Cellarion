@@ -43,9 +43,21 @@ const wineRequestSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'resolved', 'rejected'],
+    // 'withdrawn': the request left the admin queue because its cellar was
+    // soft-deleted — not judged, not rejected (rejecting notifies the user and
+    // detaches their bottles; withdrawing does neither). Restoring the cellar
+    // re-pends exactly the requests it withdrew, via withdrawnAt below.
+    enum: ['pending', 'resolved', 'rejected', 'withdrawn'],
     default: 'pending',
     index: true
+  },
+  // Stamped with the cellar's own deletedAt by the soft-delete cascade — the
+  // same exact-timestamp pattern the rack cascade uses, so a restore re-pends
+  // ONLY the requests this deletion withdrew and never resurrects one the
+  // user had already lost some other way.
+  withdrawnAt: {
+    type: Date,
+    default: null
   },
   // Admin resolution
   resolvedBy: {

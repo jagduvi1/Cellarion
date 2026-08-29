@@ -28,13 +28,19 @@ router.get('/', async (req, res) => {
     const { status } = req.query;
     const { limit, offset: skip } = parsePagination(req.query, { limit: 50, maxLimit: 200 });
     const filter = {};
-    const VALID_STATUSES = ['pending', 'resolved', 'rejected'];
+    const VALID_STATUSES = ['pending', 'resolved', 'rejected', 'withdrawn'];
 
     if (status) {
       if (!VALID_STATUSES.includes(String(status))) {
         return res.status(400).json({ error: 'Invalid status filter' });
       }
       filter.status = String(status);
+    } else {
+      // Withdrawn requests left the queue with their (soft-deleted) cellar —
+      // not judged, and nothing for a curator to do. They only show when
+      // asked for explicitly (?status=withdrawn), never in the default list
+      // an admin works through.
+      filter.status = { $ne: 'withdrawn' };
     }
 
     const [requests, total] = await Promise.all([
