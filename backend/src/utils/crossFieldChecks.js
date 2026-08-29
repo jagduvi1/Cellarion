@@ -61,6 +61,7 @@ const {
 // Shared with the enrichment hold (services/enrichmentJob) so the review queue
 // and the publication gate can never disagree about what a colour clash is.
 const { findGrapeColourConflict } = require('./grapeColourCheck');
+const { SWEETNESS_WORDS } = require('./styleTerms');
 
 /**
  * Probe a reference map with BOTH normalization folds of a wine-side value,
@@ -116,11 +117,11 @@ function buildCrossFieldRefs({ appellations = [], regions = [], countries = [], 
 // least one is style — "Roșu Demidulce" flags, "Château Doux Rivage" must not
 // (rivage is a real word).
 const STYLE_WORDS = new Set([
-  // sweetness / dryness scales across label languages
-  'demidulce', 'demisec', 'dulce', 'seco', 'semiseco', 'semidulce',
-  'abboccato', 'amabile', 'halbtrocken', 'feinherb', 'trocken', 'lieblich',
-  'offdry', 'semisweet', 'moelleux', 'doux', 'brut', 'sec', 'dry', 'sweet',
-  'suss', 'edes',
+  // sweetness / dryness scales across label languages. Shared with the
+  // registry matcher's style guard (utils/styleTerms), which reads the same
+  // words off a wine NAME to decide that a Trocken and a Feinherb are two
+  // wines — one vocabulary, two readers (issue #1134).
+  ...SWEETNESS_WORDS,
   // colour-as-style — the other half of the "Roșu Demidulce" prod row
   'rosu', 'alb', 'negru', 'rosso', 'bianco', 'rosato', 'tinto', 'blanco',
   'rouge', 'blanc', 'rose', 'rot', 'weiss', 'red', 'white',

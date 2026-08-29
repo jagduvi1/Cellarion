@@ -45,6 +45,7 @@
  * below as the complete set.
  */
 const { normalizeString } = require('../utils/normalize');
+const { conflictingStyleTerms } = require('../utils/styleTerms');
 
 // Label furniture: real words on labels that never distinguish two wines of
 // the same producer. "Old Vines" is the curator's transformation #2; the rest
@@ -132,6 +133,18 @@ function isLabelVariant(a, b, grapeTokens) {
   if (ra.varieties.size > 0 && rb.varieties.size > 0
       && !subset(ra.varieties, rb.varieties) && !subset(rb.varieties, ra.varieties)) {
     return { match: false, reason: 'each name states a different variety — a range, not a duplicate' };
+  }
+  // The same guard on the OTHER axis a range varies along (issue #1134): a
+  // Mosel estate bottles one vineyard as Kabinett, Spätlese and Auslese, and
+  // each Prädikat again as trocken / feinherb. Today the reduction already
+  // separates them — style words are not in FURNITURE, so they survive into
+  // `core` and the equality above fails. This is here so that stays true: the
+  // words read exactly like furniture ("trocken" is not a wine's name), and
+  // the first person to add them to the strip list would collapse a producer's
+  // whole range onto one row with nothing to stop it.
+  const styleConflict = conflictingStyleTerms(a.name, b.name);
+  if (styleConflict) {
+    return { match: false, reason: `${styleConflict} — a range, not a duplicate` };
   }
   // Corroborate against the stored grape lists when BOTH rows have them: two
   // records of one wine cannot disagree about what it is made from. A missing

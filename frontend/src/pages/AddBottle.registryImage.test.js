@@ -121,14 +121,14 @@ describe('the scan card shows what the registry already holds', () => {
     render(<AddBottle />);
     await deliverScan(MATCHED_WITH_IMAGE);
 
-    expect(screen.getByText('addBottle.aiFoundWine')).toBeInTheDocument();
+    expect(screen.getByText('addBottle.scanRegistryMatch')).toBeInTheDocument();
   });
 
   test('an UNMATCHED scan shows neither the badge nor a second photo', async () => {
     render(<AddBottle />);
     await deliverScan(UNMATCHED);
 
-    expect(screen.queryByText('addBottle.aiFoundWine')).not.toBeInTheDocument();
+    expect(screen.queryByText('addBottle.scanRegistryMatch')).not.toBeInTheDocument();
     expect(screen.queryByText('addBottle.scanRegistryPhoto')).not.toBeInTheDocument();
     // The user's own label photo is still there, alone and uncaptioned.
     expect(screen.queryByText('addBottle.scanYourPhoto')).not.toBeInTheDocument();
@@ -139,7 +139,7 @@ describe('the scan card shows what the registry already holds', () => {
     render(<AddBottle />);
     await deliverScan(MATCHED_NO_IMAGE);
 
-    expect(screen.getByText('addBottle.aiFoundWine')).toBeInTheDocument();
+    expect(screen.getByText('addBottle.scanRegistryMatch')).toBeInTheDocument();
     expect(screen.queryByText('addBottle.scanRegistryPhoto')).not.toBeInTheDocument();
     expect(screen.getAllByRole('img')).toHaveLength(1);
   });

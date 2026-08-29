@@ -107,7 +107,7 @@ function AddToWishlist() {
   // Resolve confirmed wine data against the registry (READ-ONLY — nothing is
   // created here any more): matched wine, soft-zone candidates, or no match
   // (→ the fields ride to the save, which mints).
-  const resolveSelectedWine = useCallback(async (wineData) => {
+  const resolveSelectedWine = useCallback(async (wineData, opts = {}) => {
     setError(null);
     setFindingWine(true);
     try {
@@ -116,10 +116,20 @@ function AddToWishlist() {
       if (!res.ok) { setError(data.error || t('addToWishlist.failedSaveWine')); return; }
       if (data.candidates && data.candidates.length > 0) {
         setSoftCandidates(data.candidates);
-        setSoftPending({ wineData });
+        setSoftPending({ wineData, queryLabel: opts.queryLabel });
         return;
       }
       if (data.wine) { applyResolvedWine(data.wine); return; }
+      // noMatch — but the label scan may have found a registry row this
+      // resolve did not (the scan matcher looks from 0.75, the resolver's
+      // "did you mean?" floor is 0.85). Ask instead of minting a duplicate;
+      // the scan's match never links on its own (issue #1134, mirrors
+      // AddBottle).
+      if (opts.fallback?.wine) {
+        setSoftCandidates([{ wine: opts.fallback.wine, score: opts.fallback.confidence || 0 }]);
+        setSoftPending({ wineData, queryLabel: opts.queryLabel });
+        return;
+      }
       applyPendingNewWine(wineData);
     } catch {
       setError(t('addToWishlist.failedSaveWine'));
@@ -285,30 +295,26 @@ function AddToWishlist() {
   // ── Confirm scan result — resolve the wine, then add details. The label
   // image is NOT part of the wine payload (the old find-or-create route
   // ignored it, and it must not bloat the wishlist commit). ──
+  //
+  // Resolve on WHAT THE LABEL SAID — never on the matched row. Same silent
+  // substitution AddBottle carried (issue #1134), and worse here: this page
+  // never rendered the matched wine at all, so there was nothing on screen
+  // that could have shown the swap.
   const handleConfirmScan = useCallback(async () => {
     const { extracted, match } = scanResult;
-    const wineData = match?.wine
-      ? {
-          name: match.wine.name,
-          producer: match.wine.producer,
-          country: match.wine.country?.name || extracted.country || '',
-          region: match.wine.region?.name || extracted.region || '',
-          appellation: match.wine.appellation || extracted.appellation || '',
-          type: match.wine.type || extracted.type || '',
-          grapes: (match.wine.grapes || []).map(g => g.name)
-        }
-      : {
-          name: extracted.name,
-          producer: extracted.producer,
-          country: extracted.country || '',
-          region: extracted.region || '',
-          appellation: extracted.appellation || '',
-          classification: extracted.classification || '',
-          type: extracted.type || '',
-          grapes: extracted.grapes || []
-        };
-
-    await resolveSelectedWine(wineData);
+    await resolveSelectedWine(
+      {
+        name: extracted.name,
+        producer: extracted.producer,
+        country: extracted.country || '',
+        region: extracted.region || '',
+        appellation: extracted.appellation || '',
+        classification: extracted.classification || '',
+        type: extracted.type || '',
+        grapes: extracted.grapes || []
+      },
+      { fallback: match, queryLabel: extracted.name }
+    );
   }, [scanResult, resolveSelectedWine]);
 
   const handleNotRightWine = useCallback(() => {
@@ -641,6 +647,17 @@ function AddToWishlist() {
                 }
               </div>
               <div className="scan-wine-body">
+                {/* Names the registry row the scan matched (issue #1134).
+                    This page showed no sign of a match at all while quietly
+                    committing to it. */}
+                {scanResult.match?.wine && (
+                  <div className="ai-result-badge scan-wine-badge">
+                    {t('addToWishlist.scanRegistryMatch', {
+                      name: scanResult.match.wine.name,
+                      percent: Math.round((scanResult.match.confidence || 0) * 100),
+                    })}
+                  </div>
+                )}
                 <h2 className="scan-wine-name">{scanResult.extracted.name}</h2>
                 <p className="scan-wine-producer">{scanResult.extracted.producer}</p>
                 {scanResult.extracted.confidence != null && (
