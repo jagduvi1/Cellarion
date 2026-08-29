@@ -75,6 +75,28 @@ describe('style guard on the same range', () => {
     expect(alteReben.score).toBeLessThan(0.95);
   });
 
+  it('a range pair can clear the import auto-link threshold — the guard is the only thing between them', () => {
+    // The import cascade auto-links at >= 0.95 through scoreWineMatchVariants.
+    // A long shared vineyard name makes the one differing style word a small
+    // fraction of the string, so this real-world shape scores ABOVE the
+    // resolver's own auto-link bar while naming two different wines — the
+    // measured proof that the import path needs the styleConflict gate.
+    const { scoreWineMatchVariants } = require('./wineMatching');
+    const A = 'Niederhäuser Hermannshöhle';
+    const halbtrocken = {
+      name: 'Niederhäuser Hermannshöhle Riesling Großes Gewächs Alte Reben Erste Lage Halbtrocken',
+      producer: 'Weingut Dönnhoff', appellation: A,
+    };
+    const trocken = {
+      name: 'Niederhäuser Hermannshöhle Riesling Großes Gewächs Alte Reben Erste Lage Trocken',
+      producer: 'Weingut Dönnhoff', appellation: A,
+    };
+    const score = scoreWineMatchVariants(halbtrocken, trocken);
+    expect(score).toBeCloseTo(0.9538, 4);
+    expect(score).toBeGreaterThanOrEqual(0.95);
+    expect(conflictingStyleTerms(trocken.name, halbtrocken.name)).toMatch(/different sweetness/);
+  });
+
   it('the two Trocken readings are rejected on sweetness, whatever the producer', () => {
     // The guard reads names only, so the misread producer changes nothing —
     // the bottle that escaped by accident would now be kept apart on purpose.

@@ -115,7 +115,13 @@ function AddToWishlist() {
       const data = await res.json();
       if (!res.ok) { setError(data.error || t('addToWishlist.failedSaveWine')); return; }
       if (data.candidates && data.candidates.length > 0) {
-        setSoftCandidates(data.candidates);
+        // Merge the scan's own match into the list when the resolver didn't
+        // find it itself — mirrors AddBottle; see the comment there.
+        const candidates = (opts.fallback?.wine
+          && !data.candidates.some((c) => c.wine?._id === opts.fallback.wine._id))
+          ? [...data.candidates, { wine: opts.fallback.wine, score: opts.fallback.confidence || 0 }]
+          : data.candidates;
+        setSoftCandidates(candidates);
         setSoftPending({ wineData, queryLabel: opts.queryLabel });
         return;
       }
@@ -302,15 +308,19 @@ function AddToWishlist() {
   // that could have shown the swap.
   const handleConfirmScan = useCallback(async () => {
     const { extracted, match } = scanResult;
+    // country/type GAP-FILL from the matched row — never identity (mirrors
+    // AddBottle; see the comment there). Restores the healing the old
+    // matched branch provided for countryless/typeless extractions without
+    // reintroducing the identity substitution.
     await resolveSelectedWine(
       {
         name: extracted.name,
         producer: extracted.producer,
-        country: extracted.country || '',
+        country: extracted.country || match?.wine?.country?.name || '',
         region: extracted.region || '',
         appellation: extracted.appellation || '',
         classification: extracted.classification || '',
-        type: extracted.type || '',
+        type: extracted.type || match?.wine?.type || '',
         grapes: extracted.grapes || []
       },
       { fallback: match, queryLabel: extracted.name }

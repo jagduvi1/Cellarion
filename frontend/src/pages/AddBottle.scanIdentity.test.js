@@ -143,6 +143,72 @@ describe('the scanned identity is what gets resolved', () => {
     expect(sent).toHaveProperty('classification');
   });
 
+  test('a label stating no country borrows the matched row\'s — identity stays the label\'s', async () => {
+    // The old matched branch healed countryless labels by accident (registry
+    // rows always have a country; the resolve endpoint requires one). The
+    // fix must keep the healing without the substitution: gap-fill only.
+    resolveWine.mockResolvedValue(jsonRes({ wine: null, created: false, noMatch: true }));
+
+    render(<AddBottle />);
+    await deliverScan({
+      ...SCAN_RESULT,
+      extracted: { ...SCANNED, country: '', type: '' },
+    });
+    await confirmScan();
+
+    const sent = resolveWine.mock.calls[0][1];
+    expect(sent.country).toBe('Germany');        // from NEIGHBOUR.country.name
+    expect(sent.type).toBe('white');             // from NEIGHBOUR.type
+    expect(sent.name).toBe(V + 'Spätlese Alte Reben');  // NOT the neighbour's
+  });
+
+  test('a stated country is never overwritten by the match', async () => {
+    resolveWine.mockResolvedValue(jsonRes({ wine: null, created: false, noMatch: true }));
+
+    render(<AddBottle />);
+    await deliverScan({
+      ...SCAN_RESULT,
+      match: { wine: { ...NEIGHBOUR, country: { name: 'Austria' } }, confidence: 0.87 },
+    });
+    await confirmScan();
+
+    expect(resolveWine.mock.calls[0][1].country).toBe('Germany');
+  });
+
+  test('the scan match joins the resolver\'s own candidate list instead of vanishing', async () => {
+    // Scan matched Y at 0.78; the resolver's soft zone returns sibling Z at
+    // 0.87. v1.181.0 showed only Z — "create new" from that dialog minted a
+    // duplicate of Y, the exact outcome the fallback exists to stop.
+    const SIBLING_Z = { ...NEIGHBOUR, _id: 'wine-trocken', name: V + 'Spätlese Trocken' };
+    resolveWine.mockResolvedValue(jsonRes({
+      wine: null,
+      candidates: [{ wine: SIBLING_Z, score: 0.87 }],
+    }));
+
+    render(<AddBottle />);
+    await deliverScan({ ...SCAN_RESULT, match: { wine: NEIGHBOUR, confidence: 0.78 } });
+    await confirmScan();
+
+    expect(await screen.findByText('similarWines.createNew')).toBeInTheDocument();
+    expect(screen.getByText(SIBLING_Z.name)).toBeInTheDocument();
+    expect(screen.getByText(NEIGHBOUR.name)).toBeInTheDocument();
+  });
+
+  test('the scan match is not duplicated when the resolver already lists it', async () => {
+    resolveWine.mockResolvedValue(jsonRes({
+      wine: null,
+      candidates: [{ wine: NEIGHBOUR, score: 0.87 }],
+    }));
+
+    render(<AddBottle />);
+    await deliverScan(SCAN_RESULT);
+    await confirmScan();
+
+    await screen.findByText('similarWines.createNew');
+    // One row for the neighbour, not two.
+    expect(screen.getAllByText(NEIGHBOUR.name)).toHaveLength(1);
+  });
+
   test('the soft zone asks instead of filing it silently', async () => {
     resolveWine.mockResolvedValue(jsonRes({
       wine: null,

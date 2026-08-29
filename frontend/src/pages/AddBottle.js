@@ -343,7 +343,16 @@ function AddBottle() {
       // was typed before the camera was opened.
       const queryLabel = opts.queryLabel || search.trim() || wineData.name;
       if (data.candidates && data.candidates.length > 0) {
-        setSoftCandidates(data.candidates);
+        // The scan's own match joins the list when the resolver didn't find
+        // it itself: the scan matcher looks from 0.75, the soft zone from
+        // 0.85, so a 0.79 true match would otherwise vanish exactly when a
+        // higher-scoring sibling makes the list — and "create new" from that
+        // incomplete dialog mints the duplicate the fallback exists to stop.
+        const candidates = (opts.fallback?.wine
+          && !data.candidates.some((c) => c.wine?._id === opts.fallback.wine._id))
+          ? [...data.candidates, { wine: opts.fallback.wine, score: opts.fallback.confidence || 0 }]
+          : data.candidates;
+        setSoftCandidates(candidates);
         setSoftPending({ wineData, carriedVintage, queryLabel });
         return;
       }
@@ -388,15 +397,22 @@ function AddBottle() {
   // match offered below that (see resolveSelectedWine).
   const handleConfirmScan = useCallback(async () => {
     const { extracted, match } = scanResult;
+    // country/type GAP-FILL from the matched row — never identity. The old
+    // matched branch substituted the whole identity, but it also quietly
+    // healed labels that state no country (registry rows always have one;
+    // the resolve endpoint hard-requires it) and typeless extractions
+    // (findOrCreateWine defaults an empty type to 'red'). Keep exactly that
+    // healing: the match fills only what the label did NOT state, and
+    // name/producer/appellation stay the label's own words.
     await resolveSelectedWine(
       {
         name: extracted.name,
         producer: extracted.producer,
-        country: extracted.country || '',
+        country: extracted.country || match?.wine?.country?.name || '',
         region: extracted.region || '',
         appellation: extracted.appellation || '',
         classification: extracted.classification || '',
-        type: extracted.type || '',
+        type: extracted.type || match?.wine?.type || '',
         grapes: extracted.grapes || []
       },
       extracted.vintage,
