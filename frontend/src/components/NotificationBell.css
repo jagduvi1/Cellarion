@@ -165,6 +165,11 @@
   color: var(--color-text-muted);
   line-height: 1.4;
   word-break: break-word;
+  /* Messages may carry a paragraph break — a registry-data decision appends
+     the curator's reason under the summary line. Without this the two run
+     together into one wall of text. Existing single-line messages are
+     unaffected: pre-line still collapses ordinary wrapping whitespace. */
+  white-space: pre-line;
 }
 
 .notif-time {

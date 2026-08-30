@@ -20,11 +20,13 @@ jest.mock('./contributionGate', () => ({
 }));
 jest.mock('./wineVisibility', () => ({ findVisibleWine: jest.fn() }));
 jest.mock('./audit', () => ({ logAudit: jest.fn() }));
+jest.mock('./notifications', () => ({ createNotification: jest.fn(() => Promise.resolve()) }));
 
 const RegistryDataKey = require('../models/RegistryDataKey');
 const RegistryDataValue = require('../models/RegistryDataValue');
 const { checkContributionGate } = require('./contributionGate');
 const { findVisibleWine } = require('./wineVisibility');
+const { createNotification } = require('./notifications');
 const ops = require('./registryDataOps');
 
 const oid = (c) => c.repeat(24);
@@ -240,6 +242,77 @@ describe('admin decisions', () => {
     expect(res.ok).toBe(true);
     expect(row.status).toBe('rejected');
     expect(RegistryDataValue.updateOne).not.toHaveBeenCalled();
+  });
+
+  // ── Contributor feedback (2026-08-30) ────────────────────────────────────
+  // The rejectReason field was written, capped and stored — and had no
+  // reader: no notification type existed, and the user-facing keys endpoint
+  // returns only the accepted vocabulary, so a curator's explanation reached
+  // the contributor solely through a GDPR export. Every sibling queue (wine
+  // requests, reports, images, price requests) notifies its submitter.
+
+  test('a rejected key notifies its proposer WITH the curator reason', async () => {
+    RegistryDataKey.findOneAndUpdate.mockResolvedValue({
+      ...acceptedKey, name: 'Beautiful', status: 'rejected',
+      proposedBy: ME, rejectReason: 'Not an objective property.',
+    });
+    await ops.decideKey(ADMIN, KEY, 'reject', 'Not an objective property.');
+
+    expect(createNotification).toHaveBeenCalledWith(
+      ME, 'registry_key_decided', 'Registry key not accepted',
+      expect.stringContaining('Not an objective property.'),
+      null
+    );
+    // The name is in the message too, so the notification stands alone.
+    expect(createNotification.mock.calls[0][3]).toContain('Beautiful');
+  });
+
+  test('an accepted key notifies without a reason paragraph', async () => {
+    RegistryDataKey.findOneAndUpdate.mockResolvedValue({
+      ...acceptedKey, status: 'accepted', proposedBy: ME, rejectReason: undefined,
+    });
+    await ops.decideKey(ADMIN, KEY, 'accept');
+
+    const [, type, title, message] = createNotification.mock.calls[0];
+    expect(type).toBe('registry_key_decided');
+    expect(title).toBe('Registry key accepted');
+    expect(message).not.toContain('\n\n'); // no empty reason block appended
+  });
+
+  test('value decisions notify the suggester both ways', async () => {
+    const base = () => ({
+      _id: oid('9'), wineDefinition: WINE, key: acceptedKey, value: 13.5,
+      status: 'suggested', suggestedBy: ME, save: jest.fn().mockResolvedValue(undefined),
+    });
+
+    RegistryDataValue.findOne.mockReturnValue({ populate: jest.fn().mockResolvedValue(base()) });
+    await ops.decideValue(ADMIN, oid('9'), 'reject', 'unsourced');
+    expect(createNotification).toHaveBeenLastCalledWith(
+      ME, 'registry_value_decided', 'Suggested value not published',
+      expect.stringContaining('unsourced'), null
+    );
+
+    RegistryDataValue.findOne.mockReturnValue({ populate: jest.fn().mockResolvedValue(base()) });
+    await ops.decideValue(ADMIN, oid('9'), 'publish');
+    expect(createNotification).toHaveBeenLastCalledWith(
+      ME, 'registry_value_decided', 'Suggested value published',
+      expect.stringContaining('13.5'), null
+    );
+  });
+
+  test('a decision still succeeds when the notification fails', async () => {
+    // Fire-and-forget: the decision is already persisted and audit-logged.
+    createNotification.mockRejectedValueOnce(new Error('push broker down'));
+    RegistryDataKey.findOneAndUpdate.mockResolvedValue({ ...acceptedKey, status: 'accepted', proposedBy: ME });
+    const res = await ops.decideKey(ADMIN, KEY, 'accept');
+    expect(res.ok).toBe(true);
+  });
+
+  test('a proposal from a deleted account is decided without notifying', async () => {
+    RegistryDataKey.findOneAndUpdate.mockResolvedValue({ ...acceptedKey, status: 'accepted', proposedBy: null });
+    const res = await ops.decideKey(ADMIN, KEY, 'accept');
+    expect(res.ok).toBe(true);
+    expect(createNotification).not.toHaveBeenCalled();
   });
 
   test('review queues are bounded', async () => {

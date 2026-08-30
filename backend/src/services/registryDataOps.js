@@ -19,6 +19,7 @@ const { checkContributionGate } = require('./contributionGate');
 const { stripHtml } = require('../utils/sanitize');
 const { isValidId } = require('../utils/validation');
 const { logAudit } = require('./audit');
+const { createNotification } = require('./notifications');
 
 // Names that would shadow first-class record fields — a key called
 // "producer" or "region" must never exist beside the real thing.
@@ -247,6 +248,29 @@ async function listReviewQueues() {
   return { ok: true, keys, values };
 }
 
+/**
+ * Notify a contributor that their registry-data submission was decided.
+ *
+ * The reason is APPENDED to the message rather than replacing it, so an
+ * accept still reads well (no reason) and a reject carries the curator's
+ * words verbatim — which is the whole point: the rejectReason field existed,
+ * was written, capped at 500 chars, and had no reader.
+ *
+ * Fire-and-forget by construction: the decision is already persisted and
+ * audit-logged when this runs, and a push/DB hiccup must not surface as a
+ * failed decision to the admin (mirrors routes/admin/wineRequests).
+ */
+function notifyDecision(userId, type, title, message, reason) {
+  if (!userId) return;
+  const body = reason ? `${message}\n\n${reason}` : message;
+  // No link: unlike a wine request (which has /wine-requests) a contributor
+  // has no page listing their own registry-data proposals, so the message
+  // has to stand alone — and a link to a non-existent route would just 404.
+  createNotification(userId, type, title, body, null).catch((err) => {
+    console.warn('[registryDataOps] decision notification failed (non-fatal):', err.message);
+  });
+}
+
 async function decideKey(adminId, keyId, decision, rejectReason, { req } = {}) {
   if (!isValidId(String(keyId))) return fail('invalid', 'Invalid key id');
   if (!['accept', 'reject'].includes(decision)) return fail('invalid', "decision must be 'accept' or 'reject'");
@@ -266,6 +290,22 @@ async function decideKey(adminId, keyId, decision, rejectReason, { req } = {}) {
   invalidateVocabCache();
   logAudit(req || null, `registry_data.key_${decision}`,
     { type: 'registry_key', id: key._id }, { name: key.name });
+
+  // Tell the proposer. Without this the decision — and the rejectReason a
+  // curator took the trouble to write — was reachable only through a GDPR
+  // data export, so a contributor got silence either way. Fire-and-forget,
+  // like every other notify call: a notification failure must never undo a
+  // recorded decision.
+  notifyDecision(
+    key.proposedBy,
+    'registry_key_decided',
+    decision === 'accept' ? 'Registry key accepted' : 'Registry key not accepted',
+    decision === 'accept'
+      ? `Your proposed key "${key.name}" is now part of the registry vocabulary — wines can carry it from now on. Thank you for improving the registry.`
+      : `Your proposed key "${key.name}" was not added to the registry vocabulary.`,
+    key.rejectReason
+  );
+
   return { ok: true, key: serializeKey(key) };
 }
 
@@ -286,6 +326,13 @@ async function decideValue(adminId, valueId, decision, rejectReason, { req } = {
     await row.save();
     logAudit(req || null, 'registry_data.value_reject',
       { type: 'wine', id: row.wineDefinition }, { key: row.key?.name, valueId: row._id });
+    notifyDecision(
+      row.suggestedBy,
+      'registry_value_decided',
+      'Suggested value not published',
+      `Your suggested ${row.key?.name || 'value'} was not published to the registry.`,
+      row.rejectReason
+    );
     return { ok: true, value: { _id: row._id, status: row.status } };
   }
 
@@ -304,6 +351,12 @@ async function decideValue(adminId, valueId, decision, rejectReason, { req } = {
   await row.save();
   logAudit(req || null, 'registry_data.value_publish',
     { type: 'wine', id: row.wineDefinition }, { key: row.key?.name, valueId: row._id, value: row.value });
+  notifyDecision(
+    row.suggestedBy,
+    'registry_value_decided',
+    'Suggested value published',
+    `Your suggested ${row.key?.name || 'value'} (${row.value}) is now published on the wine. Thank you for improving the registry.`
+  );
   return { ok: true, value: { _id: row._id, status: row.status, value: row.value } };
 }
 
