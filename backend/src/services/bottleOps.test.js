@@ -116,6 +116,8 @@ jest.mock('../models/Bottle', () => {
     this.save = jest.fn().mockResolvedValue(undefined);
     this.deleteOne = jest.fn().mockResolvedValue(undefined);
   });
+  // The shared-request guard counts remaining siblings after the delete.
+  M.countDocuments = jest.fn().mockResolvedValue(0);
   return M;
 });
 jest.mock('../models/BottleImage', () => ({
@@ -132,6 +134,7 @@ jest.mock('./imageProcessor', () => ({ unlinkImageFiles: jest.fn().mockResolvedV
 
 const BottleModel = require('../models/Bottle');
 const BottleImage = require('../models/BottleImage');
+const WineRequest = require('../models/WineRequest');
 const { embedSinglePair } = require('./embeddingJob');
 const { enrichWineById } = require('./enrichmentJob');
 const { getOrCreateDailySnapshot } = require('../utils/exchangeRates');
@@ -458,6 +461,44 @@ describe('removeBottleCascade (real execution)', () => {
     const res = await removeBottleCascade(b, REQ, 'bottle.undo');
     expect(res.error.status).toBe(400);
     expect(b.deleteOne).not.toHaveBeenCalled();
+  });
+
+  // ── The shared wine request (prod 2026-08-30) ────────────────────────────
+  // One import request covers EVERY bottle of that wine, so deleting it with
+  // a single bottle orphaned the siblings: no wineDefinition, no live
+  // request — nameless in the cellar and invisible to the admin queue.
+
+  test('a request with siblings still waiting is kept', async () => {
+    BottleModel.countDocuments.mockResolvedValueOnce(3);
+    const b = new BottleModel({ cellar: 'c1', status: 'active', pendingWineRequest: 'req-1' });
+    await removeBottleCascade(b, REQ, 'bottle.undo');
+
+    expect(BottleModel.countDocuments).toHaveBeenCalledWith({ pendingWineRequest: 'req-1' });
+    expect(WineRequest.deleteOne).not.toHaveBeenCalled();
+  });
+
+  test('the last bottle waiting takes the request with it', async () => {
+    BottleModel.countDocuments.mockResolvedValueOnce(0);
+    const b = new BottleModel({ cellar: 'c1', status: 'active', pendingWineRequest: 'req-1' });
+    await removeBottleCascade(b, REQ, 'bottle.undo');
+
+    expect(WineRequest.deleteOne).toHaveBeenCalledWith({ _id: 'req-1', status: 'pending' });
+  });
+
+  test('the count runs AFTER the delete, so the row cannot count itself', async () => {
+    BottleModel.countDocuments.mockResolvedValueOnce(0);
+    const b = new BottleModel({ cellar: 'c1', status: 'active', pendingWineRequest: 'req-1' });
+    await removeBottleCascade(b, REQ, 'bottle.undo');
+
+    expect(b.deleteOne.mock.invocationCallOrder[0])
+      .toBeLessThan(BottleModel.countDocuments.mock.invocationCallOrder[0]);
+  });
+
+  test('a bottle with no request never queries or deletes one', async () => {
+    const b = new BottleModel({ cellar: 'c1', status: 'active', pendingWineRequest: null });
+    await removeBottleCascade(b, REQ, 'bottle.undo');
+    expect(BottleModel.countDocuments).not.toHaveBeenCalled();
+    expect(WineRequest.deleteOne).not.toHaveBeenCalled();
   });
 });
 

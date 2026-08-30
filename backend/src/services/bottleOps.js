@@ -702,12 +702,29 @@ async function removeBottleCascade(bottle, req, auditAction) {
     { $set: { bottle: null } }
   );
 
-  if (pendingRequestId) {
-    await WineRequest.deleteOne({ _id: pendingRequestId, status: 'pending' });
-  }
-
   const cellarId = bottle.cellar;
   await bottle.deleteOne();
+
+  // Only remove the request if THIS was the last bottle waiting on it.
+  //
+  // One request covers every bottle of a wine in an import — /confirm dedups
+  // by (wineName, producer) — so deleting the request outright took the whole
+  // group down with a single bottle. The siblings kept a pendingWineRequest
+  // pointing at nothing: no wineDefinition, no live request, nameless in the
+  // cellar AND invisible to the admin queue that would have named them.
+  // Observed on prod 2026-08-30, where removing a few duplicate bottles
+  // orphaned four others and dropped the user's request count by eight.
+  //
+  // Counted AFTER the bottle is deleted, so this row cannot count itself.
+  // A request nobody is waiting on any more is still deleted — that is the
+  // behaviour this preserves, and it is what keeps the admin queue free of
+  // requests for bottles that no longer exist.
+  if (pendingRequestId) {
+    const stillWaiting = await Bottle.countDocuments({ pendingWineRequest: pendingRequestId });
+    if (stillWaiting === 0) {
+      await WineRequest.deleteOne({ _id: pendingRequestId, status: 'pending' });
+    }
+  }
 
   logAudit(req, auditAction || 'bottle.undo',
     { type: 'bottle', id: bottleId, cellarId },

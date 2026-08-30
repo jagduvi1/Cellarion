@@ -898,16 +898,24 @@ router.delete('/:id', requireBottleAccess('editor'), async (req, res) => {
       { bottle: bottle._id, assignedToWine: true },
       { $set: { bottle: null } }
     );
-    if (pendingRequestId) {
-      await WineRequest.deleteOne({ _id: pendingRequestId, status: 'pending' });
-    }
-
     logAudit(req, 'bottle.delete',
       { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
       {}
     );
 
     await bottle.deleteOne();
+
+    // Only when THIS was the last bottle waiting on the request — see the
+    // same guard in services/bottleOps.removeBottleCascade for the full
+    // reasoning. One import request covers every bottle of that wine, so
+    // deleting it outright orphaned the siblings. Counted after the bottle
+    // is gone so it cannot count itself.
+    if (pendingRequestId) {
+      const stillWaiting = await Bottle.countDocuments({ pendingWineRequest: pendingRequestId });
+      if (stillWaiting === 0) {
+        await WineRequest.deleteOne({ _id: pendingRequestId, status: 'pending' });
+      }
+    }
     res.json({ message: 'Bottle deleted successfully' });
   } catch (error) {
     console.error('Delete bottle error:', error);
