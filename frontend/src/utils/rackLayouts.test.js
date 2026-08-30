@@ -121,6 +121,26 @@ describe('computeLayout', () => {
     it('4 rows, 3 cols → 10 slots', () => {
       expect(computeLayout('hex', 4, 3).totalSlots).toBe(10);
     });
+
+    describe('hexFlip', () => {
+      it('is a no-op for an odd row count (the unflipped sequence is a palindrome)', () => {
+        const unflipped = computeLayout('hex', 3, 4);
+        const flipped = computeLayout('hex', 3, 4, { hexFlip: true });
+        expect(flipped).toEqual(unflipped);
+      });
+
+      it('swaps which row is short for an even row count, without changing total slots', () => {
+        const unflipped = computeLayout('hex', 4, 3);
+        const flipped = computeLayout('hex', 4, 3, { hexFlip: true });
+        expect(flipped.totalSlots).toBe(unflipped.totalSlots);
+
+        const rowSize = (layout) => layout.slots.filter(s => s.cy === layout.slots[0].cy).length;
+        // Unflipped row 0 is full width (3 cols); flipped row 0 mirrors the
+        // old last row, which is short (2 cols).
+        expect(rowSize(unflipped)).toBe(3);
+        expect(rowSize(flipped)).toBe(2);
+      });
+    });
   });
 
   describe('triangle', () => {

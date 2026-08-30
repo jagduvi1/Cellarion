@@ -1083,6 +1083,8 @@
     "doubleHeightRowsLabel": "Double-height rows",
     "doubleHeightRowsPlaceholder": "e.g. 1,3",
     "doubleHeightRowsHelp": "Rows with headroom for bottles resting on top",
+    "hexFlipLabel": "Flip rows (short row on top)",
+    "hexFlipHelp": "By default the top row is full width. Enable this to mirror the rows top-to-bottom.",
     "filled": "{{filled}}/{{total}} filled",
     "type_grid": "Grid",
     "type_x-rack": "X-Rack",

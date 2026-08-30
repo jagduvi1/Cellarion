@@ -1048,6 +1048,25 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving }) {
           </div>
         )}
 
+        {dims.showHexFlip && (
+          <div className="form-group">
+            <label>
+              <input
+                type="checkbox"
+                checked={!!newRack.typeConfig?.hexFlip}
+                onChange={e => setNewRack({
+                  ...newRack,
+                  typeConfig: { ...newRack.typeConfig, hexFlip: e.target.checked || undefined }
+                })}
+              />
+              {' '}{t('racks.hexFlipLabel', 'Flip rows (short row on top)')}
+            </label>
+            <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
+              {t('racks.hexFlipHelp', 'By default the top row is full width. Enable this to mirror the rows top-to-bottom.')}
+            </small>
+          </div>
+        )}
+
         {dims.showModule && (
           <>
             <div className="form-group">
