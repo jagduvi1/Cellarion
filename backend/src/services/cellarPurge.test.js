@@ -19,6 +19,7 @@ jest.mock('../models/Rack', () => ({ deleteMany: jest.fn() }));
 jest.mock('../models/CellarLayout', () => ({ deleteMany: jest.fn() }));
 jest.mock('../models/CellarValueSnapshot', () => ({ deleteMany: jest.fn() }));
 jest.mock('../models/ImportSession', () => ({ deleteMany: jest.fn() }));
+jest.mock('../models/ImportArchive', () => ({ deleteMany: jest.fn() }));
 jest.mock('../models/PendingShare', () => ({ deleteMany: jest.fn() }));
 jest.mock('../models/WineList', () => ({ deleteMany: jest.fn() }));
 jest.mock('../models/ClimateDevice', () => ({ updateMany: jest.fn() }));
@@ -34,6 +35,7 @@ const Rack = require('../models/Rack');
 const CellarLayout = require('../models/CellarLayout');
 const CellarValueSnapshot = require('../models/CellarValueSnapshot');
 const ImportSession = require('../models/ImportSession');
+const ImportArchive = require('../models/ImportArchive');
 const PendingShare = require('../models/PendingShare');
 const WineList = require('../models/WineList');
 const ClimateDevice = require('../models/ClimateDevice');
@@ -66,6 +68,7 @@ function setupMocks({ bottleIds = BOTTLE_IDS, ownImages = OWN_IMAGES } = {}) {
   CellarLayout.deleteMany.mockResolvedValue({ deletedCount: 1 });
   CellarValueSnapshot.deleteMany.mockResolvedValue({ deletedCount: 5 });
   ImportSession.deleteMany.mockResolvedValue({ deletedCount: 1 });
+  ImportArchive.deleteMany.mockResolvedValue({ deletedCount: 1 });
   PendingShare.deleteMany.mockResolvedValue({ deletedCount: 1 });
   WineList.deleteMany.mockResolvedValue({ deletedCount: 1 });
   deleteLogoFilesFor.mockResolvedValue();
@@ -89,6 +92,8 @@ describe('purgeCellarPermanently', () => {
     expect(CellarLayout.deleteMany).toHaveBeenCalledWith(cellarFilter);
     expect(CellarValueSnapshot.deleteMany).toHaveBeenCalledWith(cellarFilter);
     expect(ImportSession.deleteMany).toHaveBeenCalledWith(cellarFilter);
+    // Diagnostic import data cannot outlive the cellar it describes.
+    expect(ImportArchive.deleteMany).toHaveBeenCalledWith(cellarFilter);
     expect(PendingShare.deleteMany).toHaveBeenCalledWith(cellarFilter);
     expect(WineList.deleteMany).toHaveBeenCalledWith(cellarFilter);
     // Climate devices belong to the user, not the cellar → detached, not deleted (M12).

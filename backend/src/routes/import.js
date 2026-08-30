@@ -45,6 +45,7 @@ const { runConcurrent } = require('../utils/concurrency');
 const WineRequest = require('../models/WineRequest');
 const WishlistItem = require('../models/WishlistItem');
 const ImportSession = require('../models/ImportSession');
+const ImportArchive = require('../models/ImportArchive');
 
 const router = express.Router();
 // requireNonDemo: the CT/CSV importer spends AI on identify and creates registry
@@ -189,6 +190,43 @@ function buildProposedWine(aiData, item) {
  * matchOnly probe, same buildProposedWine precedence, no third path — or
  * null when the row genuinely needs (or lacks the data to skip) the model.
  */
+// ── Import archive (2026-08-30) ─────────────────────────────────────────────
+//
+// The identity columns kept from each row, and nothing else. These are the
+// fields that decide how a wine is identified, matched and minted — every
+// import defect so far has lived in one of them. Price, purchase location,
+// notes and ratings are deliberately absent: they answer no import bug, and
+// leaving them out is what makes a 30-day archive of other people's cellars
+// a small thing rather than a large one. See models/ImportArchive.
+const IDENTITY_FIELDS = [
+  'wineName', 'producer', 'vintage', 'country', 'region', 'appellation',
+  'classification', 'type', 'grapes', 'quantity', 'bottleSize',
+];
+// One import is bounded by MAX_IMPORT_SIZE (2,000 rows); the archive keeps
+// the head of anything larger so a pathological file cannot write an
+// unbounded document. rowsTruncated + rowCount keep the omission visible.
+const ARCHIVE_ROW_CAP = 2000;
+// Retention window for the archive. Matches the unattached label-scan sweep
+// (services/scanImageRetentionJob) so the app has ONE retention story to
+// explain, not two.
+const IMPORT_ARCHIVE_DAYS = 30;
+
+/**
+ * Project one import row down to its identity columns plus its outcome.
+ * `outcome` is what the row's SELECTION resolved to — matched an existing
+ * wine, minted a new one, filed a request, or was skipped — because "what
+ * the file said" and "what we did with it" are only diagnostic together.
+ */
+function archiveRow(item, outcome) {
+  const row = { outcome };
+  for (const f of IDENTITY_FIELDS) {
+    const v = item[f];
+    if (v === undefined || v === null || v === '') continue;
+    row[f] = Array.isArray(v) ? v.slice(0, 20).map((g) => String(g).slice(0, 80)) : String(v).slice(0, 200);
+  }
+  return row;
+}
+
 // Vivino-shaped cellar exports name the varietal composition rather than the
 // grape: "Sangiovese Blend", "Red Blend", "Sémillon-Sauvignon Blanc Blend".
 // None of those are taxonomy grape names, so a plain lookup misses every one
@@ -1727,6 +1765,47 @@ router.post('/confirm', async (req, res) => {
       // reading of the audit stream.
       pendingIdentity: pendingIdentityCount
     });
+
+    // Archive what the file contained, identity columns only, for 30 days.
+    //
+    // NOT awaited, deliberately — the same fire-and-forget shape as logAudit
+    // above. The import is finished and audited by this point; a diagnostic
+    // copy must never delay the user's response, and a slow or failing write
+    // must never turn a successful import into an error. (Awaiting it also
+    // made every /confirm test hang on Mongoose's buffer timeout, which is
+    // the same stall a real connection hiccup would cause in production.)
+    // The rows are projected, not stored raw — see IDENTITY_FIELDS.
+    try {
+      const rows = items.slice(0, ARCHIVE_ROW_CAP).map((item) => archiveRow(
+        item,
+        item.requestWine ? 'request'
+          : (item.newWine ? 'created'
+            : (item.wineDefinition ? 'matched' : 'other'))
+      ));
+      ImportArchive.create({
+        user: req.user.id,
+        cellar: cellarId,
+        fileName: typeof req.body.fileName === 'string' ? req.body.fileName.slice(0, 260) : undefined,
+        detectedFormat: typeof req.body.detectedFormat === 'string' ? req.body.detectedFormat.slice(0, 40) : undefined,
+        detectedEncoding: typeof req.body.detectedEncoding === 'string' ? req.body.detectedEncoding.slice(0, 40) : undefined,
+        importWarnings: Array.isArray(req.body.importWarnings) ? req.body.importWarnings.slice(0, 20) : [],
+        rows,
+        rowCount: items.length,
+        rowsTruncated: items.length > ARCHIVE_ROW_CAP,
+        summary: {
+          created, createdActive, createdHistory, wishlistCreated,
+          skipped: skipped.length, errors: errors.length,
+          ...(errors.length ? { errorReasons: summariseReasons(errors) } : {}),
+          pendingIdentity: pendingIdentityCount,
+        },
+        retainUntil: new Date(Date.now() + IMPORT_ARCHIVE_DAYS * 24 * 60 * 60 * 1000),
+      }).catch((err) => {
+        console.warn('[import] archive write failed (non-fatal):', err.message);
+      });
+    } catch (err) {
+      // Projection/build failure — the create above never launched.
+      console.warn('[import] archive build failed (non-fatal):', err.message);
+    }
 
     res.json({
       created,
