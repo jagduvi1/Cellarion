@@ -260,3 +260,85 @@ describe('complete-row AI bypass', () => {
     expect(identifyWineFromText).toHaveBeenCalledTimes(1);
   });
 });
+
+// ── Vivino-shaped exports (2026-08-30) ─────────────────────────────────────
+// Measured on a real 186-row import: every grape string was a composition
+// ("Sangiovese Blend", "Red Blend"), none matched the taxonomy, so the type
+// gate never resolved and the bypass fired zero times — 60 wines fell through
+// to the request queue on a file that stated its own colours.
+describe('blend-style grape strings', () => {
+  beforeEach(() => {
+    Grape.__state.docs = [
+      { name: 'Sangiovese', normalizedName: 'sangiovese', normalizedSynonyms: [], color: 'Red' },
+      { name: 'Trebbiano', normalizedName: 'trebbiano', normalizedSynonyms: [], color: 'White' },
+    ];
+  });
+
+  const row = (grapes, extra = {}) => ({
+    ...COMPLETE, wineName: 'Chianti Classico', producer: 'Fèlsina',
+    country: 'Italy', type: '', grapes, ...extra,
+  });
+
+  it('"Red Blend" states the colour outright — no taxonomy needed', async () => {
+    const { body } = await validate([row(['Red Blend'])]);
+    expect(identifyWineFromText).not.toHaveBeenCalled();
+    expect(body.results[0].aiProposed.type).toBe('red');
+  });
+
+  it('"Rosé Blend" resolves — the accented colour is not dropped', async () => {
+    // Regression: `ros[ée]\b` never matches, because é is not a word char.
+    const { body } = await validate([row(['Rosé Blend'])]);
+    expect(identifyWineFromText).not.toHaveBeenCalled();
+    expect(body.results[0].aiProposed.type).toBe('rosé');
+  });
+
+  it('a lead varietal plus a Blend suffix resolves through the taxonomy', async () => {
+    const { body } = await validate([row(['Sangiovese Blend'])]);
+    expect(identifyWineFromText).not.toHaveBeenCalled();
+    expect(body.results[0].aiProposed.type).toBe('red');
+  });
+
+  it('compositions the taxonomy cannot read still go to the AI', async () => {
+    await validate([
+      row(['Port Blend'], { wineName: 'A' }),
+      row(['SuperTuscan Blend'], { wineName: 'B' }),
+      row(['Cabernet-Shiraz Blend'], { wineName: 'C' }),
+    ]);
+    expect(identifyWineFromText).toHaveBeenCalledTimes(3);
+  });
+
+  it('a grape merely starting with a colour word is not a colour label', async () => {
+    // "Red Globe" has no Blend suffix, so the colour branch must not claim it.
+    await validate([row(['Red Globe'])]);
+    expect(identifyWineFromText).toHaveBeenCalledTimes(1);
+  });
+
+  it('contradictory grape colours fall to the AI rather than guessing', async () => {
+    await validate([row(['Sangiovese Blend', 'Trebbiano Blend'])]);
+    expect(identifyWineFromText).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── Duplicate rows of one wine (2026-08-30) ────────────────────────────────
+describe('the bypass identity reaches every row of a multi-bottle line', () => {
+  it('duplicate rows inherit the representative identity — and spend no AI', async () => {
+    // One cascade attempt is made per unique (name, producer); the result is
+    // then fanned out to that wine's other rows. A file-identified
+    // representative has no aiByKey entry (it never called AI), so before
+    // this fix the fan-out dropped it and every duplicate row of a 6-bottle
+    // line went to no-match — exactly the shape a cellar export is made of.
+    const { body } = await validate([
+      { ...COMPLETE, vintage: '2019' },
+      { ...COMPLETE, vintage: '2019' },
+      { ...COMPLETE, vintage: '2020' },
+    ]);
+
+    expect(identifyWineFromText).not.toHaveBeenCalled();
+    expect(body.results).toHaveLength(3);
+    for (const r of body.results) {
+      expect(r.status).toBe('ai_new');
+      expect(r.aiBypassed).toBe(true);
+      expect(r.aiProposed).toMatchObject({ name: COMPLETE.wineName, producer: COMPLETE.producer });
+    }
+  });
+});

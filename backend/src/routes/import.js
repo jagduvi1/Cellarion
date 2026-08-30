@@ -189,6 +189,54 @@ function buildProposedWine(aiData, item) {
  * matchOnly probe, same buildProposedWine precedence, no third path — or
  * null when the row genuinely needs (or lacks the data to skip) the model.
  */
+// Vivino-shaped cellar exports name the varietal composition rather than the
+// grape: "Sangiovese Blend", "Red Blend", "Sémillon-Sauvignon Blanc Blend".
+// None of those are taxonomy grape names, so a plain lookup misses every one
+// — which silently disabled the complete-row bypass for an entire export
+// format (measured on a real 186-row import: 60 wines fell through to
+// requests, 10 AI calls spent, the bypass never fired once).
+//
+// Two readings, both conservative, both anchored on the trailing "Blend":
+//
+//   "Red Blend" / "White Blend" / "Rosé Blend" / "Red Bordeaux Blend"
+//       — the file states the COLOUR itself. Better evidence than any
+//         inference: take it directly. Requiring the trailing "blend" is what
+//         keeps a grape merely STARTING with a colour word (the table grape
+//         "Red Globe") out of this branch.
+//
+//   "Sangiovese Blend" / "Tempranillo Blend" / "Trebbiano Blend"
+//       — a lead varietal plus a suffix. Strip the suffix and ask the
+//         taxonomy about the remainder.
+//
+// Everything else ("Port Blend", "SuperTuscan Blend", "Cabernet-Shiraz
+// Blend") resolves to nothing and falls through to the AI, which is the
+// right outcome: a composition this module cannot read is exactly what the
+// model is for.
+// NB the explicit `\s+` rather than a `\b` after the colour: "é" is not a
+// word character in JS regex, so `ros[ée]\b` never matches "Rosé Blend" —
+// the one case a boundary assertion silently drops.
+const COLOUR_BLEND = /^(red|white|ros[ée])\s+(.*\s+)?blends?$/i;
+const BLEND_SUFFIX = /\s+blends?$/i;
+
+function typeFromFileGrapes(grapes, grapeColourOf) {
+  for (const g of grapes) {
+    const m = COLOUR_BLEND.exec(String(g).trim());
+    if (m) {
+      const c = m[1].toLowerCase();
+      return c === 'red' ? 'red' : (c === 'white' ? 'white' : 'rosé');
+    }
+  }
+  if (typeof grapeColourOf !== 'function') return null;
+  const colours = new Set();
+  for (const g of grapes) {
+    const raw = String(g).trim();
+    const colour = grapeColourOf(raw) || grapeColourOf(raw.replace(BLEND_SUFFIX, ''));
+    if (colour) colours.add(colour);
+  }
+  if (colours.size !== 1) return null;              // silent or contradictory → AI
+  return colours.has('Red') ? 'red' : 'white';
+}
+
 function fileCompleteIdentity(item, grapeColourOf) {
   const clean = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
   const name = clean(item.wineName);
@@ -203,10 +251,7 @@ function fileCompleteIdentity(item, grapeColourOf) {
 
   let type = clean(item.type);
   if (!WINE_TYPES.includes(type)) type = null;
-  if (!type && grapes.length > 0 && typeof grapeColourOf === 'function') {
-    const colours = new Set(grapes.map((g) => grapeColourOf(g)).filter(Boolean));
-    if (colours.size === 1) type = colours.has('Red') ? 'red' : 'white';
-  }
+  if (!type && grapes.length > 0) type = typeFromFileGrapes(grapes, grapeColourOf);
   if (!type) return null;
 
   return {
@@ -535,11 +580,13 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
       }
       // (c) the complete-row bypass. Needs the colour map only when the row
       // has grapes but no type, so the taxonomy read is lazy.
+      // The colour map is only consulted when the row has grapes and no type
+      // of its own; loading it is one taxonomy read for the whole request.
+      const needsColourMap = !pr.item.type
+        && Array.isArray(pr.item.grapes) && pr.item.grapes.length > 0;
       const identity = fileCompleteIdentity(
         pr.item,
-        (!pr.item.type && Array.isArray(pr.item.grapes) && pr.item.grapes.length > 0)
-          ? await getGrapeColourOf()
-          : null
+        needsColourMap ? await getGrapeColourOf() : null
       );
       if (identity) {
         pr.aiIdentified = identity;
@@ -616,6 +663,19 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
       if (rep.registryWine) { pr.registryWine = rep.registryWine; continue; }
       if (rep.preMatches && !pr.preMatches) pr.preMatches = rep.preMatches;
       if (rep.aiSkipped) { pr.aiSkipped = true; continue; }
+      // A representative identified by the FILE (Pass 1a's complete-row
+      // bypass) has no aiByKey entry — it never called AI — so before the
+      // bypass shipped, `aiIdentified` could only ever arrive through
+      // `settled` below and this fan-out was complete. Now it can be set
+      // without one, and every duplicate row of that wine was being left
+      // with no identity at all: a 6-bottle line minted once and sent the
+      // other five to no-match, which is exactly the multi-bottle shape a
+      // cellar export is made of. Fails safe (no mis-link), but it defeated
+      // the bypass precisely where it saves the most calls.
+      if (rep.aiIdentified && !pr.aiIdentified) {
+        pr.aiIdentified = rep.aiIdentified;
+        if (rep.aiBypassed) pr.aiBypassed = true;
+      }
       const settled = aiByKey.get(key);
       if (!settled) continue;
       if (settled.status === 'fulfilled') {
