@@ -51,7 +51,14 @@ const notificationSchema = new mongoose.Schema({
       'registry_health',
       'owner_inquiry',
       'owner_inquiry_response',
-      'owner_inquiry_resolved'
+      'owner_inquiry_resolved',
+      // Registry-data contributions. Every other submitter-facing queue
+      // (wine requests, wine reports, images, price requests) tells the
+      // submitter what happened; these two were the gap — a decided
+      // proposal recorded its rejectReason where only a GDPR export could
+      // reach it.
+      'registry_key_decided',
+      'registry_value_decided'
     ],
     required: true
   },
