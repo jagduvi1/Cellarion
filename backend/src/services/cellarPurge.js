@@ -22,6 +22,7 @@ const Rack = require('../models/Rack');
 const CellarLayout = require('../models/CellarLayout');
 const CellarValueSnapshot = require('../models/CellarValueSnapshot');
 const ImportSession = require('../models/ImportSession');
+const ImportArchive = require('../models/ImportArchive');
 const PendingShare = require('../models/PendingShare');
 const WineList = require('../models/WineList');
 const ClimateDevice = require('../models/ClimateDevice');
@@ -86,6 +87,9 @@ async function purgeCellarPermanently(cellarId) {
     CellarLayout.deleteMany({ cellar: cellarId }),
     CellarValueSnapshot.deleteMany({ cellar: cellarId }),
     ImportSession.deleteMany({ cellar: cellarId }),
+    // The import archive is diagnostic data ABOUT this cellar; it cannot
+    // outlive the cellar it describes (models/ImportArchive).
+    ImportArchive.deleteMany({ cellar: cellarId }),
     PendingShare.deleteMany({ cellar: cellarId }),
     WineList.deleteMany({ cellar: cellarId }),
     // Detach any climate device that was assigned to this cellar — the device

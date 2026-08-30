@@ -47,6 +47,7 @@ const DiscussionRead = require('../models/DiscussionRead');
 const DiscussionReport = require('../models/DiscussionReport');
 const Follow = require('../models/Follow');
 const ImportSession = require('../models/ImportSession');
+const ImportArchive = require('../models/ImportArchive');
 const JournalEntry = require('../models/JournalEntry');
 const Notification = require('../models/Notification');
 const PendingShare = require('../models/PendingShare');
@@ -856,6 +857,18 @@ const REGISTRY = [
     exportFragment: async (ctx) => ({
       importSessions: markTrunc(ctx, 'importSessions', await ImportSession.find({ user: ctx.userId }).select('cellar status results positionAnchor rackConfigs defaultCurrency createdAt').limit(EXPORT_MAX).lean())
         .map(s => ({ cellar: s.cellar, status: s.status, rowCount: s.results?.length || 0, positionAnchor: s.positionAnchor, rackConfigs: s.rackConfigs, defaultCurrency: s.defaultCurrency, createdAt: s.createdAt })),
+    }),
+  },
+  {
+    // The 30-day diagnostic copy of a finished import (models/ImportArchive).
+    // Identity columns only, but they are still the user's rows, so it is
+    // exported in full and erased with the account like everything else.
+    model: ImportArchive, category: 'personal-data', userFields: ['user'],
+    purge: (ctx) => ImportArchive.deleteMany({ user: ctx.userId }),
+    exportFragment: async (ctx) => ({
+      importArchives: markTrunc(ctx, 'importArchives', await ImportArchive.find({ user: ctx.userId })
+        .select('cellar fileName detectedFormat detectedEncoding importWarnings rows rowCount rowsTruncated summary retainUntil createdAt')
+        .limit(EXPORT_MAX).lean()),
     }),
   },
   {
