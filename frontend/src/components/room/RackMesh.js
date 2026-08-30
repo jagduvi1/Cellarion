@@ -341,14 +341,17 @@ function computeXRackSlotPositions(bps, width, height) {
   return positions;
 }
 
-// Hex: even rows have cols slots, odd rows have cols-1 (offset right)
-function computeHexSlotPositions(rows, cols, width, height) {
+// Hex: even rows have cols slots, odd rows have cols-1 (offset right).
+// `flipped` mirrors the row sequence top-to-bottom (see rackLayouts.hexLayout) —
+// pure reversal, never changes total slot count.
+function computeHexSlotPositions(rows, cols, width, height, flipped) {
   const positions = [];
   const cW = width / cols;
   const hexH = height / rows;
   let pos = 1;
   for (let r = 0; r < rows; r++) {
-    const isOdd = r % 2 === 1;
+    const rr = flipped ? (rows - 1 - r) : r;
+    const isOdd = rr % 2 === 1;
     const rowCols = isOdd ? Math.max(1, cols - 1) : cols;
     const xOff = isOdd ? cW * 0.5 : 0;
     for (let c = 0; c < rowCols; c++) {
@@ -754,7 +757,7 @@ export default function RackMesh({
         : scaledLayout.positions.map(p => ({ ...p, x: p.x * sx }));
     }
     if (rackType === 'x-rack') return computeXRackSlotPositions(rack.typeConfig?.bottlesPerSection || 10, innerW, innerH);
-    if (rackType === 'hex') return computeHexSlotPositions(rack.rows || 4, rack.cols || 4, innerW, innerH);
+    if (rackType === 'hex') return computeHexSlotPositions(rack.rows || 4, rack.cols || 4, innerW, innerH, rack.typeConfig?.hexFlip);
     if (rackType === 'triangle') return computeTriangleSlotPositions(rack.cols || 1, innerW, innerH);
     if (rackType === 'stack') return computeStackSlotPositions(rack.rows || 4, innerH);
     if (rackType === 'shelf') return computeShelfSlotPositions(

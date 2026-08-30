@@ -17,7 +17,7 @@ const RACK_TYPES = [
 export const TYPE_DIMENSIONS = {
   grid:     { showRows: true,  showCols: true,  defaultRows: 4, defaultCols: 8, showDoubleHeightRows: true },
   'x-rack': { showRows: false, showCols: false, defaultRows: 1, defaultCols: 1, showBottlesPerSection: true },
-  hex:      { showRows: true,  showCols: true,  defaultRows: 4, defaultCols: 5 },
+  hex:      { showRows: true,  showCols: true,  defaultRows: 4, defaultCols: 5, showHexFlip: true },
   triangle: { showRows: false, showCols: true,  defaultRows: 1, defaultCols: 5, colLabel: 'racks.baseWidthLabel' },
   stack:    { showRows: true,  showCols: false, defaultRows: 8, defaultCols: 1, rowLabel: 'racks.heightLabel' },
   cube:     { showRows: true,  showCols: true,  defaultRows: 2, defaultCols: 3, showModule: true },

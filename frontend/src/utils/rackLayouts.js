@@ -180,13 +180,18 @@ function xRackLayout(typeConfig) {
 
 // ── Hexagonal honeycomb ──────────────────────────────────────────────
 // Even rows (0-indexed) have `cols` slots; odd rows have `cols - 1` (offset right by half).
-function hexLayout(rows, cols) {
+// typeConfig.hexFlip mirrors the row sequence top-to-bottom: row r reads the
+// width the UNFLIPPED row (rows-1-r) would have had. Pure reversal of the
+// same multiset of widths — never changes total slot count.
+function hexLayout(rows, cols, typeConfig) {
+  const flipped = !!typeConfig?.hexFlip;
   const slots = [];
   let pos = 1;
   const hexH = CELL * 0.866;  // vertical distance (sin 60° ≈ 0.866)
 
   for (let r = 0; r < rows; r++) {
-    const isOdd = r % 2 === 1;
+    const rr = flipped ? (rows - 1 - r) : r;
+    const isOdd = rr % 2 === 1;
     const rowCols = isOdd ? Math.max(1, cols - 1) : cols;
     const xOffset = isOdd ? CELL * 0.5 : 0;
 
@@ -376,7 +381,7 @@ function shelfLayout(rows, cols, typeConfig) {
 export function computeLayout(type, rows, cols, typeConfig) {
   switch (type) {
     case 'x-rack':   return xRackLayout(typeConfig);
-    case 'hex':      return hexLayout(rows, cols);
+    case 'hex':      return hexLayout(rows, cols, typeConfig);
     case 'triangle': return triangleLayout(rows, cols);
     case 'stack':    return stackLayout(rows);
     case 'cube':     return cubeLayout(rows, cols, typeConfig);
