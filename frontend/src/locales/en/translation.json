@@ -1486,6 +1486,7 @@
       },
       "pendingRegion": "New — unreviewed",
       "pendingRegionTitle": "This region was created automatically by a user adding a wine and has not been reviewed by an admin",
+      "pendingGrapeTitle": "This grape was created automatically by a user adding a wine and has not been reviewed by an admin — approve it, or merge it into the correct variety",
       "approveRegion": "Approve",
       "regionalNamesLabel": "Regional display names",
       "regionalNamesHint": "Label-true names shown on wines from a specific place — e.g. Tempranillo appears as \"Tinta Roriz\" on Douro wines. Storage, search filters and stats keep the canonical variety; leave the region empty to cover the whole country.",

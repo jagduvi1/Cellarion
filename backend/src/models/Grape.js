@@ -88,6 +88,14 @@ const grapeSchema = new mongoose.Schema({
     default: []
   },
   slug: { type: String, trim: true, lowercase: true, unique: true, sparse: true, index: true },
+  // Set when a USER write minted this grape (bottle-add / import via
+  // findOrCreateGrapes) rather than a curator: visible to admins in the
+  // taxonomy review queue, never blocking the user — the exact Region
+  // pendingReview pattern. Unreviewed user mints polluted the shared
+  // taxonomy silently ("Honey" via a mead, "Alvarão" for Alvarinho —
+  // somm ticket 6a942a60, 2026-08-30). Cleared only by the explicit
+  // approve verb, never as a PUT side effect.
+  pendingReview: { type: Boolean, default: false, index: true },
   description: { type: String, trim: true, default: '' },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
