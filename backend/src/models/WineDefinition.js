@@ -297,6 +297,30 @@ const wineDefinitionSchema = new mongoose.Schema({
     enum: ['ui', 'import', 'mcp', 'ai', null],
     default: null
   },
+  // WHICH SOURCE SUPPLIED EACH IDENTITY FIELD. createdVia says which surface
+  // minted the row; this says, field by field, whether a human stated the
+  // value or a model supplied it.
+  //
+  // Why it exists (somm ticket 6a958dbc, 2026-08-31): a 205-row import whose
+  // file carried appellation on every row and grapes on none produced 89 wines
+  // whose grapes were inferred BY THE MODEL FROM THE APPELLATION — all eight
+  // Montlouis wines got Chenin Blanc, including a pétillant naturel that is
+  // mostly Menu Pineau. The values were wrong, self-consistent and
+  // indistinguishable from researched ones, so the curator had to stop: a
+  // profile written onto a misidentified record marks it verified forever.
+  // Nothing on the record said "this grape is a guess". Now it does.
+  //
+  // Sparse by design — a field absent from the map means "not recorded",
+  // which is what every row predating this carries. Never treat absence as
+  // 'file': it is the honest unknown.
+  identityProvenance: {
+    type: Map,
+    of: {
+      type: String,
+      enum: ['file', 'model', 'curator', 'scan', 'user'],
+    },
+    default: undefined,
+  },
   // Non-wine quarantine (registry audit 2026-07-26; policy decided by Johan:
   // KEEP, HIDE). Spirits/cider/sake rows imported by users stay in the
   // registry — their owners' bottles keep working, direct wine pages render —

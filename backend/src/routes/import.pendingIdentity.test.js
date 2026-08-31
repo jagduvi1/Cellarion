@@ -130,7 +130,16 @@ test('a row with NO producer still imports — the bottle lands, the wine goes t
   const [fields, userId, opts] = findOrCreateWine.mock.calls[0];
   expect(fields.producer).toBe('');
   expect(userId).toBe(USER_ID);
-  expect(opts).toEqual({ createdVia: 'import', allowPending: true });
+  // toEqual, not objectContaining: the option set is a drift canary, so a new
+  // option has to be added here deliberately. `provenance` joined on
+  // 2026-08-31 (somm ticket 6a958dbc) — and this row is the purest case for
+  // it, since the file states nothing but a vintage, so every identity field
+  // the wine ends up with came from the model.
+  expect(opts).toEqual({
+    createdVia: 'import',
+    allowPending: true,
+    provenance: expect.objectContaining({ name: 'model', country: 'model', grapes: 'model' }),
+  });
 });
 
 test('the count is reported to the client and folded into the EXISTING import audit', async () => {

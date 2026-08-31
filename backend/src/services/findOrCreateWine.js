@@ -157,6 +157,30 @@ async function regionForAppellation(appellationName, countryId) {
   return hits.length === 1 ? hits[0] : null;
 }
 
+/**
+ * Keep only the provenance entries whose field this mint actually SET.
+ *
+ * A caller reports where each value would have come from; the mint decides
+ * which values survive normalization (an unresolvable region becomes null, a
+ * junk grape list becomes empty). Recording "grapes: model" on a wine with no
+ * grapes would be a second kind of lie — a curator would see a provenance
+ * marker and look for a value that is not there.
+ *
+ * @param {Object<string,string>} provenance field → 'file' | 'model' | …
+ * @param {Object} stored the values as they are about to be written
+ * @returns {Object<string,string>|undefined} undefined when nothing qualifies
+ */
+function pickProvenance(provenance, stored) {
+  const out = {};
+  for (const [field, source] of Object.entries(provenance || {})) {
+    if (!source) continue;
+    const value = stored[field];
+    if (value === undefined || value === null || value === '') continue;
+    out[field] = source;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 async function findOrCreateGrapes(rawNames, userId) {
   if (!Array.isArray(rawNames) || rawNames.length === 0) return [];
   // Same chokepoint argument as findOrCreateRegion: the route caps the count and
@@ -310,7 +334,7 @@ async function unpolluteEstateName({ name, producer, appellation, classification
   };
 }
 
-async function findOrCreateWine({ name, producer, country, region, appellation, type, grapes, classification }, userId, { confirmCreate = false, skipSiblingMatch = false, matchOnly = false, createdVia = null, allowPending = false } = {}) {
+async function findOrCreateWine({ name, producer, country, region, appellation, type, grapes, classification }, userId, { confirmCreate = false, skipSiblingMatch = false, matchOnly = false, createdVia = null, allowPending = false, provenance = null } = {}) {
   // Internal whitespace collapses too, not just the ends: a double space is
   // invisible in every UI and every normalized key, so "Wrights  Estate" and
   // "Wrights Estate" would otherwise coexist as two display spellings forever
@@ -855,6 +879,16 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     // Surface provenance ('mcp' = minted by a connected AI) — reviewable as a
     // class by admins; see WineDefinition.createdVia.
     createdVia,
+    // Per-field provenance, when the caller can distinguish a stated value
+    // from a supplied one. Only recorded for fields this mint actually set —
+    // claiming a source for an empty field would be a second kind of lie.
+    // See WineDefinition.identityProvenance.
+    ...(provenance ? { identityProvenance: pickProvenance(provenance, {
+      name: trimmedName, producer: producerToStore, country: countryDoc?._id,
+      region: regionDoc?._id, appellation: trimmedAppellation,
+      classification: trimmedClassification, type: wineType,
+      grapes: grapeIds?.length ? grapeIds : null,
+    }) } : {}),
     // Hidden from everyone but its creator and curation until a somm completes
     // the identity (models/WineDefinition.pendingIdentity). The model's
     // pre-validate hook promotes it automatically once producer + name are both
