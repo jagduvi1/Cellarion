@@ -165,6 +165,10 @@ export const adminRestoreDismissedAppellation = (apiFetch, name) =>
 export const adminApproveRegion = (apiFetch, regionId) =>
   apiFetch(`/api/admin/taxonomy/regions/${regionId}/approve`, { method: 'POST' });
 
+/** Approve a user-minted grape (clears its pendingReview flag). */
+export const adminApproveGrape = (apiFetch, grapeId) =>
+  apiFetch(`/api/admin/taxonomy/grapes/${grapeId}/approve`, { method: 'POST' });
+
 // Force a full Meilisearch rebuild from the running process — the restore
 // runbook's missing step (a stale index silently disables the dedup net).
 export const adminReindexSearch = (apiFetch) =>

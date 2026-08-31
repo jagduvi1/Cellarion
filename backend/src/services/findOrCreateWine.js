@@ -183,7 +183,13 @@ async function findOrCreateGrapes(rawNames, userId) {
       $or: [{ normalizedName }, { normalizedSynonyms: normalizedName }],
     });
     if (!grape) {
-      grape = new Grape({ name: canonicalName, normalizedName, createdBy: userId });
+      // pendingReview: a user write minted taxonomy — visible to admins,
+      // never blocking the user. Same rule as findOrCreateRegion above.
+      // Unflagged mints put "Honey" (a mead) and "Alvarão" (a typo of
+      // Alvarinho the synonym lookup couldn't bridge) into the globally
+      // shared taxonomy (somm ticket 6a942a60); the curator queue is where
+      // a near-miss gets merged instead of silently substituted.
+      grape = new Grape({ name: canonicalName, normalizedName, createdBy: userId, pendingReview: true });
       await grape.save();
     }
     if (!ids.some(id => String(id) === String(grape._id))) ids.push(grape._id); // two synonyms may resolve to one doc

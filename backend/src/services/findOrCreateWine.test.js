@@ -1088,8 +1088,27 @@ describe('taxonomy find-or-create dedup', () => {
       $or: [{ normalizedName: 'syrah' }, { normalizedSynonyms: 'syrah' }],
     });
     expect(Grape).toHaveBeenCalledTimes(1);
-    expect(Grape).toHaveBeenCalledWith({ name: 'Syrah', normalizedName: 'syrah', createdBy: USER_ID });
+    expect(Grape).toHaveBeenCalledWith({
+      name: 'Syrah', normalizedName: 'syrah', createdBy: USER_ID,
+      // Somm ticket 6a942a60 ("Honey", "Alvarão"): a user-write grape mint is
+      // born flagged for admin review — visible, never blocking. Same R3 rule
+      // as the region mint above.
+      pendingReview: true,
+    });
     expect(ids).toEqual(['grape-new']);
+  });
+
+  test('findOrCreateGrapes: matching an existing grape never touches its review state', async () => {
+    const existing = { _id: 'grape-1', save: jest.fn() };
+    Grape.findOne.mockResolvedValue(existing);
+
+    const ids = await findOrCreateGrapes(['Grenache'], USER_ID);
+
+    // The match path must not construct, save, or re-flag anything — only a
+    // genuinely NEW variety enters the review queue.
+    expect(ids).toEqual(['grape-1']);
+    expect(Grape).not.toHaveBeenCalled();
+    expect(existing.save).not.toHaveBeenCalled();
   });
 
   test('findOrCreateGrapes: blend percentages are stripped, bare percentages dropped', async () => {

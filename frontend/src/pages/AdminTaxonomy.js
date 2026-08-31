@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   adminGetTaxonomy, adminGetCountries, adminGetGrapes, adminGetRegions,
   adminCreateTaxonomy, adminUpdateTaxonomy, adminDeleteTaxonomy,
-  adminMergeTaxonomy, adminApproveRegion,
+  adminMergeTaxonomy, adminApproveRegion, adminApproveGrape,
 } from '../api/admin';
 import GrapePicker from '../components/GrapePicker';
 import ConfirmModal from '../components/ConfirmModal';
@@ -267,10 +267,12 @@ function AdminTaxonomy() {
           String(i.country?._id || i.country) === String(mergeItem.country?._id || mergeItem.country)))
     : [];
 
-  const handleApproveRegion = async (id) => {
+  // Regions and grapes share the pendingReview flow; the endpoint differs.
+  const handleApprove = async (id) => {
     setError(null);
     try {
-      const res = await adminApproveRegion(apiFetch, id);
+      const approve = activeTab === 'grapes' ? adminApproveGrape : adminApproveRegion;
+      const res = await approve(apiFetch, id);
       const data = await res.json();
       if (res.ok) fetchItems();
       else setError(data.error || 'Failed to approve');
@@ -889,11 +891,14 @@ function AdminTaxonomy() {
                 <div className="taxonomy-item-actions">
                   {item.pendingReview && (
                     <>
-                      <span className="taxonomy-badge taxonomy-badge--pending" title={t('admin.taxonomy.pendingRegionTitle')}>
+                      <span
+                        className="taxonomy-badge taxonomy-badge--pending"
+                        title={t(activeTab === 'grapes' ? 'admin.taxonomy.pendingGrapeTitle' : 'admin.taxonomy.pendingRegionTitle')}
+                      >
                         {t('admin.taxonomy.pendingRegion')}
                       </span>
                       <button
-                        onClick={() => handleApproveRegion(item._id)}
+                        onClick={() => handleApprove(item._id)}
                         className="btn btn-primary btn-small"
                       >
                         {t('admin.taxonomy.approveRegion')}

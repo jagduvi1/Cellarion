@@ -742,6 +742,34 @@ router.post('/regions/:id/approve', async (req, res) => {
   }
 });
 
+// POST /api/admin/taxonomy/grapes/:id/approve — clear the pendingReview flag
+// a user-write mint set (somm ticket 6a942a60: bottle-add/import minted
+// "Honey" and "Alvarão" straight into the shared taxonomy). Mirrors the
+// regions verb above: approval is its own verb, not a PUT side effect —
+// editing a grape to fix a typo must not silently count as "a human vouched
+// for this". A near-miss mint gets MERGED from the queue instead (the
+// existing grapes/merge route), never silently substituted at add time.
+router.post('/grapes/:id/approve', async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+    const grape = await Grape.findById(req.params.id);
+    if (!grape) return res.status(404).json({ error: 'Grape not found' });
+    // Idempotent like the regions verb: a second click must not write a
+    // second audit entry for a no-op.
+    if (!grape.pendingReview) return res.json({ grape, already: true });
+    grape.pendingReview = false;
+    await grape.save();
+    logAudit(req, 'admin.taxonomy.approveGrape',
+      { type: 'grape', id: grape._id },
+      { name: grape.name }
+    );
+    res.json({ grape });
+  } catch (error) {
+    console.error('Approve grape error:', error);
+    res.status(500).json({ error: 'Failed to approve grape' });
+  }
+});
+
 // ===== MERGES =====
 // Collapse a duplicate taxonomy doc into its canonical counterpart. All
 // references (wines, regions, appellations) are rewritten before the
