@@ -104,7 +104,7 @@ function Cellars() {
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <Link
               to="/import-cellar"
-              className="btn btn-secondary btn-small cellars-desktop-create"
+              className="btn btn-secondary btn-small"
               title={t('cellars.importTooltip')}
             >
               {t('cellars.import', 'Import')}
@@ -179,6 +179,14 @@ function Cellars() {
         <div className="empty-state">
           <p>{t('cellars.emptyCellars')}</p>
           <p>{t('cellars.emptyCallToAction')}</p>
+          {/* Someone arriving with an existing collection has no way to learn
+              that importing is possible: bottle import lives inside a cellar's
+              ⋯ menu, which cannot be reached before a cellar exists, and the
+              header's Import button is for a Cellarion backup, not a wine
+              list. Say both things here, where a new user actually is. */}
+          <p className="empty-state-import">
+            {t('cellars.emptyImportHint')}
+          </p>
         </div>
       ) : (
         <div className="cellars-grid">
