@@ -1487,7 +1487,7 @@
       "pendingRegion": "New — unreviewed",
       "pendingRegionTitle": "This region was created automatically by a user adding a wine and has not been reviewed by an admin",
       "pendingGrapeTitle": "This grape was created automatically by a user adding a wine and has not been reviewed by an admin — approve it, or merge it into the correct variety",
-      "needsReview": "{{count}} needs review",
+      "needsReview_one": "{{count}} needs review",
       "needsReview_other": "{{count}} need review",
       "needsReviewTitle": "Created automatically by a user and not used by any wine yet — the ones worth a look. Entries already in use are left alone.",
       "approveRegion": "Approve",

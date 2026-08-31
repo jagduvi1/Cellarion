@@ -244,7 +244,12 @@
 
 @media (max-width: 480px) {
   .login-page {
-    padding: 1rem;
+    /* The insets have to be repeated here. A bare `padding: 1rem` reset the
+       safe-area top and bottom from the base rule, on exactly the narrow
+       screens the inset exists for — the same shorthand trap deltabeat found
+       on .landing-nav (issue #1145), in the other file that fix touched.
+       Found by looking for siblings once the first one was confirmed. */
+    padding: calc(1rem + env(safe-area-inset-top)) 1rem calc(1rem + env(safe-area-inset-bottom));
     gap: 1.25rem;
   }
 

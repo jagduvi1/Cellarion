@@ -1,4 +1,4 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 /**
@@ -12,6 +12,7 @@ import { useAuth } from '../contexts/AuthContext';
  */
 function ProtectedRoute({ children, requireAdmin = false, requireSomm = false, requireModerator = false, requireSuperAdmin = false }) {
   const { user, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -22,7 +23,19 @@ function ProtectedRoute({ children, requireAdmin = false, requireSomm = false, r
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    // Carry where they were heading, so signing in finishes the journey they
+    // started instead of dumping them on /cellars (issue #1165). The case that
+    // makes it more than a nicety: NFC tags on a fridge shelf open Safari, not
+    // the installed PWA, and iOS gives a standalone web app its own cookie
+    // jar — so that Safari session has almost always expired by the next tap.
+    // Without this you sign in, land on /cellars, walk back to the fridge and
+    // tap again.
+    //
+    // The destination travels in router STATE, never a ?next= query param:
+    // state is set here and can't be steered by a crafted link, so it needs no
+    // allow-list. A string rather than the location object keeps the read on
+    // the login side to one optional chain while preserving the query.
+    return <Navigate to="/login" state={{ from: location.pathname + location.search }} replace />;
   }
 
   const roles = user.roles || [];
