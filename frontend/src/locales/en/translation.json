@@ -2146,6 +2146,8 @@
     "imperial": "Imperial"
   },
   "statistics": {
+    "clickHint": "Tip: click a chart segment to see those bottles, or a wine to open it.",
+    "openBottle": "Open this bottle",
     "replacementValue": "Est. replacement value",
     "vsPaid": "vs paid",
     "title": "Collection Analytics",

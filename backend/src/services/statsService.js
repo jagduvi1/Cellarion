@@ -175,6 +175,10 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
         // missing _id omits the field instead of crashing (clients treat absence
         // as "no actions available").
         id:            b._id?.toString(),
+        // cellarId travels WITH the bottle id because a bottle's page is
+        // /cellars/:cellarId/bottles/:bottleId — the id alone cannot address
+        // it. The HA card never noticed: it calls the API, not a URL.
+        cellarId:      b.cellar?.toString(),
         name:          wd?.name      || 'Unknown',
         producer:      wd?.producer  || '',
         vintage:       b.vintage     || 'NV',
@@ -187,7 +191,11 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
     const cid = b.cellar.toString();
     if (!cellarMap[cid]) {
       const cel = cellars.find(x => x._id.toString() === cid);
-      cellarMap[cid] = { name: cel?.name || 'Cellar', count: 0, value: 0, wines: new Set() };
+      // id lets the Statistics cellar breakdown link straight to the cellar
+      // (forum request, turbulent3964 2026-08-29). Falls back to the map key,
+      // which IS the cellar id — so the link works even when the cellar doc
+      // wasn't in the fetched list.
+      cellarMap[cid] = { id: cid, name: cel?.name || 'Cellar', count: 0, value: 0, wines: new Set() };
     }
     cellarMap[cid].count++;
     if (b.price) {
@@ -198,7 +206,12 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
 
     if (b.price && wd) {
       const v = toTarget(b.price, b.currency || 'USD');
-      if (v != null) topValueArr.push({ name: wd.name || 'Unknown', producer: wd.producer || '', vintage: b.vintage || 'NV', type: wd.type || 'unknown', price: Math.round(v * 100) / 100 });
+      // id + cellarId: same reason as the urgency ladder's — together they
+      // address the bottle's page (/cellars/:cellarId/bottles/:id), where the
+      // owner sees its rack slot and label photo (forum request,
+      // turbulent3964 2026-08-29). Optional-chained so a missing id omits the
+      // field rather than crashing; the UI then renders plain text.
+      if (v != null) topValueArr.push({ id: b._id?.toString(), cellarId: b.cellar?.toString(), name: wd.name || 'Unknown', producer: wd.producer || '', vintage: b.vintage || 'NV', type: wd.type || 'unknown', price: Math.round(v * 100) / 100 });
     }
   }
 
@@ -382,7 +395,7 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
     consumedByCountry,
     consumedByGrape,
     consumedByProducer,
-    cellarBreakdown: Object.values(cellarMap).map(c => ({ name: c.name, bottleCount: c.count, value: Math.round(c.value * 100) / 100, uniqueWines: c.wines.size })).sort((a, b) => b.bottleCount - a.bottleCount),
+    cellarBreakdown: Object.values(cellarMap).map(c => ({ id: c.id, name: c.name, bottleCount: c.count, value: Math.round(c.value * 100) / 100, uniqueWines: c.wines.size })).sort((a, b) => b.bottleCount - a.bottleCount),
     maturityForecast,
     urgencyLadder: urgencyArr.slice(0, 10),
     holdingTime,
