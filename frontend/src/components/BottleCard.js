@@ -43,9 +43,12 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
   const displayName = bottle.wineDefinition?.name || bottle.pendingWineRequest?.wineName || t('common.unknownWine');
   const displayProducer = bottle.wineDefinition?.producer || bottle.pendingWineRequest?.producer;
   const maturityInfo = bottle.maturityStatus ? MATURITY_LABELS[bottle.maturityStatus] : null;
-  // The backend computes maturityStatus with the bottle's OWN drinkFrom/drinkTo
-  // window taking precedence over the vintage profile — flag the source here.
-  const hasPersonalWindow = Number.isFinite(bottle.drinkFrom) || Number.isFinite(bottle.drinkTo);
+  // The backend computes maturityStatus with the bottle's OWN personal window
+  // taking precedence over the vintage profile — flag the source here. Peak
+  // fields count too: MCP can set a peak without a window, and that bottle's
+  // status is still personally sourced.
+  const hasPersonalWindow = Number.isFinite(bottle.drinkFrom) || Number.isFinite(bottle.drinkTo)
+    || Number.isFinite(bottle.peakFrom) || Number.isFinite(bottle.peakUntil);
   // Reserved ("spoken for") — suppressed for collapsed groups, whose members
   // may carry different reservations (same reasoning as the rack badge).
   const reserved = !isGroup && bottle.status === 'active' && isReserved(bottle);

@@ -266,6 +266,57 @@ describe('classifyPersonalWindow', () => {
     expect(classifyPersonalWindow({ drinkFrom: 2026, drinkTo: 2026 })).toBe('peak');
   });
 
+  // ── Optional personal peak (ticket 6a94655283: "drinkable ≠ peak") ───────
+  // The reporter's own worked example: a 2024 white Bordeaux, drinkable
+  // 2026–2035, at its best 2028–2031. Without the peak fields the whole
+  // decade classified as one long Peak.
+  describe('with peakFrom/peakUntil — the five-stage personal window', () => {
+    const w = { drinkFrom: 2026, drinkTo: 2035, peakFrom: 2028, peakUntil: 2031 };
+
+    test('walks not-ready → early → peak → late → declining across the years', () => {
+      expect(classifyPersonalWindow(w, 2025)).toBe('not-ready');
+      expect(classifyPersonalWindow(w, 2026)).toBe('early');
+      expect(classifyPersonalWindow(w, 2027)).toBe('early');
+      expect(classifyPersonalWindow(w, 2028)).toBe('peak');
+      expect(classifyPersonalWindow(w, 2031)).toBe('peak');
+      expect(classifyPersonalWindow(w, 2032)).toBe('late');
+      expect(classifyPersonalWindow(w, 2035)).toBe('late');
+      expect(classifyPersonalWindow(w, 2036)).toBe('declining');
+    });
+
+    test('a lone peakFrom splits early/peak with no late stage', () => {
+      const half = { drinkFrom: 2026, drinkTo: 2035, peakFrom: 2028 };
+      expect(classifyPersonalWindow(half, 2027)).toBe('early');
+      expect(classifyPersonalWindow(half, 2034)).toBe('peak');
+    });
+
+    test('a lone peakUntil splits peak/late with no early stage', () => {
+      const half = { drinkFrom: 2026, drinkTo: 2035, peakUntil: 2031 };
+      expect(classifyPersonalWindow(half, 2027)).toBe('peak');
+      expect(classifyPersonalWindow(half, 2033)).toBe('late');
+    });
+
+    test('without peak fields the whole window stays peak — historical behaviour', () => {
+      const plain = { drinkFrom: 2026, drinkTo: 2035 };
+      expect(classifyPersonalWindow(plain, 2026)).toBe('peak');
+      expect(classifyPersonalWindow(plain, 2035)).toBe('peak');
+    });
+
+    test('window bounds still win over the peak stages', () => {
+      // not-ready/declining are decided by drinkFrom/drinkTo first, so a
+      // peak range can never leak outside the window it sits in.
+      expect(classifyPersonalWindow(w, 2024)).toBe('not-ready');
+      expect(classifyPersonalWindow(w, 2040)).toBe('declining');
+    });
+
+    test('peak fields alone (no window) still classify', () => {
+      const only = { peakFrom: 2028, peakUntil: 2031 };
+      expect(classifyPersonalWindow(only, 2027)).toBe('early');
+      expect(classifyPersonalWindow(only, 2030)).toBe('peak');
+      expect(classifyPersonalWindow(only, 2032)).toBe('late');
+    });
+  });
+
   test('only drinkFrom set: open-ended after the from year', () => {
     expect(classifyPersonalWindow({ drinkFrom: 2028 })).toBe('not-ready');
     expect(classifyPersonalWindow({ drinkFrom: 2024 })).toBe('peak');

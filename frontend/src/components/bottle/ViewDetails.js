@@ -167,7 +167,11 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
                 ? t('bottleDetail.personalNotReady', { year: personalWindow.from })
                 : personalWindow.status === 'declining'
                   ? t('bottleDetail.personalPast')
-                  : t('bottleDetail.personalDrinkNow')}
+                  : personalWindow.status === 'early'
+                    ? t('bottleDetail.personalEarly', { year: personalWindow.peakFrom })
+                    : personalWindow.status === 'late'
+                      ? t('bottleDetail.personalLate')
+                      : t('bottleDetail.personalDrinkNow')}
             </span>
             <span className="bd-window-source" title={t('bottleDetail.yourWindowTooltip')}>
               {t('bottleDetail.yourWindow')}

@@ -116,6 +116,8 @@ registerTool({
     rating_scale: z.enum(['5', '20', '100']).optional(),
     drink_from: z.number().int().optional(),
     drink_to: z.number().int().optional(),
+    peak_from: z.number().int().optional().describe('Optional peak start inside the drink window ("drinkable ≠ peak")'),
+    peak_until: z.number().int().optional().describe('Optional peak end inside the drink window'),
     idempotency_key: z.string().max(100).optional(),
   },
   handler: async (args, ctx) => {
@@ -204,6 +206,8 @@ registerTool({
       ratingScale: args.rating_scale,
       drinkFrom: args.drink_from,
       drinkTo: args.drink_to,
+      peakFrom: args.peak_from,
+      peakUntil: args.peak_until,
     }, ctx.req);
     if (result.error) return fail('invalid_input', result.error.message);
     const { bottle } = result;
@@ -244,7 +248,7 @@ registerTool({
 // edit form covers the rest (vintage, bottle size, purchase metadata). Named
 // here, next to the inputSchema it must mirror, so description and schema
 // can't drift apart.
-const MCP_UPDATE_PARAMS = ['price', 'currency', 'notes', 'occasion', 'rating', 'rating_scale', 'drink_from', 'drink_to', 'reserved_for', 'reserved_until'];
+const MCP_UPDATE_PARAMS = ['price', 'currency', 'notes', 'occasion', 'rating', 'rating_scale', 'drink_from', 'drink_to', 'peak_from', 'peak_until', 'reserved_for', 'reserved_until'];
 
 registerTool({
   name: 'update_bottle',
@@ -266,6 +270,8 @@ registerTool({
     rating_scale: z.enum(['5', '20', '100']).optional(),
     drink_from: z.number().int().nullable().optional(),
     drink_to: z.number().int().nullable().optional(),
+    peak_from: z.number().int().nullable().optional().describe('Peak start inside the drink window (null clears)'),
+    peak_until: z.number().int().nullable().optional().describe('Peak end inside the drink window (null clears)'),
     reserved_for: z.string().max(200).nullable().optional().describe('Who/what the bottle is held for (null clears)'),
     reserved_until: z.number().int().nullable().optional().describe('Year the reservation runs to, e.g. 2034 (null clears)'),
     idempotency_key: z.string().max(100).optional(),
@@ -287,6 +293,8 @@ registerTool({
       ratingScale: args.rating_scale,
       drinkFrom: args.drink_from,
       drinkTo: args.drink_to,
+      peakFrom: args.peak_from,
+      peakUntil: args.peak_until,
       reservedFor: args.reserved_for,
       reservedUntil: args.reserved_until,
     }, ctx.req);

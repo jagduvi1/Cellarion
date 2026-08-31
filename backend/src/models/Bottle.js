@@ -141,6 +141,55 @@ const bottleSchema = new mongoose.Schema({
       }
     ]
   },
+  // Optional PEAK inside the personal window (ticket 6a94655283, 2026-08-31):
+  // "drinkable ≠ peak". Without these, the whole drinkFrom..drinkTo span
+  // classifies as one long Peak — a wine enjoyable for ten years with a
+  // four-year best stretch cannot be expressed except by lying about one of
+  // them. With a peak set, the personal window classifies in the same five
+  // stages the sommelier WineVintageProfile has always had: not-ready →
+  // early (drinkFrom..peakFrom) → peak → late (peakUntil..drinkTo) →
+  // declining. Bottle-level like drinkFrom/drinkTo — the user's own opinion,
+  // never the shared registry's.
+  peakFrom: {
+    type: Number,
+    min: [1900, 'Peak-from year must be 1900 or later'],
+    max: [2200, 'Peak-from year must be 2200 or earlier'],
+    validate: [
+      {
+        validator: v => v == null || Number.isInteger(v),
+        message: 'Peak-from must be a whole year'
+      },
+      {
+        validator: function(v) {
+          return v == null || this.drinkFrom == null || v >= this.drinkFrom;
+        },
+        message: 'Peak-from cannot be before drink-from'
+      }
+    ]
+  },
+  peakUntil: {
+    type: Number,
+    min: [1900, 'Peak-until year must be 1900 or later'],
+    max: [2200, 'Peak-until year must be 2200 or earlier'],
+    validate: [
+      {
+        validator: v => v == null || Number.isInteger(v),
+        message: 'Peak-until must be a whole year'
+      },
+      {
+        validator: function(v) {
+          return v == null || this.peakFrom == null || v >= this.peakFrom;
+        },
+        message: 'Peak-until cannot be before peak-from'
+      },
+      {
+        validator: function(v) {
+          return v == null || this.drinkTo == null || v <= this.drinkTo;
+        },
+        message: 'Peak-until cannot be after drink-to'
+      }
+    ]
+  },
   // ── Reservation ("spoken for") ───────────────────────────────────────
   // A bottle is reserved iff reservedFor and/or reservedUntil is set — no
   // status change (the active/consumed lifecycle stays untouched). Reserved

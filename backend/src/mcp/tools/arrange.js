@@ -40,7 +40,7 @@ async function loadRackForArrange(userId, rackId) {
   if (!access) return null;
   const rack = await Rack.findOne({ _id: rackId, deletedAt: null }).populate({
     path: 'slots.bottle',
-    select: 'vintage status drinkFrom drinkTo wineDefinition',
+    select: 'vintage status drinkFrom drinkTo peakFrom peakUntil wineDefinition',
     populate: { path: 'wineDefinition', select: 'name producer type' },
   });
   if (!rack) return null;
