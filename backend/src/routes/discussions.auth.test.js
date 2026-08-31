@@ -54,10 +54,12 @@ const modRoutes = routes.filter((r) => r.handlers.includes(requireModeratorOrAdm
 
 describe('discussions router shape', () => {
   test('router defines the expected number of routes (drift canary)', () => {
-    // 21 routes as of this writing. If you add/remove a route this fails on
-    // purpose: update the count AND make sure the new route carries the right
-    // auth middleware (the suites below check that automatically).
-    expect(routes.length).toBe(21);
+    // 22 routes as of this writing (+1: PATCH /:idOrSlug/language, the
+    // moderator move between language sections). If you add/remove a route
+    // this fails on purpose: update the count AND make sure the new route
+    // carries the right auth middleware (the suites below check that
+    // automatically).
+    expect(routes.length).toBe(22);
   });
 
   test('every route starts with an auth middleware (requireAuth or optionalAuth)', () => {

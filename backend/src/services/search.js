@@ -89,7 +89,13 @@ async function initialize() {
       // discussion_replies index) keeps the search query simple — Meilisearch
       // returns one hit per thread regardless of which field matched.
       searchableAttributes: ['title', 'body', 'replyContent', 'authorName', 'wineName'],
-      filterableAttributes: ['category', 'isLocked', 'wineDefinitionId'],
+      // `language`: the forum's language sections (2026-08-31). NOTE for
+      // deploys — adding a filterable attribute makes Meili re-index, but the
+      // stored documents only gain the field once they are re-uploaded, so a
+      // release that adds one needs MEILI_FORCE_REINDEX=1 (or an empty index)
+      // or search silently answers across every language until the next edit
+      // to each thread.
+      filterableAttributes: ['category', 'isLocked', 'wineDefinitionId', 'language'],
       sortableAttributes: ['lastActivityAt', 'createdAt', 'replyCount'],
       separatorTokens: ['.'],
       pagination: { maxTotalHits: 5000 }
@@ -663,6 +669,9 @@ function buildDiscussionDocument(discussion, replyTexts = []) {
     body: stripHtml(discussion.body || ''),
     replyContent,
     category: discussion.category || '',
+    // Threads written before language sections existed carry no field; they
+    // are English, which is also what the schema default gives new ones.
+    language: discussion.language || 'en',
     isLocked: !!discussion.isLocked,
     isPinned: !!discussion.isPinned,
     replyCount: discussion.replyCount || 0,
@@ -779,7 +788,7 @@ async function removeDiscussion(discussionId) {
 // Search discussions by free-text query. Returns ordered IDs so the route
 // handler can hydrate them from MongoDB and keep the API response shape
 // consistent with the non-search list view.
-async function searchDiscussions(query, { category, limit = 20, offset = 0 } = {}) {
+async function searchDiscussions(query, { category, language, limit = 20, offset = 0 } = {}) {
   if (!isAvailable) {
     throw new Error('Meilisearch is not available');
   }
@@ -789,6 +798,13 @@ async function searchDiscussions(query, { category, limit = 20, offset = 0 } = {
   const filters = [];
   if (category && VALID_CATEGORIES.includes(String(category))) {
     filters.push(`category = "${category}"`);
+  }
+  // Language section. The caller resolves the code (routes/discussions.js →
+  // services/forumLanguages), so it is already a known value; the character
+  // guard is belt-and-braces against a quote reaching the filter DSL, which
+  // has no parameter binding.
+  if (language && /^[a-z]{2,3}(-[a-z]{2,4})?$/.test(String(language))) {
+    filters.push(`language = "${language}"`);
   }
 
   const result = await discussionsIndex.search(query || '', {

@@ -71,3 +71,31 @@ export const banUser = (apiFetch, userId, duration, reason) =>
 
 export const unbanUser = (apiFetch, userId) =>
   apiFetch(`/api/discussions/moderation/ban/${userId}`, { method: 'DELETE' });
+
+// ── Forum language sections ─────────────────────────────────────────────────
+// English is the forum's default section; everything else is opened by a
+// moderator. See backend services/forumLanguages for the policy.
+
+/** The sections a member can post in (English first). Anonymous-readable. */
+export const getForumLanguages = (apiFetch) =>
+  apiFetch('/api/forum-languages');
+
+/** Ask for a section that isn't open yet. */
+export const requestForumLanguage = (apiFetch, data) =>
+  apiFetch('/api/forum-languages/requests', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(data) });
+
+/** Moderator: the pending requests + retired sections. */
+export const getForumLanguageRequests = (apiFetch) =>
+  apiFetch('/api/forum-languages/requests');
+
+/** Moderator: approve | reject | retire a section. */
+export const decideForumLanguage = (apiFetch, code, action, note) =>
+  apiFetch(`/api/forum-languages/${code}`, {
+    method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify({ action, note }),
+  });
+
+/** Moderator: move a mis-filed thread into another language section. */
+export const moveDiscussionLanguage = (apiFetch, idOrSlug, language) =>
+  apiFetch(`/api/discussions/${idOrSlug}/language`, {
+    method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify({ language }),
+  });

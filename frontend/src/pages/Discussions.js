@@ -3,7 +3,7 @@ import { lazy } from '../utils/lazyWithReload';
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { getDiscussions, createDiscussion } from '../api/discussions';
+import { getDiscussions, createDiscussion, getForumLanguages } from '../api/discussions';
 import DiscussionCard from '../components/DiscussionCard';
 import CategoryBadge, { CATEGORY_SLUGS } from '../components/CategoryBadge';
 import CommunityCTA from '../components/CommunityCTA';
@@ -30,6 +30,11 @@ function Discussions() {
   const [error, setError] = useState(null);
 
   const [category, setCategory] = useState('');
+  // Language section. English is the forum's default view AND the default
+  // for a new thread (Johan, 2026-08-31) — a member picks another language
+  // deliberately, and a moderator moves anything mis-filed.
+  const [language, setLanguage] = useState('en');
+  const [languages, setLanguages] = useState([]);
   const [sort, setSort] = useState('active');
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -37,7 +42,7 @@ function Discussions() {
   // Create modal state
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ title: '', body: '', category: 'general' });
+  const [form, setForm] = useState({ title: '', body: '', category: 'general', language: 'en' });
   const [bodyTextLength, setBodyTextLength] = useState(0);
   const [linkedWine, setLinkedWine] = useState(null);
   const [linkedBlogPost, setLinkedBlogPost] = useState(null);
@@ -58,6 +63,7 @@ function Discussions() {
 
       const params = new URLSearchParams({ page: p, limit: 20, sort });
       if (category) params.set('category', category);
+      params.set('language', language);
       if (searchQuery) params.set('q', searchQuery);
 
       const res = await getDiscussions(apiFetch, params.toString());
@@ -77,12 +83,27 @@ function Discussions() {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [apiFetch, category, sort, searchQuery, t]);
+  }, [apiFetch, category, sort, searchQuery, language, t]);
 
   useEffect(() => {
     setDiscussions([]);
     fetchDiscussions(1, true);
-  }, [category, sort, searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [category, sort, searchQuery, language]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The open sections. Only fetched once; a failure leaves `languages` empty,
+  // which hides the switcher and leaves the English forum working exactly as
+  // it did before — the section list is an enhancement, not a dependency.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await getForumLanguages(apiFetch);
+        const data = await res.json();
+        if (!cancelled && res.ok && Array.isArray(data.languages)) setLanguages(data.languages);
+      } catch { /* switcher stays hidden */ }
+    })();
+    return () => { cancelled = true; };
+  }, [apiFetch]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -141,7 +162,7 @@ function Discussions() {
 
       if (res.ok) {
         setShowCreate(false);
-        setForm({ title: '', body: '', category: 'general' });
+        setForm({ title: '', body: '', category: 'general', language: 'en' });
         setBodyTextLength(0);
         setLinkedWine(null);
         setLinkedBlogPost(null);
@@ -221,6 +242,22 @@ function Discussions() {
               />
             ))}
           </div>
+          {/* Language section. Hidden until a second section exists — a forum
+              in one language should not carry a control that does nothing. */}
+          {languages.length > 1 && (
+            <select
+              className="input discussions__language"
+              value={language}
+              onChange={e => setLanguage(e.target.value)}
+              aria-label={t('discussions.languageSection')}
+            >
+              {languages.map(l => (
+                <option key={l.code} value={l.code}>
+                  {l.nativeName && l.nativeName !== l.name ? `${l.name} · ${l.nativeName}` : l.name}
+                </option>
+              ))}
+            </select>
+          )}
           <select
             className="input discussions__sort"
             value={sort}
@@ -286,6 +323,27 @@ function Discussions() {
                 ))}
               </select>
             </div>
+
+            {/* Language section — English unless the author changes it. The
+                hint states the expectation plainly rather than leaving people
+                to guess why their French thread got moved. */}
+            {languages.length > 1 && (
+              <div className="form-group">
+                <label className="form-label">{t('discussions.languageSection')}</label>
+                <select
+                  className="input"
+                  value={form.language}
+                  onChange={e => setForm(f => ({ ...f, language: e.target.value }))}
+                >
+                  {languages.map(l => (
+                    <option key={l.code} value={l.code}>
+                      {l.nativeName && l.nativeName !== l.name ? `${l.name} · ${l.nativeName}` : l.name}
+                    </option>
+                  ))}
+                </select>
+                <small className="discussions__language-hint">{t('discussions.languageHint')}</small>
+              </div>
+            )}
 
             <div className="form-group">
               <label className="form-label">{t('discussions.title')}</label>
