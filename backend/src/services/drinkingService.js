@@ -39,6 +39,18 @@ function hasContent(obj) {
 }
 
 /**
+ * Unique registry ids from ranked entries. Pending registry bottles have no
+ * wineDefinition, so drop absent ids before String conversion —
+ * String(undefined) is truthy and survives filtering. Convert before Set so
+ * equal ObjectId values dedupe by string value rather than object identity.
+ */
+function uniqueWineIds(entries) {
+  return [...new Set(
+    entries.map((r) => r.b.wineDefinition?._id).filter(Boolean).map(String)
+  )];
+}
+
+/**
  * Select and rank ready-to-drink candidates within the given cellars.
  * Returns { ranked, profileMap, totalActive, considered, notReady,
  * reservedExcluded, priceWarning }.
@@ -103,7 +115,7 @@ async function readyCandidates(userId, cellarIds, { wineType, maxPrice, currency
 async function serializeCandidates(ranked, profileMap, cellarIds, limit) {
   const top = ranked.slice(0, limit);
   const bottleIds = top.map((r) => r.b._id);
-  const wineIds = [...new Set(top.map((r) => String(r.b.wineDefinition?._id)).filter(Boolean))];
+  const wineIds = uniqueWineIds(top);
 
   // Taste profiles (WINE_POPULATE_LIST strips them from list loads) and rack
   // positions, fetched only for the shortlist.
@@ -177,7 +189,7 @@ async function serializeCandidates(ranked, profileMap, cellarIds, limit) {
  */
 async function scoreDishMatches(dish, ranked) {
   const tokens = [...new Set(String(dish).toLowerCase().split(/[^a-zà-ÿ]+/i).filter((t) => t.length >= 3))];
-  const wineIds = [...new Set(ranked.map((r) => String(r.b.wineDefinition?._id)).filter(Boolean))];
+  const wineIds = uniqueWineIds(ranked);
   const wines = wineIds.length
     ? await WineDefinition.find({ _id: { $in: wineIds } }).select('aiProfile.foodPairings aiProfile.flavors').lean()
     : [];

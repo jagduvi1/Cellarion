@@ -78,6 +78,25 @@ const mkBottle = (over = {}) => ({
   ...over,
 });
 
+const mkPendingBottle = (over = {}) => mkBottle({
+  wineDefinition: null,
+  pendingWineRequest: { wineName: 'Pending registry wine' },
+  ...over,
+});
+
+function wineIdQueriesFromFindCalls() {
+  return WineDefinition.find.mock.calls
+    .map(([query]) => query?._id?.$in)
+    .filter(Array.isArray);
+}
+
+function expectWineIdQueries(expectedIds) {
+  const queries = wineIdQueriesFromFindCalls();
+  const expected = expectedIds.map(String);
+  expect(queries).not.toHaveLength(0);
+  for (const ids of queries) expect(ids).toEqual(expected);
+}
+
 function wireCandidates(bottles) {
   Cellar.find.mockReturnValue(chain([{ _id: CELLAR_ID }]));
   Bottle.find.mockReturnValue(chain(bottles));
@@ -181,6 +200,63 @@ describe('what_should_i_open_tonight', () => {
     expect(body.data).toEqual([]);
     expect(body.warnings.join(' ')).toMatch(/1 reserved .*excluded/i);
   });
+
+  test('a shortlisted pending wine does not query WineDefinition with an undefined id', async () => {
+    const pending = mkPendingBottle({ drinkTo: THIS_YEAR + 2 });
+    const resolved = mkBottle({ drinkTo: THIS_YEAR + 2 });
+    wireCandidates([pending, resolved]);
+
+    const res = await tool('what_should_i_open_tonight').handler({}, ctxFor(oid('e')));
+    const body = parse(res);
+    expect(body.data).toHaveLength(2);
+    expect(body.data.map((b) => b.wine.name)).toContain('Pending registry wine');
+    expect(body.data.find((b) => b.wine.name === 'Pending registry wine').taste).toBeNull();
+    expectWineIdQueries([resolved.wineDefinition._id]);
+  });
+
+  test('equal wine ids from distinct ObjectId instances are queried once', async () => {
+    const sharedHex = oid('1');
+    const baseWine = mkBottle().wineDefinition;
+    const first = mkBottle({
+      wineDefinition: { ...baseWine, _id: new mongoose.Types.ObjectId(sharedHex) },
+      drinkTo: THIS_YEAR + 2,
+    });
+    const second = mkBottle({
+      wineDefinition: { ...baseWine, _id: new mongoose.Types.ObjectId(sharedHex) },
+      drinkTo: THIS_YEAR + 2,
+    });
+    wireCandidates([first, second]);
+
+    const res = await tool('what_should_i_open_tonight').handler({}, ctxFor(oid('9')));
+    expect(parse(res).data).toHaveLength(2);
+    expectWineIdQueries([sharedHex]);
+  });
+
+  test('an all-pending shortlist skips WineDefinition queries without dropping bottles', async () => {
+    const pendingNull = mkPendingBottle({ drinkTo: THIS_YEAR + 2 });
+    const pendingUndefined = mkPendingBottle({
+      wineDefinition: undefined,
+      pendingWineRequest: { wineName: 'Pending wine with unset definition' },
+      drinkTo: THIS_YEAR + 2,
+    });
+    const pendingIdless = mkPendingBottle({
+      wineDefinition: {},
+      pendingWineRequest: { wineName: 'Pending wine with idless definition' },
+      drinkTo: THIS_YEAR + 2,
+    });
+    wireCandidates([pendingNull, pendingUndefined, pendingIdless]);
+
+    const res = await tool('what_should_i_open_tonight').handler({}, ctxFor(oid('0')));
+    const body = parse(res);
+    expect(body.data).toHaveLength(3);
+    expect(body.data.map((b) => b.wine.name)).toEqual(expect.arrayContaining([
+      'Pending registry wine',
+      'Pending wine with unset definition',
+      'Pending wine with idless definition',
+    ]));
+    expect(body.data.every((b) => b.taste === null)).toBe(true);
+    expect(WineDefinition.find).not.toHaveBeenCalled();
+  });
 });
 
 describe('pair_with_dish', () => {
@@ -232,6 +308,24 @@ describe('pair_with_dish', () => {
     expect(allIds).toContain(String(free._id));
     expect(allIds).not.toContain(String(reserved._id));
     expect(body.warnings.join(' ')).toMatch(/1 reserved .*excluded/i);
+  });
+
+  test('a pending wine remains in the style spread without an invalid WineDefinition query', async () => {
+    const pending = mkPendingBottle({ drinkTo: THIS_YEAR + 2 });
+    const resolved = mkBottle({ drinkTo: THIS_YEAR + 2 });
+    wireCandidates([pending, resolved]);
+    WineDefinition.find.mockReturnValue(chain([
+      { _id: resolved.wineDefinition._id, aiProfile: { foodPairings: ['roast chicken'], flavors: [] } },
+    ]));
+
+    const res = await tool('pair_with_dish').handler({ dish: 'roast chicken' }, ctxFor(oid('f')));
+    const body = parse(res);
+    expect(body.data.matched).toHaveLength(1);
+    expect(String(body.data.matched[0].bottle_id)).toBe(String(resolved._id));
+    expect(body.data.style_spread).toHaveLength(1);
+    expect(body.data.style_spread.map((b) => b.wine.name)).toContain('Pending registry wine');
+    expect(body.data.style_spread[0].taste).toBeNull();
+    expectWineIdQueries([resolved.wineDefinition._id]);
   });
 });
 
