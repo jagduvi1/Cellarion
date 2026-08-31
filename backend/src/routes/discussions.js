@@ -17,7 +17,7 @@ const { sanitizeForumHtml, visibleTextLength } = require('../utils/sanitizeHtml'
 const { logAudit } = require('../services/audit');
 const { incrementCred, decrementCred } = require('../utils/cellarCred');
 const {
-  resolveReadableLanguage, resolveWritableLanguage, resolveMoveTarget,
+  resolveReadableLanguage, resolveWritableLanguage, resolveMoveTarget, DEFAULT_LANGUAGE,
 } = require('../services/forumLanguages');
 const { submitUrls: submitToIndexNow } = require('../services/indexNow');
 const { createNotification, createNotifications } = require('../services/notifications');
@@ -83,7 +83,18 @@ router.get('/', optionalAuth, async (req, res) => {
       // constrained (it resolved against the ForumLanguage collection or fell
       // back to the default), but Array/DB lookups aren't recognised as taint
       // cleansers.
-      filter.language = { $eq: languageFilter };
+      //
+      // English ALSO matches threads with no language field at all. A Mongoose
+      // default applies when a document is created, never to documents that
+      // already exist — so the release that added this field left every
+      // pre-existing thread unmatched, and the English forum rendered empty on
+      // production until the rows were backfilled (2026-08-31). The backfill
+      // is done; this makes the query correct on its own, so a restored
+      // snapshot or a document written around the schema cannot empty the
+      // forum again. `null` matches missing fields in MongoDB.
+      filter.language = languageFilter === DEFAULT_LANGUAGE
+        ? { $in: [DEFAULT_LANGUAGE, null] }
+        : { $eq: languageFilter };
     }
     // $eq forces literal-value comparison even though `category` is already
     // gated by an allowlist (CATEGORIES.includes). CodeQL doesn't recognise

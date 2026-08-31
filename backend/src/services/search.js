@@ -804,7 +804,13 @@ async function searchDiscussions(query, { category, language, limit = 20, offset
   // guard is belt-and-braces against a quote reaching the filter DSL, which
   // has no parameter binding.
   if (language && /^[a-z]{2,3}(-[a-z]{2,4})?$/.test(String(language))) {
-    filters.push(`language = "${language}"`);
+    // English also matches documents indexed before the field existed, whose
+    // `language` is NOT SET rather than 'en' — the same legacy-row problem
+    // that emptied the English forum on the MongoDB path (2026-08-31). A
+    // reindex fills them in, but search must not depend on one having run.
+    filters.push(language === 'en'
+      ? '(language = "en" OR language NOT EXISTS)'
+      : `language = "${language}"`);
   }
 
   const result = await discussionsIndex.search(query || '', {
