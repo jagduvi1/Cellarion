@@ -5,7 +5,11 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 2rem;
+  /* The other route outside <Layout> (issue #1145). The card is centred, so
+     it only reaches the iOS status bar when the form is taller than the
+     screen — a tall viewport is not the failing case, a short one is.
+     Resolves to plain 2rem everywhere else. */
+  padding: calc(2rem + env(safe-area-inset-top)) 2rem calc(2rem + env(safe-area-inset-bottom));
   gap: 1.5rem;
 }
 
