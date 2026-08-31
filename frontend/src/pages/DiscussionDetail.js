@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   getDiscussion, deleteDiscussion,
   getDiscussionReplies, createReply, updateReply, deleteReply,
-  pinDiscussion, lockDiscussion, moveDiscussion,
+  pinDiscussion, lockDiscussion, moveDiscussion, moveDiscussionLanguage, getForumLanguages,
   reportDiscussion, reportReply
 } from '../api/discussions';
 import CategoryBadge, { CATEGORY_SLUGS } from '../components/CategoryBadge';
@@ -75,6 +75,9 @@ function DiscussionDetail() {
   // Mod: move modal
   const [showMove, setShowMove] = useState(false);
   const [moveCategory, setMoveCategory] = useState('');
+  // Language section of the thread, and the sections it can be moved to.
+  const [moveLanguage, setMoveLanguage] = useState('en');
+  const [moveLanguages, setMoveLanguages] = useState([]);
 
   const isOwner = user && discussion?.author?._id === user.id;
   const isMod = user && (user.roles?.includes('moderator') || user.roles?.includes('admin'));
@@ -237,15 +240,41 @@ function DiscussionDetail() {
     }
   };
 
+  // The section list is fetched when the dialog opens rather than on every
+  // thread view — only moderators ever need it, and it is one small request.
+  const openMove = async () => {
+    setMoveCategory(discussion.category);
+    setMoveLanguage(discussion.language || 'en');
+    setShowMove(true);
+    try {
+      const res = await getForumLanguages(apiFetch);
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.languages)) setMoveLanguages(data.languages);
+    } catch { /* the category move still works */ }
+  };
+
+  // Category and language are independent axes, so a move applies whichever
+  // of them actually changed — a moderator fixing only the language must not
+  // re-file the subject as a side effect, and vice versa.
   const handleMove = async () => {
     if (!moveCategory) return;
     try {
-      const res = await moveDiscussion(apiFetch, id, moveCategory);
-      const data = await res.json();
-      if (res.ok) {
-        setDiscussion(data.discussion);
-        setShowMove(false);
+      let updated = null;
+      if (moveCategory !== discussion.category) {
+        const res = await moveDiscussion(apiFetch, id, moveCategory);
+        const data = await res.json();
+        if (!res.ok) return;
+        updated = data.discussion;
       }
+      const currentLanguage = discussion.language || 'en';
+      if (moveLanguage && moveLanguage !== currentLanguage) {
+        const res = await moveDiscussionLanguage(apiFetch, id, moveLanguage);
+        const data = await res.json();
+        if (!res.ok) return;
+        updated = data.discussion;
+      }
+      if (updated) setDiscussion(updated);
+      setShowMove(false);
     } catch {
       // silent
     }
@@ -402,7 +431,7 @@ function DiscussionDetail() {
               <button className="reply-card__action-btn" onClick={handleLock}>
                 {discussion.isLocked ? t('discussions.unlock') : t('discussions.lock')}
               </button>
-              <button className="reply-card__action-btn" onClick={() => { setMoveCategory(discussion.category); setShowMove(true); }}>
+              <button className="reply-card__action-btn" onClick={openMove}>
                 {t('discussions.move')}
               </button>
             </>
@@ -569,7 +598,9 @@ function DiscussionDetail() {
         </Modal>
       )}
 
-      {/* Move category modal */}
+      {/* Move modal — category and language section. Both are "this thread is
+          filed in the wrong place", so they share one dialog; the two axes are
+          independent, and moving between languages leaves the subject alone. */}
       {showMove && (
         <Modal title={t('discussions.moveDiscussion')} onClose={() => setShowMove(false)}>
           <div className="form-group">
@@ -580,6 +611,19 @@ function DiscussionDetail() {
               ))}
             </select>
           </div>
+          {moveLanguages.length > 1 && (
+            <div className="form-group">
+              <label className="form-label">{t('discussions.languageSection')}</label>
+              <select className="input" value={moveLanguage} onChange={e => setMoveLanguage(e.target.value)}>
+                {moveLanguages.map(l => (
+                  <option key={l.code} value={l.code}>
+                    {l.nativeName && l.nativeName !== l.name ? `${l.name} · ${l.nativeName}` : l.name}
+                  </option>
+                ))}
+              </select>
+              <small className="discussions__language-hint">{t('discussions.moveLanguageHint')}</small>
+            </div>
+          )}
           <div className="discussions__create-actions">
             <button className="btn btn-secondary" onClick={() => setShowMove(false)}>{t('common.cancel')}</button>
             <button className="btn btn-primary" onClick={handleMove}>{t('discussions.move')}</button>

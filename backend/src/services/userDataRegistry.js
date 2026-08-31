@@ -40,6 +40,7 @@ const CellarLayout = require('../models/CellarLayout');
 const CellarValueSnapshot = require('../models/CellarValueSnapshot');
 const ChatUsage = require('../models/ChatUsage');
 const Discussion = require('../models/Discussion');
+const ForumLanguage = require('../models/ForumLanguage');
 const DiscussionReply = require('../models/DiscussionReply');
 const DiscussionReaction = require('../models/DiscussionReaction');
 const DiscussionWatch = require('../models/DiscussionWatch');
@@ -386,8 +387,28 @@ const REGISTRY = [
       for (const id of discussionIds) await searchService.indexDiscussion(id);
     },
     exportFragment: async (ctx) => ({
-      discussions: markTrunc(ctx, 'discussions', await Discussion.find({ author: ctx.userId }).select('title category body wineDefinition isPinned isLocked replyCount createdAt updatedAt').limit(EXPORT_MAX).lean())
-        .map(d => ({ title: d.title, category: d.category, body: d.body, wineDefinition: d.wineDefinition, isPinned: d.isPinned, isLocked: d.isLocked, replyCount: d.replyCount, createdAt: d.createdAt, updatedAt: d.updatedAt })),
+      discussions: markTrunc(ctx, 'discussions', await Discussion.find({ author: ctx.userId }).select('title category language body wineDefinition isPinned isLocked replyCount createdAt updatedAt').limit(EXPORT_MAX).lean())
+        .map(d => ({ title: d.title, category: d.category, language: d.language || 'en', body: d.body, wineDefinition: d.wineDefinition, isPinned: d.isPinned, isLocked: d.isLocked, replyCount: d.replyCount, createdAt: d.createdAt, updatedAt: d.updatedAt })),
+    }),
+  },
+  // A member's forum-language requests. The row OUTLIVES the requester (a
+  // section other people now post in must not vanish with the person who
+  // asked for it), so the pointer is anonymised rather than the row deleted —
+  // the same treatment as their forum posts, and the reason it lives in this
+  // category rather than 'owned'.
+  {
+    model: ForumLanguage, category: 'shared-content', userFields: ['requestedBy', 'decidedBy'],
+    // Null the pointers rather than re-point them at the [deleted] sentinel:
+    // unlike a forum post, nothing renders "requested by X", so the row needs
+    // no author at all once the person is gone. A moderator's decidedBy is
+    // cleared for the same reason; the audit log keeps the accountable record.
+    purge: async (ctx) => Promise.all([
+      ForumLanguage.updateMany({ requestedBy: ctx.userId }, { $set: { requestedBy: null, requestReason: null } }),
+      ForumLanguage.updateMany({ decidedBy: ctx.userId }, { $set: { decidedBy: null } }),
+    ]),
+    exportFragment: async (ctx) => ({
+      forumLanguageRequests: markTrunc(ctx, 'forumLanguageRequests', await ForumLanguage.find({ requestedBy: ctx.userId })
+        .select('code name nativeName status requestReason createdAt decidedAt').limit(EXPORT_MAX).lean()),
     }),
   },
   {

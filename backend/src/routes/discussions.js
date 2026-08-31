@@ -16,6 +16,9 @@ const { stripHtml, escapeRegex } = require('../utils/sanitize');
 const { sanitizeForumHtml, visibleTextLength } = require('../utils/sanitizeHtml');
 const { logAudit } = require('../services/audit');
 const { incrementCred, decrementCred } = require('../utils/cellarCred');
+const {
+  resolveReadableLanguage, resolveWritableLanguage, resolveMoveTarget,
+} = require('../services/forumLanguages');
 const { submitUrls: submitToIndexNow } = require('../services/indexNow');
 const { createNotification, createNotifications } = require('../services/notifications');
 const { extractMentions } = require('../utils/mentionParser');
@@ -69,7 +72,19 @@ router.get('/', optionalAuth, async (req, res) => {
 
     const validCategory = category && CATEGORIES.includes(category) ? category : null;
 
+    // Language section. Absent means English — the forum's default — so an
+    // older client that sends no language keeps seeing exactly what it always
+    // saw. 'all' opts out; the subject-scoped lists below use it.
+    const languageFilter = await resolveReadableLanguage(coerceStringQuery(req.query.language));
+
     const filter = {};
+    if (languageFilter) {
+      // $eq for the same CodeQL reason as category: the value is already
+      // constrained (it resolved against the ForumLanguage collection or fell
+      // back to the default), but Array/DB lookups aren't recognised as taint
+      // cleansers.
+      filter.language = { $eq: languageFilter };
+    }
     // $eq forces literal-value comparison even though `category` is already
     // gated by an allowlist (CATEGORIES.includes). CodeQL doesn't recognise
     // Array.includes() as a taint cleanser, so the `$eq` keeps the
@@ -109,6 +124,7 @@ router.get('/', optionalAuth, async (req, res) => {
       try {
         const { ids, estimatedTotalHits } = await searchService.searchDiscussions(query, {
           category: validCategory,
+          language: languageFilter,
           limit,
           offset: skip
         });
@@ -489,18 +505,27 @@ router.post('/', requireAuth, requireNonDemo, async (req, res) => {
     if (visibleLength < 10) return res.status(400).json({ error: 'Body must be at least 10 characters' });
     if (visibleLength > DISCUSSION_MAX_LENGTHS.body) return res.status(400).json({ error: `Body too long (max ${DISCUSSION_MAX_LENGTHS.body} characters)` });
 
+    // Language section. Absent → English, so a client that never sends one
+    // posts to the default section exactly as before. An unknown or closed
+    // code is a 400 rather than a silent fallback: quietly filing a French
+    // thread in the English forum is the mis-file this feature exists to
+    // prevent.
+    const lang = await resolveWritableLanguage(req.body.language);
+    if (lang.error) return res.status(400).json({ error: lang.error });
+
     const discussion = new Discussion({
       author: req.user.id,
       title: cleanTitle,
       body: cleanBody,
       category,
+      language: lang.code,
       wineDefinition: wineDefinition || null,
       blogPost: blogOid
     });
 
     await discussion.save();
     incrementCred(req.user.id, 'discussion_created').catch(() => {});
-    logAudit(req, 'discussion.create', { type: 'discussion', id: discussion._id }, { title: cleanTitle, category });
+    logAudit(req, 'discussion.create', { type: 'discussion', id: discussion._id }, { title: cleanTitle, category, language: lang.code });
 
     // Auto-watch: posting a discussion implies you want updates on it.
     DiscussionWatch.updateOne(
@@ -1168,6 +1193,45 @@ router.patch('/:idOrSlug/pin', requireAuth, requireModeratorOrAdmin, async (req,
   } catch (err) {
     console.error('Toggle pin error:', err);
     res.status(500).json({ error: 'Failed to toggle pin' });
+  }
+});
+
+// PATCH /api/discussions/:idOrSlug/language - Move a thread to another language
+// section (moderator/admin only).
+//
+// The sanctioned response to a thread written in the wrong section: English is
+// the default forum, and someone posting in their own language there has
+// mis-filed rather than misbehaved, so a moderator MOVES it (Johan,
+// 2026-08-31). Deliberately not a delete, not a lock, and not a notification —
+// the thread and its replies are untouched, and the author is not told off for
+// a filing decision they were never asked to make.
+//
+// A retired section is a valid target (see forumLanguages.resolveMoveTarget):
+// tidying the last threads of a closed section is exactly what a move is for.
+router.patch('/:idOrSlug/language', requireAuth, requireModeratorOrAdmin, async (req, res) => {
+  try {
+    const discussion = await findDiscussionByIdOrSlug(req.params.idOrSlug);
+    if (!discussion) return res.status(404).json({ error: 'Discussion not found' });
+
+    const target = await resolveMoveTarget(req.body?.language);
+    if (target.error) return res.status(400).json({ error: target.error });
+
+    const from = discussion.language || 'en';
+    if (from === target.code) return res.json({ discussion, unchanged: true });
+
+    discussion.language = target.code;
+    await discussion.save();
+    logAudit(req, 'discussion.language.move', { type: 'discussion', id: discussion._id },
+      { from, to: target.code, title: discussion.title });
+
+    // The thread's language filter changed — without a re-index it keeps
+    // answering searches scoped to the section it just left.
+    searchService.indexDiscussion(discussion._id);
+
+    res.json({ discussion });
+  } catch (err) {
+    console.error('Move discussion language error:', err);
+    res.status(500).json({ error: 'Failed to move discussion' });
   }
 });
 

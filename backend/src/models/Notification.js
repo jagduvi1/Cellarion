@@ -58,7 +58,10 @@ const notificationSchema = new mongoose.Schema({
       // proposal recorded its rejectReason where only a GDPR export could
       // reach it.
       'registry_key_decided',
-      'registry_value_decided'
+      'registry_value_decided',
+      // A member asked for a forum language section; same principle as the
+      // two above — whoever asked gets told what was decided.
+      'forum_language_decided'
     ],
     required: true
   },

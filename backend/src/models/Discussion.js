@@ -33,6 +33,24 @@ const discussionSchema = new mongoose.Schema({
     required: [true, 'Category is required'],
     index: true
   },
+  // Which language section this thread sits in. A SECOND AXIS, not a category:
+  // a French tasting note is still a tasting note, so the two filter
+  // independently (models/ForumLanguage explains the policy). English is the
+  // default everywhere and the value every existing thread takes without a
+  // migration; a member writing in another language picks it deliberately, and
+  // a moderator can move a mis-filed thread with PATCH .../language.
+  //
+  // Deliberately NOT an enum: the set of open languages lives in the
+  // ForumLanguage collection, which moderators change at runtime. The write
+  // paths validate against the ACTIVE list; retiring a language must not
+  // invalidate the threads already written in it.
+  language: {
+    type: String,
+    trim: true,
+    lowercase: true,
+    default: 'en',
+    index: true
+  },
   wineDefinition: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'WineDefinition',
@@ -95,6 +113,11 @@ const discussionSchema = new mongoose.Schema({
 discussionSchema.index({ isPinned: -1, lastActivityAt: -1 });
 // Category-filtered views
 discussionSchema.index({ category: 1, isPinned: -1, lastActivityAt: -1 });
+// Language-filtered views — EVERY forum list carries a language now (English
+// by default), so this is the hot path, not a niche one. The two-key prefix
+// serves language-only and language+category alike.
+discussionSchema.index({ language: 1, isPinned: -1, lastActivityAt: -1 });
+discussionSchema.index({ language: 1, category: 1, isPinned: -1, lastActivityAt: -1 });
 // User's discussions
 discussionSchema.index({ author: 1, createdAt: -1 });
 // "Newest" tab sort
