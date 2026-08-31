@@ -96,7 +96,33 @@ const wineLite = (wd) => (wd ? {
   // the key is omitted, meaning "not carried on this surface".
   // Output-only change: no reconnect needed.
   ...(grapesLite(wd.grapes)),
+  ...(provenanceLite(wd.identityProvenance)),
 } : null);
+
+/**
+ * Which identity fields a MODEL supplied rather than a person.
+ *
+ * Emitted as a list of field names, and only when at least one qualifies —
+ * the common case is a wine nobody needs warned about, and a key reading
+ * `inferred_fields: []` on every row is noise a curator learns to skip.
+ *
+ * Somm ticket 6a958dbc (2026-08-31): a 205-row import whose file carried
+ * appellation on every row and grapes on none produced wines whose grapes had
+ * been inferred by the model FROM the appellation — all eight Montlouis wines
+ * came out Chenin Blanc, including a pétillant naturel that is mostly Menu
+ * Pineau. The values were wrong, mutually consistent and indistinguishable
+ * from researched ones, so the curator had to stop work entirely. This is the
+ * missing signal: not "this is wrong", but "nobody asserted this".
+ */
+const provenanceLite = (provenance) => {
+  if (!provenance) return {};
+  // Mongoose Map on a hydrated doc, plain object on a .lean() one.
+  const entries = typeof provenance.entries === 'function'
+    ? [...provenance.entries()]
+    : Object.entries(provenance);
+  const inferred = entries.filter(([, source]) => source === 'model').map(([field]) => field).sort();
+  return inferred.length ? { inferred_fields: inferred } : {};
+};
 
 const grapesLite = (grapes) => {
   if (!Array.isArray(grapes)) return {};
@@ -244,7 +270,7 @@ registerTool({
         // grapes populated to NAMES, not just selected as ids: the queue row
         // is where the curator decides whether a wine needs work, and grapes
         // invisible here is what ticket 6a887619 mistook for a phantom writer.
-        .populate({ path: 'wineDefinition', select: 'name producer type appellation aiProfile grapes', populate: ['country', 'region', { path: 'grapes', select: 'name' }] })
+        .populate({ path: 'wineDefinition', select: 'name producer type appellation aiProfile grapes identityProvenance', populate: ['country', 'region', { path: 'grapes', select: 'name' }] })
         .lean(),
     ]);
     const data = profiles.map((p) => ({

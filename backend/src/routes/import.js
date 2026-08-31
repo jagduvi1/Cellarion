@@ -159,6 +159,48 @@ function buildProposedWine(aiData, item) {
 }
 
 /**
+ * Which source supplied each identity field of an AI-identified import row.
+ *
+ * Computed SERVER-SIDE at mint from the file row, deliberately not carried on
+ * the aiWine object the client round-trips: provenance is a claim about our
+ * own pipeline, and a claim a client could edit is worth nothing.
+ *
+ * The rules mirror mergeAiWithFile's precedence exactly — file first for the
+ * label-stated fields, model for the rest. Its curator-facing point (somm
+ * ticket 6a958dbc, 2026-08-31): a grape the model INFERRED FROM THE
+ * APPELLATION must not look identical to one the owner's file stated. That
+ * import's file carried appellation on all 205 rows and grapes on none, and
+ * all eight of its Montlouis wines were duly assigned Chenin Blanc —
+ * including a pétillant naturel that is mostly Menu Pineau.
+ *
+ * @param {Object} item the file's row
+ * @param {Object} ai the identified wine actually being minted
+ * @returns {Object<string,'file'|'model'>}
+ */
+function computeIdentityProvenance(item, ai) {
+  const stated = (v) => typeof v === 'string' && v.trim() !== '';
+  const fileType = stated(item?.type) && WINE_TYPES.includes(String(item.type).trim().toLowerCase());
+  // The one field with a genuine file fallback on this path: /validate
+  // supplements the AI's empty grape list from the row (see the importGrapes
+  // branch), so a grape list CAN be the file's.
+  const fileGrapes = sanitizeGrapeNames(item?.grapes);
+  const aiGrapes = Array.isArray(ai?.grapes) ? ai.grapes : [];
+  const grapesFromFile = fileGrapes.length > 0 && aiGrapes.length > 0
+    && aiGrapes.every((g) => fileGrapes.some((f) => normalizeString(f) === normalizeString(g)));
+
+  return {
+    name: 'model',
+    producer: 'model',
+    country: stated(item?.country) && !stated(ai?.country) ? 'file' : 'model',
+    region: stated(item?.region) ? 'file' : 'model',
+    appellation: stated(item?.appellation) ? 'file' : 'model',
+    classification: stated(item?.classification) ? 'file' : 'model',
+    type: fileType ? 'file' : 'model',
+    grapes: grapesFromFile ? 'file' : 'model',
+  };
+}
+
+/**
  * Complete-row AI bypass (2026-08-29, Johan's call: "the somm is free and we
  * pay for AI"). A row whose FILE already states the identity does not need a
  * model to restate it: findOrCreateWine's ladder does the normalization work
@@ -1330,7 +1372,10 @@ router.post('/confirm', async (req, res) => {
               classification: str(ai.classification),
               type: str(ai.type),
               grapes: sanitizeGrapeNames(ai.grapes),
-            }, req.user.id, { createdVia: 'import', allowPending: true });
+            }, req.user.id, {
+              createdVia: 'import', allowPending: true,
+              provenance: computeIdentityProvenance(item, ai),
+            });
             // findOrCreateWine can return { wine: null, candidates } — the soft
             // zone. Unguarded, `wine._id` two lines down threw and took the
             // whole /confirm batch with it (audit L-7). Skip the row and report
@@ -2062,3 +2107,6 @@ module.exports = router;
 // independently of the 700-line /validate route around it.
 module.exports.buildProposedWine = buildProposedWine;
 module.exports.summariseReasons = summariseReasons;
+// Exported for tests: the provenance rules must be pinnable without standing
+// up a full import (somm ticket 6a958dbc).
+module.exports.computeIdentityProvenance = computeIdentityProvenance;
