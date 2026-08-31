@@ -51,6 +51,32 @@ const { isValidId, coerceStringQuery } = require('../utils/validation');
 
 const router = express.Router();
 
+/**
+ * Has this member published anything under their own name that other users can
+ * already see? Used only to decide whether a PRIVATE profile answers with a
+ * "this profile is private" stub or with the enumeration-proof 404.
+ *
+ * The three surfaces that render an author's username next to their content
+ * and link it to /users/:id — discussions, replies and public reviews. A
+ * soft-deleted reply doesn't count: its body is replaced with a placeholder
+ * and the name goes with it. A review the author marked private doesn't count
+ * either — same principle as the profile itself.
+ *
+ * Runs at most three indexed existence checks, and only on the private-profile
+ * path, which is a small fraction of profile views.
+ *
+ * @param {mongoose.Types.ObjectId} userId
+ * @returns {Promise<boolean>}
+ */
+async function hasPublicFootprint(userId) {
+  const [discussion, reply, review] = await Promise.all([
+    Discussion.exists({ author: userId }),
+    DiscussionReply.exists({ author: userId, isDeleted: { $ne: true } }),
+    Review.exists({ author: userId, visibility: 'public' }),
+  ]);
+  return !!(discussion || reply || review);
+}
+
 // GET /api/users/profile - Get current user's profile (protected)
 router.get('/profile', requireAuth, async (req, res) => {
   try {
@@ -179,9 +205,34 @@ router.get('/public/:userId', requireAuth, async (req, res) => {
     // Respect profileVisibility: a private profile is only viewable by its
     // owner. The /search sibling already filters on 'public'; this endpoint
     // must not become a private-profile read oracle by ObjectId enumeration.
+    //
+    // …with one exception, because the blanket 404 told a lie the rest of the
+    // app contradicted: a forum post shows its author's username and links to
+    // this page, so clicking a visible name answered "User not found" for 84
+    // of 346 accounts (Johan, 2026-08-31). Where the member has ALREADY
+    // published content under this identity, their existence is public by
+    // their own action and the 404 protects nothing — so they get a stub
+    // saying the profile is private, and nothing else. A member who never
+    // posted stays fully indistinguishable from a non-existent id, which is
+    // the enumeration property #519 actually bought.
     const isOwner = req.user.id === req.params.userId;
     if (user.profileVisibility === 'private' && !isOwner) {
-      return res.status(404).json({ error: 'User not found' });
+      if (!(await hasPublicFootprint(user._id))) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      // Deliberately minimal: identity the viewer can already see, plus the
+      // reason the rest is missing. No bio, counts, plan, contribution,
+      // rating scale, join date or follow state — a private profile stays
+      // private, it just stops pretending to be a dead link.
+      return res.json({
+        user: {
+          _id: user._id,
+          username: user.username,
+          displayName: user.displayName,
+          profileVisibility: 'private',
+          isPrivate: true,
+        },
+      });
     }
 
     // Check if current user follows this user
