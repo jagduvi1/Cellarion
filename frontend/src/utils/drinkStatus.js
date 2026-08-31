@@ -40,14 +40,24 @@ export function getMaturityStatus(profile, anchorYear) {
  * @param {number} [currentYear]
  */
 export function getPersonalWindowStatus(bottle, currentYear = CURRENT_YEAR) {
-  const from = Number.isFinite(bottle?.drinkFrom) ? bottle.drinkFrom : null;
-  const to   = Number.isFinite(bottle?.drinkTo)   ? bottle.drinkTo   : null;
-  if (from === null && to === null) return null;
+  const from      = Number.isFinite(bottle?.drinkFrom)  ? bottle.drinkFrom  : null;
+  const to        = Number.isFinite(bottle?.drinkTo)    ? bottle.drinkTo    : null;
+  const peakFrom  = Number.isFinite(bottle?.peakFrom)   ? bottle.peakFrom   : null;
+  const peakUntil = Number.isFinite(bottle?.peakUntil)  ? bottle.peakUntil  : null;
+  if (from === null && to === null && peakFrom === null && peakUntil === null) return null;
 
+  // With the optional peak set, the personal window carries the same five
+  // stages the sommelier profile has always had ("drinkable ≠ peak"):
+  // not-ready | early (drinkFrom..peakFrom) | peak | late (peakUntil..drinkTo)
+  // | declining. Without it, the whole span stays 'peak' — the historical
+  // behaviour. MUST stay in step with backend classifyPersonalWindow
+  // (utils/maturityUtils).
   let status = 'peak';
   if (from !== null && currentYear < from) status = 'not-ready';
   else if (to !== null && currentYear > to) status = 'declining';
-  return { status, from, to, source: 'personal' };
+  else if (peakFrom !== null && currentYear < peakFrom) status = 'early';
+  else if (peakUntil !== null && currentYear > peakUntil) status = 'late';
+  return { status, from, to, peakFrom, peakUntil, source: 'personal' };
 }
 
 /**
@@ -76,16 +86,22 @@ export const DRINK_YEAR_MAX = 2200;
  * ≤ 500 chars). Values arrive as strings from inputs. Returns a translated
  * error message, or null when valid.
  */
-export function validateDrinkWindowFields({ drinkFrom, drinkTo, occasion }, t) {
+export function validateDrinkWindowFields({ drinkFrom, drinkTo, peakFrom, peakUntil, occasion }, t) {
   const parse = v => (v === '' || v === null || v === undefined) ? null : Number(v);
-  const from = parse(drinkFrom);
-  const to   = parse(drinkTo);
-  for (const y of [from, to]) {
+  const from   = parse(drinkFrom);
+  const to     = parse(drinkTo);
+  const pFrom  = parse(peakFrom);
+  const pUntil = parse(peakUntil);
+  for (const y of [from, to, pFrom, pUntil]) {
     if (y !== null && (!Number.isInteger(y) || y < DRINK_YEAR_MIN || y > DRINK_YEAR_MAX)) {
       return t('addBottle.drinkWindowYearRange', { min: DRINK_YEAR_MIN, max: DRINK_YEAR_MAX });
     }
   }
   if (from !== null && to !== null && from > to) return t('addBottle.drinkWindowOrder');
+  // Peak ordering mirrors the backend: drinkFrom ≤ peakFrom ≤ peakUntil ≤ drinkTo.
+  if (pFrom !== null && pUntil !== null && pFrom > pUntil) return t('addBottle.peakWindowOrder');
+  if (from !== null && pFrom !== null && pFrom < from) return t('addBottle.peakBeforeWindow');
+  if (to !== null && pUntil !== null && pUntil > to) return t('addBottle.peakAfterWindow');
   if (occasion && occasion.length > 500) return t('addBottle.occasionTooLong');
   return null;
 }

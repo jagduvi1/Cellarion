@@ -160,6 +160,32 @@ describe('getPersonalWindowStatus', () => {
     expect(getPersonalWindowStatus({ drinkFrom: CURRENT_YEAR, drinkTo: CURRENT_YEAR }).status).toBe('peak');
   });
 
+  // ── Optional personal peak ("drinkable ≠ peak") — MUST mirror the backend
+  // classifyPersonalWindow (utils/maturityUtils): the two are documented as
+  // never allowed to drift. Explicit currentYear for determinism.
+  describe('with peakFrom/peakUntil', () => {
+    const w = { drinkFrom: 2026, drinkTo: 2035, peakFrom: 2028, peakUntil: 2031 };
+
+    test('five stages across the years', () => {
+      expect(getPersonalWindowStatus(w, 2025).status).toBe('not-ready');
+      expect(getPersonalWindowStatus(w, 2027).status).toBe('early');
+      expect(getPersonalWindowStatus(w, 2030).status).toBe('peak');
+      expect(getPersonalWindowStatus(w, 2033).status).toBe('late');
+      expect(getPersonalWindowStatus(w, 2036).status).toBe('declining');
+    });
+
+    test('carries the peak bounds for display', () => {
+      const s = getPersonalWindowStatus(w, 2027);
+      expect(s.peakFrom).toBe(2028);
+      expect(s.peakUntil).toBe(2031);
+      expect(s.source).toBe('personal');
+    });
+
+    test('without peak fields the whole window stays peak', () => {
+      expect(getPersonalWindowStatus({ drinkFrom: 2026, drinkTo: 2035 }, 2034).status).toBe('peak');
+    });
+  });
+
   test('only drinkFrom set: open-ended after the from year', () => {
     expect(getPersonalWindowStatus({ drinkFrom: CURRENT_YEAR + 3 }).status).toBe('not-ready');
     expect(getPersonalWindowStatus({ drinkFrom: CURRENT_YEAR - 3 }).status).toBe('peak');

@@ -58,17 +58,34 @@ function resolveWindowForBottle(profile, bottle) {
 }
 
 /**
- * Classify a bottle against its OWN drinkFrom/drinkTo window (optional integer
- * years the user set on the bottle). Returns 'not-ready' | 'peak' | 'declining'
- * or null when the bottle has no personal window. A single-bound window is
- * open-ended on the missing side.
+ * Classify a bottle against its OWN personal window (optional integer years
+ * the user set on the bottle). Returns null when the bottle has no personal
+ * window. A single-bound window is open-ended on the missing side.
+ *
+ * With only drinkFrom/drinkTo the whole span is 'peak' — the historical
+ * three-state behaviour. When the optional peakFrom/peakUntil are set
+ * (ticket 6a94655283: "drinkable ≠ peak"), the window classifies in the
+ * same five stages the sommelier profile has always had:
+ *
+ *   not-ready | early | peak | late | declining
+ *   ──────────┤       │      │      ├──────────
+ *        drinkFrom  peakFrom peakUntil  drinkTo
+ *
+ * A lone peakFrom splits early/peak with no late stage; a lone peakUntil
+ * the reverse — the missing boundary simply never fires, mirroring how the
+ * profile classifier treats absent phase bounds. MUST stay in step with
+ * frontend/src/utils/drinkStatus.getPersonalWindowStatus.
  */
 function classifyPersonalWindow(bottle, currentYear = new Date().getFullYear()) {
-  const from = Number.isFinite(bottle?.drinkFrom) ? bottle.drinkFrom : null;
-  const to   = Number.isFinite(bottle?.drinkTo)   ? bottle.drinkTo   : null;
-  if (from === null && to === null) return null;
+  const from      = Number.isFinite(bottle?.drinkFrom)  ? bottle.drinkFrom  : null;
+  const to        = Number.isFinite(bottle?.drinkTo)    ? bottle.drinkTo    : null;
+  const peakFrom  = Number.isFinite(bottle?.peakFrom)   ? bottle.peakFrom   : null;
+  const peakUntil = Number.isFinite(bottle?.peakUntil)  ? bottle.peakUntil  : null;
+  if (from === null && to === null && peakFrom === null && peakUntil === null) return null;
   if (from !== null && currentYear < from) return 'not-ready';
   if (to   !== null && currentYear > to)   return 'declining';
+  if (peakFrom  !== null && currentYear < peakFrom)  return 'early';
+  if (peakUntil !== null && currentYear > peakUntil) return 'late';
   return 'peak';
 }
 

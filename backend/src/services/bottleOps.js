@@ -282,10 +282,34 @@ async function closeBottle(bottle, req) {
  * inline validation+resolution afterwards — this is a pre-mint gate, not a
  * replacement, and the parsers are pure so double-parsing is free.
  */
+/**
+ * Validate the optional personal peak (peakFrom/peakUntil) against its
+ * enclosing drink window. Returns { error } on a fault, or the parsed
+ * { peakFrom, peakUntil } values ({ ok } shape mirrors parseDrinkYear's
+ * undefined-for-empty convention). Ordering enforced:
+ * drinkFrom ≤ peakFrom ≤ peakUntil ≤ drinkTo.
+ */
+function validatePeakWindow(peakFromRaw, peakUntilRaw, fromValue, toValue) {
+  const pFrom = parseDrinkYear(peakFromRaw, 'peakFrom');
+  if (!pFrom.ok) return { error: { status: 400, message: pFrom.error } };
+  const pUntil = parseDrinkYear(peakUntilRaw, 'peakUntil');
+  if (!pUntil.ok) return { error: { status: 400, message: pUntil.error } };
+  if (pFrom.value && pUntil.value && pFrom.value > pUntil.value) {
+    return { error: { status: 400, message: 'peakFrom cannot be after peakUntil' } };
+  }
+  if (fromValue && pFrom.value && pFrom.value < fromValue) {
+    return { error: { status: 400, message: 'peakFrom cannot be before drinkFrom' } };
+  }
+  if (toValue && pUntil.value && pUntil.value > toValue) {
+    return { error: { status: 400, message: 'peakUntil cannot be after drinkTo' } };
+  }
+  return { peakFrom: pFrom.value, peakUntil: pUntil.value };
+}
+
 function validateBottleCommitFields(fields = {}) {
   const {
     vintage, purchaseLocation, purchaseUrl, location,
-    notes, occasion, rating, ratingScale, drinkFrom, drinkTo,
+    notes, occasion, rating, ratingScale, drinkFrom, drinkTo, peakFrom, peakUntil,
     addToHistory, consumedReason, consumedRating, consumedRatingScale,
   } = fields;
 
@@ -298,6 +322,11 @@ function validateBottleCommitFields(fields = {}) {
   if (from.value && to.value && from.value > to.value) {
     return { error: { status: 400, message: 'drinkFrom cannot be after drinkTo' } };
   }
+  // Optional peak INSIDE the window — the personal twin of the somm profile's
+  // five-stage shape (ticket 6a94655283: "drinkable ≠ peak"). Ordering:
+  // drinkFrom ≤ peakFrom ≤ peakUntil ≤ drinkTo.
+  const pw = validatePeakWindow(peakFrom, peakUntil, from.value, to.value);
+  if (pw.error) return pw;
   const { error: ratingError } = resolveRatingUtil(rating, ratingScale);
   if (ratingError) return { error: { status: 400, message: ratingError } };
   if (notes && (typeof notes !== 'string' || notes.length > 5000)) {
@@ -332,7 +361,7 @@ async function addBottle(cellarDoc, wineDoc, fields = {}, req) {
   const {
     vintage, price, currency, bottleSize,
     purchaseDate, purchaseLocation, purchaseUrl, location,
-    notes, occasion, rating, ratingScale, drinkFrom, drinkTo,
+    notes, occasion, rating, ratingScale, drinkFrom, drinkTo, peakFrom, peakUntil,
     // Migration helpers — backdate the bottle, or add it directly to history.
     dateAdded, addToHistory,
     consumedAt, consumedReason, consumedNote, consumedRating, consumedRatingScale,
@@ -348,6 +377,9 @@ async function addBottle(cellarDoc, wineDoc, fields = {}, req) {
   if (from.value && to.value && from.value > to.value) {
     return { error: { status: 400, message: 'drinkFrom cannot be after drinkTo' } };
   }
+  // Same peak validation as validateBottleCommitFields — one helper, two callers.
+  const pw = validatePeakWindow(peakFrom, peakUntil, from.value, to.value);
+  if (pw.error) return pw;
 
   const { rating: resolvedRating, ratingScale: resolvedScale, error: ratingError } =
     resolveRatingUtil(rating, ratingScale);
@@ -416,6 +448,8 @@ async function addBottle(cellarDoc, wineDoc, fields = {}, req) {
   }
   if (from.value !== undefined) doc.drinkFrom = from.value;
   if (to.value !== undefined) doc.drinkTo = to.value;
+  if (pw.peakFrom !== undefined) doc.peakFrom = pw.peakFrom;
+  if (pw.peakUntil !== undefined) doc.peakUntil = pw.peakUntil;
 
   const bottle = new Bottle(doc);
   // Backdate BEFORE seeding the journey, which anchors on the added date.
@@ -475,7 +509,7 @@ const UPDATABLE_FIELDS = [
   'vintage', 'price', 'currency', 'bottleSize',
   'purchaseDate', 'purchaseLocation', 'purchaseUrl',
   'location', 'notes', 'occasion', 'rating', 'ratingScale',
-  'drinkFrom', 'drinkTo', 'reservedFor', 'reservedUntil',
+  'drinkFrom', 'drinkTo', 'peakFrom', 'peakUntil', 'reservedFor', 'reservedUntil',
 ];
 
 // Normalize a value for change detection: Date objects and ISO-ish strings
@@ -560,6 +594,33 @@ async function updateBottleFields(bottle, fields, req) {
     return { error: { status: 400, message: 'drinkFrom cannot be after drinkTo' } };
   }
 
+  // Personal peak (peakFrom/peakUntil): same PATCH semantics as the window —
+  // explicit null/'' clears — and the ordering check runs on the EFFECTIVE
+  // values so a drinkFrom edit cannot silently invert an existing peak.
+  let peakFromYear;
+  let peakUntilYear;
+  if (fields.peakFrom !== undefined) {
+    const p = parseDrinkYear(fields.peakFrom, 'peakFrom');
+    if (!p.ok) return { error: { status: 400, message: p.error } };
+    peakFromYear = p.value !== undefined ? p.value : null;
+  }
+  if (fields.peakUntil !== undefined) {
+    const p = parseDrinkYear(fields.peakUntil, 'peakUntil');
+    if (!p.ok) return { error: { status: 400, message: p.error } };
+    peakUntilYear = p.value !== undefined ? p.value : null;
+  }
+  const effPeakFrom  = peakFromYear  !== undefined ? peakFromYear  : bottle.peakFrom;
+  const effPeakUntil = peakUntilYear !== undefined ? peakUntilYear : bottle.peakUntil;
+  if (effPeakFrom && effPeakUntil && effPeakFrom > effPeakUntil) {
+    return { error: { status: 400, message: 'peakFrom cannot be after peakUntil' } };
+  }
+  if (effFrom && effPeakFrom && effPeakFrom < effFrom) {
+    return { error: { status: 400, message: 'peakFrom cannot be before drinkFrom' } };
+  }
+  if (effTo && effPeakUntil && effPeakUntil > effTo) {
+    return { error: { status: 400, message: 'peakUntil cannot be after drinkTo' } };
+  }
+
   // Reservation ("spoken for"): reservedFor is capped free text, reservedUntil
   // a calendar year like drinkFrom/drinkTo. An explicit null/'' clears.
   if (fields.reservedFor !== undefined && fields.reservedFor &&
@@ -609,6 +670,8 @@ async function updateBottleFields(bottle, fields, req) {
     }
     if (key === 'drinkFrom') value = fromYear;
     if (key === 'drinkTo') value = toYear;
+    if (key === 'peakFrom') value = peakFromYear;
+    if (key === 'peakUntil') value = peakUntilYear;
     if (key === 'reservedUntil') value = reservedUntilYear;
     apply(key, value);
   }

@@ -58,6 +58,8 @@ function AddBottle() {
     occasion: '',
     drinkFrom: '',
     drinkTo: '',
+    peakFrom: '',
+    peakUntil: '',
     rating: '',
     ratingScale: user?.preferences?.ratingScale || '5',
     dateAdded: ''
@@ -656,6 +658,8 @@ function AddBottle() {
         occasion: bottleData.occasion || undefined,
         drinkFrom: bottleData.drinkFrom ? parseInt(bottleData.drinkFrom, 10) : undefined,
         drinkTo: bottleData.drinkTo ? parseInt(bottleData.drinkTo, 10) : undefined,
+        peakFrom: bottleData.peakFrom ? parseInt(bottleData.peakFrom, 10) : undefined,
+        peakUntil: bottleData.peakUntil ? parseInt(bottleData.peakUntil, 10) : undefined,
         rating: bottleData.rating ? parseFloat(bottleData.rating) : undefined,
         ratingScale: bottleData.ratingScale || '5',
         dateAdded: bottleData.dateAdded || undefined,
@@ -1489,6 +1493,38 @@ function AddBottle() {
                       />
                     </div>
                   </div>
+                  {/* Optional peak inside the window ("drinkable ≠ peak") —
+                      lets the maturity badge distinguish early/peak/late for
+                      wines without a curated profile. Only shown once a
+                      window exists, so the default form stays two fields. */}
+                  {(bottleData.drinkFrom || bottleData.drinkTo) && (
+                    <div className="grid-2">
+                      <div className="form-group">
+                        <label>{t('addBottle.peakFrom')}</label>
+                        <input
+                          type="number"
+                          value={bottleData.peakFrom}
+                          onChange={(e) => setBottleData({ ...bottleData, peakFrom: e.target.value })}
+                          placeholder={t('addBottle.peakFromPlaceholder')}
+                          min={DRINK_YEAR_MIN}
+                          max={DRINK_YEAR_MAX}
+                          step="1"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>{t('addBottle.peakUntil')}</label>
+                        <input
+                          type="number"
+                          value={bottleData.peakUntil}
+                          onChange={(e) => setBottleData({ ...bottleData, peakUntil: e.target.value })}
+                          placeholder={t('addBottle.peakUntilPlaceholder')}
+                          min={DRINK_YEAR_MIN}
+                          max={DRINK_YEAR_MAX}
+                          step="1"
+                        />
+                      </div>
+                    </div>
+                  )}
                   <p className="help-text">{t('addBottle.drinkWindowHint')}</p>
                 </div>
 

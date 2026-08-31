@@ -436,7 +436,7 @@ router.post('/:id/arrange/preview', async (req, res) => {
       path: 'slots.bottle',
       // purchaseDate/createdAt anchor relative (NV) profile windows for the
       // maturity arrangement strategy.
-      select: 'vintage status drinkFrom drinkTo wineDefinition purchaseDate createdAt',
+      select: 'vintage status drinkFrom drinkTo peakFrom peakUntil wineDefinition purchaseDate createdAt',
       populate: { path: 'wineDefinition', select: 'name producer type' },
     });
     if (!rack) return res.status(404).json({ error: 'Rack not found' });

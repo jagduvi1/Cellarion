@@ -24,6 +24,8 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
     occasion:         bottle.occasion || '',
     drinkFrom:        bottle.drinkFrom != null ? String(bottle.drinkFrom) : '',
     drinkTo:          bottle.drinkTo   != null ? String(bottle.drinkTo)   : '',
+    peakFrom:         bottle.peakFrom  != null ? String(bottle.peakFrom)  : '',
+    peakUntil:        bottle.peakUntil != null ? String(bottle.peakUntil) : '',
     reservedFor:      bottle.reservedFor || '',
     reservedUntil:    bottle.reservedUntil != null ? String(bottle.reservedUntil) : '',
     price:            bottle.price   || '',
@@ -64,6 +66,8 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
         purchaseDate: form.purchaseDate || null,
         drinkFrom: form.drinkFrom ? parseInt(form.drinkFrom, 10) : null,
         drinkTo:   form.drinkTo   ? parseInt(form.drinkTo, 10)   : null,
+        peakFrom:  form.peakFrom  ? parseInt(form.peakFrom, 10)  : null,
+        peakUntil: form.peakUntil ? parseInt(form.peakUntil, 10) : null,
         reservedFor:   form.reservedFor.trim() || null,
         reservedUntil: form.reservedUntil ? parseInt(form.reservedUntil, 10) : null,
       });
@@ -175,6 +179,32 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
               value={form.drinkTo}
               onChange={set('drinkTo')}
               placeholder={t('addBottle.drinkToPlaceholder')}
+              min={DRINK_YEAR_MIN}
+              max={DRINK_YEAR_MAX}
+              step="1"
+            />
+          </div>
+          {/* Optional peak inside the window ("drinkable ≠ peak") — gives the
+              five-stage maturity badge to wines without a curated profile. */}
+          <div className="form-group">
+            <label>{t('addBottle.peakFrom')}</label>
+            <input
+              type="number"
+              value={form.peakFrom}
+              onChange={set('peakFrom')}
+              placeholder={t('addBottle.peakFromPlaceholder')}
+              min={DRINK_YEAR_MIN}
+              max={DRINK_YEAR_MAX}
+              step="1"
+            />
+          </div>
+          <div className="form-group">
+            <label>{t('addBottle.peakUntil')}</label>
+            <input
+              type="number"
+              value={form.peakUntil}
+              onChange={set('peakUntil')}
+              placeholder={t('addBottle.peakUntilPlaceholder')}
               min={DRINK_YEAR_MIN}
               max={DRINK_YEAR_MAX}
               step="1"
