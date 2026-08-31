@@ -12,6 +12,7 @@ const { logAudit } = require('../../services/audit');
 const { isValidId } = require('../../utils/validation');
 const { distinctSizes, normalizeAll, remap } = require('../../services/bottleSizeMaintenance');
 const { mergeGrapes, mergeRegions, mergeCountries } = require('../../services/taxonomyMerge');
+const { findDuplicateClusters } = require('../../utils/taxonomyDuplicates');
 const {
   listUnmatchedAppellations, appellationRefsError,
   dismissUnmatchedAppellation, restoreDismissedAppellation, listDismissedAppellations,
@@ -767,6 +768,92 @@ router.post('/grapes/:id/approve', async (req, res) => {
   } catch (error) {
     console.error('Approve grape error:', error);
     res.status(500).json({ error: 'Failed to approve grape' });
+  }
+});
+
+// GET /api/admin/taxonomy/regions/duplicate-candidates
+//
+// Regions that are the same place under different names. Built after the Loire
+// was found split across FOUR documents holding 208 wines between them
+// (2026-08-31) — a split nothing surfaced, because the names share almost no
+// characters and the registry's fuzzy wine scan cannot see it.
+//
+// utils/taxonomyDuplicates explains the rule and why its stop list is short.
+// The output is a PROPOSAL: every cluster is merged by hand through the merge
+// route below, which is what keeps a wrong signature from costing anything.
+//
+// Each cluster names a suggested target — the member with the most wines, or
+// the reviewed one on a tie — because merging into the smaller document would
+// re-point more rows than necessary and discard the doc appellations already
+// reference.
+router.get('/regions/duplicate-candidates', async (req, res) => {
+  try {
+    // Country names come from a SEPARATE lookup, not .populate(). Populating
+    // destroys what the country scope depends on: a dangling ref makes
+    // Mongoose null the path and take the raw ObjectId with it, so every
+    // unresolvable region would collapse into one empty scope and same-named
+    // regions in DIFFERENT countries would cluster — the merge this scan must
+    // never propose (a Georgia in the United States is not the country's
+    // namesake). The guard fails CLOSED: a region whose country cannot be
+    // resolved is skipped and counted, never grouped with strangers.
+    const [regions, countries] = await Promise.all([
+      Region.find({}).select('name country pendingReview synonyms').lean(),
+      Country.find({}).select('name').lean(),
+    ]);
+    const countryNames = new Map(countries.map((c) => [String(c._id), c.name]));
+
+    const scopable = [];
+    let unscopableCount = 0;
+    for (const r of regions) {
+      const scope = r.country ? String(r.country) : '';
+      if (!scope) { unscopableCount++; continue; }
+      scopable.push({ ...r, scope, countryName: countryNames.get(scope) || null });
+    }
+
+    const clusters = findDuplicateClusters(scopable);
+    if (clusters.length === 0) {
+      return res.json({ clusters: [], scannedCount: regions.length, unscopableCount });
+    }
+
+    // One grouped count for every candidate rather than a query per member.
+    const memberIds = clusters.flatMap((c) => c.members.map((m) => m._id));
+    const counts = new Map(
+      (await WineDefinition.aggregate([
+        // Quarantined and pending-identity rows are not "in use" — the same
+        // exclusion wineCountsByRef() applies above, so this screen and the
+        // taxonomy list agree about the same region. It also decides the merge
+        // TARGET below: without it, a document whose bulk is quarantined junk
+        // could outrank the real region and pull its wines into itself.
+        { $match: { region: { $in: memberIds }, nonWine: { $ne: true }, pendingIdentity: { $ne: true } } },
+        { $group: { _id: '$region', n: { $sum: 1 } } },
+      ])).map((row) => [String(row._id), row.n])
+    );
+
+    const out = clusters.map((c) => {
+      const members = c.members
+        .map((m) => ({
+          _id: m._id,
+          name: m.name,
+          country: m.countryName || null,
+          wineCount: counts.get(String(m._id)) || 0,
+          pendingReview: !!m.pendingReview,
+          synonyms: m.synonyms || [],
+        }))
+        .sort((a, b) => b.wineCount - a.wineCount
+          || (a.pendingReview === b.pendingReview ? 0 : a.pendingReview ? 1 : -1));
+      return {
+        signature: c.signature,
+        country: members[0]?.country || null,
+        suggestedTargetId: members[0]?._id || null,
+        totalWines: members.reduce((sum, m) => sum + m.wineCount, 0),
+        members,
+      };
+    }).sort((a, b) => b.totalWines - a.totalWines);
+
+    res.json({ clusters: out, scannedCount: regions.length, unscopableCount });
+  } catch (error) {
+    console.error('Region duplicate scan error:', error);
+    res.status(500).json({ error: 'Failed to scan for duplicate regions' });
   }
 });
 
