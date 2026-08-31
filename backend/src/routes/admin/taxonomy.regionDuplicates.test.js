@@ -27,7 +27,8 @@ jest.mock('../../services/taxonomyReview', () => ({
 }));
 jest.mock('../../services/bottleSizeMaintenance', () => ({ distinctSizes: jest.fn(), normalizeAll: jest.fn(), remap: jest.fn() }));
 jest.mock('../taxonomy', () => ({ clearTaxonomyListCache: jest.fn() }));
-jest.mock('../../models/Country', () => ({ find: jest.fn(), findById: jest.fn(), exists: jest.fn() }));
+const mockCountryFind = jest.fn();
+jest.mock('../../models/Country', () => ({ find: (...a) => mockCountryFind(...a), findById: jest.fn(), exists: jest.fn() }));
 jest.mock('../../models/Grape', () => ({ find: jest.fn(), findById: jest.fn(), exists: jest.fn() }));
 jest.mock('../../models/Appellation', () => ({ find: jest.fn(), findOne: jest.fn(), countDocuments: jest.fn() }));
 
@@ -45,8 +46,9 @@ const http = require('http');
 const jwt = require('jsonwebtoken');
 const router = require('./taxonomy');
 
-const FR = { _id: 'fr', name: 'France' };
-const IT = { _id: 'it', name: 'Italy' };
+const FR = 'fr';
+const IT = 'it';
+const COUNTRIES = [{ _id: 'fr', name: 'France' }, { _id: 'it', name: 'Italy' }, { _id: 'us', name: 'United States' }, { _id: 'ge', name: 'Georgia' }, { _id: 'es', name: 'Spain' }];
 
 const chain = (rows) => ({ select: () => chain(rows), populate: () => chain(rows), lean: async () => rows });
 
@@ -69,6 +71,7 @@ const scan = () => fetch(`${baseUrl}/api/admin/taxonomy/regions/duplicate-candid
 beforeEach(() => {
   jest.clearAllMocks();
   mockWineAggregate.mockResolvedValue([]);
+  mockCountryFind.mockReturnValue(chain(COUNTRIES));
 });
 
 describe('the Loire cluster', () => {
@@ -108,8 +111,8 @@ describe('the Loire cluster', () => {
 describe('safety', () => {
   test('the same name under two countries is never one cluster', async () => {
     mockRegionFind.mockReturnValue(chain([
-      { _id: 'a', name: 'Georgia', country: { _id: 'us', name: 'United States' } },
-      { _id: 'b', name: 'Georgia', country: { _id: 'ge', name: 'Georgia' } },
+      { _id: 'a', name: 'Georgia', country: 'us' },
+      { _id: 'b', name: 'Georgia', country: 'ge' },
     ]));
     expect((await scan()).clusters).toHaveLength(0);
   });
@@ -131,10 +134,43 @@ describe('safety', () => {
     expect(body.scannedCount).toBe(1);
   });
 
+  // Audit finding, 2026-08-31: the first cut derived the country scope from a
+  // POPULATED ref. Mongoose nulls that path when the ref dangles — taking the
+  // raw ObjectId with it — so every unresolvable region collapsed to the same
+  // empty scope and same-named regions in different countries would have
+  // clustered. The guard has to fail CLOSED.
+  test('a region with no country is skipped, never grouped with strangers', async () => {
+    mockRegionFind.mockReturnValue(chain([
+      { _id: 'a', name: 'Georgia', country: null },
+      { _id: 'b', name: 'Georgia', country: undefined },
+      { _id: 'c', name: 'Barolo', country: IT },
+    ]));
+    const body = await scan();
+    expect(body.clusters).toHaveLength(0);
+    expect(body.unscopableCount).toBe(2);
+    expect(body.scannedCount).toBe(3);
+  });
+
+  // Audit finding: every sibling count helper in this file excludes quarantined
+  // and pending-identity rows. Without it the scan disagrees with the taxonomy
+  // list, and a document whose bulk is junk could be proposed as the TARGET.
+  test('wine counts exclude quarantined and pending-identity rows', async () => {
+    mockRegionFind.mockReturnValue(chain([
+      { _id: 'a', name: 'Rioja', country: 'es' },
+      { _id: 'b', name: 'La Rioja', country: 'es' },
+    ]));
+    await scan();
+    const [pipeline] = mockWineAggregate.mock.calls[0];
+    expect(pipeline[0].$match).toMatchObject({
+      nonWine: { $ne: true },
+      pendingIdentity: { $ne: true },
+    });
+  });
+
   test('a member with no wines still appears, ranked last', async () => {
     mockRegionFind.mockReturnValue(chain([
-      { _id: 'a', name: 'Rioja', country: { _id: 'es', name: 'Spain' } },
-      { _id: 'b', name: 'La Rioja', country: { _id: 'es', name: 'Spain' } },
+      { _id: 'a', name: 'Rioja', country: 'es' },
+      { _id: 'b', name: 'La Rioja', country: 'es' },
     ]));
     mockWineAggregate.mockResolvedValue([{ _id: 'a', n: 12 }]);
     const [cluster] = (await scan()).clusters;
