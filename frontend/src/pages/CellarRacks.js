@@ -1067,6 +1067,25 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving }) {
           </div>
         )}
 
+        {dims.showHexFlip && (
+          <div className="form-group">
+            <label>
+              <input
+                type="checkbox"
+                checked={!!newRack.typeConfig?.hexEqualRows}
+                onChange={e => setNewRack({
+                  ...newRack,
+                  typeConfig: { ...newRack.typeConfig, hexEqualRows: e.target.checked || undefined }
+                })}
+              />
+              {' '}{t('racks.hexEqualRowsLabel', 'Equal rows (staggered)')}
+            </label>
+            <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
+              {t('racks.hexEqualRowsHelp', 'Every row holds the full number of columns, offset by half a bottle — like the top and bottom shelves of many wine fridges.')}
+            </small>
+          </div>
+        )}
+
         {dims.showModule && (
           <>
             <div className="form-group">

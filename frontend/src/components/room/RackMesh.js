@@ -344,15 +344,18 @@ function computeXRackSlotPositions(bps, width, height) {
 // Hex: even rows have cols slots, odd rows have cols-1 (offset right).
 // `flipped` mirrors the row sequence top-to-bottom (see rackLayouts.hexLayout) —
 // pure reversal, never changes total slot count.
-function computeHexSlotPositions(rows, cols, width, height, flipped) {
+// `equalRows` keeps every row at the full cols count (offset rows still
+// staggered by half a slot); the frame then spans cols+0.5 bottle widths so
+// the stagger stays inside the rack box instead of poking out the side.
+function computeHexSlotPositions(rows, cols, width, height, flipped, equalRows) {
   const positions = [];
-  const cW = width / cols;
+  const cW = equalRows ? width / (cols + 0.5) : width / cols;
   const hexH = height / rows;
   let pos = 1;
   for (let r = 0; r < rows; r++) {
     const rr = flipped ? (rows - 1 - r) : r;
     const isOdd = rr % 2 === 1;
-    const rowCols = isOdd ? Math.max(1, cols - 1) : cols;
+    const rowCols = equalRows ? cols : (isOdd ? Math.max(1, cols - 1) : cols);
     const xOff = isOdd ? cW * 0.5 : 0;
     for (let c = 0; c < rowCols; c++) {
       positions.push({
@@ -757,7 +760,7 @@ export default function RackMesh({
         : scaledLayout.positions.map(p => ({ ...p, x: p.x * sx }));
     }
     if (rackType === 'x-rack') return computeXRackSlotPositions(rack.typeConfig?.bottlesPerSection || 10, innerW, innerH);
-    if (rackType === 'hex') return computeHexSlotPositions(rack.rows || 4, rack.cols || 4, innerW, innerH, rack.typeConfig?.hexFlip);
+    if (rackType === 'hex') return computeHexSlotPositions(rack.rows || 4, rack.cols || 4, innerW, innerH, rack.typeConfig?.hexFlip, rack.typeConfig?.hexEqualRows);
     if (rackType === 'triangle') return computeTriangleSlotPositions(rack.cols || 1, innerW, innerH);
     if (rackType === 'stack') return computeStackSlotPositions(rack.rows || 4, innerH);
     if (rackType === 'shelf') return computeShelfSlotPositions(
@@ -767,7 +770,8 @@ export default function RackMesh({
     return computeSlotPositions(displayRows, displayCols, innerW, innerH, doubleRows);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scaledLayout, rackType, rack.rows, rack.cols, displayRows, displayCols, innerW, innerH, depth,
-      doubleRows, rack.typeConfig?.backCols, rack.typeConfig?.bottlesPerCell, rack.typeConfig?.bottlesPerSection]);
+      doubleRows, rack.typeConfig?.backCols, rack.typeConfig?.bottlesPerCell, rack.typeConfig?.bottlesPerSection,
+      rack.typeConfig?.hexFlip, rack.typeConfig?.hexEqualRows]);
 
   const edgesGeom = useMemo(() => {
     const sw = width * rackScale, sh = height * rackScale, sd = depth * rackScale;

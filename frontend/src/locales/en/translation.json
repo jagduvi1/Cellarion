@@ -1095,6 +1095,8 @@
     "doubleHeightRowsHelp": "Rows with headroom for bottles resting on top",
     "hexFlipLabel": "Flip rows (short row on top)",
     "hexFlipHelp": "By default the top row is full width. Enable this to mirror the rows top-to-bottom.",
+    "hexEqualRowsLabel": "Equal rows (staggered)",
+    "hexEqualRowsHelp": "Every row holds the full number of columns, offset by half a bottle — like the top and bottom shelves of many wine fridges.",
     "filled": "{{filled}}/{{total}} filled",
     "type_grid": "Grid",
     "type_x-rack": "X-Rack",

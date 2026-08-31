@@ -183,8 +183,13 @@ function xRackLayout(typeConfig) {
 // typeConfig.hexFlip mirrors the row sequence top-to-bottom: row r reads the
 // width the UNFLIPPED row (rows-1-r) would have had. Pure reversal of the
 // same multiset of widths — never changes total slot count.
+// typeConfig.hexEqualRows keeps every row at the full `cols` count with the
+// offset rows still staggered by half a slot (the equal-row shelf in wine
+// fridges, effectively cols+0.5 wide) — total becomes rows × cols. Composes
+// with hexFlip, which still decides WHICH rows are offset.
 function hexLayout(rows, cols, typeConfig) {
   const flipped = !!typeConfig?.hexFlip;
+  const equalRows = !!typeConfig?.hexEqualRows;
   const slots = [];
   let pos = 1;
   const hexH = CELL * 0.866;  // vertical distance (sin 60° ≈ 0.866)
@@ -192,7 +197,7 @@ function hexLayout(rows, cols, typeConfig) {
   for (let r = 0; r < rows; r++) {
     const rr = flipped ? (rows - 1 - r) : r;
     const isOdd = rr % 2 === 1;
-    const rowCols = isOdd ? Math.max(1, cols - 1) : cols;
+    const rowCols = equalRows ? cols : (isOdd ? Math.max(1, cols - 1) : cols);
     const xOffset = isOdd ? CELL * 0.5 : 0;
 
     for (let c = 0; c < rowCols; c++) {
@@ -207,7 +212,10 @@ function hexLayout(rows, cols, typeConfig) {
   return {
     totalSlots: slots.length,
     viewBox: {
-      width:  PADDING * 2 + cols * CELL - SLOT_GAP + (cols > 1 ? CELL * 0.5 : 0),
+      // Classic hex already reserves the half-cell stagger for cols > 1; an
+      // equal-rows rack needs it at any width (offset rows genuinely extend
+      // half a slot past the even rows, even at cols = 1).
+      width:  PADDING * 2 + cols * CELL - SLOT_GAP + (cols > 1 || equalRows ? CELL * 0.5 : 0),
       height: PADDING * 2 + (rows - 1) * hexH + SLOT_R * 2,
     },
     slots,
@@ -474,6 +482,10 @@ export function getTotalSlots(type, rows, cols, typeConfig) {
       return 4 * bps;
     }
     case 'hex': {
+      // Equal-row stagger: every row full width, total = rows × cols.
+      // Mirrors backend rackGeometry.totalSlots. hexFlip is deliberately
+      // not read — a pure reversal can never change the total.
+      if (typeConfig?.hexEqualRows) return rows * cols;
       let total = 0;
       for (let r = 0; r < rows; r++) {
         total += (r % 2 === 0) ? cols : Math.max(1, cols - 1);
