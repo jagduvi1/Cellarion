@@ -204,11 +204,12 @@ describe('taxonomy review tools', () => {
     expect(body.data[0]).toMatchObject({ region_id: 'r1', name: 'Toscana', wine_count: 3 });
   });
 
-  test('approve_region clears the flag once, is idempotent, audits via mcp', async () => {
-    const r = { _id: oid('1'), name: 'Etna', pendingReview: true, save: jest.fn().mockResolvedValue(undefined) };
+  test('approve_region stamps the review once, is idempotent, audits via mcp', async () => {
+    const r = { _id: oid('1'), name: 'Etna', createdByUser: true, reviewedAt: null, save: jest.fn().mockResolvedValue(undefined) };
     Region.findById.mockResolvedValue(r);
     let body = parse(await tool('approve_region').handler({ region_id: oid('1') }, ADMIN_CTX));
-    expect(r.pendingReview).toBe(false);
+    expect(r.reviewedAt).toBeTruthy();
+    expect(r.createdByUser).toBe(true); // provenance survives the review
     expect(r.save).toHaveBeenCalled();
     expect(logAudit).toHaveBeenCalledWith(ADMIN_CTX.req, 'admin.taxonomy.approveRegion',
       expect.anything(), expect.objectContaining({ via: 'mcp' }));

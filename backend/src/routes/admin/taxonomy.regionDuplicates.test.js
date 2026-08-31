@@ -77,10 +77,10 @@ beforeEach(() => {
 describe('the Loire cluster', () => {
   beforeEach(() => {
     mockRegionFind.mockReturnValue(chain([
-      { _id: 'r1', name: 'Loire Valley', country: FR, pendingReview: false, synonyms: [] },
-      { _id: 'r2', name: 'Vallée de la Loire', country: FR, pendingReview: true, synonyms: [] },
-      { _id: 'r3', name: 'Val de Loire', country: FR, pendingReview: true, synonyms: [] },
-      { _id: 'r4', name: 'Barolo', country: IT, pendingReview: false, synonyms: [] },
+      { _id: 'r1', name: 'Loire Valley', country: FR, createdByUser: false, synonyms: [] },
+      { _id: 'r2', name: 'Vallée de la Loire', country: FR, createdByUser: true, synonyms: [] },
+      { _id: 'r3', name: 'Val de Loire', country: FR, createdByUser: true, synonyms: [] },
+      { _id: 'r4', name: 'Barolo', country: IT, createdByUser: false, synonyms: [] },
     ]));
     mockWineAggregate.mockResolvedValue([
       { _id: 'r1', n: 173 }, { _id: 'r2', n: 32 }, { _id: 'r3', n: 1 },

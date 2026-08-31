@@ -1066,9 +1066,9 @@ describe('taxonomy find-or-create dedup', () => {
       normalizedName: 'rhone',
       country: 'country-1',
       createdBy: USER_ID,
-      // R3: a user-write mint is born flagged for admin review — visible,
-      // never blocking.
-      pendingReview: true,
+      // R3: a user-write mint RECORDS ITS ORIGIN — visible, never blocking.
+      // Whether anyone has reviewed it is a separate field (reviewedAt).
+      createdByUser: true,
     });
     expect(created.save).toHaveBeenCalled();
 
@@ -1090,10 +1090,11 @@ describe('taxonomy find-or-create dedup', () => {
     expect(Grape).toHaveBeenCalledTimes(1);
     expect(Grape).toHaveBeenCalledWith({
       name: 'Syrah', normalizedName: 'syrah', createdBy: USER_ID,
+      createdByUser: true,
       // Somm ticket 6a942a60 ("Honey", "Alvarão"): a user-write grape mint is
       // born flagged for admin review — visible, never blocking. Same R3 rule
       // as the region mint above.
-      pendingReview: true,
+      createdByUser: true,
     });
     expect(ids).toEqual(['grape-new']);
   });

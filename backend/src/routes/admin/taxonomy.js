@@ -40,11 +40,12 @@ const { clearTaxonomyListCache } = require('../taxonomy');
 /**
  * Does this user-minted taxonomy row actually need a human to look at it?
  *
- * `pendingReview` records ONE fact: a user write minted this document rather
- * than a curator (services/findOrCreateWine). It inspects nothing about the
- * name, so it is provenance, not a verdict — and it is set on every mint and
- * cleared only by an admin clicking approve, which makes it a queue that grows
- * automatically and drains by hand.
+ * Two separate facts, deliberately: `createdByUser` records that a user write
+ * minted this document rather than a curator (services/findOrCreateWine), and
+ * `reviewedAt` records whether a human has since looked. They were one boolean
+ * named `pendingReview` until 2026-08-31, and that name is most of this story
+ * — it promised an action for a field that only ever recorded an origin, so
+ * every mint looked like a task and the pile only grew.
  *
  * Measured on production (2026-08-31): of 164 regions minted in one month, 161
  * were in genuine use and exactly one was junk. At a ~1% hit rate the sensible
@@ -58,17 +59,18 @@ const { clearTaxonomyListCache } = require('../taxonomy');
  * click adds nothing to. What deserves a human is the one nobody uses: that is
  * where the junk was ("Wine of Hungary", 0 wines) and where a typo would sit.
  *
- * The flag itself is deliberately NOT cleared here. It stays as the record of
- * where the document came from — the curator has found that provenance useful,
- * and tidying a screen is no reason to delete it. Duplicates are a separate
- * question with their own scan (GET /regions/duplicate-candidates).
+ * `createdByUser` is never cleared by anything. It stays as the record of where
+ * the document came from — the curator has found that provenance useful, and
+ * tidying a screen is no reason to delete it. Approving stamps `reviewedAt`
+ * instead. Duplicates are a separate question with their own scan
+ * (GET /regions/duplicate-candidates).
  *
- * @param {{pendingReview?: boolean}} doc
+ * @param {{createdByUser?: boolean, reviewedAt?: Date|null}} doc
  * @param {number} wineCount
  * @returns {boolean}
  */
 function needsHumanReview(doc, wineCount) {
-  return !!doc?.pendingReview && wineCount === 0;
+  return !!doc?.createdByUser && !doc?.reviewedAt && wineCount === 0;
 }
 
 /** Map<idString, wineCount> for a ref field ('country' | 'region'). */
@@ -293,7 +295,7 @@ router.get('/regions', async (req, res) => {
       count: rows.length,
       regions: rows,
       // What the screen should actually draw attention to — see
-      // needsHumanReview. `pendingReview` stays on every row untouched.
+      // needsHumanReview. createdByUser stays on every row untouched.
       needsReviewCount: rows.filter(r => r.needsReview).length,
     });
   } catch (error) {
@@ -768,7 +770,7 @@ router.delete('/grapes/:id', async (req, res) => {
   }
 });
 
-// POST /api/admin/taxonomy/regions/:id/approve — clear the pendingReview flag
+// POST /api/admin/taxonomy/regions/:id/approve — record that a human looked
 // a user-write mint set (strategy 2026-07-29 R3). Approval is its own verb,
 // not a PUT side effect: editing a region to fix a typo must not silently
 // count as "a human vouched for this".
@@ -779,8 +781,11 @@ router.post('/regions/:id/approve', async (req, res) => {
     if (!region) return res.status(404).json({ error: 'Region not found' });
     // Idempotent like the MCP tool: a second click must not write a second
     // audit entry for a no-op (audit 2026-07-29, REST/MCP drift).
-    if (!region.pendingReview) return res.json({ region, already: true });
-    region.pendingReview = false;
+    if (region.reviewedAt) return res.json({ region, already: true });
+    // Stamp the review. createdByUser is NEVER cleared: it records where the
+    // document came from, which stays true however many people look at it.
+    region.reviewedAt = new Date();
+    region.reviewedBy = req.user.id;
     await region.save();
     logAudit(req, 'admin.taxonomy.approveRegion',
       { type: 'region', id: region._id },
@@ -793,7 +798,7 @@ router.post('/regions/:id/approve', async (req, res) => {
   }
 });
 
-// POST /api/admin/taxonomy/grapes/:id/approve — clear the pendingReview flag
+// POST /api/admin/taxonomy/grapes/:id/approve — record that a human looked
 // a user-write mint set (somm ticket 6a942a60: bottle-add/import minted
 // "Honey" and "Alvarão" straight into the shared taxonomy). Mirrors the
 // regions verb above: approval is its own verb, not a PUT side effect —
@@ -807,8 +812,9 @@ router.post('/grapes/:id/approve', async (req, res) => {
     if (!grape) return res.status(404).json({ error: 'Grape not found' });
     // Idempotent like the regions verb: a second click must not write a
     // second audit entry for a no-op.
-    if (!grape.pendingReview) return res.json({ grape, already: true });
-    grape.pendingReview = false;
+    if (grape.reviewedAt) return res.json({ grape, already: true });
+    grape.reviewedAt = new Date();
+    grape.reviewedBy = req.user.id;
     await grape.save();
     logAudit(req, 'admin.taxonomy.approveGrape',
       { type: 'grape', id: grape._id },
@@ -847,7 +853,7 @@ router.get('/regions/duplicate-candidates', async (req, res) => {
     // namesake). The guard fails CLOSED: a region whose country cannot be
     // resolved is skipped and counted, never grouped with strangers.
     const [regions, countries] = await Promise.all([
-      Region.find({}).select('name country pendingReview synonyms').lean(),
+      Region.find({}).select('name country createdByUser reviewedAt synonyms').lean(),
       Country.find({}).select('name').lean(),
     ]);
     const countryNames = new Map(countries.map((c) => [String(c._id), c.name]));
@@ -886,11 +892,12 @@ router.get('/regions/duplicate-candidates', async (req, res) => {
           name: m.name,
           country: m.countryName || null,
           wineCount: counts.get(String(m._id)) || 0,
-          pendingReview: !!m.pendingReview,
+          createdByUser: !!m.createdByUser,
+          reviewedAt: m.reviewedAt || null,
           synonyms: m.synonyms || [],
         }))
         .sort((a, b) => b.wineCount - a.wineCount
-          || (a.pendingReview === b.pendingReview ? 0 : a.pendingReview ? 1 : -1));
+          || (!!a.reviewedAt === !!b.reviewedAt ? 0 : a.reviewedAt ? -1 : 1));
       return {
         signature: c.signature,
         country: members[0]?.country || null,
