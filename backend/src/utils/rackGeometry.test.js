@@ -96,6 +96,19 @@ describe('rackGeometry', () => {
     it('2 rows, 1 col → 1 + 1 = 2 (odd row min is 1)', () => {
       expect(totalSlots('hex', 2, 1)).toBe(2);
     });
+    it('hexEqualRows: every row full width → rows × cols', () => {
+      expect(totalSlots('hex', 4, 4, { hexEqualRows: true })).toBe(16);
+      expect(totalSlots('hex', 3, 4, { hexEqualRows: true })).toBe(12);
+      // The Liebherr GrandCru top/bottom shelf from the feature request: 4-4-4-4.
+      expect(totalSlots('hex', 4, 4)).toBe(14); // classic alternation, unchanged
+    });
+    it('hexEqualRows composes with hexFlip without changing the total', () => {
+      expect(totalSlots('hex', 4, 4, { hexEqualRows: true, hexFlip: true })).toBe(16);
+    });
+    it('hexEqualRows false/absent keeps the classic alternating total', () => {
+      expect(totalSlots('hex', 4, 3, { hexEqualRows: false })).toBe(10);
+      expect(totalSlots('hex', 4, 3, { hexFlip: true })).toBe(10);
+    });
   });
 
   describe('totalSlots — triangle', () => {

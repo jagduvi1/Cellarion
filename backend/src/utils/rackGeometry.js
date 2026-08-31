@@ -6,7 +6,8 @@
  *              typeConfig.doubleHeightRows have headroom for an extra top
  *              layer of cols-1 bottles resting in the gaps
  *   x-rack   — square with X dividers; 4 triangular sections, each holds bottlesPerSection bottles
- *   hex      — hex honeycomb; alternating row widths (cols, cols-1, …)
+ *   hex      — hex honeycomb; alternating row widths (cols, cols-1, …), or
+ *              every row full width staggered when typeConfig.hexEqualRows
  *   triangle — A-frame; base width = cols, each row shrinks by 1
  *   stack    — single vertical column; height = rows
  *   cube     — grid of sub-modules; outer grid = rows × cols, each module = moduleRows × moduleCols
@@ -93,7 +94,12 @@ function totalSlots(type, rows, cols, typeConfig) {
 
     case 'hex': {
       // Honeycomb grid: `rows` rows. Even rows (0-indexed) have `cols` slots,
-      // odd rows have `cols - 1` slots (offset).
+      // odd rows have `cols - 1` slots (offset). With typeConfig.hexEqualRows
+      // every row holds the full `cols` (offset rows still staggered by half
+      // a slot — the equal-row shelf in wine fridges), so total = rows × cols.
+      // hexFlip is deliberately not read here: it reverses which rows are
+      // which, a pure reversal that can never change the total.
+      if (typeConfig?.hexEqualRows) return rows * cols;
       let total = 0;
       for (let r = 0; r < rows; r++) {
         total += (r % 2 === 0) ? cols : Math.max(1, cols - 1);

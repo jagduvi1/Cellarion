@@ -29,7 +29,11 @@ const rackModuleSchema = new mongoose.Schema({
     backCols: { type: Number, min: 0, max: 20 },
     // Hex racks only: mirror the row sequence top-to-bottom. Pure reversal —
     // never changes total slot count (see rackSchema.typeConfig.hexFlip below).
-    hexFlip: { type: Boolean, default: false }
+    hexFlip: { type: Boolean, default: false },
+    // Hex racks only: every row holds the full `cols` count, offset rows
+    // still staggered by half a slot (see rackSchema.typeConfig.hexEqualRows
+    // below). UNLIKE hexFlip this changes total slot count (rows × cols).
+    hexEqualRows: { type: Boolean, default: false }
   },
   x:          { type: Number, default: 0 },
   y:          { type: Number, default: 0 },
@@ -67,7 +71,17 @@ const rackSchema = new mongoose.Schema({
     // row widths, so it never changes total slot count — for an odd row
     // count the unflipped sequence is always a palindrome, so this is a
     // no-op there by construction; it only matters for even row counts.
-    hexFlip: { type: Boolean, default: false }
+    hexFlip: { type: Boolean, default: false },
+    // Hex racks only: every row holds the full `cols` count, and offset rows
+    // are still staggered by half a slot — the "equal rows, staggered" shelf
+    // found in wine fridges (e.g. the Liebherr GrandCru's 4-4-4-4 top and
+    // bottom shelves, effectively cols+0.5 bottles wide). UNLIKE hexFlip this
+    // CHANGES total slot count (rows × cols, not the alternating sum), so
+    // toggling it on an existing rack renumbers positions after row 1 — the
+    // UI offers it at creation only, and the update route's resize guard
+    // (getMaxPosition recompute) blocks a shrink past placed bottles.
+    // Composes with hexFlip, which still decides WHICH rows are offset.
+    hexEqualRows: { type: Boolean, default: false }
   },
   // Modular rack fields (used when isModular is true)
   isModular: { type: Boolean, default: false },

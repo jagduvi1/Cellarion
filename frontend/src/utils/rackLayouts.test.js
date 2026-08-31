@@ -141,6 +141,59 @@ describe('computeLayout', () => {
         expect(rowSize(flipped)).toBe(2);
       });
     });
+
+    // The equal-row staggered shelf (e.g. Liebherr GrandCru top/bottom
+    // shelves: 4-4-4-4, offset — effectively 4.5 bottles wide).
+    describe('hexEqualRows', () => {
+      const rowsOf = (layout) => {
+        const ys = [...new Set(layout.slots.map(s => s.cy))].sort((a, b) => a - b);
+        return ys.map(y => layout.slots.filter(s => s.cy === y));
+      };
+
+      it('every row holds the full column count — total = rows × cols', () => {
+        expect(computeLayout('hex', 4, 4, { hexEqualRows: true }).totalSlots).toBe(16);
+        expect(computeLayout('hex', 4, 4).totalSlots).toBe(14); // classic, unchanged
+      });
+
+      it('offset rows keep the half-slot stagger at full width', () => {
+        const [row0, row1] = rowsOf(computeLayout('hex', 2, 4, { hexEqualRows: true }));
+        expect(row0).toHaveLength(4);
+        expect(row1).toHaveLength(4);
+        const cell = row0[1].cx - row0[0].cx;
+        expect(row1[0].cx - row0[0].cx).toBeCloseTo(cell / 2);
+      });
+
+      it('the viewBox is wide enough for the staggered full-width rows', () => {
+        for (const cols of [1, 4]) {
+          const layout = computeLayout('hex', 2, cols, { hexEqualRows: true });
+          const maxCx = Math.max(...layout.slots.map(s => s.cx));
+          expect(layout.viewBox.width).toBeGreaterThanOrEqual(maxCx + SLOT_RADIUS);
+        }
+      });
+
+      it('composes with hexFlip: the flip decides which rows are offset', () => {
+        const plain = computeLayout('hex', 2, 4, { hexEqualRows: true });
+        const flipped = computeLayout('hex', 2, 4, { hexEqualRows: true, hexFlip: true });
+        expect(flipped.totalSlots).toBe(plain.totalSlots);
+        // Unflipped: row 0 flush left, row 1 offset. Flipped: the reverse.
+        expect(rowsOf(plain)[0][0].cx).toBeLessThan(rowsOf(flipped)[0][0].cx);
+        expect(rowsOf(plain)[1][0].cx).toBeGreaterThan(rowsOf(flipped)[1][0].cx);
+      });
+
+      it('getTotalSlots mirrors the layout and the backend formula', () => {
+        expect(getTotalSlots('hex', 4, 4, { hexEqualRows: true })).toBe(16);
+        expect(getTotalSlots('hex', 4, 4, { hexEqualRows: true, hexFlip: true })).toBe(16);
+        expect(getTotalSlots('hex', 4, 4)).toBe(14);
+        expect(getTotalSlots('hex', 4, 4, { hexFlip: true })).toBe(14);
+      });
+
+      it('counts equal-row hex modules inside modular racks', () => {
+        expect(getModularTotalSlots([
+          { type: 'hex', rows: 4, cols: 4, typeConfig: { hexEqualRows: true } },
+          { type: 'hex', rows: 4, cols: 4 },
+        ])).toBe(16 + 14);
+      });
+    });
   });
 
   describe('triangle', () => {
