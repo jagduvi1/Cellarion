@@ -37,6 +37,40 @@ const { clearTaxonomyListCache } = require('../taxonomy');
 // which of two spellings is the real one (merge the 1-wine typo into the
 // 300-wine canonical, never the reverse).
 
+/**
+ * Does this user-minted taxonomy row actually need a human to look at it?
+ *
+ * `pendingReview` records ONE fact: a user write minted this document rather
+ * than a curator (services/findOrCreateWine). It inspects nothing about the
+ * name, so it is provenance, not a verdict — and it is set on every mint and
+ * cleared only by an admin clicking approve, which makes it a queue that grows
+ * automatically and drains by hand.
+ *
+ * Measured on production (2026-08-31): of 164 regions minted in one month, 161
+ * were in genuine use and exactly one was junk. At a ~1% hit rate the sensible
+ * response to any row is "approve without looking", which is the same as not
+ * reading it — so nobody did, and the real defect hiding in there (the Loire
+ * split across four documents) went unnoticed for weeks. Being flagged never
+ * revealed it: all four were flagged, individually.
+ *
+ * So the screen asks a better question than "who made this?". A document
+ * already carrying wines has been proven real by use, in a way an approval
+ * click adds nothing to. What deserves a human is the one nobody uses: that is
+ * where the junk was ("Wine of Hungary", 0 wines) and where a typo would sit.
+ *
+ * The flag itself is deliberately NOT cleared here. It stays as the record of
+ * where the document came from — the curator has found that provenance useful,
+ * and tidying a screen is no reason to delete it. Duplicates are a separate
+ * question with their own scan (GET /regions/duplicate-candidates).
+ *
+ * @param {{pendingReview?: boolean}} doc
+ * @param {number} wineCount
+ * @returns {boolean}
+ */
+function needsHumanReview(doc, wineCount) {
+  return !!doc?.pendingReview && wineCount === 0;
+}
+
 /** Map<idString, wineCount> for a ref field ('country' | 'region'). */
 async function wineCountsByRef(field) {
   const rows = await WineDefinition.aggregate([
@@ -250,9 +284,18 @@ router.get('/regions', async (req, res) => {
         .lean(),
       wineCountsByRef('region'),
     ]);
-    const rows = regions.map(r => ({ ...r, wineCount: wineCounts.get(String(r._id)) || 0 }));
+    const rows = regions.map(r => {
+      const wineCount = wineCounts.get(String(r._id)) || 0;
+      return { ...r, wineCount, needsReview: needsHumanReview(r, wineCount) };
+    });
 
-    res.json({ count: rows.length, regions: rows });
+    res.json({
+      count: rows.length,
+      regions: rows,
+      // What the screen should actually draw attention to — see
+      // needsHumanReview. `pendingReview` stays on every row untouched.
+      needsReviewCount: rows.filter(r => r.needsReview).length,
+    });
   } catch (error) {
     console.error('Get regions error:', error);
     res.status(500).json({ error: 'Failed to get regions' });
@@ -543,8 +586,15 @@ router.get('/grapes', async (req, res) => {
       Grape.find().sort({ name: 1 }).lean(),
       wineCountsByGrape(),
     ]);
-    const rows = grapes.map(g => ({ ...g, wineCount: wineCounts.get(String(g._id)) || 0 }));
-    res.json({ count: rows.length, grapes: rows });
+    const rows = grapes.map(g => {
+      const wineCount = wineCounts.get(String(g._id)) || 0;
+      return { ...g, wineCount, needsReview: needsHumanReview(g, wineCount) };
+    });
+    res.json({
+      count: rows.length,
+      grapes: rows,
+      needsReviewCount: rows.filter(g => g.needsReview).length,
+    });
   } catch (error) {
     console.error('Get grapes error:', error);
     res.status(500).json({ error: 'Failed to get grapes' });

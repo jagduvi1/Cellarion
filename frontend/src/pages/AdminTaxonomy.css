@@ -191,3 +191,18 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Count of rows that actually want a decision, beside the page title. Uses the
+   same warning palette as the row badge so the two read as one signal. */
+.taxonomy-needs-review {
+  margin-left: 0.6rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
+  color: var(--color-accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  vertical-align: middle;
+  white-space: nowrap;
+}

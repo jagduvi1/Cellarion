@@ -18,6 +18,10 @@ function AdminTaxonomy() {
   const { apiFetch } = useAuth();
   const [activeTab, setActiveTab] = useState('countries');
   const [items, setItems] = useState([]);
+  // How many rows actually want a decision — user-minted AND used by nothing.
+  // Every user-minted row still carries `pendingReview` as provenance; only
+  // this subset is worth drawing the eye to (see needsHumanReview server-side).
+  const [needsReviewCount, setNeedsReviewCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({});
   const [showForm, setShowForm] = useState(false);
@@ -156,6 +160,7 @@ function AdminTaxonomy() {
         // Index by the tab's expected key so a mismatched response shape
         // can't populate the list with another tab's documents.
         setItems(data[activeTab] || []);
+        setNeedsReviewCount(data.needsReviewCount ?? 0);
       }
     } catch (err) {
       if (seq !== fetchSeqRef.current) return;
@@ -812,7 +817,16 @@ function AdminTaxonomy() {
   return (
     <div className="admin-taxonomy-page">
       <div className="page-header">
-        <h1>{t('admin.taxonomy.title')}</h1>
+        <h1>
+          {t('admin.taxonomy.title')}
+          {/* Says how much actually wants a decision, so the tab doesn't have
+              to be scrolled to find out. Absent when the answer is none. */}
+          {needsReviewCount > 0 && (
+            <span className="taxonomy-needs-review" title={t('admin.taxonomy.needsReviewTitle')}>
+              {t('admin.taxonomy.needsReview', { count: needsReviewCount })}
+            </span>
+          )}
+        </h1>
         {!isEditing && !isBottleSizes && (
           <div style={{ display: 'flex', gap: 8 }}>
             {activeTab === 'appellations' && (
@@ -889,7 +903,11 @@ function AdminTaxonomy() {
               <div key={item._id} className={`taxonomy-item ${editItem?._id === item._id ? 'editing' : ''}`}>
                 <div className="taxonomy-item-content">{renderItem(item)}</div>
                 <div className="taxonomy-item-actions">
-                  {item.pendingReview && (
+                  {/* Only rows nothing uses. A user-minted document already
+                      carrying wines has been proven real by use, and badging
+                      all of them made a 154-row queue nobody read — the split
+                      Loire was flagged four times and told no one. */}
+                  {item.needsReview && (
                     <>
                       <span
                         className="taxonomy-badge taxonomy-badge--pending"
