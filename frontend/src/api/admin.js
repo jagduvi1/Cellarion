@@ -161,11 +161,11 @@ export const adminRestoreDismissedAppellation = (apiFetch, name) =>
     method: 'POST', headers: J, body: JSON.stringify({ name }),
   });
 
-/** Approve a user-minted region (clears its pendingReview flag). */
+/** Record that an admin reviewed a user-minted region (stamps reviewedAt). */
 export const adminApproveRegion = (apiFetch, regionId) =>
   apiFetch(`/api/admin/taxonomy/regions/${regionId}/approve`, { method: 'POST' });
 
-/** Approve a user-minted grape (clears its pendingReview flag). */
+/** Record that an admin reviewed a user-minted grape (stamps reviewedAt). */
 export const adminApproveGrape = (apiFetch, grapeId) =>
   apiFetch(`/api/admin/taxonomy/grapes/${grapeId}/approve`, { method: 'POST' });
 

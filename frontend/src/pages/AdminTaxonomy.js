@@ -19,7 +19,7 @@ function AdminTaxonomy() {
   const [activeTab, setActiveTab] = useState('countries');
   const [items, setItems] = useState([]);
   // How many rows actually want a decision — user-minted AND used by nothing.
-  // Every user-minted row still carries `pendingReview` as provenance; only
+  // Every user-minted row still carries `createdByUser` as provenance; only
   // this subset is worth drawing the eye to (see needsHumanReview server-side).
   const [needsReviewCount, setNeedsReviewCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -272,7 +272,7 @@ function AdminTaxonomy() {
           String(i.country?._id || i.country) === String(mergeItem.country?._id || mergeItem.country)))
     : [];
 
-  // Regions and grapes share the pendingReview flow; the endpoint differs.
+  // Regions and grapes share the review flow; the endpoint differs.
   const handleApprove = async (id) => {
     setError(null);
     try {

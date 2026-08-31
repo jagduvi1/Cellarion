@@ -116,9 +116,10 @@ async function findOrCreateRegion(rawName, countryId, userId) {
   // one state that collides with a country name; an existing doc still
   // matches above.)
   if (String(name).includes(',') || isRecognizedCountry(name)) return null;
-  // pendingReview: a user write minted taxonomy — visible to admins (R3),
-  // never blocking the user.
-  region = new Region({ name: name.trim(), normalizedName, country: countryId, createdBy: userId, pendingReview: true });
+  // createdByUser records WHERE this came from: a permanent fact, visible to
+  // admins (R3) and never blocking the user. Whether a human has reviewed it
+  // is a separate field — see models/Region.
+  region = new Region({ name: name.trim(), normalizedName, country: countryId, createdBy: userId, createdByUser: true });
   await region.save();
   return region;
 }
@@ -207,13 +208,13 @@ async function findOrCreateGrapes(rawNames, userId) {
       $or: [{ normalizedName }, { normalizedSynonyms: normalizedName }],
     });
     if (!grape) {
-      // pendingReview: a user write minted taxonomy — visible to admins,
+      // createdByUser records WHERE this came from: a permanent fact, visible to admins,
       // never blocking the user. Same rule as findOrCreateRegion above.
       // Unflagged mints put "Honey" (a mead) and "Alvarão" (a typo of
       // Alvarinho the synonym lookup couldn't bridge) into the globally
       // shared taxonomy (somm ticket 6a942a60); the curator queue is where
       // a near-miss gets merged instead of silently substituted.
-      grape = new Grape({ name: canonicalName, normalizedName, createdBy: userId, pendingReview: true });
+      grape = new Grape({ name: canonicalName, normalizedName, createdBy: userId, createdByUser: true });
       await grape.save();
     }
     if (!ids.some(id => String(id) === String(grape._id))) ids.push(grape._id); // two synonyms may resolve to one doc

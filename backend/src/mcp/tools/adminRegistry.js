@@ -202,8 +202,14 @@ registerTool({
     const Region = require('../../models/Region');
     const region = await Region.findById(args.region_id);
     if (!region) return fail('not_found', 'No region with that id.');
-    if (!region.pendingReview) return ok(`"${region.name}" was already reviewed — nothing to do.`, { region_id: region._id, already: true });
-    region.pendingReview = false;
+    if (region.reviewedAt) return ok(`"${region.name}" was already reviewed — nothing to do.`, { region_id: region._id, already: true });
+    // Stamp the review; never clear createdByUser, which records where the
+
+    // document came from and stays true forever.
+
+    region.reviewedAt = new Date();
+
+    region.reviewedBy = ctx.user?.id || null;
     await region.save();
     // Same audit action as the REST approve — the two surfaces audit identically.
     logAudit(ctx.req, 'admin.taxonomy.approveRegion',

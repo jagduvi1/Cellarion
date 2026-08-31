@@ -78,9 +78,9 @@ beforeEach(() => {
 describe('regions', () => {
   beforeEach(() => {
     mockRegionFind.mockReturnValue(chain([
-      { _id: 'used', name: 'Barolo', pendingReview: true },
-      { _id: 'unused', name: 'Wine of Hungary', pendingReview: true },
-      { _id: 'curated', name: 'Bordeaux', pendingReview: false },
+      { _id: 'used', name: 'Barolo', createdByUser: true, reviewedAt: null },
+      { _id: 'unused', name: 'Wine of Hungary', createdByUser: true, reviewedAt: null },
+      { _id: 'curated', name: 'Bordeaux', createdByUser: false, reviewedAt: null },
     ]));
     // wineCountsByRef groups over ALL regions.
     mockWineAggregate.mockResolvedValue([{ _id: 'used', n: 21 }, { _id: 'curated', n: 300 }]);
@@ -101,22 +101,32 @@ describe('regions', () => {
     expect(regions.find((r) => r._id === 'curated').needsReview).toBe(false);
   });
 
+  test('a row already reviewed never returns to the queue, even unused', async () => {
+    mockRegionFind.mockReturnValue(chain([
+      { _id: 'seen', name: 'Dunham', createdByUser: true, reviewedAt: new Date('2026-08-31') },
+    ]));
+    mockWineAggregate.mockResolvedValue([]);
+    const body = await get('regions');
+    expect(body.regions[0].needsReview).toBe(false);
+    expect(body.needsReviewCount).toBe(0);
+  });
+
   test('the response counts them, so the screen need not be scrolled', async () => {
     expect((await get('regions')).needsReviewCount).toBe(1);
   });
 
-  test('pendingReview is still reported on every row — provenance is not erased', async () => {
+  test('createdByUser is still reported on every row — provenance is not erased', async () => {
     const { regions } = await get('regions');
-    expect(regions.find((r) => r._id === 'used').pendingReview).toBe(true);
-    expect(regions.find((r) => r._id === 'unused').pendingReview).toBe(true);
+    expect(regions.find((r) => r._id === 'used').createdByUser).toBe(true);
+    expect(regions.find((r) => r._id === 'unused').createdByUser).toBe(true);
   });
 });
 
 describe('grapes get the identical rule', () => {
   test('an unused user-minted grape needs review; a used one does not', async () => {
     mockGrapeFind.mockReturnValue(chain([
-      { _id: 'g1', name: 'Malvoisie', pendingReview: true },
-      { _id: 'g2', name: 'Nonsensegrape', pendingReview: true },
+      { _id: 'g1', name: 'Malvoisie', createdByUser: true, reviewedAt: null },
+      { _id: 'g2', name: 'Nonsensegrape', createdByUser: true, reviewedAt: null },
     ]));
     mockWineAggregate.mockResolvedValue([{ _id: 'g1', n: 4 }]);
     const body = await get('grapes');

@@ -61,7 +61,7 @@ async function appellationRefsError(countryId, regionId) {
  */
 async function listPendingRegions() {
   const [regions, counts] = await Promise.all([
-    Region.find({ pendingReview: true })
+    Region.find({ createdByUser: true, reviewedAt: null })
       .populate('country', 'name')
       .sort({ createdAt: -1 })
       .lean(),

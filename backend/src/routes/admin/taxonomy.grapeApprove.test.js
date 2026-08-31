@@ -66,14 +66,17 @@ const approve = (id) => fetch(`${baseUrl}/api/admin/taxonomy/grapes/${id}/approv
 beforeEach(() => jest.clearAllMocks());
 
 describe('POST /grapes/:id/approve', () => {
-  test('clears pendingReview, saves, and audits', async () => {
-    const doc = { _id: GRAPE_ID, name: 'Alvarão', pendingReview: true, save: jest.fn().mockResolvedValue(undefined) };
+  test('stamps the review and audits — WITHOUT erasing where the grape came from', async () => {
+    const doc = { _id: GRAPE_ID, name: 'Alvarão', createdByUser: true, reviewedAt: null, save: jest.fn().mockResolvedValue(undefined) };
     Grape.findById.mockResolvedValue(doc);
 
     const res = await approve(GRAPE_ID);
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.grape.pendingReview).toBe(false);
+    // The two facts are separate: reviewing records that a human looked, and
+    // says nothing about who created the document. createdByUser is permanent.
+    expect(body.grape.reviewedAt).toBeTruthy();
+    expect(body.grape.createdByUser).toBe(true);
     expect(body.already).toBeUndefined();
     expect(doc.save).toHaveBeenCalledTimes(1);
     expect(logAudit).toHaveBeenCalledTimes(1);
@@ -82,7 +85,7 @@ describe('POST /grapes/:id/approve', () => {
   });
 
   test('idempotent: an already-reviewed grape answers already:true without a save or a second audit row', async () => {
-    const doc = { _id: GRAPE_ID, name: 'Syrah', pendingReview: false, save: jest.fn() };
+    const doc = { _id: GRAPE_ID, name: 'Syrah', createdByUser: true, reviewedAt: new Date('2026-08-30'), save: jest.fn() };
     Grape.findById.mockResolvedValue(doc);
 
     const res = await approve(GRAPE_ID);
