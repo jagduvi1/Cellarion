@@ -8,7 +8,7 @@ router.use(requireAuth, requireRole('admin'));
 
 /**
  * POST /api/admin/search/reindex — force a full Meilisearch rebuild of the
- * wines + bottles indexes from the RUNNING process.
+ * wines + bottles + discussions indexes from the RUNNING process.
  *
  * Why this exists (found testing a prod-copy restore, 2026-07-29): after a
  * mongo restore the boot-time sync skips — the index "looks populated" — and
@@ -17,9 +17,15 @@ router.use(requireAuth, requireRole('admin'));
  * workaround was renaming a taxonomy country to itself. This is the honest
  * button, and the restore runbook's missing step.
  *
- * Serial on purpose (wines, then bottles) and awaited to completion so the
- * response means "done", not "started" — at the registry's size the whole
- * rebuild is seconds, and an admin clicking this wants to KNOW it worked.
+ * Discussions joined 2026-08-31: the endpoint predated that index, so "full
+ * rebuild" quietly meant two of three. It matters the same way — stored
+ * documents only learn a NEW filterable attribute (like the forum `language`
+ * field) when re-uploaded, and this button is how a deploy adds one without
+ * a MEILI_FORCE_REINDEX restart.
+ *
+ * Serial on purpose and awaited to completion so the response means "done",
+ * not "started" — at the registry's size the whole rebuild is seconds, and
+ * an admin clicking this wants to KNOW it worked.
  */
 router.post('/reindex', async (req, res) => {
   try {
@@ -38,9 +44,13 @@ router.post('/reindex', async (req, res) => {
     const bottleTasks = await searchService.fullSyncBottles();
     await searchService.waitForTasks(bottleTasks);
     const bottlesMs = Date.now() - t1;
+    const t2 = Date.now();
+    const discussionTasks = await searchService.fullSyncDiscussions();
+    await searchService.waitForTasks(discussionTasks);
+    const discussionsMs = Date.now() - t2;
 
-    logAudit(req, 'admin.search.reindex', {}, { winesMs, bottlesMs });
-    res.json({ ok: true, winesMs, bottlesMs });
+    logAudit(req, 'admin.search.reindex', {}, { winesMs, bottlesMs, discussionsMs });
+    res.json({ ok: true, winesMs, bottlesMs, discussionsMs });
   } catch (error) {
     console.error('Search reindex error:', error);
     res.status(500).json({ error: 'Reindex failed' });
