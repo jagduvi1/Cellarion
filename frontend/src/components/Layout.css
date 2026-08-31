@@ -297,8 +297,19 @@
 .mobile-menu {
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
-  max-height: calc(100vh - 60px);
+  /* The navbar above is 60px PLUS the status-bar inset (see .navbar), so
+     subtracting a bare 60px left this menu taller than the space it has —
+     about 50px too tall on a notched iPhone, which pushed the last item
+     (Logout) off the bottom (issue #1146). */
+  max-height: calc(100vh - 60px - env(safe-area-inset-top));
   overflow-y: auto;
+  /* Stop the scroll gesture chaining to the page behind once this container
+     reaches its end. Without it, reaching Logout on a full admin menu took
+     three separate gestures across two scroll containers, and the pause in
+     between read as "the menu has bottomed out". Preferred over locking body
+     scroll: position:fixed body locks are their own source of iOS scroll
+     jumps, and containment is what this actually needs. */
+  overscroll-behavior: contain;
   padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom));
 }
 

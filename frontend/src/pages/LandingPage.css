@@ -15,11 +15,21 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 5%;
-  height: 60px;
   background: rgba(var(--color-primary-rgb), 0.03);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--color-border-light);
+  /* Keep clear of the iOS status bar in the installed PWA (issue #1145).
+     index.html sets viewport-fit=cover and a black-translucent status bar,
+     so a sticky top:0 element draws UNDERNEATH the clock and battery — the
+     Sign in button ended up in the strip iOS owns and could not be tapped.
+     Layout.css:.navbar already does this; the landing page and login are the
+     only two routes not wrapped in <Layout>, so they never inherited it.
+     The inset is added to BOTH the height and the padding because the global
+     reset is border-box: padding alone would eat into the 60px and squash
+     the bar instead of growing it. Both resolve to 0 off iOS. */
+  height: calc(60px + env(safe-area-inset-top));
+  padding-top: env(safe-area-inset-top);
 }
 
 .landing-nav-brand {
