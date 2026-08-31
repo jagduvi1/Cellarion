@@ -63,6 +63,15 @@
   font-size: 0.85rem;
 }
 
+/* Explains an otherwise-empty profile card. Muted and italic: a statement
+   about the member's choice, not an error the viewer should act on. */
+.user-profile__private-note {
+  margin: 0.5rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
 .user-profile__actions {
   flex-shrink: 0;
 }

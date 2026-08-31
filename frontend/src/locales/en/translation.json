@@ -4289,6 +4289,7 @@
   "userProfile": {
     "loading": "Loading...",
     "notFound": "User not found",
+    "privateProfile": "This member keeps their profile private.",
     "failedLoad": "Failed to load profile",
     "memberSince": "Member since {{date}}",
     "followers": "Followers",

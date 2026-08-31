@@ -131,6 +131,31 @@ function UserProfile() {
   }
 
   const displayName = profile.displayName || profile.username;
+
+  // A private profile whose owner has posted publicly answers with an
+  // identity-only stub instead of a 404 (see routes/users.js). Render the name
+  // they already show on their posts and stop there — no stats, no lists, no
+  // follow button, and no member-since date (the stub carries no createdAt,
+  // which would otherwise format as "Invalid Date").
+  if (profile.isPrivate) {
+    return (
+      <div className="user-profile-page">
+        <div className="user-profile__header card">
+          <div className="user-profile__info">
+            <div className="user-profile__avatar">{displayName.charAt(0).toUpperCase()}</div>
+            <div className="user-profile__details">
+              <h1 className="user-profile__name">{displayName}</h1>
+              {profile.displayName && profile.displayName !== profile.username && (
+                <p className="user-profile__username">@{profile.username}</p>
+              )}
+              <p className="user-profile__private-note">{t('userProfile.privateProfile')}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const memberSince = new Date(profile.createdAt).toLocaleDateString(undefined, {
     year: 'numeric', month: 'long'
   });
