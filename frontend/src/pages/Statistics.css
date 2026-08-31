@@ -66,6 +66,14 @@
   font-size: 0.875rem;
 }
 
+/* Quieter than the subtitle: a standing hint, not a headline. */
+.stats-hint {
+  color: var(--color-text-muted);
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
 .stats-premium-badge {
   background: linear-gradient(135deg, #7B5A8A 0%, #C08840 100%);
   color: #fff;
@@ -2178,6 +2186,45 @@
 .consumption-legend-item--clickable:focus-visible {
   outline: 2px solid #D4C87A;
   outline-offset: 1px;
+}
+
+/* Deep links to a single record (bottle / cellar) rather than a filtered list.
+   Same hover language as the filter rows above so the whole page reads as one
+   interactive surface, but underlined on hover: these navigate to one thing,
+   and an underline is the web's own word for that. */
+.urgency-info--link,
+.top-bottle-info--link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  padding: 0.15rem 0.35rem;
+  margin: -0.15rem -0.35rem;
+  border-radius: 4px;
+  transition: background-color 0.15s ease;
+}
+
+.urgency-info--link:hover,
+.top-bottle-info--link:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.urgency-info--link:hover .urgency-name,
+.top-bottle-info--link:hover .top-bottle-name,
+.cellar-breakdown-name--link:hover {
+  text-decoration: underline;
+}
+
+.cellar-breakdown-name--link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.urgency-info--link:focus-visible,
+.top-bottle-info--link:focus-visible,
+.cellar-breakdown-name--link:focus-visible {
+  outline: 2px solid #D4C87A;
+  outline-offset: 1px;
+  border-radius: 4px;
 }
 
 /* Reset consumption-year-col width so the button form keeps its column layout */
