@@ -1,5 +1,5 @@
 import { useId, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation, Trans } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import useVersion from '../hooks/useVersion';
@@ -43,6 +43,9 @@ function Login() {
   const { t } = useTranslation();
   const { login, register } = useAuth();
   const navigate = useNavigate();
+  // Where ProtectedRoute sent them from, when a deep link bounced them here
+  // (issue #1165). Set by ProtectedRoute itself, never read from the URL.
+  const location = useLocation();
   const appVersion = useVersion();
 
   // Ask the server which SSO providers are configured, so we only show buttons
@@ -77,7 +80,8 @@ function Login() {
         setRegisteredEmail(result.email);
         setRegistered(true);
       } else {
-        navigate('/cellars');
+        // Finish the journey they started, or the default home for a plain sign-in.
+        navigate(location.state?.from || '/cellars');
       }
     } else {
       if (result.code === 'EMAIL_NOT_VERIFIED') {
