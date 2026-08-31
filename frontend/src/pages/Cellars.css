@@ -214,3 +214,16 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Import hint in the empty state — the only place a brand-new user can learn
+   that a wine list can be brought in at all (bottle import lives inside a
+   cellar's ⋯ menu, unreachable before a cellar exists). */
+.empty-state-import {
+  margin-top: 1rem;
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+  max-width: 46ch;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.6;
+}
