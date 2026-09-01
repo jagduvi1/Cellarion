@@ -29,15 +29,18 @@ function loadDisplayNames(lang) {
   const request = fetch(`${API_URL}/api/taxonomy/display-names?lang=${encodeURIComponent(lang)}`)
     .then((res) => (res.ok ? res.json() : null))
     .then((body) => {
-      const map = body && body.byId && body.byName
-        ? { byId: body.byId, byName: body.byName }
-        : EMPTY_DISPLAY_NAMES;
+      if (!body || !body.byId || !body.byName) return EMPTY_DISPLAY_NAMES;
+      const map = { byId: body.byId, byName: body.byName };
+      // ONLY a valid answer is cached. Caching the empty fallback on a non-OK
+      // response looked harmless and wasn't: a 503 during a deploy would have
+      // condemned the tab to English for its whole lifetime — the exact thing
+      // the catch below already refuses to do for a network failure (found by
+      // the pre-merge audit; the two failure paths now agree).
       cache.set(lang, map);
       return map;
     })
     .catch(() => {
-      // Not cached: a network blip should not condemn this tab to English for
-      // the rest of the session, and the next mount will simply try again.
+      // Not cached either: the next mount simply tries again.
       return EMPTY_DISPLAY_NAMES;
     })
     .finally(() => inFlight.delete(lang));

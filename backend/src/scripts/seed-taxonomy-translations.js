@@ -65,7 +65,7 @@ const COUNTRIES = {
 const REGIONS = {
   Burgundy: { fr: 'Bourgogne', de: 'Burgund', sv: 'Bourgogne' },
   Tuscany: { fr: 'Toscane', de: 'Toskana', sv: 'Toscana' },
-  'Rhône Valley': { fr: 'Vallée du Rhône', de: 'Rhônetal', sv: 'Rhôndalen' },
+  'Rhône Valley': { fr: 'Vallée du Rhône', de: 'Rhônetal', sv: 'Rhônedalen' },
   Piedmont: { fr: 'Piémont', de: 'Piemont', sv: 'Piemonte' },
   'Loire Valley': { fr: 'Vallée de la Loire', de: 'Loiretal', sv: 'Loiredalen' },
   California: { fr: 'Californie', de: 'Kalifornien', sv: 'Kalifornien' },

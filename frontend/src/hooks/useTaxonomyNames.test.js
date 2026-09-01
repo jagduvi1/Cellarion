@@ -107,3 +107,19 @@ describe('when a component suite mocks react-i18next down to just `t`', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 });
+
+describe('a non-OK response', () => {
+  it('is not cached either — a 503 during a deploy must not stick for the session', async () => {
+    // Found by the pre-merge audit: the reject path refused to cache but the
+    // HTTP-error path quietly cached the empty map, so the two disagreed.
+    global.fetch = vi.fn(() => Promise.resolve({ ok: false, json: () => Promise.reject(new Error('no body')) }));
+    const first = renderHook(() => useTaxonomyNames());
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    first.unmount();
+
+    const BODY2 = { lang: 'fr', byId: { r1: 'Vallée du Rhône' }, byName: { 'Rhône Valley': 'Vallée du Rhône' } };
+    global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve(BODY2) }));
+    const second = renderHook(() => useTaxonomyNames());
+    await waitFor(() => expect(second.result.current.byId.r1).toBe('Vallée du Rhône'));
+  });
+});
