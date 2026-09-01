@@ -16,6 +16,7 @@ const WineVintagePrice = require('../../models/WineVintagePrice');
 const PriceTrackingRequest = require('../../models/PriceTrackingRequest');
 const PriceTrackingSkip = require('../../models/PriceTrackingSkip');
 const WineDefinition = require('../../models/WineDefinition');
+const aiConfig = require('../../config/aiConfig');
 const Bottle = require('../../models/Bottle');
 const WineCorrectionProposal = require('../../models/WineCorrectionProposal');
 const WineOwnerInquiry = require('../../models/WineOwnerInquiry');
@@ -144,6 +145,29 @@ const grapesLite = (grapes) => {
 // "this record is wrong" and "this is a small estate the model cannot place",
 // and a curator judging a drink window should know which they are looking at.
 /**
+ * Does a stored profile EXIST — by content, not by who wrote it.
+ *
+ * generatedAt is the AI's stamp: a curator-written profile never has one, so
+ * testing generatedAt alone reports every hand-written profile as absent. That
+ * is exactly what list_maturity_queue did (somm ticket 6a911643, 2026-08-28):
+ * on production 1,769 of 2,113 curator profiles carry no generatedAt, and the
+ * queue told curators all of them were blank — with a reason string that
+ * instructed them to write one. Following it in good faith overwrote another
+ * curator's research and restamped it as their own, and set_wine_profile
+ * accepted the write without complaint.
+ *
+ * list_held_profiles had already got this right ("a published suspect is
+ * identified by having CONTENT — generatedAt or a written description"), which
+ * is why the somm's workaround of trusting that tool instead worked. The two
+ * readers now share this one predicate so they cannot drift apart again. The
+ * Mongo-side unprofiled branch in list_held_profiles is the same test written
+ * as a query, and is commented to point back here.
+ *
+ * @param {object} ap  aiProfile subdoc (lean or hydrated)
+ */
+const hasProfileContent = (ap) => !!(ap && (ap.generatedAt || ap.description || ap.body));
+
+/**
  * @param {object} ap    aiProfile subdoc
  * @param {object} wine  the wine, for the absent-profile explanation
  */
@@ -153,7 +177,7 @@ const profileLite = (ap, wine) => {
   // means automatic enrichment DECLINED the record — permanently, for a
   // record too thin to say anything true — so the curator writing the drink
   // window is the one who will write the profile. A null could not say that.
-  if (!ap || !ap.generatedAt) {
+  if (!hasProfileContent(ap)) {
     const { identityDataSufficient } = require('../../services/enrichmentJob');
     // Degrade to the softer message rather than throwing: this runs inside a
     // row mapper, so a missing export would take out the whole queue listing
@@ -161,13 +185,25 @@ const profileLite = (ap, wine) => {
     const thin = wine && typeof identityDataSufficient === 'function'
       ? !identityDataSufficient({ ...wine, grapes: wine.grapes || [] })
       : false;
-    return {
-      absent: true,
-      reason: thin
-        ? 'no region or appellation on the record, so automatic enrichment skips it — this profile is yours to write'
-        : 'not enriched yet',
-      auto_enrich: thin ? 'skipped_thin_identity' : 'pending',
-    };
+    // auto_enrich must describe what will ACTUALLY happen. "pending" was
+    // hard-coded, and read as "someone else will write this" — but automatic
+    // enrichment has been switched off in production since 2026-08-22, so
+    // nothing was ever coming. A value that names a future that will not
+    // arrive is worse than no value: it tells the curator to wait.
+    const mode = aiConfig.get().enrichmentOnAdd;
+    let autoEnrich;
+    let reason;
+    if (thin) {
+      autoEnrich = 'skipped_thin_identity';
+      reason = 'no region or appellation on the record, so automatic enrichment skips it — this profile is yours to write';
+    } else if (mode === 'off') {
+      autoEnrich = 'off';
+      reason = 'automatic enrichment is switched off, so nothing will write this — the profile is yours to write';
+    } else {
+      autoEnrich = 'pending';
+      reason = 'not enriched yet';
+    }
+    return { absent: true, reason, auto_enrich: autoEnrich };
   }
   if (ap.heldAt) {
     return {
@@ -227,9 +263,11 @@ registerTool({
     'whole queue. Use the returned profile_id with set_vintage_maturity (which also accepts wine_id + vintage directly). ' +
     'THIS QUEUE IS A TWO-OUTPUT PASS: the research you do to set a drink window — the producer, the vintage, the ' +
     'style — is the same research a tasting profile needs, so write both while you have it. Read tasting_profile on ' +
-    'each row: absent:true with auto_enrich "skipped_thin_identity" means the record carries no region or ' +
-    'appellation, automatic enrichment deliberately declines those, and nothing will ever write it but you; ' +
-    '"pending" means it may still be enriched. withheld:true means a generated profile exists but is held for the ' +
+    'each row: absent:true means NO profile is stored — neither AI-generated nor curator-written (a curator profile ' +
+    'is reported in full, with source "curator"). auto_enrich says what will happen to an absent one: ' +
+    '"skipped_thin_identity" — no region or appellation, automatic enrichment deliberately declines those; "off" — ' +
+    'automatic enrichment is switched off, nothing is coming; "pending" — it may still be enriched. In the first two ' +
+    'cases nothing will ever write it but you. withheld:true means a generated profile exists but is held for the ' +
     'stated reason — judge it through list_held_profiles rather than overwriting blind. Write with set_wine_profile.',
   scope: 'read',
   requireRole: SOMM_ROLES,
@@ -1471,7 +1509,8 @@ registerTool({
       or.push({ 'aiProfile.heldAt': null, 'aiProfile.generatedAt': { $ne: null }, 'aiProfile.producerSuspect': true, 'aiProfile.description': { $ne: null } });
     }
     if (wantState('unprofiled')) {
-      or.push({ 'aiProfile.generatedAt': null, 'aiProfile.description': null });
+      // Mongo form of hasProfileContent — keep the three fields in step with it.
+      or.push({ 'aiProfile.generatedAt': null, 'aiProfile.description': null, 'aiProfile.body': null });
     }
     const match = {
       nonWine: { $ne: true }, pendingIdentity: { $ne: true },
@@ -1483,10 +1522,11 @@ registerTool({
     }
     const stateOf = (w) => {
       if (w.aiProfile?.heldAt) return 'held';
-      // A published suspect is identified by having CONTENT — generatedAt or
-      // a written description. unprofiled means neither: nothing generated,
-      // nothing written. (Matches the query's own unprofiled branch.)
-      if (w.aiProfile?.generatedAt || w.aiProfile?.description) return 'published_suspect';
+      // A published suspect is identified by having CONTENT. Shared with
+      // list_maturity_queue's profileLite via hasProfileContent, so the two
+      // tools can never again disagree about whether a profile exists.
+      // (The query's unprofiled branch above is the same test written in Mongo.)
+      if (hasProfileContent(w.aiProfile)) return 'published_suspect';
       return 'unprofiled';
     };
     const reasonKey = (w) => (w.aiProfile?.heldAt ? (w.aiProfile?.heldReason || 'legacy') : stateOf(w));

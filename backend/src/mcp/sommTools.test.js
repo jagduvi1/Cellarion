@@ -196,6 +196,94 @@ describe('list_maturity_queue', () => {
     expect(body.data[0].somm_notes).toBe('Drink young — fruit fades fast.');
     expect(body.data[1].somm_notes).toBeNull();
   });
+
+  // Somm ticket 6a911643 (2026-08-28). The inline tasting_profile reported
+  // curator-verified profiles as {absent: true}, because presence was tested
+  // by generatedAt — the AI's stamp, which a hand-written profile never has.
+  // On production 1,769 of 2,113 curator profiles were misreported. Acting on
+  // the field, a curator overwrote another curator's deliberate decision not
+  // to set a window, and set_wine_profile accepted it silently.
+  describe('inline tasting_profile reflects the STORED profile (6a911643)', () => {
+    const aiConfig = require('../config/aiConfig');
+    const row = (aiProfile, wineExtra = {}) => ({
+      _id: oid('1'), vintage: '2016', status: 'pending', relative: false,
+      wineDefinition: {
+        _id: oid('f'), name: 'Signature Blend', producer: 'The Winery at St. George',
+        region: { name: 'Somewhere' }, type: 'red', grapes: [], aiProfile, ...wineExtra,
+      },
+    });
+    const queue = async () => {
+      WineVintageProfile.countDocuments.mockResolvedValue(1);
+      const body = parse(await tool('list_maturity_queue').handler({}, SOMM_CTX));
+      return body.data[0].tasting_profile;
+    };
+    beforeEach(() => aiConfig.get.mockReturnValue({ vectorIndex: 'v1', enrichmentOnAdd: 'off' }));
+
+    test('a curator-written profile (no generatedAt) is returned in full, not as absent', async () => {
+      // Exactly the shape of the five wines in the ticket: source curator,
+      // verifiedAt set, generatedAt null, description present.
+      WineVintageProfile.find.mockReturnValue(chain([row({
+        source: 'curator', generatedAt: null, verifiedAt: new Date('2026-08-26'),
+        description: 'Cannot be identified; no drinking window should be set. Owner inquiry open.',
+        body: 'medium',
+      })]));
+      const tp = await queue();
+      expect(tp.absent).toBeUndefined();
+      expect(tp.source).toBe('curator');
+      expect(tp.description).toMatch(/no drinking window should be set/);
+      expect(tp.verified_at).toBeTruthy();
+      expect(tp.ai_confidence).toBeNull();
+    });
+
+    test('a genuinely empty profile is still absent', async () => {
+      WineVintageProfile.find.mockReturnValue(chain([row({ source: 'ai', generatedAt: null, description: null })]));
+      const tp = await queue();
+      expect(tp.absent).toBe(true);
+    });
+
+    test('no aiProfile at all is absent', async () => {
+      WineVintageProfile.find.mockReturnValue(chain([row(undefined)]));
+      expect((await queue()).absent).toBe(true);
+    });
+
+    test('with enrichment OFF, an absent profile says "off" — never a "pending" that will not arrive', async () => {
+      // "pending" read as "someone else will write this". With enrichmentOnAdd
+      // off since 2026-08-22, nothing was ever coming.
+      WineVintageProfile.find.mockReturnValue(chain([row(undefined)]));
+      const tp = await queue();
+      expect(tp.auto_enrich).toBe('off');
+      expect(tp.reason).toMatch(/switched off/);
+      expect(tp.reason).toMatch(/yours to write/);
+    });
+
+    test('with enrichment ON, an absent profile on a sufficient record is "pending"', async () => {
+      aiConfig.get.mockReturnValue({ vectorIndex: 'v1', enrichmentOnAdd: 'sufficient' });
+      WineVintageProfile.find.mockReturnValue(chain([row(undefined)]));
+      const tp = await queue();
+      expect(tp.auto_enrich).toBe('pending');
+      expect(tp.reason).toBe('not enriched yet');
+    });
+
+    test('a thin-identity record is "skipped_thin_identity" regardless of the mode', async () => {
+      aiConfig.get.mockReturnValue({ vectorIndex: 'v1', enrichmentOnAdd: 'sufficient' });
+      WineVintageProfile.find.mockReturnValue(chain([row(undefined, { region: null, appellation: null })]));
+      const tp = await queue();
+      expect(tp.auto_enrich).toBe('skipped_thin_identity');
+    });
+
+    test('a curator profile on a THIN record is still reported in full — the highest-risk case', async () => {
+      // Thin-identity records are the ones where the curator profile is the
+      // only one that will ever exist; misreporting those as absent came with
+      // a reason string that instructed the curator to overwrite it.
+      WineVintageProfile.find.mockReturnValue(chain([row(
+        { source: 'curator', generatedAt: null, description: 'Hand-written for a placeless record.' },
+        { region: null, appellation: null },
+      )]));
+      const tp = await queue();
+      expect(tp.absent).toBeUndefined();
+      expect(tp.source).toBe('curator');
+    });
+  });
 });
 
 describe('set_vintage_maturity', () => {
@@ -1005,7 +1093,9 @@ describe('the unprofiled intake queue (somm-owned data, 2026-08-22)', () => {
     expect(or).toHaveLength(3);
     // The intake branch: never generated AND never written — the 188 curator
     // rows that predate the generatedAt stamp have a description and stay out.
-    expect(or[2]).toEqual({ 'aiProfile.generatedAt': null, 'aiProfile.description': null });
+    // body is part of the content test now (6a911643) — the Mongo branch must
+    // match hasProfileContent field for field.
+    expect(or[2]).toEqual({ 'aiProfile.generatedAt': null, 'aiProfile.description': null, 'aiProfile.body': null });
   });
 
   test('state:"unprofiled" narrows the query to the intake branch alone', async () => {
@@ -1014,7 +1104,7 @@ describe('the unprofiled intake queue (somm-owned data, 2026-08-22)', () => {
     Bottle.aggregate.mockResolvedValue([]);
     await tool('list_held_profiles').handler({ state: 'unprofiled', limit: 30, offset: 0 }, SOMM_CTX);
     const or = WineDefinition.find.mock.calls[0][0].$or;
-    expect(or).toEqual([{ 'aiProfile.generatedAt': null, 'aiProfile.description': null }]);
+    expect(or).toEqual([{ 'aiProfile.generatedAt': null, 'aiProfile.description': null, 'aiProfile.body': null }]);
   });
 
   test('an explicit state:"published_suspect" implies the include flag — no second switch to forget', async () => {
