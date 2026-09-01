@@ -144,3 +144,49 @@ describe('robustness', () => {
     expect(p.appellation).toBe('model');
   });
 });
+
+/**
+ * Provenance follows the VALUE, not the column it was typed in.
+ *
+ * When a Prädikat is routed out of the appellation column (somm ticket
+ * 6a966386), the appellation the wine ends up with came from the model even
+ * though the file's column was filled — and the classification came from the
+ * file even though its column was empty. Reporting the columns would tell the
+ * curator the exact opposite of the truth on both fields, which matters
+ * because provenance is what they reason from when deciding whom to believe.
+ */
+describe('a Prädikat routed out of the appellation column', () => {
+  const molitorRow = () => ({
+    wineName: 'Riesling Auslese Bernkasteler Badstube', producer: 'Markus Molitor',
+    country: 'Allemagne', region: 'Moselle', appellation: 'Auslese',
+  });
+  const molitorAi = (over = {}) => ({
+    name: 'Riesling Auslese Bernkasteler Badstube', producer: 'Markus Molitor',
+    country: 'Germany', region: 'Mosel', appellation: 'Mosel', classification: null,
+    type: 'white', grapes: ['Riesling'], ...over,
+  });
+
+  test(`the appellation is the MODEL's, even though the file's column was filled`, () => {
+    expect(computeIdentityProvenance(molitorRow(), molitorAi()).appellation).toBe('model');
+  });
+
+  test("the classification is the FILE's, even though the file's column was empty", () => {
+    expect(computeIdentityProvenance(molitorRow(), molitorAi()).classification).toBe('file');
+  });
+
+  test(`a contradicted Prädikat is nobody's classification but the model's`, () => {
+    // Dropped rather than rescued (see buildProposedWine), so the file did not
+    // supply the value that survived — claiming it did would credit the owner
+    // with a statement we deliberately threw away.
+    const row = { wineName: 'Riesling Troken', producer: 'Dönnhoff', country: 'Allemagne', appellation: 'Trokenbeerenauslese' };
+    const p = computeIdentityProvenance(row, molitorAi({ name: 'Riesling Trocken', appellation: 'Nahe' }));
+    expect(p.classification).toBe('model');
+    expect(p.appellation).toBe('model');
+  });
+
+  test(`an ordinary appellation is still the file's`, () => {
+    const p = computeIdentityProvenance(molitorRow({}), molitorAi());
+    expect(p.region).toBe('file');
+    expect(computeIdentityProvenance({ ...molitorRow(), appellation: 'Bernkasteler Badstube' }, molitorAi()).appellation).toBe('file');
+  });
+});

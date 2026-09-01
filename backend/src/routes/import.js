@@ -19,7 +19,7 @@ const { identifyWineFromText } = require('../services/labelScan');
 const aiProvider = require('../services/aiProvider');
 const { findOrCreateWine } = require('../services/findOrCreateWine');
 const { scoreWineMatchVariants, stripProducerPrefix } = require('../services/wineMatching');
-const { conflictingStyleTerms } = require('../utils/styleTerms');
+const { conflictingStyleTerms, pradikatOnlyValue, pradikatContradictsName } = require('../utils/styleTerms');
 const { wineVisibilityFilter } = require('../services/wineVisibility');
 const { tryDebitAi, isRefundableFailure } = require('../services/aiBudget');
 const rateLimitsConfig = require('../config/rateLimits');
@@ -132,6 +132,16 @@ function buildProposedWine(aiData, item) {
     !(typeof aiData.confidence === 'number' && aiData.confidence >= AI_GEOGRAPHY_MIN_CONFIDENCE);
   const fromAi = (v) => (lowGeoConfidence ? null : clean(v));
 
+  // A purely-Prädikat appellation is routed out of the field entirely; only a
+  // Prädikat the wine itself does not contradict is rescued into the
+  // classification. See pradikatContradictsName: the second ticket record put
+  // Trockenbeerenauslese on a wine named "Riesling Trocken", and rescuing that
+  // would have kept the falsehood and merely moved which field carried it.
+  const filePradikat = pradikatOnlyValue(clean(item && item.appellation));
+  const rescuedPradikat = filePradikat && !pradikatContradictsName(filePradikat, aiData.name)
+    ? filePradikat
+    : null;
+
   return {
     name: aiData.name,
     producer: aiData.producer,
@@ -141,11 +151,30 @@ function buildProposedWine(aiData, item) {
     // a countryless identification used to cost the user the row entirely.
     country: clean(aiData.country) || clean(item && item.country),
     region: clean(item && item.region) || fromAi(aiData.region),
-    appellation: clean(item && item.appellation) || fromAi(aiData.appellation),
+    // A file's appellation column sometimes holds the ripeness Prädikat rather
+    // than a place — "Auslese" for a Mosel Riesling, "Trokenbeerenauslese" for
+    // a Nahe one (somm ticket 6a966386). Taken literally the wine ends up with
+    // NO appellation, which is the thin-identity condition that makes
+    // auto-enrichment decline it for good: the owner's data-entry habit
+    // silently costs him his tasting notes. So a purely-Prädikat value is not
+    // treated as geography, and the model's place name fills the field instead
+    // — for the Nahe wine that is the same source its region already came from.
+    // pradikatOnlyValue refuses anything that might also name a place.
+    appellation: filePradikat
+      ? fromAi(aiData.appellation)
+      : (clean(item && item.appellation) || fromAi(aiData.appellation)),
     // Same floor as geography: a classification is an assertion of knowledge
     // (ticket 6a83f014 added the field to the identify prompt), and the file's
     // own value outranks it for the same reason.
-    classification: clean(item && item.classification) || fromAi(aiData.classification),
+    //
+    // A Prädikat rescued from the appellation column lands HERE, where it was
+    // always meant to go, and outranks the model for the same reason any other
+    // file value does — the owner read it off the bottle. Only when the file
+    // states no classification of its own, which is the case that produced the
+    // ticket.
+    classification: clean(item && item.classification)
+      || rescuedPradikat
+      || fromAi(aiData.classification),
     // Same precedence as the geography above: the file states what the label
     // says, the model recalls. Only ever a value the schema accepts — a
     // client can send anything, and an invalid colour must fall through to
@@ -187,14 +216,19 @@ function computeIdentityProvenance(item, ai) {
   const aiGrapes = Array.isArray(ai?.grapes) ? ai.grapes : [];
   const grapesFromFile = fileGrapes.length > 0 && aiGrapes.length > 0
     && aiGrapes.every((g) => fileGrapes.some((f) => normalizeString(f) === normalizeString(g)));
+  const filePrad = pradikatOnlyValue(stated(item?.appellation) ? item.appellation.trim() : '');
+  const rescuedPrad = filePrad && !pradikatContradictsName(filePrad, ai?.name) ? filePrad : null;
 
   return {
     name: 'model',
     producer: 'model',
     country: stated(item?.country) && !stated(ai?.country) ? 'file' : 'model',
     region: stated(item?.region) ? 'file' : 'model',
-    appellation: stated(item?.appellation) ? 'file' : 'model',
-    classification: stated(item?.classification) ? 'file' : 'model',
+    // Follows the VALUE, not the column it was typed in: a rescued Prädikat
+    // leaves the appellation to the model and supplies the classification
+    // itself, and provenance is what the sommelier reasons from.
+    appellation: stated(item?.appellation) && !filePrad ? 'file' : 'model',
+    classification: stated(item?.classification) || rescuedPrad ? 'file' : 'model',
     type: fileType ? 'file' : 'model',
     grapes: grapesFromFile ? 'file' : 'model',
   };
@@ -334,13 +368,26 @@ function fileCompleteIdentity(item, grapeColourOf) {
   if (!type && grapes.length > 0) type = typeFromFileGrapes(grapes, grapeColourOf);
   if (!type) return null;
 
+  // Same Prädikat routing as the AI path (somm ticket 6a966386) — this path
+  // has no model to supply the place, so the appellation is simply left empty
+  // rather than filled with a ripeness level. Empty is the honest state and
+  // costs nothing here: enrichment's identityDataSufficient needs a place
+  // axis, and the region satisfies it. Storing the Prädikat instead would
+  // cost something real, because generateWineKey and the match scorer both
+  // read the appellation — the same wine arriving from another owner's file
+  // with a proper appellation would key differently and mint a duplicate.
+  const filePradikat = pradikatOnlyValue(clean(item.appellation));
+  const rescuedPradikat = filePradikat && !pradikatContradictsName(filePradikat, name)
+    ? filePradikat
+    : null;
+
   return {
     name,
     producer,
     country,
     region: clean(item.region),
-    appellation: clean(item.appellation),
-    classification: clean(item.classification),
+    appellation: filePradikat ? null : clean(item.appellation),
+    classification: clean(item.classification) || rescuedPradikat,
     type,
     grapes,
     confidence: null,
@@ -2110,3 +2157,7 @@ module.exports.summariseReasons = summariseReasons;
 // Exported for tests: the provenance rules must be pinnable without standing
 // up a full import (somm ticket 6a958dbc).
 module.exports.computeIdentityProvenance = computeIdentityProvenance;
+// Exported for the same reason as buildProposedWine: it is the OTHER rule that
+// decides what enters the shared registry, and the two must agree about a
+// Prädikat in the appellation column (somm ticket 6a966386).
+module.exports.fileCompleteIdentity = fileCompleteIdentity;

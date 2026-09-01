@@ -21,7 +21,7 @@ jest.mock('../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn(), 
 jest.mock('../middleware/aiBurstLimiter', () => (req, res, next) => next());
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 
-const { buildProposedWine, summariseReasons } = require('./import');
+const { buildProposedWine, summariseReasons, fileCompleteIdentity } = require('./import');
 
 // Below AI_GEOGRAPHY_MIN_CONFIDENCE (0.6) the model is inferring, not knowing.
 const SURE = 0.8;
@@ -168,5 +168,130 @@ describe('type: the file states, the model recalls (2026-08-22)', () => {
 
   it('leaves type null when neither the file nor the model states one', () => {
     expect(buildProposedWine(ai({ type: null }), { type: null }).type).toBeNull();
+  });
+});
+
+// ── Prädikat in the appellation column (somm ticket 6a966386, 2026-09-01) ────
+//
+// Both rows below are verbatim from the import archive that produced the
+// ticket. The owner put the ripeness Prädikat in his appellation column, and
+// the same file misspelled the wine's own name ("Riesling Troken") — which is
+// how we know the typo is his and not ours. Taken literally, those wines end
+// up with no appellation at all: the thin-identity condition that makes
+// auto-enrichment decline them permanently.
+describe('a Prädikat in the appellation column moves to classification', () => {
+  const molitor = {
+    wineName: 'Riesling Auslese Bernkasteler Badstube', producer: 'Markus Molitor',
+    country: 'Allemagne', region: 'Moselle', appellation: 'Auslese',
+  };
+
+  test("the file's Prädikat becomes the classification, and the model supplies the place", () => {
+    const out = buildProposedWine(ai({ appellation: 'Mosel', classification: null }), molitor);
+    expect(out.classification).toBe('Auslese');
+    expect(out.appellation).toBe('Mosel');
+  });
+
+  test('a Prädikat the wine CONTRADICTS is dropped, not moved to another field', () => {
+    // The second ticket record. Its file said "Trokenbeerenauslese" on a wine
+    // the model minted as "Riesling Trocken" — the sweetest botrytis category
+    // German law defines, on a bone-dry wine. Rescuing it would keep the
+    // falsehood and change only which field carried it, and a classification
+    // reads as curated fact: it would have argued for a decades-long dessert
+    // window on an estate dry Riesling. An honest gap is what asks to be filled.
+    //
+    // This is independently the judgement the sommelier reached on these two
+    // records (proposals 6a965b19 / 6a965b0e, 2026-09-01): Auslese kept as a
+    // classification, Trockenbeerenauslese dropped, appellation Nahe.
+    const donnhoff = { wineName: 'Riesling Troken', producer: 'Dönnhoff', country: 'Allemagne', appellation: 'Trokenbeerenauslese' };
+    const out = buildProposedWine(ai({ name: 'Riesling Trocken', appellation: 'Nahe', classification: null }), donnhoff);
+    expect(out.appellation).toBe('Nahe');
+    expect(out.classification).toBeFalsy();
+  });
+
+  test('the contradiction drops the value — it does not leave it in the appellation', () => {
+    // Belt and braces on the above: a ripeness level is not a place whether or
+    // not it is true of this wine, so it leaves the field either way.
+    const donnhoff = { wineName: 'Riesling Troken', producer: 'Dönnhoff', country: 'Allemagne', appellation: 'Trokenbeerenauslese' };
+    const out = buildProposedWine(ai({ name: 'Riesling Trocken', appellation: null, classification: null }), donnhoff);
+    expect(out.appellation).toBeFalsy();
+    expect(out.classification).toBeFalsy();
+  });
+
+  test('a dry Spätlese still keeps its Prädikat — that tier can legally be dry', () => {
+    // The rescue must not over-fire. "Spätlese Trocken" is one of the most
+    // common label pairs in Germany; refusing it would throw the value away on
+    // exactly the wines this exists for.
+    const row = { wineName: 'Riesling Spätlese Trocken', producer: 'Dönnhoff', appellation: 'Spätlese' };
+    const out = buildProposedWine(ai({ name: 'Riesling Spätlese Trocken', appellation: 'Nahe', classification: null }), row);
+    expect(out.classification).toBe('Spätlese');
+    expect(out.appellation).toBe('Nahe');
+  });
+
+  test('a real appellation is untouched — the file still outranks the model', () => {
+    const row = { ...molitor, appellation: 'Bernkasteler Badstube' };
+    const out = buildProposedWine(ai({ appellation: 'Mosel' }), row);
+    expect(out.appellation).toBe('Bernkasteler Badstube');
+  });
+
+  test("a classification the file states of its own wins — the rescue never overwrites it", () => {
+    const row = { ...molitor, classification: 'Prädikatswein' };
+    const out = buildProposedWine(ai({ appellation: 'Mosel', classification: 'VDP' }), row);
+    expect(out.classification).toBe('Prädikatswein');
+    expect(out.appellation).toBe('Mosel');
+  });
+
+  test('with no model appellation either, the field is empty rather than wrong', () => {
+    // Honest emptiness beats a ripeness level masquerading as a place: the
+    // curator sees a gap, which is the state that asks to be filled.
+    const out = buildProposedWine(ai({ appellation: null, classification: null }), molitor);
+    expect(out.appellation).toBeFalsy();
+    expect(out.classification).toBe('Auslese');
+  });
+});
+
+/**
+ * The complete-row AI bypass is the OTHER way a wine enters the registry, and
+ * it had the same defect. It writes the file's columns with no model involved,
+ * so a German row that happens to carry a type column would have stored the
+ * Prädikat as the appellation with nothing to catch it.
+ *
+ * The two ticket rows did not take this path (neither file row had a type), but
+ * the next German import with a type column would have.
+ */
+describe('the complete-row bypass routes the Prädikat the same way', () => {
+  const colourOf = (g) => (/riesling/i.test(g) ? 'White' : null);
+  const row = (over = {}) => ({
+    wineName: 'Riesling Auslese Bernkasteler Badstube', producer: 'Markus Molitor',
+    country: 'Germany', region: 'Mosel', appellation: 'Auslese', type: 'white', ...over,
+  });
+
+  test('the Prädikat becomes the classification and the appellation is left empty', () => {
+    // Empty rather than wrong. There is no model on this path to supply the
+    // place, and enrichment's place axis is satisfied by the region — whereas
+    // a ripeness level in the appellation would key the wine differently from
+    // the same bottle arriving with a proper appellation, and mint a twin.
+    const out = fileCompleteIdentity(row(), colourOf);
+    expect(out.appellation).toBeNull();
+    expect(out.classification).toBe('Auslese');
+  });
+
+  test('a contradicted Prädikat is dropped here too — the paths agree', () => {
+    const out = fileCompleteIdentity(
+      row({ wineName: 'Riesling Trocken', appellation: 'Trokenbeerenauslese' }), colourOf,
+    );
+    expect(out.appellation).toBeNull();
+    expect(out.classification).toBeNull();
+  });
+
+  test('a real appellation is untouched', () => {
+    const out = fileCompleteIdentity(row({ appellation: 'Bernkasteler Badstube' }), colourOf);
+    expect(out.appellation).toBe('Bernkasteler Badstube');
+    expect(out.classification).toBeNull();
+  });
+
+  test("the file's own classification still wins over the rescued Prädikat", () => {
+    const out = fileCompleteIdentity(row({ classification: 'VDP Grosse Lage' }), colourOf);
+    expect(out.classification).toBe('VDP Grosse Lage');
+    expect(out.appellation).toBeNull();
   });
 });
