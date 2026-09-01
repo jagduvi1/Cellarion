@@ -216,6 +216,10 @@
   font-size: 0.9rem;
   line-height: 1.6;
   white-space: pre-wrap;
+  /* pre-wrap wraps at spaces but cannot break a single long token. One
+     support reply held a 234-character URL, which widened this block past
+     the card and clipped every other line in it. */
+  overflow-wrap: anywhere;
 }
 
 .awr-actions {
