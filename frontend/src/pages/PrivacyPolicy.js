@@ -142,8 +142,16 @@ function PrivacyPolicy() {
         <p>
           All data is transmitted over HTTPS. Passwords are hashed with bcrypt (10 salt rounds)
           and never stored in plain text. Authentication uses short-lived JWT access tokens (15 minutes)
-          and secure, httpOnly refresh token cookies. We use industry-standard security practices
-          to protect your data at rest and in transit.
+          and secure, httpOnly refresh token cookies.
+        </p>
+        <p>
+          Being specific about storage, because vague wording here helps nobody: our
+          servers are in the EU (Finland), and neither the database nor any internal
+          service is reachable from the internet — only the web front end is exposed.
+          Backups are encrypted and held off-site. The database volume itself is not
+          currently encrypted at rest; we are changing that. If that matters for your
+          situation, Cellarion is open source and can be self-hosted on infrastructure
+          you control.
         </p>
 
         <h2>7. Data retention</h2>

@@ -265,3 +265,66 @@
     justify-content: flex-end;
   }
 }
+
+/* ── Ownership transfer ─────────────────────────────────────────────────── */
+
+.btn-transfer-owner {
+  background: none;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.btn-transfer-owner:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* Giving a cellar away is not a routine action — the confirm step takes the
+   full row and states the consequence before offering the button. */
+.share-transfer-confirm {
+  flex-basis: 100%;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-warning-border, var(--color-border));
+  background: var(--color-warning-bg, var(--color-surface-raised));
+  border-radius: var(--radius-sm);
+}
+
+.share-transfer-warning {
+  margin: 0 0 8px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.share-transfer-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-transfer-owner--confirm {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.btn-transfer-owner--confirm:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.btn-transfer-cancel {
+  background: none;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}

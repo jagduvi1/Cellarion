@@ -161,7 +161,7 @@ function ShareCellarModal({ cellarId, cellarName, onClose }) {
           </p>
           <p className="share-role-hint">
             {t('shareCellar.transferHint',
-              'You can also hand a cellar over entirely: "Make owner" transfers it, along with its bottles and racks, to that person. You stay on as an editor.')}
+              'You can also hand a cellar over entirely: "Make owner" transfers it, along with its bottles and racks, to that person. You stay on as an editor — but you cannot take it back.')}
           </p>
         </form>
 
@@ -192,15 +192,34 @@ function ShareCellarModal({ cellarId, cellarName, onClose }) {
                       Remove
                     </button>
                     {confirmTransfer === m.user._id ? (
-                      <button
-                        className="btn-transfer-owner btn-transfer-owner--confirm"
-                        onClick={() => handleTransfer(m.user._id)}
-                        disabled={transferring}
-                      >
-                        {transferring
-                          ? t('shareCellar.transferring', 'Transferring…')
-                          : t('shareCellar.transferConfirm', 'Confirm — give away this cellar')}
-                      </button>
+                      <div className="share-transfer-confirm">
+                        <p className="share-transfer-warning">
+                          {t('shareCellar.transferWarning',
+                            'You cannot undo this yourself — afterwards only the new owner can transfer it back. Export a copy first if you want your own record of this cellar.')}
+                          {' '}
+                          <a href="/export-cellar" target="_blank" rel="noopener noreferrer">
+                            {t('shareCellar.transferExportLink', 'Export this cellar')}
+                          </a>
+                        </p>
+                        <div className="share-transfer-actions">
+                          <button
+                            className="btn-transfer-owner btn-transfer-owner--confirm"
+                            onClick={() => handleTransfer(m.user._id)}
+                            disabled={transferring}
+                          >
+                            {transferring
+                              ? t('shareCellar.transferring', 'Transferring…')
+                              : t('shareCellar.transferConfirm', 'Confirm — give away this cellar')}
+                          </button>
+                          <button
+                            className="btn-transfer-cancel"
+                            onClick={() => setConfirmTransfer(null)}
+                            disabled={transferring}
+                          >
+                            {t('shareCellar.transferCancel', 'Cancel')}
+                          </button>
+                        </div>
+                      </div>
                     ) : (
                       <button
                         className="btn-transfer-owner"
