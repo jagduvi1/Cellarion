@@ -15,6 +15,7 @@ const { logAudit } = require('../services/audit');
 const { createCellar } = require('../services/rackOps');
 const { getSnapshotsForDates, getOrCreateDailySnapshot, convertCurrency } = require('../utils/exchangeRates');
 const { createNotification } = require('../services/notifications');
+const { transferCellarOwnership } = require('../services/cellarTransfer');
 const { sendCellarInviteEmail } = require('../services/mailgun');
 const { toNormalized } = require('../utils/ratingUtils');
 const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
@@ -1742,6 +1743,58 @@ router.get('/:id/audit', async (req, res) => {
   } catch (error) {
     console.error('Get cellar audit error:', error);
     res.status(500).json({ error: 'Failed to get audit log' });
+  }
+});
+
+// POST /:id/transfer-ownership — hand the cellar to another member.
+//
+// The outgoing owner stays on as an editor, which is the point: the workflow
+// this serves is "build it for someone, then give it to them and keep helping".
+// requireNonDemo because the demo account must not be able to hand its cellar
+// to a real user, nor a real user park a cellar on it.
+router.post('/:id/transfer-ownership', requireNonDemo, async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+    const { newOwnerId } = req.body || {};
+    if (!newOwnerId || !isValidId(newOwnerId)) {
+      return res.status(400).json({ error: 'newOwnerId is required' });
+    }
+
+    const result = await transferCellarOwnership(req.params.id, newOwnerId, req.user.id);
+
+    logAudit(
+      req,
+      'cellar.transferOwnership',
+      { type: 'cellar', id: result.cellar._id, cellarId: result.cellar._id },
+      {
+        name: result.cellar.name,
+        from: result.previousOwner,
+        to: result.newOwner,
+        bottlesMoved: result.bottlesMoved,
+        racksMoved: result.racksMoved,
+      },
+    );
+
+    // The recipient did not ask for this at the moment it happened, so tell
+    // them plainly what they now hold and what it cost the other party.
+    createNotification(
+      result.newOwner,
+      'cellar_ownership_received',
+      'You now own a cellar',
+      `"${result.cellar.name}" has been transferred to you, with ${result.bottlesMoved} bottle(s). The previous owner remains an editor.`,
+      `/cellars/${result.cellar._id}`,
+    ).catch((err) => console.error('[cellars] transfer notification failed:', err.message));
+
+    res.json({
+      cellar: { _id: result.cellar._id, name: result.cellar.name, user: result.cellar.user },
+      bottlesMoved: result.bottlesMoved,
+      racksMoved: result.racksMoved,
+      newOwner: { _id: result.newOwner, username: result.newOwnerName },
+    });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    console.error('Transfer cellar ownership error:', err);
+    res.status(500).json({ error: 'Failed to transfer ownership' });
   }
 });
 

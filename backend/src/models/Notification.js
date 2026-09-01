@@ -28,6 +28,7 @@ const notificationSchema = new mongoose.Schema({
       'image_approved',
       'image_rejected',
       'cellar_shared',
+      'cellar_ownership_received',
       'support_ticket_response',
       'new_follower',
       'discussion_reply',

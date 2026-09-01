@@ -38,3 +38,12 @@ export const updateCellarColor = (apiFetch, id, color) =>
     headers: JSON_HEADERS,
     body: JSON.stringify({ color }),
   });
+
+// Hand the cellar to another member. The outgoing owner stays on as an editor,
+// so the "build it for someone, then give it to them" workflow keeps working.
+export const transferCellarOwnership = (apiFetch, id, newOwnerId) =>
+  apiFetch(`/api/cellars/${id}/transfer-ownership`, {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ newOwnerId }),
+  });
