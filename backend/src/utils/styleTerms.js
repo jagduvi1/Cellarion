@@ -77,6 +77,14 @@ const PRADIKAT_WORDS = new Set([
 const PRADIKAT_ALIASES = new Map([
   ['spaetlese', 'spatlese'],
   ['icewine', 'eiswein'],
+  // An OBSERVED misspelling, not a guess: one owner's export carried
+  // "Trokenbeerenauslese" (one c, one s) in its appellation column, and the
+  // same file misspelled the wine's own name "Riesling Troken" — which is how
+  // we know the typo is the writer's rather than ours (somm ticket 6a966386,
+  // 2026-09-01). Added because it was seen in real data. This map is not a
+  // general typo-tolerance scheme and should not grow into one: every entry
+  // needs a file behind it.
+  ['trokenbeerenauslese', 'trockenbeerenauslese'],
 ]);
 
 // The sweetness twin of PRADIKAT_ALIASES, for the same keyboard: "Süß" typed
@@ -89,6 +97,10 @@ const PRADIKAT_ALIASES = new Map([
 // the 'dry'/'sweet' problem over again.
 const SWEETNESS_ALIASES = new Map([
   ['suess', 'suss'],
+  // Same file as the Prädikat typo above: it wrote the wine's own name
+  // "Riesling Troken". Name side only, like every entry here — SWEETNESS_WORDS
+  // itself must not gain it, for the 'Weingut Suess' reason given above.
+  ['troken', 'trocken'],
 ]);
 
 // Style words that are also ordinary name words. "Dry Creek Zinfandel" states
@@ -136,6 +148,85 @@ function statedStyle(name) {
   return { pradikat, sweetness };
 }
 
+/**
+ * Is this appellation value a ripeness Prädikat rather than a place?
+ *
+ * Some cellar exports put the Prädikat in the appellation column — one file
+ * carried "Auslese" for a Mosel Riesling and "Trokenbeerenauslese" for a Nahe
+ * one (somm ticket 6a966386). Stored as written, those wines end up with NO
+ * appellation at all, which is exactly the thin-identity condition that makes
+ * auto-enrichment decline them permanently: a data-entry habit quietly costs
+ * the owner his tasting notes. One of the two was worse than useless — a wine
+ * named "Riesling Trocken" (bone dry) whose appellation claimed the sweetest
+ * botrytis category German law defines, which curated at face value would have
+ * produced a 35-year dessert-wine window on a dry estate Riesling.
+ *
+ * DELIBERATELY STRICT. Only a value whose every meaningful token is a Prädikat
+ * qualifies, so "Auslese" is routed and "Auslese Goldkapsel" is not: the
+ * second carries a token this vocabulary cannot vouch for, and moving a value
+ * that might name a place would trade one wrong field for another. Refusing
+ * the uncertain case is the point — a place is never a Prädikat, but a string
+ * containing one is not necessarily free of a place.
+ *
+ * @param {string} value the appellation as written
+ * @returns {string|null} the value trimmed, when it is purely a Prädikat
+ */
+function pradikatOnlyValue(value) {
+  const raw = String(value == null ? '' : value).trim();
+  if (!raw) return null;
+  const folded = normalizeString(raw.toLowerCase().replace(/ß/g, 'ss'));
+  const tokens = folded.split(/[^a-z0-9]+/).filter(Boolean);
+  if (tokens.length === 0) return null;
+  const everyTokenIsPradikat = tokens.every((t) => PRADIKAT_WORDS.has(PRADIKAT_ALIASES.get(t) || t));
+  return everyTokenIsPradikat ? raw : null;
+}
+
+// Prädikat tiers that are sweet BY LAW — botrytis or frost concentrate the
+// must so far that no dry version can exist. Kabinett, Spätlese and Auslese are
+// deliberately ABSENT: all three are routinely bottled trocken, and "Spätlese
+// Trocken" is one of the most common label pairs in Germany.
+const ALWAYS_SWEET_PRADIKAT = new Set([
+  'beerenauslese', 'trockenbeerenauslese', 'eiswein',
+  'ausbruch', 'strohwein', 'schilfwein',
+]);
+
+// Unambiguously dry-to-off-dry. Deliberately narrower than "not sweet": the
+// medium terms (demi-sec, abboccato, moelleux) are omitted because the point is
+// to be certain of the contradiction, not to catch every one.
+const DRY_SIDE_WORDS = new Set(['trocken', 'halbtrocken', 'feinherb', 'sec', 'seco', 'brut']);
+
+/**
+ * Does this Prädikat contradict the wine it is attached to?
+ *
+ * The second ticket record is why this exists. Its file said appellation
+ * "Trokenbeerenauslese" on a wine named "Riesling Trocken" — the sweetest
+ * botrytis category German law defines, on a bone-dry wine. Both cannot be
+ * true. Moving that value into the classification would keep the falsehood and
+ * merely change which field carries it, and a classification is read as
+ * curated fact: it would have argued for a decades-long dessert-wine window on
+ * an estate dry Riesling.
+ *
+ * So a contradicted Prädikat is DROPPED, not rescued — the appellation is still
+ * cleared of it, because a ripeness level is not a place whether or not it is
+ * true. What is left is an honest gap, which is the state that asks a curator
+ * to fill it. That is independently the judgement the sommelier reached on
+ * these two records (proposals 6a965b0e / 6a965b19, 2026-09-01): Auslese kept
+ * as a classification, Trockenbeerenauslese dropped.
+ *
+ * @param {string} pradikat a value pradikatOnlyValue has already vouched for
+ * @param {string} wineName the name the wine is being minted under
+ * @returns {string|null} human-readable reason, or null when compatible
+ */
+function pradikatContradictsName(pradikat, wineName) {
+  const tiers = statedStyle(pradikat).pradikat;
+  const sweetTier = [...tiers].find((t) => ALWAYS_SWEET_PRADIKAT.has(t));
+  if (!sweetTier) return null;
+  const dry = [...statedStyle(wineName).sweetness].filter((w) => DRY_SIDE_WORDS.has(w));
+  if (dry.length === 0) return null;
+  return `${sweetTier} is sweet by definition, but the name states ${dry.sort().join(', ')}`;
+}
+
+
 const subset = (a, b) => [...a].every((x) => b.has(x));
 
 // Both sides state something, and neither statement contains the other. A
@@ -169,4 +260,6 @@ module.exports = {
   NAME_AMBIGUOUS_WORDS,
   statedStyle,
   conflictingStyleTerms,
+  pradikatContradictsName,
+  pradikatOnlyValue,
 };
