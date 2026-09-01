@@ -4538,5 +4538,12 @@
       "offensive": "Offensive",
       "other": "Something else"
     }
+  },
+  "shareCellar": {
+    "transfer": "Make owner",
+    "transferConfirm": "Confirm — give away this cellar",
+    "transferring": "Transferring…",
+    "transferFailed": "Failed to transfer ownership",
+    "transferHint": "You can also hand a cellar over entirely: \"Make owner\" transfers it, along with its bottles and racks, to that person. You stay on as an editor."
   }
 }
