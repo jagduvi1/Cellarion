@@ -4,6 +4,8 @@ import Modal from '../Modal';
 import TypedValueInput, { TYPES, formatTypedValue } from '../TypedValueInput';
 import { createWineProposal, getMyWineProposals } from '../../api/wineProposals';
 import { getWinePublicData, suggestWineValue, proposeRegistryKey } from '../../api/registryData';
+import useTaxonomyNames from '../../hooks/useTaxonomyNames';
+import { taxonomyName } from '../../utils/taxonomyName';
 import './WineRecordSection.css';
 
 /**
@@ -65,8 +67,16 @@ function WineRecordSection({ wine, canSuggest, apiFetch }) {
     return () => { cancelled = true; };
   }, [apiFetch, wine?._id, canSuggest]);
 
+  const displayNames = useTaxonomyNames();
+
   if (!wine) return null;
 
+  // What the registry actually STORES. This is what the suggest-a-fix form
+  // shows as "currently recorded", and it must stay canonical: a French reader
+  // shown "Vallée du Rhône" as the current value would reasonably propose a
+  // French correction to it — which is precisely the proposal (6a959b9d) that
+  // led to this feature, and telling him the stored value is "Rhône Valley"
+  // is what would have prevented it.
   const values = {
     producer: wine.producer || null,
     name: wine.name || null,
@@ -74,6 +84,14 @@ function WineRecordSection({ wine, canSuggest, apiFetch }) {
     region: wine.region?.name || null,
     appellation: wine.appellation || null,
     classification: wine.classification || null,
+  };
+
+  // What the reader SEES. Only the two taxonomies that genuinely change
+  // language; appellation is a protected legal name and is never translated.
+  const displayValues = {
+    ...values,
+    country: taxonomyName(wine.country, displayNames) || null,
+    region: taxonomyName(wine.region, displayNames) || null,
   };
 
   const pendingFields = new Set(
@@ -203,8 +221,8 @@ function WineRecordSection({ wine, canSuggest, apiFetch }) {
         {SUGGESTABLE.map((f) => (
           <div key={f} className="wr-row">
             <span className="wr-key">{fieldLabel(f)}</span>
-            <span className={values[f] ? 'wr-value' : 'wr-value wr-value--blank'}>
-              {values[f] || t('wineRecord.notRecorded', 'not recorded')}
+            <span className={displayValues[f] ? 'wr-value' : 'wr-value wr-value--blank'}>
+              {displayValues[f] || t('wineRecord.notRecorded', 'not recorded')}
             </span>
             {canSuggest && pendingFields.has(f) ? (
               <span className="wr-pending" title={t('wineRecord.pendingTitle', 'Your suggestion is awaiting curator review')}>

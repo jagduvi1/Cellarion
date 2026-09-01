@@ -13,6 +13,7 @@ const { isValidId } = require('../../utils/validation');
 const { distinctSizes, normalizeAll, remap } = require('../../services/bottleSizeMaintenance');
 const { mergeGrapes, mergeRegions, mergeCountries } = require('../../services/taxonomyMerge');
 const { findDuplicateClusters } = require('../../utils/taxonomyDuplicates');
+const { sanitizeTranslations } = require('../../utils/localizedName');
 const {
   listUnmatchedAppellations, appellationRefsError,
   dismissUnmatchedAppellation, restoreDismissedAppellation, listDismissedAppellations,
@@ -774,6 +775,52 @@ router.delete('/grapes/:id', async (req, res) => {
 // a user-write mint set (strategy 2026-07-29 R3). Approval is its own verb,
 // not a PUT side effect: editing a region to fix a typo must not silently
 // count as "a human vouched for this".
+// ── Display-name translations ────────────────────────────────────────────────
+
+// Only the two taxonomies that genuinely change language. Appellations are
+// protected legal names (Côte-Rôtie is Côte-Rôtie everywhere) and grape
+// variation is REGIONAL rather than linguistic — models/Grape already carries
+// `regionalNames` for that. See utils/localizedName for the full reasoning.
+const TRANSLATABLE = { countries: Country, regions: Region };
+
+/**
+ * PUT /api/admin/taxonomy/:kind/:id/translations
+ * Body: { translations: { fr: "Vallée du Rhône", de: "Rhônetal" } }
+ *
+ * A full replacement, not a merge: a language absent from the body is REMOVED.
+ * That is the only shape in which an editor can delete a wrong translation,
+ * and a merge-only endpoint would leave one stuck for good.
+ */
+router.put('/:kind(countries|regions)/:id/translations', async (req, res) => {
+  try {
+    const Model = TRANSLATABLE[req.params.kind];
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+
+    const parsed = sanitizeTranslations(req.body?.translations);
+    if (!parsed.ok) return res.status(400).json({ error: parsed.error });
+
+    const doc = await Model.findById(req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Not found' });
+
+    const before = doc.translations ? Object.fromEntries(doc.translations) : {};
+    const languages = Object.keys(parsed.translations);
+    // undefined, not an empty Map: the field's default is undefined, and
+    // storing an empty Map would leave every untranslated doc carrying one.
+    doc.translations = languages.length ? parsed.translations : undefined;
+    await doc.save();
+
+    clearTaxonomyListCache();
+    logAudit(req, `taxonomy.${req.params.kind}.translations`, { type: req.params.kind === 'countries' ? 'Country' : 'Region', id: doc._id }, {
+      name: doc.name, before, after: parsed.translations,
+    });
+
+    res.json({ id: doc._id, name: doc.name, translations: parsed.translations });
+  } catch (err) {
+    console.error('Update taxonomy translations error:', err);
+    res.status(500).json({ error: 'Failed to update translations' });
+  }
+});
+
 router.post('/regions/:id/approve', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
