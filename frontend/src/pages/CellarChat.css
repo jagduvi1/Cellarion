@@ -259,6 +259,10 @@
 
 .cellar-chat__msg--user .cellar-chat__bubble {
   white-space: pre-wrap;
+  /* pre-wrap wraps at spaces but cannot break a single long token. One
+     support reply held a 234-character URL, which widened this block past
+     the card and clipped every other line in it. */
+  overflow-wrap: anywhere;
 }
 
 .cellar-chat__msg--assistant .cellar-chat__bubble {
