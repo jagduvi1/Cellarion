@@ -14,6 +14,7 @@ const Region = require('../models/Region');
 const Grape = require('../models/Grape');
 const WineDefinition = require('../models/WineDefinition');
 const { parsePagination } = require('../utils/pagination');
+const { baseLanguage, localizedName } = require('../utils/localizedName');
 
 const router = express.Router();
 
@@ -71,6 +72,73 @@ function clearTaxonomyListCache() {
 
 // Shared wine projection for public lists
 const WINE_PROJECTION = 'name producer slug type appellation region country image communityRating';
+
+// ── Display names ────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/taxonomy/display-names?lang=fr
+ *
+ * Every country and region that HAS a name in this language, as two lookup
+ * maps. Deliberately not folded into the existing endpoints: taxonomy names
+ * are rendered in ~30 places across the app, most of which never call a
+ * taxonomy route at all — they receive a populated `region` on a wine or a
+ * bottle. Serving one small map the client resolves against localises all of
+ * them at once, and leaves every query, projection and cache in the codebase
+ * untouched. A surface nobody has adopted keeps showing English, which is
+ * exactly what it shows today.
+ *
+ * Keyed twice on purpose. `byId` is exact and is what a populated taxonomy
+ * object resolves through; `byName` catches the denormalised places that hold
+ * only the canonical string. Region names can in principle repeat across
+ * countries, so byName is a display convenience — byId is the authority.
+ *
+ * Only translated entries are included, so an untranslated language returns
+ * empty maps and costs the client nothing.
+ */
+router.get('/display-names', async (req, res) => {
+  try {
+    const lang = baseLanguage(req.query.lang);
+    // English IS the canonical name — there is nothing to override, and
+    // answering with an empty body keeps the client's code path identical.
+    if (!lang || lang === 'en') {
+      res.set('Cache-Control', 'public, max-age=3600');
+      return res.json({ lang: lang || null, byId: {}, byName: {}, total: 0 });
+    }
+
+    const cacheKey = `display-names:${lang}`;
+    const cached = getCachedList(cacheKey);
+    res.set('Cache-Control', 'public, max-age=3600');
+    if (cached) return res.json(cached);
+
+    // The whole map, not a `translations.${lang}` projection: how a dotted Map
+    // path reshapes under .lean() is a detail worth not depending on, and the
+    // maps hold one short string per shipped language. The FILTER is dotted
+    // (queries on Map paths are well defined) so only translated docs are read.
+    const field = `translations.${lang}`;
+    const [countries, regions] = await Promise.all([
+      Country.find({ [field]: { $exists: true, $ne: '' } }).select('name translations').lean(),
+      Region.find({ [field]: { $exists: true, $ne: '' } }).select('name translations').lean(),
+    ]);
+
+    const byId = {};
+    const byName = {};
+    for (const doc of [...countries, ...regions]) {
+      const value = localizedName(doc, lang);
+      // localizedName falls back to the canonical name, so an equal value means
+      // "not actually translated" and has no business in an override map.
+      if (!value || value === doc.name) continue;
+      byId[String(doc._id)] = value;
+      if (doc.name) byName[doc.name] = value;
+    }
+
+    const body = { lang, byId, byName, total: Object.keys(byId).length };
+    listCache.set(cacheKey, { at: Date.now(), body });
+    res.json(body);
+  } catch (err) {
+    console.error('[taxonomy] display-names error:', err);
+    res.status(500).json({ error: 'Failed to fetch display names' });
+  }
+});
 
 // ── Countries ────────────────────────────────────────────────────────────────
 
