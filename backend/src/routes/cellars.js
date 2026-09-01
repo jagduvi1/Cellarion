@@ -1783,7 +1783,7 @@ router.post('/:id/transfer-ownership', requireNonDemo, async (req, res) => {
       'You now own a cellar',
       `"${result.cellar.name}" has been transferred to you, with ${result.bottlesMoved} bottle(s). The previous owner remains an editor.`,
       `/cellars/${result.cellar._id}`,
-    );
+    ).catch((err) => console.error('[cellars] transfer notification failed:', err.message));
 
     res.json({
       cellar: { _id: result.cellar._id, name: result.cellar.name, user: result.cellar.user },

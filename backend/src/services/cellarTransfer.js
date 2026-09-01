@@ -104,7 +104,12 @@ async function transferCellarOwnership(cellarId, newOwnerId, actorId) {
   //       The outgoing owner becomes an editor so they keep working access —
   //       the whole point of the professional workflow — and the incoming owner
   //       leaves the member list, because owner is not a membership row.
-  cellar.members = (cellar.members || []).filter((m) => String(m.user) !== String(newOwner._id));
+  // Also drop any stray row for the CURRENT owner: owner was never a
+  // membership row, but if a data anomaly ever put one there, pushing below
+  // would duplicate it.
+  cellar.members = (cellar.members || []).filter(
+    (m) => String(m.user) !== String(newOwner._id) && String(m.user) !== currentOwner,
+  );
   cellar.members.push({ user: currentOwner, role: 'editor', addedAt: new Date() });
   cellar.user = newOwner._id;
   await cellar.save();
