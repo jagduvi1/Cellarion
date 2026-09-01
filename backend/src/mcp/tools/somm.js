@@ -480,6 +480,76 @@ registerTool({
 });
 
 registerTool({
+  name: 'reset_maturity_row',
+  title: 'Sommelier: withdraw a drink window — reviewed back to pending',
+  description:
+    'Resets a REVIEWED wine+vintage back to pending: clears every phase and the note, drops the reviewer stamp, and ' +
+    'puts the pair back in the queue as if never curated. For a window written in error — the wrong vintage, a ' +
+    'non-vintage cuvée given a year, an en primeur vintage with no bottle to assess. This was the missing verb: ' +
+    'remove_from_maturity_queue refuses reviewed rows and told the caller to reset first, and until now nothing ' +
+    'could (somm ticket 6a944e46). To remove the pair entirely, reset here and then call remove_from_maturity_queue. ' +
+    'Reversible via undo_last, which restores the exact window and note that were withdrawn.',
+  scope: 'write',
+  requireRole: SOMM_ROLES,
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+  inputSchema: {
+    profile_id: objectId.describe('From list_maturity_queue (wine-scoped, status "reviewed")'),
+    reason: z.string().max(200).optional()
+      .describe('Why the window is being withdrawn, for the audit trail — e.g. "2025 Bordeaux, not bottled yet".'),
+  },
+  handler: async (args, ctx) => {
+    const denied = requireSomm(ctx);
+    if (denied) return denied;
+    const profile = await WineVintageProfile.findById(args.profile_id).populate('wineDefinition', 'name producer');
+    if (!profile) return fail('not_found', 'No such maturity profile. Use list_maturity_queue for valid ids.');
+    if (profile.status !== 'reviewed') {
+      return fail('conflict', 'This vintage is already pending — there is no window to withdraw.');
+    }
+
+    // Same snapshot shape set_vintage_maturity logs, so undo_last's existing
+    // somm_maturity branch restores it field for field with no new code.
+    const prev = {
+      ...PHASE_FIELDS.reduce((acc, f) => ((acc[f] = profile[f] ?? null), acc), {}),
+      sommNotes: profile.sommNotes ?? null,
+      status: profile.status,
+      relative: !!profile.relative,
+      setBy: profile.setBy ? String(profile.setBy) : null,
+      setAt: profile.setAt || null,
+    };
+
+    for (const f of PHASE_FIELDS) profile[f] = undefined;
+    profile.sommNotes = '';
+    profile.status = 'pending';
+    profile.setBy = null;
+    profile.setAt = null;
+    await profile.save();
+
+    logAudit(ctx.req, 'somm.maturity.reset',
+      { type: 'wine', id: profile.wineDefinition?._id || profile.wineDefinition },
+      { vintage: profile.vintage, ...(args.reason ? { reason: args.reason } : {}), via: 'mcp' });
+
+    const envelope = {
+      summary: `Withdrew the drink window on ${profile.wineDefinition?.name || 'wine'} ${profile.vintage} — back in the pending queue`,
+      data: {
+        profile_id: String(profile._id),
+        vintage: profile.vintage,
+        status: 'pending',
+        next: 'call remove_from_maturity_queue to drop the pair entirely, or leave it to be re-curated',
+        undo: 'undo_last restores the withdrawn window and note',
+      },
+    };
+    await logAction(ctx, {
+      tool: 'reset_maturity_row',
+      action: 'somm_maturity',
+      detail: { profileId: String(profile._id), vintage: profile.vintage, reset: true },
+      prev,
+      result: envelope,
+    });
+    return ok(envelope.summary, envelope.data);
+  },
+});
+
+registerTool({
   name: 'remove_from_maturity_queue',
   title: 'Sommelier: remove a vintage the wine was never released in',
   description:
@@ -487,8 +557,8 @@ registerTool({
     'does not exist in that vintage (a user typed a year the wine was never released in — often while testing — or a ' +
     'purchase year mistaken for a vintage). Use this instead of guessing values: inventing a window poisons shared ' +
     'data. Not a quarantine — the next time anyone adds a bottle of this wine+vintage the pair re-enters the queue ' +
-    'like any other wine, so if that vintage becomes real it still gets curated. Refuses a reviewed pair (reset it ' +
-    'first). Reversible via undo_last.',
+    'like any other wine, so if that vintage becomes real it still gets curated. Refuses a reviewed pair — call ' +
+    'reset_maturity_row first. Reversible via undo_last.',
   scope: 'write',
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
@@ -503,7 +573,7 @@ registerTool({
     const profile = await WineVintageProfile.findById(args.profile_id).populate('wineDefinition', 'name producer');
     if (!profile) return fail('not_found', 'No such maturity profile. Use list_maturity_queue for valid ids.');
     if (profile.status === 'reviewed') {
-      return fail('conflict', 'This vintage is already reviewed — reset it to pending before removing it.');
+      return fail('conflict', 'This vintage is already reviewed — call reset_maturity_row first, then remove it.');
     }
 
     // Wine+vintage is all the undo needs: a removed row is the auto-seeded

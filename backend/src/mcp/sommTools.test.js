@@ -110,7 +110,7 @@ const USER_CTX = { user: { id: ME, roles: ['user'] }, scopes: ['read', 'write'],
 
 const tool = (name) => allTools().find((t) => t.name === name);
 const parse = (res) => JSON.parse(res.content[0].text);
-const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'remove_from_maturity_queue', 'set_wine_profile', 'add_grape', 'edit_grape', 'propose_wine_correction', 'list_price_tracking_requests', 'set_vintage_price', 'reject_price_request', 'list_wine_reports', 'respond_to_wine_report', 'sample_published_profiles', 'list_unverified_core_wines', 'list_held_profiles', 'review_held_profile', 'list_pending_corrections', 'record_profile_audit', 'list_profile_audits', 'list_colour_conflicts', 'dismiss_colour_conflict', 'restore_colour_conflict', 'list_rule_downgrades', 'list_ungrounded_descriptions'];
+const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'reset_maturity_row', 'remove_from_maturity_queue', 'set_wine_profile', 'add_grape', 'edit_grape', 'propose_wine_correction', 'list_price_tracking_requests', 'set_vintage_price', 'reject_price_request', 'list_wine_reports', 'respond_to_wine_report', 'sample_published_profiles', 'list_unverified_core_wines', 'list_held_profiles', 'review_held_profile', 'list_pending_corrections', 'record_profile_audit', 'list_profile_audits', 'list_colour_conflicts', 'dismiss_colour_conflict', 'restore_colour_conflict', 'list_rule_downgrades', 'list_ungrounded_descriptions'];
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -1953,5 +1953,79 @@ describe('wineLite carries grapes honestly (ticket 6a887619)', () => {
   test('a surface that never selected grapes omits the key too', async () => {
     const wine = await listQueue({ _id: oid('f'), name: 'Barolo', producer: 'P' });
     expect('grapes' in wine).toBe(false);
+  });
+});
+
+
+// Somm ticket 6a944e46: remove_from_maturity_queue refused reviewed rows and
+// told the caller to "reset it to pending first" — and no tool could. A window
+// written in error (an en primeur 2025 Bordeaux; a "2015" on a non-vintage
+// tawny) was stuck: reviewed, all phases cleared, never re-queued, never
+// removable. This is the missing verb.
+describe('reset_maturity_row (6a944e46)', () => {
+  const reviewed = (over = {}) => ({
+    _id: oid('a1'), vintage: '2025', status: 'reviewed', relative: false,
+    earlyFrom: 2030, earlyUntil: 2033, peakFrom: 2034, peakUntil: 2045, lateFrom: 2046, lateUntil: 2055,
+    sommNotes: 'Classic left-bank structure; decant.', setBy: oid('99'), setAt: new Date('2026-08-31'),
+    wineDefinition: { _id: oid('f'), name: 'Château du Tertre', producer: 'Château du Tertre' },
+    save: jest.fn().mockResolvedValue(true),
+    ...over,
+  });
+  const populate = (doc) => ({ populate: jest.fn(() => Promise.resolve(doc)) });
+
+  test('withdraws a reviewed window: every phase and the note cleared, status pending, reviewer stamp dropped', async () => {
+    const doc = reviewed();
+    WineVintageProfile.findById.mockReturnValue(populate(doc));
+    const body = parse(await tool('reset_maturity_row').handler({ profile_id: oid('a1'), reason: '2025 Bordeaux, not bottled yet' }, SOMM_CTX));
+    expect(body.data.status).toBe('pending');
+    for (const f of ['earlyFrom', 'earlyUntil', 'peakFrom', 'peakUntil', 'lateFrom', 'lateUntil']) expect(doc[f]).toBeUndefined();
+    expect(doc.sommNotes).toBe('');
+    expect(doc.status).toBe('pending');
+    expect(doc.setBy).toBeNull();
+    expect(doc.setAt).toBeNull();
+    expect(doc.save).toHaveBeenCalled();
+    expect(body.summary).toMatch(/Withdrew the drink window/);
+  });
+
+  test('logs the withdrawn window as prev in the somm_maturity shape, so undo_last restores it with no new code', async () => {
+    const doc = reviewed();
+    WineVintageProfile.findById.mockReturnValue(populate(doc));
+    await tool('reset_maturity_row').handler({ profile_id: oid('a1') }, SOMM_CTX);
+    const row = McpActionLog.create.mock.calls.at(-1)[0];
+    expect(row.action).toBe('somm_maturity');
+    expect(row.detail).toMatchObject({ profileId: oid('a1'), vintage: '2025', reset: true });
+    expect(row.prev).toMatchObject({
+      earlyFrom: 2030, peakFrom: 2034, lateUntil: 2055,
+      sommNotes: 'Classic left-bank structure; decant.',
+      status: 'reviewed', setBy: oid('99'),
+    });
+  });
+
+  test('a pending row is refused — there is nothing to withdraw', async () => {
+    const doc = reviewed({ status: 'pending' });
+    WineVintageProfile.findById.mockReturnValue(populate(doc));
+    const body = parse(await tool('reset_maturity_row').handler({ profile_id: oid('a1') }, SOMM_CTX));
+    expect(body.error.code).toBe('conflict');
+    expect(doc.save).not.toHaveBeenCalled();
+  });
+
+  test('an unknown profile is not_found', async () => {
+    WineVintageProfile.findById.mockReturnValue(populate(null));
+    const body = parse(await tool('reset_maturity_row').handler({ profile_id: oid('a1') }, SOMM_CTX));
+    expect(body.error.code).toBe('not_found');
+  });
+
+  test('the remove tool now points at the verb that exists', async () => {
+    const doc = reviewed();
+    WineVintageProfile.findById.mockReturnValue(populate(doc));
+    const body = parse(await tool('remove_from_maturity_queue').handler({ profile_id: oid('a1') }, SOMM_CTX));
+    expect(body.error.code).toBe('conflict');
+    expect(body.error.message).toMatch(/reset_maturity_row/);
+  });
+
+  test('is a write-scoped sommelier tool', () => {
+    const t = tool('reset_maturity_row');
+    expect(t.scope).toBe('write');
+    expect(t.annotations.destructiveHint).toBe(true);
   });
 });
