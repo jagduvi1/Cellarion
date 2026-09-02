@@ -21,7 +21,7 @@ function PrivacyPolicy() {
       </Helmet>
       <div className="privacy-container">
         <h1>Privacy Policy</h1>
-        <p className="privacy-updated">Last updated: July 2026 — Version 2026-07</p>
+        <p className="privacy-updated">Last updated: September 2026 — Version 2026-09</p>
 
         <p>
           Cellarion ("we", "us", or "our") operates the Cellarion wine cellar management
@@ -113,6 +113,18 @@ function PrivacyPolicy() {
               <td>IP address and request metadata for traffic reaching the site</td>
               <td>Global (EU/US)</td>
             </tr>
+            <tr>
+              <td>Hetzner</td>
+              <td>Server hosting for cellarion.app, and storage for the primary encrypted backup</td>
+              <td>Everything the service holds: your account, cellars, bottles and uploaded images</td>
+              <td>EU</td>
+            </tr>
+            <tr>
+              <td>Backblaze</td>
+              <td>Second, off-site copy of the encrypted backup, so that losing one provider cannot lose your data</td>
+              <td>Encrypted backup archives only — the data is encrypted on our server before it is sent, and Backblaze cannot read it</td>
+              <td>EU (Amsterdam)</td>
+            </tr>
           </tbody>
         </table>
         <p>
@@ -148,7 +160,10 @@ function PrivacyPolicy() {
           Being specific about storage, because vague wording here helps nobody: our
           servers are in the EU (Finland), and neither the database nor any internal
           service is reachable from the internet — only the web front end is exposed.
-          Backups are encrypted and held off-site. The database volume itself is not
+          Backups are encrypted on our own server, with a key only we hold, before
+          they are sent anywhere; they are then kept in two separate EU locations, so
+          that losing one provider cannot lose your data and neither provider can read
+          what it stores. The database volume itself is not
           currently encrypted at rest; we are changing that. If that matters for your
           situation, Cellarion is open source and can be self-hosted on infrastructure
           you control.
@@ -163,6 +178,7 @@ function PrivacyPolicy() {
           <li><strong>Import records:</strong> when you import a cellar file, we keep a record of the wine rows it contained — producer, wine name, vintage, region, grapes and the like — for 30 days, so we can diagnose an import problem you report afterwards. Prices, purchase details, notes and ratings are <em>not</em> kept in this record. It is included in your data export, deleted with the cellar it belongs to, and expires automatically.</li>
           <li><strong>Account deletion:</strong> when you request account deletion, there is a 7-day cooling-off period. After that, your personal data (account, cellar, bottles, journal, settings, forum reactions, thread subscriptions, read-state markers, reports) is permanently and irreversibly deleted.</li>
           <li><strong>Forum content (discussions and replies):</strong> to preserve multi-party conversations for other users, your forum posts are <em>anonymised</em> rather than hard-deleted — your authorship is replaced with "[Deleted user]" and the personal-data link is severed (GDPR Art. 17 compliant). The post text remains visible. If you need a specific post fully removed, contact support before requesting account deletion.</li>
+          <li><strong>Backups:</strong> encrypted snapshots are kept on a rolling schedule — seven daily, four weekly and six monthly. Anything you delete is gone from the live service straight away, and then ages out of the backups as those snapshots rotate, within six months at the outside. Backups exist only to bring the service back after a failure; they are never browsed, and never used to answer questions about an individual account.</li>
         </ul>
 
         <h2>8. Your rights (GDPR)</h2>
@@ -170,7 +186,7 @@ function PrivacyPolicy() {
         <ul>
           <li><strong>Right of access (Art. 15):</strong> you can view all your data within the app at any time. You can also download a complete export of your data from Settings.</li>
           <li><strong>Right to rectification (Art. 16):</strong> you can update your profile, preferences, and cellar data at any time.</li>
-          <li><strong>Right to erasure (Art. 17):</strong> you can delete your account and all associated personal data from Settings. Deletion takes effect after a 7-day cooling-off period. Forum posts are anonymised rather than hard-deleted (your authorship is severed) so other users' conversations stay intact; contact support if you need specific posts fully removed.</li>
+          <li><strong>Right to erasure (Art. 17):</strong> you can delete your account and all associated personal data from Settings. Deletion takes effect after a 7-day cooling-off period, and removes your data from the live service at once; encrypted backup copies then age out within six months (see Data retention). Forum posts are anonymised rather than hard-deleted (your authorship is severed) so other users' conversations stay intact; contact support if you need specific posts fully removed.</li>
           <li><strong>Right to data portability (Art. 20):</strong> you can export all your data as JSON from Settings at any time.</li>
           <li><strong>Right to restrict processing (Art. 18):</strong> you can disable all notifications and set your profile to private to restrict how your data is used.</li>
           <li><strong>Right to object (Art. 21):</strong> you can opt out of all email and push notifications in Settings, or use the one-click unsubscribe link in any email.</li>
