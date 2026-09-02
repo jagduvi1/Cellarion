@@ -12,6 +12,6 @@
  * governed by per-feature use. Keep it in sync with the version shown on the
  * Privacy Policy page (frontend/src/pages/PrivacyPolicy.js).
  */
-const CURRENT_PRIVACY_POLICY_VERSION = '2026-07';
+const CURRENT_PRIVACY_POLICY_VERSION = '2026-09';
 
 module.exports = { CURRENT_PRIVACY_POLICY_VERSION };
