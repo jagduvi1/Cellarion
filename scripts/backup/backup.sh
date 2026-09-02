@@ -185,6 +185,14 @@ restic forget --tag cellarion --group-by host,tags --keep-daily "$KEEP_DAILY" --
 # level loss can't wipe everything. Enable by setting B2_* in backup.env.
 if [ -n "${B2_RESTIC_REPOSITORY:-}" ]; then
   export B2_ACCOUNT_ID="${B2_ACCOUNT_ID:-}" B2_ACCOUNT_KEY="${B2_ACCOUNT_KEY:-}"
+  # `init --from-repo` and `copy --from-repo` open TWO repositories, and restic
+  # takes the SOURCE one's passphrase from RESTIC_FROM_PASSWORD — not from
+  # RESTIC_PASSWORD, which it applies to the destination. Without this it falls
+  # back to prompting on stdin, and under systemd (no terminal) that reads empty
+  # and dies with "an empty password is not a password". Both repositories here
+  # share one passphrase. (Found 2026-09-02, the first time this branch ever ran
+  # — B2 had been left unconfigured since the script was written.)
+  export RESTIC_FROM_PASSWORD="$RESTIC_PASSWORD"
   log "copying snapshots to off-provider repo $B2_RESTIC_REPOSITORY…"
   restic -r "$B2_RESTIC_REPOSITORY" snapshots >/dev/null 2>&1 \
     || restic -r "$B2_RESTIC_REPOSITORY" init --copy-chunker-params --from-repo "$RESTIC_REPOSITORY"
