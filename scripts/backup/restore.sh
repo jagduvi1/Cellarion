@@ -8,13 +8,23 @@
 #
 #   RESTORE_CONFIG=1  also copy the snapshot's configuration files back to
 #                     their original absolute paths (existing files are kept
-#                     as <file>.pre-restore). Use this when rebuilding a machine.
+#                     as <file>.pre-restore). Every target is listed and a
+#                     second confirmation is required. Use it when rebuilding
+#                     a machine.
 #   RESTORE_UMAMI=1   also reload the Umami analytics database (needs
 #                     UMAMI_DB_CONTAINER in backup.env and a running container).
 #
 # For a FULL move to a new machine see docs/backup.md → "Moving everything to
 # a new VM": you need the config files BEFORE the containers exist, so that
 # runbook restores in a different order than this script.
+#
+# A snapshot is DATA, not code, and it is treated with the same suspicion as
+# an upload (audit 2026-09-02 X01-4): the backup stages /app/uploads wholesale,
+# a directory the backend process writes to, so nothing found under it may be
+# mistaken for the database dump or the configuration tree. Every artefact is
+# addressed at its known place under the single staging directory, never
+# searched for; and a configuration file is written back only to a path that
+# a rebuild legitimately needs, never to anything that grants access.
 #
 # Run a DRILL of this periodically — an untested backup is not a backup.
 #
@@ -41,55 +51,101 @@ SNAPSHOT="${1:-latest}"
 
 echo "About to RESTORE snapshot '$SNAPSHOT' from $RESTIC_REPOSITORY."
 echo "This DROPS and reloads the '$MONGO_DB' database and overwrites uploaded images."
-[ "${RESTORE_CONFIG:-0}" = 1 ] && echo "RESTORE_CONFIG=1: configuration files will be written back to their original paths."
+[ "${RESTORE_CONFIG:-0}" = 1 ] && echo "RESTORE_CONFIG=1: configuration files will be listed, then written back after a second confirmation."
 [ "${RESTORE_UMAMI:-0}" = 1 ] && echo "RESTORE_UMAMI=1: the Umami database will be reloaded."
 read -rp "Type 'restore' to proceed: " confirm
 [ "$confirm" = "restore" ] || { echo "Aborted."; exit 1; }
 
 DEST="$(mktemp -d)"
+chmod 700 "$DEST"
 trap 'rm -rf "$DEST"' EXIT
 
 echo "[restore] fetching snapshot $SNAPSHOT…"
 restic restore "$SNAPSHOT" --target "$DEST"
 
-ARCHIVE="$(find "$DEST" -name "$MONGO_DB.archive.gz" | head -1)"
-UPLOADS_DIR="$(find "$DEST" -type d -name uploads | head -1)"
-CONFIG_DIR="$(find "$DEST" -type d -name config | head -1)"
-UMAMI_DUMP="$(find "$DEST" -name umami.sql.gz | head -1)"
-MANIFEST="$(find "$DEST" -name MANIFEST.txt | head -1)"
-[ -n "$ARCHIVE" ] || { echo "[restore] mongo archive not found in snapshot" >&2; exit 1; }
+# backup.sh stages everything under ONE mktemp directory and backs that up, so
+# the snapshot restores as exactly one top-level directory. Anything else is
+# not a Cellarion snapshot and is refused rather than guessed at.
+mapfile -t TOPS < <(find "$DEST" -mindepth 1 -maxdepth 1 -type d)
+if [ "${#TOPS[@]}" -ne 1 ]; then
+  echo "[restore] expected exactly one staging directory in the snapshot, found ${#TOPS[@]} — refusing" >&2
+  exit 1
+fi
+STAGE="${TOPS[0]}"
 
-if [ -n "$MANIFEST" ]; then
+ARCHIVE="$STAGE/mongo/$MONGO_DB.archive.gz"
+UPLOADS_DIR="$STAGE/uploads"
+CONFIG_DIR="$STAGE/config"
+UMAMI_DUMP="$STAGE/umami/umami.sql.gz"
+MANIFEST="$STAGE/MANIFEST.txt"
+[ -f "$ARCHIVE" ] || { echo "[restore] mongo archive not found at its expected place in the snapshot" >&2; exit 1; }
+
+if [ -f "$MANIFEST" ]; then
   echo "[restore] snapshot manifest:"
-  sed 's/^/    /' "$MANIFEST" | head -20
+  # cat -v: the manifest is data from the snapshot and is shown on a terminal.
+  head -20 "$MANIFEST" | cat -v | sed 's/^/    /'
 fi
 
 echo "[restore] restoring MongoDB (drop + reload)…"
 docker exec -i "$MONGO_CONTAINER" mongorestore --archive --gzip --drop < "$ARCHIVE"
 
-if [ -n "$UPLOADS_DIR" ] && [ -n "$(ls -A "$UPLOADS_DIR" 2>/dev/null)" ]; then
+if [ -d "$UPLOADS_DIR" ] && [ -n "$(ls -A "$UPLOADS_DIR" 2>/dev/null)" ]; then
   echo "[restore] restoring uploaded images…"
   docker cp "$UPLOADS_DIR/." "$BACKEND_CONTAINER:/app/uploads/"
 fi
 
-if [ -n "$CONFIG_DIR" ]; then
-  n="$(find "$CONFIG_DIR" -type f | wc -l)"
+# A configuration file may only go back to a place a rebuild needs. Anything
+# that would grant access on its own — SSH keys, cron, sudo, shell start-up
+# files, anything under /etc beyond the backup units — is refused outright,
+# whatever the snapshot says.
+config_target_allowed() {
+  local t="$1"
+  case "$t" in
+    */.ssh/*|*/authorized_keys|/etc/cron*|/etc/sudoers*|/etc/passwd|/etc/shadow|/etc/group|*/.bashrc|*/.bash_profile|*/.profile|*/.zshrc|*/.bash_login|*/.bash_logout|/etc/profile*|/etc/environment|/root/*|/usr/*|/bin/*|/sbin/*|/lib*|/var/lib/*|/boot/*)
+      return 1 ;;
+  esac
+  case "$t" in
+    "$HOME"/*|/etc/systemd/system/cellarion-*|/opt/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+if [ -d "$CONFIG_DIR" ]; then
+  mapfile -t CONFIG_FILES < <(find "$CONFIG_DIR" -type f | LC_ALL=C sort)
+  n="${#CONFIG_FILES[@]}"
   if [ "${RESTORE_CONFIG:-0}" = 1 ]; then
-    echo "[restore] writing $n configuration file(s) back to their original paths…"
-    # config/<abs path> → <abs path>; anything already there is kept alongside.
-    find "$CONFIG_DIR" -type f | while read -r f; do
+    echo "[restore] the snapshot carries $n configuration file(s). Targets:"
+    allowed=(); refused=()
+    for f in "${CONFIG_FILES[@]}"; do
       target="${f#"$CONFIG_DIR"}"
-      mkdir -p "$(dirname "$target")"
-      [ -e "$target" ] && cp -p "$target" "$target.pre-restore"
-      cp -p "$f" "$target"
+      # No traversal or control characters in a target, ever.
+      case "$target" in *..*|*$'\n'*|*$'\r'*) refused+=("$target"); continue ;; esac
+      if config_target_allowed "$target"; then allowed+=("$target"); else refused+=("$target"); fi
     done
+    for t in "${allowed[@]}"; do printf '    write   %s\n' "$t" | cat -v; done
+    for t in "${refused[@]}"; do printf '    REFUSE  %s\n' "$t" | cat -v; done
+    if [ "${#allowed[@]}" -eq 0 ]; then
+      echo "[restore] nothing allowed to write — skipping configuration."
+    else
+      read -rp "Type 'write config' to write the ${#allowed[@]} allowed file(s) above: " confirm2
+      if [ "$confirm2" = "write config" ]; then
+        for t in "${allowed[@]}"; do
+          mkdir -p "$(dirname "$t")"
+          [ -e "$t" ] && cp -p "$t" "$t.pre-restore"
+          cp -p "$CONFIG_DIR$t" "$t"
+        done
+        echo "[restore] wrote ${#allowed[@]} configuration file(s); existing files kept as .pre-restore."
+      else
+        echo "[restore] configuration NOT written."
+      fi
+    fi
   else
     echo "[restore] snapshot carries $n configuration file(s) (not written; set RESTORE_CONFIG=1 to restore them):"
-    find "$CONFIG_DIR" -type f | sed "s|^$CONFIG_DIR|    |" | head -40
+    for f in "${CONFIG_FILES[@]}"; do printf '    %s\n' "${f#"$CONFIG_DIR"}" | cat -v; done | head -40
   fi
 fi
 
-if [ -n "$UMAMI_DUMP" ] && [ "${RESTORE_UMAMI:-0}" = 1 ]; then
+if [ -f "$UMAMI_DUMP" ] && [ "${RESTORE_UMAMI:-0}" = 1 ]; then
   [ -n "$UMAMI_DB_CONTAINER" ] || { echo "[restore] RESTORE_UMAMI=1 but UMAMI_DB_CONTAINER is not set" >&2; exit 1; }
   echo "[restore] reloading Umami database into $UMAMI_DB_CONTAINER…"
   gunzip -c "$UMAMI_DUMP" | docker exec -i "$UMAMI_DB_CONTAINER" sh -c 'psql -q -U "$POSTGRES_USER" "$POSTGRES_DB"'

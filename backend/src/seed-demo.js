@@ -38,6 +38,30 @@ async function seed() {
   await mongoose.connect(MONGO_URI);
   console.log('Connected to MongoDB');
 
+  // ─── Refuse to run against a real database ──────────────────────────────────
+  // This script mints admin@cellarion.app with a password printed in the public
+  // README, on whatever MONGO_URI points at — and the documented invocation is
+  // `docker exec cellarion-backend node src/seed-demo.js`, which on the hosted
+  // service is the PRODUCTION container (security audit 2026-09-02, O06-1).
+  // NODE_ENV cannot tell the two apart (the image sets production everywhere),
+  // so the test is the data: a database holding any account that this script
+  // did not create is somebody's real instance, and seeding it would hand out
+  // an admin login. Override only with SEED_DEMO_FORCE=1, deliberately.
+  const SEED_ACCOUNTS = ['admin@cellarion.app', 'user@cellarion.app'];
+  const foreignUsers = await User.countDocuments({
+    email: { $nin: SEED_ACCOUNTS },
+    username: { $ne: '__deleted__' },
+  });
+  if (foreignUsers > 0 && process.env.SEED_DEMO_FORCE !== '1') {
+    console.error(
+      `\nRefusing to seed: this database already holds ${foreignUsers} account(s) that are not the demo ones.\n` +
+      'seed-demo.js is for a FRESH local stack. It would create an admin account with a publicly\n' +
+      'documented password here. If you really mean it, run again with SEED_DEMO_FORCE=1.'
+    );
+    await mongoose.disconnect();
+    process.exit(2);
+  }
+
   // ─── Users ───────────────────────────────────────────────────────────────────
   let admin = await User.findOne({ email: 'admin@cellarion.app' });
   if (!admin) {
