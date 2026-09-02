@@ -15,6 +15,7 @@ const Grape = require('../models/Grape');
 const WineDefinition = require('../models/WineDefinition');
 const { parsePagination } = require('../utils/pagination');
 const { baseLanguage, localizedName } = require('../utils/localizedName');
+const { rateLimitKey } = require('../utils/clientIp');
 
 const router = express.Router();
 
@@ -25,7 +26,13 @@ const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 60,
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  // Key on the real client, as every other per-IP limiter does. Without it
+  // the key was req.ip — the Cloudflare edge on the hosted instance — so every
+  // visitor arriving through the same edge shared ONE 60-request bucket, and
+  // this router also serves /display-names, which the logged-in app loads
+  // (audit 2026-09-02, phase 1).
+  keyGenerator: rateLimitKey,
 });
 router.use(limiter);
 

@@ -21,8 +21,12 @@
  *                                       see depth handling below)
  *   letter-number   A12, B3           { row: letterIndex, col: number }
  *   segments        12-3-4, D-04-1,   2 segments → { row, col };
- *                   3.2               3 segments → first segment names a
+ *                   3.2, 5,8          3 segments → first segment names a
  *                                       SUB-RACK ("Cellar D"), rest row/col
+ *                                     (separator: dash, dot or comma — a
+ *                                       "row,column" bin is how at least one
+ *                                       large CellarTracker cellar was typed;
+ *                                       support ticket 2026-09-02)
  *   sequential      147, BIN1, P6     { rackPosition: number } (constant
  *                                       alpha prefix stripped)
  *
@@ -72,11 +76,11 @@ const MIN_DISTINCT = 3;
 const RCD_RE = /^R\s*(\d{1,2})\s*C\s*(\d{1,2})(?:\s*D\s*(\d{1,2}))?$/i;
 const LETTER_RE = /^([A-Za-z])\s*(\d{1,3})$/;
 const PREFIXED_INT_RE = /^([A-Za-z]{0,6})(\d{1,4})$/;
-const SEGMENT_SPLIT_RE = /[-.]/;
+const SEGMENT_SPLIT_RE = /[-.,]/;
 const NUMERIC_SEGMENT_RE = /^\d{1,3}$/;
 const SUBRACK_SEGMENT_RE = /^[A-Za-z0-9]{1,6}$/;
 
-/** Split a bin code on dashes/dots into 2 or 3 usable segments, or null. */
+/** Split a bin code on dashes/dots/commas into 2 or 3 usable segments, or null. */
 function matchSegments(bin) {
   const parts = bin.split(SEGMENT_SPLIT_RE).map((s) => s.trim());
   if (parts.length < 2 || parts.length > 3) return null;

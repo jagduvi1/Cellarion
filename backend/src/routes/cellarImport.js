@@ -265,6 +265,10 @@ router.post('/', gateImport, handleUpload, async (req, res) => {
         mode: targets[i].mode,
         getFileBuffer,
         defaultCurrency,
+        // Only a sommelier/admin restores a file's drink windows as REVIEWED
+        // registry data; anyone else's land as pending suggestions (D09-4).
+        canCurate: req.user.roles.includes('somm') || req.user.roles.includes('admin'),
+        audit: (action, resource, detail) => logAudit(req, action, resource, detail),
       });
       results.push(r);
     }

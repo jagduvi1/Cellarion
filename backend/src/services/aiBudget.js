@@ -190,6 +190,7 @@ function isRefundableFailure(debugReason) {
   if (!debugReason) return false;
   return debugReason === 'no_api_key'
     || debugReason === 'rate_limit_exceeded'
+    || debugReason === 'prompt_too_long' // refused before any request was made
     || debugReason.startsWith('exception');
 }
 

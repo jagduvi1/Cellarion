@@ -25,8 +25,12 @@ const { ARRANGE_STRATEGIES, buildArrangePlan } = require('../../utils/rackArrang
 const { buildAnnotatedEntries, applyArrangement } = require('../../services/rackOps');
 const { isValidId } = require('../../utils/validation');
 const { ok, fail, objectId, resolveCellarAccess } = require('../toolUtil');
-const { logAction } = require('../actionLedger');
+const { logAction, trimOutstandingPreviews } = require('../actionLedger');
 const { takeMutationSlot, ipKeyFor } = require('../mutationBudget');
+
+// Unconsumed arrange previews kept per user (audit 2026-09-02 D08-1); the
+// plan for a full rack is small, but the row count was unbounded.
+const MAX_OUTSTANDING_PREVIEWS = 5;
 
 const PREVIEW_FRESH_MS = 15 * 60 * 1000;
 const NOT_FOUND = 'No such rack, or you have no access to it. Use list_racks for valid ids.';
@@ -114,6 +118,13 @@ registerTool({
 
       const before = occupancyOf(rack);
       const moveList = changes.map((c) => ({ bottle: labelOf(c.bottle), from: c.from, to: c.to }));
+      // A preview costs one write slot and evicts the oldest unconsumed ones
+      // (D08-1) — the early returns above (empty / already arranged /
+      // overflow) stay free because they store nothing.
+      if (!takeMutationSlot(String(ctx.user.id), 1, ipKeyFor(ctx))) {
+        return fail('rate_limited', 'Too many previews in a short time — wait a few minutes before previewing again, or apply the last one.');
+      }
+      await trimOutstandingPreviews(ctx.user.id, 'arrange_preview', MAX_OUTSTANDING_PREVIEWS);
       const row = await McpActionLog.create({
         user: ctx.user.id,
         tokenId: ctx.req?.apiToken?.id || null,

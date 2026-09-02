@@ -18,6 +18,52 @@ function getClient() {
 }
 
 /**
+ * Prompt-substitution helpers shared by EVERY prompt builder in this file.
+ *
+ * field(): user- or registry-authored text on its way into a prompt — control
+ * characters out (a newline is what lets injected text pose as a new
+ * instruction), whitespace collapsed, length bounded. 200 chars by default: no
+ * real wine field comes close, and the import parser caps rows at the same
+ * bound. Free-text search queries get the route's own 300-char cap.
+ *
+ * put(): substitute one placeholder with a replacer FUNCTION. Not cosmetic:
+ * with a string replacement, String.prototype.replace honours `$&`, `` $` ``,
+ * `$'` and `$$` inside it even for a plain-string pattern, so a wine named
+ * `$'` expands to the whole remainder of the template — a well-formed prompt
+ * followed by the attacker's own trailing instruction, and each occurrence
+ * re-inserts the template again (~30-100x the token bill per call, billed to
+ * the operator's key and invisible to the per-CALL AI budget). A replacer
+ * function is inserted literally and honours nothing. replaceAll, not
+ * replace, because the templates are superadmin-overridable via SiteConfig
+ * and a custom one may use a placeholder twice.
+ *
+ * fill(): apply [token, value] pairs in order through put().
+ *
+ * History: the 2026-08-03 audit fixed suggestProfile and scanLabelBack this
+ * way; the 2026-09-02 audit (D10-9) found identifyWineFromText,
+ * identifyWineFromQuery, suggestDrinkWindow and suggestPrice still on raw
+ * .replace(token, string). Every builder now goes through fill() — and
+ * callClaudeJson refuses an assembled prompt over MAX_PROMPT_CHARS as the
+ * backstop for a customised template or a future builder that bypasses it.
+ */
+const PROMPT_FIELD_MAX = 200;
+const QUERY_FIELD_MAX = 300; // mirrors MAX_AI_QUERY_LEN in routes/wines.js
+const field = (v, max = PROMPT_FIELD_MAX) =>
+  String(v ?? '')
+    .replace(/\p{C}/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, max);
+const put = (template, token, value) => String(template ?? '').replaceAll(token, () => value);
+const fill = (template, pairs) => pairs.reduce((acc, [token, value]) => put(acc, token, value), String(template ?? ''));
+
+// Largest default template is the 8.3 KB enrichment prompt; with every field
+// capped at 200 chars no legitimate prompt reaches half of this. A prompt
+// that does was amplified or hand-edited into something we should not pay
+// for — refuse before the request is made (the reason is refundable).
+const MAX_PROMPT_CHARS = 24 * 1024;
+
+/**
  * Derive a quality tier from the wine name and appellation.
  * Used by the maturity suggest prompt to give the AI a baseline signal.
  */
@@ -184,15 +230,7 @@ async function scanLabelBack({ backImage, backMediaType = 'image/jpeg', frontIma
 
   // EVERY value below is client-supplied text on its way into a prompt — the
   // client sends back the front extraction it was handed, and nothing stops it
-  // sending something else. Identical sanitisation to suggestProfile.field():
-  // control characters out (a newline is what lets injected text pose as a new
-  // instruction), whitespace collapsed, length bounded.
-  const field = (v) =>
-    String(v ?? '')
-      .replace(/\p{C}/gu, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 200);
+  // sending something else. field() (top of this file) sanitises each one.
 
   // Per NAME, not on a joined string — capping a join can cut a varietal
   // mid-word (suggestProfile carries the same note for the same reason).
@@ -215,20 +253,7 @@ async function scanLabelBack({ backImage, backMediaType = 'image/jpeg', frontIma
     grapes,
   });
 
-  /**
-   * Substitute one placeholder with a replacer FUNCTION.
-   *
-   * Not cosmetic: with a string replacement, String.prototype.replace honours
-   * `$&`, `` $` ``, `$'` and `$$` inside it even for a plain-string pattern, so
-   * a producer named `$'` expands to the whole remainder of the template —
-   * a well-formed prompt followed by the attacker's own trailing instruction,
-   * at ~30x the token bill. A replacer function is inserted literally.
-   *
-   * replaceAll, not replace, because the template is superadmin-overridable via
-   * SiteConfig and a custom one may use the placeholder twice.
-   */
-  const put = (template, token, value) => template.replaceAll(token, () => value);
-
+  // put() inserts literally — see the shared helpers at the top of this file.
   const prompt = put(aiConfig.get().labelScanBackPrompt, '{{frontData}}', frontData);
 
   // Image ORDER is the contract the prompt states (front first, back second).
@@ -389,6 +414,13 @@ function mergeBackScan(front = {}, back = {}, { suspectProducer = false } = {}) 
  * On 429 the call is retried once after waiting out the retry-after header.
  */
 async function callClaudeJson({ client, model, maxTokens, prompt, validate, tools }) {
+  // Backstop (audit 2026-09-02 D10-9): every builder inserts fields literally,
+  // but a superadmin-customised template or a future builder that bypasses
+  // fill() must still not turn one call into a 100k-token request. Refused
+  // before any request is made, so the reason is refundable.
+  if (typeof prompt === 'string' && prompt.length > MAX_PROMPT_CHARS) {
+    return { data: null, debugRaw: null, debugReason: 'prompt_too_long' };
+  }
   const apiParams = {
     model,
     max_tokens: maxTokens,
@@ -483,7 +515,7 @@ async function identifyWineFromText({ name, producer, vintage, country, appellat
   let client;
   try { client = getClient(); } catch { return { data: null, debugRaw: null, debugReason: 'no_api_key' }; }
 
-  const vintageHint = vintage && vintage !== 'NV' ? `Vintage: ${vintage}\n` : '';
+  const vintageHint = vintage && vintage !== 'NV' ? `Vintage: ${field(vintage, 12)}\n` : '';
 
   // The user's own file already states the geography on most exports
   // (CellarTracker has Appellation and a Country/Region/SubRegion/Appellation
@@ -504,7 +536,7 @@ async function identifyWineFromText({ name, producer, vintage, country, appellat
   // a pathological column inflates every identify call's token count (billed to
   // the user's own AI budget) and widens the prompt-injection surface for no
   // benefit: no real appellation approaches 200 characters.
-  const hint = (v) => String(v).slice(0, 200);
+  const hint = (v) => field(v);
   const hints = [
     country ? `Country hint: ${hint(country)}` : '',
     appellation ? `Appellation stated in the user's import file (trust it unless it is clearly not a wine appellation): ${hint(appellation)}` : '',
@@ -512,11 +544,16 @@ async function identifyWineFromText({ name, producer, vintage, country, appellat
   ].filter(Boolean);
   const countryHint = hints.length ? `${hints.join('\n')}\n` : '';
 
-  const prompt = aiConfig.get().importLookupPrompt
-    .replace('{{name}}', name)
-    .replace('{{producer}}', producer)
-    .replace('{{vintage}}', vintageHint)
-    .replace('{{country}}', countryHint);
+  // name/producer come straight from the user's file: sanitised and inserted
+  // literally (audit 2026-09-02 D10-9 — a `$'` producer used to re-insert the
+  // template per occurrence). The hint strings are built above from field()
+  // output; their newlines are ours.
+  const prompt = fill(aiConfig.get().importLookupPrompt, [
+    ['{{name}}', field(name)],
+    ['{{producer}}', field(producer)],
+    ['{{vintage}}', vintageHint],
+    ['{{country}}', countryHint],
+  ]);
 
   return callClaudeJson({
     client,
@@ -538,7 +575,8 @@ async function identifyWineFromQuery(query) {
   try { client = getClient(); } catch { return { data: null, debugRaw: null, debugReason: 'no_api_key' }; }
 
   const { DEFAULT_TEXT_SEARCH_PROMPT } = require('../config/aiConfig');
-  const prompt = DEFAULT_TEXT_SEARCH_PROMPT.replace('{{query}}', query.trim());
+  // Free text typed by the user, inserted literally (audit 2026-09-02 D10-9).
+  const prompt = fill(DEFAULT_TEXT_SEARCH_PROMPT, [['{{query}}', field(query, QUERY_FIELD_MAX)]]);
 
   return callClaudeJson({
     client,
@@ -570,16 +608,19 @@ async function suggestDrinkWindow({ name, producer, vintage, country, region, ap
   const isNv = vintage === 'NV';
   const template = isNv ? aiConfig.get().maturitySuggestPromptNv : aiConfig.get().maturitySuggestPrompt;
 
-  const prompt = template
-    .replace('{{name}}', name || '')
-    .replace('{{producer}}', producer || '')
-    .replace('{{vintage}}', vintage || '')
-    .replace('{{country}}', country || '')
-    .replace('{{region}}', region || '')
-    .replace('{{appellation}}', appellation || '')
-    .replace('{{type}}', type || '')
-    .replace('{{grapes}}', Array.isArray(grapes) ? grapes.join(', ') : (grapes || ''))
-    .replace('{{qualityTier}}', qualityTier);
+  // Registry text a user can author — sanitised and inserted literally
+  // (audit 2026-09-02 D10-9). Grapes are capped per NAME, not on the join.
+  const prompt = fill(template, [
+    ['{{name}}', field(name)],
+    ['{{producer}}', field(producer)],
+    ['{{vintage}}', field(vintage, 12)],
+    ['{{country}}', field(country)],
+    ['{{region}}', field(region)],
+    ['{{appellation}}', field(appellation)],
+    ['{{type}}', field(type)],
+    ['{{grapes}}', (Array.isArray(grapes) ? grapes : [grapes]).map((g) => field(g)).filter(Boolean).slice(0, 20).join(', ')],
+    ['{{qualityTier}}', qualityTier],
+  ]);
 
   return callClaudeJson({
     client,
@@ -602,17 +643,19 @@ async function suggestPrice({ name, producer, vintage, country, region, appellat
 
   const qualityTier = classifyQualityTier({ name, appellation });
 
-  const prompt = aiConfig.get().priceSuggestPrompt
-    .replace('{{name}}', name || '')
-    .replace('{{producer}}', producer || '')
-    .replace('{{vintage}}', vintage || '')
-    .replace('{{country}}', country || '')
-    .replace('{{region}}', region || '')
-    .replace('{{appellation}}', appellation || '')
-    .replace('{{classification}}', classification || '')
-    .replace('{{type}}', type || '')
-    .replace('{{grapes}}', Array.isArray(grapes) ? grapes.join(', ') : (grapes || ''))
-    .replace('{{qualityTier}}', qualityTier);
+  // Same rule as suggestDrinkWindow: literal, sanitised, per-name grape cap.
+  const prompt = fill(aiConfig.get().priceSuggestPrompt, [
+    ['{{name}}', field(name)],
+    ['{{producer}}', field(producer)],
+    ['{{vintage}}', field(vintage, 12)],
+    ['{{country}}', field(country)],
+    ['{{region}}', field(region)],
+    ['{{appellation}}', field(appellation)],
+    ['{{classification}}', field(classification)],
+    ['{{type}}', field(type)],
+    ['{{grapes}}', (Array.isArray(grapes) ? grapes : [grapes]).map((g) => field(g)).filter(Boolean).slice(0, 20).join(', ')],
+    ['{{qualityTier}}', qualityTier],
+  ]);
 
   return callClaudeJson({
     client,
@@ -642,13 +685,8 @@ async function suggestProfile({ name, producer, vintage, country, region, appell
   // registry. Collapse whitespace (a newline is what lets injected text pose as
   // a new instruction), drop control characters, and bound the length. The mint
   // chokepoint now normalises region and grape names too, but this has to hold
-  // for rows that predate that and for any caller that bypasses it.
-  const field = (v) =>
-    String(v ?? '')
-      .replace(/\p{C}/gu, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 200);
+  // for rows that predate that and for any caller that bypasses it. field()
+  // and put() are the shared helpers at the top of this file.
 
   // Per NAME, not on the joined string: capping the join truncated the tail of a
   // large blend and could cut a varietal mid-word before it reached a prompt
@@ -658,23 +696,6 @@ async function suggestProfile({ name, producer, vintage, country, region, appell
     .filter(Boolean)
     .slice(0, 20)
     .join(', ');
-
-  /**
-   * Substitute one placeholder.
-   *
-   * The replacement is a FUNCTION, and that is the whole point: with a string
-   * replacement, `String.prototype.replace` honours `$&`, `` $` ``, `$'` and
-   * `$$` inside it — even when the search pattern is a plain string. A wine
-   * named `$'` therefore expanded to the entire remainder of the template,
-   * giving an attacker a well-formed prompt followed by their own trailing
-   * instruction, and a ~30x token bill. A replacer function is inserted
-   * literally and honours nothing.
-   *
-   * replaceAll, not replace, because the template is superadmin-overridable via
-   * SiteConfig — a custom one that uses a placeholder twice would otherwise
-   * leave the second occurrence unsubstituted and ship `{{producer}}` verbatim.
-   */
-  const put = (template, token, value) => template.replaceAll(token, () => value);
 
   let prompt = aiConfig.get().enrichmentPrompt;
   for (const [token, value] of [

@@ -28,7 +28,7 @@ jest.mock('../models/JournalEntry', () => ({ create: jest.fn(), deleteOne: jest.
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn() }));
 jest.mock('../models/WineEmbedding', () => ({ findOne: jest.fn() }));
 jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn() }));
-jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
+jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn(), find: jest.fn(), deleteMany: jest.fn() }));
 jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false), search: jest.fn(), searchBottles: jest.fn() }));
 jest.mock('../services/statsService', () => ({ computeOverview: jest.fn(), buildEmptyStats: jest.fn() }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
@@ -97,6 +97,8 @@ beforeEach(() => {
   McpActionLog.findOne.mockReturnValue(chain(null));
   McpActionLog.create.mockResolvedValue({ _id: new mongoose.Types.ObjectId(oid('f')) });
   McpActionLog.findOneAndUpdate.mockResolvedValue({ _id: 'claimed' });
+  McpActionLog.find.mockReturnValue(chain([]));
+  McpActionLog.deleteMany.mockResolvedValue({ deletedCount: 0 });
 });
 
 describe('registration & scope', () => {
@@ -127,6 +129,19 @@ describe('auto_arrange preview', () => {
     ]);
     expect(stored.prev.target[0]).toEqual({ position: 1, bottleId: oid('2') });
     expect(rack.save).not.toHaveBeenCalled(); // preview never mutates
+    // A stored preview costs one write slot and trims older unconsumed ones (audit 2026-09-02 D08-1)
+    expect(takeMutationSlot).toHaveBeenCalledWith(ME, 1, null);
+    expect(McpActionLog.find).toHaveBeenCalledWith({ user: ME, action: 'arrange_preview', reversed: false });
+  });
+
+  test('preview refuses on an exhausted write budget and stores nothing', async () => {
+    const rack = mkRack();
+    wireRackLoad(rack);
+    takeMutationSlot.mockReturnValue(false);
+    const res = await tool('auto_arrange').handler({ rack_id: oid('e'), strategy: 'maturity' }, CTX);
+    expect(parse(res).error.code).toBe('rate_limited');
+    expect(McpActionLog.create).not.toHaveBeenCalled();
+    expect(rack.save).not.toHaveBeenCalled();
   });
 
   test('already-arranged rack → no ledger row, nothing to apply', async () => {

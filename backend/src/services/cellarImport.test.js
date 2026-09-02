@@ -295,20 +295,53 @@ describe('buildBottle drink window + occasion', () => {
 describe('attachMaturity', () => {
   const mockExisting = (existing) =>
     WineVintageProfile.findOne.mockReturnValue({ select: () => ({ lean: () => Promise.resolve(existing) }) });
-  const freshResult = () => ({ maturityCreated: 0, maturitySkipped: 0 });
+  const freshResult = () => ({ maturityCreated: 0, maturitySuggested: 0, maturitySkipped: 0 });
 
   beforeEach(() => jest.clearAllMocks());
 
-  test('creates a reviewed profile when the destination has none', async () => {
+  test('a sommelier/admin importer restores a REVIEWED profile when the destination has none, audited', async () => {
+    mockExisting(null);
+    WineVintageProfile.create.mockResolvedValue({ _id: 'p9' });
+    const result = freshResult();
+    const audit = jest.fn();
+    await attachMaturity({ relative: false, peakFrom: 2026, peakUntil: 2032, sommNotes: 'hold' }, 'w1', '2018', result, new Set(), { canCurate: true, userId: 'u1', audit });
+    expect(WineVintageProfile.create).toHaveBeenCalledWith(expect.objectContaining({
+      wineDefinition: 'w1', vintage: '2018', status: 'reviewed', peakFrom: 2026, peakUntil: 2032, setBy: 'u1',
+    }));
+    expect(WineVintageProfile.create.mock.calls[0][0].setAt).toBeInstanceOf(Date);
+    expect(result.maturityCreated).toBe(1);
+    expect(result.maturitySuggested).toBe(0);
+    expect(result.maturitySkipped).toBe(0);
+    expect(audit).toHaveBeenCalledWith('cellar.import.maturity', { type: 'wine', id: 'w1' },
+      expect.objectContaining({ vintage: '2018', status: 'reviewed', profileId: 'p9' }));
+  });
+
+  // Security audit 2026-09-02 (D09-4): any registered user could write a
+  // sommelier-status drink window into the shared registry from a plain JSON
+  // file, and every other user of that wine+vintage saw it as curated.
+  test("an ordinary importer's window becomes a PENDING suggestion, never a reviewed profile", async () => {
+    mockExisting(null);
+    WineVintageProfile.create.mockResolvedValue({ _id: 'p2' });
+    const result = freshResult();
+    const audit = jest.fn();
+    await attachMaturity({ peakFrom: 2026, peakUntil: 2032, sommNotes: 'trust me' }, 'w1', '2018', result, new Set(), { canCurate: false, userId: 'u2', audit });
+    const created = WineVintageProfile.create.mock.calls[0][0];
+    expect(created).toEqual(expect.objectContaining({
+      wineDefinition: 'w1', vintage: '2018', status: 'pending', peakFrom: 2026, peakUntil: 2032, sommNotes: 'trust me', setBy: 'u2', setAt: null,
+    }));
+    expect(result.maturityCreated).toBe(0);
+    expect(result.maturitySuggested).toBe(1);
+    expect(audit).toHaveBeenCalledWith('cellar.import.maturity', { type: 'wine', id: 'w1' },
+      expect.objectContaining({ status: 'pending' }));
+  });
+
+  test('with no importer context at all the profile is pending (fail closed)', async () => {
     mockExisting(null);
     WineVintageProfile.create.mockResolvedValue({});
     const result = freshResult();
-    await attachMaturity({ relative: false, peakFrom: 2026, peakUntil: 2032, sommNotes: 'hold' }, 'w1', '2018', result, new Set());
-    expect(WineVintageProfile.create).toHaveBeenCalledWith(expect.objectContaining({
-      wineDefinition: 'w1', vintage: '2018', status: 'reviewed', peakFrom: 2026, peakUntil: 2032,
-    }));
-    expect(result.maturityCreated).toBe(1);
-    expect(result.maturitySkipped).toBe(0);
+    await attachMaturity({ peakFrom: 2026 }, 'w1', '2018', result, new Set());
+    expect(WineVintageProfile.create.mock.calls[0][0].status).toBe('pending');
+    expect(result.maturitySuggested).toBe(1);
   });
 
   test('never overwrites an existing profile (create-only)', async () => {
@@ -335,8 +368,8 @@ describe('attachMaturity', () => {
     WineVintageProfile.create.mockResolvedValue({});
     const result = freshResult();
     const seen = new Set();
-    await attachMaturity({ peakFrom: 2026 }, 'w1', '2018', result, seen);
-    await attachMaturity({ peakFrom: 2026 }, 'w1', '2018', result, seen); // same key → no-op
+    await attachMaturity({ peakFrom: 2026 }, 'w1', '2018', result, seen, { canCurate: true });
+    await attachMaturity({ peakFrom: 2026 }, 'w1', '2018', result, seen, { canCurate: true }); // same key → no-op
     expect(WineVintageProfile.create).toHaveBeenCalledTimes(1);
     expect(result.maturityCreated).toBe(1);
   });
