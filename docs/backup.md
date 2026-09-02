@@ -162,3 +162,55 @@ You get **two** layers of failure alerting:
 - `backup.env` holds secrets → it's gitignored, `chmod 600`, never committed.
 - Backups contain **user PII** → encryption (restic) + a locked-down Storage Box are required for GDPR. Retention here is 7 daily / 4 weekly / 6 monthly.
 - Retention is enforced by `restic forget --prune` inside `backup.sh`.
+
+## Moving everything to a new VM
+
+Since 2026-09-02 every snapshot carries the configuration as well as the data
+(`config/<absolute path>`, an optional `umami/umami.sql.gz`, and a
+`MANIFEST.txt` naming the image digests that were running), so a snapshot plus
+the restic passphrase is enough to stand the whole stack up elsewhere. Keep
+three things **off the server** in a password manager: the restic passphrase,
+the repository address, and the credentials that reach the repository (the
+Storage Box SSH key, or the B2 account key). Without those the snapshot is
+unreachable; with them, this is the order:
+
+1. **New machine.** Install Docker (compose plugin), restic and jq. Create the
+   same unprivileged user and add it to the `docker` group.
+2. **Reach the repository.** Put the Storage Box SSH key back at
+   `~/.ssh/storagebox` with the `~/.ssh/config` alias (both are in the
+   snapshot, but you need them *first* — so from the password manager), or
+   export the `B2_*` variables for the off-provider copy.
+3. **Pull the snapshot into a scratch directory** — no containers exist yet,
+   so do not use `restore.sh` for this step:
+   ```bash
+   export RESTIC_REPOSITORY=... RESTIC_PASSWORD=...
+   restic restore latest --target /tmp/cellarion-restore
+   cat /tmp/cellarion-restore/*/MANIFEST.txt        # what was running
+   ```
+4. **Put the configuration back.** Everything under `config/` is stored at
+   its original absolute path, so with the same username and checkout path:
+   ```bash
+   sudo cp -rp /tmp/cellarion-restore/*/config/. /
+   ```
+   That restores `.env`, both compose files, `scripts/backup/backup.env`, the
+   reverse-proxy and monitoring configs, the systemd units and the SSH alias.
+   Then `git clone` the repository into the checkout path the compose files
+   expect (the checkout is not in the snapshot — only the files you changed).
+5. **Start the stack** — `docker compose -f docker-compose.prod.yml up -d`
+   (and the reverse proxy / monitoring compose projects). The images come from
+   the registry; pin the digests from `MANIFEST.txt` if `:latest` has moved on.
+6. **Load the data** with the containers now running:
+   ```bash
+   cd scripts/backup && ./restore.sh latest            # Mongo + images
+   RESTORE_UMAMI=1 ./restore.sh latest                 # add analytics history
+   ```
+7. **Rebuild the derived indexes** — restart the backend; Meilisearch
+   re-indexes from Mongo and the embedding job repopulates Qdrant (the AI chat
+   is degraded until it finishes, nothing is lost).
+8. **Point DNS at the new address** (Cloudflare), and move the firewall rule
+   that limits SSH to your own address.
+9. **Re-enable the backup timers** (`systemctl enable --now cellarion-backup.timer
+   cellarion-backup-check.timer`) and make sure the healthchecks ping green
+   from the new host before you stop watching.
+
+Drill this on a throwaway VM once. A runbook you have never run is a guess.
