@@ -1,0 +1,44 @@
+name: Self-hosting help
+description: Your own Cellarion instance will not start, upgrade, or behave
+labels: ["self-hosting"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Happy to help you get running. Please include the details below — most self-hosting problems are a missing environment variable, a reverse-proxy header, or a version mismatch, and these fields find them quickly.
+
+        **Never paste the values of secrets.** Variable names are enough.
+  - type: textarea
+    id: symptom
+    attributes:
+      label: What is going wrong
+      placeholder: The backend container restarts every 30 seconds after upgrading from 1.190 to 1.196.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Cellarion version
+      description: The image tag you are running, or the output of `/api/health`.
+    validations:
+      required: true
+  - type: textarea
+    id: setup
+    attributes:
+      label: How it is deployed
+      description: Docker Compose from this repo, or something else? Which reverse proxy in front (Traefik, nginx, Caddy, Cloudflare Tunnel)? Any changes to the compose file?
+      placeholder: docker compose from the repo, behind Caddy, on a 2 GB VPS. Changed the frontend port to 8081.
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment variables set
+      description: Names only, never values.
+      placeholder: JWT_SECRET, MEILI_MASTER_KEY, FRONTEND_URL, ANTHROPIC_API_KEY
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: "`docker compose logs backend --tail 100` and, if the web side is the problem, the same for `frontend`. Remove anything personal."
+      render: shell

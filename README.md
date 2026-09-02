@@ -536,11 +536,15 @@ Uses Jest — ~124 suites covering auth middleware, cellar access control, wine 
 
 ## Contributing
 
-1. Fork the repo and create a feature branch off `main`
-2. Make your changes
-3. Run the tests (`cd frontend && npm test` and `cd backend && npm test`)
-4. Smoke-test in Docker: `docker-compose up --build`
-5. Submit a pull request with a clear description of your changes
+Contributions are welcome — bug fixes, features, documentation, and translations. **[CONTRIBUTING.md](CONTRIBUTING.md)** has the full guide: how to set up, the branch and test workflow, the conventions the codebase follows, the personal-data checklist every feature must pass, and how to sign your commits (Cellarion uses the [Developer Certificate of Origin](https://developercertificate.org/), so commit with `git commit -s`). The short version:
+
+1. Fork the repo and create a branch off `main` (`feat/`, `fix/`, `docs/`…)
+2. Make your change, with tests
+3. Run both suites: `cd frontend && npm test` and `cd backend && npm test`
+4. Smoke-test in Docker: `docker compose up --build`, and use the thing you changed
+5. Open a pull request against `main` — the template asks for a description and a checklist
+
+Everyone taking part is expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ### Translations
 
@@ -564,8 +568,7 @@ Guidelines, the wine-terminology glossary, and how a language graduates out of b
 
 ## Reporting a Vulnerability
 
-Please report security issues privately to:
-github@cellarion.app
+Please do not open a public issue for a security problem. Use GitHub's [private vulnerability reporting](https://github.com/jagduvi1/Cellarion/security/advisories/new), or email **info@cellarion.app** with "SECURITY" in the subject. Response times, scope, and an honest account of the current security posture are in **[SECURITY.md](SECURITY.md)**.
 
 ---
 
@@ -573,7 +576,9 @@ github@cellarion.app
 
 [GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE)
 
-You are free to use, modify, and self-host this software. If you run a modified version as a network service, you must make your source code available to users of that service. Commercial hosting of this software as a managed service requires a separate agreement.
+You are free to use, modify, self-host, and even offer this software as a service. The one condition, and the reason Cellarion uses AGPL rather than MIT: if you run a modified version for other people, you must make your modified source available to them.
+
+Contributions are accepted under the same license; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 

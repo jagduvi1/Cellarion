@@ -1,0 +1,34 @@
+name: Feature request
+description: Something Cellarion could do, or do better
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Good feature requests start from a problem, not a solution. Tell us what you were trying to do. If you want to talk it through first, [Discussions](https://github.com/jagduvi1/Cellarion/discussions) is a lighter place than an issue.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What were you trying to do, and what got in the way?
+      placeholder: When I bring six bottles of the same wine back from a tasting, adding them one by one takes ten minutes.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: Your idea of how it could work. Rough is fine.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do today instead
+      description: Workarounds, other apps you have seen do it well, anything that helps us understand the shape of it.
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where you use Cellarion
+      options:
+        - cellarion.app (hosted)
+        - Self-hosted
+        - Both

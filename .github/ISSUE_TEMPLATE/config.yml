@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/jagduvi1/Cellarion/security/advisories/new
+    about: Please report security problems privately here, never as a public issue. See SECURITY.md.
+  - name: Question or idea
+    url: https://github.com/jagduvi1/Cellarion/discussions
+    about: Not sure it is a bug, or want to talk a feature through first? Discussions is the place.
+  - name: Translations
+    url: https://hosted.weblate.org/engage/cellarion/
+    about: Interface translations are done in Weblate, no Git needed. See TRANSLATING.md for guidelines.
