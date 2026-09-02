@@ -11,12 +11,24 @@
 
 const mockBottleUpdateMany = jest.fn();
 const mockRackUpdateMany = jest.fn();
+const mockBottleDistinct = jest.fn();
+const mockRackDistinct = jest.fn();
 const mockCellarFindOne = jest.fn();
+const mockCellarExists = jest.fn();
 const mockUserFindById = jest.fn();
 
-jest.mock('../models/Cellar', () => ({ findOne: (...a) => mockCellarFindOne(...a) }));
-jest.mock('../models/Bottle', () => ({ updateMany: (...a) => mockBottleUpdateMany(...a) }));
-jest.mock('../models/Rack', () => ({ updateMany: (...a) => mockRackUpdateMany(...a) }));
+jest.mock('../models/Cellar', () => ({
+  findOne: (...a) => mockCellarFindOne(...a),
+  exists: (...a) => mockCellarExists(...a),
+}));
+jest.mock('../models/Bottle', () => ({
+  updateMany: (...a) => mockBottleUpdateMany(...a),
+  find: () => ({ distinct: (...a) => mockBottleDistinct(...a) }),
+}));
+jest.mock('../models/Rack', () => ({
+  updateMany: (...a) => mockRackUpdateMany(...a),
+  find: () => ({ distinct: (...a) => mockRackDistinct(...a) }),
+}));
 jest.mock('../models/User', () => ({ findById: (...a) => mockUserFindById(...a) }));
 
 const { transferCellarOwnership } = require('./cellarTransfer');
@@ -43,6 +55,9 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockBottleUpdateMany.mockResolvedValue({ modifiedCount: 0 });
   mockRackUpdateMany.mockResolvedValue({ modifiedCount: 0 });
+  mockBottleDistinct.mockResolvedValue([]);
+  mockRackDistinct.mockResolvedValue([]);
+  mockCellarExists.mockResolvedValue(null); // no name clash unless a test says so
   mockUserFindById.mockReturnValue({ select: () => ({ lean: async () => ({ _id: CLIENT, username: 'client', email: 'c@example.com' }) }) });
 });
 
@@ -111,6 +126,71 @@ describe('ordering — the cellar flips LAST', () => {
     await expect(transferCellarOwnership(CELLAR, CLIENT, OWNER)).rejects.toThrow('mongo went away');
     expect(String(cellar.user)).toBe(OWNER);   // still theirs — retry is safe
     expect(cellar.save).not.toHaveBeenCalled();
+  });
+});
+
+describe('the cellar must be able to LAND before anything moves', () => {
+  // A cellar name is unique per owner. Without this check the bottles and racks
+  // moved first and the final save was then refused, leaving a collection owned
+  // by one account inside a cellar owned by another — and a re-run could not
+  // repair it, because the bottles no longer matched the old owner.
+  test('a recipient who already has a cellar of that name is refused, and NOTHING moves', async () => {
+    mockCellarFindOne.mockResolvedValue(cellarStub());
+    mockCellarExists.mockResolvedValue({ _id: 'their-own-cellar' });
+
+    await expect(transferCellarOwnership(CELLAR, CLIENT, OWNER))
+      .rejects.toMatchObject({ status: 409, message: expect.stringContaining("Client's Cellar") });
+
+    expect(mockCellarExists).toHaveBeenCalledWith({ user: CLIENT, name: "Client's Cellar", deletedAt: null });
+    expect(mockBottleUpdateMany).not.toHaveBeenCalled();
+    expect(mockRackUpdateMany).not.toHaveBeenCalled();
+  });
+
+  test('a soft-deleted cellar of the same name does not block the handover', async () => {
+    mockCellarFindOne.mockResolvedValue(cellarStub());
+    mockCellarExists.mockResolvedValue(null); // the query excludes deleted ones
+    await expect(transferCellarOwnership(CELLAR, CLIENT, OWNER)).resolves.toBeDefined();
+  });
+});
+
+describe('a refused save leaves no trace', () => {
+  const withMoved = (over = {}) => {
+    mockBottleDistinct.mockResolvedValue(['b1', 'b2']);
+    mockRackDistinct.mockResolvedValue(['r1']);
+    const cellar = cellarStub(over);
+    mockCellarFindOne.mockResolvedValue(cellar);
+    return cellar;
+  };
+
+  test('the exact bottles and racks are put back when the cellar save fails', async () => {
+    const cellar = withMoved({ save: jest.fn().mockRejectedValue(new Error('mongo went away')) });
+
+    await expect(transferCellarOwnership(CELLAR, CLIENT, OWNER)).rejects.toThrow('mongo went away');
+
+    // By id, never a blind inverse: the recipient was already a member and may
+    // own bottles here themselves, which must not be given to the old owner.
+    expect(mockBottleUpdateMany).toHaveBeenLastCalledWith({ _id: { $in: ['b1', 'b2'] } }, { $set: { user: OWNER } });
+    expect(mockRackUpdateMany).toHaveBeenLastCalledWith({ _id: { $in: ['r1'] } }, { $set: { user: OWNER } });
+    expect(String(cellar.user)).toBe(OWNER);
+  });
+
+  test('a duplicate-key save is reported as a 409, not a 500', async () => {
+    const dup = Object.assign(new Error('E11000 duplicate key'), { code: 11000 });
+    withMoved({ save: jest.fn().mockRejectedValue(dup) });
+
+    await expect(transferCellarOwnership(CELLAR, CLIENT, OWNER))
+      .rejects.toMatchObject({ status: 409 });
+  });
+
+  test('nothing is rolled back when nothing moved', async () => {
+    withMoved({ save: jest.fn().mockRejectedValue(new Error('nope')) });
+    mockBottleDistinct.mockResolvedValue([]);
+    mockRackDistinct.mockResolvedValue([]);
+
+    await expect(transferCellarOwnership(CELLAR, CLIENT, OWNER)).rejects.toThrow('nope');
+    // Only the forward updateMany calls happened — no empty $in rollback.
+    expect(mockBottleUpdateMany).toHaveBeenCalledTimes(1);
+    expect(mockRackUpdateMany).toHaveBeenCalledTimes(1);
   });
 });
 
