@@ -1,6 +1,6 @@
 {
   "name": "frontend",
-  "version": "1.197.0",
+  "version": "1.197.1",
   "license": "AGPL-3.0",
   "private": true,
   "type": "module",
