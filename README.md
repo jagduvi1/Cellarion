@@ -23,7 +23,7 @@ This is the primary way to use Cellarion. Create an account and start using the 
 - **Reserved bottles** — Mark bottles as "spoken for" (a birthday, a dinner) so suggestions and consume flows respect them
 - **Drink-window alerts** — Sommelier-curated maturity windows per wine and vintage; alerts when bottles approach peak, are in window, or slipping past it
 - **Rich statistics** — Charts, world choropleth map, breakdowns by country, grape, value, and drink status
-- **Import & export** — Bring collections from Vivino (incl. drinking history), CellarTracker, generic CSV, or Cellarion's own JSON; export everything as JSON or a ZIP with your images
+- **Import & export** — Bring collections from Vivino (incl. drinking history), CellarTracker, Ploc, generic CSV, or Cellarion's own JSON; export everything as JSON or a ZIP with your images
 
 **The shared registry**
 - **Smart search** — Meilisearch-powered fuzzy search with aggressive deduplication and canonical-key matching
@@ -441,7 +441,7 @@ db.users.updateMany({ emailVerified: { $exists: false } }, { $set: { emailVerifi
 
 ## Bottle Import
 
-Users can import bottles from other wine cellar apps (Vivino — including drinking history, CellarTracker, or any generic CSV). The import flow:
+Users can import bottles from other wine cellar apps (Vivino — including drinking history, CellarTracker, Ploc — including slot positions and purchase history, or any generic CSV). The import flow:
 
 1. **Upload** — Drop a CSV file; the system auto-detects the source format and maps it to a standard schema
 2. **Validate** — Each item is matched against the wine library using fuzzy search (Meilisearch + MongoDB text search + normalized key lookup) and scored with combined similarity
