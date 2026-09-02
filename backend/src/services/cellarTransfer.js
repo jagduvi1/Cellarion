@@ -40,6 +40,14 @@
  * prevent. Every step is an idempotent `updateMany` keyed on the OLD owner, so
  * re-running a partial transfer completes it and re-running a finished one does
  * nothing.
+ *
+ * Last-step ordering is necessary but not sufficient, because the LAST step is
+ * the one that can be refused: a cellar name is unique per owner, so a
+ * recipient who already has a cellar of that name makes the final save
+ * impossible — after the bottles and racks have moved, and in a way no re-run
+ * repairs (the bottles no longer match the old owner). So the transfer first
+ * checks that the cellar can land, and still rolls the exact moved documents
+ * back if the save fails anyway. A transfer either happens or leaves no trace.
  */
 
 const Cellar = require('../models/Cellar');
@@ -87,6 +95,28 @@ async function transferCellarOwnership(cellarId, newOwnerId, actorId) {
   const newOwner = await User.findById(newOwnerId).select('_id username email').lean();
   if (!newOwner) throw fail(404, 'New owner account not found');
 
+  // ── 0. Can the cellar actually LAND? A cellar name is unique per owner
+  //       (models/Cellar: unique { user, name } over active cellars), so if the
+  //       recipient already has a cellar of this name the final save at step 3
+  //       is impossible. Checked BEFORE anything moves, because the failure it
+  //       prevents is the one this service exists to prevent: the bottles and
+  //       racks would already have changed hands, leaving a collection owned by
+  //       one account inside a cellar owned by another — and a re-run cannot
+  //       repair it, since the bottles no longer match the old owner. On the
+  //       hosted service 30 cellar names are already held by more than one
+  //       account, so this is an ordinary case, not a corner.
+  const clash = await Cellar.exists({ user: newOwner._id, name: cellar.name, deletedAt: null });
+  if (clash) {
+    throw fail(409, `The new owner already has a cellar named "${cellar.name}". Rename one of them first — one account cannot hold two cellars with the same name.`);
+  }
+
+  // Exact ids, captured before the writes, so a failure at step 3 can be undone
+  // precisely. A blind inverse update would be wrong: the recipient was already
+  // a member and may own bottles in this cellar themselves, and those must not
+  // be handed to the outgoing owner by a rollback.
+  const movedBottleIds = await Bottle.find({ cellar: cellar._id, user: currentOwner }).distinct('_id');
+  const movedRackIds = await Rack.find({ cellar: cellar._id, user: currentOwner }).distinct('_id');
+
   // ── 1. Bottles. Soft-deleted ones included on purpose: they are restorable,
   //       and the deletion cascade would take them too.
   const bottles = await Bottle.updateMany(
@@ -107,12 +137,43 @@ async function transferCellarOwnership(cellarId, newOwnerId, actorId) {
   // Also drop any stray row for the CURRENT owner: owner was never a
   // membership row, but if a data anomaly ever put one there, pushing below
   // would duplicate it.
+  const previousMembers = cellar.members;
   cellar.members = (cellar.members || []).filter(
     (m) => String(m.user) !== String(newOwner._id) && String(m.user) !== currentOwner,
   );
   cellar.members.push({ user: currentOwner, role: 'editor', addedAt: new Date() });
   cellar.user = newOwner._id;
-  await cellar.save();
+  try {
+    await cellar.save();
+  } catch (err) {
+    // The step-0 check makes the duplicate-name case unreachable in practice,
+    // but a save can still fail — the recipient creating a same-named cellar in
+    // the gap, a validation error, the database going away. Whatever the cause,
+    // the half-moved state must not survive: put the exact documents back and
+    // report a failure the caller can simply retry.
+    cellar.user = currentOwner;
+    cellar.members = previousMembers;
+    await Promise.all([
+      movedBottleIds.length
+        ? Bottle.updateMany({ _id: { $in: movedBottleIds } }, { $set: { user: currentOwner } })
+        : null,
+      movedRackIds.length
+        ? Rack.updateMany({ _id: { $in: movedRackIds } }, { $set: { user: currentOwner } })
+        : null,
+    ].filter(Boolean)).catch((rollbackErr) => {
+      // A failed rollback is the one state worth shouting about: the bottles
+      // are with the new owner and the cellar is not.
+      console.error(
+        `[cellarTransfer] ROLLBACK FAILED for cellar ${cellar._id}: ${movedBottleIds.length} bottle(s) and ` +
+        `${movedRackIds.length} rack(s) may still be owned by ${newOwner._id} inside a cellar owned by ${currentOwner}`,
+        rollbackErr.message,
+      );
+    });
+    if (err && err.code === 11000) {
+      throw fail(409, `The new owner already has a cellar named "${cellar.name}". Rename one of them first — one account cannot hold two cellars with the same name.`);
+    }
+    throw err;
+  }
 
   return {
     cellar,
