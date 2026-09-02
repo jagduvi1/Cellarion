@@ -553,10 +553,15 @@ async function searchBottles(query, {
     filters.push(`cellarId = "${cleanScopeIds[0]}"`);
   } else if (cleanScopeIds.length > 1) {
     filters.push(`cellarId IN ["${cleanScopeIds.join('","')}"]`);
-  } else if (scopeIds.length > 0) {
-    // A scope WAS requested but every id stripped to empty — push a filter that
-    // matches nothing rather than no filter at all (which would un-scope the
-    // search and leak across every cellar).
+  } else {
+    // No usable scope — every id stripped to empty, OR the caller passed an
+    // EMPTY cellar list (a user who owns no cellar), OR nothing at all. Push a
+    // filter that matches nothing rather than no filter at all: an unscoped
+    // query searches every tenant's bottles. Until 2026-09-02 this branch only
+    // covered "ids given but all stripped", so a freshly registered account
+    // (registration creates no cellar) could read the whole index through MCP
+    // search_bottles (security audit D10-5). searchBottles has no legitimate
+    // unscoped caller — every REST and MCP path passes an access-checked scope.
     filters.push('cellarId = ""');
   }
   // Status filter: active (exclude consumed), consumed (only consumed), or all
