@@ -71,6 +71,10 @@ function validateDoubleHeightRows(typeConfig, effectiveType, effectiveRows, effe
  * Total number of valid slot positions for a given rack configuration.
  */
 function totalSlots(type, rows, cols, typeConfig) {
+  // Geometry is arithmetic over the two dimensions; a non-finite dimension is
+  // not a rack (the schema caps both at 20) and must never reach a formula
+  // that could return Infinity/NaN into a slot bound. Fail to zero capacity.
+  if (!Number.isFinite(rows) || !Number.isFinite(cols)) return 0;
   switch (type) {
     case 'grid': {
       // POSITION NUMBERING CONTRACT (double-height rows): the base grid
@@ -100,11 +104,14 @@ function totalSlots(type, rows, cols, typeConfig) {
       // hexFlip is deliberately not read here: it reverses which rows are
       // which, a pure reversal that can never change the total.
       if (typeConfig?.hexEqualRows) return rows * cols;
-      let total = 0;
-      for (let r = 0; r < rows; r++) {
-        total += (r % 2 === 0) ? cols : Math.max(1, cols - 1);
-      }
-      return total;
+      // Closed form, not a loop (security audit 2026-09-02 D14-1): this ran
+      // `rows` iterations, and the rack UPDATE route computed it on the
+      // request's still-unvalidated rows before the schema's max-20 check —
+      // one PUT with rows "1e308" parked the event loop for every tenant.
+      // Even rows (0-indexed) hold `cols`, odd rows hold max(1, cols-1).
+      const evenRows = Math.ceil(rows / 2);
+      const oddRows = Math.floor(rows / 2);
+      return evenRows * cols + oddRows * Math.max(1, cols - 1);
     }
 
     case 'triangle': {

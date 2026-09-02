@@ -96,6 +96,26 @@ describe('rackGeometry', () => {
     it('2 rows, 1 col → 1 + 1 = 2 (odd row min is 1)', () => {
       expect(totalSlots('hex', 2, 1)).toBe(2);
     });
+    // Security audit 2026-09-02 (D14-1): the hex count was a `rows`-iteration
+    // loop and the rack update route ran it on unvalidated input — one
+    // request with rows "1e308" stalled the backend. Closed form now; these
+    // pin it to the loop it replaced across the whole legal range.
+    it('closed form matches the row-by-row count for every legal size', () => {
+      const byLoop = (rows, cols) => { let t = 0; for (let r = 0; r < rows; r++) t += (r % 2 === 0) ? cols : Math.max(1, cols - 1); return t; };
+      for (let rows = 1; rows <= 20; rows++) {
+        for (let cols = 1; cols <= 20; cols++) {
+          expect(totalSlots('hex', rows, cols)).toBe(byLoop(rows, cols));
+        }
+      }
+    });
+    it('an absurd or non-finite dimension returns at once instead of looping', () => {
+      const t0 = Date.now();
+      expect(typeof totalSlots('hex', 1e308, 5)).toBe('number'); // overflows to Infinity — fine, it RETURNS
+      expect(totalSlots('hex', Infinity, 5)).toBe(0);
+      expect(totalSlots('grid', 4, NaN)).toBe(0);
+      expect(getMaxPosition({ isModular: true, modules: [{ type: 'hex', rows: 1e15, cols: 2 }] })).toBe(1.5e15);
+      expect(Date.now() - t0).toBeLessThan(200);
+    });
     it('hexEqualRows: every row full width → rows × cols', () => {
       expect(totalSlots('hex', 4, 4, { hexEqualRows: true })).toBe(16);
       expect(totalSlots('hex', 3, 4, { hexEqualRows: true })).toBe(12);
