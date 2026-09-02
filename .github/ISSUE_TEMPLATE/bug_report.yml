@@ -1,0 +1,52 @@
+name: Bug report
+description: Something in Cellarion does not work the way it should
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. A security problem should **not** go here — use [private vulnerability reporting](https://github.com/jagduvi1/Cellarion/security/advisories/new) instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you saw, and what you expected instead.
+      placeholder: I opened a bottle from the rack view, tapped Consume, and the bottle stayed in the rack until I reloaded.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to …
+        2. Click …
+        3. See …
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where are you running Cellarion
+      options:
+        - cellarion.app (hosted)
+        - Self-hosted
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Shown at the bottom of the page, or from `/api/health` on your instance.
+      placeholder: "1.196.0"
+  - type: input
+    id: device
+    attributes:
+      label: Browser and device
+      placeholder: "Safari on iPhone 15, Firefox 130 on Windows 11, the Android app…"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: For self-hosted, `docker compose logs backend --tail 100` around the time it happened is often the fastest way to a fix. Please remove anything personal first.
+      render: shell

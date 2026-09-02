@@ -1,0 +1,58 @@
+# Developer Certificate of Origin check.
+#
+# Every commit on a pull request from a fork must carry a "Signed-off-by:"
+# line (git commit -s). That line is the contributor certifying, under
+# https://developercertificate.org/, that they have the right to submit the
+# change under the project's AGPL-3.0 license. CONTRIBUTING.md explains it.
+#
+# Pull requests from branches inside this repository are the maintainer's own
+# work and are not checked — the job still reports success so it can be a
+# required status check without blocking those.
+name: DCO
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  dco:
+    name: DCO sign-off
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip for pull requests from this repository
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        run: echo "Pull request from the main repository — sign-off not required."
+
+      - name: Check out the pull request history
+        if: github.event.pull_request.head.repo.full_name != github.repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Verify every commit is signed off
+        if: github.event.pull_request.head.repo.full_name != github.repository
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for c in $(git rev-list "$BASE_SHA".."$HEAD_SHA"); do
+            if git show -s --format=%B "$c" | grep -qiE '^Signed-off-by: .+ <.+@.+>'; then
+              echo "ok       $(git show -s --format='%h %s' "$c")"
+            else
+              echo "::error::Missing Signed-off-by on commit $(git show -s --format='%h %s' "$c")"
+              missing=$((missing + 1))
+            fi
+          done
+          if [ "$missing" -gt 0 ]; then
+            echo
+            echo "$missing commit(s) need a sign-off. Fix with:"
+            echo "  git rebase --signoff $BASE_SHA && git push --force-with-lease"
+            echo "See CONTRIBUTING.md, section 'Sign your commits (DCO)'."
+            exit 1
+          fi
+          echo "All commits signed off."
