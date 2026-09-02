@@ -75,6 +75,17 @@ registerTool({
       cellarIds = await Cellar.find({ user: ctx.user.id, deletedAt: null }).distinct('_id');
     }
 
+    // A user with no owned cellar has nothing to search: answer before either
+    // backend is touched. searchBottles now refuses to run unscoped as well,
+    // but this tool must not depend on that — an empty scope once reached the
+    // search index unfiltered and returned every tenant's bottles (security
+    // audit 2026-09-02, D10-5).
+    if (cellarIds.length === 0) {
+      return ok('0 bottles — you own no cellar yet (pass cellar_id to search a cellar shared with you)', [], {
+        page: { limit, offset, total: 0 },
+      });
+    }
+
     // Meilisearch path — handles text + all filters with correct pagination.
     // The reserved filter lives only on the bottle document (not in the search
     // index), and filtering after pagination would shorten pages and inflate
@@ -94,11 +105,13 @@ registerTool({
           limit,
           offset,
         });
-        // Hydration only — NO extra filters here. The scope (owned cellars) is
-        // already inside the Meili query, and any post-pagination filter would
-        // shorten pages and inflate totals (the classic filter-after-paginate
-        // hole). Contract stays identical to the Mongo path below.
-        const docs = await Bottle.find({ _id: { $in: res.ids } })
+        // Hydration re-asserts the SAME cellar scope the Meili query carried.
+        // That cannot shorten a page or inflate a total in normal operation
+        // (the ids already satisfy it) — it only drops a hit whose index
+        // document is stale, i.e. a bottle that has since moved out of scope,
+        // which is exactly what must never be shown. No OTHER filter belongs
+        // here: anything not in the Meili query would be filter-after-paginate.
+        const docs = await Bottle.find({ _id: { $in: res.ids }, cellar: { $in: cellarIds } })
           .populate(WINE_POPULATE_LIST).lean();
         const byId = new Map(docs.map((d) => [String(d._id), d]));
         const items = res.ids.map((id) => byId.get(String(id))).filter(Boolean).map(bottleSummary);
