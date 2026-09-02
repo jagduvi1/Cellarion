@@ -3828,7 +3828,8 @@
       "vivino": "Vivino",
       "cellartracker": "CellarTracker",
       "oenoExport": "Oeno by Vintec",
-      "generic": "CSV"
+      "generic": "CSV",
+      "ploc": "Ploc"
     },
     "status": {
       "exact": "Matched",
@@ -3855,7 +3856,8 @@
       "ctErrorPage": "This file is a CellarTracker error page, not an export — log in to CellarTracker and re-export.",
       "ctAvailability": "This is CellarTracker's Availability table — drinking-window statistics, not a cellar export. Export the List or Inventory table instead.",
       "ctAllPending_one": "The only bottle in this file is a pending (undelivered) purchase — Cellarion doesn't track bottles you haven't received yet.",
-      "ctAllPending_other": "All {{count}} bottles in this file are pending (undelivered) purchases — Cellarion doesn't track bottles you haven't received yet."
+      "ctAllPending_other": "All {{count}} bottles in this file are pending (undelivered) purchases — Cellarion doesn't track bottles you haven't received yet.",
+      "plocWinesMissing": "That looks like a Ploc export, but the wines file is missing — it is the one with the stock counts. Select all of the files Ploc produced."
     },
     "warnings": {
       "tooManyRowsTitle": "{{count}} rows — more than one import run can take.",
@@ -3865,7 +3867,17 @@
       "ctPendingSkipped_one": "{{count}} pending (undelivered) bottle was not imported: {{wines}}. Cellarion doesn't track bottles you haven't received yet — re-import after delivery.",
       "ctPendingSkipped_other": "{{count}} pending (undelivered) bottles were not imported: {{wines}}. Cellarion doesn't track bottles you haven't received yet — re-import after delivery.",
       "noIdentitySkipped_one": "{{count}} row was skipped because it has no wine name or producer (usually a failed label scan).",
-      "noIdentitySkipped_other": "{{count}} rows were skipped because they have no wine name or producer (usually failed label scans)."
+      "noIdentitySkipped_other": "{{count}} rows were skipped because they have no wine name or producer (usually failed label scans).",
+      "extraFilesIgnored": "Only the first file was used — {{count}} other file(s) were ignored.",
+      "plocPlaced": "Ploc told us exactly where {{count}} bottle(s) sit, across {{racks}} rack(s). Check the sizes below, then import.",
+      "plocHistory": "{{count}} bottle(s) you have already drunk will be imported as drinking history, with their dates.",
+      "plocNoCellars": "No Ploc cellars file was included, so nothing could be placed in a rack. Add it and drop the files again to keep your slot positions.",
+      "plocNoHistory": "No Ploc purchases-and-consumptions file was included, so purchase dates, prices and drinking history are missing. Add it and drop the files again to bring them across.",
+      "plocRatingScale": "Ploc does not say what scale its ratings use. We read them as out of {{scale}} — check a few after importing.",
+      "plocDateOrder": "Ploc does not say whether its dates are day/month or month/day, and nothing in your file settles it. We read them as day/month.",
+      "plocExtraSlots": "\"{{wine}}\" has {{slots}} slot(s) recorded but only {{stock}} bottle(s) in stock, so the extra slots were left empty.",
+      "plocRackTooBig": "\"{{rack}}\" is {{rows}} x {{cols}}, larger than a Cellarion rack allows (20 x 20). Its bottles will be imported without a position.",
+      "plocUnmatchedHistory": "{{count}} history entr(y/ies) refer to wines that are not in the wines file, and were skipped."
     },
     "ctTables": {
       "list": "List table",
@@ -3927,7 +3939,10 @@
       "changeFile": "Click or drop to change file",
       "dropHere": "Drop your file here or click to browse",
       "dropHint": "JSON, CSV, TSV, or TXT — max 10 MB",
-      "encodingLine": "File encoding: {{encoding}}"
+      "encodingLine": "File encoding: {{encoding}}",
+      "plocTitle": "Ploc",
+      "plocDesc": "Ploc exports several files — select them all at once. The wines file carries your bottles, the cellars file their exact slot positions, and the purchases-and-consumptions file your purchase dates, prices and drinking history.",
+      "dropHereMulti": "Drop your file here or click to browse — select several at once for a Ploc export"
     },
     "wholeImport": {
       "title": "For every imported bottle",

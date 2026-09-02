@@ -6,7 +6,10 @@ import { validateImport, confirmImport } from '../api/bottles';
 import { getAiBudgetStatus, requestAiBudgetIncrease } from '../api/aiBudget';
 import { searchWines } from '../api/wines';
 import { getRacks } from '../api/racks';
-import { parseAndMap, parseJSON, summariseRacks, getDefaultRackConfig, getDefaultAnchor, decodeImportBuffer } from '../utils/importMappers';
+import {
+  parseAndMap, parseJSON, summariseRacks, getDefaultRackConfig, getDefaultAnchor, decodeImportBuffer,
+  parseCSV, detectDelimiter, detectPlocFile, parsePlocFiles,
+} from '../utils/importMappers';
 import { buildImportItem as buildImportItemPayload } from '../utils/importPayload';
 import { prepareImportItems } from '../utils/importPrepare';
 import { describePriceWarning } from '../utils/priceValidation';
@@ -398,98 +401,168 @@ function ImportBottles() {
 
   // ── File handling ───────────────────────────────────────────────────────
 
-  const processFile = useCallback((file) => {
+  // Apply one parsed result to the page's state. Shared by every source: a
+  // single CSV/JSON, and the multi-file Ploc set below, which produces the same
+  // shape from three files that only mean anything together.
+  const applyParsed = useCallback((parsed, { fileName: sourceName, encoding }) => {
+    const { items, format, oenoRackSpecs } = parsed;
+    if (items.length === 0) {
+      const pendingWarning = (parsed.warnings || []).find(w => w.code === 'ct-pending-skipped');
+      setError(pendingWarning
+        ? t('importBottles.errors.ctAllPending', { count: pendingWarning.count })
+        : t('importBottles.errors.noValidItems'));
+      return;
+    }
+    setParsedItems(items);
+    setDetectedFormat(format);
+    setDetectedEncoding(encoding);
+    setCtTable(parsed.ctTable || null);
+    setImportWarnings(parsed.warnings || []);
+    setCtTextFallback(parsed.ctRackAutoMap?.textFallback || []);
+    setCtDisclosureDismissed(false); // new file → show the CT disclosure again
+    setVivinoScanHistory(!!parsed.vivinoScanHistory);
+    setVivinoImportMode('history'); // new file → back to the recommended default
+    setFileName(sourceName);
+
+    // Build per-rack summary + seed editable config with format-aware
+    // defaults. For Oeno-export, the cabinet metadata in the CSV gives
+    // us the exact shape of each rack (one per cabinet-column); pass
+    // that through to the picker via info.oenoRackSpec. For
+    // CellarTracker, racks derived from Location/Bin pattern detection
+    // carry their pattern + counts (info.ctAutoMap, shown on the card)
+    // and detected geometry (info.ctRackSpec). Ploc states each unit's real
+    // extent outright, empty slots included, so it needs no inference at all.
+    const summary = summariseRacks(items);
+    const initialConfigs = {};
+    for (const [name, info] of Object.entries(summary)) {
+      if (oenoRackSpecs && oenoRackSpecs[name]) {
+        info.oenoRackSpec = oenoRackSpecs[name];
+      }
+      if (parsed.rackSpecs && parsed.rackSpecs[name]) {
+        info.rackSpec = parsed.rackSpecs[name];
+      }
+      const ctAutoMap = parsed.ctRackAutoMap?.racks?.[name];
+      if (ctAutoMap) {
+        info.ctAutoMap = ctAutoMap;
+        if (ctAutoMap.spec) info.ctRackSpec = ctAutoMap.spec;
+      }
+      initialConfigs[name] = getDefaultRackConfig(format, info);
+    }
+    setRackSummary(summary);
+    setRackConfigs(initialConfigs);
+    setPositionAnchor(getDefaultAnchor(format));
+  }, [t]);
+
+  const VALID_IMPORT_EXTENSIONS = ['.csv', '.tsv', '.txt', '.json'];
+
+  /**
+   * Read and parse the dropped/chosen file(s).
+   *
+   * One file is the normal case and behaves exactly as it always has. Several
+   * files are accepted for one reason: Ploc exports a SET — the wines with
+   * their stock counts, the slots that say where each bottle sits, and the
+   * purchase/consumption log — and any one of them alone is an incomplete
+   * picture of a cellar. The files are recognised by their columns rather than
+   * their names, because Ploc names them in French whatever the app language
+   * is and people rename them anyway.
+   */
+  const processFiles = useCallback((fileList) => {
     setError(null);
+    const files = Array.from(fileList || []).filter(Boolean);
+    if (files.length === 0) return;
 
-    if (!file) return;
-
-    const validExtensions = ['.csv', '.tsv', '.txt', '.json'];
-    const ext = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
-    if (!validExtensions.includes(ext)) {
-      setError(t('importBottles.errors.invalidFileType'));
-      return;
+    for (const file of files) {
+      const ext = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
+      if (!VALID_IMPORT_EXTENSIONS.includes(ext)) {
+        setError(t('importBottles.errors.invalidFileType'));
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        setError(t('importBottles.errors.fileTooLarge'));
+        return;
+      }
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      setError(t('importBottles.errors.fileTooLarge'));
-      return;
-    }
+    const readOne = (file) => new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      // Read raw bytes and detect the encoding ourselves — CellarTracker's
+      // browser export is Windows-1252, and a hard-assumed UTF-8 read
+      // silently corrupts every accented producer (Pétrus → P�trus).
+      reader.onload = (e) => {
+        try {
+          const { text, encoding } = decodeImportBuffer(e.target.result);
+          resolve({ file, text, encoding });
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = () => reject(new Error('read-failed'));
+      reader.readAsArrayBuffer(file);
+    });
 
-    const isJson = ext === '.json';
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        // Read raw bytes and detect the encoding ourselves — CellarTracker's
-        // browser export is Windows-1252, and a hard-assumed UTF-8 read
-        // silently corrupts every accented producer (Pétrus → P�trus).
-        const { text, encoding } = decodeImportBuffer(e.target.result);
-        const parsed = isJson
-          ? parseJSON(text)
-          : parseAndMap(text);
-        const { items, format, oenoRackSpecs } = parsed;
-        if (items.length === 0) {
-          const pendingWarning = (parsed.warnings || []).find(w => w.code === 'ct-pending-skipped');
-          setError(pendingWarning
-            ? t('importBottles.errors.ctAllPending', { count: pendingWarning.count })
-            : t('importBottles.errors.noValidItems'));
+    Promise.all(files.map(readOne))
+      .then((read) => {
+        // Which of these, if any, are Ploc's files?
+        const ploc = {};
+        const plocNames = [];
+        for (const r of read) {
+          if (r.file.name.toLowerCase().endsWith('.json')) continue;
+          let kind = null;
+          try {
+            const cleaned = r.text.replace(/^﻿/, '');
+            const rows = parseCSV(cleaned, detectDelimiter(cleaned));
+            if (rows.length > 0) kind = detectPlocFile(Object.keys(rows[0]));
+          } catch { /* not parseable as a table — fall through to the normal path */ }
+          if (kind && !ploc[kind]) {
+            ploc[kind] = r.text;
+            plocNames.push(r.file.name);
+          }
+        }
+
+        if (ploc.wines) {
+          const parsed = parsePlocFiles(ploc);
+          if (read.length > plocNames.length) {
+            parsed.warnings = [...(parsed.warnings || []), { code: 'extra-files-ignored', count: read.length - plocNames.length }];
+          }
+          applyParsed(parsed, { fileName: plocNames.join(' + '), encoding: read[0].encoding });
           return;
         }
-        setParsedItems(items);
-        setDetectedFormat(format);
-        setDetectedEncoding(encoding);
-        setCtTable(parsed.ctTable || null);
-        setImportWarnings(parsed.warnings || []);
-        setCtTextFallback(parsed.ctRackAutoMap?.textFallback || []);
-        setCtDisclosureDismissed(false); // new file → show the CT disclosure again
-        setVivinoScanHistory(!!parsed.vivinoScanHistory);
-        setVivinoImportMode('history'); // new file → back to the recommended default
-        setFileName(file.name);
 
-        // Build per-rack summary + seed editable config with format-aware
-        // defaults. For Oeno-export, the cabinet metadata in the CSV gives
-        // us the exact shape of each rack (one per cabinet-column); pass
-        // that through to the picker via info.oenoRackSpec. For
-        // CellarTracker, racks derived from Location/Bin pattern detection
-        // carry their pattern + counts (info.ctAutoMap, shown on the card)
-        // and detected geometry (info.ctRackSpec).
-        const summary = summariseRacks(items);
-        const initialConfigs = {};
-        for (const [name, info] of Object.entries(summary)) {
-          if (oenoRackSpecs && oenoRackSpecs[name]) {
-            info.oenoRackSpec = oenoRackSpecs[name];
-          }
-          const ctAutoMap = parsed.ctRackAutoMap?.racks?.[name];
-          if (ctAutoMap) {
-            info.ctAutoMap = ctAutoMap;
-            if (ctAutoMap.spec) info.ctRackSpec = ctAutoMap.spec;
-          }
-          initialConfigs[name] = getDefaultRackConfig(format, info);
+        if (ploc.cellars || ploc.history) {
+          // Ploc files, but not the one that holds the bottles.
+          setError(t('importBottles.errors.plocWinesMissing'));
+          return;
         }
-        setRackSummary(summary);
-        setRackConfigs(initialConfigs);
-        setPositionAnchor(getDefaultAnchor(format));
-      } catch (err) {
+
+        const first = read[0];
+        const isJson = first.file.name.toLowerCase().endsWith('.json');
+        const parsed = isJson ? parseJSON(first.text) : parseAndMap(first.text);
+        if (read.length > 1) {
+          parsed.warnings = [...(parsed.warnings || []), { code: 'extra-files-ignored', count: read.length - 1 }];
+        }
+        applyParsed(parsed, { fileName: first.file.name, encoding: first.encoding });
+      })
+      .catch((err) => {
         if (err.code === 'ct-error-page') {
           setError(t('importBottles.errors.ctErrorPage'));
         } else if (err.code === 'ct-availability') {
           setError(t('importBottles.errors.ctAvailability'));
+        } else if (err.message === 'read-failed') {
+          setError(t('importBottles.errors.readFailed'));
         } else {
           setError(t('importBottles.errors.parseFailed', { message: err.message }));
         }
-      }
-    };
-    reader.onerror = () => setError(t('importBottles.errors.readFailed'));
-    reader.readAsArrayBuffer(file);
-  }, [t]);
+      });
+  }, [t, applyParsed]);
 
   const handleFileInput = (e) => {
-    processFile(e.target.files[0]);
+    processFiles(e.target.files);
   };
 
   const handleDrop = (e) => {
     e.preventDefault();
     setDragOver(false);
-    processFile(e.dataTransfer.files[0]);
+    processFiles(e.dataTransfer.files);
   };
 
   // ── Validation ──────────────────────────────────────────────────────────
@@ -956,6 +1029,16 @@ function ImportBottles() {
             wines: (w.wines || []).join(', ')
           })}
           {w.code === 'no-identity-skipped' && t('importBottles.warnings.noIdentitySkipped', { count: w.count })}
+          {w.code === 'extra-files-ignored' && t('importBottles.warnings.extraFilesIgnored', { count: w.count })}
+          {w.code === 'ploc-placed' && t('importBottles.warnings.plocPlaced', { count: w.count, racks: w.racks })}
+          {w.code === 'ploc-history' && t('importBottles.warnings.plocHistory', { count: w.count })}
+          {w.code === 'ploc-no-cellars' && t('importBottles.warnings.plocNoCellars')}
+          {w.code === 'ploc-no-history' && t('importBottles.warnings.plocNoHistory')}
+          {w.code === 'ploc-rating-scale' && t('importBottles.warnings.plocRatingScale', { scale: w.scale })}
+          {w.code === 'ploc-date-order-assumed' && t('importBottles.warnings.plocDateOrder')}
+          {w.code === 'ploc-extra-slots' && t('importBottles.warnings.plocExtraSlots', { wine: w.wine, slots: w.slots, stock: w.stock })}
+          {w.code === 'ploc-rack-too-big' && t('importBottles.warnings.plocRackTooBig', { rack: w.rack, rows: w.rows, cols: w.cols })}
+          {w.code === 'ploc-unmatched-history' && t('importBottles.warnings.plocUnmatchedHistory', { count: w.count })}
         </div>
       ))}
     </div>
@@ -1148,6 +1231,10 @@ function ImportBottles() {
             <p>{t('importBottles.upload.oenoDesc')}</p>
           </div>
           <div className="format-card">
+            <strong>{t('importBottles.upload.plocTitle')}</strong>
+            <p>{t('importBottles.upload.plocDesc')}</p>
+          </div>
+          <div className="format-card">
             <strong>{t('importBottles.upload.genericTitle')}</strong>
             <p>{t('importBottles.upload.genericDesc')}</p>
           </div>
@@ -1165,6 +1252,7 @@ function ImportBottles() {
           id="import-file-input"
           type="file"
           accept=".csv,.tsv,.txt,.json,text/csv,text/plain,text/tab-separated-values,application/json,application/vnd.ms-excel"
+          multiple
           onChange={handleFileInput}
           style={{ display: 'none' }}
         />
@@ -1188,7 +1276,7 @@ function ImportBottles() {
         ) : (
           <div className="drop-zone-empty">
             <span className="drop-zone-icon">&#8686;</span>
-            <p>{t('importBottles.upload.dropHere')}</p>
+            <p>{t('importBottles.upload.dropHereMulti')}</p>
             <span className="drop-zone-hint">{t('importBottles.upload.dropHint')}</span>
           </div>
         )}
