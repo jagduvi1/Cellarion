@@ -103,8 +103,16 @@ restic snapshots >/dev/null 2>&1 || restic init
 log "uploading encrypted snapshot to $RESTIC_REPOSITORY…"
 restic backup --tag cellarion --host cellarion "$STAGE"
 
+# --group-by host,tags is REQUIRED here. restic's default grouping is
+# "host,paths", and every run stages into a fresh mktemp -d, so each snapshot
+# has a unique path and lands in its own group. The keep-N policy is then
+# applied per group — "keep 1 of 1" every night — and NOTHING is ever forgotten.
+# Grouping by host+tags puts all Cellarion snapshots in one group so the
+# 7d/4w/6m policy actually applies. (Found 2026-09-01: 85 snapshots retained
+# since June where ~14 were intended; erased users lingered in backups past
+# the retention promise.)
 log "pruning (keep ${KEEP_DAILY}d / ${KEEP_WEEKLY}w / ${KEEP_MONTHLY}m)…"
-restic forget --tag cellarion --keep-daily "$KEEP_DAILY" --keep-weekly "$KEEP_WEEKLY" --keep-monthly "$KEEP_MONTHLY" --prune
+restic forget --tag cellarion --group-by host,tags --keep-daily "$KEEP_DAILY" --keep-weekly "$KEEP_WEEKLY" --keep-monthly "$KEEP_MONTHLY" --prune
 
 # Optional second, off-provider copy (e.g. Backblaze B2) so a Hetzner-account
 # level loss can't wipe everything. Enable by setting B2_* in backup.env.
@@ -114,7 +122,8 @@ if [ -n "${B2_RESTIC_REPOSITORY:-}" ]; then
   restic -r "$B2_RESTIC_REPOSITORY" snapshots >/dev/null 2>&1 \
     || restic -r "$B2_RESTIC_REPOSITORY" init --copy-chunker-params --from-repo "$RESTIC_REPOSITORY"
   restic -r "$B2_RESTIC_REPOSITORY" copy --from-repo "$RESTIC_REPOSITORY" --tag cellarion
-  restic -r "$B2_RESTIC_REPOSITORY" forget --tag cellarion --keep-daily "$KEEP_DAILY" --keep-weekly "$KEEP_WEEKLY" --keep-monthly "$KEEP_MONTHLY" --prune
+  # same grouping fix as the primary repo above — without it nothing is pruned
+  restic -r "$B2_RESTIC_REPOSITORY" forget --tag cellarion --group-by host,tags --keep-daily "$KEEP_DAILY" --keep-weekly "$KEEP_WEEKLY" --keep-monthly "$KEEP_MONTHLY" --prune
 fi
 
 log "recording status for SuperAdmin…"
