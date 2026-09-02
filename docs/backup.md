@@ -177,9 +177,11 @@ unreachable; with them, this is the order:
 1. **New machine.** Install Docker (compose plugin), restic and jq. Create the
    same unprivileged user and add it to the `docker` group.
 2. **Reach the repository.** Put the Storage Box SSH key back at
-   `~/.ssh/storagebox` with the `~/.ssh/config` alias (both are in the
-   snapshot, but you need them *first* — so from the password manager), or
-   export the `B2_*` variables for the off-provider copy.
+   `~/.ssh/storagebox` with the `~/.ssh/config` alias, or export the `B2_*`
+   variables for the off-provider copy. These come from the password manager:
+   they are deliberately NOT in the snapshot, because a snapshot that carries
+   the keys to its own repositories turns a leaked passphrase into the ability
+   to erase every backup.
 3. **Pull the snapshot into a scratch directory** — no containers exist yet,
    so do not use `restore.sh` for this step:
    ```bash
@@ -192,8 +194,10 @@ unreachable; with them, this is the order:
    ```bash
    sudo cp -rp /tmp/cellarion-restore/*/config/. /
    ```
-   That restores `.env`, both compose files, `scripts/backup/backup.env`, the
-   reverse-proxy and monitoring configs, the systemd units and the SSH alias.
+   That restores `.env`, both compose files, the reverse-proxy and monitoring
+   configs and the systemd units. Then recreate `scripts/backup/backup.env`
+   from the password manager (passphrase, repository address, off-provider
+   keys) — it is never in the snapshot.
    Then `git clone` the repository into the checkout path the compose files
    expect (the checkout is not in the snapshot — only the files you changed).
 5. **Start the stack** — `docker compose -f docker-compose.prod.yml up -d`

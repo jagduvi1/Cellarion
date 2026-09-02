@@ -43,11 +43,19 @@ HEALTHCHECK_URL="${HEALTHCHECK_URL:-}"
 
 # Configuration files that make a snapshot self-sufficient. Defaults cover the
 # checkout this script lives in; EXTRA_CONFIG_PATHS (backup.env) adds anything
-# outside it — a reverse proxy, monitoring, systemd units, the SSH key that
-# reaches the repository. Space-separated absolute paths; a directory is copied
-# whole. Missing entries are logged and skipped, never fatal.
+# outside it — a reverse proxy, monitoring, systemd units. Space-separated
+# absolute paths; a directory is copied whole. Missing entries are logged and
+# skipped, never fatal.
+#
+# NEVER stage the things that unlock the snapshot itself (audit 2026-09-02
+# X01-1): backup.env (the passphrase and the keys that can DELETE both
+# repositories), the SSH key that reaches the Storage Box, the TLS origin key.
+# A snapshot that carries its own destruction keys turns a leaked passphrase
+# from "read the data" into "erase every backup". Those few bootstrap secrets
+# belong in a password manager off the host — you need them BEFORE you can
+# open a snapshot anyway, so keeping them inside one never helped recovery.
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
-CONFIG_PATHS="${CONFIG_PATHS:-$PROJECT_DIR/.env $PROJECT_DIR/docker-compose.yml $PROJECT_DIR/docker-compose.prod.yml $ENV_FILE}"
+CONFIG_PATHS="${CONFIG_PATHS:-$PROJECT_DIR/.env $PROJECT_DIR/docker-compose.yml $PROJECT_DIR/docker-compose.prod.yml}"
 EXTRA_CONFIG_PATHS="${EXTRA_CONFIG_PATHS:-}"
 # Optional: the Postgres container behind self-hosted Umami. Blank = skip.
 UMAMI_DB_CONTAINER="${UMAMI_DB_CONTAINER:-}"
@@ -123,6 +131,12 @@ log "staging configuration files…"
 mkdir -p "$STAGE/config"
 staged=0
 for p in $CONFIG_PATHS $EXTRA_CONFIG_PATHS; do
+  # Refuse the bootstrap secrets even if someone lists them (see above).
+  case "$p" in
+    "$ENV_FILE"|*/backup.env|*/.ssh/*|*/acme.json|*/id_*|*.pem|*.key)
+      log "config: refusing $p — bootstrap secret, keep it in a password manager, not in the snapshot"
+      continue ;;
+  esac
   if [ -d "$p" ]; then
     mkdir -p "$STAGE/config$(dirname "$p")"
     cp -rp "$p" "$STAGE/config$(dirname "$p")/"
