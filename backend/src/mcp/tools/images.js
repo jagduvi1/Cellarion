@@ -36,6 +36,7 @@ registerTool({
     image_url: z.string().url().optional().describe('https URL of the image (retailer/CDN product image)'),
     image_base64: z.string().max(MAX_BASE64_CHARS).optional().describe('Base64 image data (no data: prefix needed); alternative to image_url'),
     credit: z.string().max(200).optional().describe('Optional attribution/source note — admin accounts only; silently ignored for regular users (matches the web app)'),
+    keep_background: z.boolean().optional().describe('Skip background removal. Set it for a photo of just the label, a retailer product shot, or anything that is not a whole bottle on a plain background — background removal expects a bottle and cuts everything else away. Default false.'),
     idempotency_key: z.string().max(100).optional(),
   },
   handler: async (args, ctx) => {
@@ -83,6 +84,7 @@ registerTool({
       : null;
     const result = await ingestBottleImage({
       buffer, userId: ctx.user.id, userRoles: ctx.user.roles, bottle, wineDefinitionId, credit: args.credit || null,
+      keepBackground: args.keep_background === true,
     }, ctx.req);
     if (result.error) {
       // 4xx = the caller's image is bad (invalid_input); 5xx = a transient

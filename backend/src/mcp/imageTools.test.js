@@ -95,6 +95,17 @@ describe('attach_bottle_image', () => {
     expect(row.detail.imageId).toBeDefined();
   });
 
+  test('keep_background reaches the shared pipeline as keepBackground (label-only photos, ticket 6a97f870)', async () => {
+    ownBottle();
+    safeFetchImage.mockResolvedValue({ buffer: Buffer.from('imgbytes'), contentType: 'image/jpeg' });
+    await tool('attach_bottle_image').handler({ bottle_id: oid('d'), image_url: 'https://cdn.example.com/label.jpg', keep_background: true }, CTX);
+    expect(ingestBottleImage).toHaveBeenCalledWith(expect.objectContaining({ keepBackground: true }), CTX.req);
+
+    ingestBottleImage.mockClear();
+    await tool('attach_bottle_image').handler({ bottle_id: oid('d'), image_url: 'https://cdn.example.com/label.jpg' }, CTX);
+    expect(ingestBottleImage).toHaveBeenCalledWith(expect.objectContaining({ keepBackground: false }), CTX.req);
+  });
+
   test('a bottle with no registry wine yet attaches bottle-only (no wine linkage)', async () => {
     ownBottle(); // pending-wine-request bottles have no wineDefinition
     safeFetchImage.mockResolvedValue({ buffer: Buffer.from('imgbytes'), contentType: 'image/jpeg' });

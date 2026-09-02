@@ -52,7 +52,7 @@ function sanitizeCredit(credit, userRoles) {
  * @param {object}  req                    for downstream audit attribution
  * @returns {{ image }} | {{ error: { status, message } }}
  */
-async function ingestBottleImage({ buffer, userId, userRoles = [], bottle = null, wineDefinitionId = null, credit = null }, req) {
+async function ingestBottleImage({ buffer, userId, userRoles = [], bottle = null, wineDefinitionId = null, credit = null, keepBackground = false }, req) {
   if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
     return { error: { status: 400, message: 'No image data provided' } };
   }
@@ -95,19 +95,31 @@ async function ingestBottleImage({ buffer, userId, userRoles = [], bottle = null
   let contentHash = null;
   try { contentHash = hashImageBytes(clean); } catch { /* non-fatal */ }
 
+  // keepBackground (ticket 6a97f870): the uploader opted out of background
+  // removal — a label-only photo or a product shot, which rembg would cut up.
+  // The original is then the kept image from the start: processedUrl points at
+  // it so every consumer that prefers processedUrl (exports, the wine's
+  // display image, the upload preview) works unchanged, and the row is
+  // 'processed' immediately, so nothing polls for a job that never runs.
+  const keep = keepBackground === true;
+  const originalUrl = `/api/uploads/originals/${filename}`;
   const image = new BottleImage({
     bottle: bottle ? bottle._id : null,
     wineDefinition: wineDefinitionId || null,
     uploadedBy: userId,
-    originalUrl: `/api/uploads/originals/${filename}`,
-    status: 'uploaded',
+    originalUrl,
+    processedUrl: keep ? originalUrl : null,
+    status: keep ? 'processed' : 'uploaded',
+    keepBackground: keep,
     credit: sanitizeCredit(credit, userRoles),
     contentHash,
   });
   await image.save();
 
   // Fire-and-forget background removal (rembg) — same hand-off as the route.
-  processImage(image._id).catch((err) => console.error('Background processing error:', err.message));
+  if (!keep) {
+    processImage(image._id).catch((err) => console.error('Background processing error:', err.message));
+  }
 
   return { image };
 }
@@ -124,8 +136,8 @@ async function ingestBottleImage({ buffer, userId, userRoles = [], bottle = null
  * Caller must have verified the wine exists and the actor is an admin
  * (userRoles is still forwarded so the shared credit gate applies uniformly).
  */
-async function attachOfficialWineImage({ buffer, wineDefinitionId, credit = null, userId, userRoles = [] }, req) {
-  const ingest = await ingestBottleImage({ buffer, userId, userRoles, wineDefinitionId, credit }, req);
+async function attachOfficialWineImage({ buffer, wineDefinitionId, credit = null, userId, userRoles = [], keepBackground = false }, req) {
+  const ingest = await ingestBottleImage({ buffer, userId, userRoles, wineDefinitionId, credit, keepBackground }, req);
   if (ingest.error) return ingest;
   const image = ingest.image;
 

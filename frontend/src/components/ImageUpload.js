@@ -14,6 +14,11 @@ function ImageUpload({ bottleId, wineDefinitionId, credit, onUploadComplete, onP
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState(null);
   const [facingMode, setFacingMode] = useState('environment');
+  // "Keep the background": skip background removal for this upload. rembg
+  // expects a whole bottle; on a photo of just the label, or a product shot,
+  // it keeps whatever figure it finds on the label and cuts the rest away
+  // (support ticket 6a97f870, 2026-09-02).
+  const [keepBackground, setKeepBackground] = useState(false);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
@@ -97,15 +102,28 @@ function ImageUpload({ bottleId, wineDefinitionId, credit, onUploadComplete, onP
     if (bottleId) formData.append('bottleId', bottleId);
     if (wineDefinitionId) formData.append('wineDefinitionId', wineDefinitionId);
     if (credit && credit.trim()) formData.append('credit', credit.trim());
+    if (keepBackground) formData.append('keepBackground', '1');
 
     try {
       const res = await apiFetch('/api/images/upload', { method: 'POST', body: formData });
       const data = await res.json();
       if (res.ok) {
-        const newImage = { id: data.image._id, originalSrc: localSrc, processedSrc: null, status: 'processing' };
+        // With the background kept there is no job to wait for: the server
+        // answers 'processed' straight away with the original as the kept
+        // image, so show it and hand it to the parent now instead of polling.
+        const done = data.image.status === 'processed' && data.image.processedUrl;
+        const newImage = done
+          ? { id: data.image._id, originalSrc: localSrc, processedSrc: data.image.processedUrl, status: 'processed' }
+          : { id: data.image._id, originalSrc: localSrc, processedSrc: null, status: 'processing' };
         setImages(prev => [...prev, newImage]);
         if (onUploadComplete) onUploadComplete(data.image);
-        pollImage(data.image._id);
+        if (done) {
+          if (onProcessingComplete) {
+            onProcessingComplete(data.image.processedUrl.startsWith('http') ? data.image.processedUrl : `${API_URL}${data.image.processedUrl}`);
+          }
+        } else {
+          pollImage(data.image._id);
+        }
       } else {
         setError(data.error || t('imageUpload.uploadFailed'));
         URL.revokeObjectURL(localSrc);
@@ -286,6 +304,19 @@ function ImageUpload({ bottleId, wineDefinitionId, credit, onUploadComplete, onP
           {t('imageUpload.upload')}
         </button>
       </div>
+
+      <label className="upload-option">
+        <input
+          type="checkbox"
+          checked={keepBackground}
+          onChange={(e) => setKeepBackground(e.target.checked)}
+          disabled={uploading}
+        />
+        <span className="upload-option-text">
+          {t('imageUpload.keepBackground')}
+          <small className="upload-option-hint">{t('imageUpload.keepBackgroundHint')}</small>
+        </span>
+      </label>
 
       {uploading && <p className="upload-status">{t('imageUpload.uploading')}</p>}
       {error && <div className="upload-error">{error}</div>}

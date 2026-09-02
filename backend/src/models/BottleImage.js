@@ -52,6 +52,17 @@ const bottleImageSchema = new mongoose.Schema({
     enum: ['private', 'public'],
     default: 'public'
   },
+  // The uploader asked us NOT to run background removal on this photo. rembg
+  // assumes a bottle on a background: on a photo of just the label, or a
+  // retailer product shot, it keeps whatever "figure" it finds on the label
+  // and cuts the rest away (support ticket 6a97f870, 2026-09-02 — a user's
+  // label photos came back "systematically cropped"). When true the original
+  // IS the kept image (processedUrl = originalUrl) and processImage /
+  // reprocessAllImages / retry leave it alone.
+  keepBackground: {
+    type: Boolean,
+    default: false
+  },
   // What this image IS, so the one collection can hold two things that must
   // never be confused. 'bottle' (the default, and what every pre-existing row
   // is) = a user's photo of their bottle: gallery-eligible, wine-image-

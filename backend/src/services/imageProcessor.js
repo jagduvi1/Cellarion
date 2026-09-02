@@ -70,6 +70,16 @@ async function processImage(imageId) {
   const image = await BottleImage.findById(imageId);
   if (!image || image.status !== 'uploaded') return;
 
+  // The uploader opted out of background removal (label-only photo, product
+  // shot — see models/BottleImage.keepBackground). The original is the kept
+  // image; a retry or a stray 'uploaded' row just settles it without rembg.
+  if (image.keepBackground) {
+    image.processedUrl = image.originalUrl;
+    image.status = 'processed';
+    await image.save();
+    return;
+  }
+
   // Mark as processing
   image.status = 'processing';
   await image.save();
@@ -141,7 +151,9 @@ async function processImage(imageId) {
 async function reprocessAllImages() {
   const images = await BottleImage.find({
     status: { $in: ['processed', 'approved'] },
-    originalUrl: { $exists: true }
+    originalUrl: { $exists: true },
+    // Never run rembg over a photo whose uploader opted out of it.
+    keepBackground: { $ne: true },
   });
 
   console.log(`Re-processing ${images.length} images...`);

@@ -60,6 +60,36 @@
   font-size: 0.85rem;
 }
 
+/* "Keep the background" opt-out of background removal (label-only photos,
+   product shots). A plain checkbox row under the upload buttons. */
+.upload-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.upload-option input[type="checkbox"] {
+  margin-top: 0.15rem;
+  flex-shrink: 0;
+  accent-color: var(--color-primary);
+}
+
+.upload-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.upload-option-hint {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  line-height: 1.3;
+}
+
 /* ===== Preview Cards ===== */
 
 .upload-previews {
