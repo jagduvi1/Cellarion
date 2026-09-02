@@ -94,6 +94,11 @@ const {
 router.use(express.urlencoded({ extended: false }));
 
 const MAX_REDIRECT_URIS = 5;
+// Per-URI length cap (security audit 2026-09-02 D16-2): the count was capped
+// but each entry was stored verbatim, so one anonymous registration could park
+// ~2 MB of redirect URIs in Mongo for 30 days, 200 times an hour per address.
+// 2048 is the same bound accountOps applies to URLs; no real client is near it.
+const MAX_REDIRECT_URI_LEN = 2048;
 const MAX_OAUTH_CONNECTIONS_PER_USER = 20; // Claude + ChatGPT + Desktop + … — generous, but bounded.
 
 // ── error helpers (RFC 6749 §5.2) ────────────────────────────────────────────
@@ -127,6 +132,9 @@ router.post('/register', registerLimiter, async (req, res) => {
     const redirectUris = body.redirect_uris;
     if (!Array.isArray(redirectUris) || redirectUris.length === 0 || redirectUris.length > MAX_REDIRECT_URIS) {
       return oauthError(res, 400, 'invalid_redirect_uri', `redirect_uris must be a non-empty array of at most ${MAX_REDIRECT_URIS} URLs`);
+    }
+    if (!redirectUris.every((u) => typeof u === 'string' && u.length <= MAX_REDIRECT_URI_LEN)) {
+      return oauthError(res, 400, 'invalid_redirect_uri', `each redirect_uri must be a string of at most ${MAX_REDIRECT_URI_LEN} characters`);
     }
     if (!redirectUris.every(isValidRedirectUri)) {
       return oauthError(res, 400, 'invalid_redirect_uri', 'redirect_uris must all be https, or http on a loopback host');

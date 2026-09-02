@@ -20,6 +20,11 @@ const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
 const router = express.Router();
 
 const MAX_MODULES = 50;
+// Mirrors the Rack schema's rows/cols bounds (models/Rack.js). Checked at the
+// request boundary because geometry runs on the values BEFORE save() would
+// reject them (security audit 2026-09-02 D14-1).
+const MAX_RACK_DIM = 20;
+const isRackDim = (v) => Number.isInteger(v) && v >= 1 && v <= MAX_RACK_DIM;
 
 /**
  * Serialize rack doc(s) with a maturityStatus attached to every populated
@@ -193,12 +198,25 @@ router.put('/:id', async (req, res) => {
         return res.status(400).json({ error: `Maximum ${MAX_MODULES} modules allowed per rack` });
       }
       for (const m of modules) {
-        if (!m.type || !RACK_TYPES.includes(m.type)) {
-          return res.status(400).json({ error: `Invalid module type: ${m.type}` });
+        if (!m || !m.type || !RACK_TYPES.includes(m.type)) {
+          return res.status(400).json({ error: `Invalid module type: ${m?.type}` });
+        }
+        if ((m.rows !== undefined && !isRackDim(m.rows)) || (m.cols !== undefined && !isRackDim(m.cols))) {
+          return res.status(400).json({ error: `Module rows and cols must be whole numbers between 1 and ${MAX_RACK_DIM}` });
         }
       }
     } else if (type && !RACK_TYPES.includes(type)) {
       return res.status(400).json({ error: `Invalid rack type. Must be one of: ${RACK_TYPES.join(', ')}` });
+    }
+
+    // Dimensions are validated HERE, before any geometry runs on them. The
+    // schema's min/max only fires at save(), but getMaxPosition() below runs
+    // on the request's values first — and a rows of "1e308" used to park the
+    // event loop in the hex slot count for every tenant (security audit
+    // 2026-09-02 D14-1). The closed-form hex count removed the loop; this keeps
+    // nonsense out of every other formula too.
+    if ((rows !== undefined && !isRackDim(rows)) || (cols !== undefined && !isRackDim(cols))) {
+      return res.status(400).json({ error: `rows and cols must be whole numbers between 1 and ${MAX_RACK_DIM}` });
     }
 
     // Validate double-height rows against the rack's effective (post-update)

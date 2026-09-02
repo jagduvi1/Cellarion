@@ -149,6 +149,11 @@ app.use('/api/wine-lists', express.json({ limit: '1mb' }));
 // body for attach_bottle_image's base64 mode (MAX_BASE64_CHARS ≈ 1.5MB + JSON
 // overhead); every personal MCP caller is authenticated and rate-limited.
 app.use('/api/mcp/public', express.json({ limit: '10kb' }));
+// The OAuth endpoints (dynamic client registration, token, revocation) carry
+// small metadata bodies and are reachable ANONYMOUSLY — they must not inherit
+// the 2 MB image budget below (security audit 2026-09-02 D16-2: a 2 MB
+// registration body was accepted and, with uncapped redirect URIs, stored).
+app.use('/api/mcp/oauth', express.json({ limit: '10kb' }));
 app.use('/api/mcp', express.json({ limit: '2mb' }));
 app.use(express.json({ limit: '10kb' }));
 const corsOrigin = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? false : 'http://localhost:3000');

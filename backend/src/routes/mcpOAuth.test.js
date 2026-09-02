@@ -101,6 +101,16 @@ describe('POST /register (DCR)', () => {
     expect(OAuthClient.create).not.toHaveBeenCalled();
   });
 
+  // Security audit 2026-09-02 (D16-2): the COUNT was capped but each entry was
+  // stored verbatim — one anonymous registration could park ~2 MB in Mongo.
+  test('an over-long redirect_uri is rejected before anything is stored', async () => {
+    const r = await jsonPost('/register', { redirect_uris: [`https://a.example/${'x'.repeat(2100)}`] });
+    expect(r.status).toBe(400);
+    const body = await r.json();
+    expect(body.error).toBe('invalid_redirect_uri');
+    expect(body.error_description).toMatch(/2048/);
+  });
+
   test('an empty redirect_uris array is rejected', async () => {
     const r = await jsonPost('/register', { redirect_uris: [] });
     expect(r.status).toBe(400);
