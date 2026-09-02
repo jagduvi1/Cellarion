@@ -61,6 +61,27 @@ test('happy path: sanitises, writes a sniffed-extension file, saves the row, kic
   expect(processImage).toHaveBeenCalledWith('img-new');
 });
 
+// Support ticket 6a97f870 (2026-09-02): a user's label-only photos came back
+// "systematically cropped" — rembg keeps the figure it finds on the label and
+// cuts the label away. The uploader can now opt out of background removal.
+test('keepBackground: no bg-removal hand-off, the original is the kept image and the row is processed at once', async () => {
+  const res = await ingestBottleImage({ buffer: Buffer.from('RAW'), userId: 'u1', bottle: { _id: 'b1' }, keepBackground: true }, REQ);
+  expect(res.error).toBeUndefined();
+  expect(processImage).not.toHaveBeenCalled();
+  expect(res.image.keepBackground).toBe(true);
+  expect(res.image.status).toBe('processed');
+  expect(res.image.originalUrl).toMatch(/^\/api\/uploads\/originals\/.+\.jpg$/); // sniffed jpeg → .jpg
+  expect(res.image.processedUrl).toBe(res.image.originalUrl);
+  expect(res.image.save).toHaveBeenCalledTimes(1);
+});
+
+test('keepBackground must be literally true — a truthy string does not opt out', async () => {
+  const res = await ingestBottleImage({ buffer: Buffer.from('RAW'), userId: 'u1', keepBackground: 'yes' }, REQ);
+  expect(res.image.keepBackground).toBe(false);
+  expect(res.image.status).toBe('uploaded');
+  expect(processImage).toHaveBeenCalledWith('img-new');
+});
+
 test('fail-closed: an undecodable buffer is rejected, nothing written or saved', async () => {
   sanitizeImageBuffer.mockRejectedValue(new Error('Input buffer contains unsupported image format'));
   const res = await ingestBottleImage({ buffer: Buffer.from('NOT-AN-IMAGE'), userId: 'u1' }, REQ);

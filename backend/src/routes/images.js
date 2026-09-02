@@ -106,6 +106,10 @@ router.post('/upload', requireAuth, requireNonDemo, imageUploadLimiter, handleIm
     }
 
     const { bottleId, wineDefinitionId, credit } = req.body;
+    // Multipart field, so a string: "1" / "true" / "on" from the upload form's
+    // "keep the background" checkbox (ticket 6a97f870 — label-only photos
+    // came back cropped because rembg expects a whole bottle).
+    const keepBackground = ['1', 'true', 'on'].includes(String(req.body.keepBackground ?? '').trim().toLowerCase());
 
     // Verify bottle ownership if bottleId is provided (access is the route's
     // job; the per-bottle image cap lives in the shared pipeline).
@@ -150,6 +154,7 @@ router.post('/upload', requireAuth, requireNonDemo, imageUploadLimiter, handleIm
       bottle,
       wineDefinitionId: wineDefinitionId ? String(wineDefinitionId) : null,
       credit,
+      keepBackground,
     }, req);
     if (result.error) {
       return res.status(result.error.status).json({ error: result.error.message });

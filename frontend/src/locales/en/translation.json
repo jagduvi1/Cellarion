@@ -4237,7 +4237,9 @@
     "uploadFailed": "Upload failed",
     "networkError": "Network error during upload",
     "processedAlt": "Processed",
-    "originalAlt": "Original"
+    "originalAlt": "Original",
+    "keepBackground": "Keep the background",
+    "keepBackgroundHint": "For a photo of just the label, or a product picture. Background removal expects a whole bottle and cuts everything else away."
   },
   "cellarChat": {
     "title": "Cellar Chat",
