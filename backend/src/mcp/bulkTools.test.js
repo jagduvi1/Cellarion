@@ -21,7 +21,7 @@ jest.mock('../models/JournalEntry', () => ({ find: jest.fn(), countDocuments: je
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn() }));
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineEmbedding', () => ({ findOne: jest.fn() }));
-jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
+jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn(), find: jest.fn(), deleteMany: jest.fn() }));
 jest.mock('../utils/rackGeometry', () => ({ getMaxPosition: jest.fn(() => 12) }));
 jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false), search: jest.fn(), searchBottles: jest.fn() }));
 jest.mock('../services/statsService', () => ({ computeOverview: jest.fn(), buildEmptyStats: jest.fn() }));
@@ -61,6 +61,8 @@ beforeEach(() => {
   takeMutationSlot.mockReturnValue(true);
   McpActionLog.create.mockResolvedValue({ _id: oid('9') });
   McpActionLog.findOneAndUpdate.mockResolvedValue(null); // claims fail unless a test arms them
+  McpActionLog.find.mockReturnValue(chain([])); // no older unconsumed previews unless a test plants them
+  McpActionLog.deleteMany.mockResolvedValue({ deletedCount: 0 });
 });
 
 describe('preview', () => {
@@ -83,6 +85,35 @@ describe('preview', () => {
     for (const call of findOrCreateWine.mock.calls) expect(call[2]).toEqual({ matchOnly: true });
     // plan persisted for the apply step
     expect(McpActionLog.create.mock.calls[0][0].action).toBe('bulk_preview');
+    // …and the preview itself is budgeted: ceil(3/4) = 1 slot, older unconsumed previews trimmed
+    expect(takeMutationSlot).toHaveBeenCalledWith(ME, 1, null);
+    expect(McpActionLog.find).toHaveBeenCalledWith({ user: ME, action: 'bulk_preview', reversed: false });
+  });
+
+  // Security audit 2026-09-02 (D08-1): preview charged nothing and stored the
+  // whole request (~250 KB at the caps) in a 90-day-TTL row, so a looping
+  // client could fill the disk from one free account.
+  test('preview charges a quarter of the batch BEFORE resolving anything, and refuses on an exhausted budget', async () => {
+    ownCellar();
+    takeMutationSlot.mockReturnValue(false);
+    const res = await tool('bulk_add').handler({ cellar_id: oid('c'), items: Array.from({ length: 24 }, () => ({ new_wine: NEW })) }, CTX);
+    expect(parse(res).error.code).toBe('rate_limited');
+    expect(takeMutationSlot).toHaveBeenCalledWith(ME, 6, null); // ceil(24/4)
+    expect(findOrCreateWine).not.toHaveBeenCalled(); // the registry work is what the charge protects
+    expect(McpActionLog.create).not.toHaveBeenCalled();
+  });
+
+  test('a new preview evicts unconsumed previews beyond the newest five', async () => {
+    ownCellar();
+    findOrCreateWine.mockResolvedValue({ wine: null, noMatch: true });
+    McpActionLog.find.mockReturnValue(chain([{ _id: 'old1' }, { _id: 'old2' }]));
+    await tool('bulk_add').handler({ cellar_id: oid('c'), items: [{ new_wine: NEW }] }, CTX);
+    // find(...).sort(desc).skip(4) → everything past the newest four existing rows goes
+    const q = McpActionLog.find.mock.results[0].value;
+    expect(q.sort).toHaveBeenCalledWith({ createdAt: -1 });
+    expect(q.skip).toHaveBeenCalledWith(4);
+    expect(McpActionLog.deleteMany).toHaveBeenCalledWith({ _id: { $in: ['old1', 'old2'] } });
+    expect(McpActionLog.create).toHaveBeenCalledTimes(1); // the new row still lands
   });
 
   test('invalid fields are flagged per item', async () => {

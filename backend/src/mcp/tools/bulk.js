@@ -25,11 +25,19 @@ const WineDefinition = require('../../models/WineDefinition');
 const { findVisibleWine } = require('../../services/wineVisibility');
 const { NEW_WINE_SHAPE } = require('./write');
 const { ok, fail, objectId, MSG_CELLAR_NOT_FOUND, resolveCellarAccess, wineSummary } = require('../toolUtil');
-const { logAction } = require('../actionLedger');
+const { logAction, trimOutstandingPreviews } = require('../actionLedger');
 const { takeMutationSlot, ipKeyFor } = require('../mutationBudget');
 
 const MAX_ITEMS = 24; // two cases — keeps one batch well inside the write budget
 const PREVIEW_FRESH_MS = 15 * 60 * 1000;
+// Unconsumed previews kept per user; older ones are deleted when a new one is
+// made (audit 2026-09-02 D08-1). Five is plenty for an agent that previews a
+// couple of batches before applying them.
+const MAX_OUTSTANDING_PREVIEWS = 5;
+// Preview is not free: it runs up to MAX_ITEMS registry resolutions and parks
+// the whole request in the ledger. Charge a quarter of the batch (min 1) — a
+// full-case preview→apply round trip costs 6 + 24 of the 60-slot window.
+const previewCost = (n) => Math.max(1, Math.ceil(n / 4));
 
 const ITEM_SHAPE = z.object({
   wine_id: z.string().optional(),
@@ -128,6 +136,13 @@ registerTool({
       }
       const access = await resolveCellarAccess(ctx.user.id, args.cellar_id, 'editor');
       if (!access) return fail('not_found', MSG_CELLAR_NOT_FOUND);
+
+      // Charged BEFORE the registry resolutions below — they are the work a
+      // looping client would otherwise get for free (D08-1).
+      if (!takeMutationSlot(String(ctx.user.id), previewCost(args.items.length), ipKeyFor(ctx))) {
+        return fail('rate_limited', 'Too many previews in a short time — wait a few minutes before previewing again, or apply the last one.');
+      }
+      await trimOutstandingPreviews(ctx.user.id, 'bulk_preview', MAX_OUTSTANDING_PREVIEWS);
 
       const plan = [];
       for (let i = 0; i < args.items.length; i++) {

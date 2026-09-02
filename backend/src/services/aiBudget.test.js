@@ -195,6 +195,7 @@ describe('per-user override (admin-granted AiBudgetRequest)', () => {
 describe('isRefundableFailure', () => {
   test('transport-level failures are refundable', () => {
     expect(isRefundableFailure('rate_limit_exceeded')).toBe(true);
+    expect(isRefundableFailure('prompt_too_long')).toBe(true); // refused before any request (audit 2026-09-02 D10-9)
     expect(isRefundableFailure('exception: socket hang up')).toBe(true);
     expect(isRefundableFailure('no_api_key')).toBe(true);
   });

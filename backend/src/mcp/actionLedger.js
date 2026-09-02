@@ -157,4 +157,27 @@ async function releaseClaim(ctx, idempotencyKey, toolName) {
   } catch { /* best-effort; a leftover stub goes stale-reclaimable, then TTL */ }
 }
 
-module.exports = { logAction, replay, releaseClaim, CLAIM_STALE_MS };
+/**
+ * Keep at most `keep` UNCONSUMED preview rows per user and action, deleting
+ * the oldest. Call BEFORE creating the new preview row.
+ *
+ * Previews are stubs — never shown in the timeline, never undo-eligible — but
+ * their `prev` carries the whole request so apply can re-read it: up to
+ * ~250 KB for a 24-item bulk_add at the field caps. Preview never consumed a
+ * write slot (it changes nothing), so a looping client could park an
+ * unbounded number of those blobs in McpActionLog under a 90-day TTL — a
+ * disk-fill from one free account (audit 2026-09-02 D08-1). Consumed previews
+ * already drop `prev` at claim time; this bounds the unconsumed ones.
+ */
+async function trimOutstandingPreviews(userId, action, keep) {
+  const stale = await McpActionLog.find({ user: userId, action, reversed: false })
+    .sort({ createdAt: -1 })
+    .skip(Math.max(0, keep - 1))
+    .select('_id')
+    .lean();
+  if (!stale || stale.length === 0) return 0;
+  await McpActionLog.deleteMany({ _id: { $in: stale.map((s) => s._id) } });
+  return stale.length;
+}
+
+module.exports = { logAction, replay, releaseClaim, trimOutstandingPreviews, CLAIM_STALE_MS };

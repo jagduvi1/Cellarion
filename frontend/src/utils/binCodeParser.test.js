@@ -130,6 +130,25 @@ describe('segments family (12-3-4 / D-04-1 / 3.2)', () => {
     expect(r.subRacks).toBeUndefined();
   });
 
+  // Support ticket 2026-09-02: a 1,354-bottle CellarTracker cellar typed every
+  // bin as "row,column" ("5,8"). The comma was not a separator, so 1,174 bins
+  // fell through to the freeform-text fallback and no rack was auto-mapped.
+  it('parses comma-separated row,col bins (5,8) exactly like dashes and dots', () => {
+    const r = analyzeBinGroup(['5,8', '5,9', '6,1', '1,12', '2,3']);
+    expect(r.pattern).toBe('segments');
+    expect(r.qualifies).toBe(true);
+    expect(r.inferredRows).toBe(6);
+    expect(r.inferredCols).toBe(12);
+    expect(placementFor(r, 0)).toEqual({ index: 0, row: 5, col: 8 });
+    expect(placementFor(r, 3)).toEqual({ index: 3, row: 1, col: 12 });
+    expect(r.unparsed).toEqual([]);
+  });
+
+  it('a thousands-style "1,000" is not a placement (column 0 is invalid)', () => {
+    const r = analyzeBinGroup(['1,000', '1,000', '1,000', '2,5']);
+    expect(placementFor(r, 0)).toBeUndefined();
+  });
+
   it('parses 3-segment codes as subrack-row-col, splitting the group into sub-racks', () => {
     const r = analyzeBinGroup(['12-3-4', '12-3-5', '12-1-1', '13-2-2']);
     expect(r.pattern).toBe('segments');

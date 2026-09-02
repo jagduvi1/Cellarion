@@ -668,8 +668,18 @@ async function attachReviews(bottle, reviews, userId, wineDefinitionId, result) 
  *  overwrites curated maturity data, so it can't poison a shared registry. On a
  *  fresh instance (the self-hosted migration case) where no profile exists yet,
  *  the imported window is restored in full. Deduped per wine+vintage via `seen`
- *  so bottles that share a wine only trigger this once. */
-async function attachMaturity(maturity, wineDefinitionId, vintage, result, seen) {
+ *  so bottles that share a wine only trigger this once.
+ *
+ *  Status follows the IMPORTER, not the file (audit 2026-09-02 D09-4): only a
+ *  sommelier/admin — someone who could set the same window by hand — restores
+ *  it as `reviewed`. utils/maturityUtils gates every reader on
+ *  status === 'reviewed', so a reviewed row from anyone's file was
+ *  indistinguishable from curated data and became the drink window every
+ *  other user of that wine+vintage saw, with the file's notes shown as the
+ *  sommelier's. Any other importer's window lands as a PENDING suggestion:
+ *  numbers and notes kept for the sommelier queue, nothing published until a
+ *  curator reviews it — the same path a hand-added bottle takes. */
+async function attachMaturity(maturity, wineDefinitionId, vintage, result, seen, { canCurate = false, userId = null, audit = null } = {}) {
   if (!maturity || typeof maturity !== 'object') return;
   if (!wineDefinitionId || !vintage || vintage === 'NV') return;
 
@@ -690,15 +700,26 @@ async function attachMaturity(maturity, wineDefinitionId, vintage, result, seen)
       .findOne({ wineDefinition: wineDefinitionId, vintage }).select('_id').lean();
     if (existing) { result.maturitySkipped++; return; } // never clobber existing curated data
 
-    await WineVintageProfile.create({
+    const reviewed = canCurate === true;
+    const profile = await WineVintageProfile.create({
       wineDefinition: wineDefinitionId,
       vintage,
-      status: 'reviewed',
+      status: reviewed ? 'reviewed' : 'pending',
       relative: !!maturity.relative,
       ...fields,
       sommNotes: maturity.sommNotes ? stripHtml(String(maturity.sommNotes)).slice(0, 2000) : undefined,
+      setBy: userId || null,
+      setAt: reviewed ? new Date() : null,
     });
-    result.maturityCreated++;
+    if (reviewed) result.maturityCreated++;
+    else result.maturitySuggested++;
+    // Shared-data write visible to every user of this wine+vintage (when
+    // reviewed) or queued for a curator (when pending) — audited like the
+    // somm route's own review is.
+    if (typeof audit === 'function') {
+      audit('cellar.import.maturity', { type: 'wine', id: wineDefinitionId },
+        { vintage, status: reviewed ? 'reviewed' : 'pending', profileId: profile?._id || null });
+    }
   } catch {
     // Unique-index race (another bottle created it first) or a validation miss —
     // treat as skipped rather than failing the whole import.
@@ -749,7 +770,7 @@ async function createLayout(cellarId, layout, result) {
  * `result`; only an unexpected failure rejects. Returns the ids of the active
  * bottles created, for search indexing.
  */
-async function buildCellarContents({ cellarId, ownerId, userId, cellar, items, imagesByIndex, anchor, getFileBuffer, defaultCurrency, result, demoMode = false }) {
+async function buildCellarContents({ cellarId, ownerId, userId, cellar, items, imagesByIndex, anchor, getFileBuffer, defaultCurrency, result, demoMode = false, canCurate = false, audit = null }) {
   // Racks (exact geometry, fallback inference), then the 3D room layout.
   await createRacks(cellarId, ownerId, cellar, items, result);
   await createLayout(cellarId, cellar.layout, result);
@@ -839,7 +860,7 @@ async function buildCellarContents({ cellarId, ownerId, userId, cellar, items, i
       // registry wine's existing profile at read time.
       if (!demoMode) {
         await attachReviews(bottle, item.reviews, userId, wine.wineDefinitionId, result);
-        await attachMaturity(item.maturity, wine.wineDefinitionId, canonicalVintage, result, seenMaturity);
+        await attachMaturity(item.maturity, wine.wineDefinitionId, canonicalVintage, result, seenMaturity, { canCurate, userId, audit });
       }
 
       // Seed the sommelier maturity queue for resolved wines that didn't carry a
@@ -932,6 +953,9 @@ async function importCellar(userId, cellar, opts) {
     reviewsCreated: 0,
     reviewsSkipped: 0,
     maturityCreated: 0,
+    // Windows from a non-curator's file, stored as pending suggestions for
+    // the sommelier queue (see attachMaturity).
+    maturitySuggested: 0,
     maturitySkipped: 0,
     layoutImported: false,
     errors: [],
@@ -965,6 +989,10 @@ async function importCellar(userId, cellar, opts) {
       items, imagesByIndex, anchor, getFileBuffer,
       defaultCurrency: opts.defaultCurrency, result,
       demoMode: !!opts.demoMode,
+      // Registry-facing trust of the importer (somm/admin) and the caller's
+      // audit hook — the service has no req of its own.
+      canCurate: opts.canCurate === true,
+      audit: typeof opts.audit === 'function' ? opts.audit : null,
     });
     if (liveCellar) {
       swapStarted = true;
