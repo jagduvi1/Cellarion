@@ -355,6 +355,14 @@ async function attachBottleImageUrls(bottles, userId) {
     ],
     uploadedBy: userId,
     status: { $in: ['uploaded', 'processing', 'processed'] },
+    // Never a label scan (support ticket 2026-09-03). The raw frame handed to
+    // the AI scanner is kept ONLY as private curation evidence (models/
+    // BottleImage.kind); it carries the wine it minted, sits at status
+    // 'uploaded' with no processed file, and so matched the by-wine arm above —
+    // the scanner's kitchen-table photo became the card image of every bottle
+    // of that wine. `$ne`, not `kind: 'bottle'`: rows older than the field
+    // have no `kind` at all.
+    kind: { $ne: 'label-scan' },
   }).sort({ createdAt: -1 }).lean();
 
   // Two maps, consulted bottle-first: a photo pinned to this exact bottle must
@@ -1799,3 +1807,5 @@ router.post('/:id/transfer-ownership', requireNonDemo, async (req, res) => {
 });
 
 module.exports = router;
+// Exported for its unit test (routes/cellars.pendingImage.test.js).
+module.exports.attachBottleImageUrls = attachBottleImageUrls;

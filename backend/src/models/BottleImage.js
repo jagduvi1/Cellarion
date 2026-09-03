@@ -19,6 +19,16 @@ const bottleImageSchema = new mongoose.Schema({
     required: true,
     index: true
   },
+  // The sanitised (EXIF-stripped) upload as received. TRANSIENT for an
+  // ordinary bottle photo: it exists only until background removal succeeds,
+  // then services/imageProcessor.discardOriginal deletes the file and nulls
+  // this — the processed image is the only copy Cellarion keeps (support
+  // ticket 2026-09-03: a raw frame shows the kitchen, a hand, a face, and
+  // nothing needs it once rembg has run). It STAYS where it is the only or the
+  // intended file: a keepBackground row (processedUrl === originalUrl), a row
+  // whose rembg run failed (the retry needs its source), an imported photo
+  // that was never cropped, and kind:'label-scan' curation evidence, which has
+  // its own bounded retention (services/scanImageRetentionJob).
   originalUrl: {
     type: String,
     default: null
@@ -57,8 +67,8 @@ const bottleImageSchema = new mongoose.Schema({
   // retailer product shot, it keeps whatever "figure" it finds on the label
   // and cuts the rest away (support ticket 6a97f870, 2026-09-02 — a user's
   // label photos came back "systematically cropped"). When true the original
-  // IS the kept image (processedUrl = originalUrl) and processImage /
-  // reprocessAllImages / retry leave it alone.
+  // IS the kept image (processedUrl = originalUrl): processImage / retry never
+  // send it to rembg, and discardOriginal never deletes it.
   keepBackground: {
     type: Boolean,
     default: false

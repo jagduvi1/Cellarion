@@ -129,9 +129,10 @@ async function ingestBottleImage({ buffer, userId, userRoles = [], bottle = null
  * step — pre-approved (public), replacing any prior official image, with the
  * credit stored on both the image and the wine. ONE implementation for the
  * admin REST route and the admin MCP tool, mirroring what
- * routes/admin/images.js approve does for user uploads (minus original-file
- * deletion — background removal still needs the source; imageProcessor's
- * post-process hook upgrades wine.image to the clean version when it's ready).
+ * routes/admin/images.js approve does for user uploads. Background removal
+ * still needs the source at this point, so the original stays for now;
+ * imageProcessor's post-process hook upgrades wine.image to the clean version
+ * when it's ready and then discards the original (discardOriginal).
  *
  * Caller must have verified the wine exists and the actor is an admin
  * (userRoles is still forwarded so the shared credit gate applies uniformly).

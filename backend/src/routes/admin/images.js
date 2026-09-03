@@ -4,8 +4,7 @@ const BottleImage = require('../../models/BottleImage');
 const WineDefinition = require('../../models/WineDefinition');
 const Bottle = require('../../models/Bottle');
 const searchService = require('../../services/search');
-const fs = require('fs');
-const { reprocessAllImages, safeUploadPath, unlinkImageFiles } = require('../../services/imageProcessor');
+const { unlinkImageFiles, discardOriginal } = require('../../services/imageProcessor');
 const { logAudit } = require('../../services/audit');
 const { createNotification } = require('../../services/notifications');
 const { incrementCred } = require('../../utils/cellarCred');
@@ -163,17 +162,12 @@ router.get('/by-wine', async (req, res) => {
   }
 });
 
-// Helper: delete the original file if a processed version exists
-function deleteOriginalFile(image) {
-  if (image.processedUrl && image.originalUrl) {
-    try {
-      fs.unlinkSync(safeUploadPath(image.originalUrl.replace('/api/uploads/', '')));
-    } catch (err) {
-      if (err.code !== 'ENOENT') console.error('Failed to delete original image:', err.message);
-    }
-    image.originalUrl = null;
-  }
-}
+// Dropping a retained original on approval goes through the shared
+// services/imageProcessor.discardOriginal. The processor now discards it right
+// after rembg succeeds, so this only still matters for rows processed before
+// that. The inline unlink that used to live here deleted the file whenever
+// both URLs were set — including a keepBackground row, whose "original" IS the
+// kept file — and left processedUrl pointing at nothing.
 
 // PUT /api/admin/images/:id/approve
 // Body: { visibility: 'private' | 'public' } — defaults to 'public'
@@ -209,7 +203,7 @@ router.put('/:id/approve', async (req, res) => {
     // the needs-a-look flag, but keep the reports themselves so a photo raised
     // repeatedly still shows its history (ticket 6a865f60).
     image.reportedAt = null;
-    deleteOriginalFile(image);
+    await discardOriginal(image);
     await image.save();
 
     // Award Cellar Cred to the uploader
@@ -598,9 +592,9 @@ router.put('/:id/set-official', async (req, res) => {
       image.reviewedBy = req.user.id;
       image.reviewedAt = new Date();
     }
-    // Drop the now-redundant original once a processed version exists, same as
-    // the approve path — imageUrl was resolved above before this nulls it.
-    deleteOriginalFile(image);
+    // Drop a retained original once a processed version exists, same as the
+    // approve path — imageUrl was resolved above before this nulls it.
+    await discardOriginal(image);
     await image.save();
 
     await WineDefinition.findByIdAndUpdate(wineDefId, { image: imageUrl, imageCredit: image.credit || null });
@@ -670,14 +664,6 @@ router.put('/:id/visibility', async (req, res) => {
     console.error('Change visibility error:', error);
     res.status(500).json({ error: 'Failed to change image visibility' });
   }
-});
-
-// POST /api/admin/images/reprocess-all - Re-process all images through updated pipeline
-router.post('/reprocess-all', async (req, res) => {
-  res.json({ message: 'Re-processing started' });
-  reprocessAllImages().catch(err =>
-    console.error('Reprocess-all error:', err)
-  );
 });
 
 module.exports = router;
