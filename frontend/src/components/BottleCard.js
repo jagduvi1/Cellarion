@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { buildRackUrl } from '../utils/rackNavigation';
@@ -20,7 +20,7 @@ const MATURITY_LABELS = {
  * Renders a single bottle in either list or card (grid) view.
  * Props: bottle, rackMap, cellarId, viewMode ('list' | 'card')
  */
-function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onClick, showCellarBadge = false, compact = false, rackKnown = false, showNotes = false, selectable = false, selected = false, onToggleSelect }) {
+function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onClick, showCellarBadge = false, compact = false, rackKnown = false, showNotes = false, selectable = false, selected = false, onToggleSelect, onLongPress }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -71,6 +71,44 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
   ) : null;
   const selectClasses = selectable ? ` is-selectable${selected ? ' is-selected' : ''}` : '';
 
+  // Long-press (touch, pen or mouse) enters select mode with this bottle — the
+  // phone pattern (Photos, Gmail), so nobody has to find the Select button
+  // first. Fires onLongPress after 500 ms without moving; the click that
+  // follows the release is swallowed so it doesn't also navigate. Off while
+  // already in select mode, where a plain tap toggles.
+  const pressTimer = useRef(null);
+  const pressOrigin = useRef(null);
+  const swallowClick = useRef(false);
+  const cancelPress = () => { clearTimeout(pressTimer.current); pressTimer.current = null; };
+  const startPress = (e) => {
+    if (!onLongPress || selectable) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    pressOrigin.current = { x: e.clientX, y: e.clientY };
+    cancelPress();
+    pressTimer.current = setTimeout(() => {
+      pressTimer.current = null;
+      swallowClick.current = true;
+      onLongPress();
+    }, 500);
+  };
+  const movePress = (e) => {
+    if (!pressTimer.current || !pressOrigin.current) return;
+    if (Math.abs(e.clientX - pressOrigin.current.x) > 10 || Math.abs(e.clientY - pressOrigin.current.y) > 10) cancelPress();
+  };
+  const guardedClick = (e) => {
+    if (swallowClick.current) { swallowClick.current = false; e.preventDefault(); return; }
+    handleClick();
+  };
+  const pressHandlers = onLongPress ? {
+    onPointerDown: startPress,
+    onPointerMove: movePress,
+    onPointerUp: cancelPress,
+    onPointerCancel: cancelPress,
+    onPointerLeave: cancelPress,
+    // A long touch also opens the browser's context menu — not on a card.
+    onContextMenu: (e) => e.preventDefault(),
+  } : {};
+
   // Opt-in personal-note preview (list view only). Occasion ("Gift from Anna")
   // leads, then the first line of the tasting notes; CSS clamps to one line.
   // Suppressed for collapsed groups — members may carry different notes, so a
@@ -89,7 +127,8 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
     return (
       <div
         className={`bottle-grid-card${isGroup ? ' bottle-grid-card--stacked' : ''}${selectClasses}`}
-        onClick={handleClick}
+        onClick={guardedClick}
+        {...pressHandlers}
         role="button"
         tabIndex={0}
         onKeyDown={handleKey}
@@ -185,7 +224,8 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
   return (
     <div
       className={`bottle-card${isGroup ? ' bottle-card--stacked' : ''}${compact ? ' bottle-card--compact' : ''}${selectClasses}`}
-      onClick={handleClick}
+      onClick={guardedClick}
+      {...pressHandlers}
       role="button"
       tabIndex={0}
       onKeyDown={handleKey}
@@ -276,7 +316,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
 // search keystroke re-renders the page — without memo, hundreds of cards
 // re-render per keystroke even though their props are unchanged.
 //
-// onClick and onToggleSelect are excluded from the comparison: callers pass
+// onClick, onToggleSelect and onLongPress are excluded from the comparison: callers pass
 // inline arrows (`onClick={() => toggleGroup(item.key)}`), whose identity
 // changes every parent render and would defeat the memo for exactly the
 // grouped cards it exists for. This is safe because every current handler

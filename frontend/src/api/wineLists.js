@@ -23,6 +23,16 @@ export const updateWineList = (apiFetch, id, data) =>
     body: JSON.stringify(data),
   });
 
+// Put the wines of MANY bottles on a list in one step (the cellar view's
+// select mode). Entries are wine + vintage + size, so duplicates collapse;
+// wines already on the list come back in `skipped`.
+export const addBottlesToWineList = (apiFetch, id, bottleIds, section) =>
+  apiFetch(`/api/wine-lists/${id}/add-bottles`, {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ bottleIds, ...(section ? { section } : {}) }),
+  });
+
 export const deleteWineList = (apiFetch, id) =>
   apiFetch(`/api/wine-lists/${id}`, { method: 'DELETE' });
 

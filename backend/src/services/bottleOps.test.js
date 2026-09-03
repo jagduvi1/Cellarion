@@ -629,3 +629,23 @@ describe('open-bottle ops (openBottle / pourFromBottle / closeBottle)', () => {
     expect(logAudit).toHaveBeenCalledWith(REQ, 'bottle.open_undo', { type: 'bottle', id: 'b1', cellarId: 'c1' });
   });
 });
+
+describe('consumeBottle consumedAt (bulk "mark as drunk" puts one date on a selection)', () => {
+  test('an explicit past date is stored; a missing one means now', async () => {
+    const dated = freshBottle();
+    const res = await consumeBottle(dated, { reason: 'drank', consumedAt: '2026-08-30' }, REQ);
+    expect(res.error).toBeUndefined();
+    expect(dated.consumedAt.toISOString().slice(0, 10)).toBe('2026-08-30');
+
+    const undated = freshBottle();
+    await consumeBottle(undated, { reason: 'drank' }, REQ);
+    expect(Date.now() - undated.consumedAt.getTime()).toBeLessThan(5000);
+  });
+
+  test('a future date, an unparseable date and a pre-1900 date are refused', async () => {
+    const future = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    expect((await consumeBottle(freshBottle(), { consumedAt: future }, REQ)).error.status).toBe(400);
+    expect((await consumeBottle(freshBottle(), { consumedAt: 'last saturday' }, REQ)).error.status).toBe(400);
+    expect((await consumeBottle(freshBottle(), { consumedAt: '1850-01-01' }, REQ)).error.status).toBe(400);
+  });
+});

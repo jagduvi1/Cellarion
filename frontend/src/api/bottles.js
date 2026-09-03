@@ -89,6 +89,23 @@ export const bulkMoveBottles = (apiFetch, bottleIds, toCellarId) =>
     body: JSON.stringify({ bottleIds, toCellarId }),
   });
 
+// ONE edit applied to MANY bottles (POST /api/bottles/bulk, action 'update').
+// `fields` is limited server-side to purchase details + reservation.
+export const bulkUpdateBottles = (apiFetch, bottleIds, fields) =>
+  apiFetch('/api/bottles/bulk', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ action: 'update', bottleIds, fields }),
+  });
+
+// Mark MANY bottles consumed with one reason and one date (action 'consume').
+export const bulkConsumeBottles = (apiFetch, bottleIds, { reason, note, consumedAt } = {}) =>
+  apiFetch('/api/bottles/bulk', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ action: 'consume', bottleIds, reason, note, consumedAt }),
+  });
+
 export const updateConsumedRating = (apiFetch, id, data) =>
   apiFetch(`/api/bottles/${id}/consumed-rating`, {
     method: 'PUT',

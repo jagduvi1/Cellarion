@@ -830,34 +830,68 @@ router.post('/:id/move', requireBottleAccess('owner'), async (req, res) => {
   }
 });
 
+// ── Bulk actions ────────────────────────────────────────────────────────────
+// Support ticket 6a9949e3 (2026-09-03): a delivery of many bottles had been
+// logged in a storage cellar and needed to go home — one at a time was the
+// only way. The cellar view now has a select mode, and these routes are what
+// it calls. Every bulk route applies the SAME per-bottle operation the single
+// routes use (services/rackOps, services/bottleOps), one bottle at a time, and
+// reports partial success instead of hiding it: each bottle that could not be
+// acted on comes back in `skipped` with a reason, and the rest are done.
+const BULK_MAX = 500;
+
+// Validate a bulk id list and load the bottles with their cellars. Access is
+// judged per SOURCE cellar (resolved once each) against `minRole`: 'owner'
+// for a move (the single move route's rule), 'editor' for edits and consumes
+// (the single PUT / consume rule). Same disclosure as the single routes: a
+// bottle you may not touch reads as not_found. Items come back in request
+// order, deduplicated, each either { id, bottle, cellar } or { id, reason }.
+// Returns { error } | { ids, items }.
+async function resolveBulkBottles(req, bottleIds, minRole) {
+  if (!Array.isArray(bottleIds) || bottleIds.length === 0) {
+    return { error: { status: 400, message: 'bottleIds must be a non-empty array' } };
+  }
+  if (bottleIds.length > BULK_MAX) {
+    return { error: { status: 400, message: `At most ${BULK_MAX} bottles per request` } };
+  }
+  if (!bottleIds.every((x) => typeof x === 'string' && mongoose.isValidObjectId(x))) {
+    return { error: { status: 400, message: 'bottleIds must be valid bottle ids' } };
+  }
+  const ids = [...new Set(bottleIds.map(String))];
+  const bottles = await Bottle.find({ _id: { $in: ids.map((x) => new mongoose.Types.ObjectId(x)) } });
+  const byId = new Map(bottles.map((b) => [String(b._id), b]));
+  const cellarCache = new Map();
+  const cellarOf = async (cellarId) => {
+    const key = String(cellarId);
+    if (!cellarCache.has(key)) cellarCache.set(key, await Cellar.findById(cellarId));
+    return cellarCache.get(key);
+  };
+  const allowed = minRole === 'owner' ? ['owner'] : ['owner', 'editor'];
+  const items = [];
+  for (const id of ids) {
+    const bottle = byId.get(id);
+    if (!bottle) { items.push({ id, reason: 'not_found' }); continue; }
+    const cellar = await cellarOf(bottle.cellar);
+    if (!cellar || !allowed.includes(getCellarRole(cellar, req.user.id))) { items.push({ id, reason: 'not_found' }); continue; }
+    items.push({ id, bottle, cellar });
+  }
+  return { ids, items };
+}
+
 // POST /api/bottles/bulk-move - Move MANY active bottles to another cellar you
-// own, in ONE request. Support ticket 6a9949e3 (2026-09-03): a delivery of
-// many bottles had been logged in a storage cellar and needed to go home —
-// and one-at-a-time was the only way. Same rules and mechanics as the single
-// move above, applied per bottle through the shared
-// services/rackOps.moveBottleToCellar: the SOURCE cellar must be owned (not
-// merely editable), active bottles only, each bottle lands unplaced, dual
-// audit per bottle. Partial success is reported, not hidden: every bottle
-// that could not be moved comes back in `skipped` with a reason, and the ones
-// that could are moved regardless.
+// own, in ONE request. Same rules and mechanics as the single move above,
+// applied per bottle through the shared services/rackOps.moveBottleToCellar:
+// the SOURCE cellar must be owned (not merely editable), active bottles only,
+// each bottle lands unplaced, dual audit per bottle.
 //
-// Body:     { bottleIds: string[] (1..BULK_MOVE_MAX), toCellarId }
+// Body:     { bottleIds: string[] (1..BULK_MAX), toCellarId }
 // Response: { moved, movedIds: string[], skipped: [{ id, reason }], toCellar: { _id, name } }
-//   reason ∈ 'not_found' (unknown, or not a cellar you own — same disclosure
-//   as the single route), 'same_cellar', 'not_active', 'conflict'
-const BULK_MOVE_MAX = 500;
+//   reason ∈ 'not_found', 'same_cellar', 'not_active', 'conflict'
 router.post('/bulk-move', async (req, res) => {
   try {
     const { bottleIds, toCellarId } = req.body || {};
-    if (!Array.isArray(bottleIds) || bottleIds.length === 0) {
-      return res.status(400).json({ error: 'bottleIds must be a non-empty array' });
-    }
-    if (bottleIds.length > BULK_MOVE_MAX) {
-      return res.status(400).json({ error: `At most ${BULK_MOVE_MAX} bottles can be moved at once` });
-    }
-    if (!bottleIds.every((x) => typeof x === 'string' && mongoose.isValidObjectId(x))) {
-      return res.status(400).json({ error: 'bottleIds must be valid bottle ids' });
-    }
+    const resolved = await resolveBulkBottles(req, bottleIds, 'owner');
+    if (resolved.error) return res.status(resolved.error.status).json({ error: resolved.error.message });
     if (!toCellarId || !mongoose.isValidObjectId(String(toCellarId))) {
       return res.status(400).json({ error: 'Invalid destination cellar' });
     }
@@ -870,30 +904,11 @@ router.post('/bulk-move', async (req, res) => {
     });
     if (!destCellar) return res.status(404).json({ error: 'Destination cellar not found' });
 
-    const ids = [...new Set(bottleIds.map(String))];
-    const bottles = await Bottle.find({ _id: { $in: ids.map((x) => new mongoose.Types.ObjectId(x)) } });
-    const byId = new Map(bottles.map((b) => [String(b._id), b]));
-
-    // Source cellars are resolved once each and ownership is checked per
-    // cellar, so a request mixing bottles from several cellars moves the ones
-    // the caller owns and skips the rest.
-    const cellarCache = new Map();
-    const sourceCellarFor = async (cellarId) => {
-      const key = String(cellarId);
-      if (!cellarCache.has(key)) cellarCache.set(key, await Cellar.findById(cellarId));
-      return cellarCache.get(key);
-    };
-
     const movedIds = [];
     const skipped = [];
-    for (const id of ids) {
-      const bottle = byId.get(id);
-      if (!bottle) { skipped.push({ id, reason: 'not_found' }); continue; }
-      const sourceCellar = await sourceCellarFor(bottle.cellar);
-      if (!sourceCellar || getCellarRole(sourceCellar, req.user.id) !== 'owner') {
-        skipped.push({ id, reason: 'not_found' });
-        continue;
-      }
+    for (const item of resolved.items) {
+      if (item.reason) { skipped.push({ id: item.id, reason: item.reason }); continue; }
+      const { id, bottle, cellar: sourceCellar } = item;
       if (String(sourceCellar._id) === String(destCellar._id)) { skipped.push({ id, reason: 'same_cellar' }); continue; }
       if (bottle.status !== 'active') { skipped.push({ id, reason: 'not_active' }); continue; }
       const result = await moveBottleToCellar(bottle, sourceCellar, destCellar, req);
@@ -905,7 +920,7 @@ router.post('/bulk-move', async (req, res) => {
     // audit log shows "moved 120 bottles" as one act, not 240 lines to count.
     logAudit(req, 'bottle.bulk_move',
       { type: 'cellar', id: destCellar._id, cellarId: destCellar._id },
-      { requested: ids.length, moved: movedIds.length, skipped: skipped.length });
+      { requested: resolved.ids.length, moved: movedIds.length, skipped: skipped.length });
 
     res.json({
       moved: movedIds.length,
@@ -916,6 +931,89 @@ router.post('/bulk-move', async (req, res) => {
   } catch (error) {
     console.error('Bulk move error:', error);
     res.status(500).json({ error: 'Failed to move bottles' });
+  }
+});
+
+// POST /api/bottles/bulk - ONE edit or consume applied to MANY bottles.
+//   { action: 'update',  bottleIds, fields }  → services/bottleOps.updateBottleFields
+//       per bottle. `fields` is limited to BULK_UPDATE_FIELDS — the purchase
+//       details a delivery shares (date, shop, price) and the reservation
+//       ("spoken for X until 2028") — everything else stays per bottle.
+//   { action: 'consume', bottleIds, reason, note, consumedAt }
+//       → services/bottleOps.consumeBottle per bottle, one date for all;
+//       already-consumed bottles are skipped as not_active.
+// Editor+ on each bottle's cellar (the single PUT / consume rule).
+// A payload the shared validation rejects (a bad date, a note too long) is
+// the SAME error for every bottle, so it fails the whole request with that
+// message before anything is touched, rather than reporting N identical skips.
+// Response: { done, doneIds: string[], skipped: [{ id, reason }] }
+const BULK_UPDATE_FIELDS = ['price', 'currency', 'purchaseDate', 'purchaseLocation', 'purchaseUrl', 'reservedFor', 'reservedUntil'];
+router.post('/bulk', async (req, res) => {
+  try {
+    const { action, bottleIds } = req.body || {};
+    if (!['update', 'consume'].includes(action)) {
+      return res.status(400).json({ error: 'action must be "update" or "consume"' });
+    }
+    let fields = null;
+    let consumeArgs = null;
+    if (action === 'update') {
+      const src = req.body.fields;
+      if (!src || typeof src !== 'object' || Array.isArray(src)) {
+        return res.status(400).json({ error: 'fields must be an object' });
+      }
+      fields = {};
+      for (const k of BULK_UPDATE_FIELDS) if (src[k] !== undefined) fields[k] = src[k];
+      if (Object.keys(fields).length === 0) {
+        return res.status(400).json({ error: `fields must include at least one of: ${BULK_UPDATE_FIELDS.join(', ')}` });
+      }
+    } else {
+      const { reason = 'drank', note, consumedAt } = req.body;
+      consumeArgs = { reason, note, consumedAt };
+    }
+
+    const resolved = await resolveBulkBottles(req, bottleIds, 'editor');
+    if (resolved.error) return res.status(resolved.error.status).json({ error: resolved.error.message });
+
+    const doneIds = [];
+    const skipped = [];
+    let touched = false;
+    let firstCellar = null;
+    for (const item of resolved.items) {
+      if (item.reason) { skipped.push({ id: item.id, reason: item.reason }); continue; }
+      const { id, bottle, cellar } = item;
+      if (!firstCellar) firstCellar = cellar;
+      let result;
+      if (action === 'update') {
+        result = await updateBottleFields(bottle, { ...fields }, req);
+      } else {
+        if (bottle.status !== 'active') { skipped.push({ id, reason: 'not_active' }); continue; }
+        result = await consumeBottle(bottle, consumeArgs, req);
+      }
+      if (result.error) {
+        if (result.error.status === 400 && !touched) {
+          return res.status(400).json({ error: result.error.message });
+        }
+        skipped.push({ id, reason: result.error.code || (result.error.status === 400 ? 'invalid' : 'error') });
+        continue;
+      }
+      touched = true;
+      doneIds.push(id);
+    }
+
+    // One summary row on top of the per-bottle update / consume rows.
+    if (firstCellar) {
+      logAudit(req, action === 'update' ? 'bottle.bulk_update' : 'bottle.bulk_consume',
+        { type: 'cellar', id: firstCellar._id, cellarId: firstCellar._id },
+        {
+          requested: resolved.ids.length, done: doneIds.length, skipped: skipped.length,
+          ...(action === 'update' ? { fields: Object.keys(fields) } : { reason: consumeArgs.reason }),
+        });
+    }
+
+    res.json({ done: doneIds.length, doneIds, skipped });
+  } catch (error) {
+    console.error('Bulk action error:', error);
+    res.status(500).json({ error: 'Failed to apply the change to the bottles' });
   }
 });
 
