@@ -471,3 +471,37 @@
   color: var(--color-danger);
   border: 1px solid var(--color-danger-border);
 }
+
+/* ── Select mode (bulk "Move to cellar") ──
+   The whole card is the toggle; this box only SHOWS the state. In the grid it
+   sits over the image's top-left corner (the card is position: relative). */
+.bottle-select-box {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  line-height: 1;
+  color: var(--color-btn-primary-text);
+}
+.bottle-select-box--on {
+  background: var(--color-btn-primary-bg);
+  border-color: var(--color-btn-primary-bg);
+}
+.bottle-card.is-selected,
+.bottle-grid-card.is-selected {
+  border-color: var(--color-primary);
+  box-shadow: inset 0 0 0 2px var(--color-primary);
+}
+.bottle-grid-card .bottle-select-box {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  box-shadow: var(--shadow-card);
+}

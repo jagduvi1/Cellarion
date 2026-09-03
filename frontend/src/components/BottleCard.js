@@ -20,7 +20,7 @@ const MATURITY_LABELS = {
  * Renders a single bottle in either list or card (grid) view.
  * Props: bottle, rackMap, cellarId, viewMode ('list' | 'card')
  */
-function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onClick, showCellarBadge = false, compact = false, rackKnown = false, showNotes = false }) {
+function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onClick, showCellarBadge = false, compact = false, rackKnown = false, showNotes = false, selectable = false, selected = false, onToggleSelect }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -53,9 +53,23 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
   // may carry different reservations (same reasoning as the rack badge).
   const reserved = !isGroup && bottle.status === 'active' && isReserved(bottle);
 
-  // onClick overrides navigation — used to expand a collapsed group instead.
-  const handleClick = onClick || (() => navigate(`/cellars/${cellarId}/bottles/${bottle._id}`));
-  const handleKey = e => e.key === 'Enter' && handleClick();
+  // Select mode (bulk "Move to cellar") turns the whole card into a toggle: a
+  // click, Enter or Space flips the selection instead of navigating or
+  // expanding. Otherwise onClick overrides navigation — used to expand a
+  // collapsed group instead.
+  const handleClick = selectable
+    ? () => onToggleSelect?.()
+    : (onClick || (() => navigate(`/cellars/${cellarId}/bottles/${bottle._id}`)));
+  const handleKey = e => {
+    if (e.key === 'Enter') handleClick();
+    else if (selectable && e.key === ' ') { e.preventDefault(); handleClick(); }
+  };
+  const selectBox = selectable ? (
+    <span className={`bottle-select-box${selected ? ' bottle-select-box--on' : ''}`} aria-hidden="true">
+      {selected ? '✓' : ''}
+    </span>
+  ) : null;
+  const selectClasses = selectable ? ` is-selectable${selected ? ' is-selected' : ''}` : '';
 
   // Opt-in personal-note preview (list view only). Occasion ("Gift from Anna")
   // leads, then the first line of the tasting notes; CSS clamps to one line.
@@ -74,13 +88,15 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
   if (viewMode === 'card') {
     return (
       <div
-        className={`bottle-grid-card${isGroup ? ' bottle-grid-card--stacked' : ''}`}
+        className={`bottle-grid-card${isGroup ? ' bottle-grid-card--stacked' : ''}${selectClasses}`}
         onClick={handleClick}
         role="button"
         tabIndex={0}
         onKeyDown={handleKey}
+        aria-pressed={selectable ? selected : undefined}
         title={isGroup ? t('bottleCard.groupTooltip', { count: groupCount }) : undefined}
       >
+        {selectBox}
         {isGroup && <span className="bottle-count-badge">×{groupCount}</span>}
         <div className="bottle-grid-image-wrap">
           {imgSrc ? (
@@ -168,13 +184,15 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
   // list view (default)
   return (
     <div
-      className={`bottle-card${isGroup ? ' bottle-card--stacked' : ''}${compact ? ' bottle-card--compact' : ''}`}
+      className={`bottle-card${isGroup ? ' bottle-card--stacked' : ''}${compact ? ' bottle-card--compact' : ''}${selectClasses}`}
       onClick={handleClick}
       role="button"
       tabIndex={0}
       onKeyDown={handleKey}
+      aria-pressed={selectable ? selected : undefined}
       title={isGroup ? t('bottleCard.groupTooltip', { count: groupCount }) : undefined}
     >
+      {selectBox}
       {imgSrc ? (
         <div className="bottle-img-wrap">
           <AuthImage
@@ -258,14 +276,14 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
 // search keystroke re-renders the page — without memo, hundreds of cards
 // re-render per keystroke even though their props are unchanged.
 //
-// onClick is excluded from the comparison: callers pass inline arrows
-// (`onClick={() => toggleGroup(item.key)}`), whose identity changes every
-// parent render and would defeat the memo for exactly the grouped cards it
-// exists for. This is safe because every current onClick closes only over
-// values derived from the OTHER compared props (the bottle/group item) — if a
-// future caller closes over unrelated state, that handler must be stabilized
-// with useCallback instead.
-const COMPARED_PROPS = ['bottle', 'rackMap', 'cellarId', 'viewMode', 'groupCount', 'showCellarBadge', 'compact', 'rackKnown', 'showNotes'];
+// onClick and onToggleSelect are excluded from the comparison: callers pass
+// inline arrows (`onClick={() => toggleGroup(item.key)}`), whose identity
+// changes every parent render and would defeat the memo for exactly the
+// grouped cards it exists for. This is safe because every current handler
+// closes only over values derived from the OTHER compared props (the
+// bottle/group item) plus functional setState — if a future caller closes over
+// unrelated state, that handler must be stabilized with useCallback instead.
+const COMPARED_PROPS = ['bottle', 'rackMap', 'cellarId', 'viewMode', 'groupCount', 'showCellarBadge', 'compact', 'rackKnown', 'showNotes', 'selectable', 'selected'];
 export default memo(BottleCard, (prev, next) =>
   COMPARED_PROPS.every(key => prev[key] === next[key])
 );

@@ -830,6 +830,95 @@ router.post('/:id/move', requireBottleAccess('owner'), async (req, res) => {
   }
 });
 
+// POST /api/bottles/bulk-move - Move MANY active bottles to another cellar you
+// own, in ONE request. Support ticket 6a9949e3 (2026-09-03): a delivery of
+// many bottles had been logged in a storage cellar and needed to go home —
+// and one-at-a-time was the only way. Same rules and mechanics as the single
+// move above, applied per bottle through the shared
+// services/rackOps.moveBottleToCellar: the SOURCE cellar must be owned (not
+// merely editable), active bottles only, each bottle lands unplaced, dual
+// audit per bottle. Partial success is reported, not hidden: every bottle
+// that could not be moved comes back in `skipped` with a reason, and the ones
+// that could are moved regardless.
+//
+// Body:     { bottleIds: string[] (1..BULK_MOVE_MAX), toCellarId }
+// Response: { moved, movedIds: string[], skipped: [{ id, reason }], toCellar: { _id, name } }
+//   reason ∈ 'not_found' (unknown, or not a cellar you own — same disclosure
+//   as the single route), 'same_cellar', 'not_active', 'conflict'
+const BULK_MOVE_MAX = 500;
+router.post('/bulk-move', async (req, res) => {
+  try {
+    const { bottleIds, toCellarId } = req.body || {};
+    if (!Array.isArray(bottleIds) || bottleIds.length === 0) {
+      return res.status(400).json({ error: 'bottleIds must be a non-empty array' });
+    }
+    if (bottleIds.length > BULK_MOVE_MAX) {
+      return res.status(400).json({ error: `At most ${BULK_MOVE_MAX} bottles can be moved at once` });
+    }
+    if (!bottleIds.every((x) => typeof x === 'string' && mongoose.isValidObjectId(x))) {
+      return res.status(400).json({ error: 'bottleIds must be valid bottle ids' });
+    }
+    if (!toCellarId || !mongoose.isValidObjectId(String(toCellarId))) {
+      return res.status(400).json({ error: 'Invalid destination cellar' });
+    }
+
+    // Destination: an active cellar the user OWNS (same as the single move).
+    const destCellar = await Cellar.findOne({
+      _id: new mongoose.Types.ObjectId(String(toCellarId)),
+      user: req.user.id,
+      deletedAt: null,
+    });
+    if (!destCellar) return res.status(404).json({ error: 'Destination cellar not found' });
+
+    const ids = [...new Set(bottleIds.map(String))];
+    const bottles = await Bottle.find({ _id: { $in: ids.map((x) => new mongoose.Types.ObjectId(x)) } });
+    const byId = new Map(bottles.map((b) => [String(b._id), b]));
+
+    // Source cellars are resolved once each and ownership is checked per
+    // cellar, so a request mixing bottles from several cellars moves the ones
+    // the caller owns and skips the rest.
+    const cellarCache = new Map();
+    const sourceCellarFor = async (cellarId) => {
+      const key = String(cellarId);
+      if (!cellarCache.has(key)) cellarCache.set(key, await Cellar.findById(cellarId));
+      return cellarCache.get(key);
+    };
+
+    const movedIds = [];
+    const skipped = [];
+    for (const id of ids) {
+      const bottle = byId.get(id);
+      if (!bottle) { skipped.push({ id, reason: 'not_found' }); continue; }
+      const sourceCellar = await sourceCellarFor(bottle.cellar);
+      if (!sourceCellar || getCellarRole(sourceCellar, req.user.id) !== 'owner') {
+        skipped.push({ id, reason: 'not_found' });
+        continue;
+      }
+      if (String(sourceCellar._id) === String(destCellar._id)) { skipped.push({ id, reason: 'same_cellar' }); continue; }
+      if (bottle.status !== 'active') { skipped.push({ id, reason: 'not_active' }); continue; }
+      const result = await moveBottleToCellar(bottle, sourceCellar, destCellar, req);
+      if (result.error) { skipped.push({ id, reason: result.error.code || 'error' }); continue; }
+      movedIds.push(id);
+    }
+
+    // One summary row on top of the per-bottle move.out / move.in rows, so the
+    // audit log shows "moved 120 bottles" as one act, not 240 lines to count.
+    logAudit(req, 'bottle.bulk_move',
+      { type: 'cellar', id: destCellar._id, cellarId: destCellar._id },
+      { requested: ids.length, moved: movedIds.length, skipped: skipped.length });
+
+    res.json({
+      moved: movedIds.length,
+      movedIds,
+      skipped,
+      toCellar: { _id: destCellar._id, name: destCellar.name },
+    });
+  } catch (error) {
+    console.error('Bulk move error:', error);
+    res.status(500).json({ error: 'Failed to move bottles' });
+  }
+});
+
 // A consumed bottle can be moved back to the cellar only within a 2-day
 // window of being removed — restore is an "undo an accidental log", not a way
 // to resurrect a bottle drunk long ago. The window (RESTORE_WINDOW_MS) is

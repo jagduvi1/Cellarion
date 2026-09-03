@@ -80,6 +80,15 @@ export const moveBottle = (apiFetch, id, toCellarId) =>
     body: JSON.stringify({ toCellarId }),
   });
 
+// Move MANY bottles to another cellar you own in ONE request (POST
+// /api/bottles/bulk-move). Partial success comes back in `skipped`.
+export const bulkMoveBottles = (apiFetch, bottleIds, toCellarId) =>
+  apiFetch('/api/bottles/bulk-move', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ bottleIds, toCellarId }),
+  });
+
 export const updateConsumedRating = (apiFetch, id, data) =>
   apiFetch(`/api/bottles/${id}/consumed-rating`, {
     method: 'PUT',
