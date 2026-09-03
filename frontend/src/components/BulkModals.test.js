@@ -63,19 +63,29 @@ describe('BulkPurchaseModal', () => {
 });
 
 describe('BulkConsumeModal', () => {
-  test('one reason and one date for the whole selection; skipped bottles are reported', async () => {
-    bulkConsumeBottles.mockResolvedValue(okResult({ done: 2, skipped: [{ id: 'b3', reason: 'not_active' }] }));
-    const { container } = render(<BulkConsumeModal bottleIds={['b1', 'b2', 'b3']} onClose={() => {}} onDone={() => {}} />);
+  test('one reason and one date for the whole selection; reserved bottles are left alone, then offered', async () => {
+    bulkConsumeBottles
+      .mockResolvedValueOnce(okResult({ done: 2, skipped: [{ id: 'b3', reason: 'not_active' }, { id: 'b4', reason: 'reserved' }] }))
+      .mockResolvedValueOnce(okResult({ done: 1, skipped: [] }));
+    const { container } = render(<BulkConsumeModal bottleIds={['b1', 'b2', 'b3', 'b4']} onClose={() => {}} onDone={() => {}} />);
 
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'gifted' } });
     fireEvent.change(container.querySelector('input[type="date"]'), { target: { value: '2026-08-30' } });
-    fireEvent.click(screen.getByText('bulk.consumeSubmit:{"count":3}'));
+    fireEvent.click(screen.getByText('bulk.consumeSubmit:{"count":4}'));
 
-    await waitFor(() => expect(bulkConsumeBottles).toHaveBeenCalledWith(apiFetch, ['b1', 'b2', 'b3'], {
-      reason: 'gifted', note: undefined, consumedAt: '2026-08-30',
+    await waitFor(() => expect(bulkConsumeBottles).toHaveBeenCalledWith(apiFetch, ['b1', 'b2', 'b3', 'b4'], {
+      reason: 'gifted', note: undefined, consumedAt: '2026-08-30', includeReserved: false,
     }));
     expect(await screen.findByText('bulk.doneInfo:{"count":2}')).toBeTruthy();
-    expect(screen.getByText('bulk.skippedInfo:{"count":1}')).toBeTruthy();
+    expect(screen.getByText('bulk.skippedInfo:{"count":1}')).toBeTruthy();        // the consumed one
+    expect(screen.getByText('bulk.reservedSkipped:{"count":1}')).toBeTruthy();   // the reserved one, offered
+
+    fireEvent.click(screen.getByText('bulk.consumeReservedToo'));
+    await waitFor(() => expect(bulkConsumeBottles).toHaveBeenLastCalledWith(apiFetch, ['b4'], {
+      reason: 'gifted', note: undefined, consumedAt: '2026-08-30', includeReserved: true,
+    }));
+    expect(await screen.findByText('bulk.doneInfo:{"count":3}')).toBeTruthy();
+    expect(screen.queryByText('bulk.consumeReservedToo')).toBeNull();
   });
 });
 

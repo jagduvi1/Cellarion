@@ -1,6 +1,6 @@
 const express = require('express');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
-const { requireBottleAccess } = require('../middleware/bottleAccess');
+const { requireBottleAccess, ROLE_LEVELS } = require('../middleware/bottleAccess');
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
 const WineDefinition = require('../models/WineDefinition');
@@ -14,6 +14,7 @@ const PriceTrackingSkip = require('../models/PriceTrackingSkip');
 const BottleImage = require('../models/BottleImage');
 const WineRequest = require('../models/WineRequest');
 const { getCellarRole } = require('../utils/cellarAccess');
+const { isReserved } = require('../utils/reservationUtils');
 const { logAudit } = require('../services/audit');
 const { getSnapshotForDate } = require('../utils/exchangeRates');
 const { resolveRating } = require('../utils/ratingUtils');
@@ -866,13 +867,17 @@ async function resolveBulkBottles(req, bottleIds, minRole) {
     if (!cellarCache.has(key)) cellarCache.set(key, await Cellar.findById(cellarId));
     return cellarCache.get(key);
   };
-  const allowed = minRole === 'owner' ? ['owner'] : ['owner', 'editor'];
   const items = [];
   for (const id of ids) {
     const bottle = byId.get(id);
     if (!bottle) { items.push({ id, reason: 'not_found' }); continue; }
     const cellar = await cellarOf(bottle.cellar);
-    if (!cellar || !allowed.includes(getCellarRole(cellar, req.user.id))) { items.push({ id, reason: 'not_found' }); continue; }
+    // Same rules as middleware/bottleAccess: a soft-deleted cellar is frozen
+    // (its bottles read as not found until restore or purge), and the role
+    // ladder is the middleware's ROLE_LEVELS, not a second copy of it.
+    if (!cellar || cellar.deletedAt) { items.push({ id, reason: 'not_found' }); continue; }
+    const role = getCellarRole(cellar, req.user.id);
+    if ((ROLE_LEVELS[role] || 0) < (ROLE_LEVELS[minRole] || 0)) { items.push({ id, reason: 'not_found' }); continue; }
     items.push({ id, bottle, cellar });
   }
   return { ids, items };
@@ -939,9 +944,13 @@ router.post('/bulk-move', async (req, res) => {
 //       per bottle. `fields` is limited to BULK_UPDATE_FIELDS — the purchase
 //       details a delivery shares (date, shop, price) and the reservation
 //       ("spoken for X until 2028") — everything else stays per bottle.
-//   { action: 'consume', bottleIds, reason, note, consumedAt }
+//   { action: 'consume', bottleIds, reason, note, consumedAt, includeReserved }
 //       → services/bottleOps.consumeBottle per bottle, one date for all;
-//       already-consumed bottles are skipped as not_active.
+//       already-consumed bottles are skipped as not_active, and a "spoken for"
+//       bottle as 'reserved' unless includeReserved is true (the single flow
+//       warns and the MCP tool refuses without an acknowledgement — bulk must
+//       not be the one path that consumes a reservation silently). The
+//       restock-gap check runs ONCE per wine+vintage afterwards, not per bottle.
 // Editor+ on each bottle's cellar (the single PUT / consume rule).
 // A payload the shared validation rejects (a bad date, a note too long) is
 // the SAME error for every bottle, so it fails the whole request with that
@@ -968,14 +977,19 @@ router.post('/bulk', async (req, res) => {
       }
     } else {
       const { reason = 'drank', note, consumedAt } = req.body;
-      consumeArgs = { reason, note, consumedAt };
+      // consumeBottle's own restock-gap check is skipped: a case of twelve must
+      // not fire twelve pipelines (and twelve paid embedding calls when the
+      // pair is uncached). One check per wine+vintage runs after the loop.
+      consumeArgs = { reason, note, consumedAt, skipRestockCheck: true };
     }
+    const includeReserved = req.body.includeReserved === true;
 
     const resolved = await resolveBulkBottles(req, bottleIds, 'editor');
     if (resolved.error) return res.status(resolved.error.status).json({ error: resolved.error.message });
 
     const doneIds = [];
     const skipped = [];
+    const restockPairs = new Map(); // `${wine}|${vintage}` → one representative bottle
     let touched = false;
     let firstCellar = null;
     for (const item of resolved.items) {
@@ -987,7 +1001,9 @@ router.post('/bulk', async (req, res) => {
         result = await updateBottleFields(bottle, { ...fields }, req);
       } else {
         if (bottle.status !== 'active') { skipped.push({ id, reason: 'not_active' }); continue; }
+        if (!includeReserved && isReserved(bottle)) { skipped.push({ id, reason: 'reserved' }); continue; }
         result = await consumeBottle(bottle, consumeArgs, req);
+        if (!result.error) restockPairs.set(`${bottle.wineDefinition || ''}|${bottle.vintage || 'NV'}`, bottle);
       }
       if (result.error) {
         if (result.error.status === 400 && !touched) {
@@ -998,6 +1014,16 @@ router.post('/bulk', async (req, res) => {
       }
       touched = true;
       doneIds.push(id);
+    }
+
+    // One restock-gap check per distinct wine+vintage among the bottles just
+    // drunk. Skipped for demo accounts, as in consumeBottle: an uncached pair
+    // fires a paid embedding call.
+    if (action === 'consume' && consumeArgs.reason === 'drank' && !req.user.isDemo && restockPairs.size) {
+      const { checkRestockGap } = require('../services/restockChecker');
+      for (const b of restockPairs.values()) {
+        checkRestockGap(req.user.id, b._id, b.cellar).catch(() => {});
+      }
     }
 
     // One summary row on top of the per-bottle update / consume rows.

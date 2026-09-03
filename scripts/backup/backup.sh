@@ -151,6 +151,15 @@ for p in $CONFIG_PATHS $EXTRA_CONFIG_PATHS; do
 done
 log "config: $staged entries staged"
 
+# A listed DIRECTORY is copied whole, so the refusal above — which only sees
+# the listed path — is repeated inside it: any bootstrap secret that rode in
+# with a directory is pruned before the snapshot is taken (post-ship audit
+# 2026-09-03).
+pruned=$(find "$STAGE/config" -type f \( -name acme.json -o -name backup.env -o -name '*.pem' -o -name '*.key' -o -name 'id_*' -o -path '*/.ssh/*' \) -print -delete | wc -l)
+if [ "$pruned" -gt 0 ]; then
+  log "config: pruned $pruned bootstrap secret file(s) found inside a listed directory"
+fi
+
 # Optional Umami (analytics) database — small, and the only other state on the
 # machine that is not rebuilt from Mongo.
 if [ -n "$UMAMI_DB_CONTAINER" ] && docker ps --format '{{.Names}}' | grep -qx "$UMAMI_DB_CONTAINER"; then

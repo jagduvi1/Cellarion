@@ -64,3 +64,30 @@ describe('BottleCard stacked card in select mode', () => {
     expect(onToggleSelect).not.toHaveBeenCalled();
   });
 });
+
+describe('BottleCard long-press (post-ship audit 2026-09-03)', () => {
+  test('a long press enters select mode, and the next tap is not swallowed when no click followed the press', () => {
+    vi.useFakeTimers();
+    try {
+      const onLongPress = vi.fn();
+      const onToggleSelect = vi.fn();
+      const props = { bottle: BOTTLE, rackMap: new Map(), cellarId: 'c1', viewMode: 'list', onLongPress };
+      const { rerender } = render(<MemoryRouter><BottleCard {...props} /></MemoryRouter>);
+      const card = screen.getByText('Barolo Albe').closest('[role="button"]');
+
+      fireEvent.pointerDown(card, { clientX: 10, clientY: 10, pointerType: 'touch', button: 0 });
+      vi.advanceTimersByTime(600);
+      expect(onLongPress).toHaveBeenCalledTimes(1);
+      fireEvent.pointerUp(card); // on touch no click follows a long press
+
+      // The parent enters select mode with this card ticked.
+      rerender(<MemoryRouter><BottleCard {...props} selectable selected onToggleSelect={onToggleSelect} /></MemoryRouter>);
+      fireEvent.pointerDown(card, { clientX: 10, clientY: 10, pointerType: 'touch', button: 0 });
+      fireEvent.pointerUp(card);
+      fireEvent.click(card);
+      expect(onToggleSelect).toHaveBeenCalledTimes(1); // not eaten by a stale swallow flag
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

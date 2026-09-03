@@ -649,3 +649,33 @@ describe('consumeBottle consumedAt (bulk "mark as drunk" puts one date on a sele
     expect((await consumeBottle(freshBottle(), { consumedAt: '1850-01-01' }, REQ)).error.status).toBe(400);
   });
 });
+
+describe('consumedLoggedAt and the restore window (post-ship audit 2026-09-03)', () => {
+  test('consume stamps consumedLoggedAt = now even when consumedAt is backdated', async () => {
+    const b = freshBottle();
+    await consumeBottle(b, { reason: 'drank', consumedAt: '2026-08-20' }, REQ);
+    expect(b.consumedAt.toISOString().slice(0, 10)).toBe('2026-08-20');
+    expect(Date.now() - b.consumedLoggedAt.getTime()).toBeLessThan(5000);
+  });
+
+  test('restore measures the 2-day window from consumedLoggedAt, falling back to consumedAt for older rows', async () => {
+    const day = 24 * 60 * 60 * 1000;
+    const backdated = freshBottle({ status: 'drank', consumedAt: new Date(Date.now() - 10 * day), consumedLoggedAt: new Date() });
+    expect((await restoreBottle(backdated, REQ)).error).toBeUndefined();
+    expect(backdated.status).toBe('active');
+    expect(backdated.consumedLoggedAt).toBeUndefined();
+
+    const staleLog = freshBottle({ status: 'drank', consumedAt: new Date(), consumedLoggedAt: new Date(Date.now() - 3 * day) });
+    expect((await restoreBottle(staleLog, REQ)).error.code).toBe('restore_window_expired');
+
+    const legacy = freshBottle({ status: 'drank', consumedAt: new Date(Date.now() - 3 * day) });
+    expect((await restoreBottle(legacy, REQ)).error.code).toBe('restore_window_expired');
+  });
+
+  test('skipRestockCheck suppresses the per-bottle restock-gap check', async () => {
+    await consumeBottle(freshBottle(), { reason: 'drank', skipRestockCheck: true }, REQ);
+    expect(checkRestockGap).not.toHaveBeenCalled();
+    await consumeBottle(freshBottle(), { reason: 'drank' }, REQ);
+    expect(checkRestockGap).toHaveBeenCalledTimes(1);
+  });
+});

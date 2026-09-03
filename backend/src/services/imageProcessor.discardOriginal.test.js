@@ -171,3 +171,45 @@ describe('unlinkImageFiles (same contract after the refactor)', () => {
     expect(fs.promises.unlink).not.toHaveBeenCalled();
   });
 });
+
+describe('processImage gates (post-ship audit 2026-09-03)', () => {
+  test('a label scan is never sent to rembg, so its frame is never discarded', async () => {
+    const doc = makeDoc({ kind: 'label-scan' });
+    loadDoc(doc);
+    global.fetch = jest.fn();
+    await processImage('img1');
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(doc.save).not.toHaveBeenCalled();
+    expect(doc.originalUrl).toBe(ORIG);
+  });
+
+  test('an image approved before processing is processed and STAYS approved', async () => {
+    const doc = makeDoc({ status: 'approved' });
+    loadDoc(doc);
+    rembg();
+    await processImage('img1');
+    expect(doc.status).toBe('approved');
+    expect(doc.processedUrl).toBe(PROC);
+    expect(doc.originalUrl).toBeNull();
+  });
+
+  test('a failed run on an approved image keeps it approved with its original', async () => {
+    const doc = makeDoc({ status: 'approved' });
+    loadDoc(doc);
+    rembg({ ok: false, status: 500 });
+    const error = jest.spyOn(console, 'error').mockImplementation(() => {});
+    await processImage('img1');
+    expect(doc.status).toBe('approved');
+    expect(doc.originalUrl).toBe(ORIG);
+    error.mockRestore();
+  });
+
+  test('an approved image that already has a processed file is left alone', async () => {
+    const doc = makeDoc({ status: 'approved', processedUrl: PROC });
+    loadDoc(doc);
+    global.fetch = jest.fn();
+    await processImage('img1');
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(doc.save).not.toHaveBeenCalled();
+  });
+});

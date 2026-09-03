@@ -99,11 +99,13 @@ export const bulkUpdateBottles = (apiFetch, bottleIds, fields) =>
   });
 
 // Mark MANY bottles consumed with one reason and one date (action 'consume').
-export const bulkConsumeBottles = (apiFetch, bottleIds, { reason, note, consumedAt } = {}) =>
+// Reserved ("spoken for") bottles come back in `skipped` as 'reserved' unless
+// includeReserved is set.
+export const bulkConsumeBottles = (apiFetch, bottleIds, { reason, note, consumedAt, includeReserved } = {}) =>
   apiFetch('/api/bottles/bulk', {
     method: 'POST',
     headers: JSON_HEADERS,
-    body: JSON.stringify({ action: 'consume', bottleIds, reason, note, consumedAt }),
+    body: JSON.stringify({ action: 'consume', bottleIds, reason, note, consumedAt, ...(includeReserved ? { includeReserved: true } : {}) }),
   });
 
 export const updateConsumedRating = (apiFetch, id, data) =>

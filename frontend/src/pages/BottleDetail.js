@@ -298,8 +298,11 @@ function BottleDetail() {
   // consumed within the last 2 days. Matches the server-side restore window;
   // past it the button is hidden and the endpoint refuses.
   const RESTORE_WINDOW_MS = 2 * 24 * 60 * 60 * 1000;
-  const canRestore = canEditConsumed && bottle?.consumedAt &&
-    (Date.now() - new Date(bottle.consumedAt).getTime()) <= RESTORE_WINDOW_MS;
+  // The window counts from when the consume was logged (a backdated bulk
+  // "mark as drunk" stays undoable); rows from before that field only have consumedAt.
+  const restoreAnchor = bottle?.consumedLoggedAt || bottle?.consumedAt;
+  const canRestore = canEditConsumed && restoreAnchor &&
+    (Date.now() - new Date(restoreAnchor).getTime()) <= RESTORE_WINDOW_MS;
 
   // Shared overflow-menu contents — same list used by the desktop header ⋮ and
   // the mobile bar ⋮, so these actions live in exactly one place and can never

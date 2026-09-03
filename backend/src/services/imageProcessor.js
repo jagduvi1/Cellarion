@@ -118,14 +118,26 @@ async function discardOriginal(image) {
 
 async function processImage(imageId) {
   const image = await BottleImage.findById(imageId);
-  if (!image || image.status !== 'uploaded') return;
+  if (!image) return;
+  // A label scan is curation evidence kept exactly as received — never sent
+  // to rembg (a retry on one would then discard the frame the curator needs).
+  if (image.kind === 'label-scan') return;
+  // Runnable states: a fresh or failed upload ('uploaded'), or an image an
+  // admin approved before rembg got to it ('approved' with no processed file)
+  // — with the reprocess-all job gone, this is its only way to ever be
+  // processed. The prior status is restored on failure and, for an approved
+  // row, kept on success.
+  const priorStatus = image.status;
+  const runnable = priorStatus === 'uploaded' || (priorStatus === 'approved' && !image.processedUrl);
+  if (!runnable) return;
+  const settledStatus = priorStatus === 'approved' ? 'approved' : 'processed';
 
   // The uploader opted out of background removal (label-only photo, product
   // shot — see models/BottleImage.keepBackground). The original is the kept
   // image; a retry or a stray 'uploaded' row just settles it without rembg.
   if (image.keepBackground) {
     image.processedUrl = image.originalUrl;
-    image.status = 'processed';
+    image.status = settledStatus;
     await image.save();
     return;
   }
@@ -168,7 +180,7 @@ async function processImage(imageId) {
     // original-bytes hash stamped at upload) — keeping it consistent with what a
     // cellar export carries and re-imports.
     image.processedUrl = `/api/uploads/processed/${processedFilename}`;
-    image.status = 'processed';
+    image.status = settledStatus;
     image.contentHash = hashImageBytes(resultBuffer);
     await image.save();
 
@@ -196,10 +208,11 @@ async function processImage(imageId) {
     console.log(`Image ${imageId} processed successfully`);
   } catch (error) {
     console.error(`Image processing failed for ${imageId}:`, error.message);
-    // Revert to uploaded so it can be retried (POST /api/images/:id/retry) —
-    // but never demote an official (assignedToWine) image's approval. The
+    // Revert to the prior status so it can be retried (POST /api/images/:id/
+    // retry accepts 'uploaded', and 'approved' with no processed file) — and
+    // never demote an official (assignedToWine) image's approval. The
     // original stays on disk: it is the retry's source.
-    image.status = image.assignedToWine ? 'approved' : 'uploaded';
+    image.status = image.assignedToWine ? 'approved' : priorStatus;
     await image.save();
   }
 }

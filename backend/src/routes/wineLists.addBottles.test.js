@@ -22,9 +22,12 @@ jest.mock('../models/Bottle', () => ({ find: jest.fn() }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../services/wineListPdf', () => ({ generateWineListPdf: jest.fn() }));
 jest.mock('../services/imageSanitizer', () => ({ stripImageMetadata: jest.fn() }));
-jest.mock('../services/wineListData', () => ({
-  loadWineMap: jest.fn(), loadCellarWines: jest.fn(), entryKey: jest.fn(), allEntries: jest.fn(() => []),
-}));
+// entryKey / allEntries are the real, pure helpers — the route now builds its
+// duplicate set from them; only the DB-backed loaders are stubbed.
+jest.mock('../services/wineListData', () => {
+  const actual = jest.requireActual('../services/wineListData');
+  return { loadWineMap: jest.fn(), loadCellarWines: jest.fn(), entryKey: actual.entryKey, allEntries: actual.allEntries };
+});
 jest.mock('../services/wineListLogos', () => ({
   LOGO_DIR: '/tmp/logos', ensureLogoDir: jest.fn(), deleteLogoFile: jest.fn(), copyLogoFile: jest.fn(),
 }));
@@ -131,23 +134,34 @@ describe('POST /api/wine-lists/:id/add-bottles', () => {
     expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'winelist.entry.add', expect.objectContaining({ type: 'winelist', id: LIST }), { added: 2, requested: 8, via: 'bulk' });
   });
 
-  test('custom list: needs a section when it has several; an existing title matches case-insensitively, a new one is created', async () => {
+  test('custom list: needs a section when it has several; a wine in ANY section is a duplicate; titles match case-insensitively; a new section is created', async () => {
     const twoSections = makeList({
       structureMode: 'custom', autoGroupEntries: [],
-      sections: [{ title: 'Reds', sortOrder: 0, entries: [] }, { title: 'Whites', sortOrder: 1, entries: [] }],
+      sections: [
+        { title: 'Reds', sortOrder: 0, entries: [] },
+        { title: 'Whites', sortOrder: 1, entries: [{ wine: W1, vintage: '2019', bottleSize: '750ml', sortOrder: 0 }] },
+      ],
     });
     WineList.findOne.mockResolvedValue(twoSections);
-    Bottle.find.mockReturnValue(selectLean([{ _id: B(1), cellar: OWNED, wineDefinition: W1, vintage: '2019', bottleSize: '750ml' }]));
+    Bottle.find.mockReturnValue(selectLean([
+      { _id: B(1), cellar: OWNED, wineDefinition: W1, vintage: '2019', bottleSize: '750ml' }, // already under Whites
+      { _id: B(2), cellar: OWNED, wineDefinition: W3, vintage: '2018', bottleSize: '750ml' },
+      { _id: B(3), cellar: OWNED, wineDefinition: W1, vintage: '2020', bottleSize: '750ml' },
+    ]));
 
-    let res = await postJson(app(), `/api/wine-lists/${LIST}/add-bottles`, { bottleIds: [B(1)] });
+    let res = await postJson(app(), `/api/wine-lists/${LIST}/add-bottles`, { bottleIds: [B(1), B(2)] });
     expect(res.status).toBe(400);
     expect(twoSections.save).not.toHaveBeenCalled();
 
-    res = await postJson(app(), `/api/wine-lists/${LIST}/add-bottles`, { bottleIds: [B(1)], section: 'reds' });
+    // Target 'reds' (case-insensitive): W1 2019 sits in Whites, so it is a
+    // duplicate for the whole list, not just the target section (audit M3).
+    res = await postJson(app(), `/api/wine-lists/${LIST}/add-bottles`, { bottleIds: [B(1), B(2)], section: 'reds' });
     expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ added: 1, skipped: [{ id: B(1), reason: 'already_on_list' }] });
     expect(twoSections.sections[0].entries).toHaveLength(1);
+    expect(twoSections.sections[0].entries[0]).toMatchObject({ wine: W3, vintage: '2018' });
 
-    res = await postJson(app(), `/api/wine-lists/${LIST}/add-bottles`, { bottleIds: [B(1)], section: 'Dessert' });
+    res = await postJson(app(), `/api/wine-lists/${LIST}/add-bottles`, { bottleIds: [B(3)], section: 'Dessert' });
     expect(res.status).toBe(200);
     expect(twoSections.sections).toHaveLength(3);
     expect(twoSections.sections[2]).toMatchObject({ title: 'Dessert' });

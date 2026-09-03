@@ -4,7 +4,7 @@ const BottleImage = require('../../models/BottleImage');
 const WineDefinition = require('../../models/WineDefinition');
 const Bottle = require('../../models/Bottle');
 const searchService = require('../../services/search');
-const { unlinkImageFiles, discardOriginal } = require('../../services/imageProcessor');
+const { unlinkImageFiles, discardOriginal, processImage } = require('../../services/imageProcessor');
 const { logAudit } = require('../../services/audit');
 const { createNotification } = require('../../services/notifications');
 const { incrementCred } = require('../../utils/cellarCred');
@@ -205,6 +205,13 @@ router.put('/:id/approve', async (req, res) => {
     image.reportedAt = null;
     await discardOriginal(image);
     await image.save();
+
+    // Approved before rembg got to it (a failed run, or rembg down at upload):
+    // kick the processor now — it accepts an approved row with no processed
+    // file — rather than leave the raw frame as the image for good.
+    if (!image.processedUrl && !image.keepBackground) {
+      processImage(image._id).catch((err) => console.error('Post-approval processing error:', err.message));
+    }
 
     // Award Cellar Cred to the uploader
     incrementCred(image.uploadedBy, 'image_approved').catch(() => {});
