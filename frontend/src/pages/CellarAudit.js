@@ -19,6 +19,7 @@ const ACTION_LABEL_KEYS = {
   'bottle.delete':       'cellarAudit.actions.bottleDelete',
   'bottle.move.out':     'cellarAudit.actions.bottleMoveOut',
   'bottle.move.in':      'cellarAudit.actions.bottleMoveIn',
+  'bottle.bulk_move':    'cellarAudit.actions.bottleBulkMove',
   'cellar.delete':       'cellarAudit.actions.cellarDelete',
   'cellar.share.add':    'cellarAudit.actions.cellarShareAdd',
   'cellar.share.update': 'cellarAudit.actions.cellarShareUpdate',
@@ -32,6 +33,7 @@ const ACTION_ICONS = {
   'bottle.delete':       '🗑️',
   'bottle.move.out':     '📤',
   'bottle.move.in':      '📥',
+  'bottle.bulk_move':    '📦',
   'cellar.delete':       '🗑️',
   'cellar.share.add':    '🔗',
   'cellar.share.update': '🔄',
@@ -61,6 +63,10 @@ function formatDetail(action, detail, t) {
     return action === 'bottle.move.out'
       ? `${wine}→ ${detail.toCellarName || '—'}`
       : `${wine}← ${detail.fromCellarName || '—'}`;
+  }
+  // The one summary row a bulk move writes on top of its per-bottle rows.
+  if (action === 'bottle.bulk_move') {
+    return t('cellarAudit.bulkMoveDetail', { moved: detail.moved ?? 0, requested: detail.requested ?? 0 });
   }
   if (action === 'cellar.share.add') {
     return t('cellarAudit.sharedAs', { user: detail.sharedWith, role: detail.role });

@@ -759,6 +759,12 @@
     "groupBottleCount_one": "{{count}} bottle",
     "groupBottleCount_other": "{{count}} bottles",
     "collapseGroup": "Collapse ▲",
+    "selectBottles": "Select",
+    "selectBottlesTitle": "Select bottles to move to another cellar",
+    "selectedCount_one": "{{count}} bottle selected",
+    "selectedCount_other": "{{count}} bottles selected",
+    "selectAllLoaded": "Select all ({{count}})",
+    "bulkBarAria": "Actions for the selected bottles",
     "deleteWillDelete": "This will delete <strong>{{name}}</strong> and all its racks."
   },
   "addBottle": {
@@ -1314,6 +1320,7 @@
       "bottleDelete": "Deleted bottle",
       "bottleMoveOut": "Moved bottle out",
       "bottleMoveIn": "Moved bottle in",
+      "bottleBulkMove": "Moved bottles in bulk",
       "cellarDelete": "Deleted cellar",
       "cellarShareAdd": "Shared cellar",
       "cellarShareUpdate": "Changed share role",
@@ -1321,7 +1328,8 @@
     },
     "anonymous": "anonymous",
     "sharedAs": "{{user}} as {{role}}",
-    "roleChanged": "Role changed: {{from}} → {{to}}"
+    "roleChanged": "Role changed: {{from}} → {{to}}",
+    "bulkMoveDetail": "{{moved}} of {{requested}} bottles moved"
   },
   "moveBottle": {
     "action": "Move to another cellar",
@@ -1338,7 +1346,18 @@
     "moveError": "Couldn't move the bottle. Please try again.",
     "movedTitle": "Bottle moved",
     "movedInfo": "This bottle was moved to {{cellar}}.",
-    "backToCellar": "Back to cellar"
+    "backToCellar": "Back to cellar",
+    "moveSelected": "Move to cellar…",
+    "titleMany_one": "Move {{count}} bottle to another cellar",
+    "titleMany_other": "Move {{count}} bottles to another cellar",
+    "introMany": "Choose a cellar to move the selected bottles to. All their details and history are kept — they will arrive unplaced.",
+    "moveManyButton_one": "Move {{count}} bottle",
+    "moveManyButton_other": "Move {{count}} bottles",
+    "movedManyTitle": "Bottles moved",
+    "movedManyInfo_one": "{{count}} bottle was moved to {{cellar}}.",
+    "movedManyInfo_other": "{{count}} bottles were moved to {{cellar}}.",
+    "skippedInfo_one": "{{count}} bottle could not be moved — it is already consumed, or not yours to move.",
+    "skippedInfo_other": "{{count}} bottles could not be moved — they are already consumed, or not yours to move."
   },
   "admin": {
     "requests": {

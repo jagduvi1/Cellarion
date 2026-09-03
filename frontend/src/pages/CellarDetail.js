@@ -27,6 +27,7 @@ const ShareCellarModal = lazy(() => import('../components/ShareCellarModal'));
 const EditCellarModal = lazy(() => import('../components/EditCellarModal').then(m => ({ default: m.EditCellarModal })));
 const ColorPickerModal = lazy(() => import('../components/ColorPickerModal').then(m => ({ default: m.ColorPickerModal })));
 const DeleteCellarModal = lazy(() => import('../components/DeleteCellarModal').then(m => ({ default: m.DeleteCellarModal })));
+const MoveBottleModal = lazy(() => import('../components/MoveBottleModal'));
 
 const BOTTLES_PER_PAGE = 30;
 
@@ -678,6 +679,8 @@ function CellarDetail() {
               onLoadMore={loadMore}
               multi={dataIsMulti}
               rackKnown={!dataIsMulti && hasRacks === true}
+              canBulkMove={!dataIsMulti && cellar?.userRole === 'owner'}
+              onBottlesMoved={() => { fetchCellarData(0); fetchStatistics(); fetchRacks(); }}
             />
           )}
         </div>
@@ -736,7 +739,9 @@ function CellarDetail() {
 // `multi` = cross-cellar view: `bottles` is a flat list (no grouping), each item
 // carries its own `cellar` id + `cellarName` so it links to and is badged with
 // the right cellar.
-function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadMore, multi = false, rackKnown = false }) {
+// `canBulkMove` (owner of this one cellar) enables select mode → "Move to
+// cellar"; `onBottlesMoved` refreshes the parent's list, stats and racks after.
+function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadMore, multi = false, rackKnown = false, canBulkMove = false, onBottlesMoved }) {
   const { t } = useTranslation();
   const [viewMode, setViewMode] = useState(() => {
     try { return localStorage.getItem('cellarion_bottle_view') || 'list'; } catch { return 'list'; }
@@ -748,6 +753,33 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
     try { return localStorage.getItem('cellarion_bottle_notes') === '1'; } catch { return false; }
   });
   const [expandedGroups, setExpandedGroups] = useState(() => new Set());
+
+  // ── Multi-select → "Move to cellar" (support ticket 6a9949e3, 2026-09-03:
+  // a whole delivery logged in a storage cellar had to go home one bottle at
+  // a time). Owner-only and single-cellar — the parent gates canBulkMove. A
+  // collapsed group toggles all of its bottles at once, which is exactly the
+  // delivery case; expand the group to pick individual bottles.
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [showBulkMove, setShowBulkMove] = useState(false);
+  const idsOf = (item) => (Array.isArray(item?.bottles) ? item.bottles.map(b => b._id) : [item._id]);
+  const allLoadedIds = bottles.flatMap(idsOf);
+  const isSelected = (ids) => ids.length > 0 && ids.every(x => selectedIds.has(x));
+  const toggleIds = (ids) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      const allOn = ids.every(x => next.has(x));
+      ids.forEach(x => (allOn ? next.delete(x) : next.add(x)));
+      return next;
+    });
+  };
+  const exitSelect = () => { setSelectMode(false); setSelectedIds(new Set()); };
+  // Leaving the owner/single-cellar case (scope widened, cellar changed) ends
+  // select mode rather than leaving checked cards nothing can act on.
+  useEffect(() => {
+    if (!canBulkMove) { setSelectMode(false); setSelectedIds(new Set()); }
+  }, [canBulkMove, cellarId]);
+  const selectableNow = selectMode && canBulkMove && viewMode !== 'table';
 
   const setView = (mode) => {
     setViewMode(mode);
@@ -782,6 +814,18 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
   return (
     <>
       <div className="bottles-view-toggle">
+        {canBulkMove && viewMode !== 'table' && (
+          <button
+            type="button"
+            className={`view-toggle-btn select-toggle-btn ${selectMode ? 'active' : ''}`}
+            onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
+            aria-pressed={selectMode}
+            title={t('cellarDetail.selectBottlesTitle')}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="7 12 11 16 17 8"/></svg>
+            {t('cellarDetail.selectBottles')}
+          </button>
+        )}
         {viewMode === 'list' && (
           <button
             className={`view-toggle-btn notes-toggle-btn ${showNotes ? 'active' : ''}`}
@@ -831,6 +875,33 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
         </button>
       </div>
 
+      {selectableNow && (
+        <div className="bulk-bar" role="region" aria-label={t('cellarDetail.bulkBarAria')}>
+          <span className="bulk-bar-count" aria-live="polite">
+            {t('cellarDetail.selectedCount', { count: selectedIds.size })}
+          </span>
+          <button
+            type="button"
+            className="btn btn-secondary btn-small"
+            onClick={() => setSelectedIds(new Set(allLoadedIds))}
+            disabled={allLoadedIds.length === 0 || isSelected(allLoadedIds)}
+          >
+            {t('cellarDetail.selectAllLoaded', { count: allLoadedIds.length })}
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary btn-small"
+            onClick={() => setShowBulkMove(true)}
+            disabled={selectedIds.size === 0}
+          >
+            {t('moveBottle.moveSelected')}
+          </button>
+          <button type="button" className="btn btn-secondary btn-small" onClick={exitSelect}>
+            {t('common.cancel')}
+          </button>
+        </div>
+      )}
+
       {viewMode === 'table' ? (
         <Suspense fallback={<div className="load-more-wrap">{t('common.loading')}</div>}>
           <AnalyticsTable cellarId={multi ? null : cellarId} />
@@ -860,7 +931,7 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
             const rep = item.bottles[0];
             if (item.count === 1) {
               return (
-                <BottleCard key={rep._id} bottle={rep} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} compact={compact} rackKnown={rackKnown} showNotes={notesOn} />
+                <BottleCard key={rep._id} bottle={rep} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} compact={compact} rackKnown={rackKnown} showNotes={notesOn} selectable={selectableNow} selected={isSelected(idsOf(item))} onToggleSelect={() => toggleIds(idsOf(item))} />
               );
             }
             if (!expandedGroups.has(item.key)) {
@@ -873,6 +944,9 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
                   viewMode={viewMode}
                   groupCount={item.count}
                   onClick={() => toggleGroup(item.key)}
+                  selectable={selectableNow}
+                  selected={isSelected(idsOf(item))}
+                  onToggleSelect={() => toggleIds(idsOf(item))}
                   compact={compact}
                   rackKnown={rackKnown}
                   showNotes={notesOn}
@@ -889,14 +963,14 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
                   </button>
                 </div>
                 {item.bottles.map(b => (
-                  <BottleCard key={b._id} bottle={b} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} compact={compact} rackKnown={rackKnown} showNotes={notesOn} />
+                  <BottleCard key={b._id} bottle={b} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} compact={compact} rackKnown={rackKnown} showNotes={notesOn} selectable={selectableNow} selected={isSelected([b._id])} onToggleSelect={() => toggleIds([b._id])} />
                 ))}
               </Fragment>
             );
           }
           // Defensive fallback: a plain bottle item (responses are always grouped)
           return (
-            <BottleCard key={item._id} bottle={item} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} compact={compact} rackKnown={rackKnown} showNotes={notesOn} />
+            <BottleCard key={item._id} bottle={item} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} compact={compact} rackKnown={rackKnown} showNotes={notesOn} selectable={selectableNow} selected={isSelected([item._id])} onToggleSelect={() => toggleIds([item._id])} />
           );
         })}
       </div>
@@ -914,6 +988,17 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
       )}
       </>
       )}
+
+      <Suspense fallback={null}>
+        {showBulkMove && (
+          <MoveBottleModal
+            bottleIds={[...selectedIds]}
+            currentCellarId={cellarId}
+            onClose={() => setShowBulkMove(false)}
+            onMoved={() => { setShowBulkMove(false); exitSelect(); onBottlesMoved?.(); }}
+          />
+        )}
+      </Suspense>
     </>
   );
 }
