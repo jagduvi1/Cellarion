@@ -46,7 +46,7 @@ async function removeFromRacks(bottleId) {
  * re-index, audit (which also emits the stats_changed SSE nudge), and fire the
  * restock-gap check. Mirrors POST /api/bottles/:id/consume exactly.
  */
-async function consumeBottle(bottle, { reason = 'drank', note, rating, ratingScale, consumedAt } = {}, req) {
+async function consumeBottle(bottle, { reason = 'drank', note, rating, ratingScale, consumedAt, skipRestockCheck = false } = {}, req) {
   if (!CONSUMED_STATUSES.includes(reason)) {
     return { error: { status: 400, message: 'Invalid reason' } };
   }
@@ -71,6 +71,9 @@ async function consumeBottle(bottle, { reason = 'drank', note, rating, ratingSca
 
   bottle.status = reason;
   bottle.consumedAt = when;
+  // When the consume was LOGGED — always now — as distinct from the date the
+  // user put on it. The restore window counts from this (see restoreBottle).
+  bottle.consumedLoggedAt = new Date();
   bottle.consumedReason = reason;
   if (note) bottle.consumedNote = stripHtml(note);
   if (resolvedRating !== undefined) {
@@ -96,7 +99,8 @@ async function consumeBottle(bottle, { reason = 'drank', note, rating, ratingSca
   // Fire-and-forget restock-gap check. Skipped for demo accounts: on an
   // un-cached (wine, vintage) pair this fires a paid Voyage embedding call,
   // which would breach the demo's "zero AI spend" guarantee.
-  if (reason === 'drank' && !req?.user?.isDemo) {
+  // skipRestockCheck: the bulk route runs one check per wine+vintage itself.
+  if (reason === 'drank' && !skipRestockCheck && !req?.user?.isDemo) {
     const { checkRestockGap } = require('./restockChecker');
     checkRestockGap(req.user.id, bottle._id, bottle.cellar).catch(() => {});
   }
@@ -117,7 +121,12 @@ async function restoreBottle(bottle, req) {
   if (!CONSUMED_STATUSES.includes(bottle.status)) {
     return { error: { status: 400, message: 'Only a consumed bottle can be restored' } };
   }
-  if (bottle.consumedAt && (Date.now() - new Date(bottle.consumedAt).getTime()) > RESTORE_WINDOW_MS) {
+  // The window counts from when the consume was LOGGED, not from the date the
+  // user put on it — a bulk "drunk last Saturday" entered today is still an
+  // accidental log for two days. Rows from before consumedLoggedAt existed
+  // fall back to consumedAt, which was always "now" then.
+  const loggedAt = bottle.consumedLoggedAt || bottle.consumedAt;
+  if (loggedAt && (Date.now() - new Date(loggedAt).getTime()) > RESTORE_WINDOW_MS) {
     return {
       error: {
         status: 400,
@@ -130,6 +139,7 @@ async function restoreBottle(bottle, req) {
   const previousStatus = bottle.status;
   bottle.status = 'active';
   bottle.consumedAt = undefined;
+  bottle.consumedLoggedAt = undefined;
   bottle.consumedReason = undefined;
   bottle.consumedNote = undefined;
   bottle.consumedRating = undefined;
@@ -475,6 +485,7 @@ async function addBottle(cellarDoc, wineDoc, fields = {}, req) {
     bottle.status = reason;
     bottle.consumedReason = reason;
     bottle.consumedAt = consumedAt ? new Date(consumedAt) : new Date();
+    bottle.consumedLoggedAt = new Date();
     if (consumedNote) bottle.consumedNote = stripHtml(consumedNote);
     if (resolvedConsumedRating !== undefined) {
       bottle.consumedRating = resolvedConsumedRating;

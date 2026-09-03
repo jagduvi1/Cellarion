@@ -496,8 +496,17 @@ router.post('/:id/retry', requireAuth, requireNonDemo, async (req, res) => {
     if (image.uploadedBy.toString() !== req.user.id) {
       return res.status(403).json({ error: 'Not authorized' });
     }
-    if (image.status !== 'uploaded') {
-      return res.status(400).json({ error: 'Image is not in uploaded state' });
+    // A label scan is curation evidence, kept as received — never processed;
+    // and since originals are discarded after rembg, a retry on one would
+    // delete the very frame the curator needs.
+    if (image.kind === 'label-scan') {
+      return res.status(400).json({ error: 'A label scan is never processed' });
+    }
+    // Retry is for an image with NO processed file yet: a run that failed
+    // ('uploaded'), or one an admin approved before rembg got to it
+    // ('approved' with no processedUrl) — the latter used to be stuck for good.
+    if (image.processedUrl || !['uploaded', 'approved'].includes(image.status)) {
+      return res.status(400).json({ error: 'Image is not waiting to be processed' });
     }
 
     processImage(image._id).catch(err =>

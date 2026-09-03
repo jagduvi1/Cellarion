@@ -303,10 +303,15 @@ router.post('/:id/add-bottles', requireAuth, async (req, res) => {
     const knownWine = new Set(wines.map((w) => String(w._id)));
     const pendingWine = new Set(wines.filter((w) => w.pendingIdentity).map((w) => String(w._id)));
 
-    const keyOf = (wine, vintage, bottleSize) =>
-      `${String(wine)}|${(vintage || 'NV').trim() || 'NV'}|${(bottleSize || '750ml').trim() || '750ml'}`;
-    // What is already on the active container, plus what this request adds.
-    const present = new Set(container.map((e) => keyOf(e.wine, e.vintage, e.bottleSize)));
+    const keyOf = (wine, vintage, bottleSize) => entryKey({
+      wine: String(wine),
+      vintage: (vintage || 'NV').trim() || 'NV',
+      bottleSize: (bottleSize || '750ml').trim() || '750ml',
+    });
+    // What is already on the list — EVERY active container, not only the one
+    // this request writes to (a custom list's other sections count, as the
+    // MCP add_to_list check does) — plus what this request adds.
+    const present = new Set(allEntries(wineList).map((e) => keyOf(e.wine, e.vintage, e.bottleSize)));
 
     let added = 0;
     const skipped = [];

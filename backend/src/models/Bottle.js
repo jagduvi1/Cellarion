@@ -221,6 +221,10 @@ const bottleSchema = new mongoose.Schema({
     index: true
   },
   consumedAt: { type: Date },
+  // When the consume was LOGGED (always now), as distinct from consumedAt,
+  // which the user may backdate (bulk "mark as drunk" with one date). The
+  // 2-day restore window counts from this, so a backdated log stays undoable.
+  consumedLoggedAt: { type: Date },
   consumedReason: {
     type: String,
     enum: ['drank', 'gifted', 'sold', 'other']

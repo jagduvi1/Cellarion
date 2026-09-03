@@ -81,6 +81,9 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
   const swallowClick = useRef(false);
   const cancelPress = () => { clearTimeout(pressTimer.current); pressTimer.current = null; };
   const startPress = (e) => {
+    // A long press on touch ends without a click, which would leave the
+    // swallow flag armed and eat the NEXT tap — every new press starts clean.
+    swallowClick.current = false;
     if (!onLongPress || selectable) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     pressOrigin.current = { x: e.clientX, y: e.clientY };

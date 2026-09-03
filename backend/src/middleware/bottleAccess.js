@@ -46,4 +46,6 @@ function requireBottleAccess(minRole = 'viewer') {
   };
 }
 
-module.exports = { requireBottleAccess };
+// ROLE_LEVELS is exported so the bulk routes (routes/bottles.js
+// resolveBulkBottles) judge access by the same ladder instead of a copy.
+module.exports = { requireBottleAccess, ROLE_LEVELS };

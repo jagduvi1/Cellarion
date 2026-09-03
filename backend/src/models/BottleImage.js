@@ -80,9 +80,12 @@ const bottleImageSchema = new mongoose.Schema({
   // the AI label scanner, kept ONLY so a curator working the pending-identity
   // queue can read the label the extraction got wrong. A label-scan row is
   // always visibility:'private', never has a `bottle`, is never assignedToWine,
-  // and therefore appears in no gallery and no public listing — the existing
-  // { status:'approved', visibility:'public' } gates already exclude it, and
-  // this field is what makes that intent explicit and queryable.
+  // and therefore appears in no gallery and no public listing. The public
+  // { status:'approved', visibility:'public' } gates exclude it on their own,
+  // but a lookup keyed on wineDefinition + uploader does NOT (support ticket
+  // 2026-09-03: the cellar view's pending-photo lookup served scan frames as
+  // card images) — every such query must filter `kind: { $ne: 'label-scan' }`
+  // explicitly. That is what this field is for.
   kind: {
     type: String,
     enum: ['bottle', 'label-scan'],
@@ -178,6 +181,11 @@ const bottleImageSchema = new mongoose.Schema({
 bottleImageSchema.index({ status: 1, createdAt: -1 });
 bottleImageSchema.index({ bottle: 1, status: 1 });
 bottleImageSchema.index({ wineDefinition: 1, assignedToWine: 1 });
+// unlinkIfUnreferenced / discardOriginal ask "does any OTHER row point at this
+// file?" — on every processed upload since 2026-09-03 — so the answer must be
+// an index seek, not a collection scan. Partial: only rows that carry a URL.
+bottleImageSchema.index({ originalUrl: 1 }, { partialFilterExpression: { originalUrl: { $type: 'string' } } });
+bottleImageSchema.index({ processedUrl: 1 }, { partialFilterExpression: { processedUrl: { $type: 'string' } } });
 // Dedup lookup on import: "does this user already have this exact image?"
 bottleImageSchema.index({ uploadedBy: 1, contentHash: 1 }, { sparse: true });
 // The 30-day unattached-scan sweep (services/scanImageRetentionJob.js) reads

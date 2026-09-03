@@ -63,15 +63,19 @@ trap 'rm -rf "$DEST"' EXIT
 echo "[restore] fetching snapshot $SNAPSHOT…"
 restic restore "$SNAPSHOT" --target "$DEST"
 
-# backup.sh stages everything under ONE mktemp directory and backs that up, so
-# the snapshot restores as exactly one top-level directory. Anything else is
-# not a Cellarion snapshot and is refused rather than guessed at.
-mapfile -t TOPS < <(find "$DEST" -mindepth 1 -maxdepth 1 -type d)
-if [ "${#TOPS[@]}" -ne 1 ]; then
-  echo "[restore] expected exactly one staging directory in the snapshot, found ${#TOPS[@]} — refusing" >&2
+# backup.sh stages everything under ONE mktemp directory and backs that up by
+# its ABSOLUTE path, and restic recreates that path under --target — so the
+# staging directory lands at $DEST/tmp/tmp.XXXXXX, not at the top of $DEST
+# (post-ship audit 2026-09-03: the top-level lookup this replaces found only
+# "$DEST/tmp", and every restore aborted at the archive check). Locate the
+# staging directory by the one file every snapshot carries, the Mongo archive,
+# and refuse anything but exactly one hit rather than guess.
+mapfile -t HITS < <(find "$DEST" -type f -path "*/mongo/$MONGO_DB.archive.gz")
+if [ "${#HITS[@]}" -ne 1 ]; then
+  echo "[restore] expected exactly one Mongo archive in the snapshot, found ${#HITS[@]} — refusing" >&2
   exit 1
 fi
-STAGE="${TOPS[0]}"
+STAGE="$(dirname "$(dirname "${HITS[0]}")")"
 
 ARCHIVE="$STAGE/mongo/$MONGO_DB.archive.gz"
 UPLOADS_DIR="$STAGE/uploads"
