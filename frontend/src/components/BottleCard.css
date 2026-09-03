@@ -505,3 +505,15 @@
   z-index: 2;
   box-shadow: var(--shadow-card);
 }
+
+/* Select mode: a tinted card reads as "picked" at a glance on a long list,
+   and cards never select text or pop a callout on a long press. */
+.bottle-card,
+.bottle-grid-card {
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+.bottle-card.is-selected,
+.bottle-grid-card.is-selected {
+  background: var(--color-primary-light);
+}

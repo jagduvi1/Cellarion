@@ -13,6 +13,7 @@ const { stripImageMetadata } = require('../services/imageSanitizer');
 const { loadWineMap, loadCellarWines, entryKey, allEntries } = require('../services/wineListData');
 const { LOGO_DIR, ensureLogoDir, deleteLogoFile, copyLogoFile } = require('../services/wineListLogos');
 const WineDefinition = require('../models/WineDefinition');
+const Bottle = require('../models/Bottle');
 
 const router = express.Router();
 
@@ -234,6 +235,114 @@ router.put('/:id', requireAuth, async (req, res) => {
     }
     console.error('Update wine list error:', error);
     res.status(500).json({ error: 'Failed to update wine list' });
+  }
+});
+
+// POST /api/wine-lists/:id/add-bottles — put the wines of MANY bottles on a
+// list in one step (the cellar view's select mode, support ticket 6a9949e3).
+// Entries are wine + vintage + size, so a case of twelve becomes ONE line, and
+// a wine already on the list is reported as skipped, never duplicated. Same
+// rules as the MCP add_to_list tool: writes go to the ACTIVE container only, a
+// custom-structured list needs a section (created if new) unless it has
+// exactly one, and a pendingIdentity wine is refused — the list may be
+// published. Bottles must be in cellars the caller OWNS (lists are owner-only).
+// Prices are left for the editor: a menu price is a decision, not a purchase
+// price.
+// Body:     { bottleIds: string[] (≤500), section?: string }
+// Response: { added, skipped: [{ id, reason }], list: { _id, name } }
+//   reason ∈ 'not_found', 'no_wine', 'pending_wine', 'already_on_list'
+router.post('/:id/add-bottles', requireAuth, async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+    const { bottleIds, section } = req.body || {};
+    if (!Array.isArray(bottleIds) || bottleIds.length === 0) {
+      return res.status(400).json({ error: 'bottleIds must be a non-empty array' });
+    }
+    if (bottleIds.length > 500) return res.status(400).json({ error: 'At most 500 bottles per request' });
+    if (!bottleIds.every((x) => typeof x === 'string' && mongoose.Types.ObjectId.isValid(x))) {
+      return res.status(400).json({ error: 'bottleIds must be valid bottle ids' });
+    }
+
+    const wineList = await WineList.findOne({ _id: req.params.id, user: req.user.id });
+    if (!wineList) return res.status(404).json({ error: 'Wine list not found' });
+
+    // Target container, resolved exactly as the MCP tool does.
+    let container;
+    if (wineList.structureMode === 'custom') {
+      const wanted = typeof section === 'string' ? section.trim().slice(0, 200) : '';
+      if (!wanted) {
+        if (wineList.sections.length !== 1) {
+          return res.status(400).json({ error: 'This list uses custom sections — choose a section' });
+        }
+        container = wineList.sections[0].entries;
+      } else {
+        let sec = wineList.sections.find((s) => s.title.toLowerCase() === wanted.toLowerCase());
+        if (!sec) {
+          wineList.sections.push({ title: wanted, sortOrder: wineList.sections.length, entries: [] });
+          sec = wineList.sections[wineList.sections.length - 1];
+        }
+        container = sec.entries;
+      }
+    } else {
+      container = wineList.autoGroupEntries;
+    }
+
+    const ids = [...new Set(bottleIds.map(String))];
+    const bottles = await Bottle.find({ _id: { $in: ids } }).select('cellar wineDefinition vintage bottleSize').lean();
+    const byId = new Map(bottles.map((b) => [String(b._id), b]));
+    const ownedCellars = new Map();
+    const ownsCellar = async (cellarId) => {
+      const key = String(cellarId);
+      if (!ownedCellars.has(key)) ownedCellars.set(key, !!(await requireCellarOwner(req.user.id, key)));
+      return ownedCellars.get(key);
+    };
+    const wineIds = [...new Set(bottles.map((b) => b.wineDefinition && String(b.wineDefinition)).filter(Boolean))];
+    const wines = wineIds.length
+      ? await WineDefinition.find({ _id: { $in: wineIds } }).select('pendingIdentity').lean()
+      : [];
+    const knownWine = new Set(wines.map((w) => String(w._id)));
+    const pendingWine = new Set(wines.filter((w) => w.pendingIdentity).map((w) => String(w._id)));
+
+    const keyOf = (wine, vintage, bottleSize) =>
+      `${String(wine)}|${(vintage || 'NV').trim() || 'NV'}|${(bottleSize || '750ml').trim() || '750ml'}`;
+    // What is already on the active container, plus what this request adds.
+    const present = new Set(container.map((e) => keyOf(e.wine, e.vintage, e.bottleSize)));
+
+    let added = 0;
+    const skipped = [];
+    for (const id of ids) {
+      const b = byId.get(id);
+      if (!b || !(await ownsCellar(b.cellar))) { skipped.push({ id, reason: 'not_found' }); continue; }
+      const wineId = b.wineDefinition ? String(b.wineDefinition) : null;
+      if (!wineId || !knownWine.has(wineId)) { skipped.push({ id, reason: 'no_wine' }); continue; }
+      if (pendingWine.has(wineId)) { skipped.push({ id, reason: 'pending_wine' }); continue; }
+      const key = keyOf(wineId, b.vintage, b.bottleSize);
+      if (present.has(key)) { skipped.push({ id, reason: 'already_on_list' }); continue; }
+      present.add(key);
+      const [, vintage, bottleSize] = key.split('|');
+      container.push({ wine: b.wineDefinition, vintage, bottleSize, sortOrder: container.length });
+      added++;
+    }
+
+    if (added > 0) {
+      try {
+        await wineList.save();
+      } catch (err) {
+        if (err.name === 'VersionError') {
+          return res.status(409).json({ error: 'Wine list was modified by another request. Please refresh and try again.' });
+        }
+        if (err.name === 'ValidationError') return res.status(400).json({ error: err.message });
+        throw err;
+      }
+      logAudit(req, 'winelist.entry.add',
+        { type: 'winelist', id: wineList._id, cellarId: wineList.cellar },
+        { added, requested: ids.length, via: 'bulk' });
+    }
+
+    res.json({ added, skipped, list: { _id: wineList._id, name: wineList.name } });
+  } catch (error) {
+    console.error('Add bottles to wine list error:', error);
+    res.status(500).json({ error: 'Failed to add the bottles to the wine list' });
   }
 });
 

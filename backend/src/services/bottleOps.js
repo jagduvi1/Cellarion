@@ -46,7 +46,7 @@ async function removeFromRacks(bottleId) {
  * re-index, audit (which also emits the stats_changed SSE nudge), and fire the
  * restock-gap check. Mirrors POST /api/bottles/:id/consume exactly.
  */
-async function consumeBottle(bottle, { reason = 'drank', note, rating, ratingScale } = {}, req) {
+async function consumeBottle(bottle, { reason = 'drank', note, rating, ratingScale, consumedAt } = {}, req) {
   if (!CONSUMED_STATUSES.includes(reason)) {
     return { error: { status: 400, message: 'Invalid reason' } };
   }
@@ -57,8 +57,20 @@ async function consumeBottle(bottle, { reason = 'drank', note, rating, ratingSca
     resolveRating(rating, ratingScale);
   if (ratingError) return { error: { status: 400, message: ratingError } };
 
+  // Optional explicit date — the bulk "mark as drunk" puts ONE date on a whole
+  // selection (the dinner was last Saturday, the logging is today). Defaults
+  // to now; never in the future, never before the app's earliest vintage year.
+  let when = new Date();
+  if (consumedAt !== undefined && consumedAt !== null && consumedAt !== '') {
+    const d = new Date(consumedAt);
+    if (Number.isNaN(d.getTime()) || d.getTime() > Date.now() + 24 * 60 * 60 * 1000 || d.getFullYear() < 1900) {
+      return { error: { status: 400, message: 'consumedAt must be a valid date and not in the future' } };
+    }
+    when = d;
+  }
+
   bottle.status = reason;
-  bottle.consumedAt = new Date();
+  bottle.consumedAt = when;
   bottle.consumedReason = reason;
   if (note) bottle.consumedNote = stripHtml(note);
   if (resolvedRating !== undefined) {
