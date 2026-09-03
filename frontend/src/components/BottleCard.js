@@ -99,6 +99,14 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
     if (swallowClick.current) { swallowClick.current = false; e.preventDefault(); return; }
     handleClick();
   };
+  // In select mode a stacked card toggles ALL its bottles, so the ⊕ becomes a
+  // real button that expands the group instead — the only way to pick one
+  // bottle out of five (Johan, 2026-09-03, from the phone). It stops
+  // propagation so the card's own click / keydown handlers don't also flip
+  // the selection.
+  const canExpandInSelect = selectable && isGroup && typeof onClick === 'function';
+  const expandGroup = (e) => { e.stopPropagation(); onClick(); };
+  const stopKeys = (e) => e.stopPropagation();
   const pressHandlers = onLongPress ? {
     onPointerDown: startPress,
     onPointerMove: movePress,
@@ -137,6 +145,16 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
       >
         {selectBox}
         {isGroup && <span className="bottle-count-badge">×{groupCount}</span>}
+        {canExpandInSelect && (
+          <button
+            type="button"
+            className="bottle-grid-expand"
+            aria-label={t('bottleCard.expandGroup')}
+            title={t('bottleCard.expandGroup')}
+            onClick={expandGroup}
+            onKeyDown={stopKeys}
+          >⊕</button>
+        )}
         <div className="bottle-grid-image-wrap">
           {imgSrc ? (
             <>
@@ -307,7 +325,18 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
         </div>
       </div>
 
-      <span className="bottle-chevron" aria-hidden="true">{isGroup ? '⊕' : '›'}</span>
+      {canExpandInSelect ? (
+        <button
+          type="button"
+          className="bottle-chevron bottle-chevron--btn"
+          aria-label={t('bottleCard.expandGroup')}
+          title={t('bottleCard.expandGroup')}
+          onClick={expandGroup}
+          onKeyDown={stopKeys}
+        >⊕</button>
+      ) : (
+        <span className="bottle-chevron" aria-hidden="true">{isGroup ? '⊕' : '›'}</span>
+      )}
     </div>
   );
 }

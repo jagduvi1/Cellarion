@@ -517,3 +517,40 @@
 .bottle-grid-card.is-selected {
   background: var(--color-primary-light);
 }
+
+/* Select mode on a stacked card: the ⊕ is a real button that expands the
+   group (a tap on the card itself toggles all its bottles). In the grid the
+   count badge moves right to make room for the select box beside it. */
+.bottle-chevron--btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-surface);
+  color: var(--color-primary);
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+.bottle-chevron--btn:hover { background: var(--color-primary-light); }
+.bottle-grid-expand {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-surface);
+  color: var(--color-primary);
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: var(--shadow-card);
+}
+.bottle-grid-card.is-selectable .bottle-count-badge { left: 38px; }

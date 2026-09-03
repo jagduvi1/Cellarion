@@ -4250,6 +4250,7 @@
     "pendingReview": "Pending review",
     "openBadge": "{{glasses}} gl · {{days}}d",
     "groupTooltip": "{{count}} identical bottles — click to expand",
+    "expandGroup": "Show the bottles in this group",
     "yourWindow": "your window",
     "yourWindowTooltip": "Based on your own drink window for this bottle",
     "unplaced": "Unplaced",
