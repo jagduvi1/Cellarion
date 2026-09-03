@@ -196,8 +196,9 @@ async function processImage(imageId) {
     console.log(`Image ${imageId} processed successfully`);
   } catch (error) {
     console.error(`Image processing failed for ${imageId}:`, error.message);
-    // Revert to uploaded so it can be retried — but never demote an official
-    // (assignedToWine) image's approval; reprocessAllImages retries those too.
+    // Revert to uploaded so it can be retried (POST /api/images/:id/retry) —
+    // but never demote an official (assignedToWine) image's approval. The
+    // original stays on disk: it is the retry's source.
     image.status = image.assignedToWine ? 'approved' : 'uploaded';
     await image.save();
   }
