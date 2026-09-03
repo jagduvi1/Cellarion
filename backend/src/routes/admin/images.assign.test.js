@@ -25,9 +25,8 @@ jest.mock('../../models/WineDefinition', () => ({ findByIdAndUpdate: jest.fn() }
 jest.mock('../../models/Bottle', () => ({}));
 jest.mock('../../services/search', () => ({ indexWine: jest.fn() }));
 jest.mock('../../services/imageProcessor', () => ({
-  reprocessAllImages: jest.fn(),
-  safeUploadPath: jest.fn(),
   unlinkImageFiles: jest.fn(),
+  discardOriginal: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../../services/notifications', () => ({ createNotification: jest.fn() }));

@@ -849,7 +849,8 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
     WineVintageProfile.countDocuments({ status: 'reviewed' }),
     WineVintageProfile.countDocuments({ status: 'pending' }),
     WineRequest.countDocuments({ ...requestMatch, status: 'pending' }),
-    BottleImage.countDocuments({ ...imageMatch, status: { $in: ['uploaded', 'processing', 'processed'] } }),
+    // Same population as the admin moderation queue, which excludes label scans.
+    BottleImage.countDocuments({ ...imageMatch, kind: { $ne: 'label-scan' }, status: { $in: ['uploaded', 'processing', 'processed'] } }),
     BottleImage.countDocuments(imageMatch),
     Bottle.distinct('wineDefinition', bottleMatch).then(ids => ids.filter(Boolean).length),
     WineDefinition.countDocuments(),

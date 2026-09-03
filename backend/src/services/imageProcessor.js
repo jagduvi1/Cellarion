@@ -28,42 +28,92 @@ function safeUploadPath(relativePart) {
 }
 
 /**
- * Best-effort unlink of a BottleImage's on-disk files (original + processed).
- * Used by GDPR erasure so the underlying files don't outlive the DB rows that
- * are their only reference. Never throws — a missing file or transient error
- * must not abort the surrounding deletion.
+ * Unlink ONE upload file unless another BottleImage still references it.
  *
  * Reference-safe: import-time content dedup (services/cellarImport.js) can point
  * TWO BottleImage docs at the same file on disk (so we don't re-store an image
  * the user already has). Before unlinking a file we therefore check whether any
  * OTHER BottleImage still references that URL, and skip the unlink if so — so
  * deleting one doc never orphans another doc's still-needed file. When the image
- * has no other references (the common case), behaviour is unchanged.
+ * has no other references (the common case), the file is simply removed.
+ *
+ * Never throws — a missing file or transient error must not abort the
+ * surrounding operation. Returns true when the file is gone (unlinked, or was
+ * already missing), false when it was kept for another document.
+ */
+async function unlinkIfUnreferenced(imageId, url) {
+  if (!url || typeof url !== 'string' || !url.startsWith('/api/uploads/')) return true;
+  try {
+    const stillReferenced = await BottleImage.countDocuments({
+      _id: { $ne: imageId },
+      $or: [{ originalUrl: url }, { processedUrl: url }],
+    });
+    if (stillReferenced > 0) return false; // another image doc shares this file — keep it
+  } catch (err) {
+    // If the reference check fails, fall through and unlink as before — the
+    // pre-dedup behaviour. Shared files are rare; orphaning a file is worse
+    // than the (very unlikely) case of removing a still-referenced one.
+    console.warn(`[images] reference check failed for ${url}:`, err.message);
+  }
+  try {
+    await fs.promises.unlink(safeUploadPath(url.replace('/api/uploads/', '')));
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      console.warn(`[images] could not unlink ${url}:`, err.message);
+    }
+  }
+  return true;
+}
+
+/**
+ * Best-effort unlink of a BottleImage's on-disk files (original + processed).
+ * Used by GDPR erasure so the underlying files don't outlive the DB rows that
+ * are their only reference. Never throws — a missing file or transient error
+ * must not abort the surrounding deletion.
  */
 async function unlinkImageFiles(image) {
   if (!image) return;
   for (const url of [image.originalUrl, image.processedUrl]) {
-    if (!url || typeof url !== 'string' || !url.startsWith('/api/uploads/')) continue;
-    try {
-      const stillReferenced = await BottleImage.countDocuments({
-        _id: { $ne: image._id },
-        $or: [{ originalUrl: url }, { processedUrl: url }],
-      });
-      if (stillReferenced > 0) continue; // another image doc shares this file — keep it
-    } catch (err) {
-      // If the reference check fails, fall through and unlink as before — the
-      // pre-dedup behaviour. Shared files are rare; orphaning a file is worse
-      // than the (very unlikely) case of removing a still-referenced one.
-      console.warn(`[images] reference check failed for ${url}:`, err.message);
-    }
-    try {
-      await fs.promises.unlink(safeUploadPath(url.replace('/api/uploads/', '')));
-    } catch (err) {
-      if (err.code !== 'ENOENT') {
-        console.warn(`[images] could not unlink ${url}:`, err.message);
-      }
-    }
+    await unlinkIfUnreferenced(image._id, url);
   }
+}
+
+/**
+ * Drop the ORIGINAL upload once background removal has produced the processed
+ * file — the processed image is the only copy Cellarion keeps.
+ *
+ * Support ticket 2026-09-03: a user's cellar showed photos "including the
+ * background", served from /api/uploads/originals/. That frame is the raw
+ * photo — a kitchen table, a hand, a face — and nothing needs it once rembg
+ * has run: every display path prefers processedUrl, the cellar export ships
+ * the processed file, and the only retry path (POST /api/images/:id/retry)
+ * exists for images that have NO processed file yet. Keeping it was pure
+ * exposure. Until now only an admin approval deleted the original, so a
+ * private photo — the common case — kept its raw frame on disk for good.
+ *
+ * Skipped when the original IS the kept file (a keepBackground row, where
+ * processedUrl === originalUrl — see models/BottleImage) and when there is no
+ * processed file at all (a failed rembg run still needs its source for the
+ * retry; an imported never-cropped photo has nothing else). Reference-safe
+ * like everything else here, and never throws: a stray unlink failure must not
+ * fail the processing job that just succeeded — the hourly orphan sweep
+ * (cleanupOrphanedImages) picks up a file nothing references any more.
+ *
+ * Nulls originalUrl in the DB directly (not via image.save()) so a caller
+ * holding a stale document snapshot cannot resurrect the URL, and mirrors the
+ * change onto the in-memory doc for callers that go on to save it.
+ */
+async function discardOriginal(image) {
+  if (!image || !image.originalUrl || !image.processedUrl) return;
+  if (image.originalUrl === image.processedUrl) return;
+  const url = image.originalUrl;
+  await unlinkIfUnreferenced(image._id, url);
+  try {
+    await BottleImage.updateOne({ _id: image._id, originalUrl: url }, { $set: { originalUrl: null } });
+  } catch (err) {
+    console.warn(`[images] could not clear originalUrl for ${image._id}:`, err.message);
+  }
+  image.originalUrl = null;
 }
 
 async function processImage(imageId) {
@@ -138,6 +188,11 @@ async function processImage(imageId) {
       require('./search').indexWine(official.wineDefinition);
     }
 
+    // The processed file is now the only copy we keep — the raw frame goes.
+    // AFTER the wine-image upgrade above, so WineDefinition.image never points
+    // at a file that has just been deleted, even for a moment.
+    await discardOriginal(image);
+
     console.log(`Image ${imageId} processed successfully`);
   } catch (error) {
     console.error(`Image processing failed for ${imageId}:`, error.message);
@@ -148,60 +203,10 @@ async function processImage(imageId) {
   }
 }
 
-async function reprocessAllImages() {
-  const images = await BottleImage.find({
-    status: { $in: ['processed', 'approved'] },
-    originalUrl: { $exists: true },
-    // Never run rembg over a photo whose uploader opted out of it.
-    keepBackground: { $ne: true },
-  });
-
-  console.log(`Re-processing ${images.length} images...`);
-
-  for (const image of images) {
-    try {
-      const originalPath = safeUploadPath(image.originalUrl.replace('/api/uploads/', ''));
-      if (!fs.existsSync(originalPath)) {
-        console.log(`Skipping ${image._id}: original file not found`);
-        continue;
-      }
-
-      const fileBuffer = fs.readFileSync(originalPath);
-      const formData = new FormData();
-      const blob = new Blob([fileBuffer], { type: 'image/jpeg' });
-      formData.append('image', blob, 'input.jpg');
-
-      const response = await fetch(`${REMBG_URL}/remove-bg`, {
-        method: 'POST',
-        body: formData,
-        signal: AbortSignal.timeout(120000)
-      });
-
-      if (!response.ok) {
-        console.log(`Skipping ${image._id}: rembg error ${response.status}`);
-        continue;
-      }
-
-      const resultBuffer = Buffer.from(await response.arrayBuffer());
-      const basename = path.basename(image.originalUrl, path.extname(image.originalUrl));
-      const processedFilename = `${basename}.png`;
-      const processedPath = path.join(PROCESSED_DIR, processedFilename);
-
-      fs.writeFileSync(processedPath, resultBuffer);
-      image.processedUrl = `/api/uploads/processed/${processedFilename}`;
-      // The dedup hash must track the bytes of the kept/exported file (see
-      // processImage above) — rembg output is not byte-stable across runs.
-      image.contentHash = hashImageBytes(resultBuffer);
-      await image.save();
-
-      console.log(`Re-processed ${image._id} successfully`);
-    } catch (error) {
-      console.error(`Re-process failed for ${image._id}:`, error.message);
-    }
-  }
-
-  console.log('Re-processing complete');
-}
+// reprocessAllImages (admin "re-run rembg over every image") used to live here.
+// It went with the retained originals: a processed image no longer has a
+// source frame to re-run, by design (see discardOriginal). An image whose rembg
+// run FAILED keeps its original and is re-run via POST /api/images/:id/retry.
 
 /**
  * Clean up images stuck in 'processing' for more than 1 hour (likely failed silently)
@@ -223,9 +228,11 @@ async function cleanupOrphanedImages() {
     const ORIGINALS_DIR = path.join(UPLOADS_ROOT, 'originals');
     if (!fs.existsSync(ORIGINALS_DIR)) return;
 
-    // originalUrl is null for approved/rejected images (their file was already
-    // deleted) — path.basename(null) used to throw here, which silently
+    // originalUrl is null for every processed image (discardOriginal) and for
+    // rejected ones — path.basename(null) used to throw here, which silently
     // disabled the orphan sweep forever once any image had been moderated.
+    // A file whose unlink failed in discardOriginal lands here too: nothing
+    // references it any more, so it is an orphan.
     const files = await fs.promises.readdir(ORIGINALS_DIR);
     const dbImages = await BottleImage.find({ originalUrl: { $ne: null } }, 'originalUrl').lean();
     const knownFiles = new Set(dbImages.map(img => path.basename(img.originalUrl)));
@@ -256,4 +263,4 @@ async function cleanupOrphanedImages() {
   }
 }
 
-module.exports = { processImage, reprocessAllImages, cleanupOrphanedImages, safeUploadPath, unlinkImageFiles, hashImageBytes };
+module.exports = { processImage, cleanupOrphanedImages, safeUploadPath, unlinkImageFiles, unlinkIfUnreferenced, discardOriginal, hashImageBytes };

@@ -528,7 +528,11 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
     const pendingImg = await BottleImage.findOne({
       $or: pendingImgOr,
       uploadedBy: req.user.id,
-      status: { $in: ['uploaded', 'processing', 'processed'] }
+      status: { $in: ['uploaded', 'processing', 'processed'] },
+      // Never a label scan — same fix as the cellar list (routes/cellars.js
+      // attachBottleImageUrls, support ticket 2026-09-03): the scanner's raw
+      // frame is private curation evidence, not a bottle photo.
+      kind: { $ne: 'label-scan' },
     }).sort({ createdAt: -1 }).lean();
 
     const pendingImageUrl = pendingImg
