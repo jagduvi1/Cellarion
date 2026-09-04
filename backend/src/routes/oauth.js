@@ -4,7 +4,7 @@ const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const crypto = require('crypto');
 const User = require('../models/User');
 const { logAudit } = require('../services/audit');
-const { issueTokens } = require('../services/authTokens');
+const { issueTokens, clientHint } = require('../services/authTokens');
 const { resolvePendingShares } = require('../services/pendingShares');
 
 const router = express.Router();
@@ -156,7 +156,7 @@ router.get('/google/callback', (req, res, next) => {
       return res.redirect(failureRedirect(reason));
     }
     try {
-      await issueTokens(user, res, { rememberMe: true });
+      await issueTokens(user, res, { rememberMe: true, client: clientHint(req) });
       logAudit(req, 'auth.oauth.success', { type: 'user', id: user._id }, { provider: 'google' });
       resolvePendingShares(user).catch(() => {});
       return res.redirect(successRedirect);

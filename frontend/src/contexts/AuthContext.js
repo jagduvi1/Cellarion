@@ -80,11 +80,14 @@ export const AuthProvider = ({ children }) => {
   const refreshInFlightRef = useRef(null);
 
   // The ref only guards THIS tab, but the refresh cookie is browser-wide and
-  // the backend stores a single rotating token hash — two tabs refreshing at
+  // the backend rotates ONE hash per browser session — two tabs refreshing at
   // once (typical after browser session-restore reopens several Cellarion
   // tabs) race the rotation and the loser is spuriously logged out. The Web
   // Locks API serializes across tabs of the same origin: the waiter re-runs
   // with the cookie its predecessor just rotated in, which is valid.
+  // (Sessions are per DEVICE server-side since 2026-09-04, so signing in on
+  // another device no longer invalidates this browser's cookie; the race
+  // above is the only remaining way two refreshes can collide.)
   const doRefresh = async () => {
     const res = await fetch('/api/auth/refresh', {
       method: 'POST',

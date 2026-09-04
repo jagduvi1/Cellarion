@@ -35,6 +35,7 @@ const PriceTrackingSkip = require('../models/PriceTrackingSkip');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const { updatePreferences, updateProfile } = require('../services/accountOps');
 const { buildUserExport } = require('../services/userDataRegistry');
+const { revokeAllSessions } = require('../services/authTokens');
 const {
   buildCellarDataExport,
   IMAGE_EXPORT_COOLDOWN_MS,
@@ -477,12 +478,11 @@ router.delete('/me', requireAuth, requireNonDemo, async (req, res) => {
 
     user.deletionRequestedAt = now;
     user.deletionScheduledFor = scheduledFor;
-    // Revoke refresh sessions on the deletion request so a refresh token captured
-    // before deletion can't keep minting access tokens through the 7-day window.
-    // The user simply re-authenticates to use the account (or to cancel the
-    // deletion) — matching change-password / password-reset, which also clear it.
-    user.refreshTokenHash = null;
-    user.refreshTokenExpiresAt = null;
+    // Revoke every device session on the deletion request so a refresh token
+    // captured before deletion can't keep minting access tokens through the
+    // 7-day window. The user simply re-authenticates to use the account (or to
+    // cancel the deletion) — matching change-password / password-reset.
+    revokeAllSessions(user);
     eventBus.dropUser(user._id); // and force-close open SSE event streams
     await user.save();
 

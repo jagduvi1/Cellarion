@@ -170,6 +170,29 @@ const userSchema = new mongoose.Schema({
       default: 'all'
     }
   },
+  // One entry per signed-in device/browser (per-device sessions, 2026-09-04):
+  // `hash` is sha256 of the opaque refresh token in that device's cookie,
+  // `prevHash` the hash most recently rotated away (reuse detection),
+  // `client` a short device label like "Android / Chrome" — never the raw UA.
+  // Rotation touches only its own entry; password change/reset and account
+  // deletion clear the whole list. See services/authTokens.js.
+  sessions: {
+    type: [new mongoose.Schema({
+      hash: { type: String, required: true },
+      prevHash: { type: String, default: null },
+      rotatedAt: { type: Date, default: null },
+      expiresAt: { type: Date, default: null },
+      persistent: { type: Boolean, default: true },
+      createdAt: { type: Date, default: Date.now },
+      lastUsedAt: { type: Date, default: Date.now },
+      client: { type: String, default: 'Unknown device', maxlength: 80 },
+    })],
+    default: []
+  },
+  // LEGACY single-session fields. Read once by /refresh to adopt a
+  // pre-sessions cookie into `sessions` (so the rollout signs nobody out),
+  // then nulled. Drop the three fields and their index once no row carries a
+  // refreshTokenHash.
   refreshTokenHash: {
     type: String,
     default: null
@@ -350,8 +373,12 @@ const userSchema = new mongoose.Schema({
 // Sparse index so verify-email lookup is efficient; sparse avoids bloat after verification
 userSchema.index({ emailVerificationTokenHash: 1 }, { sparse: true });
 userSchema.index({ passwordResetTokenHash: 1 }, { sparse: true });
-// Every /api/auth/refresh resolves the session via this hash — without the
-// index it is a full collection scan per token refresh (one per session ~15min)
+// Every /api/auth/refresh resolves the device session via these hashes —
+// without the indexes it is a full collection scan per token refresh (one per
+// session ~15min).
+userSchema.index({ 'sessions.hash': 1 }, { sparse: true });
+userSchema.index({ 'sessions.prevHash': 1 }, { sparse: true });
+// Legacy — keeps the one-time migration lookup indexed. Drop with the field.
 userSchema.index({ refreshTokenHash: 1 }, { sparse: true });
 // SSO login resolves the account by (provider, provider's user id) on every
 // federated sign-in — index it so that lookup isn't a full collection scan.
@@ -434,18 +461,6 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// Store a hashed refresh token
-userSchema.methods.setRefreshToken = function(token) {
-  this.refreshTokenHash = crypto.createHash('sha256').update(token).digest('hex');
-};
-
-// Validate a refresh token against the stored hash
-userSchema.methods.validateRefreshToken = function(token) {
-  if (!this.refreshTokenHash) return false;
-  const hash = crypto.createHash('sha256').update(token).digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(this.refreshTokenHash));
-};
-
 // Generate a raw verification token, store its hash, set 24h expiry; returns raw token to email
 userSchema.methods.setEmailVerificationToken = function() {
   const token = crypto.randomBytes(32).toString('hex');
@@ -501,6 +516,7 @@ userSchema.methods.toJSON = function() {
   obj.linkedProviders = Array.isArray(obj.authProviders) ? obj.authProviders.map(p => p.provider) : [];
   delete obj.authProviders;
   delete obj.password;
+  delete obj.sessions;
   delete obj.refreshTokenHash;
   delete obj.refreshTokenExpiresAt;
   delete obj.refreshTokenPersistent;
