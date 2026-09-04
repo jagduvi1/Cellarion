@@ -22,8 +22,11 @@ function ImageCarousel({ images, size = 'medium', defaultImageId, onSetDefault, 
   };
 
   const currentImage = images[index];
-  const src = currentImage.processedUrl || currentImage.originalUrl;
-  const fullSrc = src.startsWith('http') ? src : `${API_URL}${src}`;
+  const src = currentImage.processedUrl || currentImage.originalUrl || null;
+  // A row with no URL (a rejected tombstone that slipped through) renders an
+  // empty frame instead of throwing — AuthImage treats a null src as nothing
+  // to show. Throwing here unmounts the entire host page via the ErrorBoundary.
+  const fullSrc = !src ? null : (src.startsWith('http') ? src : `${API_URL}${src}`);
   const isDefault = defaultImageId && currentImage._id === defaultImageId;
 
   return (
