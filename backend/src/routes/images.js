@@ -187,11 +187,17 @@ router.get('/bottle/:bottleId', requireAuth, async (req, res) => {
     // - Public approved images for everyone
     // - Private approved images only for the uploader
     // - Non-approved images only for the uploader
+    // The uploader sees their own photos in every state EXCEPT rejected. The
+    // reject route deletes the files and nulls both URLs, keeping only a
+    // tombstone row — and a row with no URL is not a photo anyone can show.
+    // Handing it back took the whole bottle page down for its owner (support
+    // ticket 2026-09-03: ImageCarousel called .startsWith on the null URL and
+    // the ErrorBoundary swallowed the page) — 138 bottles / 47 owners on prod.
     const bottleImages = await BottleImage.find({
       bottle: req.params.bottleId,
       $or: [
         { status: 'approved', visibility: 'public' },
-        { uploadedBy: req.user.id }
+        { uploadedBy: req.user.id, status: { $ne: 'rejected' } }
       ]
     }).sort({ createdAt: -1 });
 

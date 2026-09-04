@@ -33,7 +33,13 @@ const ImageGallery = forwardRef(function ImageGallery({ bottleId, wineDefinition
         // put undefined into state and throw on the next render, taking the
         // whole host page down with it. A gallery that cannot list images must
         // degrade to "no images", never break the page embedding it.
-        const list = Array.isArray(data.images) ? data.images : [];
+        // ...and drop any row without a file behind it. A rejected photo is a
+        // tombstone (both URLs nulled when the admin deleted the files); the
+        // server no longer returns those, but the carousel must never be
+        // handed a row it cannot render — that is exactly how one rejected
+        // photo made a bottle page unreachable for its owner (ticket 2026-09-03).
+        const list = (Array.isArray(data.images) ? data.images : [])
+          .filter((img) => img && (img.processedUrl || img.originalUrl));
         setImages(list);
         // For bottle images, the API returns defaultImageId
         if (data.defaultImageId) setDefaultImageId(data.defaultImageId);
