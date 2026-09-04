@@ -14,6 +14,7 @@ describe('toJSON', () => {
     const json = user.toJSON();
     expect(json.password).toBeUndefined();
     expect(json.refreshTokenHash).toBeUndefined();
+    expect(json.sessions).toBeUndefined(); // per-device session hashes never reach the client
     expect(json.stripeCustomerId).toBeUndefined();
   });
 

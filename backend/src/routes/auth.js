@@ -16,7 +16,10 @@ const { rateLimitKey } = require('../utils/clientIp');
 // Token issuance + refresh-cookie handling and pending-share resolution are
 // extracted to services so the password flow (here) and the SSO flow
 // (routes/oauth.js) share one implementation.
-const { issueTokens, clearRefreshCookie } = require('../services/authTokens');
+const {
+  issueTokens, clearRefreshCookie, clientHint, resolveRefreshSession,
+  removeSession, revokeAllSessions, sessionForCookie, hashRefreshToken,
+} = require('../services/authTokens');
 const { resolvePendingShares } = require('../services/pendingShares');
 const { createDemoAccountWithinCeiling } = require('../services/demoAccount');
 
@@ -172,7 +175,7 @@ router.post('/register', authLimiter, async (req, res) => {
 
     // Verification disabled — issue tokens immediately (current behaviour)
     user.emailVerified = true;
-    const accessToken = await issueTokens(user, res);
+    const accessToken = await issueTokens(user, res, { client: clientHint(req) });
 
     logAudit(req, 'auth.register',
       { type: 'user', id: user._id },
@@ -215,12 +218,11 @@ router.post('/demo-login', demoLimiter, async (req, res) => {
       return res.status(429).json({ error: 'The live demo is at capacity right now. Please try again shortly, or create a free account.' });
     }
 
-    // Bound the session to the demo TTL: set the refresh-token deadline to the
-    // account's expiry and PRESERVE it through issueTokens (no 30-day default),
-    // with a session cookie (rememberMe:false). A page reload refreshes within
-    // the window; once the account is reaped, /refresh 401s cleanly.
-    user.refreshTokenExpiresAt = user.demoExpiresAt;
-    const accessToken = await issueTokens(user, res, { preserveLifetime: true, rememberMe: false });
+    // Bound the session to the demo TTL: the device session's deadline is the
+    // account's expiry (no 30-day default), with a session cookie
+    // (rememberMe:false). A page reload refreshes within the window; once the
+    // account is reaped, /refresh 401s cleanly.
+    const accessToken = await issueTokens(user, res, { expiresAt: user.demoExpiresAt, rememberMe: false, client: clientHint(req) });
 
     logAudit(req, 'auth.demo_login', { type: 'user', id: user._id }, { expiresAt: user.demoExpiresAt });
 
@@ -316,7 +318,7 @@ router.post('/login', authLimiter, async (req, res) => {
       try { await user.save(); } catch (err) { console.warn('Failed to reset login-attempt counter:', err.message); }
     }
 
-    const accessToken = await issueTokens(user, res, { rememberMe: rememberMe !== false });
+    const accessToken = await issueTokens(user, res, { rememberMe: rememberMe !== false, client: clientHint(req) });
 
     logAudit(req, 'auth.login.success',
       { type: 'user', id: user._id },
@@ -452,32 +454,51 @@ router.post('/refresh', refreshLimiter, async (req, res) => {
   }
 
   try {
-    // Decode without verification to get the user ID, then validate hash in DB
-    // (Refresh tokens are opaque random bytes — not JWTs — so just look up by hash)
-    // We find the user whose stored hash matches this token
-    const tokenHash = crypto.createHash('sha256').update(incomingToken).digest('hex');
-    const user = await User.findOne({ refreshTokenHash: tokenHash });
+    // Refresh tokens are opaque random bytes — not JWTs — so the cookie is
+    // resolved by hash to the user AND the device session it belongs to
+    // (services/authTokens.resolveRefreshSession). Other devices' sessions on
+    // the same account are never touched here.
+    const found = await resolveRefreshSession(incomingToken);
 
-    if (!user) {
+    if (!found) {
+      clearRefreshCookie(res);
+      return res.status(401).json({ error: 'Invalid or expired refresh token' });
+    }
+    const { user, session, reused, race, migrated } = found;
+
+    // A token that was already rotated away. Inside the grace window it is a
+    // lost race between two tabs (the winner holds the live cookie) — a plain
+    // 401, nothing revoked. Outside it, someone else holds a copy of a cookie
+    // the real browser no longer has: sign the account out everywhere.
+    if (reused) {
+      if (!race) {
+        revokeAllSessions(user);
+        eventBus.dropUser(user._id);
+        await user.save();
+        logAudit(req, 'auth.session.reuse_detected', { type: 'user', id: user._id }, { client: session.client });
+      }
       clearRefreshCookie(res);
       return res.status(401).json({ error: 'Invalid or expired refresh token' });
     }
 
     // Enforce the absolute session deadline. Rotation must NOT extend it, so an
     // attacker who keeps rotating a stolen token is still cut off after the cap.
-    if (user.refreshTokenExpiresAt && Date.now() > user.refreshTokenExpiresAt.getTime()) {
-      user.refreshTokenHash = null;
-      user.refreshTokenExpiresAt = null;
-      eventBus.dropUser(user._id); // session hard-cap is a credential event — close open SSE streams too
+    if (session.expiresAt && Date.now() > new Date(session.expiresAt).getTime()) {
+      removeSession(user, session);
+      // The hard cap is a credential event — close open SSE streams too, but
+      // only once no device session is left (they are per-account streams).
+      if (user.sessions.length === 0) eventBus.dropUser(user._id);
       await user.save();
       clearRefreshCookie(res);
       return res.status(401).json({ error: 'Session expired, please log in again' });
     }
 
-    // Rotate: issue new pair (invalidates the old refresh token hash). Preserve
-    // the existing deadline when set; backfill legacy sessions (null) so every
-    // session eventually gets an absolute cap.
-    const accessToken = await issueTokens(user, res, { preserveLifetime: !!user.refreshTokenExpiresAt });
+    // A pre-sessions cookie adopted just now: label it with this device.
+    if (migrated) session.client = clientHint(req);
+
+    // Rotate THIS device's entry: new hash, old one kept as prevHash for reuse
+    // detection, deadline preserved (legacy null backfilled to a fresh cap).
+    const accessToken = await issueTokens(user, res, { session });
 
     res.json({ token: accessToken });
   } catch (error) {
@@ -521,12 +542,19 @@ router.post('/change-password', requireAuth, requireNonDemo, authLimiter, async 
     }
 
     user.password = newPassword;
-    user.refreshTokenHash = null; // Invalidate all existing sessions
+    // Invalidate every device session, then start a fresh one for THIS device
+    // (keeping its remember-me choice) so the user changing the password
+    // stays signed in here and nowhere else.
+    const current = sessionForCookie(user, req);
+    revokeAllSessions(user);
     // Also force-close any open SSE event streams — same trust boundary as
     // refresh sessions (docs/ha-push-events.md §1).
     eventBus.dropUser(user._id);
 
-    const accessToken = await issueTokens(user, res); // persists the new password
+    const accessToken = await issueTokens(user, res, { // persists the new password
+      rememberMe: current ? current.persistent !== false : true,
+      client: clientHint(req),
+    });
     // Revoke connected AI assistants (OAuth consent grants) — a third-party
     // grant must not outlive the "secure my account" action (security report
     // 2026-08-27). Personal API tokens (HA, climate) keep PAT semantics.
@@ -556,13 +584,25 @@ router.post('/logout', requireAuth, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
     if (user) {
-      user.refreshTokenHash = null;
+      // Sign out THIS device only: drop the session its refresh cookie belongs
+      // to (by current or just-rotated hash). Other devices keep their sessions.
+      // A pre-sessions cookie still on the legacy field is cleared the same way.
+      const raw = req.cookies?.refreshToken;
+      const hash = raw ? hashRefreshToken(raw) : null;
+      if (hash) {
+        user.sessions = (user.sessions || []).filter((s) => s.hash !== hash && s.prevHash !== hash);
+        if (user.refreshTokenHash === hash) {
+          user.refreshTokenHash = null;
+          user.refreshTokenExpiresAt = null;
+          user.refreshTokenPersistent = null;
+        }
+      }
       await user.save();
+      // Open SSE event streams are per account, so close them only when no
+      // device session is left. An integration holding valid credentials
+      // simply reconnects.
+      if ((user.sessions || []).length === 0 && !user.refreshTokenHash) eventBus.dropUser(req.user.id);
     }
-    // Logout invalidates the account's (single) refresh session, so it is a
-    // logout-everywhere — close open SSE event streams too. An integration
-    // holding valid credentials simply reconnects.
-    eventBus.dropUser(req.user.id);
     clearRefreshCookie(res);
     res.json({ message: 'Logged out' });
   } catch (error) {
@@ -663,7 +703,7 @@ router.post('/reset-password', authLimiter, async (req, res) => {
     user.password = password;
     user.passwordResetTokenHash = null;
     user.passwordResetExpiresAt = null;
-    user.refreshTokenHash = null; // Invalidate all existing sessions
+    revokeAllSessions(user); // Invalidate all existing device sessions
     eventBus.dropUser(user._id); // and force-close open SSE event streams
     // Successful password reset is the user's explicit recovery signal —
     // clear any brute-force lockout state too. Otherwise a locked user

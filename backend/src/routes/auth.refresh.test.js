@@ -14,14 +14,18 @@
  *
  * Notable behaviors PINNED here (found by reading the code, not guessed):
  *
- *  - Rotation: every successful /refresh replaces refreshTokenHash, so the
- *    previous token is dead immediately. There is NO reuse-detection /
- *    token-family revocation: presenting an already-rotated token returns a
- *    generic 401 and does NOT revoke the live session (see the reuse test —
- *    flagged there as a deliberate pin of current behavior).
- *  - The absolute 30-day session deadline (refreshTokenExpiresAt) is
- *    PRESERVED across rotation and BACKFILLED (fresh 30 days) for legacy
- *    sessions where it is null.
+ *  - Sessions are PER DEVICE (user.sessions[], 2026-09-04): /refresh rotates
+ *    only the entry its cookie belongs to, so the previous token is dead
+ *    immediately while every other device keeps working. /logout removes
+ *    only its own entry. A pre-sessions single-token row (refreshTokenHash)
+ *    is adopted into sessions[] on its first /refresh — the rollout signs
+ *    nobody out.
+ *  - Reuse detection: an already-rotated token presented again within 60 s
+ *    is a lost tab race (plain 401, nothing revoked); later than that it is
+ *    theft evidence and EVERY session on the account is revoked + audited.
+ *  - The absolute 30-day session deadline (session.expiresAt) is PRESERVED
+ *    across rotation and BACKFILLED (fresh 30 days) for legacy sessions
+ *    where it is null.
  *  - Remember-me is sticky: a session started with rememberMe=false keeps
  *    getting a browser-session cookie (no Max-Age/Expires) on rotation.
  *  - clearRefreshCookie clears BOTH Path=/api/auth and legacy Path=/ variants.
@@ -128,6 +132,7 @@ function makeUserDoc(overrides = {}) {
     roles: ['user'],
     plan: 'free',
     planExpiresAt: null,
+    sessions: [],
     refreshTokenHash: null,
     refreshTokenExpiresAt: null,
     refreshTokenPersistent: null,
@@ -138,9 +143,6 @@ function makeUserDoc(overrides = {}) {
     markModified: jest.fn(),
     toJSON() { return { id: this._id, username: this.username, email: this.email }; },
     // ── Replicas of the REAL User schema methods (models/User.js) ──
-    setRefreshToken(token) {
-      this.refreshTokenHash = sha256(token);
-    },
     setPasswordResetToken() {
       const token = crypto.randomBytes(32).toString('hex');
       this.passwordResetTokenHash = sha256(token);
@@ -159,9 +161,20 @@ function makeUserDoc(overrides = {}) {
   return doc;
 }
 
-// Plant a refresh session on a user exactly the way issueTokens() would have:
+// Plant a DEVICE session on a user exactly the way issueTokens() would have:
 // stored hash + absolute deadline + persistence flag. Returns the raw cookie value.
-function plantRefreshToken(user, { persistent = null, expiresAt = new Date(NOW + 10 * DAY) } = {}) {
+function plantRefreshToken(user, { persistent = true, expiresAt = new Date(NOW + 10 * DAY), client = 'Windows / Chrome' } = {}) {
+  const raw = crypto.randomBytes(64).toString('hex');
+  user.sessions.push({
+    hash: sha256(raw), prevHash: null, rotatedAt: null, expiresAt, persistent,
+    createdAt: new Date(NOW), lastUsedAt: new Date(NOW), client,
+  });
+  return raw;
+}
+
+// A PRE-SESSIONS row: the single refreshTokenHash an account used to carry
+// before per-device sessions. Adopted into sessions[] on its first /refresh.
+function plantLegacyRefreshToken(user, { persistent = null, expiresAt = new Date(NOW + 10 * DAY) } = {}) {
   const raw = crypto.randomBytes(64).toString('hex');
   user.refreshTokenHash = sha256(raw);
   user.refreshTokenExpiresAt = expiresAt;
@@ -169,9 +182,18 @@ function plantRefreshToken(user, { persistent = null, expiresAt = new Date(NOW +
   return raw;
 }
 
+const sessionOf = (user, raw) => user.sessions.find((s) => s.hash === sha256(raw));
+
+// Mongo-style matcher for the in-memory store: flat equality plus dotted
+// paths into arrays ('sessions.hash' → some element's hash), as the real
+// session lookups query.
 const matches = (u, q) => {
   if (q.$or) return q.$or.some((c) => matches(u, c));
-  return Object.entries(q).every(([k, v]) => u[k] === v);
+  return Object.entries(q).every(([k, v]) => {
+    const [head, ...rest] = k.split('.');
+    if (rest.length && Array.isArray(u[head])) return u[head].some((el) => el[rest.join('.')] === v);
+    return u[k] === v;
+  });
 };
 
 // ── One HTTP server for the suite ────────────────────────────────────────────
@@ -275,8 +297,8 @@ const expectClearedCookies = (res) => {
 describe('POST /api/auth/refresh — rotation', () => {
   test('valid cookie → new access token, refresh token ROTATED, cookie attrs pinned', async () => {
     const user = makeUserDoc();
-    const oldRaw = plantRefreshToken(user); // persistent=null (legacy) → persistent cookie
-    const oldHash = user.refreshTokenHash;
+    const oldRaw = plantRefreshToken(user); // persistent (remember-me) session
+    const oldHash = sha256(oldRaw);
 
     const res = await request({ path: '/api/auth/refresh', cookie: `refreshToken=${oldRaw}` });
 
@@ -294,8 +316,11 @@ describe('POST /api/auth/refresh — rotation', () => {
     const rotated = cookies[0];
     expect(rotated.value).not.toBe(oldRaw);
     expect(rotated.value).toMatch(/^[0-9a-f]{128}$/); // 64 random bytes, hex
-    expect(user.refreshTokenHash).toBe(sha256(rotated.value));
-    expect(user.refreshTokenHash).not.toBe(oldHash);
+    expect(user.sessions).toHaveLength(1); // rotated IN PLACE, no second entry
+    const session = sessionOf(user, rotated.value);
+    expect(session).toBeDefined();
+    expect(session.prevHash).toBe(oldHash); // kept for reuse detection
+    expect(session.rotatedAt.getTime()).toBe(NOW);
     expect(user.save).toHaveBeenCalled();
 
     // Cookie attributes as the code sets them (NODE_ENV=test → no Secure flag)
@@ -314,7 +339,7 @@ describe('POST /api/auth/refresh — rotation', () => {
     const res = await request({ path: '/api/auth/refresh', cookie: `refreshToken=${raw}` });
 
     expect(res.status).toBe(200);
-    expect(user.refreshTokenExpiresAt.getTime()).toBe(deadline.getTime());
+    expect(user.sessions[0].expiresAt.getTime()).toBe(deadline.getTime());
   });
 
   test('legacy session with NO deadline gets backfilled with a fresh 30-day cap', async () => {
@@ -324,7 +349,52 @@ describe('POST /api/auth/refresh — rotation', () => {
     const res = await request({ path: '/api/auth/refresh', cookie: `refreshToken=${raw}` });
 
     expect(res.status).toBe(200);
-    expect(user.refreshTokenExpiresAt.getTime()).toBe(NOW + 30 * DAY);
+    expect(user.sessions[0].expiresAt.getTime()).toBe(NOW + 30 * DAY);
+  });
+
+  test('two devices: each refresh rotates ONLY its own session, the other keeps working', async () => {
+    const user = makeUserDoc();
+    const phone = plantRefreshToken(user, { client: 'Android / Chrome' });
+    const laptop = plantRefreshToken(user, { client: 'Windows / Firefox' });
+
+    // The phone refreshes — this used to sign the laptop out.
+    const phoneRes = await request({ path: '/api/auth/refresh', cookie: `refreshToken=${phone}` });
+    expect(phoneRes.status).toBe(200);
+    expect(user.sessions).toHaveLength(2);
+    expect(sessionOf(user, laptop)).toBeDefined(); // laptop untouched
+
+    // The laptop refreshes with its ORIGINAL cookie — still valid.
+    const laptopRes = await request({ path: '/api/auth/refresh', cookie: `refreshToken=${laptop}` });
+    expect(laptopRes.status).toBe(200);
+    expect(user.sessions).toHaveLength(2);
+    expect(user.sessions.map((s) => s.client).sort()).toEqual(['Android / Chrome', 'Windows / Firefox']);
+
+    // And the phone's rotated cookie keeps working too.
+    const phone2 = refreshCookies(phoneRes)[0].value;
+    expect((await request({ path: '/api/auth/refresh', cookie: `refreshToken=${phone2}` })).status).toBe(200);
+  });
+
+  test('a pre-sessions single-token row is adopted on its first refresh — nobody is signed out by the rollout', async () => {
+    const user = makeUserDoc();
+    const deadline = new Date(NOW + 12 * DAY);
+    const raw = plantLegacyRefreshToken(user, { persistent: false, expiresAt: deadline });
+
+    const res = await request({ path: '/api/auth/refresh', cookie: `refreshToken=${raw}` });
+
+    expect(res.status).toBe(200);
+    // Legacy fields cleared, one device session in their place with the same
+    // deadline and remember-me choice, labelled from this request's UA.
+    expect(user.refreshTokenHash).toBeNull();
+    expect(user.refreshTokenExpiresAt).toBeNull();
+    expect(user.refreshTokenPersistent).toBeNull();
+    expect(user.sessions).toHaveLength(1);
+    const [session] = user.sessions;
+    expect(session.hash).toBe(sha256(refreshCookies(res)[0].value));
+    expect(session.prevHash).toBe(sha256(raw));
+    expect(session.expiresAt.getTime()).toBe(deadline.getTime());
+    expect(session.persistent).toBe(false);
+    expect(refreshCookies(res)[0].attrs['max-age']).toBeUndefined(); // still a session cookie
+    expect(session.client).toBe('Unknown device'); // node's http client sends no UA
   });
 
   test('missing cookie → 401, no cookie touched', async () => {
@@ -347,38 +417,66 @@ describe('POST /api/auth/refresh — rotation', () => {
     expectClearedCookies(res);
   });
 
-  test('rotated (already-used) token is rejected — and reuse does NOT revoke the live session', async () => {
+  test('a rotated token replayed within 60 s is a lost tab race: generic 401, nothing revoked', async () => {
     const user = makeUserDoc();
     const tokenA = plantRefreshToken(user);
+    const other = plantRefreshToken(user, { client: 'iOS / Safari' }); // another device, must survive
 
     // 1) legitimate rotation: A → B
     const first = await request({ path: '/api/auth/refresh', cookie: `refreshToken=${tokenA}` });
     expect(first.status).toBe(200);
     const tokenB = refreshCookies(first)[0].value;
 
-    // 2) replaying the rotated token A fails with the generic 401
+    // 2) replaying A ten seconds later fails with the generic 401…
+    dateNowSpy.mockReturnValue(NOW + 10 * 1000);
     const replay = await request({ path: '/api/auth/refresh', cookie: `refreshToken=${tokenA}` });
     expect(replay.status).toBe(401);
     expect(replay.body).toEqual({ error: 'Invalid or expired refresh token' });
+    expectClearedCookies(replay);
 
-    // 3) PINNED CURRENT BEHAVIOR — no reuse-detection / token-family
-    // revocation: the reuse attempt above did NOT invalidate the live token B.
-    // A stricter design would treat reuse of a rotated token as theft evidence
-    // and revoke the whole session; the code does not do that today.
-    const after = await request({ path: '/api/auth/refresh', cookie: `refreshToken=${tokenB}` });
-    expect(after.status).toBe(200);
+    // 3) …and revokes nothing: the live token B and the other device both work.
+    const { logAudit } = require('../services/audit');
+    expect(logAudit).not.toHaveBeenCalledWith(expect.anything(), 'auth.session.reuse_detected', expect.anything(), expect.anything());
+    expect((await request({ path: '/api/auth/refresh', cookie: `refreshToken=${tokenB}` })).status).toBe(200);
+    expect((await request({ path: '/api/auth/refresh', cookie: `refreshToken=${other}` })).status).toBe(200);
   });
 
-  test('absolute deadline passed → 401 "Session expired", server-side hash purged, cookie cleared', async () => {
+  test('a rotated token replayed AFTER the grace window is theft evidence: every session revoked, audited', async () => {
+    const user = makeUserDoc();
+    const tokenA = plantRefreshToken(user, { client: 'Windows / Chrome' });
+    const other = plantRefreshToken(user, { client: 'iOS / Safari' });
+
+    const first = await request({ path: '/api/auth/refresh', cookie: `refreshToken=${tokenA}` });
+    const tokenB = refreshCookies(first)[0].value;
+
+    // Five minutes later someone presents the OLD cookie A.
+    dateNowSpy.mockReturnValue(NOW + 5 * 60 * 1000);
+    const replay = await request({ path: '/api/auth/refresh', cookie: `refreshToken=${tokenA}` });
+    expect(replay.status).toBe(401);
+    expect(replay.body).toEqual({ error: 'Invalid or expired refresh token' }); // same generic body
+    expectClearedCookies(replay);
+
+    // Account signed out everywhere, with a traceable audit row.
+    expect(user.sessions).toEqual([]);
+    expect(user.save).toHaveBeenCalled();
+    const { logAudit } = require('../services/audit');
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'auth.session.reuse_detected',
+      { type: 'user', id: 'u1' }, { client: 'Windows / Chrome' });
+    expect((await request({ path: '/api/auth/refresh', cookie: `refreshToken=${tokenB}` })).status).toBe(401);
+    expect((await request({ path: '/api/auth/refresh', cookie: `refreshToken=${other}` })).status).toBe(401);
+  });
+
+  test('absolute deadline passed → 401 "Session expired", that device purged, others kept, cookie cleared', async () => {
     const user = makeUserDoc();
     const raw = plantRefreshToken(user, { expiresAt: new Date(NOW - 1000) });
+    const other = plantRefreshToken(user, { client: 'iOS / Safari' });
 
     const res = await request({ path: '/api/auth/refresh', cookie: `refreshToken=${raw}` });
 
     expect(res.status).toBe(401);
     expect(res.body).toEqual({ error: 'Session expired, please log in again' });
-    expect(user.refreshTokenHash).toBeNull();
-    expect(user.refreshTokenExpiresAt).toBeNull();
+    expect(user.sessions).toHaveLength(1);
+    expect(sessionOf(user, other)).toBeDefined();
     expect(user.save).toHaveBeenCalled();
     expectClearedCookies(res);
   });
@@ -397,22 +495,60 @@ describe('POST /api/auth/refresh — rotation', () => {
     expect(rotated.attrs.path).toBe('/api/auth');
     expect(rotated.attrs.httponly).toBe(true);
     // and the persistence choice survives the rotation for the NEXT one too
-    expect(user.refreshTokenPersistent).toBe(false);
+    expect(user.sessions[0].persistent).toBe(false);
   });
 });
 
 describe('POST /api/auth/logout', () => {
-  test('revokes the server-side refresh token and clears the cookie on both paths', async () => {
+  test('revokes ONLY this device\'s session (by its cookie) and clears the cookie on both paths', async () => {
+    const user = makeUserDoc();
+    const laptop = plantRefreshToken(user, { client: 'Windows / Chrome' });
+    const phone = plantRefreshToken(user, { client: 'Android / Chrome' });
+
+    const res = await request({ path: '/api/auth/logout', bearer: tokenFor('u1'), cookie: `refreshToken=${laptop}` });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ message: 'Logged out' });
+    expect(user.sessions).toHaveLength(1);
+    expect(sessionOf(user, phone)).toBeDefined();
+    expect(sessionOf(user, laptop)).toBeUndefined();
+    expect(user.save).toHaveBeenCalled();
+    expectClearedCookies(res);
+    // the phone is still signed in
+    expect((await request({ path: '/api/auth/refresh', cookie: `refreshToken=${phone}` })).status).toBe(200);
+  });
+
+  test('logout right after a rotation still finds its session (by the just-rotated hash)', async () => {
+    const user = makeUserDoc();
+    const raw = plantRefreshToken(user);
+    const rotated = await request({ path: '/api/auth/refresh', cookie: `refreshToken=${raw}` });
+    expect(rotated.status).toBe(200);
+
+    // A stale tab logging out with the pre-rotation cookie
+    const res = await request({ path: '/api/auth/logout', bearer: tokenFor('u1'), cookie: `refreshToken=${raw}` });
+    expect(res.status).toBe(200);
+    expect(user.sessions).toHaveLength(0);
+  });
+
+  test('a pre-sessions cookie is cleared from the legacy field the same way', async () => {
+    const user = makeUserDoc();
+    const raw = plantLegacyRefreshToken(user);
+
+    const res = await request({ path: '/api/auth/logout', bearer: tokenFor('u1'), cookie: `refreshToken=${raw}` });
+
+    expect(res.status).toBe(200);
+    expect(user.refreshTokenHash).toBeNull();
+    expect(user.refreshTokenExpiresAt).toBeNull();
+  });
+
+  test('without a cookie nothing can be identified server-side: sessions untouched, cookie still cleared', async () => {
     const user = makeUserDoc();
     plantRefreshToken(user);
-    expect(user.refreshTokenHash).not.toBeNull();
 
     const res = await request({ path: '/api/auth/logout', bearer: tokenFor('u1') });
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ message: 'Logged out' });
-    expect(user.refreshTokenHash).toBeNull();
-    expect(user.save).toHaveBeenCalled();
+    expect(user.sessions).toHaveLength(1);
     expectClearedCookies(res);
   });
 
@@ -526,7 +662,8 @@ describe('POST /api/auth/reset-password', () => {
     expect(user.passwordResetTokenHash).toBeNull();
     expect(user.passwordResetExpiresAt).toBeNull();
 
-    // Every existing session is killed server-side + cookie cleared client-side
+    // Every device session is killed server-side + cookie cleared client-side
+    expect(user.sessions).toEqual([]);
     expect(user.refreshTokenHash).toBeNull();
     expectClearedCookies(res);
 

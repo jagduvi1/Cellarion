@@ -154,6 +154,13 @@ const REGISTRY = [
           aiBudgetOverride: u.aiBudgetOverride?.max
             ? { max: u.aiBudgetOverride.max, expiresAt: u.aiBudgetOverride.expiresAt }
             : null,
+          // Signed-in devices (per-device sessions). Metadata only — the token
+          // hashes are the credential itself, not the user's data, and never
+          // leave the database.
+          sessions: (u.sessions || []).map(s => ({
+            client: s.client, createdAt: s.createdAt, lastUsedAt: s.lastUsedAt,
+            expiresAt: s.expiresAt, persistent: s.persistent !== false,
+          })),
         },
       };
     },
