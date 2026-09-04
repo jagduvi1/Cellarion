@@ -205,7 +205,8 @@ registerTool({
     }
 
     const result = await ops.decideValue(ctx.user.id, args.value_id, args.decision, args.reject_reason, {
-      req: ctx.req, asWineDefault: args.as_wine_default === true,
+      req: ctx.req,
+      ...(args.as_wine_default === true ? { asWineDefault: true } : {}),
     });
     if (!result.ok) return svcFail(result);
     const slot = result.value.status === 'published'
