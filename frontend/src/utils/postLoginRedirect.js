@@ -11,13 +11,18 @@
  * mechanism the OIDC client libraries use to carry a PKCE verifier across that
  * trip.
  *
- * Deliberately NOT a ?next= query parameter, which would put the destination
- * into a crafted link and turn the auth path into an open redirect. As with
- * router state, nothing here is ever read from a URL — the only writer is our
- * own code, passing a value ProtectedRoute produced. The validation below is
- * therefore belt-and-braces rather than the primary defence, but it is cheap,
- * and it keeps the guarantee inside this file rather than resting on an
- * argument about every call site.
+ * Deliberately NOT a ?next= query parameter: that would let a crafted link name
+ * any destination at all. What ProtectedRoute records is narrower — the path the
+ * visitor was already on, which had to match a protected route to get here.
+ *
+ * Narrower is not the same as trusted, so the validation below is load-bearing
+ * rather than decorative. An attacker still chooses the link, and react-router's
+ * push falls back to window.location.assign() when pushState throws (which it
+ * does for a cross-origin URL), so navigating to a protocol-relative path would
+ * genuinely leave the origin. Today no protected route can match one — they are
+ * all literal-prefixed and '//evil.example' falls to the unprotected catch-all —
+ * but that is a property of the route table, not a guarantee, and it would
+ * evaporate the day a wildcard route becomes protected. Hence the checks here.
  */
 
 const STORAGE_KEY = 'cellarion.postLoginRedirect';
@@ -45,14 +50,18 @@ export function isSafeInternalPath(path) {
 }
 
 /**
- * Remember where to return to. Silently ignores anything unsafe or absent — no
- * destination is the normal case (a plain visit to /login), and the caller has
- * nothing useful to do about it.
+ * Record where to return to at the start of a sign-in — and, just as important,
+ * clear any earlier destination when this sign-in has none.
+ *
+ * Skipping instead of clearing would let an abandoned journey be inherited by
+ * the next sign-in in the tab: cancel at the provider, come back, sign in
+ * plainly, and you would land on the page someone was heading for earlier. On a
+ * shared computer that is someone else's cellar.
  */
 export function stashPostLoginRedirect(path) {
-  if (!isSafeInternalPath(path)) return;
   try {
-    window.sessionStorage.setItem(STORAGE_KEY, path);
+    if (isSafeInternalPath(path)) window.sessionStorage.setItem(STORAGE_KEY, path);
+    else window.sessionStorage.removeItem(STORAGE_KEY);
   } catch {
     // Storage disabled or full. Sign-in still works, it just ends on /cellars —
     // which is what everyone had before this.

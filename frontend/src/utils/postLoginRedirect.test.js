@@ -65,6 +65,20 @@ describe('stash and take', () => {
     expect(takePostLoginRedirect()).toBeNull();
   });
 
+  it('clears a previous destination when a sign-in starts without one', () => {
+    // Otherwise an abandoned journey is inherited by the next sign-in in this
+    // tab — on a shared computer, someone else's cellar.
+    stashPostLoginRedirect('/wishlist');
+    stashPostLoginRedirect(undefined);
+    expect(takePostLoginRedirect()).toBeNull();
+  });
+
+  it('clears rather than keeps a previous destination when handed an unsafe one', () => {
+    stashPostLoginRedirect('/wishlist');
+    stashPostLoginRedirect('//evil.example');
+    expect(takePostLoginRedirect()).toBeNull();
+  });
+
   it('re-checks on the way out, so a poisoned store cannot redirect off-origin', () => {
     window.sessionStorage.setItem('cellarion.postLoginRedirect', 'https://evil.example');
     expect(takePostLoginRedirect()).toBeNull();

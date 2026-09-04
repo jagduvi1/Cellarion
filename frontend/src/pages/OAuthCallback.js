@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { takePostLoginRedirect } from '../utils/postLoginRedirect';
@@ -23,14 +23,24 @@ function OAuthCallback() {
   const [params] = useSearchParams();
   const error = params.get('error');
 
+  // The stashed destination is single-use, and StrictMode double-invokes mount
+  // effects in dev (index.js): run one would consume it and navigate, run two
+  // would find nothing and replace with /cellars — so the fix would work in
+  // production and silently not in dev. Run once per mount cycle, as
+  // VerifyEmail does for its single-use token.
+  const ranRef = useRef(false);
+  const signedIn = Boolean(user);
+
   useEffect(() => {
     if (error) return; // show the error card + let the user go back to login
+    if (ranRef.current) return;
+    ranRef.current = true;
     // No error: the session either restored (→ wherever they were heading
     // before the sign-in interrupted them, else home) or silently failed
     // (→ login). The stash is left alone on failure so that retrying still
     // finishes the journey.
-    navigate(user ? (takePostLoginRedirect() || '/cellars') : '/login', { replace: true });
-  }, [error, user, navigate]);
+    navigate(signedIn ? (takePostLoginRedirect() || '/cellars') : '/login', { replace: true });
+  }, [error, signedIn, navigate]);
 
   if (error) {
     return (

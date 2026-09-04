@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { render } from '@testing-library/react';
 import OAuthCallback from './OAuthCallback';
 import { stashPostLoginRedirect, takePostLoginRedirect } from '../utils/postLoginRedirect';
@@ -50,4 +51,14 @@ test('a failed sign-in does not navigate and keeps the destination for the retry
   render(<OAuthCallback />);
   expect(navigateMock).not.toHaveBeenCalled();
   expect(takePostLoginRedirect()).toBe('/wishlist');
+});
+
+test('survives StrictMode\'s dev double-mount — the destination is not overwritten by /cellars', () => {
+  // Dev runs under React.StrictMode (index.js:11), which invokes mount effects
+  // twice. The stash is single-use, so an unguarded effect consumes it on the
+  // first run and replaces with /cellars on the second — the fix would work in
+  // production and silently not in dev. Same trap VerifyEmail.js guards.
+  stashPostLoginRedirect('/wishlist');
+  render(<StrictMode><OAuthCallback /></StrictMode>);
+  expect(navigateMock).toHaveBeenLastCalledWith('/wishlist', { replace: true });
 });
