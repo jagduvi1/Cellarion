@@ -13,8 +13,10 @@ export const proposeRegistryKey = (apiFetch, data) =>
     body: JSON.stringify(data),
   });
 
-export const getWinePublicData = (apiFetch, wineId) =>
-  apiFetch(`/api/registry-data/wine/${wineId}`);
+// `vintage` (YYYY) resolves that bottling's override over the wine-wide
+// default and tells the server which slot a new suggestion lands in.
+export const getWinePublicData = (apiFetch, wineId, vintage) =>
+  apiFetch(`/api/registry-data/wine/${wineId}${vintage ? `?vintage=${encodeURIComponent(vintage)}` : ''}`);
 
 export const suggestWineValue = (apiFetch, wineId, data) =>
   apiFetch(`/api/registry-data/wine/${wineId}`, {
@@ -34,9 +36,15 @@ export const decideRegistryKey = (apiFetch, keyId, decision, rejectReason) =>
     body: JSON.stringify({ decision, ...(rejectReason ? { rejectReason } : {}) }),
   });
 
-export const decideRegistryValue = (apiFetch, valueId, decision, rejectReason) =>
+// asWineDefault: publish a vintage-specific suggestion as the wine-wide
+// default instead (reviewer judged the evidence to be a producer spec).
+export const decideRegistryValue = (apiFetch, valueId, decision, rejectReason, { asWineDefault = false } = {}) =>
   apiFetch(`/api/admin/registry-data/values/${valueId}/decide`, {
     method: 'POST',
     headers: JSON_HEADERS,
-    body: JSON.stringify({ decision, ...(rejectReason ? { rejectReason } : {}) }),
+    body: JSON.stringify({
+      decision,
+      ...(rejectReason ? { rejectReason } : {}),
+      ...(asWineDefault ? { asWineDefault: true } : {}),
+    }),
   });

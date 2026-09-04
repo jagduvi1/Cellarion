@@ -33,6 +33,15 @@ const connectDB = async () => {
     ImportSession.syncIndexes().catch(err =>
       console.warn('[db] ImportSession.syncIndexes failed:', err.message)
     );
+    // RegistryDataValue: the one-published-per-slot unique index gained a
+    // `vintage` key (per-vintage overrides, 2026-09-04). The old
+    // { wineDefinition, key, status } partial unique index would otherwise
+    // still forbid a default AND an override on the same wine+key — the sync
+    // drops it and creates the four-key one.
+    const RegistryDataValue = require('../models/RegistryDataValue');
+    RegistryDataValue.syncIndexes().catch(err =>
+      console.warn('[db] RegistryDataValue.syncIndexes failed:', err.message)
+    );
   } catch (error) {
     // Log the reason (DNS, auth, TLS, bad URI) but mask any credentials
     // embedded in a mongodb:// URI that error messages may echo back.

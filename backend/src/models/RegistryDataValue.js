@@ -6,9 +6,15 @@ const mongoose = require('mongoose');
 // registry stays human-gated; suggestions never auto-apply.
 //
 // Lifecycle: suggested → published | rejected. One published value per
-// (wine, key) is the record; one suggested value per (wine, key) at a time
+// (wine, key, vintage) is the record; one suggested value per slot at a time
 // keeps the queue free of pile-ups (same one-pending discipline as
 // WineCorrectionProposal).
+//
+// Vintage slots (2026-09-04): `vintage: null` is the wine-wide DEFAULT,
+// 'YYYY' is an OVERRIDE for that bottling only. Readers resolve override →
+// default → blank (registryDataOps.resolveForVintage). ABV drifts between
+// years, and a retailer page or a label is a fact about ONE year — filing it
+// as the wine-wide answer was the mistake the single-slot model forced.
 
 const registryDataValueSchema = new mongoose.Schema({
   wineDefinition: {
@@ -23,6 +29,14 @@ const registryDataValueSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'RegistryDataKey',
     required: true
+  },
+  // null = applies to every vintage (the default); 'YYYY' = this vintage
+  // only. Canonical year string as Bottle.vintage stores it, so a bottle
+  // resolves its override by plain equality. Never 'NV'/'Unknown' — those
+  // collapse to the default at entry (there is nothing to drift from).
+  vintage: {
+    type: String,
+    default: null
   },
   // Already cast/validated against the key's type by the service layer.
   value: {
@@ -60,10 +74,14 @@ const registryDataValueSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
-// One suggested + one published row per (wine, key); rejected rows keep
-// history without blocking a fresh suggestion.
+// One suggested + one published row per (wine, key, vintage slot); rejected
+// rows keep history without blocking a fresh suggestion. Rows written before
+// the vintage field existed have no `vintage` at all — Mongo indexes a
+// missing field as null, so they occupy the default slot exactly as intended.
+// Replaces the pre-vintage { wineDefinition, key, status } unique index:
+// config/db.js syncIndexes() drops that one on existing databases.
 registryDataValueSchema.index(
-  { wineDefinition: 1, key: 1, status: 1 },
+  { wineDefinition: 1, key: 1, vintage: 1, status: 1 },
   { unique: true, partialFilterExpression: { status: { $in: ['suggested', 'published'] } } }
 );
 // The review queue: status-filtered, oldest-first, bounded.

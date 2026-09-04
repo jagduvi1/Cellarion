@@ -19,8 +19,12 @@ import './WineRecordSection.css';
 // The six admin-reviewed identity fields (must match wineProposalOps.FIELDS).
 const SUGGESTABLE = ['producer', 'name', 'appellation', 'region', 'country', 'classification'];
 
-function WineRecordSection({ wine, canSuggest, apiFetch }) {
+function WineRecordSection({ wine, canSuggest, apiFetch, vintage }) {
   const { t } = useTranslation();
+  // The bottle's vintage when this section sits on a bottle page: public
+  // values resolve that year's override over the wine-wide default, and a
+  // new suggestion lands in that year's slot unless the user widens it.
+  const bottleVintage = vintage && /^\d{4}$/.test(String(vintage)) ? String(vintage) : null;
   const [mine, setMine] = useState([]);
   const [modal, setModal] = useState(null); // { field }
   const [proposed, setProposed] = useState('');
@@ -37,17 +41,23 @@ function WineRecordSection({ wine, canSuggest, apiFetch }) {
   const [valueModal, setValueModal] = useState(null); // { field } from publicFields
   const [valueInput, setValueInput] = useState('');
   const [valueReason, setValueReason] = useState('');
+  // Which slot a public-value suggestion lands in. On a bottle page the
+  // default is THIS vintage — a label or a one-year page is a fact about one
+  // bottling, so filing it narrow is never wrong; widening to every vintage
+  // is the deliberate choice. Off a bottle page the user may type a year.
+  const [valueScope, setValueScope] = useState('vintage'); // 'vintage' | 'wine'
+  const [valueVintage, setValueVintage] = useState('');
   const [keyModal, setKeyModal] = useState(false);
   const [keyForm, setKeyForm] = useState({ name: '', type: 'text', unit: '', enumOptions: '', rationale: '' });
 
   const loadPublicData = useCallback(async () => {
     try {
-      const res = await getWinePublicData(apiFetch, wine._id);
+      const res = await getWinePublicData(apiFetch, wine._id, bottleVintage);
       if (!res.ok) return;
       const body = await res.json().catch(() => ({}));
       setPublicFields(body.fields || []);
     } catch { /* non-critical — the record renders without it */ }
-  }, [apiFetch, wine?._id]);
+  }, [apiFetch, wine?._id, bottleVintage]);
 
   useEffect(() => {
     if (wine?._id) loadPublicData();
@@ -145,9 +155,15 @@ function WineRecordSection({ wine, canSuggest, apiFetch }) {
     setError(null);
     try {
       const raw = valueModal.field.key.type === 'boolean' ? valueInput === 'true' : valueInput.trim();
+      // The slot: this bottle's vintage (default) or every vintage; without a
+      // bottle vintage, whatever year was typed, else every vintage.
+      const vintageFor = bottleVintage
+        ? (valueScope === 'vintage' ? bottleVintage : null)
+        : (valueVintage.trim() || null);
       const res = await suggestWineValue(apiFetch, wine._id, {
         keyId: valueModal.field.key._id,
         value: raw,
+        ...(vintageFor ? { vintage: vintageFor } : {}),
         ...(valueReason.trim() ? { reason: valueReason.trim() } : {}),
       });
       const body = await res.json().catch(() => ({}));
@@ -256,6 +272,20 @@ function WineRecordSection({ wine, canSuggest, apiFetch }) {
                   <span className="wr-key">{field.key.name}</span>
                   <span className={shown ? 'wr-value' : 'wr-value wr-value--blank'}>
                     {shown || t('wineRecord.notRecorded', 'not recorded')}
+                    {/* Which layer answered: this vintage's override, or the
+                        wine-wide default (tagged only when a vintage is in
+                        play, so the reader knows a year-specific figure could
+                        still be added). */}
+                    {shown && field.resolvedFrom === 'vintage' && (
+                      <span className="wr-scope" title={t('wineRecord.scopeVintageTitle', 'Recorded for the {{year}} vintage specifically', { year: field.resolvedVintage })}>
+                        {field.resolvedVintage}
+                      </span>
+                    )}
+                    {shown && field.resolvedFrom === 'wine' && bottleVintage && (
+                      <span className="wr-scope wr-scope--wine" title={t('wineRecord.scopeWineTitle', 'The wine-wide value — no {{year}}-specific figure recorded yet', { year: bottleVintage })}>
+                        {t('wineRecord.scopeWine', 'all vintages')}
+                      </span>
+                    )}
                     {shown && field.contributedBy && (
                       <span className="wr-contributor"> {t('wineRecord.contributedBy', 'by {{name}}', { name: field.contributedBy })}</span>
                     )}
@@ -273,10 +303,19 @@ function WineRecordSection({ wine, canSuggest, apiFetch }) {
                     <button
                       type="button"
                       className="wr-suggest-btn"
-                      onClick={() => { setValueModal({ field }); setValueInput(''); setValueReason(''); setError(null); }}
+                      onClick={() => {
+                        setValueModal({ field });
+                        setValueInput('');
+                        setValueReason('');
+                        setValueScope(bottleVintage ? 'vintage' : 'wine');
+                        setValueVintage('');
+                        setError(null);
+                      }}
                       aria-label={t('wineRecord.suggestValueFor', 'Suggest a value for {{field}}', { field: field.key.name })}
                     >
-                      {shown ? t('wineRecord.suggest', 'Suggest a fix') : t('wineRecord.suggestValue', 'Add value')}
+                      {shown && field.resolvedFrom === 'wine' && bottleVintage
+                        ? t('wineRecord.addVintageValue', 'Add {{year}} value', { year: bottleVintage })
+                        : shown ? t('wineRecord.suggest', 'Suggest a fix') : t('wineRecord.suggestValue', 'Add value')}
                     </button>
                   ) : null}
                 </div>
@@ -372,6 +411,53 @@ function WineRecordSection({ wine, canSuggest, apiFetch }) {
                 onChange={setValueInput}
               />
             </div>
+            {/* The one question that decides the slot, asked in the user's
+                terms: nobody thinks "default vs override", everybody knows
+                whether they read it off their own label or off a spec sheet. */}
+            {bottleVintage ? (
+              <fieldset className="form-group wr-scope-choice">
+                <legend>{t('wineRecord.scopeQuestion', 'Where does this figure come from?')}</legend>
+                <label className="wr-scope-option">
+                  <input
+                    type="radio"
+                    name="wr-scope"
+                    value="vintage"
+                    checked={valueScope === 'vintage'}
+                    onChange={() => setValueScope('vintage')}
+                  />
+                  <span>{t('wineRecord.scopeVintage', 'My bottle, or a page for this vintage — applies to {{year}} only', { year: bottleVintage })}</span>
+                </label>
+                <label className="wr-scope-option">
+                  <input
+                    type="radio"
+                    name="wr-scope"
+                    value="wine"
+                    checked={valueScope === 'wine'}
+                    onChange={() => setValueScope('wine')}
+                  />
+                  <span>{t('wineRecord.scopeAll', 'The producer’s general spec, the same every year — applies to all vintages')}</span>
+                </label>
+              </fieldset>
+            ) : (
+              <div className="form-group">
+                <label htmlFor="wr-value-vintage">{t('wineRecord.scopeYear', 'For one vintage only? (optional)')}</label>
+                <input
+                  id="wr-value-vintage"
+                  type="text"
+                  inputMode="numeric"
+                  value={valueVintage}
+                  onChange={(e) => setValueVintage(e.target.value)}
+                  placeholder={t('wineRecord.scopeYearPlaceholder', 'e.g. 2023 — leave empty for all vintages')}
+                  maxLength={4}
+                  pattern="\d{4}"
+                />
+              </div>
+            )}
+            {valueModal.field.wineValue !== null && valueModal.field.wineValue !== undefined && (
+              <p className="wr-current-note">
+                {t('wineRecord.currentWineValue', 'Wine-wide value today: {{value}}', { value: formatTypedValue(valueModal.field.key, valueModal.field.wineValue, t) })}
+              </p>
+            )}
             <div className="form-group">
               <label htmlFor="wr-value-reason">{t('wineRecord.valueReason', 'How do you know? (optional)')}</label>
               <input

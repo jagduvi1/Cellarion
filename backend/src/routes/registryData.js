@@ -40,9 +40,12 @@ router.post('/keys', requireNonDemo, async (req, res, next) => {
  */
 router.get('/wine/:id', async (req, res, next) => {
   try {
-    const result = await ops.dataForWine(req.params.id, req.user.id, { roles: req.user.roles });
+    // ?vintage=YYYY resolves per-vintage overrides for that bottling and
+    // tells the client which slot a new suggestion would land in.
+    const vintage = typeof req.query.vintage === 'string' ? req.query.vintage : undefined;
+    const result = await ops.dataForWine(req.params.id, req.user.id, { roles: req.user.roles, vintage });
     if (!result.ok) return sendFail(res, result);
-    res.json({ fields: result.fields });
+    res.json({ fields: result.fields, vintage: result.vintage });
   } catch (err) {
     next(err);
   }
@@ -51,10 +54,10 @@ router.get('/wine/:id', async (req, res, next) => {
 /** POST /api/registry-data/wine/:id — suggest a value for an accepted key. */
 router.post('/wine/:id', requireNonDemo, async (req, res, next) => {
   try {
-    const { keyId, keyName, value, reason, evidenceUrl } = req.body || {};
+    const { keyId, keyName, value, reason, evidenceUrl, vintage } = req.body || {};
     const result = await ops.suggestValue(
       req.user.id,
-      { wineId: req.params.id, keyId, keyName, value, reason, evidenceUrl },
+      { wineId: req.params.id, keyId, keyName, value, reason, evidenceUrl, vintage },
       { via: 'web', req }
     );
     if (!result.ok) return sendFail(res, result);

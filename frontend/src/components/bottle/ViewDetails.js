@@ -153,7 +153,7 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
       {/* The full public record with visible blanks + per-field suggestions
           (#985). Demo visitors see the record but not the suggest actions
           (writes are requireNonDemo). */}
-      <WineRecordSection wine={wine} canSuggest={!user?.isDemo} apiFetch={apiFetch} />
+      <WineRecordSection wine={wine} vintage={bottle?.vintage} canSuggest={!user?.isDemo} apiFetch={apiFetch} />
 
       {/* Personal drink window — the user's own drinkFrom/drinkTo. Takes
           precedence over the sommelier profile status below, so the profile

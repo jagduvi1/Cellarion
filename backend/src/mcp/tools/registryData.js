@@ -22,12 +22,18 @@ registerTool({
   title: 'Public data fields on a registry wine',
   description:
     'The accepted public key vocabulary (ABV etc.) with each key\'s published value for this wine — blanks included, ' +
-    'because a visible gap is an invitation to contribute. Also returns the user\'s own pending suggestions.',
+    'because a visible gap is an invitation to contribute. Also returns the user\'s own pending suggestions. ' +
+    'Values are per wine with per-VINTAGE overrides: pass the bottle\'s vintage and each field resolves to that ' +
+    'vintage\'s override when one is published, else the wine-wide default (applies_to says which); wine_value and ' +
+    'overrides expose both layers.',
   scope: 'read',
   annotations: { readOnlyHint: true, openWorldHint: false },
-  inputSchema: { wine_id: objectId },
+  inputSchema: {
+    wine_id: objectId,
+    vintage: z.string().max(10).optional().describe('The bottle\'s vintage (YYYY) — resolves that year\'s override'),
+  },
   handler: async (args, ctx) => {
-    const result = await ops.dataForWine(args.wine_id, ctx.user.id, { roles: ctx.user.roles });
+    const result = await ops.dataForWine(args.wine_id, ctx.user.id, { roles: ctx.user.roles, vintage: args.vintage });
     if (!result.ok) return svcFail(result);
     const fields = result.fields.map((f) => ({
       key_id: f.key._id,
@@ -36,13 +42,20 @@ registerTool({
       unit: f.key.unit,
       ...(f.key.enumOptions ? { options: f.key.enumOptions } : {}),
       value: f.value,
+      // 'YYYY' = this vintage's override; 'all vintages' = the wine-wide
+      // default; null = blank.
+      applies_to: f.resolvedFrom === 'vintage' ? f.resolvedVintage : (f.resolvedFrom === 'wine' ? 'all vintages' : null),
+      wine_value: f.wineValue,
+      overrides: f.overrides,
       contributed_by: f.contributedBy,
-      // A pending suggestion (anyone's) holds this key's one review slot —
-      // do not file another; it would only conflict.
+      // A pending suggestion (anyone's) holds this slot's one review slot —
+      // do not file another for the same slot; it would only conflict.
       suggestion_pending: f.hasPendingSuggestion,
       my_pending_suggestion: f.mySuggestion ? f.mySuggestion.value : null,
+      my_pending_suggestion_vintage: f.mySuggestion ? f.mySuggestion.vintage : null,
     }));
-    return ok(`${fields.length} public field(s), ${fields.filter((f) => f.value !== null).length} filled for this wine`, { fields });
+    const forWhom = result.vintage ? ` (resolved for vintage ${result.vintage})` : '';
+    return ok(`${fields.length} public field(s), ${fields.filter((f) => f.value !== null).length} filled for this wine${forWhom}`, { fields, vintage: result.vintage });
   },
 });
 
@@ -53,25 +66,34 @@ registerTool({
     'Files a value suggestion for an ACCEPTED public key on a registry wine (key_id from get_wine_public_data). ' +
     'The value is validated against the key\'s type; an admin publishes or rejects it — nothing auto-applies. ' +
     'Confirm the value with the user first; evidence (a URL) speeds up review. Daily budget shared with ' +
-    'suggest_wine_correction and propose_registry_key.',
+    'suggest_wine_correction and propose_registry_key. ' +
+    'VINTAGE RULE: pass `vintage` whenever the figure comes from the user\'s own bottle, a label, or a retailer ' +
+    'page for one year — it then applies to that vintage only, which is never wrong. Omit `vintage` ONLY for the ' +
+    'producer\'s general spec that holds for every year (a technical sheet). When in doubt, pass the vintage.',
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
     wine_id: objectId,
     key_id: objectId,
     value: z.union([z.string().max(500), z.number(), z.boolean()]),
+    vintage: z.string().max(10).optional().describe('YYYY — the bottling this figure is true for; omit for a producer-wide spec'),
     reason: z.string().max(1000).optional().describe('How the user knows (label, producer site …)'),
     evidence_url: z.string().max(500).optional(),
   },
   handler: async (args, ctx) => {
     const result = await ops.suggestValue(
       ctx.user.id,
-      { wineId: args.wine_id, keyId: args.key_id, value: args.value, reason: args.reason, evidenceUrl: args.evidence_url },
+      {
+        wineId: args.wine_id, keyId: args.key_id, value: args.value, vintage: args.vintage,
+        reason: args.reason, evidenceUrl: args.evidence_url,
+      },
       { via: 'mcp', req: ctx.req }
     );
     if (!result.ok) return svcFail(result);
-    return ok(`Suggested ${result.value.key.name} = ${JSON.stringify(result.value.value)} (admin will review)`, {
+    const slot = result.value.vintage ? `for vintage ${result.value.vintage}` : 'for all vintages';
+    return ok(`Suggested ${result.value.key.name} = ${JSON.stringify(result.value.value)} ${slot} (admin will review)`, {
       value_id: result.value._id,
+      vintage: result.value.vintage,
       status: 'suggested',
     });
   },
@@ -114,8 +136,11 @@ registerTool({
   description:
     'The public-data review queues: proposed keys (the vocabulary itself) and suggested values users have offered ' +
     'for a wine. Call with no arguments to list both, or decide one row: "accept"/"reject" for a key_id, ' +
-    '"publish"/"reject" for a value_id. Publishing a value supersedes any previously published value for that ' +
-    'wine+key. ' +
+    '"publish"/"reject" for a value_id. Publishing a value supersedes any previously published value in the SAME ' +
+    'slot only (wine+key+vintage): a wine-wide default never touches per-vintage overrides and vice versa. A ' +
+    'suggestion filed for one vintage can be published as the wine-wide default instead with as_wine_default=true ' +
+    '— do that only when the evidence is plainly the producer\'s general spec, not a label or a one-year page; ' +
+    'each row says whether the wine has a default yet (wine_default). ' +
     'JUDGE THE TWO QUEUES DIFFERENTLY. A suggested VALUE is a fact about one wine — is 14.5% the right ABV for ' +
     'this bottling? — and that is ordinary curation, same as any other wine data. A proposed KEY is a decision ' +
     'about what the registry TRACKS AT ALL: accepting one adds it to the public vocabulary every wine can carry ' +
@@ -144,6 +169,7 @@ registerTool({
     value_id: objectId.optional(),
     decision: z.enum(['accept', 'reject', 'publish']).optional(),
     reject_reason: z.string().max(500).optional(),
+    as_wine_default: z.boolean().optional().describe('With decision=publish on a vintage-slotted value: publish it as the wine-wide default instead'),
   },
   handler: async (args, ctx) => {
     if (!args.key_id && !args.value_id) {
@@ -156,6 +182,11 @@ registerTool({
         })),
         suggested_values: result.values.map((v) => ({
           value_id: v._id, key: v.key?.name, value: v.value,
+          // null = applies to every vintage; 'YYYY' = that vintage only.
+          vintage: v.vintage || null,
+          // For a vintage row: the wine-wide default it would diverge from,
+          // or null when the wine has none yet (absent on wine-wide rows).
+          ...(v.vintage ? { wine_default: v.wineDefault ?? null } : {}),
           wine: v.wineDefinition ? `${v.wineDefinition.producer || '?'} — ${v.wineDefinition.name}` : null,
           reason: v.reason || null, evidence_url: v.evidenceUrl || null,
           suggested_by: v.suggestedBy?.username || null, tier: v.suggestedBy?.contribution?.tier || null,
@@ -173,9 +204,15 @@ registerTool({
       return ok(`Key "${result.key.name}" ${result.key.status}`, { key: result.key });
     }
 
-    const result = await ops.decideValue(ctx.user.id, args.value_id, args.decision, args.reject_reason, { req: ctx.req });
+    const result = await ops.decideValue(ctx.user.id, args.value_id, args.decision, args.reject_reason, {
+      req: ctx.req,
+      ...(args.as_wine_default === true ? { asWineDefault: true } : {}),
+    });
     if (!result.ok) return svcFail(result);
-    return ok(`Value ${result.value.status}`, { value: result.value });
+    const slot = result.value.status === 'published'
+      ? (result.value.vintage ? ` for vintage ${result.value.vintage}` : ' for all vintages')
+      : '';
+    return ok(`Value ${result.value.status}${slot}`, { value: result.value });
   },
 });
 

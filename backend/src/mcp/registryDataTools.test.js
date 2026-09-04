@@ -153,3 +153,71 @@ describe('sommelier access to the review queues', () => {
     expect(d).not.toMatch(/ADMIN only/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Per-vintage overrides (2026-09-04): the vintage rides through unchanged on
+// read and suggest, and the reviewer's "publish as wine default" reaches the
+// service ONLY when asked for — the plain call shape is untouched.
+// ---------------------------------------------------------------------------
+describe('vintage slots over MCP', () => {
+  test('get_wine_public_data passes the vintage and reports which layer answered', async () => {
+    ops.dataForWine.mockResolvedValue({ ok: true, vintage: '2023', fields: [{
+      key: { _id: oid('c'), name: 'ABV', type: 'decimal', unit: '%', enumOptions: null },
+      value: 14, resolvedFrom: 'vintage', resolvedVintage: '2023', wineValue: 13.5,
+      overrides: [{ vintage: '2023', value: 14 }], contributedBy: 'akki',
+      hasPendingSuggestion: false, mySuggestion: { value: 14.5, status: 'suggested', vintage: '2023' },
+    }] });
+    const res = await tool('get_wine_public_data').handler({ wine_id: oid('b'), vintage: '2023' }, USER_CTX);
+    expect(ops.dataForWine).toHaveBeenCalledWith(oid('b'), ME, { roles: ['user'], vintage: '2023' });
+    const body = parse(res);
+    expect(body.data.vintage).toBe('2023');
+    expect(body.data.fields[0]).toMatchObject({
+      value: 14, applies_to: '2023', wine_value: 13.5, overrides: [{ vintage: '2023', value: 14 }],
+      my_pending_suggestion: 14.5, my_pending_suggestion_vintage: '2023',
+    });
+  });
+
+  test('a wine-wide answer is labelled "all vintages"', async () => {
+    ops.dataForWine.mockResolvedValue({ ok: true, vintage: null, fields: [{
+      key: { _id: oid('c'), name: 'ABV', type: 'decimal', unit: '%', enumOptions: null },
+      value: 13.5, resolvedFrom: 'wine', resolvedVintage: null, wineValue: 13.5, overrides: [],
+      contributedBy: 'kurt', hasPendingSuggestion: false, mySuggestion: null,
+    }] });
+    const res = await tool('get_wine_public_data').handler({ wine_id: oid('b') }, USER_CTX);
+    expect(parse(res).data.fields[0].applies_to).toBe('all vintages');
+  });
+
+  test('suggest_wine_public_value forwards the vintage and names the slot in its reply', async () => {
+    ops.suggestValue.mockResolvedValue({ ok: true, value: { _id: oid('9'), key: { name: 'ABV' }, value: 14, vintage: '2023', status: 'suggested' } });
+    const res = await tool('suggest_wine_public_value').handler({ wine_id: oid('b'), key_id: oid('c'), value: 14, vintage: '2023' }, USER_CTX);
+    expect(ops.suggestValue).toHaveBeenCalledWith(ME,
+      expect.objectContaining({ wineId: oid('b'), keyId: oid('c'), value: 14, vintage: '2023' }),
+      { via: 'mcp', req: USER_CTX.req });
+    expect(res.content[0].text).toMatch(/for vintage 2023/);
+    expect(parse(res).data.vintage).toBe('2023');
+  });
+
+  test('review_registry_data passes asWineDefault only when asked, and says which slot it published', async () => {
+    ops.decideValue.mockResolvedValue({ ok: true, value: { _id: oid('9'), status: 'published', value: 14, vintage: null } });
+    const widened = await tool('review_registry_data').handler({ value_id: oid('9'), decision: 'publish', as_wine_default: true }, ADMIN_CTX);
+    expect(ops.decideValue).toHaveBeenLastCalledWith(ME, oid('9'), 'publish', undefined, { req: ADMIN_CTX.req, asWineDefault: true });
+    expect(widened.content[0].text).toMatch(/for all vintages/);
+
+    ops.decideValue.mockResolvedValue({ ok: true, value: { _id: oid('9'), status: 'published', value: 14, vintage: '2023' } });
+    const plain = await tool('review_registry_data').handler({ value_id: oid('9'), decision: 'publish' }, ADMIN_CTX);
+    expect(ops.decideValue).toHaveBeenLastCalledWith(ME, oid('9'), 'publish', undefined, { req: ADMIN_CTX.req });
+    expect(plain.content[0].text).toMatch(/for vintage 2023/);
+  });
+
+  test('the queue listing exposes each row\'s slot and the wine-wide value a vintage row diverges from', async () => {
+    ops.listReviewQueues.mockResolvedValue({ ok: true, keys: [], values: [
+      { _id: oid('5'), key: { name: 'ABV' }, value: 14, vintage: '2023', wineDefault: 13.5, wineDefinition: { producer: 'Valli', name: 'Pinot' } },
+      { _id: oid('6'), key: { name: 'ABV' }, value: 13, vintage: null, wineDefinition: { producer: 'Valli', name: 'Pinot' } },
+    ] });
+    const res = await tool('review_registry_data').handler({}, ADMIN_CTX);
+    const rows = parse(res).data.suggested_values;
+    expect(rows[0]).toMatchObject({ vintage: '2023', wine_default: 13.5 });
+    expect(rows[1].vintage).toBeNull();
+    expect(rows[1]).not.toHaveProperty('wine_default');
+  });
+});

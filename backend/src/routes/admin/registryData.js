@@ -34,11 +34,18 @@ router.post('/keys/:id/decide', async (req, res, next) => {
   }
 });
 
-/** POST /api/admin/registry-data/values/:id/decide  { decision: publish|reject, rejectReason? } */
+/**
+ * POST /api/admin/registry-data/values/:id/decide
+ *   { decision: publish|reject, rejectReason?, asWineDefault? }
+ * asWineDefault publishes a vintage-specific suggestion as the wine-wide
+ * default instead (the reviewer judged the evidence to be a producer spec).
+ */
 router.post('/values/:id/decide', async (req, res, next) => {
   try {
-    const { decision, rejectReason } = req.body || {};
-    const result = await ops.decideValue(req.user.id, req.params.id, decision, rejectReason, { req });
+    const { decision, rejectReason, asWineDefault } = req.body || {};
+    const result = await ops.decideValue(req.user.id, req.params.id, decision, rejectReason, {
+      req, asWineDefault: asWineDefault === true,
+    });
     if (!result.ok) return sendFail(res, result);
     res.json({ value: result.value });
   } catch (err) {
