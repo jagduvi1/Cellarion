@@ -8,7 +8,7 @@
 # (Krypton) is Active LTS until 2026-10-20, maintenance to 2028-04-30.
 # Dependabot will offer Current releases (26 before 2026-10-28) — those are
 # ignored in .github/dependabot.yml rather than tracked.
-FROM node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
+FROM node:24-alpine@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf
 
 # Bake production mode into the image: the refresh-cookie Secure flag and
 # 5xx error redaction key off NODE_ENV, and Express itself runs faster with
