@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { takePostLoginRedirect } from '../utils/postLoginRedirect';
 import './Login.css';
 
 // Landing route for the OAuth round-trip (backend redirects here after Google).
@@ -24,8 +25,11 @@ function OAuthCallback() {
 
   useEffect(() => {
     if (error) return; // show the error card + let the user go back to login
-    // No error: the session either restored (→ home) or silently failed (→ login).
-    navigate(user ? '/cellars' : '/login', { replace: true });
+    // No error: the session either restored (→ wherever they were heading
+    // before the sign-in interrupted them, else home) or silently failed
+    // (→ login). The stash is left alone on failure so that retrying still
+    // finishes the journey.
+    navigate(user ? (takePostLoginRedirect() || '/cellars') : '/login', { replace: true });
   }, [error, user, navigate]);
 
   if (error) {

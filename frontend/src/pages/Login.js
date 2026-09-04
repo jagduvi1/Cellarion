@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation, Trans } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import useVersion from '../hooks/useVersion';
+import { stashPostLoginRedirect } from '../utils/postLoginRedirect';
 import './Login.css';
 
 const LOGO_WEBP = '/cellarion-logo-light.webp';
@@ -311,7 +312,12 @@ function Login() {
             <button
               type="button"
               className="btn btn-google btn-full"
-              onClick={() => { window.location.href = '/api/auth/google'; }}
+              onClick={() => {
+                // Router state does not survive the full-page trip out to
+                // Google, so hand the destination over before we leave.
+                stashPostLoginRedirect(location.state?.from);
+                window.location.href = '/api/auth/google';
+              }}
             >
               <GoogleIcon />
               <span>{t('auth.continueWithGoogle', 'Continue with Google')}</span>
