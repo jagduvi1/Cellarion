@@ -38,7 +38,11 @@ function AdminRegistryData() {
 
   useEffect(() => { load(); }, [load]);
 
-  const decide = async (kind, id, decision) => {
+  // opts.asWineDefault: publish a vintage-slotted suggestion as the wine-wide
+  // default instead — the reviewer's call when the evidence is plainly the
+  // producer's general spec and the suggester left the (safer) vintage
+  // default selected.
+  const decide = async (kind, id, decision, opts = {}) => {
     let rejectReason;
     if (decision === 'reject') {
       // null = Cancel; '' = OK with no text — a reason is optional, so an
@@ -51,8 +55,9 @@ function AdminRegistryData() {
     setBusy(id);
     setError(null);
     try {
-      const fn = kind === 'key' ? decideRegistryKey : decideRegistryValue;
-      const res = await fn(apiFetch, id, decision, rejectReason);
+      const res = kind === 'key'
+        ? await decideRegistryKey(apiFetch, id, decision, rejectReason)
+        : await decideRegistryValue(apiFetch, id, decision, rejectReason, opts);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) return setError(data.error || 'Decision failed');
       // The server returned the decided row — drop it locally instead of
@@ -110,6 +115,20 @@ function AdminRegistryData() {
             <span className="ard-name">
               {v.key?.name}: <strong>{String(v.value)}</strong>{v.key?.unit ? ` ${v.key.unit}` : ''}
             </span>
+            {/* The slot. A vintage row also shows what the wine says for
+                every other year, or that it says nothing yet — the reviewer
+                decides whether this first figure should seed the default. */}
+            <span className="ard-slot">
+              {v.vintage ? (
+                <>
+                  for the <strong>{v.vintage}</strong> vintage
+                  {' · '}
+                  {v.wineDefault !== null && v.wineDefault !== undefined
+                    ? <>wine-wide today: {String(v.wineDefault)}{v.key?.unit ? ` ${v.key.unit}` : ''}</>
+                    : <em>no wine-wide value yet</em>}
+                </>
+              ) : 'all vintages'}
+            </span>
             <span className="ard-type">
               {v.wineDefinition
                 ? <Link to={`/wines/${v.wineDefinition.slug || v.wineDefinition._id}`}>
@@ -130,7 +149,16 @@ function AdminRegistryData() {
           </div>
           <div className="ard-actions">
             <button type="button" className="btn btn-small btn-primary" disabled={busy === v._id}
-              onClick={() => decide('value', v._id, 'publish')}>Publish</button>
+              onClick={() => decide('value', v._id, 'publish')}>
+              {v.vintage ? `Publish for ${v.vintage}` : 'Publish'}
+            </button>
+            {v.vintage && (
+              <button type="button" className="btn btn-small" disabled={busy === v._id}
+                title="The evidence is the producer's general spec, not a one-year figure — publish it for every vintage instead"
+                onClick={() => decide('value', v._id, 'publish', { asWineDefault: true })}>
+                Publish as wine default
+              </button>
+            )}
             <button type="button" className="btn btn-small btn-danger" disabled={busy === v._id}
               onClick={() => decide('value', v._id, 'reject')}>Reject</button>
           </div>

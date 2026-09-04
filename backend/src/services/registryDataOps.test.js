@@ -157,7 +157,7 @@ describe('dataForWine', () => {
   test('empty vocabulary short-circuits without value queries', async () => {
     RegistryDataKey.find.mockReturnValue(chain([]));
     const res = await ops.dataForWine(WINE, ME);
-    expect(res).toEqual({ ok: true, fields: [] });
+    expect(res).toEqual({ ok: true, fields: [], vintage: null });
     expect(RegistryDataValue.find).not.toHaveBeenCalled();
   });
 
@@ -217,8 +217,10 @@ describe('admin decisions', () => {
     const res = await ops.decideValue(ADMIN, oid('9'), 'publish');
     expect(res.ok).toBe(true);
     expect(RegistryDataValue.deleteOne).not.toHaveBeenCalled();
+    // Supersede is SLOT-scoped: a wine-wide publish demotes only the
+    // wine-wide row (vintage: null), never a per-vintage override.
     expect(RegistryDataValue.updateOne).toHaveBeenCalledWith(
-      { wineDefinition: WINE, key: KEY, status: 'published' },
+      { wineDefinition: WINE, key: KEY, vintage: null, status: 'published' },
       expect.objectContaining({ $set: expect.objectContaining({ status: 'rejected', rejectReason: expect.stringContaining('Superseded') }) })
     );
     expect(row.status).toBe('published');

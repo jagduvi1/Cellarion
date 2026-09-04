@@ -38,6 +38,7 @@ const Bottle = require('../../models/Bottle');
 const Cellar = require('../../models/Cellar');
 const PersonalDataEntry = require('../../models/PersonalDataEntry');
 const RegistryDataValue = require('../../models/RegistryDataValue');
+const { resolveForVintage } = require('../registryDataOps');
 const { resolveField, opsForType } = require('./fieldCatalogue');
 const { validateValue } = require('../../utils/personalDataTypes');
 const { ANCHORS, COL, toNormalized, fromNormalized } = require('../../utils/ratingUtils');
@@ -301,8 +302,11 @@ function castKvForEval(field, op, value) {
  */
 async function kvCondition(field, op, value, userId) {
   if (field.source === 'registry') {
-    // One published value per (wine, key) — no precedence to resolve, the
-    // predicate can stay in the query.
+    // Published rows carry the wine-wide default AND any per-vintage
+    // overrides; a wine matches when ANY of its published values does. The
+    // filter is wine-grained by design (one indexed query), so a bottle whose
+    // own vintage's override misses can still ride in on a matching default —
+    // the hydrated column resolves per bottle and shows the truth.
     const valuePred = predicate(field, op, value, (raw) => castKv(field, raw));
     const rows = await RegistryDataValue.find({
       key: field.keyId, status: 'published', value: valuePred,
@@ -722,7 +726,22 @@ async function hydrateRows({ userId, pageIds, columns, scopeCellars }) {
       wineDefinition: { $in: wineIds },
     }).lean();
   }
-  const registryByWineKey = new Map(registryValues.map((v) => [`${v.wineDefinition}:${v.key}`, v.value]));
+  // Per-vintage overrides (2026-09-04): a bottle reads its vintage's row when
+  // one is published, else the wine-wide default — the bottle-page rule,
+  // shared via registryDataOps.resolveForVintage so the two never drift.
+  const registryRows = new Map();
+  for (const v of registryValues) {
+    const k = `${v.wineDefinition}:${v.key}`;
+    if (!registryRows.has(k)) registryRows.set(k, []);
+    registryRows.get(k).push(v);
+  }
+  const registryValueFor = (wid, keyId, vintage) => {
+    const rows = registryRows.get(`${wid}:${keyId}`);
+    if (!rows) return undefined;
+    const year = vintage && /^\d{4}$/.test(String(vintage)) ? String(vintage) : null;
+    const { row } = resolveForVintage(rows, year);
+    return row ? row.value : undefined;
+  };
 
   // Personal precedence per (bottle, key): bottle entry > wine entry matching
   // the bottle's vintage > wine entry with no vintage — the bottle page rule.
@@ -780,7 +799,7 @@ async function hydrateRows({ userId, pageIds, columns, scopeCellars }) {
       }
       case 'registry': {
         const wid = String(b.wineDefinition?._id || b.wineDefinition);
-        const v = registryByWineKey.get(`${wid}:${f.keyId}`);
+        const v = registryValueFor(wid, f.keyId, b.vintage);
         return v === undefined ? null : v;
       }
       default:

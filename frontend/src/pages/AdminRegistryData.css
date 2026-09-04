@@ -70,3 +70,12 @@
   flex-direction: column;
   gap: 6px;
 }
+
+/* The slot a suggested value lands in (all vintages vs one year) and, for a
+   vintage row, what the wine says wine-wide today. */
+.ard-slot {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  margin-top: 0.15rem;
+}

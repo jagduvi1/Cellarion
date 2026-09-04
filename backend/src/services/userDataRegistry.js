@@ -379,7 +379,7 @@ const REGISTRY = [
       RegistryDataValue.updateMany({ suggestedBy: ctx.userId }, { $set: { suggestedBy: ctx.deletedUserId } }),
       RegistryDataValue.updateMany({ decidedBy: ctx.userId }, { $unset: { decidedBy: '' } }),
     ],
-    exportFragment: async (ctx) => ({ registryDataValueSuggestions: markTrunc(ctx, 'registryDataValueSuggestions', await RegistryDataValue.find({ suggestedBy: ctx.userId }).populate('key', 'name type unit').select('wineDefinition key value status reason evidenceUrl createdAt decidedAt rejectReason').limit(EXPORT_MAX).lean()) }),
+    exportFragment: async (ctx) => ({ registryDataValueSuggestions: markTrunc(ctx, 'registryDataValueSuggestions', await RegistryDataValue.find({ suggestedBy: ctx.userId }).populate('key', 'name type unit').select('wineDefinition key vintage value status reason evidenceUrl createdAt decidedAt rejectReason').limit(EXPORT_MAX).lean()) }),
   },
 
   // ── Forum content: anonymise (preserve multi-party threads) ─────────────

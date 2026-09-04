@@ -169,9 +169,12 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage }
       // matches against its own nameKey rule. 404 = no such accepted key →
       // propose the key itself; a type mismatch surfaces the type-validation
       // message instead of a dead-end "already in the vocabulary" conflict.
+      // A vintage-scoped personal entry promotes into that vintage's slot;
+      // a wine-level one into the wine-wide default. The entry already knows.
       const res = await suggestWineValue(apiFetch, wineId, {
         keyName: promote.key.name,
         value: promote.value,
+        ...(promote.vintage ? { vintage: promote.vintage } : {}),
         ...(promoteReason.trim() ? { reason: promoteReason.trim() } : {}),
       });
       if (res.ok) {
@@ -328,6 +331,10 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage }
             {promoteError && <div className="alert alert-error" style={{ marginBottom: 8 }}>{promoteError}</div>}
             <p style={{ margin: '0 0 0.6rem', fontSize: '0.85rem' }}>
               {t('personalData.promoteIntro', 'Offer “{{key}}: {{value}}” to the shared registry. A curator reviews it; if the field doesn’t exist in the public vocabulary yet, the field itself is proposed first.', { key: promote.key.name, value: String(promote.value) })}
+              {' '}
+              {promote.vintage
+                ? t('personalData.promoteScopeVintage', 'It will apply to the {{year}} vintage only.', { year: promote.vintage })
+                : t('personalData.promoteScopeWine', 'It will apply to every vintage of this wine.')}
             </p>
             <div className="form-group">
               <label htmlFor="pd-promote-reason">{t('wineRecord.reason', 'How do you know?')}</label>

@@ -118,3 +118,52 @@
     grid-column: 1 / -1;
   }
 }
+
+/* Which layer answered a public value: this vintage's override (accent) or
+   the wine-wide default (muted). Only shown when a vintage is in play. */
+.wr-scope {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0 0.4rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.5;
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  vertical-align: 1px;
+}
+.wr-scope--wine {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+.wr-scope-choice {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.7rem 0.6rem;
+  margin: 0 0 0.8rem;
+}
+.wr-scope-choice legend {
+  padding: 0 0.3rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.wr-scope-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.wr-scope-option input {
+  margin-top: 0.2rem;
+  flex: none;
+}
+.wr-current-note {
+  margin: -0.3rem 0 0.7rem;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
