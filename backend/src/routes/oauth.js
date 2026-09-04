@@ -51,53 +51,62 @@ async function generateUniqueUsername(email, displayName) {
 }
 
 /**
- * Turn a Google profile into a Cellarion account, three ways:
- *   1. already linked by provider id  → return it
- *   2. existing account with the same (verified) email → link Google to it
+ * Turn a set of provider-neutral SSO claims into a Cellarion account, three ways:
+ *   1. already linked by (provider, providerId)  → return it
+ *   2. existing account with the same (verified) email → link this provider to it
  *   3. otherwise → create a fresh SSO account
  * Then downstream everything (roles, plans, refresh rotation, cellar shares)
  * behaves exactly like a password account.
+ *
+ * `claims` is normalised by the caller so this stays provider-agnostic:
+ *   { providerId, email, emailVerified, displayName }
+ *
+ * `trustEmailVerified` decides whether an unverified email may still link:
+ *   - Google is an OPEN issuer — anyone can hold an account there, so an
+ *     unverified address is an attacker-controlled claim and must never link.
+ *     The Google adapter passes false and relies on Google's own verification.
+ *   - A self-hosted OIDC issuer is not open — the operator decides who gets an
+ *     account at all, so "do I trust this issuer's email claim" is a real
+ *     question only they can answer. OIDC_TRUST_EMAIL_VERIFIED (default off) is
+ *     where they answer it; when true this is passed true and the address is
+ *     treated as verified even if the issuer does not assert it.
  */
-async function upsertGoogleUser(profile) {
-  const providerId = profile.id;
-  const emailEntry = Array.isArray(profile.emails) ? profile.emails[0] : null;
-  const email = emailEntry?.value ? emailEntry.value.toLowerCase() : null;
-  // Only trust the email once Google says it has verified ownership — otherwise
-  // a Google account with an unverified address could be used to take over an
-  // existing Cellarion account that happens to share that address.
-  const emailVerified = profile._json?.email_verified === true || emailEntry?.verified === true;
+async function upsertSsoUser(provider, claims, { trustEmailVerified = false } = {}) {
+  const { providerId, displayName } = claims;
+  const email = claims.email ? claims.email.toLowerCase() : null;
+  const emailVerified = claims.emailVerified === true || trustEmailVerified === true;
 
   // 1. Already linked?
   const linked = await User.findOne({
-    'authProviders.provider': 'google',
+    'authProviders.provider': provider,
     'authProviders.providerId': providerId
   });
   if (linked) return linked;
 
   if (!email || !emailVerified) {
-    const err = new Error('Google did not provide a verified email address.');
+    const err = new Error('The identity provider did not supply a verified email address.');
     err.code = 'no_verified_email';
     throw err;
   }
 
-  // 2. Existing account with this email → link Google to it.
+  // 2. Existing account with this email → link this provider to it.
   const existing = await User.findOne({ email });
   if (existing) {
-    existing.authProviders.push({ provider: 'google', providerId });
-    if (!existing.emailVerified) existing.emailVerified = true; // Google verified it
+    existing.authProviders.push({ provider, providerId });
+    if (!existing.emailVerified) existing.emailVerified = true; // provider-verified
     await existing.save();
     return existing;
   }
 
   // 3. Brand-new SSO account.
-  const username = await generateUniqueUsername(email, profile.displayName);
+  const username = await generateUniqueUsername(email, displayName);
   const user = new User({
     username,
     email,
     emailVerified: true, // provider-verified
     roles: ['user'],
-    displayName: profile.displayName || undefined,
-    authProviders: [{ provider: 'google', providerId }]
+    displayName: displayName || undefined,
+    authProviders: [{ provider, providerId }]
     // GDPR consent is intentionally NOT stamped here. A new SSO account lands
     // with requiresPolicyReconsent === true, and the app's ReconsentModal forces
     // the user to accept the privacy policy + data processing before using the
@@ -105,6 +114,22 @@ async function upsertGoogleUser(profile) {
   });
   await user.save();
   return user;
+}
+
+/**
+ * Adapter: map a passport-google-oauth20 profile onto the neutral claim shape.
+ * Google asserts email verification itself and is an open issuer, so it never
+ * blanket-trusts — trustEmailVerified stays false and the email_verified claim
+ * is authoritative. Behaviour is identical to the pre-refactor path.
+ */
+async function upsertGoogleUser(profile) {
+  const emailEntry = Array.isArray(profile.emails) ? profile.emails[0] : null;
+  return upsertSsoUser('google', {
+    providerId: profile.id,
+    email: emailEntry?.value || null,
+    emailVerified: profile._json?.email_verified === true || emailEntry?.verified === true,
+    displayName: profile.displayName
+  }, { trustEmailVerified: false });
 }
 
 // One store instance serves every provider: it holds no per-flow state of its
@@ -196,5 +221,6 @@ router.get('/google/callback', (req, res, next) => {
 
 module.exports = router;
 // Exported for unit tests (the account-linking logic is the important part).
+module.exports.upsertSsoUser = upsertSsoUser;
 module.exports.upsertGoogleUser = upsertGoogleUser;
 module.exports.generateUniqueUsername = generateUniqueUsername;

@@ -53,7 +53,7 @@ const userSchema = new mongoose.Schema({
     type: [
       new mongoose.Schema(
         {
-          provider: { type: String, enum: ['google'], required: true },
+          provider: { type: String, enum: ['google', 'oidc'], required: true },
           providerId: { type: String, required: true },
           linkedAt: { type: Date, default: Date.now }
         },

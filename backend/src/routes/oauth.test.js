@@ -63,7 +63,7 @@ jest.mock('../models/User', () => {
 });
 
 const User = require('../models/User');
-const { upsertGoogleUser, generateUniqueUsername } = require('./oauth');
+const { upsertSsoUser, upsertGoogleUser, generateUniqueUsername } = require('./oauth');
 
 const googleProfile = (overrides = {}) => ({
   id: 'google-1',
@@ -154,6 +154,79 @@ describe('upsertGoogleUser', () => {
       googleProfile({ id: 'google-linked', emails: [{ value: 'dave@example.com', verified: false }], _json: { email_verified: false } })
     );
     expect(user).toBe(existing);
+  });
+});
+
+describe('upsertSsoUser — the provider-neutral core', () => {
+  const oidcClaims = (overrides = {}) => ({
+    providerId: 'oidc-1',
+    email: 'erin@example.com',
+    emailVerified: true,
+    displayName: 'Erin Example',
+    ...overrides,
+  });
+
+  test('creates an account tagged with the given provider, not google', async () => {
+    const user = await upsertSsoUser('oidc', oidcClaims());
+    expect(User.__store.users).toHaveLength(1);
+    expect(user.authProviders).toEqual([{ provider: 'oidc', providerId: 'oidc-1' }]);
+    expect(user.email).toBe('erin@example.com');
+    expect(user.emailVerified).toBe(true);
+    expect(user.gdprConsent).toBeUndefined();
+  });
+
+  test('lowercases the email before matching, like the Google path', async () => {
+    const existing = User.__seed({ username: 'erin', email: 'erin@example.com', authProviders: [] });
+    const user = await upsertSsoUser('oidc', oidcClaims({ providerId: 'oidc-9', email: 'Erin@Example.COM' }));
+    expect(user).toBe(existing);
+    expect(User.__store.users).toHaveLength(1);
+  });
+
+  test('an unverified claim is rejected by default (trustEmailVerified off)', async () => {
+    await expect(
+      upsertSsoUser('oidc', oidcClaims({ emailVerified: false }))
+    ).rejects.toMatchObject({ code: 'no_verified_email' });
+    expect(User.__store.users).toHaveLength(0);
+  });
+
+  test('an unverified claim links when the operator has opted in via trustEmailVerified', async () => {
+    // Pocket ID reports email_verified:false by default; the operator asserts
+    // trust for their own issuer with OIDC_TRUST_EMAIL_VERIFIED.
+    const user = await upsertSsoUser(
+      'oidc',
+      oidcClaims({ emailVerified: false }),
+      { trustEmailVerified: true }
+    );
+    expect(user.email).toBe('erin@example.com');
+    expect(user.emailVerified).toBe(true);
+  });
+
+  test('trustEmailVerified does not rescue a claim with no email at all', async () => {
+    await expect(
+      upsertSsoUser('oidc', oidcClaims({ email: null, emailVerified: false }), { trustEmailVerified: true })
+    ).rejects.toMatchObject({ code: 'no_verified_email' });
+  });
+
+  test('a linked (provider, providerId) short-circuits before the verified-email guard', async () => {
+    const existing = User.__seed({
+      username: 'frank',
+      email: 'frank@example.com',
+      authProviders: [{ provider: 'oidc', providerId: 'oidc-linked' }],
+    });
+    const user = await upsertSsoUser('oidc', oidcClaims({ providerId: 'oidc-linked', emailVerified: false }));
+    expect(user).toBe(existing);
+  });
+
+  test('the same providerId under a different provider is NOT treated as linked', async () => {
+    User.__seed({
+      username: 'grace',
+      email: 'grace@example.com',
+      authProviders: [{ provider: 'google', providerId: 'shared-id' }],
+    });
+    // Same providerId string, different provider → a new account, not a link.
+    const user = await upsertSsoUser('oidc', oidcClaims({ providerId: 'shared-id', email: 'grace2@example.com' }));
+    expect(User.__store.users).toHaveLength(2);
+    expect(user.authProviders).toEqual([{ provider: 'oidc', providerId: 'shared-id' }]);
   });
 });
 
