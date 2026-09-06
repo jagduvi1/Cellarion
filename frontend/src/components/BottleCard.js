@@ -37,8 +37,13 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
   // and whenever placement is unknown (cross-cellar view, or no racks exist).
   const isUnplaced = rackKnown && !isGroup && !rackInfo && bottle.status === 'active';
   const rackNavPref = user?.preferences?.rackNavigation || 'auto';
-  const imgSrc = bottle.defaultImageUrl || bottle.wineDefinition?.image || bottle.pendingImageUrl;
-  const credit = bottle.defaultImageUrl ? null : bottle.wineDefinition?.imageCredit;
+  // Chosen default → the owner's own photo (pending or approved) → the
+  // registry image. Same order as the bottle page hero: a photo you took of
+  // YOUR bottle beats a generic registry image, and it must not disappear
+  // from the card when an admin approves it (ticket 2026-09-05, #1227).
+  const ownImage = bottle.defaultImageUrl || bottle.pendingImageUrl;
+  const imgSrc = ownImage || bottle.wineDefinition?.image;
+  const credit = ownImage ? null : bottle.wineDefinition?.imageCredit;
   const isPending = !bottle.wineDefinition && !!bottle.pendingWineRequest;
   const displayName = bottle.wineDefinition?.name || bottle.pendingWineRequest?.wineName || t('common.unknownWine');
   const displayProducer = bottle.wineDefinition?.producer || bottle.pendingWineRequest?.producer;
