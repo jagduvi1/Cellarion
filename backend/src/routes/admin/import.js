@@ -228,11 +228,14 @@ async function getOrCreateAppellation(name, countryId, regionId, userId, cache) 
   // to their canonical (hyphenated) forms. Country/Region above keep
   // normalizeString: that IS their collections' convention.
   const normalized = normalizeAppellationKey(name);
+  // Audit 2026-09 D01-4: the CSV cell is user text feeding two indexes — same
+  // sanitiser and cap as the admin appellation routes (APPELLATION_NAME_MAX).
+  const cleanName = sanitizeTaxonomyName(name).slice(0, 200);
   const doc = await Appellation.findOneAndUpdate(
     { country: countryId, normalizedName: normalized },
     {
       $setOnInsert: {
-        name: name.trim(),
+        name: cleanName,
         normalizedName: normalized,
         country: countryId,
         region: regionId || null,

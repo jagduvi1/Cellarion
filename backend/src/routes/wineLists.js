@@ -3,7 +3,10 @@ const mongoose = require('mongoose');
 const crypto = require('crypto');
 const fs = require('fs');
 const multer = require('multer');
-const { requireAuth } = require('../middleware/auth');
+// Audit 2026-09 S2-3: the write routes are demo-blocked like their MCP twins —
+// an anonymous demo session must not publish a public, branded wine list or
+// consume disk with logos and duplicates. Reads stay open for the demo tour.
+const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const WineList = require('../models/WineList');
 const Cellar = require('../models/Cellar');
 const { logAudit } = require('../services/audit');
@@ -128,7 +131,7 @@ router.get('/cellar-wines', requireAuth, async (req, res) => {
 });
 
 // POST /api/wine-lists — create a new wine list
-router.post('/', requireAuth, async (req, res) => {
+router.post('/', requireAuth, requireNonDemo, async (req, res) => {
   try {
     const { cellar: cellarId, name } = req.body;
     if (!cellarId || !name) return res.status(400).json({ error: 'cellar and name are required' });
@@ -188,7 +191,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 });
 
 // PUT /api/wine-lists/:id — update wine list
-router.put('/:id', requireAuth, async (req, res) => {
+router.put('/:id', requireAuth, requireNonDemo, async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const wineList = await WineList.findOne({ _id: req.params.id, user: req.user.id });
@@ -369,7 +372,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
 });
 
 // POST /api/wine-lists/:id/duplicate — copy a list (e.g. Spring → Summer menu)
-router.post('/:id/duplicate', requireAuth, async (req, res) => {
+router.post('/:id/duplicate', requireAuth, requireNonDemo, async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const source = await WineList.findOne({ _id: req.params.id, user: req.user.id }).lean();
@@ -399,7 +402,7 @@ router.post('/:id/duplicate', requireAuth, async (req, res) => {
 });
 
 // POST /api/wine-lists/:id/publish — generate token and publish
-router.post('/:id/publish', requireAuth, async (req, res) => {
+router.post('/:id/publish', requireAuth, requireNonDemo, async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const wineList = await WineList.findOne({ _id: req.params.id, user: req.user.id });
@@ -483,7 +486,7 @@ function handleLogoUpload(req, res, next) {
 }
 
 // POST /api/wine-lists/:id/logo — upload restaurant logo
-router.post('/:id/logo', requireAuth, handleLogoUpload, async (req, res) => {
+router.post('/:id/logo', requireAuth, requireNonDemo, handleLogoUpload, async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const wineList = await WineList.findOne({ _id: req.params.id, user: req.user.id });

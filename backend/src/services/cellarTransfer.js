@@ -92,8 +92,12 @@ async function transferCellarOwnership(cellarId, newOwnerId, actorId) {
     throw fail(400, 'The new owner must already be a member of this cellar');
   }
 
-  const newOwner = await User.findById(newOwnerId).select('_id username email').lean();
+  const newOwner = await User.findById(newOwnerId).select('_id username email isDemo').lean();
   if (!newOwner) throw fail(404, 'New owner account not found');
+  // Audit 2026-09 D03-1: a demo account is hard-deleted within hours, taking
+  // everything just transferred into it. Refuse rather than let a mistaken
+  // click (or a phished session) make a cellar vanish.
+  if (newOwner.isDemo) throw fail(400, 'A demo account cannot own a cellar');
 
   // ── 0. Can the cellar actually LAND? A cellar name is unique per owner
   //       (models/Cellar: unique { user, name } over active cellars), so if the

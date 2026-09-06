@@ -156,7 +156,8 @@ router.post('/countries', async (req, res) => {
     const normalizedName = normalizeString(name);
 
     const country = new Country({
-      name: name.trim(),
+      // Audit 2026-09 D01-1: same cap + control-character strip as Region/Grape.
+      name: sanitizeTaxonomyName(name),
       code: code?.trim().toUpperCase(),
       normalizedName,
       description: description || '',
@@ -190,7 +191,7 @@ router.put('/countries/:id', async (req, res) => {
     }
 
     if (name) {
-      country.name = name.trim();
+      country.name = sanitizeTaxonomyName(name);
       country.normalizedName = normalizeString(name);
     }
     if (code !== undefined) {

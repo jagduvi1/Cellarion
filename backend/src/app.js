@@ -99,8 +99,17 @@ const app = express();
 //     so req.ip resolves to the Cloudflare edge IP and getClientIp() can trust
 //     CF-Connecting-IP. Without it, req.ip collapses to Traefik's internal IP and
 //     every per-IP limiter shares one bucket. See utils/clientIp.js.
-const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS ?? 1);
-app.set('trust proxy', Number.isFinite(trustProxyHops) ? trustProxyHops : 1);
+// Audit 2026-09 D16-1: the shipped compose hands an EMPTY TRUST_PROXY_HOPS
+// through, and Number('') is 0 — so a default self-host ran `trust proxy 0`
+// and every per-IP limiter shared one bucket. Empty means unset; anything
+// that is not a whole non-negative number is refused loudly rather than
+// silently becoming 0 or 1.
+const rawHops = process.env.TRUST_PROXY_HOPS;
+const trustProxyHops = rawHops === undefined || String(rawHops).trim() === '' ? 1 : Number(rawHops);
+if (!Number.isInteger(trustProxyHops) || trustProxyHops < 0) {
+  throw new Error(`TRUST_PROXY_HOPS must be a whole number of proxy hops (got "${rawHops}")`);
+}
+app.set('trust proxy', trustProxyHops);
 
 // Security headers — explicit config for production SaaS
 app.use(helmet({

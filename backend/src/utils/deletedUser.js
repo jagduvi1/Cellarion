@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const User = require('../models/User');
 
 // Sentinel "[deleted]" user used to anonymise forum content when a real user
@@ -23,12 +24,14 @@ async function getOrCreateDeletedUser() {
     return cachedId;
   }
 
-  // Required password field — store an unverifiable bcrypt-shaped hash so
-  // login attempts via username/password fail at compare-time.
+  // Required password field. Audit 2026-09 O05-6: the old literal "invalid
+  // hash" string was itself hashed by the pre-save hook and so became a VALID
+  // password anyone could read in the repository. A random secret nobody ever
+  // sees is unknowable in practice, whatever the hook does to it.
   const created = await User.create({
     username: SENTINEL_USERNAME,
     email: SENTINEL_EMAIL,
-    password: '$2a$10$INVALID_HASH_NEVER_MATCHES_ANYTHING',
+    password: crypto.randomBytes(48).toString('hex'),
     displayName: null,
     profileVisibility: 'private',
     emailVerified: false,
