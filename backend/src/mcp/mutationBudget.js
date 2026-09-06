@@ -17,7 +17,13 @@ const ipWindows = new Map();   // ipKey  -> { start, count }
 const WINDOWS_MAX = 5000;
 // A single NAT/office may host several Cellarion users, each with their own AI
 // connection; the per-IP write ceiling is a multiple of the per-user cap.
-const IP_WRITE_MULTIPLIER = 4;
+// Hosted connectors (claude.ai, ChatGPT) egress from a SMALL shared pool, so
+// for them one "IP" is hundreds of users: at 4× four busy accounts blocked
+// every other user on that egress from all MCP writes for the rest of the
+// window (audit 2026-09 M02-2). 25× still bounds many-accounts-behind-one-
+// address abuse (1,500 writes / 15 min is trivial load) without pooling
+// strangers; the per-user cap is the real fairness layer.
+const IP_WRITE_MULTIPLIER = 25;
 
 // Evict the oldest half (insertion order) instead of clearing everyone (the old
 // `.clear()` wiped every in-flight window when a burst of distinct keys hit the

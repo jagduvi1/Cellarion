@@ -124,10 +124,33 @@ const stampPromotedScanRetention = async (wine) => {
   }
 };
 
+/**
+ * Record that a curator read somebody else's private bottle photo or label
+ * scan. Owners' galleries are private; curation is the one purpose-bound
+ * exception, so every such read must leave an audit row — on BOTH surfaces
+ * (REST GET /api/images/:id and MCP get_pending_wine_images), through this
+ * one helper so they can never diverge (audit 2026-09 M03-4). The row names
+ * the wine and the image ids, never the bytes.
+ */
+const logCurationImageRead = (req, { wineId, imageIds, privateCount, scanCount, via }) => {
+  try {
+    const { logAudit } = require('./audit');
+    logAudit(req, 'image.curation_read', { type: 'wine', id: wineId || null }, {
+      imageIds: (imageIds || []).map(String),
+      privateCount: privateCount || 0,
+      scanCount: scanCount || 0,
+      via,
+    });
+  } catch (err) {
+    console.warn('[labelScanAccess] curation read audit failed (non-fatal):', err.message);
+  }
+};
+
 module.exports = {
   PROMOTED_SCAN_GRACE_DAYS,
   promotedScanDeadline,
   isWithinPromotedGrace,
   mayCurationReadScan,
   stampPromotedScanRetention,
+  logCurationImageRead,
 };

@@ -2667,7 +2667,7 @@ const { promises: fsp } = require('fs');
 const { safeUploadPath } = require('../../services/imageProcessor');
 // ONE definition of "may curation read this label scan" — shared with the REST
 // image gate (routes/images.js) and the retention sweep.
-const { mayCurationReadScan, PROMOTED_SCAN_GRACE_DAYS } = require('../../services/labelScanAccess');
+const { mayCurationReadScan, PROMOTED_SCAN_GRACE_DAYS, logCurationImageRead } = require('../../services/labelScanAccess');
 
 // Downscale cap for the image blocks. 1024px on the longest edge is what a
 // vision model needs to read a wine label and is a large byte reduction on a
@@ -2954,6 +2954,17 @@ registerTool({
     if (included.length === 0) {
       return fail('unavailable', 'The stored photos for this wine could not be read right now — retry later, or judge the row on its text.');
     }
+
+    // Somebody's private photo is about to leave the platform for the
+    // curator's model provider — that leaves a record on this surface exactly
+    // as on the REST twin (audit 2026-09 M03-4).
+    logCurationImageRead(ctx.req, {
+      wineId: wine._id,
+      imageIds: included.map(i => i.image_id),
+      privateCount: included.filter(i => i.private).length,
+      scanCount: included.filter(i => i.kind === 'label-scan').length,
+      via: 'mcp',
+    });
 
     // Text part FIRST so the model reads the instruction before the pixels.
     return {

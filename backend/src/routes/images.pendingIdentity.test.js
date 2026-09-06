@@ -30,6 +30,7 @@ const BottleImage = require('../models/BottleImage');
 const Bottle = require('../models/Bottle');
 const WineDefinition = require('../models/WineDefinition');
 const imagesRouter = require('./images');
+const { logAudit } = require('../services/audit');
 
 const oid = (c) => c.repeat(24);
 const IMG = oid('6');
@@ -77,11 +78,17 @@ const image = (over = {}) => ({
  * — and outside that it is an ordinary private photo of a wine nobody has been
  * asked to identify.
  */
-test('a somm may read the LABEL SCAN of a wine that is still pending', async () => {
+test('a somm may read the LABEL SCAN of a wine that is still pending — and it leaves an audit row (audit M03-4)', async () => {
   BottleImage.findById.mockResolvedValue(image({ kind: 'label-scan', wineDefinition: W1 }));
   scanWine({ _id: W1, pendingIdentity: true });
 
   expect((await get(tokenFor(CURATOR, ['somm']))).status).toBe(200);
+  expect(logAudit).toHaveBeenCalledWith(
+    expect.anything(),
+    'image.curation_read',
+    { type: 'wine', id: W1 },
+    expect.objectContaining({ via: 'rest', imageIds: [IMG], scanCount: 1, privateCount: 1 })
+  );
 });
 
 test('…and on day 3 after promotion, so a wrong completion can be corrected against the label', async () => {
@@ -132,6 +139,7 @@ test('a somm may NOT read an ordinary private photo of a COMPLETE wine', async (
   WineDefinition.exists.mockResolvedValue(null); // not pending
 
   expect((await get(tokenFor(CURATOR, ['somm']))).status).toBe(404);
+  expect(logAudit).not.toHaveBeenCalledWith(expect.anything(), 'image.curation_read', expect.anything(), expect.anything());
 });
 
 test('a plain user gains nothing — not even on a pending wine', async () => {

@@ -49,7 +49,12 @@ registerTool({
     'Exports ALL owned cellars by default, or one when cellar_id is given. Set include_images to bundle the user\'s own ' +
     'uploaded photos as a ZIP (limited to once per week); otherwise a JSON file. Only cellars the user OWNS are exportable.',
   scope: 'read',
-  annotations: { readOnlyHint: true, openWorldHint: false },
+  // NOT read-only for the client: every call MINTS a bearer download link.
+  // Clients treat readOnlyHint as "no confirmation needed", which is exactly
+  // what a prompt-injected agent needs to mint the link silently and pass it
+  // to an attacker through any outbound tool argument (audit 2026-09 M02-1).
+  // One write-budget slot per call is the right price for that.
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
     cellar_id: z.string().regex(/^[a-f0-9]{24}$/i, 'must be a 24-hex id').optional()
       .describe('Export just this owned cellar. Omit to export all owned cellars.'),
@@ -100,7 +105,9 @@ registerTool({
     'Call for "export all my data", "GDPR export", "download everything you have about me", or right-to-portability requests. ' +
     'Limited to once per day. For just the wine collection, prefer export_cellar.',
   scope: 'write',
-  annotations: { readOnlyHint: true, openWorldHint: false },
+  // NOT read-only for the client — see export_cellar: the full-PII export
+  // link must go through the client's confirmation step (audit 2026-09 M02-1).
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {},
   handler: async (args, ctx) => {
     const { url, expiresAt } = await exportLinks().mintExportLink({

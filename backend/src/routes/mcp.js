@@ -170,7 +170,9 @@ router.post('/', requireMcpEnabled, mcpIpLimiter, mcpChallenge, requireAuth, req
       // counts the requests and the mutation budget is independent) — accepted,
       // see audit LOW-1.
       session.callState.calls = 0;
-      session.ctx.req = req;       // audit attribution follows the actual caller
+      // Attribution follows the actual caller; the request body does NOT
+      // stay pinned in the session (audit 2026-09 M01-1).
+      session.ctx.req = require('../mcp/requestSnapshot').snapshotRequest(req);
       return await session.transport.handleRequest(req, res, req.body);
     }
     if (session !== undefined) return res.status(404).json(SESSION_GONE);

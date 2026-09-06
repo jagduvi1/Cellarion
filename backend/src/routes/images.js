@@ -13,7 +13,7 @@ const { getCellarRole } = require('../utils/cellarAccess');
 const { processImage } = require('../services/imageProcessor');
 const { sanitizeImageBuffer } = require('../services/imageSanitizer');
 const { ingestBottleImage } = require('../services/imageOps');
-const { mayCurationReadScan } = require('../services/labelScanAccess');
+const { mayCurationReadScan, logCurationImageRead } = require('../services/labelScanAccess');
 const { isValidId } = require('../utils/validation');
 const { stripHtml } = require('../utils/sanitize');
 const rateLimitsConfig = require('../config/rateLimits');
@@ -313,6 +313,8 @@ router.get('/:id', requireAuth, async (req, res) => {
     // is never public). It does NOT open ordinary users' bottle galleries to
     // curators. The bytes themselves were always served by the unauthenticated
     // random-UUID static mount (app.js), so this is the one gate that mattered.
+    let curationRead = false;
+    let curationWineId = null;
     if (!authorized && (req.user.roles?.includes('somm') || req.user.roles?.includes('admin'))) {
       if (image.kind === 'label-scan') {
         // PURPOSE-BOUND, not blanket. A label scan is curation evidence while
@@ -328,6 +330,7 @@ router.get('/:id', requireAuth, async (req, res) => {
           ? await WineDefinition.findById(image.wineDefinition).select('pendingIdentity').lean()
           : null;
         authorized = mayCurationReadScan(scanWine, image);
+        curationRead = authorized;
       } else {
         // The photo may name the wine directly, or only the bottle it hangs
         // off (the plain AddBottle upload path) — resolve both.
@@ -339,8 +342,21 @@ router.get('/:id', requireAuth, async (req, res) => {
         const WineDefinition = require('../models/WineDefinition');
         if (wineId && await WineDefinition.exists({ _id: wineId, pendingIdentity: true })) {
           authorized = true;
+          curationRead = true;
+          curationWineId = wineId;
         }
       }
+    }
+    // A curator reading somebody's private photo or label scan leaves a
+    // record — same helper and action as the MCP twin (audit 2026-09 M03-4).
+    if (curationRead) {
+      logCurationImageRead(req, {
+        wineId: curationWineId || image.wineDefinition || null,
+        imageIds: [image._id],
+        privateCount: image.visibility !== 'public' ? 1 : 0,
+        scanCount: image.kind === 'label-scan' ? 1 : 0,
+        via: 'rest',
+      });
     }
 
     // User owns the bottle this image is attached to, or has cellar access
