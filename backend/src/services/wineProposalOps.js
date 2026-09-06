@@ -25,6 +25,16 @@ const { isValidId } = require('../utils/validation');
 const { TIER_DAILY, checkContributionGate } = require('./contributionGate');
 
 const FIELDS = ['producer', 'name', 'appellation', 'region', 'country', 'classification'];
+// Structural fields a user may also correct (support ticket 2026-09-06: the
+// sommelier tool had them since 6a85ad44, the user tool did not — a whole
+// class of registry errors, wrong grape lists, was unfixable from a connector).
+// `type` is validated against the wine-type enum; `grapes` REPLACES the whole
+// variety list and every name must already exist in the taxonomy — resolved
+// at filing so the user learns about a typo now, and again at approval.
+const EXTRA_FIELDS = ['type', 'grapes'];
+const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
+const GRAPES_MAX = 12;
+const GRAPE_NAME_MAX = 60;
 const REASON_MIN = 10;
 const REASON_MAX = 1000;
 const FIELD_MAX = 200;
@@ -59,8 +69,8 @@ async function createFieldCorrection(userId, { wineId, fields, reason, evidenceU
   const proposedFields = {};
   const src = fields || {};
   for (const f of Object.keys(src)) {
-    if (!FIELDS.includes(f)) {
-      return fail('invalid', `Unknown field "${f}" — correctable fields: ${FIELDS.join(', ')}.`);
+    if (!FIELDS.includes(f) && !EXTRA_FIELDS.includes(f)) {
+      return fail('invalid', `Unknown field "${f}" — correctable fields: ${[...FIELDS, ...EXTRA_FIELDS].join(', ')}.`);
     }
   }
   for (const f of FIELDS) {
@@ -71,6 +81,31 @@ async function createFieldCorrection(userId, { wineId, fields, reason, evidenceU
       return fail('invalid', `${f} must be at most ${FIELD_MAX} characters.`);
     }
     proposedFields[f] = v;
+  }
+  if (src.type !== undefined && src.type !== null) {
+    const t = String(src.type).trim().toLowerCase();
+    if (!WINE_TYPES.includes(t)) {
+      return fail('invalid', `type must be one of ${WINE_TYPES.join(', ')}.`);
+    }
+    proposedFields.type = t;
+  }
+  if (src.grapes !== undefined && src.grapes !== null) {
+    if (!Array.isArray(src.grapes) || src.grapes.length === 0 || src.grapes.length > GRAPES_MAX) {
+      return fail('invalid', `grapes must be a list of 1 to ${GRAPES_MAX} variety names — the complete corrected list, since it replaces the current one.`);
+    }
+    const names = src.grapes.map((g) => stripHtml(String(g == null ? '' : g)).trim()).filter(Boolean);
+    if (names.length === 0 || names.some((n) => n.length > GRAPE_NAME_MAX)) {
+      return fail('invalid', `Each grape name must be 1 to ${GRAPE_NAME_MAX} characters.`);
+    }
+    const { resolveGrapeIdsStrict } = require('./wineProfileOps');
+    const resolved = await resolveGrapeIdsStrict(names);
+    if (!resolved.ok) {
+      return fail('invalid',
+        `These grape names are not in the taxonomy: ${resolved.unmatched.map((g) => `"${g}"`).join(', ')}. ` +
+        'Check the spelling or use the grape\'s canonical name — a suggestion cannot create a variety.');
+    }
+    // Canonical names, so the admin diff shows what would actually be written.
+    proposedFields.grapes = resolved.names;
   }
   if (Object.keys(proposedFields).length === 0) {
     return fail('invalid', 'Suggest at least one changed field.');
@@ -87,7 +122,7 @@ async function createFieldCorrection(userId, { wineId, fields, reason, evidenceU
   const wine = await findVisibleWine(String(wineId), {
     userId,
     roles: req?.user?.roles || [],
-    populate: ['country', 'region'],
+    populate: ['country', 'region', 'grapes'],
   });
   if (!wine) return fail('not_found', 'Wine not found');
 
@@ -98,6 +133,8 @@ async function createFieldCorrection(userId, { wineId, fields, reason, evidenceU
     region: wine.region?.name || null,
     country: wine.country?.name || null,
     classification: wine.classification || null,
+    type: wine.type || null,
+    grapes: (wine.grapes || []).map((g) => (g && g.name) || String(g)),
   };
 
   let proposal;

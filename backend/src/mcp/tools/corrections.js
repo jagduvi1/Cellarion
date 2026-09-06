@@ -20,8 +20,10 @@ registerTool({
   name: 'suggest_wine_correction',
   title: 'Suggest a correction to a registry wine (admin-reviewed)',
   description:
-    'Files a SUGGESTION to fix identity fields on a shared registry wine — producer, name, appellation, region, ' +
-    'country, classification. Available to every user; nothing changes until an admin approves the diff. Give a ' +
+    'Files a SUGGESTION to fix a shared registry wine — the identity fields producer, name, appellation, region, ' +
+    'country, classification, and the structural fields type and grapes. `grapes` REPLACES the whole variety list ' +
+    '(send every variety the wine has, as on the label; names must exist in the taxonomy — describe_grape finds the ' +
+    'canonical one). Available to every user; nothing changes until an admin approves the diff. Give a ' +
     'reason saying what is wrong and how you know; an evidence URL (producer site, appellation register) makes ' +
     'one-click approval possible. Daily suggestion budget grows with the user\'s accepted contributions. ' +
     'NOT undoable via undo_last — an admin reads and decides. Sommeliers proposing merges or non-wine flags use ' +
@@ -37,6 +39,10 @@ registerTool({
       region: z.string().max(200).optional(),
       country: z.string().max(200).optional(),
       classification: z.string().max(200).optional(),
+      type: z.enum(['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified']).optional()
+        .describe('The wine\'s colour/style, when the record has it wrong'),
+      grapes: z.array(z.string().min(1).max(60)).min(1).max(12).optional()
+        .describe('The COMPLETE corrected variety list (replaces the current one); every name must already be in the taxonomy'),
     }).describe('Only the fields that should CHANGE, with their corrected values'),
     reason: z.string().min(10).max(1000).describe('What is wrong and how it was verified'),
     evidence_url: z.string().max(500).optional().describe('http(s) link backing the claim — strongly encouraged'),
