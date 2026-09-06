@@ -172,6 +172,43 @@ describe('segments family (12-3-4 / D-04-1 / 3.2)', () => {
   });
 });
 
+// Support ticket 2026-09-05: the same 1,354-bottle cellar turned out to type
+// its bins as "column,row" — the importer had read every "2,7" as row 2,
+// column 7. The order is the user's to declare; the codes cannot tell.
+describe('binOrder option (column,row cellars)', () => {
+  it('col-row swaps the two numeric segments, sub-rack codes included', () => {
+    const r = analyzeBinGroup(['2,7', '2,8', '3,1', '1,12'], { binOrder: 'col-row' });
+    expect(r.pattern).toBe('segments');
+    expect(r.qualifies).toBe(true);
+    expect(placementFor(r, 0)).toEqual({ index: 0, row: 7, col: 2 });
+    expect(placementFor(r, 3)).toEqual({ index: 3, row: 12, col: 1 });
+    expect(r.inferredRows).toBe(12);
+    expect(r.inferredCols).toBe(3);
+    const s = analyzeBinGroup(['12-3-4', '12-3-5', '13-1-1'], { binOrder: 'col-row' });
+    expect(placementFor(s, 0)).toEqual({ index: 0, subRack: '12', row: 4, col: 3 });
+  });
+
+  it('col-row reads a letter+number code as column letter, row number', () => {
+    const r = analyzeBinGroup(['A1', 'A2', 'B1', 'B3'], { binOrder: 'col-row' });
+    expect(r.pattern).toBe('letter-number');
+    expect(placementFor(r, 3)).toEqual({ index: 3, row: 3, col: 2 });
+    expect(r.inferredRows).toBe(3);
+    expect(r.inferredCols).toBe(2);
+  });
+
+  it('never touches codes that name their axes (R3C2) or sequential bins', () => {
+    const rc = analyzeBinGroup(['R3C2', 'R1C1', 'R2C4'], { binOrder: 'col-row' });
+    expect(placementFor(rc, 0)).toEqual({ index: 0, row: 3, col: 2 });
+    const seq = analyzeBinGroup(['147', '148', '149'], { binOrder: 'col-row' });
+    expect(placementFor(seq, 0)).toEqual({ index: 0, rackPosition: 147 });
+  });
+
+  it('row-col (the default) is unchanged', () => {
+    const r = analyzeBinGroup(['2,7', '2,8', '3,1'], { binOrder: 'row-col' });
+    expect(placementFor(r, 0)).toEqual({ index: 0, row: 2, col: 7 });
+  });
+});
+
 // ---------------------------------------------------------------------------
 // sequential — 147, BIN1
 // ---------------------------------------------------------------------------

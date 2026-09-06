@@ -1565,7 +1565,7 @@ function splitCSVLine(line, delimiter = ',') {
  *   (leftovers of single-rack groups are reported on the rack's own card
  *   via `unparsedCount` instead).
  */
-export function applyCtRackAutoMap(items) {
+export function applyCtRackAutoMap(items, opts = {}) {
   const groupIndexes = new Map(); // location -> [item index]
   items.forEach((item, i) => {
     if (!item || typeof item !== 'object') return;
@@ -1582,7 +1582,8 @@ export function applyCtRackAutoMap(items) {
 
   for (const [loc, idxs] of groupIndexes) {
     const analysis = analyzeBinGroups(
-      idxs.map((i) => ({ location: loc, bin: items[i]._ctBin || '' }))
+      idxs.map((i) => ({ location: loc, bin: items[i]._ctBin || '' })),
+      opts
     )[loc];
 
     if (!analysis?.qualifies) {
@@ -2092,7 +2093,7 @@ export function parsePlocFiles(texts) {
  * @throws Error with code 'ct-error-page' for HTML error pages, or
  *   'ct-availability' for CT's Availability statistics table.
  */
-export function parseAndMap(text, forceFormat) {
+export function parseAndMap(text, forceFormat, opts = {}) {
   // Strip BOM
   const cleaned = text.replace(/^\uFEFF/, '');
 
@@ -2196,7 +2197,9 @@ export function parseAndMap(text, forceFormat) {
   // transient _ctLocation/_ctBin markers from every item.
   let ctRackAutoMap = null;
   if (format === 'cellartracker') {
-    const autoMap = applyCtRackAutoMap(items);
+    // opts.ctBinOrder: 'row-col' (default) | 'col-row' — the user's declaration
+    // of how their bins are typed (support ticket 2026-09-05).
+    const autoMap = applyCtRackAutoMap(items, { binOrder: opts.ctBinOrder });
     if (Object.keys(autoMap.racks).length > 0 || autoMap.textFallback.length > 0) {
       ctRackAutoMap = autoMap;
     }
