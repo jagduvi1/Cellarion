@@ -201,6 +201,34 @@ describe('createWineRequest', () => {
     expect((await createWineRequest(UID, { wineName: 'X', sourceUrl: 'https://x.com', image: 'd'.repeat(500001) })).error.status).toBe(400);
   });
 
+  test('accepts only http(s) links, inline images and own upload paths as the image (audit F06-1)', async () => {
+    const submit = (image) => createWineRequest(UID, { wineName: 'X', sourceUrl: 'https://x.com', image });
+    expect((await submit('https://img.example.com/a.png')).wineRequest.image).toBe('https://img.example.com/a.png');
+    expect((await submit('data:image/png;base64,iVBORw0KGgo=')).wineRequest.image).toBe('data:image/png;base64,iVBORw0KGgo=');
+    expect((await submit('/api/uploads/abc-123.png')).wineRequest.image).toBe('/api/uploads/abc-123.png');
+    expect((await submit('')).wineRequest.image).toBeNull();
+    expect((await submit('//attacker.example/a.png')).error.status).toBe(400);
+    expect((await submit('javascript:alert(1)')).error.status).toBe(400);
+    expect((await submit('http://10.0.0.1/a.png')).error.message).toMatch(/private\/internal/);
+    expect((await submit('data:text/html;base64,PHNjcmlwdD4=')).error.status).toBe(400);
+    expect((await submit('/api/uploads/../../etc/passwd')).error.status).toBe(400);
+    expect((await submit('/etc/passwd')).error.status).toBe(400);
+    expect((await submit('label.png')).error.status).toBe(400);
+  });
+
+  test('an own-origin upload URL passes when FRONTEND_URL names that origin', async () => {
+    const prev = process.env.FRONTEND_URL;
+    process.env.FRONTEND_URL = 'http://192.168.1.10';
+    try {
+      const own = await createWineRequest(UID, { wineName: 'X', sourceUrl: 'https://x.com', image: 'http://192.168.1.10/api/uploads/abc.png' });
+      expect(own.wineRequest.image).toBe('http://192.168.1.10/api/uploads/abc.png');
+      const other = await createWineRequest(UID, { wineName: 'X', sourceUrl: 'https://x.com', image: 'http://192.168.1.10/etc/passwd' });
+      expect(other.error.status).toBe(400);
+    } finally {
+      if (prev === undefined) delete process.env.FRONTEND_URL; else process.env.FRONTEND_URL = prev;
+    }
+  });
+
   test('creates a pending new_wine request, trimming the name', async () => {
     const res = await createWineRequest(UID, { wineName: '  Barolo Riserva  ', sourceUrl: 'https://vivino.com/w/1' });
     expect(res.error).toBeUndefined();

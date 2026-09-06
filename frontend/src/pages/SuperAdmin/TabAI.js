@@ -804,6 +804,8 @@ export default function TabAI() {
   const [enrichMsg, setEnrichMsg] = useState(null);
 
   async function startJob() {
+    // A full run re-sends the whole registry to the provider (audit 2026-09 F05-2).
+    if (jobMode === 'full' && !window.confirm('Re-embed EVERY registry wine? This re-sends the whole registry to the embedding provider and can take hours. Continue?')) return;
     setJobBusy(true); setJobMsg(null);
     try {
       // Content-Type header is required — without it Express's express.json()
@@ -833,6 +835,8 @@ export default function TabAI() {
   }
 
   async function startEnrich() {
+    // A full run is one AI call per registry wine (audit 2026-09 F05-2).
+    if (enrichMode === 'full' && !window.confirm('Re-enrich EVERY registry wine? This calls the AI provider once per wine — hours of runtime and real cost. Continue?')) return;
     setEnrichBusy(true); setEnrichMsg(null);
     try {
       const limitNum = parseInt(enrichLimit, 10);

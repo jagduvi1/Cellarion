@@ -1,3 +1,5 @@
+import { API_URL } from '../api/apiConstants';
+
 // Module-level frontend cache — avoids repeated API calls within the same session
 let ratesCache = null;
 let ratesFetchedAt = 0;   // time of the last SUCCESSFUL fetch
@@ -5,7 +7,10 @@ let lastAttemptAt = 0;    // time of the last attempt (success or failure)
 const FRONTEND_CACHE_TTL = 60 * 60 * 1000; // 1 hour on success
 const FAILURE_BACKOFF = 5 * 60 * 1000;     // negative-cache window after a failure
 /**
- * Fetch USD-based exchange rates from open.er-api.com (CORS-enabled, free, no key).
+ * Fetch USD-based exchange rates from OUR backend (GET /api/exchange-rates),
+ * which keeps one daily snapshot from its upstream provider. The browser no
+ * longer talks to the provider itself, so no visitor IP leaves the site for
+ * this (audit 2026-09 F03-4).
  * Returns a rates object like { USD: 1, EUR: 0.92, SEK: 10.5, ... }
  * Returns null on error — callers should degrade gracefully.
  */
@@ -21,10 +26,10 @@ export async function fetchRates() {
   }
   lastAttemptAt = now;
   try {
-    const res = await fetch('https://open.er-api.com/v6/latest/USD');
+    const res = await fetch(`${API_URL}/api/exchange-rates`);
     if (!res.ok) return ratesCache;
     const data = await res.json();
-    if (data.result !== 'success' || !data.rates) return ratesCache;
+    if (!data || typeof data.rates !== 'object' || !data.rates) return ratesCache;
     ratesCache = data.rates; // already includes USD: 1
     ratesFetchedAt = Date.now();
     return ratesCache;

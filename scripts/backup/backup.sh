@@ -61,6 +61,10 @@ EXTRA_CONFIG_PATHS="${EXTRA_CONFIG_PATHS:-}"
 UMAMI_DB_CONTAINER="${UMAMI_DB_CONTAINER:-}"
 
 log() { echo "[backup] $(date -Is) $*"; }
+# Credentials in the repository string (rest:/s3: forms carry user:pass@) must
+# not reach the database or the super-admin console — the status document only
+# says WHERE the backups go, never how to open them (audit 2026-09 F05-5).
+redact_repo() { printf '%s' "$1" | sed -E 's#(://)[^/@[:space:]]*@#\1***@#g'; }
 ping_fail() {
   [ -n "$HEALTHCHECK_URL" ] && curl -fsS -m 10 --retry 3 "${HEALTHCHECK_URL%/}/fail" >/dev/null 2>&1 || true
 }
@@ -87,7 +91,7 @@ record_status() {
     --arg     latestSnapshotTime "$latest" \
     --argjson repoSizeBytes     "${size:-null}" \
     --arg     host              "$(hostname)" \
-    --arg     repo              "$RESTIC_REPOSITORY" \
+    --arg     repo              "$(redact_repo "$RESTIC_REPOSITORY")" \
     --arg     error             "$err" \
     '{status:$status, lastRunAt:$lastRunAt, durationSec:$durationSec,
       snapshotCount:$snapshotCount, latestSnapshotTime:$latestSnapshotTime,

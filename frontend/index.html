@@ -13,12 +13,9 @@
     <link rel="preload" as="image" href="/cellarion-logo-light.webp" type="image/webp" media="(prefers-color-scheme: light)" fetchpriority="high" />
     <link rel="preload" as="image" href="/cellarion-logo-dark.webp"  type="image/webp" media="(prefers-color-scheme: dark)"  fetchpriority="high" />
 
-    <!-- Fonts: Playfair Display (headings) + Inter (body) -->
-    <!-- preload downloads the CSS early; the stylesheet link is non-blocking because it hits cache immediately -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet" />
+    <!-- Fonts: Playfair Display (headings) + Inter (body) are bundled with the app
+         (@fontsource, imported in src/index.js) and served from this origin — no
+         request to Google Fonts leaves the visitor's browser. -->
 
     <!-- Open Graph / Social sharing -->
     <meta property="og:type" content="website" />
@@ -36,7 +33,7 @@
       https://analytics.cellarion.app so the self-hosted tracker can load and POST.
       If you self-host Umami at a different subdomain, update both lists.
     -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' https://analytics.cellarion.app; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' blob: data: https:; connect-src 'self' https://open.er-api.com https://analytics.cellarion.app; frame-src https://www.youtube.com https://www.youtube-nocookie.com;" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' https://analytics.cellarion.app; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' blob: data: https:; connect-src 'self' https://analytics.cellarion.app; frame-src https://www.youtube.com https://www.youtube-nocookie.com;" />
 
     <!--
       Search engine webmaster verification.

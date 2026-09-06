@@ -114,6 +114,12 @@ function PrivacyPolicy() {
               <td>Global (EU/US)</td>
             </tr>
             <tr>
+              <td>Google (Sign in with Google)</td>
+              <td>Optional single sign-on — used only if you choose to sign in with your Google account</td>
+              <td>The e-mail address, name and account identifier of the Google account you sign in with; Google separately learns that you signed in to Cellarion</td>
+              <td>US</td>
+            </tr>
+            <tr>
               <td>Hetzner</td>
               <td>Server hosting for cellarion.app, and storage for the primary encrypted backup</td>
               <td>Everything the service holds: your account, cellars, bottles and uploaded images</td>
@@ -133,7 +139,9 @@ function PrivacyPolicy() {
           (vector storage for AI cellar chat), <strong>rembg</strong> (image background removal),
           and <strong>Umami</strong> (privacy-friendly, cookieless usage analytics). Self-hosted
           Cellarion instances run all of these themselves; the hosted cellarion.app additionally
-          uses Stripe, Voyage AI and Cloudflare as noted above.
+          uses Stripe, Voyage AI, Cloudflare and Google sign-in as noted above. The site's fonts are
+          served from our own server, and currency exchange rates are fetched by our server once a
+          day — your browser does not contact those providers.
         </p>
 
         <h3>AI assistants you connect (MCP)</h3>
@@ -209,7 +217,7 @@ function PrivacyPolicy() {
 
         <h2>10. International data transfers</h2>
         <p>
-          Some of our sub-processors (Mailgun, Anthropic, Voyage AI, Stripe, Cloudflare) are based in
+          Some of our sub-processors (Mailgun, Anthropic, Voyage AI, Stripe, Cloudflare, Google) are based in
           or route traffic through the United States. Where personal data is transferred outside the
           EU/EEA, we ensure appropriate safeguards are in place, such as Standard Contractual Clauses
           (SCCs) or the EU-US Data Privacy Framework.

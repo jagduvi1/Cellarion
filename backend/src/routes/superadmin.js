@@ -23,6 +23,7 @@ const { isEmbeddingConfigured, embeddingProviderName } = require('../services/em
 const { updateSiteConfig } = require('../utils/siteConfig');
 const { parsePagination } = require('../utils/pagination');
 const { escapeRegex } = require('../utils/sanitize');
+const { redactUrlCredentials } = require('../utils/redactUrl');
 const { coerceStringQuery } = require('../utils/validation');
 const { SYSTEM_PROMPT_MAX_LENGTH, SCAN_PROMPT_MAX_LENGTH, CONSUMED_STATUSES } = require('../config/constants');
 
@@ -345,7 +346,10 @@ router.get('/backups', async (req, res) => {
     const ageHours = lastRunAt ? (Date.now() - lastRunAt.getTime()) / 3600000 : null;
     // Daily schedule → never-run or older than ~26h counts as stale.
     const stale = ageHours == null || ageHours > 26;
-    res.json({ configured: true, stale, ageHours, ...doc });
+    // The job records the repository string it used. If an operator ever puts
+    // credentials in it (rest:https://user:pass@host/…) they must not reach the
+    // browser (audit 2026-09 F05-5) — the script redacts too, this is the backstop.
+    res.json({ configured: true, stale, ageHours, ...doc, repo: redactUrlCredentials(doc.repo) });
   } catch (error) {
     console.error('[superadmin] backups error:', error);
     res.status(500).json({ error: 'Failed to load backup status' });

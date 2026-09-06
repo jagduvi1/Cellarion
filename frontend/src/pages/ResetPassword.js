@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import CellarionLogo from '../components/CellarionLogo';
@@ -6,7 +6,7 @@ import './Login.css';
 
 function ResetPassword() {
   const { t } = useTranslation();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const [password, setPassword] = useState('');
@@ -14,7 +14,15 @@ function ResetPassword() {
   const [status, setStatus] = useState('idle'); // 'idle' | 'submitting' | 'success' | 'error'
   const [errorMessage, setErrorMessage] = useState('');
 
-  const token = searchParams.get('token');
+  // Read the one-time token ONCE, then take it out of the address bar so it
+  // does not linger in browser history, in the Referer of any outbound link,
+  // or in an analytics pageview (audit 2026-09 F03-6). State survives the URL
+  // change; the form posts the captured value.
+  const [token] = useState(() => searchParams.get('token'));
+  useEffect(() => {
+    if (searchParams.has('token')) setSearchParams(new URLSearchParams(), { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

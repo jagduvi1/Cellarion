@@ -72,7 +72,7 @@ function Message({ msg }) {
       <div className={`cellar-chat__bubble${msg.thinking ? ' cellar-chat__bubble--thinking' : ''}`}>
         {isUser || msg.thinking
           ? msg.text
-          : <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{msg.text}</ReactMarkdown>
+          : <ReactMarkdown rehypePlugins={[rehypeSanitize]} disallowedElements={['img']} unwrapDisallowed>{msg.text}</ReactMarkdown>
         }
       </div>
       {msg.expandedQuery && <ExpandedQueryHint text={msg.expandedQuery} />}

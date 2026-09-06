@@ -275,7 +275,9 @@ function AddToWishlist() {
   // or from a wine page's "Add to Wishlist" link (?wine=<id> query param).
   useEffect(() => {
     const restock = location.state?.fromRestock;
-    const wineParam = new URLSearchParams(location.search).get('wine');
+    const rawWineParam = new URLSearchParams(location.search).get('wine');
+    // Only a well-formed id may be interpolated into the API path (audit 2026-09 F01-2).
+    const wineParam = /^[a-f0-9]{24}$/i.test(rawWineParam || '') ? rawWineParam : null;
     const wineId = restock?.wineId || wineParam;
     if (!wineId) return;
     let cancelled = false;
