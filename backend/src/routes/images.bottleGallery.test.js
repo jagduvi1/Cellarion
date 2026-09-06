@@ -93,15 +93,16 @@ describe('the uploader branch', () => {
     expect(wineFilter).toEqual({ wineDefinition: WINE, status: 'approved', visibility: 'public' });
   });
 
-  test('a row the server returns comes through untouched (regression guard for the shape)', async () => {
+  test('a row the server returns keeps its public fields, gains `mine`, and loses reviewer/reporter identities (audit 2026-09 D05-1)', async () => {
     const live = { _id: oid('d'), processedUrl: '/api/uploads/processed/live.png', originalUrl: null, status: 'approved' };
+    const withIdentities = { ...live, uploadedBy: USER, reviewedBy: oid('e'), reviewedAt: new Date().toISOString(), reports: [{ by: oid('f') }], contentHash: 'h' };
     BottleImage.find
-      .mockReturnValueOnce(makeQuery([live]))
+      .mockReturnValueOnce(makeQuery([withIdentities]))
       .mockReturnValueOnce(makeQuery([]));
 
     const res = await get(`/api/images/bottle/${BOTTLE}`, tokenFor(USER, ['user']));
     const body = await res.json();
-    expect(body.images).toEqual([live]);
+    expect(body.images).toEqual([{ ...live, mine: true }]);
     expect(body.defaultImageId).toBeNull();
   });
 });

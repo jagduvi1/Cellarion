@@ -46,6 +46,25 @@ const {
 const { safeUploadPath } = require('../services/imageProcessor');
 const { logAudit } = require('../services/audit');
 const eventBus = require('../services/eventBus');
+const rateLimit = require('express-rate-limit');
+const { rateLimitKey } = require('../utils/clientIp');
+
+// Audit 2026-09 D05-4: the full account export spans ~40 collections at up to
+// 50k rows each and had no per-user throttle. Three an hour is more than any
+// person needs and stops a looping script; keyed on the account so a shared
+// address is not punished. Kept separate from the MCP export-link claim
+// (lastAccountExportAt) so a web download never blocks a connector export.
+const accountExportLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  keyGenerator: (req) => (req.user?.id ? `u:${req.user.id}` : rateLimitKey(req)),
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    logAudit(req, 'system.rate_limit_exceeded', { type: 'user', id: req.user?.id }, { limiter: 'accountExport', limit: 3 });
+    res.status(429).json({ error: 'Account exports are limited to three per hour. Please try again later.' });
+  },
+});
 const { CURRENT_PRIVACY_POLICY_VERSION } = require('../config/legal');
 const { stripHtml, escapeRegex } = require('../utils/sanitize');
 const { isValidId, coerceStringQuery } = require('../utils/validation');
@@ -277,7 +296,7 @@ router.get('/public/:userId', requireAuth, async (req, res) => {
 // services/userDataRegistry.js (EXPORT_MAX there) — the single source of
 // truth shared with the deletion job. The admin user list lives at
 // /api/admin/users (routes/admin/users.js).
-router.get('/me/export', requireAuth, async (req, res) => {
+router.get('/me/export', requireAuth, accountExportLimiter, async (req, res) => {
   const userId = req.user.id;
   try {
     const user = await User.findById(userId);
@@ -287,6 +306,11 @@ router.get('/me/export', requireAuth, async (req, res) => {
     // source of truth shared with the deletion job — see
     // services/userDataRegistry.js).
     const exportData = await buildUserExport(userId, user);
+    // Audit 2026-09 S1-1: the cellar exports and the MCP twin already leave a
+    // row; the one export that carries ALL of a person's data did not.
+    logAudit(req, 'user.account_export', { type: 'user', id: userId }, {
+      via: 'web', collections: Object.keys(exportData || {}).length, truncated: !!exportData?._truncated,
+    });
 
     res.setHeader('Content-Disposition', `attachment; filename="cellarion-data-export-${user.username}.json"`);
     res.setHeader('Content-Type', 'application/json');

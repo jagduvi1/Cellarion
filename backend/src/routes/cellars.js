@@ -1536,6 +1536,10 @@ router.delete('/:id', async (req, res) => {
 // requireNonDemo: inviting a member sends an email to an arbitrary address — an
 // outbound-email/PII spam vector a throwaway demo must not have. A demo user can
 // explore a populated cellar but can't invite others to it.
+// Audit 2026-09 D11-1: invitations per account per rolling 24 h. A household
+// shares a handful of cellars with a handful of people; twenty is generous.
+const INVITES_PER_DAY = 20;
+
 router.post('/:id/members', requireNonDemo, async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
@@ -1552,7 +1556,13 @@ router.post('/:id/members', requireNonDemo, async (req, res) => {
     const cellar = await Cellar.findOne({ _id: req.params.id, user: req.user.id, deletedAt: null });
     if (!cellar) return res.status(404).json({ error: 'Cellar not found' });
 
-    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedEmail = String(email).toLowerCase().trim();
+    // Audit 2026-09 D11-1: the invite path relays attacker-chosen text (the
+    // cellar name) to any mailbox. Only real addresses, and no more than
+    // INVITES_PER_DAY invitations per account per rolling day.
+    if (normalizedEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      return res.status(400).json({ error: 'A valid email address is required' });
+    }
 
     // Look up user by email
     const userToAdd = await User.findOne({ email: normalizedEmail });
@@ -1569,6 +1579,12 @@ router.post('/:id/members', requireNonDemo, async (req, res) => {
         return res.status(400).json({ error: 'An invitation has already been sent to this email' });
       }
 
+      const sentToday = await PendingShare.countDocuments({ invitedBy: req.user.id, createdAt: { $gte: new Date(Date.now() - 24 * 3600e3) } });
+      if (sentToday >= INVITES_PER_DAY) {
+        logAudit(req, 'system.rate_limit_exceeded', { type: 'cellar', id: cellar._id }, { limiter: 'cellarInvites', limit: INVITES_PER_DAY });
+        return res.status(429).json({ error: 'Too many invitations sent today. Please try again tomorrow.' });
+      }
+
       const sharingUser = await User.findById(req.user.id).select('username email').lean();
 
       await PendingShare.create({
@@ -1582,7 +1598,7 @@ router.post('/:id/members', requireNonDemo, async (req, res) => {
         normalizedEmail,
         sharingUser?.username ?? 'A Cellarion user',
         sharingUser?.email ?? '',
-        cellar.name,
+        String(cellar.name || '').slice(0, 100),
         role
       ).catch(err => {
         console.error('Failed to send cellar invite email:', err.message);

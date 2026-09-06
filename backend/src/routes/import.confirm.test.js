@@ -44,6 +44,13 @@ jest.mock('../utils/vintageProfile', () => ({
 
 jest.mock('../models/Cellar', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineDefinition', () => ({ findById: jest.fn(), find: jest.fn() }));
+// Audit 2026-09 D02-3: confirm resolves wines through the visibility helper;
+// these tests describe the confirm behaviour, not the visibility rule, so
+// route it back to the findById mock the cases already configure.
+jest.mock('../services/wineVisibility', () => ({
+  wineVisibilityFilter: () => ({}),
+  findVisibleWine: (id) => require('../models/WineDefinition').findById(id),
+}));
 jest.mock('../models/Country', () => ({ findOne: jest.fn() }));
 jest.mock('../models/ImportSession', () => ({}));
 

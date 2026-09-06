@@ -134,7 +134,7 @@ describe('DiscussionReply purge — quote.authorName erasure (L-17)', () => {
     // 1) own replies re-pointed to the [deleted] sentinel
     expect(calls).toContainEqual([
       { author: 'u1' },
-      { $set: { author: 'del1' } },
+      { $set: { author: 'del1', deletedBody: null } },
     ]);
     // 2) quotes carrying the user's id: name scrubbed, id re-pointed
     expect(calls).toContainEqual([

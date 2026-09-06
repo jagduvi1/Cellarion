@@ -11,6 +11,7 @@ const { runSecurityAlertCheck } = require('./securityAlertJob');
 const { runClimateOfflineCheck } = require('./climateOfflineJob');
 const { runDemoSweep } = require('./demoSweepJob');
 const { runRegistryHealthCheck } = require('./registryHealthJob');
+const DiscussionReply = require('../models/DiscussionReply');
 const embeddingJob = require('./embeddingJob');
 
 /**
@@ -67,6 +68,14 @@ function startScheduler() {
       await runCellarRetentionPurge();
     } catch (err) {
       console.error('[scheduler] Cellar retention purge failed:', err);
+    }
+    // Audit 2026-09 S3-3: the original text of a soft-deleted forum reply is
+    // kept 30 days for moderation and was then kept forever — the purge
+    // helper existed but nothing called it.
+    try {
+      await DiscussionReply.purgeExpiredDeletes();
+    } catch (err) {
+      console.error('[scheduler] Soft-deleted reply purge failed:', err);
     }
   });
 

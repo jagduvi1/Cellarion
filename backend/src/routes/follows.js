@@ -110,7 +110,7 @@ router.get('/:userId/followers', async (req, res) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate('follower', 'username displayName bio'),
+        .populate('follower', 'username displayName bio profileVisibility'),
       Follow.countDocuments({ following: req.params.userId })
     ]);
 
@@ -121,10 +121,16 @@ router.get('/:userId/followers', async (req, res) => {
     const myFollows = await Follow.find({ follower: req.user.id, following: { $in: userIds } }).select('following');
     const followingSet = new Set(myFollows.map(f => f.following.toString()));
 
-    const enriched = users.map(u => ({
-      ...u.toObject(),
-      isFollowing: followingSet.has(u._id.toString())
-    }));
+    // Audit 2026-09 O01-3: only a public profile shows its bio here; the
+    // visibility flag itself never leaves the server.
+    const enriched = users.map(u => {
+      const { profileVisibility, ...rest } = u.toObject();
+      return {
+        ...rest,
+        bio: profileVisibility === 'public' ? rest.bio : undefined,
+        isFollowing: followingSet.has(u._id.toString())
+      };
+    });
 
     res.json({ users: enriched, total, page, pages: Math.ceil(total / limit) });
   } catch (err) {
@@ -147,7 +153,7 @@ router.get('/:userId/following', async (req, res) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate('following', 'username displayName bio'),
+        .populate('following', 'username displayName bio profileVisibility'),
       Follow.countDocuments({ follower: req.params.userId })
     ]);
 
@@ -158,10 +164,16 @@ router.get('/:userId/following', async (req, res) => {
     const myFollows = await Follow.find({ follower: req.user.id, following: { $in: userIds } }).select('following');
     const followingSet = new Set(myFollows.map(f => f.following.toString()));
 
-    const enriched = users.map(u => ({
-      ...u.toObject(),
-      isFollowing: followingSet.has(u._id.toString())
-    }));
+    // Audit 2026-09 O01-3: only a public profile shows its bio here; the
+    // visibility flag itself never leaves the server.
+    const enriched = users.map(u => {
+      const { profileVisibility, ...rest } = u.toObject();
+      return {
+        ...rest,
+        bio: profileVisibility === 'public' ? rest.bio : undefined,
+        isFollowing: followingSet.has(u._id.toString())
+      };
+    });
 
     res.json({ users: enriched, total, page, pages: Math.ceil(total / limit) });
   } catch (err) {

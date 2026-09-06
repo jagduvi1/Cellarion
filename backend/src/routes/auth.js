@@ -271,7 +271,15 @@ router.post('/login', authLimiter, async (req, res) => {
     }
 
     if (!user) {
-      logAudit(req, 'auth.login.failed', {}, { identifier: username });
+      // Audit 2026-09 D04-4: the typed identifier is attacker-chosen text and
+      // often a real e-mail from a breach list; every admin can read the audit
+      // log. Keep what forensics needs — shape + a short hash to correlate
+      // repeats — never the raw string.
+      const typed = String(username || '').trim().toLowerCase().slice(0, 254);
+      logAudit(req, 'auth.login.failed', {}, {
+        identifierType: typed.includes('@') ? 'email' : 'username',
+        identifierHash: crypto.createHash('sha256').update(typed).digest('hex').slice(0, 16),
+      });
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 

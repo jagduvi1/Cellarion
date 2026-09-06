@@ -431,7 +431,9 @@ const REGISTRY = [
     purge: async (ctx) => {
       const ownReplyIds = await DiscussionReply.distinct('_id', { author: ctx.userId });
       await Promise.all([
-        DiscussionReply.updateMany({ author: ctx.userId }, { $set: { author: ctx.deletedUserId } }),
+        // deletedBody: the original text of the user's own soft-deleted
+        // replies does not survive their erasure (audit 2026-09 S3-3).
+        DiscussionReply.updateMany({ author: ctx.userId }, { $set: { author: ctx.deletedUserId, deletedBody: null } }),
         DiscussionReply.updateMany(
           { 'quote.authorId': ctx.userId },
           { $set: { 'quote.authorName': '[deleted]', 'quote.authorId': ctx.deletedUserId } }

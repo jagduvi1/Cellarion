@@ -20,7 +20,9 @@ const aiProvider = require('../services/aiProvider');
 const { findOrCreateWine } = require('../services/findOrCreateWine');
 const { scoreWineMatchVariants, stripProducerPrefix } = require('../services/wineMatching');
 const { conflictingStyleTerms, pradikatOnlyValue, pradikatContradictsName } = require('../utils/styleTerms');
-const { wineVisibilityFilter } = require('../services/wineVisibility');
+const { wineVisibilityFilter, findVisibleWine } = require('../services/wineVisibility');
+// Audit 2026-09 D13-12: parse-time warnings are bounded before they are stored.
+const { sanitizeImportWarnings } = require('../utils/importWarnings');
 const { tryDebitAi, isRefundableFailure } = require('../services/aiBudget');
 const rateLimitsConfig = require('../config/rateLimits');
 const { generateWineKey } = require('../utils/normalize');
@@ -1468,7 +1470,9 @@ router.post('/confirm', async (req, res) => {
             errors.push({ index: i, reason: 'Invalid wine definition ID' });
             continue;
           }
-          const wishWine = await WineDefinition.findById(item.wineDefinition);
+          // Audit 2026-09 D02-3: the registry's pendingIdentity visibility
+          // rule applies here as everywhere else (services/wineVisibility.js).
+          const wishWine = await findVisibleWine(item.wineDefinition, { userId: req.user.id, roles: req.user.roles });
           if (!wishWine) {
             errors.push({ index: i, reason: 'Wine definition not found' });
             continue;
@@ -1640,7 +1644,7 @@ router.post('/confirm', async (req, res) => {
             errors.push({ index: i, reason: 'Invalid wine definition ID' });
             continue;
           }
-          wineDoc = await WineDefinition.findById(item.wineDefinition);
+          wineDoc = await findVisibleWine(item.wineDefinition, { userId: req.user.id, roles: req.user.roles });
           if (!wineDoc) {
             errors.push({ index: i, reason: 'Wine definition not found' });
             continue;
@@ -1875,7 +1879,7 @@ router.post('/confirm', async (req, res) => {
         fileName: typeof req.body.fileName === 'string' ? req.body.fileName.slice(0, 260) : undefined,
         detectedFormat: typeof req.body.detectedFormat === 'string' ? req.body.detectedFormat.slice(0, 40) : undefined,
         detectedEncoding: typeof req.body.detectedEncoding === 'string' ? req.body.detectedEncoding.slice(0, 40) : undefined,
-        importWarnings: Array.isArray(req.body.importWarnings) ? req.body.importWarnings.slice(0, 20) : [],
+        importWarnings: sanitizeImportWarnings(req.body.importWarnings),
         rows,
         rowCount: items.length,
         rowsTruncated: items.length > ARCHIVE_ROW_CAP,
@@ -1963,7 +1967,7 @@ router.post('/sessions', async (req, res) => {
       positionAnchor: positionAnchor || 'top-left',
       rackConfigs: rackConfigs || {},
       defaultCurrency: defaultCurrency || 'USD',
-      importWarnings: Array.isArray(importWarnings) ? importWarnings : [],
+      importWarnings: sanitizeImportWarnings(importWarnings),
       detectedEncoding: detectedEncoding || undefined,
       ctTable: ctTable || undefined,
       ctTextFallback: Array.isArray(ctTextFallback) ? ctTextFallback : []
@@ -2104,7 +2108,7 @@ router.put('/sessions/:id', async (req, res) => {
     if (defaultCurrency !== undefined) session.defaultCurrency = defaultCurrency;
     // Parse-time notices/metadata — persisted so the ct-truncated banner (and
     // the encoding/table/fallback notes) survive a resume.
-    if (importWarnings !== undefined) session.importWarnings = importWarnings;
+    if (importWarnings !== undefined) session.importWarnings = sanitizeImportWarnings(importWarnings);
     if (detectedEncoding !== undefined) session.detectedEncoding = detectedEncoding;
     if (ctTable !== undefined) session.ctTable = ctTable;
     if (ctTextFallback !== undefined) session.ctTextFallback = ctTextFallback;

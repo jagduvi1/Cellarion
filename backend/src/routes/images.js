@@ -214,7 +214,17 @@ router.get('/bottle/:bottleId', requireAuth, async (req, res) => {
       wineImages = wineImages.filter(img => !bottleImageIds.has(img._id.toString()));
     }
 
-    const images = [...bottleImages, ...wineImages];
+    // Audit 2026-09 D05-1: the gallery is read by every cellar member, viewers
+    // included, and returned whole documents — uploader, reviewer and reporter
+    // identities of every public wine photo. The page needs the picture, its
+    // credit and state, and whether the photo is the caller's own.
+    const me = String(req.user.id);
+    const publicImage = (doc) => {
+      const o = typeof doc.toObject === 'function' ? doc.toObject() : { ...doc };
+      const { uploadedBy, reviewedBy, reviewedAt, reports, reportedAt, contentHash, retainUntil, ...rest } = o;
+      return { ...rest, mine: uploadedBy != null && String(uploadedBy) === me };
+    };
+    const images = [...bottleImages, ...wineImages].map(publicImage);
 
     // Sort default image first if the bottle has one set
     if (bottle.defaultImage) {

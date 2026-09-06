@@ -67,6 +67,9 @@ router.post('/test', async (req, res) => {
   }
 });
 
+// Audit 2026-09 S4-3: devices per account; the oldest is evicted past this.
+const MAX_PUSH_SUBSCRIPTIONS = 10;
+
 // POST /api/push-subscriptions — save a new push subscription
 router.post('/', async (req, res) => {
   try {
@@ -77,6 +80,19 @@ router.post('/', async (req, res) => {
 
     const safeEndpoint = String(endpoint);
     const safeKeys = { p256dh: String(keys.p256dh), auth: String(keys.auth) };
+    // Audit 2026-09 S4-3: every notification fans out to every subscription,
+    // each a VAPID-signed HTTPS POST to a host the CLIENT chose. Push
+    // services are https-only, and a person has a handful of devices — keep
+    // the newest MAX_PUSH_SUBSCRIPTIONS and evict the oldest beyond that.
+    if (safeEndpoint.length > 2048 || !/^https:\/\//i.test(safeEndpoint)) {
+      return res.status(400).json({ error: 'Push endpoint must be an https URL' });
+    }
+    const others = await PushSubscription.find({ user: req.user.id, endpoint: { $ne: safeEndpoint } })
+      .sort({ _id: 1 }).select('_id').lean();
+    if (others.length >= MAX_PUSH_SUBSCRIPTIONS) {
+      const evict = others.slice(0, others.length - MAX_PUSH_SUBSCRIPTIONS + 1).map((s) => s._id);
+      await PushSubscription.deleteMany({ _id: { $in: evict } });
+    }
 
     // Scope the upsert to the caller so the common path (a user re-subscribing
     // their own device) can't be turned into an IDOR by filtering on endpoint
