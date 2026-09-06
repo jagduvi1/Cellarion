@@ -205,6 +205,38 @@ function AdminRequests() {
     setLinkSearch('');
     setLinkResults([]);
     setAiLookup({ loading: false, error: null });
+    selectedIdRef.current = request._id;
+    prefillFromHints(request);
+  };
+
+  // What the import FILE said about the wine (request.hints — country,
+  // region, appellation, type) pre-fills the create form the same way an AI
+  // lookup does, so the curator starts from the file's geography instead of
+  // re-deriving it (support ticket 2026-09-05). Bails if another request was
+  // selected while the region list was loading (selectedIdRef is the page's
+  // existing "which request is open" ref).
+  const prefillFromHints = async (request) => {
+    const hints = request.hints;
+    if (!hints || !(hints.country || hints.region || hints.appellation || hints.type)) return;
+    const patch = {};
+    if (hints.type && WINE_TYPES.includes(hints.type)) patch.type = hints.type;
+    if (hints.appellation) patch.appellation = hints.appellation;
+    const country = hints.country ? countries.find(c => c.name.toLowerCase() === hints.country.toLowerCase()) : null;
+    if (country) patch.country = country._id;
+    setResolveData(prev => ({ ...prev, wineData: { ...prev.wineData, ...patch } }));
+    if (!country) return;
+    try {
+      const regRes = await adminGetRegions(apiFetch, country._id);
+      const regData = await regRes.json();
+      if (selectedIdRef.current !== request._id) return;
+      if (regRes.ok) {
+        setRegions(regData.regions);
+        const region = hints.region ? regData.regions.find(r => r.name.toLowerCase() === hints.region.toLowerCase()) : null;
+        if (region) setResolveData(prev => ({ ...prev, wineData: { ...prev.wineData, region: region._id } }));
+      }
+    } catch {
+      // A failed region load only costs the prefill; the curator picks by hand.
+    }
   };
 
   const handleAiLookup = async () => {
@@ -446,6 +478,12 @@ function AdminRequests() {
                     <a href={safeUrl(selected.sourceUrl) || undefined} target="_blank" rel="noopener noreferrer">
                       {selected.sourceUrl}
                     </a>
+                  </p>
+                )}
+                {selected.hints && (selected.hints.country || selected.hints.region || selected.hints.appellation || selected.hints.type) && (
+                  <p>
+                    <strong>{t('admin.requests.fromFile', 'From the import file')}:</strong>{' '}
+                    {[selected.hints.country, selected.hints.region, selected.hints.appellation, selected.hints.type].filter(Boolean).join(' · ')}
                   </p>
                 )}
                 {displayableImage(selected.image) && (

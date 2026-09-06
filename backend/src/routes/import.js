@@ -43,6 +43,7 @@ const { validatePriceSanity } = require('../utils/priceValidation');
 const { computeUserMediansByCurrency } = require('../services/priceWarnings');
 const { runConcurrent } = require('../utils/concurrency');
 const WineRequest = require('../models/WineRequest');
+const { findOrCreatePendingRequest, pickImportHints } = require('../services/wineRequestIntake');
 const WishlistItem = require('../models/WishlistItem');
 const ImportSession = require('../models/ImportSession');
 const ImportArchive = require('../models/ImportArchive');
@@ -1534,26 +1535,20 @@ router.post('/confirm', async (req, res) => {
             continue;
           }
 
-          const requestKey = `${(item.wineName || '').trim().toLowerCase()}|${(item.producer || '').trim().toLowerCase()}`;
-          let wineRequest = pendingRequestCache.get(requestKey);
-
-          if (!wineRequest) {
-            // Optional import-supplied grape names ride along as suggestions —
-            // the admin sees them when resolving the request and decides which
-            // taxonomy grapes the new wine definition gets (registry integrity:
-            // imports never write taxonomy directly on this path).
-            const suggestedGrapes = sanitizeGrapeNames(item.grapes);
-            wineRequest = new WineRequest({
-              requestType: 'new_wine',
-              wineName: String(item.wineName).trim(),
-              producer: (item.producer || '').trim() || undefined,
-              user: req.user.id,
-              status: 'pending',
-              ...(suggestedGrapes.length > 0 ? { suggestedGrapes } : {})
-            });
-            await wineRequest.save();
-            pendingRequestCache.set(requestKey, wineRequest);
-          }
+          // One request per user + wine + producer, REUSED across imports
+          // (a re-import used to mint a second pending request for every
+          // wine still waiting), carrying the file's geography/type as hints
+          // for the curator. Import-supplied grape names ride along as
+          // suggestions — the admin decides which taxonomy grapes the new
+          // wine definition gets (imports never write taxonomy on this path).
+          const { wineRequest } = await findOrCreatePendingRequest({
+            userId: req.user.id,
+            wineName: item.wineName,
+            producer: item.producer,
+            suggestedGrapes: sanitizeGrapeNames(item.grapes),
+            hints: pickImportHints(item),
+            cache: pendingRequestCache,
+          });
 
           // Validate rating if provided — the frontend sends rating/ratingScale
           // for request-wine rows too; dropping them here silently lost the
