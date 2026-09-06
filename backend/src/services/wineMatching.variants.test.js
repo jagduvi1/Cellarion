@@ -131,3 +131,85 @@ describe('helpers', () => {
     expect(stripProducerPrefix('Anything', '')).toBeNull();
   });
 });
+
+// ── Appellation-first names + bracketed producers (registry backlog 2026-09-06) ──
+//
+// Real rows from a CellarTracker re-import: 44 requests, every one for a wine
+// that already existed. CT composes "Wine" as producer + appellation +
+// designation, so after producer-stripping the name still leads with the
+// appellation; producers carry a parenthetical the registry does not.
+const {
+  stripAppellationPrefix,
+  stripProducerBrackets,
+  importQueryVariants,
+} = require('./wineMatching');
+
+describe('appellation-first import rows reach the exact threshold against their registry wine', () => {
+  const cases = [
+    ['Muga Prado Enea', { name: 'Rioja Prado Enea Gran Reserva', producer: 'Bodegas Muga', appellation: 'Rioja' },
+      { name: 'Prado Enea Gran Reserva', producer: 'Muga', appellation: 'Rioja' }],
+    ['Magari (bracketed producer)', { name: 'Magari', producer: "Ca' Marcanda (Gaja)", appellation: 'Bolgheri' },
+      { name: 'Magari', producer: "Ca' Marcanda", appellation: 'Bolgheri' }],
+    ['Cavallotto Bricco Boschis', { name: 'Barolo Bricco Boschis', producer: 'Cavallotto', appellation: 'Barolo' },
+      { name: 'Bricco Boschis', producer: 'Cavallotto', appellation: 'Barolo' }],
+    ['Château Lagrange (St. Julien)', { name: 'Château Lagrange (St. Julien)', producer: 'Château Lagrange (St. Julien)', appellation: 'Saint-Julien' },
+      { name: 'Château Lagrange', producer: 'Château Lagrange', appellation: 'Saint-Julien' }],
+    ['Xisto Cru Branco (region hint only)', { name: 'Douro Xisto Cru Branco', producer: 'Luís Seabra Vinhos', appellation: 'Douro', region: 'Douro' },
+      { name: 'Xisto Cru Branco', producer: 'Luis Seabra Vinhos', appellation: 'Douro' }],
+    ['Fonterutoli (DOCG suffix on the hint)', { name: 'Chianti Classico Castello di Fonterutoli Gran Selezione', producer: 'Marchesi Mazzei', appellation: 'Chianti Classico DOCG' },
+      { name: 'Castello di Fonterutoli Gran Selezione', producer: 'Marchesi Mazzei', appellation: 'Chianti Classico' }],
+  ];
+  test.each(cases)('%s', (_label, row, registry) => {
+    expect(scoreWineMatchVariants(registry, row)).toBeGreaterThanOrEqual(EXACT);
+    // Monotonic: never below the raw scorer.
+    expect(scoreWineMatchVariants(registry, row)).toBeGreaterThanOrEqual(scoreWineMatch(registry, row));
+  });
+
+  test('the registry side may carry the bracket instead', () => {
+    const registry = { name: 'Chapelle des Bois', producer: "Jean-Louis Dutraive (Domaine de la Grand'Cour)", appellation: 'Fleurie' };
+    const row = { name: 'Fleurie Chapelle des Bois', producer: 'Jean-Louis Dutraive', appellation: 'Fleurie' };
+    expect(scoreWineMatchVariants(registry, row)).toBeGreaterThanOrEqual(EXACT);
+  });
+
+  test('negative: a different wine of the same producer and appellation does not cross-match', () => {
+    const registry = { name: 'Prado Enea Gran Reserva', producer: 'Muga', appellation: 'Rioja' };
+    expect(scoreWineMatchVariants(registry, { name: 'Rioja Reserva', producer: 'Bodegas Muga', appellation: 'Rioja' })).toBeLessThan(0.85);
+    expect(scoreWineMatchVariants(registry, { name: 'Rioja Torre Muga', producer: 'Bodegas Muga', appellation: 'Rioja' })).toBeLessThan(0.85);
+  });
+
+  test('negative: same appellation-first name, different producer, stays a soft candidate at most', () => {
+    const registry = { name: '1er Cru Beauroy', producer: "Domaine de l'Enclos", appellation: 'Chablis Premier Cru' };
+    expect(scoreWineMatchVariants(registry, { name: 'Chablis 1er Cru Beauroy', producer: 'Domaine Laroche', appellation: 'Chablis 1er Cru' })).toBeLessThan(EXACT);
+  });
+});
+
+describe('the helpers', () => {
+  test('stripAppellationPrefix strips the hint head, folds tier suffixes, and refuses bare styles', () => {
+    expect(stripAppellationPrefix('Rioja Prado Enea Gran Reserva', 'Rioja')).toBe('prado enea gran reserva');
+    expect(stripAppellationPrefix('Chianti Classico Castello di Fonterutoli', 'Chianti Classico DOCG')).toBe('castello di fonterutoli');
+    expect(stripAppellationPrefix('Rioja Reserva', 'Rioja')).toBeNull();          // a style is not a name
+    expect(stripAppellationPrefix('Rioja', 'Rioja')).toBeNull();                  // nothing left
+    expect(stripAppellationPrefix('Riojana Cuvée', 'Rioja')).toBeNull();          // word boundary
+    expect(stripAppellationPrefix('Prado Enea', '')).toBeNull();
+  });
+  test('stripProducerBrackets removes only a trailing parenthetical', () => {
+    expect(stripProducerBrackets("Ca' Marcanda (Gaja)")).toBe("Ca' Marcanda");
+    expect(stripProducerBrackets('Château Lagrange (St. Julien)')).toBe('Château Lagrange');
+    expect(stripProducerBrackets('Muga')).toBeNull();
+    expect(stripProducerBrackets('(Unknown)')).toBeNull();
+  });
+  test('importQueryVariants yields the raw query, then the cleaned one, without duplicates', () => {
+    expect(importQueryVariants({ producer: 'Bodegas Muga', wineName: 'Rioja Prado Enea Gran Reserva', appellation: 'Rioja' }))
+      .toEqual(['Bodegas Muga Rioja Prado Enea Gran Reserva', 'Bodegas Muga prado enea gran reserva']);
+    expect(importQueryVariants({ producer: 'Muga', wineName: 'Prado Enea', appellation: 'Rioja' })).toEqual(['Muga Prado Enea']);
+  });
+});
+
+describe('the vineyard-as-appellation guard', () => {
+  test('a Mosel row whose CT "appellation" is the single vineyard keeps the vineyard in the name', () => {
+    expect(stripAppellationPrefix('Wehlener Sonnenuhr Riesling Auslese', 'Wehlener Sonnenuhr')).toBeNull();
+    expect(stripAppellationPrefix('Wehlener Sonnenuhr Riesling Auslese Goldkapsel', 'Wehlener Sonnenuhr')).toBe('riesling auslese goldkapsel');
+    const registry = { name: 'Wehlener Sonnenuhr Riesling Auslese', producer: 'Joh. Jos. Prüm', appellation: 'Wehlener Sonnenuhr' };
+    expect(scoreWineMatchVariants(registry, { name: 'Wehlener Sonnenuhr Riesling Auslese', producer: 'Joh. Jos. Prüm', appellation: 'Wehlener Sonnenuhr' })).toBeGreaterThanOrEqual(EXACT);
+  });
+});

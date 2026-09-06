@@ -11,6 +11,7 @@ import {
   parseVivinoDrinkWindow,
   isVivinoScanHistory,
   splitClassificationFromName,
+  stripAppellationPrefixFromName,
 } from './importMappers';
 
 // ---------------------------------------------------------------------------
@@ -1044,5 +1045,30 @@ describe('classification reaches the mapped item', () => {
   it('generic rows: an explicit Classification column is honoured when the name is clean', () => {
     const { items } = parseAndMap('Wine,Producer,Classification,Vintage\nPavillon Rouge,Château Margaux,Second Vin,2018\n');
     expect(items[0]).toMatchObject({ wineName: 'Pavillon Rouge', classification: 'Second Vin' });
+  });
+});
+
+describe('stripAppellationPrefixFromName (registry backlog 2026-09-06)', () => {
+  it('drops an appellation that opens the name, keeping the file spelling', () => {
+    expect(stripAppellationPrefixFromName('Rioja Prado Enea Gran Reserva', { appellation: 'Rioja' })).toBe('Prado Enea Gran Reserva');
+    expect(stripAppellationPrefixFromName('Barolo Bricco Boschis', { appellation: 'Barolo' })).toBe('Bricco Boschis');
+    expect(stripAppellationPrefixFromName('Chianti Classico Castello di Fonterutoli Gran Selezione', { appellation: 'Chianti Classico DOCG' })).toBe('Castello di Fonterutoli Gran Selezione');
+    expect(stripAppellationPrefixFromName('Beaune 1er Cru Grèves Les Trois Journaux', { appellation: 'Beaune 1er Cru' })).toBe('Grèves Les Trois Journaux');
+  });
+  it('falls back to the region hint and prefers the Designation column verbatim', () => {
+    expect(stripAppellationPrefixFromName('Douro Xisto Cru Branco', { appellation: '', region: 'Douro' })).toBe('Xisto Cru Branco');
+    expect(stripAppellationPrefixFromName('Rioja Prado Enea Gran Reserva', { appellation: 'Rioja', designation: 'Prado Enea Gran Reserva' })).toBe('Prado Enea Gran Reserva');
+  });
+  it('leaves bare styles, whole-name hints and non-matching names alone', () => {
+    expect(stripAppellationPrefixFromName('Rioja Reserva', { appellation: 'Rioja' })).toBe('Rioja Reserva');
+    expect(stripAppellationPrefixFromName('Rioja', { appellation: 'Rioja' })).toBe('Rioja');
+    expect(stripAppellationPrefixFromName('Riojana Cuvée', { appellation: 'Rioja' })).toBe('Riojana Cuvée');
+    expect(stripAppellationPrefixFromName('Magari', { appellation: 'Bolgheri' })).toBe('Magari');
+    expect(stripAppellationPrefixFromName('', { appellation: 'Rioja' })).toBe('');
+  });
+  it('keeps a single-vineyard "appellation" in the name (Mosel rows)', () => {
+    // CT files the Einzellage as the Appellation; the registry keeps it in the name.
+    expect(stripAppellationPrefixFromName('Wehlener Sonnenuhr Riesling Auslese', { appellation: 'Wehlener Sonnenuhr', region: 'Mosel' })).toBe('Wehlener Sonnenuhr Riesling Auslese');
+    expect(stripAppellationPrefixFromName('Wehlener Sonnenuhr Riesling Auslese Goldkapsel', { appellation: 'Wehlener Sonnenuhr' })).toBe('Riesling Auslese Goldkapsel');
   });
 });
