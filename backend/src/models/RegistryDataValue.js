@@ -69,7 +69,7 @@ const registryDataValueSchema = new mongoose.Schema({
   reason: { type: String, trim: true, maxlength: 1000 },
   decidedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   decidedAt: { type: Date, default: null },
-  rejectReason: { type: String, trim: true, maxlength: 2000 } // 500 was too short for a real explanation (registry backlog 2026-09-06),
+  rejectReason: { type: String, trim: true, maxlength: 2000 }, // 500 was too short for a real explanation (registry backlog 2026-09-06)
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
