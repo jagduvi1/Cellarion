@@ -189,6 +189,15 @@ function predicate(field, op, value, castOne) {
   if (field.type === 'date' && (field.source === 'bottle' || field.source === 'wine')) {
     return datePredicate(field, op, value, castOne);
   }
+  // Text equality is case-insensitive and anchored — "gaja" must find "Gaja"
+  // exactly as the taxonomy path already does (support ticket 2026-09-05: a
+  // typed Producer "=" filter looked broken because it was byte-exact).
+  // Only 'text' takes this path: enum values are whitelisted already, and
+  // numbers, dates and booleans compare as before.
+  if (field.type === 'text' && (op === 'eq' || op === 'neq')) {
+    const rx = { $regex: `^${escapeRegex(castOne(value))}$`, $options: 'i' };
+    return op === 'eq' ? rx : { $not: rx };
+  }
   switch (op) {
     case 'eq': return castOne(value);
     case 'neq': return { $ne: castOne(value) };
@@ -246,10 +255,13 @@ async function taxonomyIds(field, op, value) {
  * semantics exactly; a mismatch between the two is a bug the KV filter tests
  * exist to catch.
  */
+// Mirrors predicate(): text compares case-insensitively, everything else strictly.
+const looseEq = (a, b) => (typeof a === 'string' && typeof b === 'string' ? a.toLowerCase() === b.toLowerCase() : a === b);
+
 function evalKvPredicate(op, castValue, entryValue) {
   switch (op) {
-    case 'eq': return entryValue === castValue;
-    case 'neq': return entryValue !== castValue;
+    case 'eq': return looseEq(entryValue, castValue);
+    case 'neq': return !looseEq(entryValue, castValue);
     case 'gt': return entryValue > castValue;
     case 'gte': return entryValue >= castValue;
     case 'lt': return entryValue < castValue;

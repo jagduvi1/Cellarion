@@ -4514,7 +4514,6 @@
     }
   },
   "analytics": {
-    "tableView": "Table view",
     "columns": "Columns",
     "exportCsv": "Export CSV",
     "exporting": "Exporting…",
@@ -4590,7 +4589,13 @@
     "beta": "Beta",
     "betaHint": "Analytics is new and still settling in. If a number looks wrong or something misbehaves, please tell us via Support — it helps more than you would think.",
     "dashboardTitle": "Dashboard",
-    "dashboardHint": "Widgets come from the analytics table: open a cellar, switch to the table view, group something interesting, and press \"Add to dashboard\".",
+    "tabs": {
+      "boards": "Boards",
+      "table": "Table"
+    },
+    "tabsAria": "Analytics sections",
+    "openTable": "Open the analytics table",
+    "dashboardHint": "Widgets come from the Table tab: group something interesting there and press \"Add to dashboard\".",
     "addToDashboard": "Add to dashboard",
     "widgetTitlePrompt": "Name this dashboard widget:",
     "removeWidget": "Remove widget",
@@ -4614,7 +4619,7 @@
     "deleteDashboardConfirm": "Delete the dashboard \"{{name}}\"? Its widgets are gone for good.",
     "defaultBoardName": "My cellar",
     "defaultBoard": "default",
-    "emptyBoard": "This dashboard is empty — pin views to it from the analytics table.",
+    "emptyBoard": "This dashboard is empty — pin views to it from the Table tab.",
     "andMore": "…and {{n}} more",
     "chartMeasure": "Chart shows:",
     "summarize": "Summarize",
