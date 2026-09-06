@@ -167,6 +167,15 @@ export default function TabUsers() {
   }
 
   async function changeRoles(userId, newRoles) {
+    // Granting or revoking a privileged role is one checkbox click away from
+    // a mis-tap — confirm it first (audit 2026-09 F05-1).
+    const target = data?.users?.find(u => u._id === userId);
+    const before = new Set(target?.roles || []);
+    const after = new Set(newRoles);
+    const changes = ['admin', 'somm']
+      .filter(r => before.has(r) !== after.has(r))
+      .map(r => `${after.has(r) ? 'Grant' : 'Revoke'} ${r}`);
+    if (changes.length > 0 && !window.confirm(`${changes.join(', ')} for ${target?.username || target?.email || userId}?`)) return;
     setUpdating(prev => ({ ...prev, [userId + '_roles']: true }));
     try {
       const res = await adminChangeUserRoles(apiFetch, userId, newRoles);

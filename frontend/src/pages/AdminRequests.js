@@ -8,6 +8,8 @@ import {
 import { searchWines, getAiWineInfo } from '../api/wines';
 import { WINE_TYPES } from '../config/wineTypes';
 import GrapePicker from '../components/GrapePicker';
+import safeUrl from '../utils/safeUrl';
+import displayableImage from '../utils/displayableImage';
 import './AdminRequests.css';
 
 function AdminRequests() {
@@ -173,6 +175,11 @@ function AdminRequests() {
   const handleSelectRequest = (request) => {
     setSelected(request);
     setRegions([]);
+    // The requester chose the image value. Only a link or one of our upload
+    // paths is offered to the approval form — never an inline image (too big
+    // for the field) and never an unrecognised shape (audit 2026-09 F06-1).
+    const requestImage = displayableImage(request.image);
+    const prefillImage = requestImage && !requestImage.startsWith('data:') ? requestImage : '';
     setResolveData({
       mode: request.requestType === 'grape_suggestion' ? 'apply_grapes' : 'create',
       adminNotes: '',
@@ -186,7 +193,7 @@ function AdminRequests() {
         type: 'red',
         appellation: '',
         grapes: [],
-        image: (request.image && !request.image.startsWith('data:')) ? request.image : ''
+        image: prefillImage
       }
     });
     // Cancel any pending/in-flight duplicate check from the previous request
@@ -436,13 +443,13 @@ function AdminRequests() {
                 ) : (
                   <p>
                     <strong>{t('common.source')}:</strong>{' '}
-                    <a href={selected.sourceUrl} target="_blank" rel="noopener noreferrer">
+                    <a href={safeUrl(selected.sourceUrl) || undefined} target="_blank" rel="noopener noreferrer">
                       {selected.sourceUrl}
                     </a>
                   </p>
                 )}
-                {selected.image && (
-                  <img src={selected.image} alt="Wine" className="wine-image-preview" />
+                {displayableImage(selected.image) && (
+                  <img src={displayableImage(selected.image)} alt="Wine" className="wine-image-preview" />
                 )}
                 {selected.requestType !== 'grape_suggestion' && selected.status === 'pending' && (
                   <div className="ai-lookup-row">

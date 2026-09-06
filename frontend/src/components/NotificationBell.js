@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useNotifications } from '../contexts/NotificationContext';
 import timeAgo from '../utils/timeAgo';
+import internalPath from '../utils/internalPath';
 import './NotificationBell.css';
 
 export default function NotificationBell() {
@@ -27,7 +28,10 @@ export default function NotificationBell() {
   async function handleItemClick(n) {
     setOpen(false);
     if (!n.read) await markRead(n._id);
-    if (n.link) navigate(n.link);
+    // The link is server-built, but it is data — only ever navigate within
+    // the app (audit 2026-09 F03-5).
+    const to = internalPath(n.link);
+    if (to) navigate(to);
   }
 
   return (

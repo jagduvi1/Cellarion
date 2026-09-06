@@ -57,7 +57,14 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const link = event.notification.data?.link;
+  // The link is server-built, but it is data: only ever open this origin
+  // (audit 2026-09 F03-5).
+  const raw = event.notification.data?.link;
+  let link = null;
+  try {
+    const target = raw ? new URL(String(raw), self.location.origin) : null;
+    if (target && target.origin === self.location.origin) link = target.href;
+  } catch { link = null; }
   if (link) {
     event.waitUntil(
       self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {

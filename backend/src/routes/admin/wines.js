@@ -12,6 +12,7 @@ const {
   normalizeAppellation
 } = require('../../utils/normalize');
 const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
+const { validateImageRef } = require('../../services/accountOps');
 const { scoreWineMatch } = require('../../services/wineMatching');
 const { conflictingStyleTerms } = require('../../utils/styleTerms');
 const { sameProducerAppellationGroups, nearProducerPairs, nameSubsetPairs } = require('../../services/registryFragmentation');
@@ -239,6 +240,12 @@ router.post('/', async (req, res) => {
 
     // Generate normalized key for deduplication
     const normalizedKey = generateWineKey(cleanName, producerToStore, cleanAppellation);
+
+    // The image lands on a public page and in every viewer's AuthImage, so it
+    // has to be a real http(s) link, an inline image or one of our own upload
+    // paths (audit 2026-09 S7-1 / F06-1).
+    const imageErr = validateImageRef(image);
+    if (imageErr) return res.status(400).json({ error: `Wine image: ${imageErr}` });
 
     const wine = new WineDefinition({
       name: cleanName,
@@ -1445,6 +1452,8 @@ router.put('/:id', async (req, res) => {
     // label-scan URL bug left wines in this state after Remove default image).
     if (image !== undefined) {
       if (image) {
+        const imageErr = validateImageRef(image);
+        if (imageErr) return res.status(400).json({ error: `Wine image: ${imageErr}` });
         wine.image = image;
       } else {
         const replacement = await BottleImage.findOne({

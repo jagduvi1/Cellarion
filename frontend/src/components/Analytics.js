@@ -18,6 +18,12 @@ import { Helmet } from 'react-helmet-async';
 // no useful SEO/marketing data and recording them pollutes the dashboard with noise.
 // Note: Umami fires before React's ProtectedRoute can redirect, so a non-admin who
 // visits /admin/* would otherwise be recorded even though they never see the content.
+//
+// Query strings and fragments are never reported (data-exclude-search /
+// data-exclude-hash): password-reset and e-mail-verification links carry a
+// one-time token in the query, and the OAuth consent page carries the request
+// (audit 2026-09 F03-6). Those routes are also excluded outright below, so the
+// tracker is not even loaded on them.
 
 const EXCLUDED_PREFIXES = [
   '/admin',
@@ -25,6 +31,9 @@ const EXCLUDED_PREFIXES = [
   '/settings',
   '/cellars',
   '/users',
+  '/reset-password',
+  '/verify-email',
+  '/connect-ai/authorize',
 ];
 
 export default function Analytics() {
@@ -63,6 +72,8 @@ export default function Analytics() {
         defer
         src={`${url.replace(/\/$/, '')}/script.js`}
         data-website-id={websiteId}
+        data-exclude-search="true"
+        data-exclude-hash="true"
       />
     </Helmet>
   );

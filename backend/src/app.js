@@ -74,6 +74,7 @@ const wineListPublicRoute = require('./routes/wineListPublic');
 const sitemapRoute = require('./routes/sitemap');
 const ogRoute = require('./routes/og');
 const taxonomyRoute = require('./routes/taxonomy');
+const exchangeRatesRoute = require('./routes/exchangeRates');
 const stripeRoute = require('./routes/stripe');
 const tokensRoute = require('./routes/tokens');
 const eventsRoute = require('./routes/events');
@@ -340,6 +341,9 @@ app.use('/api/forum-languages', forumLanguagesRoute);
 app.use('/api/push-subscriptions', pushSubscriptionsRoute);
 app.use('/api/blog', blogRoute);
 app.use('/api/taxonomy', taxonomyRoute);
+// Exchange rates for the price UI — served from the backend's daily snapshot so
+// the browser never contacts the upstream provider itself (audit 2026-09 F03-4).
+app.use('/api/exchange-rates', exchangeRatesRoute);
 app.use('/api/wishlist', wishlistRoute);
 app.use('/api/recommendations', recommendationsRoute);
 app.use('/api/journal', journalRoute);

@@ -15,6 +15,7 @@ const { stripHtml } = require('../../utils/sanitize');
 const { incrementCred } = require('../../utils/cellarCred');
 const { parsePagination } = require('../../utils/pagination');
 const { isValidId } = require('../../utils/validation');
+const { validateImageRef } = require('../../services/accountOps');
 const { ensurePendingVintageProfile } = require('../../utils/vintageProfile');
 
 const router = express.Router();
@@ -123,6 +124,17 @@ router.put('/:id/resolve', async (req, res) => {
         return res.status(400).json({ error: 'Invalid country' });
       }
 
+      // Image: an explicitly blank field means "no image" — it must NOT fall
+      // back to the requester's value (audit 2026-09 F06-1). Whatever is
+      // stored has to pass the same http(s) / inline-image / own-upload check
+      // as intake, so a protocol-relative or javascript: reference can never
+      // reach WineDefinition.image through an approval.
+      const imageToStore = (image === '' || image === null) ? null : (image ?? wineRequest.image ?? null);
+      const imageErr = validateImageRef(imageToStore);
+      if (imageErr) {
+        return res.status(400).json({ error: `Wine image: ${imageErr}` });
+      }
+
       const cleanProducer = producer.trim();
       const cleanName = canonicalizeWineName(name, cleanProducer);
       // Tier-strip AND curated-registry resolve — this branch bulk-builds the
@@ -191,7 +203,7 @@ router.put('/:id/resolve', async (req, res) => {
         appellation: cleanAppellation,
         grapes: grapes || [],
         type: type || null, // no guessed red (ticket 6a85ad44)
-        image: image || wineRequest.image || null,
+        image: imageToStore,
         normalizedKey,
         createdBy: req.user.id,
         createdVia: 'ui'

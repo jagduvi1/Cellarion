@@ -623,7 +623,7 @@ function BottleDetail() {
           })()}
 
           <div className="bd-ai-prose">
-            <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{wine.aiProfile.description}</ReactMarkdown>
+            <ReactMarkdown rehypePlugins={[rehypeSanitize]} disallowedElements={['img']} unwrapDisallowed>{wine.aiProfile.description}</ReactMarkdown>
           </div>
 
           {wine.aiProfile.foodPairings?.length > 0 && (

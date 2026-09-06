@@ -279,6 +279,55 @@ function validateSourceUrl(url) {
 }
 
 /**
+ * Validate an image reference attached to a wine request, or copied from one
+ * into the registry when an admin approves it. Exactly three shapes pass:
+ *   - an http(s) URL that clears the same public-host check as sourceUrl;
+ *   - an inline `data:image/<type>;base64,…` payload (a label photo captured
+ *     in the request form);
+ *   - one of our own upload paths (`/api/uploads/<file>`, or that path on the
+ *     FRONTEND_URL origin — what the request form sends after background
+ *     removal).
+ * Anything else — a protocol-relative `//host/x`, `javascript:`, a bare word
+ * — is refused. Until audit 2026-09 (F06-1) such a value flowed verbatim into
+ * WineDefinition.image on approval, where every viewer's AuthImage would have
+ * fetched it with the bearer token attached.
+ * Returns an error string, or null when the value is acceptable (empty is fine).
+ */
+const MAX_IMAGE_REF_LENGTH = 500000;
+const UPLOAD_PATH = /^\/api\/uploads\/[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/;
+const DOT_SEGMENT = /\/\.\.?(?:\/|$)/;
+const INLINE_IMAGE = /^data:image\/(?:png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/;
+
+function isOwnUploadPath(pathname) {
+  return UPLOAD_PATH.test(pathname) && !DOT_SEGMENT.test(pathname);
+}
+
+function isOwnUploadUrl(value) {
+  const base = process.env.FRONTEND_URL;
+  if (!base) return false;
+  try {
+    const target = new URL(value);
+    return target.origin === new URL(base).origin && isOwnUploadPath(target.pathname);
+  } catch {
+    return false;
+  }
+}
+
+function validateImageRef(image) {
+  if (image == null || image === '') return null;
+  if (typeof image !== 'string') return 'Image must be an http(s) link or an inline image';
+  if (image.length > MAX_IMAGE_REF_LENGTH) return 'Image reference is too large';
+  if (INLINE_IMAGE.test(image)) return null;
+  if (image.startsWith('/')) {
+    return isOwnUploadPath(image) ? null : 'Image must be an http(s) link or an inline image';
+  }
+  if (isOwnUploadUrl(image)) return null;
+  const urlErr = validateSourceUrl(image);
+  if (urlErr) return `Image must be an http(s) link or an inline image (${urlErr})`;
+  return null;
+}
+
+/**
  * Validate + create a `new_wine` WineRequest (the fallback when resolve_wine
  * dead-ends and the user can't confirm enough to mint a registry entry). Returns
  * { wineRequest } or { error }. The grape_suggestion request type is deliberately
@@ -295,9 +344,8 @@ async function createWineRequest(userId, { wineName, sourceUrl, image } = {}) {
   if (trimmedName.length > 300) {
     return { error: err(400, 'Wine name must be 300 characters or fewer') };
   }
-  if (trimmedImage.length > 500000) {
-    return { error: err(400, 'Image reference is too large') };
-  }
+  const imageErr = validateImageRef(trimmedImage);
+  if (imageErr) return { error: err(400, imageErr) };
 
   const wineRequest = new WineRequest({
     requestType: 'new_wine',
@@ -321,6 +369,7 @@ module.exports = {
   TICKET_REPLY_CAP,
   createWineRequest,
   validateSourceUrl,
+  validateImageRef,
   // Exposed so the MCP tool descriptions/schemas can enumerate the same options.
   ALLOWED_CURRENCIES,
   LANGUAGE_TAG,

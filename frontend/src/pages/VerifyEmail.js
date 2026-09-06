@@ -7,7 +7,7 @@ import './Login.css';
 
 function VerifyEmail() {
   const { t } = useTranslation();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { verifyEmail } = useAuth();
   const navigate = useNavigate();
 
@@ -30,6 +30,9 @@ function VerifyEmail() {
       setErrorMessage(t('auth.noVerifyToken'));
       return;
     }
+    // The token has been read — drop it from the address bar so it is not
+    // kept in history or reported anywhere (audit 2026-09 F03-6).
+    setSearchParams(new URLSearchParams(), { replace: true });
 
     verifyEmail(token).then(result => {
       if (result.success) {
