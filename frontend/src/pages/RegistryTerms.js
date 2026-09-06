@@ -6,10 +6,10 @@ import './PrivacyPolicy.css';
 // Registry Data Terms (registry lockdown 2026-09-06, layer L6). The code is
 // AGPL; the shared registry's curated content — tasting profiles, drink
 // windows, sommelier notes, curated values — is not, and this page is where
-// that is said. Wording is a DRAFT pending a legal check (Johan's decision 3);
-// the mechanics it describes (per-reader budgets, terms-bound keys) ship
-// regardless. Reuses the privacy page's layout so the two legal pages read
-// as one set.
+// that is said, in plain language: house rules for an open-source project,
+// not a contract drafted by counsel (Johan, 2026-09-06). The mechanics it
+// describes (per-reader budgets, terms-bound keys) are what actually holds.
+// Reuses the privacy page's layout so the two legal pages read as one set.
 function RegistryTerms() {
   return (
     <div className="privacy-page">
@@ -28,7 +28,7 @@ function RegistryTerms() {
       </Helmet>
       <div className="privacy-container">
         <h1>Registry Data Terms</h1>
-        <p className="privacy-updated">Version 2026-09 — draft, effective on publication</p>
+        <p className="privacy-updated">Version 2026-09</p>
 
         <p>
           Cellarion's code is open source under the AGPL-3.0 licence. The <strong>shared wine
@@ -81,15 +81,15 @@ function RegistryTerms() {
           Cellarion holds copyright in the registry's original text and images, and the
           database right under Directive 96/9/EC on the registry as a whole, reflecting the
           substantial investment in obtaining, verifying and presenting its contents. The
-          registry also contains marker entries that identify copies. A copy of the registry
-          found elsewhere is treated as an infringement of these rights and of these terms.
+          registry also contains marker entries that identify copies. We reserve these rights.
         </p>
 
         <h2>6. Enforcement</h2>
         <p>
-          Reading past the limits stops working; keys and accounts used for copying are
-          revoked; copies found elsewhere are pursued. None of this applies to a person using
-          the app for their own wine, which is what everything here is for.
+          Reading past the limits stops working, and keys or accounts used for copying are
+          revoked. If a copy of the registry turns up elsewhere, we will ask for it to be taken
+          down and reserve our rights. None of this applies to a person using the app for their
+          own wine, which is what everything here is for.
         </p>
 
         <h2>7. Changes and contact</h2>
