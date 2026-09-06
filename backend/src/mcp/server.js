@@ -358,6 +358,7 @@ async function handleMcpRequest(req, res, ctx) {
 // mode, which degrades subscriptions only (every tool still works).
 async function initStatefulSession(req, res, ctx) {
   const { createSession, destroySession } = require('./sessions');
+  const { snapshotRequest } = require('./requestSnapshot');
   const session = createSession({ userId: ctx.user.id, tokenId: ctx.req?.apiToken?.id });
   if (!session) return false;
   try {
@@ -365,7 +366,12 @@ async function initStatefulSession(req, res, ctx) {
     // The session owns a MUTABLE ctx: the route swaps ctx.req on every request
     // so audit attribution (ip/UA/token) follows the actual caller. Concurrent
     // POSTs on one session may interleave req refs — same-user cosmetic only.
-    session.ctx = { user: ctx.user, scopes: ctx.scopes, req: ctx.req };
+    // Keep an ATTRIBUTION SNAPSHOT, never the Express request: the request
+    // carries the parsed JSON body (up to 2 MB under /api/mcp) and a session
+    // lives 30 min idle / 2 h, so 200 pinned bodies would exhaust the heap
+    // (audit 2026-09 M01-1). Everything logAudit, the ledger and the budgets
+    // read from ctx.req is in the snapshot.
+    session.ctx = { user: ctx.user, scopes: ctx.scopes, req: snapshotRequest(ctx.req) };
     const server = await buildServer(session.ctx, { session, callState: session.callState });
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => session.id,

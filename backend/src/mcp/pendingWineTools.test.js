@@ -250,6 +250,18 @@ describe('get_pending_wine_images — the point of the feature', () => {
     expect(parse(res).data.images[0]).toEqual({ image_id: String(SCAN), kind: 'label-scan', side: 'front', private: true });
   });
 
+  test('reading the photos leaves an audit row naming the wine and the image ids (audit M03-4)', async () => {
+    primeWine();
+    await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX);
+
+    expect(logAudit).toHaveBeenCalledWith(
+      SOMM_CTX.req,
+      'image.curation_read',
+      expect.objectContaining({ type: 'wine' }),
+      expect.objectContaining({ via: 'mcp', imageIds: [String(SCAN), String(IMG)], scanCount: 1, privateCount: expect.any(Number) })
+    );
+  });
+
   test('downscales server-side to <=1024px on the longest edge, never enlarging', async () => {
     primeWine();
     await tool('get_pending_wine_images').handler({ wine_id: W1 }, SOMM_CTX);

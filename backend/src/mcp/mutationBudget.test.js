@@ -54,11 +54,11 @@ test('reads the LIVE write.max on each call (admin can tune it down)', () => {
 });
 
 // Security audit L-18: a per-IP write budget bounds the amplification of many
-// distinct accounts sharing one NAT. Per-user cap 5, per-IP cap 5×4 = 20.
+// distinct accounts sharing one NAT. Per-user cap 5, per-IP cap 5 × IP_WRITE_MULTIPLIER.
 test('a shared IP is capped across distinct users at max × IP_WRITE_MULTIPLIER', () => {
   const ip = `ip-${now}`;
-  const perIpCap = 5 * IP_WRITE_MULTIPLIER; // 20
-  // Each distinct user can spend its full 5, but the IP tops out at 20.
+  const perIpCap = 5 * IP_WRITE_MULTIPLIER;
+  // Each distinct user can spend its full 5, but the IP tops out at perIpCap.
   let spent = 0;
   for (let i = 0; spent < perIpCap; i++) {
     expect(takeMutationSlot(`shared-${i}-${now}`, 5, ip)).toBe(true);
@@ -70,8 +70,8 @@ test('a shared IP is capped across distinct users at max × IP_WRITE_MULTIPLIER'
 
 test('all-or-nothing across BOTH dimensions — an IP-blocked call takes nothing per-user', () => {
   const ip = `ip2-${now}`;
-  // Fill the IP window to its cap (20) via other users.
-  for (let i = 0; i < 4; i++) expect(takeMutationSlot(`filler-${i}-${now}`, 5, ip)).toBe(true);
+  // Fill the IP window to its cap (5 × IP_WRITE_MULTIPLIER) via other users.
+  for (let i = 0; i < IP_WRITE_MULTIPLIER; i++) expect(takeMutationSlot(`filler-${i}-${now}`, 5, ip)).toBe(true);
   const u = `victim-${now}`;
   expect(takeMutationSlot(u, 5, ip)).toBe(false); // fits per-user but IP is full
   // Because the refused call took nothing per-user, a call WITHOUT the ip key

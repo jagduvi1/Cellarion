@@ -33,11 +33,11 @@ const parse = (res) => JSON.parse(res.content[0].text);
 beforeEach(() => jest.clearAllMocks());
 
 describe('registration + scope split', () => {
-  test('export_cellar is read-scoped and read-only', () => {
+  test('export_cellar is read-scoped but NOT read-only for the client — it mints a download credential (audit M02-1)', () => {
     const t = tool('export_cellar');
     expect(t).toBeDefined();
     expect(t.scope).toBe('read');
-    expect(t.annotations.readOnlyHint).toBe(true);
+    expect(t.annotations.readOnlyHint).toBe(false);
   });
 
   test('get_account_export is WRITE-scoped (account PII above the read tier)', () => {
@@ -46,7 +46,9 @@ describe('registration + scope split', () => {
     // Deliberately NOT read: a leaked read-only token must never exfiltrate the
     // full account export (email, audit history). See tool + ApiToken model.
     expect(t.scope).toBe('write');
-    expect(t.annotations.readOnlyHint).toBe(true);
+    // And NOT read-only: minting the full-PII export link must go through the
+    // client's confirmation step, never silently (audit M02-1).
+    expect(t.annotations.readOnlyHint).toBe(false);
   });
 });
 
