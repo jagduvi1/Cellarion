@@ -89,3 +89,25 @@
   font-weight: 600;
   max-width: 60vw;
 }
+
+
+/* Tabs: Boards (the pages you just look at) | Table (where views are built,
+   since the table moved here from the cellar page). */
+.ad-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--color-border);
+}
+.ad-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 8px 14px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.ad-tab:hover { color: var(--color-text); }
+.ad-tab.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }

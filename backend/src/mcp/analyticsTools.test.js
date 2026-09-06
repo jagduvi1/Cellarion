@@ -9,7 +9,7 @@
 
 jest.mock('../services/analytics/fieldCatalogue', () => ({
   composeCatalogue: jest.fn(),
-  opsForType: jest.fn(() => ['eq', 'neq', 'contains']),
+  opsForType: jest.fn(() => ['contains', 'eq', 'neq']),
 }));
 jest.mock('../services/analytics/queryEngine', () => {
   class QueryError extends Error {
@@ -49,7 +49,7 @@ test('list_analytics_fields returns the composed catalogue in compact form', asy
   const { data } = parse(res);
   expect(composeCatalogue).toHaveBeenCalledWith(ME);
   expect(data).toHaveLength(2);
-  expect(data[0]).toMatchObject({ key: 'wine.producer', ops: ['eq', 'neq', 'contains'], sortable: true });
+  expect(data[0]).toMatchObject({ key: 'wine.producer', ops: ['contains', 'eq', 'neq'], sortable: true });
   expect(data[1]).toMatchObject({ key: 'personal.' + 'd'.repeat(24), unit: '%', aggregations: ['avg'], groupable: false });
 });
 

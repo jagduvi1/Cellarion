@@ -12,11 +12,8 @@ import CellarScopePicker from '../components/CellarScopePicker';
 import ClimateCard from '../components/ClimateCard';
 import CellarNav from '../components/CellarNav';
 import CellarPageHeader from '../components/CellarPageHeader';
+import { readBottleViewMode, storeBottleViewMode } from '../utils/bottleViewMode';
 import './CellarDetail.css';
-
-// The analytics table (#987) loads lazily — it ships its own catalogue fetch,
-// query engine client and CSV assembly, none of which the list/card views pay for.
-const AnalyticsTable = lazy(() => import('../components/AnalyticsTable'));
 
 // Stable empty rack map for the cross-cellar view (rack placement is per-cellar,
 // so it doesn't apply when several cellars are combined).
@@ -763,9 +760,7 @@ function CellarDetail() {
 // one; `onSelectModeChange` tells the parent to hide the FAB meanwhile.
 function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadMore, multi = false, rackKnown = false, canBulkMove = false, onBulkDone, onSelectModeChange }) {
   const { t } = useTranslation();
-  const [viewMode, setViewMode] = useState(() => {
-    try { return localStorage.getItem('cellarion_bottle_view') || 'list'; } catch { return 'list'; }
-  });
+  const [viewMode, setViewMode] = useState(readBottleViewMode);
   const [density, setDensity] = useState(() => {
     try { return localStorage.getItem('cellarion_bottle_density') || 'comfortable'; } catch { return 'comfortable'; }
   });
@@ -807,12 +802,12 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
   useEffect(() => {
     if (!canBulkMove) { setSelectMode(false); setSelectedIds(new Set()); }
   }, [canBulkMove, cellarId]);
-  const selectableNow = selectMode && canBulkMove && viewMode !== 'table';
+  const selectableNow = selectMode && canBulkMove;
   useEffect(() => { onSelectModeChange?.(selectableNow); }, [selectableNow, onSelectModeChange]);
 
   const setView = (mode) => {
     setViewMode(mode);
-    try { localStorage.setItem('cellarion_bottle_view', mode); } catch {}
+    storeBottleViewMode(mode);
   };
 
   const setDens = (mode) => {
@@ -843,7 +838,7 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
   return (
     <>
       <div className="bottles-view-toggle">
-        {canBulkMove && viewMode !== 'table' && (
+        {canBulkMove && (
           <button
             type="button"
             className={`view-toggle-btn select-toggle-btn ${selectMode ? 'active' : ''}`}
@@ -893,15 +888,18 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
         </button>
-        <button
-          className={`view-toggle-btn ${viewMode === 'table' ? 'active' : ''}`}
-          onClick={() => setView('table')}
-          aria-label={t('analytics.tableView', 'Table view')}
-          aria-pressed={viewMode === 'table'}
-          title={t('analytics.tableView', 'Table view')}
+        {/* The analytics table lives on the Dashboard page since support
+            ticket 2026-09-05 (this page's search bar and filters sat above a
+            table they did not filter); the shortcut keeps the old path alive
+            with this cellar's scope preselected. */}
+        <Link
+          to={multi ? '/dashboard?view=table' : `/dashboard?view=table&cellar=${cellarId}`}
+          className="view-toggle-btn view-toggle-link"
+          aria-label={t('analytics.openTable', 'Open the analytics table')}
+          title={t('analytics.openTable', 'Open the analytics table')}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="1"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
-        </button>
+        </Link>
       </div>
 
       {selectableNow && (
@@ -939,12 +937,6 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
         </div>
       )}
 
-      {viewMode === 'table' ? (
-        <Suspense fallback={<div className="load-more-wrap">{t('common.loading')}</div>}>
-          <AnalyticsTable cellarId={multi ? null : cellarId} />
-        </Suspense>
-      ) : (
-      <>
       <div className={viewMode === 'list' ? 'bottles-list' : 'bottles-grid'}>
         {bottles.map(item => {
           // Cross-cellar view: flat bottles, each linked to + badged with its cellar.
@@ -1023,8 +1015,6 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
             {loadingMore ? t('common.loading') : t('cellarDetail.loadMore')}
           </button>
         </div>
-      )}
-      </>
       )}
 
       <Suspense fallback={null}>

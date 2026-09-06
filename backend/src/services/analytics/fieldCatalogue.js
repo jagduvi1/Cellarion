@@ -39,9 +39,12 @@ const PersonalDataKey = require('../../models/PersonalDataKey');
 const RegistryDataKey = require('../../models/RegistryDataKey');
 
 // Filter operators per type — the whitelist the engine enforces. 'between'
-// is compiled as gte+lte; 'in' takes an array of enum options.
+// is compiled as gte+lte; 'in' takes an array of enum options. The FIRST op
+// is what the filter builder preselects, so text leads with 'contains': a
+// typed producer filter should find "Gaja" by "gaj", not demand the exact
+// name (support ticket 2026-09-05).
 const OPS_BY_TYPE = {
-  text: ['eq', 'neq', 'contains'],
+  text: ['contains', 'eq', 'neq'],
   integer: ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'between'],
   decimal: ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'between'],
   boolean: ['eq'],

@@ -1,5 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { lazy } from '../utils/lazyWithReload';
 import { useAuth } from '../contexts/AuthContext';
 import { listDashboards, createDashboard, updateDashboard, deleteDashboard, runAnalyticsQuery } from '../api/analytics';
 import AnalyticsCharts from '../components/AnalyticsCharts';
@@ -8,6 +10,12 @@ import { humanMeasureLabel } from '../utils/analyticsLabels';
 // stay visually one feature.
 import '../components/AnalyticsTable.css';
 import './AnalyticsDashboard.css';
+
+// The analytics table lives here since it moved off the cellar page (support
+// ticket 2026-09-05: the cellar page's search bar and filters sat above a
+// table they did not filter). Lazy — it ships its own catalogue fetch, query
+// client and CSV assembly, none of which the boards pay for.
+const AnalyticsTable = lazy(() => import('../components/AnalyticsTable'));
 
 /**
  * The analytics dashboards (#987) — cube.dev-style "pages you just look at",
@@ -189,6 +197,17 @@ function Widget({ widget, onRemove }) {
 export default function AnalyticsDashboard() {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  // ?view=table opens the Table tab; ?cellar=<id> preselects that cellar's
+  // scope — the link on a cellar page passes both.
+  const tab = searchParams.get('view') === 'table' ? 'table' : 'boards';
+  const cellarParam = /^[a-f0-9]{24}$/i.test(searchParams.get('cellar') || '') ? searchParams.get('cellar') : null;
+  const showTab = (next) => {
+    const sp = new URLSearchParams(searchParams);
+    if (next === 'table') sp.set('view', 'table');
+    else { sp.delete('view'); sp.delete('cellar'); }
+    setSearchParams(sp, { replace: true });
+  };
   const [boards, setBoards] = useState(null);   // null = loading; [] = none saved
   const [activeId, setActiveId] = useState(null); // null = the client-side default
   const [saveState, setSaveState] = useState(null);
@@ -273,6 +292,20 @@ export default function AnalyticsDashboard() {
 
   return (
     <div className="analytics-dashboard">
+      <div className="ad-tabs" role="tablist" aria-label={t('analytics.tabsAria', 'Analytics sections')}>
+        <button type="button" role="tab" className={`ad-tab${tab === 'boards' ? ' active' : ''}`} aria-selected={tab === 'boards'} onClick={() => showTab('boards')}>
+          {t('analytics.tabs.boards', 'Boards')}
+        </button>
+        <button type="button" role="tab" className={`ad-tab${tab === 'table' ? ' active' : ''}`} aria-selected={tab === 'table'} onClick={() => showTab('table')}>
+          {t('analytics.tabs.table', 'Table')}
+        </button>
+      </div>
+      {tab === 'table' ? (
+        <Suspense fallback={<div className="ad-empty">{t('analytics.loading', 'Loading…')}</div>}>
+          <AnalyticsTable cellarId={cellarParam} />
+        </Suspense>
+      ) : (
+      <>
       <div className="ad-head">
         <h1>
           {boards && boards.length > 0 ? (
@@ -300,7 +333,7 @@ export default function AnalyticsDashboard() {
         </div>
       </div>
       <p className="ad-hint">
-        {t('analytics.dashboardHint', 'Widgets come from the analytics table: open a cellar, switch to the table view, group something interesting, and press "Add to dashboard".')}
+        {t('analytics.dashboardHint', 'Widgets come from the Table tab: group something interesting there and press "Add to dashboard".')}
       </p>
       <div className="ad-grid">
         {boards === null && <div className="ad-empty">{t('analytics.loading', 'Loading…')}</div>}
@@ -308,9 +341,11 @@ export default function AnalyticsDashboard() {
           <Widget key={`${w.title}-${i}`} widget={w} onRemove={() => removeWidget(i)} />
         ))}
         {boards !== null && active && !widgets.length && (
-          <div className="ad-empty">{t('analytics.emptyBoard', 'This dashboard is empty — pin views to it from the analytics table.')}</div>
+          <div className="ad-empty">{t('analytics.emptyBoard', 'This dashboard is empty — pin views to it from the Table tab.')}</div>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }

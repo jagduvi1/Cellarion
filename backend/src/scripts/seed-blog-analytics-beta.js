@@ -47,7 +47,7 @@ const CONTENT = `
 
 <p>Every cellar tool answers the questions its developers thought of. <em>How many bottles? What's the split by type?</em> Useful — but your questions are more specific than ours. <em>Which of my Burgundies are ready and cost over 500 kr? Where is my money sitting, by region? What did I actually drink last year, and how did I rate it?</em></p>
 
-<p>The new <strong>analytics view</strong> answers those. Open any cellar and look at the view switcher above your bottles — next to list and card view there's now a third, table-shaped icon. Click it and your cellar becomes something you can interrogate:</p>
+<p>The new <strong>analytics view</strong> answers those. Open the <strong>Dashboard</strong> page from the main menu and switch to the <strong>Table</strong> tab (every cellar page has a shortcut to it next to the list and card switcher), and your cellar becomes something you can interrogate:</p>
 
 <ul>
 <li><strong>Choose your columns</strong> — from wine identity and purchase details to drink windows, consumption history, and <em>your own custom fields</em>. If you've defined an ABV field or a "bought at" note as personal data, it's a column now, and you can filter and sort on it.</li>

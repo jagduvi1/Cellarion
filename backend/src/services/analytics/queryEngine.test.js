@@ -197,6 +197,31 @@ describe('filter compilation is a whitelist, not an interpreter', () => {
     expect(post[0]['wd.producer']).toBeDefined();
     expect(needsWine).toBe(true);
   });
+  // Support ticket 2026-09-05: a typed Producer "=" filter was byte-exact, so
+  // "gaja" found nothing and the table looked broken.
+  test('text "=" is case-insensitive and anchored', async () => {
+    const { post } = await compileFilters([{ field: 'wine.producer', op: 'eq', value: 'gaja' }], USER);
+    expect(post[0]['wd.producer']).toEqual({ $regex: '^gaja$', $options: 'i' });
+    const rx = new RegExp(post[0]['wd.producer'].$regex, post[0]['wd.producer'].$options);
+    expect(rx.test('Gaja')).toBe(true);
+    expect(rx.test("Ca'Marcanda (Gaja)")).toBe(false);
+  });
+  test('text "≠" negates the same case-insensitive match', async () => {
+    const { post } = await compileFilters([{ field: 'wine.producer', op: 'neq', value: 'Gaja' }], USER);
+    expect(post[0]['wd.producer']).toEqual({ $not: { $regex: '^Gaja$', $options: 'i' } });
+  });
+  test('text "=" still escapes regex metacharacters', async () => {
+    const { post } = await compileFilters([{ field: 'wine.producer', op: 'eq', value: 'a.b' }], USER);
+    // '^a\.b$' — spelled without a backslash literal so the intent survives any tooling.
+    expect(post[0]['wd.producer'].$regex).toBe(['^a', '.b$'].join(String.fromCharCode(92)));
+  });
+  test('numbers keep strict equality', async () => {
+    const { pre } = await compileFilters([{ field: 'purchase.price', op: 'eq', value: 100 }], USER);
+    expect(pre).toEqual([{ price: 100 }]);
+  });
+  test('text fields offer "contains" first, so the filter builder defaults to it', () => {
+    expect(require('./fieldCatalogue').OPS_BY_TYPE.text[0]).toBe('contains');
+  });
 });
 
 // ── KV filters resolve entries first ───────────────────────────────────────

@@ -594,6 +594,13 @@
   background: var(--color-primary-light);
 }
 
+/* The analytics-table shortcut is a link to the Dashboard page, styled as a
+   toggle; a small gutter keeps it from reading as a third view mode. */
+.view-toggle-link {
+  text-decoration: none;
+  margin-left: 0.4rem;
+}
+
 /* Density toggle sits just left of the list/card control (list view only),
    separated by a small gutter so it doesn't read as part of that segmented pair. */
 .density-toggle-btn {
