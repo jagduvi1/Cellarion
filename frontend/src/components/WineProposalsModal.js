@@ -372,7 +372,7 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
                 value={bulkReason}
                 onChange={(e) => setBulkReason(e.target.value)}
                 placeholder={t('admin.wines.proposals.bulkRejectPlaceholder')}
-                maxLength={500}
+                maxLength={2000}
                 disabled={!!pendingId}
                 style={{ flex: '1 1 220px', minWidth: 180 }}
               />
@@ -536,7 +536,7 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
                         value={rejectReason}
                         onChange={(e) => setRejectReason(e.target.value)}
                         placeholder={t('admin.wines.proposals.rejectPlaceholder')}
-                        maxLength={500}
+                        maxLength={2000}
                         disabled={!!pendingId}
                         style={{ flex: '1 1 220px', minWidth: 180 }}
                       />

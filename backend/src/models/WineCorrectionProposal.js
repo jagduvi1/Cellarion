@@ -111,7 +111,7 @@ const wineCorrectionProposalSchema = new mongoose.Schema({
   },
   decidedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   decidedAt: { type: Date, default: null },
-  rejectReason: { type: String, trim: true, maxlength: 500 },
+  rejectReason: { type: String, trim: true, maxlength: 2000 }, // 500 was too short for a real explanation (registry backlog 2026-09-06)
   // What the approve actually did (fields applied / bottles moved / queue rows
   // cleared) — the reviewer-facing receipt.
   appliedNote: { type: String, trim: true, maxlength: 500 },
