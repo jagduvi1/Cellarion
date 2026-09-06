@@ -10,6 +10,8 @@ const { isValidId } = require('../../utils/validation');
 const { ok, fail, wineSummary, hasContent } = require('../toolUtil');
 const { siteBaseUrl } = require('../../utils/siteUrl');
 const { decorateGrapes } = require('../../utils/grapeDisplay');
+const { publicProfileSummary } = require('../../services/registryTiering');
+const { gateMcpRead, CAP_MESSAGE } = require('../../services/registryReadTracker');
 
 const REGISTRY_LIMIT = 10; // == USER_SEARCH_LIMIT in routes/wines.js
 
@@ -22,6 +24,10 @@ const SAFE_SELECT = 'name producer slug country region appellation classificatio
 // pendingIdentity rows are not registry content until they are completed.
 // (Pending rows are not in Meilisearch either; this covers the Mongo paths.)
 const VISIBLE = { nonWine: { $ne: true }, pendingIdentity: { $ne: true } };
+// Search never returns a canary (registry lockdown L4: a customer must not be
+// able to find a wine that does not exist); get_wine by id still serves one,
+// because a direct fetch is the path a copier walks.
+const SEARCH_VISIBLE = { ...VISIBLE, canary: { $ne: true } };
 
 registerTool({
   name: 'search_registry',
@@ -45,7 +51,7 @@ registerTool({
     if (searchService.getIsAvailable()) {
       try {
         const res = await searchService.search(args.query, { limit: REGISTRY_LIMIT });
-        const docs = await WineDefinition.find({ _id: { $in: res.ids }, ...VISIBLE })
+        const docs = await WineDefinition.find({ _id: { $in: res.ids }, ...SEARCH_VISIBLE })
           .select(SAFE_SELECT).populate(['country', 'region', 'grapes']).lean();
         const byId = new Map(docs.map((d) => [String(d._id), d]));
         wines = res.ids.map((id) => byId.get(String(id))).filter(Boolean);
@@ -54,7 +60,7 @@ registerTool({
     }
     if (!viaEngine) {
       wines = await WineDefinition.find(
-        { $text: { $search: args.query }, ...VISIBLE },
+        { $text: { $search: args.query }, ...SEARCH_VISIBLE },
         { score: { $meta: 'textScore' } }
       )
         .select(SAFE_SELECT).sort({ score: { $meta: 'textScore' } })
@@ -81,7 +87,7 @@ registerTool({
   scope: 'public',
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: { wine_id: z.string().describe('Registry wine id from search_registry or a bottle\'s wine') },
-  handler: async (args) => {
+  handler: async (args, ctx) => {
     if (!isValidId(args.wine_id)) return fail('invalid_input', 'wine_id must be a 24-hex Mongo id.');
     // The exclusion is a QUERY clause, not a post-filter on the result. A
     // post-filter here was DEAD CODE (security audit): SAFE_SELECT is an
@@ -102,12 +108,20 @@ registerTool({
     // ("Tinta Roriz" on a Douro Port) — storage stays canonical, and the
     // grapes field keeps its array-of-strings shape.
     const w = decorateGrapes(raw);
+    // Registry lockdown (2026-09-06): every read is counted per reader per
+    // day; an anonymous address past the daily distinct cap is refused. The
+    // anonymous surface gets the prose-only profile (L3) — the structured
+    // dataset stays with signed-in connections.
+    const anonymous = !!ctx?.anonymous || !ctx?.user;
+    const gate = await gateMcpRead(ctx, w._id);
+    if (!gate.allowed) return fail('rate_limited', CAP_MESSAGE);
+    const profile = hasContent(w.aiProfile) ? w.aiProfile : null;
     return ok(`${w.name}${w.producer ? ` — ${w.producer}` : ''}`, {
       ...wineSummary(w),
       classification: w.classification || null,
       lwin7: w.lwin?.lwin7 || null,
       community_rating: w.communityRating?.reviewCount ? w.communityRating : null,
-      tasting_profile: hasContent(w.aiProfile) ? w.aiProfile : null,
+      tasting_profile: anonymous ? publicProfileSummary(profile) : profile,
       public_url: w.slug ? `${siteBaseUrl()}/wines/${w.slug}` : null,
     });
   },

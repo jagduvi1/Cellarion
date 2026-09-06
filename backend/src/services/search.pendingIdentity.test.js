@@ -104,6 +104,6 @@ test('the full sync excludes pending rows at the query level', async () => {
   await searchService.fullSync();
 
   expect(WineDefinition.find).toHaveBeenCalledWith({
-    nonWine: { $ne: true }, pendingIdentity: { $ne: true },
+    nonWine: { $ne: true }, pendingIdentity: { $ne: true }, canary: { $ne: true },
   });
 });

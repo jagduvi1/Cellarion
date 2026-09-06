@@ -1,6 +1,7 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const WineDefinition = require('../models/WineDefinition');
+const { recordRead, readerFor } = require('../services/registryReadTracker');
 const WineVintageProfile = require('../models/WineVintageProfile');
 const BlogPost = require('../models/BlogPost');
 const Country = require('../models/Country');
@@ -449,12 +450,16 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
 
     const wine = await WineDefinition.findOne(filter)
       .populate(['country', 'region', 'grapes'])
-      .select('name producer slug country region appellation classification grapes type image communityRating')
+      .select('name producer slug country region appellation classification grapes type image communityRating canary')
       .lean();
 
     if (!wine) {
       return res.status(404).send('Not found');
     }
+    // Registry lockdown (2026-09-06, L4): count the read per address so the
+    // daily readers report sees crawler and copier volume alike. Never gated
+    // here — this is the page verified search crawlers are routed to.
+    recordRead(readerFor(req), wine._id);
 
     // Canonicalise to the CURRENT slug URL when one exists — from an ObjectId
     // URL, and equally from a superseded slug after a name correction. 301
@@ -646,6 +651,7 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
   <meta name="twitter:image" content="${esc(imageUrl)}" />
   <link rel="canonical" href="${esc(pageUrl)}" />
   <script type="application/ld+json">${serializeJsonLd(jsonLd)}</script>
+  ${wine.canary === true ? '<meta name="robots" content="noindex, nofollow" />' : ''}
 </head>
 <body>
   <header>
@@ -673,6 +679,9 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
 
     res.set('Content-Type', 'text/html; charset=utf-8');
     res.set('Cache-Control', 'public, max-age=3600');
+    // A canary (a wine that does not exist) is served like any other — that is
+    // what makes it evidence — but search engines are told to drop it.
+    if (wine.canary === true) res.set('X-Robots-Tag', 'noindex, nofollow');
     res.send(html);
   } catch (err) {
     console.error('[og] wine page error:', err.message);

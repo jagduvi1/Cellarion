@@ -1,4 +1,8 @@
 {
+  "registryTerms": {
+    "contributionNote": "By submitting you let Cellarion use this in the shared wine registry under the Registry Data Terms.",
+    "link": "Registry Data Terms"
+  },
   "common": {
     "save": "Save",
     "saving": "Saving…",

@@ -84,7 +84,11 @@ registerTool({
       });
     }
 
-    const limit = Math.min(Math.max(parseInt(args.limit, 10) || 8, 1), MAX_SIMILAR);
+    // Registry lockdown (2026-09-06, L3): the anonymous surface walks the
+    // neighbour graph five wines at a time — enough for "more like this",
+    // too slow to map the registry by adjacency.
+    const maxHere = ctx?.anonymous || !ctx?.user ? 5 : MAX_SIMILAR;
+    const limit = Math.min(Math.max(parseInt(args.limit, 10) || 8, 1), maxHere);
     // Over-fetch: hits include the reference wine itself and one hit per
     // embedded vintage of the same wine — dedup to distinct wines below.
     const FETCH = (limit + 1) * 5;
@@ -117,7 +121,7 @@ registerTool({
     // beyond it — say so instead of implying an exhaustive ranking.
     const possiblyMore = ranked.length < limit && hits.length >= FETCH;
 
-    const docs = await WineDefinition.find({ _id: { $in: ranked.map(([id]) => id) }, pendingIdentity: { $ne: true } })
+    const docs = await WineDefinition.find({ _id: { $in: ranked.map(([id]) => id) }, pendingIdentity: { $ne: true }, canary: { $ne: true } })
       .select('name producer slug country region appellation classification grapes type communityRating')
       .populate(['country', 'region', 'grapes'])
       .lean();

@@ -82,6 +82,14 @@ const defaults = {
   // nothing that also serves public pages can. It makes casual scraping not
   // worth the trouble, which is the achievable goal.
   publicWineRead: { max: 120, windowMs: 15 * 60 * 1000 },
+  // Registry lockdown (2026-09-06, L4): DISTINCT wines per reader per UTC day.
+  // Limiters count requests in a window and cannot tell a person browsing
+  // from a copier; this can. Anonymous addresses over the cap are refused for
+  // the rest of the day on the public wine endpoint and the anonymous MCP;
+  // members are never refused, only listed in the daily readers report when
+  // they pass the alert level. Sized far above real use (measured ~5 public
+  // reads per address per day) and below any useful copy (8.7k wines).
+  registryRead: { anonymousDailyDistinct: 300, memberAlertDistinct: 1000 },
   // Ephemeral public-demo accounts (POST /api/auth/demo-login). Cloning a
   // snapshot cellar per visitor is write-heavy, so this is bounded on three
   // axes: per-IP creation rate, a DURABLE global ceiling on concurrent live

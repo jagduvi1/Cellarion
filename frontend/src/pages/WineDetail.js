@@ -26,7 +26,7 @@ const OBJECT_ID_RE = /^[a-f0-9]{24}$/i;
 export default function WineDetail() {
   const { t } = useTranslation();
   const { idOrSlug } = useParams();
-  const { user } = useAuth();
+  const { user, apiFetch } = useAuth();
   const [wine, setWine] = useState(null);
   const [showReport, setShowReport] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -35,7 +35,11 @@ export default function WineDetail() {
   useEffect(() => {
     const fetchWine = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/wines/${encodeURIComponent(idOrSlug)}/public`);
+        // Signed in: send the session along so the same endpoint returns the
+        // full profile; anonymous visitors get the prose-only tier (registry
+        // lockdown 2026-09-06).
+        const url = `${API_URL}/api/wines/${encodeURIComponent(idOrSlug)}/public`;
+        const res = user ? await apiFetch(url) : await fetch(url);
         if (res.ok) {
           const data = await res.json();
           setWine(data.wine);
@@ -220,7 +224,9 @@ export default function WineDetail() {
 
           {(() => {
             const ap = wine.aiProfile;
-            const structure = [
+            // Anonymous visitors receive the structure as one `style` line
+            // instead of the fields; members get the fields.
+            const structure = ap.style ? [ap.style] : [
               ap.body && `${ap.body}-bodied`,
               ap.tannin && `${ap.tannin} tannin`,
               ap.acidity && `${ap.acidity} acidity`,

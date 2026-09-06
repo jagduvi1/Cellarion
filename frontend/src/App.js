@@ -20,6 +20,7 @@ const ConnectAiAuthorize = lazy(() => import('./pages/ConnectAiAuthorize'));
 const VerifyEmail     = lazy(() => import('./pages/VerifyEmail'));
 const ResetPassword   = lazy(() => import('./pages/ResetPassword'));
 const PrivacyPolicy   = lazy(() => import('./pages/PrivacyPolicy'));
+const RegistryTerms   = lazy(() => import('./pages/RegistryTerms'));
 const Cellars         = lazy(() => import('./pages/Cellars'));
 const CellarDetail    = lazy(() => import('./pages/CellarDetail'));
 const AddBottle       = lazy(() => import('./pages/AddBottle'));
@@ -107,6 +108,7 @@ function AppRoutes() {
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<RegistryTerms />} />
         <Route path="/unsubscribed" element={<Unsubscribed />} />
 
         {/* Protected routes wrapped in Layout */}

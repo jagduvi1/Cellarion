@@ -333,6 +333,18 @@ const wineDefinitionSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // Canary (registry lockdown 2026-09-06, L4): a plausible wine that does not
+  // exist, seeded by scripts/seed-canary-wines.js. The rule is "on every path
+  // a thief walks, off every path a customer walks": present in the sitemap
+  // (page served with noindex), in deep taxonomy pages and on direct fetches
+  // by id/slug; excluded from registry search (Meilisearch membership and the
+  // Mongo fallback), similar-wines, the first taxonomy pages, embedding and
+  // enrichment. A copy that surfaces elsewhere carrying one of these can only
+  // have come from here. Never exposed in a public payload.
+  canary: {
+    type: Boolean,
+    default: false
+  },
   // Pending identity: this row was minted at bottle-commit from an INCOMPLETE
   // identity — no producer, a sentinel producer ("Unknown", "N/A"), or a
   // geography typed into the producer box. The bottle saves instantly (that is
