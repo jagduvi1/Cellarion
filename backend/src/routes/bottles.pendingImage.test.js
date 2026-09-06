@@ -112,10 +112,20 @@ describe('GET /api/bottles/:id pending photo', () => {
     expect(BottleImage.findOne).toHaveBeenCalledTimes(1);
     expect(BottleImage.findOne).toHaveBeenCalledWith(expect.objectContaining({
       uploadedBy: USER,
-      status: { $in: ['uploaded', 'processing', 'processed'] },
+      // 'approved' is deliberate — see the cellar-list twin (ticket 2026-09-05 / #1227).
+      status: { $in: ['uploaded', 'processing', 'processed', 'approved'] },
       // `$ne`, not `kind: 'bottle'` — rows older than the field have no kind.
       kind: { $ne: 'label-scan' },
     }));
+  });
+
+  test('an APPROVED own photo keeps showing on the bottle page hero (ticket 2026-09-05 / #1227)', async () => {
+    BottleImage.findOne.mockReturnValue(sortLean({
+      _id: 'img1', kind: 'bottle', status: 'approved', visibility: 'public',
+      originalUrl: null, processedUrl: '/api/uploads/processed/approved.png',
+    }));
+    const res = await getJson(app(), `/api/bottles/${BOTTLE}`);
+    expect(res.body.pendingImageUrl).toBe('/api/uploads/processed/approved.png');
   });
 
   test('a genuine bottle photo still shows — the processed file first, the original only while rembg is still running', async () => {

@@ -91,3 +91,39 @@ describe('BottleCard long-press (post-ship audit 2026-09-03)', () => {
     }
   });
 });
+
+/**
+ * Which photo a card shows (support ticket 2026-09-05, discussion #1227): the
+ * owner's chosen default, else the owner's OWN photo — pending or approved —
+ * else the registry image. Approval used to make a card go blank because the
+ * own-photo lookup dropped approved rows and the card preferred the registry
+ * image, which most wines do not have.
+ */
+describe('BottleCard image precedence', () => {
+  const WITH_REGISTRY_IMAGE = {
+    ...BOTTLE,
+    wineDefinition: { ...BOTTLE.wineDefinition, image: '/api/uploads/processed/registry.png', imageCredit: 'someone else' },
+  };
+
+  test("the owner's own photo beats the registry image and carries no credit line", () => {
+    const { container } = renderCard({ bottle: { ...WITH_REGISTRY_IMAGE, pendingImageUrl: '/api/uploads/processed/mine.png' } });
+    expect(container.querySelector('img').getAttribute('src')).toBe('/api/uploads/processed/mine.png');
+    expect(screen.queryByText('someone else')).not.toBeInTheDocument();
+  });
+
+  test('a chosen default beats both', () => {
+    const { container } = renderCard({ bottle: { ...WITH_REGISTRY_IMAGE, pendingImageUrl: '/api/uploads/processed/mine.png', defaultImageUrl: '/api/uploads/processed/default.png' } });
+    expect(container.querySelector('img').getAttribute('src')).toBe('/api/uploads/processed/default.png');
+  });
+
+  test('with no own photo the registry image shows, with its credit', () => {
+    const { container } = renderCard({ bottle: WITH_REGISTRY_IMAGE });
+    expect(container.querySelector('img').getAttribute('src')).toBe('/api/uploads/processed/registry.png');
+    expect(screen.getByText('someone else')).toBeInTheDocument();
+  });
+
+  test('no photo at all renders no image', () => {
+    const { container } = renderCard();
+    expect(container.querySelector('img')).toBeNull();
+  });
+});

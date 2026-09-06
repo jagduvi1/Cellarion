@@ -529,7 +529,10 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
     const pendingImg = await BottleImage.findOne({
       $or: pendingImgOr,
       uploadedBy: req.user.id,
-      status: { $in: ['uploaded', 'processing', 'processed'] },
+      // Pending OR approved — the uploader's own photo must not vanish from
+      // the hero the moment it is approved (same fix as the cellar list,
+      // support ticket 2026-09-05 / discussion #1227).
+      status: { $in: ['uploaded', 'processing', 'processed', 'approved'] },
       // Never a label scan — same fix as the cellar list (routes/cellars.js
       // attachBottleImageUrls, support ticket 2026-09-03): the scanner's raw
       // frame is private curation evidence, not a bottle photo.

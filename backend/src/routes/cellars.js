@@ -354,7 +354,12 @@ async function attachBottleImageUrls(bottles, userId) {
       ...(wineIds.length ? [{ wineDefinition: { $in: wineIds } }] : []),
     ],
     uploadedBy: userId,
-    status: { $in: ['uploaded', 'processing', 'processed'] },
+    // The uploader's OWN photos, pending OR approved. Approval used to drop a
+    // photo out of this lookup, so the moment an admin approved it the card
+    // went blank unless the wine had a registry image — while the bottle page
+    // gallery still listed it (support ticket 2026-09-05, discussion #1227;
+    // 471 bottles of 49 owners on 2026-09-06). Rejected stays out.
+    status: { $in: ['uploaded', 'processing', 'processed', 'approved'] },
     // Never a label scan (support ticket 2026-09-03). The raw frame handed to
     // the AI scanner is kept ONLY as private curation evidence (models/
     // BottleImage.kind); it carries the wine it minted, sits at status

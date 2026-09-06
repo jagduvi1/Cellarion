@@ -56,13 +56,15 @@ beforeEach(() => {
   BottleImage.find.mockReturnValue(chain([]));
 });
 
-test('the pending lookup excludes label scans and is scoped to the viewer', async () => {
+test('the own-photo lookup excludes label scans, is scoped to the viewer, and includes APPROVED photos', async () => {
   const out = await attachBottleImageUrls([{ _id: B1, wineDefinition: WINE }], USER);
 
   expect(BottleImage.find).toHaveBeenCalledTimes(1);
   expect(BottleImage.find).toHaveBeenCalledWith(expect.objectContaining({
     uploadedBy: USER,
-    status: { $in: ['uploaded', 'processing', 'processed'] },
+    // 'approved' is deliberate: approval used to drop a photo out of this
+    // lookup and blank the card (support ticket 2026-09-05, discussion #1227).
+    status: { $in: ['uploaded', 'processing', 'processed', 'approved'] },
     // `$ne`, not `kind: 'bottle'` — rows older than the field have no kind.
     kind: { $ne: 'label-scan' },
   }));
@@ -83,6 +85,15 @@ test('a photo pinned to the bottle beats one that merely matches the wine, and t
 
   expect(out[0].pendingImageUrl).toBe('/api/uploads/processed/b1.png');   // pinned to B1
   expect(out[1].pendingImageUrl).toBe('/api/uploads/processed/wine.png'); // same wine, no pin
+});
+
+test('an approved own photo — public or private — still shows on the card', async () => {
+  BottleImage.find.mockReturnValue(chain([
+    { _id: 'appr', wineDefinition: WINE, bottle: B1, status: 'approved', visibility: 'private', originalUrl: null, processedUrl: '/api/uploads/processed/approved.png' },
+  ]));
+
+  const out = await attachBottleImageUrls([{ _id: B1, wineDefinition: WINE }], USER);
+  expect(out[0].pendingImageUrl).toBe('/api/uploads/processed/approved.png');
 });
 
 test('empty input is returned as-is without a query', async () => {
