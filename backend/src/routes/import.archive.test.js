@@ -57,6 +57,7 @@ jest.mock('../models/Bottle', () => {
 jest.mock('../models/WineRequest', () => {
   function WineRequest(doc) { Object.assign(this, doc); this._id = 'req-1'; }
   WineRequest.prototype.save = function () { return Promise.resolve(this); };
+  WineRequest.findOne = jest.fn().mockResolvedValue(null); // intake reuse lookup (services/wineRequestIntake)
   return WineRequest;
 });
 // The archive itself — captured, never written.

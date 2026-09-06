@@ -35,6 +35,7 @@ const { RACK_TYPES } = require('../models/Rack');
 const CellarLayout = require('../models/CellarLayout');
 const BottleImage = require('../models/BottleImage');
 const WineRequest = require('../models/WineRequest');
+const { findOrCreatePendingRequest, pickImportHints } = require('./wineRequestIntake');
 const Review = require('../models/Review');
 const WineVintageProfile = require('../models/WineVintageProfile');
 
@@ -439,19 +440,12 @@ async function resolveWine(item, userId, cache, result, demoMode = false) {
     return { skip: true };
   }
 
-  const key = `${name.toLowerCase()}|${producer.toLowerCase()}`;
-  let wineRequest = cache.get(key);
-  if (!wineRequest) {
-    wineRequest = await WineRequest.create({
-      requestType: 'new_wine',
-      wineName: name,
-      producer: producer || undefined,
-      user: userId,
-      status: 'pending',
-    });
-    cache.set(key, wineRequest);
-    result.wineRequests++;
-  }
+  // Reused across imports for the same user + wine + producer, with the
+  // file's geography/type as curator hints (services/wineRequestIntake).
+  const { wineRequest, reused } = await findOrCreatePendingRequest({
+    userId, wineName: name, producer, hints: pickImportHints(item), cache,
+  });
+  if (!reused) result.wineRequests++;
   return { wineRequestId: wineRequest._id };
 }
 

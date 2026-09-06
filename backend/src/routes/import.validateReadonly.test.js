@@ -83,6 +83,7 @@ jest.mock('../models/WineRequest', () => {
     instances.push(this);
   }
   WineRequest.__instances = instances;
+  WineRequest.findOne = jest.fn().mockResolvedValue(null); // intake reuse lookup (services/wineRequestIntake)
   return WineRequest;
 });
 

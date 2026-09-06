@@ -1460,6 +1460,7 @@
       "statusAll": "All",
       "typeGrapeSuggestion": "Grape suggestion",
       "suggestedGrapes": "Suggested varieties",
+      "fromFile": "From the import file",
       "applyGrapesNote": "Select the grape varieties to add to this wine. Unrecognised names can be added to the taxonomy first.",
       "applyGrapesLabel": "Grapes to add",
       "linkSearchLabel": "Search Wine Registry",
