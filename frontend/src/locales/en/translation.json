@@ -4084,6 +4084,9 @@
     },
     "rackAutoMap": {
       "hint": "Detected <1>CellarTracker</1> Location/Bin codes. Locations with a consistent bin pattern have been mapped to racks below — check the detected dimensions before importing. Bottles whose bin codes don't fit the pattern keep their location as text instead.",
+      "binOrderLabel": "Bin codes are written as",
+      "binOrderRowCol": "Row, Column (2,7 = row 2, column 7)",
+      "binOrderColRow": "Column, Row (2,7 = column 2, row 7)",
       "patternRowCol": "Row/column bin codes (R3C2)",
       "patternRowColDepth": "Row/column/depth bin codes (R3C2D1)",
       "patternLetterNumber": "Letter + number bin codes (A12)",

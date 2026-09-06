@@ -162,6 +162,21 @@ describe('applyCtRackAutoMap', () => {
     wineName: 'W', producer: 'P', _ctLocation: loc, _ctBin: bin, ...extra,
   });
 
+  it('honours binOrder: col-row for "column,row" cellars (support ticket 2026-09-05)', () => {
+    const items = [mk('North rack', '2,7'), mk('North rack', '2,8'), mk('North rack', '3,1'), mk('North rack', '1,12')];
+    const { racks } = applyCtRackAutoMap(items, { binOrder: 'col-row' });
+    expect(items[0]).toMatchObject({ rackName: 'North rack', row: 7, col: 2, rackRows: 12, rackCols: 3 });
+    expect(racks['North rack']).toMatchObject({ pattern: 'segments', rows: 12, cols: 3, spec: { type: 'grid', rows: 12, cols: 3, typeConfig: {} } });
+  });
+
+  it('parseAndMap threads ctBinOrder through to the auto-map', () => {
+    const text = decodeImportBuffer(fs.readFileSync(path.join(FIXTURES, 'bundle', 'CellarTracker_Inventory.tsv'))).text;
+    const { items } = parseAndMap(text, undefined, { ctBinOrder: 'col-row' });
+    const fridge = items.filter((i) => i.rackName === 'Wine Fridge');
+    expect(fridge).toHaveLength(9);
+    expect(fridge.find((i) => i.location === 'Wine Fridge / B3')).toMatchObject({ row: 3, col: 2, rackRows: 6, rackCols: 2 });
+  });
+
   it('emits shelf geometry for R<r>C<c>D<d> bins with front/back depth', () => {
     const items = [
       mk('Cave', 'R1C1D1'), mk('Cave', 'R1C1D2'),

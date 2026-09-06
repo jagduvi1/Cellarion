@@ -124,6 +124,10 @@ function ImportBottles() {
 
   // Upload step
   const [parsedItems, setParsedItems] = useState([]);
+  // The last CSV's raw text, kept so a CellarTracker bin-order change can
+  // re-run the parser (support ticket 2026-09-05: bins typed "column,row").
+  const [sourceText, setSourceText] = useState(null);
+  const [ctBinOrder, setCtBinOrder] = useState('row-col');
   const [detectedFormat, setDetectedFormat] = useState(null);
   // File encoding detected by decodeImportBuffer ('utf-8', 'windows-1252', …)
   const [detectedEncoding, setDetectedEncoding] = useState(null);
@@ -455,6 +459,16 @@ function ImportBottles() {
 
   const VALID_IMPORT_EXTENSIONS = ['.csv', '.tsv', '.txt', '.json'];
 
+  // Re-run the CellarTracker parse with the other bin-code order. Everything
+  // derived from the parse (items, rack summary, rack configs) is rebuilt by
+  // applyParsed, exactly as on the original upload.
+  const changeCtBinOrder = (order) => {
+    setCtBinOrder(order);
+    if (!sourceText) return;
+    const parsed = parseAndMap(sourceText.text, undefined, { ctBinOrder: order });
+    applyParsed(parsed, { fileName: sourceText.fileName, encoding: sourceText.encoding });
+  };
+
   /**
    * Read and parse the dropped/chosen file(s).
    *
@@ -536,6 +550,8 @@ function ImportBottles() {
 
         const first = read[0];
         const isJson = first.file.name.toLowerCase().endsWith('.json');
+        setSourceText(isJson ? null : { text: first.text, fileName: first.file.name, encoding: first.encoding });
+        setCtBinOrder('row-col');
         const parsed = isJson ? parseJSON(first.text) : parseAndMap(first.text);
         if (read.length > 1) {
           parsed.warnings = [...(parsed.warnings || []), { code: 'extra-files-ignored', count: read.length - 1 }];
@@ -1333,6 +1349,17 @@ function ImportBottles() {
           {detectedFormat === 'cellartracker' && Object.values(rackSummary).some(i => i.ctAutoMap) && (
             <p className="rack-options-hint">
               <Trans i18nKey="importBottles.rackAutoMap.hint" components={{ 1: <strong /> }} />
+            </p>
+          )}
+          {detectedFormat === 'cellartracker' && sourceText && (
+            <p className="rack-options-hint">
+              <label>
+                {t('importBottles.rackAutoMap.binOrderLabel')}{' '}
+                <select value={ctBinOrder} onChange={e => changeCtBinOrder(e.target.value)}>
+                  <option value="row-col">{t('importBottles.rackAutoMap.binOrderRowCol')}</option>
+                  <option value="col-row">{t('importBottles.rackAutoMap.binOrderColRow')}</option>
+                </select>
+              </label>
             </p>
           )}
           <p className="rack-options-hint">

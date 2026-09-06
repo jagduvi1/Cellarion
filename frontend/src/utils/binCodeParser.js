@@ -66,6 +66,13 @@
  * (the Rack schema bound). A parsed code whose row/col exceeds 20, or a
  * sequential position beyond 400 (a full 20×20 grid), is treated as unparsed
  * for that bottle rather than distorting the rack.
+ *
+ * Bin-code ORDER (opts.binOrder, support ticket 2026-09-05): the codes cannot
+ * say whether "2,7" means row 2 / column 7 or the other way round — a
+ * 1,354-bottle cellar typed every bin as "column,row". The default is
+ * 'row-col'; 'col-row' swaps the two numeric segments (2- and 3-segment
+ * codes) and reads a letter+number code as column letter, row number. Codes
+ * that NAME their axes (R3C2, R3C2D1) and sequential bins are never affected.
  */
 
 const MAX_DIM = 20;
@@ -81,11 +88,12 @@ const NUMERIC_SEGMENT_RE = /^\d{1,3}$/;
 const SUBRACK_SEGMENT_RE = /^[A-Za-z0-9]{1,6}$/;
 
 /** Split a bin code on dashes/dots/commas into 2 or 3 usable segments, or null. */
-function matchSegments(bin) {
+function matchSegments(bin, colFirst = false) {
   const parts = bin.split(SEGMENT_SPLIT_RE).map((s) => s.trim());
   if (parts.length < 2 || parts.length > 3) return null;
   if (parts.some((p) => !p)) return null;
-  const [rowStr, colStr] = parts.slice(-2);
+  const tail = parts.slice(-2);
+  const [rowStr, colStr] = colFirst ? [tail[1], tail[0]] : tail;
   if (!NUMERIC_SEGMENT_RE.test(rowStr) || !NUMERIC_SEGMENT_RE.test(colStr)) return null;
   const row = parseInt(rowStr, 10);
   const col = parseInt(colStr, 10);
@@ -138,7 +146,8 @@ function noMatch(n, allIndexes) {
  * `qualifies` is false the caller must fall back to freeform text for the
  * whole group — `placements` is still returned for diagnostics only.
  */
-export function analyzeBinGroup(bins) {
+export function analyzeBinGroup(bins, opts = {}) {
+  const colFirst = opts.binOrder === 'col-row';
   const trimmed = (bins || []).map((b) => (b == null ? '' : String(b).trim()));
   const n = trimmed.length;
   const allIndexes = trimmed.map((_, i) => i);
@@ -163,7 +172,7 @@ export function analyzeBinGroup(bins) {
       const col = parseInt(m[2], 10);
       if (col >= 1) letter.push({ i, letter: m[1].toUpperCase(), col });
     }
-    const seg = matchSegments(bin);
+    const seg = matchSegments(bin, colFirst);
     if (seg?.segs === 2) seg2.push({ i, row: seg.row, col: seg.col });
     if (seg?.segs === 3) seg3.push({ i, subRack: seg.subRack, row: seg.row, col: seg.col });
     if ((m = bin.match(PREFIXED_INT_RE))) {
@@ -242,7 +251,9 @@ export function analyzeBinGroup(bins) {
   } else if (best.name === 'letter') {
     pattern = 'letter-number';
     const usable = best.matches
-      .map((c) => ({ index: c.i, row: c.letter.charCodeAt(0) - 64, col: c.col }))
+      .map((c) => (colFirst
+        ? { index: c.i, row: c.col, col: c.letter.charCodeAt(0) - 64 }
+        : { index: c.i, row: c.letter.charCodeAt(0) - 64, col: c.col }))
       .filter((c) => c.row <= MAX_DIM && c.col <= MAX_DIM);
     placements = usable;
     inferredRows = Math.max(0, ...usable.map((c) => c.row)) || undefined;
@@ -304,7 +315,7 @@ export function analyzeBinGroup(bins) {
  *   skipped entirely — no location means nothing to place (e.g. CT List rows
  *   for wines spanning multiple locations export Location blank).
  */
-export function analyzeBinGroups(pairs) {
+export function analyzeBinGroups(pairs, opts = {}) {
   const groups = new Map(); // location -> [globalIndex]
   (pairs || []).forEach((p, i) => {
     const loc = (p?.location || '').trim();
@@ -315,7 +326,7 @@ export function analyzeBinGroups(pairs) {
 
   const out = {};
   for (const [loc, idxs] of groups) {
-    const analysis = analyzeBinGroup(idxs.map((i) => pairs[i]?.bin ?? ''));
+    const analysis = analyzeBinGroup(idxs.map((i) => pairs[i]?.bin ?? ''), opts);
     // Re-map group-local indexes back to the caller's pair indexes.
     analysis.placements = analysis.placements.map((pl) => ({ ...pl, index: idxs[pl.index] }));
     analysis.unparsed = analysis.unparsed.map((i) => idxs[i]);
