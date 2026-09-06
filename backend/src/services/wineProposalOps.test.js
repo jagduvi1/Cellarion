@@ -17,6 +17,7 @@ jest.mock('../models/RegistryDataValue', () => ({ countDocuments: jest.fn() }));
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('./wineVisibility', () => ({ findVisibleWine: jest.fn() }));
 jest.mock('./audit', () => ({ logAudit: jest.fn() }));
+jest.mock('./wineProfileOps', () => ({ resolveGrapeIdsStrict: jest.fn() }));
 
 const WineCorrectionProposal = require('../models/WineCorrectionProposal');
 const RegistryDataKey = require('../models/RegistryDataKey');
@@ -24,6 +25,7 @@ const RegistryDataValue = require('../models/RegistryDataValue');
 const User = require('../models/User');
 const { findVisibleWine } = require('./wineVisibility');
 const { logAudit } = require('./audit');
+const { resolveGrapeIdsStrict } = require('./wineProfileOps');
 const ops = require('./wineProposalOps');
 
 const oid = (c) => c.repeat(24);
@@ -144,11 +146,48 @@ describe('creation', () => {
         region: 'Marlborough',
         country: 'New Zealand',
         classification: null,
+        type: null,
+        grapes: [],
       },
     }));
     expect(logAudit).toHaveBeenCalledWith(null, 'wine_proposal.user_create',
       expect.objectContaining({ type: 'wine' }),
       expect.objectContaining({ via: 'web', tier: 'newcomer', fields: ['appellation'] }));
+  });
+
+  // Support ticket 2026-09-06: type and grapes are correctable by any user,
+  // exactly as through the sommelier tool — resolved at filing, canonical names stored.
+  test('grapes are resolved against the taxonomy at filing and stored as canonical names', async () => {
+    resolveGrapeIdsStrict.mockResolvedValue({ ok: true, ids: ['g1', 'g2'], names: ['Pinot Noir', 'Müller-Thurgau'], substitutions: [{ from: 'Riesling-Sylvaner', to: 'Müller-Thurgau' }] });
+    const res = await ops.createFieldCorrection(ME, { ...GOOD, fields: { grapes: [' Pinot Noir ', 'Riesling-Sylvaner'], type: 'White' } });
+    expect(res.ok).toBe(true);
+    expect(resolveGrapeIdsStrict).toHaveBeenCalledWith(['Pinot Noir', 'Riesling-Sylvaner']);
+    expect(WineCorrectionProposal.create).toHaveBeenCalledWith(expect.objectContaining({
+      proposedFields: { type: 'white', grapes: ['Pinot Noir', 'Müller-Thurgau'] },
+    }));
+  });
+
+  test('an unknown grape name is refused at filing, naming it', async () => {
+    resolveGrapeIdsStrict.mockResolvedValue({ ok: false, unmatched: ['Muskat Olivierx'] });
+    const res = await ops.createFieldCorrection(ME, { ...GOOD, fields: { grapes: ['Pinot Noir', 'Muskat Olivierx'] } });
+    expect(res).toMatchObject({ ok: false, code: 'invalid' });
+    expect(res.message).toMatch(/Muskat Olivierx/);
+    expect(WineCorrectionProposal.create).not.toHaveBeenCalled();
+  });
+
+  test('a bad type, an empty grape list and an oversized list are refused', async () => {
+    expect((await ops.createFieldCorrection(ME, { ...GOOD, fields: { type: 'orange' } })).message).toMatch(/type must be one of/);
+    expect((await ops.createFieldCorrection(ME, { ...GOOD, fields: { grapes: [] } })).message).toMatch(/1 to 12/);
+    expect((await ops.createFieldCorrection(ME, { ...GOOD, fields: { grapes: Array(13).fill('Syrah') } })).message).toMatch(/1 to 12/);
+    expect(resolveGrapeIdsStrict).not.toHaveBeenCalled();
+  });
+
+  test('the snapshot records the live type and grape names for the admin diff', async () => {
+    findVisibleWine.mockResolvedValue({ ...wineDoc, type: 'white', grapes: [{ name: 'Chardonnay' }, { name: 'Pinot Blanc' }] });
+    await ops.createFieldCorrection(ME, GOOD);
+    expect(WineCorrectionProposal.create).toHaveBeenCalledWith(expect.objectContaining({
+      currentSnapshot: expect.objectContaining({ type: 'white', grapes: ['Chardonnay', 'Pinot Blanc'] }),
+    }));
   });
 
   test('E11000 (one pending per wine) becomes a friendly conflict', async () => {

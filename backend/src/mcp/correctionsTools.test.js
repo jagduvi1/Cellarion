@@ -36,6 +36,15 @@ const parse = (res) => JSON.parse(res.content[0].text);
 
 beforeEach(() => jest.clearAllMocks());
 
+test('accepts type and grapes alongside the identity fields (support ticket 2026-09-06)', () => {
+  const shape = tool().inputSchema.fields.shape;
+  expect(Object.keys(shape)).toEqual(expect.arrayContaining(['producer', 'name', 'appellation', 'region', 'country', 'classification', 'type', 'grapes']));
+  expect(shape.type.safeParse('white').success).toBe(true);
+  expect(shape.type.safeParse('orange').success).toBe(false);
+  expect(shape.grapes.safeParse(['Pinot Noir', 'Muscaris']).success).toBe(true);
+  expect(shape.grapes.safeParse([]).success).toBe(false);
+});
+
 test('registered as a write tool for regular users (no somm gate)', () => {
   expect(tool().scope).toBe('write');
 });
