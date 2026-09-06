@@ -19,10 +19,12 @@ import { API_URL } from '../api/apiConstants';
  */
 export function isApiTarget(url) {
   try {
+    // Our API is the page origin (nginx proxies /api there) and, when
+    // VITE_API_URL names another host, that origin as well.
     const base = typeof window !== 'undefined' && window.location ? window.location.origin : 'http://localhost';
     const apiOrigin = new URL(API_URL || '/', base).origin;
     const target = new URL(String(url), base);
-    return target.origin === apiOrigin && target.pathname.startsWith('/api/');
+    return (target.origin === base || target.origin === apiOrigin) && target.pathname.startsWith('/api/');
   } catch {
     return false;
   }

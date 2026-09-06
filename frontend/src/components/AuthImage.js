@@ -17,7 +17,9 @@ import { useAuth } from '../contexts/AuthContext';
  *   S7-1 / F06-1 / F01-1).
  */
 const API_PATH = /^\/api\/(?!\/)[^\\]*$/;
-const PLAIN_SRC = /^(?:https?:\/\/[^\\\s]+|data:image\/(?:png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+|blob:[^\\\s]+)$/i;
+// Spaces inside an http(s) URL are tolerated (the browser encodes them, and
+// admin-entered registry links have them); backslashes never are.
+const PLAIN_SRC = /^(?:https?:\/\/[^\\]+|data:image\/(?:png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]+|blob:[^\\\s]+)$/i;
 
 function AuthImage({ src, alt, className, onError, style, loading }) {
   const { apiFetch } = useAuth();

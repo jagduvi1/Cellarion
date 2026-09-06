@@ -18,7 +18,7 @@ afterEach(() => vi.unstubAllGlobals());
 const renderSrc = (src) => render(<AuthImage src={src} alt="x" />).container;
 
 test('plain external https, inline image and blob sources render directly, no fetch', async () => {
-  for (const src of ['https://cdn.example.com/a.png', 'data:image/png;base64,iVBORw0KGgo=', 'blob:http://localhost:3000/abc']) {
+  for (const src of ['https://cdn.example.com/a.png', 'https://cdn.example.com/my label.png', 'data:image/png;base64,iVBORw0KGgo=', 'blob:http://localhost:3000/abc']) {
     const c = renderSrc(src);
     await waitFor(() => expect(c.querySelector('img')).toHaveAttribute('src', src));
   }
