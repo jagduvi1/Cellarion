@@ -70,6 +70,7 @@ export function SuggestGrapesModal({ wine, onClose }) {
                 <small className="form-hint">{t('bottleDetail.suggestGrapesHint', 'Separate multiple varieties with commas')}</small>
               </div>
               {error && <div className="alert alert-error">{error}</div>}
+              <p className="modal-hint">{t('registryTerms.contributionNote', 'By submitting you let Cellarion use this in the shared wine registry under the Registry Data Terms.')} <a href="/terms" target="_blank" rel="noopener noreferrer">{t('registryTerms.link', 'Registry Data Terms')}</a></p>
               <div className="modal-actions">
                 <button type="button" className="btn btn-secondary" onClick={onClose}>{t('common.cancel')}</button>
                 <button type="submit" className="btn btn-primary" disabled={submitting || !grapes.trim()}>

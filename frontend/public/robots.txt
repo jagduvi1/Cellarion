@@ -1,4 +1,7 @@
 # https://www.robotstxt.org/robotstxt.html
+# Registry content (wine pages, tasting profiles, drink windows) is provided under
+# the Registry Data Terms: https://cellarion.app/terms — read and cite one wine at a
+# time; bulk extraction, mirroring and training corpora are not permitted.
 
 # Default policy — applies to all crawlers not matched below
 User-agent: *
@@ -26,6 +29,7 @@ Allow: /grapes/
 Allow: /help
 Allow: /connect-ai
 Allow: /privacy
+Allow: /terms
 Allow: /community
 Allow: /api/sitemap.xml
 Allow: /api/blog

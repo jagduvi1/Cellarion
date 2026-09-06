@@ -85,6 +85,7 @@ const Appellation = require('../models/Appellation');
 const AppellationReviewSkip = require('../models/AppellationReviewSkip');
 const ProfileAuditSample = require('../models/ProfileAuditSample');
 const SiteConfig = require('../models/SiteConfig');
+const RegistryReadDay = require('../models/RegistryReadDay');
 const { getOrCreateDeletedUser } = require('../utils/deletedUser');
 const { deleteLogoFilesFor } = require('./wineListLogos');
 const { unlinkImageFiles } = require('./imageProcessor');
@@ -334,6 +335,19 @@ const REGISTRY = [
     purge: (ctx) => WishlistItem.deleteMany({ user: ctx.userId }),
     // Trunc flag key kept as 'wishlistItems' to match the pre-refactor _truncated payload.
     exportFragment: async (ctx) => ({ wishlist: markTrunc(ctx, 'wishlistItems', await WishlistItem.find({ user: ctx.userId }).limit(EXPORT_MAX).lean()) }),
+  },
+  {
+    // Registry lockdown (2026-09-06, L4): per-day distinct-wine read counters
+    // keyed `user:<id>` for signed-in readers. Operational telemetry with a
+    // 14-day TTL — purged with the account; the export carries the summary
+    // (day, reads, distinct count), not the wine ids, which are registry
+    // content rather than personal data.
+    model: RegistryReadDay, category: 'personal-data', userFields: ['readerKey (user:<id>)'],
+    purge: (ctx) => RegistryReadDay.deleteMany({ readerKey: `user:${ctx.userId}` }),
+    exportFragment: async (ctx) => ({
+      registryReads: (await RegistryReadDay.find({ readerKey: `user:${ctx.userId}` }).select('day count wines').limit(EXPORT_MAX).lean())
+        .map((r) => ({ day: r.day, reads: r.count, distinctWines: (r.wines || []).length })),
+    }),
   },
   {
     model: PersonalDataKey, category: 'personal-data', userFields: ['user'],

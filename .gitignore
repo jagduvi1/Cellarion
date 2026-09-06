@@ -53,3 +53,6 @@ firmware/*.bin
 
 # TWA Android build tools and output (run locally, never commit keystore or AAB)
 twa/
+
+# Registry canary lists are operator secrets — never in the tree (registry lockdown 2026-09-06)
+canaries*.json

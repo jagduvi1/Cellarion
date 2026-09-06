@@ -254,7 +254,10 @@ async function fullSync() {
       // Neither do pendingIdentity rows: a half-identified wine must not be
       // findable by strangers in registry search. The BOTTLES index is
       // deliberately untouched — an owner keeps finding their own bottle.
-      WineDefinition.find({ nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
+      // Canary rows (registry lockdown L4) are not searchable either: a
+      // customer must never be able to find, let alone add, a wine that
+      // does not exist. They stay reachable by id/slug on purpose.
+      WineDefinition.find({ nonWine: { $ne: true }, pendingIdentity: { $ne: true }, canary: { $ne: true } })
         .populate('country', 'name')
         .populate('region', 'name')
         // regionalNames feed wineGrapeSearchNames (regional display recall).
@@ -288,7 +291,7 @@ async function indexWine(wineId) {
     // never enters, and the promoting write's own indexWine() call is what puts
     // the completed wine INTO the index (there is no separate "add on promote"
     // path to forget — this is it).
-    if (wine.nonWine === true || wine.pendingIdentity === true) {
+    if (wine.nonWine === true || wine.pendingIdentity === true || wine.canary === true) {
       await index.deleteDocument(String(wine._id));
       return;
     }

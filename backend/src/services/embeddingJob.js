@@ -184,7 +184,9 @@ async function runJob(cfg) {
         // would pollute semantic search AND the similar-wines graph with a row
         // strangers must not see anyway. The promoting write re-embeds
         // (reembedActiveVintages), which is when the pair genuinely enters.
-        if (!wine || wine.pendingIdentity === true) {
+        // A canary (registry lockdown L4) is never embedded either: it must
+        // not become anyone's "similar wine".
+        if (!wine || wine.pendingIdentity === true || wine.canary === true) {
           job.skipped++;
           job.done++;
           continue;
@@ -335,7 +337,7 @@ async function embedSinglePair(wineDefId, vintage) {
     // the fire-and-forget call every bottle add makes, so without it the very
     // add that mints a pending wine would immediately index it for semantic
     // search — the one surface that would leak it to strangers.
-    if (!wine || wine.pendingIdentity === true) return;
+    if (!wine || wine.pendingIdentity === true || wine.canary === true) return;
 
     const text = buildEmbeddingText(wine, vintage);
     const textHash = sha256(text);

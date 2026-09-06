@@ -284,6 +284,7 @@ export default function LandingPage() {
           <div className="landing-footer-links">
             <Link to="/connect-ai">{t('landing.footerConnectAi')}</Link>
             <Link to="/privacy">Privacy</Link>
+            <Link to="/terms">Registry terms</Link>
             {contactEmail && (
               <a href={`mailto:${contactEmail}`}>{contactEmail}</a>
             )}

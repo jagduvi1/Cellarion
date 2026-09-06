@@ -12,6 +12,7 @@ const { runClimateOfflineCheck } = require('./climateOfflineJob');
 const { runDemoSweep } = require('./demoSweepJob');
 const { runRegistryHealthCheck } = require('./registryHealthJob');
 const DiscussionReply = require('../models/DiscussionReply');
+const { runRegistryReadReport } = require('./registryReadReportJob');
 const embeddingJob = require('./embeddingJob');
 
 /**
@@ -186,6 +187,19 @@ function startScheduler() {
       } else {
         console.error('[scheduler] Weekly embedding sweep failed:', err.message);
       }
+    }
+  });
+
+  // Registry readers report (registry lockdown 2026-09-06, L4): daily at
+  // 05:15 UTC, after the day's counters have closed. Lists yesterday's top
+  // readers by distinct wines and notifies admins about anyone past the alert
+  // level — the alarm the canaries are the evidence for.
+  cron.schedule('15 5 * * *', async () => {
+    console.log('[scheduler] Running registry readers report…');
+    try {
+      await runRegistryReadReport();
+    } catch (err) {
+      console.error('[scheduler] Registry readers report failed:', err);
     }
   });
 

@@ -137,6 +137,7 @@ function ReportWineModal({ wine, defaultReason, onClose }) {
 
         {error && <p className="report-wine-error">{error}</p>}
 
+        <p className="modal-hint">{t('registryTerms.contributionNote', 'By submitting you let Cellarion use this in the shared wine registry under the Registry Data Terms.')} <a href="/terms" target="_blank" rel="noopener noreferrer">{t('registryTerms.link', 'Registry Data Terms')}</a></p>
         <div className="modal-actions">
           <button type="button" className="btn btn-secondary" onClick={onClose} disabled={submitting}>
             {t('common.cancel')}

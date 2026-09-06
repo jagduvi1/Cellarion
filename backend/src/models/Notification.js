@@ -62,7 +62,10 @@ const notificationSchema = new mongoose.Schema({
       'registry_value_decided',
       // A member asked for a forum language section; same principle as the
       // two above — whoever asked gets told what was decided.
-      'forum_language_decided'
+      'forum_language_decided',
+      // Registry lockdown (2026-09-06): the daily readers report found a
+      // reader past the alert level — admins only.
+      'registry_read_alert'
     ],
     required: true
   },

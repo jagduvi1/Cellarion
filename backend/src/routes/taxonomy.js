@@ -80,6 +80,18 @@ function clearTaxonomyListCache() {
 // Shared wine projection for public lists
 const WINE_PROJECTION = 'name producer slug type appellation region country image communityRating';
 
+// Registry lockdown (2026-09-06, L2): these four listings are the one
+// unauthenticated surface that pages through the registry. At 100 a page with
+// an offset up to a million they enumerated every wine in a single limiter
+// window; nobody legitimate reads page 400 of a country. 48 a page, 2,000
+// deep, `total` still returned so the client can show it.
+const WINE_PAGE = { limit: 24, maxLimit: 48, maxOffset: 2000 };
+// Canaries (L4) sit in the DEEP pages only — a customer browsing the first
+// screens never meets one, a walker paging to the end does. `total` always
+// excludes them so the visible page count is honest.
+const CANARY_DEPTH = 480;
+const winesFilter = (base, offset) => (offset < CANARY_DEPTH ? { ...base, canary: { $ne: true } } : base);
+
 // ── Display names ────────────────────────────────────────────────────────────
 
 /**
@@ -187,10 +199,11 @@ router.get('/countries/:slug', async (req, res) => {
       .lean();
     if (!country) return res.status(404).json({ error: 'Country not found' });
 
-    const { limit, offset } = parsePagination(req.query, { limit: 24, maxLimit: 100 });
+    const { limit, offset } = parsePagination(req.query, WINE_PAGE);
+    const base = { country: country._id, nonWine: { $ne: true }, pendingIdentity: { $ne: true } };
 
     const [wines, total, regions] = await Promise.all([
-      WineDefinition.find({ country: country._id, nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
+      WineDefinition.find(winesFilter(base, offset))
         .select(WINE_PROJECTION)
         .populate('region', 'name slug')
         .populate('country', 'name slug')
@@ -198,7 +211,7 @@ router.get('/countries/:slug', async (req, res) => {
         .skip(offset)
         .limit(limit)
         .lean(),
-      WineDefinition.countDocuments({ country: country._id, nonWine: { $ne: true }, pendingIdentity: { $ne: true } }),
+      WineDefinition.countDocuments({ ...base, canary: { $ne: true } }),
       Region.find({ country: country._id, slug: { $exists: true } })
         .select('name slug description')
         .sort({ name: 1 })
@@ -258,10 +271,11 @@ router.get('/regions/:slug', async (req, res) => {
       .lean();
     if (!region) return res.status(404).json({ error: 'Region not found' });
 
-    const { limit, offset } = parsePagination(req.query, { limit: 24, maxLimit: 100 });
+    const { limit, offset } = parsePagination(req.query, WINE_PAGE);
+    const base = { region: region._id, nonWine: { $ne: true }, pendingIdentity: { $ne: true } };
 
     const [wines, total] = await Promise.all([
-      WineDefinition.find({ region: region._id, nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
+      WineDefinition.find(winesFilter(base, offset))
         .select(WINE_PROJECTION)
         .populate('region', 'name slug')
         .populate('country', 'name slug')
@@ -270,7 +284,7 @@ router.get('/regions/:slug', async (req, res) => {
         .skip(offset)
         .limit(limit)
         .lean(),
-      WineDefinition.countDocuments({ region: region._id, nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
+      WineDefinition.countDocuments({ ...base, canary: { $ne: true } })
     ]);
 
     if (total < MIN_WINES) return res.status(404).json({ error: 'Region not found' });
@@ -323,10 +337,11 @@ router.get('/grapes/:slug', async (req, res) => {
       .lean();
     if (!grape) return res.status(404).json({ error: 'Grape not found' });
 
-    const { limit, offset } = parsePagination(req.query, { limit: 24, maxLimit: 100 });
+    const { limit, offset } = parsePagination(req.query, WINE_PAGE);
+    const base = { grapes: grape._id, nonWine: { $ne: true }, pendingIdentity: { $ne: true } };
 
     const [wines, total] = await Promise.all([
-      WineDefinition.find({ grapes: grape._id, nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
+      WineDefinition.find(winesFilter(base, offset))
         .select(WINE_PROJECTION)
         .populate('region', 'name slug')
         .populate('country', 'name slug')
@@ -334,7 +349,7 @@ router.get('/grapes/:slug', async (req, res) => {
         .skip(offset)
         .limit(limit)
         .lean(),
-      WineDefinition.countDocuments({ grapes: grape._id, nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
+      WineDefinition.countDocuments({ ...base, canary: { $ne: true } })
     ]);
 
     if (total < MIN_WINES) return res.status(404).json({ error: 'Grape not found' });
@@ -355,10 +370,11 @@ router.get('/wine-types/:type', async (req, res) => {
     const type = String(req.params.type).toLowerCase();
     if (!WINE_TYPES.includes(type)) return res.status(404).json({ error: 'Unknown wine type' });
 
-    const { limit, offset } = parsePagination(req.query, { limit: 24, maxLimit: 100 });
+    const { limit, offset } = parsePagination(req.query, WINE_PAGE);
+    const base = { type, nonWine: { $ne: true }, pendingIdentity: { $ne: true } };
 
     const [wines, total] = await Promise.all([
-      WineDefinition.find({ type, nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
+      WineDefinition.find(winesFilter(base, offset))
         .select(WINE_PROJECTION)
         .populate('region', 'name slug')
         .populate('country', 'name slug')
@@ -366,7 +382,7 @@ router.get('/wine-types/:type', async (req, res) => {
         .skip(offset)
         .limit(limit)
         .lean(),
-      WineDefinition.countDocuments({ type, nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
+      WineDefinition.countDocuments({ ...base, canary: { $ne: true } })
     ]);
 
     res.set('Cache-Control', 'public, max-age=3600');

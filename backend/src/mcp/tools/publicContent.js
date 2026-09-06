@@ -23,10 +23,15 @@ registerTool({
     wine_id: z.string().describe('Registry wine id (from search_registry)'),
     vintage: z.string().max(10).optional().describe('One vintage year; omit for all curated vintages of the wine'),
   },
-  handler: async (args) => {
+  handler: async (args, ctx) => {
     // Lazy model requires keep the registry load path lean (file convention).
     const WineDefinition = require('../../models/WineDefinition');
     const WineVintageProfile = require('../../models/WineVintageProfile');
+    // Registry lockdown (2026-09-06, L3): the anonymous surface gets the peak
+    // window per vintage — the answer to "when should I drink it" — while the
+    // early/late bounds, the curated table a copier wants, stay with signed-in
+    // connections.
+    const anonymous = !!ctx?.anonymous || !ctx?.user;
 
     if (!isValidId(String(args.wine_id || ''))) {
       return fail('invalid_input', 'wine_id must be a 24-hex id from search_registry.');
@@ -52,11 +57,13 @@ registerTool({
       // `relative` profiles (NV wines) hold year-OFFSETS from purchase, not
       // calendar years — without a bottle there is no anchor, so report the
       // offsets as such and no now-status.
-      const windows = {
-        early: { from: p.earlyFrom ?? null, until: p.earlyUntil ?? null },
-        peak: { from: p.peakFrom ?? null, until: p.peakUntil ?? null },
-        late: { from: p.lateFrom ?? null, until: p.lateUntil ?? null },
-      };
+      const windows = anonymous
+        ? { peak: { from: p.peakFrom ?? null, until: p.peakUntil ?? null } }
+        : {
+          early: { from: p.earlyFrom ?? null, until: p.earlyUntil ?? null },
+          peak: { from: p.peakFrom ?? null, until: p.peakUntil ?? null },
+          late: { from: p.lateFrom ?? null, until: p.lateUntil ?? null },
+        };
       let now = null;
       if (!p.relative) {
         if (p.peakFrom && currentYear < p.peakFrom) now = (p.earlyFrom && currentYear >= p.earlyFrom) ? 'early' : 'not_ready';

@@ -419,3 +419,11 @@
   color: var(--color-text-muted);
   text-align: center;
 }
+
+/* Contribution licence note under a submission form (registry lockdown 2026-09-06, L6). */
+.modal-hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+}
+.modal-hint a { color: inherit; }

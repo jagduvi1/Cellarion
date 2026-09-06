@@ -29,6 +29,9 @@ registerTool({
       license: 'AGPL-3.0',
       repository: 'https://github.com/jagduvi1/Cellarion',
       homepage: 'https://cellarion.app',
+      // The code is AGPL; the shared registry's curated content is not — it
+      // is provided under its own terms (registry lockdown 2026-09-06, L6).
+      data_terms: 'https://cellarion.app/terms',
     };
     // Hosted cellarion.app only (config/hostedInstance.js): the hosted service
     // is funded by voluntary supporters; a self-hosted instance pays its own

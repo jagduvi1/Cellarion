@@ -7,6 +7,8 @@ const { requireAuth, requireNonDemo, optionalAuth } = require('../middleware/aut
 const rateLimit = require('express-rate-limit');
 const rateLimitsConfig = require('../config/rateLimits');
 const { rateLimitKey } = require('../utils/clientIp');
+const { tierWinePayload } = require('../services/registryTiering');
+const { gateAnonymousRead, CAP_MESSAGE } = require('../services/registryReadTracker');
 const { logAudit } = require('../services/audit');
 const { scanLabelFull, scanLabelBack, mergeBackScan, identifyWineFromQuery } = require('../services/labelScan');
 const { sanitizeImageBuffer, detectImageFormat } = require('../services/imageSanitizer');
@@ -270,6 +272,8 @@ async function mongoSearch(filter, sort, limit, offset, search) {
   // also what the wine-list / wishlist / add-bottle pickers read).
   filter.nonWine = { $ne: true };
   filter.pendingIdentity = { $ne: true };
+  // Canaries (registry lockdown L4) are reachable by id, never by search.
+  filter.canary = { $ne: true };
   let sortOptions = {};
   const sortField = sort.startsWith('-') ? sort.substring(1) : sort;
   const sortDir = sort.startsWith('-') ? -1 : 1;
@@ -324,8 +328,11 @@ router.get('/', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Search query is too long (max 200 characters)' });
     }
 
+    // Curators browse the whole registry, but not 10,000 rows at a time: a
+    // phished admin account was the cheapest full dump (registry lockdown
+    // 2026-09-06, L5). 500 a page keeps every admin screen working.
     const paginationOpts = isPrivileged
-      ? { limit: 50, maxLimit: 10000 }
+      ? { limit: 50, maxLimit: 500 }
       : { limit: USER_SEARCH_LIMIT, maxLimit: USER_SEARCH_LIMIT };
     const { limit: parsedLimit, offset: parsedOffset } = parsePagination(req.query, paginationOpts);
     const grapeIds = grapes ? String(grapes).split(',').filter(id => mongoose.isValidObjectId(id)) : [];
@@ -931,7 +938,7 @@ router.post('/ai-info', requireAuth, aiBurstLimiter, asyncHandler(async (req, re
 
 // GET /api/wines/:idOrSlug/public — Public wine detail (no auth required)
 // Accepts both ObjectId and slug. Used for shared links and social previews.
-const PUBLIC_PROJECTION = 'name producer slug country region appellation grapes type image communityRating classification aiProfile';
+const PUBLIC_PROJECTION = 'name producer slug country region appellation grapes type image communityRating classification aiProfile canary';
 
 // Anti-enumeration limit for the ONE wine endpoint that needs no account.
 //
@@ -969,7 +976,12 @@ const publicWineLimiter = rateLimit({
     res.status(429).json({ error: 'Too many requests, please try again later' });
   },
 });
-router.get('/:idOrSlug/public', publicWineLimiter, async (req, res) => {
+// optionalAuth (registry lockdown 2026-09-06, L3/L4): the SAME endpoint serves
+// a signed-in member the full profile and an anonymous visitor the prose-only
+// tier (services/registryTiering.js), and every read is counted per reader
+// per day — an anonymous address past the daily distinct cap is refused
+// (services/registryReadTracker.js). Members are counted, never refused.
+router.get('/:idOrSlug/public', publicWineLimiter, optionalAuth, async (req, res) => {
   try {
     const { idOrSlug } = req.params;
     // Unauthenticated share/preview surface — quarantined non-wines are hidden
@@ -994,7 +1006,15 @@ router.get('/:idOrSlug/public', publicWineLimiter, async (req, res) => {
       return res.status(404).json({ error: 'Wine not found' });
     }
 
-    res.json({ wine: decorateGrapes(wine) });
+    const gate = await gateAnonymousRead(req, wine._id);
+    if (!gate.allowed) {
+      return res.status(429).json({ error: CAP_MESSAGE });
+    }
+    // A canary page must never be indexed — and must never say it is one.
+    if (wine.canary === true) res.set('X-Robots-Tag', 'noindex, nofollow');
+    const payload = tierWinePayload(decorateGrapes(wine), { full: !!req.user });
+    delete payload.canary;
+    res.json({ wine: payload });
   } catch (error) {
     console.error('Get public wine error:', error);
     res.status(500).json({ error: 'Failed to get wine' });
@@ -1005,7 +1025,7 @@ router.get('/:idOrSlug/public', publicWineLimiter, async (req, res) => {
 // Per-vintage community release-price curve (what users actually paid) for one
 // currency, newest vintage first. Public, unattributed product data — never
 // converted across currencies. Returns { currency, currentRelease, curve }.
-router.get('/:idOrSlug/community-prices', async (req, res) => {
+router.get('/:idOrSlug/community-prices', publicWineLimiter, async (req, res) => {
   try {
     const { idOrSlug } = req.params;
     const currency = String(req.query.currency || 'USD').toUpperCase().slice(0, 10);
@@ -1049,21 +1069,31 @@ router.get('/:id', requireAuth, async (req, res) => {
     // read that label text here (release-audit LOW-3 — same rationale as the
     // wishlist $unset). Image BYTES were always gated per-image; this hides
     // the pointers and the text.
+    // Registry lockdown (2026-09-06, L5): the dedup keys, verification record
+    // and provenance are curation internals. Nothing a member's screens render
+    // needs them, and together they are the part of a copy that is hardest to
+    // rebuild. Curators keep the full document. pendingIdentity/createdBy stay
+    // selected for the gate below and are then dropped from the response.
+    const isCurator = req.user.roles.includes('admin') || req.user.roles.includes('somm');
+    const select = isCurator
+      ? '-scanImage -scanImageBack -scanFieldConflicts'
+      : '-scanImage -scanImageBack -scanFieldConflicts -normalizedKey -canonicalKey -verifiedChecks -identityProvenance -productNumber -previousSlugs -canary';
     const wine = await WineDefinition.findById(req.params.id)
-      .select('-scanImage -scanImageBack -scanFieldConflicts')
+      .select(select)
       .populate(['country', 'region', 'grapes']);
 
     if (!wine) {
       return res.status(404).json({ error: 'Wine not found' });
     }
     if (wine.pendingIdentity === true) {
-      const isCurator = req.user.roles.includes('admin') || req.user.roles.includes('somm');
       if (!isCurator && String(wine.createdBy) !== String(req.user.id)) {
         return res.status(404).json({ error: 'Wine not found' });
       }
     }
 
-    res.json({ wine: decorateGrapes(wine) });
+    const payload = decorateGrapes(wine);
+    if (!isCurator) delete payload.createdBy;
+    res.json({ wine: payload });
   } catch (error) {
     console.error('Get wine error:', error);
     res.status(500).json({ error: 'Failed to get wine' });
