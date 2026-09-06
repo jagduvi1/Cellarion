@@ -1,0 +1,45 @@
+name: Dependabot auto-merge
+
+# Turns the two LOW-RISK Dependabot groups into something that does not need a
+# human: the SHA-pinned GitHub Actions and the @sha256-pinned base images.
+# dependabot.yml exists so those pins cannot "silently rot into an unpatched
+# base" (security audit 2026-07-17, M-5 + L-11) — but a PR nobody merges rots
+# exactly the same way. Three of them had been sitting open for up to two weeks
+# when this was added.
+#
+# What this does NOT auto-merge, deliberately:
+#   - the npm_and_yarn group. Those are application dependencies and arrive as
+#     security updates; they get read by a person.
+#   - a node MAJOR bump. Already suppressed in dependabot.yml (majors are taken
+#     when a line reaches Active LTS, not when it appears).
+#
+# Auto-merge is a QUEUE, not a bypass: GitHub still waits for every required
+# check on main (Backend tests, Frontend tests, DCO sign-off) and merges only
+# if they pass. A red CI leaves the PR sitting open exactly as it does today.
+#
+# Note: the elevated `permissions` block below is what makes this work at all —
+# a workflow triggered by Dependabot gets a READ-ONLY token by default.
+
+on: pull_request
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    # github.actor is the bot only for genuine Dependabot events; a human PR
+    # that merely touches dependabot.yml does not reach this job.
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+
+      - name: Enable auto-merge for the low-risk groups
+        if: contains(fromJSON('["github-actions", "docker-images"]'), steps.meta.outputs.dependency-group)
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
