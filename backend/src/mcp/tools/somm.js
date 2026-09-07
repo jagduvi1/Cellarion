@@ -2692,8 +2692,7 @@ registerTool({
 //
 // ANONYMISED like the owner inquiries (#930): the curator gets the wine, its
 // bottle count and its IMAGES — never who added it.
-const { promises: fsp } = require('fs');
-const { safeUploadPath } = require('../../services/imageProcessor');
+const { renderImage } = require('../../services/photoBytes');
 // ONE definition of "may curation read this label scan" — shared with the REST
 // image gate (routes/images.js) and the retention sweep.
 const { mayCurationReadScan, PROMOTED_SCAN_GRACE_DAYS, logCurationImageRead } = require('../../services/labelScanAccess');
@@ -2918,9 +2917,6 @@ registerTool({
       );
     }
 
-    // sharp is already a backend dependency (services/imageSanitizer) —
-    // nothing new is added for this.
-    const sharp = require('sharp');
     const blocks = [];
     const included = [];
     let totalBytes = 0;
@@ -2930,16 +2926,13 @@ registerTool({
       const url = doc.originalUrl || doc.processedUrl;
       if (!url || typeof url !== 'string' || !url.startsWith('/api/uploads/')) continue;
       try {
-        const buf = await fsp.readFile(safeUploadPath(url.replace('/api/uploads/', '')));
-        const out = await sharp(buf)
-          .rotate()
-          .resize({ width: IMAGE_MAX_EDGE, height: IMAGE_MAX_EDGE, fit: 'inside', withoutEnlargement: true })
-          .jpeg({ quality: 82 })
-          .toBuffer();
+        // Downscaled exactly as get_photo does it (services/photoBytes).
+        const rendered = await renderImage(url, { maxEdge: IMAGE_MAX_EDGE });
+        if (!rendered) continue;
         // Cap the WHOLE response, not each image: 4 MB is the budget, and a
         // curator would rather see two labels than be refused all of them.
-        if (totalBytes + out.length > IMAGE_TOTAL_CAP_BYTES) break;
-        totalBytes += out.length;
+        if (totalBytes + rendered.bytes > IMAGE_TOTAL_CAP_BYTES) break;
+        totalBytes += rendered.bytes;
         // A caption block BEFORE each image, because a queue row can now carry
         // two label frames of one bottle and "the producer is not printed on
         // this one" means opposite things about a front and a back label. The
@@ -2963,7 +2956,7 @@ registerTool({
           type: 'text',
           text: `Image ${included.length + 1} — ${caption} (image_id ${doc._id})`,
         });
-        blocks.push({ type: 'image', data: out.toString('base64'), mimeType: 'image/jpeg' });
+        blocks.push({ type: 'image', data: rendered.data, mimeType: rendered.mimeType });
         // Marked private unless the owner published it: these are somebody's
         // own bottle photos, released to curation for one purpose only.
         included.push({

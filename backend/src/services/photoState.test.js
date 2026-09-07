@@ -66,9 +66,14 @@ describe('photosForBottle', () => {
       ]))
       .mockReturnValueOnce(chain([
         { _id: 'p', status: 'approved', uploadedBy: OTHER, processedUrl: '/p.png', wineDefinition: 'w', createdAt: 3 },
-      ]));
+      ]))
+      // The viewer's own label-scan frames: a third bounded query, listed
+      // apart from the photos and never counted as one (get_photo reads them).
+      .mockReturnValueOnce(chain([{ _id: 's', side: 'back', createdAt: 4 }]));
     const out = await photosForBottle(ME, { _id: 'b1', wineDefinition: { _id: 'w', image: null } });
-    expect(BottleImage.find).toHaveBeenCalledTimes(2);
+    expect(BottleImage.find).toHaveBeenCalledTimes(3);
+    expect(BottleImage.find.mock.calls[2][0]).toEqual({ kind: 'label-scan', uploadedBy: ME, wineDefinition: 'w' });
+    expect(out.label_scans).toEqual([{ image_id: 's', side: 'back', scanned_at: 4 }]);
     const own = BottleImage.find.mock.calls[0][0];
     expect(own).toMatchObject({ kind: { $ne: 'label-scan' }, uploadedBy: ME });
     expect(own.$or).toEqual([{ bottle: 'b1' }, { wineDefinition: 'w' }]);
@@ -84,9 +89,11 @@ describe('photosForBottle', () => {
     const many = Array.from({ length: MAX_ROWS }, (_, i) => ({ _id: `p${i}`, status: 'approved', uploadedBy: OTHER, processedUrl: '/p.png', wineDefinition: 'w' }));
     BottleImage.find
       .mockReturnValueOnce(chain([{ _id: 'mine', status: 'uploaded', uploadedBy: ME, originalUrl: '/m.png', wineDefinition: 'w' }]))
-      .mockReturnValueOnce(chain(many));
+      .mockReturnValueOnce(chain(many))
+      .mockReturnValueOnce(chain([]));
     const out = await photosForBottle(ME, { _id: 'b1', wineDefinition: { _id: 'w' } });
     expect(out.items[0].image_id).toBe('mine');
+    expect(out.label_scans).toBeUndefined();
     expect(out.mine_pending).toBe(1);
     expect(out.truncated).toBe(true);
   });
@@ -113,6 +120,7 @@ describe('photosForBottle', () => {
   test('only a rejected row → count 1 but no photo', async () => {
     BottleImage.find
       .mockReturnValueOnce(chain([{ _id: 'r', status: 'rejected', uploadedBy: ME, processedUrl: null, originalUrl: null }]))
+      .mockReturnValueOnce(chain([]))
       .mockReturnValueOnce(chain([]));
     const out = await photosForBottle(ME, { _id: 'b1', wineDefinition: { _id: 'w' } });
     expect(out).toMatchObject({ count: 1, has_photo: false, mine_pending: 0 });

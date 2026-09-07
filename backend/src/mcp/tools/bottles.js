@@ -185,7 +185,9 @@ registerTool({
     'Full detail for one bottle: wine (incl. tasting profile when enriched), vintage, price, ratings, personal drink ' +
     'window, notes, reservation ("spoken for") state, purchase info, open-bottle state, rack placement, cellar, ' +
     'consumption info if consumed, and photos — every photo that applies to the bottle with its state (queued, ' +
-    'processing, awaiting_review, published, rejected), so an upload can be confirmed and a duplicate avoided. ' +
+    'processing, awaiting_review, published, rejected), so an upload can be confirmed and a duplicate avoided; ' +
+    'photos.label_scans lists the frames the user scanned to identify the wine. The URLs are for people; to SEE ' +
+    'a photo yourself (read a label, check an ABV), pass its image_id to get_photo. ' +
     'Call when the user asks about a specific bottle you already have a bottle_id for.',
   scope: 'read',
   annotations: { readOnlyHint: true, openWorldHint: false },

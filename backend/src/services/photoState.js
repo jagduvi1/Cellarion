@@ -34,6 +34,7 @@ const PENDING_STATES = ['queued', 'processing', 'awaiting_review'];
 const LIVE_STATUSES = ['uploaded', 'processing', 'processed', 'approved'];
 const NOT_SCAN = { kind: { $ne: 'label-scan' } };
 const MAX_ROWS = 20;
+const MAX_SCANS = 4; // label-scan frames of one wine by one viewer
 
 // Same rule as routes/og.js and the frontend's getWineImageUrl: a stored image
 // is a full URL, an /api/ path, or a bare upload filename.
@@ -93,6 +94,14 @@ async function photosForBottle(userId, bottle) {
         ...NOT_SCAN, wineDefinition: wineId, status: 'approved', visibility: 'public', uploadedBy: { $ne: userId },
       }).sort({ createdAt: -1 }).limit(MAX_ROWS).lean()
     : [];
+  // The viewer's own label-scan frames of this wine (support ticket
+  // 2026-09-07): never a "photo of the bottle" — kept out of items, count and
+  // has_photo, the 2026-09-03 leak — but the sharpest image of the label
+  // there is, and get_photo can now show it.
+  const scans = wineId
+    ? await BottleImage.find({ kind: 'label-scan', uploadedBy: userId, wineDefinition: wineId })
+        .sort({ createdAt: -1 }).limit(MAX_SCANS).select('side createdAt').lean()
+    : [];
   const items = [...own, ...published].map((r) => photoState(r, userId));
   const inline = wd && typeof wd === 'object' && isInlineImage(wd.image);
   const registryImage = wd && typeof wd === 'object' && wd.image ? absoluteImageUrl(wd.image) : null;
@@ -104,6 +113,9 @@ async function photosForBottle(userId, bottle) {
     ...(inline ? { registry_image_inline: true } : {}),
     ...(own.length >= MAX_ROWS || published.length >= MAX_ROWS ? { truncated: true } : {}),
     items,
+    ...(scans.length
+      ? { label_scans: scans.map((s) => ({ image_id: s._id, side: s.side === 'back' ? 'back' : 'front', scanned_at: s.createdAt || null })) }
+      : {}),
   };
 }
 
