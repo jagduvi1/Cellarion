@@ -399,6 +399,7 @@ async function buildCellarDataExport(userId, scope) {
       // the same geometry + top-left anchor the import round-trips placement).
       racks: (racksByCellar.get(id) || []).map((r) => ({
         name: r.name,
+        ...(r.group ? { group: r.group } : {}),
         type: r.type,
         rows: r.rows,
         cols: r.cols,

@@ -80,6 +80,12 @@ const STATIC_FIELDS = [
   dim({ key: 'bottle.status', label: 'Status', domain: 'inventory', type: 'enum', source: 'bottle', path: 'status', enumOptions: ['active', 'drank', 'gifted', 'sold', 'other'] }),
   dim({ key: 'bottle.cellar', label: 'Cellar', domain: 'inventory', type: 'text', source: 'computed', path: 'cellar', sortable: false, groupable: true }),
   dim({ key: 'bottle.location', label: 'Rack location', domain: 'inventory', type: 'text', source: 'bottle', path: 'location' }),
+  // The rack a bottle actually sits in, and the rack's group (the room or
+  // appliance the user named — support ticket 2026-09-06). Joined from
+  // Rack.slots, so a sort would need the join on every row: sortable is off;
+  // grouping and filtering are the point ("what is in the basement").
+  dim({ key: 'rack.name', label: 'Rack', domain: 'inventory', type: 'text', source: 'rack', path: 'name', sortable: false }),
+  dim({ key: 'rack.group', label: 'Rack group', domain: 'inventory', type: 'text', source: 'rack', path: 'group', sortable: false }),
   dim({ key: 'bottle.occasion', label: 'Occasion note', domain: 'inventory', type: 'text', source: 'bottle', path: 'occasion' }),
   dim({ key: 'bottle.reservedFor', label: 'Reserved for', domain: 'inventory', type: 'text', source: 'bottle', path: 'reservedFor' }),
   // Date fields are not groupable (audit 2026-08-19 F9): without calendar
@@ -115,6 +121,10 @@ const STATIC_FIELDS = [
   // the derived drink status is computed per hydrated row and says so.
   dim({ key: 'maturity.drinkFrom', label: 'Drink from (year)', domain: 'maturity', type: 'integer', source: 'bottle', path: 'drinkFrom' }),
   dim({ key: 'maturity.drinkTo', label: 'Drink to (year)', domain: 'maturity', type: 'integer', source: 'bottle', path: 'drinkTo' }),
+  // The peak pair (writable per bottle) was missing here, so a lot could not
+  // be checked for matching peaks in one query (support ticket 2026-09-07).
+  dim({ key: 'maturity.peakFrom', label: 'Peak from (year)', domain: 'maturity', type: 'integer', source: 'bottle', path: 'peakFrom' }),
+  dim({ key: 'maturity.peakUntil', label: 'Peak until (year)', domain: 'maturity', type: 'integer', source: 'bottle', path: 'peakUntil' }),
   // enumOptions mirror what classifyMaturity actually returns (audit F7) —
   // 'unknown' is this module's own fallback for rows with no window at all.
   dim({ key: 'maturity.status', label: 'Drink status', domain: 'maturity', type: 'enum', source: 'computed', path: null, sortable: false, groupable: false, filterable: false, enumOptions: ['not-ready', 'early', 'peak', 'late', 'declining', 'unknown'] }),

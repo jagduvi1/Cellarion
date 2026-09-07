@@ -193,3 +193,26 @@ describe('moveBottleToCellar', () => {
     expect(removeFromRacks).not.toHaveBeenCalled(); // never unracked on a failed save
   });
 });
+
+describe('rack group (support ticket 2026-09-06)', () => {
+  const { normalizeRackGroup } = require('./rackOps');
+  const cellar = { _id: 'c1', user: 'u1' };
+  const REQ = { user: { id: 'u1' } };
+
+  test('normalizeRackGroup trims, caps at 40 and turns blank into null; undefined stays undefined', () => {
+    expect(normalizeRackGroup('  Basement ')).toBe('Basement');
+    expect(normalizeRackGroup('')).toBeNull();
+    expect(normalizeRackGroup('   ')).toBeNull();
+    expect(normalizeRackGroup(null)).toBeNull();
+    expect(normalizeRackGroup(42)).toBeNull();
+    expect(normalizeRackGroup('x'.repeat(50))).toHaveLength(40);
+    expect(normalizeRackGroup(undefined)).toBeUndefined();
+  });
+
+  test('createGridRack stores the normalised group, null when none was given', async () => {
+    const withGroup = await createGridRack(cellar, { name: 'Left', group: ' Basement ' }, REQ);
+    expect(withGroup.rack.group).toBe('Basement');
+    const without = await createGridRack(cellar, { name: 'Fridge' }, REQ);
+    expect(without.rack.group).toBeNull();
+  });
+});

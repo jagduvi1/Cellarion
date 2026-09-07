@@ -710,6 +710,7 @@
     "appellationLabel": "Appellation",
     "placementLabel": "Placement",
     "unplacedOnly": "Unplaced only",
+    "storedInLabel": "Stored in",
     "reservationLabel": "Reservation",
     "reservedOnly": "Reserved only",
     "grapeLabel": "Grapes",
@@ -1083,6 +1084,13 @@
     }
   },
   "racks": {
+    "groupLabel": "Group",
+    "groupPlaceholder": "e.g. Basement, Kitchen fridge",
+    "groupHint": "Optional. Racks with the same group are shown together — a room, a fridge, a cooler. Leave it empty for no group.",
+    "editRack": "Rename or group this rack",
+    "editRackTitle": "Rack name and group",
+    "nameRequired": "Give the rack a name.",
+    "editFailed": "Could not save the rack.",
     "title": "Storage Racks",
     "backToCellar": "← Back to Cellar",
     "newRack": "New Rack",

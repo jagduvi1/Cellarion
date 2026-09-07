@@ -50,7 +50,7 @@ const BOTTLES_PER_PAGE = 30;
 const FILTERS_STORAGE_PREFIX = 'cellarFilters:';
 const buildDefaultFilters = () => ({
   search: '', type: [], country: [], region: [], appellation: [],
-  grapes: [], vintage: [], minRating: '', maturity: '', unplaced: '', reserved: '', sort: '-createdAt'
+  grapes: [], vintage: [], minRating: '', maturity: '', unplaced: '', reserved: '', storage: '', sort: '-createdAt'
 });
 const readSavedFilters = (cellarId) => {
   try {
@@ -76,6 +76,8 @@ function CellarDetail() {
   // once we know the cellar has racks (true) — never while loading, and never
   // for cellars with no racks at all (false), where placement isn't a concept.
   const [hasRacks, setHasRacks] = useState(null);
+  // [{ id, name, group }] for the "Stored in" filter (support ticket 2026-09-06)
+  const [storageRacks, setStorageRacks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [bottlesLoading, setBottlesLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -97,7 +99,7 @@ function CellarDetail() {
     // A deep link with any filter param wins (shared/bookmarked URL). Otherwise
     // restore the last-used selection for this cellar so browser-back keeps it.
     const hasUrlFilters = ['search', 'type', 'country', 'region', 'appellation',
-      'grapes', 'vintage', 'minRating', 'maturity', 'unplaced', 'reserved', 'sort']
+      'grapes', 'vintage', 'minRating', 'maturity', 'unplaced', 'reserved', 'storage', 'sort']
       .some(k => searchParams.has(k));
     if (!hasUrlFilters) return readSavedFilters(id) || buildDefaultFilters();
     return {
@@ -112,6 +114,8 @@ function CellarDetail() {
       maturity: searchParams.get('maturity') || '',
       unplaced: searchParams.get('unplaced') || '',
       reserved: searchParams.get('reserved') || '',
+      // 'group:<name>' or 'rack:<id>' — where the bottle is stored
+      storage: searchParams.get('storage') || '',
       sort: searchParams.get('sort') || '-createdAt'
     };
   });
@@ -170,7 +174,7 @@ function CellarDetail() {
 
   // Clear URL search params after they've been read into filter/tab state
   useEffect(() => {
-    if (searchParams.has('search') || searchParams.has('vintage') || searchParams.has('minRating') || searchParams.has('sort') || searchParams.has('type') || searchParams.has('country') || searchParams.has('region') || searchParams.has('grapes') || searchParams.has('unplaced') || searchParams.has('reserved') || searchParams.has('tab')) {
+    if (searchParams.has('search') || searchParams.has('vintage') || searchParams.has('minRating') || searchParams.has('sort') || searchParams.has('type') || searchParams.has('country') || searchParams.has('region') || searchParams.has('grapes') || searchParams.has('unplaced') || searchParams.has('reserved') || searchParams.has('storage') || searchParams.has('tab')) {
       setSearchParams({}, { replace: true });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -188,7 +192,7 @@ function CellarDetail() {
     debouncedSearch,
     filters.type.join(','), filters.country.join(','), filters.region.join(','),
     filters.appellation.join(','), filters.grapes.join(','), filters.vintage.join(','),
-    filters.minRating, filters.maturity, filters.unplaced, filters.reserved, filters.sort
+    filters.minRating, filters.maturity, filters.unplaced, filters.reserved, filters.storage, filters.sort
   ].join('|');
 
   // Refetch on cellar id, filters, or scope change. `id` is included so an
@@ -221,6 +225,8 @@ function CellarDetail() {
         } else if (key === 'reserved') {
           // Set below — single-cellar only (the cross-cellar endpoint doesn't
           // support ?reserved).
+        } else if (key === 'storage') {
+          // Mapped to ?rack= / ?rackGroup= below — single-cellar only.
         } else if (Array.isArray(val)) {
           if (val.length > 0) params.append(key, val.join(','));
         } else if (val) {
@@ -238,6 +244,11 @@ function CellarDetail() {
         params.set('group', '1');
         if (filters.unplaced) params.set('excludePlaced', '1');
         if (filters.reserved) params.set('reserved', '1');
+        if (filters.storage) {
+          const m = /^(group|rack):(.+)$/.exec(String(filters.storage));
+          if (m && m[1] === 'rack') params.set('rack', m[2]);
+          if (m && m[1] === 'group') params.set('rackGroup', m[2]);
+        }
         res = await getCellar(apiFetch, id, params);
       }
       const data = await res.json();
@@ -304,6 +315,8 @@ function CellarDetail() {
         });
         setRackMap(map);
         setHasRacks((racksData.racks || []).length > 0);
+        // The "Stored in" filter's choices: every rack with its group label.
+        setStorageRacks((racksData.racks || []).map(r => ({ id: String(r._id), name: r.name, group: r.group || null })));
       }
     } catch {}
   };
@@ -561,6 +574,11 @@ function CellarDetail() {
             if (filters.maturity) activeChips.push({ key: 'maturity', value: filters.maturity, label: filters.maturity });
             if (filters.unplaced) activeChips.push({ key: 'unplaced', value: '1', label: t('cellarDetail.unplacedOnly', 'Unplaced only') });
             if (filters.reserved) activeChips.push({ key: 'reserved', value: '1', label: t('cellarDetail.reservedOnly', 'Reserved only') });
+            if (filters.storage) {
+              const m = /^(group|rack):(.+)$/.exec(String(filters.storage));
+              const rackRow = m && m[1] === 'rack' ? storageRacks.find(r => r.id === m[2]) : null;
+              activeChips.push({ key: 'storage', value: filters.storage, label: m ? (m[1] === 'group' ? m[2] : (rackRow ? rackRow.name : m[2])) : filters.storage });
+            }
 
             const removeChip = (chip) => {
               setFilters(prev => {
@@ -575,7 +593,7 @@ function CellarDetail() {
             const clearAll = () => setFilters(prev => ({
               ...prev,
               type: [], country: [], region: [], appellation: [], grapes: [], vintage: [],
-              minRating: '', maturity: '', unplaced: '', reserved: ''
+              minRating: '', maturity: '', unplaced: '', reserved: '', storage: ''
             }));
 
             return (
@@ -660,6 +678,7 @@ function CellarDetail() {
                       bottlesTotal={bottlesTotal}
                       showUnplaced={!multiScope && hasRacks === true}
                       showReserved={!multiScope}
+                      storage={!multiScope ? storageRacks : null}
                     />
                   </Suspense>
                 )}
@@ -670,7 +689,7 @@ function CellarDetail() {
           {loading ? (
             <div className="loading">{t('cellarDetail.loadingCellar')}</div>
           ) : bottles.length === 0 && !bottlesLoading ? (
-            (filters.search || filters.vintage?.length || filters.minRating || filters.maturity || filters.unplaced || filters.reserved || filters.type?.length || filters.country?.length || filters.region?.length || filters.appellation?.length || filters.grapes?.length) ? (
+            (filters.search || filters.vintage?.length || filters.minRating || filters.maturity || filters.unplaced || filters.reserved || filters.storage || filters.type?.length || filters.country?.length || filters.region?.length || filters.appellation?.length || filters.grapes?.length) ? (
               <div className="empty-state">
                 <p>{t('cellarDetail.noSearchResults')}</p>
               </div>

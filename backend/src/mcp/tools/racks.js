@@ -11,7 +11,8 @@ registerTool({
   name: 'list_racks',
   title: 'List racks in a cellar',
   description:
-    'Lists the racks of one cellar with type, dimensions, capacity, fill level and zone names — no per-slot detail. ' +
+    'Lists the racks of one cellar with type, dimensions, capacity, fill level, zone names and the user\'s group label ' +
+    '(a room or appliance such as "Basement" or "Kitchen fridge"; null = ungrouped) — no per-slot detail. ' +
     'Call to get a rack overview or find a rack_id; use get_rack for the slot-by-slot map.',
   scope: 'read',
   annotations: { readOnlyHint: true, openWorldHint: false },
@@ -25,6 +26,7 @@ registerTool({
       return {
         rack_id: r._id,
         name: r.name,
+        group: r.group || null,
         type: r.isModular ? 'modular' : r.type,
         // Modular racks keep geometry in modules[]; the schema-default rows/cols
         // are meaningless there and would mislead placement reasoning.
@@ -37,7 +39,8 @@ registerTool({
         zones: (r.zones || []).map((zn) => ({ name: zn.name, positions: (zn.positions || []).length })),
       };
     });
-    return ok(`${data.length} rack(s) in "${access.cellar.name}"`, data);
+    const groups = [...new Set(data.map((r) => r.group).filter(Boolean))];
+    return ok(`${data.length} rack(s) in "${access.cellar.name}"${groups.length ? ` — groups: ${groups.join(', ')}` : ''}`, data);
   },
 });
 
@@ -79,9 +82,10 @@ registerTool({
       }))
       .sort((a, b) => a.position - b.position);
     const capacity = Math.max(getMaxPosition(rack) - (rack.disabledPositions || []).length, 0);
-    return ok(`Rack "${rack.name}": ${slots.length}/${capacity} filled`, {
+    return ok(`Rack "${rack.name}"${rack.group ? ` (${rack.group})` : ''}: ${slots.length}/${capacity} filled`, {
       rack_id: rack._id,
       name: rack.name,
+      group: rack.group || null,
       cellar_id: rack.cellar,
       type: rack.isModular ? 'modular' : rack.type,
       rows: rack.isModular ? null : rack.rows ?? null,

@@ -55,7 +55,7 @@ function groupPartExpr(field, fallback) {
  *
  * Aggregation pipelines bypass Mongoose casting, so ids are cast explicitly.
  */
-async function loadGroupedBottlePage({ cellarId, excludeSet, sortField, sortDir, skip, limit }) {
+async function loadGroupedBottlePage({ cellarId, excludeSet, onlyIds = null, sortField, sortDir, skip, limit }) {
   const { ObjectId } = mongoose.Types;
   const match = {
     cellar: new ObjectId(String(cellarId)),
@@ -64,6 +64,8 @@ async function loadGroupedBottlePage({ cellarId, excludeSet, sortField, sortDir,
   if (excludeSet.size > 0) {
     match._id = { $nin: [...excludeSet].map(id => new ObjectId(id)) };
   }
+  // The rack / group filter is an include set already minus excludeSet.
+  if (onlyIds) match._id = { $in: [...onlyIds].map(id => new ObjectId(id)) };
   const groupId = {
     // Bottles without a wine stay singleton groups (keyed by their own _id)
     wine: { $ifNull: ['$wineDefinition', '$_id'] },
@@ -1023,6 +1025,31 @@ router.get('/:id', async (req, res) => {
       }
     }
 
+    // ?rack=<id> or ?rackGroup=<name> — only the bottles placed in that rack,
+    // or in any rack of that group ("what is in the basement", support ticket
+    // 2026-09-06). Resolved to an id set once and applied on every path like
+    // excludeSet; an unknown rack or group matches nothing.
+    let onlyIds = null;
+    if (req.query.rack || req.query.rackGroup) {
+      onlyIds = new Set();
+      const rackQuery = { cellar: req.params.id, deletedAt: null };
+      let resolvable = true;
+      if (req.query.rack) {
+        if (isValidObjectId(String(req.query.rack))) rackQuery._id = String(req.query.rack);
+        else resolvable = false;
+      } else {
+        rackQuery.group = String(req.query.rackGroup).trim().slice(0, 40);
+      }
+      if (resolvable) {
+        const racks = await Rack.find(rackQuery).select('slots.bottle').lean();
+        for (const rack of racks) {
+          for (const slot of rack.slots || []) {
+            if (slot.bottle && !excludeSet.has(slot.bottle.toString())) onlyIds.add(slot.bottle.toString());
+          }
+        }
+      }
+    }
+
     // Whether we need in-memory post-processing that neither Meilisearch nor MongoDB can do
     const needsMaturity = !!(maturityFilter || sortField === 'maturity');
     const MATURITY_RANK = { declining: 0, late: 1, peak: 2, early: 3, 'not-ready': 4 };
@@ -1043,7 +1070,7 @@ router.get('/:id', async (req, res) => {
       && ['createdAt', 'vintage', 'price', 'rating'].includes(sortField);
     if (groupedInDb) {
       ({ groupsForPage, bottles, totalCount } = await loadGroupedBottlePage({
-        cellarId: req.params.id, excludeSet, sortField, sortDir, skip, limit,
+        cellarId: req.params.id, excludeSet, onlyIds, sortField, sortDir, skip, limit,
       }));
       usedMeili = false;
       canPaginateInDb = false;
@@ -1082,6 +1109,7 @@ router.get('/:id', async (req, res) => {
         if (excludeSet.size > 0) {
           idsToFetch = matchingIds.filter(id => !excludeSet.has(id));
         }
+        if (onlyIds) idsToFetch = idsToFetch.filter(id => onlyIds.has(String(id)));
 
         // Fetch just the matching bottles from MongoDB (by ID) — much smaller query
         bottles = await Bottle.find({ _id: { $in: idsToFetch } })
@@ -1109,6 +1137,7 @@ router.get('/:id', async (req, res) => {
       if (excludeSet.size > 0) {
         filter._id = { $nin: [...excludeSet] };
       }
+      if (onlyIds) filter._id = { $in: [...onlyIds] };
       // Vintage: single or comma-separated
       if (vintage) {
         const vintages = String(vintage).split(',').map(v => v.trim()).filter(Boolean);

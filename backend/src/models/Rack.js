@@ -43,6 +43,12 @@ const rackSchema = new mongoose.Schema({
   cellar:    { type: mongoose.Schema.Types.ObjectId, ref: 'Cellar', required: true, index: true },
   user:      { type: mongoose.Schema.Types.ObjectId, ref: 'User',   required: true, index: true },
   name:      { type: String, required: true, trim: true },
+  // Optional user-named group — the level between a cellar and its racks
+  // that a room needs ("Basement" holds several racks; the fridge and the
+  // cooler are one each). A label, not a collection: the racks page sections
+  // by it, the bottle filter scopes to it, the connector and analytics report
+  // it (support ticket 2026-09-06, discussion #1228). null = ungrouped.
+  group:     { type: String, trim: true, maxlength: 40, default: null },
   // Simple rack fields (used when isModular is false)
   type:      { type: String, enum: RACK_TYPES, default: 'grid' },
   rows:      { type: Number, default: 4, min: 1, max: 20 },

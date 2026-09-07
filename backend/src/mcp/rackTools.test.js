@@ -194,3 +194,24 @@ describe('structural undo', () => {
     expect(rackOps.moveBottleToCellar).toHaveBeenCalled();
   });
 });
+
+describe('rack groups (support ticket 2026-09-06)', () => {
+  test('list_racks reports each rack\'s group and names the groups in the summary', async () => {
+    ownCellar();
+    Rack.find.mockReturnValue(chain([
+      { _id: oid('1'), name: 'Left', group: 'Basement', type: 'grid', rows: 4, cols: 8, slots: [], disabledPositions: [], zones: [] },
+      { _id: oid('2'), name: 'Fridge', group: null, type: 'grid', rows: 2, cols: 3, slots: [], disabledPositions: [], zones: [] },
+    ]));
+    const body = parse(await tool('list_racks').handler({ cellar_id: oid('c') }, CTX));
+    expect(body.data.map((r) => r.group)).toEqual(['Basement', null]);
+    expect(body.summary).toMatch(/groups: Basement/);
+  });
+
+  test('create_rack passes the group to the shared creator and echoes it back', async () => {
+    ownCellar();
+    rackOps.createGridRack.mockResolvedValue({ rack: { _id: oid('e'), name: 'Left', group: 'Basement' } });
+    const body = parse(await tool('create_rack').handler({ cellar_id: oid('c'), name: 'Left', group: 'Basement' }, CTX));
+    expect(rackOps.createGridRack).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ name: 'Left', group: 'Basement' }), expect.anything());
+    expect(body.data.group).toBe('Basement');
+  });
+});

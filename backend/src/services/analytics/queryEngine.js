@@ -36,6 +36,7 @@
 const mongoose = require('mongoose');
 const Bottle = require('../../models/Bottle');
 const Cellar = require('../../models/Cellar');
+const Rack = require('../../models/Rack');
 const PersonalDataEntry = require('../../models/PersonalDataEntry');
 const RegistryDataValue = require('../../models/RegistryDataValue');
 const { resolveForVintage } = require('../registryDataOps');
@@ -378,7 +379,49 @@ async function kvCondition(field, op, value, userId) {
  * apply: before the wine $lookup (bottle paths, KV pre-resolutions) or after
  * it (wd.* paths).
  */
-async function compileFilters(filters, userId) {
+/**
+ * Bottles placed in the racks of the scope whose name / group matches. One
+ * rack query, then an id set — the same shape the cellar list route uses for
+ * ?rack= / ?rackGroup=. Unplaced bottles never match.
+ */
+async function rackBottleIds(field, op, value, scopeCellars) {
+  const cellarIds = (scopeCellars || []).map((c) => c._id);
+  const racks = await Rack.find({
+    cellar: { $in: cellarIds }, deletedAt: null,
+    [field.path]: predicate(field, op, value, (raw) => castStatic(field, raw)),
+  }).select('slots.bottle').lean();
+  const ids = [];
+  for (const r of racks) for (const s of r.slots || []) if (s.bottle) ids.push(s.bottle);
+  return ids;
+}
+
+/**
+ * The rack a bottle sits in, joined once per grouped pipeline. Racks are few
+ * per cellar, so matching each bottle against the slot arrays is cheap; the
+ * join yields { name, group } or nothing (unplaced → null bucket).
+ */
+function rackJoinStages() {
+  return [
+    {
+      $lookup: {
+        from: 'racks',
+        let: { bid: '$_id' },
+        pipeline: [
+          { $match: { $expr: { $and: [
+            { $in: ['$$bid', { $ifNull: ['$slots.bottle', []] }] },
+            { $eq: ['$deletedAt', null] },
+          ] } } },
+          { $limit: 1 },
+          { $project: { _id: 0, name: 1, group: 1 } },
+        ],
+        as: '_rack_j',
+      },
+    },
+    { $addFields: { _rack: { $first: '$_rack_j' } } },
+  ];
+}
+
+async function compileFilters(filters, userId, scopeCellars = null) {
   if (filters === undefined) return { pre: [], post: [], exprFilters: [], needsWine: false };
   if (!Array.isArray(filters) || filters.length > MAX_FILTERS) {
     throw new QueryError(400, `filters must be an array of at most ${MAX_FILTERS}`);
@@ -425,6 +468,14 @@ async function compileFilters(filters, userId) {
       post.push(cond);
     } else if (field.source === 'bottle') {
       pre.push({ [field.path]: predicate(field, f.op, f.value, (raw) => castStatic(field, raw)) });
+    } else if (field.source === 'rack') {
+      // "In the basement" = placed in a rack of that group; "not in the
+      // basement" ($nin of the same set) includes the unplaced bottles.
+      if (!['eq', 'neq', 'contains'].includes(f.op)) {
+        throw new QueryError(400, `Filter on ${field.key}: operator "${f.op}" not supported`);
+      }
+      const ids = await rackBottleIds(field, f.op === 'neq' ? 'eq' : f.op, f.value, scopeCellars);
+      pre.push({ _id: f.op === 'neq' ? { $nin: ids } : { $in: ids } });
     } else {
       throw new QueryError(400, `Field "${f.field}" cannot be filtered`);
     }
@@ -623,7 +674,7 @@ function baseMatch(scopeCellarIds, bottleScope, preConds) {
 // ── rows mode ──────────────────────────────────────────────────────────────
 
 async function runRows({ userId, scopeCellars, bottleScope, filters, sort, limit, offset, columns }) {
-  const { pre, post, exprFilters, needsWine: filterNeedsWine } = await compileFilters(filters, userId);
+  const { pre, post, exprFilters, needsWine: filterNeedsWine } = await compileFilters(filters, userId, scopeCellars);
 
   // Sort: one field, validated; default = newest first. _id tiebreaker always.
   // Taxonomy and KV sorts join their value in first (R-B) — the join stages
@@ -713,6 +764,18 @@ async function hydrateRows({ userId, pageIds, columns, scopeCellars }) {
   const byId = new Map(bottles.map((b) => [String(b._id), b]));
   const ordered = pageIds.map((id) => byId.get(String(id))).filter(Boolean);
   const cellarNames = new Map(scopeCellars.map((c) => [String(c._id), c.name]));
+
+  // Rack name / group per bottle — one query over the scope's racks, only
+  // when a rack column was asked for.
+  let rackOf = null;
+  if (fields.some((f) => f.source === 'rack')) {
+    rackOf = new Map();
+    const racks = await Rack.find({ cellar: { $in: scopeCellars.map((c) => c._id) }, deletedAt: null })
+      .select('name group slots.bottle').lean();
+    for (const r of racks) {
+      for (const s of r.slots || []) if (s.bottle) rackOf.set(String(s.bottle), { name: r.name, group: r.group || null });
+    }
+  }
 
   // KV hydration: two indexed queries for the whole page.
   const personalFields = fields.filter((f) => f.source === 'personal');
@@ -805,6 +868,9 @@ async function hydrateRows({ userId, pageIds, columns, scopeCellars }) {
         if (f.key === 'maturity.status') return classifyMaturity(b, profileMap) ?? 'unknown';
         return null;
       }
+      case 'rack': {
+        return rackOf?.get(String(b._id))?.[f.path] ?? null;
+      }
       case 'personal': {
         const v = personalValue(b, f.keyId);
         return v === undefined ? null : v;
@@ -829,7 +895,7 @@ async function hydrateRows({ userId, pageIds, columns, scopeCellars }) {
 // ── grouped mode ───────────────────────────────────────────────────────────
 
 async function runGrouped({ userId, scopeCellars, bottleScope, filters, dimensions, measures }) {
-  const { pre, post, exprFilters, needsWine: filterNeedsWine } = await compileFilters(filters, userId);
+  const { pre, post, exprFilters, needsWine: filterNeedsWine } = await compileFilters(filters, userId, scopeCellars);
 
   // ZERO dimensions is the KPI shape (dashboards, R-E): one bucket holding
   // the whole scoped set — "total bottles", "total value", "average rating".
@@ -844,11 +910,16 @@ async function runGrouped({ userId, scopeCellars, bottleScope, filters, dimensio
   const joinStages = [];
   const dimFields = [];
   const dimExprs = [];
+  let rackJoined = false;
   for (let i = 0; i < (dimensions || []).length; i++) {
     const f = await resolveField(dimensions[i], userId);
     if (!f) throw new QueryError(400, `Unknown dimension "${dimensions[i]}"`);
     if (!f.groupable) throw new QueryError(400, `Field "${dimensions[i]}" cannot be grouped`);
-    if (f.source === 'personal' || f.source === 'registry') {
+    if (f.source === 'rack') {
+      // Rack name / group: joined once, whichever of the two is asked for.
+      if (!rackJoined) { joinStages.push(...rackJoinStages()); rackJoined = true; }
+      dimExprs.push(`$_rack.${f.path}`);
+    } else if (f.source === 'personal' || f.source === 'registry') {
       // R-B: group by the joined KV value (non-numeric keys only, per the
       // catalogue flag — numeric readings would bucket per distinct value).
       joinStages.push(...kvJoinStages(f, `_d${i}v`, userId));
