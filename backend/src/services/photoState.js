@@ -40,9 +40,15 @@ const MAX_ROWS = 20;
 const apiBase = () => (process.env.BACKEND_URL || process.env.FRONTEND_URL || 'https://cellarion.app').replace(/\/+$/, '');
 function absoluteImageUrl(path) {
   if (!path || typeof path !== 'string') return null;
-  if (/^https?:\/\//i.test(path) || path.startsWith('data:')) return path;
+  // An inline data: image (a registry image copied verbatim from a wine
+  // request) can be half a megabyte; it never travels in a tool result
+  // (audit 2026-09-07) — the public wine page shows it.
+  if (path.startsWith('data:')) return null;
+  if (/^https?:\/\//i.test(path)) return path;
   return path.startsWith('/') ? `${apiBase()}${path}` : `${apiBase()}/api/uploads/${path}`;
 }
+/** True when a stored image reference is an inline data: URL (see absoluteImageUrl). */
+const isInlineImage = (path) => typeof path === 'string' && path.startsWith('data:');
 
 /** One BottleImage row → the caller-facing shape. */
 function photoState(img, userId) {
@@ -75,20 +81,28 @@ function photoState(img, userId) {
 async function photosForBottle(userId, bottle) {
   const wd = bottle.wineDefinition;
   const wineId = wd && (wd._id || wd);
-  const own = { uploadedBy: userId, $or: [{ bottle: bottle._id }, ...(wineId ? [{ wineDefinition: wineId }] : [])] };
+  // Two bounded queries, own rows first: one query with a shared cap let a
+  // wine with many published photos push the viewer's own row past the cap
+  // — the very "did my upload land?" answer this exists for (audit 2026-09-07).
+  const own = await BottleImage.find({
+    ...NOT_SCAN, uploadedBy: userId,
+    $or: [{ bottle: bottle._id }, ...(wineId ? [{ wineDefinition: wineId }] : [])],
+  }).sort({ createdAt: -1 }).limit(MAX_ROWS).lean();
   const published = wineId
-    ? { wineDefinition: wineId, status: 'approved', visibility: 'public', uploadedBy: { $ne: userId } }
-    : null;
-  const rows = await BottleImage.find({ ...NOT_SCAN, $or: published ? [own, published] : [own] })
-    .sort({ createdAt: -1 }).limit(MAX_ROWS).lean();
-  const items = rows.map((r) => photoState(r, userId))
-    .sort((a, b) => (a.mine === b.mine ? 0 : a.mine ? -1 : 1));
+    ? await BottleImage.find({
+        ...NOT_SCAN, wineDefinition: wineId, status: 'approved', visibility: 'public', uploadedBy: { $ne: userId },
+      }).sort({ createdAt: -1 }).limit(MAX_ROWS).lean()
+    : [];
+  const items = [...own, ...published].map((r) => photoState(r, userId));
+  const inline = wd && typeof wd === 'object' && isInlineImage(wd.image);
   const registryImage = wd && typeof wd === 'object' && wd.image ? absoluteImageUrl(wd.image) : null;
   return {
     count: items.length,
-    has_photo: !!registryImage || items.some((p) => p.state !== 'rejected' && !!p.url),
+    has_photo: !!registryImage || inline || items.some((p) => p.state !== 'rejected' && !!p.url),
     mine_pending: items.filter((p) => p.mine && PENDING_STATES.includes(p.state)).length,
     registry_image: registryImage,
+    ...(inline ? { registry_image_inline: true } : {}),
+    ...(own.length >= MAX_ROWS || published.length >= MAX_ROWS ? { truncated: true } : {}),
     items,
   };
 }
@@ -122,4 +136,4 @@ async function photoPresence(userId, docs) {
   return out;
 }
 
-module.exports = { STATE, PENDING_STATES, absoluteImageUrl, photoState, photosForBottle, photoPresence };
+module.exports = { STATE, PENDING_STATES, MAX_ROWS, absoluteImageUrl, isInlineImage, photoState, photosForBottle, photoPresence };

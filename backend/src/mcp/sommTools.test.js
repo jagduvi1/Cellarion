@@ -2036,8 +2036,10 @@ describe('list_maturity_queue unprofiled (audit ticket 2026-09-06)', () => {
     WineVintageProfile.countDocuments.mockResolvedValue(0);
     WineVintageProfile.find.mockReturnValue(chain([]));
     await tool('list_maturity_queue').handler({ status: 'reviewed', unprofiled: true }, SOMM_CTX);
+    // The queue's own "no profile" predicate: a HELD profile (generatedAt,
+    // no description) or a prose-less curator profile (body) is NOT unprofiled.
     expect(WineDefinition.find).toHaveBeenCalledWith({
-      $or: [{ 'aiProfile.description': { $in: [null, ''] } }, { 'aiProfile.description': { $exists: false } }],
+      'aiProfile.generatedAt': null, 'aiProfile.description': { $in: [null, ''] }, 'aiProfile.body': null,
     });
     const filter = WineVintageProfile.find.mock.calls.at(-1)[0];
     expect(filter).toEqual({ status: 'reviewed', wineDefinition: { $in: [oid('a'), oid('b')] } });

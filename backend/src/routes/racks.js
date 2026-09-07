@@ -235,7 +235,11 @@ router.put('/:id', async (req, res) => {
 
     if (name !== undefined) rack.name = name;
     // '' or null clears the group (ungrouped); absent leaves it alone.
-    if (group !== undefined) rack.group = normalizeRackGroup(group);
+    if (group !== undefined) {
+      // A non-string group is a client bug, not a request to un-group (audit 2026-09-07).
+      if (group !== null && typeof group !== 'string') return res.status(400).json({ error: 'group must be a string' });
+      rack.group = normalizeRackGroup(group);
+    }
     if (isModular !== undefined) rack.isModular = isModular;
     if (modules !== undefined) rack.modules = modules;
     if (type !== undefined) rack.type = type;

@@ -12,7 +12,7 @@ const { siteBaseUrl } = require('../../utils/siteUrl');
 const { decorateGrapes } = require('../../utils/grapeDisplay');
 const { publicProfileSummary } = require('../../services/registryTiering');
 const { gateMcpRead, CAP_MESSAGE } = require('../../services/registryReadTracker');
-const { absoluteImageUrl } = require('../../services/photoState');
+const { absoluteImageUrl, isInlineImage } = require('../../services/photoState');
 
 const REGISTRY_LIMIT = 10; // == USER_SEARCH_LIMIT in routes/wines.js
 
@@ -125,8 +125,16 @@ registerTool({
       community_rating: w.communityRating?.reviewCount ? w.communityRating : null,
       tasting_profile: anonymous ? publicProfileSummary(profile) : profile,
       // The same picture the public wine page shows; a caller's own pending
-      // photos are on get_bottle → photos, never here.
-      image: w.image ? { url: absoluteImageUrl(w.image), credit: w.imageCredit || null } : null,
+      // photos are on get_bottle → photos, never here. The credit stays with
+      // signed-in callers, as on the REST public projection; an inline data:
+      // image is not shipped (up to 500 kB) — the page shows it.
+      image: w.image
+        ? {
+            url: absoluteImageUrl(w.image),
+            ...(isInlineImage(w.image) ? { inline: true, see: 'public_url' } : {}),
+            ...(anonymous ? {} : { credit: w.imageCredit || null }),
+          }
+        : null,
       public_url: w.slug ? `${siteBaseUrl()}/wines/${w.slug}` : null,
     });
   },

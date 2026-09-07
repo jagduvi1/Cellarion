@@ -1,3 +1,4 @@
+const { splitPradikatFromAppellation } = require('../../utils/styleTerms');
 const express = require('express');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const WineRequest = require('../../models/WineRequest');
@@ -142,8 +143,10 @@ router.put('/:id/resolve', async (req, res) => {
       // WineDefinition itself rather than going through findOrCreateWine, so
       // the resolver has to be called explicitly or an approved request mints
       // a spelling variant of an already-curated appellation.
+      // A bare Prädikat is not a place — same rule as findOrCreateWine (audit 2026-09-07).
+      const pradikatSplit = splitPradikatFromAppellation(appellation, req.body.classification, cleanName);
       const cleanAppellation = await resolveCanonicalAppellation(
-        normalizeAppellation(typeof appellation === 'string' ? appellation.trim() : null)
+        normalizeAppellation(pradikatSplit.appellation)
       ) || null;
 
       if (!req.body.confirmCreate) {
@@ -202,6 +205,7 @@ router.put('/:id/resolve', async (req, res) => {
         country,
         region: region || null,
         appellation: cleanAppellation,
+        classification: pradikatSplit.classification || undefined,
         grapes: grapes || [],
         type: type || null, // no guessed red (ticket 6a85ad44)
         image: imageToStore,

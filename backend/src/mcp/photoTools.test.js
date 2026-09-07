@@ -38,6 +38,7 @@ jest.mock('../services/photoState', () => ({
   photosForBottle: jest.fn(),
   photoPresence: jest.fn(),
   absoluteImageUrl: (p) => (p ? `https://api.test/api/uploads/${p}` : null),
+  isInlineImage: (p) => typeof p === 'string' && p.startsWith('data:'),
 }));
 jest.mock('../services/bottleOps', () => ({
   consumeBottle: jest.fn(), restoreBottle: jest.fn(), addBottle: jest.fn(), updateBottleFields: jest.fn(),
@@ -86,6 +87,7 @@ beforeEach(() => {
   Bottle.countDocuments.mockResolvedValue(0);
   ingestBottleImage.mockResolvedValue({ image: { _id: new mongoose.Types.ObjectId(oid('9')), status: 'uploaded' } });
   safeFetchImage.mockResolvedValue({ buffer: Buffer.from('imgbytes'), contentType: 'image/jpeg' });
+  Cellar.find.mockReturnValue(chain([{ _id: oid('c') }]));
 });
 
 describe('get_bottle → photos', () => {
@@ -175,7 +177,7 @@ describe('attach_bottle_image answers with what the user already had and where t
     Bottle.findOne.mockReturnValue(chain({ _id: oid('d') }));
     const body = parse(await tool('attach_bottle_image').handler({ wine_id: oid('f'), image_url: 'https://cdn.example.com/label.jpg' }, CTX));
     expect(body.error).toBeUndefined();
-    expect(Bottle.findOne).toHaveBeenCalledWith({ user: ME, wineDefinition: oid('f'), status: 'active' });
+    expect(Bottle.findOne).toHaveBeenCalledWith(expect.objectContaining({ user: ME, wineDefinition: oid('f'), status: 'active', cellar: { $in: [oid('c')] } }));
     expect(body.data.bottle_id).toBe(oid('d'));
   });
 
@@ -186,5 +188,21 @@ describe('attach_bottle_image answers with what the user already had and where t
     const neither = parse(await tool('attach_bottle_image').handler({ image_url: 'https://cdn.example.com/label.jpg' }, CTX));
     expect(neither.error.code).toBe('invalid_input');
     expect(ingestBottleImage).not.toHaveBeenCalled();
+  });
+});
+
+describe('attach_bottle_image id rules (audit 2026-09-07)', () => {
+  test('bottle_id together with wine_id is refused', async () => {
+    const body = parse(await tool('attach_bottle_image').handler({ bottle_id: oid('d'), wine_id: oid('f'), image_url: 'https://cdn.example.com/label.jpg' }, CTX));
+    expect(body.error.code).toBe('invalid_input');
+    expect(ingestBottleImage).not.toHaveBeenCalled();
+  });
+
+  test('wine_id picks only from cellars the user can still edit', async () => {
+    ownBottle();
+    Bottle.findOne.mockReturnValue(chain({ _id: oid('d') }));
+    await tool('attach_bottle_image').handler({ wine_id: oid('f'), image_url: 'https://cdn.example.com/label.jpg' }, CTX);
+    expect(Cellar.find.mock.calls[0][0].$or[1]).toEqual({ members: { $elemMatch: { user: ME, role: { $in: ['editor', 'owner'] } } } });
+    expect(Bottle.findOne).toHaveBeenCalledWith(expect.objectContaining({ cellar: { $in: [oid('c')] } }));
   });
 });

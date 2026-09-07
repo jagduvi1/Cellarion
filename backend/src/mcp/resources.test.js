@@ -19,7 +19,7 @@ jest.mock('../models/Cellar', () => ({ find: jest.fn(), findById: jest.fn() }));
 jest.mock('../models/Bottle', () => ({
   find: jest.fn(), findById: jest.fn(), aggregate: jest.fn(), countDocuments: jest.fn(),
 }));
-jest.mock('../services/photoState', () => ({ photosForBottle: jest.fn().mockResolvedValue({ count: 0, has_photo: false, mine_pending: 0, registry_image: null, items: [] }), photoPresence: jest.fn().mockResolvedValue(new Map()), absoluteImageUrl: (p) => p }));
+jest.mock('../services/photoState', () => ({ photosForBottle: jest.fn().mockResolvedValue({ count: 0, has_photo: false, mine_pending: 0, registry_image: null, items: [] }), photoPresence: jest.fn().mockResolvedValue(new Map()), absoluteImageUrl: (p) => p, isInlineImage: () => false }));
 jest.mock('../models/Rack', () => ({ find: jest.fn(), findOne: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/WishlistItem', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/JournalEntry', () => ({ find: jest.fn(), countDocuments: jest.fn() }));

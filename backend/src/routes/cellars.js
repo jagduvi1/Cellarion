@@ -1369,7 +1369,13 @@ router.get('/:id', async (req, res) => {
         baseFacets = baseResult.facetDistribution || null;
 
         // If filters are active, also fetch filtered facets for cascading counts
-        if (hasAnyFilter) {
+        if (onlyIds) {
+          // The rack / group filter is not a search-index attribute, so
+          // cascading counts cannot reflect it; ship the option lists without
+          // counts rather than whole-cellar numbers beside a scoped list
+          // (audit 2026-09-07).
+          facets = null;
+        } else if (hasAnyFilter) {
           const filteredResult = await searchService.searchBottles(search || '', {
             cellarId: req.params.id,
             type: type || undefined,

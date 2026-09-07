@@ -165,6 +165,11 @@ function CellarDetail() {
     if (multiScope) setFilters(prev => (prev.reserved ? { ...prev, reserved: '' } : prev));
   }, [multiScope]);
 
+  // And for "stored in" — racks belong to one cellar (audit 2026-09-07).
+  useEffect(() => {
+    if (multiScope) setFilters(prev => (prev.storage ? { ...prev, storage: '' } : prev));
+  }, [multiScope]);
+
   // Debounce the search input — only send the API call after the user stops typing
   const [debouncedSearch, setDebouncedSearch] = useState(filters.search);
   const searchTimer = useRef(null);
@@ -318,7 +323,18 @@ function CellarDetail() {
         setRackMap(map);
         setHasRacks((racksData.racks || []).length > 0);
         // The "Stored in" filter's choices: every rack with its group label.
-        setStorageRacks((racksData.racks || []).map(r => ({ id: String(r._id), name: r.name, group: r.group || null })));
+        const storageList = (racksData.racks || []).map(r => ({ id: String(r._id), name: r.name, group: r.group || null }));
+        setStorageRacks(storageList);
+        // A remembered "stored in" whose rack was deleted or group renamed
+        // would show an opaque chip over an empty list (audit 2026-09-07).
+        setFilters(prev => {
+          const m = /^(group|rack):(.+)$/.exec(String(prev.storage || ''));
+          if (!m) return prev;
+          const alive = m[1] === 'rack'
+            ? storageList.some(r => r.id === m[2])
+            : storageList.some(r => r.group === m[2]);
+          return alive ? prev : { ...prev, storage: '' };
+        });
       }
     } catch {}
   };

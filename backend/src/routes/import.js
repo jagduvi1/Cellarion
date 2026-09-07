@@ -12,7 +12,8 @@ const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
 const { getOrCreateDailySnapshot } = require('../utils/exchangeRates');
 const { resolveRating } = require('../utils/ratingUtils');
-const { normalizeString, resolveCountryName, isRecognizedCountry, isUnknownName } = require('../utils/normalize');
+const { normalizeString, resolveCountryName, isRecognizedCountry, isUnknownName, isIdentitySentinel
+} = require('../utils/normalize');
 const { normalizeBottleSize, DEFAULT_SIZE } = require('../config/bottleSizes');
 const searchService = require('../services/search');
 const { identifyWineFromText } = require('../services/labelScan');
@@ -360,11 +361,15 @@ function typeFromFileGrapes(grapes, grapeColourOf) {
   return colours.has('Red') ? 'red' : 'white';
 }
 
-// Estate names legitimately double as the wine name ("Château Talbot").
-const ESTATE_WORD_RE = /^(ch[âa]teau|domaine|clos|quinta|tenuta|castello|weingut|bodegas?|mas|cascina|fattoria|azienda|cantina|villa|podere|finca|casa|ch\.)\b/i;
+// Estate names legitimately double as the wine name ("Château Talbot",
+// "Harlan Estate", "Schloss Johannisberg") — the estate word may lead or
+// trail (audit 2026-09-07).
+const ESTATE_WORD_RE = /\b(ch[âa]teau|domaine|clos|quinta|tenuta|castello|weingut|bodegas?|mas|cascina|fattoria|azienda|cantina|villa|podere|poderi|finca|casa|ch\.|estate|winery|vineyards?|cellars?|schloss|maison|weinbau|abbazia|marchesi|vignobles|adega|herdade)\b/i;
 function producerMirroredFromName(aiData, item) {
   const str = (v) => (typeof v === 'string' ? v.trim() : '');
-  if (str(item && item.producer)) return false;                  // the file said it — keep it
+  // A sentinel producer ("Unknown", "-") is "the file gave none" too.
+  const fileProducer = str(item && item.producer);
+  if (fileProducer && !isIdentitySentinel(fileProducer)) return false; // the file said it — keep it
   const name = str(aiData && aiData.name);
   const producer = str(aiData && aiData.producer);
   if (!name || !producer) return false;

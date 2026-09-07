@@ -114,3 +114,14 @@ describe('POST /api/racks group', () => {
     expect(body.rack.group).toBe('Basement');
   });
 });
+
+describe('PUT /api/racks/:id group validation (audit 2026-09-07)', () => {
+  test('a non-string group is a 400, not a silent un-group', async () => {
+    const doc = rackDoc({ group: 'Basement' });
+    Rack.findOne.mockResolvedValue(doc);
+    const { status } = await request(buildApp(), 'PUT', `/api/racks/${RACK_ID}`, { group: 5 });
+    expect(status).toBe(400);
+    expect(doc.group).toBe('Basement');
+    expect(doc.save).not.toHaveBeenCalled();
+  });
+});

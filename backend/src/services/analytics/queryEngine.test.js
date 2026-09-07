@@ -698,3 +698,23 @@ describe('rack name / group dimensions (support ticket 2026-09-06)', () => {
     await expect(runQuery(USER, { columns: ['rack.name'], sort: { field: 'rack.name', dir: 'asc' } })).rejects.toThrow(/not sortable/);
   });
 });
+
+describe('rack join and page map (audit 2026-09-07)', () => {
+  test('the grouped join uses the indexed localField/foreignField form, scoped to live racks', async () => {
+    const captured = aggReturning([{ _id: { d0: 'Basement' }, m0: 1 }]);
+    await runQuery(USER, { mode: 'grouped', dimensions: ['rack.group'], measures: [{ field: '*', agg: 'count' }] });
+    const lookup = captured.pipelines.at(-1).find((s) => s.$lookup && s.$lookup.from === 'racks').$lookup;
+    expect(lookup).toMatchObject({ localField: '_id', foreignField: 'slots.bottle' });
+    expect(lookup.let).toBeUndefined();
+    expect(lookup.pipeline[0]).toEqual({ $match: { deletedAt: null } });
+  });
+
+  test('rows: the rack map query is limited to racks holding a bottle of the page', async () => {
+    const B1 = 'e'.repeat(24);
+    aggReturning([{ ids: [{ _id: B1 }], total: [{ n: 1 }] }]);
+    Bottle.find.mockReturnValue(chainLean([{ _id: B1, cellar: CELLAR_A, wineDefinition: { _id: 'f'.repeat(24) } }]));
+    Rack.find.mockReturnValue(chainLean([]));
+    await runQuery(USER, { columns: ['rack.group'] });
+    expect(Rack.find.mock.calls[0][0]['slots.bottle']).toEqual({ $in: [B1] });
+  });
+});

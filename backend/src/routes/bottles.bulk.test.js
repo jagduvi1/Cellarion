@@ -259,3 +259,22 @@ describe('POST /api/bottles/bulk — drink window (support ticket 2026-09-06)', 
       { drinkFrom: null, drinkTo: null, peakFrom: null, peakUntil: null }, expect.anything());
   });
 });
+
+describe('POST /api/bottles/bulk — per-bottle window conflicts (audit 2026-09-07)', () => {
+  test('a peak-outside-window refusal on the FIRST bottle is a skip, not a whole-request 400', async () => {
+    Bottle.find.mockResolvedValue([{ _id: B(1), cellar: OWNED, status: 'active' }, { _id: B(2), cellar: OWNED, status: 'active' }]);
+    updateBottleFields
+      .mockResolvedValueOnce({ error: { status: 400, message: 'peakUntil cannot be after drinkTo' } })
+      .mockResolvedValueOnce({ changes: { drinkTo: 2029 }, prev: { drinkTo: 2035 } });
+    const { status, body } = await postJson(app(), '/api/bottles/bulk', { action: 'update', bottleIds: [B(1), B(2)], fields: { drinkTo: 2029 } });
+    expect(status).toBe(200);
+    expect(body).toMatchObject({ done: 1, doneIds: [B(2)], skipped: [{ id: B(1), reason: 'invalid' }] });
+  });
+
+  test('a payload-wide 400 still fails the request before anything is touched', async () => {
+    Bottle.find.mockResolvedValue([{ _id: B(1), cellar: OWNED, status: 'active' }]);
+    updateBottleFields.mockResolvedValueOnce({ error: { status: 400, message: 'purchaseDate must be a valid date' } });
+    const { status } = await postJson(app(), '/api/bottles/bulk', { action: 'update', bottleIds: [B(1)], fields: { purchaseDate: 'nope' } });
+    expect(status).toBe(400);
+  });
+});

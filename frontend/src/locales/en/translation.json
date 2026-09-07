@@ -4163,6 +4163,7 @@
       "price": "Price",
       "vintageMissing": "no vintage in file",
       "vintageInputAria": "Vintage year for this row",
+    "vintageInvalid": "Give each flagged row a four-digit year, or leave it empty for NV.",
       "nv": "NV"
     },
     "validate": {

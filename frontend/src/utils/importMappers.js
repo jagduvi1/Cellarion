@@ -1464,7 +1464,7 @@ export function parseOenoExport(text) {
     const baseItem = {
       wineName: (cells[idx.title] || '').trim(),
       producer: (cells[idx.winery] || '').trim(),
-      vintage: (cells[idx.year] || '').trim() || 'NV',
+      ...vintageOrNV(cells[idx.year]),
       country: (cells[idx.country] || '').trim(),
       region: (cells[idx.region] || '').trim(),
       type: mapWineType((cells[idx.type] || '').trim()),
@@ -2047,7 +2047,7 @@ export function parsePlocFiles(texts) {
     const base = {
       wineName,
       producer: producer || undefined,
-      vintage: plocGet(r, ['Vintage', 'Millésime', 'Millesime']) || 'NV',
+      ...vintageOrNV(plocGet(r, ['Vintage', 'Millésime', 'Millesime'])),
       type: PLOC_COLOUR_TO_TYPE[colour] || undefined,
       grapes: parsePlocGrapes(plocGet(r, ['Grapes', 'Cépages', 'Cepages', 'Cépage'])),
       country: plocGet(r, ['Country', 'Pays']) || undefined,

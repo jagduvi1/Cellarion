@@ -37,7 +37,7 @@ beforeEach(() => {
 
 describe('changedLotFields', () => {
   test('only the lot-level fields that changed; a changed price carries its currency', () => {
-    expect(changedLotFields(BOTTLE, { ...BOTTLE, drinkTo: 2040, notes: 'x', rating: 4 })).toEqual({ drinkTo: 2040 });
+    expect(changedLotFields(BOTTLE, { ...BOTTLE, drinkTo: 2040, notes: 'x', rating: 4 })).toEqual({ drinkFrom: 2026, drinkTo: 2040, peakFrom: null, peakUntil: null });
     expect(changedLotFields(BOTTLE, { ...BOTTLE, price: 30 })).toEqual({ price: 30, currency: 'EUR' });
     expect(changedLotFields(BOTTLE, { ...BOTTLE, currency: 'SEK' })).toEqual({ currency: 'SEK' });
     expect(changedLotFields(BOTTLE, { ...BOTTLE })).toEqual({});
@@ -46,7 +46,7 @@ describe('changedLotFields', () => {
     expect(changedLotFields({ ...BOTTLE, price: null, currency: null }, { ...BOTTLE, price: null, currency: 'SEK' })).toEqual({});
   });
   test('clearing a year propagates the clear', () => {
-    expect(changedLotFields(BOTTLE, { ...BOTTLE, drinkFrom: null })).toEqual({ drinkFrom: null });
+    expect(changedLotFields(BOTTLE, { ...BOTTLE, drinkFrom: null })).toEqual({ drinkFrom: null, drinkTo: 2035, peakFrom: null, peakUntil: null });
   });
 });
 
@@ -66,9 +66,9 @@ describe('EditForm lot checkbox', () => {
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.change(container.querySelector('input[value="2035"]'), { target: { value: '2040' } });
     fireEvent.click(screen.getByText('bottleDetail.saveChanges'));
-    await waitFor(() => expect(bulkUpdateBottles).toHaveBeenCalledWith(apiFetch, ['b2', 'b3'], { drinkTo: 2040 }));
+    await waitFor(() => expect(bulkUpdateBottles).toHaveBeenCalledWith(apiFetch, ['b2', 'b3'], { drinkFrom: 2026, drinkTo: 2040, peakFrom: null, peakUntil: null }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith(
-      expect.objectContaining({ drinkTo: 2040 }), { done: 2, skipped: 0, fields: ['drinkTo'] }));
+      expect.objectContaining({ drinkTo: 2040 }), { done: 2, skipped: 0, fields: ['drinkFrom', 'drinkTo', 'peakFrom', 'peakUntil'] }));
   });
 
   test('ticked but nothing lot-level changed: the siblings are left alone and the page is told', async () => {

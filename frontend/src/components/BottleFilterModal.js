@@ -93,14 +93,14 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
     onApply({
       ...filters,
       type: [], country: [], region: [], appellation: [], grapes: [], vintage: [],
-      minRating: '', maturity: '', unplaced: '', reserved: ''
+      minRating: '', maturity: '', unplaced: '', reserved: '', storage: ''
     });
   };
 
   const activeCount = (filters.type?.length || 0) + (filters.country?.length || 0) +
     (filters.region?.length || 0) + (filters.appellation?.length || 0) + (filters.grapes?.length || 0) +
     (filters.vintage?.length || 0) + (filters.minRating ? 1 : 0) + (filters.maturity ? 1 : 0) +
-    (filters.unplaced ? 1 : 0) + (filters.reserved ? 1 : 0);
+    (filters.unplaced ? 1 : 0) + (filters.reserved ? 1 : 0) + (filters.storage ? 1 : 0);
 
   // For a given facet key, decide which counts to use:
   // - If THIS category has active selections, use baseFacets (so you can still add more)
@@ -281,7 +281,9 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
             <FilterPill
               label={t('cellarDetail.unplacedOnly', 'Unplaced only')}
               selected={!!filters.unplaced}
-              onClick={() => onApply({ ...filters, unplaced: filters.unplaced ? '' : '1' })}
+              // "Unplaced" and "Stored in" contradict each other — picking one
+              // releases the other instead of yielding a puzzling empty list.
+              onClick={() => onApply({ ...filters, unplaced: filters.unplaced ? '' : '1', ...(filters.unplaced ? {} : { storage: '' }) })}
             />
           </FilterSection>
         )}
@@ -291,7 +293,7 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
         {Array.isArray(storage) && storage.length > 0 && (() => {
           const groups = [...new Set(storage.map(r => r.group).filter(Boolean))];
           const current = filters.storage || '';
-          const pick = (v) => onApply({ ...filters, storage: current === v ? '' : v });
+          const pick = (v) => onApply({ ...filters, storage: current === v ? '' : v, ...(current === v ? {} : { unplaced: '' }) });
           const pills = [
             ...groups.map(g => (
               <FilterPill key={`group:${g}`} label={g} selected={current === `group:${g}`} onClick={() => pick(`group:${g}`)} />
