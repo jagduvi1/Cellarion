@@ -2029,3 +2029,23 @@ describe('reset_maturity_row (6a944e46)', () => {
     expect(t.annotations.destructiveHint).toBe(true);
   });
 });
+
+describe('list_maturity_queue unprofiled (audit ticket 2026-09-06)', () => {
+  test('narrows to rows whose wine has no profile text, keeping the status filter', async () => {
+    WineDefinition.find.mockReturnValue({ select: () => ({ lean: async () => [{ _id: oid('a') }, { _id: oid('b') }] }) });
+    WineVintageProfile.countDocuments.mockResolvedValue(0);
+    WineVintageProfile.find.mockReturnValue(chain([]));
+    await tool('list_maturity_queue').handler({ status: 'reviewed', unprofiled: true }, SOMM_CTX);
+    expect(WineDefinition.find).toHaveBeenCalledWith({
+      $or: [{ 'aiProfile.description': { $in: [null, ''] } }, { 'aiProfile.description': { $exists: false } }],
+    });
+    const filter = WineVintageProfile.find.mock.calls.at(-1)[0];
+    expect(filter).toEqual({ status: 'reviewed', wineDefinition: { $in: [oid('a'), oid('b')] } });
+  });
+  test('wine_id wins over unprofiled — a wine lookup is never narrowed away', async () => {
+    WineVintageProfile.countDocuments.mockResolvedValue(0);
+    WineVintageProfile.find.mockReturnValue(chain([]));
+    await tool('list_maturity_queue').handler({ wine_id: oid('f'), unprofiled: true }, SOMM_CTX);
+    expect(WineVintageProfile.find.mock.calls.at(-1)[0]).toEqual({ wineDefinition: oid('f') });
+  });
+});

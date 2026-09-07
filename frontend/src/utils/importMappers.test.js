@@ -1072,3 +1072,17 @@ describe('stripAppellationPrefixFromName (registry backlog 2026-09-06)', () => {
     expect(stripAppellationPrefixFromName('Wehlener Sonnenuhr Riesling Auslese Goldkapsel', { appellation: 'Wehlener Sonnenuhr' })).toBe('Riesling Auslese Goldkapsel');
   });
 });
+
+describe('a row without a vintage is filed as NV but flagged (audit ticket 2026-09-05)', () => {
+  it('sets vintageMissing on the item and reports one warning with the count', () => {
+    const csv = 'Wine name,Producer,Vintage,Country\nPrado Enea Gran Reserva,Muga,,Spain\nBrut Réserve,Pol Roger,NV,France\nBarolo,Vajra,2019,Italy\n';
+    const out = parseAndMap(csv);
+    expect(out.items).toHaveLength(3);
+    expect(out.items[0].vintage).toBe('NV');
+    expect(out.items[0].vintageMissing).toBe(true);
+    expect(out.items[1].vintage).toBe('NV');
+    expect(out.items[1].vintageMissing).toBeUndefined();
+    expect(out.items[2].vintage).toBe('2019');
+    expect(out.warnings).toEqual(expect.arrayContaining([{ code: 'vintage-missing', count: 1 }]));
+  });
+});

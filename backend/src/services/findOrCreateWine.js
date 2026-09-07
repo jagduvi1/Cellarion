@@ -27,7 +27,7 @@ const { buildSurfaceForms, inferGrapeIds } = require('./grapeInference');
 const { isLabelVariant, grapeTokenSet } = require('./labelVariantMatch');
 const { resolveCanonicalProducerSpelling } = require('./producerSpelling');
 const { resolveCanonicalAppellation, candidateKeys } = require('./appellationResolve');
-const { conflictingStyleTerms } = require('../utils/styleTerms');
+const { conflictingStyleTerms, pradikatOnlyValue, pradikatContradictsName } = require('../utils/styleTerms');
 const { escapeRegex } = require('../utils/sanitize');
 
 // Auto-match when combined score >= SIMILARITY_THRESHOLD (near-identical — e.g.
@@ -357,8 +357,22 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // one (strategy R2) — BEFORE key generation, so a synonym ("Chateauneuf du
   // Pape") produces the same normalizedKey as the canonical form and the
   // exact-match stage collapses them instead of minting a sibling.
+  // A ripeness Prädikat is not a place. The import paths already route a bare
+  // "Kabinett"/"Auslese" out of the appellation (PR #1173); the add-bottle
+  // form did not, and a Weingut Herztal record arrived with appellation
+  // "Kabinett" (audit ticket 2026-09-03). Same rule for every mint: the word
+  // leaves the appellation, and moves to classification only when the name
+  // does not contradict it (a Trockenbeerenauslese on a "Trocken" is dropped).
+  let appellationIn = typeof appellation === 'string' ? appellation.trim() : '';
+  const pradikat = pradikatOnlyValue(appellationIn);
+  if (pradikat) {
+    appellationIn = '';
+    if (!(typeof classification === 'string' && classification.trim()) && !pradikatContradictsName(pradikat, trimmedName)) {
+      classification = pradikat;
+    }
+  }
   let trimmedAppellation = await resolveCanonicalAppellation(
-    normalizeAppellation((typeof appellation === 'string' ? appellation.trim() : '')).slice(0, MAX_FIELD)
+    normalizeAppellation(appellationIn).slice(0, MAX_FIELD)
   );
 
   // 0. Registry canon: the registry is vintage-neutral — a trailing year on

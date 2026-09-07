@@ -47,11 +47,14 @@ const MIN_VINTAGE_YEAR = 1900;
  * apply to neither, but the somm queue treats them differently — NV gets
  * a profile so somms can attach drinking notes, Unknown does not.
  *
- * The upper bound floats with the current year (current + 5) so future
- * en primeur releases stay accepted without code changes.
+ * The upper bound is the CURRENT year. A later vintage cannot exist — the
+ * grapes have not grown — and the old "+5 for en primeur" allowance let a
+ * 2026 Italian frizzante be recorded in August 2026 with a confident AI
+ * tasting note (support ticket 2026-08-20). En primeur is a purchase of a
+ * past harvest (a 2025 Bordeaux bought in 2026), so it still passes.
  *
  * Accepts numbers, strings, and trims whitespace. Rejects anything that
- * isn't an integer year in [MIN_VINTAGE_YEAR, currentYear+5], the literal
+ * isn't an integer year in [MIN_VINTAGE_YEAR, currentYear], the literal
  * "NV", the literal "Unknown", or blank.
  */
 function parseAndValidateVintage(raw, { now = new Date() } = {}) {
@@ -70,7 +73,7 @@ function parseAndValidateVintage(raw, { now = new Date() } = {}) {
   }
 
   const year = parseInt(str, 10);
-  const maxYear = now.getFullYear() + 5;
+  const maxYear = now.getFullYear();
   if (year < MIN_VINTAGE_YEAR || year > maxYear) {
     return {
       ok: false,

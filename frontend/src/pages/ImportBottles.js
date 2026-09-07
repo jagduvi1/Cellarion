@@ -1045,6 +1045,7 @@ function ImportBottles() {
             wines: (w.wines || []).join(', ')
           })}
           {w.code === 'no-identity-skipped' && t('importBottles.warnings.noIdentitySkipped', { count: w.count })}
+          {w.code === 'vintage-missing' && t('importBottles.warnings.vintageMissing', { count: w.count })}
           {w.code === 'extra-files-ignored' && t('importBottles.warnings.extraFilesIgnored', { count: w.count })}
           {w.code === 'ploc-placed' && t('importBottles.warnings.plocPlaced', { count: w.count, racks: w.racks })}
           {w.code === 'ploc-history' && t('importBottles.warnings.plocHistory', { count: w.count })}
@@ -1625,7 +1626,10 @@ function ImportBottles() {
                   <tr key={i}>
                     <td>{item.producer || '—'}</td>
                     <td>{item.wineName || '—'}</td>
-                    <td>{item.vintage || t('importBottles.preview.nv')}</td>
+                    <td>
+                      {item.vintage || t('importBottles.preview.nv')}
+                      {item.vintageMissing && <span className="import-flag" title={t('importBottles.preview.vintageMissing')}> ?</span>}
+                    </td>
                     <td>{item.country || '—'}</td>
                     <td>
                       <span className="type-dot" style={{ background: TYPE_DOTS[item.type] || '#888' }} />
@@ -1923,7 +1927,25 @@ function ImportBottles() {
                         <strong>{r.item.producer}</strong>
                         <span>{r.item.wineName}</span>
                         <span className="source-meta">
-                          {r.item.vintage || t('importBottles.preview.nv')}
+                          {r.item.vintageMissing ? (
+                            // The file had no vintage for this row (audit ticket
+                            // 2026-09-05): say so, and take the year right here.
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              className="review-vintage-input"
+                              placeholder={t('importBottles.preview.vintageMissing')}
+                              aria-label={t('importBottles.preview.vintageInputAria')}
+                              value={r.item.vintage === 'NV' ? '' : (r.item.vintage || '')}
+                              maxLength={4}
+                              onChange={(e) => {
+                                const v = e.target.value.replace(/[^0-9]/g, '');
+                                setResults(prev => prev.map(x => x.index === r.index
+                                  ? { ...x, item: { ...x.item, vintage: v || 'NV' } }
+                                  : x));
+                              }}
+                            />
+                          ) : (r.item.vintage || t('importBottles.preview.nv'))}
                           {r.item.country && ` · ${r.item.country}`}
                         </span>
                       </div>

@@ -1367,3 +1367,25 @@ describe('findOrCreateWine — label variants are caught even on confirmCreate',
     void realFind;
   });
 });
+
+describe('findOrCreateWine — a ripeness Prädikat is not an appellation (audit ticket 2026-09-03)', () => {
+  // The import paths already routed a bare Prädikat out of the appellation
+  // (PR #1173); the add-bottle form did not, and a Weingut Herztal record
+  // arrived with appellation "Kabinett". Every mint now applies the rule.
+  test('a bare Prädikat leaves the appellation and lands in classification', async () => {
+    await findOrCreateWine({ ...INPUT, name: 'Spätburgunder Rotwein Kabinett Trocken', appellation: 'Kabinett' }, USER_ID);
+    const doc = WineDefinition.mock.calls[0][0];
+    expect(doc.appellation || '').toBe('');
+    expect(doc.classification).toBe('Kabinett');
+  });
+  test('a Prädikat the name contradicts is dropped, not rescued', async () => {
+    await findOrCreateWine({ ...INPUT, name: 'Riesling Trocken', appellation: 'Trockenbeerenauslese' }, USER_ID);
+    const doc = WineDefinition.mock.calls[0][0];
+    expect(doc.appellation || '').toBe('');
+    expect(doc.classification || undefined).toBeUndefined();
+  });
+  test('a stated classification is kept over the rescued Prädikat', async () => {
+    await findOrCreateWine({ ...INPUT, name: 'Riesling Kabinett', appellation: 'Kabinett', classification: 'VDP.Gutswein' }, USER_ID);
+    expect(WineDefinition.mock.calls[0][0].classification).toBe('VDP.Gutswein');
+  });
+});

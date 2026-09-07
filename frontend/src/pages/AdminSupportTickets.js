@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { adminGetSupportTickets, adminRespondToTicket, adminUpdateTicketStatus } from '../api/admin';
 import './AdminSupportTickets.css';
@@ -33,8 +33,23 @@ function AdminSupportTickets() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const detailRef = useRef(null);
 
   const LIMIT = 20;
+
+  // On a phone the list sits above the detail (one grid column at 768px and
+  // below), so a tap on a ticket rendered the conversation below the fold and
+  // nothing visibly happened. Bring the panel up under the sticky navbar (the
+  // CSS sets scroll-margin-top for it). Keyed on the id so a reply or a status
+  // change on the open ticket does not scroll again; desktop keeps both
+  // columns in view and never scrolls.
+  useEffect(() => {
+    const el = detailRef.current;
+    if (!selected || !el || typeof el.scrollIntoView !== 'function' || !window.matchMedia) return;
+    if (!window.matchMedia('(max-width: 768px)').matches) return;
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
+  }, [selected?._id]);
 
   useEffect(() => {
     fetchTickets();
@@ -163,7 +178,7 @@ function AdminSupportTickets() {
           )}
         </div>
 
-        <div className="admin-support-detail">
+        <div className="admin-support-detail" ref={detailRef}>
           {!selected ? (
             <p className="admin-support-placeholder">Select a ticket to view details</p>
           ) : (

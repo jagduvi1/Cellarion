@@ -166,33 +166,50 @@
   border-radius: var(--radius-md);
   background: var(--color-surface);
   padding: 20px;
+  /* A flex child defaults to min-width:auto, so an unbreakable token in the
+     subject ("suggest_wine_correction") widened the panel past the phone
+     screen and clipped the badges and every line below (Johan, 2026-09-07). */
+  min-width: 0;
+  overflow-wrap: anywhere;
+  /* Target of the phone scroll-into-view in AdminSupportTickets.js. The navbar
+     is sticky (56px logo + 2 x 0.5rem padding + border, about 73px, plus the
+     status-bar inset on an installed PWA), so leave that much above the card. */
+  scroll-margin-top: calc(80px + env(safe-area-inset-top, 0px));
 }
 
 .admin-support-detail-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px 12px;
   margin-bottom: 8px;
 }
 
 .admin-support-detail-header h2 {
   margin: 0;
   font-size: 1.1rem;
+  flex: 1 1 220px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .admin-support-detail-badges {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   flex-shrink: 0;
 }
 
 .admin-support-detail-meta {
   display: flex;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 4px 16px;
   font-size: 0.8rem;
   color: var(--color-text-muted);
   margin-bottom: 16px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .admin-support-message,
