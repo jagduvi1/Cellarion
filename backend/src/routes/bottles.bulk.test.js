@@ -233,3 +233,29 @@ describe('POST /api/bottles/bulk — post-ship audit fixes (2026-09-03)', () => 
     expect(checkRestockGap).not.toHaveBeenCalled();
   });
 });
+
+describe('POST /api/bottles/bulk — drink window (support ticket 2026-09-06)', () => {
+  test('update: the four window fields pass the whitelist and reach the shared update; rating does not', async () => {
+    Bottle.find.mockResolvedValue([{ _id: B(1), cellar: OWNED, status: 'active' }, { _id: B(2), cellar: OWNED, status: 'active' }]);
+    updateBottleFields.mockResolvedValue({ changes: { drinkFrom: 2028 }, prev: {} });
+    const { status, body } = await postJson(app(), '/api/bottles/bulk', {
+      action: 'update', bottleIds: [B(1), B(2)],
+      fields: { drinkFrom: 2028, drinkTo: 2040, peakFrom: 2032, peakUntil: 2036, rating: 5 },
+    });
+    expect(status).toBe(200);
+    expect(body.done).toBe(2);
+    expect(updateBottleFields).toHaveBeenNthCalledWith(1, expect.objectContaining({ _id: B(1) }),
+      { drinkFrom: 2028, drinkTo: 2040, peakFrom: 2032, peakUntil: 2036 }, expect.anything());
+  });
+
+  test('update: nulls clear the window on every bottle', async () => {
+    Bottle.find.mockResolvedValue([{ _id: B(1), cellar: OWNED, status: 'active' }]);
+    updateBottleFields.mockResolvedValue({ changes: { drinkFrom: null }, prev: { drinkFrom: 2028 } });
+    const { status } = await postJson(app(), '/api/bottles/bulk', {
+      action: 'update', bottleIds: [B(1)], fields: { drinkFrom: null, drinkTo: null, peakFrom: null, peakUntil: null },
+    });
+    expect(status).toBe(200);
+    expect(updateBottleFields).toHaveBeenCalledWith(expect.anything(),
+      { drinkFrom: null, drinkTo: null, peakFrom: null, peakUntil: null }, expect.anything());
+  });
+});

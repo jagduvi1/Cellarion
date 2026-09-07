@@ -25,7 +25,7 @@ async function unclaim(rowId) {
 }
 
 const CONSUME_REVERSIBLE = ['consume', 'restore', 'open', 'pour', 'close'];
-const WRITE_REVERSIBLE = ['add', 'update', 'bulk_add', 'somm_maturity', 'somm_maturity_remove',
+const WRITE_REVERSIBLE = ['add', 'update', 'lot_update', 'bulk_add', 'somm_maturity', 'somm_maturity_remove',
   'somm_wine_profile', 'somm_price', 'somm_price_decline', 'somm_proposal',
   'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange', 'tasting_note', 'attach_image',
   'winelist_add', 'winelist_price', 'personal_data'];
@@ -586,6 +586,41 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     }
     const envelope = { summary: `Undid bulk add — ${removed.length} bottle(s) removed${winesRemoved.length ? `, ${winesRemoved.length} newly-created registry wine(s) rolled back` : ''}${failures.length ? `, ${failures.length} FAILED (remove those manually)` : ''}`, data: { undone: 'bulk_add', removed_bottle_ids: removed, ...(winesRemoved.length ? { removed_wine_ids: winesRemoved } : {}), ...(failures.length ? { failures } : {}) } };
     await logAction(ctx, { tool: 'undo_last', action: 'undo_add', viaUndo: true, cellar: row.cellar, detail: { undid: String(row._id), count: resolved.length, ...(winesRemoved.length ? { winesRemoved } : {}) }, result: envelope });
+    return ok(envelope.summary, envelope.data);
+  }
+
+  // Lot update (update_bottle apply_to_lot) — the drink window / price written
+  // to every bottle of a wine and vintage at once. prev is keyed by bottle id;
+  // every bottle is re-verified before anything is restored, then the whole
+  // lot goes back together (a partial restore would leave the lot uneven,
+  // which is the very thing the feature exists to prevent).
+  if (row.action === 'lot_update') {
+    const { updateBottleFields } = require('../services/bottleOps');
+    const prevById = row.prev && typeof row.prev === 'object' ? row.prev : {};
+    const ids = Object.keys(prevById);
+    if (!ids.length) return fail('conflict', 'That lot update has no recorded previous values; nothing was changed.');
+    const resolved = [];
+    for (const id of ids) {
+      const a = await resolveBottleAccess(ctx.user.id, id, 'editor');
+      if (!a) return fail('conflict', `Bottle ${id} from that lot update is no longer accessible; nothing was changed.`);
+      resolved.push(a.bottle);
+    }
+    const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+    if (!claimed) return fail('conflict', 'That lot update is already being undone by another request.');
+    const restored = [];
+    const failures = [];
+    for (const b of resolved) {
+      try {
+        const r = await updateBottleFields(b, prevById[String(b._id)] || {}, ctx.req);
+        if (r.error) failures.push({ bottle_id: String(b._id), error: r.error.message });
+        else restored.push(String(b._id));
+      } catch (err) { failures.push({ bottle_id: String(b._id), error: err.message }); }
+    }
+    const envelope = {
+      summary: `Undid lot update — previous values restored on ${restored.length} bottle(s)${failures.length ? `, ${failures.length} FAILED (fix those by hand)` : ''}`,
+      data: { undone: 'update_bottle', restored_bottle_ids: restored, ...(failures.length ? { failures } : {}) },
+    };
+    await logAction(ctx, { tool: 'undo_last', action: 'lot_update', viaUndo: true, bottle: row.bottle, cellar: row.cellar, detail: { undid: String(row._id), count: restored.length }, result: envelope });
     return ok(envelope.summary, envelope.data);
   }
 

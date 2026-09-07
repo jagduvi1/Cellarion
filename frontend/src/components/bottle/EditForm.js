@@ -2,7 +2,7 @@ import { useState, useRef, Suspense } from 'react';
 import { lazy } from '../../utils/lazyWithReload';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
-import { updateBottle, setBottleDefaultImage } from '../../api/bottles';
+import { updateBottle, setBottleDefaultImage, bulkUpdateBottles } from '../../api/bottles';
 import { toInputDate, validateDrinkWindowFields, DRINK_YEAR_MIN, DRINK_YEAR_MAX } from '../../utils/drinkStatus';
 import { API_URL } from '../../api/apiConstants';
 import { CURRENCIES } from '../../config/currencies';
@@ -12,7 +12,24 @@ import RatingInput from '../RatingInput';
 const ImageUpload = lazy(() => import('../ImageUpload'));
 const ImageGallery = lazy(() => import('../ImageGallery'));
 
-function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
+// The fields a wine and vintage share (support ticket 2026-09-06). Only the
+// ones the user CHANGED in this save are copied to the other bottles of the
+// lot — rating, notes, reservation and rack slot never are. A price carries
+// its currency with it; a currency alone counts only when a price exists.
+const LOT_FIELDS = ['drinkFrom', 'drinkTo', 'peakFrom', 'peakUntil', 'price'];
+const norm = (v) => (v === '' || v === null || v === undefined ? null : v);
+export function changedLotFields(original, payload) {
+  const out = {};
+  for (const k of LOT_FIELDS) {
+    if (norm(original[k]) !== norm(payload[k])) out[k] = norm(payload[k]);
+  }
+  if ('price' in out || (norm(original.price) !== null && norm(original.currency) !== norm(payload.currency))) {
+    out.currency = payload.currency;
+  }
+  return out;
+}
+
+function EditForm({ bottle, onSaved, onCancel, onImageUploaded, lotSiblingIds = [] }) {
   const { t } = useTranslation();
   const { apiFetch, user } = useAuth();
   const galleryRef = useRef(null);
@@ -39,6 +56,7 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState(null);
+  const [applyToLot, setApplyToLot] = useState(false);
 
   const set = (field) => (e) => setForm(f => ({ ...f, [field]: e.target.value }));
 
@@ -58,7 +76,7 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
     setSaving(true);
     setError(null);
     try {
-      const res = await updateBottle(apiFetch, bottle._id, {
+      const payload = {
         ...form,
         price:  form.price  ? parseFloat(form.price)  : null,
         rating: form.rating ? parseFloat(form.rating) : null,
@@ -70,10 +88,31 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
         peakUntil: form.peakUntil ? parseInt(form.peakUntil, 10) : null,
         reservedFor:   form.reservedFor.trim() || null,
         reservedUntil: form.reservedUntil ? parseInt(form.reservedUntil, 10) : null,
-      });
+      };
+      const res = await updateBottle(apiFetch, bottle._id, payload);
       const data = await res.json();
-      if (res.ok) onSaved(data.bottle);
-      else setError(data.error || 'Failed to save');
+      if (!res.ok) { setError(data.error || 'Failed to save'); return; }
+      // "Also apply to the other N": the changed lot-level fields go to the
+      // siblings through the bulk route, which re-checks every bottle and
+      // reports skips instead of failing this save.
+      let lotOutcome = null;
+      if (applyToLot && lotSiblingIds.length) {
+        const fields = changedLotFields(bottle, payload);
+        if (!Object.keys(fields).length) {
+          lotOutcome = { nothing: true };
+        } else {
+          try {
+            const r = await bulkUpdateBottles(apiFetch, lotSiblingIds, fields);
+            const d = await r.json().catch(() => ({}));
+            lotOutcome = r.ok
+              ? { done: d.done ?? 0, skipped: (d.skipped || []).length, fields: Object.keys(fields) }
+              : { error: d.error || t('bulk.failed') };
+          } catch {
+            lotOutcome = { error: t('bulk.failed') };
+          }
+        }
+      }
+      onSaved(data.bottle, lotOutcome);
     } catch {
       setError('Network error');
     } finally {
@@ -212,6 +251,15 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
           </div>
         </div>
         <p className="help-text">{t('addBottle.drinkWindowHint')}</p>
+        {lotSiblingIds.length > 0 && (
+          <div className="bd-lot-apply">
+            <label className="bd-lot-apply-label">
+              <input type="checkbox" checked={applyToLot} onChange={(e) => setApplyToLot(e.target.checked)} />
+              {' '}{t('bottleDetail.applyToLot', { count: lotSiblingIds.length })}
+            </label>
+            <p className="help-text">{t('bottleDetail.applyToLotHint')}</p>
+          </div>
+        )}
       </div>
 
       <div className="form-group">

@@ -32,6 +32,7 @@ const BulkPurchaseModal = (await import('./BulkPurchaseModal')).default;
 const BulkConsumeModal = (await import('./BulkConsumeModal')).default;
 const BulkReserveModal = (await import('./BulkReserveModal')).default;
 const BulkAddToListModal = (await import('./BulkAddToListModal')).default;
+const BulkDrinkWindowModal = (await import('./BulkDrinkWindowModal')).default;
 
 const okResult = (data) => ({ ok: true, json: async () => data });
 
@@ -129,5 +130,43 @@ describe('BulkAddToListModal', () => {
     expect(await screen.findByText('bulk.doneInfo:{"count":1}')).toBeTruthy();
     expect(screen.getByText('bulk.listSkippedInfo:{"count":1}')).toBeTruthy();
     expect(screen.getByText('Dinner menu')).toBeTruthy();
+  });
+});
+
+describe('BulkDrinkWindowModal', () => {
+  test('sends only the filled-in years as integers and shows the outcome', async () => {
+    bulkUpdateBottles.mockResolvedValue(okResult({ done: 3, skipped: [{ id: 'b3', reason: 'invalid' }] }));
+    const onDone = vi.fn();
+    const { container } = render(<BulkDrinkWindowModal bottleIds={['b1', 'b2', 'b3']} onClose={() => {}} onDone={onDone} />);
+    expect(screen.getByText('bulk.windowTitle:{"count":3}')).toBeTruthy();
+    const inputs = container.querySelectorAll('input[type="number"]');
+    fireEvent.change(inputs[0], { target: { value: '2028' } });
+    fireEvent.change(inputs[1], { target: { value: '2040' } });
+    fireEvent.click(screen.getByText('bulk.windowSubmit'));
+    await waitFor(() => expect(bulkUpdateBottles).toHaveBeenCalledWith(apiFetch, ['b1', 'b2', 'b3'], { drinkFrom: 2028, drinkTo: 2040 }));
+    expect(await screen.findByText('bulk.doneInfo:{"count":3}')).toBeTruthy();
+    expect(screen.getByText('bulk.windowSkippedInfo:{"count":1}')).toBeTruthy();
+    fireEvent.click(screen.getByText('bulk.close'));
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  test('refuses an empty form and a peak outside the window before calling the API', async () => {
+    const { container } = render(<BulkDrinkWindowModal bottleIds={['b1']} onClose={() => {}} onDone={() => {}} />);
+    fireEvent.click(screen.getByText('bulk.windowSubmit'));
+    expect(await screen.findByText('bulk.windowNeedsSomething')).toBeTruthy();
+    const inputs = container.querySelectorAll('input[type="number"]');
+    fireEvent.change(inputs[0], { target: { value: '2030' } });
+    fireEvent.change(inputs[2], { target: { value: '2028' } });
+    fireEvent.click(screen.getByText('bulk.windowSubmit'));
+    expect(await screen.findByText('addBottle.peakBeforeWindow')).toBeTruthy();
+    expect(bulkUpdateBottles).not.toHaveBeenCalled();
+  });
+
+  test('clear mode nulls all four years', async () => {
+    bulkUpdateBottles.mockResolvedValue(okResult({ done: 2, skipped: [] }));
+    render(<BulkDrinkWindowModal bottleIds={['b1', 'b2']} onClose={() => {}} onDone={() => {}} />);
+    fireEvent.click(screen.getByLabelText('bulk.windowClearMode'));
+    fireEvent.click(screen.getByText('bulk.windowClearSubmit'));
+    await waitFor(() => expect(bulkUpdateBottles).toHaveBeenCalledWith(apiFetch, ['b1', 'b2'], { drinkFrom: null, drinkTo: null, peakFrom: null, peakUntil: null }));
   });
 });

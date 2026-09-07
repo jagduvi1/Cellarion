@@ -48,6 +48,12 @@ function BottleDetail() {
   const [userRole, setUserRole] = useState(null);
   const [cellarColor, setCellarColor] = useState(null);
   const [rackInfo, setRackInfo] = useState(null);
+  // The other active bottles of this wine and vintage in the viewer's own
+  // cellars (from the bottle response) — drives the edit form's "also apply
+  // the drink window and price to the other N" checkbox, and the outcome
+  // banner after such a save.
+  const [lotSiblingIds, setLotSiblingIds] = useState([]);
+  const [lotMsg, setLotMsg] = useState(null);
   const [vintageProfile, setVintageProfile] = useState(null);
   const [priceHistory, setPriceHistory] = useState(null);
   const [currentRelease, setCurrentRelease] = useState(null);
@@ -109,6 +115,7 @@ function BottleDetail() {
         // same question with one indexed query. That per-open cost is what
         // let an ordinary editing session hit the API rate limit.
         setRackInfo(data.rackInfo || null);
+        setLotSiblingIds(Array.isArray(data.lotSiblingIds) ? data.lotSiblingIds : []);
         if (data.pendingImageUrl) {
           const url = data.pendingImageUrl.startsWith('http')
             ? data.pendingImageUrl
@@ -211,9 +218,10 @@ function BottleDetail() {
     }
   };
 
-  const handleBottleUpdated = (updated) => {
+  const handleBottleUpdated = (updated, lotOutcome = null) => {
     setBottle(updated);
     setEditing(false);
+    setLotMsg(lotOutcome);
   };
 
   const handleMistakeConfirm = async () => {
@@ -374,6 +382,24 @@ function BottleDetail() {
             className="btn btn-small btn-secondary"
             style={{ marginLeft: '0.75rem' }}
             onClick={() => setError(null)}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+      {/* Outcome of "also apply to the other N bottles" from the edit form. */}
+      {lotMsg && (
+        <div className={`alert ${lotMsg.error ? 'alert-error' : 'alert-success'}`} role="status">
+          {lotMsg.error
+            ? t('bottleDetail.lotFailed', { error: lotMsg.error })
+            : lotMsg.nothing
+              ? t('bottleDetail.lotNothing')
+              : `${t('bottleDetail.lotApplied', { count: lotMsg.done })}${lotMsg.skipped ? ` ${t('bottleDetail.lotSkipped', { count: lotMsg.skipped })}` : ''}`}
+          <button
+            type="button"
+            className="btn btn-small btn-secondary"
+            style={{ marginLeft: '0.75rem' }}
+            onClick={() => setLotMsg(null)}
           >
             ✕
           </button>
@@ -543,6 +569,7 @@ function BottleDetail() {
       {editing ? (
         <EditForm
           bottle={bottle}
+          lotSiblingIds={lotSiblingIds}
           onSaved={handleBottleUpdated}
           onCancel={() => setEditing(false)}
           onImageUploaded={(url) => setPendingImage(url)}
