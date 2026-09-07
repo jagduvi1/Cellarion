@@ -123,6 +123,88 @@ function stripProducerPrefix(name, producer) {
   return remainder || null;
 }
 
+// ── Appellation-first names and bracketed producers (import path) ───────────
+//
+// CellarTracker composes its "Wine" display name as producer + appellation +
+// designation ("Bodegas Muga Rioja Prado Enea Gran Reserva"), so after the
+// producer prefix is stripped the row still LEADS with the appellation
+// ("Rioja Prado Enea Gran Reserva") while the registry stores the designation
+// alone ("Prado Enea Gran Reserva"). Producers arrive with a parenthetical
+// the registry does not carry ("Ca' Marcanda (Gaja)"). A re-import of one
+// such file re-created its entire request queue (44 rows, 2026-09-06) —
+// every wine already existed. Both are comparison-layer variants: stored
+// strings and keys never change.
+
+// Legal-tier suffixes that ride on an appellation hint ("Chianti Classico
+// DOCG", "Rioja DOCa") but never on the wine name's leading words.
+const APPELLATION_TIER_RX = /\b(docg|doca|doc|dop|aoc|aop|igt|igp|ava|gi|do|vdp|vdqs)\b/g;
+// A remainder made only of these is a style or a grape, not a name ("Rioja
+// Reserva" → "Reserva", "Wehlener Sonnenuhr Riesling Auslese" → "Riesling
+// Auslese" where the "appellation" is the single vineyard the registry keeps
+// in the name): stripping would make every such wine of the appellation
+// collide, so the name is left whole.
+const GENERIC_WORDS = new Set([
+  'reserva', 'gran', 'grande', 'riserva', 'reserve', 'crianza', 'joven', 'classico', 'superiore',
+  'brut', 'extra', 'sec', 'demi', 'dry', 'trocken', 'feinherb', 'halbtrocken', 'kabinett', 'spatlese',
+  'auslese', 'beerenauslese', 'trockenbeerenauslese', 'eiswein', 'gg', 'groes', 'gewachs', 'erstes',
+  'rouge', 'blanc', 'rose', 'rosado', 'bianco', 'rosso', 'tinto', 'branco', 'red', 'white', 'sekt',
+  'riesling', 'chardonnay', 'pinot', 'noir', 'gris', 'grigio', 'blanco', 'sauvignon', 'merlot', 'cabernet',
+  'franc', 'syrah', 'shiraz', 'grenache', 'garnacha', 'tempranillo', 'sangiovese', 'nebbiolo', 'barbera',
+  'dolcetto', 'malbec', 'zinfandel', 'gewurztraminer', 'gruner', 'veltliner', 'chenin', 'viognier', 'muscat',
+  'moscato', 'mourvedre', 'carignan', 'gamay', 'mencia', 'garganega', 'albarino', 'alvarinho', 'verdejo',
+  'godello', 'touriga', 'nacional', 'franca', 'spatburgunder', 'weissburgunder', 'grauburgunder', 'silvaner',
+  'sylvaner', 'muller', 'thurgau', 'blaufrankisch', 'zweigelt', 'semillon', 'primitivo', 'aglianico',
+  'montepulciano', 'corvina', 'glera', 'trebbiano', 'vermentino', 'verdicchio', 'fiano', 'greco', 'nero',
+  'davola', 'carmenere', 'petit', 'verdot', 'roussanne', 'marsanne', 'cinsault', 'furmint', 'assyrtiko',
+]);
+const isGenericRemainder = (normalized) => normalized.split(' ').filter(Boolean).every((t) => GENERIC_WORDS.has(t));
+
+function normalizedAppellationHead(hint) {
+  return normalizeString(hint || '').replace(APPELLATION_TIER_RX, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * If `name` starts with the appellation (or region) hint, return the
+ * normalized remainder — else null. Null too when the remainder is a bare
+ * style word, or when the hint would swallow the whole name.
+ */
+function stripAppellationPrefix(name, hint) {
+  const nName = normalizeString(name || '');
+  const head = normalizedAppellationHead(hint);
+  if (!head || !nName.startsWith(head + ' ')) return null;
+  const remainder = nName.slice(head.length + 1).trim();
+  if (!remainder || isGenericRemainder(remainder)) return null;
+  return remainder;
+}
+
+/** Normalized name with a trailing parenthetical removed ("Château Lagrange (St. Julien)"); null when nothing to strip. */
+function stripNameBrackets(name) {
+  const bare = stripProducerBrackets(name);
+  return bare ? normalizeString(bare) : null;
+}
+
+/** "Ca' Marcanda (Gaja)" → "Ca' Marcanda"; null when nothing to strip or nothing left. */
+function stripProducerBrackets(producer) {
+  const raw = String(producer || '').trim();
+  const stripped = raw.replace(/\s*\([^)]*\)\s*$/, '').trim();
+  return stripped && stripped !== raw ? stripped : null;
+}
+
+/**
+ * The query strings an import row should try against the search engine, in
+ * order: the raw producer + name, then the same with the appellation prefix
+ * and the producer's parenthetical removed. Distinct, non-empty.
+ */
+function importQueryVariants(item) {
+  const out = [];
+  const push = (producer, name) => { const q = `${producer || ''} ${name || ''}`.trim(); if (q && !out.includes(q)) out.push(q); };
+  push(item.producer, item.wineName);
+  const producer = stripProducerBrackets(item.producer) || item.producer;
+  const name = stripAppellationPrefix(item.wineName, item.appellation) || stripAppellationPrefix(item.wineName, item.region) || item.wineName;
+  push(producer, name);
+  return out;
+}
+
 /**
  * Variant-aware scorer for the import path: the max of scoreWineMatch over
  * producer-embedded name variants. Strictly monotonic relative to
@@ -178,6 +260,34 @@ function scoreWineMatchVariants(candidate, query, opts) {
       scoreWineMatch(candidate, { ...query, name: strippedByCandidate, producer: candidate.producer }, opts)
     );
   }
+  if (best >= 1) return best;
+
+  // 5–7. Appellation-first names and bracketed producers (see the note
+  // above): every combination of {name, appellation-stripped name} ×
+  // {producer, bracket-stripped producer}, on BOTH sides, still max()-ed over
+  // the raw comparison so the result never drops below scoreWineMatch.
+  const nameVariants = [query.name];
+  for (const hint of [query.appellation, query.region, candidate.appellation]) {
+    const v = stripAppellationPrefix(query.name, hint);
+    if (v && !nameVariants.includes(v)) nameVariants.push(v);
+  }
+  const bareName = stripNameBrackets(query.name);
+  if (bareName && !nameVariants.includes(bareName)) nameVariants.push(bareName);
+  const producerVariants = [query.producer];
+  const qBare = stripProducerBrackets(query.producer);
+  if (qBare) producerVariants.push(qBare);
+  const candidateVariants = [candidate];
+  const cBare = stripProducerBrackets(candidate.producer);
+  if (cBare) candidateVariants.push({ ...candidate, producer: cBare });
+  for (const cand of candidateVariants) {
+    for (const producer of producerVariants) {
+      for (const name of nameVariants) {
+        if (cand === candidate && producer === query.producer && name === query.name) continue; // the raw pair, already in `best`
+        best = Math.max(best, scoreWineMatch(cand, { ...query, name, producer }, opts));
+        if (best >= 1) return best;
+      }
+    }
+  }
 
   return best;
 }
@@ -221,6 +331,9 @@ module.exports = {
   scoreWineMatchVariants,
   concatNormalized,
   stripProducerPrefix,
+  stripAppellationPrefix,
+  stripProducerBrackets,
+  importQueryVariants,
   findBestMatch,
   scoreAllMatches,
   WEIGHTS,

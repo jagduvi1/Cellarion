@@ -18,7 +18,7 @@ const searchService = require('../services/search');
 const { identifyWineFromText } = require('../services/labelScan');
 const aiProvider = require('../services/aiProvider');
 const { findOrCreateWine } = require('../services/findOrCreateWine');
-const { scoreWineMatchVariants, stripProducerPrefix } = require('../services/wineMatching');
+const { scoreWineMatchVariants, stripProducerPrefix, stripAppellationPrefix, stripProducerBrackets, importQueryVariants } = require('../services/wineMatching');
 const { conflictingStyleTerms, pradikatOnlyValue, pradikatContradictsName } = require('../utils/styleTerms');
 const { wineVisibilityFilter, findVisibleWine } = require('../services/wineVisibility');
 // Audit 2026-09 D13-12: parse-time warnings are bounded before they are stored.
@@ -409,7 +409,11 @@ function scoreCandidate(candidate, item) {
   return scoreWineMatchVariants(candidate, {
     name: item.wineName,
     producer: item.producer,
-    appellation: item.appellation
+    appellation: item.appellation,
+    // The region hint lets an appellation-first name ("Douro Old Vines
+    // Reserva") shed its prefix when the file names the region, not the
+    // appellation (registry backlog 2026-09-06).
+    region: item.region
   });
 }
 
@@ -466,8 +470,11 @@ async function findWineMatches(item, viewer = {}) {
   // Strategy 1: Meilisearch search (if available)
   if (searchService.getIsAvailable()) {
     try {
-      // Search with combined producer + name for best fuzzy results
-      const query = `${item.producer || ''} ${item.wineName || ''}`.trim();
+      // Search with combined producer + name for best fuzzy results — then,
+      // if that found nothing worth scoring, with the appellation prefix and
+      // the producer's parenthetical removed (registry backlog 2026-09-06: a
+      // CellarTracker re-import missed 44 known wines on those two habits).
+      const queries = importQueryVariants(item);
       const searchOpts = { limit: 15 };
 
       // Add country filter if we can resolve it
@@ -477,20 +484,23 @@ async function findWineMatches(item, viewer = {}) {
         if (countryDoc) searchOpts.countryId = countryDoc._id.toString();
       }
 
-      const { ids } = await searchService.search(query, searchOpts);
-      if (ids.length > 0) {
-        // Pending rows are not in the Meili index at all; the clause is here so
-        // the gate holds if that ever changes (all three strategies, one rule).
-        const wines = await WineDefinition.find({ _id: { $in: ids }, ...visible })
-          .populate(['country', 'region', 'grapes'])
-          .lean();
+      for (const query of queries) {
+        const { ids } = await searchService.search(query, searchOpts);
+        if (ids.length > 0) {
+          // Pending rows are not in the Meili index at all; the clause is here so
+          // the gate holds if that ever changes (all three strategies, one rule).
+          const wines = await WineDefinition.find({ _id: { $in: ids }, ...visible })
+            .populate(['country', 'region', 'grapes'])
+            .lean();
 
-        for (const wine of wines) {
-          const score = scoreCandidate(wine, item);
-          if (score >= FUZZY_THRESHOLD) {
-            candidates.set(wine._id.toString(), { wine, score });
+          for (const wine of wines) {
+            const score = scoreCandidate(wine, item);
+            if (score >= FUZZY_THRESHOLD) {
+              candidates.set(wine._id.toString(), { wine, score });
+            }
           }
         }
+        if (candidates.size > 0) break;
       }
     } catch (err) {
       console.error('Meilisearch search failed during import, falling back to MongoDB:', err.message);
@@ -530,11 +540,17 @@ async function findWineMatches(item, viewer = {}) {
   if (candidates.size < 3 && item.producer && item.wineName) {
     const normalizedProducer = normalizeString(item.producer);
     const normalizedName = normalizeString(item.wineName);
+    const bareProducer = stripProducerBrackets(item.producer);
+    const bareName = stripAppellationPrefix(item.wineName, item.appellation) || stripAppellationPrefix(item.wineName, item.region);
 
     const keyMatch = {
       $or: [
         { normalizedKey: { $regex: `^${escapeRegex(normalizedProducer)}:` } },
-        { normalizedKey: { $regex: `:${escapeRegex(normalizedName)}:` } }
+        { normalizedKey: { $regex: `:${escapeRegex(normalizedName)}:` } },
+        // The same two lookups on the appellation-stripped name and the
+        // bracket-free producer (registry backlog 2026-09-06).
+        ...(bareProducer ? [{ normalizedKey: { $regex: `^${escapeRegex(normalizeString(bareProducer))}:` } }] : []),
+        ...(bareName ? [{ normalizedKey: { $regex: `:${escapeRegex(bareName)}:` } }] : []),
       ]
     };
     // $and, not a spread: `visible` is itself an $or for non-curators, and two

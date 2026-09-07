@@ -871,6 +871,59 @@ export function splitClassificationFromName(wineName, { producer, appellation, r
   return { wineName: (producer || '').trim() || name, classification: tier };
 }
 
+// ── Appellation-first names (registry backlog 2026-09-06) ───────────────────
+//
+// CT composes "Wine" as producer + appellation + designation ("Bodegas Muga
+// Rioja Prado Enea Gran Reserva"). After the producer prefix goes, the name
+// still leads with the appellation while the registry keeps the designation
+// alone ("Prado Enea Gran Reserva"); a re-import of one such file re-created
+// its whole request queue. When the row's Appellation (or Region) opens the
+// name, drop it — unless what is left is a bare style word ("Reserva"), which
+// is not a name. CT's own Designation column, when present and matching the
+// remainder, is used verbatim so the file's spelling and case survive.
+const APPELLATION_TIER_WORDS = /\b(docg|doca|doc|dop|aoc|aop|igt|igp|ava|gi|do|vdp|vdqs)\b/g;
+// A remainder made only of styles and grapes is not a name: "Rioja Reserva"
+// → "Reserva", and a Mosel row whose CT Appellation is the single vineyard
+// ("Wehlener Sonnenuhr Riesling Auslese") must keep the vineyard, because
+// that is the wine's name. Mirrors services/wineMatching.js on the server.
+const GENERIC_NAME_WORDS = new Set([
+  'reserva', 'gran', 'grande', 'riserva', 'reserve', 'crianza', 'joven', 'classico', 'superiore',
+  'brut', 'extra', 'sec', 'demi', 'dry', 'trocken', 'feinherb', 'halbtrocken', 'kabinett', 'spatlese',
+  'auslese', 'beerenauslese', 'trockenbeerenauslese', 'eiswein', 'gg', 'grosses', 'groes', 'gewachs', 'erstes',
+  'rouge', 'blanc', 'rose', 'rosado', 'bianco', 'rosso', 'tinto', 'branco', 'red', 'white', 'sekt',
+  'riesling', 'chardonnay', 'pinot', 'noir', 'gris', 'grigio', 'blanco', 'sauvignon', 'merlot', 'cabernet',
+  'franc', 'syrah', 'shiraz', 'grenache', 'garnacha', 'tempranillo', 'sangiovese', 'nebbiolo', 'barbera',
+  'dolcetto', 'malbec', 'zinfandel', 'gewurztraminer', 'gruner', 'veltliner', 'chenin', 'viognier', 'muscat',
+  'moscato', 'mourvedre', 'carignan', 'gamay', 'mencia', 'garganega', 'albarino', 'alvarinho', 'verdejo',
+  'godello', 'touriga', 'nacional', 'franca', 'spatburgunder', 'weissburgunder', 'grauburgunder', 'silvaner',
+  'sylvaner', 'muller', 'thurgau', 'blaufrankisch', 'zweigelt', 'semillon', 'primitivo', 'aglianico',
+  'montepulciano', 'corvina', 'glera', 'trebbiano', 'vermentino', 'verdicchio', 'fiano', 'greco', 'nero',
+  'davola', 'carmenere', 'petit', 'verdot', 'roussanne', 'marsanne', 'cinsault', 'furmint', 'assyrtiko',
+]);
+const foldForPrefix = (s) => foldAccents(String(s || '')).toLowerCase().replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, ' ').trim();
+const isGenericRemainder = (folded) => folded.split(' ').filter(Boolean).every((t) => GENERIC_NAME_WORDS.has(t));
+
+export function stripAppellationPrefixFromName(wineName, { appellation, region, designation } = {}) {
+  const name = String(wineName || '').trim();
+  if (!name) return wineName;
+  const nameWords = name.split(/\s+/);
+  for (const hint of [appellation, region]) {
+    const head = foldForPrefix(hint).replace(APPELLATION_TIER_WORDS, ' ').replace(/\s+/g, ' ').trim();
+    if (!head) continue;
+    const headWords = head.split(' ');
+    if (headWords.length >= nameWords.length) continue;
+    const lead = foldForPrefix(nameWords.slice(0, headWords.length).join(' '));
+    if (lead !== head) continue;
+    const remainderWords = nameWords.slice(headWords.length);
+    const remainder = remainderWords.join(' ');
+    if (isGenericRemainder(foldForPrefix(remainder))) return name;
+    const des = String(designation || '').trim();
+    if (des && foldForPrefix(des) === foldForPrefix(remainder)) return des;
+    return remainder;
+  }
+  return name;
+}
+
 /** wineName + producer from a CT row (Producer column or heuristic). */
 function ctIdentity(get) {
   const rawWine = get(['Wine', 'wine', 'WineName']);
@@ -889,8 +942,9 @@ function ctCommonFields(get, { sizeKeys = ['Size'] } = {}) {
   const appellation = ctClean(get(['Appellation'])) || locale.appellation;
   // After producer-stripping, a Bordeaux Wine value can be pure tier
   // ("Grand Cru Classé") — route it to classification, never the name.
-  const { wineName, classification } = splitClassificationFromName(
+  const { wineName: tieredName, classification } = splitClassificationFromName(
     identity.wineName, { producer: identity.producer, appellation, region });
+  const wineName = stripAppellationPrefixFromName(tieredName, { appellation, region, designation: ctClean(get(['Designation', 'designation'])) });
   const rating = ctMyRating(get);
   return {
     wineName,
