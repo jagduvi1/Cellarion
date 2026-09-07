@@ -212,6 +212,8 @@ async function buildBottleDetail(userId, bottleId) {
       rating_scale: b.rating != null ? b.ratingScale : null,
       drink_from: b.drinkFrom ?? null,
       drink_to: b.drinkTo ?? null,
+      peak_from: b.peakFrom ?? null,
+      peak_until: b.peakUntil ?? null,
       notes: b.notes || null,
       occasion: b.occasion || null,
       // "Spoken for" — null when unreserved. Reserved bottles are excluded

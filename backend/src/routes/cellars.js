@@ -348,9 +348,24 @@ async function attachBottleImageUrls(bottles, userId) {
   const wineIdOf = (b) => b.wineDefinition && (b.wineDefinition._id || b.wineDefinition);
   const wineIds = [...new Set(bottles.map(wineIdOf).filter(Boolean).map(String))];
 
+  // Sibling bottles: the viewer's OTHER bottles of the same wines, whether or
+  // not they are on this page. A photo uploaded while the bottle still waited
+  // for its wine request carries no wineDefinition at all (support ticket
+  // 2026-09-07: one of two identical bottles showed the photo, the other did
+  // not), so the by-wine arm never sees it — the photo's bottle is the only
+  // way to learn its wine.
+  const wineOfBottle = {};
+  for (const b of bottles) { const w = wineIdOf(b); if (w) wineOfBottle[b._id.toString()] = w.toString(); }
+  if (wineIds.length) {
+    const siblings = await Bottle.find({ user: userId, wineDefinition: { $in: wineIds } }).select('_id wineDefinition').lean();
+    for (const s of siblings) if (s.wineDefinition) wineOfBottle[s._id.toString()] = s.wineDefinition.toString();
+  }
+  const imageBottleIds = Object.keys(wineOfBottle).length ? Object.keys(wineOfBottle) : bottleIds.map(String);
+  for (const id of bottleIds.map(String)) if (!imageBottleIds.includes(id)) imageBottleIds.push(id);
+
   const pendingImages = await BottleImage.find({
     $or: [
-      { bottle: { $in: bottleIds } },
+      { bottle: { $in: imageBottleIds } },
       ...(wineIds.length ? [{ wineDefinition: { $in: wineIds } }] : []),
     ],
     uploadedBy: userId,
@@ -381,8 +396,10 @@ async function attachBottleImageUrls(bottles, userId) {
     if (img.bottle && !pendingByBottle[img.bottle.toString()]) {
       pendingByBottle[img.bottle.toString()] = url;
     }
-    if (img.wineDefinition && !pendingByWine[img.wineDefinition.toString()]) {
-      pendingByWine[img.wineDefinition.toString()] = url;
+    // The wine the photo belongs to: its own reference, else its bottle's.
+    const imgWine = (img.wineDefinition && img.wineDefinition.toString()) || (img.bottle && wineOfBottle[img.bottle.toString()]) || null;
+    if (imgWine && !pendingByWine[imgWine]) {
+      pendingByWine[imgWine] = url;
     }
   }
 
