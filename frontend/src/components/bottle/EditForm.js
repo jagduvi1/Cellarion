@@ -12,17 +12,21 @@ import RatingInput from '../RatingInput';
 const ImageUpload = lazy(() => import('../ImageUpload'));
 const ImageGallery = lazy(() => import('../ImageGallery'));
 
-// The fields a wine and vintage share (support ticket 2026-09-06). Only the
-// ones the user CHANGED in this save are copied to the other bottles of the
-// lot — rating, notes, reservation and rack slot never are. A price carries
-// its currency with it; a currency alone counts only when a price exists.
-const LOT_FIELDS = ['drinkFrom', 'drinkTo', 'peakFrom', 'peakUntil', 'price'];
+// The fields a wine and vintage share (support ticket 2026-09-06). Only what
+// the user CHANGED in this save is copied to the other bottles of the lot —
+// rating, notes, reservation and rack slot never are. The drink window
+// travels as a unit: touching any of its four years copies all four, so the
+// lot ends up with ONE window rather than four uneven ones (audit
+// 2026-09-07). A price carries its currency; a currency alone counts only
+// when a price exists.
+const WINDOW_FIELDS = ['drinkFrom', 'drinkTo', 'peakFrom', 'peakUntil'];
 const norm = (v) => (v === '' || v === null || v === undefined ? null : v);
 export function changedLotFields(original, payload) {
   const out = {};
-  for (const k of LOT_FIELDS) {
-    if (norm(original[k]) !== norm(payload[k])) out[k] = norm(payload[k]);
+  if (WINDOW_FIELDS.some((k) => norm(original[k]) !== norm(payload[k]))) {
+    for (const k of WINDOW_FIELDS) out[k] = norm(payload[k]);
   }
+  if (norm(original.price) !== norm(payload.price)) out.price = norm(payload.price);
   if ('price' in out || (norm(original.price) !== null && norm(original.currency) !== norm(payload.currency))) {
     out.currency = payload.currency;
   }

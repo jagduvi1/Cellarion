@@ -393,7 +393,7 @@ async function decideKey(adminId, keyId, decision, rejectReason, { req } = {}) {
         status: decision === 'accept' ? 'accepted' : 'rejected',
         decidedBy: adminId,
         decidedAt: new Date(),
-        ...(decision === 'reject' && rejectReason ? { rejectReason: stripHtml(String(rejectReason)).slice(0, 500) } : {}),
+        ...(decision === 'reject' && rejectReason ? { rejectReason: stripHtml(String(rejectReason)).slice(0, 2000) } : {}),
       },
     },
     { new: true }
@@ -440,7 +440,7 @@ async function decideValue(adminId, valueId, decision, rejectReason, { req, asWi
     row.status = 'rejected';
     row.decidedBy = adminId;
     row.decidedAt = new Date();
-    if (rejectReason) row.rejectReason = stripHtml(String(rejectReason)).slice(0, 500);
+    if (rejectReason) row.rejectReason = stripHtml(String(rejectReason)).slice(0, 2000);
     await row.save();
     logAudit(req || null, 'registry_data.value_reject',
       { type: 'wine', id: row.wineDefinition }, { key: row.key?.name, valueId: row._id });

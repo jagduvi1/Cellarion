@@ -48,6 +48,7 @@ jest.mock('../services/bottleLot', () => {
   const LOT_FIELDS = ['drinkFrom', 'drinkTo', 'peakFrom', 'peakUntil', 'price', 'currency'];
   return {
     LOT_FIELDS,
+    LOT_LIMIT: 500,
     findLotSiblings: jest.fn(),
     pickLotFields: (fields) => Object.fromEntries(LOT_FIELDS.filter((k) => fields[k] !== undefined).map((k) => [k, fields[k]])),
   };
@@ -171,5 +172,28 @@ describe('update_bottle apply_to_lot', () => {
     expect(findLotSiblings).not.toHaveBeenCalled();
     expect(body.data.lot).toBeUndefined();
     expect(McpActionLog.create.mock.calls[0][0]).toMatchObject({ action: 'update', prev: { drinkTo: 2035 } });
+  });
+});
+
+describe('apply_to_lot guards (audit 2026-09-07)', () => {
+  test("a price without a currency carries this bottle's currency to the siblings", async () => {
+    Bottle.findById.mockReturnValue(chain({ _id: new mongoose.Types.ObjectId(oid('d')), cellar: new mongoose.Types.ObjectId(oid('c')), status: 'active', vintage: '2019', currency: 'SEK' }));
+    Cellar.findById.mockReturnValue(chain({ _id: oid('c'), user: ME, members: [], deletedAt: null, name: 'Mine' }));
+    findLotSiblings.mockResolvedValue([sib('1')]);
+    bottleOps.updateBottleFields
+      .mockResolvedValueOnce(changed({ price: 350 }, { price: 300 }))
+      .mockResolvedValueOnce(changed({ price: 350, currency: 'SEK' }, { price: 20, currency: 'USD' }));
+    await tool('update_bottle').handler({ bottle_id: oid('d'), price: 350, apply_to_lot: true }, CTX);
+    expect(bottleOps.updateBottleFields.mock.calls[1][1]).toEqual({ price: 350, currency: 'SEK' });
+  });
+
+  test('from a bottle in a cellar shared with the user, the lot is skipped with a warning', async () => {
+    Bottle.findById.mockReturnValue(chain({ _id: new mongoose.Types.ObjectId(oid('d')), cellar: new mongoose.Types.ObjectId(oid('c')), status: 'active', vintage: '2019' }));
+    Cellar.findById.mockReturnValue(chain({ _id: oid('c'), user: oid('b'), members: [{ user: ME, role: 'editor' }], deletedAt: null, name: 'Theirs' }));
+    bottleOps.updateBottleFields.mockResolvedValueOnce(changed({ drinkTo: 2040 }, { drinkTo: 2035 }));
+    const body = parse(await tool('update_bottle').handler({ bottle_id: oid('d'), drink_to: 2040, apply_to_lot: true }, CTX));
+    expect(findLotSiblings).not.toHaveBeenCalled();
+    expect(body.warnings[0]).toMatch(/shared with you/);
+    expect(McpActionLog.create.mock.calls[0][0].action).toBe('update');
   });
 });

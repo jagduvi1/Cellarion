@@ -401,16 +401,17 @@ async function rackBottleIds(field, op, value, scopeCellars) {
  * join yields { name, group } or nothing (unplaced → null bucket).
  */
 function rackJoinStages() {
+  // The concise correlated form: localField/foreignField lets the unique
+  // multikey index on slots.bottle answer the join, where an $expr $in had
+  // to scan every rack of every tenant per bottle (audit 2026-09-07).
   return [
     {
       $lookup: {
         from: 'racks',
-        let: { bid: '$_id' },
+        localField: '_id',
+        foreignField: 'slots.bottle',
         pipeline: [
-          { $match: { $expr: { $and: [
-            { $in: ['$$bid', { $ifNull: ['$slots.bottle', []] }] },
-            { $eq: ['$deletedAt', null] },
-          ] } } },
+          { $match: { deletedAt: null } },
           { $limit: 1 },
           { $project: { _id: 0, name: 1, group: 1 } },
         ],
@@ -770,7 +771,9 @@ async function hydrateRows({ userId, pageIds, columns, scopeCellars }) {
   let rackOf = null;
   if (fields.some((f) => f.source === 'rack')) {
     rackOf = new Map();
-    const racks = await Rack.find({ cellar: { $in: scopeCellars.map((c) => c._id) }, deletedAt: null })
+    // Only the racks holding a bottle of this page (indexed), not every slot
+    // of every rack in scope (audit 2026-09-07).
+    const racks = await Rack.find({ cellar: { $in: scopeCellars.map((c) => c._id) }, deletedAt: null, 'slots.bottle': { $in: pageIds } })
       .select('name group slots.bottle').lean();
     for (const r of racks) {
       for (const s of r.slots || []) if (s.bottle) rackOf.set(String(s.bottle), { name: r.name, group: r.group || null });

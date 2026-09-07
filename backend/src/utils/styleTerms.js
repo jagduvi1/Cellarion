@@ -263,3 +263,19 @@ module.exports = {
   pradikatContradictsName,
   pradikatOnlyValue,
 };
+
+/**
+ * Route a bare Prädikat out of an appellation — the one rule for EVERY mint
+ * (findOrCreateWine and the two admin routes that build a WineDefinition
+ * themselves; audit 2026-09-07). Returns the appellation to store (null when
+ * it was only the Prädikat) and the classification: the caller's own when
+ * given, else the Prädikat unless the name contradicts it.
+ */
+function splitPradikatFromAppellation(appellation, classification, name) {
+  const ap = typeof appellation === 'string' ? appellation.trim() : '';
+  const keep = typeof classification === 'string' && classification.trim() ? classification.trim() : null;
+  const pradikat = pradikatOnlyValue(ap);
+  if (!pradikat) return { appellation: ap || null, classification: keep };
+  return { appellation: null, classification: keep || (pradikatContradictsName(pradikat, name || '') ? null : pradikat) };
+}
+module.exports.splitPradikatFromAppellation = splitPradikatFromAppellation;

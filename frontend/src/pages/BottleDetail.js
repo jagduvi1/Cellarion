@@ -100,6 +100,11 @@ function BottleDetail() {
   }, [reviewAudience, reviewVintage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchBottle = async () => {
+    // A new bottle id on the same mounted page (a notification link from
+    // bottle A to bottle B) must not carry A's edit form or A's lot banner
+    // over (audit 2026-09-07).
+    setLotMsg(null);
+    setEditing(false);
     try {
       const res = await getBottle(apiFetch, bottleId);
       const data = await res.json();
@@ -389,7 +394,7 @@ function BottleDetail() {
       )}
       {/* Outcome of "also apply to the other N bottles" from the edit form. */}
       {lotMsg && (
-        <div className={`alert ${lotMsg.error ? 'alert-error' : 'alert-success'}`} role="status">
+        <div className={`alert ${lotMsg.error ? 'alert-error' : 'alert-success'}`} role={lotMsg.error ? 'alert' : 'status'}>
           {lotMsg.error
             ? t('bottleDetail.lotFailed', { error: lotMsg.error })
             : lotMsg.nothing
@@ -400,6 +405,7 @@ function BottleDetail() {
             className="btn btn-small btn-secondary"
             style={{ marginLeft: '0.75rem' }}
             onClick={() => setLotMsg(null)}
+            aria-label={t('common.close', 'Close')}
           >
             ✕
           </button>

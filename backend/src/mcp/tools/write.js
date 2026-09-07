@@ -22,7 +22,7 @@ const { registerTool } = require('../registry');
 // — a top-level require here would break every suite that loads the tool
 // registry (the #702 failure mode).
 const { addBottle, updateBottleFields } = require('../../services/bottleOps');
-const { findLotSiblings, pickLotFields, LOT_FIELDS } = require('../../services/bottleLot');
+const { findLotSiblings, pickLotFields, LOT_FIELDS, LOT_LIMIT } = require('../../services/bottleLot');
 const { logAudit } = require('../../services/audit');
 const { isValidId } = require('../../utils/validation');
 const { decorateGrapes } = require('../../utils/grapeDisplay');
@@ -311,16 +311,26 @@ registerTool({
     // the same shared validation; one that refuses (a peak outside ITS own
     // window, say) is reported under skipped, never fatal for the rest.
     const lotFields = args.apply_to_lot ? pickLotFields(fields) : {};
+    // A price is meaningless without its currency: carry this bottle's
+    // (audit 2026-09-07 — siblings kept their own, default USD, so "350"
+    // landed as 350 USD next to 350 SEK).
+    if (lotFields.price !== undefined && lotFields.currency === undefined && bottle.currency) lotFields.currency = bottle.currency;
     const lot = { count: 0, applied: [], unchanged: 0, skipped: [] };
     const primaryChanged = Object.keys(result.changes).length > 0;
     // prev keyed by bottle id, this bottle first — the undo restores in this order.
     const prevById = primaryChanged ? { [String(bottle._id)]: result.prev } : {};
     const warnings = [];
+    // The lot is the caller's OWN bottles; from a bottle in someone else's
+    // cellar that would be the wrong lot (audit 2026-09-07), so say so.
+    const ownCellar = String(access.cellar.user && (access.cellar.user._id || access.cellar.user)) === String(ctx.user.id);
     if (args.apply_to_lot && !Object.keys(lotFields).length) {
       warnings.push(`apply_to_lot ignored: none of the fields in this call are lot-level (${LOT_FIELDS.join(', ')})`);
+    } else if (args.apply_to_lot && !ownCellar) {
+      warnings.push('apply_to_lot ignored: this bottle is in a cellar shared with you, and the lot would be your own bottles, not that cellar\'s. Update the other bottles there one by one.');
     } else if (args.apply_to_lot) {
       const siblings = await findLotSiblings(ctx.user.id, bottle);
       lot.count = siblings.length;
+      if (siblings.length >= LOT_LIMIT) warnings.push(`The lot was capped at ${LOT_LIMIT} bottles.`);
       for (const sib of siblings) {
         const r = await updateBottleFields(sib, { ...lotFields }, ctx.req);
         if (r.error) { lot.skipped.push({ bottle_id: String(sib._id), reason: r.error.message }); continue; }

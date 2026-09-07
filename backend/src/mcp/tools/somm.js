@@ -305,8 +305,12 @@ registerTool({
       // description leaves the record incomplete for good unless a curator
       // finds it. Wines without profile text are few hundred, so an id list
       // keeps the page and the total honest.
+      // "No profile" is the queue's own predicate (hasProfileContent): a HELD
+      // profile has generatedAt but no description, and a curator profile may
+      // carry body/flavors without prose — neither is "nothing describes the
+      // wine" (audit 2026-09-07).
       const bare = await WineDefinition.find({
-        $or: [{ 'aiProfile.description': { $in: [null, ''] } }, { 'aiProfile.description': { $exists: false } }],
+        'aiProfile.generatedAt': null, 'aiProfile.description': { $in: [null, ''] }, 'aiProfile.body': null,
       }).select('_id').lean();
       filter.wineDefinition = { $in: bare.map((w) => w._id) };
     }
@@ -494,8 +498,8 @@ registerTool({
     const warnings = [];
     try {
       const wineId = profile.wineDefinition?._id || profile.wineDefinition;
-      const w = await WineDefinition.findById(wineId).select('aiProfile.description').lean();
-      if (w && !(w.aiProfile && w.aiProfile.description)) {
+      const w = await WineDefinition.findById(wineId).select('aiProfile.description aiProfile.generatedAt aiProfile.body').lean();
+      if (w && !hasProfileContent(w.aiProfile)) {
         warnings.push('This wine has no tasting profile text — the window is saved, but nothing describes the wine. Write one with set_wine_profile while the research is fresh (list_maturity_queue unprofiled:true finds the others).');
       }
     } catch { /* the warning is a courtesy, never a failure */ }

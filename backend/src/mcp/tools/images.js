@@ -59,13 +59,24 @@ registerTool({
     if (!args.bottle_id && !args.wine_id) {
       return fail('invalid_input', 'Provide bottle_id (from search_bottles) or wine_id (the registry wine — the photo then goes on your newest active bottle of it).');
     }
+    if (args.bottle_id && args.wine_id) {
+      return fail('invalid_input', 'Provide bottle_id OR wine_id, not both — with both, a mismatch would silently land the photo on the bottle\'s wine.');
+    }
     let bottleId = args.bottle_id;
     if (!bottleId) {
       // wine_id: the effect is per wine, so any of the user's bottles will do —
-      // the newest active one, so the photo lands where the user is looking.
-      const own = await Bottle.findOne({ user: ctx.user.id, wineDefinition: args.wine_id, status: 'active' })
-        .sort({ createdAt: -1 }).select('_id').lean();
-      if (!own) return fail('not_found', 'You have no active bottle of that wine. Add one first (resolve_wine → add_bottle), then attach the photo.');
+      // the newest active one in a cellar the user can still edit (a bottle
+      // left in a cellar they were removed from must not be picked and then
+      // refused — audit 2026-09-07).
+      const Cellar = require('../../models/Cellar');
+      const editable = await Cellar.find({
+        deletedAt: null,
+        $or: [{ user: ctx.user.id }, { members: { $elemMatch: { user: ctx.user.id, role: { $in: ['editor', 'owner'] } } } }],
+      }).select('_id').lean();
+      const own = await Bottle.findOne({
+        user: ctx.user.id, wineDefinition: args.wine_id, status: 'active', cellar: { $in: editable.map((c) => c._id) },
+      }).sort({ createdAt: -1 }).select('_id').lean();
+      if (!own) return fail('not_found', 'You have no active bottle of that wine in a cellar you can edit. Add one first (resolve_wine → add_bottle), then attach the photo.');
       bottleId = String(own._id);
     }
     const access = await resolveBottleAccess(ctx.user.id, bottleId, 'editor');

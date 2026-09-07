@@ -168,7 +168,7 @@ registerTool({
     key_id: objectId.optional(),
     value_id: objectId.optional(),
     decision: z.enum(['accept', 'reject', 'publish']).optional(),
-    reject_reason: z.string().max(500).optional(),
+    reject_reason: z.string().max(2000).optional(),
     as_wine_default: z.boolean().optional().describe('With decision=publish on a vintage-slotted value: publish it as the wine-wide default instead'),
   },
   handler: async (args, ctx) => {

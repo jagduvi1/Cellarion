@@ -1,12 +1,15 @@
 /**
  * photoState — the owner-facing photo state behind the MCP read path
  * (support ticket 2026-09-06: no way to tell "no photo", "photo exists" and
- * "upload stuck" apart over the connector).
+ * "upload stuck" apart over the connector). Audit 2026-09-07: own rows and
+ * published rows are two bounded queries, own first, so a popular wine can
+ * never push the viewer's own row past the cap; inline data: images never
+ * travel.
  */
 jest.mock('../models/BottleImage', () => ({ find: jest.fn() }));
 
 const BottleImage = require('../models/BottleImage');
-const { photoState, photosForBottle, photoPresence, absoluteImageUrl } = require('./photoState');
+const { photoState, photosForBottle, photoPresence, absoluteImageUrl, isInlineImage, MAX_ROWS } = require('./photoState');
 
 const chain = (rows) => {
   const c = {};
@@ -23,10 +26,12 @@ beforeEach(() => {
 });
 
 describe('absoluteImageUrl', () => {
-  test('full URLs pass through; /api paths and bare filenames get the API base', () => {
+  test('full URLs pass through; /api paths and bare filenames get the API base; inline data: never travels', () => {
     expect(absoluteImageUrl('https://x/y.png')).toBe('https://x/y.png');
     expect(absoluteImageUrl('/api/uploads/processed/a.png')).toBe('https://api.test/api/uploads/processed/a.png');
     expect(absoluteImageUrl('a.png')).toBe('https://api.test/api/uploads/a.png');
+    expect(absoluteImageUrl('data:image/png;base64,AAAA')).toBeNull();
+    expect(isInlineImage('data:image/png;base64,AAAA')).toBe(true);
     expect(absoluteImageUrl(null)).toBeNull();
   });
 });
@@ -53,38 +58,62 @@ describe('photoState', () => {
 });
 
 describe('photosForBottle', () => {
-  test('own rows in any state (rejected included) plus other people\'s published rows; own first; counts', async () => {
-    BottleImage.find.mockReturnValue(chain([
-      { _id: 'p', status: 'approved', uploadedBy: OTHER, processedUrl: '/p.png', wineDefinition: 'w', createdAt: 3 },
-      { _id: 'r', status: 'rejected', uploadedBy: ME, processedUrl: null, originalUrl: null, createdAt: 2 },
-      { _id: 'q', status: 'uploaded', uploadedBy: ME, originalUrl: '/q.png', wineDefinition: 'w', createdAt: 1 },
-    ]));
+  test('own rows (any state, rejected included) come from their own bounded query, published rows from another; own first', async () => {
+    BottleImage.find
+      .mockReturnValueOnce(chain([
+        { _id: 'r', status: 'rejected', uploadedBy: ME, processedUrl: null, originalUrl: null, createdAt: 2 },
+        { _id: 'q', status: 'uploaded', uploadedBy: ME, originalUrl: '/q.png', wineDefinition: 'w', createdAt: 1 },
+      ]))
+      .mockReturnValueOnce(chain([
+        { _id: 'p', status: 'approved', uploadedBy: OTHER, processedUrl: '/p.png', wineDefinition: 'w', createdAt: 3 },
+      ]));
     const out = await photosForBottle(ME, { _id: 'b1', wineDefinition: { _id: 'w', image: null } });
-    const q = BottleImage.find.mock.calls[0][0];
-    expect(q.kind).toEqual({ $ne: 'label-scan' });
-    expect(q.$or[0]).toMatchObject({ uploadedBy: ME });
-    expect(q.$or[0].$or).toEqual([{ bottle: 'b1' }, { wineDefinition: 'w' }]);
-    expect(q.$or[1]).toEqual({ wineDefinition: 'w', status: 'approved', visibility: 'public', uploadedBy: { $ne: ME } });
+    expect(BottleImage.find).toHaveBeenCalledTimes(2);
+    const own = BottleImage.find.mock.calls[0][0];
+    expect(own).toMatchObject({ kind: { $ne: 'label-scan' }, uploadedBy: ME });
+    expect(own.$or).toEqual([{ bottle: 'b1' }, { wineDefinition: 'w' }]);
+    expect(BottleImage.find.mock.calls[1][0]).toEqual({
+      kind: { $ne: 'label-scan' }, wineDefinition: 'w', status: 'approved', visibility: 'public', uploadedBy: { $ne: ME },
+    });
     expect(out.items.map((i) => i.image_id)).toEqual(['r', 'q', 'p']);
     expect(out).toMatchObject({ count: 3, has_photo: true, mine_pending: 1, registry_image: null });
+    expect(out.truncated).toBeUndefined();
   });
 
-  test('a bottle with no registry wine looks up by bottle only; nothing found → has_photo false', async () => {
-    BottleImage.find.mockReturnValue(chain([]));
+  test('a wine with a cap-full gallery cannot hide the viewer\'s own row, and says it was truncated', async () => {
+    const many = Array.from({ length: MAX_ROWS }, (_, i) => ({ _id: `p${i}`, status: 'approved', uploadedBy: OTHER, processedUrl: '/p.png', wineDefinition: 'w' }));
+    BottleImage.find
+      .mockReturnValueOnce(chain([{ _id: 'mine', status: 'uploaded', uploadedBy: ME, originalUrl: '/m.png', wineDefinition: 'w' }]))
+      .mockReturnValueOnce(chain(many));
+    const out = await photosForBottle(ME, { _id: 'b1', wineDefinition: { _id: 'w' } });
+    expect(out.items[0].image_id).toBe('mine');
+    expect(out.mine_pending).toBe(1);
+    expect(out.truncated).toBe(true);
+  });
+
+  test('a bottle with no registry wine looks up own rows by bottle only and skips the published query', async () => {
+    BottleImage.find.mockReturnValueOnce(chain([]));
     const out = await photosForBottle(ME, { _id: 'b1', wineDefinition: null });
-    expect(BottleImage.find.mock.calls[0][0].$or).toHaveLength(1);
+    expect(BottleImage.find).toHaveBeenCalledTimes(1);
+    expect(BottleImage.find.mock.calls[0][0].$or).toEqual([{ bottle: 'b1' }]);
     expect(out).toMatchObject({ count: 0, has_photo: false, mine_pending: 0, items: [] });
   });
 
-  test('the registry image counts as a photo even with no rows of the viewer\'s own', async () => {
+  test('the registry image counts as a photo; an inline one is flagged instead of shipped', async () => {
     BottleImage.find.mockReturnValue(chain([]));
     const out = await photosForBottle(ME, { _id: 'b1', wineDefinition: { _id: 'w', image: 'w.png' } });
     expect(out.has_photo).toBe(true);
     expect(out.registry_image).toBe('https://api.test/api/uploads/w.png');
+
+    BottleImage.find.mockReturnValue(chain([]));
+    const inline = await photosForBottle(ME, { _id: 'b1', wineDefinition: { _id: 'w', image: 'data:image/png;base64,AAAA' } });
+    expect(inline).toMatchObject({ has_photo: true, registry_image: null, registry_image_inline: true });
   });
 
   test('only a rejected row → count 1 but no photo', async () => {
-    BottleImage.find.mockReturnValue(chain([{ _id: 'r', status: 'rejected', uploadedBy: ME, processedUrl: null, originalUrl: null }]));
+    BottleImage.find
+      .mockReturnValueOnce(chain([{ _id: 'r', status: 'rejected', uploadedBy: ME, processedUrl: null, originalUrl: null }]))
+      .mockReturnValueOnce(chain([]));
     const out = await photosForBottle(ME, { _id: 'b1', wineDefinition: { _id: 'w' } });
     expect(out).toMatchObject({ count: 1, has_photo: false, mine_pending: 0 });
   });

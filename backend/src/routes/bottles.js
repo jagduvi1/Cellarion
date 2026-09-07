@@ -610,11 +610,16 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
     // cellars, so the edit form can offer "also apply the drink window and
     // price to the other N" (support ticket 2026-09-06). Auxiliary: a lookup
     // failure degrades to "no checkbox", never a 500.
+    // Only from a bottle in the viewer's OWN cellar: the lot is the viewer's
+    // bottles, which from someone else's cellar would be the wrong lot
+    // (audit 2026-09-07).
     let lotSiblingIds = [];
-    try {
-      lotSiblingIds = await findLotSiblingIds(req.user.id, bottle);
-    } catch (err) {
-      console.error('Lot sibling lookup failed:', err.message);
+    if (String(cellar.user && (cellar.user._id || cellar.user)) === String(req.user.id)) {
+      try {
+        lotSiblingIds = await findLotSiblingIds(req.user.id, bottle);
+      } catch (err) {
+        console.error('Lot sibling lookup failed:', err.message);
+      }
     }
 
     const ucEntry = cellar.userColors?.find(uc => uc.user.toString() === req.user.id.toString());
@@ -1033,7 +1038,12 @@ router.post('/bulk', async (req, res) => {
         if (!result.error) restockPairs.set(`${bottle.wineDefinition || ''}|${bottle.vintage || 'NV'}`, bottle);
       }
       if (result.error) {
-        if (result.error.status === 400 && !touched) {
+        // A 400 about THIS bottle's own values (its peak outside the new
+        // window) is a per-bottle skip, whatever its position in the list;
+        // only a payload-wide error still fails the whole request up front
+        // (audit 2026-09-07: the outcome depended on list order).
+        const perBottle = result.error.status === 400 && /cannot be (after|before)/.test(result.error.message || '');
+        if (result.error.status === 400 && !touched && !perBottle) {
           return res.status(400).json({ error: result.error.message });
         }
         skipped.push({ id, reason: result.error.code || (result.error.status === 400 ? 'invalid' : 'error') });

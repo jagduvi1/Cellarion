@@ -6,6 +6,7 @@
 // Every reversal re-verifies current state and refuses (conflict) if the world
 // moved on since the action; nothing here trusts that `row` is the newest.
 const McpActionLog = require('../models/McpActionLog');
+const Bottle = require('../models/Bottle');
 const { CONSUMED_STATUSES } = require('../config/constants');
 const { consumeBottle, restoreBottle, RESTORE_WINDOW_MS } = require('../services/bottleOps');
 const { logAction } = require('./actionLedger');
@@ -599,12 +600,20 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     const prevById = row.prev && typeof row.prev === 'object' ? row.prev : {};
     const ids = Object.keys(prevById);
     if (!ids.length) return fail('conflict', 'That lot update has no recorded previous values; nothing was changed.');
+    // The bottles are independent: one removed since (added by mistake, then
+    // undone) has nothing to restore and must not block the rest (audit
+    // 2026-09-07). A bottle that still exists but is no longer editable does
+    // block — restoring around it would leave the lot uneven on purpose.
     const resolved = [];
+    const missing = [];
     for (const id of ids) {
+      const exists = await Bottle.exists({ _id: id });
+      if (!exists) { missing.push(id); continue; }
       const a = await resolveBottleAccess(ctx.user.id, id, 'editor');
       if (!a) return fail('conflict', `Bottle ${id} from that lot update is no longer accessible; nothing was changed.`);
       resolved.push(a.bottle);
     }
+    if (!resolved.length) return fail('conflict', 'Every bottle of that lot update has been removed since; nothing to restore.');
     const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
     if (!claimed) return fail('conflict', 'That lot update is already being undone by another request.');
     const restored = [];
@@ -616,11 +625,29 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
         else restored.push(String(b._id));
       } catch (err) { failures.push({ bottle_id: String(b._id), error: err.message }); }
     }
+    if (failures.length) {
+      // Keep the row undoable for exactly what is still outstanding (audit
+      // 2026-09-07: a claimed-but-partial undo could never be retried).
+      // Nothing restored → plain unclaim; some restored → prev shrinks to the
+      // failed bottles so the next undo touches only those.
+      const outstanding = {};
+      for (const f of failures) outstanding[f.bottle_id] = prevById[f.bottle_id];
+      await McpActionLog.updateOne({ _id: row._id }, { $set: { reversed: false, prev: outstanding } }).catch(() => {});
+      if (!restored.length) {
+        return fail('conflict', `Cannot undo that lot update right now: ${failures[0].error} Nothing was changed — retry.`);
+      }
+    }
     const envelope = {
-      summary: `Undid lot update — previous values restored on ${restored.length} bottle(s)${failures.length ? `, ${failures.length} FAILED (fix those by hand)` : ''}`,
-      data: { undone: 'update_bottle', restored_bottle_ids: restored, ...(failures.length ? { failures } : {}) },
+      summary: `Undid lot update — previous values restored on ${restored.length} bottle(s)` +
+        (failures.length ? `, ${failures.length} not yet (undo_last again restores those)` : '') +
+        (missing.length ? `, ${missing.length} removed since (nothing to restore)` : ''),
+      data: {
+        undone: 'update_bottle', restored_bottle_ids: restored,
+        ...(failures.length ? { failures, retry: 'undo_last again restores the bottles that failed' } : {}),
+        ...(missing.length ? { removed_bottle_ids: missing } : {}),
+      },
     };
-    await logAction(ctx, { tool: 'undo_last', action: 'lot_update', viaUndo: true, bottle: row.bottle, cellar: row.cellar, detail: { undid: String(row._id), count: restored.length }, result: envelope });
+    await logAction(ctx, { tool: 'undo_last', action: 'lot_update', viaUndo: true, bottle: row.bottle, cellar: row.cellar, detail: { undid: String(row._id), count: restored.length, ...(failures.length ? { outstanding: failures.length } : {}) }, result: envelope });
     return ok(envelope.summary, envelope.data);
   }
 

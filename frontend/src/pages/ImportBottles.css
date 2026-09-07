@@ -1625,3 +1625,6 @@
 /* Import review: a row whose file had no vintage (audit ticket 2026-09-05) */
 .review-vintage-input { width: 5.5em; padding: 2px 6px; font: inherit; font-size: 0.85em; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text); }
 .import-flag { color: var(--color-warning, #b8860b); font-weight: 600; cursor: help; }
+
+/* A typed vintage that is not a real year (audit 2026-09-07). */
+.review-vintage-input[aria-invalid="true"] { border-color: var(--color-danger); outline: 1px solid var(--color-danger); }

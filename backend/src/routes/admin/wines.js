@@ -1,3 +1,4 @@
+const { splitPradikatFromAppellation } = require('../../utils/styleTerms');
 const express = require('express');
 const mongoose = require('mongoose');
 const { requireAuth, requireRole } = require('../../middleware/auth');
@@ -182,8 +183,10 @@ router.post('/', async (req, res) => {
     // directly, so without the curated-registry lookup an admin create
     // reintroduces the spelling variants the mint chokepoint folds. One
     // resolution serves the dedup probe, the key and the stored field.
+    // A bare Prädikat is not a place — same rule as findOrCreateWine (audit 2026-09-07).
+    const pradikatSplit = splitPradikatFromAppellation(appellation, req.body.classification, cleanName);
     const cleanAppellation = await resolveCanonicalAppellation(
-      normalizeAppellation(typeof appellation === 'string' ? appellation.trim() : null)
+      normalizeAppellation(pradikatSplit.appellation)
     ) || null;
 
     if (!confirmCreate) {
@@ -253,6 +256,7 @@ router.post('/', async (req, res) => {
       country,
       region: region || null,
       appellation: cleanAppellation,
+      classification: pradikatSplit.classification || undefined,
       grapes: grapes || [],
       type: type || null, // no guessed red (ticket 6a85ad44)
       image: image || null,

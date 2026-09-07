@@ -7,6 +7,7 @@
  * claim (so a double-revert loses cleanly).
  */
 
+jest.mock('../models/Bottle', () => ({ exists: jest.fn().mockResolvedValue(true) }));
 jest.mock('../models/McpActionLog', () => ({ findOne: jest.fn(), findOneAndUpdate: jest.fn(), updateOne: jest.fn() }));
 jest.mock('../services/embeddingJob', () => ({ reembedActiveVintages: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../models/WineList', () => ({ findOne: jest.fn() }));
@@ -454,5 +455,39 @@ describe('lot_update (update_bottle apply_to_lot, support ticket 2026-09-06)', (
   test('is write-class: a consume-only token cannot reverse it', () => {
     expect(WRITE_REVERSIBLE).toContain('lot_update');
     expect(reversibleActionsFor(['consume'])).not.toContain('lot_update');
+  });
+});
+
+describe('lot_update undo — partial failure and removed bottles (audit 2026-09-07)', () => {
+  const Bottle = require('../models/Bottle');
+  beforeEach(() => { Bottle.exists.mockResolvedValue(true); });
+
+  test('a sibling whose save fails keeps the row undoable for exactly that sibling', async () => {
+    resolveBottleAccess.mockImplementation(async (uid, id) => ({ bottle: { _id: id, vintage: 2018, cellar: 'c1' } }));
+    bottleOps.updateBottleFields.mockImplementation(async (b) => (String(b._id) === 'b2'
+      ? { error: { status: 409, message: 'modified by another request' } }
+      : { changes: {}, prev: {} }));
+    const res = await revertLedgerRow({ _id: 'r', action: 'lot_update', bottle: 'b1', prev: { b1: { price: 1 }, b2: { price: 2 } } }, ctx(), H);
+    expect(res.data.restored_bottle_ids).toEqual(['b1']);
+    expect(res.data.retry).toMatch(/undo_last again/);
+    expect(McpActionLog.updateOne).toHaveBeenCalledWith({ _id: 'r' }, { $set: { reversed: false, prev: { b2: { price: 2 } } } });
+  });
+
+  test('nothing restored: the row is unclaimed and the undo reports a conflict to retry', async () => {
+    resolveBottleAccess.mockImplementation(async (uid, id) => ({ bottle: { _id: id } }));
+    bottleOps.updateBottleFields.mockResolvedValue({ error: { status: 409, message: 'db hiccup' } });
+    const res = await revertLedgerRow({ _id: 'r', action: 'lot_update', bottle: 'b1', prev: { b1: { price: 1 } } }, ctx(), H);
+    expect(res).toMatchObject({ ok: false, code: 'conflict' });
+    expect(McpActionLog.updateOne).toHaveBeenCalledWith({ _id: 'r' }, { $set: { reversed: false, prev: { b1: { price: 1 } } } });
+  });
+
+  test('a bottle removed since is skipped and reported; the rest are restored', async () => {
+    Bottle.exists.mockImplementation(async ({ _id }) => _id !== 'b2');
+    resolveBottleAccess.mockImplementation(async (uid, id) => ({ bottle: { _id: id } }));
+    bottleOps.updateBottleFields.mockResolvedValue({ changes: {}, prev: {} });
+    const res = await revertLedgerRow({ _id: 'r', action: 'lot_update', bottle: 'b1', prev: { b1: { price: 1 }, b2: { price: 2 } } }, ctx(), H);
+    expect(res.data.restored_bottle_ids).toEqual(['b1']);
+    expect(res.data.removed_bottle_ids).toEqual(['b2']);
+    expect(bottleOps.updateBottleFields).toHaveBeenCalledTimes(1);
   });
 });

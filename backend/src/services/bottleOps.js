@@ -586,7 +586,13 @@ async function updateBottleFields(bottle, fields, req) {
   }
 
   // Vintage: coerce to canonical form ('NV' / 'Unknown' / 'YYYY') or reject.
-  if (fields.vintage !== undefined) {
+  // An UNCHANGED vintage is never re-validated: the web form sends the whole
+  // form on every save, and a bottle stored under an older rule (2028 was
+  // legal when the cap was harvest year + 5) must stay editable — a price
+  // change is not the moment to argue about its vintage (audit 2026-09-07).
+  if (fields.vintage !== undefined && String(fields.vintage).trim() === String(bottle.vintage ?? '').trim()) {
+    delete fields.vintage;
+  } else if (fields.vintage !== undefined) {
     const p = parseAndValidateVintage(fields.vintage);
     if (!p.ok) return { error: { status: 400, message: p.error } };
     fields.vintage = p.value;

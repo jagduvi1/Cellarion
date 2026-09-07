@@ -953,7 +953,18 @@ function ImportBottles() {
 
   const getImportableCount = () => results.filter(isImportableRow).length;
 
+  // A typed vintage on a flagged row must be a real year before confirm, or
+  // the one row the user took care of is the one the server rejects
+  // (audit 2026-09-07). Empty stays NV.
+  const isBadTypedVintage = (v) => {
+    if (!v || v === 'NV') return false;
+    const n = parseInt(v, 10);
+    return !/^\d{4}$/.test(String(v)) || n < 1900 || n > new Date().getFullYear();
+  };
+  const hasBadTypedVintage = results.some(r => r.item && r.item.vintageMissing && isBadTypedVintage(r.item.vintage));
+
   const handleImport = async () => {
+    if (hasBadTypedVintage) { setError(t('importBottles.preview.vintageInvalid', 'Give each flagged row a four-digit year (or leave it empty for NV).')); return; }
     setImporting(true);
     setError(null);
     setStep('importing');
@@ -1938,6 +1949,7 @@ function ImportBottles() {
                               aria-label={t('importBottles.preview.vintageInputAria')}
                               value={r.item.vintage === 'NV' ? '' : (r.item.vintage || '')}
                               maxLength={4}
+                              aria-invalid={isBadTypedVintage(r.item.vintage) ? 'true' : undefined}
                               onChange={(e) => {
                                 const v = e.target.value.replace(/[^0-9]/g, '');
                                 setResults(prev => prev.map(x => x.index === r.index
@@ -2142,7 +2154,8 @@ function ImportBottles() {
           <button
             className="btn btn-primary btn-import"
             onClick={handleImport}
-            disabled={importable === 0 || importing}
+            disabled={importable === 0 || importing || hasBadTypedVintage}
+            title={hasBadTypedVintage ? t('importBottles.preview.vintageInvalid', 'Give each flagged row a four-digit year (or leave it empty for NV).') : undefined}
           >
             {importing
               ? t('importBottles.review.importing')
