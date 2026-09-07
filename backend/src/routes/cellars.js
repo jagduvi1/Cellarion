@@ -357,8 +357,13 @@ async function attachBottleImageUrls(bottles, userId) {
   const wineOfBottle = {};
   for (const b of bottles) { const w = wineIdOf(b); if (w) wineOfBottle[b._id.toString()] = w.toString(); }
   if (wineIds.length) {
-    const siblings = await Bottle.find({ user: userId, wineDefinition: { $in: wineIds } }).select('_id wineDefinition').lean();
-    for (const s of siblings) if (s.wineDefinition) wineOfBottle[s._id.toString()] = s.wineDefinition.toString();
+    try {
+      const siblings = await Bottle.find({ user: userId, wineDefinition: { $in: wineIds } }).select('_id wineDefinition').lean();
+      for (const s of siblings) if (s.wineDefinition) wineOfBottle[s._id.toString()] = s.wineDefinition.toString();
+    } catch (err) {
+      // A photo nicety must never take the cellar list down.
+      console.error('Sibling photo lookup failed:', err.message);
+    }
   }
   const imageBottleIds = Object.keys(wineOfBottle).length ? Object.keys(wineOfBottle) : bottleIds.map(String);
   for (const id of bottleIds.map(String)) if (!imageBottleIds.includes(id)) imageBottleIds.push(id);
