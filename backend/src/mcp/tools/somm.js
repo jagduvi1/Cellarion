@@ -16,6 +16,7 @@ const WineVintagePrice = require('../../models/WineVintagePrice');
 const PriceTrackingRequest = require('../../models/PriceTrackingRequest');
 const PriceTrackingSkip = require('../../models/PriceTrackingSkip');
 const WineDefinition = require('../../models/WineDefinition');
+const { DOWNGRADE_RULES } = require('../../utils/producerSuspectCheck');
 const aiConfig = require('../../config/aiConfig');
 const Bottle = require('../../models/Bottle');
 const WineCorrectionProposal = require('../../models/WineCorrectionProposal');
@@ -3188,8 +3189,21 @@ registerTool({
     const scan = await scanCrossFieldChecks({ checkIds: [RULE] });
     const all = scan.rows.filter((r) => r.hits.some((h) => h.check === RULE));
 
+    // A variety with no curated colour is skipped by the rule, not passed by
+    // it (somm 6a9e9a2f): name the colourless ones in use, so a zero reads as
+    // "zero among the evaluable rows" rather than as a clean registry.
+    const unevaluated = await colourlessVarietiesInUse();
+    const caveat = unevaluated.count
+      ? ` ${unevaluated.count} colourless variet${unevaluated.count === 1 ? 'y is' : 'ies are'} in use and never ` +
+        `evaluated (${unevaluated.names.slice(0, 8).join(', ')}${unevaluated.count > 8 ? ', …' : ''}): give them a ` +
+        'colour with edit_grape and this check starts seeing their wines.'
+      : '';
+
     if (args.counts_only) {
-      return ok(`${all.length} wine(s) whose stored type contradicts every grape on them.`, { total: all.length });
+      return ok(
+        `${all.length} wine(s) whose stored type contradicts every grape on them.${caveat}`,
+        { total: all.length, unevaluated_varieties: unevaluated }
+      );
     }
 
     const page = all.slice(args.offset, args.offset + args.limit);
@@ -3203,11 +3217,30 @@ registerTool({
     }));
     return ok(
       `${all.length} colour conflict(s); showing ${rows.length} from ${args.offset}. Either the type or the grape ` +
-      'list is wrong on each — the check does not presume which.',
-      { total: all.length, limit: args.limit, offset: args.offset, wines: rows }
+      `list is wrong on each — the check does not presume which.${caveat}`,
+      { total: all.length, limit: args.limit, offset: args.offset, unevaluated_varieties: unevaluated, wines: rows }
     );
   },
 });
+
+// Grapes with no curated colour, restricted to the ones at least one
+// published wine still references — the blind spot of the colour check.
+async function colourlessVarietiesInUse() {
+  const Grape = require('../../models/Grape');
+  const colourless = await Grape.find({ $or: [{ color: null }, { color: { $exists: false } }] }).select('name').lean();
+  if (!colourless.length) return { count: 0, names: [] };
+  const inUse = new Set(
+    (await WineDefinition.distinct('grapes', { grapes: { $in: colourless.map((g) => g._id) }, nonWine: { $ne: true } }))
+      .map(String)
+  );
+  const names = colourless.filter((g) => inUse.has(String(g._id))).map((g) => g.name).sort((a, b) => a.localeCompare(b));
+  return { count: names.length, names: names.slice(0, 25) };
+}
+
+// The variety vocabulary the description audit grades against: curated rows,
+// plus user mints a curator has since reviewed. An unreviewed mint is still
+// just a string somebody typed.
+const REVIEWED_VARIETY_FILTER = { $or: [{ createdByUser: { $ne: true } }, { reviewedAt: { $ne: null } }] };
 
 // Somm ticket 6a869911 (2026-08-20): list_colour_conflicts shipped read-only,
 // so a row only a LABEL can settle was re-researched every session — Palazzo
@@ -3324,12 +3357,17 @@ registerTool({
     'suspectDecision instead and never appears here. One documented semantic (audit 6a86dad6): the tag records ' +
     'which rule FIRED under strongest-claim-first precedence, not which shape the note best fits — a note that ' +
     'textually asserts a producer can carry the epistemic tag when the assertion regex did not match it; the ' +
-    'outcome is identical either way.',
+    'outcome is identical either way. A fourth tag, `appellation_has_geography`, is record-based rather than ' +
+    'note-based: the wine carries an appellation that resolves to a curated entry with geography, so a knowable ' +
+    'house stands behind whatever the producer string says.',
   scope: 'read',
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {
-    rule: z.enum(['note_asserts_producer', 'note_epistemic_only', 'note_doubts_cuvee_not_producer']).optional()
+    // Derived from the rule table itself, so a rule added to the downgrade
+    // logic is filterable here the same day (somm 6a9e9a2f: the record-based
+    // appellation_has_geography rows were counted but unreachable).
+    rule: z.enum(Object.values(DOWNGRADE_RULES)).optional()
       .describe('Only rows moved by this rule; omit for all'),
     counts_only: z.boolean().optional().describe('Return just the totals, per rule'),
     limit: z.number().int().min(1).max(100).default(50),
@@ -3441,8 +3479,13 @@ registerTool({
     // Franc" reads as a broken grader to a first reader; the extraction was
     // correct — varieties were in the original 6a82bfb7 test — the label
     // wasn't).
+    // Only varieties a curator has stood behind. A user-minted grape still
+    // awaiting review is an unverified string, and one named after a flavour
+    // ("Cherry", minted from a cherry wine — somm 6a9e9a2f) turns every "red
+    // cherry" in the prose into a false variety claim that buries the real
+    // ungrounded-place assertions this audit exists to surface.
     const Grape = require('../../models/Grape');
-    const grapeVocabulary = (await Grape.find({}).select('name').lean()).map((g) => g.name);
+    const grapeVocabulary = (await Grape.find(REVIEWED_VARIETY_FILTER).select('name').lean()).map((g) => g.name);
 
     const graded = [];
     let okCount = 0;
