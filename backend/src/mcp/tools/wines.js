@@ -12,11 +12,12 @@ const { siteBaseUrl } = require('../../utils/siteUrl');
 const { decorateGrapes } = require('../../utils/grapeDisplay');
 const { publicProfileSummary } = require('../../services/registryTiering');
 const { gateMcpRead, CAP_MESSAGE } = require('../../services/registryReadTracker');
+const { absoluteImageUrl } = require('../../services/photoState');
 
 const REGISTRY_LIMIT = 10; // == USER_SEARCH_LIMIT in routes/wines.js
 
 // Fields safe to expose: never normalizedKey / createdBy / productNumber*.
-const SAFE_SELECT = 'name producer slug country region appellation classification grapes type communityRating aiProfile lwin';
+const SAFE_SELECT = 'name producer slug country region appellation classification grapes type communityRating aiProfile lwin image imageCredit';
 
 // Registry reads on this surface are 'public' scope — served to any token and
 // to the anonymous /api/mcp/public surface — so there is no caller identity to
@@ -79,8 +80,9 @@ registerTool({
   name: 'get_wine',
   title: 'Get one registry wine',
   description:
-    'Full registry record for one wine: producer, region, appellation, classification, grapes, community rating, and ' +
-    'the AI tasting profile when the wine has been enriched. Vintage-neutral (bottles carry the vintage). ' +
+    'Full registry record for one wine: producer, region, appellation, classification, grapes, community rating, ' +
+    'the AI tasting profile when the wine has been enriched, and the registry image (url + credit) when one is ' +
+    'published — null means the wine has no public picture yet. Vintage-neutral (bottles carry the vintage). ' +
     'Call after search_registry when the user wants depth on a specific wine.',
   // 'public' — same rationale as search_registry: this is the public wine
   // page's data over MCP.
@@ -122,6 +124,9 @@ registerTool({
       lwin7: w.lwin?.lwin7 || null,
       community_rating: w.communityRating?.reviewCount ? w.communityRating : null,
       tasting_profile: anonymous ? publicProfileSummary(profile) : profile,
+      // The same picture the public wine page shows; a caller's own pending
+      // photos are on get_bottle → photos, never here.
+      image: w.image ? { url: absoluteImageUrl(w.image), credit: w.imageCredit || null } : null,
       public_url: w.slug ? `${siteBaseUrl()}/wines/${w.slug}` : null,
     });
   },

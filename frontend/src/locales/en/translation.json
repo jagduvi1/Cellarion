@@ -4337,6 +4337,14 @@
     "removeImage": "Remove image",
     "chooseFile": "Choose File"
   },
+  "imageGallery": {
+    "state": {
+      "queued": "Queued",
+      "processing": "Processing…",
+      "review": "Awaiting review",
+      "published": "Published"
+    }
+  },
   "imageUpload": {
     "upload": "Upload",
     "uploading": "Uploading...",

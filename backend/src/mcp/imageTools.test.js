@@ -18,6 +18,7 @@ const chain = (result) => {
 
 jest.mock('../models/Cellar', () => ({ find: jest.fn(), findById: jest.fn() }));
 jest.mock('../models/Bottle', () => ({ find: jest.fn(), findById: jest.fn(), aggregate: jest.fn(), countDocuments: jest.fn(), distinct: jest.fn() }));
+jest.mock('../models/BottleImage', () => ({ countDocuments: jest.fn().mockResolvedValue(0), find: jest.fn(), findOne: jest.fn(), deleteOne: jest.fn() }));
 jest.mock('../models/Rack', () => ({ find: jest.fn(), findOne: jest.fn() }));
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('../models/WishlistItem', () => ({ find: jest.fn(), countDocuments: jest.fn() }));

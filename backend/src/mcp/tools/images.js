@@ -15,6 +15,8 @@ const { safeFetchImage } = require('../../utils/safeImageFetch');
 const { logAudit } = require('../../services/audit');
 const { ok, fail, objectId, MSG_BOTTLE_NOT_FOUND, resolveBottleAccess } = require('../toolUtil');
 const { logAction, replay } = require('../actionLedger');
+const Bottle = require('../../models/Bottle');
+const BottleImage = require('../../models/BottleImage');
 
 // Base64 payloads ride the JSON body (the /api/mcp limit is 2MB). ~1.5M base64
 // chars ≈ ~1.1MB image — plenty for a label; larger photos must come by URL.
@@ -28,11 +30,15 @@ registerTool({
     '(JPEG/PNG/WebP). Use image_url for a product image you found on the web (e.g. a retailer\'s wine page); use ' +
     'image_base64 for a photo the user shared directly. The image is background-removed automatically after upload. ' +
     'Attach ONCE per wine: the photo shows on ALL the user\'s bottles of that wine, so never repeat the same photo ' +
-    'for duplicate bottles. Confirm with the user which bottle before attaching. Reversible via undo_last.',
+    'for duplicate bottles — check get_bottle → photos first, and the response says how many photos the wine ' +
+    'already had from the user (photos_before) and on how many bottles it now shows (shows_on_bottles). Pass wine_id ' +
+    'instead of bottle_id when you only know the wine; the photo goes on the user\'s newest active bottle of it. ' +
+    'Confirm with the user before attaching. Reversible via undo_last.',
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
-    bottle_id: objectId.describe('The bottle to attach the photo to (from search_bottles / add_bottle)'),
+    bottle_id: objectId.optional().describe('The bottle to attach the photo to (from search_bottles / add_bottle)'),
+    wine_id: objectId.optional().describe('Alternative to bottle_id: the registry wine — the photo goes on your newest active bottle of it (it shows on all of them anyway)'),
     image_url: z.string().url().optional().describe('https URL of the image (retailer/CDN product image)'),
     image_base64: z.string().max(MAX_BASE64_CHARS).optional().describe('Base64 image data (no data: prefix needed); alternative to image_url'),
     credit: z.string().max(200).optional().describe('Optional attribution/source note — admin accounts only; silently ignored for regular users (matches the web app)'),
@@ -50,7 +56,19 @@ registerTool({
       return fail('invalid_input', 'Provide image_url OR image_base64, not both.');
     }
 
-    const access = await resolveBottleAccess(ctx.user.id, args.bottle_id, 'editor');
+    if (!args.bottle_id && !args.wine_id) {
+      return fail('invalid_input', 'Provide bottle_id (from search_bottles) or wine_id (the registry wine — the photo then goes on your newest active bottle of it).');
+    }
+    let bottleId = args.bottle_id;
+    if (!bottleId) {
+      // wine_id: the effect is per wine, so any of the user's bottles will do —
+      // the newest active one, so the photo lands where the user is looking.
+      const own = await Bottle.findOne({ user: ctx.user.id, wineDefinition: args.wine_id, status: 'active' })
+        .sort({ createdAt: -1 }).select('_id').lean();
+      if (!own) return fail('not_found', 'You have no active bottle of that wine. Add one first (resolve_wine → add_bottle), then attach the photo.');
+      bottleId = String(own._id);
+    }
+    const access = await resolveBottleAccess(ctx.user.id, bottleId, 'editor');
     if (!access) return fail('not_found', MSG_BOTTLE_NOT_FOUND);
     const { bottle } = access;
 
@@ -82,6 +100,14 @@ registerTool({
     const wineDefinitionId = bottle.wineDefinition
       ? String(bottle.wineDefinition._id || bottle.wineDefinition)
       : null;
+    // What the user already had, so a duplicate is visible in the answer
+    // (support ticket 2026-09-06: "attach once per wine" could not be honoured
+    // with no way to look). Counts are a courtesy — never fatal.
+    const count = (p) => Promise.resolve(p).then((n) => (Number.isFinite(n) ? n : null)).catch(() => null);
+    const photosBefore = await count(BottleImage.countDocuments({
+      uploadedBy: ctx.user.id, status: { $ne: 'rejected' }, kind: { $ne: 'label-scan' },
+      $or: [{ bottle: bottle._id }, ...(wineDefinitionId ? [{ wineDefinition: wineDefinitionId }] : [])],
+    }));
     const result = await ingestBottleImage({
       buffer, userId: ctx.user.id, userRoles: ctx.user.roles, bottle, wineDefinitionId, credit: args.credit || null,
       keepBackground: args.keep_background === true,
@@ -94,14 +120,30 @@ registerTool({
     const image = result.image;
     logAudit(ctx.req, 'image.attach', { type: 'bottle', id: bottle._id, cellarId: bottle.cellar }, { via: 'mcp', imageId: String(image._id) });
 
+    const showsOn = wineDefinitionId
+      ? await count(Bottle.countDocuments({ user: ctx.user.id, wineDefinition: wineDefinitionId, status: 'active' }))
+      : 1;
+    // 'processed' = the background was kept, so nothing runs; otherwise the
+    // row waits for background removal ('uploaded' → queued).
+    const state = image.status === 'processed' ? 'awaiting_review' : 'queued';
+    const warnings = photosBefore > 0
+      ? [`This wine already had ${photosBefore} photo(s) from you — if this one duplicates it, undo_last removes it.`]
+      : [];
     const envelope = {
-      summary: `Attached a photo to vintage ${bottle.vintage}${wineDefinitionId ? ' — it shows on all bottles of this wine' : ''} (background removal in progress)`,
+      summary: `Attached a photo to vintage ${bottle.vintage}` +
+        (wineDefinitionId ? ` — it shows on ${showsOn == null ? 'all' : showsOn} of your bottle(s) of this wine` : '') +
+        (state === 'queued' ? ' (background removal in progress)' : ' (background kept, awaiting review)'),
       data: {
         image_id: image._id,
         bottle_id: bottle._id,
+        wine_id: wineDefinitionId,
         status: image.status,
+        state,
         source: args.image_url ? 'url' : 'upload',
         shows_on_all_bottles_of_wine: !!wineDefinitionId,
+        shows_on_bottles: showsOn,
+        photos_before: photosBefore,
+        check: 'get_bottle → photos lists every photo of this bottle with its state',
         undo: 'undo_last removes the photo',
       },
     };
@@ -114,7 +156,7 @@ registerTool({
       idempotencyKey: args.idempotency_key || null,
       result: envelope,
     });
-    return ok(envelope.summary, envelope.data);
+    return ok(envelope.summary, envelope.data, warnings.length ? { warnings } : undefined);
   },
 });
 
