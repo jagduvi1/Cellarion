@@ -20,7 +20,7 @@ jest.mock('../models/Bottle', () => ({ find: jest.fn(), findById: jest.fn(), agg
 jest.mock('../models/Rack', () => ({ find: jest.fn(), findOne: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/WishlistItem', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/JournalEntry', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
-jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn(), aggregate: jest.fn(), populate: jest.fn(), updateOne: jest.fn() }));
+jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn(), aggregate: jest.fn(), populate: jest.fn(), updateOne: jest.fn(), distinct: jest.fn() }));
 jest.mock('../services/enrichmentJob', () => ({
   releaseHeldProfile: jest.fn(),
   // list_maturity_queue asks whether an ABSENT profile is one automatic
@@ -39,6 +39,7 @@ jest.mock('../models/Grape', () => {
     this.save = jest.fn().mockResolvedValue(this);
   });
   ctor.findOne = jest.fn();
+  ctor.find = jest.fn();
   return ctor;
 });
 // list_held_profiles flags rows with an open owner inquiry (somm 6a872b98).
@@ -90,6 +91,9 @@ jest.mock('../services/bottleOps', () => ({
   UPDATABLE_FIELDS: ['price', 'currency', 'notes', 'occasion', 'rating', 'ratingScale', 'drinkFrom', 'drinkTo'],
 }));
 jest.mock('./mutationBudget', () => ({ takeMutationSlot: jest.fn(() => true), WRITE_WINDOW_MS: 15 * 60 * 1000 }));
+// list_colour_conflicts reads the deterministic scan; the queue-gap tests
+// below exercise the caveat it adds around that scan, not the scan itself.
+jest.mock('../services/crossFieldScan', () => ({ scanCrossFieldChecks: jest.fn(async () => ({ rows: [] })) }));
 
 const WineVintageProfile = require('../models/WineVintageProfile');
 const WineVintagePrice = require('../models/WineVintagePrice');
@@ -2049,5 +2053,43 @@ describe('list_maturity_queue unprofiled (audit ticket 2026-09-06)', () => {
     WineVintageProfile.find.mockReturnValue(chain([]));
     await tool('list_maturity_queue').handler({ wine_id: oid('f'), unprofiled: true }, SOMM_CTX);
     expect(WineVintageProfile.find.mock.calls.at(-1)[0]).toEqual({ wineDefinition: oid('f') });
+  });
+});
+
+// Somm ticket 6a9e9a2f (2026-09-07): three queue gaps found in one run — a
+// downgrade rule the filter enum could not name, a user-minted "Cherry" grape
+// turning every tasting note into a false variety claim, and a colour check
+// whose zero hid the varieties it never evaluated.
+describe('sommelier queue gaps (somm 6a9e9a2f)', () => {
+  const { DOWNGRADE_RULES } = require('../utils/producerSuspectCheck');
+
+  beforeEach(() => { jest.clearAllMocks(); });
+
+  test('list_rule_downgrades filters by every rule the downgrade table can write', () => {
+    const rule = tool('list_rule_downgrades').inputSchema.rule;
+    expect(rule.unwrap().options).toEqual(Object.values(DOWNGRADE_RULES));
+    expect(rule.safeParse('appellation_has_geography').success).toBe(true);
+  });
+
+  test('list_ungrounded_descriptions grades against reviewed varieties only', async () => {
+    WineDefinition.find.mockReturnValue(chain([{
+      _id: oid('1'), producer: 'Weingut Zund', name: 'Merlot', grapes: [{ name: 'Merlot' }],
+      aiProfile: { description: 'Red cherry and plum with soft tannins.', confidence: 0.6 },
+    }]));
+    Grape.find.mockReturnValue(chain([{ name: 'Merlot' }]));
+    const body = parse(await tool('list_ungrounded_descriptions').handler({ counts_only: true, grade: 'assertion' }, SOMM_CTX));
+    expect(Grape.find).toHaveBeenCalledWith({ $or: [{ createdByUser: { $ne: true } }, { reviewedAt: { $ne: null } }] });
+    expect(body.data).toMatchObject({ assertion: 0, ok: 1, scanned: 1 });
+  });
+
+  test('list_colour_conflicts names the colourless varieties in use instead of passing them', async () => {
+    Grape.find.mockReturnValue(chain([
+      { _id: oid('c'), name: 'Picpoul' }, { _id: oid('d'), name: 'Cherry' }, { _id: oid('e'), name: 'Malvoisie' },
+    ]));
+    WineDefinition.distinct.mockResolvedValue([oid('d'), oid('c')]);
+    const body = parse(await tool('list_colour_conflicts').handler({ counts_only: true }, SOMM_CTX));
+    expect(WineDefinition.distinct).toHaveBeenCalledWith('grapes', expect.objectContaining({ nonWine: { $ne: true } }));
+    expect(body.data.unevaluated_varieties).toEqual({ count: 2, names: ['Cherry', 'Picpoul'] });
+    expect(body.summary).toMatch(/never evaluated \(Cherry, Picpoul\)/);
   });
 });
