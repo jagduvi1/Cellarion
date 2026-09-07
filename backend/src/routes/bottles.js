@@ -525,6 +525,17 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
     const pendingImgOr = [{ bottle: bottle._id }];
     if (bottle.wineDefinition) {
       pendingImgOr.push({ wineDefinition: bottle.wineDefinition });
+      // The viewer's other bottles of the same wine: a photo uploaded while a
+      // bottle still waited for its wine request carries no wineDefinition,
+      // so only its bottle knows the wine (support ticket 2026-09-07 — same
+      // fix as the cellar list's attachBottleImageUrls).
+      try {
+        const siblings = await Bottle.find({ user: req.user.id, wineDefinition: bottle.wineDefinition, _id: { $ne: bottle._id } }).select('_id').lean();
+        if (siblings.length) pendingImgOr.push({ bottle: { $in: siblings.map((s) => s._id) } });
+      } catch (err) {
+        // A photo nicety must never take the bottle page down.
+        console.error('Sibling photo lookup failed:', err.message);
+      }
     }
     const pendingImg = await BottleImage.findOne({
       $or: pendingImgOr,

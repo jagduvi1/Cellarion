@@ -128,6 +128,11 @@ function bottleSummary(b) {
     rating_scale: b.rating != null ? b.ratingScale : undefined,
     drink_from: b.drinkFrom ?? null,
     drink_to: b.drinkTo ?? null,
+    // The peak pair is writable through update_bottle and was missing from
+    // every read (support ticket 2026-09-07) — an assistant could set it and
+    // never see it again.
+    peak_from: b.peakFrom ?? null,
+    peak_until: b.peakUntil ?? null,
     opened_at: b.openedAt || undefined,
     // Only present when the bottle is "spoken for" — keeps unreserved rows lean.
     reserved: isReserved(b)

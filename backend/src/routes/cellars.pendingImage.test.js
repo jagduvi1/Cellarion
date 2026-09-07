@@ -26,7 +26,10 @@ jest.mock('../utils/exchangeRates', () => ({
   getSnapshotsForDates: jest.fn(), getOrCreateDailySnapshot: jest.fn(), convertCurrency: jest.fn(),
 }));
 jest.mock('../models/Cellar', () => ({}));
-jest.mock('../models/Bottle', () => ({}));
+// Sibling lookup (support ticket 2026-09-07): the viewer's other bottles of
+// the same wines. Empty unless a test says otherwise.
+const mockBottleFind = jest.fn(() => ({ select: () => ({ lean: async () => [] }) }));
+jest.mock('../models/Bottle', () => ({ find: (...a) => mockBottleFind(...a) }));
 jest.mock('../models/Rack', () => ({}));
 jest.mock('../models/User', () => ({}));
 jest.mock('../models/AuditLog', () => ({}));
@@ -94,6 +97,33 @@ test('an approved own photo — public or private — still shows on the card', 
 
   const out = await attachBottleImageUrls([{ _id: B1, wineDefinition: WINE }], USER);
   expect(out[0].pendingImageUrl).toBe('/api/uploads/processed/approved.png');
+});
+
+test('a photo whose row carries no wine (uploaded while the bottle awaited its wine request) still reaches the sibling bottle', async () => {
+  // Support ticket 2026-09-07: two identical bottles, the photo pinned to
+  // B1 with wineDefinition null — B2 showed nothing.
+  BottleImage.find.mockReturnValue(chain([
+    { _id: 'noWineRef', wineDefinition: null, bottle: B1, status: 'approved', originalUrl: null, processedUrl: '/api/uploads/processed/b1.png' },
+  ]));
+  const out = await attachBottleImageUrls([
+    { _id: B1, wineDefinition: WINE },
+    { _id: B2, wineDefinition: WINE },
+  ], USER);
+  expect(out[0].pendingImageUrl).toBe('/api/uploads/processed/b1.png');
+  expect(out[1].pendingImageUrl).toBe('/api/uploads/processed/b1.png');
+});
+
+test('a sibling bottle that is NOT on this page still lends its photo, and only the viewer\'s own bottles are consulted', async () => {
+  const S1 = '64b0000000000000000000c1';
+  mockBottleFind.mockReturnValueOnce({ select: () => ({ lean: async () => [{ _id: S1, wineDefinition: WINE }] }) });
+  BottleImage.find.mockReturnValue(chain([
+    { _id: 'sib', wineDefinition: null, bottle: S1, status: 'approved', originalUrl: null, processedUrl: '/api/uploads/processed/s1.png' },
+  ]));
+  const out = await attachBottleImageUrls([{ _id: B2, wineDefinition: WINE }], USER);
+  expect(mockBottleFind).toHaveBeenCalledWith({ user: USER, wineDefinition: { $in: [WINE] } });
+  const query = BottleImage.find.mock.calls[0][0];
+  expect(query.$or[0].bottle.$in).toEqual(expect.arrayContaining([S1, B2]));
+  expect(out[0].pendingImageUrl).toBe('/api/uploads/processed/s1.png');
 });
 
 test('empty input is returned as-is without a query', async () => {

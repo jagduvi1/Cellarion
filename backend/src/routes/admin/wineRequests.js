@@ -3,6 +3,7 @@ const { requireAuth, requireRole } = require('../../middleware/auth');
 const WineRequest = require('../../models/WineRequest');
 const WineDefinition = require('../../models/WineDefinition');
 const Bottle = require('../../models/Bottle');
+const BottleImage = require('../../models/BottleImage');
 const { generateWineKey, normalizeAppellation, normalizeString } = require('../../utils/normalize');
 const { canonicalizeWineName } = require('../../utils/producerPrefix');
 const Country = require('../../models/Country');
@@ -253,12 +254,24 @@ router.put('/:id/resolve', async (req, res) => {
       // Capture the distinct vintages BEFORE the update unsets pendingWineRequest
       // — needed to seed the maturity queue once the wine is known.
       const pendingVintages = await Bottle.distinct('vintage', { pendingWineRequest: wineRequest._id });
+      const pendingBottleIds = await Bottle.distinct('_id', { pendingWineRequest: wineRequest._id });
 
       const result = await Bottle.updateMany(
         { pendingWineRequest: wineRequest._id },
         { $set: { wineDefinition: linkedWine._id }, $unset: { pendingWineRequest: '' } }
       );
       backfilledCount = result.modifiedCount || 0;
+
+      // Photos uploaded while these bottles waited for their wine carry no
+      // wineDefinition; stamp it now so the by-wine photo lookups (cellar
+      // list, bottle page) see them on every bottle of the wine (support
+      // ticket 2026-09-07). Best-effort — a failure here must not undo the link.
+      if (pendingBottleIds.length) {
+        BottleImage.updateMany(
+          { bottle: { $in: pendingBottleIds }, wineDefinition: null },
+          { $set: { wineDefinition: linkedWine._id } }
+        ).catch((err) => console.error('[wine-requests] image wine stamp failed:', err.message));
+      }
 
       // Now that these bottles have a real wineDefinition, put each wine+vintage
       // into the sommelier maturity queue — mirroring the hand-add and matched-

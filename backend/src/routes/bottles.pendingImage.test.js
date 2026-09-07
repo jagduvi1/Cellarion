@@ -41,7 +41,8 @@ jest.mock('../models/PriceTrackingRequest', () => ({}));
 jest.mock('../models/PriceTrackingSkip', () => ({}));
 jest.mock('../models/BottleImage', () => ({ findOne: jest.fn(), findById: jest.fn() }));
 jest.mock('../models/WineRequest', () => ({}));
-jest.mock('../models/Bottle', () => ({ findById: jest.fn() }));
+// find(): the sibling-bottle lookup added for support ticket 2026-09-07 — empty here.
+jest.mock('../models/Bottle', () => ({ findById: jest.fn(), find: jest.fn(() => ({ select: () => ({ lean: async () => [] }) })) }));
 
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
