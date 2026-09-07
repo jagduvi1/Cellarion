@@ -34,6 +34,8 @@ const WineDefinition = require('../models/WineDefinition');
 const Country = require('../models/Country');
 const Region = require('../models/Region');
 const Grape = require('../models/Grape');
+const User = require('../models/User');
+const { generateWineKey } = require('../utils/normalize');
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://mongo:27017/winecellar';
 const argv = process.argv.slice(2);
@@ -62,6 +64,10 @@ function validate(rows) {
 
 async function run() {
   await mongoose.connect(MONGO_URI);
+  // The model requires a creator and a normalizedKey (the route layer sets
+  // both); canonicalKey and slug come from the schema hooks.
+  const admin = await User.findOne({ roles: 'admin' }).select('_id username').lean();
+  if (!admin) throw new Error('no admin user to own the canaries');
   if (LIST) {
     const rows = await WineDefinition.find({ canary: true }).select('producer name slug country').populate('country', 'name').sort({ producer: 1 }).lean();
     console.log(`${rows.length} canary wine(s) seeded:`);
@@ -83,6 +89,8 @@ async function run() {
     const fields = {
       name: c.name, producer: c.producer, country: country._id, region: region ? region._id : undefined,
       appellation: c.appellation || undefined, type: c.type, grapes: grapeIds, canary: true,
+      normalizedKey: generateWineKey(c.name, c.producer, c.appellation || ''),
+      createdBy: admin._id,
       aiProfile: { ...c.profile, source: 'curator', confidence: 0.9, generatedAt: new Date() },
     };
     const where = `${c.country}${region ? ', ' + c.region : ', region missing'}; ${grapeIds.length}/${(c.grapes || []).length} grapes`;
