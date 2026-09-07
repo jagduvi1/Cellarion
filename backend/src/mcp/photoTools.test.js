@@ -19,7 +19,7 @@ const chain = (result) => {
 
 jest.mock('../models/Cellar', () => ({ find: jest.fn(), findById: jest.fn() }));
 jest.mock('../models/Bottle', () => ({ find: jest.fn(), findById: jest.fn(), findOne: jest.fn(), aggregate: jest.fn(), countDocuments: jest.fn(), distinct: jest.fn() }));
-jest.mock('../models/BottleImage', () => ({ countDocuments: jest.fn(), find: jest.fn(), findOne: jest.fn(), deleteOne: jest.fn() }));
+jest.mock('../models/BottleImage', () => ({ countDocuments: jest.fn(), find: jest.fn(), findOne: jest.fn(), findById: jest.fn(), deleteOne: jest.fn() }));
 jest.mock('../models/Rack', () => ({ find: jest.fn(), findOne: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('../models/WishlistItem', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
@@ -33,12 +33,27 @@ jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('./mutationBudget', () => ({ takeMutationSlot: jest.fn(() => true), WRITE_WINDOW_MS: 900000 }));
 jest.mock('../services/imageOps', () => ({ ingestBottleImage: jest.fn() }));
 jest.mock('../utils/safeImageFetch', () => ({ safeFetchImage: jest.fn() }));
+// get_photo renders through photoBytes (its own suite pins the downscale);
+// imageSource is the real classifier's contract, restated so the external-link
+// branch is exercised without loading sharp.
+jest.mock('../services/photoBytes', () => ({
+  renderImage: jest.fn(),
+  imageSource: (ref) => (!ref ? null : /^https?:\/\//i.test(ref) ? { kind: 'external', url: ref } : ref.startsWith('/api/uploads/') ? { kind: 'upload' } : null),
+  IMAGE_MAX_EDGE: 1024,
+}));
 jest.mock('../services/registryReadTracker', () => ({ gateMcpRead: jest.fn().mockResolvedValue({ allowed: true }), CAP_MESSAGE: 'cap' }));
 jest.mock('../services/photoState', () => ({
   photosForBottle: jest.fn(),
   photoPresence: jest.fn(),
   absoluteImageUrl: (p) => (p ? `https://api.test/api/uploads/${p}` : null),
   isInlineImage: (p) => typeof p === 'string' && p.startsWith('data:'),
+  photoState: (img, uid) => ({
+    state: img.status === 'approved' ? 'published' : img.status,
+    meaning: 'm',
+    mine: img.uploadedBy != null && String(img.uploadedBy) === String(uid),
+    credit: img.credit || null,
+    registry_image: img.assignedToWine === true,
+  }),
 }));
 jest.mock('../services/bottleOps', () => ({
   consumeBottle: jest.fn(), restoreBottle: jest.fn(), addBottle: jest.fn(), updateBottleFields: jest.fn(),
@@ -204,5 +219,98 @@ describe('attach_bottle_image id rules (audit 2026-09-07)', () => {
     await tool('attach_bottle_image').handler({ wine_id: oid('f'), image_url: 'https://cdn.example.com/label.jpg' }, CTX);
     expect(Cellar.find.mock.calls[0][0].$or[1]).toEqual({ members: { $elemMatch: { user: ME, role: { $in: ['editor', 'owner'] } } } });
     expect(Bottle.findOne).toHaveBeenCalledWith(expect.objectContaining({ cellar: { $in: [oid('c')] } }));
+  });
+});
+
+// get_photo (support ticket 2026-09-07): the pixels behind the URLs, under the
+// photo-list visibility rule. photoBytes is mocked — its own suite pins the
+// downscale; here the TOOL's who-may-see-what and its two-block answer are
+// what is pinned.
+describe('get_photo', () => {
+  const { renderImage } = require('../services/photoBytes');
+  const OTHER = oid('b');
+  const image = (over = {}) => ({
+    _id: new mongoose.Types.ObjectId(oid('9')), uploadedBy: ME, status: 'approved', visibility: 'public', kind: 'bottle',
+    originalUrl: '/api/uploads/originals/o.jpg', processedUrl: '/api/uploads/processed/p.png',
+    wineDefinition: new mongoose.Types.ObjectId(oid('f')), ...over,
+  });
+  const ANON = { anonymous: true, user: null, scopes: ['public'], req: { headers: {} } };
+
+  beforeEach(() => {
+    renderImage.mockReset();
+    renderImage.mockResolvedValue({ data: 'QUJD', mimeType: 'image/jpeg', bytes: 3 });
+  });
+
+  test('the owner sees their own photo in any state, as shot (the original): caption first, then the image', async () => {
+    BottleImage.findById.mockReturnValue(chain(image({ status: 'rejected', visibility: 'private' })));
+    const res = await tool('get_photo').handler({ image_id: oid('9') }, CTX);
+    expect(renderImage).toHaveBeenCalledWith('/api/uploads/originals/o.jpg');
+    expect(res.content).toHaveLength(2);
+    expect(res.content[1]).toEqual({ type: 'image', data: 'QUJD', mimeType: 'image/jpeg' });
+    const body = parse(res);
+    expect(body.summary).toMatch(/Your photo/);
+    expect(body.data).toMatchObject({ image_id: oid('9'), kind: 'bottle', mine: true, state: 'rejected', wine_id: oid('f'), bytes: 3, max_edge: 1024 });
+  });
+
+  test("another member's photo is visible only once published, and only its published render", async () => {
+    BottleImage.findById.mockReturnValue(chain(image({ uploadedBy: OTHER, credit: 'Anna' })));
+    const res = await tool('get_photo').handler({ image_id: oid('9') }, CTX);
+    expect(renderImage).toHaveBeenCalledWith('/api/uploads/processed/p.png');
+    expect(parse(res).summary).toMatch(/gallery photo.*credit: Anna/);
+    expect(parse(res).data.mine).toBe(false);
+
+    BottleImage.findById.mockReturnValue(chain(image({ uploadedBy: OTHER, status: 'processed' })));
+    expect(parse(await tool('get_photo').handler({ image_id: oid('9') }, CTX)).error.code).toBe('not_found');
+    BottleImage.findById.mockReturnValue(chain(image({ uploadedBy: OTHER, visibility: 'private' })));
+    expect(parse(await tool('get_photo').handler({ image_id: oid('9') }, CTX)).error.code).toBe('not_found');
+    BottleImage.findById.mockReturnValue(chain(null));
+    expect(parse(await tool('get_photo').handler({ image_id: oid('9') }, CTX)).error.code).toBe('not_found');
+    expect(renderImage).toHaveBeenCalledTimes(1);
+  });
+
+  test("the owner's label-scan frame is readable and captioned as a frame; a stranger's never is", async () => {
+    BottleImage.findById.mockReturnValue(chain(image({ kind: 'label-scan', side: 'back', status: 'uploaded', visibility: 'private', processedUrl: null })));
+    const body = parse(await tool('get_photo').handler({ image_id: oid('9') }, CTX));
+    expect(body.summary).toMatch(/BACK label frame/);
+    expect(body.data).toMatchObject({ kind: 'label-scan', side: 'back', mine: true, wine_id: oid('f') });
+    expect(renderImage).toHaveBeenCalledWith('/api/uploads/originals/o.jpg');
+
+    BottleImage.findById.mockReturnValue(chain(image({ kind: 'label-scan', uploadedBy: OTHER, status: 'approved', visibility: 'public' })));
+    expect(parse(await tool('get_photo').handler({ image_id: oid('9') }, CTX)).error.code).toBe('not_found');
+  });
+
+  test('wine_id renders the registry picture; an external link comes back as a url; no picture is explicit', async () => {
+    WineDefinition.findById.mockReturnValue(chain({ _id: oid('f'), name: 'Barolo', producer: 'X', image: '/api/uploads/processed/w.png', imageCredit: 'Estate' }));
+    const res = await tool('get_photo').handler({ wine_id: oid('f') }, CTX);
+    expect(renderImage).toHaveBeenCalledWith('/api/uploads/processed/w.png');
+    expect(parse(res).summary).toMatch(/registry picture of X — Barolo \(credit: Estate\)/);
+    expect(parse(res).data).toMatchObject({ wine_id: oid('f'), kind: 'registry', credit: 'Estate' });
+    expect(res.content[1].type).toBe('image');
+
+    renderImage.mockResolvedValue(null);
+    WineDefinition.findById.mockReturnValue(chain({ _id: oid('f'), name: 'Barolo', image: 'https://cdn.example/w.jpg' }));
+    const ext = await tool('get_photo').handler({ wine_id: oid('f') }, CTX);
+    expect(ext.content).toHaveLength(1);
+    expect(parse(ext).data).toMatchObject({ url: 'https://cdn.example/w.jpg' });
+
+    WineDefinition.findById.mockReturnValue(chain({ _id: oid('f'), name: 'Barolo', image: null }));
+    expect(parse(await tool('get_photo').handler({ wine_id: oid('f') }, CTX)).data.image).toBeNull();
+    WineDefinition.findById.mockReturnValue(chain(null));
+    expect(parse(await tool('get_photo').handler({ wine_id: oid('f') }, CTX)).error.code).toBe('not_found');
+  });
+
+  test('an unreadable file is unavailable, not a crash; exactly one id; anonymous is refused', async () => {
+    BottleImage.findById.mockReturnValue(chain(image()));
+    renderImage.mockRejectedValue(new Error('ENOENT'));
+    expect(parse(await tool('get_photo').handler({ image_id: oid('9') }, CTX)).error.code).toBe('unavailable');
+
+    expect(parse(await tool('get_photo').handler({ image_id: oid('9'), wine_id: oid('f') }, CTX)).error.code).toBe('invalid_input');
+    expect(parse(await tool('get_photo').handler({}, CTX)).error.code).toBe('invalid_input');
+    expect(parse(await tool('get_photo').handler({ image_id: oid('9') }, ANON)).error.code).toBe('forbidden_scope');
+  });
+
+  test('get_photo is a read tool, never a public one', () => {
+    expect(tool('get_photo').scope).toBe('read');
+    expect(tool('get_photo').annotations.readOnlyHint).toBe(true);
   });
 });

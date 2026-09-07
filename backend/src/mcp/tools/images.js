@@ -17,6 +17,9 @@ const { ok, fail, objectId, MSG_BOTTLE_NOT_FOUND, resolveBottleAccess } = requir
 const { logAction, replay } = require('../actionLedger');
 const Bottle = require('../../models/Bottle');
 const BottleImage = require('../../models/BottleImage');
+const WineDefinition = require('../../models/WineDefinition');
+const { photoState } = require('../../services/photoState');
+const { renderImage, imageSource, IMAGE_MAX_EDGE } = require('../../services/photoBytes');
 
 // Base64 payloads ride the JSON body (the /api/mcp limit is 2MB). ~1.5M base64
 // chars ≈ ~1.1MB image — plenty for a label; larger photos must come by URL.
@@ -170,5 +173,120 @@ registerTool({
     return ok(envelope.summary, envelope.data, warnings.length ? { warnings } : undefined);
   },
 });
+
+// get_photo (support ticket 2026-09-07). get_bottle → photos and get_wine →
+// image hand out URLs, and an MCP client cannot open any of them: the uploads
+// sit behind the app, and Claude's fetch refuses URLs that arrive in tool
+// results. So the pixels travel as an MCP image content block instead, the
+// way the sommelier's get_pending_wine_images already does for label frames.
+// Visibility is the photo-list rule, unchanged: the caller's own rows in any
+// state (their label-scan frames included — the sharpest image of a label),
+// other people's rows only once published, and the registry picture of any
+// wine. Nothing new is stored and nothing new is exposed.
+registerTool({
+  name: 'get_photo',
+  title: 'See one photo',
+  description:
+    'Returns the PIXELS of one photo as image content, so you can read a label yourself — the name as printed, ' +
+    'the ABV, the cuvée, a lot code — instead of guessing from a URL no client can open. Pass an image_id from ' +
+    'get_bottle → photos (items or label_scans) or from attach_bottle_image, or a wine_id for the registry picture ' +
+    'of a wine. You see the user\'s own photos in any state (rejected included) and their label-scan frames as ' +
+    'shot; other people\'s photos only once published in the gallery. Downscaled to fit 1024 px, JPEG. One image ' +
+    'per call; read the caption text first — it says what the image is (a label frame, a gallery photo, the ' +
+    'registry picture) and whose. What you read on a label is evidence for suggest_wine_correction / ' +
+    'suggest_wine_public_value; say where the value came from when you file one.',
+  scope: 'read',
+  annotations: { readOnlyHint: true, openWorldHint: false },
+  inputSchema: {
+    image_id: objectId.optional().describe('A photo id from get_bottle → photos (items or label_scans) or attach_bottle_image'),
+    wine_id: objectId.optional().describe('Alternative to image_id: the registry wine whose public picture you want'),
+  },
+  handler: async (args, ctx) => {
+    if (!ctx?.user || ctx?.anonymous) return fail('forbidden_scope', 'get_photo needs a signed-in connection.');
+    if (!!args.image_id === !!args.wine_id) return fail('invalid_input', 'Provide image_id OR wine_id, exactly one.');
+    return args.image_id ? bottlePhoto(args.image_id, ctx) : registryPicture(args.wine_id);
+  },
+});
+
+async function bottlePhoto(imageId, ctx) {
+  const img = await BottleImage.findById(imageId).lean();
+  const mine = !!img && img.uploadedBy != null && String(img.uploadedBy) === String(ctx.user.id);
+  const isScan = !!img && img.kind === 'label-scan';
+  const published = !!img && !isScan && img.status === 'approved' && img.visibility === 'public';
+  // Not-found and not-visible are one answer: a stranger's unpublished photo
+  // does not exist as far as this caller is concerned.
+  if (!img || !(mine || published)) return fail('not_found', 'No photo with that id is visible to you.');
+
+  // The owner sees their own frame as shot (background removal can eat a
+  // corner of a label); everyone else sees only what was published.
+  const ref = mine
+    ? (img.originalUrl || img.processedUrl)
+    : (img.processedUrl || (img.keepBackground ? img.originalUrl : null));
+
+  if (isScan) {
+    const side = img.side === 'back' ? 'back' : 'front';
+    return respond(ref, `The ${side.toUpperCase()} label frame you scanned to identify this wine (image_id ${img._id})`, {
+      image_id: String(img._id),
+      kind: 'label-scan',
+      side,
+      mine: true,
+      meaning: 'a frame scanned for identification; it is not shown on the bottle',
+      wine_id: img.wineDefinition ? String(img.wineDefinition) : null,
+    });
+  }
+  const state = photoState(img, ctx.user.id);
+  const caption = mine
+    ? `Your photo of this bottle (${state.state}, image_id ${img._id})`
+    : `A gallery photo of this wine, published by another member${state.credit ? ` (credit: ${state.credit})` : ''} (image_id ${img._id})`;
+  return respond(ref, caption, {
+    image_id: String(img._id),
+    kind: 'bottle',
+    mine,
+    state: state.state,
+    meaning: state.meaning,
+    registry_image: state.registry_image,
+    credit: state.credit,
+    wine_id: img.wineDefinition ? String(img.wineDefinition) : null,
+  });
+}
+
+async function registryPicture(wineId) {
+  const w = await WineDefinition.findById(wineId).select('name producer image imageCredit').lean();
+  if (!w) return fail('not_found', 'No registry wine with that id.');
+  const label = `${w.producer ? `${w.producer} — ` : ''}${w.name}`;
+  if (!w.image) return ok(`"${label}" has no registry picture yet`, { wine_id: String(w._id), kind: 'registry', image: null });
+  return respond(w.image, `The registry picture of ${label}${w.imageCredit ? ` (credit: ${w.imageCredit})` : ''}`, {
+    wine_id: String(w._id),
+    kind: 'registry',
+    credit: w.imageCredit || null,
+  });
+}
+
+// Caption text FIRST so the model reads what the image is before the pixels.
+async function respond(ref, caption, data) {
+  let rendered;
+  try {
+    rendered = await renderImage(ref);
+  } catch (err) {
+    console.warn('[mcp] get_photo read failed:', err.message);
+    return fail('unavailable', 'The photo file could not be read right now — retry later.');
+  }
+  if (!rendered) {
+    const src = imageSource(ref);
+    if (src && src.kind === 'external') {
+      return ok(`${caption} — hosted elsewhere`, {
+        ...data, url: src.url,
+        note: 'This picture is an external link, not a file this server holds, so it cannot be rendered over MCP.',
+      });
+    }
+    return fail('unavailable', 'No image file is stored for this photo.');
+  }
+  return {
+    content: [
+      { type: 'text', text: JSON.stringify({ summary: caption, data: { ...data, bytes: rendered.bytes, max_edge: IMAGE_MAX_EDGE } }) },
+      { type: 'image', data: rendered.data, mimeType: rendered.mimeType },
+    ],
+  };
+}
 
 module.exports = {};

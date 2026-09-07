@@ -82,7 +82,8 @@ registerTool({
   description:
     'Full registry record for one wine: producer, region, appellation, classification, grapes, community rating, ' +
     'the AI tasting profile when the wine has been enriched, and the registry image (url + credit) when one is ' +
-    'published — null means the wine has no public picture yet. Vintage-neutral (bottles carry the vintage). ' +
+    'published — null means the wine has no public picture yet; to see the picture yourself, call get_photo with ' +
+    'the wine_id. Vintage-neutral (bottles carry the vintage). ' +
     'Call after search_registry when the user wants depth on a specific wine.',
   // 'public' — same rationale as search_registry: this is the public wine
   // page's data over MCP.
