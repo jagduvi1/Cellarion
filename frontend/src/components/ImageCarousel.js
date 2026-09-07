@@ -2,8 +2,17 @@ import { useState } from 'react';
 import './ImageCarousel.css';
 import AuthImage from './AuthImage';
 import { API_URL } from '../api/apiConstants';
+import { useTranslation } from 'react-i18next';
+
+// The owner's own photo carries its review state as a small pill (discussion
+// #1227: "I don't know if some uploads have been rejected or are still
+// waiting"). Other people's photos only reach a gallery once published, so
+// the pill is for `mine` rows only; rejected rows never reach the carousel.
+const PHOTO_STATE = { uploaded: 'queued', processing: 'processing', processed: 'review', approved: 'published' };
+const STATE_FALLBACK = { queued: 'Queued', processing: 'Processing…', review: 'Awaiting review', published: 'Published' };
 
 function ImageCarousel({ images, size = 'medium', defaultImageId, onSetDefault, currentUserId, onDelete, onReport }) {
+  const { t } = useTranslation();
   const [currentIndex, setCurrentIndex] = useState(0);
 
   if (!images || images.length === 0) return null;
@@ -38,9 +47,15 @@ function ImageCarousel({ images, size = 'medium', defaultImageId, onSetDefault, 
           className="carousel-image"
           onError={(e) => { e.target.style.display = 'none'; }}
         />
-        {currentImage.status === 'processing' && (
-          <div className="carousel-processing">Processing...</div>
-        )}
+        {(() => {
+          const mine = currentImage.mine === true || (currentUserId && currentImage.uploadedBy != null && String(currentImage.uploadedBy) === String(currentUserId));
+          const state = mine ? PHOTO_STATE[currentImage.status] : null;
+          return state ? (
+            <div className={`carousel-state carousel-state-${state}`} role="status">
+              {t(`imageGallery.state.${state}`, STATE_FALLBACK[state])}
+            </div>
+          ) : null;
+        })()}
         {currentImage.credit && (
           <div className="carousel-credit">© {currentImage.credit}</div>
         )}

@@ -23,6 +23,7 @@ const {
   resolveCellarAccess, resolveBottleAccess,
   wineSummary, bottleSummary, pageParams, hasContent,
 } = require('../toolUtil');
+const { photosForBottle, photoPresence } = require('../../services/photoState');
 
 function statusToMongo(status) {
   if (status === 'all') return {};
@@ -37,8 +38,9 @@ registerTool({
     'Searches the bottles in the cellars the user owns (pass cellar_id to search one specific cellar, including shared ' +
     'ones). Filters: free-text query (wine name, producer, region, grape, notes), status (active | consumed | all), ' +
     'vintage, wine type, reserved (only/exclude "spoken for" bottles). Paginated and bounded; every item includes its ' +
-    'rating, so filter by rating yourself from the ' +
-    'results. Call for any "what do I have…", "find my…", "do I own…" question. Prefer filters over fetching everything.',
+    'rating, so filter by rating yourself from the results, and has_photo (own or published photo, or a registry ' +
+    'image — get_bottle → photos has the detail). Call for any "what do I have…", "find my…", "do I own…" question. ' +
+    'Prefer filters over fetching everything.',
   scope: 'read',
   annotations: { readOnlyHint: true, openWorldHint: false },
   // No min_rating filter on purpose: stored ratings are on per-bottle scales
@@ -114,9 +116,11 @@ registerTool({
         const docs = await Bottle.find({ _id: { $in: res.ids }, cellar: { $in: cellarIds } })
           .populate(WINE_POPULATE_LIST).lean();
         const byId = new Map(docs.map((d) => [String(d._id), d]));
-        const items = res.ids.map((id) => byId.get(String(id))).filter(Boolean).map(bottleSummary);
+        const ordered = res.ids.map((id) => byId.get(String(id))).filter(Boolean);
+        const items = await withPhotoFlag(ctx.user.id, ordered, warnings);
         return ok(`${items.length} of ${res.estimatedTotalHits} matching bottle(s)`, items, {
           page: { limit, offset, total: res.estimatedTotalHits },
+          ...(warnings.length ? { warnings } : {}),
         });
       } catch (err) {
         warnings.push('Text search engine unavailable — fell back to basic filters without free-text matching.');
@@ -152,20 +156,36 @@ registerTool({
       Bottle.find(filter).populate(WINE_POPULATE_LIST)
         .sort({ createdAt: -1 }).skip(offset).limit(limit).lean(),
     ]);
-    return ok(`${docs.length} of ${total} bottle(s)`, docs.map(bottleSummary), {
+    return ok(`${docs.length} of ${total} bottle(s)`, await withPhotoFlag(ctx.user.id, docs, warnings), {
       page: { limit, offset, total },
       ...(warnings.length ? { warnings } : {}),
     });
   },
 });
 
+// has_photo on every list row, from ONE BottleImage query per page (support
+// ticket 2026-09-06: the connector could not tell whether a photo existed
+// before attaching one). A failing lookup degrades to "no flag" with a
+// warning — a photo nicety never fails the search.
+async function withPhotoFlag(userId, docs, warnings) {
+  let presence = new Map();
+  try {
+    presence = await photoPresence(userId, docs);
+  } catch (err) {
+    warnings.push('Photo lookup failed for this page — has_photo is omitted.');
+    return docs.map(bottleSummary);
+  }
+  return docs.map((d) => ({ ...bottleSummary(d), has_photo: presence.get(String(d._id)) === true }));
+}
+
 registerTool({
   name: 'get_bottle',
   title: 'Get one bottle',
   description:
     'Full detail for one bottle: wine (incl. tasting profile when enriched), vintage, price, ratings, personal drink ' +
-    'window, notes, reservation ("spoken for") state, purchase info, open-bottle state, rack placement, cellar, and ' +
-    'consumption info if consumed. ' +
+    'window, notes, reservation ("spoken for") state, purchase info, open-bottle state, rack placement, cellar, ' +
+    'consumption info if consumed, and photos — every photo that applies to the bottle with its state (queued, ' +
+    'processing, awaiting_review, published, rejected), so an upload can be confirmed and a duplicate avoided. ' +
     'Call when the user asks about a specific bottle you already have a bottle_id for.',
   scope: 'read',
   annotations: { readOnlyHint: true, openWorldHint: false },
@@ -191,6 +211,13 @@ async function buildBottleDetail(userId, bottleId) {
     .select('name slots.position slots.bottle').lean();
   const slot = rack ? rack.slots.find((s) => String(s.bottle) === String(b._id)) : null;
   const wd = b.wineDefinition;
+  // Every photo that applies, with its state, from this viewer's side.
+  let photos;
+  try {
+    photos = await photosForBottle(userId, b);
+  } catch (err) {
+    photos = { error: 'photo lookup failed — retry get_bottle for the photo list' };
+  }
   return {
     summary: `${wd ? wd.name : 'Bottle'} ${b.vintage}`,
     data: {
@@ -236,6 +263,7 @@ async function buildBottleDetail(userId, bottleId) {
           }
         : null,
       placement: slot ? { rack_id: rack._id, rack_name: rack.name, position: slot.position } : null,
+      photos,
       cellar: { cellar_id: cellar._id, name: cellar.name, your_role: role },
       added_at: b.addedToCellarAt || b.createdAt,
     },
