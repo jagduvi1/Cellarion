@@ -974,6 +974,44 @@ describe('held-profile review queue over MCP (somm ticket 2026-08-18)', () => {
         expect(update.$set['aiProfile.producerNote']).toBeNull();
       });
 
+      // Somm 6a9eb3ae (2026-09-07): note_doubts_cuvee_not_producer lands a row
+      // CLEAN — no flag, only the rule tag — so a curator who had placed the
+      // producer got "nothing to review", and list_rule_downgrades had no exit.
+      test('confirm on a rule-downgraded row with no flag records the placement and clears the tag', async () => {
+        WineDefinition.findById.mockReturnValue(selectChain(publishedSuspect({
+          producerSuspect: false, producerUnknown: false, suspectDowngradedBy: 'note_doubts_cuvee_not_producer',
+        })));
+        const body = parse(await tool('review_held_profile').handler({ wine_id: oid('7'), decision: 'confirm' }, SOMM_CTX));
+        expect(body.error).toBeUndefined();
+        const [, update] = WineDefinition.updateOne.mock.calls[0];
+        expect(update.$set['aiProfile.suspectDowngradedBy']).toBeNull();
+        // suspectDecision stays the verdict on producerSuspect, and only that (6a85f5e8).
+        expect(update.$set['aiProfile.suspectDecision']).toBeUndefined();
+        expect(update.$set.profileReviewedAt).toBeInstanceOf(Date);
+        expect(body.data).toMatchObject({ state: 'published_rule_downgraded', rule_cleared: 'note_doubts_cuvee_not_producer', left_rule_downgrades: true });
+      });
+
+      test('an unknown-only row that a rule moved leaves the residue list with the same confirm', async () => {
+        WineDefinition.findById.mockReturnValue(selectChain(publishedSuspect({
+          producerSuspect: false, producerUnknown: true, suspectDowngradedBy: 'note_epistemic_only',
+        })));
+        const body = parse(await tool('review_held_profile').handler({ wine_id: oid('7'), decision: 'confirm' }, SOMM_CTX));
+        const [, update] = WineDefinition.updateOne.mock.calls[0];
+        expect(update.$set['aiProfile.producerUnknown']).toBe(false);
+        expect(update.$set['aiProfile.suspectDowngradedBy']).toBeNull();
+        expect(body.data).toMatchObject({ state: 'published_unknown', unknown_cleared: true, rule_cleared: 'note_epistemic_only' });
+      });
+
+      test('a clean row with no tag is still nothing to review, and uphold never touches a rule-downgraded row', async () => {
+        WineDefinition.findById.mockReturnValue(selectChain(publishedSuspect({ producerSuspect: false, producerUnknown: false })));
+        let body = parse(await tool('review_held_profile').handler({ wine_id: oid('7'), decision: 'confirm' }, SOMM_CTX));
+        expect(body.error.code).toBe('invalid_input');
+        WineDefinition.findById.mockReturnValue(selectChain(publishedSuspect({ producerSuspect: false, producerUnknown: false, suspectDowngradedBy: 'note_epistemic_only' })));
+        body = parse(await tool('review_held_profile').handler({ wine_id: oid('7'), decision: 'uphold' }, SOMM_CTX));
+        expect(body.error.code).toBe('invalid_input');
+        expect(WineDefinition.updateOne).not.toHaveBeenCalled();
+      });
+
       test('UPHOLD keeps the note — the doubt stands, so its explanation must', async () => {
         WineDefinition.findById.mockReturnValue(selectChain(publishedSuspect({ producerNote: 'genuinely unidentifiable' })));
         const body = parse(await tool('review_held_profile').handler({ wine_id: oid('7'), decision: 'uphold' }, SOMM_CTX));

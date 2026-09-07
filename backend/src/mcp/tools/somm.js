@@ -1783,7 +1783,9 @@ registerTool({
     'stays held (its owner keeps seeing "Not yet assessed"), a published_suspect row stays published WITH THE ' +
     'SUSPECT FLAG CLEARED (a human adjudicated the doubt away), and producerUnknown clears too when set — confirm ' +
     'also works on a published row whose ONLY doubt flag is producerUnknown ("I have placed this producer"; the ' +
-    'route a documented estate needed once its profile was fixed but the flag had no verb). decision "uphold" ' +
+    'route a documented estate needed once its profile was fixed but the flag had no verb), and on a row a RULE ' +
+    'moved out of the suspect queue with no flag left at all (list_rule_downgrades): confirm records the placement, ' +
+    'clears the rule tag and the row leaves that list. decision "uphold" ' +
     '(published_suspect rows only): ' +
     'the flag is CORRECT — the producer value really is a brand/style/non-winery — so the row stays published, ' +
     'KEEPS the flag and the owner-visible caveat, and leaves the queue as the registry\'s honest residue; ' +
@@ -1823,7 +1825,7 @@ registerTool({
     // semantics (and the stamp rule) cannot fork.
     const decideOne = async (id) => {
       const wine = await WineDefinition.findById(id)
-        .select('name producer aiProfile.heldAt aiProfile.heldReason aiProfile.producerSuspect aiProfile.producerUnknown aiProfile.description aiProfile.generatedAt aiProfile.source');
+        .select('name producer aiProfile.heldAt aiProfile.heldReason aiProfile.producerSuspect aiProfile.producerUnknown aiProfile.suspectDowngradedBy aiProfile.description aiProfile.generatedAt aiProfile.source');
       if (!wine) return { wine_id: id, error: 'not_found' };
       const ap = wine.aiProfile || {};
       const held = !!ap.heldAt;
@@ -1832,7 +1834,13 @@ registerTool({
       // documented 180 ha estate carried the flag with no verb able to clear
       // it — set_wine_profile writes the profile, not the doubt fields).
       const unknownOnly = !held && !flaggedPublished && ap.producerUnknown === true;
-      if (!held && !flaggedPublished && !(unknownOnly && args.decision === 'confirm')) {
+      // …and so are rows a RULE moved out of the suspect queue (somm 6a9eb3ae):
+      // note_doubts_cuvee_not_producer lands a row CLEAN — no flag at all, only
+      // the rule tag — so a curator who then placed the producer had nowhere
+      // to say so, and list_rule_downgrades had no exit.
+      const ruleDowngraded = !held && !flaggedPublished && !unknownOnly && !!ap.suspectDowngradedBy;
+      const confirmable = (unknownOnly || ruleDowngraded) && args.decision === 'confirm';
+      if (!held && !flaggedPublished && !confirmable) {
         return { wine_id: id, error: 'nothing_to_review' };
       }
       const label = `${wine.name} — ${wine.producer}`;
@@ -1871,6 +1879,11 @@ registerTool({
           // on an unknown-only row: that field is the verdict on
           // producerSuspect, and ONLY that (6a85f5e8).
           if (ap.producerUnknown === true) set['aiProfile.producerUnknown'] = false;
+          // A human placement replaces the rule's residue: the tag is what keeps
+          // a row in list_rule_downgrades, and the curator has now done the
+          // review that list exists to invite. Which rule fired is kept in the
+          // audit row below.
+          if (ap.suspectDowngradedBy) set['aiProfile.suspectDowngradedBy'] = null;
 
           // …and the NOTE goes with the flag it explains (somm ticket
           // 6a882f3e). It used to be kept "for curator context", and that was
@@ -1896,11 +1909,15 @@ registerTool({
           }
         }
         await WineDefinition.updateOne({ _id: wine._id }, { $set: set });
-        const state = held ? 'held' : (flaggedPublished ? 'published_suspect' : 'published_unknown');
+        const state = held ? 'held'
+          : flaggedPublished ? 'published_suspect'
+          : ap.producerUnknown === true ? 'published_unknown'
+          : 'published_rule_downgraded';
         const noteCleared = set['aiProfile.producerNote'] === null ? ap.producerNote : null;
         const cleared = {
           ...(flaggedPublished ? { suspectCleared: true } : {}),
           ...(!held && ap.producerUnknown === true ? { unknownCleared: true } : {}),
+          ...(!held && ap.suspectDowngradedBy ? { ruleCleared: ap.suspectDowngradedBy } : {}),
         };
         logAudit(ctx.req, 'admin.wine.profileReviewed', { type: 'wine', id: wine._id },
           {
@@ -1914,6 +1931,7 @@ registerTool({
           wine_id: wine._id, label, decision: 'confirm', state,
           ...(cleared.suspectCleared ? { suspect_cleared: true } : {}),
           ...(cleared.unknownCleared ? { unknown_cleared: true } : {}),
+          ...(cleared.ruleCleared ? { rule_cleared: cleared.ruleCleared, left_rule_downgrades: true } : {}),
           // Told, not silent: the curator should know the caveat went with the
           // flag, because they can no longer see it to check.
           ...(noteCleared ? { producer_note_cleared: true } : {}),
@@ -3346,7 +3364,9 @@ registerTool({
     'whenever any clause doubts the producer itself, and lands clean, or on producerUnknown when the note also ' +
     'carries first-person doubt about the producer. This list exists so a rule that turns out to be wrong can be found ' +
     'and reversed as a set instead of re-derived — spot-check a sample, and if a row should not have moved, ' +
-    'propose_wine_correction or set_wine_profile still work on it normally. A row a HUMAN judged carries ' +
+    'propose_wine_correction or set_wine_profile still work on it normally; and when the row is RIGHT — a ' +
+    'documented estate the rule happened to move — review_held_profile with decision confirm records the placement ' +
+    'and takes it off this list. A row a HUMAN judged carries ' +
     'suspectDecision instead and never appears here. One documented semantic (audit 6a86dad6): the tag records ' +
     'which rule FIRED under strongest-claim-first precedence, not which shape the note best fits — a note that ' +
     'textually asserts a producer can carry the epistemic tag when the assertion regex did not match it; the ' +
