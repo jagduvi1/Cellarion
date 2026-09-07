@@ -11,6 +11,7 @@ const { getMaxPosition, validateDoubleHeightRows } = require('../utils/rackGeome
 const {
   createGridRack, placeBottleInRack, clearRackSlot,
   buildAnnotatedEntries, validateArrangementTarget, applyArrangement,
+  normalizeRackGroup,
 } = require('../services/rackOps');
 const { ARRANGE_STRATEGIES, buildArrangePlan } = require('../utils/rackArrange');
 const { isValidId } = require('../utils/validation');
@@ -99,7 +100,7 @@ router.get('/', requireCellarAccess('viewer'), async (req, res) => {
 // POST /api/racks  — create a rack (owner or editor)
 router.post('/', requireCellarAccess('editor'), async (req, res) => {
   try {
-    const { name, rows, cols, type, typeConfig, isModular, modules } = req.body;
+    const { name, rows, cols, type, typeConfig, isModular, modules, group } = req.body;
     if (!name) return res.status(400).json({ error: 'Rack name is required' });
 
     // Modular racks are a REST-only route path (no MCP twin to drift against;
@@ -121,6 +122,7 @@ router.post('/', requireCellarAccess('editor'), async (req, res) => {
         cellar: req.cellar._id,
         user: req.cellar.user,
         name,
+        group: normalizeRackGroup(group) ?? null,
         isModular: true,
         modules,
       });
@@ -134,7 +136,7 @@ router.post('/', requireCellarAccess('editor'), async (req, res) => {
     // Grid family: ONE shared implementation with the MCP create_rack tool
     // (plan §7) — type/typeConfig validation, ownership, duplicate-name 409
     // and the rack.create audit all live in rackOps.createGridRack.
-    const result = await createGridRack(req.cellar, { name, type, rows, cols, typeConfig }, req);
+    const result = await createGridRack(req.cellar, { name, type, rows, cols, typeConfig, group }, req);
     if (result.error) return res.status(result.error.status).json({ error: result.error.message });
     res.status(201).json({ rack: result.rack });
   } catch (err) {
@@ -158,7 +160,7 @@ router.put('/:id', async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to modify this rack' });
     }
 
-    const { name, type, rows, cols, typeConfig, isModular, modules, rfidTag, zones } = req.body;
+    const { name, type, rows, cols, typeConfig, isModular, modules, rfidTag, zones, group } = req.body;
 
     // Validate zones if provided: bounded count, named, valid hex color,
     // integer positions, and no position in more than one zone.
@@ -232,6 +234,8 @@ router.put('/:id', async (req, res) => {
     }
 
     if (name !== undefined) rack.name = name;
+    // '' or null clears the group (ungrouped); absent leaves it alone.
+    if (group !== undefined) rack.group = normalizeRackGroup(group);
     if (isModular !== undefined) rack.isModular = isModular;
     if (modules !== undefined) rack.modules = modules;
     if (type !== undefined) rack.type = type;
@@ -278,7 +282,8 @@ router.put('/:id', async (req, res) => {
       populate: { path: 'wineDefinition', populate: ['country', 'region', 'grapes'] }
     });
 
-    logAudit(req, 'rack.update', { type: 'rack', id: rack._id });
+    // cellarId so the update shows on the cellar's audit page like rack.create.
+    logAudit(req, 'rack.update', { type: 'rack', id: rack._id, cellarId: rack.cellar }, { name: rack.name, group: rack.group || null });
     res.json({ rack: await withMaturity(rack) });
   } catch (err) {
     if (err.code === 11000) {

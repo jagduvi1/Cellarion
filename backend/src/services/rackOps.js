@@ -45,7 +45,14 @@ async function createCellar({ name, description }, req) {
  * MCP twin to drift against). typeConfig (double-height rows etc.) is
  * accepted and validated; MCP simply doesn't pass it in v1.
  */
-async function createGridRack(cellarDoc, { name, type = 'grid', rows = 4, cols = 8, typeConfig }, req) {
+/** The rack group as stored: trimmed, capped, empty → null (ungrouped). */
+function normalizeRackGroup(group) {
+  if (group === undefined) return undefined;
+  const s = typeof group === 'string' ? group.trim().slice(0, 40) : '';
+  return s || null;
+}
+
+async function createGridRack(cellarDoc, { name, type = 'grid', rows = 4, cols = 8, typeConfig, group }, req) {
   if (!name || !String(name).trim()) return { error: { status: 400, message: 'Rack name is required' } };
   if (type && !RACK_TYPES.includes(type)) {
     return { error: { status: 400, message: `Invalid rack type. Must be one of: ${RACK_TYPES.join(', ')}` } };
@@ -57,6 +64,7 @@ async function createGridRack(cellarDoc, { name, type = 'grid', rows = 4, cols =
     type: type || 'grid',
     rows: rows || 4,
     cols: cols || 8,
+    group: normalizeRackGroup(group) ?? null,
   });
   if (typeConfig) {
     const dhrError = validateDoubleHeightRows(typeConfig, rack.type, rack.rows, false);
@@ -70,7 +78,7 @@ async function createGridRack(cellarDoc, { name, type = 'grid', rows = 4, cols =
     if (err.name === 'ValidationError') return { error: { status: 400, message: err.message } };
     throw err;
   }
-  logAudit(req, 'rack.create', { type: 'rack', id: rack._id, cellarId: cellarDoc._id }, { name: rack.name });
+  logAudit(req, 'rack.create', { type: 'rack', id: rack._id, cellarId: cellarDoc._id }, { name: rack.name, ...(rack.group ? { group: rack.group } : {}) });
   return { rack };
 }
 
@@ -297,6 +305,7 @@ async function applyArrangement(rack, target, req, meta = {}) {
 }
 
 module.exports = {
+  normalizeRackGroup,
   createCellar, createGridRack, placeBottleInRack, clearRackSlot, moveBottleToCellar,
   buildAnnotatedEntries, validateArrangementTarget, applyArrangement,
 };

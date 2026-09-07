@@ -81,6 +81,7 @@ export default function RackRenderer({
   onDelete,
   onNfcLink,
   onZones,
+  onEdit,
   getSlotStyle,
 }) {
   const { t } = useTranslation();
@@ -163,7 +164,10 @@ export default function RackRenderer({
     <div className="rack-container card">
       <div className="rack-header">
         <div>
-          <h2>{rack.name}</h2>
+          <h2>
+            {rack.name}
+            {rack.group && <span className="rack-group-badge">{rack.group}</span>}
+          </h2>
           <span className="rack-dims">
             {isModular ? (
               <span className="rack-type-badge">{t('racks.modular')}</span>
@@ -174,6 +178,16 @@ export default function RackRenderer({
           </span>
         </div>
         <div className="rack-header-actions">
+          {canEdit && onEdit && (
+            <button
+              className="rack-icon-btn"
+              onClick={onEdit}
+              title={t('racks.editRack', 'Rename or group this rack')}
+              aria-label={t('racks.editRack', 'Rename or group this rack')}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+            </button>
+          )}
           {canEdit && onZones && (
             <button
               className={`rack-icon-btn ${(rack.zones || []).length > 0 ? 'rack-icon-btn--active' : ''}`}

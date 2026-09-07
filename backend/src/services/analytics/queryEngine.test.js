@@ -10,6 +10,7 @@
 
 jest.mock('../../models/Bottle', () => ({ aggregate: jest.fn(), find: jest.fn() }));
 jest.mock('../../models/Cellar', () => ({ find: jest.fn() }));
+jest.mock('../../models/Rack', () => ({ find: jest.fn() }));
 jest.mock('../../models/PersonalDataEntry', () => ({ find: jest.fn() }));
 jest.mock('../../models/RegistryDataValue', () => ({ find: jest.fn() }));
 jest.mock('../../models/PersonalDataKey', () => ({ find: jest.fn(), findOne: jest.fn() }));
@@ -26,6 +27,7 @@ jest.mock('../../utils/maturityUtils', () => ({
 const mongoose = require('mongoose');
 const Bottle = require('../../models/Bottle');
 const Cellar = require('../../models/Cellar');
+const Rack = require('../../models/Rack');
 const PersonalDataEntry = require('../../models/PersonalDataEntry');
 const RegistryDataValue = require('../../models/RegistryDataValue');
 const PersonalDataKey = require('../../models/PersonalDataKey');
@@ -634,4 +636,65 @@ describe('KPI shape — zero dimensions (dashboards R-E)', () => {
     expect(out.currency.target).toBe('USD');
   });
 
+});
+
+describe('rack name / group dimensions (support ticket 2026-09-06)', () => {
+  const B1 = 'e'.repeat(24);
+  const B2 = '1'.repeat(24);
+  const racksInScope = () => Rack.find.mockReturnValue(chainLean([
+    { _id: 'r1', name: 'Left', group: 'Basement', slots: [{ position: 1, bottle: B1 }] },
+    { _id: 'r2', name: 'Fridge', group: null, slots: [] },
+  ]));
+
+  test('rows: rack.name and rack.group hydrate from one rack query over the scope; unplaced → null', async () => {
+    aggReturning([{ ids: [{ _id: B1 }, { _id: B2 }], total: [{ n: 2 }] }]);
+    Bottle.find.mockReturnValue(chainLean([
+      { _id: B1, cellar: CELLAR_A, wineDefinition: { _id: 'f'.repeat(24) } },
+      { _id: B2, cellar: CELLAR_A, wineDefinition: { _id: 'f'.repeat(24) } },
+    ]));
+    racksInScope();
+    const out = await runQuery(USER, { columns: ['rack.name', 'rack.group'] });
+    expect(Rack.find).toHaveBeenCalledTimes(1);
+    expect(Rack.find.mock.calls[0][0]).toMatchObject({ cellar: { $in: [CELLAR_A, CELLAR_B] }, deletedAt: null });
+    expect(out.rows[0].values).toEqual({ 'rack.name': 'Left', 'rack.group': 'Basement' });
+    expect(out.rows[1].values).toEqual({ 'rack.name': null, 'rack.group': null });
+  });
+
+  test('rows: a rack column without any rack in the request makes no rack query', async () => {
+    aggReturning([{ ids: [{ _id: B1 }], total: [{ n: 1 }] }]);
+    Bottle.find.mockReturnValue(chainLean([{ _id: B1, cellar: CELLAR_A, wineDefinition: { _id: 'f'.repeat(24) } }]));
+    await runQuery(USER, { columns: ['bottle.vintage'] });
+    expect(Rack.find).not.toHaveBeenCalled();
+  });
+
+  test('grouped: rack.group joins the racks once and buckets by the joined value', async () => {
+    const captured = aggReturning([{ _id: { d0: 'Basement' }, m0: 12 }, { _id: { d0: null }, m0: 3 }]);
+    const out = await runQuery(USER, {
+      mode: 'grouped', dimensions: ['rack.group'], measures: [{ field: '*', agg: 'count' }],
+    });
+    const pipeline = captured.pipelines[captured.pipelines.length - 1];
+    const lookups = pipeline.filter((s) => s.$lookup && s.$lookup.from === 'racks');
+    expect(lookups).toHaveLength(1);
+    const group = pipeline.find((s) => s.$group);
+    expect(group.$group._id).toEqual({ d0: '$_rack.group' });
+    expect(out.buckets.map((b) => [b.dimensions[0], b.measures[0]])).toEqual([['Basement', 12], [null, 3]]);
+  });
+
+  test('filter: rack.group eq resolves the placed bottles of matching racks into an id set; neq excludes them', async () => {
+    racksInScope();
+    const { pre } = await compileFilters([{ field: 'rack.group', op: 'eq', value: 'basement' }], USER, [{ _id: CELLAR_A, name: 'Home' }]);
+    expect(Rack.find.mock.calls[0][0]).toMatchObject({ cellar: { $in: [CELLAR_A] }, deletedAt: null });
+    expect(Rack.find.mock.calls[0][0].group).toEqual({ $regex: '^basement$', $options: 'i' });
+    expect(pre).toEqual([{ _id: { $in: [B1] } }]);
+
+    Rack.find.mockClear();
+    racksInScope();
+    const not = await compileFilters([{ field: 'rack.group', op: 'neq', value: 'Basement' }], USER, [{ _id: CELLAR_A, name: 'Home' }]);
+    expect(not.pre).toEqual([{ _id: { $nin: [B1] } }]);
+  });
+
+  test('rack dimensions are not sortable', async () => {
+    aggReturning([{ ids: [], total: [] }]);
+    await expect(runQuery(USER, { columns: ['rack.name'], sort: { field: 'rack.name', dir: 'asc' } })).rejects.toThrow(/not sortable/);
+  });
 });

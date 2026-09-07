@@ -26,6 +26,8 @@ import { LENSES, getLensStyle, getLensLegend, bottleMatchesSearch } from '../uti
 import CellarNav from '../components/CellarNav';
 import CellarPageHeader from '../components/CellarPageHeader';
 import DialogBox from '../components/DialogBox';
+import EditRackModal from '../components/racks/EditRackModal';
+import { groupRacks, groupNames } from '../utils/rackGroups';
 import './CellarRacks.css';
 
 function CellarRacks() {
@@ -46,6 +48,8 @@ function CellarRacks() {
   const [showNewRack, setShowNewRack] = useState(false);
   const [newRack, setNewRack]         = useState({ name: '', type: 'grid', rows: 4, cols: 8, typeConfig: {} });
   const [saving, setSaving]           = useState(false);
+  // rack id being renamed / regrouped (EditRackModal), or null
+  const [editRack, setEditRack]       = useState(null);
   // which rack tab is selected
   const [selectedRackId, setSelectedRackId] = useState(null);
 
@@ -222,6 +226,7 @@ function CellarRacks() {
         type: newRack.type,
         rows: newRack.rows,
         cols: newRack.cols,
+        ...(newRack.group && newRack.group.trim() ? { group: newRack.group.trim() } : {}),
       };
       if (newRack.typeConfig && Object.keys(newRack.typeConfig).length > 0) {
         const typeConfig = { ...newRack.typeConfig };
@@ -527,6 +532,20 @@ function CellarRacks() {
     }
   };
 
+  // Rename / regroup (support ticket 2026-09-06): PUT name + group and adopt
+  // the returned values. An empty group clears it.
+  const handleEditRackSave = async (rackId, { name, group }) => {
+    try {
+      const res = await updateRack(apiFetch, rackId, { name, group });
+      const data = await res.json();
+      if (!res.ok) return { ok: false, error: data.error };
+      setRacks(prev => prev.map(r => r._id === rackId ? { ...r, name: data.rack.name, group: data.rack.group ?? null } : r));
+      return { ok: true };
+    } catch {
+      return { ok: false };
+    }
+  };
+
   // --- NFC: save or clear rfidTag on rack ---
   const handleNfcSave = async (rackId, rfidTag) => {
     try {
@@ -580,6 +599,7 @@ function CellarRacks() {
             onTypeChange={handleTypeChange}
             onSubmit={handleCreateRack}
             saving={saving}
+            groups={groupNames(racks)}
           />
         </div>
       )}
@@ -590,28 +610,36 @@ function CellarRacks() {
         </div>
       ) : (
         <>
-          <div className="rack-tabs">
-            {racks.map(r => (
-              <button
-                key={r._id}
-                className={`rack-tab ${r._id === rack._id ? 'active' : ''}`}
-                onClick={() => { setSelectedRackId(r._id); setActivePopup(null); }}
-              >
-                {r.name}
-                <span className="rack-tab-count">
-                  {r.slots.length}/{(r.isModular && r.modules?.length > 0
-                    ? getModularTotalSlots(r.modules)
-                    : getTotalSlots(r.type || 'grid', r.rows, r.cols, r.typeConfig))
-                    - (r.disabledPositions?.length || 0)}
-                </span>
-                {matchCounts && (
-                  <span className={`rack-tab-matches ${matchCounts[r._id] > 0 ? 'has-matches' : ''}`}>
-                    {matchCounts[r._id]}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
+          {/* Tabs sectioned by the racks' group label ("Basement" holds several
+              racks — support ticket 2026-09-06). A cellar without groups
+              renders one plain strip, exactly as before. */}
+          {groupRacks(racks).map(section => (
+            <div key={section.group ?? '__ungrouped'} className={`rack-tab-group${section.group ? '' : ' rack-tab-group--none'}`}>
+              {section.group && <div className="rack-tab-group-label">{section.group}</div>}
+              <div className="rack-tabs">
+                {section.racks.map(r => (
+                  <button
+                    key={r._id}
+                    className={`rack-tab ${r._id === rack._id ? 'active' : ''}`}
+                    onClick={() => { setSelectedRackId(r._id); setActivePopup(null); }}
+                  >
+                    {r.name}
+                    <span className="rack-tab-count">
+                      {r.slots.length}/{(r.isModular && r.modules?.length > 0
+                        ? getModularTotalSlots(r.modules)
+                        : getTotalSlots(r.type || 'grid', r.rows, r.cols, r.typeConfig))
+                        - (r.disabledPositions?.length || 0)}
+                    </span>
+                    {matchCounts && (
+                      <span className={`rack-tab-matches ${matchCounts[r._id] > 0 ? 'has-matches' : ''}`}>
+                        {matchCounts[r._id]}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
 
           {/* Lens + search toolbar (the 3D shelf view doesn't support lenses yet) */}
           {!(rack.type === 'shelf' && !rack.isModular && viewMode === '3d') && (
@@ -780,6 +808,7 @@ function CellarRacks() {
               onDelete={() => setDeleteConfirm(rack._id)}
               onNfcLink={() => setNfcModal({ rackId: rack._id })}
               onZones={() => setZonesOpen(true)}
+              onEdit={() => setEditRack(rack._id)}
             />
           )}
           </div>
@@ -911,6 +940,19 @@ function CellarRacks() {
         />
       )}
 
+      {/* Rename / regroup */}
+      {editRack && (() => {
+        const target = racks.find(r => r._id === editRack);
+        return target ? (
+          <EditRackModal
+            rack={target}
+            groups={groupNames(racks)}
+            onSave={(fields) => handleEditRackSave(target._id, fields)}
+            onClose={() => setEditRack(null)}
+          />
+        ) : null;
+      })()}
+
       {/* NFC link modal */}
       {nfcModal && (
         <NfcLinkModal
@@ -957,7 +999,7 @@ function parseDoubleHeightRows(text) {
 }
 
 // ---- New rack creation form with type selector ----
-function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving }) {
+function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving, groups = [] }) {
   const { t } = useTranslation();
   const dims = TYPE_DIMENSIONS[newRack.type] || TYPE_DIMENSIONS.grid;
   const [showPreview, setShowPreview] = useState(false);
@@ -995,6 +1037,22 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving }) {
             placeholder={t('racks.namePlaceholder')}
             required
           />
+        </div>
+
+        <div className="form-group">
+          <label>{t('racks.groupLabel', 'Group')}</label>
+          <input
+            type="text"
+            list="new-rack-group-options"
+            value={newRack.group || ''}
+            onChange={e => setNewRack({ ...newRack, group: e.target.value })}
+            placeholder={t('racks.groupPlaceholder', 'e.g. Basement, Kitchen fridge')}
+            maxLength={40}
+          />
+          <datalist id="new-rack-group-options">
+            {groups.map(g => <option key={g} value={g} />)}
+          </datalist>
+          <small className="help-text">{t('racks.groupHint', 'Optional. Racks with the same group are shown together — a room, a fridge, a cooler. Leave it empty for no group.')}</small>
         </div>
 
         {dims.showRows && (

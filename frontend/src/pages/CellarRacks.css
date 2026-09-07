@@ -1174,3 +1174,13 @@
 .slot-open-info--ok { color: #4527a0; }
 .slot-open-info--soon { color: #e65100; }
 .slot-open-info--past { color: #c62828; }
+
+/* Rack tabs sectioned by group (support ticket 2026-09-06). */
+.rack-tab-group { margin-bottom: 0.25rem; }
+.rack-tab-group-label { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-muted); margin: 0.5rem 0 0.2rem 0.25rem; }
+.rack-tab-group--none .rack-tabs { margin-top: 0.25rem; }
+.rack-group-badge { display: inline-block; margin-left: 0.5rem; padding: 0.05rem 0.5rem; border-radius: 999px; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.03em; color: var(--color-text-muted); background: var(--color-surface-hover); vertical-align: middle; }
+.edit-rack-form .form-group { display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 0.75rem; }
+.edit-rack-form .form-group > span { font-size: 0.85rem; color: var(--color-text-secondary); }
+.edit-rack-form input { width: 100%; }
+.edit-rack-form .help-text { font-size: 0.78rem; color: var(--color-text-muted); }

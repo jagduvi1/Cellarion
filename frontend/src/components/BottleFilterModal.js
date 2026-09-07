@@ -71,7 +71,10 @@ function FilterSection({ label, icon, children, defaultExpanded = true }) {
 // only when the cellar actually has racks.
 // showReserved: only the single-cellar active endpoint supports ?reserved=1
 // (reserved bottles are active by definition — consumed ones lose relevance).
-function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, facetMeta, bottlesTotal, showRatingMaturity = true, showUnplaced = false, showReserved = false }) {
+// storage: the cellar's racks as [{ id, name, group }] — renders the "Stored
+// in" section (a rack group or one rack). null/empty hides it; the filter is
+// applied server-side after search like Placement, so no facet counts.
+function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, facetMeta, bottlesTotal, showRatingMaturity = true, showUnplaced = false, showReserved = false, storage = null }) {
   const { t } = useTranslation();
 
   // baseFacets = all options in the cellar (unfiltered) — used to LIST available pills
@@ -282,6 +285,32 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
             />
           </FilterSection>
         )}
+
+        {/* Stored in — a rack group (a room, a fridge) or one rack; single
+            choice, server-side after search (support ticket 2026-09-06). */}
+        {Array.isArray(storage) && storage.length > 0 && (() => {
+          const groups = [...new Set(storage.map(r => r.group).filter(Boolean))];
+          const current = filters.storage || '';
+          const pick = (v) => onApply({ ...filters, storage: current === v ? '' : v });
+          const pills = [
+            ...groups.map(g => (
+              <FilterPill key={`group:${g}`} label={g} selected={current === `group:${g}`} onClick={() => pick(`group:${g}`)} />
+            )),
+            ...storage.map(r => (
+              <FilterPill
+                key={`rack:${r.id}`}
+                label={r.group ? `${r.group} · ${r.name}` : r.name}
+                selected={current === `rack:${r.id}`}
+                onClick={() => pick(`rack:${r.id}`)}
+              />
+            )),
+          ];
+          return (
+            <FilterSection label={t('cellarDetail.storedInLabel', 'Stored in')} icon="🗄️">
+              {pills}
+            </FilterSection>
+          );
+        })()}
 
         {/* Reservation — single toggle, applied server-side after search (same
             no-facet-count reasoning as Placement above). */}

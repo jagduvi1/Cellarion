@@ -63,8 +63,10 @@ registerTool({
   name: 'create_rack',
   title: 'Create a grid rack in a cellar',
   description:
-    'Adds a grid rack (rows × cols) to a cellar the user owns or edits. Confirm name and size first. For modular racks, ' +
-    'zones or disabled slots, use the web app. Reversible via undo_last while the rack is still empty.',
+    'Adds a grid rack (rows × cols) to a cellar the user owns or edits. Confirm name and size first; group is the ' +
+    'optional room or appliance label the rack belongs to ("Basement", "Kitchen fridge") — reuse a group name ' +
+    'list_racks already shows so racks section together. For modular racks, zones or disabled slots, use the web app. ' +
+    'Reversible via undo_last while the rack is still empty.',
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
@@ -72,6 +74,7 @@ registerTool({
     name: z.string().min(1).max(120),
     rows: z.number().int().min(1).max(20).default(4),
     cols: z.number().int().min(1).max(20).default(8),
+    group: z.string().max(40).optional().describe('Optional group label (room or appliance), e.g. "Basement"'),
     idempotency_key: z.string().max(100).optional(),
   },
   handler: async (args, ctx) => {
@@ -79,13 +82,13 @@ registerTool({
     if (replayed) return replayed;
     const access = await resolveCellarAccess(ctx.user.id, args.cellar_id, 'editor');
     if (!access) return fail('not_found', MSG_CELLAR_NOT_FOUND);
-    const result = await createGridRack(access.cellar, { name: args.name, type: 'grid', rows: args.rows, cols: args.cols }, ctx.req);
+    const result = await createGridRack(access.cellar, { name: args.name, type: 'grid', rows: args.rows, cols: args.cols, group: args.group }, ctx.req);
     if (result.error) {
       return fail(result.error.code === 'duplicate' ? 'conflict' : 'invalid_input', result.error.message);
     }
     const envelope = {
       summary: `Created ${args.rows}×${args.cols} rack "${result.rack.name}" in "${access.cellar.name}"`,
-      data: { rack_id: result.rack._id, cellar_id: access.cellar._id, rows: args.rows, cols: args.cols, undo: 'undo_last deletes it while still empty' },
+      data: { rack_id: result.rack._id, cellar_id: access.cellar._id, rows: args.rows, cols: args.cols, group: result.rack.group || null, undo: 'undo_last deletes it while still empty' },
     };
     await logAction(ctx, {
       tool: 'create_rack', action: 'rack_create', cellar: access.cellar._id,

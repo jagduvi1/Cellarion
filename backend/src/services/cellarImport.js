@@ -327,6 +327,7 @@ async function createRacks(cellarId, userId, cellar, items, result) {
       cols: clampDim(spec?.cols || inf.cols, 1),
     };
     if (spec?.typeConfig) rackData.typeConfig = spec.typeConfig;
+    if (typeof spec?.group === 'string' && spec.group.trim()) rackData.group = spec.group.trim().slice(0, 40);
     const rackDoc = new Rack(rackData);
     // Restore disabled (unusable) positions, clamped to the created geometry.
     if (Array.isArray(spec?.disabledPositions) && spec.disabledPositions.length > 0) {
