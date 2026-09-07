@@ -147,7 +147,13 @@ function buildProposedWine(aiData, item) {
 
   return {
     name: aiData.name,
-    producer: aiData.producer,
+    // A file with no producer column gets its producer from the model, and
+    // the model — told a name-equals-producer estate wine is fine — sometimes
+    // mirrors an unknown cuvée name back as the producer ("Les Caractères" /
+    // "Les Caractères", boubou17's CSV; audit ticket 2026-09-04). That is a
+    // missing producer, not a producer: leave it empty so the row mints as a
+    // pending identity for a curator, unless the name itself is an estate.
+    producer: producerMirroredFromName(aiData, item) ? null : aiData.producer,
     // Country keeps the AI's value first: it is fed the file's country as a
     // hint and normalizes local-language names ("Deutschland" → "Germany"),
     // which the raw column does not. The file is the fallback, which is new —
@@ -352,6 +358,18 @@ function typeFromFileGrapes(grapes, grapeColourOf) {
   }
   if (colours.size !== 1) return null;              // silent or contradictory → AI
   return colours.has('Red') ? 'red' : 'white';
+}
+
+// Estate names legitimately double as the wine name ("Château Talbot").
+const ESTATE_WORD_RE = /^(ch[âa]teau|domaine|clos|quinta|tenuta|castello|weingut|bodegas?|mas|cascina|fattoria|azienda|cantina|villa|podere|finca|casa|ch\.)\b/i;
+function producerMirroredFromName(aiData, item) {
+  const str = (v) => (typeof v === 'string' ? v.trim() : '');
+  if (str(item && item.producer)) return false;                  // the file said it — keep it
+  const name = str(aiData && aiData.name);
+  const producer = str(aiData && aiData.producer);
+  if (!name || !producer) return false;
+  if (normalizeString(name) !== normalizeString(producer)) return false;
+  return !ESTATE_WORD_RE.test(name);
 }
 
 function fileCompleteIdentity(item, grapeColourOf) {

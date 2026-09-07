@@ -295,3 +295,25 @@ describe('the complete-row bypass routes the Prädikat the same way', () => {
     expect(out.appellation).toBeNull();
   });
 });
+
+describe('a producer the model mirrored from an unknown name is a missing producer (audit ticket 2026-09-04)', () => {
+  it('drops a name-equals-producer answer when the file gave no producer', () => {
+    const out = buildProposedWine(ai({ name: 'Les Caractères', producer: 'Les Caractères' }), { producer: '', appellation: '' });
+    expect(out.producer).toBeNull();
+    expect(out.name).toBe('Les Caractères');
+  });
+  it('keeps an estate wine whose name IS the estate', () => {
+    const out = buildProposedWine(ai({ name: 'Château Talbot', producer: 'Château Talbot' }), { producer: '' });
+    expect(out.producer).toBe('Château Talbot');
+    const out2 = buildProposedWine(ai({ name: 'Weingut Herztal', producer: 'Weingut Herztal' }), { producer: '' });
+    expect(out2.producer).toBe('Weingut Herztal');
+  });
+  it('keeps the producer when the file itself stated it, even if it equals the name', () => {
+    const out = buildProposedWine(ai({ name: 'Les Caractères', producer: 'Les Caractères' }), { producer: 'Les Caractères' });
+    expect(out.producer).toBe('Les Caractères');
+  });
+  it('keeps a producer that differs from the name', () => {
+    const out = buildProposedWine(ai({ name: 'En Toute Intimité', producer: 'Domaine Gayda' }), { producer: '' });
+    expect(out.producer).toBe('Domaine Gayda');
+  });
+});

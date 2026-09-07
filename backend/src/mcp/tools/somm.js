@@ -277,6 +277,9 @@ registerTool({
       .describe('Default: "pending" — or "all" when wine_id is given (a wine lookup wants every row)'),
     wine_id: objectId.optional().describe('Scope to one registry wine (from search_registry/get_wine/drink_window_for)'),
     vintage: z.string().min(1).max(10).optional().describe('With wine_id: one vintage, e.g. "2019" or "NV"'),
+    unprofiled: z.boolean().optional().describe(
+      'Only rows whose wine has NO tasting profile text. With status "reviewed" this finds windows that were written ' +
+      'onto a wine nothing describes — the pass that has to be finished with set_wine_profile.'),
     limit: z.number().int().min(1).max(50).default(20),
     offset: z.number().int().min(0).default(0),
   },
@@ -296,6 +299,16 @@ registerTool({
         // Same canonical vintage form set_vintage_maturity uses.
         filter.vintage = /^nv$/i.test(args.vintage.trim()) ? 'NV' : args.vintage.trim();
       }
+    } else if (args.unprofiled) {
+      // Windowed-but-unprofiled wines (audit ticket 2026-09-06): with
+      // automatic enrichment off, a window written onto a wine that has no
+      // description leaves the record incomplete for good unless a curator
+      // finds it. Wines without profile text are few hundred, so an id list
+      // keeps the page and the total honest.
+      const bare = await WineDefinition.find({
+        $or: [{ 'aiProfile.description': { $in: [null, ''] } }, { 'aiProfile.description': { $exists: false } }],
+      }).select('_id').lean();
+      filter.wineDefinition = { $in: bare.map((w) => w._id) };
     }
     const [total, pending, profiles] = await Promise.all([
       WineVintageProfile.countDocuments(filter),
@@ -475,7 +488,18 @@ registerTool({
       prev,
       result: envelope,
     });
-    return ok(envelope.summary, envelope.data);
+    // A window on a wine nothing describes leaves the record incomplete —
+    // and with automatic enrichment off, nobody but the curator will fill it
+    // (audit ticket 2026-09-06). Say so in the same breath. Best-effort.
+    const warnings = [];
+    try {
+      const wineId = profile.wineDefinition?._id || profile.wineDefinition;
+      const w = await WineDefinition.findById(wineId).select('aiProfile.description').lean();
+      if (w && !(w.aiProfile && w.aiProfile.description)) {
+        warnings.push('This wine has no tasting profile text — the window is saved, but nothing describes the wine. Write one with set_wine_profile while the research is fresh (list_maturity_queue unprofiled:true finds the others).');
+      }
+    } catch { /* the warning is a courtesy, never a failure */ }
+    return ok(envelope.summary, envelope.data, warnings.length ? { warnings } : undefined);
   },
 });
 

@@ -558,7 +558,7 @@ function mapVivinoRow(row) {
   return {
     wineName: get(['Wine name', 'Wine Name', 'wine name', 'Wine', 'wine']),
     producer: get(['Winery', 'winery', 'Producer', 'producer']),
-    vintage: get(['Vintage', 'vintage', 'Year', 'year']) || 'NV',
+    ...vintageOrNV(get(['Vintage', 'vintage', 'Year', 'year'])),
     country: get(['Country', 'country']),
     region: get(['Region', 'region']),
     appellation: get(['Appellation', 'appellation']),
@@ -612,6 +612,14 @@ function ctClean(value) {
 }
 
 /** Vintage: 1001 → 'NV' (CT's non-vintage sentinel), 9999/blank → ''. */
+// A missing vintage is filed as NV — but flagged, so the review can say so and
+// let the importer type the year. Silent NV on 85 vintage-dated bottles in one
+// file was the whole problem (audit ticket 2026-09-05).
+function vintageOrNV(raw) {
+  const v = String(raw || '').trim();
+  return v ? { vintage: v } : { vintage: 'NV', vintageMissing: true };
+}
+
 function ctVintage(value) {
   const s = (value || '').trim();
   if (s === '1001') return 'NV';
@@ -950,7 +958,7 @@ function ctCommonFields(get, { sizeKeys = ['Size'] } = {}) {
     wineName,
     producer: identity.producer,
     classification,
-    vintage: ctVintage(get(['Vintage'])) || 'NV',
+    ...vintageOrNV(ctVintage(get(['Vintage']))),
     country: get(['Country']) || locale.country,
     region,
     appellation,
@@ -1116,7 +1124,7 @@ function mapCellarTrackerRow(row) {
   return {
     wineName,
     producer,
-    vintage: ctVintage(get(['Vintage', 'vintage', 'Year'])) || 'NV',
+    ...vintageOrNV(ctVintage(get(['Vintage', 'vintage', 'Year']))),
     country: get(['Country', 'country']) || locale.country,
     region: get(['Region', 'region', 'Sub-Region']) || locale.region,
     appellation: ctClean(get(['Appellation', 'appellation', 'SubRegion'])) || locale.appellation,
@@ -1166,7 +1174,7 @@ function mapGenericRow(row) {
     wineName,
     producer,
     classification: classification || get(['Classification', 'classification']) || undefined,
-    vintage: get(['Vintage', 'vintage', 'Year', 'year']) || 'NV',
+    ...vintageOrNV(get(['Vintage', 'vintage', 'Year', 'year'])),
     country: get(['Country', 'country']),
     region,
     appellation,
@@ -1210,7 +1218,7 @@ function mapCellarionRow(row) {
     quantity: isNaN(qty) || qty < 1 ? 1 : qty,
     wineName: str('wineName'),
     producer: str('producer'),
-    vintage: str('vintage') || 'NV',
+    ...vintageOrNV(str('vintage')),
     country: str('country'),
     region: str('region'),
     appellation: str('appellation'),
@@ -2274,6 +2282,10 @@ export function parseAndMap(text, forceFormat, opts = {}) {
   }
   if (noIdentitySkipped > 0) {
     warnings.push({ code: 'no-identity-skipped', count: noIdentitySkipped });
+  }
+  const vintageMissing = items.filter((it) => it.vintageMissing).length;
+  if (vintageMissing > 0) {
+    warnings.push({ code: 'vintage-missing', count: vintageMissing });
   }
 
   return {

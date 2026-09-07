@@ -3955,6 +3955,7 @@
       "tooManyRowsTitle": "{{count}} rows — more than one import run can take.",
       "tooManyRows": "Imports are capped at {{max}} rows per run. Split the file and import the parts one at a time (the destination choice applies per file), or skip rows during review — anything above the cap is refused at the final step.",
       "ctTruncatedTitle": "Only 25 rows found — this export may be cut off.",
+      "vintageMissing": "{{count}} rows have no vintage in the file. Type the year where you know it, or leave it as NV for non-vintage wines.",
       "ctTruncated": "This looks like a single-page export (exactly 25 rows). In CellarTracker, choose 'All wines' instead of 'Only wines on this page' before exporting, or your import may be missing most of your cellar.",
       "ctPendingSkipped_one": "{{count}} pending (undelivered) bottle was not imported: {{wines}}. Cellarion doesn't track bottles you haven't received yet — re-import after delivery.",
       "ctPendingSkipped_other": "{{count}} pending (undelivered) bottles were not imported: {{wines}}. Cellarion doesn't track bottles you haven't received yet — re-import after delivery.",
@@ -4131,6 +4132,8 @@
       "country": "Country",
       "type": "Type",
       "price": "Price",
+      "vintageMissing": "no vintage in file",
+      "vintageInputAria": "Vintage year for this row",
       "nv": "NV"
     },
     "validate": {

@@ -91,10 +91,12 @@ describe('parseAndValidateVintage', () => {
     expect(parseAndValidateVintage('-2018', { now }).ok).toBe(false);
   });
 
-  it('rejects years more than 5 ahead of current year', () => {
-    // currentYear = 2026, max = 2031
-    expect(parseAndValidateVintage('2031', { now }).ok).toBe(true);
-    expect(parseAndValidateVintage('2032', { now }).ok).toBe(false);
+  it('rejects any year after the current one — a vintage cannot exist before its harvest (support ticket 2026-08-20)', () => {
+    // currentYear = 2026: this year's harvest may be recorded, next year's cannot.
+    expect(parseAndValidateVintage('2026', { now }).ok).toBe(true);
+    expect(parseAndValidateVintage('2025', { now }).ok).toBe(true); // en primeur of a past harvest
+    expect(parseAndValidateVintage('2027', { now }).ok).toBe(false);
+    expect(parseAndValidateVintage('2031', { now }).ok).toBe(false);
     expect(parseAndValidateVintage('9999', { now }).ok).toBe(false);
   });
 
