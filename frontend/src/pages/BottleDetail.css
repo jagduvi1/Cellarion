@@ -1554,3 +1554,8 @@
 .bd-open-method small {
   color: var(--color-text-muted);
 }
+
+/* "Also apply the drink window and price to the other N bottles" (edit form). */
+.bd-lot-apply { margin-top: 0.5rem; }
+.bd-lot-apply-label { display: flex; align-items: flex-start; gap: 0.5rem; font-weight: 500; cursor: pointer; }
+.bd-lot-apply-label input { margin-top: 0.2rem; }

@@ -28,6 +28,7 @@ const MoveBottleModal = lazy(() => import('../components/MoveBottleModal'));
 const BulkPurchaseModal = lazy(() => import('../components/BulkPurchaseModal'));
 const BulkConsumeModal = lazy(() => import('../components/BulkConsumeModal'));
 const BulkReserveModal = lazy(() => import('../components/BulkReserveModal'));
+const BulkDrinkWindowModal = lazy(() => import('../components/BulkDrinkWindowModal'));
 const BulkAddToListModal = lazy(() => import('../components/BulkAddToListModal'));
 
 // The select-mode bar's actions, in display order. Each opens one modal; all
@@ -38,6 +39,7 @@ const BULK_ACTIONS = [
   { key: 'purchase', icon: '🧾', label: 'bulk.purchaseAction' },
   { key: 'consume',  icon: '🍷', label: 'bulk.consumeAction' },
   { key: 'reserve',  icon: '🔖', label: 'bulk.reserveAction' },
+  { key: 'window',   icon: '⏳', label: 'bulk.windowAction' },
   { key: 'list',     icon: '📋', label: 'bulk.listAction' },
 ];
 
@@ -1029,6 +1031,9 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
         )}
         {bulkAction === 'reserve' && (
           <BulkReserveModal bottleIds={[...selectedIds]} onClose={closeAction} onDone={finishAction} />
+        )}
+        {bulkAction === 'window' && (
+          <BulkDrinkWindowModal bottleIds={[...selectedIds]} onClose={closeAction} onDone={finishAction} />
         )}
         {bulkAction === 'list' && (
           <BulkAddToListModal bottleIds={[...selectedIds]} cellarId={cellarId} onClose={closeAction} onDone={finishAction} />

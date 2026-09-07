@@ -22,6 +22,7 @@ const { registerTool } = require('../registry');
 // — a top-level require here would break every suite that loads the tool
 // registry (the #702 failure mode).
 const { addBottle, updateBottleFields } = require('../../services/bottleOps');
+const { findLotSiblings, pickLotFields, LOT_FIELDS } = require('../../services/bottleLot');
 const { logAudit } = require('../../services/audit');
 const { isValidId } = require('../../utils/validation');
 const { decorateGrapes } = require('../../utils/grapeDisplay');
@@ -257,7 +258,9 @@ registerTool({
     `Partially updates one bottle. Updatable: ${MCP_UPDATE_PARAMS.join(', ')}. Only send the ` +
     'fields to change; confirm the change with the user first. Set reserved_for and/or reserved_until (a year) to ' +
     'mark the bottle reserved ("spoken for" — excluded from drink suggestions); send null for both to clear the ' +
-    'reservation. Reversible via undo_last.',
+    'reservation. Reversible via undo_last. apply_to_lot: true also writes the lot-level fields of this call ' +
+    `(${LOT_FIELDS.join(', ')}) to every active bottle of the same wine and vintage in the user's own cellars — ` +
+    'one call for a case instead of one per bottle; undo_last then reverts the whole lot.',
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
@@ -274,6 +277,7 @@ registerTool({
     peak_until: z.number().int().nullable().optional().describe('Peak end inside the drink window (null clears)'),
     reserved_for: z.string().max(200).nullable().optional().describe('Who/what the bottle is held for (null clears)'),
     reserved_until: z.number().int().nullable().optional().describe('Year the reservation runs to, e.g. 2034 (null clears)'),
+    apply_to_lot: z.boolean().optional().describe('Also apply the drink window / price / currency of this call to every other active bottle of the same wine and vintage in the user\'s own cellars. Other fields stay on this bottle.'),
     idempotency_key: z.string().max(100).optional(),
   },
   handler: async (args, ctx) => {
@@ -284,7 +288,7 @@ registerTool({
     if (!access) return fail('not_found', MSG_BOTTLE_NOT_FOUND);
     const { bottle } = access;
 
-    const result = await updateBottleFields(bottle, {
+    const fields = {
       price: args.price,
       currency: args.currency,
       notes: args.notes,
@@ -297,36 +301,72 @@ registerTool({
       peakUntil: args.peak_until,
       reservedFor: args.reserved_for,
       reservedUntil: args.reserved_until,
-    }, ctx.req);
+    };
+    const result = await updateBottleFields(bottle, fields, ctx.req);
     if (result.error) return fail('invalid_input', result.error.message);
 
-    if (Object.keys(result.changes).length === 0) {
+    // apply_to_lot: the lot-level fields of THIS call go to every other active
+    // bottle of the same wine and vintage in the user's own cellars (support
+    // ticket 2026-09-06 — six identical calls for a case). Each sibling runs
+    // the same shared validation; one that refuses (a peak outside ITS own
+    // window, say) is reported under skipped, never fatal for the rest.
+    const lotFields = args.apply_to_lot ? pickLotFields(fields) : {};
+    const lot = { count: 0, applied: [], unchanged: 0, skipped: [] };
+    const primaryChanged = Object.keys(result.changes).length > 0;
+    // prev keyed by bottle id, this bottle first — the undo restores in this order.
+    const prevById = primaryChanged ? { [String(bottle._id)]: result.prev } : {};
+    const warnings = [];
+    if (args.apply_to_lot && !Object.keys(lotFields).length) {
+      warnings.push(`apply_to_lot ignored: none of the fields in this call are lot-level (${LOT_FIELDS.join(', ')})`);
+    } else if (args.apply_to_lot) {
+      const siblings = await findLotSiblings(ctx.user.id, bottle);
+      lot.count = siblings.length;
+      for (const sib of siblings) {
+        const r = await updateBottleFields(sib, { ...lotFields }, ctx.req);
+        if (r.error) { lot.skipped.push({ bottle_id: String(sib._id), reason: r.error.message }); continue; }
+        if (Object.keys(r.changes).length) { lot.applied.push(String(sib._id)); prevById[String(sib._id)] = r.prev; }
+        else lot.unchanged += 1;
+      }
+    }
+    const withLot = (data) => (args.apply_to_lot ? { ...data, lot } : data);
+    const extra = warnings.length ? { warnings } : undefined;
+
+    if (!primaryChanged && !lot.applied.length) {
       // No mutation → logAction never runs, so the claim replay() took above
       // would stay pending and turn every same-key retry into a bogus `busy`
       // for CLAIM_STALE_MS (audit 2026-07-24 M11). Release it: a retry simply
       // re-runs and no-ops again.
       await releaseClaim(ctx, args.idempotency_key, 'update_bottle');
-      return ok('No changes — every value already matched', { bottle_id: bottle._id, changes: {} });
+      return ok('No changes — every value already matched', withLot({ bottle_id: bottle._id, changes: {} }), extra);
     }
+    const lotApplied = lot.applied.length > 0;
+    const lotText = args.apply_to_lot && lot.count
+      ? `; lot: applied to ${lot.applied.length} of ${lot.count} other bottle(s) of this wine and vintage${lot.skipped.length ? `, ${lot.skipped.length} refused` : ''}`
+      : (args.apply_to_lot && Object.keys(lotFields).length ? '; lot: no other active bottles of this wine and vintage' : '');
     const envelope = {
-      summary: `Updated bottle ${bottle._id}: ${Object.keys(result.changes).join(', ')}`,
-      data: {
+      summary: (primaryChanged
+        ? `Updated bottle ${bottle._id}: ${Object.keys(result.changes).join(', ')}`
+        : `Bottle ${bottle._id} already matched`) + lotText,
+      data: withLot({
         bottle_id: bottle._id,
         changes: result.changes,
-        undo: 'undo_last restores the previous values',
-      },
+        undo: lotApplied ? 'undo_last restores the previous values on every bottle of the lot' : 'undo_last restores the previous values',
+      }),
     };
     await logAction(ctx, {
       tool: 'update_bottle',
-      action: 'update',
+      action: lotApplied ? 'lot_update' : 'update',
       bottle: bottle._id,
       cellar: bottle.cellar,
-      detail: { changed: Object.keys(result.changes) },
-      prev: result.prev,
+      detail: {
+        changed: [...new Set([...Object.keys(result.changes), ...(lotApplied ? Object.keys(lotFields) : [])])],
+        ...(lotApplied ? { bottles: Object.keys(prevById), lot: lot.count } : {}),
+      },
+      prev: lotApplied ? prevById : result.prev,
       idempotencyKey: args.idempotency_key || null,
       result: envelope,
     });
-    return ok(envelope.summary, envelope.data);
+    return ok(envelope.summary, envelope.data, extra);
   },
 });
 

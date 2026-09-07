@@ -1122,3 +1122,7 @@
 .bulk-price-row label { display: flex; flex-direction: column; gap: 0.25rem; }
 .bulk-mode-row { display: flex; flex-direction: row; gap: 1rem; }
 .move-bottle-skipped { color: var(--color-text-secondary); }
+
+/* Bulk drink window: the four year fields in two columns (one on a phone). */
+.bulk-year-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 0.75rem; }
+@media (max-width: 480px) { .bulk-year-grid { grid-template-columns: 1fr; } }

@@ -428,3 +428,31 @@ describe('undo rolls back wines the undone action minted', () => {
     expect(gcOrphanMintedWine).not.toHaveBeenCalled();
   });
 });
+
+describe('lot_update (update_bottle apply_to_lot, support ticket 2026-09-06)', () => {
+  test('restores the prev snapshot on every bottle of the lot, claim first, one reverse row', async () => {
+    resolveBottleAccess.mockImplementation(async (uid, id) => ({ bottle: { _id: id, vintage: 2018, cellar: 'c1' } }));
+    bottleOps.updateBottleFields.mockImplementation(async (b, prev) => ({ changes: prev, prev: { drinkFrom: 2030 } }));
+    const row = { _id: 'r', action: 'lot_update', bottle: 'b1', cellar: 'c1', prev: { b1: { drinkFrom: 2026 }, b2: { drinkFrom: 2027 } } };
+    const res = await revertLedgerRow(row, ctx(), H);
+    expect(bottleOps.updateBottleFields).toHaveBeenCalledTimes(2);
+    expect(bottleOps.updateBottleFields).toHaveBeenCalledWith(expect.objectContaining({ _id: 'b1' }), { drinkFrom: 2026 }, expect.anything());
+    expect(bottleOps.updateBottleFields).toHaveBeenCalledWith(expect.objectContaining({ _id: 'b2' }), { drinkFrom: 2027 }, expect.anything());
+    expect(McpActionLog.findOneAndUpdate).toHaveBeenCalledWith({ _id: 'r', reversed: false }, expect.anything());
+    expect(res.data).toMatchObject({ undone: 'update_bottle', restored_bottle_ids: ['b1', 'b2'] });
+    expect(logAction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: 'lot_update', viaUndo: true }));
+  });
+
+  test('one inaccessible bottle refuses the whole undo before anything is touched', async () => {
+    resolveBottleAccess.mockImplementation(async (uid, id) => (id === 'b2' ? null : { bottle: { _id: id } }));
+    const res = await revertLedgerRow({ _id: 'r', action: 'lot_update', bottle: 'b1', prev: { b1: { price: 1 }, b2: { price: 1 } } }, ctx(), H);
+    expect(res).toMatchObject({ ok: false, code: 'conflict' });
+    expect(bottleOps.updateBottleFields).not.toHaveBeenCalled();
+    expect(McpActionLog.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  test('is write-class: a consume-only token cannot reverse it', () => {
+    expect(WRITE_REVERSIBLE).toContain('lot_update');
+    expect(reversibleActionsFor(['consume'])).not.toContain('lot_update');
+  });
+});

@@ -22,6 +22,7 @@ const { CONSUMED_STATUSES, WINE_POPULATE, WINE_POPULATE_LIST } = require('../con
 const { unlinkImageFiles } = require('../services/imageProcessor');
 const { gatherPriceWarnings } = require('../services/priceWarnings');
 const { getCurrentRelease } = require('../services/communityPrice');
+const { findLotSiblingIds } = require('../services/bottleLot');
 const { stripHtml, escapeRegex } = require('../utils/sanitize');
 const { toNormalized } = require('../utils/ratingUtils');
 const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
@@ -605,8 +606,19 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
       }
     }
 
+    // The other active bottles of this wine and vintage in the viewer's OWN
+    // cellars, so the edit form can offer "also apply the drink window and
+    // price to the other N" (support ticket 2026-09-06). Auxiliary: a lookup
+    // failure degrades to "no checkbox", never a 500.
+    let lotSiblingIds = [];
+    try {
+      lotSiblingIds = await findLotSiblingIds(req.user.id, bottle);
+    } catch (err) {
+      console.error('Lot sibling lookup failed:', err.message);
+    }
+
     const ucEntry = cellar.userColors?.find(uc => uc.user.toString() === req.user.id.toString());
-    res.json({ bottle: bottleObj, userRole: role, cellarColor: ucEntry?.color || null, pendingImageUrl, defaultImageUrl, currentRelease, rackInfo });
+    res.json({ bottle: bottleObj, userRole: role, cellarColor: ucEntry?.color || null, pendingImageUrl, defaultImageUrl, currentRelease, rackInfo, lotSiblingIds });
   } catch (error) {
     console.error('Get bottle error:', error);
     res.status(500).json({ error: 'Failed to get bottle' });
@@ -956,8 +968,9 @@ router.post('/bulk-move', async (req, res) => {
 // POST /api/bottles/bulk - ONE edit or consume applied to MANY bottles.
 //   { action: 'update',  bottleIds, fields }  → services/bottleOps.updateBottleFields
 //       per bottle. `fields` is limited to BULK_UPDATE_FIELDS — the purchase
-//       details a delivery shares (date, shop, price) and the reservation
-//       ("spoken for X until 2028") — everything else stays per bottle.
+//       details a delivery shares (date, shop, price), the reservation
+//       ("spoken for X until 2028") and the drink window a wine and vintage
+//       share (support ticket 2026-09-06) — everything else stays per bottle.
 //   { action: 'consume', bottleIds, reason, note, consumedAt, includeReserved }
 //       → services/bottleOps.consumeBottle per bottle, one date for all;
 //       already-consumed bottles are skipped as not_active, and a "spoken for"
@@ -970,7 +983,7 @@ router.post('/bulk-move', async (req, res) => {
 // the SAME error for every bottle, so it fails the whole request with that
 // message before anything is touched, rather than reporting N identical skips.
 // Response: { done, doneIds: string[], skipped: [{ id, reason }] }
-const BULK_UPDATE_FIELDS = ['price', 'currency', 'purchaseDate', 'purchaseLocation', 'purchaseUrl', 'reservedFor', 'reservedUntil'];
+const BULK_UPDATE_FIELDS = ['price', 'currency', 'purchaseDate', 'purchaseLocation', 'purchaseUrl', 'reservedFor', 'reservedUntil', 'drinkFrom', 'drinkTo', 'peakFrom', 'peakUntil'];
 router.post('/bulk', async (req, res) => {
   try {
     const { action, bottleIds } = req.body || {};
