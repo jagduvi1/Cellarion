@@ -284,6 +284,49 @@ describe('GET /api/auth/oidc/callback', () => {
     ]);
   });
 
+  it('authenticates at the token endpoint with client_secret_post', async () => {
+    // Pinned because it is inherited behaviour, not a choice made here:
+    // node-oauth always writes client_id and client_secret into the POST body
+    // and sends no Authorization header. A provider registered for
+    // client_secret_basic — the OIDC default when discovery is silent about it
+    // — will reject the exchange despite correct credentials, so the
+    // requirement is documented in .env.example and asserted here.
+    //
+    // Intercepts _request, the layer BELOW getOAuthAccessToken, so the real
+    // exchange code runs. The other tests replace getOAuthAccessToken outright
+    // and could never see this.
+    const started = await get('/api/auth/oidc');
+    const state = new URL(started.headers.get('location')).searchParams.get('state');
+    const cookie = stateCookie(started).split(';')[0];
+
+    const strategy = passport._strategy('oidc');
+    const realRequest = strategy._oauth2._request;
+    let sent = null;
+    strategy._oauth2._request = (method, url, headers, postData, accessToken, cb) => {
+      sent = { method, url, headers, postData };
+      cb(new Error('token endpoint not called in tests'));
+    };
+
+    try {
+      await get(`/api/auth/oidc/callback?code=any-code&state=${encodeURIComponent(state)}`, { cookie });
+    } finally {
+      strategy._oauth2._request = realRequest;
+    }
+
+    expect(sent.method).toBe('POST');
+    expect(sent.url).toBe('https://id.example/realms/alpha/protocol/openid-connect/token');
+    const body = new URLSearchParams(sent.postData);
+    expect(body.get('grant_type')).toBe('authorization_code');
+    expect(body.get('client_id')).toBe('test-oidc-client');
+    expect(body.get('client_secret')).toBe('test-oidc-secret');
+    // PKCE: the verifier the store kept, proving the challenge sent on the way
+    // out belongs to this exchange.
+    expect(body.get('code_verifier')).toBeTruthy();
+    // No Basic header — this is client_secret_post, and sending both would be
+    // two authentication methods on one request, which the spec forbids.
+    expect(sent.headers.Authorization || sent.headers.authorization).toBeUndefined();
+  });
+
   it('refuses userinfo that carries no sub claim', async () => {
     // sub is the only claim guaranteed stable and unique per issuer. Without it
     // there is nothing safe to key an account on — falling back to email would
