@@ -53,6 +53,16 @@ test('a failed sign-in does not navigate and keeps the destination for the retry
   expect(takePostLoginRedirect()).toBe('/wishlist');
 });
 
+test('an unverifiable sign-in says what to do, rather than the generic failure', () => {
+  // error=invalid_state is what the backend returns when the browser comes back
+  // without the cookie that started the flow. Falling through to the generic
+  // "something went wrong" would tell the user nothing they can act on, and the
+  // three ordinary causes all have the same remedy: start again from /login.
+  searchParams = new URLSearchParams({ error: 'invalid_state' });
+  const { getByText } = render(<OAuthCallback />);
+  expect(getByText(/start again from the login page/i)).toBeTruthy();
+});
+
 test('survives StrictMode\'s dev double-mount — the destination is not overwritten by /cellars', () => {
   // Dev runs under React.StrictMode (index.js:11), which invokes mount effects
   // twice. The stash is single-use, so an unguarded effect consumes it on the

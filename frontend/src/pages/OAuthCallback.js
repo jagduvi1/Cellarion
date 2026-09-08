@@ -13,6 +13,10 @@ const ERROR_MESSAGES = {
   no_verified_email: "Your Google account doesn't have a verified email address, so we couldn't sign you in.",
   access_denied: 'Google sign-in was cancelled.',
   not_configured: 'Google sign-in is not enabled on this server.',
+  // The browser did not come back with the cookie that started the flow —
+  // usually a sign-in left open too long, resumed in another browser, or
+  // third-party cookie blocking. Retrying from the login page fixes all three.
+  invalid_state: "We couldn't verify that sign-in. Please start again from the login page.",
   server_error: 'Something went wrong while signing you in. Please try again.',
   google: 'Google sign-in failed. Please try again.'
 };

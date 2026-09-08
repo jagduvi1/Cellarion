@@ -6,6 +6,7 @@ const User = require('../models/User');
 const { logAudit } = require('../services/audit');
 const { issueTokens, clientHint } = require('../services/authTokens');
 const { resolvePendingShares } = require('../services/pendingShares');
+const { CookieStateStore } = require('../services/oauthStateStore');
 
 const router = express.Router();
 
@@ -106,12 +107,29 @@ async function upsertGoogleUser(profile) {
   return user;
 }
 
+// One store instance serves every provider: it holds no per-flow state of its
+// own, only the cookie name and lifetime.
+const oauthStateStore = new CookieStateStore();
+
 if (GOOGLE_ENABLED) {
   passport.use(new GoogleStrategy(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: CALLBACK_URL
+      callbackURL: CALLBACK_URL,
+      // Bind the round trip to the browser that started it. Without a store,
+      // passport-oauth2 uses its NullStore and the callback will exchange any
+      // authorization code presented to it, which is login CSRF: an attacker
+      // navigates a victim to the callback carrying a code for the ATTACKER's
+      // Google account and the victim is signed into it. There is no session
+      // middleware here to hold the state, so it rides in a short-lived
+      // httpOnly cookie — see services/oauthStateStore.js.
+      store: oauthStateStore,
+      // PKCE binds the code to this flow's own verifier as well, so a code
+      // intercepted in transit cannot be redeemed elsewhere. Separable from the
+      // state fix above: the same store carries the verifier, and dropping this
+      // line leaves the CSRF binding intact.
+      pkce: 'S256'
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
@@ -149,9 +167,18 @@ router.get('/google', (req, res, next) => {
 // then calls /api/auth/refresh to obtain its access token.
 router.get('/google/callback', (req, res, next) => {
   if (!GOOGLE_ENABLED) return res.redirect(failureRedirect('not_configured'));
-  passport.authenticate('google', { session: false }, async (err, user) => {
+  passport.authenticate('google', { session: false }, async (err, user, info) => {
     if (err || !user) {
-      const reason = err?.code || (err ? 'server_error' : 'access_denied');
+      // The provider can bounce back with ?error=... — a cancelled consent
+      // screen, most often — and passport-oauth2 answers that BEFORE it
+      // consults the state store, so the outbound cookie is still in the
+      // browser and verify() never ran. Clear it here: an abandoned flow has no
+      // business leaving its state behind for the rest of its lifetime.
+      oauthStateStore.clear(res);
+      // info carries the state store's verdict; without it a failed browser
+      // binding would be reported as a plain access_denied and look to the
+      // operator like the user cancelling at the consent screen.
+      const reason = err?.code || info?.code || (err ? 'server_error' : 'access_denied');
       logAudit(req, 'auth.oauth.failed', {}, { provider: 'google', reason });
       return res.redirect(failureRedirect(reason));
     }
