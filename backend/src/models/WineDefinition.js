@@ -294,7 +294,7 @@ const wineDefinitionSchema = new mongoose.Schema({
   // AuditLog (wine.create).
   createdVia: {
     type: String,
-    enum: ['ui', 'import', 'mcp', 'ai', null],
+    enum: ['ui', 'import', 'mcp', 'ai', 'bridge', null],
     default: null
   },
   // WHICH SOURCE SUPPLIED EACH IDENTITY FIELD. createdVia says which surface
@@ -344,6 +344,24 @@ const wineDefinitionSchema = new mongoose.Schema({
   canary: {
     type: Boolean,
     default: false
+  },
+  // Registry Bridge (self-hosted installs, services/registryBridge.js): the
+  // id of the shared-registry wine this row was copied from. Set once at
+  // adoption; the weekly refresh keeps the copy current until the registry
+  // reports the wine removed (merged away or quarantined), after which the
+  // copy is left alone. Absent on every row that was not adopted.
+  registryId: {
+    type: String,
+    index: true,
+    sparse: true
+  },
+  registrySyncedAt: {
+    type: Date,
+    default: null
+  },
+  registryRemovedAt: {
+    type: Date,
+    default: null
   },
   // Pending identity: this row was minted at bottle-commit from an INCOMPLETE
   // identity — no producer, a sentinel producer ("Unknown", "N/A"), or a

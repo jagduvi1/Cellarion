@@ -15,6 +15,8 @@ import ApiTokensSection from '../components/ApiTokensSection';
 import LanguagePicker from '../components/LanguagePicker';
 import AiConnectSection from '../components/AiConnectSection';
 import SelfHostedBridgeSection from '../components/SelfHostedBridgeSection';
+import RegistryConnectionSection from '../components/RegistryConnectionSection';
+import { isHostedOrigin } from '../utils/mcpConnect';
 import SetPasswordNotice from '../components/SetPasswordNotice';
 import McpActivitySection from '../components/McpActivitySection';
 import ClimateDevicesSection from '../components/ClimateDevicesSection';
@@ -507,8 +509,10 @@ function Settings() {
       {/* ── Connect your AI card (needs a token → hidden for demo too) ── */}
       {!user?.isDemo && <AiConnectSection />}
 
-      {/* ── Self-hosted bridge card (registry keys; hidden for demo) ── */}
-      {!user?.isDemo && <SelfHostedBridgeSection />}
+      {/* ── Registry Bridge: on cellarion.app the card issues keys to self-hosters;
+           on a self-hosted install it shows this server's own connection ── */}
+      {!user?.isDemo && isHostedOrigin(window.location.origin) && <SelfHostedBridgeSection />}
+      {!user?.isDemo && !isHostedOrigin(window.location.origin) && <RegistryConnectionSection />}
 
       {/* ── Recent AI activity card (self-hides when the ledger is empty) ── */}
       {!user?.isDemo && <McpActivitySection />}

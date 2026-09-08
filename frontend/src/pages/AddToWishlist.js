@@ -3,6 +3,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { searchWines, getWine, resolveWine, identifyWineByText } from '../api/wines';
+import { adoptRegistryWine } from '../api/bridge';
 import useLabelScanner from '../hooks/useLabelScanner';
 import { addToWishlist } from '../api/wishlist';
 import '../components/ImageUpload.css';
@@ -25,6 +26,10 @@ function AddToWishlist() {
   const [search, setSearch] = useState('');
   const [showTextSearch, setShowTextSearch] = useState(false);
   const [wines, setWines] = useState([]);
+  // Registry Bridge (self-hosted installs): shared-registry identities this
+  // install does not hold yet; copied in when picked. See AddBottle.js.
+  const [registryWines, setRegistryWines] = useState([]);
+  const [adoptingId, setAdoptingId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [aiSearching, setAiSearching] = useState(false);
   const [aiSearchError, setAiSearchError] = useState(null);
@@ -385,7 +390,10 @@ function AddToWishlist() {
 
     searchWines(apiFetch, `search=${encodeURIComponent(query)}&limit=10`)
       .then(res => res.json())
-      .then(data => { if (data.wines) setWines(data.wines); })
+      .then(data => {
+        if (data.wines) setWines(data.wines);
+        setRegistryWines(Array.isArray(data.registryWines) ? data.registryWines : []);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [search, apiFetch, clearAi]);
@@ -461,6 +469,46 @@ function AddToWishlist() {
     setSelectedWine(wine);
     setPendingNewWine(null);
   };
+
+  // Registry Bridge: adopt the shared-registry wine into this install, then
+  // select the resulting local doc (see AddBottle.js for the twin).
+  const handleAdoptRegistry = async (item) => {
+    if (adoptingId) return;
+    setAdoptingId(item.registryId);
+    setAiSearchError(null);
+    try {
+      const res = await adoptRegistryWine(apiFetch, item.registryId);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.wine) throw new Error(data.error || 'adopt failed');
+      setRegistryWines(prev => prev.filter(r => r.registryId !== item.registryId));
+      handleSelectWine(data.wine);
+    } catch {
+      setAiSearchError(t('addToWishlist.registryAdoptFailed', 'The shared registry could not be reached. Try again in a minute, or add the wine by hand.'));
+    } finally {
+      setAdoptingId(null);
+    }
+  };
+
+  const renderRegistryRow = (item) => (
+    <div key={`registry-${item.registryId}`} className="wine-row registry-wine-row" onClick={() => handleAdoptRegistry(item)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleAdoptRegistry(item); } }}>
+      <WineImage image={item.image} alt={item.name} className="wine-row-image" wrapClass="wine-row-img-wrap" wineType={item.type} placeholder="wine-row-placeholder" />
+      <div className="wine-info">
+        <h3>{item.name} <span className="registry-badge">{t('addToWishlist.registryBadge', 'shared registry')}</span></h3>
+        <p className="producer">{item.producer}</p>
+        <div className="wine-meta">
+          {item.country && <span>{item.country}</span>}
+          {item.region && <span>• {item.region}</span>}
+          {item.type && <span className={`wine-type-pill ${item.type}`}>{item.type}</span>}
+        </div>
+        {item.grapes?.length > 0 && (
+          <p className="wine-grapes">{item.grapes.join(', ')}</p>
+        )}
+      </div>
+      <button className="btn btn-primary btn-small" disabled={adoptingId === item.registryId}>
+        {adoptingId === item.registryId ? t('addToWishlist.registryAdopting', 'Copying…') : t('addToWishlist.select')}
+      </button>
+    </div>
+  );
 
   // One row renderer for both the registry-search list and the AI near-match
   // list. Takes a SAVED wine only.
@@ -896,6 +944,14 @@ function AddToWishlist() {
                     .filter(w => String(w._id) !== String(aiMatch?._id)
                       && !aiCandidates.some(c => String(c.wine?._id) === String(w._id)))
                     .map(wine => renderWineRow(wine))}
+                </div>
+              )}
+
+              {/* Shared-registry identities (Registry Bridge, self-hosted) */}
+              {!aiSearching && registryWines.length > 0 && (
+                <div className="wines-list registry-wines">
+                  <p className="registry-wines-title">{t('addToWishlist.registryResults', 'From the shared registry — pick one to copy it into this install')}</p>
+                  {registryWines.map(item => renderRegistryRow(item))}
                 </div>
               )}
 

@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { searchWines, resolveWine, identifyWineByText } from '../api/wines';
+import { adoptRegistryWine } from '../api/bridge';
 import useLabelScanner from '../hooks/useLabelScanner';
 import { CURRENCIES } from '../config/currencies';
 import { BOTTLE_SIZES, bottleSizeLabel } from '../config/bottleSizes';
@@ -23,6 +24,11 @@ function AddBottle() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1); // 1 = select wine, 2 = enter details
   const [wines, setWines] = useState([]);
+  // Registry Bridge (self-hosted installs): shared-registry identities this
+  // install does not hold yet, shown under the local results and copied in
+  // ("adopted") when picked. Always empty on the hosted instance.
+  const [registryWines, setRegistryWines] = useState([]);
+  const [adoptingId, setAdoptingId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
@@ -491,7 +497,10 @@ function AddBottle() {
 
     searchWines(apiFetch, `search=${encodeURIComponent(query)}&limit=10`)
       .then(res => res.json())
-      .then(data => { if (data.wines) setWines(data.wines); })
+      .then(data => {
+        if (data.wines) setWines(data.wines);
+        setRegistryWines(Array.isArray(data.registryWines) ? data.registryWines : []);
+      })
       .catch(err => console.error('Search failed:', err))
       .finally(() => setLoading(false));
   }, [search, apiFetch, clearAi]);
@@ -571,6 +580,50 @@ function AddBottle() {
     setPendingNewWine(null);
     setStep(2);
   };
+
+  // Registry Bridge: picking a shared-registry identity copies that one wine
+  // into this install (profile and drink windows included) and then follows
+  // the normal path with the local doc — nothing else in step 2 knows the
+  // difference.
+  const handleAdoptRegistry = async (item) => {
+    if (adoptingId) return;
+    setAdoptingId(item.registryId);
+    setAiSearchError(null);
+    try {
+      const res = await adoptRegistryWine(apiFetch, item.registryId);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.wine) throw new Error(data.error || 'adopt failed');
+      setRegistryWines(prev => prev.filter(r => r.registryId !== item.registryId));
+      handleSelectWine(data.wine);
+    } catch {
+      setAiSearchError(t('addBottle.registryAdoptFailed', 'The shared registry could not be reached. Try again in a minute, or add the wine by hand.'));
+    } finally {
+      setAdoptingId(null);
+    }
+  };
+
+  // A shared-registry identity: plain strings, no _id yet. Its own renderer so
+  // the local-row renderer keeps its "SAVED wine only" contract.
+  const renderRegistryRow = (item) => (
+    <div key={`registry-${item.registryId}`} className="wine-row registry-wine-row" onClick={() => handleAdoptRegistry(item)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleAdoptRegistry(item); } }}>
+      <WineImage image={item.image} alt={item.name} className="wine-row-image" wrapClass="wine-row-img-wrap" credit={item.imageCredit} creditClass="wine-row-credit" wineType={item.type} placeholder="wine-row-placeholder" />
+      <div className="wine-info">
+        <h3>{item.name} <span className="registry-badge">{t('addBottle.registryBadge', 'shared registry')}</span></h3>
+        <p className="producer">{item.producer}</p>
+        <div className="wine-meta">
+          {item.country && <span>{item.country}</span>}
+          {item.region && <span>• {item.region}</span>}
+          {item.type && <span className={`wine-type-pill ${item.type}`}>{item.type}</span>}
+        </div>
+        {item.grapes?.length > 0 && (
+          <p className="wine-grapes">{item.grapes.join(', ')}</p>
+        )}
+      </div>
+      <button className="btn btn-primary btn-small" disabled={adoptingId === item.registryId}>
+        {adoptingId === item.registryId ? t('addBottle.registryAdopting', 'Copying…') : t('addBottle.selectBtn')}
+      </button>
+    </div>
+  );
 
   // The registry wine this scan matched, when it matched one. The scan card
   // used to read `match` only inside handleConfirmScan, so a matched scan and
@@ -1182,6 +1235,14 @@ function AddBottle() {
                     .filter(w => String(w._id) !== String(aiMatch?._id)
                       && !aiCandidates.some(c => String(c.wine?._id) === String(w._id)))
                     .map(wine => renderWineRow(wine))}
+                </div>
+              )}
+
+              {/* ── Shared-registry identities (Registry Bridge, self-hosted) ── */}
+              {!aiSearching && registryWines.length > 0 && (
+                <div className="wines-list registry-wines">
+                  <p className="registry-wines-title">{t('addBottle.registryResults', 'From the shared registry — pick one to copy it into this install')}</p>
+                  {registryWines.map(item => renderRegistryRow(item))}
                 </div>
               )}
 

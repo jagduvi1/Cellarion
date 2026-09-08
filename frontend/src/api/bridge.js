@@ -25,3 +25,19 @@ export const revokeBridgeKey = (apiFetch, id) =>
 // POST /api/bridge/keys/:id/import-window — ×5 quotas for 24 h, once per 30 days.
 export const openBridgeImportWindow = (apiFetch, id) =>
   apiFetch(`/api/bridge/keys/${id}/import-window`, { method: 'POST' });
+
+// ── Self-hosted side (this install's own connection to the shared registry) ──
+
+// GET /api/bridge/status — { enabled, reason, url, keyPrefix, blocked, lastError,
+// held, removed, lastRefresh, me } — see backend/src/services/registryBridge.js.
+export const getBridgeStatus = (apiFetch) => apiFetch('/api/bridge/status');
+
+// POST /api/bridge/adopt — body: { registryId }. Copies one shared-registry wine
+// into this install and returns { wine, created } — a normal local wine doc.
+// Errors: 400 invalid, 404 not connected / gone from the registry, 503 unreachable.
+export const adoptRegistryWine = (apiFetch, registryId) =>
+  apiFetch('/api/bridge/adopt', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ registryId }),
+  });

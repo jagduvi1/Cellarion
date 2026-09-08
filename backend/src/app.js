@@ -79,6 +79,7 @@ const stripeRoute = require('./routes/stripe');
 const tokensRoute = require('./routes/tokens');
 const bridgeKeysRoute = require('./routes/bridgeKeys');
 const bridgeV1Route = require('./routes/bridgeV1');
+const bridgeLocalRoute = require('./routes/bridge');
 const eventsRoute = require('./routes/events');
 const climateRoute = require('./routes/climate');
 const mcpRoute = require('./routes/mcp');
@@ -376,6 +377,9 @@ app.use('/api/stripe', stripeRoute);
 app.use('/api/tokens', tokensRoute);
 app.use('/api/bridge/keys', bridgeKeysRoute);
 app.use('/api/bridge/v1', bridgeV1Route);
+// The self-hosted side (status + adopt); mounted AFTER the two hosted-side
+// routers so /keys and /v1 keep matching their own mounts first.
+app.use('/api/bridge', bridgeLocalRoute);
 app.use('/api/events', eventsRoute);
 app.use('/api/climate', climateRoute);
 // OAuth 2.1 authorization server for the MCP connector (DCR + PKCE + token

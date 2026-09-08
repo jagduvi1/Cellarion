@@ -76,8 +76,40 @@ the account export, deleted with the account, and usage rows expire after 90 day
 Your users' own bottles never travel over the bridge; only registry records and the
 contributions you choose to forward.
 
-## Client side
+## Client side (what a connected install does)
 
-The self-hosted client (search merge in add-bottle, wine adoption, weekly refresh,
-contribution forwarding, a Settings panel) ships in a following release; until then
-the protocol above can be used from any HTTP client.
+With the two `.env` lines set, the self-hosted backend switches its bridge client on
+(`backend/src/services/registryBridgeClient.js` for transport,
+`backend/src/services/registryBridge.js` for the logic). Nothing changes for its
+users until they search.
+
+- **Add-bottle search.** Local results come first, as before. Below them, under
+  "From the shared registry", up to ten identities that this install does not hold
+  yet (already-copied wines are filtered out). The same applies on the wishlist page.
+  Searches are cached for a minute per query so quota is not spent on every keystroke.
+- **Adoption.** Picking a registry row calls `POST /api/bridge/adopt` on the install,
+  which fetches that one wine and creates a local wine with `createdVia: 'bridge'`
+  and `registryId` set: identity, tasting profile, reviewed drink windows (as
+  reviewed rows) and published values (keys are matched by name locally, created as
+  accepted when missing). The dedup key is computed the same way a typed wine gets
+  it, so a later manual add finds the copy instead of creating a twin. A local wine
+  typed earlier with the same key is linked, not duplicated, and a locally curated
+  profile is kept. The label image is a URL into cellarion.app, never copied.
+- **Local enrichment stays away.** The install's own AI enrichment skips wines with
+  `registryId`; the registry's profile is the source of truth for them.
+- **Weekly refresh.** Monday 06:30 UTC the install sends the ids it holds (one
+  change check; chunks of 5,000) and re-fetches the changed ones. Profile, windows,
+  values and image follow the registry; identity fields follow it only when the copy
+  has not been edited locally since the last sync. Wines the registry reports removed
+  are marked `registryRemovedAt` and left alone.
+- **Contributions flow back.** A field correction or a value suggestion filed on the
+  install for an adopted wine is also sent to the hosted queues, and a new-wine
+  request is forwarded too. All fire-and-forget: the local record stands alone if the
+  hosted side is unreachable.
+- **Settings.** A "Shared wine registry" card shows the connection (key prefix, copies
+  held, today's quota use, last refresh) or, when not connected, the three steps.
+
+Failure mode is always local-only: a missing key, a bad key, a quota refusal or a
+network problem never produces an error on add-bottle, only fewer results. Quota and
+key refusals pause the client's requests for a few minutes so a closed door is not
+hammered; the Settings card says so.

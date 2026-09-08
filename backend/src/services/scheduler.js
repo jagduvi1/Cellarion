@@ -14,6 +14,7 @@ const { runRegistryHealthCheck } = require('./registryHealthJob');
 const DiscussionReply = require('../models/DiscussionReply');
 const { runRegistryReadReport } = require('./registryReadReportJob');
 const embeddingJob = require('./embeddingJob');
+const registryBridge = require('./registryBridge');
 
 /**
  * Start all scheduled cron jobs.
@@ -203,7 +204,22 @@ function startScheduler() {
     }
   });
 
-  console.log('[scheduler] Cron jobs registered (drink-window daily 06:00 UTC, value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, search-reconcile daily 02:37, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, recommendation-email-scrub daily 04:30 UTC, label-scan-retention daily 04:45 UTC, security-spike every 15 min, climate-offline every 15 min, demo-sweep every 15 min offset, registry-health weekly Mon 05:00 UTC, embed-sweep weekly Mon 05:30 UTC)');
+  // Registry Bridge (self-hosted installs): weekly on Monday at 06:30 UTC,
+  // refresh the wines copied from the shared registry — one change check for
+  // the ids this install holds, then re-fetch the ones that changed. A no-op
+  // when REGISTRY_BRIDGE_KEY is not set (every hosted-instance run).
+  cron.schedule('30 6 * * 1', async () => {
+    if (!registryBridge.isEnabled()) return;
+    console.log('[scheduler] Running registry bridge refresh…');
+    try {
+      const r = await registryBridge.refreshHeld();
+      console.log('[scheduler] Registry bridge refresh:', JSON.stringify(r));
+    } catch (err) {
+      console.error('[scheduler] Registry bridge refresh failed:', err);
+    }
+  });
+
+  console.log('[scheduler] Cron jobs registered (drink-window daily 06:00 UTC, value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, search-reconcile daily 02:37, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, recommendation-email-scrub daily 04:30 UTC, label-scan-retention daily 04:45 UTC, security-spike every 15 min, climate-offline every 15 min, demo-sweep every 15 min offset, registry-health weekly Mon 05:00 UTC, embed-sweep weekly Mon 05:30 UTC, bridge-refresh weekly Mon 06:30 UTC)');
 }
 
 module.exports = { startScheduler };

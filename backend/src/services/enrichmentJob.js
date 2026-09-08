@@ -375,7 +375,10 @@ async function runJob(cfg) {
     // The promoting write re-enriches (runPromotionFollowThrough), which is
     // when the wine genuinely enters.
     // Canaries (registry lockdown L4) carry hand-written profiles and are never regenerated.
-    const keepCurated = { 'aiProfile.source': { $ne: 'curator' }, pendingIdentity: { $ne: true }, canary: { $ne: true } };
+    // A wine copied from the shared registry (Registry Bridge, registryId set)
+    // carries the registry's profile and is refreshed from there — the local
+    // model must never write over it.
+    const keepCurated = { 'aiProfile.source': { $ne: 'curator' }, pendingIdentity: { $ne: true }, canary: { $ne: true }, registryId: { $exists: false } };
     const filter = job.mode === 'full'
       ? keepCurated
       : {
@@ -968,6 +971,7 @@ async function enrichWineById(wineDefId, { budgetUserId, force = false, publishS
     // spend the adding user's daily AI budget describing a producerless wine.
     if (wine.pendingIdentity === true) return;
     if (wine.canary === true) return; // registry lockdown L4 — a canary's profile is the evidence; never touch it
+    if (wine.registryId) return; // a Registry Bridge copy keeps the shared registry's profile
     if (wine.aiProfile && wine.aiProfile.source === 'curator') return; // hand-corrected — never regenerate (force included)
     // Per-add policy (Johan 2026-08-21). Checked AFTER the wine is loaded
     // because 'sufficient' reads the record, and before any spend. Only the
