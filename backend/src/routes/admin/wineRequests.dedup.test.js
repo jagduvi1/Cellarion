@@ -179,3 +179,40 @@ test('a duplicate-key race resolves the request by LINKING the existing wine', a
   expect(requestDoc.linkedWineDefinition).toBe('wine-existing');
   expect(requestDoc.save).toHaveBeenCalled();
 });
+
+// Provenance (2026-09-08): `createdBy` on the new wine is the ADMIN who
+// approved it, which is the wrong answer to "a rights holder says this record
+// is theirs — who gave it to us?". The contribution block answers that, and it
+// is the only place the bridge origin survives once the audit rows expire.
+test('the created wine records WHOSE contribution produced it, not just who approved it', async () => {
+  requestDoc.via = 'bridge';
+  requestDoc.bridgeKey = 'key-1';
+  requestDoc.instanceHost = 'cellar.example.org';
+  requestDoc.createdAt = new Date('2026-09-08T10:00:00Z');
+
+  const res = await resolve(CREATE_BODY);
+  expect(res.status).toBe(200);
+
+  const doc = WineDefinition.mock.calls[0][0];
+  expect(doc.createdBy).toBe(ADMIN_ID);              // who performed the write
+  expect(doc.contribution).toEqual({                 // whose data it is
+    user: '64b000000000000000000003',
+    via: 'bridge',
+    request: REQUEST_ID,
+    bridgeKey: 'key-1',
+    instanceHost: 'cellar.example.org',
+    at: new Date('2026-09-08T10:00:00Z'),
+  });
+});
+
+test('a request with no recorded surface still names the contributor, and never invents one', async () => {
+  const res = await resolve(CREATE_BODY);
+  expect(res.status).toBe(200);
+  const doc = WineDefinition.mock.calls[0][0];
+  expect(doc.contribution.user).toBe('64b000000000000000000003');
+  expect(doc.contribution.bridgeKey).toBeNull();
+  expect(doc.contribution.instanceHost).toBeNull();
+  // Rows predating the origin fields fall back to the surface that has always
+  // filed requests in a browser.
+  expect(doc.contribution.via).toBe('ui');
+});

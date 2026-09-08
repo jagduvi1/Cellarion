@@ -239,7 +239,13 @@ describe('contributions', () => {
     createWineRequest.mockResolvedValue({ wineRequest: { _id: 'r1', status: 'pending', wineName: 'Salmos 2019' } });
     const res = await call('POST', '/api/bridge/v1/requests', { wineName: 'Salmos 2019', sourceUrl: 'https://torres.es/salmos' });
     expect(res.status).toBe(201);
-    expect(createWineRequest).toHaveBeenCalledWith('u1', { wineName: 'Salmos 2019', sourceUrl: 'https://torres.es/salmos', image: undefined });
+    // The third argument is what stamps the origin onto the record itself, so
+    // the contributor stays findable after the audit rows expire.
+    expect(createWineRequest).toHaveBeenCalledWith(
+      'u1',
+      { wineName: 'Salmos 2019', sourceUrl: 'https://torres.es/salmos', image: undefined },
+      expect.objectContaining({ via: 'bridge' })
+    );
     expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'bridge.request.forwarded', { type: 'wineRequest', id: 'r1' }, expect.objectContaining({ key: 'k1', instanceHost: 'cellar.example.org' }));
     createWineRequest.mockResolvedValue({ error: { status: 400, message: 'Wine name and source URL are required' } });
     expect((await call('POST', '/api/bridge/v1/requests', {})).status).toBe(400);

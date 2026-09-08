@@ -1,6 +1,12 @@
 const mongoose = require('mongoose');
+const { originSchemaFields } = require('../utils/contributionOrigin');
 
 const wineRequestSchema = new mongoose.Schema({
+  // Which surface filed this, and — when it arrived over the Registry Bridge —
+  // which key and which install. Recorded on the record, not only in the audit
+  // log, so "what else did this contributor give us?" is answerable after the
+  // audit rows expire. See utils/contributionOrigin.js.
+  ...originSchemaFields(mongoose),
   requestType: {
     type: String,
     enum: ['new_wine', 'grape_suggestion'],
@@ -97,6 +103,9 @@ const wineRequestSchema = new mongoose.Schema({
 
 // Index for admin queue (pending requests, most recent first)
 wineRequestSchema.index({ status: 1, createdAt: -1 });
+// Provenance lookups: everything one install or one key sent us.
+wineRequestSchema.index({ bridgeKey: 1, createdAt: -1 }, { sparse: true });
+wineRequestSchema.index({ instanceHost: 1, createdAt: -1 }, { sparse: true });
 
 // Update timestamp on save
 wineRequestSchema.pre('save', function(next) {

@@ -175,7 +175,14 @@ describe('create_support_ticket / request_wine_addition', () => {
     accountOps.createWineRequest.mockResolvedValue({ wineRequest: { _id: 'wr1', wineName: 'Barolo', status: 'pending' } });
     const body = parse(await tool('request_wine_addition').handler(
       { wine_name: 'Barolo', source_url: 'https://vivino.com/w/1' }, CTX));
-    expect(accountOps.createWineRequest).toHaveBeenCalledWith(ME, { wineName: 'Barolo', sourceUrl: 'https://vivino.com/w/1', image: undefined });
+    // The third argument stamps the surface onto the REQUEST ROW, so a
+    // contributor stays findable after the audit rows expire (provenance,
+    // 2026-09-08). The audit line below is no longer the only record of it.
+    expect(accountOps.createWineRequest).toHaveBeenCalledWith(
+      ME,
+      { wineName: 'Barolo', sourceUrl: 'https://vivino.com/w/1', image: undefined },
+      expect.objectContaining({ via: 'mcp' })
+    );
     expect(logAudit).toHaveBeenCalledWith(REQ, 'wineRequest.create', { type: 'wineRequest', id: 'wr1' }, { via: 'mcp' });
     expect(body.data.request_id).toBe('wr1');
   });

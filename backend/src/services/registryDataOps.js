@@ -13,6 +13,7 @@
  */
 const RegistryDataKey = require('../models/RegistryDataKey');
 const RegistryDataValue = require('../models/RegistryDataValue');
+const { originFrom } = require('../utils/contributionOrigin');
 const { findVisibleWine } = require('./wineVisibility');
 const { validateValue, validateKeyDefinition } = require('../utils/personalDataTypes');
 const { checkContributionGate } = require('./contributionGate');
@@ -156,6 +157,7 @@ async function listAcceptedKeys() {
  * general spec belongs in the default.
  */
 async function suggestValue(userId, { wineId, keyId, keyName, value, reason, evidenceUrl, vintage }, { via, req } = {}) {
+  const origin = originFrom(req, via);
   let key;
   if (keyId) {
     if (!isValidId(String(keyId))) return fail('invalid', 'Invalid key id');
@@ -224,6 +226,7 @@ async function suggestValue(userId, { wineId, keyId, keyName, value, reason, evi
       suggestedBy: userId,
       ...(cleanUrl ? { evidenceUrl: cleanUrl } : {}),
       ...(cleanReason ? { reason: cleanReason } : {}),
+      ...origin,
     });
   } catch (err) {
     if (err?.code === 11000) {

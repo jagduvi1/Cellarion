@@ -297,6 +297,29 @@ const wineDefinitionSchema = new mongoose.Schema({
     enum: ['ui', 'import', 'mcp', 'ai', 'bridge', null],
     default: null
   },
+  // WHOSE DATA THIS IS, when the row was minted from someone else's
+  // contribution rather than typed by the account that wrote it.
+  //
+  // `createdBy` answers "who performed the write", and for a wine minted by
+  // approving a wine request that is the ADMIN who clicked approve — which is
+  // the wrong answer to "a rights holder says this record is theirs, who gave
+  // it to us?". This says who asked for it, through which surface, and from
+  // which install.
+  //
+  // Sparse by design: absent means the wine was not minted from a contribution
+  // (someone typed it themselves), or predates the field. Never read absence
+  // as "ours".
+  contribution: {
+    // The account whose contribution produced this wine. Reassigned to the
+    // shared [deleted] user on erasure, like createdBy.
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    via: { type: String, enum: ['ui', 'import', 'mcp', 'bridge', null], default: null },
+    // The request that carried it, while that request still exists.
+    request: { type: mongoose.Schema.Types.ObjectId, ref: 'WineRequest', default: null },
+    bridgeKey: { type: mongoose.Schema.Types.ObjectId, ref: 'BridgeKey', default: null },
+    instanceHost: { type: String, default: null, maxlength: 120 },
+    at: { type: Date, default: null },
+  },
   // WHICH SOURCE SUPPLIED EACH IDENTITY FIELD. createdVia says which surface
   // minted the row; this says, field by field, whether a human stated the
   // value or a model supplied it.
@@ -574,6 +597,11 @@ wineDefinitionSchema.index({ type: 1, name: 1 });
 // Registry Bridge change checks ask "which of THESE ids changed since T"
 // (routes/bridgeV1.js): an $in over held ids plus an updatedAt comparison.
 wineDefinitionSchema.index({ updatedAt: 1 });
+// Provenance lookups: every wine one contributor, key or install produced —
+// the query a takedown demand starts from.
+wineDefinitionSchema.index({ 'contribution.user': 1 }, { sparse: true });
+wineDefinitionSchema.index({ 'contribution.bridgeKey': 1 }, { sparse: true });
+wineDefinitionSchema.index({ 'contribution.instanceHost': 1 }, { sparse: true });
 
 // Update timestamp on save
 wineDefinitionSchema.pre('save', function(next) {

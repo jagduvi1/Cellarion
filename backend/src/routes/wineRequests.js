@@ -6,6 +6,7 @@ const registryBridge = require('../services/registryBridge');
 const WineDefinition = require('../models/WineDefinition');
 const { findVisibleWine } = require('../services/wineVisibility');
 const { createWineRequest } = require('../services/accountOps');
+const { originFrom } = require('../utils/contributionOrigin');
 
 const router = express.Router();
 
@@ -45,7 +46,8 @@ router.post('/', requireNonDemo, async (req, res) => {
         linkedWineDefinition: wine._id,
         suggestedGrapes: suggestedGrapes.map(g => String(g).trim()).filter(Boolean).slice(0, 20),
         user: req.user.id,
-        status: 'pending'
+        status: 'pending',
+        ...originFrom(req, 'web'),
       });
       await wineRequest.save();
       logAudit(req, 'wineRequest.create', { type: 'wineRequest', id: wineRequest._id });
@@ -54,7 +56,7 @@ router.post('/', requireNonDemo, async (req, res) => {
 
     // ── New wine request ── (validation + creation shared with the MCP
     // request_wine_addition tool via services/accountOps)
-    const { wineRequest, error } = await createWineRequest(req.user.id, { wineName, sourceUrl, image });
+    const { wineRequest, error } = await createWineRequest(req.user.id, { wineName, sourceUrl, image }, { via: 'web', req });
     if (error) return res.status(error.status).json({ error: error.message });
     logAudit(req, 'wineRequest.create', { type: 'wineRequest', id: wineRequest._id });
     // Registry Bridge (self-hosted installs): a wine nobody here has is worth
