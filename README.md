@@ -286,6 +286,8 @@ The backend exposes ~65 route modules; this is the core surface, not an exhausti
 | POST | `/register` | Create account (sends verification email if Mailgun is configured) |
 | POST | `/login` | Login, returns JWT (blocked until email is verified when Mailgun is configured) |
 | GET | `/google` → `/google/callback` | Google SSO (when `GOOGLE_CLIENT_ID/SECRET` are set) |
+| GET | `/oidc` → `/oidc/callback` | OIDC SSO against your own provider (when the `OIDC_*` vars are set) |
+| GET | `/sso/providers` | Which SSO providers this deployment has configured |
 | GET | `/verify-email?token=` | Verify email address, returns JWT on success |
 | POST | `/resend-verification` | Resend verification email |
 | POST | `/forgot-password` | Request password reset email |
@@ -388,6 +390,7 @@ Copy `.env.example` to `.env` — **it is fully commented and is the authoritati
 |-------|-----------|---------|
 | Self-hosted AI | `AI_PROVIDER`, `OPENAI_BASE_URL`, `OPENAI_API_KEY`, `AI_MODEL`, `AI_VISION_MODEL`, `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `EMBEDDING_DIMENSION`, … | Any OpenAI-compatible endpoint instead of Anthropic/Voyage — see [Self-hosted AI](#self-hosted-ai-openai-compatible-endpoints) |
 | Google SSO | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL` | Sign in with Google |
+| OIDC SSO | `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_AUTHORIZATION_URL`, `OIDC_TOKEN_URL`, `OIDC_USERINFO_URL`, `OIDC_PROVIDER_NAME`, `OIDC_CALLBACK_URL`, `OIDC_SCOPES`, `OIDC_TRUST_EMAIL_VERIFIED` | Sign in with your own identity provider (Pocket ID, Authentik, Keycloak, Zitadel, Authelia). Works alongside Google; endpoints come from the provider's `/.well-known/openid-configuration` |
 | Registry Bridge | `REGISTRY_BRIDGE_URL`, `REGISTRY_BRIDGE_KEY`, `REGISTRY_BRIDGE_REFRESH` | Search and copy wines from the shared registry on cellarion.app into a self-hosted install; `REGISTRY_BRIDGE_REFRESH=off` keeps copies exactly as copied — see [Registry Bridge](#shared-wine-registry-for-self-hosters-registry-bridge) |
 | Supporter payments | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_{SUPPORTER,PATRON,BENEFACTOR}_PRICE_ID` + `_ANNUAL_` variants | Stripe Checkout for the optional tiers. Give each tier its own Stripe **Product** (one monthly + one yearly price), or the Customer Portal can't offer tier switching. Each price var takes a comma-separated list — current price first, then any retired prices that still have live subscribers |
 | Push notifications | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_EMAIL` | Web-push for drink alerts and events |

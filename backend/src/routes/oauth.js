@@ -1,6 +1,7 @@
 const express = require('express');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const OAuth2Strategy = require('passport-oauth2').Strategy;
 const crypto = require('crypto');
 const User = require('../models/User');
 const { logAudit } = require('../services/audit');
@@ -15,6 +16,46 @@ const router = express.Router();
 // Google OAuth client keep classic email+password login untouched.
 const GOOGLE_ENABLED = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 
+// The same opt-in shape for a generic OIDC provider, so a self-hoster can point
+// Cellarion at their own identity provider instead of Google (#1203). Nothing
+// here is Google-specific and nothing changes for a deployment that leaves
+// these unset — there is no mode flag and no either/or: both can be on.
+//
+// WHY passport-oauth2 AND NOT passport-openidconnect. It adds no dependency
+// (passport-google-oauth20 is already a passport-oauth2 wrapper), and the state
+// store below implements passport-oauth2's store interface — so this strategy
+// inherits the browser binding and PKCE by passing the same `store`, rather
+// than needing a second mechanism for the same job.
+//
+// WHY THREE URLs RATHER THAN ONE ISSUER + DISCOVERY. Strategies register at
+// require time on config presence. A discovery fetch at that moment makes SSO
+// depend on the provider being reachable during boot, and its absence is
+// silent: the strategy simply never registers and the login button never
+// appears. Explicit endpoints cannot fail that way. They come straight off the
+// provider's /.well-known/openid-configuration, once, by hand.
+const OIDC_ENABLED = Boolean(
+  process.env.OIDC_CLIENT_ID &&
+  process.env.OIDC_CLIENT_SECRET &&
+  process.env.OIDC_AUTHORIZATION_URL &&
+  process.env.OIDC_TOKEN_URL &&
+  process.env.OIDC_USERINFO_URL
+);
+
+// Label for the login button. Providers are named things to their users
+// ("Continue with Pocket ID"), and "Continue with OIDC" is jargon on a page
+// where the other button says Google.
+const OIDC_PROVIDER_NAME = process.env.OIDC_PROVIDER_NAME || 'SSO';
+
+// Whether an unverified email from this issuer may link to an existing local
+// account. Default OFF — see the adapter below for why this is the operator's
+// answer to give and not ours.
+const OIDC_TRUST_EMAIL_VERIFIED = process.env.OIDC_TRUST_EMAIL_VERIFIED === 'true';
+
+// `openid` is not optional even though nothing here reads an ID token: the
+// userinfo endpoint is an OIDC feature and providers refuse it without that
+// scope. `profile` and `email` carry the claims the account resolver needs.
+const OIDC_SCOPES = (process.env.OIDC_SCOPES || 'openid profile email').split(/[\s,]+/).filter(Boolean);
+
 const trimSlash = (s) => (s || '').replace(/\/$/, '');
 const frontendBase = trimSlash(process.env.FRONTEND_URL) || 'http://localhost:3000';
 
@@ -24,6 +65,7 @@ const frontendBase = trimSlash(process.env.FRONTEND_URL) || 'http://localhost:30
 // from FRONTEND_URL. Override with GOOGLE_CALLBACK_URL when the API lives on a
 // different host (e.g. local dev with a separate backend port).
 const CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL || `${frontendBase}/api/auth/google/callback`;
+const OIDC_CALLBACK_URL = process.env.OIDC_CALLBACK_URL || `${frontendBase}/api/auth/oidc/callback`;
 
 // Frontend landing route for the OAuth round-trip. On success the SPA restores
 // the session from the refresh cookie; on failure it shows a message.
@@ -132,6 +174,31 @@ async function upsertGoogleUser(profile) {
   }, { trustEmailVerified: false });
 }
 
+/**
+ * Adapter: map OIDC userinfo claims onto the neutral claim shape.
+ *
+ * `sub` is the only claim guaranteed stable and unique per issuer, so it is the
+ * provider id; email can change and is never the key. Display name falls back
+ * through the claims providers actually populate.
+ *
+ * trustEmailVerified is the operator's decision, not ours, which is why it is a
+ * variable and not a constant. Google's hard email_verified check exists
+ * because Google is an OPEN issuer: anyone can hold an account there, so an
+ * unverified address is an attacker-controlled claim and linking on it would
+ * hand over an existing local account. A self-hosted issuer is not that — its
+ * operator decides who gets an account at all — so whether its email claim is
+ * trustworthy is a real question with a real answer, and only they can give it.
+ * Default off keeps the safe behaviour for anyone who never thinks about it.
+ */
+async function upsertOidcUser(claims) {
+  return upsertSsoUser('oidc', {
+    providerId: claims.sub,
+    email: claims.email || null,
+    emailVerified: claims.email_verified === true,
+    displayName: claims.name || claims.display_name || claims.preferred_username
+  }, { trustEmailVerified: OIDC_TRUST_EMAIL_VERIFIED });
+}
+
 // One store instance serves every provider: it holds no per-flow state of its
 // own, only the cookie name and lifetime.
 const oauthStateStore = new CookieStateStore();
@@ -165,15 +232,94 @@ if (GOOGLE_ENABLED) {
       }
     }
   ));
-  // Stateless: we mint our own JWT + refresh cookie, so passport keeps no
-  // session. initialize() is still required for passport.authenticate to run.
+}
+
+if (OIDC_ENABLED) {
+  const oidcStrategy = new OAuth2Strategy(
+    {
+      authorizationURL: process.env.OIDC_AUTHORIZATION_URL,
+      tokenURL: process.env.OIDC_TOKEN_URL,
+      clientID: process.env.OIDC_CLIENT_ID,
+      clientSecret: process.env.OIDC_CLIENT_SECRET,
+      callbackURL: OIDC_CALLBACK_URL,
+      // Same store instance as Google: one cookie name, one lifetime, and the
+      // binding that stops an authorization code minted in one browser being
+      // redeemed in another. Passing it is the whole of what this strategy has
+      // to do to inherit that.
+      store: oauthStateStore,
+      pkce: 'S256'
+    },
+    async (accessToken, refreshToken, claims, done) => {
+      try {
+        return done(null, await upsertOidcUser(claims));
+      } catch (err) {
+        return done(err);
+      }
+    }
+  );
+
+  /**
+   * Where the identity comes from — and, deliberately, where it does not.
+   *
+   * passport-oauth2 has no profile of its own, so we fetch the claims from the
+   * provider's userinfo endpoint with the access token we were just issued.
+   * That request is a direct, TLS-protected, client-authenticated back channel
+   * to the provider, which is what makes its answer trustworthy.
+   *
+   * The token response also carries an `id_token`, because `openid` is in the
+   * requested scopes. NOTHING HERE READS IT, and that is a decision rather than
+   * an oversight: an ID token is only worth anything once its signature, issuer,
+   * audience and expiry have been verified against the provider's JWKS, and a
+   * half-done version of that — decoding the JWT and trusting its claims — is a
+   * complete authentication bypass, since anyone can mint an unsigned JWT.
+   * Using userinfo instead means there is no token to verify and no way to get
+   * that wrong. If ID-token claims are ever wanted here, verify them properly or
+   * not at all; do not split the difference.
+   *
+   * `nonce` is absent for the same reason: it defends against ID-token replay,
+   * and no ID token is consumed. Browser binding is `state`, which the store
+   * above provides, plus PKCE on the code itself.
+   */
+  oidcStrategy.userProfile = function userProfile(accessToken, done) {
+    this._oauth2.get(process.env.OIDC_USERINFO_URL, accessToken, (err, body) => {
+      // The provider's error body can carry the access token back to us; report
+      // that the call failed without pasting its contents into a log.
+      if (err) return done(new Error('Failed to fetch OIDC userinfo'));
+      let claims;
+      try {
+        claims = JSON.parse(body);
+      } catch (e) {
+        return done(new Error('OIDC userinfo was not JSON'));
+      }
+      if (!claims || typeof claims.sub !== 'string' || !claims.sub) {
+        // Without `sub` there is no stable identity to key an account on, and
+        // falling back to email would key it on something the user can change.
+        return done(new Error('OIDC userinfo carried no sub claim'));
+      }
+      return done(null, claims);
+    });
+  };
+
+  passport.use('oidc', oidcStrategy);
+}
+
+// Stateless: we mint our own JWT + refresh cookie, so passport keeps no
+// session. Registered for EITHER provider rather than only inside the Google
+// block, so an OIDC-only deployment is set up the same way a Google one is.
+// Defensive rather than load-bearing: passport 0.7 tolerates authenticate()
+// without initialize() when sessions are off, so the old placement works today
+// — but that is undocumented tolerance, not a promise.
+if (GOOGLE_ENABLED || OIDC_ENABLED) {
   router.use(passport.initialize());
 }
 
 // GET /api/auth/sso/providers — public. Lets the login page render only the
 // SSO buttons that are actually configured on this deployment.
 router.get('/sso/providers', (req, res) => {
-  res.json({ google: GOOGLE_ENABLED });
+  // oidcName travels with the flag because the button needs the provider's own
+  // name to be worth showing: "Continue with OIDC" means nothing to the person
+  // reading it.
+  res.json({ google: GOOGLE_ENABLED, oidc: OIDC_ENABLED, oidcName: OIDC_PROVIDER_NAME });
 });
 
 // GET /api/auth/google — start the OAuth redirect to Google.
@@ -219,8 +365,46 @@ router.get('/google/callback', (req, res, next) => {
   })(req, res, next);
 });
 
+// GET /api/auth/oidc — start the redirect to the configured OIDC provider.
+// Deliberately no `prompt` equivalent to Google's select_account: an issuer's
+// re-authentication policy is the operator's to set, not ours to override.
+router.get('/oidc', (req, res, next) => {
+  if (!OIDC_ENABLED) return res.redirect(failureRedirect('not_configured'));
+  passport.authenticate('oidc', {
+    scope: OIDC_SCOPES,
+    session: false
+  })(req, res, next);
+});
+
+// GET /api/auth/oidc/callback — the provider redirects here after consent.
+// Identical handling to the Google callback, including the state-cookie
+// cleanup: passport-oauth2 answers a provider `?error=...` BEFORE it consults
+// the state store, so a cancelled sign-in would otherwise leave its state in
+// the browser for the rest of the cookie's life.
+router.get('/oidc/callback', (req, res, next) => {
+  if (!OIDC_ENABLED) return res.redirect(failureRedirect('not_configured'));
+  passport.authenticate('oidc', { session: false }, async (err, user, info) => {
+    if (err || !user) {
+      oauthStateStore.clear(res);
+      const reason = err?.code || info?.code || (err ? 'server_error' : 'access_denied');
+      logAudit(req, 'auth.oauth.failed', {}, { provider: 'oidc', reason });
+      return res.redirect(failureRedirect(reason));
+    }
+    try {
+      await issueTokens(user, res, { rememberMe: true, client: clientHint(req) });
+      logAudit(req, 'auth.oauth.success', { type: 'user', id: user._id }, { provider: 'oidc' });
+      resolvePendingShares(user).catch(() => {});
+      return res.redirect(successRedirect);
+    } catch (e) {
+      console.error('OAuth token issue failed:', e);
+      return res.redirect(failureRedirect('server_error'));
+    }
+  })(req, res, next);
+});
+
 module.exports = router;
 // Exported for unit tests (the account-linking logic is the important part).
 module.exports.upsertSsoUser = upsertSsoUser;
 module.exports.upsertGoogleUser = upsertGoogleUser;
+module.exports.upsertOidcUser = upsertOidcUser;
 module.exports.generateUniqueUsername = generateUniqueUsername;

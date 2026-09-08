@@ -178,7 +178,10 @@
 
 /* SSO / "Continue with Google" button — neutral surface with the coloured G
    mark, per Google's branding guidance. */
-.btn-google {
+/* Shared by every SSO button: the treatment is provider-neutral already —
+   only the Google mark is Google-specific. */
+.btn-google,
+.btn-sso {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -189,7 +192,8 @@
   font-weight: 600;
 }
 
-.btn-google:hover {
+.btn-google:hover,
+.btn-sso:hover {
   background: var(--color-surface-hover);
 }
 
