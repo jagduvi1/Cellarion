@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { getBridgeStatus } from '../api/bridge';
+import { getBridgeStatus, setBridgeRefreshMode } from '../api/bridge';
 import { HOSTED_ORIGIN } from '../utils/mcpConnect';
 
 // Settings card on a SELF-HOSTED install: whether this server is connected to
@@ -11,9 +11,12 @@ import { HOSTED_ORIGIN } from '../utils/mcpConnect';
 // never shown here. Not rendered on the hosted instance (Settings.js gates it).
 function RegistryConnectionSection() {
   const { t } = useTranslation();
-  const { apiFetch } = useAuth();
+  const { apiFetch, user } = useAuth();
   const [status, setStatus] = useState(null);
   const [error, setError] = useState(null);
+  const [refreshBusy, setRefreshBusy] = useState(false);
+  const [refreshNotice, setRefreshNotice] = useState(null);
+  const isAdmin = !!user?.roles?.includes('admin');
 
   const load = useCallback(async () => {
     try {
@@ -27,6 +30,31 @@ function RegistryConnectionSection() {
   }, [apiFetch, t]);
 
   useEffect(() => { load(); }, [load]);
+
+  // The weekly refresh switch: install-wide, admins only, and only when the
+  // server's .env has not already decided (REGISTRY_BRIDGE_REFRESH).
+  const toggleRefresh = async () => {
+    if (!status?.refresh) return;
+    const next = status.refresh.mode === 'off' ? 'weekly' : 'off';
+    setRefreshBusy(true);
+    setRefreshNotice(null);
+    try {
+      const res = await setBridgeRefreshMode(apiFetch, next);
+      if (res.status === 409) {
+        setRefreshNotice(t('settings.registryConnection.refreshEnvOverride', 'REGISTRY_BRIDGE_REFRESH is set in this server\'s .env; change it there and restart the backend.'));
+      } else if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setRefreshNotice(data.error || t('settings.registryConnection.errorGeneric', 'Something went wrong. Please try again.'));
+      } else {
+        setRefreshNotice(t('settings.registryConnection.refreshSaved', 'Saved. The change applies from the next weekly run.'));
+        await load();
+      }
+    } catch {
+      setRefreshNotice(t('settings.registryConnection.errorGeneric', 'Something went wrong. Please try again.'));
+    } finally {
+      setRefreshBusy(false);
+    }
+  };
 
   const formatDate = (d) => (d ? new Date(d).toLocaleString() : null);
   const reasonText = (reason) => ({
@@ -78,6 +106,24 @@ function RegistryConnectionSection() {
               </div>
             </li>
           </ul>
+          {status.refresh && (
+            <p className="settings-hint">
+              {status.refresh.mode === 'off'
+                ? t('settings.registryConnection.refreshOff', 'Weekly refresh is off: copied wines stay exactly as they were copied.')
+                : t('settings.registryConnection.refreshOn', 'Copied wines refresh weekly from the registry. Anything changed on this install (a drink window, a value, the identity) is kept.')}
+              {status.refresh.source === 'env' ? ` ${t('settings.registryConnection.refreshEnv', 'Set by REGISTRY_BRIDGE_REFRESH in this server\'s .env.')}` : ''}
+            </p>
+          )}
+          {status.refresh && isAdmin && status.refresh.source !== 'env' && (
+            <div className="settings-actions">
+              <button type="button" className="btn btn-secondary btn-small" onClick={toggleRefresh} disabled={refreshBusy}>
+                {status.refresh.mode === 'off'
+                  ? t('settings.registryConnection.refreshTurnOn', 'Turn weekly refresh on')
+                  : t('settings.registryConnection.refreshTurnOff', 'Turn weekly refresh off')}
+              </button>
+            </div>
+          )}
+          {refreshNotice && <div className="alert alert-info">{refreshNotice}</div>}
           {status.blocked && (
             <div className="alert alert-info">
               {t('settings.registryConnection.blocked', 'The registry answered "{{reason}}"; this install pauses its requests until {{until}}.', { reason: status.blocked.reason, until: formatDate(status.blocked.until) })}

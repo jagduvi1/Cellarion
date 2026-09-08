@@ -235,7 +235,7 @@ Self-hosted instances serve the same endpoints from their own origin — the `/c
 
 ## Shared wine registry for self-hosters (Registry Bridge)
 
-A self-hosted Cellarion starts with an empty wine registry. The **Registry Bridge** connects it to the shared registry on cellarion.app, one wine at a time: registry matches appear in your add-bottle search, the wine you pick is copied into your own database with its tasting profile and drink windows, copies are refreshed weekly, and the corrections and values your users file flow back to the shared queues, credited to your install. The registry itself never leaves cellarion.app — no bulk download, no snapshot.
+A self-hosted Cellarion starts with an empty wine registry. The **Registry Bridge** connects it to the shared registry on cellarion.app, one wine at a time: registry matches appear in your add-bottle search, the wine you pick is copied into your own database with its tasting profile and drink windows, copies are refreshed weekly (your own edits to a copy are kept, and `REGISTRY_BRIDGE_REFRESH=off` stops the refresh), and the corrections and values your users file flow back to the shared queues, credited to your install. The registry itself never leaves cellarion.app — no bulk download, no snapshot.
 
 1. Sign in on [cellarion.app](https://cellarion.app), open **Settings → Connect a self-hosted Cellarion**, accept the Registry Data Terms and create a key (two per account, shown once).
 2. Add the two lines to your `.env` and restart the backend:
@@ -388,7 +388,7 @@ Copy `.env.example` to `.env` — **it is fully commented and is the authoritati
 |-------|-----------|---------|
 | Self-hosted AI | `AI_PROVIDER`, `OPENAI_BASE_URL`, `OPENAI_API_KEY`, `AI_MODEL`, `AI_VISION_MODEL`, `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `EMBEDDING_DIMENSION`, … | Any OpenAI-compatible endpoint instead of Anthropic/Voyage — see [Self-hosted AI](#self-hosted-ai-openai-compatible-endpoints) |
 | Google SSO | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL` | Sign in with Google |
-| Registry Bridge | `REGISTRY_BRIDGE_URL`, `REGISTRY_BRIDGE_KEY` | Search and copy wines from the shared registry on cellarion.app into a self-hosted install — see [Registry Bridge](#shared-wine-registry-for-self-hosters-registry-bridge) |
+| Registry Bridge | `REGISTRY_BRIDGE_URL`, `REGISTRY_BRIDGE_KEY`, `REGISTRY_BRIDGE_REFRESH` | Search and copy wines from the shared registry on cellarion.app into a self-hosted install; `REGISTRY_BRIDGE_REFRESH=off` keeps copies exactly as copied — see [Registry Bridge](#shared-wine-registry-for-self-hosters-registry-bridge) |
 | Supporter payments | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_{SUPPORTER,PATRON,BENEFACTOR}_PRICE_ID` + `_ANNUAL_` variants | Stripe Checkout for the optional tiers. Give each tier its own Stripe **Product** (one monthly + one yearly price), or the Customer Portal can't offer tier switching. Each price var takes a comma-separated list — current price first, then any retired prices that still have live subscribers |
 | Push notifications | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_EMAIL` | Web-push for drink alerts and events |
 | Climate monitoring | `CLIMATE_RETENTION_DAYS`, `CLIMATE_MAX_DEVICES_PER_USER`, `CLIMATE_MAX_READINGS_PER_DAY`, … | Sensor ingest limits + GDPR retention |

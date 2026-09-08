@@ -17,7 +17,7 @@ jest.mock('../models/ApiToken', () => {
   const crypto = require('crypto');
   return { findOne: jest.fn(), hashToken: (raw) => crypto.createHash('sha256').update(raw).digest('hex'), TOKEN_PREFIX: 'cel_' };
 });
-jest.mock('../services/registryBridge', () => ({ status: jest.fn(), adoptWine: jest.fn() }));
+jest.mock('../services/registryBridge', () => ({ status: jest.fn(), adoptWine: jest.fn(), setRefreshMode: jest.fn() }));
 jest.mock('../utils/grapeDisplay', () => ({ decorateGrapes: (w) => ({ ...w, decorated: true }) }));
 
 const express = require('express');
@@ -85,5 +85,34 @@ describe('POST /api/bridge/adopt', () => {
     const res = await call('POST', '/api/bridge/adopt', { registryId: RID }, token({ isDemo: true }));
     expect(res.status).toBe(403);
     expect(bridge.adoptWine).not.toHaveBeenCalled();
+  });
+});
+
+describe('PATCH /api/bridge/refresh', () => {
+  const admin = () => token({ roles: ['admin'] });
+
+  test('admins of this install only', async () => {
+    expect((await call('PATCH', '/api/bridge/refresh', { mode: 'off' }, null)).status).toBe(401);
+    expect((await call('PATCH', '/api/bridge/refresh', { mode: 'off' })).status).toBe(403);
+    expect(bridge.setRefreshMode).not.toHaveBeenCalled();
+  });
+
+  test('stores the mode and audits it', async () => {
+    bridge.setRefreshMode.mockResolvedValue({ ok: true, mode: 'off', source: 'settings' });
+    const res = await call('PATCH', '/api/bridge/refresh', { mode: 'off' }, admin());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ mode: 'off', source: 'settings' });
+    expect(bridge.setRefreshMode).toHaveBeenCalledWith('off', 'u1');
+    expect(logAudit.mock.calls.some((c) => c[1] === 'bridge.refresh_mode.update' && c[3].mode === 'off')).toBe(true);
+  });
+
+  test('a bad mode is 400, an .env override is 409 with the mode in force', async () => {
+    bridge.setRefreshMode.mockResolvedValue({ ok: false, code: 'invalid' });
+    expect((await call('PATCH', '/api/bridge/refresh', { mode: 'sometimes' }, admin())).status).toBe(400);
+    bridge.setRefreshMode.mockResolvedValue({ ok: false, code: 'env_override', mode: 'off', source: 'env' });
+    const res = await call('PATCH', '/api/bridge/refresh', { mode: 'weekly' }, admin());
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: 'env_override', mode: 'off', source: 'env' });
+    expect(logAudit.mock.calls.some((c) => c[1] === 'bridge.refresh_mode.update')).toBe(false);
   });
 });
