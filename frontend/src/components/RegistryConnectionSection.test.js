@@ -1,21 +1,23 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import RegistryConnectionSection from './RegistryConnectionSection';
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key, fallback, vars) => {
+// A STABLE t: the card's load callback depends on it, and a fresh function per
+// render would re-run the effect on every render and inflate fetch counts.
+vi.mock('react-i18next', () => {
+  const t = (key, fallback, vars) => {
       if (typeof fallback !== 'string') return key;
       return fallback.replace(/\{\{(\w+)\}\}/g, (_, k) => (vars && vars[k] !== undefined ? String(vars[k]) : ''));
-    },
-  }),
-}));
+  };
+  return { useTranslation: () => ({ t }) };
+});
 
 const apiFetch = vi.fn();
-vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ apiFetch }) }));
+const authState = { apiFetch, user: { roles: ['user'] } };
+vi.mock('../contexts/AuthContext', () => ({ useAuth: () => authState }));
 
 const ok = (body, status = 200) => Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body) });
 
-beforeEach(() => apiFetch.mockReset());
+beforeEach(() => { apiFetch.mockReset(); authState.user = { roles: ['user'] }; });
 
 describe('RegistryConnectionSection (self-hosted Settings card)', () => {
   test('a connected install sees the key prefix, copies held, quota use and the last refresh', async () => {
@@ -56,5 +58,44 @@ describe('RegistryConnectionSection (self-hosted Settings card)', () => {
     apiFetch.mockImplementation(() => ok({ enabled: false, reason: 'self_target', url: 'https://cellar.example.org', held: 0, removed: 0 }));
     render(<RegistryConnectionSection />);
     expect(await screen.findByText(/points at this very install/)).toBeInTheDocument();
+  });
+});
+
+describe('RegistryConnectionSection — weekly refresh switch', () => {
+  const connected = (refresh) => ({
+    enabled: true, reason: null, url: 'https://cellarion.app', keyPrefix: 'cbr_12345678', blocked: null, lastError: null,
+    held: 3, removed: 0, lastRefresh: null, refresh, me: null,
+  });
+
+  test('everyone reads the mode; only an admin gets the switch, and toggling PATCHes then reloads', async () => {
+    authState.user = { roles: ['admin'] };
+    apiFetch.mockImplementation((url, opts = {}) => {
+      if (url === '/api/bridge/refresh') {
+        expect(opts.method).toBe('PATCH');
+        expect(JSON.parse(opts.body)).toEqual({ mode: 'off' });
+        return ok({ mode: 'off', source: 'settings' });
+      }
+      return ok(connected({ mode: 'weekly', source: 'default' }));
+    });
+    render(<RegistryConnectionSection />);
+    expect(await screen.findByText(/Copied wines refresh weekly from the registry/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Turn weekly refresh off/ }));
+    expect(await screen.findByText(/Saved\. The change applies from the next weekly run/)).toBeInTheDocument();
+    expect(apiFetch.mock.calls.filter(([u]) => u === '/api/bridge/status')).toHaveLength(2);
+  });
+
+  test('a member sees the mode but no switch', async () => {
+    apiFetch.mockImplementation(() => ok(connected({ mode: 'off', source: 'settings' })));
+    render(<RegistryConnectionSection />);
+    expect(await screen.findByText(/Weekly refresh is off/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Turn weekly refresh/ })).toBeNull();
+  });
+
+  test('when .env decides, even an admin only gets told where to change it', async () => {
+    authState.user = { roles: ['admin'] };
+    apiFetch.mockImplementation(() => ok(connected({ mode: 'off', source: 'env' })));
+    render(<RegistryConnectionSection />);
+    expect(await screen.findByText(/Set by REGISTRY_BRIDGE_REFRESH in this server's \.env/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Turn weekly refresh/ })).toBeNull();
   });
 });

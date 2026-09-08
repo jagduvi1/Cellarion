@@ -41,3 +41,12 @@ export const adoptRegistryWine = (apiFetch, registryId) =>
     headers: JSON_HEADERS,
     body: JSON.stringify({ registryId }),
   });
+
+// PATCH /api/bridge/refresh — body: { mode: 'weekly' | 'off' }. Admins of this
+// install only. 409 env_override while REGISTRY_BRIDGE_REFRESH in .env decides.
+export const setBridgeRefreshMode = (apiFetch, mode) =>
+  apiFetch('/api/bridge/refresh', {
+    method: 'PATCH',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ mode }),
+  });

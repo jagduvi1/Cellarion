@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { requireAuth, requireNonDemo } = require('../middleware/auth');
+const { requireAuth, requireNonDemo, requireRole } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
 const bridge = require('../services/registryBridge');
 const { decorateGrapes } = require('../utils/grapeDisplay');
@@ -42,6 +42,32 @@ router.post('/adopt', requireAuth, requireNonDemo, async (req, res) => {
   } catch (error) {
     console.error('Bridge adopt error:', error);
     res.status(500).json({ error: 'Failed to copy the wine from the shared registry' });
+  }
+});
+
+// PATCH /api/bridge/refresh { mode: 'weekly' | 'off' } — the install-wide
+// switch for the weekly refresh of copied wines. Admins of this install only;
+// refused with env_override while REGISTRY_BRIDGE_REFRESH in .env decides.
+router.patch('/refresh', requireAuth, requireRole('admin'), async (req, res) => {
+  const mode = req.body?.mode;
+  try {
+    const r = await bridge.setRefreshMode(mode, req.user.id);
+    if (!r.ok && r.code === 'invalid') {
+      return res.status(400).json({ error: 'mode must be "weekly" or "off"', code: 'invalid' });
+    }
+    if (!r.ok && r.code === 'env_override') {
+      return res.status(409).json({
+        error: 'REGISTRY_BRIDGE_REFRESH is set in this server\'s .env; change it there and restart the backend.',
+        code: 'env_override',
+        mode: r.mode,
+        source: 'env',
+      });
+    }
+    logAudit(req, 'bridge.refresh_mode.update', {}, { mode });
+    res.json({ mode: r.mode, source: r.source });
+  } catch (error) {
+    console.error('Bridge refresh mode error:', error);
+    res.status(500).json({ error: 'Failed to update the refresh setting' });
   }
 });
 

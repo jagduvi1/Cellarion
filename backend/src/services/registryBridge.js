@@ -36,6 +36,72 @@ const PROFILE_FIELDS = ['body', 'tannin', 'acidity', 'sweetness', 'flavors', 'fo
 const REGISTRY_NOTE = 'From the shared registry (cellarion.app)';
 const isId = (v) => /^[a-f0-9]{24}$/i.test(String(v || ''));
 
+// Weekly refresh switch. REGISTRY_BRIDGE_REFRESH in the install's .env wins
+// ("off" | "weekly"); otherwise the admin toggle on the Settings card
+// (SiteConfig 'registryBridge'.refresh); otherwise weekly. Read per run, so
+// the toggle needs no restart; the env value does, like every env value.
+const REFRESH_MODES = ['weekly', 'off'];
+const SITE_CONFIG_KEY = 'registryBridge';
+const siteConfigModel = () => require('../models/SiteConfig');
+
+function refreshEnvMode() {
+  const raw = String(process.env.REGISTRY_BRIDGE_REFRESH || '').trim().toLowerCase();
+  if (!raw) return null;
+  if (['off', 'false', '0', 'no', 'never', 'none'].includes(raw)) return 'off';
+  return 'weekly';
+}
+
+/** { mode: 'weekly' | 'off', source: 'env' | 'settings' | 'default' } */
+async function refreshMode() {
+  const env = refreshEnvMode();
+  if (env) return { mode: env, source: 'env' };
+  try {
+    const doc = await siteConfigModel().findOne({ key: SITE_CONFIG_KEY }).lean();
+    const stored = doc?.value?.refresh;
+    if (REFRESH_MODES.includes(stored)) return { mode: stored, source: 'settings' };
+  } catch (err) {
+    console.warn('[bridge] could not read the refresh setting, assuming weekly:', err.message);
+  }
+  return { mode: 'weekly', source: 'default' };
+}
+
+/** The admin toggle. Refused with env_override while the .env decides. */
+async function setRefreshMode(mode, userId) {
+  if (!REFRESH_MODES.includes(mode)) return { ok: false, code: 'invalid' };
+  const env = refreshEnvMode();
+  if (env) return { ok: false, code: 'env_override', mode: env, source: 'env' };
+  const { updateSiteConfig } = require('../utils/siteConfig');
+  await updateSiteConfig(SITE_CONFIG_KEY, { refresh: mode }, userId);
+  return { ok: true, mode, source: 'settings' };
+}
+
+// Local changes win. A window or value row the bridge wrote carries
+// REGISTRY_NOTE and the sync time; a row written by someone on this install,
+// or touched after the last sync, is theirs and is never overwritten by an
+// adoption or a refresh. A seeded placeholder (no dates, no note) is not an
+// edit, so the registry still fills it.
+const EDIT_SLACK_MS = 5000;
+const WINDOW_FIELDS = ['earlyFrom', 'earlyUntil', 'peakFrom', 'peakUntil', 'lateFrom', 'lateUntil'];
+
+function touchedAfterSync(at, syncedAt) {
+  if (!at || !syncedAt) return false;
+  return new Date(at).getTime() > new Date(syncedAt).getTime() + EDIT_SLACK_MS;
+}
+
+function windowEditedLocally(row, syncedAt) {
+  if (!row) return false;
+  if (row.sommNotes !== REGISTRY_NOTE) {
+    return row.status === 'reviewed' || WINDOW_FIELDS.some((f) => row[f] !== null && row[f] !== undefined);
+  }
+  return touchedAfterSync(row.setAt, syncedAt);
+}
+
+function valueEditedLocally(row, syncedAt) {
+  if (!row) return false;
+  if (row.reason !== REGISTRY_NOTE) return true;
+  return touchedAfterSync(row.decidedAt, syncedAt);
+}
+
 let lastRefresh = null;
 
 const isEnabled = () => client.isEnabled();
@@ -82,9 +148,11 @@ function identityFields(w, tax) {
 }
 
 /** Reviewed windows from the registry replace whatever the copy had. */
-async function applyWindows(wineId, windows, userId, now) {
+async function applyWindows(wineId, windows, userId, now, syncedAt = null) {
   for (const win of windows || []) {
     if (!win || win.vintage === undefined || win.vintage === null) continue;
+    const existing = await WineVintageProfile.findOne({ wineDefinition: wineId, vintage: String(win.vintage) });
+    if (windowEditedLocally(existing, syncedAt)) continue;
     const phase = (p) => ({ from: p?.from ?? null, until: p?.until ?? null });
     const early = phase(win.early); const peak = phase(win.peak); const late = phase(win.late);
     await WineVintageProfile.findOneAndUpdate(
@@ -104,7 +172,7 @@ async function applyWindows(wineId, windows, userId, now) {
 }
 
 /** Published values: the key is matched by name locally (minted accepted when missing). */
-async function applyValues(wineId, values, userId, now) {
+async function applyValues(wineId, values, userId, now, syncedAt = null) {
   for (const f of values || []) {
     const name = f?.key?.name;
     if (!name) continue;
@@ -122,6 +190,8 @@ async function applyValues(wineId, values, userId, now) {
     }
     const publish = async (vintage, value) => {
       if (value === undefined || value === null) return;
+      const existing = await RegistryDataValue.findOne({ wineDefinition: wineId, key: key._id, vintage, status: 'published' });
+      if (valueEditedLocally(existing, syncedAt)) return;
       await RegistryDataValue.findOneAndUpdate(
         { wineDefinition: wineId, key: key._id, vintage, status: 'published' },
         { $set: { value, suggestedBy: userId, decidedBy: userId, decidedAt: now, reason: REGISTRY_NOTE } },
@@ -213,7 +283,8 @@ async function registrySearch(q, { limit = 10 } = {}) {
 async function applyRegistryUpdate(local, w, now) {
   const wine = await WineDefinition.findById(local._id);
   if (!wine) return false;
-  const untouchedLocally = !wine.registrySyncedAt || !wine.updatedAt || wine.updatedAt.getTime() <= wine.registrySyncedAt.getTime() + 5000;
+  const prevSync = wine.registrySyncedAt || null;
+  const untouchedLocally = !wine.registrySyncedAt || !wine.updatedAt || wine.updatedAt.getTime() <= wine.registrySyncedAt.getTime() + EDIT_SLACK_MS;
   if (untouchedLocally) {
     const tax = await resolveTaxonomy(w, wine.createdBy);
     Object.assign(wine, identityFields(w, tax));
@@ -222,8 +293,10 @@ async function applyRegistryUpdate(local, w, now) {
     wine.image = w.image; wine.imageCredit = w.imageCredit || null;
   }
   const profile = profileFrom(w.profile);
-  const curatedHere = wine.aiProfile && wine.aiProfile.source === 'curator' && wine.aiProfile.verifiedAt
-    && wine.registrySyncedAt && wine.aiProfile.verifiedAt.getTime() > wine.registrySyncedAt.getTime();
+  // A profile a person on this install curated after the last sync stays.
+  const ap = wine.aiProfile;
+  const curatedHere = !!(ap && ap.source === 'curator'
+    && (touchedAfterSync(ap.verifiedAt, prevSync) || touchedAfterSync(ap.generatedAt, prevSync)));
   if (profile && !curatedHere) wine.aiProfile = profile;
   wine.registrySyncedAt = now;
   try {
@@ -240,8 +313,8 @@ async function applyRegistryUpdate(local, w, now) {
       throw err;
     }
   }
-  await applyWindows(wine._id, w.windows, wine.createdBy, now);
-  await applyValues(wine._id, w.values, wine.createdBy, now);
+  await applyWindows(wine._id, w.windows, wine.createdBy, now, prevSync);
+  await applyValues(wine._id, w.values, wine.createdBy, now, prevSync);
   indexLocally(wine._id);
   return true;
 }
@@ -253,6 +326,8 @@ async function applyRegistryUpdate(local, w, now) {
  */
 async function refreshHeld({ now = new Date() } = {}) {
   if (!isEnabled()) return { skipped: 'disabled' };
+  const mode = await refreshMode();
+  if (mode.mode === 'off') return { skipped: 'refresh_off', source: mode.source };
   const rows = await WineDefinition.find({ registryId: { $exists: true, $ne: null }, registryRemovedAt: null })
     .select('_id registryId registrySyncedAt updatedAt createdBy').lean();
   if (!rows.length) { lastRefresh = { at: now, checked: 0, changed: 0, updated: 0, removed: 0, failed: false }; return lastRefresh; }
@@ -312,17 +387,18 @@ async function forwardRequest({ wineName, sourceUrl, image }) {
 async function status() {
   const transport = client.transportState();
   if (!transport.enabled) return { ...transport, held: 0, removed: 0, lastRefresh: null, me: null };
-  const [held, removed, me] = await Promise.all([
+  const [held, removed, me, refresh] = await Promise.all([
     WineDefinition.countDocuments({ registryId: { $exists: true, $ne: null }, registryRemovedAt: null }),
     WineDefinition.countDocuments({ registryRemovedAt: { $ne: null } }),
     client.me(),
+    refreshMode(),
   ]);
-  return { ...transport, held, removed, lastRefresh, me };
+  return { ...transport, held, removed, lastRefresh, refresh, me };
 }
 
 function _reset() { lastRefresh = null; }
 
 module.exports = {
   isEnabled, adoptWine, registrySearch, refreshHeld, forwardCorrection, forwardValueFor, forwardRequest, status,
-  profileFrom, REGISTRY_NOTE, _reset,
+  refreshMode, setRefreshMode, REFRESH_MODES, profileFrom, REGISTRY_NOTE, _reset,
 };
