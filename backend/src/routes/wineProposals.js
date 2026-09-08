@@ -8,6 +8,7 @@ const express = require('express');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const ops = require('../services/wineProposalOps');
 const { sendServiceFail: sendFail } = require('../utils/serviceResult');
+const registryBridge = require('../services/registryBridge');
 
 const router = express.Router();
 
@@ -27,6 +28,10 @@ router.post('/', requireNonDemo, async (req, res, next) => {
       { via: 'web', req }
     );
     if (!result.ok) return sendFail(res, result);
+    // Registry Bridge (self-hosted installs): a correction on a wine copied
+    // from the shared registry also goes to the hosted queue, credited to
+    // this install's key. Fire-and-forget — the local proposal stands alone.
+    registryBridge.forwardCorrection(result.wine, { fields, reason, evidenceUrl }).catch(() => {});
     res.status(201).json({
       proposal: {
         _id: result.proposal._id,

@@ -8,6 +8,7 @@ const rateLimit = require('express-rate-limit');
 const rateLimitsConfig = require('../config/rateLimits');
 const { rateLimitKey } = require('../utils/clientIp');
 const { tierWinePayload } = require('../services/registryTiering');
+const registryBridge = require('../services/registryBridge');
 const { gateAnonymousRead, CAP_MESSAGE } = require('../services/registryReadTracker');
 const { logAudit } = require('../services/audit');
 const { scanLabelFull, scanLabelBack, mergeBackScan, identifyWineFromQuery } = require('../services/labelScan');
@@ -353,6 +354,14 @@ router.get('/', requireAuth, async (req, res) => {
     if (type) filter.type = String(type);
     if (grapeIds.length > 0) filter.grapes = { $in: grapeIds };
 
+    // Registry Bridge (self-hosted installs): identities from the shared
+    // registry that this install does not hold yet, returned in their own
+    // list so the picker can adopt one on selection. Empty when the bridge is
+    // off or unreachable — local results never wait on it failing.
+    const registryWines = searchTerm && registryBridge.isEnabled()
+      ? await registryBridge.registrySearch(searchTerm).catch(() => [])
+      : [];
+
     // Try Meilisearch for text queries
     if (searchTerm && searchService.getIsAvailable()) {
       try {
@@ -379,7 +388,8 @@ router.get('/', requireAuth, async (req, res) => {
           total: estimatedTotalHits,
           offset: parsedOffset,
           limit: parsedLimit,
-          wines: wines.map(decorateGrapes)
+          wines: wines.map(decorateGrapes),
+          registryWines
         });
       } catch (err) {
         console.warn('Meilisearch query failed, falling back to MongoDB:', err.message);
@@ -394,7 +404,8 @@ router.get('/', requireAuth, async (req, res) => {
       total,
       offset: parsedOffset,
       limit: parsedLimit,
-      wines: wines.map(decorateGrapes)
+      wines: wines.map(decorateGrapes),
+      registryWines
     });
   } catch (error) {
     console.error('Get wines error:', error);

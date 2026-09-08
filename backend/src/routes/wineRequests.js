@@ -2,6 +2,7 @@ const express = require('express');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
 const WineRequest = require('../models/WineRequest');
+const registryBridge = require('../services/registryBridge');
 const WineDefinition = require('../models/WineDefinition');
 const { findVisibleWine } = require('../services/wineVisibility');
 const { createWineRequest } = require('../services/accountOps');
@@ -56,6 +57,9 @@ router.post('/', requireNonDemo, async (req, res) => {
     const { wineRequest, error } = await createWineRequest(req.user.id, { wineName, sourceUrl, image });
     if (error) return res.status(error.status).json({ error: error.message });
     logAudit(req, 'wineRequest.create', { type: 'wineRequest', id: wineRequest._id });
+    // Registry Bridge (self-hosted installs): a wine nobody here has is worth
+    // asking the shared registry for too. Fire-and-forget.
+    registryBridge.forwardRequest({ wineName, sourceUrl, image }).catch(() => {});
     res.status(201).json({ wineRequest });
   } catch (error) {
     console.error('Create wine request error:', error);

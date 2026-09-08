@@ -6,6 +6,7 @@ const express = require('express');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const ops = require('../services/registryDataOps');
 const { sendServiceFail: sendFail } = require('../utils/serviceResult');
+const registryBridge = require('../services/registryBridge');
 
 const router = express.Router();
 
@@ -61,6 +62,9 @@ router.post('/wine/:id', requireNonDemo, async (req, res, next) => {
       { via: 'web', req }
     );
     if (!result.ok) return sendFail(res, result);
+    // Registry Bridge (self-hosted installs): a value on a wine copied from
+    // the shared registry is also suggested there. Fire-and-forget.
+    registryBridge.forwardValueFor(req.params.id, { keyId, keyName, value, reason, evidenceUrl, vintage }).catch(() => {});
     res.status(201).json({ value: result.value });
   } catch (err) {
     next(err);

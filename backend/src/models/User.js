@@ -326,6 +326,15 @@ const userSchema = new mongoose.Schema({
       acceptedAt: { type: Date, default: null }
     }
   },
+  // Registry Data Terms (registry lockdown L6 / Registry Bridge, 2026-09):
+  // accepted once per version before a bridge key is issued. Not a privacy
+  // consent — it is the licence under which registry data reaches a
+  // self-hosted install. Version = config/legal.js CURRENT_REGISTRY_TERMS_VERSION.
+  registryTerms: {
+    accepted: { type: Boolean, default: false },
+    acceptedAt: { type: Date, default: null },
+    version: { type: String, default: null }
+  },
   // Scheduled deletion (GDPR right to erasure with cooling-off)
   deletionRequestedAt: {
     type: Date,
