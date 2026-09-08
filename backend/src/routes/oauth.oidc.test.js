@@ -47,9 +47,30 @@ afterAll(() => {
   }
 });
 
-jest.mock('../models/User', () => ({ findOne: () => Promise.resolve(null) }));
+// Enough of a User model to carry a sign-in all the way to a session: findOne
+// answers nothing (a first-time user), and save() records what was built.
+jest.mock('../models/User', () => {
+  const created = [];
+  function User(doc) {
+    Object.assign(this, doc);
+    this._id = 'user-1';
+  }
+  User.prototype.save = async function save() { created.push(this); return this; };
+  User.findOne = () => {
+    const chain = { select: () => chain, lean: () => Promise.resolve(null), then: (r, j) => Promise.resolve(null).then(r, j) };
+    return chain;
+  };
+  User.__created = created;
+  return User;
+});
+jest.mock('../services/authTokens', () => {
+  const actual = jest.requireActual('../services/authTokens');
+  return { ...actual, issueTokens: jest.fn(async () => {}) };
+});
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
-jest.mock('../services/pendingShares', () => ({ resolvePendingShares: jest.fn() }));
+// Returns a promise: the route calls .catch() on it, so a bare jest.fn()
+// throws inside the success path and turns a clean sign-in into server_error.
+jest.mock('../services/pendingShares', () => ({ resolvePendingShares: jest.fn(async () => {}) }));
 
 const express = require('express');
 const http = require('http');
@@ -57,6 +78,8 @@ const cookieParser = require('cookie-parser');
 const passport = require('passport');
 
 const oauthRouter = require('./oauth');
+const User = require('../models/User');
+const { issueTokens } = require('../services/authTokens');
 const { DEFAULT_COOKIE_NAME: COOKIE_NAME } = require('../services/oauthStateStore');
 
 let server;
@@ -148,6 +171,59 @@ describe('GET /api/auth/oidc/callback', () => {
     }
 
     expect(exchangedCode).toBe('any-code');
+  });
+
+  it('carries a sign-in all the way through userinfo to a session', async () => {
+    // The end-to-end direction, which the other positive test does not reach:
+    // state verified, code exchanged, userinfo fetched, claims mapped, account
+    // created, session issued, browser sent to the SPA. Everything below the
+    // token endpoint is real code; only the two network calls are stubbed.
+    const started = await get('/api/auth/oidc');
+    const state = new URL(started.headers.get('location')).searchParams.get('state');
+    const cookie = stateCookie(started).split(';')[0];
+
+    const strategy = passport._strategy('oidc');
+    const realExchange = strategy._oauth2.getOAuthAccessToken;
+    const realGet = strategy._oauth2.get;
+    let userinfoUrl = null;
+    strategy._oauth2.getOAuthAccessToken = (code, params, cb) => cb(null, 'an-access-token', null, {});
+    strategy._oauth2.get = function (url, token, cb) {
+      userinfoUrl = url;
+      cb(null, JSON.stringify({
+        sub: 'subject-abc',
+        email: 'Erin@Example.COM',
+        email_verified: true,
+        name: 'Erin Example'
+      }));
+    };
+
+    let res;
+    try {
+      res = await get(`/api/auth/oidc/callback?code=any-code&state=${encodeURIComponent(state)}`, { cookie });
+    } finally {
+      strategy._oauth2.getOAuthAccessToken = realExchange;
+      strategy._oauth2.get = realGet;
+    }
+
+    // The token goes in the Authorization header, never on the URL. node-oauth
+    // defaults this OFF, which made _oauth2.get() append ?access_token=… — the
+    // defect a live sign-in found, since providers reject it and a token in a
+    // URL lands in access logs. Asserted on the flag the strategy sets, because
+    // the stub above replaces the code that consumes it.
+    expect(strategy._oauth2._useAuthorizationHeaderForGET).toBe(true);
+    expect(userinfoUrl).toBe('https://id.example/api/oidc/userinfo');
+    expect(userinfoUrl).not.toContain('access_token');
+    expect(res.headers.get('location')).toBe('https://cellar.example/login/callback');
+    expect(issueTokens).toHaveBeenCalled();
+
+    expect(User.__created).toHaveLength(1);
+    const account = User.__created[0];
+    expect(account.email).toBe('erin@example.com');       // case-folded
+    expect(account.displayName).toBe('Erin Example');
+    expect(account.roles).toEqual(['user']);              // nothing inherited from the IdP
+    expect(account.authProviders).toEqual([
+      { provider: 'oidc', providerId: 'subject-abc', issuer: 'https://id.example' }
+    ]);
   });
 
   it('refuses userinfo that carries no sub claim', async () => {

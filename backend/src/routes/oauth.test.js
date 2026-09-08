@@ -30,14 +30,27 @@ jest.mock('../models/User', () => {
     return this;
   };
 
+  // Matching has to be as PERMISSIVE as MongoDB's, not as sensible as one might
+  // wish. Dotted paths into an array of subdocuments are matched independently —
+  // each condition may be satisfied by a DIFFERENT element — while $elemMatch
+  // requires them all to hold within one. An earlier version of this mock
+  // implemented same-entry matching for both, which is stronger than the real
+  // database and quietly hid a cross-identity match in the production query.
+  // Verified against a live mongod before being written this way.
+  const matchesDotted = (u, query) =>
+    Object.entries(query)
+      .filter(([k]) => k.startsWith('authProviders.'))
+      .every(([k, v]) => (u.authProviders || []).some((p) => p[k.slice('authProviders.'.length)] === v));
+
+  const matchesElem = (u, spec) =>
+    (u.authProviders || []).some((p) => Object.entries(spec).every(([k, v]) => p[k] === v));
+
   User.findOne = (query) => {
     let result = null;
-    if (query['authProviders.provider']) {
-      result = store.users.find((u) =>
-        (u.authProviders || []).some(
-          (p) => p.provider === query['authProviders.provider'] && p.providerId === query['authProviders.providerId']
-        )
-      ) || null;
+    if (query.authProviders && query.authProviders.$elemMatch) {
+      result = store.users.find((u) => matchesElem(u, query.authProviders.$elemMatch)) || null;
+    } else if (query['authProviders.provider']) {
+      result = store.users.find((u) => matchesDotted(u, query)) || null;
     } else if (query.email) {
       result = store.users.find((u) => u.email === query.email) || null;
     } else if (query.username) {
@@ -227,6 +240,77 @@ describe('upsertSsoUser — the provider-neutral core', () => {
     const user = await upsertSsoUser('oidc', oidcClaims({ providerId: 'shared-id', email: 'grace2@example.com' }));
     expect(User.__store.users).toHaveLength(2);
     expect(user.authProviders).toEqual([{ provider: 'oidc', providerId: 'shared-id' }]);
+  });
+});
+
+describe('upsertSsoUser — identity is one array entry, and is scoped to its issuer', () => {
+  test('a subject from one provider does not match an entry from another', async () => {
+    // The account holds google/shared-id and oidc/other-id. Nobody has ever
+    // linked oidc/shared-id, so signing in as that identity must NOT find it.
+    //
+    // Two dotted conditions would: MongoDB matches each independently against
+    // the array, so 'oidc' satisfies one entry while 'shared-id' satisfies the
+    // other and the account comes back — before any email check, handing over
+    // an existing account to an identity that was never linked to it. The mock
+    // above reproduces that semantics faithfully, so this test fails if the
+    // query reverts to dotted paths.
+    User.__seed({
+      email: 'victim@example.com',
+      username: 'victim',
+      authProviders: [
+        { provider: 'google', providerId: 'shared-id' },
+        { provider: 'oidc', providerId: 'other-id', issuer: 'https://id.example' }
+      ]
+    });
+
+    await expect(
+      upsertSsoUser('oidc', {
+        providerId: 'shared-id',
+        email: 'someone-else@example.com',
+        emailVerified: false
+      }, { issuer: 'https://id.example' })
+    ).rejects.toMatchObject({ code: 'no_verified_email' });
+
+    // Reached the email check rather than short-circuiting on a false link, and
+    // created nothing.
+    expect(User.__store.users).toHaveLength(1);
+  });
+
+  test('the same subject from a different issuer is a different person', async () => {
+    // OIDC guarantees `sub` unique only WITHIN an issuer. Repoint a deployment
+    // at another provider or realm and the subjects start over, so the subject
+    // alone cannot be the account key.
+    const original = await upsertSsoUser('oidc', {
+      providerId: 'subject-1', email: 'first@example.com', emailVerified: true
+    }, { issuer: 'https://id-one.example' });
+
+    const other = await upsertSsoUser('oidc', {
+      providerId: 'subject-1', email: 'second@example.com', emailVerified: true
+    }, { issuer: 'https://id-two.example' });
+
+    expect(other).not.toBe(original);
+    expect(User.__store.users).toHaveLength(2);
+    expect(other.authProviders[0].issuer).toBe('https://id-two.example');
+  });
+
+  test('the same subject from the SAME issuer is the same person', async () => {
+    // The control for the test above: scoping must not break the ordinary case
+    // of a returning user.
+    const first = await upsertSsoUser('oidc', {
+      providerId: 'subject-1', email: 'first@example.com', emailVerified: true
+    }, { issuer: 'https://id-one.example' });
+
+    const again = await upsertSsoUser('oidc', {
+      providerId: 'subject-1', email: 'first@example.com', emailVerified: true
+    }, { issuer: 'https://id-one.example' });
+
+    expect(again).toBe(first);
+    expect(User.__store.users).toHaveLength(1);
+  });
+
+  test('google entries carry no issuer, the provider name being the issuer', async () => {
+    const user = await upsertGoogleUser(googleProfile());
+    expect(user.authProviders[0]).toEqual({ provider: 'google', providerId: 'google-1' });
   });
 });
 

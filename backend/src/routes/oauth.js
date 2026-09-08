@@ -46,6 +46,22 @@ const OIDC_ENABLED = Boolean(
 // where the other button says Google.
 const OIDC_PROVIDER_NAME = process.env.OIDC_PROVIDER_NAME || 'SSO';
 
+// Identifier for the issuer that mints the subjects we store. Part of the
+// account key, not decoration: OIDC guarantees `sub` unique only within an
+// issuer, so without this, repointing a deployment at a different provider or
+// realm would let a different person holding the same subject value inherit an
+// existing local account. Defaults to the authorization endpoint's origin,
+// which is the issuer for every provider whose discovery document we have seen;
+// set OIDC_ISSUER explicitly if yours differs (the `issuer` value in
+// /.well-known/openid-configuration is the authority).
+const OIDC_ISSUER = process.env.OIDC_ISSUER || (() => {
+  try {
+    return new URL(process.env.OIDC_AUTHORIZATION_URL).origin;
+  } catch (e) {
+    return null;
+  }
+})();
+
 // Whether an unverified email from this issuer may link to an existing local
 // account. Default OFF — see the adapter below for why this is the operator's
 // answer to give and not ours.
@@ -113,16 +129,28 @@ async function generateUniqueUsername(email, displayName) {
  *     where they answer it; when true this is passed true and the address is
  *     treated as verified even if the issuer does not assert it.
  */
-async function upsertSsoUser(provider, claims, { trustEmailVerified = false } = {}) {
+async function upsertSsoUser(provider, claims, { trustEmailVerified = false, issuer = null } = {}) {
   const { providerId, displayName } = claims;
   const email = claims.email ? claims.email.toLowerCase() : null;
   const emailVerified = claims.emailVerified === true || trustEmailVerified === true;
 
+  // The identity this sign-in asserts. `issuer` is part of it for OIDC because
+  // the spec only guarantees `sub` to be unique WITHIN an issuer: repoint a
+  // deployment at another provider or realm and a different person holding the
+  // same subject would otherwise inherit this account. Google needs none — it
+  // is a single fixed issuer, so the provider name already says which.
+  const identity = { provider, providerId };
+  if (issuer) identity.issuer = issuer;
+
   // 1. Already linked?
-  const linked = await User.findOne({
-    'authProviders.provider': provider,
-    'authProviders.providerId': providerId
-  });
+  //
+  // $elemMatch, NOT two dotted conditions. Dotted paths into an array of
+  // subdocuments are matched INDEPENDENTLY: each condition may be satisfied by
+  // a different element, so an account holding google/123 and oidc/456 is
+  // returned for a query for oidc/123 — an identity nobody has ever linked, and
+  // the match happens before the email checks below. $elemMatch requires all
+  // conditions to hold within one element, which is the actual question.
+  const linked = await User.findOne({ authProviders: { $elemMatch: identity } });
   if (linked) return linked;
 
   if (!email || !emailVerified) {
@@ -134,7 +162,7 @@ async function upsertSsoUser(provider, claims, { trustEmailVerified = false } = 
   // 2. Existing account with this email → link this provider to it.
   const existing = await User.findOne({ email });
   if (existing) {
-    existing.authProviders.push({ provider, providerId });
+    existing.authProviders.push({ ...identity });
     if (!existing.emailVerified) existing.emailVerified = true; // provider-verified
     await existing.save();
     return existing;
@@ -148,7 +176,7 @@ async function upsertSsoUser(provider, claims, { trustEmailVerified = false } = 
     emailVerified: true, // provider-verified
     roles: ['user'],
     displayName: displayName || undefined,
-    authProviders: [{ provider, providerId }]
+    authProviders: [{ ...identity }]
     // GDPR consent is intentionally NOT stamped here. A new SSO account lands
     // with requiresPolicyReconsent === true, and the app's ReconsentModal forces
     // the user to accept the privacy policy + data processing before using the
@@ -196,7 +224,7 @@ async function upsertOidcUser(claims) {
     email: claims.email || null,
     emailVerified: claims.email_verified === true,
     displayName: claims.name || claims.display_name || claims.preferred_username
-  }, { trustEmailVerified: OIDC_TRUST_EMAIL_VERIFIED });
+  }, { trustEmailVerified: OIDC_TRUST_EMAIL_VERIFIED, issuer: OIDC_ISSUER });
 }
 
 // One store instance serves every provider: it holds no per-flow state of its
