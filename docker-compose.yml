@@ -142,6 +142,13 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-}
       - AUDIT_TTL_DAYS=${AUDIT_TTL_DAYS:-}
       - INDEXNOW_KEY=${INDEXNOW_KEY:-}
+      # Registry Bridge (self-hosted installs). The env block enumerates vars,
+      # so these MUST be forwarded or the documented two-line .env setup is a
+      # silent no-op inside the container: the client sees no key, Settings
+      # says "not connected", and nothing explains why.
+      - REGISTRY_BRIDGE_URL=${REGISTRY_BRIDGE_URL:-}
+      - REGISTRY_BRIDGE_KEY=${REGISTRY_BRIDGE_KEY:-}
+      - REGISTRY_BRIDGE_REFRESH=${REGISTRY_BRIDGE_REFRESH:-}
       - MAILGUN_API_KEY=${MAILGUN_API_KEY:-}
       - MAILGUN_DOMAIN=${MAILGUN_DOMAIN:-}
       - MAILGUN_FROM=${MAILGUN_FROM:-}

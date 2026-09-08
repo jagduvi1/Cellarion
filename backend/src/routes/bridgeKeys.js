@@ -43,6 +43,9 @@ async function presentKey(key) {
 
 // How long an admin revocation stays visible to the owner in Settings.
 const REVOKED_NOTICE_DAYS = 30;
+// Key minting is bounded per account per day — see the churn guard below.
+const KEY_CHURN_MAX = 5;
+const KEY_CHURN_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Keys an ADMIN revoked recently, with the reason — the owner's only way to
@@ -132,6 +135,22 @@ router.post('/', requireAuth, requireNonDemo, passwordConfirmLimiter, async (req
     const activeCount = await BridgeKey.countDocuments({ user: req.user.id, revokedAt: null });
     if (activeCount >= MAX_ACTIVE_PER_USER) {
       return res.status(400).json({ error: `Maximum of ${MAX_ACTIVE_PER_USER} active bridge keys reached — revoke one first`, code: 'key_cap' });
+    }
+    // Churn guard (audit 2026-09-08): the active-key cap alone is no cap at
+    // all, because revoking frees the slot immediately. Quotas and the import
+    // window now count per account, so re-minting no longer multiplies an
+    // allowance — this bounds the remaining nuisance (a fresh prefix per
+    // request to muddy attribution) and keeps a scripted loop out of the logs.
+    const mintedToday = await BridgeKey.countDocuments({
+      user: req.user.id,
+      createdAt: { $gte: new Date(Date.now() - KEY_CHURN_WINDOW_MS) },
+    });
+    if (mintedToday >= KEY_CHURN_MAX) {
+      logAudit(req, 'bridge.key.create_failed', { type: 'user', id: req.user.id }, { reason: 'churn', mintedToday });
+      return res.status(429).json({
+        error: `Too many bridge keys created today (${KEY_CHURN_MAX}). Existing keys keep working; try again tomorrow.`,
+        code: 'key_churn',
+      });
     }
 
     const rawKey = BridgeKey.generateKey();

@@ -57,8 +57,13 @@ Images are referenced by URL, never sent as bytes.
 ## What never crosses
 
 Bulk listings or paging of the registry, snapshots or exports, a feed of all changes,
-embeddings and the similarity graph, sommelier notes behind a drink window, canary
-rows, curator identities.
+embeddings and the similarity graph, sommelier notes behind a drink window, curator
+identities.
+
+Canary rows are excluded from `/search` and from change answers, so nothing leads an
+install to one. A canary fetched **by id** is served like any other wine — that is
+the path a copier walks, and the fetch raises an admin alert at once (at most one
+notification per key per day; every hit is audited).
 
 ## How reading is watched
 
@@ -98,7 +103,11 @@ users until they search.
 - **Local enrichment stays away.** The install's own AI enrichment skips wines with
   `registryId`; the registry's profile is the source of truth for them.
 - **Weekly refresh.** Monday 06:30 UTC the install sends the ids it holds (one
-  change check; chunks of 5,000) and re-fetches the changed ones. Wines the registry
+  change check; chunks of 5,000) and re-fetches the changed ones, skipping any whose
+  local copy is already at or past the registry's version. The "since" point is an
+  install-level watermark kept in site config, and it only advances after a run that
+  fetched everything it meant to — so a run cut short by quota resumes rather than
+  losing the wines it skipped. Wines the registry
   reports removed are marked `registryRemovedAt` and left alone.
 - **Local changes win.** The refresh only replaces what the bridge wrote and nobody
   on the install has touched since: identity fields follow the registry only while
@@ -109,9 +118,18 @@ users until they search.
   recognisable by their note, "From the shared registry (cellarion.app)".
 - **Refresh switch.** `REGISTRY_BRIDGE_REFRESH=off` in the install's `.env` stops the
   weekly refresh entirely: copies stay exactly as copied, and removed-from-registry
-  marks stop too. Without the env value, an admin of the install can switch it on
-  the Settings card (stored in the install's site config, read at each run). The env
-  value always wins; the card says so when it does.
+  marks stop too. Accepted values are `off` (also `false`, `0`, `no`, `never`,
+  `none`) and `weekly` (also `on`, `true`, `1`); anything else is ignored with a
+  warning rather than read as "on". Without the env value, an admin of the install
+  can switch it on the Settings card (stored in the install's site config, read at
+  each run). The env value always wins; the card says so when it does.
+- **What the refresh will not touch.** Only rows the bridge itself wrote and nobody
+  has changed since: a bridge row carries the note "From the shared registry
+  (cellarion.app)" and the same stamp as the wine's `registrySyncedAt`. A drink
+  window or public value set by someone on the install, a bridge row edited
+  afterwards, a profile curated locally after the last sync, and identity fields on a
+  locally edited copy all stay. A wine the registry has no picture for never blanks
+  one the install already shows.
 - **Contributions flow back.** A field correction or a value suggestion filed on the
   install for an adopted wine is also sent to the hosted queues, and a new-wine
   request is forwarded too. All fire-and-forget: the local record stands alone if the

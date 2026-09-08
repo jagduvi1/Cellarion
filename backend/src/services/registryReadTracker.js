@@ -52,6 +52,10 @@ function limits() {
  */
 async function recordRead(reader, wineId) {
   if (!reader || !wineId) return null;
+  // One id or many: a search returns ten identities in a single call, and
+  // those are reads of the registry too (bridge audit 2026-09-08).
+  const ids = (Array.isArray(wineId) ? wineId : [wineId]).filter(Boolean);
+  if (!ids.length) return null;
   // No database, no counter (fail open, and fast): a disconnected model would
   // otherwise buffer the write until Mongoose's timeout and stall the read.
   if (mongoose.connection.readyState !== 1) return null;
@@ -61,8 +65,8 @@ async function recordRead(reader, wineId) {
     const row = await RegistryReadDay.findOneAndUpdate(
       { readerKey: reader.key, day },
       {
-        $addToSet: { wines: wineId },
-        $inc: { count: 1 },
+        $addToSet: { wines: { $each: ids } },
+        $inc: { count: ids.length },
         $setOnInsert: { kind: reader.kind, expiresAt },
       },
       { upsert: true, new: true, projection: { wines: 1, count: 1, blockedAt: 1 } }

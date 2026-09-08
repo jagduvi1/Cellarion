@@ -170,7 +170,10 @@ describe('refreshHeld', () => {
     const local = { _id: 'l1', createdBy: USER, registrySyncedAt: new Date('2026-09-01'), updatedAt: new Date('2026-09-01'), aiProfile: { source: 'ai' }, save: jest.fn().mockResolvedValue(undefined) };
     WineDefinition.findById.mockResolvedValue(local);
     const r = await bridge.refreshHeld({ now: new Date('2026-09-08') });
-    expect(client.changes).toHaveBeenCalledWith([RID, 'b'.repeat(24)], new Date('2026-09-01'));
+    // `since` is the install's own watermark from site config, not the oldest
+    // per-wine sync date: derived per wine it never advanced, so the same
+    // wines came back every week until the quota ran out (audit 2026-09-08).
+    expect(client.changes).toHaveBeenCalledWith([RID, 'b'.repeat(24)], new Date(0));
     expect(local.name).toBe('Salmos Priorat'); // untouched locally → identity follows the registry
     expect(local.aiProfile).toMatchObject({ description: 'A dense Priorat.' });
     expect(local.save).toHaveBeenCalled();
@@ -192,7 +195,7 @@ describe('refreshHeld', () => {
 
   test('is a no-op when off or when nothing is held', async () => {
     client.isEnabled.mockReturnValue(false);
-    expect(await bridge.refreshHeld()).toEqual({ skipped: 'disabled' });
+    expect(await bridge.refreshHeld()).toMatchObject({ skipped: 'disabled' });
     client.isEnabled.mockReturnValue(true);
     WineDefinition.find.mockReturnValue({ select: () => ({ lean: () => Promise.resolve([]) }) });
     expect(await bridge.refreshHeld()).toMatchObject({ checked: 0 });
@@ -322,10 +325,13 @@ describe('local changes win', () => {
 describe('refresh switch', () => {
   test('REGISTRY_BRIDGE_REFRESH=off in .env stops the weekly run before any request', async () => {
     process.env.REGISTRY_BRIDGE_REFRESH = 'off';
-    expect(await bridge.refreshHeld()).toEqual({ skipped: 'refresh_off', source: 'env' });
+    expect(await bridge.refreshHeld()).toMatchObject({ skipped: 'refresh_off', source: 'env' });
     expect(client.changes).not.toHaveBeenCalled();
     expect(await bridge.refreshMode()).toEqual({ mode: 'off', source: 'env' });
-    // …and the admin toggle is refused while the env decides.
+    // …and the admin toggle is refused while the env decides. (The skipped run
+    // above does persist its own record, so clear the write log first and
+    // assert only that the toggle wrote nothing.)
+    SiteConfig.findOneAndUpdate.mockClear();
     expect(await bridge.setRefreshMode('weekly', USER)).toEqual({ ok: false, code: 'env_override', mode: 'off', source: 'env' });
     expect(SiteConfig.findOneAndUpdate).not.toHaveBeenCalled();
   });
@@ -335,11 +341,11 @@ describe('refresh switch', () => {
     expect(await bridge.setRefreshMode('off', USER)).toEqual({ ok: true, mode: 'off', source: 'settings' });
     expect(SiteConfig.findOneAndUpdate).toHaveBeenCalledWith(
       { key: 'registryBridge' },
-      { $set: expect.objectContaining({ value: { refresh: 'off' }, updatedBy: USER }) },
+      { $set: expect.objectContaining({ value: expect.objectContaining({ refresh: 'off' }), updatedBy: USER }) },
       expect.objectContaining({ upsert: true })
     );
     SiteConfig.findOne.mockReturnValue({ lean: () => Promise.resolve({ key: 'registryBridge', value: { refresh: 'off' } }) });
-    expect(await bridge.refreshHeld()).toEqual({ skipped: 'refresh_off', source: 'settings' });
+    expect(await bridge.refreshHeld()).toMatchObject({ skipped: 'refresh_off', source: 'settings' });
     expect(await bridge.setRefreshMode('sometimes', USER)).toEqual({ ok: false, code: 'invalid' });
   });
 
@@ -349,5 +355,133 @@ describe('refresh switch', () => {
     client.me.mockResolvedValue(null);
     const s = await bridge.status();
     expect(s.refresh).toEqual({ mode: 'weekly', source: 'default' });
+  });
+});
+
+// ── Audit 2026-09-08 regressions ─────────────────────────────────────────────
+// Four High findings, all in the "local changes win" machinery shipped in
+// v1.209.0. Each test below fails on the code as released.
+
+describe('audit 2026-09-08 — refresh keeps its promises', () => {
+  const NOTE = bridge.REGISTRY_NOTE;
+
+  /** A held copy plus the change answer that names it. */
+  function heldWine(over = {}) {
+    WineDefinition.find.mockReturnValue({ select: () => ({ lean: () => Promise.resolve([
+      { _id: 'l1', registryId: RID, registrySyncedAt: new Date('2026-09-01'), updatedAt: new Date('2026-09-01'), createdBy: USER },
+    ]) }) });
+    client.changes.mockResolvedValue({ changed: [{ id: RID }], removed: [], checked: 1, failed: false, checkedAt: new Date('2026-09-08T06:30:00Z') });
+    client.fetchWine.mockResolvedValue(registryWine());
+    const local = {
+      _id: 'l1', name: 'Salmos', createdBy: USER,
+      registrySyncedAt: new Date('2026-09-01'), updatedAt: new Date('2026-09-01'),
+      image: null, aiProfile: { source: 'ai' },
+      // Faithful to models/WineDefinition.js: the pre-save hook stamps
+      // updatedAt with the REAL instant of the save, while the run passes a
+      // logical `now`. That gap is what froze copies (audit 2026-09-08), so
+      // the mock has to reproduce it rather than echo the run's clock.
+      save: jest.fn(async function save() { this.updatedAt = new Date(); }),
+      ...over,
+    };
+    WineDefinition.findById.mockResolvedValue(local);
+    return local;
+  }
+
+  test('a local edit survives EVERY refresh, not just the next one', async () => {
+    heldWine();
+    // A somm fixed the peak years and left the bridge note on the row, so the
+    // only thing separating it from a bridge row is its stamp.
+    WineVintageProfile.findOne.mockResolvedValue({ vintage: '2019', sommNotes: NOTE, status: 'reviewed', setAt: new Date('2026-09-05') });
+
+    await bridge.refreshHeld({ now: new Date('2026-09-08') });
+    await bridge.refreshHeld({ now: new Date('2026-09-15') });
+    await bridge.refreshHeld({ now: new Date('2026-09-22') });
+
+    // Before the fix the second run reverted it: the wine's sync stamp had
+    // advanced past the edit, so the one-sided "touched after sync" test flipped.
+    expect(WineVintageProfile.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  test('a wine saved late in a run is not misread as locally edited next week', async () => {
+    const local = heldWine();
+    await bridge.refreshHeld({ now: new Date('2026-09-08') });
+    // The save stamped updatedAt 1.2 s after registrySyncedAt. With the run's
+    // start time as the sync stamp, every wine past the first seconds of a run
+    // looked edited from then on and never took an identity change again.
+    client.fetchWine.mockResolvedValue(registryWine({ name: 'Renamed Upstream' }));
+    await bridge.refreshHeld({ now: new Date('2026-09-15') });
+    expect(local.name).toBe('Renamed Upstream');
+  });
+
+  test('a bridge row left unstamped by an account erasure is the bridge\'s again', async () => {
+    heldWine();
+    // GDPR erasure unsets setBy/setAt on the profiles a departing user "set" —
+    // which, for a one-admin install, is every copied window.
+    WineVintageProfile.findOne.mockResolvedValue({ vintage: '2019', sommNotes: NOTE, status: 'reviewed', setAt: null });
+    await bridge.refreshHeld({ now: new Date('2026-09-08') });
+    expect(WineVintageProfile.findOneAndUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  test('the change watermark comes from site config and advances only after a clean run', async () => {
+    SiteConfig.findOne.mockReturnValue({ lean: () => Promise.resolve({ key: 'registryBridge', value: { checkedAt: new Date('2026-09-07T06:30:00Z') } }) });
+    heldWine();
+    await bridge.refreshHeld({ now: new Date('2026-09-08') });
+    expect(client.changes).toHaveBeenCalledWith([RID], new Date('2026-09-07T06:30:00Z'));
+    const saved = SiteConfig.findOneAndUpdate.mock.calls.at(-1)[1].$set.value;
+    expect(saved.checkedAt).toEqual(new Date('2026-09-08T06:30:00Z'));
+
+    // A run that could not fetch everything must ask from the same point again,
+    // or the wines it skipped are never updated.
+    jest.clearAllMocks();
+    SiteConfig.findOne.mockReturnValue({ lean: () => Promise.resolve({ key: 'registryBridge', value: { checkedAt: new Date('2026-09-08T06:30:00Z') } }) });
+    heldWine();
+    client.fetchWine.mockResolvedValue(null);   // quota, backoff or a timeout
+    const r = await bridge.refreshHeld({ now: new Date('2026-09-15') });
+    expect(r).toMatchObject({ updated: 0, failures: 1, failed: true });
+    const savedAgain = SiteConfig.findOneAndUpdate.mock.calls.at(-1)[1].$set.value;
+    expect(savedAgain.checkedAt).toEqual(new Date('2026-09-08T06:30:00Z'));
+  });
+
+  test('a wine already at the registry\'s version is not re-fetched, and one bad wine does not end the run', async () => {
+    WineDefinition.find.mockReturnValue({ select: () => ({ lean: () => Promise.resolve([
+      { _id: 'l1', registryId: RID, registrySyncedAt: new Date('2026-09-10'), updatedAt: new Date('2026-09-10'), createdBy: USER },
+      { _id: 'l2', registryId: 'b'.repeat(24), registrySyncedAt: new Date('2026-09-01'), updatedAt: new Date('2026-09-01'), createdBy: USER },
+      { _id: 'l3', registryId: 'c'.repeat(24), registrySyncedAt: new Date('2026-09-01'), updatedAt: new Date('2026-09-01'), createdBy: USER },
+    ]) }) });
+    client.changes.mockResolvedValue({
+      changed: [
+        { id: RID, updatedAt: new Date('2026-09-05') },          // older than our copy
+        { id: 'b'.repeat(24), updatedAt: new Date('2026-09-07') },
+        { id: 'c'.repeat(24), updatedAt: new Date('2026-09-07') },
+      ],
+      removed: [], checked: 3, failed: false,
+    });
+    client.fetchWine.mockResolvedValue(registryWine());
+    let call = 0;
+    WineDefinition.findById.mockImplementation(async () => {
+      call += 1;
+      if (call === 1) throw new Error('taxonomy exploded');   // the first wine fetched
+      return { _id: 'l3', createdBy: USER, registrySyncedAt: new Date('2026-09-01'), updatedAt: new Date('2026-09-01'), aiProfile: { source: 'ai' }, save: jest.fn().mockResolvedValue(undefined) };
+    });
+
+    const r = await bridge.refreshHeld({ now: new Date('2026-09-15') });
+    // One skipped as current, one thrown and counted, one applied — the run
+    // used to stop at the throw, at the same wine every week.
+    expect(r).toMatchObject({ skipped: 1, failures: 1, updated: 1 });
+    expect(client.fetchWine).toHaveBeenCalledTimes(2);
+  });
+
+  test('an unrecognised REGISTRY_BRIDGE_REFRESH is ignored, not read as "on"', async () => {
+    process.env.REGISTRY_BRIDGE_REFRESH = 'disabled';
+    // It used to mean weekly AND lock the Settings toggle with env_override.
+    expect(await bridge.refreshMode()).toEqual({ mode: 'weekly', source: 'default' });
+    expect(await bridge.setRefreshMode('off', USER)).toMatchObject({ ok: true, source: 'settings' });
+  });
+
+  test('a wine the registry has no picture for keeps the one this install shows', async () => {
+    const local = heldWine({ image: '/api/uploads/processed/local.png', imageCredit: 'A member' });
+    client.fetchWine.mockResolvedValue(registryWine({ image: null, imageCredit: null }));
+    await bridge.refreshHeld({ now: new Date('2026-09-08') });
+    expect(local.image).toBe('/api/uploads/processed/local.png');
   });
 });

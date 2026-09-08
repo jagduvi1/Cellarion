@@ -23,6 +23,12 @@ jest.mock('../services/notifications', () => ({ createNotifications: jest.fn().m
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../utils/clientIp', () => ({ rateLimitKey: (req) => req.ip || '127.0.0.1' }));
 jest.mock('../config/legal', () => ({ CURRENT_REGISTRY_TERMS_VERSION: '2026-09' }));
+// The canary notification is throttled to one per key per day through this
+// conditional update; `new: false` returns the pre-update doc, so a truthy
+// answer means "not told yet today".
+jest.mock('../models/BridgeKey', () => ({
+  findOneAndUpdate: jest.fn(() => ({ select: () => ({ lean: () => Promise.resolve({ _id: 'k1' }) }) })),
+}));
 // The key middleware and the quota are unit-tested on their own; here they are
 // stand-ins that inject an owner and spend nothing, unless a test flips them.
 jest.mock('../middleware/bridgeKeyAuth', () => ({
@@ -36,8 +42,14 @@ jest.mock('../middleware/bridgeKeyAuth', () => ({
 // Quota kinds are wired at require time; jest.clearAllMocks in beforeEach would
 // wipe the mock's call list, so they are also recorded on a plain array.
 global.__bridgeQuotaKinds = [];
+// __bridgeQuotaSpends records the middleware actually RUNNING, which is how a
+// test can tell that validation refused a request before it cost a unit.
+global.__bridgeQuotaSpends = [];
 jest.mock('../services/bridgeQuota', () => ({
-  quota: jest.fn((kind) => { global.__bridgeQuotaKinds.push(kind); return (req, res, next) => next(); }),
+  quota: jest.fn((kind) => {
+    global.__bridgeQuotaKinds.push(kind);
+    return (req, res, next) => { global.__bridgeQuotaSpends.push(kind); next(); };
+  }),
   usageFor: jest.fn().mockResolvedValue({ day: '2026-09-08', used: {}, caps: {} }),
   QUOTAS: { searches: 600, fetches: 300, changeChecks: 1, contributions: 50 },
   capsNow: () => ({ searches: 600, fetches: 300, changeChecks: 1, contributions: 50 }),
@@ -55,6 +67,7 @@ const { dataForWine, suggestValue } = require('../services/registryDataOps');
 const { createFieldCorrection } = require('../services/wineProposalOps');
 const { createWineRequest } = require('../services/accountOps');
 const { createNotifications } = require('../services/notifications');
+const BridgeKey = require('../models/BridgeKey');
 const { logAudit } = require('../services/audit');
 const { quota } = require('../services/bridgeQuota');
 const router = require('./bridgeV1');
@@ -198,7 +211,15 @@ describe('POST /wines/changes', () => {
     const res = await call('POST', '/api/bridge/v1/wines/changes', { ids: [ID, ID2, ID3], since: '2026-09-01T00:00:00Z' });
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(WineDefinition.find).toHaveBeenCalledWith({ _id: { $in: [ID, ID2, ID3] } });
+    // The same visibility as a single fetch: a hidden row reports as removed,
+    // never as changed, so the check is not an existence oracle (audit
+    // 2026-09-08).
+    expect(WineDefinition.find).toHaveBeenCalledWith(expect.objectContaining({
+      _id: { $in: [ID, ID2, ID3] },
+      nonWine: { $ne: true },
+      pendingIdentity: { $ne: true },
+      canary: { $ne: true },
+    }));
     expect(body.changed).toEqual([{ id: ID, updatedAt: '2026-09-05T00:00:00.000Z' }]);
     expect(body.removed).toEqual([ID3]);
     expect(body.checked).toBe(3);
@@ -244,5 +265,69 @@ describe('contributions', () => {
     expect(res.status).toBe(201);
     expect(suggestValue).toHaveBeenCalledWith('u1', expect.objectContaining({ wineId: ID, keyName: 'ABV', value: 14.5, vintage: '2019' }), expect.objectContaining({ via: 'bridge' }));
     expect((await res.json()).suggestion).toEqual({ id: 'v1', status: 'suggested' });
+  });
+});
+
+// ── Audit 2026-09-08 regressions ─────────────────────────────────────────────
+
+describe('audit 2026-09-08 — counting and the kill switch', () => {
+  const rateLimitsConfig = require('../config/rateLimits');
+  afterEach(() => rateLimitsConfig.set(JSON.parse(JSON.stringify(rateLimitsConfig.defaults))));
+
+  test('a wine fetch counts on the OWNER as well as the key', async () => {
+    findVisibleWine.mockResolvedValue(wine());
+    await call('GET', `/api/bridge/v1/wines/${ID}`);
+    // Detection has to survive key rotation: the two-key cap counts only
+    // ACTIVE keys, so revoke-and-remint is free and a per-key row let one
+    // account stay under the alert level forever.
+    expect(recordRead).toHaveBeenCalledWith({ key: 'user:u1', kind: 'user' }, ID);
+    expect(recordRead).toHaveBeenCalledWith({ key: 'key:k1', kind: 'key' }, ID);
+  });
+
+  test('a search counts the identities it hands out', async () => {
+    searchService.getIsAvailable.mockReturnValue(false);
+    WineDefinition.find.mockReturnValue(chain([{ _id: ID, name: 'Salmos' }, { _id: ID2, name: 'Mas La Plana' }]));
+    const res = await call('GET', '/api/bridge/v1/search?q=salmos');
+    expect(res.status).toBe(200);
+    // Ten identities a call, hundreds of calls a day: counting only single
+    // fetches left this path invisible to the copy detector.
+    expect(recordRead).toHaveBeenCalledWith({ key: 'user:u1', kind: 'user' }, [ID, ID2]);
+  });
+
+  test('the kill switch closes the protocol with a 503, before the key is even read', async () => {
+    rateLimitsConfig.set({ ...rateLimitsConfig.get(), bridge: { ...rateLimitsConfig.get().bridge, enabled: 0 } });
+    const res = await call('GET', '/api/bridge/v1/me');
+    expect(res.status).toBe(503);
+    expect((await res.json()).code).toBe('closed');
+  });
+
+  test('a canary raises at most one notification per key per day; every hit is audited', async () => {
+    findVisibleWine.mockResolvedValue(wine({ canary: true }));
+    await call('GET', `/api/bridge/v1/wines/${ID}`);
+    expect(createNotifications).toHaveBeenCalledTimes(1);
+
+    // Second hit the same day: the conditional update matches nothing.
+    BridgeKey.findOneAndUpdate.mockReturnValue({ select: () => ({ lean: () => Promise.resolve(null) }) });
+    createNotifications.mockClear();
+    logAudit.mockClear();
+    await call('GET', `/api/bridge/v1/wines/${ID}`);
+    expect(createNotifications).not.toHaveBeenCalled();
+    // Canary ids are discoverable from public pages, so the alarm is
+    // throttled — but the audit trail is not.
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'bridge.canary_hit', expect.anything(), expect.anything());
+  });
+
+  test('a malformed request is refused before it costs quota', async () => {
+    global.__bridgeQuotaSpends.length = 0;
+    expect((await call('POST', '/api/bridge/v1/wines/changes', { ids: [] })).status).toBe(400);
+    expect((await call('GET', '/api/bridge/v1/search?q=a')).status).toBe(400);
+    // With one change check a day, a single malformed call used to silence the
+    // weekly refresh until UTC midnight.
+    expect(global.__bridgeQuotaSpends).toEqual([]);
+
+    // …and a well-formed one still spends.
+    WineDefinition.find.mockReturnValue(chain([]));
+    expect((await call('POST', '/api/bridge/v1/wines/changes', { ids: [ID] })).status).toBe(200);
+    expect(global.__bridgeQuotaSpends).toEqual(['changeChecks']);
   });
 });

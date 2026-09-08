@@ -10,7 +10,11 @@
  * database fails OPEN so a self-hoster is never refused by a counter outage.
  */
 jest.mock('mongoose', () => ({ connection: { readyState: 1 } }));
-jest.mock('../models/BridgeKey', () => ({ updateOne: jest.fn().mockResolvedValue({}) }));
+jest.mock('../models/BridgeKey', () => ({
+  updateOne: jest.fn().mockResolvedValue({}),
+  updateMany: jest.fn().mockResolvedValue({}),
+  findOne: jest.fn(),
+}));
 jest.mock('../models/BridgeUsageDay', () => ({
   findOneAndUpdate: jest.fn(),
   findOne: jest.fn(),
@@ -28,15 +32,25 @@ const lean = (doc) => ({ lean: () => Promise.resolve(doc) });
 beforeEach(() => {
   jest.clearAllMocks();
   mongoose.connection.readyState = 1;
+  // No earlier import window anywhere on the account, unless a test says so.
+  BridgeKey.findOne.mockReturnValue({ select: () => ({ sort: () => ({ lean: () => Promise.resolve(null) }) }) });
+});
+
+/** The account-wide cooldown lookup, answering with one key's opening date. */
+const openedAt = (date) => BridgeKey.findOne.mockReturnValue({
+  select: () => ({ sort: () => ({ lean: () => Promise.resolve(date ? { importWindowOpenedAt: date } : null) }) }),
 });
 
 describe('takeQuota', () => {
   test('spends one unit and allows while at or under the cap', async () => {
     BridgeUsageDay.findOneAndUpdate.mockReturnValue(lean({ searches: 600 }));
     const r = await q.takeQuota(key(), 'searches');
+    // Keyed on the ACCOUNT: keys are re-mintable, so a per-key counter was an
+    // allowance multiplier (audit 2026-09-08). The key is recorded for
+    // attribution only.
     expect(BridgeUsageDay.findOneAndUpdate).toHaveBeenCalledWith(
-      { key: 'k1', day: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) },
-      expect.objectContaining({ $inc: { searches: 1 }, $setOnInsert: expect.objectContaining({ user: 'u1' }) }),
+      { user: 'u1', day: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) },
+      expect.objectContaining({ $inc: { searches: 1 }, $setOnInsert: expect.objectContaining({ key: 'k1' }) }),
       expect.objectContaining({ upsert: true, new: true })
     );
     expect(r).toMatchObject({ allowed: true, used: 600, cap: 600, counted: true });
@@ -100,18 +114,36 @@ describe('usageFor / openImportWindow', () => {
     expect(u.importWindow.nextAvailableAt.getTime()).toBe(opened.getTime() + q.IMPORT_COOLDOWN_MS);
   });
 
-  test('opening the window sets 24 hours and refuses a second opening within 30 days', async () => {
+  test('opening the window sets 24 hours on every active key of the ACCOUNT', async () => {
     const first = await q.openImportWindow(key());
     expect(first.ok).toBe(true);
     expect(first.until.getTime() - Date.now()).toBeGreaterThan(q.IMPORT_WINDOW_MS - 5000);
-    expect(BridgeKey.updateOne).toHaveBeenCalledWith({ _id: 'k1' }, { $set: expect.objectContaining({ importWindowUntil: first.until }) });
+    // Every active key of the owner, so the sync capFor(keyDoc) stays right
+    // whichever key makes the next request.
+    expect(BridgeKey.updateMany).toHaveBeenCalledWith(
+      { user: 'u1', revokedAt: null },
+      { $set: expect.objectContaining({ importWindowUntil: first.until }) }
+    );
+  });
 
-    const again = await q.openImportWindow(key({ importWindowOpenedAt: new Date(Date.now() - 10 * 86400e3) }));
+  test('the 30-day cooldown is per ACCOUNT — a freshly minted key does not reset it', async () => {
+    // The cooldown lookup asks about the OWNER, not the key in hand: a brand
+    // new key with importWindowOpenedAt: null used to grant ×5 immediately
+    // (audit 2026-09-08).
+    openedAt(new Date(Date.now() - 10 * 86400e3));
+    const again = await q.openImportWindow(key({ importWindowOpenedAt: null }));
     expect(again.ok).toBe(false);
     expect(again.nextAvailableAt).toBeInstanceOf(Date);
+    expect(BridgeKey.findOne).toHaveBeenCalledWith(expect.objectContaining({ user: 'u1' }));
+    expect(BridgeKey.updateMany).not.toHaveBeenCalled();
 
+    // Older than the cooldown: the real query filters on
+    // `importWindowOpenedAt >= now - 30 days`, so it finds nothing.
+    openedAt(null);
     const later = await q.openImportWindow(key({ importWindowOpenedAt: new Date(Date.now() - 31 * 86400e3) }));
     expect(later.ok).toBe(true);
+    expect(BridgeKey.findOne.mock.calls[BridgeKey.findOne.mock.calls.length - 1][0].importWindowOpenedAt.$gte)
+      .toBeInstanceOf(Date);
   });
 });
 

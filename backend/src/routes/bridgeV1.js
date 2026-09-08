@@ -16,6 +16,7 @@ const { createWineRequest } = require('../services/accountOps');
 const { createNotifications } = require('../services/notifications');
 const { logAudit } = require('../services/audit');
 const { rateLimitKey } = require('../utils/clientIp');
+const BridgeKey = require('../models/BridgeKey');
 const { requireBridgeKey } = require('../middleware/bridgeKeyAuth');
 const { quota, usageFor, capsNow } = require('../services/bridgeQuota');
 const rateLimitsConfig = require('../config/rateLimits');
@@ -36,6 +37,7 @@ const { CURRENT_REGISTRY_TERMS_VERSION } = require('../config/legal');
 // canary wine fetched through a key names the key in the readers report.
 
 const SEARCH_LIMIT = 10;                 // == USER_SEARCH_LIMIT in routes/wines.js
+const CANARY_ALERT_THROTTLE_MS = 24 * 60 * 60 * 1000;
 const QUERY_MIN = 2;
 const QUERY_MAX = 120;
 const CHANGES_MAX_IDS = 5000;
@@ -49,7 +51,9 @@ const IDENTITY_SELECT = 'name producer slug country region appellation classific
 // bookkeeping, the model name, the input snapshot or the producer note.
 const PROFILE_FIELDS = ['body', 'tannin', 'acidity', 'sweetness', 'flavors', 'foodPairings', 'description', 'source', 'generatedAt', 'verifiedAt'];
 
-const isValidId = (id) => mongoose.isValidObjectId(String(id));
+// Strict: mongoose.isValidObjectId() also accepts any 12-character string, so
+// a nested value could reach $in and raise a CastError 500 (audit 2026-09-08).
+const isValidId = (id) => /^[a-f0-9]{24}$/i.test(String(id));
 
 // Pre-auth per-address limiter: bounds key guessing and probing. A
 // self-hosted install is one address for all its users, so this is loose;
@@ -86,7 +90,18 @@ const keyLimiter = rateLimit({
   },
 });
 
-router.use(ipLimiter, requireBridgeKey, keyLimiter);
+// Kill switch: `bridge.enabled = 0` closes the whole protocol with a clear
+// 503, the lever routes/mcp.js has had since it shipped and this surface
+// lacked (audit 2026-09-08). Read from the in-memory config, so it takes
+// effect on the next request without a restart.
+function bridgeOpen(req, res, next) {
+  if ((rateLimitsConfig.get().bridge || {}).enabled === 0) {
+    return res.status(503).json({ error: 'The Registry Bridge is closed on this instance right now.', code: 'closed' });
+  }
+  next();
+}
+
+router.use(bridgeOpen, ipLimiter, requireBridgeKey, keyLimiter);
 
 function nameOf(ref) {
   if (!ref) return null;
@@ -143,10 +158,23 @@ function sendResult(res, r, ok) {
   return ok(r);
 }
 
-/** A canary fetched through a key: audit + tell the admins now, not tomorrow. */
+/**
+ * A canary fetched through a key: audit + tell the admins now, not tomorrow.
+ *
+ * The AUDIT row is written for every hit; the notification is throttled to one
+ * per key per day. Canary ids are discoverable from public pages, so an
+ * unthrottled notify was a way to bury admins in their own alarm (audit
+ * 2026-09-08).
+ */
 async function reportCanaryFetch(req, wine) {
   try {
     logAudit(req, 'bridge.canary_hit', { type: 'wine', id: wine._id }, { key: req.bridge.key.id, keyName: req.bridge.key.name, instanceHost: req.bridge.key.instanceHost });
+    const alerted = await BridgeKey.findOneAndUpdate(
+      { _id: req.bridge.keyDoc._id, $or: [{ canaryAlertAt: null }, { canaryAlertAt: { $lt: new Date(Date.now() - CANARY_ALERT_THROTTLE_MS) } }] },
+      { $set: { canaryAlertAt: new Date() } },
+      { new: false }
+    ).select('_id').lean();
+    if (!alerted) return;   // already told today; the audit row still records the hit
     const admins = await User.find({ roles: 'admin' }).select('_id').lean();
     await createNotifications(admins.map((a) => ({
       userId: a._id,
@@ -179,11 +207,32 @@ router.get('/me', async (req, res) => {
 });
 
 // GET /v1/search?q=  — identities only, capped like the web UI's add-bottle search.
-router.get('/search', quota('searches'), async (req, res) => {
+// Validation runs BEFORE the quota is spent: a malformed call used to cost a
+// unit, and with one change check a day that meant a single typo silenced the
+// weekly refresh until UTC midnight (audit 2026-09-08).
+function validSearch(req, res, next) {
   const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
   if (q.length < QUERY_MIN || q.length > QUERY_MAX) {
     return res.status(400).json({ error: `q must be ${QUERY_MIN}–${QUERY_MAX} characters`, code: 'invalid' });
   }
+  req.bridgeQuery = q;
+  next();
+}
+
+function validChanges(req, res, next) {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids : null;
+  if (!ids || ids.length === 0 || ids.length > CHANGES_MAX_IDS || !ids.every(isValidId)) {
+    return res.status(400).json({ error: `ids must be 1–${CHANGES_MAX_IDS} wine ids`, code: 'invalid' });
+  }
+  const since = req.body?.since ? new Date(req.body.since) : new Date(0);
+  if (Number.isNaN(since.getTime())) return res.status(400).json({ error: 'since must be an ISO date', code: 'invalid' });
+  req.bridgeIds = ids;
+  req.bridgeSince = since;
+  next();
+}
+
+router.get('/search', validSearch, quota('searches'), async (req, res) => {
+  const q = req.bridgeQuery;
   try {
     let wines = null;
     if (searchService.getIsAvailable()) {
@@ -206,6 +255,12 @@ router.get('/search', quota('searches'), async (req, res) => {
         .populate(['country', 'region', 'grapes'])
         .lean();
     }
+    // A search is a read of the registry too — ten identities a call, hundreds
+    // of calls a day. Counting only single fetches left the copy detector
+    // blind to this path (audit 2026-09-08). Detection counts on the owner.
+    if (wines.length) {
+      recordRead({ key: `user:${req.user.id}`, kind: 'user' }, wines.map((w) => w._id)).catch(() => {});
+    }
     res.json({ query: q, count: wines.length, wines: wines.map(identity) });
   } catch (error) {
     console.error('Bridge search error:', error);
@@ -225,7 +280,11 @@ router.get('/wines/:id', quota('fetches'), async (req, res) => {
     });
     if (!wine || wine.nonWine) return res.status(404).json({ error: 'Wine not found', code: 'not_found' });
 
-    await recordRead({ key: `key:${req.bridge.key.id}`, kind: 'key' }, wine._id);
+    // Detection counts on the OWNER: keys are re-mintable, so a per-key row
+    // let one account stay under the alert level by cycling keys (audit
+    // 2026-09-08). The per-key row stays for attribution on the admin page.
+    await recordRead({ key: `user:${req.user.id}`, kind: 'user' }, wine._id);
+    recordRead({ key: `key:${req.bridge.key.id}`, kind: 'key' }, wine._id).catch(() => {});
     if (wine.canary) await reportCanaryFetch(req, wine);
 
     const [windows, values] = await Promise.all([
@@ -244,8 +303,10 @@ router.get('/wines/:id', quota('fetches'), async (req, res) => {
         windows: windows.map(windowOf),
         // Published registry values only; who contributed them stays on the
         // hosted page.
+        // A field whose figures exist only per vintage has a null wine-wide
+        // value; dropping it took its overrides with it (audit 2026-09-08).
         values: values && values.ok
-          ? values.fields.filter((f) => f.value !== null && f.value !== undefined)
+          ? values.fields.filter((f) => f.value !== null && f.value !== undefined || f.wineValue !== null && f.wineValue !== undefined || (f.overrides || []).length > 0)
             .map((f) => ({ key: f.key, value: f.value, wineValue: f.wineValue ?? null, overrides: f.overrides || [] }))
           : [],
       },
@@ -258,16 +319,16 @@ router.get('/wines/:id', quota('fetches'), async (req, res) => {
 
 // POST /v1/wines/changes — { ids: [...], since: ISO } → which of THOSE changed.
 // Never a global feed: an install can only ask about wines it already holds.
-router.post('/wines/changes', quota('changeChecks'), async (req, res) => {
-  const ids = Array.isArray(req.body?.ids) ? req.body.ids : null;
-  if (!ids || ids.length === 0 || ids.length > CHANGES_MAX_IDS || !ids.every(isValidId)) {
-    return res.status(400).json({ error: `ids must be 1–${CHANGES_MAX_IDS} wine ids`, code: 'invalid' });
-  }
-  const since = req.body?.since ? new Date(req.body.since) : new Date(0);
-  if (Number.isNaN(since.getTime())) return res.status(400).json({ error: 'since must be an ISO date', code: 'invalid' });
+router.post('/wines/changes', validChanges, quota('changeChecks'), async (req, res) => {
+  const ids = req.bridgeIds;
+  const since = req.bridgeSince;
   try {
     const checkedAt = new Date();
-    const found = await WineDefinition.find({ _id: { $in: ids } }).select('_id updatedAt nonWine').lean();
+    // The same visibility the single-wine fetch applies: a hidden row must
+    // report as removed, not as changed, or the change check is an existence
+    // oracle for wines /wines/:id would 404 (audit 2026-09-08).
+    const found = await WineDefinition.find({ _id: { $in: ids }, ...VISIBLE, canary: { $ne: true } })
+      .select('_id updatedAt nonWine').lean();
     const present = new Map(found.map((w) => [String(w._id), w]));
     const changed = [];
     const removed = [];

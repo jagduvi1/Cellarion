@@ -28,6 +28,10 @@ const User = require('../models/User');
 const AiBudgetRequest = require('../models/AiBudgetRequest');
 const ApiToken = require('../models/ApiToken');
 const BridgeKey = require('../models/BridgeKey');
+// Kept in step with REGISTRY_NOTE in services/registryBridge.js. A literal on
+// purpose: requiring the bridge service here would pull its taxonomy and
+// search dependencies into every erasure run.
+const BRIDGE_REGISTRY_NOTE = 'From the shared registry (cellarion.app)';
 const BridgeUsageDay = require('../models/BridgeUsageDay');
 const ExportLink = require('../models/ExportLink');
 const OAuthAuthCode = require('../models/OAuthAuthCode');
@@ -1061,7 +1065,22 @@ const REGISTRY = [
     model: WineVintageProfile, category: 'creator-ref', userFields: ['setBy'],
     // BUG FIX: also clear sommNotes (the old code unset setBy+setAt but left the
     // somm's authored notes on the now-anonymised profile, unlike WineVintagePrice).
-    purge: (ctx) => WineVintageProfile.updateMany({ setBy: ctx.userId }, { $unset: { setBy: '', setAt: '', sommNotes: '' } }),
+    // Two passes. A somm's own row is fully anonymised, as before. A row the
+    // Registry Bridge wrote keeps its note: clearing it left the row looking
+    // like a local edit ('reviewed', no bridge note), which froze every copied
+    // drink window on a one-admin install forever (audit 2026-09-08). Dropping
+    // setBy/setAt still removes the personal reference, and an unstamped
+    // bridge row is treated as the bridge's own again.
+    purge: async (ctx) => {
+      await WineVintageProfile.updateMany(
+        { setBy: ctx.userId, sommNotes: { $ne: BRIDGE_REGISTRY_NOTE } },
+        { $unset: { setBy: '', setAt: '', sommNotes: '' } }
+      );
+      return WineVintageProfile.updateMany(
+        { setBy: ctx.userId, sommNotes: BRIDGE_REGISTRY_NOTE },
+        { $unset: { setBy: '', setAt: '' } }
+      );
+    },
     exportFragment: null,
     note: 'somm maturity contribution (shared data); portability of own contributions is a follow-up',
   },

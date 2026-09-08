@@ -228,8 +228,16 @@ function SelfHostedBridgeSection() {
         )}
       </div>
 
+      {/* Once the plaintext key is on screen the dialog must not be dismissable
+          by a stray Escape or a click on the backdrop: closing clears it, it is
+          shown exactly once, and the cap is two keys per account. "Done" is the
+          only way out (audit 2026-09-08). */}
       {showCreate && (
-        <Modal title={t('settings.bridge.createTitle', 'Create bridge key')} onClose={creating ? undefined : closeCreate} showClose={!creating}>
+        <Modal
+          title={t('settings.bridge.createTitle', 'Create bridge key')}
+          onClose={creating || created ? undefined : closeCreate}
+          showClose={!creating && !created}
+        >
           {created ? (
             <>
               <p>{t('settings.bridge.createdShowOnce', 'Copy these two lines into the .env of your self-hosted Cellarion now and restart its backend. The key will not be shown again.')}</p>

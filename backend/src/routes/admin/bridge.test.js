@@ -13,7 +13,7 @@ process.env.JWT_SECRET = 'test-secret';
 jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../../models/BridgeKey', () => ({ find: jest.fn(), findOne: jest.fn(), updateOne: jest.fn(), REVOKE_REASON_MAX: 300 }));
 jest.mock('../../models/BridgeUsageDay', () => ({ aggregate: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn(), RETENTION_DAYS: 90 }));
-jest.mock('../../models/RegistryReadDay', () => ({ aggregate: jest.fn() }));
+jest.mock('../../models/RegistryReadDay', () => ({ aggregate: jest.fn(), RETENTION_DAYS: 14 }));
 jest.mock('../../models/ApiToken', () => ({ find: jest.fn() }));
 jest.mock('../../models/User', () => ({ findById: jest.fn(), find: jest.fn(), exists: jest.fn().mockResolvedValue(true) }));
 
@@ -108,6 +108,7 @@ describe('GET /keys', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.days).toBe(7);
+    expect(body.readDays).toBe(7);
     expect(body.caps).toMatchObject({ searches: 600, fetches: 300, changeChecks: 1, contributions: 50 });
     expect(body.alertDistinct).toBe(1000);
     expect(body.totals).toEqual({ active: 1, revoked: 1, usedInPeriod: 1, searches: 40, fetches: 12, contributions: 1 });
@@ -140,6 +141,9 @@ describe('GET /keys', () => {
   test('clamps the window to 1–90 days and defaults to 7', async () => {
     let body = await (await get('/keys?days=400', admin())).json();
     expect(body.days).toBe(90);
+    // The distinct-wines half of the answer cannot go back further than the
+    // read counters live (audit 2026-09-08): 90 days of spend, 14 of reads.
+    expect(body.readDays).toBe(14);
     body = await (await get('/keys?days=abc', admin())).json();
     expect(body.days).toBe(7);
     body = await (await get('/keys?days=0', admin())).json();
