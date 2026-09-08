@@ -16,6 +16,7 @@ function SelfHostedBridgeSection() {
   const { apiFetch, user } = useAuth();
 
   const [keys, setKeys] = useState([]);
+  const [revoked, setRevoked] = useState([]); // admin revocations of the last 30 days, with the reason
   const [maxActive, setMaxActive] = useState(2);
   const [terms, setTerms] = useState({ version: null, accepted: false, url: '/terms' });
   const [listError, setListError] = useState(null);
@@ -42,6 +43,7 @@ function SelfHostedBridgeSection() {
       if (!res.ok) throw new Error();
       const data = await res.json();
       setKeys(data.keys || []);
+      setRevoked(data.revoked || []);
       setMaxActive(data.maxActive || 2);
       setTerms(data.terms || { version: null, accepted: false, url: '/terms' });
       setListError(null);
@@ -158,6 +160,12 @@ function SelfHostedBridgeSection() {
 
       {listError && <div className="alert alert-error">{listError}</div>}
       {notice && <div className="alert alert-info">{notice}</div>}
+      {revoked.map((r) => (
+        <div key={r.id} className="alert alert-warning">
+          {t('settings.bridge.revokedByAdmin', 'The key "{{name}}" was revoked by an administrator on {{date}}.', { name: r.name, date: formatDate(r.revokedAt) })}
+          {r.reason ? ` ${t('settings.bridge.revokedReason', 'Reason: {{reason}}', { reason: r.reason })}` : ''}
+        </div>
+      ))}
 
       {keys.length === 0 ? (
         <p className="settings-hint">{t('settings.bridge.empty', 'No bridge keys yet.')}</p>

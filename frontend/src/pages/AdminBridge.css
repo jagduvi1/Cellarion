@@ -1,0 +1,314 @@
+.admin-bridge-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.admin-bridge-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.admin-bridge-header h1 {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.8rem;
+  margin: 0;
+}
+
+.admin-bridge-range {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.admin-bridge-range-btn {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-radius: 6px;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.admin-bridge-range-btn.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.admin-bridge-error {
+  background: var(--color-danger-bg, #fdecea);
+  color: var(--color-danger, #b3261e);
+  border-radius: 8px;
+  padding: 0.6rem 0.9rem;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.admin-bridge-loading {
+  color: var(--color-text-secondary);
+  padding: 2rem 0;
+}
+
+/* Kill switches */
+.admin-bridge-switches {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.admin-bridge-switch {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  flex: 1 1 320px;
+  user-select: none;
+}
+
+.admin-bridge-switch input[type="checkbox"] {
+  margin-top: 0.2rem;
+  cursor: pointer;
+}
+
+.admin-bridge-switch.saving {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.admin-bridge-switch.overridden {
+  opacity: 0.55;
+}
+
+.admin-bridge-switch-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.admin-bridge-switch-desc {
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+  line-height: 1.45;
+}
+
+/* Stat cards */
+.admin-bridge-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.admin-bridge-card {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  padding: 0.85rem 1rem;
+}
+
+.admin-bridge-card-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.admin-bridge-card-label {
+  font-size: 0.85rem;
+  color: var(--color-text);
+  margin-top: 0.15rem;
+}
+
+.admin-bridge-card-sub {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  margin-top: 0.1rem;
+}
+
+/* Sits under the cards and explains what the user counts can and cannot see. */
+.admin-bridge-note {
+  margin: -0.75rem 0 1.5rem;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  max-width: 70ch;
+}
+
+/* Panels */
+.admin-bridge-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 900px) {
+  .admin-bridge-panels {
+    grid-template-columns: 1fr;
+  }
+}
+
+.admin-bridge-panel {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  padding: 1rem 1.1rem;
+  overflow-x: auto;
+}
+
+.admin-bridge-panel h3 {
+  margin: 0 0 0.6rem;
+  font-size: 1rem;
+}
+
+.admin-bridge-empty {
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+}
+
+.admin-bridge-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.87rem;
+}
+
+.admin-bridge-table th {
+  text-align: left;
+  color: var(--color-text-secondary);
+  font-weight: 600;
+  padding: 0.3rem 0.6rem 0.3rem 0;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.admin-bridge-table td {
+  padding: 0.32rem 0.6rem 0.32rem 0;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.admin-bridge-tool-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+}
+
+/* Error-code breakdown under the error count. Secondary to the number it
+   explains, and on its own line so the cell stays narrow. */
+.admin-bridge-error-codes {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  color: var(--color-text-muted, #6b7280);
+  margin-top: 2px;
+}
+
+.admin-bridge-bar-col {
+  width: 30%;
+  min-width: 80px;
+}
+
+.admin-bridge-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--color-primary);
+  opacity: 0.75;
+  min-width: 2px;
+}
+
+/* ── Registry Bridge additions ─────────────────────────────────────────── */
+
+/* Secondary line under a cell's main value: prefix, host, email, caps. */
+.admin-bridge-sub {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+}
+
+.admin-bridge-table td {
+  vertical-align: top;
+}
+
+/* Status pills: what a key is right now. */
+.admin-bridge-pill {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.admin-bridge-pill--active {
+  color: var(--color-success);
+  border-color: var(--color-success);
+}
+
+.admin-bridge-pill--window {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.admin-bridge-pill--revoked {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+/* A reader over its alert level: the whole row draws the eye, not a badge. */
+.admin-bridge-table tr.over-alert td {
+  background: color-mix(in srgb, var(--color-danger) 8%, transparent);
+}
+
+.admin-bridge-table tr.over-alert td:first-child {
+  border-left: 3px solid var(--color-danger);
+}
+
+.admin-bridge-kind {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+}
+
+.admin-bridge-reason {
+  font-style: italic;
+}
+
+.admin-bridge-toggle {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.admin-bridge-textarea {
+  width: 100%;
+  min-height: 5rem;
+  box-sizing: border-box;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 0.5rem 0.65rem;
+  font: inherit;
+  resize: vertical;
+}
+
+.admin-bridge-counter {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  text-align: right;
+}

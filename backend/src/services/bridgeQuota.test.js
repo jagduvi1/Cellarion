@@ -114,3 +114,25 @@ describe('usageFor / openImportWindow', () => {
     expect(later.ok).toBe(true);
   });
 });
+
+describe('runtime caps', () => {
+  const rateLimitsConfig = require('../config/rateLimits');
+  afterEach(() => rateLimitsConfig.set(JSON.parse(JSON.stringify(rateLimitsConfig.defaults))));
+
+  test('capsNow follows the admin-tuned bridge group, field by field, and falls back to the constants', () => {
+    expect(q.capsNow()).toEqual({ searches: 600, fetches: 300, changeChecks: 1, contributions: 50 });
+    rateLimitsConfig.set({ ...rateLimitsConfig.get(), bridge: { fetches: 1000, searches: 0, changeChecks: 'x' } });
+    expect(q.capsNow()).toEqual({ searches: 600, fetches: 1000, changeChecks: 1, contributions: 50 });
+    expect(q.capFor('fetches', key())).toBe(1000);
+    expect(q.capFor('fetches', key({ importWindowUntil: new Date(Date.now() + 3600e3) }))).toBe(5000);
+    expect(q.capFor('searches', key())).toBe(600);
+  });
+
+  test('usageFor reports the caps in force, not the constants', async () => {
+    rateLimitsConfig.set({ ...rateLimitsConfig.get(), bridge: { ...rateLimitsConfig.get().bridge, searches: 50 } });
+    BridgeUsageDay.findOne.mockReturnValue(lean(null));
+    const u = await q.usageFor(key());
+    expect(u.caps.searches).toBe(50);
+    expect(u.caps.fetches).toBe(300);
+  });
+});

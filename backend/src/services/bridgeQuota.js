@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const BridgeKey = require('../models/BridgeKey');
 const BridgeUsageDay = require('../models/BridgeUsageDay');
+const rateLimitsConfig = require('../config/rateLimits');
 
 /**
  * Daily quotas per Registry Bridge key (REGISTRY_LOCKDOWN_PLAN §6).
@@ -38,8 +39,23 @@ function importWindowActive(keyDoc, now = Date.now()) {
   return !!(keyDoc?.importWindowUntil && new Date(keyDoc.importWindowUntil).getTime() > now);
 }
 
+/**
+ * The caps in force right now: the admin-tuned `bridge` group of the runtime
+ * config (Super-admin → Settings), falling back to QUOTAS above for anything
+ * unset or nonsensical. Read per call so a change needs no restart.
+ */
+function capsNow() {
+  const cfg = rateLimitsConfig.get().bridge || {};
+  const caps = {};
+  for (const kind of KINDS) {
+    const v = cfg[kind];
+    caps[kind] = Number.isInteger(v) && v > 0 ? v : QUOTAS[kind];
+  }
+  return caps;
+}
+
 function capFor(kind, keyDoc, now = Date.now()) {
-  const base = QUOTAS[kind];
+  const base = capsNow()[kind];
   return importWindowActive(keyDoc, now) ? base * IMPORT_MULTIPLIER : base;
 }
 
@@ -139,5 +155,5 @@ function quota(kind) {
 
 module.exports = {
   QUOTAS, KINDS, IMPORT_MULTIPLIER, IMPORT_WINDOW_MS, IMPORT_COOLDOWN_MS,
-  takeQuota, usageFor, openImportWindow, quota, capFor, importWindowActive, resetAt, dayKey,
+  takeQuota, usageFor, openImportWindow, quota, capFor, capsNow, importWindowActive, resetAt, dayKey,
 };

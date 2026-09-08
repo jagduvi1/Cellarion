@@ -226,6 +226,128 @@ function McpLimitsPanel({ apiFetch, config, defaults, error }) {
   );
 }
 
+// Registry lockdown (L4) and Registry Bridge quotas. The distinct-wines cap is
+// what tells a person browsing from a copier (limiters can't); the bridge
+// group is what one self-hosted install may do per key per UTC day. PATCHes
+// only { registryRead, bridge } — the backend merges field by field.
+function RegistryLimitsPanel({ apiFetch, config, defaults, error }) {
+  const [form,   setForm]   = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [msg,    setMsg]    = useState(null);
+
+  useEffect(() => {
+    if (config) {
+      const rr = config.registryRead || {}; const drr = defaults?.registryRead || {};
+      const b = config.bridge || {};        const db = defaults?.bridge || {};
+      setForm({
+        anonymousDailyDistinct: String(rr.anonymousDailyDistinct ?? drr.anonymousDailyDistinct ?? ''),
+        memberAlertDistinct:    String(rr.memberAlertDistinct    ?? drr.memberAlertDistinct    ?? ''),
+        searches:       String(b.searches       ?? db.searches       ?? ''),
+        fetches:        String(b.fetches        ?? db.fetches        ?? ''),
+        changeChecks:   String(b.changeChecks   ?? db.changeChecks   ?? ''),
+        contributions:  String(b.contributions  ?? db.contributions  ?? ''),
+        burstPerMinute: String(b.burstPerMinute ?? db.burstPerMinute ?? ''),
+      });
+    }
+  }, [config, defaults]);
+
+  const save = async () => {
+    setSaving(true); setMsg(null);
+    try {
+      const res = await adminSaveRateLimits(apiFetch, {
+        registryRead: {
+          anonymousDailyDistinct: Number(form.anonymousDailyDistinct),
+          memberAlertDistinct: Number(form.memberAlertDistinct),
+        },
+        bridge: {
+          searches: Number(form.searches),
+          fetches: Number(form.fetches),
+          changeChecks: Number(form.changeChecks),
+          contributions: Number(form.contributions),
+          burstPerMinute: Number(form.burstPerMinute),
+        },
+      });
+      if (!res.ok) { const d = await res.json(); setMsg({ ok: false, text: d.error || 'Save failed' }); }
+      else setMsg({ ok: true, text: 'Saved — takes effect on the next request' });
+    } catch { setMsg({ ok: false, text: 'Network error' }); }
+    finally { setSaving(false); }
+  };
+
+  if (error)  return null; // the Per-IP panel already shows the shared load error
+  if (!form)  return <div className="sa-loading">Loading registry limits...</div>;
+
+  const set = (k) => (v) => setForm(f => ({ ...f, [k]: v }));
+  return (
+    <PanelShell
+      title="Shared registry and bridge"
+      intro="Distinct wines per reader per UTC day is the copy detector: a person adding bottles reads tens, a copier reads thousands. Anonymous addresses over the cap are refused for the rest of the day; members, tokens and bridge keys over the alert level are only listed in the 05:15 readers report. The bridge quotas are per key per day; an owner's monthly import window multiplies the four daily ones by five. Keys and readers: Admin → Registry Bridge."
+      saving={saving} onSave={save} msg={msg}
+    >
+      <NumberField
+        label="Anonymous daily distinct cap"
+        unit="wines / day / address"
+        hint="refused above this for the rest of the day; sized far above real use"
+        value={form.anonymousDailyDistinct}
+        defaultValue={defaults?.registryRead?.anonymousDailyDistinct}
+        onChange={set('anonymousDailyDistinct')}
+        min={20} max={100000}
+      />
+      <NumberField
+        label="Member alert level"
+        unit="wines / day / reader"
+        hint="signed-in users, tokens and bridge keys are reported above this, never refused"
+        value={form.memberAlertDistinct}
+        defaultValue={defaults?.registryRead?.memberAlertDistinct}
+        onChange={set('memberAlertDistinct')}
+        min={50} max={1000000}
+      />
+      <NumberField
+        label="Bridge searches"
+        unit="/ key / day"
+        value={form.searches}
+        defaultValue={defaults?.bridge?.searches}
+        onChange={set('searches')}
+        min={10} max={100000}
+      />
+      <NumberField
+        label="Bridge wine fetches"
+        unit="/ key / day"
+        hint="one per wine copied into the install"
+        value={form.fetches}
+        defaultValue={defaults?.bridge?.fetches}
+        onChange={set('fetches')}
+        min={10} max={100000}
+      />
+      <NumberField
+        label="Bridge change checks"
+        unit="/ key / day"
+        hint="the weekly refresh needs one"
+        value={form.changeChecks}
+        defaultValue={defaults?.bridge?.changeChecks}
+        onChange={set('changeChecks')}
+        min={1} max={1000}
+      />
+      <NumberField
+        label="Bridge contributions"
+        unit="/ key / day"
+        hint="wine requests, corrections and values forwarded"
+        value={form.contributions}
+        defaultValue={defaults?.bridge?.contributions}
+        onChange={set('contributions')}
+        min={1} max={10000}
+      />
+      <NumberField
+        label="Bridge burst"
+        unit="req / minute / key"
+        value={form.burstPerMinute}
+        defaultValue={defaults?.bridge?.burstPerMinute}
+        onChange={set('burstPerMinute')}
+        min={5} max={10000}
+      />
+    </PanelShell>
+  );
+}
+
 function AccountLockoutPanel({ apiFetch, config, defaults, error }) {
   const [form,   setForm]   = useState(null);
   const [saving, setSaving] = useState(false);
@@ -508,6 +630,7 @@ export default function TabSettings() {
       <ContactEmailPanel apiFetch={apiFetch} />
       <PerIpLimitsPanel apiFetch={apiFetch} {...rateLimits} />
       <McpLimitsPanel apiFetch={apiFetch} {...rateLimits} />
+      <RegistryLimitsPanel apiFetch={apiFetch} {...rateLimits} />
       <AccountLockoutPanel apiFetch={apiFetch} {...rateLimits} />
       <ChatLimitsPanel apiFetch={apiFetch} {...rateLimits} />
       <AiBudgetPanel apiFetch={apiFetch} {...rateLimits} />

@@ -90,6 +90,14 @@ const defaults = {
   // they pass the alert level. Sized far above real use (measured ~5 public
   // reads per address per day) and below any useful copy (8.7k wines).
   registryRead: { anonymousDailyDistinct: 300, memberAlertDistinct: 1000 },
+  // Registry Bridge (plan §6): what one self-hosted install may do with the
+  // shared registry per key per UTC day, and its per-minute burst. Generous
+  // for a household, tight for a copier: a full copy at 300 fetches a day
+  // takes a month and is reported every day of it. The owner's monthly
+  // import window multiplies the four daily caps by five;
+  // services/bridgeQuota.js and routes/bridgeV1.js read this group per
+  // request.
+  bridge: { searches: 600, fetches: 300, changeChecks: 1, contributions: 50, burstPerMinute: 60 },
   // Ephemeral public-demo accounts (POST /api/auth/demo-login). Cloning a
   // snapshot cellar per visitor is write-heavy, so this is bounded on three
   // axes: per-IP creation rate, a DURABLE global ceiling on concurrent live
@@ -155,6 +163,8 @@ let cache = {
   aiGlobalDailyCap: { ...defaults.aiGlobalDailyCap },
   imageUploadBurst: { ...defaults.imageUploadBurst },
   publicWineRead: { ...defaults.publicWineRead },
+  registryRead: { ...defaults.registryRead },
+  bridge: { ...defaults.bridge },
   demo: { ...defaults.demo },
   mcp: { ...defaults.mcp },
 };
@@ -204,6 +214,17 @@ async function load() {
           max:      doc.value.publicWineRead?.max      ?? defaults.publicWineRead.max,
           windowMs: doc.value.publicWineRead?.windowMs ?? defaults.publicWineRead.windowMs,
 
+        },
+        registryRead: {
+          anonymousDailyDistinct: doc.value.registryRead?.anonymousDailyDistinct ?? defaults.registryRead.anonymousDailyDistinct,
+          memberAlertDistinct:    doc.value.registryRead?.memberAlertDistinct    ?? defaults.registryRead.memberAlertDistinct,
+        },
+        bridge: {
+          searches:       doc.value.bridge?.searches       ?? defaults.bridge.searches,
+          fetches:        doc.value.bridge?.fetches        ?? defaults.bridge.fetches,
+          changeChecks:   doc.value.bridge?.changeChecks   ?? defaults.bridge.changeChecks,
+          contributions:  doc.value.bridge?.contributions  ?? defaults.bridge.contributions,
+          burstPerMinute: doc.value.bridge?.burstPerMinute ?? defaults.bridge.burstPerMinute,
         },
         demo: {
           createMax:      doc.value.demo?.createMax      ?? defaults.demo.createMax,

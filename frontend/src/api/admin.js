@@ -456,3 +456,18 @@ export const adminSaveContactEmail = (apiFetch, contactEmail) =>
     headers: J,
     body: JSON.stringify({ contactEmail }),
   });
+
+// ── Registry Bridge (keys, readers, admin revocation) ────────────────────────
+export const adminGetBridgeKeys = (apiFetch, days = 7) =>
+  apiFetch(`/api/admin/bridge/keys?days=${days}`);
+
+export const adminGetBridgeReaders = (apiFetch, days = 7) =>
+  apiFetch(`/api/admin/bridge/readers?days=${days}`);
+
+// The reason is mandatory: the owner is shown it in their Settings.
+export const adminRevokeBridgeKey = (apiFetch, id, reason) =>
+  apiFetch(`/api/admin/bridge/keys/${id}/revoke`, {
+    method: 'POST',
+    headers: J,
+    body: JSON.stringify({ reason }),
+  });

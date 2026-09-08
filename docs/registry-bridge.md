@@ -113,3 +113,8 @@ Failure mode is always local-only: a missing key, a bad key, a quota refusal or 
 network problem never produces an error on add-bottle, only fewer results. Quota and
 key refusals pause the client's requests for a few minutes so a closed door is not
 hammered; the Settings card says so.
+
+## When a reader looks like a copier
+
+The operator's side — the signals, the admin page and the ladder of responses
+— is in [registry-bridge-enforcement.md](registry-bridge-enforcement.md).

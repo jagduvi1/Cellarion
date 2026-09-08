@@ -17,7 +17,8 @@ const { createNotifications } = require('../services/notifications');
 const { logAudit } = require('../services/audit');
 const { rateLimitKey } = require('../utils/clientIp');
 const { requireBridgeKey } = require('../middleware/bridgeKeyAuth');
-const { quota, usageFor, QUOTAS } = require('../services/bridgeQuota');
+const { quota, usageFor, capsNow } = require('../services/bridgeQuota');
+const rateLimitsConfig = require('../config/rateLimits');
 const { CURRENT_REGISTRY_TERMS_VERSION } = require('../config/legal');
 
 // Registry Bridge, protocol v1 (REGISTRY_LOCKDOWN_PLAN §6). What a self-hosted
@@ -64,17 +65,24 @@ const ipLimiter = rateLimit({
     res.status(429).json({ error: 'Too many bridge requests from this network — try again in a few minutes.', code: 'rate_limited' });
   },
 });
-// Per-key burst limiter (plan §6: 60 per minute).
+// Per-key burst limiter (plan §6: 60 per minute by default). Tunable at
+// runtime together with the daily quotas (config/rateLimits.js `bridge`
+// group); read per request so a change needs no restart.
 const BURST_PER_MINUTE = 60;
+function burstPerMinute() {
+  const v = rateLimitsConfig.get().bridge?.burstPerMinute;
+  return Number.isInteger(v) && v > 0 ? v : BURST_PER_MINUTE;
+}
 const keyLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: BURST_PER_MINUTE,
+  max: () => burstPerMinute(),
   keyGenerator: (req) => (req.bridge?.key?.id ? `k:${req.bridge.key.id}` : rateLimitKey(req)),
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res) => {
-    logAudit(req, 'system.rate_limit_exceeded', {}, { limiter: 'bridge_key', limit: BURST_PER_MINUTE, key: req.bridge?.key?.id });
-    res.status(429).json({ error: `This bridge key made more than ${BURST_PER_MINUTE} requests in a minute — slow down.`, code: 'burst' });
+    const limit = burstPerMinute();
+    logAudit(req, 'system.rate_limit_exceeded', {}, { limiter: 'bridge_key', limit, key: req.bridge?.key?.id });
+    res.status(429).json({ error: `This bridge key made more than ${limit} requests in a minute — slow down.`, code: 'burst' });
   },
 });
 
@@ -159,8 +167,8 @@ router.get('/me', async (req, res) => {
     res.json({
       key: { id: req.bridge.key.id, name: req.bridge.key.name, prefix: req.bridge.key.prefix, instanceHost: req.bridge.key.instanceHost, createdAt: req.bridge.keyDoc.createdAt },
       terms: { version: req.bridge.keyDoc.termsVersion, current: CURRENT_REGISTRY_TERMS_VERSION },
-      quotas: QUOTAS,
-      burstPerMinute: BURST_PER_MINUTE,
+      quotas: capsNow(),
+      burstPerMinute: burstPerMinute(),
       usage,
       protocol: 'v1',
     });

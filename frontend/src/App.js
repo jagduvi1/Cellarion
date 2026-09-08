@@ -64,6 +64,7 @@ const BlogPost             = lazy(() => import('./pages/BlogPost'));
 const AdminBlog            = lazy(() => import('./pages/AdminBlog'));
 const AdminStats           = lazy(() => import('./pages/AdminStats'));
 const AdminMcp             = lazy(() => import('./pages/AdminMcp'));
+const AdminBridge          = lazy(() => import('./pages/AdminBridge'));
 const AdminBlogEditor      = lazy(() => import('./pages/AdminBlogEditor'));
 const NfcRedirect          = lazy(() => import('./pages/NfcRedirect'));
 const Wishlist             = lazy(() => import('./pages/Wishlist'));
@@ -500,6 +501,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute requireAdmin>
               <Layout><AdminMcp /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/bridge"
+          element={
+            <ProtectedRoute requireAdmin>
+              <Layout><AdminBridge /></Layout>
             </ProtectedRoute>
           }
         />
