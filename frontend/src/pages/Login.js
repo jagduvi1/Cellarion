@@ -40,6 +40,8 @@ function Login() {
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotStatus, setForgotStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
   const [googleEnabled, setGoogleEnabled] = useState(false);
+  // null when no OIDC provider is configured; { name } when one is.
+  const [oidcProvider, setOidcProvider] = useState(null);
 
   const { t } = useTranslation();
   const { login, register } = useAuth();
@@ -55,7 +57,11 @@ function Login() {
     let active = true;
     fetch('/api/auth/sso/providers')
       .then((r) => (r.ok ? r.json() : null))
-      .then((data) => { if (active && data) setGoogleEnabled(Boolean(data.google)); })
+      .then((data) => {
+        if (!active || !data) return;
+        setGoogleEnabled(Boolean(data.google));
+        setOidcProvider(data.oidc ? { name: data.oidcName || 'SSO' } : null);
+      })
       .catch(() => { /* leave SSO buttons hidden if the probe fails */ });
     return () => { active = false; };
   }, []);
@@ -313,21 +319,41 @@ function Login() {
           </div>
         )}
 
-        {googleEnabled && (
+        {(googleEnabled || oidcProvider) && (
           <>
-            <button
-              type="button"
-              className="btn btn-google btn-full"
-              onClick={() => {
-                // Router state does not survive the full-page trip out to
-                // Google, so hand the destination over before we leave.
-                stashPostLoginRedirect(location.state?.from);
-                window.location.href = '/api/auth/google';
-              }}
-            >
-              <GoogleIcon />
-              <span>{t('auth.continueWithGoogle', 'Continue with Google')}</span>
-            </button>
+            {googleEnabled && (
+              <button
+                type="button"
+                className="btn btn-google btn-full"
+                onClick={() => {
+                  // Router state does not survive the full-page trip out to
+                  // Google, so hand the destination over before we leave.
+                  stashPostLoginRedirect(location.state?.from);
+                  window.location.href = '/api/auth/google';
+                }}
+              >
+                <GoogleIcon />
+                <span>{t('auth.continueWithGoogle', 'Continue with Google')}</span>
+              </button>
+            )}
+            {oidcProvider && (
+              <button
+                type="button"
+                className="btn btn-sso btn-full"
+                onClick={() => {
+                  // Same full-page round trip as Google, same reason to stash.
+                  stashPostLoginRedirect(location.state?.from);
+                  window.location.href = '/api/auth/oidc';
+                }}
+              >
+                <span>
+                  {t('auth.continueWithProvider', 'Continue with {{provider}}', {
+                    provider: oidcProvider.name
+                  })}
+                </span>
+              </button>
+            )}
+            {/* One divider, however many providers are configured. */}
             <div className="login-divider"><span>{t('auth.or', 'or')}</span></div>
           </>
         )}

@@ -53,8 +53,15 @@ const userSchema = new mongoose.Schema({
     type: [
       new mongoose.Schema(
         {
-          provider: { type: String, enum: ['google'], required: true },
+          provider: { type: String, enum: ['google', 'oidc'], required: true },
           providerId: { type: String, required: true },
+          // The issuer that minted providerId. OIDC guarantees `sub` is unique
+          // only WITHIN an issuer, so the subject alone is not an identity:
+          // repoint a deployment at a different provider or realm and a
+          // different person holding the same subject value would inherit this
+          // account. Set for 'oidc' entries, absent for 'google' — Google is a
+          // single fixed issuer, so the provider name already carries it.
+          issuer: { type: String },
           linkedAt: { type: Date, default: Date.now }
         },
         { _id: false }
