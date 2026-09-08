@@ -30,8 +30,18 @@ function isBridgeCredential(credential) {
 function instanceHostFrom(req) {
   const raw = req.get ? req.get(INSTANCE_HEADER) : req.headers?.[INSTANCE_HEADER];
   if (!raw || typeof raw !== 'string') return null;
-  const cleaned = raw.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '')
-    .replace(/[^a-z0-9.:_-]/g, '').slice(0, INSTANCE_MAX);
+  // String operations, not regexes, on the untrusted part: a header of many
+  // slashes must cost nothing to reject (CodeQL: polynomial regex on user data).
+  let s = raw.slice(0, 4 * INSTANCE_MAX).trim().toLowerCase();
+  if (s.startsWith('https://')) s = s.slice(8);
+  else if (s.startsWith('http://')) s = s.slice(7);
+  const slash = s.indexOf('/');
+  if (slash >= 0) s = s.slice(0, slash);
+  let cleaned = '';
+  for (const ch of s) {
+    if ((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch === '.' || ch === ':' || ch === '_' || ch === '-') cleaned += ch;
+    if (cleaned.length >= INSTANCE_MAX) break;
+  }
   return cleaned || null;
 }
 

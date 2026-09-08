@@ -147,7 +147,7 @@ function indexLocally(wineId) {
 async function adoptWine(registryId, userId) {
   if (!isEnabled()) return { ok: false, code: 'disabled' };
   if (!isId(registryId)) return { ok: false, code: 'invalid' };
-  const held = await WineDefinition.findOne({ registryId: String(registryId) }).populate(POPULATE);
+  const held = await WineDefinition.findOne({ registryId: { $eq: String(registryId) } }).populate(POPULATE);
   if (held) return { ok: true, wine: held, created: false };
 
   const w = await client.fetchWine(registryId);
@@ -287,11 +287,13 @@ async function forwardCorrection(wine, { fields, reason, evidenceUrl }) {
 /** A local value suggestion on an adopted wine → the hosted review queue. */
 async function forwardValueFor(wineId, { keyId, keyName, value, reason, evidenceUrl, vintage }) {
   if (!isEnabled() || !isId(wineId)) return null;
-  const wine = await WineDefinition.findById(wineId).select('registryId').lean();
+  // Ids come from the route params/body: validated above and pinned with $eq
+  // so nothing but a plain string ever reaches the filter.
+  const wine = await WineDefinition.findOne({ _id: { $eq: String(wineId) } }).select('registryId').lean();
   if (!wine?.registryId) return null;
-  let name = keyName;
+  let name = typeof keyName === 'string' ? keyName : null;
   if (!name && isId(keyId)) {
-    const key = await RegistryDataKey.findById(keyId).select('name').lean();
+    const key = await RegistryDataKey.findOne({ _id: { $eq: String(keyId) } }).select('name').lean();
     name = key?.name;
   }
   if (!name) return null;

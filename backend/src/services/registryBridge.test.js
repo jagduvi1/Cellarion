@@ -202,11 +202,11 @@ describe('forwarding', () => {
   });
 
   test('a value is forwarded by key NAME, resolved from the local key id when needed', async () => {
-    WineDefinition.findById.mockReturnValue({ select: () => ({ lean: () => Promise.resolve({ registryId: RID }) }) });
-    RegistryDataKey.findById.mockReturnValue({ select: () => ({ lean: () => Promise.resolve({ name: 'ABV' }) }) });
+    WineDefinition.findOne.mockReturnValue({ select: () => ({ lean: () => Promise.resolve({ registryId: RID }) }) });
+    RegistryDataKey.findOne.mockReturnValue({ select: () => ({ lean: () => Promise.resolve({ name: 'ABV' }) }) });
     await bridge.forwardValueFor('c'.repeat(24), { keyId: 'd'.repeat(24), value: 14.5, reason: 'label', vintage: '2019' });
     expect(client.forwardValue).toHaveBeenCalledWith(expect.objectContaining({ wineId: RID, keyName: 'ABV', value: 14.5, vintage: '2019' }));
-    WineDefinition.findById.mockReturnValue({ select: () => ({ lean: () => Promise.resolve({ registryId: null }) }) });
+    WineDefinition.findOne.mockReturnValue({ select: () => ({ lean: () => Promise.resolve({ registryId: null }) }) });
     expect(await bridge.forwardValueFor('c'.repeat(24), { keyName: 'ABV', value: 1 })).toBeNull();
   });
 
