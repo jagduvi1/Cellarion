@@ -66,6 +66,30 @@ describe('SelfHostedBridgeSection', () => {
     expect(screen.getByText(/will not be shown again/)).toBeInTheDocument();
   });
 
+  test('the plaintext key cannot be dismissed by Escape or the backdrop — only by Done', async () => {
+    apiFetch.mockImplementation((url, opts = {}) => {
+      if (url === '/api/bridge/keys' && opts.method === 'POST') {
+        return ok({ key: 'cbr_' + 'a'.repeat(64), id: 'k1', name: 'Home NAS', prefix: 'cbr_aaaaaaaa', env: { REGISTRY_BRIDGE_URL: 'https://cellarion.app', REGISTRY_BRIDGE_KEY: 'cbr_' + 'a'.repeat(64) } }, 201);
+      }
+      return ok(list([], true));
+    });
+    renderSection();
+    fireEvent.click(await screen.findByRole('button', { name: /Create bridge key/ }));
+    fireEvent.change(screen.getByLabelText(/Name of the install/), { target: { value: 'Home NAS' } });
+    fireEvent.change(screen.getByLabelText(/Confirm with your password/), { target: { value: 'pw' } });
+    // The terms are already accepted on this account, so no checkbox is shown.
+    fireEvent.click(screen.getByRole('button', { name: /^Create key$/ }));
+    expect(await screen.findByText(/REGISTRY_BRIDGE_KEY=cbr_a+/)).toBeInTheDocument();
+
+    // The key is shown exactly once and the cap is two per account, so a stray
+    // Escape used to cost the tester a key.
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.getByText(/REGISTRY_BRIDGE_KEY=cbr_a+/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Done$/ }));
+    await waitFor(() => expect(screen.queryByText(/REGISTRY_BRIDGE_KEY=cbr_a+/)).toBeNull());
+  });
+
   test('a wrong password is reported as such (403), not as a session problem', async () => {
     apiFetch.mockImplementation((url, opts = {}) => (opts.method === 'POST' ? ok({ error: 'Password is incorrect' }, 403) : ok(list([], true))));
     renderSection();

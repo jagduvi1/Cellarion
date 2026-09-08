@@ -97,7 +97,10 @@ const defaults = {
   // import window multiplies the four daily caps by five;
   // services/bridgeQuota.js and routes/bridgeV1.js read this group per
   // request.
-  bridge: { searches: 600, fetches: 300, changeChecks: 1, contributions: 50, burstPerMinute: 60 },
+  // `enabled: 0` closes the whole /api/bridge/v1 protocol with a 503 — the
+  // same kill switch the MCP surface has. Key management and the self-hosted
+  // client's own Settings card stay up; only registry access stops.
+  bridge: { enabled: 1, searches: 600, fetches: 300, changeChecks: 1, contributions: 50, burstPerMinute: 60 },
   // Ephemeral public-demo accounts (POST /api/auth/demo-login). Cloning a
   // snapshot cellar per visitor is write-heavy, so this is bounded on three
   // axes: per-IP creation rate, a DURABLE global ceiling on concurrent live
@@ -220,6 +223,7 @@ async function load() {
           memberAlertDistinct:    doc.value.registryRead?.memberAlertDistinct    ?? defaults.registryRead.memberAlertDistinct,
         },
         bridge: {
+          enabled:        doc.value.bridge?.enabled        ?? defaults.bridge.enabled,
           searches:       doc.value.bridge?.searches       ?? defaults.bridge.searches,
           fetches:        doc.value.bridge?.fetches        ?? defaults.bridge.fetches,
           changeChecks:   doc.value.bridge?.changeChecks   ?? defaults.bridge.changeChecks,

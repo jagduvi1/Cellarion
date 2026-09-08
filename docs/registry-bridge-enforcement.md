@@ -18,7 +18,7 @@ own cellar.
 |---|---|---|
 | Daily readers report | Admin notification at 05:15 UTC, only when a reader passed an alert level the day before | One reader read more distinct wines in a UTC day than the level for its kind. Anonymous addresses were already refused in real time; members and keys were only counted. |
 | Canary hit | Admin notification, immediately | A wine that does not exist was fetched through a bridge key. Search never returns a canary, so a fetch of one means the caller enumerated ids it did not get from search. |
-| Quota refusals | `429` with `code: "quota"` to the caller; visible as spend on the admin page | A key hit its daily cap. On its own this is not suspicious: a large import does it once. |
+| Quota refusals | `429` with `code: "quota"` to the caller; visible as spend on the admin page | The ACCOUNT hit its daily cap — quotas and the monthly import window count per owner, not per key, so minting more keys does not raise them. On its own this is not suspicious: a large import does it once. |
 | Burst refusals | `429` with `code: "burst"` to the caller; `system.rate_limit_exceeded` in the audit log with `limiter: bridge_key` | More than the per-minute allowance from one key. A misconfigured client, or a script. |
 | Edge rate rule | Your reverse proxy or CDN's own log | Requests refused before they reached the backend. Only the volume is known; no reader identity. |
 
@@ -28,7 +28,10 @@ request.
 
 ## 2. Where to look
 
-**Admin → Registry Bridge** shows two tables for the last 7, 30 or 90 days.
+**Admin → Registry Bridge** shows two tables for the last 7, 30 or 90 days. Spend
+figures (searches, fetches, contributions) go back the full window; the distinct-wines
+columns are drawn from the read counters, which are kept for 14 days, so a 30- or
+90-day request answers with those 14 and the response says so (`readDays`).
 
 - **Keys**: every active bridge key and those revoked in the last 90 days.
   Per key: the owner, the install's reported host, today's spend against the
@@ -58,7 +61,8 @@ reversible except the last, and every one of them is audited.
 ### Step 1 — Look
 
 Open the key or reader on the admin page. Check the import window, the
-worst-day distinct figure over 30 days, the contributions the key has made
+worst-day distinct figure over the last 14 days (the read counters' retention),
+the contributions the key has made
 (a real install files wine requests and corrections; a copier never does) and
 whether the same owner has other keys. Check the audit log for
 `bridge.key.used`, `bridge.canary_hit` and `system.rate_limit_exceeded`
@@ -74,7 +78,11 @@ misunderstanding of what the bridge is for. Give them a few days.
 
 ### Step 3 — Tighten
 
-Two levers, both in Super-admin → Settings, both instance-wide:
+Three levers, all in Super-admin → Settings, all instance-wide:
+
+- **Bridge enabled** — `0` closes `/api/bridge/v1` entirely with a `503`, for an
+  incident where revoking one key at a time is not fast enough. Key management and
+  the self-hosted Settings card stay up.
 
 - **Anonymous daily distinct cap** — how many distinct wines an address may
   read in a UTC day before the public endpoints refuse it.

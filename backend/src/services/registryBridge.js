@@ -48,7 +48,43 @@ function refreshEnvMode() {
   const raw = String(process.env.REGISTRY_BRIDGE_REFRESH || '').trim().toLowerCase();
   if (!raw) return null;
   if (['off', 'false', '0', 'no', 'never', 'none'].includes(raw)) return 'off';
-  return 'weekly';
+  if (raw === 'weekly' || raw === 'on' || raw === 'true' || raw === '1') return 'weekly';
+  // Anything else is a typo, and treating it as "weekly" ALSO locked the admin
+  // toggle with env_override — refresh on, no way to turn it off (audit
+  // 2026-09-08). Warn and fall through to the Settings switch instead.
+  console.warn(`[bridge] REGISTRY_BRIDGE_REFRESH="${raw}" is not "weekly" or "off" — ignoring it; the Settings switch decides.`);
+  return null;
+}
+
+/**
+ * The install's own bridge state: the change-check watermark and the last run.
+ * Persisted so a restart — which is the last step of connecting — does not
+ * erase the only record of what the refresh did (audit 2026-09-08).
+ */
+async function bridgeState() {
+  try {
+    const doc = await siteConfigModel().findOne({ key: SITE_CONFIG_KEY }).lean();
+    return doc?.value || {};
+  } catch {
+    return {};
+  }
+}
+
+async function saveBridgeState(patch) {
+  try {
+    const current = await bridgeState();
+    const { updateSiteConfig } = require('../utils/siteConfig');
+    await updateSiteConfig(SITE_CONFIG_KEY, { ...current, ...patch }, null);
+  } catch (err) {
+    console.warn('[bridge] could not persist the refresh state:', err.message);
+  }
+}
+
+/** Remember a run that did nothing, so the card can say why. */
+function recordRefresh(summary) {
+  lastRefresh = summary;
+  saveBridgeState({ lastRefresh: summary }).catch(() => {});
+  return summary;
 }
 
 /** { mode: 'weekly' | 'off', source: 'env' | 'settings' | 'default' } */
@@ -71,15 +107,25 @@ async function setRefreshMode(mode, userId) {
   const env = refreshEnvMode();
   if (env) return { ok: false, code: 'env_override', mode: env, source: 'env' };
   const { updateSiteConfig } = require('../utils/siteConfig');
-  await updateSiteConfig(SITE_CONFIG_KEY, { refresh: mode }, userId);
+  // Merge: the same document holds the change-check watermark and the last
+  // run, and a wholesale write would erase them.
+  const current = await bridgeState();
+  await updateSiteConfig(SITE_CONFIG_KEY, { ...current, refresh: mode }, userId);
   return { ok: true, mode, source: 'settings' };
 }
 
 // Local changes win. A window or value row the bridge wrote carries
-// REGISTRY_NOTE and the sync time; a row written by someone on this install,
-// or touched after the last sync, is theirs and is never overwritten by an
-// adoption or a refresh. A seeded placeholder (no dates, no note) is not an
+// REGISTRY_NOTE and is stamped with the same instant as the wine's
+// registrySyncedAt; a row written by someone on this install, or one whose
+// stamp no longer MATCHES that instant, is theirs and is never overwritten by
+// an adoption or a refresh. A seeded placeholder (no dates, no note) is not an
 // edit, so the registry still fills it.
+//
+// The comparison is symmetric on purpose (audit 2026-09-08). The first version
+// asked "was this row touched AFTER the last sync", and the wine's sync stamp
+// advanced on every refresh including runs that skipped the row — so an edit
+// survived exactly one refresh and the next one silently reverted it. Matching
+// stamps cannot drift: only the bridge writes them together.
 const EDIT_SLACK_MS = 5000;
 const WINDOW_FIELDS = ['earlyFrom', 'earlyUntil', 'peakFrom', 'peakUntil', 'lateFrom', 'lateUntil'];
 
@@ -88,18 +134,28 @@ function touchedAfterSync(at, syncedAt) {
   return new Date(at).getTime() > new Date(syncedAt).getTime() + EDIT_SLACK_MS;
 }
 
+/** True when `at` is the very instant the bridge last wrote this wine. */
+function stampedByBridge(at, syncedAt) {
+  if (!at || !syncedAt) return false;
+  return Math.abs(new Date(at).getTime() - new Date(syncedAt).getTime()) <= EDIT_SLACK_MS;
+}
+
 function windowEditedLocally(row, syncedAt) {
   if (!row) return false;
   if (row.sommNotes !== REGISTRY_NOTE) {
     return row.status === 'reviewed' || WINDOW_FIELDS.some((f) => row[f] !== null && row[f] !== undefined);
   }
-  return touchedAfterSync(row.setAt, syncedAt);
+  // A bridge row with no stamp at all (anonymised by an account erasure) is
+  // the bridge's again, not a local edit frozen forever.
+  if (!row.setAt) return false;
+  return !stampedByBridge(row.setAt, syncedAt);
 }
 
 function valueEditedLocally(row, syncedAt) {
   if (!row) return false;
   if (row.reason !== REGISTRY_NOTE) return true;
-  return touchedAfterSync(row.decidedAt, syncedAt);
+  if (!row.decidedAt) return false;
+  return !stampedByBridge(row.decidedAt, syncedAt);
 }
 
 let lastRefresh = null;
@@ -228,6 +284,10 @@ async function adoptWine(registryId, userId) {
   const tax = await resolveTaxonomy(w, userId);
   const normalizedKey = generateWineKey(w.name, w.producer || '', w.appellation || '');
   let wine = await WineDefinition.findOne({ normalizedKey });
+  // Captured before the assignment below: rows a previous adoption wrote carry
+  // the OLD stamp, and comparing them against the new one would read them as
+  // local edits and freeze them (audit 2026-09-08).
+  const prevSync = wine?.registrySyncedAt || null;
   const profile = profileFrom(w.profile);
   if (wine) {
     wine.registryId = String(w.id);
@@ -259,8 +319,8 @@ async function adoptWine(registryId, userId) {
       }
     }
   }
-  await applyWindows(wine._id, w.windows, userId, now);
-  await applyValues(wine._id, w.values, userId, now);
+  await applyWindows(wine._id, w.windows, userId, now, prevSync);
+  await applyValues(wine._id, w.values, userId, now, prevSync);
   indexLocally(wine._id);
   await wine.populate(POPULATE);
   return { ok: true, wine, created: !held };
@@ -280,25 +340,35 @@ async function registrySearch(q, { limit = 10 } = {}) {
 }
 
 /** One changed wine → the local copy, keeping local identity edits. */
-async function applyRegistryUpdate(local, w, now) {
+async function applyRegistryUpdate(local, w) {
   const wine = await WineDefinition.findById(local._id);
   if (!wine) return false;
   const prevSync = wine.registrySyncedAt || null;
   const untouchedLocally = !wine.registrySyncedAt || !wine.updatedAt || wine.updatedAt.getTime() <= wine.registrySyncedAt.getTime() + EDIT_SLACK_MS;
-  if (untouchedLocally) {
-    const tax = await resolveTaxonomy(w, wine.createdBy);
-    Object.assign(wine, identityFields(w, tax));
-    wine.normalizedKey = generateWineKey(w.name, w.producer || '', w.appellation || '');
-  } else if (!wine.image && w.image) {
-    wine.image = w.image; wine.imageCredit = w.imageCredit || null;
-  }
   const profile = profileFrom(w.profile);
   // A profile a person on this install curated after the last sync stays.
   const ap = wine.aiProfile;
   const curatedHere = !!(ap && ap.source === 'curator'
     && (touchedAfterSync(ap.verifiedAt, prevSync) || touchedAfterSync(ap.generatedAt, prevSync)));
+  if (untouchedLocally) {
+    const tax = await resolveTaxonomy(w, wine.createdBy);
+    const fields = identityFields(w, tax);
+    // Never trade a picture for nothing: a wine the registry has no image for
+    // must not blank one this install already shows.
+    if (!fields.image && wine.image) { delete fields.image; delete fields.imageCredit; }
+    Object.assign(wine, fields);
+    wine.normalizedKey = generateWineKey(w.name, w.producer || '', w.appellation || '');
+  } else if (!wine.image && w.image) {
+    wine.image = w.image; wine.imageCredit = w.imageCredit || null;
+  }
   if (profile && !curatedHere) wine.aiProfile = profile;
-  wine.registrySyncedAt = now;
+  // The stamp is taken HERE, immediately before the save, and reused for the
+  // rows below. Using the run's start time meant `updatedAt` (stamped by the
+  // pre-save hook at the real save moment) ran ahead of registrySyncedAt on
+  // every wine past the first few seconds of a run, so the next run read the
+  // copy as locally edited and froze its identity forever (audit 2026-09-08).
+  const stamp = new Date();
+  wine.registrySyncedAt = stamp;
   try {
     await wine.save();
   } catch (err) {
@@ -306,15 +376,16 @@ async function applyRegistryUpdate(local, w, now) {
       // The registry's identity now collides with another local row: keep
       // the copy's old identity, take the rest.
       const fresh = await WineDefinition.findById(local._id);
+      if (!fresh) return false;
       if (profile && !curatedHere) fresh.aiProfile = profile;
-      fresh.registrySyncedAt = now;
+      fresh.registrySyncedAt = stamp;
       await fresh.save();
     } else {
       throw err;
     }
   }
-  await applyWindows(wine._id, w.windows, wine.createdBy, now, prevSync);
-  await applyValues(wine._id, w.values, wine.createdBy, now, prevSync);
+  await applyWindows(wine._id, w.windows, wine.createdBy, stamp, prevSync);
+  await applyValues(wine._id, w.values, wine.createdBy, stamp, prevSync);
   indexLocally(wine._id);
   return true;
 }
@@ -323,34 +394,68 @@ async function applyRegistryUpdate(local, w, now) {
  * Weekly: one change check for every registry id this install holds, then
  * re-fetch the changed ones; wines the registry reports removed are marked
  * and left alone from then on. Returns a summary the status route shows.
+ *
+ * `since` is an INSTALL-level watermark kept in site config, not the oldest
+ * per-wine sync date. Deriving it per wine meant the watermark never advanced
+ * — every wine the registry had touched since the oldest adoption came back
+ * changed, every week, until the daily fetch quota ran out, and the wines past
+ * that point were never updated at all (audit 2026-09-08).
  */
 async function refreshHeld({ now = new Date() } = {}) {
-  if (!isEnabled()) return { skipped: 'disabled' };
+  if (!isEnabled()) return recordRefresh({ at: now, skipped: 'disabled' });
   const mode = await refreshMode();
-  if (mode.mode === 'off') return { skipped: 'refresh_off', source: mode.source };
+  if (mode.mode === 'off') return recordRefresh({ at: now, skipped: 'refresh_off', source: mode.source });
   const rows = await WineDefinition.find({ registryId: { $exists: true, $ne: null }, registryRemovedAt: null })
     .select('_id registryId registrySyncedAt updatedAt createdBy').lean();
-  if (!rows.length) { lastRefresh = { at: now, checked: 0, changed: 0, updated: 0, removed: 0, failed: false }; return lastRefresh; }
-  const since = rows.reduce((min, r) => (r.registrySyncedAt && (!min || r.registrySyncedAt < min) ? r.registrySyncedAt : min), null) || new Date(0);
+  if (!rows.length) return recordRefresh({ at: now, checked: 0, changed: 0, updated: 0, removed: 0, failures: 0, failed: false });
+
+  const state = await bridgeState();
+  const since = state.checkedAt ? new Date(state.checkedAt) : new Date(0);
   const r = await client.changes(rows.map((x) => x.registryId), since);
   const byRegistry = new Map(rows.map((x) => [x.registryId, x]));
-  let updated = 0; let removed = 0;
+  let updated = 0; let removed = 0; let failures = 0; let skipped = 0;
+
   for (const c of r.changed) {
     const local = byRegistry.get(c.id);
     if (!local) continue;
-    const w = await client.fetchWine(c.id);
-    if (!w || w.removed) continue;
-    if (await applyRegistryUpdate(local, w, now)) updated++;
+    // Already have this version: the watermark is install-wide, so a wine
+    // synced after the registry last touched it needs no fetch.
+    if (local.registrySyncedAt && c.updatedAt && new Date(local.registrySyncedAt) >= new Date(c.updatedAt)) { skipped++; continue; }
+    try {
+      const w = await client.fetchWine(c.id);
+      // null = quota, backoff, timeout or a transport error. Counted, not
+      // silently swallowed: a run that updated nothing must not read as a
+      // clean run on the Settings card.
+      if (!w) { failures++; continue; }
+      if (w.removed) continue;
+      if (await applyRegistryUpdate(local, w)) updated++;
+    } catch (err) {
+      // One bad wine must not end the run at the same point every week.
+      failures++;
+      console.warn(`[bridge] refresh: wine ${c.id} failed — ${err.message}`);
+    }
   }
+
   for (const id of r.removed) {
     const local = byRegistry.get(id);
     if (!local) continue;
     await WineDefinition.updateOne({ _id: local._id }, { $set: { registryRemovedAt: now } });
     removed++;
   }
-  lastRefresh = { at: now, checked: r.checked, changed: r.changed.length, updated, removed, failed: !!r.failed };
-  console.log(`[bridge] refresh: ${r.checked} checked, ${updated} updated, ${removed} removed${r.failed ? ' (a chunk failed — quota or network)' : ''}`);
-  return lastRefresh;
+
+  // Advance the watermark only when the check itself was complete and nothing
+  // was left unfetched; otherwise the next run must ask from the same point.
+  const complete = !r.failed && failures === 0;
+  const checkedAt = complete ? (r.checkedAt ? new Date(r.checkedAt) : now) : (state.checkedAt ? new Date(state.checkedAt) : null);
+  const summary = {
+    at: now, checked: r.checked, changed: r.changed.length, updated, removed, skipped, failures,
+    failed: !!r.failed || failures > 0,
+    watermark: checkedAt,
+  };
+  await saveBridgeState({ checkedAt, lastRefresh: summary });
+  console.log(`[bridge] refresh: ${r.checked} checked, ${updated} updated, ${skipped} already current, ${removed} removed, ${failures} failed${r.failed ? ' (a chunk failed — quota or network)' : ''}`);
+  lastRefresh = summary;
+  return summary;
 }
 
 /** A local correction on an adopted wine → the hosted proposal queue. */
@@ -387,18 +492,20 @@ async function forwardRequest({ wineName, sourceUrl, image }) {
 async function status() {
   const transport = client.transportState();
   if (!transport.enabled) return { ...transport, held: 0, removed: 0, lastRefresh: null, me: null };
-  const [held, removed, me, refresh] = await Promise.all([
+  const [held, removed, me, refresh, state] = await Promise.all([
     WineDefinition.countDocuments({ registryId: { $exists: true, $ne: null }, registryRemovedAt: null }),
     WineDefinition.countDocuments({ registryRemovedAt: { $ne: null } }),
     client.me(),
     refreshMode(),
+    bridgeState(),
   ]);
-  return { ...transport, held, removed, lastRefresh, refresh, me };
+  // In-memory first (this process), else the persisted record of the last run.
+  return { ...transport, held, removed, lastRefresh: lastRefresh || state.lastRefresh || null, refresh, me };
 }
 
 function _reset() { lastRefresh = null; }
 
 module.exports = {
   isEnabled, adoptWine, registrySearch, refreshHeld, forwardCorrection, forwardValueFor, forwardRequest, status,
-  refreshMode, setRefreshMode, REFRESH_MODES, profileFrom, REGISTRY_NOTE, _reset,
+  refreshMode, setRefreshMode, REFRESH_MODES, profileFrom, REGISTRY_NOTE, bridgeState, _reset,
 };

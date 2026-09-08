@@ -84,6 +84,13 @@ const bridgeKeySchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+  // Last time a canary fetch through this key raised an admin notification.
+  // The audit row is written for every hit; the notification is once a day, so
+  // discoverable canary ids cannot be used to bury admins in their own alarm.
+  canaryAlertAt: {
+    type: Date,
+    default: null,
+  },
   createdAt: {
     type: Date,
     default: Date.now,

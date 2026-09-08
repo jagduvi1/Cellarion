@@ -4,6 +4,8 @@ const { requireAuth, requireRole } = require('../../middleware/auth');
 const BridgeKey = require('../../models/BridgeKey');
 const BridgeUsageDay = require('../../models/BridgeUsageDay');
 const RegistryReadDay = require('../../models/RegistryReadDay');
+// The read counters' TTL bounds every distinct-wines figure below.
+const READ_RETENTION_DAYS = RegistryReadDay.RETENTION_DAYS || 14;
 const ApiToken = require('../../models/ApiToken');
 const User = require('../../models/User');
 const { KINDS, capsNow, importWindowActive } = require('../../services/bridgeQuota');
@@ -87,6 +89,9 @@ async function readsByReader(days, today, match = {}) {
 router.get('/keys', async (req, res) => {
   try {
     const days = daysParam(req.query.days);
+    // The read counters live for RETENTION_DAYS; asking for 30 or 90 silently
+    // returned a 14-day answer under a 90-day label (audit 2026-09-08).
+    const readDays = Math.min(days, READ_RETENTION_DAYS);
     const today = dayKey();
     const revokedSince = new Date(Date.now() - REVOKED_SHOWN_DAYS * 86400e3);
     const [keys, usage, reads] = await Promise.all([
@@ -97,7 +102,7 @@ router.get('/keys', async (req, res) => {
         .populate('revokedBy', 'username')
         .lean(),
       usageByKey(days, today),
-      readsByReader(days, today, { kind: 'key' }),
+      readsByReader(readDays, today, { kind: 'key' }),
     ]);
     const readMap = new Map(reads.map((r) => [String(r._id), r]));
     const rows = keys.map((k) => {
@@ -131,6 +136,7 @@ router.get('/keys', async (req, res) => {
     const sum = (kind) => rows.reduce((n, k) => n + (k.period[kind] || 0), 0);
     res.json({
       days,
+      readDays,
       today,
       caps: capsNow(),
       alertDistinct: limits().memberAlertDistinct,
@@ -157,8 +163,9 @@ router.get('/keys', async (req, res) => {
 router.get('/readers', async (req, res) => {
   try {
     const days = daysParam(req.query.days);
+    const readDays = Math.min(days, READ_RETENTION_DAYS);
     const today = dayKey();
-    const rows = (await readsByReader(days, today)).slice(0, READERS_MAX);
+    const rows = (await readsByReader(readDays, today)).slice(0, READERS_MAX);
     const idsOf = (prefix) => rows
       .filter((r) => typeof r._id === 'string' && r._id.startsWith(prefix))
       .map((r) => r._id.slice(prefix.length))
@@ -216,7 +223,7 @@ router.get('/readers', async (req, res) => {
         overAlert: (r.distinctMax || 0) > alertAt,
       };
     });
-    res.json({ days, today, thresholds: { anonymousDailyDistinct, memberAlertDistinct }, readers });
+    res.json({ days, readDays, retentionDays: READ_RETENTION_DAYS, today, thresholds: { anonymousDailyDistinct, memberAlertDistinct }, readers });
   } catch (err) {
     console.error('Admin bridge readers error:', err);
     res.status(500).json({ error: 'Failed to load registry readers' });

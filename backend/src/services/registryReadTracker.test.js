@@ -43,7 +43,8 @@ describe('recordRead', () => {
     const [filter, update, opts] = RegistryReadDay.findOneAndUpdate.mock.calls[0];
     expect(filter.readerKey).toBe('ip:x');
     expect(filter.day).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(update.$addToSet).toEqual({ wines: 'b' });
+    // $each because one call can now carry a whole search page of ids.
+    expect(update.$addToSet).toEqual({ wines: { $each: ['b'] } });
     expect(update.$inc).toEqual({ count: 1 });
     expect(update.$setOnInsert.kind).toBe('ip');
     expect(update.$setOnInsert.expiresAt).toBeInstanceOf(Date);
@@ -79,4 +80,19 @@ describe('gateAnonymousRead', () => {
     RegistryReadDay.findOneAndUpdate.mockImplementation(() => { throw new Error('db down'); });
     expect(await gateAnonymousRead(req(), 'a')).toEqual({ allowed: true, distinct: 0 });
   });
+});
+
+test('a page of ids is one write: the set grows by all of them and the count by their number', async () => {
+  // A bridge search hands out ten identities in a single call, and those are
+  // reads of the registry too (audit 2026-09-08).
+  RegistryReadDay.findOneAndUpdate.mockReturnValue({ lean: () => Promise.resolve({ wines: ['a', 'b', 'c'], count: 3 }) });
+  const r = await recordRead({ key: 'user:u1', kind: 'user' }, ['a', 'b', 'c']);
+  const [, update] = RegistryReadDay.findOneAndUpdate.mock.calls[0];
+  expect(update.$addToSet).toEqual({ wines: { $each: ['a', 'b', 'c'] } });
+  expect(update.$inc).toEqual({ count: 3 });
+  expect(r).toMatchObject({ distinct: 3 });
+  // An empty page costs nothing.
+  RegistryReadDay.findOneAndUpdate.mockClear();
+  expect(await recordRead({ key: 'user:u1', kind: 'user' }, [])).toBeNull();
+  expect(RegistryReadDay.findOneAndUpdate).not.toHaveBeenCalled();
 });

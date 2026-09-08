@@ -134,6 +134,9 @@ router.patch('/rate-limits', async (req, res) => {
       requireIntInRange('mcp.oauthMax',      mcp.oauthMax,      100, 1_000_000);
     }
 
+    // The upper bounds are deliberately near the size of the registry: a cap
+    // far above it refuses nobody, which is the safety mechanism switched off
+    // by a typo rather than by a decision (audit 2026-09-08).
     // Registry lockdown (L4): DISTINCT wines per reader per UTC day — the
     // one number that tells a person browsing from a copier. The anonymous
     // cap refuses for the rest of the day; the member level only puts a
@@ -141,8 +144,8 @@ router.patch('/rate-limits', async (req, res) => {
     // adding a case (20) or reporting every member every morning (50).
     // There is no 0 here on purpose: the endpoints have their own switches.
     if (registryRead !== undefined) {
-      requireIntInRange('registryRead.anonymousDailyDistinct', registryRead.anonymousDailyDistinct, 20, 100_000);
-      requireIntInRange('registryRead.memberAlertDistinct',    registryRead.memberAlertDistinct,    50, 1_000_000);
+      requireIntInRange('registryRead.anonymousDailyDistinct', registryRead.anonymousDailyDistinct, 20, 20_000);
+      requireIntInRange('registryRead.memberAlertDistinct',    registryRead.memberAlertDistinct,    50, 50_000);
     }
 
     // Registry Bridge quotas per key per UTC day, plus the per-minute burst
@@ -150,6 +153,7 @@ router.patch('/rate-limits', async (req, res) => {
     // keeps adding a bottle possible on the tightest setting; one change
     // check is what the weekly refresh needs; five a minute is a person.
     if (bridge !== undefined) {
+      requireIntInRange('bridge.enabled',        bridge.enabled,        0,  1);
       requireIntInRange('bridge.searches',       bridge.searches,       10, 100_000);
       requireIntInRange('bridge.fetches',        bridge.fetches,        10, 100_000);
       requireIntInRange('bridge.changeChecks',   bridge.changeChecks,   1,  1_000);
@@ -206,6 +210,7 @@ router.patch('/rate-limits', async (req, res) => {
         memberAlertDistinct:    registryRead?.memberAlertDistinct    ?? previous.registryRead?.memberAlertDistinct    ?? rateLimitsConfig.defaults.registryRead.memberAlertDistinct,
       },
       bridge: {
+        enabled:        bridge?.enabled        ?? previous.bridge?.enabled        ?? rateLimitsConfig.defaults.bridge.enabled,
         searches:       bridge?.searches       ?? previous.bridge?.searches       ?? rateLimitsConfig.defaults.bridge.searches,
         fetches:        bridge?.fetches        ?? previous.bridge?.fetches        ?? rateLimitsConfig.defaults.bridge.fetches,
         changeChecks:   bridge?.changeChecks   ?? previous.bridge?.changeChecks   ?? rateLimitsConfig.defaults.bridge.changeChecks,

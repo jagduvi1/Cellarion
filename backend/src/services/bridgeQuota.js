@@ -60,10 +60,15 @@ function capFor(kind, keyDoc, now = Date.now()) {
 }
 
 /**
- * Spend one unit of `kind` for the key. Returns { allowed, used, cap, resetAt }.
+ * Spend one unit of `kind` for the key's OWNER. Returns
+ * { allowed, used, cap, resetAt }.
+ *
  * The counter is incremented first and compared after, so two concurrent
  * requests at the edge of a cap both count; a cap can be overshot by the
  * number of concurrent requests, never silently underspent.
+ *
+ * Keyed on the account, not the key: keys are freely re-mintable, so a per-key
+ * counter was an allowance multiplier (audit 2026-09-08).
  */
 async function takeQuota(keyDoc, kind) {
   if (!KINDS.includes(kind)) throw new Error(`Unknown bridge quota kind: ${kind}`);
@@ -74,16 +79,29 @@ async function takeQuota(keyDoc, kind) {
   }
   try {
     const row = await BridgeUsageDay.findOneAndUpdate(
-      { key: keyDoc._id, day: dayKey(new Date(now)) },
+      { user: keyDoc.user, day: dayKey(new Date(now)) },
       {
         $inc: { [kind]: 1 },
-        $setOnInsert: { user: keyDoc.user, expiresAt: new Date(now + BridgeUsageDay.RETENTION_DAYS * 86400e3) },
+        $setOnInsert: { key: keyDoc._id, expiresAt: new Date(now + BridgeUsageDay.RETENTION_DAYS * 86400e3) },
       },
       { upsert: true, new: true, projection: { [kind]: 1 } }
     ).lean();
     const used = row?.[kind] || 0;
     return { allowed: used <= cap, used, cap, resetAt: resetAt(now), counted: true };
   } catch (err) {
+    // A racing upsert can raise E11000 on the {user, day} unique index: the row
+    // exists on the retry, so the spend is counted rather than waved through.
+    if (err && err.code === 11000) {
+      try {
+        const row = await BridgeUsageDay.findOneAndUpdate(
+          { user: keyDoc.user, day: dayKey(new Date(now)) },
+          { $inc: { [kind]: 1 } },
+          { new: true, projection: { [kind]: 1 } }
+        ).lean();
+        const used = row?.[kind] || 0;
+        return { allowed: used <= cap, used, cap, resetAt: resetAt(now), counted: true };
+      } catch { /* fall through to fail-open */ }
+    }
     console.error('[bridge] quota write failed:', err.message);
     return { allowed: true, used: 0, cap, resetAt: resetAt(now), counted: false };
   }
@@ -94,7 +112,7 @@ async function usageFor(keyDoc, now = Date.now()) {
   const day = dayKey(new Date(now));
   let row = null;
   if (mongoose.connection.readyState === 1) {
-    row = await BridgeUsageDay.findOne({ key: keyDoc._id, day }).lean().catch(() => null);
+    row = await BridgeUsageDay.findOne({ user: keyDoc.user, day }).lean().catch(() => null);
   }
   const used = {}; const caps = {};
   for (const kind of KINDS) {
@@ -116,17 +134,27 @@ async function usageFor(keyDoc, now = Date.now()) {
 }
 
 /**
- * Open the ×5 window for 24 hours. Once per 30 days per key: the point is a
- * cellar import, not a standing raise. Returns { ok, until } or
+ * Open the ×5 window for 24 hours. Once per 30 days per ACCOUNT: the point is a
+ * cellar import, not a standing raise, and a per-KEY cooldown was simply a
+ * mint-a-new-key away (audit 2026-09-08). The window is written to every active
+ * key of the owner, so the sync `capFor(kind, keyDoc)` above stays correct
+ * whichever key makes the request. Returns { ok, until } or
  * { ok: false, nextAvailableAt }.
  */
 async function openImportWindow(keyDoc, now = Date.now()) {
-  const openedAt = keyDoc.importWindowOpenedAt ? new Date(keyDoc.importWindowOpenedAt).getTime() : null;
-  if (openedAt && now - openedAt < IMPORT_COOLDOWN_MS) {
-    return { ok: false, nextAvailableAt: new Date(openedAt + IMPORT_COOLDOWN_MS) };
+  const since = new Date(now - IMPORT_COOLDOWN_MS);
+  const recent = await BridgeKey.findOne({ user: keyDoc.user, importWindowOpenedAt: { $gte: since } })
+    .select('importWindowOpenedAt')
+    .sort({ importWindowOpenedAt: -1 })
+    .lean();
+  if (recent?.importWindowOpenedAt) {
+    return { ok: false, nextAvailableAt: new Date(new Date(recent.importWindowOpenedAt).getTime() + IMPORT_COOLDOWN_MS) };
   }
   const until = new Date(now + IMPORT_WINDOW_MS);
-  await BridgeKey.updateOne({ _id: keyDoc._id }, { $set: { importWindowUntil: until, importWindowOpenedAt: new Date(now) } });
+  await BridgeKey.updateMany(
+    { user: keyDoc.user, revokedAt: null },
+    { $set: { importWindowUntil: until, importWindowOpenedAt: new Date(now) } }
+  );
   return { ok: true, until };
 }
 

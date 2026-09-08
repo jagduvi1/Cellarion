@@ -55,7 +55,7 @@ test('GET exposes both groups with their defaults', async () => {
   const res = await fetch(`${baseUrl}/api/admin/settings/rate-limits`, { headers: { Authorization: `Bearer ${admin()}` } });
   const body = await res.json();
   expect(body.config.registryRead).toEqual({ anonymousDailyDistinct: 300, memberAlertDistinct: 1000 });
-  expect(body.config.bridge).toEqual({ searches: 600, fetches: 300, changeChecks: 1, contributions: 50, burstPerMinute: 60 });
+  expect(body.config.bridge).toEqual({ enabled: 1, searches: 600, fetches: 300, changeChecks: 1, contributions: 50, burstPerMinute: 60 });
   expect(body.defaults.bridge.fetches).toBe(300);
 });
 
@@ -64,7 +64,7 @@ test('a partial PATCH changes only the fields sent and reaches the tracker and t
   expect(res.status).toBe(200);
   const { config } = await res.json();
   expect(config.registryRead).toEqual({ anonymousDailyDistinct: 500, memberAlertDistinct: 1000 });
-  expect(config.bridge).toEqual({ searches: 600, fetches: 1000, changeChecks: 1, contributions: 50, burstPerMinute: 120 });
+  expect(config.bridge).toEqual({ enabled: 1, searches: 600, fetches: 1000, changeChecks: 1, contributions: 50, burstPerMinute: 120 });
   // Untouched groups survive the wholesale set().
   expect(config.mcp).toEqual(rateLimitsConfig.defaults.mcp);
   expect(config.aiBurst).toEqual(rateLimitsConfig.defaults.aiBurst);

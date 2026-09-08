@@ -172,7 +172,7 @@ app.use('/api/mcp', express.json({ limit: '2mb' }));
 // Registry Bridge v1: a change check carries up to 5,000 wine ids (~130 kB
 // of JSON); everything else on the router is small. Registered above the
 // 10 kb default rule below (first express.json to parse wins).
-app.use('/api/bridge/v1', express.json({ limit: '256kb' }));
+app.use('/api/bridge/v1/wines/changes', express.json({ limit: '256kb' }));
 app.use(express.json({ limit: '10kb' }));
 const corsOrigin = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? false : 'http://localhost:3000');
 if (process.env.NODE_ENV === 'production' && !process.env.FRONTEND_URL) {

@@ -217,3 +217,31 @@ describe('GET /api/bridge/keys — admin revocation notice', () => {
     expect((await res.json()).revoked).toEqual([]);
   });
 });
+
+describe('audit 2026-09-08 — key churn', () => {
+  test('minting is bounded per account per day, and the refusal is audited', async () => {
+    const u = userDoc({ registryTerms: { accepted: true, acceptedAt: new Date(), version: '2026-09' } });
+    User.findById.mockResolvedValue(u);
+    // First call: active keys. Second: keys minted in the last 24 hours.
+    BridgeKey.countDocuments.mockResolvedValueOnce(0).mockResolvedValueOnce(5);
+
+    const res = await call('POST', '/api/bridge/keys', { name: 'Home NAS', password: 'pw', acceptTerms: true });
+    expect(res.status).toBe(429);
+    expect((await res.json()).code).toBe('key_churn');
+    expect(BridgeKey.create).not.toHaveBeenCalled();
+    // The active-key cap alone was no cap: revoking frees the slot at once, so
+    // mint-revoke-mint was unbounded (audit 2026-09-08).
+    const churnFilter = BridgeKey.countDocuments.mock.calls[1][0];
+    expect(churnFilter.createdAt.$gte).toBeInstanceOf(Date);
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'bridge.key.create_failed', expect.anything(), expect.objectContaining({ reason: 'churn' }));
+  });
+
+  test('under the daily limit a key is still issued', async () => {
+    const u = userDoc({ registryTerms: { accepted: true, acceptedAt: new Date(), version: '2026-09' } });
+    User.findById.mockResolvedValue(u);
+    BridgeKey.countDocuments.mockResolvedValueOnce(0).mockResolvedValueOnce(4);
+    BridgeKey.create.mockImplementation(async (doc) => ({ _id: 'k1', createdAt: new Date(), ...doc }));
+    const res = await call('POST', '/api/bridge/keys', { name: 'Home NAS', password: 'pw', acceptTerms: true });
+    expect(res.status).toBe(201);
+  });
+});
