@@ -27,6 +27,8 @@
 const User = require('../models/User');
 const AiBudgetRequest = require('../models/AiBudgetRequest');
 const ApiToken = require('../models/ApiToken');
+const BridgeKey = require('../models/BridgeKey');
+const BridgeUsageDay = require('../models/BridgeUsageDay');
 const ExportLink = require('../models/ExportLink');
 const OAuthAuthCode = require('../models/OAuthAuthCode');
 const McpActionLog = require('../models/McpActionLog');
@@ -798,6 +800,30 @@ const REGISTRY = [
           // The conversation, without the by refs (an admin's account id is
           // not the exporting user's data — author side + text suffice).
           replies: (t.replies || []).map(r => ({ author: r.author, message: r.message, createdAt: r.createdAt })) })),
+    }),
+  },
+
+  // ── Registry Bridge keys + usage ───────────────────────────────────────
+  {
+    // A bridge key is credential bookkeeping like an API token: hard-deleted
+    // on erasure, exported as metadata only — the keyHash never leaves the
+    // database. The display prefix is not a secret (it authenticates nothing).
+    model: BridgeKey, category: 'personal-data', userFields: ['user'],
+    purge: (ctx) => BridgeKey.deleteMany({ user: ctx.userId }),
+    exportFragment: async (ctx) => ({
+      bridgeKeys: markTrunc(ctx, 'bridgeKeys', await BridgeKey.find({ user: ctx.userId })
+        .select('name prefix instanceHost termsVersion termsAcceptedAt lastUsedAt createdAt revokedAt').limit(EXPORT_MAX).lean())
+        .map(k => ({ name: k.name, prefix: k.prefix, instanceHost: k.instanceHost, termsVersion: k.termsVersion, termsAcceptedAt: k.termsAcceptedAt, lastUsedAt: k.lastUsedAt, createdAt: k.createdAt, revokedAt: k.revokedAt })),
+    }),
+  },
+  {
+    // Per-key daily quota counters (90-day TTL): operational telemetry keyed
+    // to the owner — purged with the account, exported as the daily counts.
+    model: BridgeUsageDay, category: 'personal-data', userFields: ['user'],
+    purge: (ctx) => BridgeUsageDay.deleteMany({ user: ctx.userId }),
+    exportFragment: async (ctx) => ({
+      bridgeUsage: (await BridgeUsageDay.find({ user: ctx.userId }).select('day searches fetches changeChecks contributions').limit(EXPORT_MAX).lean())
+        .map(r => ({ day: r.day, searches: r.searches, fetches: r.fetches, changeChecks: r.changeChecks, contributions: r.contributions })),
     }),
   },
 

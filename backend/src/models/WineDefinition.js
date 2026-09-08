@@ -553,6 +553,10 @@ wineDefinitionSchema.index({ region: 1, name: 1 });
 wineDefinitionSchema.index({ grapes: 1, name: 1 });
 wineDefinitionSchema.index({ type: 1, name: 1 });
 
+// Registry Bridge change checks ask "which of THESE ids changed since T"
+// (routes/bridgeV1.js): an $in over held ids plus an updatedAt comparison.
+wineDefinitionSchema.index({ updatedAt: 1 });
+
 // Update timestamp on save
 wineDefinitionSchema.pre('save', function(next) {
   this.updatedAt = Date.now();

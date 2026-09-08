@@ -13,7 +13,8 @@ import { isPushSupported, getPushPermissionState, subscribeToPush, unsubscribeFr
 import { downloadBlobObject } from '../utils/downloadBlob';
 import ApiTokensSection from '../components/ApiTokensSection';
 import LanguagePicker from '../components/LanguagePicker';
-import AiConnectSection from '../components/AiConnectSection';
+import AiConnectSection from '../components/AiConnectSection';
+import SelfHostedBridgeSection from '../components/SelfHostedBridgeSection';
 import SetPasswordNotice from '../components/SetPasswordNotice';
 import McpActivitySection from '../components/McpActivitySection';
 import ClimateDevicesSection from '../components/ClimateDevicesSection';
@@ -505,6 +506,9 @@ function Settings() {
 
       {/* ── Connect your AI card (needs a token → hidden for demo too) ── */}
       {!user?.isDemo && <AiConnectSection />}
+
+      {/* ── Self-hosted bridge card (registry keys; hidden for demo) ── */}
+      {!user?.isDemo && <SelfHostedBridgeSection />}
 
       {/* ── Recent AI activity card (self-hides when the ledger is empty) ── */}
       {!user?.isDemo && <McpActivitySection />}

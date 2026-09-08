@@ -76,7 +76,9 @@ const ogRoute = require('./routes/og');
 const taxonomyRoute = require('./routes/taxonomy');
 const exchangeRatesRoute = require('./routes/exchangeRates');
 const stripeRoute = require('./routes/stripe');
-const tokensRoute = require('./routes/tokens');
+const tokensRoute = require('./routes/tokens');
+const bridgeKeysRoute = require('./routes/bridgeKeys');
+const bridgeV1Route = require('./routes/bridgeV1');
 const eventsRoute = require('./routes/events');
 const climateRoute = require('./routes/climate');
 const mcpRoute = require('./routes/mcp');
@@ -165,6 +167,10 @@ app.use('/api/mcp/public', express.json({ limit: '10kb' }));
 // registration body was accepted and, with uncapped redirect URIs, stored).
 app.use('/api/mcp/oauth', express.json({ limit: '10kb' }));
 app.use('/api/mcp', express.json({ limit: '2mb' }));
+// Registry Bridge v1: a change check carries up to 5,000 wine ids (~130 kB
+// of JSON); everything else on the router is small. Registered above the
+// 10 kb default rule below (first express.json to parse wins).
+app.use('/api/bridge/v1', express.json({ limit: '256kb' }));
 app.use(express.json({ limit: '10kb' }));
 const corsOrigin = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? false : 'http://localhost:3000');
 if (process.env.NODE_ENV === 'production' && !process.env.FRONTEND_URL) {
@@ -242,7 +248,14 @@ const isStripeWebhook = (req) => req.originalUrl.split('?')[0] === '/api/stripe/
 const isMcp = (req) => {
   const p = req.originalUrl.split('?')[0];
   return p === '/api/mcp' || p === '/api/mcp/' || p === '/api/mcp/public'
-    || p.startsWith('/api/mcp/oauth/');
+    || p.startsWith('/api/mcp/oauth/')
+    // Registry Bridge v1 is the same shape of problem: one self-hosted
+    // install is ONE address for all its users, so the per-IP budgets here
+    // would throttle a household as if it were a scraper. The router carries
+    // its own per-address and per-key limiters plus daily quotas
+    // (routes/bridgeV1.js). Key MANAGEMENT (/api/bridge/keys) stays under
+    // the global limiters like every other logged-in route.
+    || p === '/api/bridge/v1' || p.startsWith('/api/bridge/v1/');
 };
 
 // Global API rate limiter — default 200 requests per 15 min per IP (admin-configurable)
@@ -361,6 +374,8 @@ app.use('/api/help', helpRoute);
 app.use('/api/wine-lists', wineListsRoute);
 app.use('/api/stripe', stripeRoute);
 app.use('/api/tokens', tokensRoute);
+app.use('/api/bridge/keys', bridgeKeysRoute);
+app.use('/api/bridge/v1', bridgeV1Route);
 app.use('/api/events', eventsRoute);
 app.use('/api/climate', climateRoute);
 // OAuth 2.1 authorization server for the MCP connector (DCR + PKCE + token

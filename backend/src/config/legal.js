@@ -14,4 +14,11 @@
  */
 const CURRENT_PRIVACY_POLICY_VERSION = '2026-09';
 
-module.exports = { CURRENT_PRIVACY_POLICY_VERSION };
+// The Registry Data Terms (frontend/src/pages/RegistryTerms.js, "/terms"):
+// the licence a person accepts before a Registry Bridge key is issued to
+// them. Bump together with the version line on that page. A bump does not
+// revoke existing keys; it means new keys are issued under the new version
+// and the Settings page asks for re-acceptance before the next one.
+const CURRENT_REGISTRY_TERMS_VERSION = '2026-09';
+
+module.exports = { CURRENT_PRIVACY_POLICY_VERSION, CURRENT_REGISTRY_TERMS_VERSION };
