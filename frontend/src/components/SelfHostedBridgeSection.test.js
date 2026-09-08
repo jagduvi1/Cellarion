@@ -91,3 +91,13 @@ describe('SelfHostedBridgeSection', () => {
     await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/api/bridge/keys/k1', { method: 'DELETE' }));
   });
 });
+
+test('an admin revocation is shown with its reason, even when no key is left', async () => {
+  apiFetch.mockImplementation((url) => (url === '/api/bridge/keys'
+    ? ok({ ...list([], true), revoked: [{ id: 'k9', name: 'Old box', prefix: 'cbr_87654321', revokedAt: '2026-09-07T00:00:00Z', reason: 'Read 4000 wines in a day' }] })
+    : ok({})));
+  renderSection();
+  expect(await screen.findByText(/The key "Old box" was revoked by an administrator on/)).toBeInTheDocument();
+  expect(screen.getByText(/Reason: Read 4000 wines in a day/)).toBeInTheDocument();
+  expect(screen.getByText('No bridge keys yet.')).toBeInTheDocument();
+});

@@ -34,7 +34,7 @@ router.get('/rate-limits', async (req, res) => {
 // accountLockout.threshold to 9999 effectively turns lockout off).
 router.patch('/rate-limits', async (req, res) => {
   try {
-    const { api, write, auth, accountLockout, chatBurst, chatConcurrentStreams, aiDailyBudget, aiImportPerRequestCap, aiGlobalDailyCap, imageUploadBurst, demo, mcp } = req.body;
+    const { api, write, auth, accountLockout, chatBurst, chatConcurrentStreams, aiDailyBudget, aiImportPerRequestCap, aiGlobalDailyCap, imageUploadBurst, demo, mcp, registryRead, bridge } = req.body;
 
     const previous = { ...rateLimitsConfig.get() };
 
@@ -134,6 +134,29 @@ router.patch('/rate-limits', async (req, res) => {
       requireIntInRange('mcp.oauthMax',      mcp.oauthMax,      100, 1_000_000);
     }
 
+    // Registry lockdown (L4): DISTINCT wines per reader per UTC day — the
+    // one number that tells a person browsing from a copier. The anonymous
+    // cap refuses for the rest of the day; the member level only puts a
+    // reader in the daily report. Floors keep a typo from refusing someone
+    // adding a case (20) or reporting every member every morning (50).
+    // There is no 0 here on purpose: the endpoints have their own switches.
+    if (registryRead !== undefined) {
+      requireIntInRange('registryRead.anonymousDailyDistinct', registryRead.anonymousDailyDistinct, 20, 100_000);
+      requireIntInRange('registryRead.memberAlertDistinct',    registryRead.memberAlertDistinct,    50, 1_000_000);
+    }
+
+    // Registry Bridge quotas per key per UTC day, plus the per-minute burst
+    // (services/bridgeQuota.js, routes/bridgeV1.js). Floors: ten fetches
+    // keeps adding a bottle possible on the tightest setting; one change
+    // check is what the weekly refresh needs; five a minute is a person.
+    if (bridge !== undefined) {
+      requireIntInRange('bridge.searches',       bridge.searches,       10, 100_000);
+      requireIntInRange('bridge.fetches',        bridge.fetches,        10, 100_000);
+      requireIntInRange('bridge.changeChecks',   bridge.changeChecks,   1,  1_000);
+      requireIntInRange('bridge.contributions',  bridge.contributions,  1,  10_000);
+      requireIntInRange('bridge.burstPerMinute', bridge.burstPerMinute, 5,  10_000);
+    }
+
     if (errors.length > 0) {
       return res.status(400).json({ error: errors[0], errors });
     }
@@ -177,6 +200,17 @@ router.patch('/rate-limits', async (req, res) => {
         createWindowMs: demo?.createWindowMs ?? previous.demo?.createWindowMs ?? rateLimitsConfig.defaults.demo.createWindowMs,
         globalMax:      demo?.globalMax      ?? previous.demo?.globalMax      ?? rateLimitsConfig.defaults.demo.globalMax,
         ttlMs:          demo?.ttlMs          ?? previous.demo?.ttlMs          ?? rateLimitsConfig.defaults.demo.ttlMs,
+      },
+      registryRead: {
+        anonymousDailyDistinct: registryRead?.anonymousDailyDistinct ?? previous.registryRead?.anonymousDailyDistinct ?? rateLimitsConfig.defaults.registryRead.anonymousDailyDistinct,
+        memberAlertDistinct:    registryRead?.memberAlertDistinct    ?? previous.registryRead?.memberAlertDistinct    ?? rateLimitsConfig.defaults.registryRead.memberAlertDistinct,
+      },
+      bridge: {
+        searches:       bridge?.searches       ?? previous.bridge?.searches       ?? rateLimitsConfig.defaults.bridge.searches,
+        fetches:        bridge?.fetches        ?? previous.bridge?.fetches        ?? rateLimitsConfig.defaults.bridge.fetches,
+        changeChecks:   bridge?.changeChecks   ?? previous.bridge?.changeChecks   ?? rateLimitsConfig.defaults.bridge.changeChecks,
+        contributions:  bridge?.contributions  ?? previous.bridge?.contributions  ?? rateLimitsConfig.defaults.bridge.contributions,
+        burstPerMinute: bridge?.burstPerMinute ?? previous.bridge?.burstPerMinute ?? rateLimitsConfig.defaults.bridge.burstPerMinute,
       },
       mcp: {
         enabled:       mcp?.enabled       ?? previous.mcp?.enabled       ?? rateLimitsConfig.defaults.mcp.enabled,

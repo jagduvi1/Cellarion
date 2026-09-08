@@ -40,6 +40,7 @@ jest.mock('../services/bridgeQuota', () => ({
   quota: jest.fn((kind) => { global.__bridgeQuotaKinds.push(kind); return (req, res, next) => next(); }),
   usageFor: jest.fn().mockResolvedValue({ day: '2026-09-08', used: {}, caps: {} }),
   QUOTAS: { searches: 600, fetches: 300, changeChecks: 1, contributions: 50 },
+  capsNow: () => ({ searches: 600, fetches: 300, changeChecks: 1, contributions: 50 }),
 }));
 
 const express = require('express');

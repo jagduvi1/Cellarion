@@ -188,3 +188,32 @@ describe('DELETE and import window', () => {
     expect((await res.json()).code).toBe('import_window_cooldown');
   });
 });
+
+describe('GET /api/bridge/keys — admin revocation notice', () => {
+  test("a key an admin revoked recently is listed with the reason; the owner's own revocations are not", async () => {
+    BridgeKey.find.mockImplementation((filter) => ({
+      sort: () => Promise.resolve(filter.revokedBy
+        ? [{ _id: 'k9', name: 'Old box', prefix: 'cbr_87654321', revokedAt: new Date('2026-09-07T00:00:00Z'), revokedReason: 'Read 4000 wines in a day' }]
+        : []),
+    }));
+    User.findById.mockReturnValue({ select: () => ({ lean: () => Promise.resolve({ registryTerms: { accepted: true, version: '2026-09' } }) }) });
+    const body = await (await call('GET', '/api/bridge/keys')).json();
+    expect(body.keys).toEqual([]);
+    expect(body.revoked).toEqual([{ id: 'k9', name: 'Old box', prefix: 'cbr_87654321', revokedAt: '2026-09-07T00:00:00.000Z', reason: 'Read 4000 wines in a day' }]);
+    const revokedCall = BridgeKey.find.mock.calls.find(([f]) => f.revokedBy);
+    expect(revokedCall[0]).toMatchObject({ user: 'u1', revokedBy: { $ne: null } });
+    expect(revokedCall[0].revokedAt.$gte).toBeInstanceOf(Date);
+    // Only what the notice shows is read — never the hash.
+    expect(revokedCall[1]).toBe('name prefix revokedAt revokedReason');
+  });
+
+  test('a failing notice lookup never takes the key list down', async () => {
+    BridgeKey.find.mockImplementation((filter) => (filter.revokedBy
+      ? { sort: () => Promise.reject(new Error('boom')) }
+      : { sort: () => Promise.resolve([]) }));
+    User.findById.mockReturnValue({ select: () => ({ lean: () => Promise.resolve({ registryTerms: { accepted: true, version: '2026-09' } }) }) });
+    const res = await call('GET', '/api/bridge/keys');
+    expect(res.status).toBe(200);
+    expect((await res.json()).revoked).toEqual([]);
+  });
+});

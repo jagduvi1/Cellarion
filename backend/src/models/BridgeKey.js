@@ -23,6 +23,7 @@ const crypto = require('crypto');
 const KEY_PREFIX = 'cbr_';
 const MAX_ACTIVE_PER_USER = 2;
 const NAME_MAX = 60;
+const REVOKE_REASON_MAX = 300;
 const PREFIX_DISPLAY_LENGTH = 12; // "cbr_" + 8 hex chars
 
 const bridgeKeySchema = new mongoose.Schema({
@@ -91,6 +92,19 @@ const bridgeKeySchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+  // Set only when an ADMIN revoked the key (routes/admin/bridge.js): who and
+  // why. The owner is shown the reason in Settings for a while; a key the
+  // owner revoked themselves leaves both empty.
+  revokedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null,
+  },
+  revokedReason: {
+    type: String,
+    default: null,
+    maxlength: REVOKE_REASON_MAX,
+  },
 });
 
 bridgeKeySchema.index({ user: 1, revokedAt: 1 });
@@ -113,5 +127,6 @@ bridgeKeySchema.statics.displayPrefix = function (rawKey) {
 bridgeKeySchema.statics.KEY_PREFIX = KEY_PREFIX;
 bridgeKeySchema.statics.MAX_ACTIVE_PER_USER = MAX_ACTIVE_PER_USER;
 bridgeKeySchema.statics.NAME_MAX = NAME_MAX;
+bridgeKeySchema.statics.REVOKE_REASON_MAX = REVOKE_REASON_MAX;
 
 module.exports = mongoose.model('BridgeKey', bridgeKeySchema);

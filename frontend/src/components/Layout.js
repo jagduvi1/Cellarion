@@ -210,6 +210,7 @@ function Layout({ children }) {
                     <Link to="/admin/blog" className={`nav-link nav-link--admin ${isActive('/admin/blog') ? 'active' : ''}`}>{t('nav.blogAdmin')}</Link>
                     <Link to="/admin/stats" className={`nav-link nav-link--admin ${isActive('/admin/stats') ? 'active' : ''}`}>{t('nav.adminStats')}</Link>
                     <Link to="/admin/mcp" className={`nav-link nav-link--admin ${isActive('/admin/mcp') ? 'active' : ''}`}>{t('nav.adminMcp')}</Link>
+                    <Link to="/admin/bridge" className={`nav-link nav-link--admin ${isActive('/admin/bridge') ? 'active' : ''}`}>{t('nav.adminBridge')}</Link>
                   </>
                 )}
 
@@ -306,6 +307,7 @@ function Layout({ children }) {
                 <Link to="/admin/blog" className={`mobile-menu-link ${isActive('/admin/blog') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.blogAdmin')}</Link>
                 <Link to="/admin/stats" className={`mobile-menu-link ${isActive('/admin/stats') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.adminStats')}</Link>
                 <Link to="/admin/mcp" className={`mobile-menu-link ${isActive('/admin/mcp') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.adminMcp')}</Link>
+                <Link to="/admin/bridge" className={`mobile-menu-link ${isActive('/admin/bridge') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.adminBridge')}</Link>
               </div>
             )}
 

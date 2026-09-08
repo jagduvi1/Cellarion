@@ -41,16 +41,43 @@ async function presentKey(key) {
   };
 }
 
-// GET /api/bridge/keys — the owner's active keys with today's usage, plus the
-// terms state the UI needs to decide whether to show the acceptance step.
+// How long an admin revocation stays visible to the owner in Settings.
+const REVOKED_NOTICE_DAYS = 30;
+
+/**
+ * Keys an ADMIN revoked recently, with the reason — the owner's only way to
+ * learn why their install lost access. Best effort: a failure here must not
+ * take the key list down with it.
+ */
+async function recentAdminRevocations(userId) {
+  try {
+    const since = new Date(Date.now() - REVOKED_NOTICE_DAYS * 86400e3);
+    const rows = await BridgeKey.find(
+      { user: userId, revokedBy: { $ne: null }, revokedAt: { $gte: since } },
+      'name prefix revokedAt revokedReason'
+    ).sort({ revokedAt: -1 });
+    return (rows || [])
+      .filter((k) => k.revokedAt)
+      .map((k) => ({ id: k._id, name: k.name, prefix: k.prefix, revokedAt: k.revokedAt, reason: k.revokedReason || null }));
+  } catch (error) {
+    console.error('Bridge key revocation notice error:', error);
+    return [];
+  }
+}
+
+// GET /api/bridge/keys — the owner's active keys with today's usage, the
+// terms state the UI needs to decide whether to show the acceptance step,
+// and any recent admin revocation with its reason.
 router.get('/', requireAuth, async (req, res) => {
   try {
-    const [keys, user] = await Promise.all([
+    const [keys, user, revoked] = await Promise.all([
       BridgeKey.find({ user: req.user.id, revokedAt: null }).sort({ createdAt: 1 }),
       User.findById(req.user.id).select('registryTerms').lean(),
+      recentAdminRevocations(req.user.id),
     ]);
     res.json({
       keys: await Promise.all(keys.map(presentKey)),
+      revoked,
       maxActive: MAX_ACTIVE_PER_USER,
       terms: termsState(user),
     });
