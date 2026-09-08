@@ -293,6 +293,27 @@ describe('upsertSsoUser — identity is one array entry, and is scoped to its is
     expect(other.authProviders[0].issuer).toBe('https://id-two.example');
   });
 
+  test('two realms on one host are two issuers, not one', async () => {
+    // The case an origin cannot distinguish, and the reason the issuer is
+    // configured rather than derived. Keycloak's issuer carries the realm —
+    // https://id.example/realms/alpha — while its authorization endpoint is
+    // that plus /protocol/openid-connect/auth, so every realm on a host shares
+    // a scheme and hostname. Deriving from the URL's origin would collapse them
+    // and let a subject reused across realms inherit the other realm's account.
+    const alpha = await upsertSsoUser('oidc', {
+      providerId: 'subject-1', email: 'alpha@example.com', emailVerified: true
+    }, { issuer: 'https://id.example/realms/alpha' });
+
+    const beta = await upsertSsoUser('oidc', {
+      providerId: 'subject-1', email: 'beta@example.com', emailVerified: true
+    }, { issuer: 'https://id.example/realms/beta' });
+
+    expect(beta).not.toBe(alpha);
+    expect(User.__store.users).toHaveLength(2);
+    expect(alpha.authProviders[0].issuer).toBe('https://id.example/realms/alpha');
+    expect(beta.authProviders[0].issuer).toBe('https://id.example/realms/beta');
+  });
+
   test('the same subject from the SAME issuer is the same person', async () => {
     // The control for the test above: scoping must not break the ordinary case
     // of a returning user.

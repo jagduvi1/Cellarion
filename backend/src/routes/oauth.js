@@ -36,6 +36,7 @@ const GOOGLE_ENABLED = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGL
 const OIDC_ENABLED = Boolean(
   process.env.OIDC_CLIENT_ID &&
   process.env.OIDC_CLIENT_SECRET &&
+  process.env.OIDC_ISSUER &&
   process.env.OIDC_AUTHORIZATION_URL &&
   process.env.OIDC_TOKEN_URL &&
   process.env.OIDC_USERINFO_URL
@@ -50,17 +51,20 @@ const OIDC_PROVIDER_NAME = process.env.OIDC_PROVIDER_NAME || 'SSO';
 // account key, not decoration: OIDC guarantees `sub` unique only within an
 // issuer, so without this, repointing a deployment at a different provider or
 // realm would let a different person holding the same subject value inherit an
-// existing local account. Defaults to the authorization endpoint's origin,
-// which is the issuer for every provider whose discovery document we have seen;
-// set OIDC_ISSUER explicitly if yours differs (the `issuer` value in
-// /.well-known/openid-configuration is the authority).
-const OIDC_ISSUER = process.env.OIDC_ISSUER || (() => {
-  try {
-    return new URL(process.env.OIDC_AUTHORIZATION_URL).origin;
-  } catch (e) {
-    return null;
-  }
-})();
+// existing local account.
+//
+// REQUIRED, and copied verbatim from the `issuer` field of the provider's
+// /.well-known/openid-configuration. It is deliberately NOT derived from the
+// authorization URL: there is no rule that maps one to the other. Keycloak
+// appends /protocol/openid-connect/auth to its issuer, Pocket ID appends
+// /authorize, Authentik /application/o/authorize/ — so taking the URL's origin
+// is right for some providers and wrong for others. Wrong in the worst way for
+// Keycloak, whose issuer carries the realm: every realm on one host shares an
+// origin, so two realms would collapse to the same identifier and a subject
+// reused across them would land on the existing account. Being a whole path
+// segment rather than a hostname, that is exactly the case an origin cannot
+// distinguish.
+const OIDC_ISSUER = process.env.OIDC_ISSUER || null;
 
 // Whether an unverified email from this issuer may link to an existing local
 // account. Default OFF — see the adapter below for why this is the operator's

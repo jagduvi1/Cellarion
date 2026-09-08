@@ -26,9 +26,12 @@ const ENV_UNDER_TEST = {
   FRONTEND_URL: 'https://cellar.example',
   OIDC_CLIENT_ID: 'test-oidc-client',
   OIDC_CLIENT_SECRET: 'test-oidc-secret',
-  OIDC_AUTHORIZATION_URL: 'https://id.example/authorize',
-  OIDC_TOKEN_URL: 'https://id.example/api/oidc/token',
-  OIDC_USERINFO_URL: 'https://id.example/api/oidc/userinfo',
+  // A realm path, not a bare origin: this is the case that proves the issuer is
+  // taken verbatim from configuration rather than derived from the URL below.
+  OIDC_ISSUER: 'https://id.example/realms/alpha',
+  OIDC_AUTHORIZATION_URL: 'https://id.example/realms/alpha/protocol/openid-connect/auth',
+  OIDC_TOKEN_URL: 'https://id.example/realms/alpha/protocol/openid-connect/token',
+  OIDC_USERINFO_URL: 'https://id.example/realms/alpha/protocol/openid-connect/userinfo',
   OIDC_PROVIDER_NAME: 'Pocket ID',
   // Deliberately absent: GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET.
 };
@@ -114,13 +117,65 @@ describe('GET /api/auth/sso/providers', () => {
   });
 });
 
+describe('configuration', () => {
+  // The issuer is REQUIRED, not optional-with-a-default. Without this guard a
+  // deployment that omits it still enables OIDC, stores entries carrying no
+  // issuer, and is silently back to matching on subject alone — the very thing
+  // the issuer was added to prevent. A missing button is a loud failure; silent
+  // unscoped identities are not.
+  const withEnv = (overrides, assertion) => {
+    const before = {};
+    for (const [k, v] of Object.entries(overrides)) {
+      before[k] = process.env[k];
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    try {
+      jest.isolateModules(() => {
+        const express2 = require('express');
+        const router = require('./oauth');
+        const app = express2();
+        app.use('/api/auth', router);
+        assertion(app);
+      });
+    } finally {
+      for (const [k, v] of Object.entries(before)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+  };
+
+  const providersOf = (app) => new Promise((resolve) => {
+    const srv = http.createServer(app).listen(0, async () => {
+      const r = await fetch(`http://127.0.0.1:${srv.address().port}/api/auth/sso/providers`);
+      const body = await r.json();
+      srv.close(() => resolve(body));
+    });
+  });
+
+  it('does not enable OIDC when the issuer is missing', async () => {
+    let result;
+    withEnv({ OIDC_ISSUER: undefined }, (app) => { result = providersOf(app); });
+    await expect(result).resolves.toMatchObject({ oidc: false });
+  });
+
+  it('enables OIDC when every required value is present', async () => {
+    // The control: proves the test above fails for the missing issuer and not
+    // because isolateModules quietly broke the whole configuration.
+    let result;
+    withEnv({}, (app) => { result = providersOf(app); });
+    await expect(result).resolves.toMatchObject({ oidc: true });
+  });
+});
+
 describe('GET /api/auth/oidc', () => {
   it('redirects to the provider with state, PKCE and the openid scope', async () => {
     const res = await get('/api/auth/oidc');
     expect(res.status).toBe(302);
 
     const location = new URL(res.headers.get('location'));
-    expect(location.origin + location.pathname).toBe('https://id.example/authorize');
+    expect(location.origin + location.pathname).toBe('https://id.example/realms/alpha/protocol/openid-connect/auth');
     expect(location.searchParams.get('client_id')).toBe('test-oidc-client');
 
     const state = location.searchParams.get('state');
@@ -211,7 +266,7 @@ describe('GET /api/auth/oidc/callback', () => {
     // URL lands in access logs. Asserted on the flag the strategy sets, because
     // the stub above replaces the code that consumes it.
     expect(strategy._oauth2._useAuthorizationHeaderForGET).toBe(true);
-    expect(userinfoUrl).toBe('https://id.example/api/oidc/userinfo');
+    expect(userinfoUrl).toBe('https://id.example/realms/alpha/protocol/openid-connect/userinfo');
     expect(userinfoUrl).not.toContain('access_token');
     expect(res.headers.get('location')).toBe('https://cellar.example/login/callback');
     expect(issueTokens).toHaveBeenCalled();
@@ -222,7 +277,10 @@ describe('GET /api/auth/oidc/callback', () => {
     expect(account.displayName).toBe('Erin Example');
     expect(account.roles).toEqual(['user']);              // nothing inherited from the IdP
     expect(account.authProviders).toEqual([
-      { provider: 'oidc', providerId: 'subject-abc', issuer: 'https://id.example' }
+      // The full issuer, realm path included — NOT the authorization URL's
+      // origin, which would be https://id.example and shared with every other
+      // realm on that host.
+      { provider: 'oidc', providerId: 'subject-abc', issuer: 'https://id.example/realms/alpha' }
     ]);
   });
 
