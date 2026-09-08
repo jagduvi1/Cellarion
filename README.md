@@ -43,7 +43,7 @@ This is the primary way to use Cellarion. Create an account and start using the 
 
 **Platform**
 - **Climate monitoring** — Connect cellar temperature/humidity sensors (Home Assistant-friendly ingest API) with per-cellar dashboards
-- **Sign in with Google** — Optional Google SSO alongside email/password
+- **Single sign-on** — Optional Google SSO, or your own OIDC provider (Pocket ID, Authentik, Keycloak, Zitadel, Authelia), alongside email/password
 - **Installable app** — PWA with push notifications, plus an Android app on [Google Play](https://play.google.com/store/apps/details?id=app.cellarion.twa)
 - **Internationalization** — Community-translated via Weblate ([help translate](#translations))
 - **Privacy & GDPR** — Full data export, account deletion with cooling-off, one-click email opt-out, optional self-hosted cookie-free analytics (Umami)

@@ -108,6 +108,8 @@
     "dashboard": "Dashboard"
   },
   "auth": {
+    "continueWithGoogle": "Continue with Google",
+    "continueWithProvider": "Continue with {{provider}}",
     "login": "Login",
     "register": "Register",
     "tagline": "Your personal wine cellar",
