@@ -17,6 +17,7 @@
  * message } — codes: invalid | banned | limit | not_found | conflict.
  */
 const WineCorrectionProposal = require('../models/WineCorrectionProposal');
+const { originFrom } = require('../utils/contributionOrigin');
 
 const { findVisibleWine } = require('./wineVisibility');
 const { stripHtml } = require('../utils/sanitize');
@@ -47,6 +48,7 @@ const fail = (code, message) => ({ ok: false, code, message });
  * fields = { producer?, name?, appellation?, region?, country?, classification? }
  */
 async function createFieldCorrection(userId, { wineId, fields, reason, evidenceUrl }, { via, req } = {}) {
+  const origin = originFrom(req, via);
   const cleanReason = stripHtml(typeof reason === 'string' ? reason : '').trim();
   if (cleanReason.length < REASON_MIN) {
     return fail('invalid', `Please say what is wrong and how you know — at least ${REASON_MIN} characters.`);
@@ -147,6 +149,7 @@ async function createFieldCorrection(userId, { wineId, fields, reason, evidenceU
       ...(cleanUrl ? { evidenceUrl: cleanUrl } : {}),
       reason: cleanReason,
       currentSnapshot,
+      ...origin,
     });
   } catch (err) {
     // One pending field_correction per wine (partial unique index) — a clean,

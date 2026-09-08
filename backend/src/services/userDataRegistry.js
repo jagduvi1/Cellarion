@@ -396,7 +396,9 @@ const REGISTRY = [
     // Anonymise both — the record survives its contributor (#985).
     model: RegistryDataValue, category: 'shared-content', userFields: ['suggestedBy', 'decidedBy'],
     purge: (ctx) => [
-      RegistryDataValue.updateMany({ suggestedBy: ctx.userId }, { $set: { suggestedBy: ctx.deletedUserId } }),
+      // instanceHost can name a household; bridgeKey survives as an opaque
+      // grouping id (see the WineDefinition entry below for the reasoning).
+      RegistryDataValue.updateMany({ suggestedBy: ctx.userId }, { $set: { suggestedBy: ctx.deletedUserId, instanceHost: null } }),
       RegistryDataValue.updateMany({ decidedBy: ctx.userId }, { $unset: { decidedBy: '' } }),
     ],
     exportFragment: async (ctx) => ({ registryDataValueSuggestions: markTrunc(ctx, 'registryDataValueSuggestions', await RegistryDataValue.find({ suggestedBy: ctx.userId }).populate('key', 'name type unit').select('wineDefinition key vintage value status reason evidenceUrl createdAt decidedAt rejectReason').limit(EXPORT_MAX).lean()) }),
@@ -1099,7 +1101,7 @@ const REGISTRY = [
   // re-point it to the [deleted] sentinel so the ref doesn't dangle (createdBy
   // is `required`, so it can't be unset). Not exported — not the user's data.
   {
-    model: WineDefinition, category: 'creator-ref', userFields: ['createdBy', 'aiProfile.verifiedBy'],
+    model: WineDefinition, category: 'creator-ref', userFields: ['createdBy', 'aiProfile.verifiedBy', 'contribution.user'],
     // aiProfile.verifiedBy is the curator who corrected the tasting profile.
     // Reassigned rather than unset, like createdBy: the profile stays
     // curator-sourced (which is what keeps the AI job from regenerating over
@@ -1107,6 +1109,14 @@ const REGISTRY = [
     purge: async (ctx) => {
       await WineDefinition.updateMany({ createdBy: ctx.userId }, { $set: { createdBy: ctx.deletedUserId } });
       await WineDefinition.updateMany({ 'aiProfile.verifiedBy': ctx.userId }, { $set: { 'aiProfile.verifiedBy': ctx.deletedUserId } });
+      // The contributor whose request produced this wine, anonymised the same
+      // way. `contribution.bridgeKey` is deliberately KEPT: once the key row
+      // and the account are gone it identifies nobody, but it still GROUPS
+      // everything that install contributed — which is what a rights-holder
+      // takedown needs. The self-reported host can name a household, so it
+      // goes. Retaining more than this, with a legal basis and terms wording,
+      // is the provenance-ledger work, not something to smuggle in here.
+      await WineDefinition.updateMany({ 'contribution.user': ctx.userId }, { $set: { 'contribution.user': ctx.deletedUserId, 'contribution.instanceHost': null } });
     },
     exportFragment: null,
     note: 'shared registry; required createdBy + aiProfile.verifiedBy reassigned to [deleted] on erasure',

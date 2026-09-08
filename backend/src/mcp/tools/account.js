@@ -309,7 +309,7 @@ registerTool({
   handler: async (args, ctx) => {
     const { wineRequest, error } = await createWineRequest(ctx.user.id, {
       wineName: args.wine_name, sourceUrl: args.source_url, image: args.image_url,
-    });
+    }, { via: 'mcp', req: ctx.req });
     if (error) return fail('invalid_input', error.message);
     logAudit(ctx.req, 'wineRequest.create', { type: 'wineRequest', id: wineRequest._id }, { via: 'mcp' });
     return ok(`Wine addition requested: ${wineRequest.wineName}`, {

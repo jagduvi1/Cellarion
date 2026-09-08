@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { originSchemaFields } = require('../utils/contributionOrigin');
 
 // A value for an accepted public key on a registry wine (#985 Slice B).
 // Suggested by users, TYPE-validated at entry (utils/personalDataTypes via
@@ -70,9 +71,16 @@ const registryDataValueSchema = new mongoose.Schema({
   decidedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   decidedAt: { type: Date, default: null },
   rejectReason: { type: String, trim: true, maxlength: 2000 }, // 500 was too short for a real explanation (registry backlog 2026-09-06)
+  // Which surface suggested this value, and which bridge key / install if it
+  // came from one (utils/contributionOrigin.js).
+  ...originSchemaFields(mongoose),
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
+
+// Provenance lookups: everything one install or one key sent us.
+registryDataValueSchema.index({ bridgeKey: 1, createdAt: -1 }, { sparse: true });
+registryDataValueSchema.index({ instanceHost: 1, createdAt: -1 }, { sparse: true });
 
 // One suggested + one published row per (wine, key, vintage slot); rejected
 // rows keep history without blocking a fresh suggestion. Rows written before

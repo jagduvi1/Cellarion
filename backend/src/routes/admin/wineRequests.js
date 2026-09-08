@@ -211,7 +211,19 @@ router.put('/:id/resolve', async (req, res) => {
         image: imageToStore,
         normalizedKey,
         createdBy: req.user.id,
-        createdVia: 'ui'
+        createdVia: 'ui',
+        // WHOSE data this is, as opposed to who performed the write.
+        // createdBy is the approving admin; a rights-holder complaint about
+        // this record needs the person who asked for it, the surface they
+        // used and, over the bridge, the install it came from.
+        contribution: {
+          user: wineRequest.user,
+          via: wineRequest.via || 'ui',
+          request: wineRequest._id,
+          bridgeKey: wineRequest.bridgeKey || null,
+          instanceHost: wineRequest.instanceHost || null,
+          at: wineRequest.createdAt || new Date(),
+        },
       });
 
       try {

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { originSchemaFields } = require('../utils/contributionOrigin');
 
 /**
  * A sommelier's proposed correction to a SHARED registry wine — an identity
@@ -115,9 +116,15 @@ const wineCorrectionProposalSchema = new mongoose.Schema({
   // What the approve actually did (fields applied / bottles moved / queue rows
   // cleared) — the reviewer-facing receipt.
   appliedNote: { type: String, trim: true, maxlength: 500 },
+  // Which surface filed this, and which bridge key / install if it came from
+  // one (utils/contributionOrigin.js).
+  ...originSchemaFields(mongoose),
 }, { timestamps: true });
 
 wineCorrectionProposalSchema.index({ status: 1, createdAt: -1 });
+// Provenance lookups: everything one install or one key sent us.
+wineCorrectionProposalSchema.index({ bridgeKey: 1, createdAt: -1 }, { sparse: true });
+wineCorrectionProposalSchema.index({ instanceHost: 1, createdAt: -1 }, { sparse: true });
 
 // At most ONE pending proposal per (wine, kind) — makes the duplicate-propose
 // conflict race-safe (two concurrent creates can't both insert a pending row),

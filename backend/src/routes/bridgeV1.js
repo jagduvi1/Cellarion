@@ -349,7 +349,7 @@ router.post('/requests', quota('contributions'), async (req, res) => {
   try {
     const r = await createWineRequest(req.user.id, {
       wineName: req.body?.wineName, sourceUrl: req.body?.sourceUrl, image: req.body?.image,
-    });
+    }, { via: 'bridge', req });
     if (r.error) return res.status(r.error.status || 400).json({ error: r.error.message, code: 'invalid' });
     logAudit(req, 'bridge.request.forwarded', { type: 'wineRequest', id: r.wineRequest._id },
       { key: req.bridge.key.id, instanceHost: req.bridge.key.instanceHost });

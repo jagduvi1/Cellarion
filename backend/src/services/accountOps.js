@@ -15,6 +15,7 @@ const Cellar = require('../models/Cellar');
 const SupportTicket = require('../models/SupportTicket');
 const { isPrivateAddress } = require('../utils/safeImageFetch');
 const WineRequest = require('../models/WineRequest');
+const { originFrom } = require('../utils/contributionOrigin');
 const { stripHtml } = require('../utils/sanitize');
 const { SUPPORTED_CURRENCIES } = require('../config/currencies');
 
@@ -334,7 +335,7 @@ function validateImageRef(image) {
  * NOT handled here — it stays inline in the REST route (niche, needs a linked
  * wine) and is not exposed over MCP.
  */
-async function createWineRequest(userId, { wineName, sourceUrl, image } = {}) {
+async function createWineRequest(userId, { wineName, sourceUrl, image } = {}, { via, req } = {}) {
   if (!wineName) return { error: err(400, 'Wine name and source URL are required') };
   const urlErr = validateSourceUrl(sourceUrl);
   if (urlErr) return { error: err(400, urlErr) };
@@ -354,6 +355,9 @@ async function createWineRequest(userId, { wineName, sourceUrl, image } = {}) {
     image: trimmedImage || null,
     user: userId,
     status: 'pending',
+    // Which surface and, over the bridge, which install — kept on the record
+    // so a contributor's whole output stays findable (utils/contributionOrigin.js).
+    ...originFrom(req, via),
   });
   await wineRequest.save();
   return { wineRequest };
