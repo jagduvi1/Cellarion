@@ -280,11 +280,19 @@ if (OIDC_ENABLED) {
    * and no ID token is consumed. Browser binding is `state`, which the store
    * above provides, plus PKCE on the code itself.
    */
+  // Send the access token as `Authorization: Bearer`, not as a query parameter.
+  // node-oauth defaults this OFF, so `_oauth2.get()` would otherwise append
+  // ?access_token=… to the userinfo URL: providers reject that (the OIDC spec
+  // has clients use the header), and a token in a URL is the kind of thing that
+  // ends up in access logs and proxy history. passport-google-oauth20 never
+  // trips over this because it does not use this code path.
+  oidcStrategy._oauth2.useAuthorizationHeaderforGET(true);
+
   oidcStrategy.userProfile = function userProfile(accessToken, done) {
     this._oauth2.get(process.env.OIDC_USERINFO_URL, accessToken, (err, body) => {
-      // The provider's error body can carry the access token back to us; report
-      // that the call failed without pasting its contents into a log.
-      if (err) return done(new Error('Failed to fetch OIDC userinfo'));
+      // Report the status, never the body: a provider's error response can echo
+      // the access token back, and this ends up in logs.
+      if (err) return done(new Error(`Failed to fetch OIDC userinfo (HTTP ${err.statusCode || 'error'})`));
       let claims;
       try {
         claims = JSON.parse(body);

@@ -72,3 +72,18 @@ test('survives StrictMode\'s dev double-mount — the destination is not overwri
   render(<StrictMode><OAuthCallback /></StrictMode>);
   expect(navigateMock).toHaveBeenLastCalledWith('/wishlist', { replace: true });
 });
+
+test.each(['no_verified_email', 'access_denied', 'not_configured', 'server_error', 'invalid_state'])(
+  'the %s message names no provider, because every provider shares it',
+  (error) => {
+    // These strings predate #1203, when Google was the only way in and naming it
+    // was accurate. They are now shown to OIDC users too, and telling someone
+    // signing in with their own identity provider that their "Google account"
+    // has no verified email address sends them to look at the wrong account
+    // entirely. Caught in a live Pocket ID sign-in, not by this suite — nothing
+    // pinned the wording, so the regression was free to happen.
+    searchParams = new URLSearchParams({ error });
+    const { container } = render(<OAuthCallback />);
+    expect(container.textContent).not.toMatch(/google/i);
+  }
+);

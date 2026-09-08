@@ -4,15 +4,20 @@ import { useAuth } from '../contexts/AuthContext';
 import { takePostLoginRedirect } from '../utils/postLoginRedirect';
 import './Login.css';
 
-// Landing route for the OAuth round-trip (backend redirects here after Google).
+// Landing route for the OAuth round-trip (backend redirects here after any
+// SSO provider — Google, or the configured OIDC issuer).
 // The backend has already set the httpOnly refresh cookie, and AuthProvider runs
 // its session-restore on mount BEFORE this renders (the app gates on `loading`),
 // so by the time we get here `user` is populated on success — no token ever
 // travels in the URL.
+// These are shared by every SSO provider, so they must not name one. Until
+// #1203 there was only Google and naming it was accurate; a Pocket ID user
+// being told their "Google account" has no verified email address is worse
+// than saying nothing, because it sends them to look at the wrong account.
 const ERROR_MESSAGES = {
-  no_verified_email: "Your Google account doesn't have a verified email address, so we couldn't sign you in.",
-  access_denied: 'Google sign-in was cancelled.',
-  not_configured: 'Google sign-in is not enabled on this server.',
+  no_verified_email: "That account doesn't have a verified email address, so we couldn't sign you in.",
+  access_denied: 'Sign-in was cancelled.',
+  not_configured: 'Single sign-on is not enabled on this server.',
   // The browser did not come back with the cookie that started the flow —
   // usually a sign-in left open too long, resumed in another browser, or
   // third-party cookie blocking. Retrying from the login page fixes all three.
