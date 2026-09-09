@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import AdminStats from './AdminStats';
 
 /**
@@ -68,6 +68,19 @@ const BASE = {
   },
 };
 
+// Cohorts from a backend that predates the second measure: no `changed` at all.
+const withOldCohorts = {
+  ...BASE,
+  retention: {
+    ...BASE.retention,
+    signupCohorts: [
+      { daysAgoFrom: 0, daysAgoTo: 7, signedUp: 18, returned: null, pct: null, tooNew: true },
+      { daysAgoFrom: 7, daysAgoTo: 14, signedUp: 31, returned: 16, pct: 51.6, tooNew: false },
+    ],
+    cohortSignups: 31, cohortReturned: 16, cohortReturnedPct: 51.6,
+  },
+};
+
 const withPresence = {
   ...BASE,
   engagement: {
@@ -76,6 +89,14 @@ const withPresence = {
   },
   retention: {
     ...BASE.retention,
+    // The same cohorts by both measures. 9 ≤ 16: you cannot change a cellar
+    // without being present.
+    signupCohorts: [
+      { daysAgoFrom: 0, daysAgoTo: 7, signedUp: 18, returned: null, pct: null, changed: null, changedPct: null, tooNew: true },
+      { daysAgoFrom: 7, daysAgoTo: 14, signedUp: 31, returned: 16, pct: 51.6, changed: 9, changedPct: 29, tooNew: false },
+    ],
+    cohortSignups: 31, cohortReturned: 16, cohortReturnedPct: 51.6,
+    cohortChanged: 9, cohortChangedPct: 29,
     presence: {
       usersSeen: 255, returningUsers: 130, coreUsers: 85, returningPct: 51,
       tiers: [{ days: 2, users: 130, pct: 51 }, { days: 4, users: 85, pct: 33 }, { days: 7, users: 63, pct: 24 }],
@@ -123,6 +144,40 @@ describe('AdminStats presence measures', () => {
     expect(screen.queryByText('adminStats.retentionByPresence:90')).not.toBeInTheDocument();
     // The bottle-based figures are still there.
     expect(screen.getByText('50')).toBeInTheDocument();
+  });
+
+  it('shows both cohort measures side by side, with a header row', async () => {
+    getStats.mockResolvedValue(jsonRes(withPresence));
+    render(<AdminStats />);
+    await waitFor(() => expect(screen.getByText('adminStats.cohortsHead')).toBeInTheDocument());
+    // Two headline cards.
+    expect(screen.getByText('adminStats.cohortReturned')).toBeInTheDocument();
+    expect(screen.getByText('adminStats.cohortChanged')).toBeInTheDocument();
+    // A header row naming each column, so the two figures cannot be confused.
+    expect(screen.getByText('adminStats.cohortColChanged')).toBeInTheDocument();
+    expect(screen.getByText('adminStats.cohortColPresent')).toBeInTheDocument();
+    // One mature row, both measures, present ≥ changed.
+    expect(screen.getByText('16 · 52%')).toBeInTheDocument();
+    expect(screen.getByText('9 · 29%')).toBeInTheDocument();
+    // The newest row: intake only, a dash in the narrow column, and "too
+    // recent" stated once rather than twice. Scoped to the table — the page
+    // prints a dash for every missing value elsewhere too.
+    const table = within(screen.getByText('adminStats.cohortColPresent').closest('table'));
+    expect(table.getAllByText('—')).toHaveLength(1);
+    expect(table.getAllByText('adminStats.cohortTooNew')).toHaveLength(1);
+  });
+
+  it('keeps the single-measure table for a payload without the narrow measure', async () => {
+    // A cached or older response: no second card, no extra column, no zeros
+    // pretending to be data.
+    getStats.mockResolvedValue(jsonRes(withOldCohorts));
+    render(<AdminStats />);
+    await waitFor(() => expect(screen.getByText('adminStats.cohortsHead')).toBeInTheDocument());
+    expect(screen.getByText('16 · 52%')).toBeInTheDocument();
+    expect(screen.queryByText('adminStats.cohortChanged')).not.toBeInTheDocument();
+    expect(screen.queryByText('adminStats.cohortColChanged')).not.toBeInTheDocument();
+    const table = within(screen.getByText('16 · 52%').closest('table'));
+    expect(table.queryByText('—')).not.toBeInTheDocument();
   });
 
   it('hides the presence ladder when nobody has been seen yet', async () => {

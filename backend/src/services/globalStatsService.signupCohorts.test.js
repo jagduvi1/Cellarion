@@ -82,6 +82,42 @@ describe('buildSignupCohorts', () => {
   });
 });
 
+describe('the narrow measure (changedIds) beside the wide one', () => {
+  it('is null, not zero, when the caller does not supply it', () => {
+    // "Not measured" must never read as "nobody did": an older caller gets
+    // null back and the page hides the column instead of showing zeros.
+    const cohorts = buildSignupCohorts([user('a', 9)], new Set(['a']), NOW);
+    const wk2 = cohorts.find((c) => c.daysAgoFrom === 7);
+    expect(wk2.changed).toBeNull();
+    expect(wk2.changedPct).toBeNull();
+  });
+
+  it('counts the two sets independently on the same members', () => {
+    // Four signups a week ago: a and c were present, only a changed a cellar.
+    const users = [user('a', 8), user('b', 9), user('c', 10), user('d', 11)];
+    const cohorts = buildSignupCohorts(users, new Set(['a', 'c']), NOW, new Set(['a']));
+    const wk2 = cohorts.find((c) => c.daysAgoFrom === 7);
+    expect(wk2).toMatchObject({ signedUp: 4, returned: 2, pct: 50, changed: 1, changedPct: 25 });
+  });
+
+  it('never reports the narrow rate for the newest cohort either', () => {
+    // The same tautology as the wide measure: joining this week and adding a
+    // first bottle this week is intake, not retention.
+    const [newest] = buildSignupCohorts([user('a', 2)], new Set(['a']), NOW, new Set(['a']));
+    expect(newest.tooNew).toBe(true);
+    expect(newest.changed).toBeNull();
+    expect(newest.changedPct).toBeNull();
+  });
+
+  it('compares changed ids as strings too', () => {
+    // changedIds comes from a Bottle aggregation; the same ObjectId-vs-string
+    // trap as the audit side, and the same silent 0% if it were missed.
+    const oid = { toString: () => 'objid-2' };
+    const cohorts = buildSignupCohorts([{ _id: oid, createdAt: daysAgo(9) }], new Set(), NOW, new Set(['objid-2']));
+    expect(cohorts.find((c) => c.daysAgoFrom === 7)).toMatchObject({ returned: 0, changed: 1, changedPct: 100 });
+  });
+});
+
 describe('the newest bucket has no upper bound', () => {
   it('counts a user created at the exact query instant', () => {
     // With `< now` as the upper edge this user fell out of every bucket and

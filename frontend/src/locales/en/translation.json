@@ -3679,12 +3679,12 @@
     "formerSupportersTooltip": "Users on the free plan whose supporter tier once started — the start is stamped only when support is actually granted, so an abandoned Stripe checkout does not count. Someone who resubscribed counts as current, not former.",
     "planUnconfigured": "(not a configured tier)",
     "cohortsHead": "Do new users come back?",
-    "cohortReturned": "New users returning",
+    "cohortReturned": "New users present",
     "cohortReturnedSub": "{{returned}} of {{total}} recent signups",
-    "cohortReturnedTooltip": "Of everyone who signed up between 1 and 4 weeks ago, the share who did anything the app records in the last 7 days — not only adding a bottle, and not merely signing in, since a session lasts 30 days without a fresh login. Drawn from the audit log, which is kept for 90 days; that is ample for a 7-day question. The most recent week is excluded because its members were active in the window by virtue of signing up in it.",
+    "cohortReturnedTooltip": "Of everyone who signed up between 1 and 4 weeks ago, the share who were present in the last 7 days: signed in, or did anything the app records. The same rule as the presence ladder below — automated API traffic does not count, and a session lasting 30 days without a fresh sign-in does not hide anyone. The most recent week is excluded because its members were present in the window by virtue of signing up in it.",
     "cohortRange": "{{from}}–{{to}} days ago",
     "cohortTooNew": "too recent",
-    "cohortNote": "Came back = any recorded action in the last 7 days — adding, editing, consuming, anything the audit log records. That is deliberately broader than the bottle-only measure above, because a new user finding their way around counts as coming back. The newest group shows its intake only: those users were active in the window because they joined during it, so a percentage there would measure nothing.",
+    "cohortNote": "Present = signed in, or did anything the app records, in the last 7 days — the same rule as the presence ladder below. Changed a cellar = added or consumed a bottle in the same 7 days. A new user finding their way around is present without having changed anything yet; the gap between the two columns is exactly that. The newest group shows its intake only: those users were present in the window because they joined during it, so a rate there would measure nothing.",
     "engagementChanged": "Changed a cellar",
     "engagementPresent": "Signed in or acted",
     "presenceNote": "Present = signed in, or did something the app records: adding, editing, consuming, asking the sommelier. Automated API traffic does not count, so a Home Assistant or climate integration polling in the background is not mistaken for its owner showing up. Reading pages is not recorded for anyone, so this is a floor rather than a ceiling. Seen as far back as the activity log is kept, which is {{days}} days.",
@@ -3704,7 +3704,13 @@
     "usersSeen": "People seen at all",
     "usersSeenSub": "in the last {{days}} days",
     "usersSeenTooltip": "Everyone with at least one recorded action or sign-in in the window. This is the denominator the percentages beside it use.",
-    "ofUsersSeen": "of people seen"
+    "ofUsersSeen": "of people seen",
+    "cohortChanged": "New users who changed a cellar",
+    "cohortChangedTooltip": "Of the same signups, the share who added or consumed a bottle in the last 7 days. Always at or below the figure beside it: you cannot change a cellar without being present.",
+    "cohortColSignedUp": "Signed up",
+    "cohortColCount": "People",
+    "cohortColChanged": "Changed a cellar",
+    "cohortColPresent": "Present"
   },
   "announcement": {
     "dismiss": "Dismiss"

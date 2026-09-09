@@ -133,6 +133,9 @@ function AdminStats() {
     if (!parts.length) return null;
     return t('adminStats.excludedNote', 'excludes {{list}}', { list: parts.join(', ') });
   })();
+  // An older payload has no `changed` on its cohorts; the column and its card
+  // simply stay away rather than rendering a row of zeros.
+  const cohortHasChanged = (retention?.signupCohorts || []).some((c) => c.changed != null);
 
   const maturityColors = {
     peak:       '#1a7f37',
@@ -274,6 +277,8 @@ function AdminStats() {
           {retention.signupCohorts && retention.signupCohorts.length > 0 && (
             <>
               <h3 className="admin-stats-subhead">{t('adminStats.cohortsHead')}</h3>
+              {/* Both answers, side by side. The gap between them is new
+                  users who came back to look without changing anything yet. */}
               <div className="admin-stats-cards">
                 <StatCard
                   accent="ok"
@@ -285,6 +290,17 @@ function AdminStats() {
                   })}
                   tooltip={t('adminStats.cohortReturnedTooltip')}
                 />
+                {cohortHasChanged && (
+                  <StatCard
+                    label={t('adminStats.cohortChanged', 'New users who changed a cellar')}
+                    value={fmtPct(retention.cohortChangedPct)}
+                    sublabel={t('adminStats.cohortReturnedSub', {
+                      returned: retention.cohortChanged ?? 0,
+                      total: retention.cohortSignups ?? 0,
+                    })}
+                    tooltip={t('adminStats.cohortChangedTooltip', 'Of the same signups, the share who added or consumed a bottle in the last 7 days. Always at or below the figure beside it: you cannot change a cellar without being present.')}
+                  />
+                )}
               </div>
               <div className="admin-stats-panel">
                 {/* Own class, not just admin-stats-table: this table's right
@@ -292,6 +308,16 @@ function AdminStats() {
                     across lines (it read as broken data when it did). The
                     other admin tables are unaffected. */}
                 <table className="admin-stats-table admin-stats-cohorts">
+                  <thead>
+                    <tr>
+                      <th className="admin-stats-name">{t('adminStats.cohortColSignedUp', 'Signed up')}</th>
+                      <th className="admin-stats-count">{t('adminStats.cohortColCount', 'People')}</th>
+                      {cohortHasChanged && (
+                        <th className="admin-stats-pct">{t('adminStats.cohortColChanged', 'Changed a cellar')}</th>
+                      )}
+                      <th className="admin-stats-pct">{t('adminStats.cohortColPresent', 'Present')}</th>
+                    </tr>
+                  </thead>
                   <tbody>
                     {retention.signupCohorts.map((c) => (
                       <tr key={c.daysAgoFrom} className={c.tooNew ? 'admin-stats-row-empty' : undefined}>
@@ -299,6 +325,16 @@ function AdminStats() {
                           {t('adminStats.cohortRange', { from: c.daysAgoFrom, to: c.daysAgoTo })}
                         </td>
                         <td className="admin-stats-count">{fmt(c.signedUp)}</td>
+                        {cohortHasChanged && (
+                          <td className="admin-stats-pct">
+                            {/* The newest cohort gets a dash here, not a second
+                                "too recent": the reason is stated once, in the
+                                column beside it. */}
+                            {c.tooNew || c.changed == null
+                              ? '—'
+                              : `${fmt(c.changed)} · ${fmtPct(c.changedPct)}`}
+                          </td>
+                        )}
                         <td className="admin-stats-pct">
                           {/* The newest cohort shows its intake and NO rate:
                               its members are "active in the last 7 days"

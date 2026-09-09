@@ -187,7 +187,7 @@ const COHORT_SPAN_DAYS = 28;    // how far back cohorts go
  *
  * `now` is injected so the test can pin time instead of racing the clock.
  */
-const buildSignupCohorts = (users, activeIds, now) => {
+const buildSignupCohorts = (users, activeIds, now, changedIds = null) => {
   const out = [];
   for (let start = 0; start < COHORT_SPAN_DAYS; start += COHORT_WINDOW_DAYS) {
     const end = start + COHORT_WINDOW_DAYS;
@@ -201,12 +201,17 @@ const buildSignupCohorts = (users, activeIds, now) => {
     const members = users.filter((u) => u.createdAt >= from && (to === null || u.createdAt < to));
     const tooNew = start === 0;
     const returned = tooNew ? null : members.filter((u) => activeIds.has(String(u._id))).length;
+    // The narrow measure on the same members. Null when the caller did not
+    // supply it, and null for the newest cohort for the same reason as above.
+    const changed = tooNew || !changedIds ? null : members.filter((u) => changedIds.has(String(u._id))).length;
     out.push({
       daysAgoFrom: start,
       daysAgoTo: end,
       signedUp: members.length,
       returned,
       pct: returned == null ? null : pct(returned, members.length),
+      changed,
+      changedPct: changed == null ? null : pct(changed, members.length),
       tooNew,
     });
   }
@@ -400,17 +405,28 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
 
   // ── Engagement (active users 24h / 7d / 30d / 90d) ──────────────────────
   // "Active" = added a bottle or consumed a bottle within the window.
+  // "Changed a cellar" = added or consumed a bottle since `since`. One
+  // definition, used by the window counts here and by the signup cohorts
+  // further down, so the phrase means the same thing everywhere on the page.
+  const cellarChangedMatch = (since) => ({ ...bottleMatch, $or: [
+    { createdAt:  { $gte: since } },
+    { consumedAt: { $gte: since } },
+  ]});
   const engagementWindow = async (since) => {
     const r = await safeAggregate(Bottle, [
-      { $match: { ...bottleMatch, $or: [
-        { createdAt:  { $gte: since } },
-        { consumedAt: { $gte: since } },
-      ]}},
+      { $match: cellarChangedMatch(since) },
       { $group: { _id: '$user' } },
       { $count: 'count' },
     ]);
     return r[0]?.count || 0;
   };
+  // The same population as ids, for set membership rather than a count.
+  const cellarChangedUserIds = async (since) => new Set(
+    (await safeAggregate(Bottle, [
+      { $match: cellarChangedMatch(since) },
+      { $group: { _id: '$user' } },
+    ])).map((r) => String(r._id)),
+  );
 
   const [activeUsers24h, activeUsers7d, activeUsers30d, activeUsers90d] = await Promise.all([
     engagementWindow(since24h),
@@ -493,30 +509,38 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
   // shows the intake without inviting the false reading. The headline
   // percentage covers the MATURE cohorts only.
   //
-  // Cost: ONE audit query, bounded to 7 days and served by the timestamp
-  // index, intersected in memory — not one query per cohort. Deliberately
-  // modest, because the login retention removed above was the most expensive
-  // thing on this page and replacing it with something worse would be a poor
-  // trade.
+  // Cost: one audit query and one bottle query, each bounded to 7 days and
+  // served by an index, intersected in memory — not one query per cohort.
   const cohortUsers = await User.find({
     ...userMatch,
     createdAt: { $gte: new Date(Date.now() - COHORT_SPAN_DAYS * 86400000) },
   }).select('_id createdAt').lean();
 
-  // Anyone who did ANYTHING in the window. Deliberately not "logged in": the
-  // refresh cookie keeps a session alive for 30 rotating days, so an active
-  // user may not hit /login for weeks. Deliberately not "touched a bottle"
-  // either — that measures activation, which is a different question and
-  // already has its own figures.
-  const activeIds = new Set(
-    (await AuditLog.distinct('actor.userId', { timestamp: { $gte: since7d } }))
-      .filter(Boolean).map(String),
-  );
+  // Two answers to "came back", on the same cohorts, so the gap between them
+  // is visible row by row rather than argued about:
+  //
+  //   present — signed in, or did anything the audit log records, under the
+  //             SAME rule as the presence ladder (sign-ins resolved from
+  //             resource.id, machine traffic excluded). Deliberately not
+  //             "logged in": the refresh cookie keeps a session alive for 30
+  //             rotating days, so an active user may not hit /login for weeks.
+  //   changed — added or consumed a bottle: the narrow cellar-change measure.
+  //
+  // A new user finding their way around is present without having changed
+  // anything yet. That is exactly the difference worth seeing.
+  const [presentIds, changedIds] = await Promise.all([
+    safeAggregate(AuditLog, [
+      ...presenceStages({ since: since7d, excludedIds }),
+      { $group: { _id: '$who' } },
+    ]).then((rows) => new Set(rows.map((r) => String(r._id)))),
+    cellarChangedUserIds(since7d),
+  ]);
 
-  const signupCohorts = buildSignupCohorts(cohortUsers, activeIds, Date.now());
+  const signupCohorts = buildSignupCohorts(cohortUsers, presentIds, Date.now(), changedIds);
   const mature = signupCohorts.filter((c) => !c.tooNew);
   const matureSignups = mature.reduce((s, c) => s + c.signedUp, 0);
   const matureReturned = mature.reduce((s, c) => s + c.returned, 0);
+  const matureChanged = mature.reduce((s, c) => s + (c.changed || 0), 0);
 
   // History worth keeping: a LOGIN-ONLY ladder lived here until 2026-08-21 and
   // was removed for good reasons. It counted sign-in events, and a rotating
@@ -828,6 +852,10 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
       cohortSignups: matureSignups,
       cohortReturned: matureReturned,
       cohortReturnedPct: pct(matureReturned, matureSignups),
+      // The same mature cohorts by the narrow measure — added or consumed a
+      // bottle — so the two headline rates sit side by side.
+      cohortChanged: matureChanged,
+      cohortChangedPct: pct(matureChanged, matureSignups),
       // The second ladder: days the user was PRESENT (signed in, or did
       // anything the audit log records) rather than days they changed a
       // cellar. Windowed by the audit TTL, which is why windowDays ships with
