@@ -190,6 +190,90 @@ describe('dataForWine', () => {
   });
 });
 
+// Display names (2026-09-09). The vocabulary refused "Alkoholgehalt" as a
+// duplicate of ABV, correctly — and the German reader who proposed it could
+// not have known, because the only key on his page was named in English. A
+// key now carries the reader's name in `displayName`; `name` is unchanged
+// and stays the identifier everywhere.
+describe('key display names', () => {
+  const { logAudit } = require('./audit');
+  const translated = { ...acceptedKey, translations: { de: 'Alkoholgehalt', fr: "Degré d'alcool" } };
+
+  test('serialises the translation for the reader, the canonical name for everyone else', async () => {
+    RegistryDataKey.find.mockReturnValue(chain([translated]));
+    const de = (await ops.listAcceptedKeys({ locale: 'de' })).keys[0];
+    expect(de).toMatchObject({ name: 'ABV', displayName: 'Alkoholgehalt', translations: translated.translations });
+
+    // A regional variant falls back to its base language; an untranslated
+    // language and no language at all both read the canonical name.
+    expect((await ops.listAcceptedKeys({ locale: 'de-AT' })).keys[0].displayName).toBe('Alkoholgehalt');
+    expect((await ops.listAcceptedKeys({ locale: 'sv' })).keys[0].displayName).toBe('ABV');
+    expect((await ops.listAcceptedKeys()).keys[0].displayName).toBe('ABV');
+  });
+
+  test('an untranslated key serialises translations as null, not {} or undefined', async () => {
+    RegistryDataKey.find.mockReturnValue(chain([acceptedKey]));
+    const k = (await ops.listAcceptedKeys({ locale: 'de' })).keys[0];
+    expect(k.displayName).toBe('ABV');
+    expect(k.translations).toBeNull();
+  });
+
+  test('a Mongoose Map and a lean object both serialise to one plain object', async () => {
+    RegistryDataKey.find.mockReturnValue(chain([{ ...acceptedKey, translations: new Map([['sv', 'Alkoholhalt']]) }]));
+    const k = (await ops.listAcceptedKeys({ locale: 'sv' })).keys[0];
+    expect(k.displayName).toBe('Alkoholhalt');
+    expect(k.translations).toEqual({ sv: 'Alkoholhalt' });
+  });
+
+  test('the wine record carries the display name too', async () => {
+    RegistryDataKey.find.mockReturnValue(chain([translated]));
+    RegistryDataValue.find.mockReturnValue(chain([]));
+    const res = await ops.dataForWine(WINE, ME, { locale: 'fr' });
+    expect(res.fields[0].key).toMatchObject({ name: 'ABV', displayName: "Degré d'alcool" });
+  });
+
+  test('setKeyTranslations validates, refuses English, and touches only live keys', async () => {
+    expect((await ops.setKeyTranslations(ADMIN, 'nope', { de: 'x' })).code).toBe('invalid');
+    // English IS the canonical name; a second English spelling would drift.
+    expect((await ops.setKeyTranslations(ADMIN, KEY, { en: 'Alcohol' })).code).toBe('invalid');
+    expect(RegistryDataKey.findOne).not.toHaveBeenCalled();
+
+    RegistryDataKey.findOne.mockResolvedValue(null);
+    expect((await ops.setKeyTranslations(ADMIN, KEY, { de: 'Alkoholgehalt' })).code).toBe('not_found');
+    expect(RegistryDataKey.findOne).toHaveBeenCalledWith({ _id: { $eq: KEY }, status: { $ne: 'rejected' } });
+  });
+
+  test('setKeyTranslations replaces the whole map, saves, audits before/after, and invalidates the cache', async () => {
+    const doc = { ...acceptedKey, translations: { fr: 'Alcool' }, save: jest.fn(() => Promise.resolve()) };
+    RegistryDataKey.findOne.mockResolvedValue(doc);
+    RegistryDataKey.find.mockReturnValue(chain([acceptedKey]));
+    await ops.listAcceptedKeys();                        // warm the cache
+    expect(RegistryDataKey.find).toHaveBeenCalledTimes(1);
+
+    const res = await ops.setKeyTranslations(ADMIN, KEY, { de: ' Alkoholgehalt ', sv: 'Alkoholhalt', fr: '' });
+    expect(res.ok).toBe(true);
+    // fr was emptied → removed; de trimmed; the old map is gone, not merged.
+    expect(doc.translations).toEqual({ de: 'Alkoholgehalt', sv: 'Alkoholhalt' });
+    expect(doc.save).toHaveBeenCalled();
+    expect(res.key.translations).toEqual({ de: 'Alkoholgehalt', sv: 'Alkoholhalt' });
+    expect(logAudit).toHaveBeenCalledWith(null, 'registry_data.key_translations',
+      { type: 'registry_key', id: KEY },
+      { name: 'ABV', before: { fr: 'Alcool' }, after: { de: 'Alkoholgehalt', sv: 'Alkoholhalt' } });
+
+    await ops.listAcceptedKeys();                        // cache was dropped → re-read
+    expect(RegistryDataKey.find).toHaveBeenCalledTimes(2);
+  });
+
+  test('an empty body clears the map to undefined, never to an empty Map', async () => {
+    const doc = { ...acceptedKey, translations: { de: 'Alkoholgehalt' }, save: jest.fn(() => Promise.resolve()) };
+    RegistryDataKey.findOne.mockResolvedValue(doc);
+    const res = await ops.setKeyTranslations(ADMIN, KEY, {});
+    expect(res.ok).toBe(true);
+    expect(doc.translations).toBeUndefined();
+    expect(res.key.translations).toBeNull();
+  });
+});
+
 describe('admin decisions', () => {
   test('decideKey accepts only a still-proposed row', async () => {
     RegistryDataKey.findOneAndUpdate.mockResolvedValue({ ...acceptedKey, status: 'accepted' });

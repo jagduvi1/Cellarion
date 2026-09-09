@@ -53,4 +53,21 @@ router.post('/values/:id/decide', async (req, res, next) => {
   }
 });
 
+/**
+ * PUT /api/admin/registry-data/keys/:id/translations
+ * Body: { translations: { de: "Alkoholgehalt", fr: "Degré d'alcool" } }
+ *
+ * A full replacement: a language absent from the body is removed. Mirrors
+ * PUT /api/admin/taxonomy/:kind/:id/translations.
+ */
+router.put('/keys/:id/translations', async (req, res, next) => {
+  try {
+    const result = await ops.setKeyTranslations(req.user.id, req.params.id, req.body?.translations, { req });
+    if (!result.ok) return sendFail(res, result);
+    res.json({ key: result.key });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

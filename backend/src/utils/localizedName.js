@@ -19,6 +19,14 @@
  * dedup, exports and the registry key are built on — and a translation is a
  * DISPLAY concern layered on top.
  *
+ * Registry data KEYS (models/RegistryDataKey) use the same layer since
+ * 2026-09-09: "ABV" is the identifier, a German reader sees "Alkoholgehalt".
+ * The first duplicate proposal — "Alkoholgehalt", as a new integer key —
+ * arrived the day after the vocabulary got its first German-speaking
+ * contributor. The vocabulary refused it correctly; the reader could not have
+ * known, because the only key it held was named in a language he was not
+ * reading in.
+ *
  * WHAT IS DELIBERATELY NOT TRANSLATED:
  *
  *   - Appellations. Côte-Rôtie is Côte-Rôtie in every language; a protected

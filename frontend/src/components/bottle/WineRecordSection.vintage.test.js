@@ -60,7 +60,7 @@ test('a wine-wide value on a vintage bottle is tagged and invites the year-speci
   }));
   renderSection({ vintage: '2023' });
   expect(await screen.findByText('13.5 %')).toBeInTheDocument();
-  expect(getWinePublicData).toHaveBeenCalledWith(expect.any(Function), 'w1', '2023');
+  expect(getWinePublicData).toHaveBeenCalledWith(expect.any(Function), 'w1', '2023', null);
   expect(screen.getByText('all vintages')).toBeInTheDocument();
   enterSuggestMode();
   expect(screen.getByLabelText('Suggest a value for ABV')).toHaveTextContent('Add 2023 value');
@@ -113,7 +113,7 @@ test('off a bottle page there is no radio — a typed year scopes the suggestion
   getWinePublicData.mockResolvedValue(ok({ fields: [field({})] }));
   renderSection();
   await screen.findByText('More data');
-  expect(getWinePublicData).toHaveBeenCalledWith(expect.any(Function), 'w1', null);
+  expect(getWinePublicData).toHaveBeenCalledWith(expect.any(Function), 'w1', null, null);
   enterSuggestMode();
   fireEvent.click(screen.getByLabelText('Suggest a value for ABV'));
   await screen.findByText('Suggest a value: ABV');
@@ -133,6 +133,6 @@ test('NV and Unknown bottles read as no vintage: no tag, no radio', async () => 
   }));
   renderSection({ vintage: 'NV' });
   await screen.findByText('13.5 %');
-  expect(getWinePublicData).toHaveBeenCalledWith(expect.any(Function), 'w1', null);
+  expect(getWinePublicData).toHaveBeenCalledWith(expect.any(Function), 'w1', null, null);
   expect(screen.queryByText('all vintages')).not.toBeInTheDocument();
 });

@@ -19,6 +19,7 @@ const { validateValue, validateKeyDefinition } = require('../utils/personalDataT
 const { checkContributionGate } = require('./contributionGate');
 const { stripHtml } = require('../utils/sanitize');
 const { isValidId, parseAndValidateVintage } = require('../utils/validation');
+const { localizedName, sanitizeTranslations } = require('../utils/localizedName');
 const { logAudit } = require('./audit');
 const { createNotification } = require('./notifications');
 
@@ -83,13 +84,27 @@ function invalidateVocabCache() {
   vocabCache = null;
 }
 
-const serializeKey = (k) => ({
+// A Mongoose document holds a Map, a .lean() row a plain object, and an
+// untranslated key nothing at all — one plain object (or null) on the wire.
+const plainTranslations = (k) => {
+  const t = k && k.translations;
+  if (!t) return null;
+  const obj = typeof t.get === 'function' ? Object.fromEntries(t) : { ...t };
+  return Object.keys(obj).length ? obj : null;
+};
+
+const serializeKey = (k, locale) => ({
   _id: k._id,
   name: k.name,
+  // What to SHOW this reader: the translation for their language when there
+  // is one, else the canonical name. `name` stays the identifier everywhere —
+  // suggestions, MCP arguments and analytics all key on it.
+  displayName: localizedName(k, locale),
   type: k.type,
   unit: k.unit || null,
   enumOptions: k.enumOptions || null,
   status: k.status,
+  translations: plainTranslations(k),
 });
 
 /* ── User operations ─────────────────────────────────────────────────── */
@@ -140,9 +155,9 @@ async function proposeKey(userId, { name, type, unit, enumOptions, rationale }, 
 }
 
 /** The accepted vocabulary (for pickers and the wine-record display). */
-async function listAcceptedKeys() {
+async function listAcceptedKeys({ locale } = {}) {
   const keys = await acceptedKeys();
-  return { ok: true, keys: keys.map(serializeKey) };
+  return { ok: true, keys: keys.map((k) => serializeKey(k, locale)) };
 }
 
 /**
@@ -255,7 +270,7 @@ async function suggestValue(userId, { wineId, keyId, keyName, value, reason, evi
  * Gated on wine VISIBILITY like every other registry surface — a hidden
  * pendingIdentity wine answers the same not_found a missing id does.
  */
-async function dataForWine(wineId, userId = null, { roles, vintage } = {}) {
+async function dataForWine(wineId, userId = null, { roles, vintage, locale } = {}) {
   if (!isValidId(String(wineId))) return fail('invalid', 'Invalid wine id');
   const wine = await findVisibleWine(String(wineId), { userId, roles: roles || [] });
   if (!wine) return fail('not_found', 'Wine not found');
@@ -304,7 +319,7 @@ async function dataForWine(wineId, userId = null, { roles, vintage } = {}) {
       const pendingHere = pendings.find((p) => slotOf(p) === forVintage) || null;
       const own = pendings.find((p) => userId && String(p.suggestedBy) === String(userId)) || null;
       return {
-        key: serializeKey(k),
+        key: serializeKey(k, locale),
         value: pub ? pub.value : null,
         // 'vintage' = an override for the asked vintage; 'wine' = the
         // wine-wide default; null = blank. The UI tags the value with it.
@@ -492,6 +507,39 @@ async function decideValue(adminId, valueId, decision, rejectReason, { req, asWi
   return { ok: true, value: { _id: row._id, status: row.status, value: row.value, vintage: targetVintage } };
 }
 
+/**
+ * Replace a key's display-name translations (admin).
+ *
+ * A full replacement, not a merge, for the same reason as the taxonomy
+ * editor: a language absent from the body is REMOVED, and that is the only
+ * shape in which a wrong translation can be deleted. English is refused by
+ * sanitizeTranslations — the canonical `name` is the English.
+ *
+ * Proposed keys may be translated too (a curator can prepare one before
+ * accepting it); rejected ones cannot, they are tombstones.
+ */
+async function setKeyTranslations(adminId, keyId, translations, { req } = {}) {
+  if (!isValidId(String(keyId))) return fail('invalid', 'Invalid key id');
+  // Same ceiling as the key name itself.
+  const parsed = sanitizeTranslations(translations, 60);
+  if (!parsed.ok) return fail('invalid', parsed.error);
+
+  const key = await RegistryDataKey.findOne({ _id: { $eq: String(keyId) }, status: { $ne: 'rejected' } });
+  if (!key) return fail('not_found', 'No live key with that id');
+
+  const before = plainTranslations(key) || {};
+  const languages = Object.keys(parsed.translations);
+  // undefined, not an empty Map: the field's default is undefined, and an
+  // empty Map on every untranslated key would be litter.
+  key.translations = languages.length ? parsed.translations : undefined;
+  await key.save();
+  invalidateVocabCache();
+
+  logAudit(req || null, 'registry_data.key_translations',
+    { type: 'registry_key', id: key._id }, { name: key.name, before, after: parsed.translations });
+  return { ok: true, key: serializeKey(key) };
+}
+
 module.exports = {
   RESERVED_NAMES,
   REVIEW_QUEUE_LIMIT,
@@ -502,6 +550,7 @@ module.exports = {
   listReviewQueues,
   decideKey,
   decideValue,
+  setKeyTranslations,
   // Vintage-slot helpers — shared with the analytics query engine so a
   // bottle resolves its ABV by the same override → default rule everywhere.
   normaliseVintage,

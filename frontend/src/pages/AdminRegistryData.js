@@ -3,8 +3,17 @@ import { useAuth } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom';
 import {
   getRegistryDataQueues, decideRegistryKey, decideRegistryValue,
+  getRegistryKeys, setRegistryKeyTranslations,
 } from '../api/registryData';
+import { LANGUAGE_OPTIONS, baseCode } from '../config/locales';
 import './AdminRegistryData.css';
+
+// The languages a key can carry a display name in: every language the app
+// offers, minus English, which IS the canonical name. Base codes, deduped, so
+// a regional variant never gets its own box.
+const TRANSLATABLE = LANGUAGE_OPTIONS
+  .map((l) => ({ code: baseCode(l.code), label: l.label }))
+  .filter((l, i, all) => l.code !== 'en' && all.findIndex((o) => o.code === l.code) === i);
 
 /**
  * Review the public data vocabulary (#985 Slice B): user-proposed KEYS join
@@ -16,6 +25,10 @@ function AdminRegistryData() {
   const { apiFetch } = useAuth();
   const [keys, setKeys] = useState([]);
   const [values, setValues] = useState([]);
+  // The accepted vocabulary, editable for display-name translations.
+  const [vocab, setVocab] = useState([]);
+  const [drafts, setDrafts] = useState({});   // keyId → { lang: text }
+  const [saved, setSaved] = useState(null);   // keyId just saved, for the tick
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState(null);
@@ -29,12 +42,51 @@ function AdminRegistryData() {
       if (!res.ok) return setError(data.error || 'Failed to load queues');
       setKeys(data.keys || []);
       setValues(data.values || []);
+      // The vocabulary is a second, independent read: a failure there must
+      // not blank the review queues, which are this page's first job.
+      try {
+        const vres = await getRegistryKeys(apiFetch);
+        const vdata = await vres.json();
+        if (vres.ok) setVocab(vdata.keys || []);
+      } catch {
+        // leave the vocabulary section empty
+      }
     } catch {
       setError('Network error.');
     } finally {
       setLoading(false);
     }
   }, [apiFetch]);
+
+  // What the editor shows for one key: the unsaved draft if there is one,
+  // else what the server holds.
+  const draftFor = (k) => drafts[k._id] || k.translations || {};
+
+  const editTranslation = (keyId, lang, text) =>
+    setDrafts((prev) => ({ ...prev, [keyId]: { ...draftFor(vocab.find((k) => k._id === keyId) || { _id: keyId }), [lang]: text } }));
+
+  const saveTranslations = async (k) => {
+    const draft = draftFor(k);
+    // Empty boxes are removals — the server treats the body as the whole map.
+    const translations = Object.fromEntries(
+      Object.entries(draft).map(([lang, text]) => [lang, String(text || '').trim()]).filter(([, text]) => text),
+    );
+    setBusy(k._id);
+    setError(null);
+    setSaved(null);
+    try {
+      const res = await setRegistryKeyTranslations(apiFetch, k._id, translations);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return setError(data.error || 'Saving translations failed');
+      setVocab((prev) => prev.map((x) => (x._id === k._id ? { ...x, translations: data.key?.translations || null } : x)));
+      setDrafts((prev) => { const next = { ...prev }; delete next[k._id]; return next; });
+      setSaved(k._id);
+    } catch {
+      setError('Network error.');
+    } finally {
+      setBusy(null);
+    }
+  };
 
   useEffect(() => { load(); }, [load]);
 
@@ -161,6 +213,46 @@ function AdminRegistryData() {
             )}
             <button type="button" className="btn btn-small btn-danger" disabled={busy === v._id}
               onClick={() => decide('value', v._id, 'reject')}>Reject</button>
+          </div>
+        </div>
+      ))}
+
+      {/* The accepted vocabulary, with a display name per language. The
+          English name is the identifier and is not editable here; what a
+          German reader SEES for "ABV" is. Left blank, a language shows the
+          English name, exactly as before. */}
+      <h2>Vocabulary ({vocab.length})</h2>
+      <p className="ard-intro">
+        Display names in each language. The English name stays the key itself — it is what suggestions, the AI
+        connector and analytics use — and a translation only changes what a reader sees. Leave a box empty to
+        show the English name in that language.
+      </p>
+      {!loading && vocab.length === 0 && <p className="ard-empty">No accepted keys yet.</p>}
+      {vocab.map((k) => (
+        <div key={k._id} className="ard-card">
+          <div className="ard-card-main">
+            <span className="ard-name">{k.name}</span>
+            <span className="ard-type">{typeLabel(k)}</span>
+            <div className="ard-translations">
+              {TRANSLATABLE.map((l) => (
+                <label key={l.code}>
+                  {l.label} <span className="ard-lang">{l.code}</span>
+                  <input
+                    type="text"
+                    maxLength={60}
+                    value={draftFor(k)[l.code] || ''}
+                    placeholder={k.name}
+                    aria-label={`${k.name} in ${l.label}`}
+                    onChange={(e) => editTranslation(k._id, l.code, e.target.value)}
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="ard-actions">
+            <button type="button" className="btn btn-small btn-primary" disabled={busy === k._id || !drafts[k._id]}
+              onClick={() => saveTranslations(k)}>Save names</button>
+            {saved === k._id && <span className="ard-saved">Saved</span>}
           </div>
         </div>
       ))}
