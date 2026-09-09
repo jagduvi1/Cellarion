@@ -31,5 +31,8 @@
   "homepage": "https://cellarion.app",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0"
+  },
+  "overrides": {
+    "qs": "^6.16.0"
   }
 }
