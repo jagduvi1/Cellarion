@@ -84,10 +84,23 @@ A `Review` team covering **all languages** already exists — Weblate creates it
 
 ## 5. Routine: when a Weblate PR appears
 
-1. **Content-diff it against `main` first.** Never blind-merge. `git fetch origin pull/N/head && git checkout FETCH_HEAD` and compare the flattened JSON. This has caught resurrected deleted keys and blanked plurals before.
-2. Check CI is green — [`translation.test.js`](../frontend/src/locales/translation.test.js) is the real gate (no keys `en` lacks, no empty strings, placeholder parity, complete plural families).
-3. **Squash**-merge. The repo requires it.
-4. Weblate pulls the squash automatically. If it later claims "needs merge" or shows an outgoing commit, a plain **Update** resolves it — its own commit is content-identical to the squash.
+**Since 2026-09-09 there is no routine.** `.github/workflows/weblate-automerge.yml` enables auto-merge on every pull request the Weblate bot opens, provided it changes nothing but non-English locale files and rewrites none of them wholesale (no file may lose more than 500 lines). GitHub then merges it the moment the required checks pass — [`translation.test.js`](../frontend/src/locales/translation.test.js) is the real gate (no keys `en` lacks, no empty strings, placeholder parity, complete plural families). The DCO check skips the bot: translators certify their work by accepting the translation licence in Weblate, and a sign-off typed by a robot would certify nothing.
+
+The merged translations then ship with the next release, like everything else.
+
+**When a person is still needed** — the workflow comments on the PR saying so:
+
+- it touches `en/translation.json`, code, or anything outside `frontend/src/locales/`
+- a locale file loses more than 500 lines — that is the signature of a Weblate rebase gone wrong (§7, "Reset and reapply"), not of a translation batch
+- CI is red — most often an empty plural form Weblate scaffolded, or a key that `en` has since dropped
+
+In those cases: content-diff against `main` first (`git fetch origin pull/N/head && git checkout FETCH_HEAD`, compare the flattened JSON), then squash-merge if it is right, or close it and fix the Weblate side (§7).
+
+### 5a. Checking what is waiting on you — three places, two minutes
+
+1. **Open Weblate PRs:** <https://github.com/jagduvi1/Cellarion/pulls?q=is%3Apr+author%3Aweblate+is%3Aopen>. Normally empty; anything there for more than a day has a comment explaining why.
+2. **Is Weblate pushing at all?** Compare the badge in the README (Weblate's own numbers) with the percentages the app shows in Settings → Language (the repo's numbers, computed at build time). If Weblate says a language is well above what the app shows and no PR has appeared for weeks, Weblate has stopped pushing: open the component → **Manage → Repository maintenance** and read the alert. The usual causes are a rebase conflict after a squash-merge (plain **Update** fixes it) or a locked component. Never guess at "Reset" — §7 explains which one is right.
+3. **Anything a language still needs** is on the Weblate Languages page: the *Unreviewed* number for fr/de/sv, the *Untranslated* one for any new language.
 
 ---
 

@@ -8,6 +8,13 @@
 # Pull requests from branches inside this repository are the maintainer's own
 # work and are not checked — the job still reports success so it can be a
 # required status check without blocking those.
+#
+# Nor are the Weblate bot's. Translations arrive as commits the bot writes on
+# translators' behalf; the people certifying the work are the translators,
+# who accept the project's translation licence in Weblate before their first
+# string, and each commit names its source (Translate-URL). A sign-off line
+# typed by a robot would certify nothing. Without this exemption every
+# translation PR fails the check and can never merge.
 name: DCO
 
 on:
@@ -22,18 +29,18 @@ jobs:
     name: DCO sign-off
     runs-on: ubuntu-latest
     steps:
-      - name: Skip for pull requests from this repository
-        if: github.event.pull_request.head.repo.full_name == github.repository
-        run: echo "Pull request from the main repository — sign-off not required."
+      - name: Skip for pull requests from this repository or the Weblate bot
+        if: github.event.pull_request.head.repo.full_name == github.repository || github.event.pull_request.user.login == 'weblate'
+        run: echo "Pull request from the main repository or the Weblate bot — sign-off not required."
 
       - name: Check out the pull request history
-        if: github.event.pull_request.head.repo.full_name != github.repository
+        if: github.event.pull_request.head.repo.full_name != github.repository && github.event.pull_request.user.login != 'weblate'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Verify every commit is signed off
-        if: github.event.pull_request.head.repo.full_name != github.repository
+        if: github.event.pull_request.head.repo.full_name != github.repository && github.event.pull_request.user.login != 'weblate'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
