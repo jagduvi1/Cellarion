@@ -230,6 +230,11 @@ function AdminStats() {
       {/* ── Engagement ── */}
       <section>
         <h2>{t('adminStats.section.engagement')}</h2>
+        {/* Two measures of the same windows, deliberately shown together.
+            Changing a cellar is the narrow one; being here at all is the
+            honest denominator for "is anyone using this". Reading your drink
+            window is using the app, and the bottle count cannot see it. */}
+        <h3 className="admin-stats-subhead">{t('adminStats.engagementChanged')}</h3>
         <p className="admin-stats-section-note">{t('adminStats.engagementNote')}</p>
         <div className="admin-stats-cards">
           <StatCard accent="ok" tooltip={t('adminStats.engagementTooltip')} label={t('adminStats.activeUsers24h')} value={fmt(engagement.activeUsers24h)} sublabel={t('adminStats.dau')} />
@@ -237,6 +242,23 @@ function AdminStats() {
           <StatCard tooltip={t('adminStats.engagementTooltip')} label={t('adminStats.activeUsers30d')} value={fmt(engagement.activeUsers30d)} sublabel={t('adminStats.mau')} />
           <StatCard tooltip={t('adminStats.engagementTooltip')} label={t('adminStats.activeUsers90d')} value={fmt(engagement.activeUsers90d)} sublabel={t('adminStats.in90Days')} />
         </div>
+
+        {engagement.present90d != null && (
+          <>
+            <h3 className="admin-stats-subhead">{t('adminStats.engagementPresent')}</h3>
+            <p className="admin-stats-section-note">
+              {t('adminStats.presenceNote', { days: engagement.presenceWindowDays ?? 90 })}
+            </p>
+            <div className="admin-stats-cards">
+              <StatCard accent="ok" tooltip={t('adminStats.presenceTooltip')} label={t('adminStats.present24h')} value={fmt(engagement.present24h)} sublabel={t('adminStats.dau')} />
+              <StatCard tooltip={t('adminStats.presenceTooltip')} label={t('adminStats.present7d')}  value={fmt(engagement.present7d)}  sublabel={t('adminStats.wau')} />
+              <StatCard tooltip={t('adminStats.presenceTooltip')} label={t('adminStats.present30d')} value={fmt(engagement.present30d)} sublabel={t('adminStats.mau')} />
+              {/* The widest window IS the audit window, so this is everyone
+                  the log can still see — not a rolling quarter next to it. */}
+              <StatCard tooltip={t('adminStats.presenceAllTooltip')} label={t('adminStats.present90d')} value={fmt(engagement.present90d)} sublabel={t('adminStats.presenceAllSub', { days: engagement.presenceWindowDays ?? 90 })} />
+            </div>
+          </>
+        )}
       </section>
 
       {/* ── Retention / returning users ── */}
@@ -331,6 +353,46 @@ function AdminStats() {
               tooltip={t('adminStats.singleSessionTooltip')}
             />
           </div>
+
+          {/* The same ladder over presence rather than bottles. It answers the
+              question that comes first — did they come back at all — and it is
+              reliably the larger number. Its window is the audit retention
+              period, NOT all history, which is why the heading says so: two
+              ladders with unstated windows would look like a contradiction. */}
+          {retention.presence && retention.presence.usersSeen > 0 && (
+            <>
+              <h3 className="admin-stats-subhead">
+                {t('adminStats.retentionByPresence', { days: retention.presence.windowDays ?? 90 })}
+              </h3>
+              <p className="admin-stats-section-note">{t('adminStats.presenceLadderNote')}</p>
+              <div className="admin-stats-cards">
+                <StatCard
+                  accent="ok"
+                  label={t('adminStats.presenceReturning')}
+                  value={fmt(retention.presence.returningUsers)}
+                  sublabel={`${fmtPct(retention.presence.returningPct)} ${t('adminStats.ofUsersSeen')}`}
+                  tooltip={t('adminStats.presenceReturningTooltip', { days: retention.presence.windowDays ?? 90 })}
+                />
+                {(retention.presence.tiers || [])
+                  .filter(tier => tier.days !== 2)
+                  .map(tier => (
+                    <StatCard
+                      key={`presence-${tier.days}`}
+                      label={t('adminStats.presenceTier', { days: tier.days })}
+                      value={fmt(tier.users)}
+                      sublabel={`${fmtPct(tier.pct)} ${t('adminStats.ofUsersSeen')}`}
+                      tooltip={t('adminStats.presenceTierTooltip', { days: tier.days })}
+                    />
+                  ))}
+                <StatCard
+                  label={t('adminStats.usersSeen')}
+                  value={fmt(retention.presence.usersSeen)}
+                  sublabel={t('adminStats.usersSeenSub', { days: retention.presence.windowDays ?? 90 })}
+                  tooltip={t('adminStats.usersSeenTooltip')}
+                />
+              </div>
+            </>
+          )}
 
         </section>
       )}

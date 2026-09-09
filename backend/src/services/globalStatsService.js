@@ -20,10 +20,11 @@ const pct = (count, total) => total > 0 ? round((count / total) * 100, 1) : 0;
 // tier here and both the API payload and the dashboard pick it up — nothing
 // else to change.
 //
-// It stopped at 7 because the login ladder alongside it was bounded by the
-// audit TTL, and that ladder is gone (2026-08-21). The bottle-activity ladder
-// this now serves runs over ALL history, so a longer tier is no longer
-// structurally broken — just unmeasured. Adding one is a product call.
+// It stops at 7 because BOTH ladders have to be able to reach the top tier,
+// and the presence ladder sees only the audit TTL window (90 days). The
+// bottle ladder runs over all history and could take a longer tier; the
+// presence ladder could not, and two ladders with different rungs would be
+// worse than one rung fewer. Adding a tier is a product call, not a free one.
 const DAY_TIERS = [2, 4, 7];
 
 // $group accumulators counting users at or above each tier, e.g. { t2: {…}, t4: {…} }.
@@ -37,6 +38,112 @@ const tierRows = (row, total) => DAY_TIERS.map(n => ({
   users: row[`t${n}`] || 0,
   pct:   pct(row[`t${n}`] || 0, total),
 }));
+
+// How far back presence can be asked about. Read from the model so it tracks
+// the TTL index rather than restating 90 where it can silently disagree.
+const AUDIT_TTL_DAYS = AuditLog.TTL_DAYS || 90;
+
+// Actions that mean "this person arrived", written BEFORE the request is
+// authenticated. Both are needed: password sign-in and single sign-on write
+// different action names, and matching only the first silently drops every
+// SSO-only account. auth.demo_login is deliberately absent — demo accounts are
+// not customers, and they are excluded by id as well.
+const SIGNIN_ACTIONS = ['auth.login.success', 'auth.oauth.success'];
+
+// Connection bookkeeping, written by machines rather than done by people, and
+// therefore NOT presence.
+//
+// token.used is written once an hour per API token by whatever is holding it.
+// Production tokens are named "Home Assistant", "Homeassistant" and "Climate
+// device: Kallaren": integrations that poll around the clock and would mark
+// their owner present every single day, for ever. Measured on 2026-09-09 they
+// inflated the 7-or-more-days tier from 44 users to 63 — a 43% overstatement,
+// concentrated exactly where the most engaged people are supposed to be.
+// oauth.token_refreshed is a background token rotation and never a person.
+//
+// The token's origin ('personal' PAT vs 'oauth' connected AI) is NOT used to
+// tell machines from people, because it does not: production has personal
+// tokens named "claude" and OAuth tokens that could equally be automated.
+// The rule that survives contact with the data is simpler and explains itself
+// in one sentence — presence counts things a person DID, plus signing in.
+//
+// What this costs MCP users: nothing, measured rather than assumed. Dropping
+// these two actions removed NOBODY from the page — all 255 people seen stayed
+// seen — because anyone using MCP for something real writes an audited action
+// of their own (15 of the 16 accounts with MCP writes in the window remained
+// present; the 16th is an excluded admin). Only the hourly heartbeat goes: 7
+// users leave the 2-or-more tier and 19 leave the 7-or-more one, which is the
+// machine inflation being removed, not people being hidden.
+//
+// A read-only MCP session does now leave no trace here. That is consistent
+// rather than unfair: reading leaves no trace for anybody, since browsing the
+// site is not audited either. Presence is a floor for every kind of user.
+const MACHINE_ACTIONS = ['token.used', 'oauth.token_refreshed'];
+
+// Days a user was PRESENT, whether or not they touched a bottle.
+//
+// The bottle ladder alongside this one answers "did they use their cellar".
+// This one answers the question that comes first: did they come back at all.
+// Someone who signs in, reads their drink window and leaves is a returning
+// user by any honest reading, and the bottle ladder cannot see them.
+//
+// ⚠️ The trap that makes this non-obvious. A sign-in row is written before the
+// request is authenticated, so its actor is anonymous — `actor.userId` is NULL
+// on every login row in the collection, and the account is in `resource.id`
+// instead. Grouping on actor.userId alone therefore counts sign-ins as nobody.
+// Every other action carries actor.userId normally. The $project below
+// coalesces the two into one "who was here" field, and the exclusion $match
+// runs AFTER it, so a demo or admin sign-in is dropped by the resolved id
+// rather than slipping through as an anonymous row.
+//
+// Bounded by the audit TTL (AUDIT_TTL_DAYS, 90 by default) — unlike the bottle
+// ladder, which spans all history. The payload reports the window so the page
+// can say so rather than inviting a comparison of two different questions.
+// The rows that mean "this person was here", with the account resolved and the
+// excluded cohorts dropped. Shared by the ladder and the window counts below,
+// so the two can never come to disagree about who was present.
+const presenceStages = ({ since, excludedIds = [] }) => [
+  { $match: {
+    timestamp: { $gte: since },
+    action: { $nin: MACHINE_ACTIONS },
+    $or: [{ 'actor.userId': { $ne: null } }, { action: { $in: SIGNIN_ACTIONS } }],
+  }},
+  { $project: {
+    day: { $dateToString: { format: '%Y-%m-%d', date: '$timestamp' } },
+    at: '$timestamp',
+    who: { $cond: [{ $in: ['$action', SIGNIN_ACTIONS] }, '$resource.id', '$actor.userId'] },
+  }},
+  { $match: { who: { $nin: [...excludedIds, null] } } },
+];
+
+const buildPresencePipeline = (opts) => [
+  ...presenceStages(opts),
+  { $group: { _id: { user: '$who', day: '$day' } } },      // dedupe user×day
+  { $group: { _id: '$_id.user', activeDays: { $sum: 1 } } }, // days per user
+  { $group: {
+    _id: null,
+    usersSeen: { $sum: 1 },
+    ...tierAccumulators('$activeDays'),
+  }},
+];
+
+// "How many people were here in the last 24h / 7d / 30d / 90d", answered in a
+// SINGLE pass rather than one scan per window: reduce to each user's most
+// recent moment, then count how many of those fall inside each window. Adding
+// a window costs nothing extra.
+//
+// The widest window can be no wider than the audit TTL — rows older than that
+// are gone — so the caller passes windows it can actually see.
+const buildPresenceWindowPipeline = ({ since, excludedIds = [], windows }) => [
+  ...presenceStages({ since, excludedIds }),
+  { $group: { _id: '$who', lastSeen: { $max: '$at' } } },
+  { $group: {
+    _id: null,
+    ...Object.fromEntries(Object.entries(windows).map(([label, from]) => [
+      label, { $sum: { $cond: [{ $gte: ['$lastSeen', from] }, 1, 0] } },
+    ])),
+  }},
+];
 
 /**
  * Turn raw `{_id: plan, count}` groups into the distribution the page renders.
@@ -184,6 +291,8 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
   const since30 = new Date(Date.now() - 30 * 86400000);
   const since90 = new Date(Date.now() - 90 * 86400000);
   const since24h = new Date(Date.now() - 86400000);
+  // Presence can only be seen as far back as audit rows are kept.
+  const sinceAudit = new Date(Date.now() - AUDIT_TTL_DAYS * 86400000);
   const since7d  = new Date(Date.now() - 7 * 86400000);
 
   // ── Who counts as a customer ────────────────────────────────────────────
@@ -310,17 +419,28 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
     engagementWindow(since90),
   ]);
 
+  // The same four windows, counting presence instead of cellar changes: signed
+  // in, or did anything the audit log records. Reliably the larger number —
+  // reading your cellar is using the app, and the bottle count cannot see it.
+  const presenceWindowsRaw = await safeAggregate(AuditLog, buildPresenceWindowPipeline({
+    since: sinceAudit,
+    excludedIds,
+    windows: { w24h: since24h, w7d: since7d, w30d: since30, w90d: since90 },
+  }));
+  const presentWindows = presenceWindowsRaw[0] || {};
+
   // ── Retention / returning users ──────────────────────────────────────────
   // "Returning" = a genuine repeat user, not a sign-up who poked around once.
   // Derived RETROACTIVELY from activity so it works across all history: a user
   // is returning if they added or consumed bottles on >=2 distinct calendar
   // days (4+ days = "core"/power users; DAY_TIERS carries the full ladder).
-  // Counting distinct days, not events, so
-  // adding 50 bottles in one sitting still counts as a single session. The
-  // login-based figures further below are derived from the audit log (no new
-  // per-user field stored) and so are likewise retroactive — bounded only by
-  // the audit TTL window. The activity metric is the headline because it spans
-  // all history and isn't undercounted by long-lived refresh-token sessions.
+  // Counting distinct days, not events, so adding 50 bottles in one sitting
+  // still counts as a single session.
+  //
+  // This is the HEADLINE ladder because it spans all history. The presence
+  // ladder computed just below answers a broader question — did they come
+  // back at all — but only as far back as audit rows are kept. Two questions,
+  // two windows, both labelled on the page.
   const returningRaw = await safeAggregate(Bottle, [
     { $match: bottleMatch },
     { $project: {
@@ -350,6 +470,14 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
   const returningUsers = ret.t2 || 0;   // 2+ distinct active days
   const coreUsers = ret.t4 || 0;        // 4+ — a stickier tier, subset of the above
   const singleSessionUsers = Math.max(0, ret.usersWithActivity - returningUsers);
+
+  // The same ladder, over presence rather than bottles. One aggregation,
+  // bounded by the audit TTL and served by the timestamp index — measured at
+  // ~240 ms against 57k production rows, behind a 5-minute cache.
+  const presenceRaw = await safeAggregate(AuditLog,
+    buildPresencePipeline({ since: sinceAudit, excludedIds }));
+  const pres = presenceRaw[0] || { usersSeen: 0 };
+  const presenceTiers = tierRows(pres, pres.usersSeen || 0);
 
   // ── Signup cohorts: do new users come back? ─────────────────────────────
   //
@@ -390,19 +518,25 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
   const matureSignups = mature.reduce((s, c) => s + c.signedUp, 0);
   const matureReturned = mature.reduce((s, c) => s + c.returned, 0);
 
-  // Login-derived retention was REMOVED 2026-08-21. It answered a question the
-  // activity ladder above already answers better, and it cost the single most
-  // expensive query on this page: a full AuditLog scan over every login event,
-  // grouped user×day then twice more. Login figures also structurally
-  // undercount — a long-lived refresh session never re-hits /login — so the
-  // two ladders disagreed by design and invited exactly the comparison the
-  // docs had to warn against.
+  // History worth keeping: a LOGIN-ONLY ladder lived here until 2026-08-21 and
+  // was removed for good reasons. It counted sign-in events, and a rotating
+  // 30-day refresh cookie means an active user may not sign in for weeks — so
+  // it structurally undercounted, disagreed with the bottle ladder by design,
+  // and invited exactly the comparison the docs had to warn against.
   //
-  // The LOGIN_ACTIONS constant went with it rather than being kept "for
-  // documentation": nothing read it, and a constant nobody reads is litter
-  // wearing a comment. The one fact worth not relearning — Google SSO writes
-  // its OWN audit action, so matching only 'auth.login.success' silently drops
-  // every SSO-only user — lives in docs/admin-global-stats-architecture.md.
+  // The presence ladder above is NOT that metric returning. Measured against
+  // production on 2026-09-09, sign-in events alone found 105 returning users
+  // where presence found 130: a quarter of them were missed by counting logins.
+  // Presence counts any recorded action, sign-ins included, so a long session
+  // no longer hides anyone. It is one indexed aggregation (~240 ms over 57k
+  // rows) behind the 5-minute cache, not the full scan the old one was.
+  //
+  // Two facts that cost real time to learn, kept here because nothing in the
+  // schema hints at either: single sign-on writes its OWN audit action, so
+  // matching only 'auth.login.success' silently drops every SSO-only account;
+  // and a sign-in row is written before the request is authenticated, so its
+  // actor.userId is NULL and the account is in resource.id instead. Both are
+  // handled in buildPresencePipeline. See docs/admin-global-stats-architecture.md.
 
   // ── Plans / subscriptions ───────────────────────────────────────────────
   // Every CONFIGURED tier appears, including the ones nobody has chosen.
@@ -660,10 +794,19 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
       bottlesConsumed90,
     },
     engagement: {
+      // Changed a cellar: added or consumed a bottle in the window.
       activeUsers24h,
       activeUsers7d,
       activeUsers30d,
       activeUsers90d,
+      // Was here at all: signed in, or anything the audit log records. Bounded
+      // by the audit TTL, which is why the window ships alongside — the 90-day
+      // figure is the whole visible history, not a rolling quarter.
+      present24h: presentWindows.w24h || 0,
+      present7d:  presentWindows.w7d  || 0,
+      present30d: presentWindows.w30d || 0,
+      present90d: presentWindows.w90d || 0,
+      presenceWindowDays: AUDIT_TTL_DAYS,
     },
     retention: {
       // Retroactive, activity-based (works across all history).
@@ -685,6 +828,18 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
       cohortSignups: matureSignups,
       cohortReturned: matureReturned,
       cohortReturnedPct: pct(matureReturned, matureSignups),
+      // The second ladder: days the user was PRESENT (signed in, or did
+      // anything the audit log records) rather than days they changed a
+      // cellar. Windowed by the audit TTL, which is why windowDays ships with
+      // it — the page must say which question it is answering.
+      presence: {
+        usersSeen: pres.usersSeen || 0,
+        returningUsers: pres.t2 || 0,
+        coreUsers: pres.t4 || 0,
+        returningPct: pct(pres.t2 || 0, pres.usersSeen),
+        tiers: presenceTiers,
+        windowDays: AUDIT_TTL_DAYS,
+      },
     },
     plans: {
       distribution: planDistribution,
@@ -730,5 +885,7 @@ module.exports = {
     DAY_TIERS, tierAccumulators, tierRows,
     buildPlanDistribution, buildSignupCohorts, COHORT_WINDOW_DAYS, COHORT_SPAN_DAYS,
     buildBridgeSummary, buildActivation,
+    buildPresencePipeline, buildPresenceWindowPipeline,
+    SIGNIN_ACTIONS, MACHINE_ACTIONS, AUDIT_TTL_DAYS,
   },
 };

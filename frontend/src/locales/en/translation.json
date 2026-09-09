@@ -3684,7 +3684,27 @@
     "cohortReturnedTooltip": "Of everyone who signed up between 1 and 4 weeks ago, the share who did anything the app records in the last 7 days — not only adding a bottle, and not merely signing in, since a session lasts 30 days without a fresh login. Drawn from the audit log, which is kept for 90 days; that is ample for a 7-day question. The most recent week is excluded because its members were active in the window by virtue of signing up in it.",
     "cohortRange": "{{from}}–{{to}} days ago",
     "cohortTooNew": "too recent",
-    "cohortNote": "Came back = any recorded action in the last 7 days — adding, editing, consuming, anything the audit log records. That is deliberately broader than the bottle-only measure above, because a new user finding their way around counts as coming back. The newest group shows its intake only: those users were active in the window because they joined during it, so a percentage there would measure nothing."
+    "cohortNote": "Came back = any recorded action in the last 7 days — adding, editing, consuming, anything the audit log records. That is deliberately broader than the bottle-only measure above, because a new user finding their way around counts as coming back. The newest group shows its intake only: those users were active in the window because they joined during it, so a percentage there would measure nothing.",
+    "engagementChanged": "Changed a cellar",
+    "engagementPresent": "Signed in or acted",
+    "presenceNote": "Present = signed in, or did something the app records: adding, editing, consuming, asking the sommelier. Automated API traffic does not count, so a Home Assistant or climate integration polling in the background is not mistaken for its owner showing up. Reading pages is not recorded for anyone, so this is a floor rather than a ceiling. Seen as far back as the activity log is kept, which is {{days}} days.",
+    "presenceTooltip": "People who signed in or did something recorded during this window. Wider than the cellar-change figure above it, because reading your own drink window is using the app and adds no bottle. Background API polling is excluded — a machine is not a visit.",
+    "presenceAllTooltip": "Everyone the activity log can still see. The widest window here is the log’s own retention period, so this is the whole visible history rather than a rolling quarter.",
+    "presenceAllSub": "the whole {{days}}-day log",
+    "present24h": "Present (24h)",
+    "present7d": "Present (7d)",
+    "present30d": "Present (30d)",
+    "present90d": "Present (all logged)",
+    "retentionByPresence": "By days present (last {{days}} days)",
+    "presenceLadderNote": "The same ladder, asking whether people came back at all rather than whether they changed a cellar. It counts sign-ins and every recorded action, so a long signed-in session no longer hides anyone, and it ignores automated API traffic so an always-on integration cannot look like a daily user. Its window is the activity log, not all history — which is why this ladder and the one above it are not comparable figures.",
+    "presenceReturning": "Returning users (2+ days present)",
+    "presenceReturningTooltip": "People present on 2 or more separate calendar days within the last {{days}} days. Counting sign-ins alone would find roughly a quarter fewer, because a signed-in session lasts 30 days without a fresh sign-in.",
+    "presenceTier": "Present on {{days}}+ days",
+    "presenceTierTooltip": "People present on {{days}} or more separate calendar days in the window. Each tier contains the ones above it.",
+    "usersSeen": "People seen at all",
+    "usersSeenSub": "in the last {{days}} days",
+    "usersSeenTooltip": "Everyone with at least one recorded action or sign-in in the window. This is the denominator the percentages beside it use.",
+    "ofUsersSeen": "of people seen"
   },
   "announcement": {
     "dismiss": "Dismiss"
