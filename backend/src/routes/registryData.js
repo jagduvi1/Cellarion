@@ -12,11 +12,16 @@ const router = express.Router();
 
 router.use(requireAuth);
 
+// The language the UI is showing, as `?lang=`. Validated downstream by
+// utils/localizedName.baseLanguage, so anything odd falls back to English —
+// the same contract as GET /api/taxonomy/display-names.
+const readerLocale = (req) => (typeof req.query.lang === 'string' ? req.query.lang : null);
+
 
 /** GET /api/registry-data/keys — the accepted vocabulary. */
 router.get('/keys', async (req, res, next) => {
   try {
-    const result = await ops.listAcceptedKeys();
+    const result = await ops.listAcceptedKeys({ locale: readerLocale(req) });
     res.json({ keys: result.keys });
   } catch (err) {
     next(err);
@@ -44,7 +49,9 @@ router.get('/wine/:id', async (req, res, next) => {
     // ?vintage=YYYY resolves per-vintage overrides for that bottling and
     // tells the client which slot a new suggestion would land in.
     const vintage = typeof req.query.vintage === 'string' ? req.query.vintage : undefined;
-    const result = await ops.dataForWine(req.params.id, req.user.id, { roles: req.user.roles, vintage });
+    const result = await ops.dataForWine(req.params.id, req.user.id, {
+      roles: req.user.roles, vintage, locale: readerLocale(req),
+    });
     if (!result.ok) return sendFail(res, result);
     res.json({ fields: result.fields, vintage: result.vintage });
   } catch (err) {

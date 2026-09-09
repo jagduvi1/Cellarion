@@ -16,9 +16,13 @@ vi.mock('../api/registryData', () => ({
   getRegistryDataQueues: vi.fn(),
   decideRegistryKey: vi.fn(),
   decideRegistryValue: vi.fn(),
+  getRegistryKeys: vi.fn(),
+  setRegistryKeyTranslations: vi.fn(),
 }));
 
-const { getRegistryDataQueues, decideRegistryValue } = await import('../api/registryData');
+const {
+  getRegistryDataQueues, decideRegistryValue, getRegistryKeys, setRegistryKeyTranslations,
+} = await import('../api/registryData');
 const AdminRegistryData = (await import('./AdminRegistryData')).default;
 
 const ok = (body) => ({ ok: true, json: async () => body });
@@ -28,6 +32,53 @@ const WINE = { _id: 'w1', name: 'Bannockburn Pinot Noir', producer: 'Valli', slu
 beforeEach(() => {
   vi.clearAllMocks();
   decideRegistryValue.mockResolvedValue(ok({ value: { _id: 'v1', status: 'published' } }));
+  getRegistryKeys.mockResolvedValue(ok({ keys: [] }));
+});
+
+// The vocabulary editor (2026-09-09): every accepted key gets a display name
+// per language, and the English name is never one of the boxes — it IS the
+// key. The body sent is the WHOLE map, so an emptied box is a removal.
+describe('display-name translations', () => {
+  test('an accepted key shows one box per non-English language, prefilled from the server', async () => {
+    getRegistryDataQueues.mockResolvedValue(ok({ keys: [], values: [] }));
+    getRegistryKeys.mockResolvedValue(ok({ keys: [
+      { _id: 'k1', name: 'ABV', type: 'decimal', unit: '%', enumOptions: null, translations: { de: 'Alkoholgehalt' } },
+    ] }));
+    render(<AdminRegistryData />);
+    expect(await screen.findByText('Vocabulary (1)')).toBeInTheDocument();
+    const de = screen.getByLabelText(/ABV in .*(German|Deutsch)/);
+    expect(de).toHaveValue('Alkoholgehalt');
+    expect(screen.queryByLabelText(/ABV in English/)).not.toBeInTheDocument();
+    // Nothing to save until something is typed.
+    expect(screen.getByText('Save names')).toBeDisabled();
+  });
+
+  test('saving sends the whole map, trimmed, with emptied boxes dropped', async () => {
+    getRegistryDataQueues.mockResolvedValue(ok({ keys: [], values: [] }));
+    getRegistryKeys.mockResolvedValue(ok({ keys: [
+      { _id: 'k1', name: 'ABV', type: 'decimal', unit: '%', enumOptions: null, translations: { de: 'Alkoholgehalt', fr: 'Alcool' } },
+    ] }));
+    setRegistryKeyTranslations.mockResolvedValue(ok({ key: { _id: 'k1', name: 'ABV', translations: { de: 'Alkoholgehalt', sv: 'Alkoholhalt' } } }));
+    render(<AdminRegistryData />);
+    await screen.findByText('Vocabulary (1)');
+    fireEvent.change(screen.getByLabelText(/ABV in .*(Swedish|Svenska)/), { target: { value: '  Alkoholhalt ' } });
+    fireEvent.change(screen.getByLabelText(/ABV in .*(French|Français)/), { target: { value: '' } });
+    fireEvent.click(screen.getByText('Save names'));
+    await waitFor(() => expect(setRegistryKeyTranslations).toHaveBeenCalledWith(
+      apiFetch, 'k1', { de: 'Alkoholgehalt', sv: 'Alkoholhalt' },
+    ));
+    expect(await screen.findByText('Saved')).toBeInTheDocument();
+  });
+
+  test('a failed vocabulary read leaves the review queues intact', async () => {
+    getRegistryDataQueues.mockResolvedValue(ok({ keys: [], values: [
+      { _id: 'v1', key: ABV, value: 13.5, vintage: null, wineDefinition: WINE, suggestedBy: { username: 'kurt' } },
+    ] }));
+    getRegistryKeys.mockRejectedValue(new Error('down'));
+    render(<AdminRegistryData />);
+    expect(await screen.findByText('Suggested values (1)')).toBeInTheDocument();
+    expect(screen.getByText('Vocabulary (0)')).toBeInTheDocument();
+  });
 });
 
 test('a vintage row shows its slot and the wine-wide value it diverges from', async () => {

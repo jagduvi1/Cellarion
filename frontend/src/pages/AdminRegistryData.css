@@ -14,6 +14,43 @@
   font-size: 0.9rem;
 }
 
+/* Display-name editor on the vocabulary cards: one box per language, the
+   language code beside its label so an admin never has to guess which is
+   which. */
+.ard-translations {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.ard-translations label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.ard-translations input {
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.15));
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.ard-lang {
+  font-family: monospace;
+  opacity: 0.7;
+}
+
+.ard-saved {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
 .ard-empty {
   color: var(--color-text-muted);
   font-size: 0.9rem;

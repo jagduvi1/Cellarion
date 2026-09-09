@@ -51,6 +51,22 @@ const registryDataKeySchema = new mongoose.Schema({
     minlength: [10, 'Rationale too short'],
     maxlength: [1000, 'Rationale too long']
   },
+  // Display names in the reader's language, keyed by base language code
+  // ('de', 'fr', 'sv'). The canonical `name` stays English and authoritative —
+  // it is what nameKey uniqueness, MCP tool arguments and the analytics
+  // vocabulary key on — and a translation is a DISPLAY concern layered on top,
+  // exactly as models/Country and models/Region do it (utils/localizedName).
+  // Absent on an untranslated key, which then reads as it always has.
+  //
+  // Why this exists: the day after the vocabulary got its first
+  // German-speaking contributor, "Alkoholgehalt" was proposed as a new key.
+  // It is ABV. The vocabulary was doing its job of refusing duplicates, but
+  // a reader who never sees "ABV" in their own language cannot know that.
+  translations: {
+    type: Map,
+    of: String,
+    default: undefined,
+  },
   status: {
     // Indexed via the compound { status, createdAt } queue index below.
     type: String,

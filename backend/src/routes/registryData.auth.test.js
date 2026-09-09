@@ -43,7 +43,7 @@ describe('admin registry-data router shape', () => {
   test('drift canary + admin gating', () => {
     const routes = shape(adminRegistryDataRouter);
     expect(routes.map((r) => `${r.methods.join(',')} ${r.path}`).sort()).toEqual([
-      'GET /', 'POST /keys/:id/decide', 'POST /values/:id/decide',
+      'GET /', 'POST /keys/:id/decide', 'POST /values/:id/decide', 'PUT /keys/:id/translations',
     ]);
     // requireAuth + requireRole('admin') ride as router-level use() layers.
     const useLayers = adminRegistryDataRouter.stack.filter((l) => !l.route).map((l) => l.handle);

@@ -168,3 +168,37 @@ test('server rejection (e.g. daily limit) surfaces in the modal', async () => {
   fireEvent.click(screen.getByText('Send suggestion'));
   expect(await screen.findByText(/suggestion limit/)).toBeInTheDocument();
 });
+
+// Display names (2026-09-09). The day after the vocabulary got its first
+// German-speaking contributor, "Alkoholgehalt" was proposed as a new key: it
+// is ABV, and he could not have known, because the only key on his bottle
+// page was named in a language he was not reading in. A key now carries the
+// reader's name in `displayName`; `name` stays the identifier.
+describe('key display names', () => {
+  test('a translated key is labelled in the reader\'s language, and the suggest action uses that label', async () => {
+    getWinePublicData.mockResolvedValue(ok({
+      fields: [
+        { key: { _id: 'k1', name: 'ABV', displayName: 'Alkoholgehalt', type: 'decimal', unit: '%', enumOptions: null }, value: null, contributedBy: null, mySuggestion: null },
+      ],
+    }));
+    renderSection();
+    expect(await screen.findByText('Alkoholgehalt')).toBeInTheDocument();
+    expect(screen.queryByText('ABV')).not.toBeInTheDocument();
+    enterSuggestMode();
+    expect(screen.getByLabelText('Suggest a value for Alkoholgehalt')).toBeInTheDocument();
+  });
+
+  test('a key without a translation reads exactly as before', async () => {
+    // An older payload has no displayName at all; a translated payload for a
+    // language with no entry carries the English name in it. Both show "ABV".
+    getWinePublicData.mockResolvedValue(ok({
+      fields: [
+        { key: { _id: 'k1', name: 'ABV', type: 'decimal', unit: '%', enumOptions: null }, value: 13.5, contributedBy: 'Kurt', mySuggestion: null },
+        { key: { _id: 'k2', name: 'Organic', displayName: 'Organic', type: 'boolean', unit: null, enumOptions: null }, value: null, contributedBy: null, mySuggestion: null },
+      ],
+    }));
+    renderSection();
+    expect(await screen.findByText('ABV')).toBeInTheDocument();
+    expect(screen.getByText('Organic')).toBeInTheDocument();
+  });
+});

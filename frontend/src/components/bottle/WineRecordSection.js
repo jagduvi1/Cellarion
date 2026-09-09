@@ -20,7 +20,12 @@ import './WineRecordSection.css';
 const SUGGESTABLE = ['producer', 'name', 'appellation', 'region', 'country', 'classification'];
 
 function WineRecordSection({ wine, canSuggest, apiFetch, vintage }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  // The reader's language rides along on the fetch, and a key comes back
+  // with a displayName in it when a translation exists. `name` stays the
+  // identifier; only what is SHOWN changes.
+  const lang = i18n?.language || null;
+  const keyLabel = (key) => key.displayName || key.name;
   // The bottle's vintage when this section sits on a bottle page: public
   // values resolve that year's override over the wine-wide default, and a
   // new suggestion lands in that year's slot unless the user widens it.
@@ -52,12 +57,12 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage }) {
 
   const loadPublicData = useCallback(async () => {
     try {
-      const res = await getWinePublicData(apiFetch, wine._id, bottleVintage);
+      const res = await getWinePublicData(apiFetch, wine._id, bottleVintage, lang);
       if (!res.ok) return;
       const body = await res.json().catch(() => ({}));
       setPublicFields(body.fields || []);
     } catch { /* non-critical — the record renders without it */ }
-  }, [apiFetch, wine?._id, bottleVintage]);
+  }, [apiFetch, wine?._id, bottleVintage, lang]);
 
   useEffect(() => {
     if (wine?._id) loadPublicData();
@@ -269,7 +274,7 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage }) {
               const shown = formatPublicValue(field);
               return (
                 <div key={field.key._id} className="wr-row">
-                  <span className="wr-key">{field.key.name}</span>
+                  <span className="wr-key">{keyLabel(field.key)}</span>
                   <span className={shown ? 'wr-value' : 'wr-value wr-value--blank'}>
                     {shown || t('wineRecord.notRecorded', 'not recorded')}
                     {/* Which layer answered: this vintage's override, or the
@@ -311,7 +316,7 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage }) {
                         setValueVintage('');
                         setError(null);
                       }}
-                      aria-label={t('wineRecord.suggestValueFor', 'Suggest a value for {{field}}', { field: field.key.name })}
+                      aria-label={t('wineRecord.suggestValueFor', 'Suggest a value for {{field}}', { field: keyLabel(field.key) })}
                     >
                       {shown && field.resolvedFrom === 'wine' && bottleVintage
                         ? t('wineRecord.addVintageValue', 'Add {{year}} value', { year: bottleVintage })
@@ -397,7 +402,7 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage }) {
 
       {valueModal && (
         <Modal
-          title={t('wineRecord.valueModalTitle', 'Suggest a value: {{field}}', { field: valueModal.field.key.name })}
+          title={t('wineRecord.valueModalTitle', 'Suggest a value: {{field}}', { field: keyLabel(valueModal.field.key) })}
           onClose={() => !busy && setValueModal(null)}
         >
           <form onSubmit={submitValue} className="pd-form">
