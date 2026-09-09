@@ -307,6 +307,7 @@ function AdminStats() {
                     cell holds "7 · 44%", and on a phone that must never split
                     across lines (it read as broken data when it did). The
                     other admin tables are unaffected. */}
+                <div className="admin-stats-scroll">
                 <table className="admin-stats-table admin-stats-cohorts">
                   <thead>
                     <tr>
@@ -348,6 +349,7 @@ function AdminStats() {
                     ))}
                   </tbody>
                 </table>
+                </div>
                 <p className="admin-stats-section-note">{t('adminStats.cohortNote')}</p>
               </div>
             </>

@@ -367,3 +367,26 @@
   word-break: normal;
   overflow-wrap: anywhere;
 }
+/* Four columns on a phone. The nowrap rule above matches header cells too, so
+   "Changed a cellar" took the width it wanted and the label column collapsed
+   to one character per line (measured at 360px: 29px wide, 174px tall).
+   Headers may wrap; the label column keeps room for "7–14 days ago" on two
+   lines; cells give up a little side padding so all four columns fit a 360px
+   screen (measured: label 102px wide, table 2px inside its panel); and on a
+   screen narrower still, the table scrolls sideways inside its wrapper rather
+   than crushing a column. */
+.admin-stats-cohorts th.admin-stats-count,
+.admin-stats-cohorts th.admin-stats-pct {
+  white-space: normal;
+}
+.admin-stats-cohorts .admin-stats-name {
+  min-width: 6rem;
+}
+.admin-stats-cohorts th,
+.admin-stats-cohorts td {
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+.admin-stats-scroll {
+  overflow-x: auto;
+}
