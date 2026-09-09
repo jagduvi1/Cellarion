@@ -1,11 +1,8 @@
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
 const User = require('../models/User');
+const BridgeKey = require('../models/BridgeKey');
 const WineDefinition = require('../models/WineDefinition');
-const WineVintageProfile = require('../models/WineVintageProfile');
-const WineRequest = require('../models/WineRequest');
-const BottleImage = require('../models/BottleImage');
-const Rack = require('../models/Rack');
 const AuditLog = require('../models/AuditLog');
 const { PLAN_NAMES } = require('../config/plans');
 
@@ -117,13 +114,39 @@ const safeAggregate = async (model, pipeline) => {
   }
 };
 
+// Bridge-only = holds a bridge account and owns no bottle on this instance.
+// Derived on every read rather than stored, because it is not a property of
+// the account: the day a bridge user adds their first bottle here they stop
+// being bridge-only, and nothing has to be migrated for that to be true.
+//
+// Clamped at zero because the two inputs come from separate queries. Between
+// them a bottle can be added, which would otherwise report a negative count.
+const buildBridgeSummary = ({ accounts = 0, ownersWithBottles = 0, liveKeyOwners = 0, everKeyOwners = 0 }) => ({
+  accounts,
+  bridgeOnly: Math.max(0, accounts - ownersWithBottles),
+  liveKeys: liveKeyOwners,
+  everConnected: everKeyOwners,
+});
+
+// Activation asks "of the people who could put a bottle in a cellar here, how
+// many did". Bridge-only accounts could not — their cellar lives on their own
+// server — so dividing by totalUsers would count a working self-hosted install
+// as a failed signup, and would sink the figure further with every install the
+// beta adds. Divide by the people the question is actually about.
+const buildActivation = ({ totalUsers = 0, usersWithBottles = 0, bridgeOnlyUsers = 0 }) => {
+  const cellarUsers = Math.max(0, totalUsers - bridgeOnlyUsers);
+  return {
+    cellarUsers,
+    activationPct: cellarUsers > 0 ? Math.round((usersWithBottles / cellarUsers) * 100) : 0,
+  };
+};
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 // ── In-memory cache ──────────────────────────────────────────────────────────
-// ~20 aggregations per call against MongoDB, plus an in-memory median sort
-// per currency. Admin-only traffic so the load is low, but caching keeps the
-// page snappy and avoids hammering Mongo if an admin holds Cmd-R. TTL is
-// short enough that the page never feels stale.
+// A dozen aggregations per call against MongoDB. Admin-only traffic so the
+// load is low, but caching keeps the page snappy and avoids hammering Mongo if
+// an admin holds Cmd-R. TTL is short enough that the page never feels stale.
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const _cache = new Map();  // key: excludeAdmins flag ('true' | 'false') → { at, data }
 
@@ -134,10 +157,11 @@ const _cache = new Map();  // key: excludeAdmins flag ('true' | 'false') → { a
  * @param {object}  [options]
  * @param {boolean} [options.excludeAdmins=true]
  *        When true (the default), all per-user data (bottles, cellars, user
- *        counts, plans, engagement, retention, image uploads, wine requests,
- *        racks) is filtered to exclude any user with the 'admin' role — so the
- *        dashboard reflects real customers, not our own test/admin accounts.
- *        Pass false explicitly to include admins.
+ *        counts, plans, engagement, retention) is filtered to exclude any user
+ *        with the 'admin' role — so the dashboard reflects real customers, not
+ *        our own test/admin accounts. Pass false explicitly to include admins.
+ *        Demo accounts and accounts pending deletion are excluded either way;
+ *        the payload's `excluded` block reports how many of each.
  * @param {boolean} [options.force=false]
  *        When true, bypass the in-memory cache and recompute fresh.
  * @returns {Promise<object>}
@@ -162,26 +186,42 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
   const since24h = new Date(Date.now() - 86400000);
   const since7d  = new Date(Date.now() - 7 * 86400000);
 
-  // ── Admin-exclusion filters ─────────────────────────────────────────────
-  // When excludeAdmins=true, we filter every per-user collection to drop
-  // admin-owned data. For Rack (which has no `user` field — it belongs to a
-  // Cellar that belongs to a User) we have to resolve the chain by first
-  // collecting admin cellar IDs.
+  // ── Who counts as a customer ────────────────────────────────────────────
+  // Three kinds of account are excluded from every figure on this page, and
+  // the payload reports how many of each so the totals stay explainable.
+  //
+  //   admins            — our own data, not a customer's. Optional, on by
+  //                       default, because looking at the real numbers is the
+  //                       normal case; ?excludeAdmins=false opts back in.
+  //   demo accounts     — ephemeral clones of a snapshot cellar with a
+  //                       two-hour lifetime (config/rateLimits demo.ttlMs).
+  //                       Counting them inflated signups and every bottle
+  //                       figure with data nobody owns. ALWAYS excluded.
+  //   pending deletion  — the account asked to be erased and is inside the
+  //                       seven-day cooling-off window. ALWAYS excluded: they
+  //                       are leaving, and their data is about to go.
+  const alwaysExcluded = await User.find({
+    $or: [{ isDemo: true }, { deletionScheduledFor: { $ne: null } }],
+  }).select('_id isDemo deletionScheduledFor').lean();
+  const demoCount = alwaysExcluded.filter(u => u.isDemo).length;
+  const pendingDeletionCount = alwaysExcluded.filter(u => !u.isDemo && u.deletionScheduledFor).length;
+
   let adminIds = [];
-  let adminCellarIds = [];
   if (excludeAdmins) {
     const admins = await User.find({ roles: 'admin' }).select('_id').lean();
     adminIds = admins.map(a => a._id);
-    if (adminIds.length > 0) {
-      adminCellarIds = await Cellar.find({ user: { $in: adminIds } }).distinct('_id');
-    }
   }
-  const userMatch     = excludeAdmins ? { roles: { $nin: ['admin'] } } : {};
-  const bottleMatch   = excludeAdmins ? { user: { $nin: adminIds } }   : {};
-  const cellarMatch   = excludeAdmins ? { user: { $nin: adminIds } }   : {};
-  const imageMatch    = excludeAdmins ? { uploadedBy: { $nin: adminIds } } : {};
-  const requestMatch  = excludeAdmins ? { user: { $nin: adminIds } }       : {};
-  const rackMatch     = excludeAdmins ? { cellar: { $nin: adminCellarIds } } : {};
+  // One list drives every per-collection filter below.
+  const excludedIds = [...adminIds, ...alwaysExcluded.map(u => u._id)];
+  // The admin condition stays a role test rather than an id list so a newly
+  // promoted admin is excluded even if the id lookup above raced with it.
+  const userMatch = {
+    ...(excludeAdmins ? { roles: { $nin: ['admin'] } } : {}),
+    isDemo: { $ne: true },
+    deletionScheduledFor: null,
+  };
+  const bottleMatch = { user: { $nin: excludedIds } };
+  const cellarMatch = { user: { $nin: excludedIds } };
 
   // ── Overview ────────────────────────────────────────────────────────────
   const [
@@ -220,212 +260,34 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
     Bottle.countDocuments({ ...bottleMatch, consumedAt: { $gte: since90 } }),
   ]);
 
-  // ── Country / region / grape / producer breakdowns ──────────────────────
-  const topCountries = await safeAggregate(Bottle, [
-    { $match: { ...bottleMatch, status: 'active', wineDefinition: { $ne: null } } },
-    { $lookup: { from: 'winedefinitions', localField: 'wineDefinition', foreignField: '_id', as: 'wd' } },
-    { $unwind: '$wd' },
-    { $lookup: { from: 'countries', localField: 'wd.country', foreignField: '_id', as: 'country' } },
-    { $unwind: { path: '$country', preserveNullAndEmptyArrays: true } },
-    { $group: { _id: { name: '$country.name', code: '$country.code' }, count: { $sum: 1 } } },
-    { $match: { '_id.name': { $ne: null } } },
-    { $sort: { count: -1 } },
-    { $limit: 15 },
-    { $project: { _id: 0, name: '$_id.name', code: '$_id.code', count: 1 } },
+  // ── Bridge installs ─────────────────────────────────────────────────────
+  // A self-hoster who connects their own Cellarion to the shared registry
+  // needs an account here, but their wines live on their server — so they
+  // will never add a bottle to this instance, by design. Left inside
+  // totalUsers they look like signups that failed to activate, and they drag
+  // every activation figure down as the beta grows. Reported here as their
+  // own line, and subtracted from the activation denominator below.
+  //
+  // The marker is registryTerms.accepted: it is written only when a bridge
+  // key is issued, and unlike the key itself it survives revocation.
+  const bridgeTermsMatch = { ...userMatch, 'registryTerms.accepted': true };
+  const [bridgeAccounts, liveKeyOwners, everKeyOwners, bridgeUserIds] = await Promise.all([
+    User.countDocuments(bridgeTermsMatch),
+    BridgeKey.distinct('user', { revokedAt: null }).then(ids => ids.length),
+    BridgeKey.distinct('user').then(ids => ids.length),
+    User.find(bridgeTermsMatch).select('_id').lean().then(rows => rows.map(r => r._id)),
   ]);
-
-  const topRegions = await safeAggregate(Bottle, [
-    { $match: { ...bottleMatch, status: 'active', wineDefinition: { $ne: null } } },
-    { $lookup: { from: 'winedefinitions', localField: 'wineDefinition', foreignField: '_id', as: 'wd' } },
-    { $unwind: '$wd' },
-    { $lookup: { from: 'regions', localField: 'wd.region', foreignField: '_id', as: 'region' } },
-    { $unwind: { path: '$region', preserveNullAndEmptyArrays: true } },
-    { $group: { _id: '$region.name', count: { $sum: 1 } } },
-    { $match: { _id: { $ne: null } } },
-    { $sort: { count: -1 } },
-    { $limit: 15 },
-    { $project: { _id: 0, name: '$_id', count: 1 } },
-  ]);
-
-  const topGrapes = await safeAggregate(Bottle, [
-    { $match: { ...bottleMatch, status: 'active', wineDefinition: { $ne: null } } },
-    { $lookup: { from: 'winedefinitions', localField: 'wineDefinition', foreignField: '_id', as: 'wd' } },
-    { $unwind: '$wd' },
-    { $unwind: { path: '$wd.grapes', preserveNullAndEmptyArrays: true } },
-    { $lookup: { from: 'grapes', localField: 'wd.grapes', foreignField: '_id', as: 'grape' } },
-    { $unwind: { path: '$grape', preserveNullAndEmptyArrays: true } },
-    { $group: { _id: '$grape.name', count: { $sum: 1 } } },
-    { $match: { _id: { $ne: null } } },
-    { $sort: { count: -1 } },
-    { $limit: 15 },
-    { $project: { _id: 0, name: '$_id', count: 1 } },
-  ]);
-
-  // Producer rollup — collapses minor casing/whitespace variants of the
-  // same producer name (e.g. "Château Margaux " vs "château margaux") so
-  // they rank as one entry. Keeps an example display spelling via $first.
-  const topProducers = await safeAggregate(Bottle, [
-    { $match: { ...bottleMatch, status: 'active', wineDefinition: { $ne: null } } },
-    { $lookup: { from: 'winedefinitions', localField: 'wineDefinition', foreignField: '_id', as: 'wd' } },
-    { $unwind: '$wd' },
-    { $match: { 'wd.producer': { $ne: null } } },
-    { $addFields: { producerKey: { $toLower: { $trim: { input: '$wd.producer' } } } } },
-    { $group: { _id: '$producerKey', name: { $first: '$wd.producer' }, count: { $sum: 1 } } },
-    { $sort: { count: -1 } },
-    { $limit: 15 },
-    { $project: { _id: 0, name: 1, count: 1 } },
-  ]);
-
-  // ── Wine types ──────────────────────────────────────────────────────────
-  const byType = await safeAggregate(Bottle, [
-    { $match: { ...bottleMatch, status: 'active', wineDefinition: { $ne: null } } },
-    { $lookup: { from: 'winedefinitions', localField: 'wineDefinition', foreignField: '_id', as: 'wd' } },
-    { $unwind: '$wd' },
-    { $group: { _id: '$wd.type', count: { $sum: 1 } } },
-    { $sort: { count: -1 } },
-    { $project: { _id: 0, type: '$_id', count: 1 } },
-  ]);
-
-  // ── Vintage stats ───────────────────────────────────────────────────────
-  const vintageRaw = await safeAggregate(Bottle, [
-    { $match: { ...bottleMatch, status: 'active', vintage: { $nin: ['NV', null, ''] } } },
-    { $addFields: { yr: { $convert: { input: '$vintage', to: 'int', onError: null, onNull: null } } } },
-    { $match: { yr: { $gt: 1800, $lte: currentYear } } },
-    { $group: {
-      _id: null,
-      avgAge:  { $avg: { $subtract: [currentYear, '$yr'] } },
-      oldest:  { $min: '$yr' },
-      newest:  { $max: '$yr' },
-      count:   { $sum: 1 },
-    }},
-  ]);
-  const vintage = vintageRaw[0] || { avgAge: null, oldest: null, newest: null, count: 0 };
-
-  const byDecade = await safeAggregate(Bottle, [
-    { $match: { ...bottleMatch, status: 'active', vintage: { $nin: ['NV', null, ''] } } },
-    { $addFields: { yr: { $convert: { input: '$vintage', to: 'int', onError: null, onNull: null } } } },
-    { $match: { yr: { $gt: 1800, $lte: currentYear } } },
-    { $addFields: { decade: { $multiply: [{ $floor: { $divide: ['$yr', 10] } }, 10] } } },
-    { $group: { _id: '$decade', count: { $sum: 1 } } },
-    { $sort: { _id: 1 } },
-    { $project: { _id: 0, decade: '$_id', count: 1 } },
-  ]);
-
-  // ── Price (grouped by currency — avoids cross-rate noise) ───────────────
-  const priceByCurrency = await safeAggregate(Bottle, [
-    { $match: { ...bottleMatch, status: 'active', price: { $gt: 0 } } },
-    { $group: {
-      _id: '$currency',
-      count:      { $sum: 1 },
-      avgPrice:   { $avg: '$price' },
-      totalValue: { $sum: '$price' },
-      maxPrice:   { $max: '$price' },
-    }},
-    { $sort: { count: -1 } },
-    { $project: { _id: 0, currency: '$_id', count: 1, avgPrice: { $round: ['$avgPrice', 2] }, totalValue: { $round: ['$totalValue', 2] }, maxPrice: 1 } },
-  ]);
-
-  // ── Holding time (purchase → consumption) ───────────────────────────────
-  // NOTE: $bucket OMITS empty buckets, so we map results by _id (the bucket's
-  // lower boundary) rather than by array index — otherwise an empty middle
-  // bucket would shift every label downward and silently mislabel real data.
-  const HOLDING_BUCKETS = [
-    { id: 0,      label: '<1yr'  },
-    { id: 365,    label: '1–2yr' },
-    { id: 730,    label: '2–5yr' },
-    { id: 1825,   label: '5–10yr'},
-    { id: 3650,   label: '10+yr' },
-    { id: 'over', label: 'over'  },
-  ];
-  const holdingRaw = await safeAggregate(Bottle, [
-    { $match: { ...bottleMatch, status: { $ne: 'active' }, consumedAt: { $ne: null }, purchaseDate: { $ne: null } } },
-    { $addFields: { daysHeld: { $divide: [{ $subtract: ['$consumedAt', '$purchaseDate'] }, 86400000] } } },
-    { $bucket: {
-      groupBy: '$daysHeld',
-      boundaries: [0, 365, 730, 1825, 3650, 100000],
-      default: 'over',
-      output: { count: { $sum: 1 } },
-    }},
-  ]);
-  const totalHeld = holdingRaw.reduce((s, h) => s + h.count, 0);
-  const holdingTime = HOLDING_BUCKETS.map(({ id, label }) => {
-    const row = holdingRaw.find(h => h._id === id);
-    const count = row?.count || 0;
-    return { bucket: label, count, pct: pct(count, totalHeld) };
+  // Bridge-only = has a bridge account and owns no bottle here. Derived, never
+  // stored: a bridge user who later adds a bottle stops being one.
+  const bridgeOwnersWithBottles = bridgeUserIds.length
+    ? (await Bottle.distinct('user', { ...bottleMatch, user: { $in: bridgeUserIds } })).length
+    : 0;
+  const bridge = buildBridgeSummary({
+    accounts: bridgeAccounts,
+    ownersWithBottles: bridgeOwnersWithBottles,
+    liveKeyOwners,
+    everKeyOwners,
   });
-
-  // ── Bottle-size distribution ────────────────────────────────────────────
-  // Bottle-size rollup — collapses minor variants of the same physical
-  // size. Users have entered "750ml", "750ml (Standard)", and the CJK
-  // fullwidth-paren "750ml（標準）" as three different strings; this
-  // groups them into one entry. Pattern:
-  //   1. Replace fullwidth '（' with ASCII '(' so the split below catches both
-  //   2. Split on '(' and take the first piece (drops any "(...)" suffix)
-  //   3. Trim + lowercase to canonicalise
-  //   4. Keep the most popular original spelling as the display name via $first
-  const byBottleSize = await safeAggregate(Bottle, [
-    { $match: { ...bottleMatch, status: 'active' } },
-    { $addFields: {
-      sizeKey: {
-        $toLower: {
-          $trim: {
-            input: {
-              $arrayElemAt: [
-                { $split: [
-                  { $replaceAll: { input: { $ifNull: ['$bottleSize', ''] }, find: '（', replacement: '(' } },
-                  '(',
-                ]},
-                0,
-              ],
-            },
-          },
-        },
-      },
-    }},
-    { $sort: { bottleSize: 1 } },  // deterministic $first pick for tie-breaks
-    { $group: { _id: '$sizeKey', size: { $first: '$bottleSize' }, count: { $sum: 1 } } },
-    { $match: { _id: { $ne: '' } } },
-    { $sort: { count: -1 } },
-    { $project: { _id: 0, size: 1, count: 1 } },
-  ]);
-
-  // ── Cellar-size distribution ────────────────────────────────────────────
-  // Same _id-keyed mapping as holdingTime — defensive against empty buckets.
-  const CELLAR_BUCKETS = [
-    { id: 1,       label: '1–9'      },
-    { id: 10,      label: '10–24'    },
-    { id: 25,      label: '25–49'    },
-    { id: 50,      label: '50–99'    },
-    { id: 100,     label: '100–249'  },
-    { id: 250,     label: '250–499'  },
-    { id: 500,     label: '500+'     },
-    { id: 'other', label: 'other'    },
-  ];
-  const bottlesPerCellar = await safeAggregate(Bottle, [
-    { $match: { ...bottleMatch, status: 'active' } },
-    { $group: { _id: '$cellar', count: { $sum: 1 } } },
-    { $bucket: {
-      groupBy: '$count',
-      boundaries: [1, 10, 25, 50, 100, 250, 500, 100000],
-      default: 'other',
-      output: { count: { $sum: 1 } },
-    }},
-  ]);
-  const cellarSizeDistribution = CELLAR_BUCKETS.map(({ id, label }) => {
-    const row = bottlesPerCellar.find(b => b._id === id);
-    return { bucket: label, cellars: row?.count || 0 };
-  });
-
-  // ── Top wine definitions (most-collected wines) ─────────────────────────
-  const topWines = await safeAggregate(Bottle, [
-    { $match: { ...bottleMatch, status: 'active', wineDefinition: { $ne: null } } },
-    { $group: { _id: '$wineDefinition', count: { $sum: 1 } } },
-    { $sort: { count: -1 } },
-    { $limit: 10 },
-    { $lookup: { from: 'winedefinitions', localField: '_id', foreignField: '_id', as: 'wd' } },
-    { $unwind: '$wd' },
-    { $project: { _id: 0, name: '$wd.name', producer: '$wd.producer', type: '$wd.type', count: 1 } },
-  ]);
 
   // ── Engagement (active users 24h / 7d / 30d / 90d) ──────────────────────
   // "Active" = added a bottle or consumed a bottle within the window.
@@ -710,64 +572,6 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
   const bottlesWithProfile = maturity.peak + maturity.early + maturity.late + maturity.declining + maturity.notReady;
   const maturityCoverage = pct(bottlesWithProfile, activeBottles);
 
-  // ── Ratings ─────────────────────────────────────────────────────────────
-  // Normalize all ratings to 0–100 (5-star * 20, 20-pt Davis * 5, 100-pt as-is).
-  const normRatingExpr = {
-    $switch: {
-      branches: [
-        { case: { $eq: ['$ratingScale', '5']   }, then: { $multiply: ['$rating', 20] } },
-        { case: { $eq: ['$ratingScale', '20']  }, then: { $multiply: ['$rating', 5]  } },
-        { case: { $eq: ['$ratingScale', '100'] }, then: '$rating' },
-      ],
-      default: { $multiply: ['$rating', 20] },
-    },
-  };
-
-  const [ratingOverallRaw, ratingDistRaw, ratingByTypeRaw] = await Promise.all([
-    safeAggregate(Bottle, [
-      { $match: { ...bottleMatch, rating: { $ne: null, $gt: 0 } } },
-      { $addFields: { norm: normRatingExpr } },
-      { $group: { _id: null, avg: { $avg: '$norm' }, count: { $sum: 1 } } },
-    ]),
-    safeAggregate(Bottle, [
-      { $match: { ...bottleMatch, rating: { $ne: null, $gt: 0 } } },
-      { $addFields: { norm: normRatingExpr } },
-      { $bucket: {
-        groupBy: '$norm',
-        boundaries: [0, 20, 40, 60, 80, 101],
-        default: 'other',
-        output: { count: { $sum: 1 } },
-      }},
-    ]),
-    safeAggregate(Bottle, [
-      { $match: { ...bottleMatch, rating: { $ne: null, $gt: 0 }, wineDefinition: { $ne: null } } },
-      { $lookup: { from: 'winedefinitions', localField: 'wineDefinition', foreignField: '_id', as: 'wd' } },
-      { $unwind: '$wd' },
-      { $addFields: { norm: normRatingExpr } },
-      { $group: { _id: '$wd.type', avg: { $avg: '$norm' }, count: { $sum: 1 } } },
-      { $match: { _id: { $ne: null } } },
-      { $sort: { count: -1 } },
-      { $project: { _id: 0, type: '$_id', avg: { $round: ['$avg', 1] }, count: 1 } },
-    ]),
-  ]);
-
-  const ratingOverall = ratingOverallRaw[0] || { avg: null, count: 0 };
-  // Map by lower-boundary _id rather than array index — $bucket omits empty
-  // buckets, so an empty middle band would otherwise mislabel everything.
-  const RATING_BUCKETS = [
-    { id: 0,  band: '0–20'   },
-    { id: 20, band: '21–40'  },
-    { id: 40, band: '41–60'  },
-    { id: 60, band: '61–80'  },
-    { id: 80, band: '81–100' },
-  ];
-  const totalRated = ratingDistRaw.reduce((s, r) => s + r.count, 0);
-  const ratingDistribution = RATING_BUCKETS.map(({ id, band }) => {
-    const row = ratingDistRaw.find(r => r._id === id);
-    const count = row?.count || 0;
-    return { band, count, pct: pct(count, totalRated) };
-  });
-
   // ── Monthly trends (last 12 calendar months) ────────────────────────────
   const buildMonthlySeries = async (model, dateField, baseMatch = {}, extraMatch = {}) => {
     const since = new Date();
@@ -800,83 +604,40 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
     buildMonthlySeries(Cellar, 'createdAt',  cellarMatch),
   ]);
 
-  // ── Most expensive bottles ──────────────────────────────────────────────
-  // On platforms with very few users, showing the wine + producer + vintage
-  // of the single most expensive bottle could let one user infer it's theirs
-  // (or someone else's). When the user base is small we band the price and
-  // suppress the identifying fields. Threshold matches the same guard used
-  // for the "anonymised aggregate" framing on the blog data piece.
-  const EXPENSIVE_REDACT_THRESHOLD_USERS = 25;
-  const shouldRedactExpensive = usersWithBottles < EXPENSIVE_REDACT_THRESHOLD_USERS;
-  const topExpensiveBottlesRaw = await safeAggregate(Bottle, [
-    { $match: { ...bottleMatch, status: 'active', price: { $gt: 0 }, wineDefinition: { $ne: null } } },
-    { $sort: { price: -1 } },
-    { $limit: 10 },
-    { $lookup: { from: 'winedefinitions', localField: 'wineDefinition', foreignField: '_id', as: 'wd' } },
-    { $unwind: '$wd' },
-    { $project: {
-      _id: 0,
-      name:     '$wd.name',
-      producer: '$wd.producer',
-      vintage:  1,
-      price:    1,
-      currency: 1,
-    }},
-  ]);
-  const topExpensiveBottles = topExpensiveBottlesRaw.map(b => shouldRedactExpensive
-    ? { name: null, producer: null, vintage: null, price: b.price, currency: b.currency, redacted: true }
-    : { ...b, redacted: false }
-  );
-
-  // ── Library health ──────────────────────────────────────────────────────
-  // WineDefinition + WineVintageProfile are shared platform reference data
-  // (admin-curated by design), so they remain unfiltered. Racks belong to
-  // cellars which belong to users, so they DO honour excludeAdmins via
-  // rackMatch (resolved earlier via the admin cellar IDs).
-  const [
-    totalRacks,
-    profilesTotal,
-    profilesReviewed,
-    profilesPending,
-    pendingWineRequests,
-    pendingImageReviews,
-    totalImages,
-    wineDefinitionsWithBottles,
-    totalWineDefinitions,
-  ] = await Promise.all([
-    Rack.countDocuments(rackMatch),
-    WineVintageProfile.countDocuments(),
-    WineVintageProfile.countDocuments({ status: 'reviewed' }),
-    WineVintageProfile.countDocuments({ status: 'pending' }),
-    WineRequest.countDocuments({ ...requestMatch, status: 'pending' }),
-    // Same population as the admin moderation queue, which excludes label scans.
-    BottleImage.countDocuments({ ...imageMatch, kind: { $ne: 'label-scan' }, status: { $in: ['uploaded', 'processing', 'processed'] } }),
-    BottleImage.countDocuments(imageMatch),
-    Bottle.distinct('wineDefinition', bottleMatch).then(ids => ids.filter(Boolean).length),
-    WineDefinition.countDocuments(),
-  ]);
-
-  // ── Median bottle price per currency (in-memory percentile) ─────────────
-  // Mongo $percentile needs 7.0+; safer to compute from a small sorted list.
-  const priceByCurrencyWithMedian = await Promise.all(priceByCurrency.map(async (p) => {
-    const prices = await Bottle.find({ ...bottleMatch, status: 'active', price: { $gt: 0 }, currency: p.currency })
-      .select('price').sort({ price: 1 }).lean();
-    const median = prices.length
-      ? prices[Math.floor(prices.length / 2)].price
-      : null;
-    return { ...p, medianPrice: median };
-  }));
+  // ── Registry size ──────────────────────────────────────────────────────
+  // Shared reference data, deliberately unfiltered: the registry is one
+  // catalogue for everyone rather than a per-user figure, so excluding a
+  // cohort of accounts would not change what is in it.
+  const totalWineDefinitions = await WineDefinition.countDocuments();
 
   // ── Assemble payload ────────────────────────────────────────────────────
   const avgBottlesPerUser = usersWithBottles > 0 ? Math.round(activeBottles / usersWithBottles) : 0;
   const avgBottlesPerCellar = totalCellars > 0 ? Math.round(activeBottles / totalCellars) : 0;
+  const { cellarUsers, activationPct } = buildActivation({
+    totalUsers,
+    usersWithBottles,
+    bridgeOnlyUsers: bridge.bridgeOnly,
+  });
 
   return {
     generatedAt: new Date().toISOString(),
     excludeAdmins,
     adminsExcludedCount: excludeAdmins ? adminIds.length : 0,
+    // What was left out of every figure above, so the totals can be explained
+    // rather than merely trusted.
+    excluded: {
+      admins: excludeAdmins ? adminIds.length : 0,
+      demo: demoCount,
+      pendingDeletion: pendingDeletionCount,
+    },
+    // accounts  — everyone who accepted the Registry Data Terms
+    // bridgeOnly — of those, the ones holding no bottle here
+    // liveKeys / everConnected — installs connected now, and ever
+    bridge,
     overview: {
       totalUsers,
+      cellarUsers,
+      activationPct,
       usersWithBottles,
       totalCellars,
       totalBottles,
@@ -953,47 +714,12 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
       bottlesWithProfile,
       coveragePct: maturityCoverage,
     },
-    ratings: {
-      avgNormalized: ratingOverall.avg != null ? round(ratingOverall.avg, 1) : null,
-      ratedCount:    ratingOverall.count,
-      distribution:  ratingDistribution,
-      byType:        ratingByTypeRaw,
-    },
-    vintage: {
-      avgAge: vintage.avgAge != null ? Math.round(vintage.avgAge) : null,
-      oldest: vintage.oldest,
-      newest: vintage.newest,
-      withVintageCount: vintage.count,
-      byDecade,
-    },
     trends: {
       bottlesAdded:    trendBottlesAdded,
       bottlesConsumed: trendBottlesConsumed,
       newUsers:        trendNewUsers,
       newCellars:      trendNewCellars,
     },
-    library: {
-      totalWineDefinitions,
-      wineDefinitionsWithBottles,
-      profilesTotal,
-      profilesReviewed,
-      profilesPending,
-      pendingWineRequests,
-      pendingImageReviews,
-      totalImages,
-      totalRacks,
-    },
-    byType,
-    topCountries,
-    topRegions,
-    topGrapes,
-    topProducers,
-    topWines,
-    topExpensiveBottles,
-    priceByCurrency: priceByCurrencyWithMedian,
-    holdingTime,
-    byBottleSize,
-    cellarSizeDistribution,
   };
 }
 
@@ -1003,5 +729,6 @@ module.exports = {
   __testing: {
     DAY_TIERS, tierAccumulators, tierRows,
     buildPlanDistribution, buildSignupCohorts, COHORT_WINDOW_DAYS, COHORT_SPAN_DAYS,
+    buildBridgeSummary, buildActivation,
   },
 };

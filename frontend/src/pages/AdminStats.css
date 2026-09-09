@@ -207,12 +207,6 @@
   border-bottom: none;
 }
 
-.admin-stats-rank {
-  width: 2rem;
-  color: var(--color-text-secondary);
-  font-variant-numeric: tabular-nums;
-}
-
 .admin-stats-name {
   font-weight: 500;
 }
