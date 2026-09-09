@@ -38,6 +38,15 @@
     "notes": "Märkmed",
     "date": "Kuupäev",
     "price": "Hind",
-    "currency": "Valuuta"
+    "currency": "Valuuta",
+    "rating": "Hinnang",
+    "reason": "Põhjus",
+    "error": "Tekkis viga",
+    "optional": "valikuline",
+    "or": "või"
+  },
+  "nav": {
+    "myCellars": "Minu veinikeldrid",
+    "wineRegistry": "Veinide register"
   }
 }
