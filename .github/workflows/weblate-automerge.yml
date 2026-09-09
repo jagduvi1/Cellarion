@@ -1,0 +1,93 @@
+name: Weblate auto-merge
+
+# Translations arrive as pull requests from the Weblate bot's fork. Nothing in
+# them is code: only frontend/src/locales/<lang>/translation.json for languages
+# other than English, and the frontend test suite already polices everything
+# that can go wrong inside one — a key that no longer exists in `en`, an empty
+# string, a placeholder that drifted, a broken plural family
+# (frontend/src/locales/translation.test.js). So a translator's finished work
+# was waiting on a person only to click Merge, and in August the first
+# external contribution sat for four days. This removes the click.
+#
+# Guards, in order:
+#   1. The PR is authored by the Weblate bot AND comes from its own fork — a
+#      human who names a branch "weblate" does not qualify.
+#   2. Every changed file is a non-English locale file. Anything else — code,
+#      en/translation.json, a workflow — leaves the PR for a person.
+#   3. No file loses more than 500 lines. A translation batch adds and edits;
+#      a Weblate rebase gone wrong ("Reset and reapply", 2026-07-23) rewrites
+#      whole files and reverts newer strings, and shows up as mass deletions.
+#
+# What it does: enables GitHub auto-merge (squash). GitHub still waits for
+# every required check on main — Backend tests, Frontend tests, DCO — and
+# merges only if they pass. A red locale test leaves the PR open, as today.
+# Translations then ship with the next release, like everything else.
+#
+# Why pull_request_target: a plain pull_request run from a fork gets a
+# read-only token and cannot enable auto-merge. pull_request_target runs with
+# the base repository's token. That is safe HERE because this workflow never
+# checks out or executes anything from the fork — it reads PR metadata through
+# the API and calls `gh pr merge --auto`. Keep it that way: no actions/checkout.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    if: >-
+      github.event.pull_request.user.login == 'weblate' &&
+      github.event.pull_request.head.repo.owner.login == 'weblate' &&
+      github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check that only non-English locale files changed, and none wholesale
+        id: scope
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR}/files" \
+            --jq '.[] | "\(.filename)\t\(.additions)\t\(.deletions)"' > files.tsv
+          echo "changed files (additions / deletions):"
+          awk -F'\t' '{ printf "  %s  +%s -%s\n", $1, $2, $3 }' files.tsv
+
+          outside=$(awk -F'\t' '$1 !~ /^frontend\/src\/locales\/[a-z][a-z][a-z]?(-[A-Za-z]+)?\/translation\.json$/ || $1 ~ /\/locales\/en\//' files.tsv || true)
+          rewrite=$(awk -F'\t' '$3 > 500' files.tsv || true)
+
+          if [ ! -s files.tsv ]; then
+            echo "reason=no files changed" >> "$GITHUB_OUTPUT"; echo "ok=no" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ -n "$outside" ]; then
+            echo "not auto-merging — outside the translation scope:"; echo "$outside" | sed 's/^/  /'
+            echo "reason=it changes something outside the non-English locale files" >> "$GITHUB_OUTPUT"
+            echo "ok=no" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ -n "$rewrite" ]; then
+            echo "not auto-merging — a file loses more than 500 lines, which is a rewrite rather than a batch:"; echo "$rewrite" | sed 's/^/  /'
+            echo "reason=a locale file loses more than 500 lines, which looks like a rewrite rather than a translation batch" >> "$GITHUB_OUTPUT"
+            echo "ok=no" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "ok=yes" >> "$GITHUB_OUTPUT"
+
+      - name: Enable auto-merge
+        if: steps.scope.outputs.ok == 'yes'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR_URL"
+
+      # Once, when the PR opens — not on every push to it.
+      - name: Say why a person is needed
+        if: steps.scope.outputs.ok == 'no' && github.event.action == 'opened'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          REASON: ${{ steps.scope.outputs.reason }}
+        run: |
+          gh pr comment "$PR_URL" --body "Not merged automatically: ${REASON}. A maintainer will look at it. (.github/workflows/weblate-automerge.yml)"

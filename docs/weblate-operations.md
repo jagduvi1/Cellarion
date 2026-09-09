@@ -84,10 +84,23 @@ A `Review` team covering **all languages** already exists — Weblate creates it
 
 ## 5. Routine: when a Weblate PR appears
 
-1. **Content-diff it against `main` first.** Never blind-merge. `git fetch origin pull/N/head && git checkout FETCH_HEAD` and compare the flattened JSON. This has caught resurrected deleted keys and blanked plurals before.
-2. Check CI is green — [`translation.test.js`](../frontend/src/locales/translation.test.js) is the real gate (no keys `en` lacks, no empty strings, placeholder parity, complete plural families).
-3. **Squash**-merge. The repo requires it.
-4. Weblate pulls the squash automatically. If it later claims "needs merge" or shows an outgoing commit, a plain **Update** resolves it — its own commit is content-identical to the squash.
+**Since 2026-09-09 there is no routine.** `.github/workflows/weblate-automerge.yml` enables auto-merge on every pull request the Weblate bot opens, provided it changes nothing but non-English locale files and rewrites none of them wholesale (no file may lose more than 500 lines). GitHub then merges it the moment the required checks pass — [`translation.test.js`](../frontend/src/locales/translation.test.js) is the real gate (no keys `en` lacks, no empty strings, placeholder parity, complete plural families). The DCO check skips the bot: translators certify their work by accepting the translation licence in Weblate, and a sign-off typed by a robot would certify nothing.
+
+The merged translations then ship with the next release, like everything else.
+
+**When a person is still needed** — the workflow comments on the PR saying so:
+
+- it touches `en/translation.json`, code, or anything outside `frontend/src/locales/`
+- a locale file loses more than 500 lines — that is the signature of a Weblate rebase gone wrong (§7, "Reset and reapply"), not of a translation batch
+- CI is red — most often an empty plural form Weblate scaffolded, or a key that `en` has since dropped
+
+In those cases: content-diff against `main` first (`git fetch origin pull/N/head && git checkout FETCH_HEAD`, compare the flattened JSON), then squash-merge if it is right, or close it and fix the Weblate side (§7).
+
+### 5a. Checking what is waiting on you — three places, two minutes
+
+1. **Open Weblate PRs:** <https://github.com/jagduvi1/Cellarion/pulls?q=is%3Apr+author%3Aweblate+is%3Aopen>. Normally empty; anything there for more than a day has a comment explaining why.
+2. **Is Weblate pushing at all?** Compare the badge in the README (Weblate's own numbers) with the percentages the app shows in Settings → Language (the repo's numbers, computed at build time). If Weblate says a language is well above what the app shows and no PR has appeared for weeks, Weblate has stopped pushing: open the component → **Operations → Repository maintenance** (the same dropdown as Update — there is no Manage menu, see §3) and read the alert. The usual causes are a rebase conflict after a squash-merge (plain **Update** fixes it) or a locked component. Never guess at "Reset" — §7 explains which one is right.
+3. **Anything a language still needs** is on the Weblate Languages page: the *Unreviewed* number for fr/de/sv, the *Untranslated* one for any new language.
 
 ---
 
@@ -108,7 +121,10 @@ Nothing about this can be automated from Weblate's side — see §1.
 
 Each of these has already happened once.
 
-- **Never use "Reset and reapply"** on a rebase-conflict alert. It wrote 3,195 database units over newer `main`: resurrected deleted keys, blanked plurals, reverted fresh Swedish. The correct recovery is **"Reset and discard"** — upstream is the truth — then redo the handful of Weblate-side edits by hand.
+- **"Reset" has two buttons, and which one is safe depends on which side is newer.** Weblate's database and the repository are two copies of the same translations; a rebase-conflict alert means they disagree, and a Reset picks a winner.
+  - **Repository newer, Weblate stale** (the 2026-07-23 incident: `main` had fresh Swedish and dropped keys, Weblate's checkout had not caught up): **"Reset and discard"**. "Reset and reapply" wrote 3,195 database units over newer `main` — resurrected deleted keys, blanked plurals, reverted fresh Swedish — and the few Weblate-side edits were redone by hand.
+  - **Weblate newer, repository stale** (2026-09-09: Weblate showed fr 99 / de 99 / sv 95 % while the app showed 83 / 83 / 81 %, and no PR had appeared since 3 August — some 600 finished strings per language sitting unpushed): **"Reset and discard" would throw all of that away.** Use **Update** first; if it still cannot rebase, **"Reset and reapply"** rewrites the locale files from the database on top of the current `main`, which is exactly what you want. The result is a large PR; the locale tests and the auto-merge workflow's 500-deletion guard are what catch it if something went wrong, so let CI judge it rather than merging by hand.
+  - **How to tell which case you are in:** compare Weblate's percentages (the README badge, or the Languages page) with the app's (Settings → Language). Whichever is higher holds the newer work.
 - **Weblate scaffolds missing CLDR plural siblings as empty strings.** French has one/many/other, so an `_other` without a `_many` gets an empty `_many` on the next sync, which fails the no-empty-strings test. French locale files therefore carry an explicit `_many`.
 - **Never end a key in `_one`/`_other`/`_few`/`_many`/`_zero`/`_two` unless it is a real plural.** Weblate treats the suffix as a plural family and scaffolds empty siblings around it. Nest enums instead (`bottles.statusLabels.other`).
 - **Renaming a key discards its translations in every language.** Reword the English *value* when the meaning changes (Weblate then flags translations for review); don't rename keys casually.
