@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation, Trans } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import useVersion from '../hooks/useVersion';
-import { stashPostLoginRedirect, takePostLoginRedirect } from '../utils/postLoginRedirect';
+import { stashPostLoginRedirect, takePostLoginRedirect, isSafeInternalPath } from '../utils/postLoginRedirect';
 import './Login.css';
 
 const LOGO_WEBP = '/cellarion-logo-light.webp';
@@ -94,7 +94,12 @@ function Login() {
         // wins is how an abandoned journey gets inherited by a later sign-in in
         // this tab.
         const stashed = takePostLoginRedirect();
-        navigate(location.state?.from || stashed || '/cellars');
+        // Router state is same-origin only, and today no protected route can
+        // match a protocol-relative or backslash path — but that is a property
+        // of the route table, not a guarantee (postLoginRedirect.js explains),
+        // so the destination takes the same check the stashed one already does.
+        const from = location.state?.from;
+        navigate(isSafeInternalPath(from) ? from : (stashed || '/cellars'));
       }
     } else {
       if (result.code === 'EMAIL_NOT_VERIFIED') {
