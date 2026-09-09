@@ -17,11 +17,6 @@ const NAMED_ACTIVITY_TIERS = [2, 4];
 
 // Raw integer formatting for fields where a thousands separator is wrong —
 // vintage years (1973 not "1,973") and decade labels (2020 not "2,020").
-function fmtYear(n) {
-  if (n == null) return '—';
-  return String(n);
-}
-
 // Display percentage that shows "<1%" when the value rounds to zero but
 // isn't actually zero — avoids "6 (0%)" rows that look like a bug.
 function fmtPct(value) {
@@ -39,34 +34,6 @@ function StatCard({ label, value, sublabel, accent, tooltip }) {
       <div className="admin-stats-card-value">{value ?? '—'}</div>
       <div className="admin-stats-card-label">{label}</div>
       {sublabel && <div className="admin-stats-card-sub">{sublabel}</div>}
-    </div>
-  );
-}
-
-function RankedList({ title, items, valueKey = 'count', nameKey = 'name', subKey = null, total = null }) {
-  if (!items || items.length === 0) return null;
-  return (
-    <div className="admin-stats-panel">
-      <h3>{title}</h3>
-      <table className="admin-stats-table">
-        <tbody>
-          {items.map((it, i) => {
-            const v = it[valueKey] || 0;
-            const sharePct = total ? Math.round((v / total) * 100) : null;
-            return (
-              <tr key={`${it[nameKey] || 'unknown'}-${i}`}>
-                <td className="admin-stats-rank">{i + 1}</td>
-                <td className="admin-stats-name">
-                  <span>{it[nameKey] || 'Unknown'}</span>
-                  {subKey && it[subKey] && <span className="admin-stats-sub">{it[subKey]}</span>}
-                </td>
-                <td className="admin-stats-count">{v.toLocaleString()}</td>
-                {sharePct != null && <td className="admin-stats-pct">{sharePct}%</td>}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
     </div>
   );
 }
@@ -154,10 +121,18 @@ function AdminStats() {
   if (!stats) return null;
 
   const {
-    overview, activity, engagement, retention, plans, maturity, ratings, vintage, trends, library,
-    byType, topCountries, topRegions, topGrapes, topProducers, topWines,
-    topExpensiveBottles, priceByCurrency, holdingTime, byBottleSize, cellarSizeDistribution,
+    overview, activity, engagement, retention, plans, maturity, trends, bridge, excluded,
   } = stats;
+  // Say what was left out, rather than leaving the total to be trusted.
+  const excludedNote = (() => {
+    const ex = excluded || {};
+    const parts = [];
+    if (ex.admins) parts.push(t('adminStats.exAdmins', '{{count}} admin', { count: ex.admins }));
+    if (ex.demo) parts.push(t('adminStats.exDemo', '{{count}} demo', { count: ex.demo }));
+    if (ex.pendingDeletion) parts.push(t('adminStats.exPending', '{{count}} leaving', { count: ex.pendingDeletion }));
+    if (!parts.length) return null;
+    return t('adminStats.excludedNote', 'excludes {{list}}', { list: parts.join(', ') });
+  })();
 
   const maturityColors = {
     peak:       '#1a7f37',
@@ -201,7 +176,22 @@ function AdminStats() {
       <section>
         <h2>{t('adminStats.section.overview')}</h2>
         <div className="admin-stats-cards">
-          <StatCard label={t('adminStats.totalUsers')}        value={fmt(overview.totalUsers)} sublabel={t('adminStats.withBottles', { count: overview.usersWithBottles ?? 0 })} />
+          <StatCard
+            label={t('adminStats.totalUsers')}
+            value={fmt(overview.totalUsers)}
+            sublabel={excludedNote || t('adminStats.withBottles', { count: overview.usersWithBottles ?? 0 })}
+            tooltip={t('adminStats.totalUsersTip', 'Excludes demo accounts and accounts pending deletion. Admins too, unless you switch them back on.')}
+          />
+          {/* Activation measured against the people who could actually put a
+              bottle in a cellar here — bridge-only accounts are real people
+              whose wines live on their own server, so counting them as failed
+              activations is simply wrong. */}
+          <StatCard
+            label={t('adminStats.cellarUsers', 'Cellar users')}
+            value={fmt(overview.cellarUsers)}
+            sublabel={t('adminStats.activationPct', '{{pct}}% have added a bottle', { pct: overview.activationPct ?? 0 })}
+            tooltip={t('adminStats.cellarUsersTip', 'Accounts expected to keep a cellar here: everyone except bridge-only accounts. This is the honest denominator for activation.')}
+          />
           <StatCard label={t('adminStats.totalCellars')}      value={fmt(overview.totalCellars)} />
           <StatCard label={t('adminStats.activeBottles')}     value={fmt(overview.activeBottles)} sublabel={t('adminStats.allTime', { count: overview.totalBottles ?? 0 })} />
           <StatCard label={t('adminStats.consumedBottles')}   value={fmt(overview.consumedBottles)} sublabel={[
@@ -216,9 +206,35 @@ function AdminStats() {
         </div>
       </section>
 
+      {/* ── Self-hosted installs ── */}
+      {bridge && bridge.accounts > 0 && (
+        <section>
+          <h2>{t('adminStats.section.bridge', 'Self-hosted installs')}</h2>
+          <div className="admin-stats-cards">
+            <StatCard
+              label={t('adminStats.bridgeLive', 'Connected installs')}
+              value={fmt(bridge.liveKeys)}
+              sublabel={t('adminStats.bridgeEver', '{{count}} ever connected', { count: bridge.everConnected ?? 0 })}
+              accent="ok"
+            />
+            <StatCard
+              label={t('adminStats.bridgeAccounts', 'Bridge accounts')}
+              value={fmt(bridge.accounts)}
+              sublabel={t('adminStats.bridgeOnly', '{{count}} keep no cellar here', { count: bridge.bridgeOnly ?? 0 })}
+              tooltip={t('adminStats.bridgeAccountsTip', 'Accounts that accepted the Registry Data Terms. The marker survives a key being revoked, so this counts everyone who came for the bridge.')}
+            />
+          </div>
+        </section>
+      )}
+
       {/* ── Engagement ── */}
       <section>
         <h2>{t('adminStats.section.engagement')}</h2>
+        {/* Two measures of the same windows, deliberately shown together.
+            Changing a cellar is the narrow one; being here at all is the
+            honest denominator for "is anyone using this". Reading your drink
+            window is using the app, and the bottle count cannot see it. */}
+        <h3 className="admin-stats-subhead">{t('adminStats.engagementChanged')}</h3>
         <p className="admin-stats-section-note">{t('adminStats.engagementNote')}</p>
         <div className="admin-stats-cards">
           <StatCard accent="ok" tooltip={t('adminStats.engagementTooltip')} label={t('adminStats.activeUsers24h')} value={fmt(engagement.activeUsers24h)} sublabel={t('adminStats.dau')} />
@@ -226,6 +242,23 @@ function AdminStats() {
           <StatCard tooltip={t('adminStats.engagementTooltip')} label={t('adminStats.activeUsers30d')} value={fmt(engagement.activeUsers30d)} sublabel={t('adminStats.mau')} />
           <StatCard tooltip={t('adminStats.engagementTooltip')} label={t('adminStats.activeUsers90d')} value={fmt(engagement.activeUsers90d)} sublabel={t('adminStats.in90Days')} />
         </div>
+
+        {engagement.present90d != null && (
+          <>
+            <h3 className="admin-stats-subhead">{t('adminStats.engagementPresent')}</h3>
+            <p className="admin-stats-section-note">
+              {t('adminStats.presenceNote', { days: engagement.presenceWindowDays ?? 90 })}
+            </p>
+            <div className="admin-stats-cards">
+              <StatCard accent="ok" tooltip={t('adminStats.presenceTooltip')} label={t('adminStats.present24h')} value={fmt(engagement.present24h)} sublabel={t('adminStats.dau')} />
+              <StatCard tooltip={t('adminStats.presenceTooltip')} label={t('adminStats.present7d')}  value={fmt(engagement.present7d)}  sublabel={t('adminStats.wau')} />
+              <StatCard tooltip={t('adminStats.presenceTooltip')} label={t('adminStats.present30d')} value={fmt(engagement.present30d)} sublabel={t('adminStats.mau')} />
+              {/* The widest window IS the audit window, so this is everyone
+                  the log can still see — not a rolling quarter next to it. */}
+              <StatCard tooltip={t('adminStats.presenceAllTooltip')} label={t('adminStats.present90d')} value={fmt(engagement.present90d)} sublabel={t('adminStats.presenceAllSub', { days: engagement.presenceWindowDays ?? 90 })} />
+            </div>
+          </>
+        )}
       </section>
 
       {/* ── Retention / returning users ── */}
@@ -320,6 +353,46 @@ function AdminStats() {
               tooltip={t('adminStats.singleSessionTooltip')}
             />
           </div>
+
+          {/* The same ladder over presence rather than bottles. It answers the
+              question that comes first — did they come back at all — and it is
+              reliably the larger number. Its window is the audit retention
+              period, NOT all history, which is why the heading says so: two
+              ladders with unstated windows would look like a contradiction. */}
+          {retention.presence && retention.presence.usersSeen > 0 && (
+            <>
+              <h3 className="admin-stats-subhead">
+                {t('adminStats.retentionByPresence', { days: retention.presence.windowDays ?? 90 })}
+              </h3>
+              <p className="admin-stats-section-note">{t('adminStats.presenceLadderNote')}</p>
+              <div className="admin-stats-cards">
+                <StatCard
+                  accent="ok"
+                  label={t('adminStats.presenceReturning')}
+                  value={fmt(retention.presence.returningUsers)}
+                  sublabel={`${fmtPct(retention.presence.returningPct)} ${t('adminStats.ofUsersSeen')}`}
+                  tooltip={t('adminStats.presenceReturningTooltip', { days: retention.presence.windowDays ?? 90 })}
+                />
+                {(retention.presence.tiers || [])
+                  .filter(tier => tier.days !== 2)
+                  .map(tier => (
+                    <StatCard
+                      key={`presence-${tier.days}`}
+                      label={t('adminStats.presenceTier', { days: tier.days })}
+                      value={fmt(tier.users)}
+                      sublabel={`${fmtPct(tier.pct)} ${t('adminStats.ofUsersSeen')}`}
+                      tooltip={t('adminStats.presenceTierTooltip', { days: tier.days })}
+                    />
+                  ))}
+                <StatCard
+                  label={t('adminStats.usersSeen')}
+                  value={fmt(retention.presence.usersSeen)}
+                  sublabel={t('adminStats.usersSeenSub', { days: retention.presence.windowDays ?? 90 })}
+                  tooltip={t('adminStats.usersSeenTooltip')}
+                />
+              </div>
+            </>
+          )}
 
         </section>
       )}
@@ -469,263 +542,6 @@ function AdminStats() {
         </div>
       </section>
 
-      {/* ── Quality & ratings ── */}
-      <section>
-        <h2>{t('adminStats.section.ratings')}</h2>
-        <div className="admin-stats-cards">
-          <StatCard label={t('adminStats.avgRating')}    value={ratings.avgNormalized != null ? `${ratings.avgNormalized}/100` : '—'} sublabel={t('adminStats.ratedBottles', { count: ratings.ratedCount ?? 0 })} />
-        </div>
-        <div className="admin-stats-grid">
-          {ratings.distribution && ratings.distribution.length > 0 && (
-            <div className="admin-stats-panel">
-              <h3>{t('adminStats.ratingDistribution')}</h3>
-              {ratings.distribution.filter(r => r.count > 0).map((r, i) => (
-                <HorizontalBar key={`${r.band}-${i}`} label={r.band} count={r.count} total={ratings.ratedCount} color="var(--color-accent)" />
-              ))}
-            </div>
-          )}
-          {ratings.byType && ratings.byType.length > 0 && (
-            <div className="admin-stats-panel">
-              <h3>{t('adminStats.avgRatingByType')}</h3>
-              <table className="admin-stats-table">
-                <thead>
-                  <tr>
-                    <th>{t('adminStats.type')}</th>
-                    <th>{t('adminStats.avg')}</th>
-                    <th>{t('adminStats.priceCount')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ratings.byType.map((r, i) => (
-                    <tr key={`${r.type || 'unknown'}-${i}`}>
-                      <td className="admin-stats-name">{r.type || '—'}</td>
-                      <td className="admin-stats-count">{r.avg}</td>
-                      <td className="admin-stats-count">{fmt(r.count)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* ── Vintage ── */}
-      <section>
-        <h2>{t('adminStats.section.vintage')}</h2>
-        <div className="admin-stats-cards">
-          <StatCard label={t('adminStats.avgVintageAge')}  value={vintage.avgAge != null ? t('adminStats.years', { count: vintage.avgAge }) : '—'} />
-          <StatCard label={t('adminStats.oldestVintage')}  value={fmtYear(vintage.oldest)} />
-          <StatCard label={t('adminStats.newestVintage')}  value={fmtYear(vintage.newest)} />
-          <StatCard label={t('adminStats.withVintage')}    value={fmt(vintage.withVintageCount)} sublabel={t('adminStats.bottlesUnit')} />
-        </div>
-        {vintage.byDecade && vintage.byDecade.length > 0 && (
-          <div className="admin-stats-panel">
-            <h3>{t('adminStats.byDecade')}</h3>
-            <table className="admin-stats-table">
-              <tbody>
-                {vintage.byDecade.map(d => (
-                  <tr key={d.decade}>
-                    <td className="admin-stats-name">{fmtYear(d.decade)}s</td>
-                    <td className="admin-stats-count">{fmt(d.count)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      {/* ── Composition ── */}
-      <section>
-        <h2>{t('adminStats.section.composition')}</h2>
-        <div className="admin-stats-grid">
-          <RankedList title={t('adminStats.topCountries')} items={topCountries} total={overview.activeBottles} />
-          <RankedList title={t('adminStats.topRegions')}   items={topRegions}   total={overview.activeBottles} />
-          <RankedList title={t('adminStats.topGrapes')}    items={topGrapes}    total={overview.activeBottles} />
-          <RankedList title={t('adminStats.topProducers')} items={topProducers} total={overview.activeBottles} />
-          {byType && byType.length > 0 && (
-            <div className="admin-stats-panel">
-              <h3>{t('adminStats.byType')}</h3>
-              <table className="admin-stats-table">
-                <tbody>
-                  {byType.map((b, i) => {
-                    const p = overview.activeBottles > 0 ? Math.round((b.count / overview.activeBottles) * 100) : 0;
-                    return (
-                      <tr key={`${b.type || 'unknown'}-${i}`}>
-                        <td className="admin-stats-name">{b.type || 'unknown'}</td>
-                        <td className="admin-stats-count">{fmt(b.count)}</td>
-                        <td className="admin-stats-pct">{p}%</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* ── Top wines (most-collected) ── */}
-      {topWines && topWines.length > 0 && (
-        <section>
-          <h2>{t('adminStats.section.topWines')}</h2>
-          <div className="admin-stats-panel">
-            <table className="admin-stats-table">
-              <tbody>
-                {topWines.map((w, i) => (
-                  <tr key={`${w.name}-${w.producer}-${i}`}>
-                    <td className="admin-stats-rank">{i + 1}</td>
-                    <td className="admin-stats-name">
-                      <span>{w.name}</span>
-                      {w.producer && <span className="admin-stats-sub">{w.producer}</span>}
-                    </td>
-                    <td className="admin-stats-count">{fmt(w.count)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-
-      {/* ── Top expensive bottles ── */}
-      {topExpensiveBottles && topExpensiveBottles.length > 0 && (
-        <section>
-          <h2>{t('adminStats.section.topExpensive')}</h2>
-          {topExpensiveBottles[0]?.redacted && (
-            <p className="admin-stats-section-note">{t('adminStats.topExpensiveRedacted')}</p>
-          )}
-          <div className="admin-stats-panel">
-            <table className="admin-stats-table">
-              <tbody>
-                {topExpensiveBottles.map((w, i) => (
-                  <tr key={`${w.name || 'redacted'}-${w.vintage || i}-${i}`}>
-                    <td className="admin-stats-rank">{i + 1}</td>
-                    <td className="admin-stats-name">
-                      {w.redacted ? (
-                        <span className="admin-stats-sub">{t('adminStats.bottleRedacted')}</span>
-                      ) : (
-                        <>
-                          <span>{w.name}</span>
-                          {w.producer && <span className="admin-stats-sub">{w.producer} · {w.vintage}</span>}
-                        </>
-                      )}
-                    </td>
-                    <td className="admin-stats-count">{fmt(w.price)} {w.currency || ''}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-
-      {/* ── Money ── */}
-      {priceByCurrency && priceByCurrency.length > 0 && (
-        <section>
-          <h2>{t('adminStats.section.value')}</h2>
-          <div className="admin-stats-panel">
-            <table className="admin-stats-table">
-              <thead>
-                <tr>
-                  <th>{t('adminStats.currency')}</th>
-                  <th>{t('adminStats.priceCount')}</th>
-                  <th>{t('adminStats.avgPrice')}</th>
-                  <th>{t('adminStats.medianPrice')}</th>
-                  <th>{t('adminStats.totalValue')}</th>
-                  <th>{t('adminStats.maxPrice')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {priceByCurrency.map(p => (
-                  <tr key={p.currency}>
-                    <td className="admin-stats-name">{p.currency || '—'}</td>
-                    <td className="admin-stats-count">{fmt(p.count)}</td>
-                    <td className="admin-stats-count">{fmt(p.avgPrice)}</td>
-                    <td className="admin-stats-count">{fmt(p.medianPrice)}</td>
-                    <td className="admin-stats-count">{fmt(p.totalValue)}</td>
-                    <td className="admin-stats-count">{fmt(p.maxPrice)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-
-      {/* ── Library health ── */}
-      <section>
-        <h2>{t('adminStats.section.library')}</h2>
-        <div className="admin-stats-cards">
-          <StatCard label={t('adminStats.totalWineDefs')}    value={fmt(library.totalWineDefinitions)} sublabel={t('adminStats.withBottlesShort', { count: library.wineDefinitionsWithBottles ?? 0 })} />
-          <StatCard label={t('adminStats.profilesReviewed')} value={fmt(library.profilesReviewed)} sublabel={t('adminStats.profilesTotal', { count: library.profilesTotal ?? 0 })} />
-          <StatCard label={t('adminStats.profilesPending')}  value={fmt(library.profilesPending)} accent={library.profilesPending > 50 ? 'warn' : null} />
-          <StatCard label={t('adminStats.pendingWineRequests')} value={fmt(library.pendingWineRequests)} accent={library.pendingWineRequests > 5 ? 'warn' : null} />
-          <StatCard label={t('adminStats.pendingImageReviews')} value={fmt(library.pendingImageReviews)} accent={library.pendingImageReviews > 10 ? 'warn' : null} />
-          <StatCard label={t('adminStats.totalImages')}      value={fmt(library.totalImages)} />
-          <StatCard label={t('adminStats.totalRacks')}       value={fmt(library.totalRacks)} />
-        </div>
-      </section>
-
-      {/* ── Distributions ── */}
-      <section>
-        <h2>{t('adminStats.section.patterns')}</h2>
-        <div className="admin-stats-grid">
-          {holdingTime && holdingTime.length > 0 && (
-            <div className="admin-stats-panel">
-              <h3>{t('adminStats.holdingTime')}</h3>
-              <p className="admin-stats-sub">{t('adminStats.holdingTimeNote')}</p>
-              <table className="admin-stats-table">
-                <tbody>
-                  {holdingTime.filter(h => h.count > 0).map((h, i) => (
-                    <tr key={`${h.bucket}-${i}`}>
-                      <td className="admin-stats-name">{h.bucket}</td>
-                      <td className="admin-stats-count">{fmt(h.count)}</td>
-                      <td className="admin-stats-pct">{fmtPct(h.pct)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {cellarSizeDistribution && cellarSizeDistribution.length > 0 && (
-            <div className="admin-stats-panel">
-              <h3>{t('adminStats.cellarSize')}</h3>
-              <p className="admin-stats-sub">{t('adminStats.cellarSizeNote')}</p>
-              <table className="admin-stats-table">
-                <tbody>
-                  {cellarSizeDistribution.filter(c => c.cellars > 0).map((c, i) => (
-                    <tr key={`${c.bucket}-${i}`}>
-                      <td className="admin-stats-name">
-                        {c.bucket === 'other' ? t('adminStats.cellarSizeOther') : t('adminStats.cellarSizeBucket', { bucket: c.bucket })}
-                      </td>
-                      <td className="admin-stats-count">{t('adminStats.cellarsUnit', { count: c.cellars ?? 0 })}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {byBottleSize && byBottleSize.length > 0 && (
-            <div className="admin-stats-panel">
-              <h3>{t('adminStats.bottleSize')}</h3>
-              <table className="admin-stats-table">
-                <tbody>
-                  {byBottleSize.map((b, i) => (
-                    <tr key={`${b.size || 'unknown'}-${i}`}>
-                      <td className="admin-stats-name">{b.size || '—'}</td>
-                      <td className="admin-stats-count">{fmt(b.count)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </section>
     </div>
   );
 }

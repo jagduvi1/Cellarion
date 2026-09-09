@@ -52,4 +52,10 @@ if (ttlDays > 0) {
   auditLogSchema.index({ timestamp: 1 });
 }
 
+// How far back this collection can answer questions about. Exposed as a static
+// so callers reading history (the presence ladder on the admin stats page) use
+// the SAME window the TTL index enforces, instead of a second hard-coded 90
+// that silently disagrees the day AUDIT_TTL_DAYS changes.
+auditLogSchema.statics.TTL_DAYS = ttlDays;
+
 module.exports = mongoose.model('AuditLog', auditLogSchema);
