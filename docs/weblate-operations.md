@@ -99,7 +99,7 @@ In those cases: content-diff against `main` first (`git fetch origin pull/N/head
 ### 5a. Checking what is waiting on you — three places, two minutes
 
 1. **Open Weblate PRs:** <https://github.com/jagduvi1/Cellarion/pulls?q=is%3Apr+author%3Aweblate+is%3Aopen>. Normally empty; anything there for more than a day has a comment explaining why.
-2. **Is Weblate pushing at all?** Compare the badge in the README (Weblate's own numbers) with the percentages the app shows in Settings → Language (the repo's numbers, computed at build time). If Weblate says a language is well above what the app shows and no PR has appeared for weeks, Weblate has stopped pushing: open the component → **Manage → Repository maintenance** and read the alert. The usual causes are a rebase conflict after a squash-merge (plain **Update** fixes it) or a locked component. Never guess at "Reset" — §7 explains which one is right.
+2. **Is Weblate pushing at all?** Compare the badge in the README (Weblate's own numbers) with the percentages the app shows in Settings → Language (the repo's numbers, computed at build time). If Weblate says a language is well above what the app shows and no PR has appeared for weeks, Weblate has stopped pushing: open the component → **Operations → Repository maintenance** (the same dropdown as Update — there is no Manage menu, see §3) and read the alert. The usual causes are a rebase conflict after a squash-merge (plain **Update** fixes it) or a locked component. Never guess at "Reset" — §7 explains which one is right.
 3. **Anything a language still needs** is on the Weblate Languages page: the *Unreviewed* number for fr/de/sv, the *Untranslated* one for any new language.
 
 ---
