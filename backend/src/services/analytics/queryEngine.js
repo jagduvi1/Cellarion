@@ -44,7 +44,7 @@ const { resolveField, opsForType } = require('./fieldCatalogue');
 const { validateValue } = require('../../utils/personalDataTypes');
 const { ANCHORS, COL, toNormalized, fromNormalized } = require('../../utils/ratingUtils');
 const { getOrCreateDailySnapshot, convertCurrency } = require('../../utils/exchangeRates');
-const { classifyMaturity, buildProfileMap } = require('../../utils/maturityUtils');
+const { classifyMaturity, buildProfileMap, resolveEffectiveWindow } = require('../../utils/maturityUtils');
 
 const MAX_TIME_MS = 5000;
 const ROWS_LIMIT_MAX = 200;
@@ -837,9 +837,23 @@ async function hydrateRows({ userId, pageIds, columns, scopeCellars }) {
     return wineVint !== undefined ? wineVint : wineNull;
   };
 
-  // Maturity status only when asked for — profile map is one query.
-  const wantsMaturity = fields.some((f) => f.key === 'maturity.status');
+  // Maturity status / resolved window only when asked for — profile map is
+  // one query, and the window resolves once per row, not once per column.
+  const wantsMaturity = fields.some((f) => f.source === 'computed' && f.key.startsWith('maturity.'));
   const profileMap = wantsMaturity ? await buildProfileMap(ordered) : null;
+  const windowOf = new Map();
+  const effectiveWindow = (b) => {
+    const id = String(b._id);
+    if (!windowOf.has(id)) windowOf.set(id, resolveEffectiveWindow(b, profileMap));
+    return windowOf.get(id);
+  };
+  const WINDOW_COLUMNS = {
+    'maturity.windowFrom': 'drinkFrom',
+    'maturity.windowTo': 'drinkTo',
+    'maturity.windowPeakFrom': 'peakFrom',
+    'maturity.windowPeakUntil': 'peakUntil',
+    'maturity.windowSource': 'source',
+  };
 
   const iso = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : d ?? null);
   const extract = (b, f) => {
@@ -869,6 +883,7 @@ async function hydrateRows({ userId, pageIds, columns, scopeCellars }) {
       case 'computed': {
         if (f.key === 'bottle.cellar') return cellarNames.get(String(b.cellar)) ?? null;
         if (f.key === 'maturity.status') return classifyMaturity(b, profileMap) ?? 'unknown';
+        if (WINDOW_COLUMNS[f.key]) return effectiveWindow(b)?.[WINDOW_COLUMNS[f.key]] ?? null;
         return null;
       }
       case 'rack': {
