@@ -2,7 +2,7 @@ jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn() }));
 
 const WineVintageProfile = require('../models/WineVintageProfile');
 const {
-  classifyMaturity, classifyPersonalWindow, maturityLabel,
+  classifyMaturity, classifyPersonalWindow, maturityLabel, resolveEffectiveWindow,
   buildProfileMap, bottleAnchorYear, resolveWindow,
 } = require('./maturityUtils');
 
@@ -599,6 +599,34 @@ describe('maturityLabel — personal window precedence', () => {
     expect(maturityLabel('declining', profileSaysNow, bottle)).toBe('Past peak — declining, drink immediately if at all');
   });
 
+  // Support ticket 2026-09-10: a bottle recorded as drinkTo 2027 with its
+  // peak already behind it read "Late maturity — drink soon, until 2032" —
+  // the PROFILE's lateUntil — because 'late' fell through to the profile
+  // labels. The personal peak pair makes 'early' and 'late' reachable, so
+  // both must quote the bottle's own years.
+  test('late: quotes the personal drinkTo, not the profile lateUntil', () => {
+    const bottle = { drinkFrom: 2021, peakFrom: 2022, peakUntil: 2024, drinkTo: 2027 };
+    expect(classifyPersonalWindow(bottle)).toBe('late');
+    expect(maturityLabel('late', profileSaysNow, bottle)).toBe('Late maturity — drink soon, until 2027');
+  });
+
+  test('late with no drinkTo: open-ended personal late phase has no year suffix', () => {
+    const bottle = { peakUntil: 2024 };
+    expect(classifyPersonalWindow(bottle)).toBe('late');
+    expect(maturityLabel('late', profileSaysNow, bottle)).toBe('Late maturity — drink soon');
+  });
+
+  test('early: quotes the personal peakFrom, not the profile peakFrom', () => {
+    const bottle = { drinkFrom: 2021, peakFrom: 2030, drinkTo: 2040 };
+    expect(classifyPersonalWindow(bottle)).toBe('early');
+    expect(maturityLabel('early', profileSaysNow, bottle)).toBe('Early drinking — peak from 2030');
+  });
+
+  test('a status the personal window cannot produce never leaks profile years', () => {
+    const bottle = { drinkFrom: 2021, drinkTo: 2040 };
+    expect(maturityLabel('bogus', profileSaysNow, bottle)).toBeNull();
+  });
+
   test('no personal window on the bottle → unchanged profile-based label', () => {
     const bottle = { vintage: 2020 }; // no drinkFrom/drinkTo
     expect(maturityLabel('peak', profileSaysNow, bottle)).toBe('At peak — drink now through 2028');
@@ -626,5 +654,44 @@ describe('maturityLabel — relative (NV) profiles quote resolved years', () => 
   test('no anchor → generic year-free labels, never a bare offset', () => {
     expect(maturityLabel('peak', relProfile, { vintage: 'NV' })).toBe('At peak maturity — drink now');
     expect(maturityLabel('not-ready', relProfile, { vintage: 'NV' })).toBe('Not ready yet — drinking from ?');
+  });
+});
+
+// ─── resolveEffectiveWindow ──────────────────────────────────────────────────
+// The analytics maturity.window* columns (support ticket 2026-09-10): the
+// window that governs the status, in calendar years, with its source.
+describe('resolveEffectiveWindow', () => {
+  const W = 'a'.repeat(24);
+  const profile = { status: 'reviewed', earlyFrom: 2024, earlyUntil: 2025, peakFrom: 2026, peakUntil: 2030, lateFrom: 2031, lateUntil: 2034 };
+  const map = new Map([[`${W}:2020`, profile]]);
+
+  test('a bottle with any personal field set resolves to its own window', () => {
+    const b = { drinkFrom: 2022, peakUntil: 2027, drinkTo: 2029, wineDefinition: { _id: W }, vintage: '2020' };
+    expect(resolveEffectiveWindow(b, map)).toEqual({ source: 'personal', drinkFrom: 2022, drinkTo: 2029, peakFrom: null, peakUntil: 2027 });
+  });
+
+  test('no personal window → the reviewed profile, drink span = early start to late end', () => {
+    const b = { wineDefinition: { _id: W }, vintage: '2020' };
+    expect(resolveEffectiveWindow(b, map)).toEqual({ source: 'profile', drinkFrom: 2024, drinkTo: 2034, peakFrom: 2026, peakUntil: 2030 });
+  });
+
+  test('a profile with only a peak pair spans the peak', () => {
+    const m = new Map([[`${W}:2020`, { status: 'reviewed', peakFrom: 2026, peakUntil: 2030 }]]);
+    const b = { wineDefinition: { _id: W }, vintage: '2020' };
+    expect(resolveEffectiveWindow(b, m)).toEqual({ source: 'profile', drinkFrom: 2026, drinkTo: 2030, peakFrom: 2026, peakUntil: 2030 });
+  });
+
+  test('a relative (NV) profile resolves against the purchase year', () => {
+    const m = new Map([[`${W}:NV`, { status: 'reviewed', relative: true, peakFrom: 1, peakUntil: 3, lateUntil: 5 }]]);
+    const b = { wineDefinition: { _id: W }, vintage: 'NV', purchaseDate: '2024-06-01' };
+    expect(resolveEffectiveWindow(b, m)).toEqual({ source: 'profile', drinkFrom: 2025, drinkTo: 2029, peakFrom: 2025, peakUntil: 2027 });
+  });
+
+  test('null when nothing governs: no profile, unanchored NV, unreviewed, or no wine', () => {
+    expect(resolveEffectiveWindow({ wineDefinition: { _id: W }, vintage: '2019' }, map)).toBeNull();
+    expect(resolveEffectiveWindow({ wineDefinition: { _id: W }, vintage: 'NV' }, new Map([[`${W}:NV`, { status: 'reviewed', relative: true, peakFrom: 1 }]]))).toBeNull();
+    expect(resolveEffectiveWindow({ wineDefinition: { _id: W }, vintage: '2020' }, new Map([[`${W}:2020`, { ...profile, status: 'pending' }]]))).toBeNull();
+    expect(resolveEffectiveWindow({ vintage: '2020' }, map)).toBeNull();
+    expect(resolveEffectiveWindow({ wineDefinition: { _id: W }, vintage: '2020' }, null)).toBeNull();
   });
 });

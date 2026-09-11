@@ -117,14 +117,28 @@ const STATIC_FIELDS = [
   dim({ key: 'open.openedAt', label: 'Opened date', domain: 'open', type: 'date', source: 'bottle', path: 'openedAt', groupable: false }),
   dim({ key: 'open.preservation', label: 'Preservation', domain: 'open', type: 'enum', source: 'bottle', path: 'preservationMethod', enumOptions: ['coravin', 'inert-gas', 'vacuum', 'sparkling-stopper', 'recorked'] }),
 
-  // Maturity — the user's own per-bottle window (integers, filter/sortable);
-  // the derived drink status is computed per hydrated row and says so.
-  dim({ key: 'maturity.drinkFrom', label: 'Drink from (year)', domain: 'maturity', type: 'integer', source: 'bottle', path: 'drinkFrom' }),
-  dim({ key: 'maturity.drinkTo', label: 'Drink to (year)', domain: 'maturity', type: 'integer', source: 'bottle', path: 'drinkTo' }),
+  // Maturity. Two layers, and the labels say which is which (support ticket
+  // 2026-09-10 — a cellar relying on curated windows read all-null dates
+  // next to status "peak" and took the null for missing data):
+  //   maturity.drinkFrom / drinkTo / peakFrom / peakUntil — the user's OWN
+  //     per-bottle overrides (integers, filter/sortable). Null whenever the
+  //     bottle relies on the sommelier profile, so a filter on them only
+  //     ever sees bottles the user set a window on.
+  //   maturity.window* — the RESOLVED window behind the status: the bottle's
+  //     own when set, else the reviewed profile (NV offsets anchored on the
+  //     bottle). Computed per hydrated row like status, so display-only.
+  //   maturity.status — the derived verdict, computed per row.
+  dim({ key: 'maturity.drinkFrom', label: 'My drink from (year)', domain: 'maturity', type: 'integer', source: 'bottle', path: 'drinkFrom' }),
+  dim({ key: 'maturity.drinkTo', label: 'My drink to (year)', domain: 'maturity', type: 'integer', source: 'bottle', path: 'drinkTo' }),
   // The peak pair (writable per bottle) was missing here, so a lot could not
   // be checked for matching peaks in one query (support ticket 2026-09-07).
-  dim({ key: 'maturity.peakFrom', label: 'Peak from (year)', domain: 'maturity', type: 'integer', source: 'bottle', path: 'peakFrom' }),
-  dim({ key: 'maturity.peakUntil', label: 'Peak until (year)', domain: 'maturity', type: 'integer', source: 'bottle', path: 'peakUntil' }),
+  dim({ key: 'maturity.peakFrom', label: 'My peak from (year)', domain: 'maturity', type: 'integer', source: 'bottle', path: 'peakFrom' }),
+  dim({ key: 'maturity.peakUntil', label: 'My peak until (year)', domain: 'maturity', type: 'integer', source: 'bottle', path: 'peakUntil' }),
+  dim({ key: 'maturity.windowFrom', label: 'Effective drink from (year)', domain: 'maturity', type: 'integer', source: 'computed', path: null, sortable: false, groupable: false, filterable: false }),
+  dim({ key: 'maturity.windowTo', label: 'Effective drink to (year)', domain: 'maturity', type: 'integer', source: 'computed', path: null, sortable: false, groupable: false, filterable: false }),
+  dim({ key: 'maturity.windowPeakFrom', label: 'Effective peak from (year)', domain: 'maturity', type: 'integer', source: 'computed', path: null, sortable: false, groupable: false, filterable: false }),
+  dim({ key: 'maturity.windowPeakUntil', label: 'Effective peak until (year)', domain: 'maturity', type: 'integer', source: 'computed', path: null, sortable: false, groupable: false, filterable: false }),
+  dim({ key: 'maturity.windowSource', label: 'Window source', domain: 'maturity', type: 'enum', source: 'computed', path: null, sortable: false, groupable: false, filterable: false, enumOptions: ['personal', 'profile'] }),
   // enumOptions mirror what classifyMaturity actually returns (audit F7) —
   // 'unknown' is this module's own fallback for rows with no window at all.
   dim({ key: 'maturity.status', label: 'Drink status', domain: 'maturity', type: 'enum', source: 'computed', path: null, sortable: false, groupable: false, filterable: false, enumOptions: ['not-ready', 'early', 'peak', 'late', 'declining', 'unknown'] }),

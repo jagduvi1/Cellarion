@@ -25,7 +25,11 @@ registerTool({
     'identity, inventory, purchase, star-scale ratings, consumption, maturity, plus the USER\'S OWN typed personal ' +
     'keys and the public registry vocabulary (their keys embed an id: "personal.<id>", "registry.<id>"). Each entry ' +
     'carries type, unit, the allowed filter ops, allowed aggregations, and whether it can sort/group. Call this ' +
-    'once before composing analyze_cellar queries; field keys are exact.',
+    'once before composing analyze_cellar queries; field keys are exact. Maturity has two layers: ' +
+    'maturity.drinkFrom/drinkTo/peakFrom/peakUntil are the USER\'S OWN per-bottle overrides (null when the bottle ' +
+    'relies on the curated sommelier window, so filtering on them only sees bottles the user set a window on); ' +
+    'maturity.window* are the RESOLVED window behind the verdict (own window when set, else the curated one) and ' +
+    'maturity.status is the verdict itself — both computed per row, so columns only, never filters or groups.',
   scope: 'read',
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {},
@@ -57,7 +61,9 @@ registerTool({
     'columns, filters and sort — use it for "which bottles" questions. Filters are {field, op, value} with field ' +
     'keys and ops exactly as list_analytics_fields declares them; date values are YYYY-MM-DD and match whole days; ' +
     'rating values are stars 0-5. Scope: cellars "all" (default) or an id subset; bottles "active" (default), ' +
-    '"consumed" or "all" — say which scope you used when presenting numbers.',
+    '"consumed" or "all" — say which scope you used when presenting numbers. "Everything at peak" cannot be ' +
+    'expressed as a filter (maturity.status is computed per row): ask what_should_i_open_tonight or cellar_stats, ' +
+    'or select maturity.status / maturity.window* as columns and read them off the rows.',
   scope: 'read',
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {

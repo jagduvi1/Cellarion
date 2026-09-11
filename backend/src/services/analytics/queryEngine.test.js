@@ -22,6 +22,7 @@ jest.mock('../../utils/exchangeRates', () => ({
 jest.mock('../../utils/maturityUtils', () => ({
   classifyMaturity: jest.fn(() => 'ready'),
   buildProfileMap: jest.fn(async () => new Map()),
+  resolveEffectiveWindow: jest.fn(() => null),
 }));
 
 const mongoose = require('mongoose');
@@ -503,6 +504,45 @@ describe('rows mode hydration', () => {
       'purchase.price': 250,
       [`personal.${KEY_ID}`]: 14.1,
     });
+  });
+
+  test('maturity.window* columns hydrate the resolved window once per row; null-safe when nothing governs', async () => {
+    const { resolveEffectiveWindow, buildProfileMap } = require('../../utils/maturityUtils');
+    const B2 = '1'.repeat(24);
+    aggReturning([{ ids: [{ _id: B1 }, { _id: B2 }], total: [{ n: 2 }] }]);
+    Bottle.find.mockReturnValue(chainLean([
+      { _id: B1, cellar: CELLAR_A, wineDefinition: { _id: W1 }, vintage: '2019' },
+      { _id: B2, cellar: CELLAR_A, wineDefinition: { _id: W1 }, vintage: '2021' },
+    ]));
+    resolveEffectiveWindow.mockImplementation((b) => (String(b._id) === B1
+      ? { source: 'profile', drinkFrom: 2024, drinkTo: 2034, peakFrom: 2026, peakUntil: 2030 }
+      : null));
+    buildProfileMap.mockClear();
+    resolveEffectiveWindow.mockClear();
+
+    const out = await runQuery(USER, {
+      columns: ['maturity.windowFrom', 'maturity.windowTo', 'maturity.windowPeakFrom', 'maturity.windowPeakUntil', 'maturity.windowSource'],
+    });
+    expect(buildProfileMap).toHaveBeenCalledTimes(1);
+    expect(resolveEffectiveWindow).toHaveBeenCalledTimes(2);
+    expect(out.rows[0].values).toEqual({
+      'maturity.windowFrom': 2024, 'maturity.windowTo': 2034,
+      'maturity.windowPeakFrom': 2026, 'maturity.windowPeakUntil': 2030,
+      'maturity.windowSource': 'profile',
+    });
+    expect(out.rows[1].values).toEqual({
+      'maturity.windowFrom': null, 'maturity.windowTo': null,
+      'maturity.windowPeakFrom': null, 'maturity.windowPeakUntil': null,
+      'maturity.windowSource': null,
+    });
+    resolveEffectiveWindow.mockImplementation(() => null);
+  });
+
+  test('maturity.window* are columns only — a filter or sort on them is refused', async () => {
+    await expect(runQuery(USER, { filters: [{ field: 'maturity.windowTo', op: 'lte', value: 2027 }] }))
+      .rejects.toMatchObject({ status: 400, message: 'Field "maturity.windowTo" is not filterable' });
+    await expect(runQuery(USER, { mode: 'rows', sort: { field: 'maturity.windowTo', dir: 'asc' } }))
+      .rejects.toMatchObject({ status: 400, message: 'Field "maturity.windowTo" is not sortable' });
   });
 
   test('a registry value hydrates from the published row only', async () => {

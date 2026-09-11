@@ -136,6 +136,50 @@ function classifyMaturity(bottle, profileMap) {
   return 'early';
 }
 
+/**
+ * The window that actually governs a bottle's status, resolved to calendar
+ * years — the same precedence classifyMaturity applies: the bottle's OWN
+ * drinkFrom/drinkTo/peakFrom/peakUntil when any of them is set, otherwise
+ * the reviewed sommelier profile (NV offsets anchored on the bottle).
+ * Returns null when neither exists, or when a relative profile cannot be
+ * anchored — exactly the bottles classifyMaturity leaves unclassified.
+ *
+ * Analytics needed this (support ticket 2026-09-10): its maturity.* date
+ * columns are the bottle's own values, so a cellar that relies on curated
+ * windows reads all-null there while status says "peak". These are the
+ * resolved figures behind that status.
+ *
+ * @returns {{ source: 'personal'|'profile', drinkFrom, drinkTo, peakFrom, peakUntil }|null}
+ */
+function resolveEffectiveWindow(bottle, profileMap) {
+  const num = (v) => (Number.isFinite(v) ? v : null);
+  if (classifyPersonalWindow(bottle)) {
+    return {
+      source: 'personal',
+      drinkFrom: num(bottle.drinkFrom),
+      drinkTo: num(bottle.drinkTo),
+      peakFrom: num(bottle.peakFrom),
+      peakUntil: num(bottle.peakUntil),
+    };
+  }
+  const wdId    = bottle?.wineDefinition?._id?.toString() || bottle?.wineDefinition?.toString();
+  const vintage = bottle?.vintage;
+  if (!wdId || !vintage) return null;
+  const profile = profileMap?.get(`${wdId}:${vintage}`);
+  if (!profile || profile.status !== 'reviewed') return null;
+  const w = resolveWindowForBottle(profile, bottle);
+  if (!w) return null;
+  const earlyFrom = num(w.earlyFrom), peakFrom = num(w.peakFrom), peakUntil = num(w.peakUntil), lateUntil = num(w.lateUntil);
+  if (earlyFrom === null && peakFrom === null && peakUntil === null) return null;
+  return {
+    source: 'profile',
+    drinkFrom: earlyFrom ?? peakFrom,
+    drinkTo: lateUntil ?? peakUntil,
+    peakFrom,
+    peakUntil,
+  };
+}
+
 /** Build and return a WineVintageProfile lookup map for a set of active bottles. */
 async function buildProfileMap(activeBottles) {
   const seenPairs = new Set();
@@ -193,17 +237,27 @@ function maturityLabel(status, profile, bottle = null) {
   // Personal window wins: build the label from the user's own years so it is
   // consistent with the personal-window status classifyMaturity returned.
   if (bottle && classifyPersonalWindow(bottle)) {
-    const from = Number.isFinite(bottle.drinkFrom) ? bottle.drinkFrom : null;
-    const to   = Number.isFinite(bottle.drinkTo)   ? bottle.drinkTo   : null;
+    const from     = Number.isFinite(bottle.drinkFrom) ? bottle.drinkFrom : null;
+    const to       = Number.isFinite(bottle.drinkTo)   ? bottle.drinkTo   : null;
+    const peakFrom = Number.isFinite(bottle.peakFrom)  ? bottle.peakFrom  : null;
+    // Every status classifyPersonalWindow can return is handled HERE. The
+    // personal peak pair made 'early' and 'late' reachable, and for a while
+    // those two fell through to the profile labels below — so a bottle the
+    // user had recorded as finished in 2027 read "drink soon, until 2032",
+    // the shared profile's late-phase end (support ticket 2026-09-10).
     switch (status) {
       case 'not-ready':
         return `Not ready yet — drinking from ${from ?? '?'}`;
+      case 'early':
+        return peakFrom ? `Early drinking — peak from ${peakFrom}` : 'Early drinking window';
       case 'peak':
         return to ? `At peak — drink now through ${to}` : 'At peak maturity — drink now';
+      case 'late':
+        return to ? `Late maturity — drink soon, until ${to}` : 'Late maturity — drink soon';
       case 'declining':
         return 'Past peak — declining, drink immediately if at all';
       default:
-        break; // any other status → fall through to the profile-based labels
+        return null;
     }
   }
 
@@ -236,5 +290,5 @@ function maturityLabel(status, profile, bottle = null) {
 
 module.exports = {
   classifyMaturity, classifyPersonalWindow, buildProfileMap, maturityLabel,
-  bottleAnchorYear, resolveWindow, resolveWindowForBottle,
+  bottleAnchorYear, resolveWindow, resolveWindowForBottle, resolveEffectiveWindow,
 };
