@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildSections, groupingLevels } from './wineListSections';
+import { buildSections, groupingLevels, localName } from './wineListSections';
 
 const WINES = {
   barolo: {
@@ -185,5 +185,35 @@ describe('nested grouping fallbacks (review 2026-09-12)', () => {
       layout: {},
     }, mapOf(item(WINES.barolo), item(chianti)));
     expect(sections.map(s => `${'  '.repeat(s.level)}${s.title}`)).toEqual(['Red Wines', '  Italy', '    Piedmont', '    Other']);
+  });
+});
+
+describe('geography in the list language (support ticket 2026-09-12)', () => {
+  const tuscan = {
+    _id: 'g1', name: 'Brunello', producer: 'Biondi-Santi', type: 'red',
+    country: { name: 'Italy', translations: { de: 'Italien' } },
+    region: { name: 'Tuscany', translations: { de: 'Toskana' } }, grapes: [],
+  };
+  const bordeaux = {
+    _id: 'g2', name: 'Pauillac', producer: 'Lynch-Bages', type: 'red',
+    country: { name: 'France', translations: { de: 'Frankreich' } },
+    region: { name: 'Bordeaux' }, grapes: [],
+  };
+  const byKey = mapOf(item(tuscan), item(bordeaux));
+
+  it('prints Toskana on a German list and leaves Bordeaux alone; English is unchanged', () => {
+    const outline = (language) => buildSections({
+      structureMode: 'auto', language,
+      autoGrouping: { levels: ['type', 'country', 'region'], collapseSingle: false, withinGroup: 'name' },
+      autoGroupEntries: [entry('g1'), entry('g2')], layout: {},
+    }, byKey).map(s => `${'  '.repeat(s.level)}${s.title}`);
+    expect(outline('de')).toEqual(['Rotweine', '  Frankreich', '    Bordeaux', '  Italien', '    Toskana']);
+    expect(outline('en')).toEqual(['Red Wines', '  France', '    Bordeaux', '  Italy', '    Tuscany']);
+  });
+
+  it('localName falls back to the canonical name', () => {
+    expect(localName({ name: 'Rioja', translations: { de: '' } }, 'de')).toBe('Rioja');
+    expect(localName({ name: 'Rioja' }, 'sv')).toBe('Rioja');
+    expect(localName(null, 'de')).toBe('');
   });
 });
