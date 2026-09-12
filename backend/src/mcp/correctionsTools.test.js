@@ -14,6 +14,7 @@ jest.mock('../services/wineProposalOps', () => ({
   FIELDS: ['producer', 'name', 'appellation', 'region', 'country', 'classification'],
 }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
+jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
 // revert.js and tools/write.js top-require bottleOps (search/meili chain) —
 // same load-time mock as every other MCP tool suite.
 jest.mock('../services/bottleOps', () => ({
@@ -115,4 +116,27 @@ test.each([
   const res = await tool().handler({ wine_id: WINE, fields: {}, reason: 'long enough reason' }, CTX);
   expect(res.isError).toBe(true);
   expect(parse(res).error.code).toBe(mcpCode);
+});
+
+describe('idempotency (support ticket 2026-09-12)', () => {
+  const McpActionLog = require('../models/McpActionLog');
+  beforeEach(() => { McpActionLog.create.mockReset(); McpActionLog.findOneAndUpdate.mockReset(); });
+
+  test('a filed suggestion records a suggest_correction ledger row carrying the replayable envelope', async () => {
+    ops.createFieldCorrection.mockResolvedValue({ ok: true, amended: false, proposal: { _id: 'p1', proposedFields: { region: 'Rioja' } }, wine: { _id: WINE, producer: 'Muga', name: 'Reserva' } });
+    const body = parse(await tool().handler({ wine_id: WINE, fields: { region: 'Rioja' }, reason: 'Label says Rioja DOCa' }, CTX));
+    expect(body.data.proposal_id).toBe('p1');
+    expect(McpActionLog.create).toHaveBeenCalledWith(expect.objectContaining({
+      tool: 'suggest_wine_correction', action: 'suggest_correction', idempotencyKey: null,
+      detail: expect.objectContaining({ proposalId: 'p1', fields: ['region'], amended: false }),
+    }));
+  });
+
+  test('a retry with the same idempotency_key replays and never reaches the proposal service', async () => {
+    McpActionLog.findOneAndUpdate.mockResolvedValueOnce({ lastErrorObject: { updatedExisting: true }, value: { tool: 'suggest_wine_correction', pending: false, result: { ok: true, summary: 'Suggestion filed', data: { proposal_id: 'p1' } } } });
+    const body = parse(await tool().handler({ wine_id: WINE, fields: { region: 'Rioja' }, reason: 'Label says Rioja DOCa', idempotency_key: 'k-9' }, CTX));
+    expect(body.data.proposal_id).toBe('p1');
+    expect(ops.createFieldCorrection).not.toHaveBeenCalled();
+    expect(tool().description).toMatch(/read back/);
+  });
 });

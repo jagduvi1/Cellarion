@@ -300,3 +300,51 @@ describe('reply_to_ticket (continuing the support conversation)', () => {
     expect(parse(await tool('reply_to_ticket').handler({ ticket_id: 'f'.repeat(24), message: 'x' }, CTX)).error.code).toBe('invalid_input');
   });
 });
+
+describe('idempotency on the human-queue writes (support ticket 2026-09-12)', () => {
+  const McpActionLog = require('../models/McpActionLog');
+  const claimed = () => ({ lastErrorObject: { updatedExisting: false } });
+  const completed = (tool, result) => ({ lastErrorObject: { updatedExisting: true }, value: { tool, pending: false, result } });
+
+  test('create_support_ticket with a key: claims first, records a support_ticket ledger row completing the claim, returns the envelope', async () => {
+    McpActionLog.findOneAndUpdate.mockResolvedValueOnce(claimed()).mockResolvedValueOnce({});
+    accountOps.createSupportTicket.mockResolvedValue({ ticket: { _id: 't1', category: 'bug', status: 'open' } });
+    const res = await tool('create_support_ticket').handler(
+      { category: 'bug', subject: 'Crash', message: 'It broke', idempotency_key: 'k-1' }, CTX);
+    expect(res.isError).toBeFalsy();
+    expect(parse(res).data.ticket_id).toBe('t1');
+    // claim
+    expect(McpActionLog.findOneAndUpdate.mock.calls[0][0]).toEqual({ user: ME, idempotencyKey: 'k-1' });
+    // completion of THIS tool's claim with the replayable envelope
+    const [filter, update] = McpActionLog.findOneAndUpdate.mock.calls[1];
+    expect(filter).toEqual({ user: ME, tool: 'create_support_ticket', idempotencyKey: 'k-1', pending: true });
+    expect(update.$set).toMatchObject({ action: 'support_ticket', detail: { ticketId: 't1', category: 'bug' }, pending: false });
+    expect(update.$set.result.data.ticket_id).toBe('t1');
+  });
+
+  test('a retry with the same key replays the original result and files NOTHING', async () => {
+    McpActionLog.findOneAndUpdate.mockResolvedValueOnce(completed('create_support_ticket', { ok: true, summary: 'Support ticket submitted (bug)', data: { ticket_id: 't1' } }));
+    const body = parse(await tool('create_support_ticket').handler(
+      { category: 'bug', subject: 'Crash', message: 'It broke', idempotency_key: 'k-1' }, CTX));
+    expect(body.data.ticket_id).toBe('t1');
+    expect(accountOps.createSupportTicket).not.toHaveBeenCalled();
+    expect(logAudit).not.toHaveBeenCalled();
+  });
+
+  test('reply_to_ticket and request_wine_addition record their own ledger rows (no key → plain create)', async () => {
+    accountOps.replyToTicket.mockResolvedValue({ ticket: { _id: 't1', subject: 'S', status: 'open', replies: [{}] } });
+    await tool('reply_to_ticket').handler({ ticket_id: 'a'.repeat(24), message: 'more' }, CTX);
+    expect(McpActionLog.create).toHaveBeenCalledWith(expect.objectContaining({ tool: 'reply_to_ticket', action: 'support_reply', idempotencyKey: null }));
+
+    accountOps.createWineRequest.mockResolvedValue({ wineRequest: { _id: 'wr1', wineName: 'Barolo', status: 'pending' } });
+    await tool('request_wine_addition').handler({ wine_name: 'Barolo', source_url: 'https://vivino.com/w/1' }, CTX);
+    expect(McpActionLog.create).toHaveBeenCalledWith(expect.objectContaining({ tool: 'request_wine_addition', action: 'wine_request' }));
+  });
+
+  test('every irreversible write declares idempotency_key and says to read back on a transport error', () => {
+    for (const n of ['create_support_ticket', 'reply_to_ticket', 'request_wine_addition']) {
+      expect(tool(n).inputSchema.idempotency_key).toBeDefined();
+      expect(tool(n).description).toMatch(/read back/);
+    }
+  });
+});

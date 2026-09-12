@@ -11,6 +11,7 @@ jest.mock('../services/registryDataOps', () => ({
   listReviewQueues: jest.fn(), decideKey: jest.fn(), decideValue: jest.fn(),
 }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
+jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
 jest.mock('../services/bottleOps', () => ({
   consumeBottle: jest.fn(), restoreBottle: jest.fn(), removeFromRacks: jest.fn(),
   RESTORE_WINDOW_MS: 2 * 24 * 60 * 60 * 1000,
@@ -219,5 +220,27 @@ describe('vintage slots over MCP', () => {
     expect(rows[0]).toMatchObject({ vintage: '2023', wine_default: 13.5 });
     expect(rows[1].vintage).toBeNull();
     expect(rows[1]).not.toHaveProperty('wine_default');
+  });
+});
+
+describe('idempotency (support ticket 2026-09-12)', () => {
+  const McpActionLog = require('../models/McpActionLog');
+  beforeEach(() => { McpActionLog.create.mockReset(); McpActionLog.findOneAndUpdate.mockReset(); });
+
+  test('suggest_wine_public_value and propose_registry_key record ledger rows; a same-key retry replays', async () => {
+    ops.suggestValue.mockResolvedValue({ ok: true, value: { _id: 'v1', vintage: '2019', key: { name: 'ABV' }, value: 13.5 } });
+    await tool('suggest_wine_public_value').handler({ wine_id: WINE, key_id: KEY, value: 13.5, vintage: '2019' }, USER_CTX);
+    expect(McpActionLog.create).toHaveBeenCalledWith(expect.objectContaining({ tool: 'suggest_wine_public_value', action: 'suggest_value', detail: expect.objectContaining({ valueId: 'v1', vintage: '2019' }) }));
+
+    ops.proposeKey.mockResolvedValue({ ok: true, key: { _id: 'k1', name: 'Closure', type: 'enum' } });
+    await tool('propose_registry_key').handler({ name: 'Closure', type: 'enum', enum_options: ['cork', 'screwcap'], rationale: 'Durable objective property' }, USER_CTX);
+    expect(McpActionLog.create).toHaveBeenCalledWith(expect.objectContaining({ tool: 'propose_registry_key', action: 'propose_key' }));
+
+    McpActionLog.findOneAndUpdate.mockResolvedValueOnce({ lastErrorObject: { updatedExisting: true }, value: { tool: 'suggest_wine_public_value', pending: false, result: { ok: true, summary: 'Suggested', data: { value_id: 'v1' } } } });
+    ops.suggestValue.mockClear();
+    const body = parse(await tool('suggest_wine_public_value').handler({ wine_id: WINE, key_id: KEY, value: 13.5, idempotency_key: 'k-2' }, USER_CTX));
+    expect(body.data.value_id).toBe('v1');
+    expect(ops.suggestValue).not.toHaveBeenCalled();
+    for (const n of ['suggest_wine_public_value', 'propose_registry_key']) expect(tool(n).inputSchema.idempotency_key).toBeDefined();
   });
 });

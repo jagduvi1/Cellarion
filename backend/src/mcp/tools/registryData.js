@@ -7,6 +7,17 @@ const { registerTool } = require('../registry');
 const ops = require('../../services/registryDataOps');
 const { ok, fail, objectId } = require('../toolUtil');
 const { TYPES } = require('../../utils/personalDataTypes');
+// A suggestion or key proposal cannot be withdrawn, so a retry after an
+// ambiguous transport failure must be safe: idempotency_key claims/replays
+// through the ledger (support ticket 2026-09-12).
+const { logAction, replay } = require('../actionLedger');
+// The replayable body stored on the ledger row: what ok() serialises.
+const envelopeOf = (summary, data) => ({ summary, data });
+const IDEMPOTENCY_KEY = z.string().max(100).optional()
+  .describe('Unique key: a retry with the same key returns the original result instead of filing again');
+const RETRY_NOTE = (readBack) =>
+  `Cannot be unsent. Pass an idempotency_key (any unique string) so a retry after a transport error replays the ` +
+  `original result instead of filing twice; on a transport error WITHOUT a key, read back with ${readBack} before retrying.`;
 
 const FAIL_CODE = {
   invalid: 'invalid_input',
@@ -69,7 +80,8 @@ registerTool({
     'suggest_wine_correction and propose_registry_key. ' +
     'VINTAGE RULE: pass `vintage` whenever the figure comes from the user\'s own bottle, a label, or a retailer ' +
     'page for one year — it then applies to that vintage only, which is never wrong. Omit `vintage` ONLY for the ' +
-    'producer\'s general spec that holds for every year (a technical sheet). When in doubt, pass the vintage.',
+    'producer\'s general spec that holds for every year (a technical sheet). When in doubt, pass the vintage. ' +
+    RETRY_NOTE('get_wine_public_data'),
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
@@ -79,8 +91,12 @@ registerTool({
     vintage: z.string().max(10).optional().describe('YYYY — the bottling this figure is true for; omit for a producer-wide spec'),
     reason: z.string().max(1000).optional().describe('How the user knows (label, producer site …)'),
     evidence_url: z.string().max(500).optional(),
+    idempotency_key: IDEMPOTENCY_KEY,
   },
   handler: async (args, ctx) => {
+    const replayed = await replay(ctx, args.idempotency_key, 'suggest_wine_public_value');
+    if (replayed) return replayed;
+
     const result = await ops.suggestValue(
       ctx.user.id,
       {
@@ -91,11 +107,17 @@ registerTool({
     );
     if (!result.ok) return svcFail(result);
     const slot = result.value.vintage ? `for vintage ${result.value.vintage}` : 'for all vintages';
-    return ok(`Suggested ${result.value.key.name} = ${JSON.stringify(result.value.value)} ${slot} (admin will review)`, {
+    const envelope = envelopeOf(`Suggested ${result.value.key.name} = ${JSON.stringify(result.value.value)} ${slot} (admin will review)`, {
       value_id: result.value._id,
       vintage: result.value.vintage,
       status: 'suggested',
     });
+    await logAction(ctx, {
+      tool: 'suggest_wine_public_value', action: 'suggest_value',
+      detail: { wineId: String(args.wine_id), keyId: String(args.key_id), valueId: String(result.value._id), vintage: result.value.vintage || null },
+      idempotencyKey: args.idempotency_key || null, result: envelope,
+    });
+    return ok(envelope.summary, envelope.data);
   },
 });
 
@@ -106,7 +128,7 @@ registerTool({
     'Proposes a new key for the shared public vocabulary — name, a type from the shared type system ' +
     `(${TYPES.join(' | ')}, unit on numeric keys, options on enum keys) and a rationale for why it deserves to be ` +
     'first-class. Creating a public key is a curated act: an admin accepts it before anyone can suggest values. ' +
-    'Check get_wine_public_data first — the key may already exist.',
+    'Check get_wine_public_data first — the key may already exist. ' + RETRY_NOTE('get_wine_public_data'),
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
@@ -115,18 +137,28 @@ registerTool({
     unit: z.string().max(20).optional(),
     enum_options: z.array(z.string().max(40)).min(2).max(20).optional(),
     rationale: z.string().min(10).max(1000),
+    idempotency_key: IDEMPOTENCY_KEY,
   },
   handler: async (args, ctx) => {
+    const replayed = await replay(ctx, args.idempotency_key, 'propose_registry_key');
+    if (replayed) return replayed;
+
     const result = await ops.proposeKey(
       ctx.user.id,
       { name: args.name, type: args.type, unit: args.unit, enumOptions: args.enum_options, rationale: args.rationale },
       { via: 'mcp', req: ctx.req }
     );
     if (!result.ok) return svcFail(result);
-    return ok(`Proposed public key "${result.key.name}" (${result.key.type}) — admin will review`, {
+    const envelope = envelopeOf(`Proposed public key "${result.key.name}" (${result.key.type}) — admin will review`, {
       key_id: result.key._id,
       status: 'proposed',
     });
+    await logAction(ctx, {
+      tool: 'propose_registry_key', action: 'propose_key',
+      detail: { keyId: String(result.key._id), name: result.key.name },
+      idempotencyKey: args.idempotency_key || null, result: envelope,
+    });
+    return ok(envelope.summary, envelope.data);
   },
 });
 

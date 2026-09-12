@@ -14,7 +14,7 @@ const DAY = 86400000;
 const WINDOW = 5 * DAY;
 
 jest.mock('../mcp/server', () => ({ handleMcpRequest: jest.fn(), initStatefulSession: jest.fn() }));
-jest.mock('../mcp/sessions', () => ({ getSession: jest.fn() }));
+jest.mock('../mcp/sessions', () => ({ getSession: jest.fn(), beginRequest: jest.fn(), endRequest: jest.fn() }));
 jest.mock('../services/bottleOps', () => ({ RESTORE_WINDOW_MS: 5 * 86400000 }));
 // Use the REAL reversibleActionsFor / action lists (only revertLedgerRow is
 // mocked) so the route's revertible-action set — built from this at load — can

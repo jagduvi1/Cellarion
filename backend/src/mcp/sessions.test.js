@@ -144,3 +144,46 @@ describe('teardown', () => {
     expect(sessions.getSession(jwt.id, { userId: 'u1', tokenId: null })).toBe(jwt);
   });
 });
+
+describe('in-flight requests (support ticket 2026-09-12: "session expired" after a committed write)', () => {
+  test('expiry or eviction while a request is in flight unroutes the session but keeps its transport until the request ends', async () => {
+    const s = sessions.createSession({ userId: 'u1' });
+    s.transport = mkTransport();
+    s.server = { close: jest.fn().mockResolvedValue() };
+    sessions.beginRequest(s);
+    expect(sessions.destroySession(s.id, 'evicted_for_new_session')).toBe(true);
+    // New requests get 404 (re-initialize), the slot is free …
+    expect(sessions.getSession(s.id, { userId: 'u1', tokenId: null })).toBeNull();
+    expect(sessions.sessionCounts().total).toBe(0);
+    // … but the in-flight response stream is untouched
+    expect(s.transport.close).not.toHaveBeenCalled();
+    sessions.endRequest(s);
+    await Promise.resolve(); await Promise.resolve(); // close() runs off the hot path
+    expect(s.transport.close).toHaveBeenCalled();
+    expect(s.server.close).toHaveBeenCalled();
+  });
+
+  test('a revoked credential still tears the transport down at once, request or not', async () => {
+    const s = sessions.createSession({ userId: 'u1', tokenId: 'tok1' });
+    s.transport = mkTransport();
+    sessions.beginRequest(s);
+    eventBus.dropToken('tok1');
+    await Promise.resolve(); await Promise.resolve();
+    expect(s.transport.close).toHaveBeenCalled();
+  });
+
+  test('the per-user cap evicts an idle session before one that is mid-request, even when the busy one is staler', () => {
+    const busy = sessions.createSession({ userId: 'u1' });
+    busy.transport = mkTransport();
+    sessions.beginRequest(busy);
+    jest.advanceTimersByTime(1000);
+    const idle = sessions.createSession({ userId: 'u1' });
+    idle.transport = mkTransport();
+    jest.advanceTimersByTime(1000);
+    sessions.createSession({ userId: 'u1' });
+    jest.setSystemTime(Date.now());
+    sessions.createSession({ userId: 'u1' }); // 4th → evicts one
+    expect(sessions.getSession(idle.id, { userId: 'u1', tokenId: null })).toBeNull();
+    expect(sessions.getSession(busy.id, { userId: 'u1', tokenId: null })).toBe(busy);
+  });
+});

@@ -4,7 +4,7 @@ const router = express.Router();
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const { rateLimitKey } = require('../utils/clientIp');
 const { handleMcpRequest, initStatefulSession } = require('../mcp/server');
-const { getSession } = require('../mcp/sessions');
+const { getSession, beginRequest, endRequest } = require('../mcp/sessions');
 const mongoose = require('mongoose');
 const McpActionLog = require('../models/McpActionLog');
 const { RESTORE_WINDOW_MS } = require('../services/bottleOps');
@@ -173,7 +173,14 @@ router.post('/', requireMcpEnabled, mcpIpLimiter, mcpChallenge, requireAuth, req
       // Attribution follows the actual caller; the request body does NOT
       // stay pinned in the session (audit 2026-09 M01-1).
       session.ctx.req = require('../mcp/requestSnapshot').snapshotRequest(req);
-      return await session.transport.handleRequest(req, res, req.body);
+      // Housekeeping (cap eviction, TTL sweep) must not close the transport
+      // while this request is being served — see sessions.beginRequest.
+      beginRequest(session);
+      try {
+        return await session.transport.handleRequest(req, res, req.body);
+      } finally {
+        endRequest(session);
+      }
     }
     if (session !== undefined) return res.status(404).json(SESSION_GONE);
 

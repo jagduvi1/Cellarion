@@ -16,6 +16,17 @@ const User = require('../../models/User');
 const { registerTool } = require('../registry');
 const { ok, fail, pageParams } = require('../toolUtil');
 const { logAudit } = require('../../services/audit');
+// The human-queue writes (ticket, reply, wine request) cannot be unsent, so a
+// retry after an ambiguous transport failure must be safe: idempotency_key
+// claims/replays through the ledger (support ticket 2026-09-12).
+const { logAction, replay } = require('../actionLedger');
+// The replayable body stored on the ledger row: what ok() serialises.
+const envelopeOf = (summary, data) => ({ summary, data });
+const IDEMPOTENCY_KEY = z.string().max(100).optional()
+  .describe('Unique key: a retry with the same key returns the original result instead of filing again');
+const RETRY_NOTE = (readBack) =>
+  `Cannot be unsent. Pass an idempotency_key (any unique string) so a retry after a transport error replays the ` +
+  `original result instead of filing twice; on a transport error WITHOUT a key, read back with ${readBack} before retrying.`;
 const {
   updatePreferences, updateProfile, createSupportTicket, replyToTicket, createWineRequest,
   ALLOWED_CURRENCIES, LANGUAGE_TAG, LANGUAGE_TAG_MAX, ALLOWED_RATING_SCALES,
@@ -178,15 +189,20 @@ registerTool({
     'Files a support ticket to the Cellarion admins (a bug report, a question, a feature request). category is one ' +
     `of ${SUPPORT_CATEGORIES.join(' / ')}; subject ≤200 chars, message ≤5000. Use only for issues WITH the app itself — ` +
     'not for cellar actions you can do with other tools. Confirm the wording with the user first; this reaches a ' +
-    'human and cannot be unsent. Track replies with list_my_tickets (or in the web app under Settings → Support).',
+    'human and cannot be unsent. Track replies with list_my_tickets (or in the web app under Settings → Support). ' +
+    RETRY_NOTE('list_my_tickets'),
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
     category: z.enum(SUPPORT_CATEGORIES),
     subject: z.string().min(1).max(200),
     message: z.string().min(1).max(5000),
+    idempotency_key: IDEMPOTENCY_KEY,
   },
   handler: async (args, ctx) => {
+    const replayed = await replay(ctx, args.idempotency_key, 'create_support_ticket');
+    if (replayed) return replayed;
+
     const { ticket, error } = await createSupportTicket(ctx.user.id, {
       category: args.category, subject: args.subject, message: args.message,
     });
@@ -194,12 +210,18 @@ registerTool({
     logAudit(ctx.req, 'support.ticket.created', { type: 'SupportTicket', id: ticket._id }, {
       via: 'mcp', category: ticket.category,
     });
-    return ok(`Support ticket submitted (${ticket.category})`, {
+    const envelope = envelopeOf(`Support ticket submitted (${ticket.category})`, {
       ticket_id: ticket._id,
       category: ticket.category,
       status: ticket.status,
       note: 'A Cellarion admin will respond — check back with list_my_tickets (replies also arrive as a notification and in the web app under Settings → Support).',
     });
+    await logAction(ctx, {
+      tool: 'create_support_ticket', action: 'support_ticket',
+      detail: { ticketId: String(ticket._id), category: ticket.category },
+      idempotencyKey: args.idempotency_key || null, result: envelope,
+    });
+    return ok(envelope.summary, envelope.data);
   },
 });
 
@@ -265,14 +287,18 @@ registerTool({
     'Adds the user\'s follow-up to one of their support tickets — continuing the conversation after an admin ' +
     'response (get the ticket_id and the current thread from list_my_tickets). Reopens the ticket for the admins. ' +
     'Message ≤5000 chars. Confirm the wording with the user first; this reaches a human and cannot be unsent. ' +
-    'Closed tickets refuse — file a new ticket with create_support_ticket instead.',
+    'Closed tickets refuse — file a new ticket with create_support_ticket instead. ' + RETRY_NOTE('list_my_tickets'),
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
     ticket_id: z.string().regex(/^[a-f0-9]{24}$/i).describe('From list_my_tickets'),
     message: z.string().min(1).max(5000),
+    idempotency_key: IDEMPOTENCY_KEY,
   },
   handler: async (args, ctx) => {
+    const replayed = await replay(ctx, args.idempotency_key, 'reply_to_ticket');
+    if (replayed) return replayed;
+
     const { ticket, error } = await replyToTicket(ctx.user.id, args.ticket_id, args.message);
     if (error) {
       const code = error.status === 404 ? 'not_found' : error.status === 409 ? 'conflict' : 'invalid_input';
@@ -281,12 +307,18 @@ registerTool({
     logAudit(ctx.req, 'support.ticket.replied', { type: 'SupportTicket', id: ticket._id }, {
       via: 'mcp', replies: ticket.replies.length,
     });
-    return ok(`Reply added to "${ticket.subject}" — ticket reopened for the support team`, {
+    const envelope = envelopeOf(`Reply added to "${ticket.subject}" — ticket reopened for the support team`, {
       ticket_id: ticket._id,
       status: ticket.status,
       replies: ticket.replies.length,
       note: 'The support team will see the follow-up; check back with list_my_tickets.',
     });
+    await logAction(ctx, {
+      tool: 'reply_to_ticket', action: 'support_reply',
+      detail: { ticketId: String(ticket._id), replies: ticket.replies.length },
+      idempotencyKey: args.idempotency_key || null, result: envelope,
+    });
+    return ok(envelope.summary, envelope.data);
   },
 });
 
@@ -298,26 +330,36 @@ registerTool({
     'match AND you can\'t confirm enough detail (producer, country, type) to add it yourself with add_bottle/new_wine. ' +
     'Requires a source_url (a Systembolaget / Vivino / winery page an admin can verify) and the wine_name as printed. ' +
     'This is a request to a human queue, not an instant add — tell the user it may take a while and that add_bottle ' +
-    'with new_wine is the immediate route when the details are known.',
+    'with new_wine is the immediate route when the details are known. ' + RETRY_NOTE('list_history'),
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
     wine_name: z.string().min(1).max(300).describe('The wine name as printed on the label / source'),
     source_url: z.string().min(1).max(2048).describe('An http(s) link to a page describing the wine (required)'),
     image_url: z.string().max(500000).optional().describe('Optional image URL or data reference for the wine'),
+    idempotency_key: IDEMPOTENCY_KEY,
   },
   handler: async (args, ctx) => {
+    const replayed = await replay(ctx, args.idempotency_key, 'request_wine_addition');
+    if (replayed) return replayed;
+
     const { wineRequest, error } = await createWineRequest(ctx.user.id, {
       wineName: args.wine_name, sourceUrl: args.source_url, image: args.image_url,
     }, { via: 'mcp', req: ctx.req });
     if (error) return fail('invalid_input', error.message);
     logAudit(ctx.req, 'wineRequest.create', { type: 'wineRequest', id: wineRequest._id }, { via: 'mcp' });
-    return ok(`Wine addition requested: ${wineRequest.wineName}`, {
+    const envelope = envelopeOf(`Wine addition requested: ${wineRequest.wineName}`, {
       request_id: wineRequest._id,
       wine_name: wineRequest.wineName,
       status: wineRequest.status,
       note: 'A Cellarion admin will review this. To add it to YOUR cellar right now instead, use resolve_wine → add_bottle once you have the producer, country and type.',
     });
+    await logAction(ctx, {
+      tool: 'request_wine_addition', action: 'wine_request',
+      detail: { requestId: String(wineRequest._id), wineName: wineRequest.wineName },
+      idempotencyKey: args.idempotency_key || null, result: envelope,
+    });
+    return ok(envelope.summary, envelope.data);
   },
 });
 

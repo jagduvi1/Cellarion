@@ -77,9 +77,13 @@ function createSession({ userId, tokenId }) {
   // its stream cap. Global cap stays a refusal — evicting ANOTHER user's
   // live session to seat this one would trade a known cost for a stranger's.
   if ((perUserCounts.get(userKey) || 0) >= MAX_SESSIONS_PER_USER) {
+    // Prefer a session with nothing in flight; among those, the stalest.
     let oldest = null;
     for (const s of sessions.values()) {
-      if (s.userId === userKey && (!oldest || s.lastSeenAt < oldest.lastSeenAt)) oldest = s;
+      if (s.userId !== userKey) continue;
+      const busy = (s.inFlight || 0) > 0;
+      const oldestBusy = oldest ? (oldest.inFlight || 0) > 0 : true;
+      if (!oldest || (oldestBusy && !busy) || (busy === oldestBusy && s.lastSeenAt < oldest.lastSeenAt)) oldest = s;
     }
     if (oldest) {
       destroySession(oldest.id, 'evicted_for_new_session');
@@ -98,6 +102,8 @@ function createSession({ userId, tokenId }) {
     callState: { calls: 0 }, // reset per request (per-request call budget)
     subscriptions: new Set(), // subscribed resource URIs
     busUnsub: null,      // eventBus listener teardown
+    inFlight: 0,         // requests currently being served (beginRequest/endRequest)
+    pendingDestroy: null, // reason of a destroy deferred until inFlight reaches 0
   };
   sessions.set(session.id, session);
   perUserCounts.set(userKey, (perUserCounts.get(userKey) || 0) + 1);
@@ -126,18 +132,57 @@ function getSession(sessionId, { userId, tokenId }) {
   return s;
 }
 
-function destroySession(sessionId, reason = 'closed') {
-  const s = sessions.get(String(sessionId));
-  if (!s) return false;
-  sessions.delete(s.id);
-  const left = (perUserCounts.get(s.userId) || 1) - 1;
-  if (left <= 0) perUserCounts.delete(s.userId);
-  else perUserCounts.set(s.userId, left);
+// Reasons that must tear the transport down NOW even with a request in
+// flight: the credential is gone (security), the client asked, or the
+// transport already died. Everything else (expiry, cap eviction) waits for
+// the in-flight request to finish.
+const IMMEDIATE_REASONS = new Set(['user_dropped', 'token_revoked', 'client_delete', 'init_failed', 'transport_closed']);
+
+/**
+ * A request is being served on this session. Housekeeping (cap eviction,
+ * TTL sweep) must not close the transport under it: a client whose
+ * response stream dies mid-call is told "session expired" for a write the
+ * server has already committed (support ticket 2026-09-12 — a support
+ * ticket filed twice would have been the result). Call endRequest in a
+ * finally.
+ */
+function beginRequest(session) {
+  if (!session) return;
+  session.inFlight = (session.inFlight || 0) + 1;
+}
+
+function endRequest(session) {
+  if (!session) return;
+  session.inFlight = Math.max(0, (session.inFlight || 1) - 1);
+  if (session.inFlight === 0 && session.pendingDestroy) closeSessionIo(session, session.pendingDestroy);
+}
+
+function closeSessionIo(s, reason) {
+  s.pendingDestroy = null;
   try { s.busUnsub?.(); } catch { /* already gone */ }
   // Close transport+server asynchronously; a rejected close must never crash
   // the hot path (same rationale as the stateless per-request teardown).
   Promise.resolve().then(() => s.transport?.close()).catch(() => {});
   Promise.resolve().then(() => s.server?.close()).catch(() => {});
+  console.log(`[mcp] session ${s.id.slice(0, 8)} closed (${reason})`);
+}
+
+function destroySession(sessionId, reason = 'closed') {
+  const s = sessions.get(String(sessionId));
+  if (!s) return false;
+  // Unrouted at once: the slot is free and a new request gets 404 → the
+  // client re-initializes cleanly. The transport itself only closes once no
+  // request is being served on it (unless the reason says otherwise).
+  sessions.delete(s.id);
+  const left = (perUserCounts.get(s.userId) || 1) - 1;
+  if (left <= 0) perUserCounts.delete(s.userId);
+  else perUserCounts.set(s.userId, left);
+  if ((s.inFlight || 0) > 0 && !IMMEDIATE_REASONS.has(reason)) {
+    s.pendingDestroy = reason;
+    console.log(`[mcp] session ${s.id.slice(0, 8)} unrouted (${reason}) — ${s.inFlight} request(s) in flight, transport kept until they finish`);
+    return true;
+  }
+  closeSessionIo(s, reason);
   return true;
 }
 
@@ -167,6 +212,7 @@ function sessionCounts() {
 
 module.exports = {
   createSession, getSession, destroySession, sessionCounts,
+  beginRequest, endRequest,
   dropUserSessions, dropTokenSessions,
   MAX_SESSIONS_PER_USER, MAX_SESSIONS_GLOBAL, IDLE_TTL_MS, ABSOLUTE_TTL_MS,
 };
