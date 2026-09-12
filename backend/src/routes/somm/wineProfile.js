@@ -76,7 +76,8 @@ router.put('/:wineId', requireSommOrAdmin, async (req, res) => {
     }
 
     const wine = await WineDefinition.findById(req.params.wineId);
-    if (!wine) return res.status(404).json({ error: 'Wine not found' });
+    // A user's private draft is nobody's curation work (draft design 2026-09-12).
+    if (!wine || wine.draft === true) return res.status(404).json({ error: 'Wine not found' });
 
     const before = snapshotProfile(wine);
     applyProfilePatch(wine, check.clean, req.user.id);

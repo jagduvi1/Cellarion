@@ -69,6 +69,10 @@ function BottleDetail() {
   const [mistakeOpen, setMistakeOpen] = useState(false);
   const [mistakeBusy, setMistakeBusy] = useState(false);
   const [suggestGrapesOpen, setSuggestGrapesOpen] = useState(false);
+  // What the last draft publish / attach did; survives the refetch that
+  // unmounts the draft banner. Cleared when the page moves to another bottle.
+  const [draftNotice, setDraftNotice] = useState(null);
+  useEffect(() => { setDraftNotice(null); }, [bottleId]);
   const [addMoreOpen, setAddMoreOpen] = useState(false);
   const [addMoreMsg, setAddMoreMsg] = useState(null); // success banner after "Add more bottles"
   const [reportWineOpen, setReportWineOpen] = useState(false);
@@ -597,7 +601,8 @@ function BottleDetail() {
           onRemove={() => setConsumeOpen(true)}
           onReportWine={(reason) => { setReportWineOpen(true); setReportDefaultReason(typeof reason === 'string' ? reason : null); }}
           wineDraft={bottle.wineDraft || null}
-          onDraftChanged={fetchBottle}
+          onDraftChanged={(notice) => { setDraftNotice(typeof notice === 'string' ? notice : null); fetchBottle(); }}
+          draftNotice={draftNotice}
         />
       )}
 

@@ -61,7 +61,8 @@ registerTool({
     if (args.existing_wine_id) {
       if (!isValidId(args.existing_wine_id)) return fail('invalid_input', 'existing_wine_id must be a 24-hex Mongo id.');
       wineDoc = await WineDefinition.findById(args.existing_wine_id).populate(['country', 'region', 'grapes']);
-      if (!wineDoc) return fail('not_found', 'No registry wine with that id.');
+      // A user's private draft is not registry content, not even to an admin.
+      if (!wineDoc || wineDoc.draft === true) return fail('not_found', 'No registry wine with that id.');
     } else {
       const { findOrCreateWine } = require('../../services/findOrCreateWine');
       let result;

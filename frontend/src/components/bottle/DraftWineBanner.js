@@ -41,10 +41,13 @@ function DraftWineBanner({ wine, wineDraft, onChanged }) {
     setBusy(false);
     if (r.status === 'ok') {
       setChoice(null);
-      setNotice(r.pendingCuration
+      // The notice is handed UP: after the refetch this banner unmounts (the
+      // wine is no longer a draft), so the page keeps and shows it.
+      const msg = r.pendingCuration
         ? t('draftWine.publishedPending', 'Published. The producer is still missing, so a curator will complete the record.')
-        : t('draftWine.published', 'Published to the shared registry.'));
-      onChanged?.();
+        : t('draftWine.published', 'Published to the shared registry.');
+      setNotice(msg);
+      onChanged?.(msg);
       return;
     }
     if (r.status === 'similar' || r.status === 'duplicate') { setChoice({ kind: r.status, candidates: r.candidates }); return; }
@@ -58,16 +61,17 @@ function DraftWineBanner({ wine, wineDraft, onChanged }) {
     setBusy(false);
     if (r.status === 'ok') {
       setChoice(null);
-      setNotice(t('draftWine.attached', 'Your bottles now sit on the registry wine.'));
-      onChanged?.();
+      const msg = t('draftWine.attached', 'Your bottles now sit on the registry wine.');
+      setNotice(msg);
+      onChanged?.(msg);
       return;
     }
     setError(r.status === 'network' ? t('common.networkError', 'Network error') : r.message);
   };
 
   return (
-    <div className="draft-wine-banner" role="status">
-      <div className="draft-wine-banner-text">
+    <div className="draft-wine-banner">
+      <div className="draft-wine-banner-text" role="status">
         <strong>{t('draftWine.bannerTitle', 'Private draft')}</strong>
         <span>
           {mine

@@ -320,6 +320,9 @@ function AddBottle() {
   const applyPendingNewWine = useCallback((wineData, carriedVintage) => {
     createdBottlesRef.current = [];
     imagesLinkedRef.current = false;
+    // A fresh new-wine choice starts with the draft toggle off — the earlier
+    // answer belonged to a different wine (audit 2026-09-12).
+    setCreateAsDraft(false);
     setPendingNewWine(wineData);
     setSelectedWine({ name: wineData.name, producer: wineData.producer, type: wineData.type });
     setBottleData(prev => ({ ...prev, vintage: carriedVintage || '' }));

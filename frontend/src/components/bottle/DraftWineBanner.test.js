@@ -58,7 +58,9 @@ describe('DraftWineBanner', () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Publish' })); });
     expect(publishWineDraft).toHaveBeenCalledWith(authState.apiFetch, 'w1', { confirmCreate: false });
     expect(await screen.findByText('Published to the shared registry.')).toBeInTheDocument();
-    expect(onChanged).toHaveBeenCalledTimes(1);
+    // The notice is handed up with the change: the page keeps it after the
+    // refetch unmounts this banner (audit 2026-09-12).
+    expect(onChanged).toHaveBeenCalledWith('Published to the shared registry.');
   });
 
   test('publish → 409 similar opens the choice with "create new" still available; confirming re-publishes with confirmCreate', async () => {

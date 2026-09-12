@@ -23,9 +23,21 @@ function WineDrafts() {
   const [selected, setSelected] = useState(() => new Set());
   const [busy, setBusy] = useState(false);
   const [rowState, setRowState] = useState({}); // id -> { status, message }
+  // Outcomes for drafts that have LEFT the list (published / attached): the
+  // row is gone after the reload, so its message lives here instead.
+  const [recent, setRecent] = useState([]);     // [{ id, name, message }]
+  // Pending choices per row from a batch publish (several rows can need one;
+  // the modal shows one at a time, the others keep a Resolve button).
+  const [choices, setChoices] = useState({});   // id -> { kind, candidates }
   const [editing, setEditing] = useState(null); // draft being edited
   const [choice, setChoice] = useState(null);   // { draft, kind, candidates }
   const canAct = !user?.isDemo;
+  const remember = (draft, message) => setRecent((prev) => [{ id: draft._id, name: draft.producer ? `${draft.producer} — ${draft.name}` : draft.name, message }, ...prev.filter((r) => r.id !== draft._id)].slice(0, 10));
+  const openChoice = (draft, kind, candidates) => {
+    setChoices((c) => ({ ...c, [draft._id]: { kind, candidates } }));
+    setChoice({ draft, kind, candidates });
+  };
+  const clearChoice = (id) => setChoices((c) => { const n = { ...c }; delete n[id]; return n; });
 
   const load = useCallback(async () => {
     setError(null);
@@ -49,13 +61,14 @@ function WineDrafts() {
 
   const handleResult = (draft, r) => {
     if (r.status === 'ok') {
-      setRow(draft._id, 'done', r.pendingCuration
+      clearChoice(draft._id);
+      remember(draft, r.pendingCuration
         ? t('draftWine.rowPendingCuration', 'Published — a curator will complete the producer')
         : t('draftWine.rowPublished', 'Published'));
       return true;
     }
     if (r.status === 'similar' || r.status === 'duplicate') {
-      setChoice({ draft, kind: r.status, candidates: r.candidates });
+      openChoice(draft, r.status, r.candidates);
       setRow(draft._id, 'choice', r.status === 'duplicate'
         ? t('draftWine.rowDuplicate', 'Already in the registry — attach your bottles to it')
         : t('draftWine.rowSimilar', 'Similar wines exist — choose'));
@@ -64,6 +77,12 @@ function WineDrafts() {
     setRow(draft._id, 'error', r.status === 'network' ? t('common.networkError', 'Network error') : r.message);
     return false;
   };
+
+  const statusText = (status) => ({
+    not_found: t('draftWine.rowNotFound', 'No longer a draft'),
+    error: t('common.error', 'Something went wrong'),
+    conflict: t('draftWine.rowConflict', 'Changed meanwhile — reload'),
+  })[status] || status;
 
   const publishOne = async (draft, opts = {}) => {
     setBusy(true);
@@ -80,24 +99,26 @@ function WineDrafts() {
       const res = await publishWineDrafts(apiFetch, ids);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setError(data.error || t('common.error', 'Something went wrong')); return; }
+      let firstChoice = null;
       for (const row of data.results || []) {
         const draft = drafts.find((d) => d._id === row.id);
         if (!draft) continue;
-        if (row.status === 'published') setRow(row.id, 'done', t('draftWine.rowPublished', 'Published'));
-        else if (row.status === 'pending_curation') setRow(row.id, 'done', t('draftWine.rowPendingCuration', 'Published — a curator will complete the producer'));
-        else if (row.status === 'duplicate' && row.match) setRow(row.id, 'choice', t('draftWine.rowDuplicate', 'Already in the registry — attach your bottles to it'));
-        else if (row.status === 'similar') setRow(row.id, 'choice', t('draftWine.rowSimilar', 'Similar wines exist — choose'));
-        else setRow(row.id, 'error', row.error || row.status);
+        if (row.status === 'published') remember(draft, t('draftWine.rowPublished', 'Published'));
+        else if (row.status === 'pending_curation') remember(draft, t('draftWine.rowPendingCuration', 'Published — a curator will complete the producer'));
+        else if ((row.status === 'duplicate' && row.match) || (row.status === 'similar' && row.candidates)) {
+          // Every row that needs a choice keeps its candidates and a Resolve
+          // button; the first one opens now.
+          const candidates = row.status === 'duplicate'
+            ? [{ wine: matchToWine(row.match), score: 1 }]
+            : row.candidates.map((c) => ({ wine: matchToWine(c), score: c.score ?? 0 }));
+          setChoices((c) => ({ ...c, [row.id]: { kind: row.status, candidates } }));
+          setRow(row.id, 'choice', row.status === 'duplicate'
+            ? t('draftWine.rowDuplicate', 'Already in the registry — attach your bottles to it')
+            : t('draftWine.rowSimilar', 'Similar wines exist — choose'));
+          if (!firstChoice) firstChoice = { draft, kind: row.status, candidates };
+        } else setRow(row.id, 'error', row.error || statusText(row.status));
       }
-      // Keep the choices for the rows that need one: the first opens now.
-      const first = (data.results || []).find((row) => (row.status === 'duplicate' && row.match) || (row.status === 'similar' && row.candidates));
-      if (first) {
-        const draft = drafts.find((d) => d._id === first.id);
-        const candidates = first.status === 'duplicate'
-          ? [{ wine: matchToWine(first.match), score: 1 }]
-          : first.candidates.map((c) => ({ wine: matchToWine(c), score: c.score ?? 0 }));
-        setChoice({ draft, kind: first.status, candidates });
-      }
+      if (firstChoice) setChoice(firstChoice);
       await load();
     } catch {
       setError(t('common.networkError', 'Network error'));
@@ -112,7 +133,8 @@ function WineDrafts() {
     const r = await attachDraft(apiFetch, choice.draft._id, target._id);
     setBusy(false);
     if (r.status === 'ok') {
-      setRow(choice.draft._id, 'done', t('draftWine.rowAttached', 'Bottles attached to {{wine}}', { wine: target.name }));
+      clearChoice(choice.draft._id);
+      remember(choice.draft, t('draftWine.rowAttached', 'Bottles attached to {{wine}}', { wine: target.name }));
       setChoice(null);
       await load();
     } else {
@@ -148,6 +170,15 @@ function WineDrafts() {
       </div>
 
       {error && <div className="alert alert-error" role="alert">{error}</div>}
+
+      {recent.length > 0 && (
+        <div className="alert alert-success wine-drafts-recent" role="status">
+          <strong>{t('draftWine.recentTitle', 'Just now')}</strong>
+          <ul>
+            {recent.map((r) => <li key={r.id}>{r.name}: {r.message}</li>)}
+          </ul>
+        </div>
+      )}
 
       {drafts === null ? (
         <div className="loading">{t('common.loading', 'Loading…')}</div>
@@ -186,6 +217,9 @@ function WineDrafts() {
                   </div>
                   {canAct && (
                     <div className="wine-draft-actions">
+                      {choices[d._id] && (
+                        <button type="button" className="btn btn-primary btn-small" disabled={busy} onClick={() => setChoice({ draft: d, ...choices[d._id] })}>{t('draftWine.resolve', 'Resolve')}</button>
+                      )}
                       <button type="button" className="btn btn-secondary btn-small" disabled={busy} onClick={() => setEditing(d)}>{t('draftWine.edit', 'Edit')}</button>
                       <button type="button" className="btn btn-primary btn-small" disabled={busy} onClick={() => publishOne(d)}>{t('draftWine.publish', 'Publish')}</button>
                       {!d.bottleCount && (

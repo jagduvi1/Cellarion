@@ -44,7 +44,8 @@ jest.mock('../utils/vintageProfile', () => ({
 }));
 
 jest.mock('../models/Cellar', () => ({ findById: jest.fn() }));
-jest.mock('../models/WineDefinition', () => ({ findById: jest.fn() }));
+// exists: the route refuses a private DRAFT wine before the skip check (2026-09-12).
+jest.mock('../models/WineDefinition', () => ({ findById: jest.fn(), exists: jest.fn(async () => null) }));
 jest.mock('../models/Rack', () => ({ updateMany: jest.fn() }));
 jest.mock('../models/Country', () => ({}));
 jest.mock('../models/Region', () => ({}));

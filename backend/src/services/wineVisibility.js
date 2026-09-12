@@ -106,7 +106,10 @@ async function isDraftVisibleViaSharedCellar(wineId, userId) {
   if (!userId) return false;
   const Cellar = require('../models/Cellar');
   const Bottle = require('../models/Bottle');
-  const cellarIds = await Cellar.find({ 'members.user': userId, deletedAt: null }).distinct('_id');
+  // The cellar's OWNER is `user`, not a member (utils/cellarAccess) — an
+  // editor adding their draft bottle into someone else's cellar must leave
+  // that owner able to read it too (audit 2026-09-12).
+  const cellarIds = await Cellar.find({ $or: [{ user: userId }, { 'members.user': userId }], deletedAt: null }).distinct('_id');
   if (cellarIds.length === 0) return false;
   return Boolean(await Bottle.exists({ wineDefinition: wineId, cellar: { $in: cellarIds } }));
 }

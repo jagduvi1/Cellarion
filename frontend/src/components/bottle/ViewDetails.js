@@ -17,7 +17,7 @@ import MaturityPhaseTable from './MaturityPhaseTable';
 import PriceHistoryTimeline from './PriceHistoryTimeline';
 import PriceTrackingToggle from './PriceTrackingToggle';
 
-function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory, currentRelease, rates, userCurrency, canEdit, hasImage, onEdit, onSuggestGrapes, onRemove, onReportWine, wineDraft = null, onDraftChanged }) {
+function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory, currentRelease, rates, userCurrency, canEdit, hasImage, onEdit, onSuggestGrapes, onRemove, onReportWine, wineDraft = null, onDraftChanged, draftNotice = null }) {
   const { t } = useTranslation();
   const { user, apiFetch } = useAuth();
   const anchorYear = bottleAnchorYear(bottle);
@@ -137,7 +137,7 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
               <span key={g._id} className="bd-grape-pill">{g.displayName || g.name}</span>
             ))}
           </div>
-        ) : canEdit ? (
+        ) : canEdit && wine?.draft !== true ? (
           <ContributePrompt
             storageKey={`cellarion_contrib_grapes_${wine?._id}`}
             icon="🍇"
@@ -155,6 +155,11 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
           shared-cellar member only sees that it is one. Drafts are edited
           directly, never through the correction queue, so the per-field
           suggest actions below are off while it is a draft. */}
+      {/* What the last publish / attach did — kept by the page, because the
+          banner below unmounts the moment the wine stops being a draft. */}
+      {draftNotice && (
+        <div className="alert alert-success" role="status">{draftNotice}</div>
+      )}
       {wine?.draft === true && (
         <DraftWineBanner wine={wine} wineDraft={wineDraft} onChanged={onDraftChanged} />
       )}

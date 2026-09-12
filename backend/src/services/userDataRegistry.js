@@ -1138,12 +1138,22 @@ const REGISTRY = [
           const wine = await WineDefinition.findOne({ _id: id, draft: true });
           if (!wine) continue;
           if (await Bottle.exists({ wineDefinition: wine._id })) {
-            const r = await ops.publishDraft(wine, { userId: null, req: null, auto: true });
+            const r = await ops.publishDraft(wine, { userId: null, req: null, auto: true, reason: 'erasure' });
             if (!r.ok && r.code === 'duplicate' && r.match) {
-              await ops.attachDraftBottles(wine, r.match.wine_id, { userId: ctx.deletedUserId, roles: ['admin'], req: null, auto: true });
+              // The departed user's rows now carry the shared [deleted]
+              // identity, under which the resolver would treat EVERY erased
+              // user's pending row as "own" — so the surviving member's
+              // bottles may only move onto a genuinely published wine, never
+              // onto some other erased user's pending row (audit 2026-09-12).
+              const published = await WineDefinition.exists({ _id: r.match.wine_id, pendingIdentity: { $ne: true }, draft: { $ne: true } });
+              if (published) {
+                await ops.attachDraftBottles(wine, r.match.wine_id, { userId: ctx.deletedUserId, roles: [], req: null, auto: true, reason: 'erasure' });
+              } else {
+                console.warn('[userDataRegistry] draft', String(id), 'kept: its duplicate match is not a published wine');
+              }
             }
           } else {
-            await ops.deleteDraft(wine, null, { action: 'wine.draft_expire' });
+            await ops.deleteDraft(wine, null, { action: 'wine.draft_erasure_delete' });
           }
         } catch (err) {
           console.warn('[userDataRegistry] draft wine cleanup failed (non-fatal):', String(id), err.message);

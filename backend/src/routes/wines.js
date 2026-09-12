@@ -1044,7 +1044,9 @@ router.get('/:idOrSlug/community-prices', publicWineLimiter, async (req, res) =>
       ? { _id: idOrSlug }
       : WineDefinition.slugFilter(idOrSlug);
 
-    const wine = await WineDefinition.findOne(filter).select('_id').lean();
+    // Hidden rows (pending identity, private drafts) answer the same 404 a
+    // missing id does — a 200/404 difference here was an existence oracle.
+    const wine = await WineDefinition.findOne({ ...filter, pendingIdentity: { $ne: true } }).select('_id').lean();
     if (!wine) return res.status(404).json({ error: 'Wine not found' });
 
     const curve = await getReleaseCurve(wine._id, currency);
@@ -1130,7 +1132,8 @@ router.get('/:idOrSlug/discussions', optionalAuth, async (req, res) => {
       ? { _id: idOrSlug }
       : WineDefinition.slugFilter(idOrSlug);
 
-    const wine = await WineDefinition.findOne(filter).select('_id');
+    // Same not-found for a hidden row as for a missing id (existence oracle).
+    const wine = await WineDefinition.findOne({ ...filter, pendingIdentity: { $ne: true } }).select('_id');
     if (!wine) return res.status(404).json({ error: 'Wine not found' });
 
     const { page, limit, offset: skip } = parsePagination(req.query, { limit: 10, maxLimit: 30 });
