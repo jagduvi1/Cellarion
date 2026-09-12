@@ -1,4 +1,4 @@
-const { buildSections, resolveEntry } = require('./wineListPdf');
+const { buildSections, resolveEntry, groupingLevels, generateWineListPdf } = require('./wineListPdf');
 
 // --- Fixtures ---------------------------------------------------------------
 
@@ -143,5 +143,103 @@ describe('buildSections (custom mode)', () => {
     }, wineMap);
 
     expect(sections.map(s => s.title)).toEqual(['Whites', 'Reds']);
+  });
+});
+
+// --- Nested auto grouping (support ticket 2026-09-12) -----------------------
+
+describe('buildSections (nested auto grouping)', () => {
+  const rioja = {
+    _id: 'w4', name: 'Rioja Reserva', producer: 'Muga', type: 'red',
+    country: { name: 'Spain' }, region: { name: 'Rioja' }, grapes: [],
+  };
+  const sauternes = {
+    _id: 'w5', name: 'Sauternes', producer: 'Guiraud', type: 'dessert',
+    country: { name: 'France' }, region: { name: 'Bordeaux' }, appellation: 'Sauternes', grapes: [],
+  };
+  const wineMap = new Map([
+    mapEntry(WINES.barolo), mapEntry(WINES.chablis), mapEntry(WINES.champagne),
+    mapEntry(rioja), mapEntry(sauternes),
+  ]);
+  const list = (autoGrouping, extra = {}) => ({
+    structureMode: 'auto',
+    language: 'en',
+    autoGrouping,
+    autoGroupEntries: ['w1', 'w2', 'w3', 'w4', 'w5'].map(id => entry(id)),
+    layout: {},
+    ...extra,
+  });
+  const outline = (sections) => sections.map(s =>
+    `${'  '.repeat(s.level)}${s.title}${s.wines.length ? ` (${s.wines.map(w => w.name).join(', ')})` : ''}`
+  );
+
+  test('type › country › region renders nested headings; wines sit only under the deepest one', () => {
+    const sections = buildSections(list({ levels: ['type', 'country', 'region'], withinGroup: 'name' }), wineMap);
+    expect(outline(sections)).toEqual([
+      'Sparkling Wines (Brut Réserve)',   // France › Champagne would be two headings for one wine — collapsed
+      'White Wines (Chablis)',
+      'Red Wines',
+      '  Italy (Barolo Riserva)',         // Piedmont collapsed under Italy
+      '  Spain (Rioja Reserva)',
+      'Dessert Wines (Sauternes)',
+    ]);
+  });
+
+  test('collapseSingle off keeps every heading, one wine or not', () => {
+    const sections = buildSections(list({ levels: ['type', 'country', 'region'], collapseSingle: false, withinGroup: 'name' }), wineMap);
+    expect(outline(sections).slice(0, 3)).toEqual(['Sparkling Wines', '  France', '    Champagne (Brut Réserve)']);
+  });
+
+  test('the appellation level falls back to region; a legacy single groupBy stays flat at level 0', () => {
+    const sections = buildSections(list({ levels: ['type', 'appellation'], collapseSingle: false }), wineMap);
+    expect(outline(sections)).toContain('  Sauternes (Sauternes)');
+    expect(outline(sections)).toContain('  Piedmont (Barolo Riserva)');
+
+    const legacy = buildSections(list({ groupBy: 'country' }), wineMap);
+    expect(legacy.map(s => [s.title, s.level])).toEqual([['France', 0], ['Italy', 0], ['Spain', 0]]);
+  });
+
+  test('sorts within the deepest group by producer when asked', () => {
+    const sections = buildSections(list({ levels: ['type'], withinGroup: 'producer' }), wineMap);
+    const reds = sections.find(s => s.title === 'Red Wines');
+    expect(reds.wines.map(w => w.producer)).toEqual(['Conterno', 'Muga']);
+  });
+
+  test('groupingLevels caps at three distinct known fields and falls back to groupBy, then type', () => {
+    expect(groupingLevels({ levels: ['type', 'type', 'country', 'bogus', 'region', 'appellation'] })).toEqual(['type', 'country', 'region']);
+    expect(groupingLevels({ groupBy: 'region' })).toEqual(['region']);
+    expect(groupingLevels({ levels: ['bogus'] })).toEqual(['type']);
+    expect(groupingLevels({})).toEqual(['type']);
+  });
+});
+
+// --- Hidden prices + the last-bottle marker ---------------------------------
+
+describe('hidden prices and the last-bottle marker', () => {
+  test('resolveEntry flags the last bottle only when the list asks AND stock is exactly one; byGlass is kept apart from the price', () => {
+    const one = new Map([mapEntry(WINES.barolo, { stock: 1 })]);
+    const e = entry('w1', { byGlass: true, glassPrice: 12 });
+    expect(resolveEntry(e, one, { markLastBottle: true })).toMatchObject({ lastBottle: true, byGlass: true, glassPrice: 12 });
+    expect(resolveEntry(e, one, {}).lastBottle).toBe(false);
+    const two = new Map([mapEntry(WINES.barolo, { stock: 2 })]);
+    expect(resolveEntry(e, two, { markLastBottle: true }).lastBottle).toBe(false);
+  });
+
+  test('a nested, price-hidden, last-bottle-marked list renders to PDF', async () => {
+    const wineMap = new Map([mapEntry(WINES.barolo, { stock: 1 }), mapEntry(WINES.chablis)]);
+    const doc = await generateWineListPdf({
+      name: 'Hemma', structureMode: 'auto', language: 'sv',
+      autoGrouping: { levels: ['type', 'country', 'region'], collapseSingle: false },
+      autoGroupEntries: [entry('w1', { byGlass: true, glassPrice: 12 }), entry('w2')],
+      layout: { hidePrices: true, markLastBottle: true },
+      branding: {},
+    }, wineMap);
+    const bytes = await new Promise((resolve, reject) => {
+      const chunks = [];
+      doc.on('data', c => chunks.push(c));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+    });
+    expect(bytes.length).toBeGreaterThan(1000);
   });
 });

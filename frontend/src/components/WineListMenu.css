@@ -121,3 +121,50 @@
     margin-left: auto;
   }
 }
+
+/* Nested auto-grouping headings (type › country › region) */
+.wlm-level-1 {
+  margin-top: 1rem;
+}
+
+.wlm-level-2 {
+  margin-top: 0.6rem;
+}
+
+.wlm-sub-title {
+  margin: 0 0 0.5rem;
+  color: var(--wlm-subheading);
+}
+
+.wlm-sub-title-1 {
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  padding-left: 0.25rem;
+}
+
+.wlm-sub-title-2 {
+  font-size: 0.85rem;
+  font-style: italic;
+  font-weight: 600;
+  padding-left: 0.75rem;
+}
+
+.wlm-level-2 .wlm-wines {
+  padding-left: 0.75rem;
+}
+
+/* "Last bottle" marker — only ever shown for a stock of exactly one */
+.wlm-last-bottle {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0 0.4rem;
+  border: 1px solid var(--wlm-accent);
+  border-radius: 999px;
+  color: var(--wlm-accent);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  white-space: nowrap;
+}

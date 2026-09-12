@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getWineList, updateWineList, publishWineList, unpublishWineList, uploadWineListLogo, getWineListStats, previewWineListPdf, getCellarWines } from '../api/wineLists';
-import { buildSections } from '../utils/wineListSections';
+import { buildSections, groupingLevels, LEVEL_FIELDS } from '../utils/wineListSections';
 import WineListMenu from '../components/WineListMenu';
 import './WineListEditor.css';
 
@@ -600,43 +600,81 @@ function WineListEditor() {
             </label>
           </div>
 
-          {/* Auto-grouping options */}
-          {wineList.structureMode === 'auto' && (
-            <div className="wle-auto-options">
-              <div className="form-group">
-                <label>{t('wineLists.groupBy')}</label>
-                <select
-                  value={wineList.autoGrouping?.groupBy || 'type'}
-                  onChange={e => setWineList({
-                    ...wineList,
-                    autoGrouping: { ...wineList.autoGrouping, groupBy: e.target.value }
-                  })}
-                  className="filter-select"
-                >
-                  <option value="type">{t('wineLists.groupByType')}</option>
-                  <option value="country">{t('wineLists.groupByCountry')}</option>
-                  <option value="region">{t('wineLists.groupByRegion')}</option>
-                </select>
+          {/* Auto-grouping options: up to three nested heading levels
+              (type › country › region), the sort within the deepest, and
+              whether a heading that would hold one group is skipped. */}
+          {wineList.structureMode === 'auto' && (() => {
+            const grouping = wineList.autoGrouping || {};
+            const levels = groupingLevels(grouping);
+            const levelLabel = (f) => t(`wineLists.groupBy${f.charAt(0).toUpperCase()}${f.slice(1)}`);
+            const setLevels = (next) => setWineList({
+              ...wineList,
+              autoGrouping: {
+                ...grouping,
+                levels: next,
+                // Legacy single-level field, kept for readers that predate nesting
+                groupBy: next[0] === 'appellation' ? 'region' : next[0],
+              },
+            });
+            // Clearing a level drops everything below it; picking one keeps
+            // the deeper levels minus a repeat of the new choice.
+            const changeLevel = (idx, value) => {
+              const next = levels.slice(0, idx);
+              if (value) next.push(value, ...levels.slice(idx + 1).filter(f => f !== value));
+              setLevels(next.slice(0, 3));
+            };
+            return (
+              <div className="wle-auto-options">
+                {[0, 1, 2].map(idx => (idx === 0 || levels.length >= idx) && (
+                  <div className="form-group" key={idx}>
+                    <label>{idx === 0 ? t('wineLists.groupBy') : t('wineLists.thenBy')}</label>
+                    <select
+                      value={levels[idx] || ''}
+                      onChange={e => changeLevel(idx, e.target.value)}
+                      className="filter-select"
+                      data-testid={`group-level-${idx}`}
+                    >
+                      {idx > 0 && <option value="">{t('wineLists.noSubGroup')}</option>}
+                      {LEVEL_FIELDS.filter(f => f === levels[idx] || !levels.includes(f)).map(f => (
+                        <option key={f} value={f}>{levelLabel(f)}</option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+                <div className="form-group">
+                  <label>{t('wineLists.sortWithinGroup')}</label>
+                  <select
+                    value={grouping.withinGroup || 'country-region-name'}
+                    onChange={e => setWineList({
+                      ...wineList,
+                      autoGrouping: { ...grouping, withinGroup: e.target.value }
+                    })}
+                    className="filter-select"
+                  >
+                    <option value="country-region-name">{t('wineLists.sortCountryRegionName')}</option>
+                    <option value="name">{t('wineLists.sortName')}</option>
+                    <option value="producer">{t('wineLists.sortProducer')}</option>
+                    <option value="price-asc">{t('wineLists.sortPriceAsc')}</option>
+                    <option value="price-desc">{t('wineLists.sortPriceDesc')}</option>
+                    <option value="vintage">{t('wineLists.sortVintage')}</option>
+                  </select>
+                </div>
+                {levels.length > 1 && (
+                  <label className="wle-checkbox wle-auto-options-wide">
+                    <input
+                      type="checkbox"
+                      checked={grouping.collapseSingle !== false}
+                      onChange={e => setWineList({
+                        ...wineList,
+                        autoGrouping: { ...grouping, collapseSingle: e.target.checked }
+                      })}
+                    />
+                    {t('wineLists.collapseSingle')}
+                  </label>
+                )}
               </div>
-              <div className="form-group">
-                <label>{t('wineLists.sortWithinGroup')}</label>
-                <select
-                  value={wineList.autoGrouping?.withinGroup || 'country-region-name'}
-                  onChange={e => setWineList({
-                    ...wineList,
-                    autoGrouping: { ...wineList.autoGrouping, withinGroup: e.target.value }
-                  })}
-                  className="filter-select"
-                >
-                  <option value="country-region-name">{t('wineLists.sortCountryRegionName')}</option>
-                  <option value="name">{t('wineLists.sortName')}</option>
-                  <option value="price-asc">{t('wineLists.sortPriceAsc')}</option>
-                  <option value="price-desc">{t('wineLists.sortPriceDesc')}</option>
-                  <option value="vintage">{t('wineLists.sortVintage')}</option>
-                </select>
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Custom sections management */}
           {wineList.structureMode === 'custom' && (
@@ -967,6 +1005,28 @@ function WineListEditor() {
               })}
             />
             {t('wineLists.glassSectionFirst')}
+          </label>
+          <label className="wle-checkbox">
+            <input
+              type="checkbox"
+              checked={layout.hidePrices || false}
+              onChange={e => setWineList({
+                ...wineList,
+                layout: { ...layout, hidePrices: e.target.checked }
+              })}
+            />
+            {t('wineLists.hidePrices')}
+          </label>
+          <label className="wle-checkbox">
+            <input
+              type="checkbox"
+              checked={layout.markLastBottle || false}
+              onChange={e => setWineList({
+                ...wineList,
+                layout: { ...layout, markLastBottle: e.target.checked }
+              })}
+            />
+            {t('wineLists.markLastBottle')}
           </label>
 
           <div className="wle-glass-calc">

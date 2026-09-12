@@ -23,6 +23,11 @@ const { logAction, replay } = require('../actionLedger');
 // Single source for the glass-price rule (MCP-audit M4) — identical to the web
 // editor's, and now floored at one step so a cheap wine no longer suggests 0.
 const { suggestGlassPrice } = require('../../utils/glassPrice');
+// get_wine_list reads the SAME rendered structure the app and the PDF use —
+// nested auto-mode headings and live per-entry stock (support ticket
+// 2026-09-12: a client could not see the grouping of the menu it was reading).
+const { loadWineMap, entryKey } = require('../../services/wineListData');
+const { buildSections, groupingLevels } = require('../../services/wineListPdf');
 
 // The active entry container for writes; [{ section, entries }] for reads.
 function activeContainers(list) {
@@ -109,29 +114,80 @@ registerTool({
   name: 'get_wine_list',
   title: 'Get a wine list with its entries',
   description:
-    'One wine list in full: entries (wine, vintage, bottle size, bottle price, by-glass price) grouped by section ' +
-    'in custom mode or as one flat group in auto mode, plus the glass-pricing rule and currency. Publishing, ' +
-    'share links, branding and PDF layout are managed in the app, not over MCP.',
+    'One wine list in full: entries (wine, vintage, bottle size, bottle price, by-glass price, live cellar stock ' +
+    'and last_bottle) grouped exactly as the menu renders them — custom-mode sections by title, auto-mode ' +
+    'headings by their path (e.g. "Red Wines › Italy › Piedmont", from the list\'s grouping levels) — plus the ' +
+    'grouping, the glass-pricing rule, currency and whether prices are hidden on the shared menu. Publishing, ' +
+    'share links, branding, grouping and PDF layout are managed in the app, not over MCP.',
   scope: 'read',
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: { list_id: objectId.describe('From list_wine_lists') },
   handler: async (args, ctx) => {
-    const list = await WineList.findOne({ _id: args.list_id, user: ctx.user.id })
-      .populate('sections.entries.wine', 'name producer type')
-      .populate('autoGroupEntries.wine', 'name producer type')
-      .lean();
+    const list = await WineList.findOne({ _id: args.list_id, user: ctx.user.id }).lean();
     if (!list) return fail('not_found', 'No such wine list. Use list_wine_lists for valid ids.');
-    const groups = activeContainers(list).map((c) => ({
-      section: c.section,
-      entries: (c.entries || []).map(entryOut),
-    }));
+
+    // Wine names and stock come from the list's cellar, keyed like the
+    // renderer; an entry whose wine is gone keeps its bare wine_id.
+    const wineMap = await loadWineMap(list);
+    const liveEntry = (e) => {
+      const info = wineMap.get(entryKey(e));
+      const out = entryOut(info
+        ? { ...e, wine: { _id: e.wine, name: info.wine.name, producer: info.wine.producer, type: info.wine.type } }
+        : e);
+      if (info) {
+        out.stock = info.stock;
+        out.last_bottle = info.stock === 1;
+      }
+      return out;
+    };
+
+    let groups;
+    let grouping = null;
+    if (list.structureMode === 'custom') {
+      groups = activeContainers(list).map((c) => ({
+        section: c.section,
+        entries: (c.entries || []).map(liveEntry),
+      }));
+    } else {
+      // The headings the app renders, each leaf labelled by its path. Stock
+      // and glass-section display rules are the menu's business, not the
+      // curator's: every entry is listed here, with its stock alongside.
+      const rendered = buildSections(
+        { ...list, layout: { ...(list.layout || {}), hideOutOfStock: false, glassSectionFirst: false } },
+        wineMap
+      );
+      const byKey = new Map((list.autoGroupEntries || []).map((e) => [entryKey(e), e]));
+      const seen = new Set();
+      const path = [];
+      groups = [];
+      for (const section of rendered) {
+        path.length = section.level;
+        path[section.level] = section.title;
+        if (!section.wines.length) continue;
+        groups.push({
+          section: path.join(' › '),
+          entries: section.wines.map((w) => { seen.add(w.key); return liveEntry(byKey.get(w.key)); }),
+        });
+      }
+      const unresolved = (list.autoGroupEntries || []).filter((e) => !seen.has(entryKey(e)));
+      if (unresolved.length) groups.push({ section: null, entries: unresolved.map(liveEntry) });
+      grouping = {
+        levels: groupingLevels(list.autoGrouping || {}),
+        collapse_single_group: list.autoGrouping?.collapseSingle !== false,
+        within_group: list.autoGrouping?.withinGroup || 'country-region-name',
+      };
+    }
+
     const data = {
       list_id: list._id,
       name: list.name,
       cellar_id: list.cellar,
       structure_mode: list.structureMode,
+      grouping,
       is_published: !!list.isPublished,
       currency: list.layout?.currency || 'USD',
+      hide_prices: !!list.layout?.hidePrices,
+      mark_last_bottle: !!list.layout?.markLastBottle,
       glass_pricing_rule: {
         glasses_per_bottle: list.layout?.glassesPerBottle ?? 6,
         markup_percent: list.layout?.glassMarkup ?? 0,
@@ -139,7 +195,7 @@ registerTool({
       },
       sections: groups,
     };
-    return ok(`"${list.name}" — ${countEntries(list)} entries in ${groups.length} section(s)`, data);
+    return ok(`"${list.name}" — ${countEntries(list)} entries in ${groups.length} group(s)`, data);
   },
 });
 
