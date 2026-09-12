@@ -3817,6 +3817,7 @@
     "glassSectionFirst": "Lead with a “Wines by the Glass” section",
     "hidePrices": "Hide prices on the shared page and the PDF (the figures stay on the entries)",
     "markLastBottle": "Mark wines with only one bottle left as “Last bottle”",
+    "newPageEachSection": "PDF: start each section (wine type) on a new page",
     "dashboard": "Dashboard",
     "winesOnList": "Wines on list",
     "bottlesInStock": "Bottles in stock",

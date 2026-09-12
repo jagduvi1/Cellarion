@@ -65,6 +65,11 @@ const LAST_BOTTLE_LABEL = {
   de: 'Letzte Flasche', es: 'Última botella', it: 'Ultima bottiglia',
 };
 
+// Suffix on a heading repeated after a page break
+const CONTINUED_LABEL = {
+  en: 'continued', sv: 'forts.', fr: 'suite', de: 'Fortsetzung', es: 'continuación', it: 'continua',
+};
+
 // Auto-mode grouping: the fields a heading level may group on, outermost
 // first in the classic menu order, and the depth cap (support ticket
 // 2026-09-12 — a menu reads naturally at three).
@@ -337,6 +342,8 @@ async function generateWineListPdf(wineList, wineMap, opts = {}) {
 
   const sections = buildSections(wineList, wineMap);
   const hidePrices = !!layout.hidePrices;
+  const newPageEachSection = !!layout.newPageEachSection;
+  const continuedLabel = CONTINUED_LABEL[lang] || CONTINUED_LABEL.en;
   // The legacy single-level "type, then country — region" run-in sub-headers
   // only make sense when there is no nested heading doing that job.
   const levelsInForce = wineList.structureMode === 'auto' ? groupingLevels(wineList.autoGrouping || {}) : [];
@@ -348,6 +355,43 @@ async function generateWineListPdf(wineList, wineMap, opts = {}) {
   // so no heading is ever orphaned at the foot of a page.
   const HEADING_HEIGHT = [42, 22, 15];
   const FIRST_ENTRY_HEIGHT = 26;
+  // Content must stay above this line: everything written below the bottom
+  // margin makes PDFKit open a new page by itself.
+  const bottomLimit = pageSize[1] - margin;
+
+  const renderHeading = (section, { first = false, continued = false } = {}) => {
+    const level = section.level || 0;
+    const title = continued ? `${section.title} (${continuedLabel})` : section.title;
+    if (level === 0) {
+      doc.moveDown(first ? 0.5 : 1.2);
+      doc.font(fontBold).fontSize(13).fillColor(scheme.accent);
+      doc.text(title.toUpperCase(), margin, doc.y, { width: contentWidth });
+      doc.moveDown(0.2);
+      doc.moveTo(margin, doc.y).lineTo(margin + contentWidth, doc.y)
+        .strokeColor(scheme.line).lineWidth(0.5).stroke();
+      doc.moveDown(0.4);
+    } else if (level === 1) {
+      doc.moveDown(0.6);
+      doc.font(fontBold).fontSize(10.5).fillColor(scheme.subheading);
+      doc.text(title, margin + 10, doc.y, { width: contentWidth - 10 });
+      doc.moveDown(0.25);
+    } else {
+      doc.moveDown(0.3);
+      doc.font(fontItalic).fontSize(9).fillColor(scheme.subheading);
+      doc.text(title, margin + 20, doc.y, { width: contentWidth - 20 });
+      doc.moveDown(0.15);
+    }
+  };
+
+  // The headings the current wines sit under (one per level). A page break
+  // in the middle of a group repeats them, marked as continued, so a reader
+  // turning the page still knows where the wines are from.
+  const stack = [];
+  const breakPage = ({ repeatHeadings }) => {
+    doc.addPage();
+    if (!repeatHeadings) return;
+    stack.forEach((s, idx) => renderHeading(s, { first: idx === 0, continued: true }));
+  };
 
   // --- Header ---
   renderHeader(doc, branding, scheme, fontBold, fontItalic, contentWidth, margin, qrBuffer);
@@ -356,56 +400,55 @@ async function generateWineListPdf(wineList, wineMap, opts = {}) {
   for (let i = 0; i < sections.length; i++) {
     const section = sections[i];
     const level = section.level || 0;
+    stack.length = level;
+    stack[level] = section;
 
-    // Room for this heading, the deeper headings that follow it before the
-    // first wine, and that wine — else start a new page here.
-    let need = HEADING_HEIGHT[Math.min(level, 2)] + FIRST_ENTRY_HEIGHT;
-    for (let k = i + 1; k < sections.length && (sections[k].level || 0) > level && !section.wines.length; k++) {
-      need += HEADING_HEIGHT[Math.min(sections[k].level || 0, 2)];
-      if (sections[k].wines.length) break;
-    }
-    if (doc.y > pageSize[1] - margin - Math.max(need, level === 0 ? 80 : 0)) {
-      doc.addPage();
-    }
-
-    if (level === 0) {
-      doc.moveDown(i === 0 ? 0.5 : 1.2);
-      doc.font(fontBold).fontSize(13).fillColor(scheme.accent);
-      doc.text(section.title.toUpperCase(), margin, doc.y, { width: contentWidth });
-
-      doc.moveDown(0.2);
-      doc.moveTo(margin, doc.y).lineTo(margin + contentWidth, doc.y)
-        .strokeColor(scheme.line).lineWidth(0.5).stroke();
-      doc.moveDown(0.4);
-    } else if (level === 1) {
-      doc.moveDown(0.6);
-      doc.font(fontBold).fontSize(10.5).fillColor(scheme.subheading);
-      doc.text(section.title, margin + 10, doc.y, { width: contentWidth - 10 });
-      doc.moveDown(0.25);
+    if (level === 0 && i > 0 && newPageEachSection) {
+      breakPage({ repeatHeadings: false });
     } else {
-      doc.moveDown(0.3);
-      doc.font(fontItalic).fontSize(9).fillColor(scheme.subheading);
-      doc.text(section.title, margin + 20, doc.y, { width: contentWidth - 20 });
-      doc.moveDown(0.15);
+      // Room for this heading, the deeper headings that follow it before the
+      // first wine, and that wine — else start a new page here.
+      let need = HEADING_HEIGHT[Math.min(level, 2)] + FIRST_ENTRY_HEIGHT;
+      for (let k = i + 1; k < sections.length && (sections[k].level || 0) > level && !section.wines.length; k++) {
+        need += HEADING_HEIGHT[Math.min(sections[k].level || 0, 2)];
+        if (sections[k].wines.length) break;
+      }
+      if (doc.y > bottomLimit - Math.max(need, level === 0 ? 80 : 0)) {
+        breakPage({ repeatHeadings: false });
+      }
     }
+
+    renderHeading(section, { first: i === 0 || doc.y <= margin + 1 });
 
     let lastSubHeader = null;
 
     for (const wine of section.wines) {
-      if (doc.y > pageSize[1] - margin - 35) {
-        doc.addPage();
-      }
       if (wine.lastBottle) anyLastBottle = true;
 
+      let sub = null;
       if (!section.isGlassSection && legacySubHeaders) {
-        const sub = wine.region ? `${wine.country} — ${wine.region}` : wine.country;
-        if (sub && sub !== lastSubHeader) {
-          lastSubHeader = sub;
-          doc.moveDown(0.2);
-          doc.font(fontItalic).fontSize(9).fillColor(scheme.subheading);
-          doc.text(sub, margin + 10, doc.y, { width: contentWidth - 10 });
-          doc.moveDown(0.2);
+        sub = wine.region ? `${wine.country} — ${wine.region}` : wine.country;
+        if (sub === lastSubHeader) sub = null;
+      }
+
+      // An entry is never split: name + price line, and the producer/grape
+      // line under it, move to the next page together (with a pending
+      // run-in sub-header, which would otherwise be orphaned).
+      const need = entryHeight(wine) + (sub ? 20 : 0);
+      if (doc.y + need > bottomLimit) {
+        breakPage({ repeatHeadings: true });
+        lastSubHeader = null;
+        if (legacySubHeaders && !section.isGlassSection) {
+          sub = wine.region ? `${wine.country} — ${wine.region}` : wine.country;
         }
+      }
+
+      if (sub) {
+        lastSubHeader = sub;
+        doc.moveDown(0.2);
+        doc.font(fontItalic).fontSize(9).fillColor(scheme.subheading);
+        doc.text(sub, margin + 10, doc.y, { width: contentWidth - 10, lineBreak: false });
+        doc.moveDown(0.2);
       }
 
       renderWineEntry(doc, wine, {
@@ -417,16 +460,21 @@ async function generateWineListPdf(wineList, wineMap, opts = {}) {
 
   // Legend for the "last bottle" asterisk, once, under the last section
   if (anyLastBottle) {
-    if (doc.y > pageSize[1] - margin - 30) doc.addPage();
+    if (doc.y + 30 > bottomLimit) breakPage({ repeatHeadings: false });
     doc.moveDown(1);
     doc.font(fontItalic).fontSize(8).fillColor(scheme.subheading);
-    doc.text(`* ${LAST_BOTTLE_LABEL[lang] || LAST_BOTTLE_LABEL.en}`, margin, doc.y, { width: contentWidth });
+    doc.text(`* ${LAST_BOTTLE_LABEL[lang] || LAST_BOTTLE_LABEL.en}`, margin, doc.y, { width: contentWidth, lineBreak: false });
   }
 
-  // Page numbers + footer on all pages
+  // Page numbers + footer on all pages. They sit INSIDE the bottom margin, so
+  // the margin is lifted while they are stamped — otherwise PDFKit treats
+  // each of them as overflow and appends a blank page per element per page
+  // (support ticket 2026-09-12: a 4-page menu came out as 12).
   const range = doc.bufferedPageRange();
   for (let i = 0; i < range.count; i++) {
     doc.switchToPage(i);
+    const savedBottom = doc.page.margins.bottom;
+    doc.page.margins.bottom = 0;
 
     if (branding.footerText) {
       doc.font(fontItalic).fontSize(7).fillColor(scheme.subheading);
@@ -439,10 +487,25 @@ async function generateWineListPdf(wineList, wineMap, opts = {}) {
     doc.text(`${i + 1} / ${range.count}`, margin, pageSize[1] - margin + 16, {
       width: contentWidth, align: 'center', lineBreak: false,
     });
+
+    doc.page.margins.bottom = savedBottom;
   }
 
   doc.end();
   return doc;
+}
+
+/** Height renderWineEntry will use for a wine (see its final `doc.y` line). */
+function entryHeight(wine) {
+  const grapes = (wine.grapes || []).slice(0, 3).join(', ');
+  const producerRegion = [wine.producer, wine.region].filter(Boolean).join(' — ');
+  return [producerRegion, grapes].filter(Boolean).length ? 26 : 15;
+}
+
+/** "CHF 16" but "$16": a space after a symbol made of letters, none after a sign. */
+function priceWithSymbol(symbol, amount) {
+  const sep = /[A-Za-z]$/.test(symbol) ? ' ' : '';
+  return `${symbol}${sep}${amount}`;
 }
 
 // Server-generated logo URLs are always `wine-list-logos/<uuid>.<ext>` — anything
@@ -478,15 +541,16 @@ function renderHeader(doc, branding, scheme, fontBold, fontItalic, contentWidth,
   }
 
   // QR code — top-right corner
+  const qrSize = 50;
   if (qrBuffer) {
-    const qrSize = 50;
     const qrX = margin + contentWidth - qrSize;
     const qrY = margin;
     doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize });
   }
 
-  // Decorative line
+  // Decorative line — below the QR code, never through it
   doc.moveDown(0.5);
+  if (qrBuffer) doc.y = Math.max(doc.y, margin + qrSize + 8);
   doc.moveTo(margin, doc.y).lineTo(margin + contentWidth, doc.y)
     .strokeColor(scheme.accent).lineWidth(1).stroke();
   doc.moveDown(0.3);
@@ -516,8 +580,8 @@ function renderWineEntry(doc, wine, opts) {
   if (hidePrices) {
     if (wine.byGlass) priceParts.push(glassLabel);
   } else {
-    if (wine.price != null) priceParts.push(`${currencySymbol}${wine.price.toFixed(0)}`);
-    if (wine.glassPrice != null) priceParts.push(`${currencySymbol}${wine.glassPrice.toFixed(0)} ${glassLabel}`);
+    if (wine.price != null) priceParts.push(priceWithSymbol(currencySymbol, wine.price.toFixed(0)));
+    if (wine.glassPrice != null) priceParts.push(`${priceWithSymbol(currencySymbol, wine.glassPrice.toFixed(0))} ${glassLabel}`);
   }
   const priceText = priceParts.join(' / ');
   if (priceText) {
@@ -552,6 +616,6 @@ function renderWineEntry(doc, wine, opts) {
 }
 
 module.exports = {
-  generateWineListPdf, buildSections, resolveEntry, groupingLevels,
-  LEVEL_FIELDS, MAX_LEVELS, LAST_BOTTLE_LABEL,
+  generateWineListPdf, buildSections, resolveEntry, groupingLevels, priceWithSymbol,
+  LEVEL_FIELDS, MAX_LEVELS, LAST_BOTTLE_LABEL, CONTINUED_LABEL,
 };

@@ -1028,6 +1028,17 @@ function WineListEditor() {
             />
             {t('wineLists.markLastBottle')}
           </label>
+          <label className="wle-checkbox">
+            <input
+              type="checkbox"
+              checked={layout.newPageEachSection || false}
+              onChange={e => setWineList({
+                ...wineList,
+                layout: { ...layout, newPageEachSection: e.target.checked }
+              })}
+            />
+            {t('wineLists.newPageEachSection')}
+          </label>
 
           <div className="wle-glass-calc">
             <h4>{t('wineLists.glassPricingRule')}</h4>

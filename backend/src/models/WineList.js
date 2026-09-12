@@ -224,6 +224,9 @@ const wineListSchema = new mongoose.Schema({
     // Read live at render time: the web menu follows the cellar, a printed
     // sheet is a snapshot of the moment it was printed.
     markLastBottle: { type: Boolean, default: false },
+    // PDF: every top-level section (a wine type, in auto mode) starts on a
+    // fresh page.
+    newPageEachSection: { type: Boolean, default: false },
     currency: {
       type: String,
       default: 'USD',

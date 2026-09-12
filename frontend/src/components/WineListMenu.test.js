@@ -43,3 +43,13 @@ describe('WineListMenu', () => {
     expect(screen.getAllByText('Sista flaskan')).toHaveLength(1);
   });
 });
+
+describe('WineListMenu price symbol spacing (support ticket 2026-09-12)', () => {
+  test('a lettered currency gets a space, a sign does not', () => {
+    const { unmount } = render(<WineListMenu layout={{ currencySymbol: 'CHF' }} sections={[{ title: 'R', level: 0, wines: [wine({ price: 16, byGlass: true, glassPrice: 9 })] }]} />);
+    expect(screen.getByText('CHF 16 / CHF 9 glass')).toBeInTheDocument();
+    unmount();
+    render(<WineListMenu layout={{ currencySymbol: '€' }} sections={[{ title: 'R', level: 0, wines: [wine({ price: 16 })] }]} />);
+    expect(screen.getByText('€16')).toBeInTheDocument();
+  });
+});
