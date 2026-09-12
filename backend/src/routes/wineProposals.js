@@ -32,7 +32,10 @@ router.post('/', requireNonDemo, async (req, res, next) => {
     // from the shared registry also goes to the hosted queue, credited to
     // this install's key. Fire-and-forget — the local proposal stands alone.
     registryBridge.forwardCorrection(result.wine, { fields, reason, evidenceUrl }).catch(() => {});
-    res.status(201).json({
+    // 201 for a new queue row; 200 when the caller's own pending suggestion
+    // absorbed these fields instead (support ticket 2026-09-12).
+    res.status(result.amended ? 200 : 201).json({
+      amended: !!result.amended,
       proposal: {
         _id: result.proposal._id,
         proposedFields: result.proposal.proposedFields,

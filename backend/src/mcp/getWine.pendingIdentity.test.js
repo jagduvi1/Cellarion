@@ -14,10 +14,12 @@
  */
 
 jest.mock('../models/WineDefinition', () => ({ findOne: jest.fn(), find: jest.fn(), findById: jest.fn() }));
+jest.mock('../services/wineProposalOps', () => ({ pendingForWine: jest.fn() }));
 jest.mock('../services/search', () => ({ getIsAvailable: () => false, search: jest.fn() }));
 jest.mock('../utils/siteUrl', () => ({ siteBaseUrl: () => 'https://cellarion.app' }));
 
 const WineDefinition = require('../models/WineDefinition');
+const { pendingForWine } = require('../services/wineProposalOps');
 const { allTools } = require('./registry');
 require('./tools/wines');
 
@@ -109,5 +111,35 @@ describe('search_registry — the sibling that was already right', () => {
       expect.objectContaining({ nonWine: { $ne: true }, pendingIdentity: { $ne: true } }),
       expect.anything(),
     );
+  });
+});
+
+// Support ticket 2026-09-12: the one-pending-per-wine rule was only
+// discoverable by composing a correction and having it refused.
+describe('get_wine — pending_correction', () => {
+  const visible = { _id: WINE, name: 'Grand Vin de Bordeaux', producer: 'Chateau Martinat', grapes: [], slug: 'martinat' };
+
+  test('a signed-in caller sees the queue state (fields, filing time, mine)', async () => {
+    WineDefinition.findOne.mockReturnValue(chain(visible));
+    pendingForWine.mockResolvedValue({ fields: ['producer', 'name'], filed_at: '2026-09-11T19:14:12.715Z', mine: true });
+
+    const body = parse(await tool('get_wine').handler({ wine_id: WINE }, CTX));
+
+    expect(pendingForWine).toHaveBeenCalledWith(WINE, CTX.user.id);
+    expect(body.data.pending_correction).toEqual({ fields: ['producer', 'name'], filed_at: '2026-09-11T19:14:12.715Z', mine: true });
+  });
+
+  test('null when nothing is pending', async () => {
+    WineDefinition.findOne.mockReturnValue(chain(visible));
+    pendingForWine.mockResolvedValue(null);
+    const body = parse(await tool('get_wine').handler({ wine_id: WINE }, CTX));
+    expect(body.data).toHaveProperty('pending_correction', null);
+  });
+
+  test('the anonymous surface neither reads the queue nor carries the key', async () => {
+    WineDefinition.findOne.mockReturnValue(chain(visible));
+    const body = parse(await tool('get_wine').handler({ wine_id: WINE }, { anonymous: true }));
+    expect(pendingForWine).not.toHaveBeenCalled();
+    expect(body.data).not.toHaveProperty('pending_correction');
   });
 });
