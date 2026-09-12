@@ -231,6 +231,12 @@ async function buildBottleDetail(userId, bottleId) {
         // materialized by Mongoose defaults — return null, not empty shells.
         community_rating: wd.communityRating?.reviewCount ? wd.communityRating : null,
         tasting_profile: hasContent(wd.aiProfile) ? wd.aiProfile : null,
+        // A PRIVATE DRAFT wine (support ticket 2026-09-12): the user's own
+        // record, not shared registry content yet.
+        ...(wd.draft === true ? {
+          draft: true,
+          draft_note: 'This wine is the user\'s private draft: edit it with update_wine_draft, publish it with publish_wine. list_wine_drafts shows every draft with its deadline.',
+        } : {}),
       } : { pending_registry_review: true, name: b.pendingWineRequest?.wineName || null },
       vintage: b.vintage,
       status: b.status,

@@ -17,7 +17,9 @@ const { absoluteImageUrl, isInlineImage } = require('../../services/photoState')
 const REGISTRY_LIMIT = 10; // == USER_SEARCH_LIMIT in routes/wines.js
 
 // Fields safe to expose: never normalizedKey / createdBy / productNumber*.
-const SAFE_SELECT = 'name producer slug country region appellation classification grapes type communityRating aiProfile lwin image imageCredit';
+// `draft` is selected so get_wine can SAY a row is the caller's private draft
+// (the query below already guarantees only the creator can reach one).
+const SAFE_SELECT = 'name producer slug country region appellation classification grapes type communityRating aiProfile lwin image imageCredit draft';
 
 // Registry reads on this surface are 'public' scope — served to any token and
 // to the anonymous /api/mcp/public surface — so there is no caller identity to
@@ -103,7 +105,19 @@ registerTool({
     // an anonymous caller and a stranger's half-identified wine. nonWine rides
     // along in the same clause (it was never filtered here either). Compare
     // publicContent.js's drink_window_for, which selects the flag it tests.
-    const raw = await WineDefinition.findOne({ _id: args.wine_id, ...VISIBLE })
+    // Registry lockdown (2026-09-06): every read is counted per reader per
+    // day; an anonymous address past the daily distinct cap is refused. The
+    // anonymous surface gets the prose-only profile (L3) — the structured
+    // dataset stays with signed-in connections.
+    const anonymous = !!ctx?.anonymous || !ctx?.user;
+    // A signed-in caller may read their OWN private draft (support ticket
+    // 2026-09-12) — the one exception to the absolute pending exclusion, and
+    // it is in the QUERY, keyed on the creator, so nobody else's draft can
+    // ever match. The anonymous surface keeps the absolute rule.
+    const visible = anonymous
+      ? VISIBLE
+      : { nonWine: { $ne: true }, $or: [{ pendingIdentity: { $ne: true } }, { draft: true, createdBy: ctx.user.id }] };
+    const raw = await WineDefinition.findOne({ _id: args.wine_id, ...visible })
       .select(SAFE_SELECT).populate(['country', 'region', 'grapes']).lean();
     // Same not_found a missing id gets, so a hidden row's existence never leaks.
     if (!raw) {
@@ -113,11 +127,6 @@ registerTool({
     // ("Tinta Roriz" on a Douro Port) — storage stays canonical, and the
     // grapes field keeps its array-of-strings shape.
     const w = decorateGrapes(raw);
-    // Registry lockdown (2026-09-06): every read is counted per reader per
-    // day; an anonymous address past the daily distinct cap is refused. The
-    // anonymous surface gets the prose-only profile (L3) — the structured
-    // dataset stays with signed-in connections.
-    const anonymous = !!ctx?.anonymous || !ctx?.user;
     const gate = await gateMcpRead(ctx, w._id);
     if (!gate.allowed) return fail('rate_limited', CAP_MESSAGE);
     const profile = hasContent(w.aiProfile) ? w.aiProfile : null;
@@ -126,7 +135,8 @@ registerTool({
     // callers see the queue state (fields + whether it is theirs; never whose
     // otherwise, never the proposed values). Omitted for the anonymous
     // surface — queue state is not public-site content.
-    const pendingCorrection = anonymous
+    // A draft has no queue state: it is edited directly, never corrected.
+    const pendingCorrection = anonymous || w.draft === true
       ? undefined
       : await require('../../services/wineProposalOps').pendingForWine(w._id, ctx.user.id);
     return ok(`${w.name}${w.producer ? ` — ${w.producer}` : ''}`, {
@@ -146,8 +156,14 @@ registerTool({
             ...(anonymous ? {} : { credit: w.imageCredit || null }),
           }
         : null,
-      public_url: w.slug ? `${siteBaseUrl()}/wines/${w.slug}` : null,
-      ...(anonymous ? {} : { pending_correction: pendingCorrection }),
+      // A draft has no public page and no queue state: it is the caller's own record.
+      public_url: w.draft === true ? null : (w.slug ? `${siteBaseUrl()}/wines/${w.slug}` : null),
+      ...(anonymous ? {} : { pending_correction: w.draft === true ? null : pendingCorrection }),
+      // (a draft answers null above: nothing to read, nothing to file)
+      ...(w.draft === true ? {
+        draft: true,
+        draft_note: 'This is the user\'s PRIVATE DRAFT — not in the shared registry yet. Edit it with update_wine_draft; publish it with publish_wine (list_wine_drafts shows every draft with its deadline).',
+      } : {}),
     });
   },
 });

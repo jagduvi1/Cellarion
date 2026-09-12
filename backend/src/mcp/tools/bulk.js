@@ -127,6 +127,7 @@ registerTool({
     mode: z.enum(['preview', 'apply']).default('preview'),
     cellar_id: objectId.optional().describe('Required for preview'),
     items: z.array(ITEM_SHAPE).min(1).max(MAX_ITEMS).optional().describe('Required for preview'),
+    draft: z.boolean().optional().describe('Preview only: keep every NEW wine of this batch as the user\'s private draft (see add_bottle draft / publish_wine). Fixed at preview; apply cannot change it.'),
     preview_id: z.string().optional().describe('Required for apply — from the preview response'),
   },
   handler: async (args, ctx) => {
@@ -161,15 +162,16 @@ registerTool({
         cellar: access.cellar._id,
         detail: { counts, applyable },
         // The apply call re-reads items + plan from here — the client cannot
-        // swap items between preview and apply.
-        prev: { cellarId: String(access.cellar._id), items: args.items, plan },
+        // swap items between preview and apply. `draft` is fixed here too.
+        prev: { cellarId: String(access.cellar._id), items: args.items, plan, draft: args.draft === true },
         result: null,
       });
       return ok(
-        `Preview: ${args.items.length} item(s) — ${counts.ready || 0} ready, ${counts.will_create || 0} new wine(s), ${counts.blocked_similar || 0} blocked, ${counts.invalid || 0} invalid${applyable ? '' : ' — NOT applyable yet'}`,
+        `Preview: ${args.items.length} item(s) — ${counts.ready || 0} ready, ${counts.will_create || 0} new wine(s)${args.draft === true && counts.will_create ? ' (as private drafts)' : ''}, ${counts.blocked_similar || 0} blocked, ${counts.invalid || 0} invalid${applyable ? '' : ' — NOT applyable yet'}`,
         {
           preview_id: String(row._id),
           applyable,
+          ...(args.draft === true ? { draft: true } : {}),
           plan,
           guidance: applyable
             ? 'Show this plan to the user. On their approval call bulk_add with mode:"apply" and this preview_id.'
@@ -192,7 +194,7 @@ registerTool({
     if (Date.now() - preview.createdAt.getTime() > PREVIEW_FRESH_MS) {
       return fail('conflict', 'That preview has expired (15 min) — run a fresh preview.');
     }
-    const { cellarId, items, plan } = preview.prev || {};
+    const { cellarId, items, plan, draft } = preview.prev || {};
     if (!items?.length || plan.some((p) => p.status === 'invalid' || p.status === 'blocked_similar')) {
       return fail('conflict', 'That preview is not applyable — fix the flagged items and preview again.');
     }
@@ -240,12 +242,14 @@ registerTool({
             // a pendingIdentity row for sommelier completion instead of losing
             // the bottle mid-batch.
             allowPending: true,
+            // Private drafts, as fixed at preview (support ticket 2026-09-12).
+            draft: draft === true,
           });
           if (!res.wine) { failures.push({ index: i, error: 'similar wines appeared since the preview — resolve this item individually with resolve_wine' }); continue; }
           wineDoc = res.wine;
           if (res.created) {
             winesCreated.push(String(wineDoc._id));
-            logAudit(ctx.req, 'wine.create', { type: 'wine', id: wineDoc._id }, { via: 'mcp', bulk: true, name: wineDoc.name, producer: wineDoc.producer || null, ...(wineDoc.pendingIdentity ? { pendingIdentity: true } : {}), ...(res.producerRejected ? { rejectedProducer: res.producerRejected.producer, rejectedByCheck: res.producerRejected.check } : {}) });
+            logAudit(ctx.req, 'wine.create', { type: 'wine', id: wineDoc._id }, { via: 'mcp', bulk: true, name: wineDoc.name, producer: wineDoc.producer || null, ...(wineDoc.pendingIdentity && !wineDoc.draft ? { pendingIdentity: true } : {}), ...(wineDoc.draft ? { draft: true } : {}), ...(res.producerRejected ? { rejectedProducer: res.producerRejected.producer, rejectedByCheck: res.producerRejected.check } : {}) });
           }
         }
         const result = await addBottle(access.cellar, wineDoc, {

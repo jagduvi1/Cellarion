@@ -117,7 +117,11 @@ function bottleSummary(b) {
   return {
     bottle_id: b._id,
     wine: b.wineDefinition
-      ? { name: b.wineDefinition.name, producer: b.wineDefinition.producer || null, type: b.wineDefinition.type || null }
+      ? {
+          name: b.wineDefinition.name, producer: b.wineDefinition.producer || null, type: b.wineDefinition.type || null,
+          // The user's private draft wine (publish_wine to share it).
+          ...(b.wineDefinition.draft === true ? { draft: true } : {}),
+        }
       : { name: b.pendingWineRequest?.wineName || 'Unknown wine', pending_registry_review: true },
     vintage: b.vintage,
     status: b.status,
