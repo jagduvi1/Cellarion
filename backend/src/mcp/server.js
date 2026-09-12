@@ -357,7 +357,7 @@ async function handleMcpRequest(req, res, ctx) {
 // false when a session cap was hit — the caller then falls back to stateless
 // mode, which degrades subscriptions only (every tool still works).
 async function initStatefulSession(req, res, ctx) {
-  const { createSession, destroySession } = require('./sessions');
+  const { createSession, destroySession, beginRequest, endRequest } = require('./sessions');
   const { snapshotRequest } = require('./requestSnapshot');
   const session = createSession({ userId: ctx.user.id, tokenId: ctx.req?.apiToken?.id });
   if (!session) return false;
@@ -382,7 +382,14 @@ async function initStatefulSession(req, res, ctx) {
     session.server = server;
     session.transport = transport;
     await server.connect(transport);
-    await transport.handleRequest(req, res, req.body);
+    // The initialize request is in flight too: with "prefer idle" eviction
+    // it would otherwise be the first one cut when a 4th client seats.
+    beginRequest(session);
+    try {
+      await transport.handleRequest(req, res, req.body);
+    } finally {
+      endRequest(session);
+    }
     return true;
   } catch (err) {
     destroySession(session.id, 'init_failed');

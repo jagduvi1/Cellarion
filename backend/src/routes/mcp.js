@@ -369,6 +369,9 @@ router.post('/activity/:id/revert', requireAuth, requireNonDemo, async (req, res
     if (!row) return res.status(404).json({ error: 'No such AI action on your account.' });
     if (row.reversed) return res.status(409).json({ error: 'That action has already been reverted.' });
     if (row.viaUndo) return res.status(400).json({ error: 'That entry is itself a revert and cannot be reverted.' });
+    if (!REVERSIBLE_ACTIONS.has(row.action)) {
+      return res.status(409).json({ error: 'That action cannot be reverted: it reached a human queue or the shared registry (a support ticket, a wine request, a suggestion). Reply on the ticket or wait for the review instead.' });
+    }
     if (!isRevertible(row)) {
       return res.status(409).json({ error: 'That action is too old to revert automatically. Adjust the bottle in your cellar directly.' });
     }

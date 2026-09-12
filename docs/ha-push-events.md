@@ -269,8 +269,11 @@ POST   /api/tokens          {name, scopes}     → {token: "cel_..."}  (shown on
 GET    /api/tokens          → [{id, name, scopes, lastUsedAt, createdAt}]
 DELETE /api/tokens/:id      → revoke (session login)
 DELETE /api/tokens/self     → the calling token revokes ITSELF — bearer only, no
-                              session and no id; any scope. For an integration
-                              cleaning up when it is removed.
+                              session and no id; any personal scope (a climate
+                              device token is retired via its device instead).
+                              For an integration cleaning up when it is removed.
+                              Treat 401 as "already gone": it also answers 401
+                              while the account is in its deletion cooling-off.
 ```
 
 Require a fresh password confirmation on create (same pattern as

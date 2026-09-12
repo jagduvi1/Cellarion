@@ -187,3 +187,45 @@ describe('in-flight requests (support ticket 2026-09-12: "session expired" after
     expect(sessions.getSession(busy.id, { userId: 'u1', tokenId: null })).toBe(busy);
   });
 });
+
+describe('draining sessions (post-ship audit 2026-09-12 M1)', () => {
+  test('a revoked token closes a DRAINING session at once — a deferred close never outlives its credential', async () => {
+    const s = sessions.createSession({ userId: 'u1', tokenId: 'tok1' });
+    s.transport = mkTransport();
+    sessions.beginRequest(s);
+    sessions.destroySession(s.id, 'evicted_for_new_session'); // deferred: request in flight
+    expect(sessions.sessionCounts()).toMatchObject({ total: 0, draining: 1 });
+    expect(s.transport.close).not.toHaveBeenCalled();
+    eventBus.dropToken('tok1');
+    await Promise.resolve(); await Promise.resolve();
+    expect(s.transport.close).toHaveBeenCalled();
+    expect(sessions.sessionCounts().draining).toBe(0);
+    // The late endRequest is a no-op — nothing closes twice
+    sessions.endRequest(s);
+    await Promise.resolve();
+    expect(s.transport.close).toHaveBeenCalledTimes(1);
+  });
+
+  test('a password change (dropUser) reaches draining sessions too', async () => {
+    const s = sessions.createSession({ userId: 'u1' });
+    s.transport = mkTransport();
+    sessions.beginRequest(s);
+    sessions.destroySession(s.id, 'expired');
+    eventBus.dropUser('u1');
+    await Promise.resolve(); await Promise.resolve();
+    expect(s.transport.close).toHaveBeenCalled();
+  });
+
+  test('a hung request cannot keep a drain open forever: the sweeper force-closes it after DRAIN_MAX_MS', async () => {
+    const s = sessions.createSession({ userId: 'u1' });
+    s.transport = mkTransport();
+    sessions.beginRequest(s);
+    sessions.destroySession(s.id, 'evicted_for_new_session');
+    jest.advanceTimersByTime(sessions.DRAIN_MAX_MS - 30 * 1000);
+    expect(s.transport.close).not.toHaveBeenCalled();
+    jest.advanceTimersByTime(2 * 60 * 1000);
+    await Promise.resolve(); await Promise.resolve();
+    expect(s.transport.close).toHaveBeenCalled();
+    expect(sessions.sessionCounts().draining).toBe(0);
+  });
+});

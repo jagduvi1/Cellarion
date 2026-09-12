@@ -402,3 +402,36 @@ describe('self-revoke (DELETE /api/tokens/self) is reachable by every scope, and
     }
   });
 });
+
+// The real middleware path for the self-revoke route (post-ship audit
+// 2026-09-12 L2): the OAuth audience confinement must run BEFORE the
+// self-revoke short-circuit, and a personal token must reach the handler
+// with a string id.
+describe('authenticateApiToken × DELETE /api/tokens/self', () => {
+  const RAW = 'cel_' + 'e'.repeat(64);
+  const mockRes = () => { const res = { status: jest.fn(() => res), json: jest.fn(() => res) }; return res; };
+  const req = () => ({ method: 'DELETE', baseUrl: '/api/tokens', path: '/self', headers: {} });
+  const selectable = (doc) => ({ select: jest.fn().mockResolvedValue(doc) });
+  const user = { _id: { toString: () => 'u1' }, roles: ['user'], plan: 'free', planExpiresAt: null, deletionScheduledFor: null };
+
+  test('an OAuth-issued token is confined to the MCP endpoint — 403, never the handler', async () => {
+    ApiToken.findOne.mockResolvedValue({ _id: { toString: () => 't1' }, user: 'u1', scopes: ['read', 'write'], origin: 'oauth', lastUsedAt: null });
+    User.findById.mockReturnValue(selectable(user));
+    const r = req(); const res = mockRes(); const next = jest.fn();
+    await authenticateApiToken(r, res, next, RAW);
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json.mock.calls[0][0].error).toMatch(/MCP endpoint/);
+  });
+
+  test('a personal token of ANY scope reaches the handler with a string id', async () => {
+    for (const scopes of [['read'], ['consume'], ['climate']]) {
+      ApiToken.findOne.mockResolvedValue({ _id: { toString: () => 't1' }, user: 'u1', scopes, lastUsedAt: null });
+      User.findById.mockReturnValue(selectable(user));
+      const r = req(); const res = mockRes(); const next = jest.fn();
+      await authenticateApiToken(r, res, next, RAW);
+      expect(next).toHaveBeenCalled();
+      expect(r.apiToken).toEqual({ id: 't1', scopes });
+    }
+  });
+});

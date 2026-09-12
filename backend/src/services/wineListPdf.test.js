@@ -369,3 +369,49 @@ describe('country and region print in the list language', () => {
     expect(resolveEntry(entry('g1'), new Map([mapEntry(mapDoc)]), {}, 'de-CH').region).toBe('Toskana');
   });
 });
+
+
+// --- Post-ship audit 2026-09-12 -----------------------------------------------
+
+describe('page breaks between sibling groups (post-ship audit 2026-09-12)', () => {
+  test('a page never opens on a bare nested heading: the parents come first, marked continued', async () => {
+    // Italy with three regions and Spain with one, three levels, no collapse —
+    // enough pages that breaks land both mid-group and between siblings.
+    const wines = [];
+    for (const [country, region, n] of [['Italy', 'Piedmont', 30], ['Italy', 'Tuscany', 30], ['Italy', 'Veneto', 30], ['Spain', 'Rioja', 30]]) {
+      for (let i = 0; i < n; i++) {
+        wines.push({ _id: `${region}${i}`, name: `${region} wine ${String(i).padStart(2, '0')}`, producer: `P${i}`, type: 'red', country: { name: country }, region: { name: region }, grapes: [] });
+      }
+    }
+    const wineMap = new Map(wines.map(w => mapEntry(w)));
+    const PDFDocument = require('pdfkit');
+    const events = [];
+    const origText = PDFDocument.prototype.text;
+    const origAdd = PDFDocument.prototype.addPage;
+    const spyT = jest.spyOn(PDFDocument.prototype, 'text').mockImplementation(function (s, ...r) { events.push(['text', String(s)]); return origText.call(this, s, ...r); });
+    const spyA = jest.spyOn(PDFDocument.prototype, 'addPage').mockImplementation(function (...r) { events.push(['page']); return origAdd.apply(this, r); });
+    try {
+      await pdfBytes(await generateWineListPdf({
+        name: 'T', structureMode: 'auto', language: 'en',
+        autoGrouping: { levels: ['type', 'country', 'region'], collapseSingle: false, withinGroup: 'name' },
+        autoGroupEntries: wines.map(w => entry(w._id)), layout: {}, branding: {},
+      }, wineMap));
+    } finally { spyT.mockRestore(); spyA.mockRestore(); }
+    const breaks = events.map((e, i) => (e[0] === 'page' ? i : -1)).filter(i => i > 0);
+    expect(breaks.length).toBeGreaterThan(3);
+    for (const b of breaks) {
+      const next = events.slice(b + 1).find(e => e[0] === 'text' && !/^[.$]/.test(e[1]));
+      // Either a fresh section (uppercase level-0 title) or a continued stack starting at the top
+      expect(next[1]).toMatch(/^RED WINES( \(CONTINUED\))?$/);
+    }
+    // Every wine written exactly once
+    expect(events.filter(e => e[0] === 'text' && /wine \d\d, NV$/.test(e[1]))).toHaveLength(120);
+  });
+
+  test('priceWithSymbol handles non-ASCII letters and a trailing dot', () => {
+    expect(priceWithSymbol('zł', '160')).toBe('zł 160');
+    expect(priceWithSymbol('Kč', '160')).toBe('Kč 160');
+    expect(priceWithSymbol('Fr.', '16')).toBe('Fr. 16');
+    expect(priceWithSymbol('£', '16')).toBe('£16');
+  });
+});

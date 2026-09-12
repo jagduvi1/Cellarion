@@ -28,8 +28,16 @@ const ABSOLUTE_TTL_MS = 2 * 60 * 60 * 1000; // hard cap; also bounds stale-scope
 const SWEEP_EVERY_MS = 60 * 1000;
 
 const sessions = new Map(); // sessionId -> session
+// Unrouted sessions whose transport is kept open for a request still being
+// served on it (see destroySession). Revocation and the sweeper scan this
+// too — a draining session must never outlive its credential, or a hung
+// handler (post-ship audit 2026-09-12, M1).
+const draining = new Map(); // sessionId -> session
 let perUserCounts = new Map(); // userIdString -> n
 let sweepTimer = null;
+// A drain older than this is force-closed: no legitimate tool call runs
+// for minutes, so the request is hung and the transport would leak.
+const DRAIN_MAX_MS = 5 * 60 * 1000;
 
 function ensureSweeper() {
   if (sweepTimer) return;
@@ -40,7 +48,10 @@ function ensureSweeper() {
         destroySession(s.id, 'expired');
       }
     }
-    if (sessions.size === 0 && sweepTimer) {
+    for (const s of [...draining.values()]) {
+      if (now - s.drainingSince > DRAIN_MAX_MS) closeSessionIo(s, `${s.pendingDestroy}_drain_timeout`);
+    }
+    if (sessions.size === 0 && draining.size === 0 && sweepTimer) {
       clearInterval(sweepTimer);
       sweepTimer = null;
     }
@@ -159,6 +170,7 @@ function endRequest(session) {
 
 function closeSessionIo(s, reason) {
   s.pendingDestroy = null;
+  draining.delete(s.id);
   try { s.busUnsub?.(); } catch { /* already gone */ }
   // Close transport+server asynchronously; a rejected close must never crash
   // the hot path (same rationale as the stateless per-request teardown).
@@ -179,6 +191,9 @@ function destroySession(sessionId, reason = 'closed') {
   else perUserCounts.set(s.userId, left);
   if ((s.inFlight || 0) > 0 && !IMMEDIATE_REASONS.has(reason)) {
     s.pendingDestroy = reason;
+    s.drainingSince = Date.now();
+    draining.set(s.id, s);
+    ensureSweeper(); // bounds the drain even when the routed map is empty
     console.log(`[mcp] session ${s.id.slice(0, 8)} unrouted (${reason}) — ${s.inFlight} request(s) in flight, transport kept until they finish`);
     return true;
   }
@@ -186,10 +201,15 @@ function destroySession(sessionId, reason = 'closed') {
   return true;
 }
 
+// Credential gone: every session of that user/token closes NOW — routed or
+// draining. A draining transport must not keep serving a revoked credential.
 function dropUserSessions(userId) {
   const key = String(userId);
   for (const s of [...sessions.values()]) {
     if (s.userId === key) destroySession(s.id, 'user_dropped');
+  }
+  for (const s of [...draining.values()]) {
+    if (s.userId === key) closeSessionIo(s, 'user_dropped');
   }
 }
 
@@ -197,6 +217,9 @@ function dropTokenSessions(tokenId) {
   const id = String(tokenId);
   for (const s of [...sessions.values()]) {
     if (s.tokenId === id) destroySession(s.id, 'token_revoked');
+  }
+  for (const s of [...draining.values()]) {
+    if (s.tokenId === id) closeSessionIo(s, 'token_revoked');
   }
 }
 
@@ -207,12 +230,12 @@ eventBus.onDropToken(dropTokenSessions);
 
 /** Counts for tests/ops. */
 function sessionCounts() {
-  return { total: sessions.size, users: perUserCounts.size };
+  return { total: sessions.size, users: perUserCounts.size, draining: draining.size };
 }
 
 module.exports = {
   createSession, getSession, destroySession, sessionCounts,
   beginRequest, endRequest,
   dropUserSessions, dropTokenSessions,
-  MAX_SESSIONS_PER_USER, MAX_SESSIONS_GLOBAL, IDLE_TTL_MS, ABSOLUTE_TTL_MS,
+  MAX_SESSIONS_PER_USER, MAX_SESSIONS_GLOBAL, IDLE_TTL_MS, ABSOLUTE_TTL_MS, DRAIN_MAX_MS,
 };

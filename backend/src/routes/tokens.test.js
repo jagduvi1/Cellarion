@@ -228,3 +228,24 @@ describe('DELETE /api/tokens/self', () => {
     expect(status).toBe(404);
   });
 });
+
+describe('DELETE /api/tokens/self refuses a climate device token (post-ship audit 2026-09-12)', () => {
+  test('a device token is retired through its device, not here — 403 and no write', async () => {
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => { req.apiToken = { id: 't5', scopes: ['climate'] }; next(); });
+    app.use('/api/tokens', tokensRouter);
+    const { status, body } = await new Promise((resolve) => {
+      const s = http.createServer(app);
+      s.listen(0, async () => {
+        const res = await fetch(`http://127.0.0.1:${s.address().port}/api/tokens/self`, { method: 'DELETE', headers: { Authorization: authHeader() } });
+        const b = await res.json();
+        s.closeAllConnections(); s.close();
+        resolve({ status: res.status, body: b });
+      });
+    });
+    expect(status).toBe(403);
+    expect(body.error).toMatch(/climate\/devices/);
+    expect(ApiToken.findOne).not.toHaveBeenCalled();
+  });
+});
