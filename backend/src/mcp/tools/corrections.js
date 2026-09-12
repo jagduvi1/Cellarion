@@ -7,6 +7,15 @@ const { z } = require('zod');
 const { registerTool } = require('../registry');
 const ops = require('../../services/wineProposalOps');
 const { ok, fail, objectId } = require('../toolUtil');
+// A suggestion cannot be withdrawn, so a retry after an ambiguous transport
+// failure must be safe: idempotency_key claims/replays through the ledger
+// (support ticket 2026-09-12).
+const { logAction, replay } = require('../actionLedger');
+// The replayable body stored on the ledger row: what ok() serialises.
+const envelopeOf = (summary, data) => ({ summary, data });
+const RETRY_NOTE = 'Cannot be unsent. Pass an idempotency_key (any unique string) so a retry after a transport error ' +
+  'replays the original result instead of filing twice; on a transport error WITHOUT a key, read back ' +
+  '(get_wine → pending_correction) before retrying.';
 
 const FAIL_CODE = {
   invalid: 'invalid_input',
@@ -32,11 +41,12 @@ registerTool({
     'noticed right after filing; while SOMEONE ELSE\'s is pending the call fails with conflict. Check get_wine → ' +
     'pending_correction first: it says whether a suggestion is pending, which fields it covers and whether it is ' +
     'the caller\'s. NOT undoable via undo_last — an admin reads and decides. Sommeliers proposing merges or ' +
-    'non-wine flags use propose_wine_correction instead.',
+    'non-wine flags use propose_wine_correction instead. ' + RETRY_NOTE,
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
     wine_id: objectId,
+    idempotency_key: z.string().max(100).optional().describe('Unique key: a retry with the same key returns the original result instead of filing again'),
     fields: z.object({
       producer: z.string().max(200).optional(),
       name: z.string().max(200).optional(),
@@ -53,6 +63,9 @@ registerTool({
     evidence_url: z.string().max(500).optional().describe('http(s) link backing the claim — strongly encouraged'),
   },
   handler: async (args, ctx) => {
+    const replayed = await replay(ctx, args.idempotency_key, 'suggest_wine_correction');
+    if (replayed) return replayed;
+
     const result = await ops.createFieldCorrection(
       ctx.user.id,
       { wineId: args.wine_id, fields: args.fields, reason: args.reason, evidenceUrl: args.evidence_url },
@@ -65,8 +78,8 @@ registerTool({
     const pf = result.proposal.proposedFields;
     const allFields = Object.keys(pf && typeof pf.toObject === 'function' ? pf.toObject() : pf || {});
     const label = `${result.wine.producer || '?'} — ${result.wine.name}`;
-    if (result.amended) {
-      return ok(
+    const envelope = result.amended
+      ? envelopeOf(
         `Your pending suggestion for ${label} was amended with ${result.amendedFields.join(', ')} — it now covers ${allFields.join(', ')} (admin will review)`,
         {
           proposal_id: result.proposal._id,
@@ -76,18 +89,25 @@ registerTool({
           amendments: (result.proposal.amendments || []).length,
           note: 'No new queue row: the fields were merged into the suggestion already awaiting review, and no daily budget was spent.',
         }
+      )
+      : envelopeOf(
+        `Suggestion filed for ${label}: ${allFields.join(', ')} (admin will review)`,
+        {
+          proposal_id: result.proposal._id,
+          status: 'pending',
+          amended: false,
+          fields: allFields,
+          note: 'An admin reviews the diff; the record changes only on approval. The user can see the outcome on the bottle page.',
+        }
       );
-    }
-    return ok(
-      `Suggestion filed for ${label}: ${allFields.join(', ')} (admin will review)`,
-      {
-        proposal_id: result.proposal._id,
-        status: 'pending',
-        amended: false,
-        fields: allFields,
-        note: 'An admin reviews the diff; the record changes only on approval. The user can see the outcome on the bottle page.',
-      }
-    );
+    // Ledger row (not undo-eligible): completes the idempotency claim so a
+    // retry replays this envelope; also the activity-timeline record.
+    await logAction(ctx, {
+      tool: 'suggest_wine_correction', action: 'suggest_correction',
+      detail: { wineId: String(result.wine._id), proposalId: String(result.proposal._id), fields: allFields, amended: !!result.amended },
+      idempotencyKey: args.idempotency_key || null, result: envelope,
+    });
+    return ok(envelope.summary, envelope.data);
   },
 });
 
