@@ -1,0 +1,83 @@
+.wine-drafts-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.wine-drafts-intro {
+  color: var(--color-text-muted);
+  font-size: 0.95rem;
+}
+
+.wine-drafts-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0.5rem 0 1rem;
+}
+
+.wine-drafts-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.wine-draft-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.wine-draft-row input[type="checkbox"] {
+  margin-top: 0.3rem;
+}
+
+.wine-draft-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.wine-draft-name {
+  font-weight: 600;
+}
+
+.wine-draft-meta {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.wine-draft-state {
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+}
+
+.wine-draft-state--done { color: var(--color-success); }
+.wine-draft-state--error { color: var(--color-danger); }
+.wine-draft-state--choice { color: var(--color-warning); }
+
+.wine-draft-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: flex-end;
+}
+
+.wine-drafts-footer {
+  margin-top: 1.5rem;
+}
+
+@media (max-width: 600px) {
+  .wine-draft-row {
+    flex-wrap: wrap;
+  }
+  .wine-draft-actions {
+    flex-basis: 100%;
+    justify-content: flex-start;
+  }
+}

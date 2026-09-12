@@ -1,0 +1,40 @@
+.draft-wine-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.75rem 1rem;
+  margin: 0.75rem 0 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
+  color: var(--color-text);
+}
+
+.draft-wine-banner-text {
+  flex: 1 1 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.draft-wine-banner-text strong {
+  color: var(--color-warning);
+}
+
+.draft-wine-banner-link {
+  font-size: 0.85rem;
+  align-self: flex-start;
+}
+
+.draft-wine-banner-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.draft-wine-banner-alert {
+  flex-basis: 100%;
+  margin: 0;
+}

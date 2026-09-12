@@ -181,3 +181,24 @@ describe('AddBottle — the step-1 soft zone stays write-free', () => {
     expect(body.newWine).toMatchObject({ name: 'Kaefferkopf', confirmCreate: true });
   });
 });
+
+describe('AddBottle — "keep as a private draft" (2026-09-12)', () => {
+  test('the toggle is offered only for a new wine and puts draft:true on the FIRST POST', async () => {
+    apiFetchMock.mockResolvedValueOnce(jsonRes({
+      bottle: { _id: 'b1', wineDefinition: { _id: 'w-new', draft: true }, vintage: '2019' },
+      priceWarnings: [],
+    }, true, 201));
+
+    await reachStepTwoPending();
+    const toggle = screen.getByTestId('create-as-draft');
+    expect(toggle).not.toBeChecked();
+    fireEvent.click(toggle);
+
+    fireEvent.change(screen.getByPlaceholderText('addBottle.vintagePlaceholder'), { target: { value: '2019' } });
+    await act(async () => { fireEvent.click(screen.getByText('addBottle.addBottleBtn')); });
+
+    const calls = bottlesCalls();
+    expect(calls).toHaveLength(1);
+    expect(JSON.parse(calls[0][1].body).newWine).toMatchObject({ name: 'Kaefferkopf', draft: true });
+  });
+});

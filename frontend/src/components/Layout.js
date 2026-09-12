@@ -133,6 +133,12 @@ function Layout({ children }) {
                   {t('nav.myRequests')}
                 </Link>
                 <Link
+                  to="/wine-drafts"
+                  className={`nav-link ${isActive('/wine-drafts') ? 'active' : ''}`}
+                >
+                  {t('nav.myDrafts', 'My Drafts')}
+                </Link>
+                <Link
                   to="/community/discussions"
                   className={`nav-link ${isActive('/community') ? 'active' : ''}`}
                 >
@@ -279,6 +285,7 @@ function Layout({ children }) {
               <Link to="/journal" className={`mobile-menu-link ${isActive('/journal') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.journal')}</Link>
               <Link to="/restock" className={`mobile-menu-link ${isActive('/restock') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.restock')}</Link>
               <Link to="/wine-requests" className={`mobile-menu-link ${isActive('/wine-requests') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.myRequests')}</Link>
+              <Link to="/wine-drafts" className={`mobile-menu-link ${isActive('/wine-drafts') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.myDrafts', 'My Drafts')}</Link>
               <Link to="/cellar-chat" className={`mobile-menu-link ${isActive('/cellar-chat') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.cellarChat')}</Link>
               <Link to="/blog" className={`mobile-menu-link ${isActive('/blog') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.blog')}{blogBadge}</Link>
               <Link to="/supporter" className={`mobile-menu-link ${isActive('/supporter') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.supporter')}</Link>

@@ -51,6 +51,10 @@ function AddBottle() {
   // /api/bottles carries this payload as `newWine` and mints exactly one wine,
   // whose id the remaining bottles of the batch then reference.
   const [pendingNewWine, setPendingNewWine] = useState(null);
+  // Mint the new wine as the user's PRIVATE DRAFT (visible only to them,
+  // editable directly, published to the registry when they say so) instead
+  // of a public registry row. Only meaningful when pendingNewWine is set.
+  const [createAsDraft, setCreateAsDraft] = useState(false);
   const [numBottles, setNumBottles] = useState(1);
   const [bottleData, setBottleData] = useState({
     vintage: '',
@@ -745,6 +749,8 @@ function AddBottle() {
           // and what the two labels disagreed about.
           : { ...base, newWine: {
             ...newWinePayload,
+            // Private draft: the row is the user's until they publish it.
+            ...(createAsDraft ? { draft: true } : {}),
             ...(scanImageId ? { scanImageId } : {}),
             ...(backScanImageId ? { scanImageBackId: backScanImageId } : {}),
             ...(scanConflicts.length > 0 ? { scanConflicts } : {}),
@@ -1306,6 +1312,27 @@ function AddBottle() {
               {t('addBottle.changeWine')}
             </button>
           </div>
+
+          {/* A wine the registry does not know yet will be MINTED with this
+              bottle. Offer to keep it private first: a draft is editable by
+              its creator without the correction queue, hidden from everyone
+              else, and published when they are done (support ticket
+              2026-09-12). Only shown on that path — an existing wine is
+              already shared. */}
+          {pendingNewWine && (
+            <label className="draft-wine-toggle">
+              <input
+                type="checkbox"
+                data-testid="create-as-draft"
+                checked={createAsDraft}
+                onChange={(e) => setCreateAsDraft(e.target.checked)}
+              />
+              <span>
+                <strong>{t('addBottle.createAsDraft', 'Keep this wine as a private draft')}</strong>
+                <small>{t('addBottle.createAsDraftHint', 'Only you can see it and you can edit it freely. Publish it to the shared registry when the record is complete; an untouched draft with bottles publishes by itself after 7 days.')}</small>
+              </span>
+            </label>
+          )}
 
           <form onSubmit={handleSubmit}>
             {/* ── Core fields ── */}
