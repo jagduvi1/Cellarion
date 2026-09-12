@@ -1456,6 +1456,9 @@ registerTool({
       evidence_url: p.evidenceUrl || null,
       reason: p.reason,
       created_at: p.createdAt,
+      ...(p.amendments && p.amendments.length
+        ? { amendments: p.amendments.map((a) => ({ at: a.at, fields: a.fields || [], reason: a.reason, evidence_url: a.evidenceUrl || null })) }
+        : {}),
       ...(p.status !== 'pending' ? { decided_at: p.decidedAt, reject_reason: p.rejectReason || null, applied_note: p.appliedNote || null } : {}),
     })));
   },

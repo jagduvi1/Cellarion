@@ -155,6 +155,12 @@ router.get('/', async (req, res) => {
         currentSnapshot: p.currentSnapshot || null,
         evidenceUrl: p.evidenceUrl || null,
         reason: p.reason,
+        // Later filings by the same proposer, each with its own reason and
+        // evidence — the original reason/evidence above back the original
+        // fields only (support ticket 2026-09-12).
+        amendments: (p.amendments || []).map((a) => ({
+          at: a.at, fields: a.fields || [], reason: a.reason, evidenceUrl: a.evidenceUrl || null,
+        })),
         rejectReason: p.rejectReason || null,
         appliedNote: p.appliedNote || null,
         decidedAt: p.decidedAt || null,

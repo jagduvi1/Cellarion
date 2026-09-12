@@ -80,7 +80,7 @@ test('an amended own suggestion is reported as such, with the full field set', a
     ok: true,
     amended: true,
     amendedFields: ['grapes'],
-    proposal: { _id: oid('7'), proposedFields: { toObject: () => ({ name: 'Château Martinat', grapes: ['Merlot', 'Malbec'] }) } },
+    proposal: { _id: oid('7'), amendments: [{ fields: ['grapes'] }], proposedFields: { toObject: () => ({ name: 'Château Martinat', grapes: ['Merlot', 'Malbec'] }) } },
     wine: { producer: 'Chateau Martinat', name: 'Grand Vin de Bordeaux' },
   });
   const res = await tool().handler({ wine_id: WINE, fields: { grapes: ['Merlot', 'Malbec'] }, reason: 'Importer data sheet.' }, CTX);
@@ -88,8 +88,14 @@ test('an amended own suggestion is reported as such, with the full field set', a
   expect(res.isError).toBeFalsy();
   expect(body.summary).toMatch(/amended with grapes/);
   expect(body.summary).toMatch(/now covers name, grapes/);
-  expect(body.data).toMatchObject({ proposal_id: oid('7'), amended: true, fields: ['name', 'grapes'], status: 'pending' });
+  expect(body.data).toMatchObject({ proposal_id: oid('7'), amended: true, fields: ['name', 'grapes'], status: 'pending', amendments: 1 });
   expect(body.data.note).toMatch(/no daily budget/);
+});
+
+test('a conflict carries the MCP-only pointer to get_wine, added by the transport', async () => {
+  ops.createFieldCorrection.mockResolvedValue({ ok: false, code: 'conflict', message: 'Filed by another user.' });
+  const res = await tool().handler({ wine_id: WINE, fields: { name: 'x' }, reason: 'long enough reason' }, CTX);
+  expect(parse(res).error.message).toBe('Filed by another user. get_wine → pending_correction shows which fields it covers.');
 });
 
 test('the description states the per-wine (not per-user) limit and the amend rule', () => {

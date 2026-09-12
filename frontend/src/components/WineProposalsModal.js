@@ -492,6 +492,28 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
                 {p.reason}
               </div>
 
+              {/* Later filings by the same proposer (each with its own reason and
+                  evidence) — the reason above backs the original fields only. */}
+              {(p.amendments || []).map((a, i) => (
+                <div key={i} className="wp-amendment" style={{ fontSize: '0.85rem', margin: '0.35rem 0 0.35rem 0.75rem', paddingLeft: '0.5rem', borderLeft: '2px solid var(--color-border, #ccc)' }}>
+                  <div style={mutedStyle}>
+                    {t('admin.wines.proposals.amendment', {
+                      date: new Date(a.at).toLocaleDateString(),
+                      fields: (a.fields || []).map((f) => t(FIELD_KEYS[f] || f, f)).join(', '),
+                    })}
+                    {a.evidenceUrl && (
+                      <>
+                        {' · '}
+                        <a href={a.evidenceUrl} target="_blank" rel="noopener noreferrer">
+                          {t('admin.wines.proposals.evidence')}
+                        </a>
+                      </>
+                    )}
+                  </div>
+                  <div>{a.reason}</div>
+                </div>
+              ))}
+
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: '0.8rem', ...mutedStyle }}>
                 {p.evidenceUrl && (
                   <a href={p.evidenceUrl} target="_blank" rel="noopener noreferrer">

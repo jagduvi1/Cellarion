@@ -9,7 +9,7 @@
  */
 
 jest.mock('../models/WineCorrectionProposal', () => ({
-  create: jest.fn(), countDocuments: jest.fn(), find: jest.fn(), findOne: jest.fn(),
+  create: jest.fn(), countDocuments: jest.fn(), find: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn(),
 }));
 // The shared contribution gate counts across ALL suggestion collections.
 jest.mock('../models/RegistryDataKey', () => ({ countDocuments: jest.fn() }));
@@ -70,15 +70,24 @@ beforeEach(() => {
   WineCorrectionProposal.create.mockResolvedValue({ _id: oid('9'), proposedFields: GOOD.fields, status: 'pending' });
 });
 
-/** A pending row as the amend path sees it — a saveable mongoose-like doc. */
+/** A pending row as the amend path reads it. */
 const pendingRow = (over = {}) => ({
   _id: oid('7'),
   proposer: ME,
   proposedFields: { toObject: () => ({ name: 'Château Martinat' }) },
   reason: 'Name field holds the label boilerplate.',
   evidenceUrl: 'https://old.example/x',
+  currentSnapshot: { producer: 'Cloudy Bay', name: 'Sauvignon Blanc', grapes: null },
   status: 'pending',
-  save: jest.fn().mockResolvedValue(undefined),
+  ...over,
+});
+/** What the atomic update hands back once it landed. */
+const updatedRow = (over = {}) => ({
+  _id: oid('7'),
+  proposer: ME,
+  proposedFields: { toObject: () => ({ name: 'Château Martinat', grapes: ['Merlot', 'Malbec'] }) },
+  amendments: [{ fields: ['grapes'], reason: 'Importer data sheet: 80% Merlot, 20% Malbec.' }],
+  status: 'pending',
   ...over,
 });
 
@@ -162,7 +171,7 @@ describe('creation', () => {
         country: 'New Zealand',
         classification: null,
         type: null,
-        grapes: [],
+        grapes: null,
       },
     }));
     expect(logAudit).toHaveBeenCalledWith(null, 'wine_proposal.user_create',
@@ -197,18 +206,34 @@ describe('creation', () => {
     expect(resolveGrapeIdsStrict).not.toHaveBeenCalled();
   });
 
-  test('the snapshot records the live type and grape names for the admin diff', async () => {
+  // Joined, not an array: the admin modal compares the snapshot against its
+  // liveIdentity (joined names) to flag drift — an array read as permanent drift
+  // (audit 2026-09-12 L-2).
+  test('the snapshot records the live type and JOINED grape names, the shape the admin diff compares', async () => {
     findVisibleWine.mockResolvedValue({ ...wineDoc, type: 'white', grapes: [{ name: 'Chardonnay' }, { name: 'Pinot Blanc' }] });
     await ops.createFieldCorrection(ME, GOOD);
     expect(WineCorrectionProposal.create).toHaveBeenCalledWith(expect.objectContaining({
-      currentSnapshot: expect.objectContaining({ type: 'white', grapes: ['Chardonnay', 'Pinot Blanc'] }),
+      currentSnapshot: expect.objectContaining({ type: 'white', grapes: 'Chardonnay, Pinot Blanc' }),
     }));
   });
 
-  test('E11000 (one pending per wine) becomes a friendly conflict', async () => {
+  test('E11000 (one pending per wine) from another user\'s racing row becomes a friendly conflict', async () => {
     WineCorrectionProposal.create.mockRejectedValue(Object.assign(new Error('dup'), { code: 11000 }));
+    WineCorrectionProposal.findOne
+      .mockResolvedValueOnce(null)                          // before the insert: nothing
+      .mockResolvedValueOnce(pendingRow({ proposer: oid('c') })); // after E11000: somebody else's
     const res = await ops.createFieldCorrection(ME, GOOD);
     expect(res).toMatchObject({ ok: false, code: 'conflict' });
+    expect(res.message).toMatch(/another user/);
+  });
+
+  test('E11000 that keeps vanishing gives up after two rounds with a retry-able conflict', async () => {
+    WineCorrectionProposal.create.mockRejectedValue(Object.assign(new Error('dup'), { code: 11000 }));
+    WineCorrectionProposal.findOne.mockResolvedValue(null);
+    const res = await ops.createFieldCorrection(ME, GOOD);
+    expect(res).toMatchObject({ ok: false, code: 'conflict' });
+    expect(res.message).toMatch(/try again/);
+    expect(WineCorrectionProposal.create).toHaveBeenCalledTimes(2);
   });
 
   test('a fresh filing reports amended: false', async () => {
@@ -218,11 +243,14 @@ describe('creation', () => {
 
 // Support ticket 2026-09-12: the one-pending rule is per WINE, and the user's
 // own suggestion was what blocked their follow-up. Own pending → amend; someone
-// else's → conflict that says so.
+// else's → conflict that says so. Audit 2026-09-12 H-1: the amendment is ONE
+// atomic update pinned to the pending row, never a hydrated save().
 describe('amending the caller\'s own pending suggestion', () => {
-  test('own pending row: fields merged, reason appended, evidence replaced, snapshot refreshed — no insert', async () => {
-    const row = pendingRow();
-    WineCorrectionProposal.findOne.mockResolvedValue(row);
+  const dup = () => Object.assign(new Error('dup'), { code: 11000 });
+
+  test('own pending row: one findOneAndUpdate pinned to {pending, proposer}, per-field $set, $push amendment — no insert', async () => {
+    WineCorrectionProposal.findOne.mockResolvedValue(pendingRow());
+    WineCorrectionProposal.findOneAndUpdate.mockResolvedValue(updatedRow());
     resolveGrapeIdsStrict.mockResolvedValue({ ok: true, ids: ['1', '2'], names: ['Merlot', 'Malbec'], substitutions: [] });
 
     const res = await ops.createFieldCorrection(ME, {
@@ -233,29 +261,39 @@ describe('amending the caller\'s own pending suggestion', () => {
     }, { via: 'mcp' });
 
     expect(res).toMatchObject({ ok: true, amended: true, amendedFields: ['grapes'] });
-    expect(res.proposal).toBe(row);
-    expect(row.proposedFields).toEqual({ name: 'Château Martinat', grapes: ['Merlot', 'Malbec'] });
-    expect(row.reason).toBe('Name field holds the label boilerplate.\n\nImporter data sheet: 80% Merlot, 20% Malbec.');
-    expect(row.evidenceUrl).toBe('https://new.example/sheet');
-    expect(row.currentSnapshot).toEqual(expect.objectContaining({ producer: 'Cloudy Bay', region: 'Marlborough' }));
-    expect(row.save).toHaveBeenCalledTimes(1);
+    expect(WineCorrectionProposal.findOneAndUpdate).toHaveBeenCalledTimes(1);
+    const [filter, update, opts] = WineCorrectionProposal.findOneAndUpdate.mock.calls[0];
+    expect(filter).toEqual({ _id: oid('7'), status: 'pending', proposer: ME, kind: 'field_correction' });
+    // Per-field paths, so a parallel amendment of another field also lands;
+    // the snapshot is refreshed for the added field only; the original
+    // reason and evidenceUrl are NOT touched.
+    expect(update.$set).toEqual({ 'proposedFields.grapes': ['Merlot', 'Malbec'], 'currentSnapshot.grapes': null });
+    expect(update.$set).not.toHaveProperty('reason');
+    expect(update.$set).not.toHaveProperty('evidenceUrl');
+    expect(update.$set).not.toHaveProperty('proposedFields');
+    expect(update.$push.amendments).toEqual(expect.objectContaining({
+      fields: ['grapes'], reason: 'Importer data sheet: 80% Merlot, 20% Malbec.', evidenceUrl: 'https://new.example/sheet',
+    }));
+    expect(update.$push.amendments.at).toBeInstanceOf(Date);
+    expect(opts).toEqual({ new: true, runValidators: true, context: 'query' });
     expect(WineCorrectionProposal.create).not.toHaveBeenCalled();
     expect(logAudit).toHaveBeenCalledWith(null, 'wine_proposal.user_amend',
       expect.objectContaining({ type: 'wine' }),
-      expect.objectContaining({ via: 'mcp', fields: ['grapes'], allFields: ['name', 'grapes'] }));
+      expect.objectContaining({ via: 'mcp', fields: ['grapes'], allFields: ['name', 'grapes'], amendments: 1 }));
   });
 
-  test('a later value for the same field wins; evidence is kept when none is given', async () => {
-    const row = pendingRow();
-    WineCorrectionProposal.findOne.mockResolvedValue(row);
-    const res = await ops.createFieldCorrection(ME, { ...GOOD, fields: { name: 'Martinat' } });
-    expect(res.amended).toBe(true);
-    expect(row.proposedFields).toEqual({ name: 'Martinat' });
-    expect(row.evidenceUrl).toBe('https://old.example/x');
+  test('an amendment without evidence pushes no evidenceUrl key; a null snapshot is set whole', async () => {
+    WineCorrectionProposal.findOne.mockResolvedValue(pendingRow({ currentSnapshot: null }));
+    WineCorrectionProposal.findOneAndUpdate.mockResolvedValue(updatedRow());
+    await ops.createFieldCorrection(ME, GOOD);
+    const [, update] = WineCorrectionProposal.findOneAndUpdate.mock.calls[0];
+    expect(update.$push.amendments).not.toHaveProperty('evidenceUrl');
+    expect(update.$set.currentSnapshot).toEqual(expect.objectContaining({ producer: 'Cloudy Bay' }));
   });
 
   test('an amendment does NOT spend the daily budget (the ban still applies)', async () => {
     WineCorrectionProposal.findOne.mockResolvedValue(pendingRow());
+    WineCorrectionProposal.findOneAndUpdate.mockResolvedValue(updatedRow());
     WineCorrectionProposal.countDocuments.mockResolvedValue(3); // newcomer limit reached
     expect((await ops.createFieldCorrection(ME, GOOD)).amended).toBe(true);
 
@@ -263,28 +301,59 @@ describe('amending the caller\'s own pending suggestion', () => {
     expect((await ops.createFieldCorrection(ME, GOOD)).code).toBe('banned');
   });
 
-  test('a combined reason past the cap is refused, naming the room left', async () => {
-    const row = pendingRow({ reason: 'x'.repeat(990) });
-    WineCorrectionProposal.findOne.mockResolvedValue(row);
+  test('the bypass is capped: the 11th amendment is a limit, without a write', async () => {
+    WineCorrectionProposal.findOne.mockResolvedValue(pendingRow({ amendments: Array(ops.AMENDMENTS_MAX).fill({ fields: ['name'], reason: 'x'.repeat(10) }) }));
     const res = await ops.createFieldCorrection(ME, GOOD);
-    expect(res).toMatchObject({ ok: false, code: 'invalid' });
-    expect(res.message).toMatch(/990-character reason/);
-    expect(row.save).not.toHaveBeenCalled();
+    expect(res).toMatchObject({ ok: false, code: 'limit' });
+    expect(WineCorrectionProposal.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(WineCorrectionProposal.create).not.toHaveBeenCalled();
   });
 
-  test('somebody else\'s pending row is a conflict that says the limit is per wine', async () => {
+  test('row decided while composing: the pinned update misses, the filing is fresh and BUDGETED', async () => {
+    WineCorrectionProposal.findOne.mockResolvedValue(pendingRow());
+    WineCorrectionProposal.findOneAndUpdate.mockResolvedValue(null); // no longer pending
+    WineCorrectionProposal.countDocuments.mockResolvedValue(3);     // and the budget is spent
+    const res = await ops.createFieldCorrection(ME, GOOD);
+    expect(res).toMatchObject({ ok: false, code: 'limit' });
+    expect(WineCorrectionProposal.create).not.toHaveBeenCalled();
+
+    WineCorrectionProposal.countDocuments.mockResolvedValue(0);
+    const res2 = await ops.createFieldCorrection(ME, GOOD);
+    expect(res2).toMatchObject({ ok: true, amended: false });
+    expect(WineCorrectionProposal.create).toHaveBeenCalledTimes(1);
+  });
+
+  test('E11000 from the caller\'s OWN racing row is amended, never reported as "in the queue" (audit M-1)', async () => {
+    WineCorrectionProposal.create.mockRejectedValue(dup());
+    WineCorrectionProposal.findOne
+      .mockResolvedValueOnce(null)          // before the insert: nothing
+      .mockResolvedValueOnce(pendingRow()); // after E11000: the caller's parallel filing
+    WineCorrectionProposal.findOneAndUpdate.mockResolvedValue(updatedRow());
+    const res = await ops.createFieldCorrection(ME, GOOD);
+    expect(res).toMatchObject({ ok: true, amended: true, amendedFields: ['appellation'] });
+    expect(WineCorrectionProposal.findOneAndUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  test('somebody else\'s pending row is a transport-neutral conflict that says the limit is per wine', async () => {
     WineCorrectionProposal.findOne.mockResolvedValue(pendingRow({ proposer: oid('c') }));
     const res = await ops.createFieldCorrection(ME, GOOD);
     expect(res).toMatchObject({ ok: false, code: 'conflict' });
     expect(res.message).toMatch(/another user/);
     expect(res.message).toMatch(/per wine/);
+    expect(res.message).not.toMatch(/get_wine/); // the web bottle page shows this text too
     expect(WineCorrectionProposal.create).not.toHaveBeenCalled();
+    expect(WineCorrectionProposal.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
-  test('a hidden wine answers not_found even when its queue row is somebody else\'s — no leak', async () => {
-    WineCorrectionProposal.findOne.mockResolvedValue(pendingRow({ proposer: oid('c') }));
+  test.each([
+    ['somebody else\'s', oid('c')],
+    ['the caller\'s own', ME],
+  ])('a hidden wine answers not_found even when its queue row is %s — no leak, no write', async (_label, proposer) => {
+    WineCorrectionProposal.findOne.mockResolvedValue(pendingRow({ proposer }));
     findVisibleWine.mockResolvedValue(null);
     expect((await ops.createFieldCorrection(ME, GOOD)).code).toBe('not_found');
+    expect(WineCorrectionProposal.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(WineCorrectionProposal.create).not.toHaveBeenCalled();
   });
 });
 
@@ -297,35 +366,17 @@ describe('pendingForWine', () => {
     expect(await ops.pendingForWine('nope', ME)).toBeNull();
   });
 
-  test('field names, filing time and mine — never the proposer or the values', async () => {
+  test('field names and mine — filing time only on the caller\'s own row, never the proposer or the values', async () => {
     const filed = new Date('2026-09-11T19:14:12.715Z');
     WineCorrectionProposal.findOne.mockReturnValue(chain({
       proposer: ME, createdAt: filed,
       proposedFields: { producer: 'Château Martinat', name: 'Château Martinat', appellation: null, grapes: undefined },
     }));
     expect(await ops.pendingForWine(WINE, ME)).toEqual({ fields: ['producer', 'name'], filed_at: filed, mine: true });
-    expect(await ops.pendingForWine(WINE, oid('c'))).toMatchObject({ mine: false });
-    expect(await ops.pendingForWine(WINE, null)).toMatchObject({ mine: false });
+    expect(await ops.pendingForWine(WINE, oid('c'))).toEqual({ fields: ['producer', 'name'], mine: false });
+    expect(await ops.pendingForWine(WINE, null)).toEqual({ fields: ['producer', 'name'], mine: false });
     expect(WineCorrectionProposal.findOne).toHaveBeenCalledWith({
       wineDefinition: { $eq: WINE }, kind: 'field_correction', status: 'pending',
     });
-  });
-});
-
-describe('listMineForWine', () => {
-  test('caller + wine scoped, field_correction only', async () => {
-    const chain = { sort: jest.fn().mockReturnThis(), limit: jest.fn().mockReturnThis(), select: jest.fn().mockReturnThis(), lean: jest.fn().mockResolvedValue([]) };
-    WineCorrectionProposal.find.mockReturnValue(chain);
-    const res = await ops.listMineForWine(ME, WINE);
-    expect(res.ok).toBe(true);
-    expect(WineCorrectionProposal.find).toHaveBeenCalledWith({
-      proposer: ME,
-      wineDefinition: { $eq: WINE },
-      kind: 'field_correction',
-    });
-  });
-
-  test('invalid wine id rejected', async () => {
-    expect((await ops.listMineForWine(ME, 'nope')).code).toBe('invalid');
   });
 });

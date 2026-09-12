@@ -136,6 +136,13 @@ describe('get_wine — pending_correction', () => {
     expect(body.data).toHaveProperty('pending_correction', null);
   });
 
+  test('a hidden wine never reads the queue — not_found comes first', async () => {
+    WineDefinition.findOne.mockReturnValue(chain(null));
+    const res = await tool('get_wine').handler({ wine_id: WINE }, CTX);
+    expect(parse(res).error.code).toBe('not_found');
+    expect(pendingForWine).not.toHaveBeenCalled();
+  });
+
   test('the anonymous surface neither reads the queue nor carries the key', async () => {
     WineDefinition.findOne.mockReturnValue(chain(visible));
     const body = parse(await tool('get_wine').handler({ wine_id: WINE }, { anonymous: true }));
