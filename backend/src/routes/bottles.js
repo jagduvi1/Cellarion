@@ -25,7 +25,7 @@ const { getCurrentRelease } = require('../services/communityPrice');
 const { findLotSiblingIds } = require('../services/bottleLot');
 const { stripHtml, escapeRegex } = require('../utils/sanitize');
 const { toNormalized } = require('../utils/ratingUtils');
-const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
+const { classifyMaturity, buildProfileMap, parseMaturityFilter, matchesMaturityFilter } = require('../utils/maturityUtils');
 const { parsePagination } = require('../utils/pagination');
 // Read-surface decoration: populated grapes gain `displayName` — the
 // regionally correct label for the bottle's wine (Tinta Roriz on a Douro
@@ -67,7 +67,9 @@ router.use(requireAuth);
 //   producer     — exact producer string (case-insensitive)
 //   bottleSize   — exact bottle-size string (e.g. "750ml")
 //   minRating    — minimum normalised rating (0-100)
-//   maturity     — one of 'declining','late','peak','early','not-ready','none'
+//   maxRating    — maximum normalised rating (0-100); with minRating it is a range
+//   maturity     — 'declining','late','peak','early','not-ready','none' — one, or
+//                  several comma-separated (OR-combined)
 //   sort         — 'createdAt'|'vintage'|'price'|'rating'|'name'|'maturity' with optional leading '-' for descending
 //   limit / offset — pagination (defaults: limit 30, max 200)
 router.get('/', async (req, res) => {
@@ -96,7 +98,9 @@ router.get('/', async (req, res) => {
     const producer         = q(req.query.producer);
     const bottleSize       = q(req.query.bottleSize);
     const minRating        = q(req.query.minRating);
-    const maturityFilter   = q(req.query.maturity);
+    const maxRating        = q(req.query.maxRating);
+    // null when absent; a Set of statuses otherwise (multi-select, OR).
+    const maturityFilter   = parseMaturityFilter(q(req.query.maturity));
     const sort             = q(req.query.sort) || '-createdAt';
     // Lifecycle filters — default is active-only, matching the
     // Statistics page's by-type / by-country / etc. aggregates.
@@ -233,7 +237,7 @@ router.get('/', async (req, res) => {
 
     const directSortFields = ['createdAt', 'vintage', 'price', 'rating'];
     const canSortInDb = directSortFields.includes(sortField);
-    const needsInMemoryFilter = !!(search || minRating || maturityFilter);
+    const needsInMemoryFilter = !!(search || minRating || maxRating || maturityFilter);
     const canPaginateInDb = canSortInDb && !needsInMemoryFilter;
 
     let query = Bottle.find(filter).populate(WINE_POPULATE_LIST);
@@ -295,6 +299,15 @@ router.get('/', async (req, res) => {
         });
       }
     }
+    if (maxRating) {
+      const max = parseFloat(maxRating);
+      if (!isNaN(max)) {
+        bottles = bottles.filter(b => {
+          if (b.rating == null) return false;
+          return toNormalized(b.rating, b.ratingScale || '5') <= max;
+        });
+      }
+    }
 
     // ── Maturity post-filter / sort (needs WineVintageProfile lookup) ─────────
     let maturityMap = null;
@@ -308,11 +321,7 @@ router.get('/', async (req, res) => {
     }
 
     if (maturityFilter && maturityMap) {
-      if (maturityFilter === 'none') {
-        bottles = bottles.filter(b => maturityMap.get(b._id.toString()) == null);
-      } else {
-        bottles = bottles.filter(b => maturityMap.get(b._id.toString()) === maturityFilter);
-      }
+      bottles = bottles.filter(b => matchesMaturityFilter(maturityMap.get(b._id.toString()), maturityFilter));
     }
 
     // ── In-memory sort for fields we couldn't sort in the DB ──────────────────

@@ -32,7 +32,7 @@ function CellarHistory() {
   const [filters, setFilters] = useState({
     search: '',
     type: [], country: [], region: [], grapes: [], vintage: [],
-    minRating: '', maturity: ''
+    minRating: '', maxRating: '', maturity: []
   });
   const [facets, setFacets] = useState(null);
   const [baseFacets, setBaseFacets] = useState(null);
@@ -166,7 +166,7 @@ function CellarHistory() {
 
   const clearAll = () => setFilters(prev => ({
     ...prev, type: [], country: [], region: [], grapes: [], vintage: [],
-    minRating: '', maturity: ''
+    minRating: '', maxRating: '', maturity: []
   }));
 
   return (

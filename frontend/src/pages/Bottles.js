@@ -4,11 +4,12 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { listBottles } from '../api/bottles';
 import BottleCard from '../components/BottleCard';
+import { ratingRangeLabel, toMaturityArray, MATURITY_I18N_KEY } from '../utils/filterLabels';
 import './Bottles.css';
 
 const FILTER_KEYS = [
   'search', 'type', 'country', 'region', 'appellation', 'grapes',
-  'vintage', 'producer', 'bottleSize', 'minRating', 'maturity', 'sort',
+  'vintage', 'producer', 'bottleSize', 'minRating', 'maxRating', 'maturity', 'sort',
   'purchaseYear', 'consumedYear', 'status',
 ];
 
@@ -44,7 +45,8 @@ const PAGE_SIZE = 30;
  */
 function Bottles() {
   const { t } = useTranslation();
-  const { apiFetch } = useAuth();
+  const { apiFetch, user } = useAuth();
+  const ratingScale = user?.preferences?.ratingScale || '5';
   const [searchParams, setSearchParams] = useSearchParams();
 
   const filters = useMemo(() => {
@@ -105,7 +107,8 @@ function Bottles() {
 
   const removeFilter = (key) => {
     const next = new URLSearchParams(searchParams);
-    next.delete(key);
+    // The rating chip stands for a range — both bounds go together.
+    if (key === 'rating') { next.delete('minRating'); next.delete('maxRating'); } else next.delete(key);
     setSearchParams(next, { replace: true });
   };
 
@@ -151,8 +154,13 @@ function Bottles() {
     if (filters.vintage) labels.vintage = t('bottles.chipVintage', 'Vintage: {{value}}', { value: filters.vintage });
     if (filters.producer) labels.producer = t('bottles.chipProducer', 'Producer: {{value}}', { value: filters.producer });
     if (filters.bottleSize) labels.bottleSize = t('bottles.chipSize', 'Size: {{value}}', { value: filters.bottleSize });
-    if (filters.minRating) labels.minRating = t('bottles.chipRating', 'Rating: {{value}}+', { value: filters.minRating });
-    if (filters.maturity) labels.maturity = t('bottles.chipMaturity', 'Maturity: {{value}}', { value: filters.maturity });
+    // Rating bounds arrive normalised (0–100) and read back in the user's scale.
+    const ratingLabel = ratingRangeLabel(t, filters.minRating || '', filters.maxRating || '', ratingScale);
+    if (ratingLabel) labels.rating = t('bottles.chipRatingRange', 'Rating: {{value}}', { value: ratingLabel });
+    if (filters.maturity) {
+      const names = toMaturityArray(filters.maturity).map(v => t(MATURITY_I18N_KEY[v] || v, v));
+      labels.maturity = t('bottles.chipMaturity', 'Maturity: {{value}}', { value: names.join(', ') });
+    }
     if (filters.search) labels.search = t('bottles.chipSearch', 'Search: "{{value}}"', { value: filters.search });
     if (filters.purchaseYear) labels.purchaseYear = t('bottles.chipPurchased', 'Purchased: {{value}}', { value: filters.purchaseYear });
     if (filters.consumedYear) labels.consumedYear = t('bottles.chipConsumed', 'Consumed: {{value}}', { value: filters.consumedYear });
@@ -161,7 +169,7 @@ function Bottles() {
       labels.status = t('bottles.chipStatus', 'Status: {{value}}', { value: statusName });
     }
     return labels;
-  }, [filters, data.items, t]);
+  }, [filters, data.items, t, ratingScale]);
 
   const chips = Object.entries(chipLabels);
   const total = data.total ?? 0;
