@@ -33,6 +33,7 @@ const BottleDetail    = lazy(() => import('./pages/BottleDetail'));
 const CellarHistory   = lazy(() => import('./pages/CellarHistory'));
 const CellarAudit     = lazy(() => import('./pages/CellarAudit'));
 const WineRequests    = lazy(() => import('./pages/WineRequests'));
+const WineDrafts      = lazy(() => import('./pages/WineDrafts'));
 const CellarChat      = lazy(() => import('./pages/CellarChat'));
 const ReviewFeed      = lazy(() => import('./pages/ReviewFeed'));
 const UserProfile     = lazy(() => import('./pages/UserProfile'));
@@ -232,6 +233,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <Layout><WineRequests /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/wine-drafts"
+          element={
+            <ProtectedRoute>
+              <Layout><WineDrafts /></Layout>
             </ProtectedRoute>
           }
         />

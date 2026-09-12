@@ -12,11 +12,12 @@ import safeUrl from '../../utils/safeUrl';
 import RatingDisplay from '../RatingDisplay';
 import ContributePrompt from './ContributePrompt';
 import WineRecordSection from './WineRecordSection';
+import DraftWineBanner from './DraftWineBanner';
 import MaturityPhaseTable from './MaturityPhaseTable';
 import PriceHistoryTimeline from './PriceHistoryTimeline';
 import PriceTrackingToggle from './PriceTrackingToggle';
 
-function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory, currentRelease, rates, userCurrency, canEdit, hasImage, onEdit, onSuggestGrapes, onRemove, onReportWine }) {
+function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory, currentRelease, rates, userCurrency, canEdit, hasImage, onEdit, onSuggestGrapes, onRemove, onReportWine, wineDraft = null, onDraftChanged }) {
   const { t } = useTranslation();
   const { user, apiFetch } = useAuth();
   const anchorYear = bottleAnchorYear(bottle);
@@ -150,10 +151,18 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
         )}
       </div>
 
+      {/* A PRIVATE DRAFT wine: its creator edits and publishes it here; a
+          shared-cellar member only sees that it is one. Drafts are edited
+          directly, never through the correction queue, so the per-field
+          suggest actions below are off while it is a draft. */}
+      {wine?.draft === true && (
+        <DraftWineBanner wine={wine} wineDraft={wineDraft} onChanged={onDraftChanged} />
+      )}
+
       {/* The full public record with visible blanks + per-field suggestions
           (#985). Demo visitors see the record but not the suggest actions
           (writes are requireNonDemo). */}
-      <WineRecordSection wine={wine} vintage={bottle?.vintage} canSuggest={!user?.isDemo} apiFetch={apiFetch} />
+      <WineRecordSection wine={wine} vintage={bottle?.vintage} canSuggest={!user?.isDemo && wine?.draft !== true} apiFetch={apiFetch} />
 
       {/* Personal drink window — the user's own drinkFrom/drinkTo. Takes
           precedence over the sommelier profile status below, so the profile

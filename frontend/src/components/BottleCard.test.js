@@ -127,3 +127,18 @@ describe('BottleCard image precedence', () => {
     expect(container.querySelector('img')).toBeNull();
   });
 });
+
+/** A private draft wine (2026-09-12) is marked on the card in both views. */
+describe('BottleCard private-draft badge', () => {
+  test('a draft wine shows the badge in list and grid view; an ordinary wine does not', () => {
+    const draftBottle = { ...BOTTLE, wineDefinition: { ...BOTTLE.wineDefinition, draft: true } };
+    const { unmount } = renderCard({ bottle: draftBottle });
+    expect(screen.getByText('bottleCard.draftWine')).toBeInTheDocument();
+    unmount();
+    const grid = renderCard({ bottle: draftBottle, viewMode: 'grid' });
+    expect(screen.getByText('bottleCard.draftWine')).toBeInTheDocument();
+    grid.unmount();
+    renderCard();
+    expect(screen.queryByText('bottleCard.draftWine')).not.toBeInTheDocument();
+  });
+});

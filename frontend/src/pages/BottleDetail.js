@@ -596,6 +596,8 @@ function BottleDetail() {
           onSuggestGrapes={() => setSuggestGrapesOpen(true)}
           onRemove={() => setConsumeOpen(true)}
           onReportWine={(reason) => { setReportWineOpen(true); setReportDefaultReason(typeof reason === 'string' ? reason : null); }}
+          wineDraft={bottle.wineDraft || null}
+          onDraftChanged={fetchBottle}
         />
       )}
 

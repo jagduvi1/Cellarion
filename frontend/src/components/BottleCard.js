@@ -197,6 +197,9 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
             {isPending && (
               <span className="pending-wine-badge">{t('bottleCard.pendingReview')}</span>
             )}
+            {bottle.wineDefinition?.draft === true && (
+              <span className="draft-wine-badge">{t('bottleCard.draftWine', 'Private draft')}</span>
+            )}
             {bottle.openedAt && bottle.status === 'active' && (
               <span className={`open-bottle-badge open-bottle-badge--${freshnessStatus(bottle) || 'ok'}`}>
                 🍷 {t('bottleCard.openBadge', '{{glasses}} gl · {{days}}d', {
@@ -294,6 +297,9 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
           )}
           {isPending && (
             <span className="pending-wine-badge">{t('bottleCard.pendingReview')}</span>
+          )}
+          {bottle.wineDefinition?.draft === true && (
+            <span className="draft-wine-badge">{t('bottleCard.draftWine', 'Private draft')}</span>
           )}
           {reserved && (
             <span className="reserved-badge" title={reservationSummary(bottle, t)}>

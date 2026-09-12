@@ -18,14 +18,18 @@ import './WineModalThumbs.css';
  *   onCreateNew  — user wants to create a new wine anyway
  *   onCancel     — user wants to back out and re-enter / cancel
  *   busy         — disables buttons while a follow-up request is in flight
+ *   allowCreateNew — false hides "create new": the publish step of a private
+ *                  draft found an EXACT registry match, and the only honest
+ *                  answers are "attach my bottles to it" or cancel
+ *   pickLabel / introKey — wording overrides for that publish flow
  */
-function SimilarWinesModal({ candidates, queryName, onPick, onCreateNew, onCancel, busy }) {
+function SimilarWinesModal({ candidates, queryName, onPick, onCreateNew, onCancel, busy, allowCreateNew = true, pickLabel, introKey }) {
   const { t } = useTranslation();
   return (
     <Modal title={t('similarWines.title')} onClose={onCancel} showClose wide>
       <p style={{ margin: '0 0 1rem', fontSize: '0.95rem', color: 'var(--color-text-secondary, #666)' }}>
         <Trans
-          i18nKey="similarWines.intro"
+          i18nKey={introKey || 'similarWines.intro'}
           components={{ strong: <strong /> }}
           values={{ query: queryName || t('similarWines.whatYouEntered') }}
         />
@@ -77,7 +81,7 @@ function SimilarWinesModal({ candidates, queryName, onPick, onCreateNew, onCance
                 onClick={() => onPick(wine)}
                 style={{ padding: '0.35rem 0.8rem', fontSize: '0.85rem' }}
               >
-                {t('similarWines.useThis')}
+                {pickLabel || t('similarWines.useThis')}
               </button>
             </div>
           </li>
@@ -88,9 +92,11 @@ function SimilarWinesModal({ candidates, queryName, onPick, onCreateNew, onCance
         <button type="button" className="btn" disabled={busy} onClick={onCancel}>
           {t('common.cancel')}
         </button>
-        <button type="button" className="btn btn-secondary" disabled={busy} onClick={onCreateNew}>
-          {t('similarWines.createNew')}
-        </button>
+        {allowCreateNew && (
+          <button type="button" className="btn btn-secondary" disabled={busy} onClick={onCreateNew}>
+            {t('similarWines.createNew')}
+          </button>
+        )}
       </div>
     </Modal>
   );
