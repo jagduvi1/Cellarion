@@ -132,6 +132,14 @@ router.delete('/self', requireAuth, async (req, res) => {
     if (!req.apiToken) {
       return res.status(400).json({ error: 'Only a personal API token can revoke itself — from a signed-in session use DELETE /api/tokens/:id' });
     }
+    // A climate device token is bound to a ClimateDevice row: it is minted
+    // and retired through the device routes (DELETE /api/climate/devices/:id
+    // revokes + purges + deletes). Ending only the token here would leave a
+    // device that can never post again, still counted and still alerting
+    // "offline" (post-ship audit 2026-09-12).
+    if ((req.apiToken.scopes || []).includes('climate')) {
+      return res.status(403).json({ error: 'A climate device token is retired by deleting its device (DELETE /api/climate/devices/:id), not by revoking the token alone' });
+    }
     const token = await ApiToken.findOne({ _id: req.apiToken.id, user: req.user.id, revokedAt: null });
     if (!token) {
       return res.status(404).json({ error: 'Token not found' });

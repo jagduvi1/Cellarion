@@ -354,11 +354,24 @@ async function generateWineListPdf(wineList, wineMap, opts = {}) {
   const legacySubHeaders = levelsInForce.length === 1 && levelsInForce[0] === 'type' &&
     wineList.autoGrouping?.withinGroup === 'country-region-name';
   let anyLastBottle = false;
-  // Approximate heights of a heading per level, and of the first entry —
-  // a heading stack (type › country › region) breaks the page as ONE unit
-  // so no heading is ever orphaned at the foot of a page.
-  const HEADING_HEIGHT = [42, 22, 15];
+  // A heading stack (type › country › region) breaks the page as ONE unit
+  // so no heading is ever orphaned at the foot of a page. Heading heights
+  // are measured with the font renderHeading uses plus its spacing; the
+  // first entry is renderWineEntry's tallest advance.
   const FIRST_ENTRY_HEIGHT = 26;
+  const headingHeight = (section) => {
+    const level = section.level || 0;
+    if (level === 0) {
+      doc.font(fontBold).fontSize(13);
+      return doc.heightOfString(String(section.title).toUpperCase(), { width: contentWidth }) + 30;
+    }
+    if (level === 1) {
+      doc.font(fontBold).fontSize(10.5);
+      return doc.heightOfString(String(section.title), { width: contentWidth - 10 }) + 12;
+    }
+    doc.font(fontItalic).fontSize(9);
+    return doc.heightOfString(String(section.title), { width: contentWidth - 20 }) + 8;
+  };
   // Content must stay above this line: everything written below the bottom
   // margin makes PDFKit open a new page by itself.
   const bottomLimit = pageSize[1] - margin;
@@ -404,23 +417,27 @@ async function generateWineListPdf(wineList, wineMap, opts = {}) {
   for (let i = 0; i < sections.length; i++) {
     const section = sections[i];
     const level = section.level || 0;
+    // Ancestors only while deciding the break: a break placed between two
+    // sibling groups repeats the parents ("RED WINES (continued) › Italy
+    // (continued)") before the new sibling — post-ship audit 2026-09-12.
     stack.length = level;
-    stack[level] = section;
 
     if (level === 0 && i > 0 && newPageEachSection) {
       breakPage({ repeatHeadings: false });
     } else {
       // Room for this heading, the deeper headings that follow it before the
-      // first wine, and that wine — else start a new page here.
-      let need = HEADING_HEIGHT[Math.min(level, 2)] + FIRST_ENTRY_HEIGHT;
+      // first wine, and that wine — else start a new page here. Heights are
+      // MEASURED (a long title wraps), not guessed.
+      let need = headingHeight(section) + FIRST_ENTRY_HEIGHT;
       for (let k = i + 1; k < sections.length && (sections[k].level || 0) > level && !section.wines.length; k++) {
-        need += HEADING_HEIGHT[Math.min(sections[k].level || 0, 2)];
+        need += headingHeight(sections[k]);
         if (sections[k].wines.length) break;
       }
       if (doc.y > bottomLimit - Math.max(need, level === 0 ? 80 : 0)) {
-        breakPage({ repeatHeadings: false });
+        breakPage({ repeatHeadings: level > 0 });
       }
     }
+    stack[level] = section;
 
     renderHeading(section, { first: i === 0 || doc.y <= margin + 1 });
 
@@ -506,9 +523,9 @@ function entryHeight(wine) {
   return [producerRegion, grapes].filter(Boolean).length ? 26 : 15;
 }
 
-/** "CHF 16" but "$16": a space after a symbol made of letters, none after a sign. */
+/** "CHF 16", "zł 160", "Fr. 16" but "$16": a space after a symbol ending in a letter (any script) or a dot, none after a sign. */
 function priceWithSymbol(symbol, amount) {
-  const sep = /[A-Za-z]$/.test(symbol) ? ' ' : '';
+  const sep = /[\p{L}.]$/u.test(symbol) ? ' ' : '';
   return `${symbol}${sep}${amount}`;
 }
 

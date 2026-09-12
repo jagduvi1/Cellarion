@@ -41,8 +41,8 @@ function WineListMenu({ branding = {}, layout = {}, language = 'en', sections = 
   // exist. With prices hidden, a by-the-glass wine still says so.
   const renderPrice = (wine) => {
     if (hidePrices) return wine.byGlass ? glassLabel : null;
-    // "CHF 16" but "$16": a space after a symbol made of letters, none after a sign
-    const sym = /[A-Za-z]$/.test(currencySymbol) ? `${currencySymbol} ` : currencySymbol;
+    // "CHF 16", "zł 160", "Fr. 16" but "$16": a space after a symbol ending in a letter (any script) or a dot
+    const sym = /[\p{L}.]$/u.test(currencySymbol) ? `${currencySymbol} ` : currencySymbol;
     const parts = [];
     if (wine.price != null) parts.push(`${sym}${Math.round(wine.price)}`);
     if (wine.glassPrice != null) parts.push(`${sym}${Math.round(wine.glassPrice)} ${glassLabel}`);
