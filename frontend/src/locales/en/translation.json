@@ -1936,6 +1936,7 @@
         "nonWineLine": "Quarantine as non-wine: hidden from search and public listings, its pending maturity-queue rows removed; owners' bottles keep working.",
         "wineGone": "(wine no longer exists)",
         "evidence": "Evidence",
+        "amendment": "Amended {{date}} · {{fields}}",
         "proposedBy": "Proposed by {{name}} on {{date}}",
         "approve": "Approve & apply",
         "approving": "Applying…",

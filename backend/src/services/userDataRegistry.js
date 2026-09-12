@@ -699,7 +699,7 @@ const REGISTRY = [
       // snapshot so it survives the wine being merged away or renamed.
       wineCorrectionProposals: markTrunc(ctx, 'wineCorrectionProposals',
         await WineCorrectionProposal.find({ proposer: ctx.userId })
-          .select('kind currentSnapshot proposedFields reason evidenceUrl status createdAt decidedAt')
+          .select('kind currentSnapshot proposedFields reason evidenceUrl amendments status createdAt decidedAt')
           .limit(EXPORT_MAX).lean())
         .map(p => ({
           kind: p.kind,

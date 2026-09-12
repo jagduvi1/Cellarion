@@ -256,7 +256,13 @@ describe('contributions', () => {
     const res = await call('POST', '/api/bridge/v1/corrections', { wineId: ID, fields: { producer: 'Familia Torres' }, reason: 'The label reads Familia Torres.', evidenceUrl: 'https://torres.es' });
     expect(res.status).toBe(201);
     expect(createFieldCorrection).toHaveBeenCalledWith('u1', { wineId: ID, fields: { producer: 'Familia Torres' }, reason: 'The label reads Familia Torres.', evidenceUrl: 'https://torres.es' }, expect.objectContaining({ via: 'bridge' }));
-    expect((await res.json()).proposal).toEqual({ id: 'p1', status: 'pending', applied: false });
+    expect((await res.json()).proposal).toEqual({ id: 'p1', status: 'pending', applied: false, amended: false });
+    // The key owner's own pending proposal absorbed the fields (support ticket
+    // 2026-09-12): 200, and the install learns it was an amendment.
+    createFieldCorrection.mockResolvedValue({ ok: true, amended: true, proposal: { _id: 'p1', status: 'pending' } });
+    const amended = await call('POST', '/api/bridge/v1/corrections', { wineId: ID, fields: { grapes: ['Garnacha'] }, reason: 'Back label lists Garnacha.' });
+    expect(amended.status).toBe(200);
+    expect((await amended.json()).proposal).toEqual({ id: 'p1', status: 'pending', applied: false, amended: true });
     for (const [code, status] of [['invalid', 400], ['banned', 403], ['limit', 429], ['not_found', 404], ['conflict', 409]]) {
       createFieldCorrection.mockResolvedValue({ ok: false, code, message: 'm' });
       const r = await call('POST', '/api/bridge/v1/corrections', { wineId: ID });

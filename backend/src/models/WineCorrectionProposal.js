@@ -116,6 +116,29 @@ const wineCorrectionProposalSchema = new mongoose.Schema({
   // What the approve actually did (fields applied / bottles moved / queue rows
   // cleared) — the reviewer-facing receipt.
   appliedNote: { type: String, trim: true, maxlength: 500 },
+  // Later filings by the SAME proposer while the row was pending (support
+  // ticket 2026-09-12): each one merged its fields into proposedFields and is
+  // recorded here with its own reason and evidence, so the original reason
+  // and evidenceUrl stay the claim for the original fields and the admin reads
+  // the amendments as what they are. Appended atomically ($push); never
+  // rewritten. `default: undefined` keeps "never amended" distinct from [].
+  amendments: {
+    type: [new mongoose.Schema({
+      at: { type: Date, default: Date.now },
+      fields: { type: [{ type: String, trim: true, maxlength: 40 }], default: undefined },
+      reason: { type: String, trim: true, required: true, minlength: 10, maxlength: 1000 },
+      evidenceUrl: {
+        type: String,
+        trim: true,
+        maxlength: 500,
+        validate: {
+          validator: (v) => !v || /^https?:\/\//i.test(v),
+          message: 'evidenceUrl must start with http:// or https://',
+        },
+      },
+    }, { _id: false })],
+    default: undefined,
+  },
   // Which surface filed this, and which bridge key / install if it came from
   // one (utils/contributionOrigin.js).
   ...originSchemaFields(mongoose),

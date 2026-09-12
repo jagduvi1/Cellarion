@@ -134,12 +134,38 @@ describe('GET / (list)', () => {
     expect(row.currentSnapshot.producer).toBe('Pira'); // drift is client-visible
     expect(row.proposer.username).toBe('somm1');
     expect(row.evidenceUrl).toBe('https://pira-barolo.example');
+    expect(row.amendments).toEqual([]); // never amended → empty, so the modal maps without a guard
 
     // The status filter is a literal from the static array, and the sort key
     // is the derived pending-first field.
     const pipeline = WineCorrectionProposal.aggregate.mock.calls[0][0];
     expect(pipeline[0]).toEqual({ $match: { status: 'pending' } });
     expect(pipeline.some(s => s.$sort && s.$sort._pendingFirst === 1)).toBe(true);
+  });
+
+  // Support ticket 2026-09-12: later filings by the same proposer ride along
+  // with their own reason/evidence; the original reason stays the original.
+  test('amendments are projected with their own reason and evidence, fields defaulting to []', async () => {
+    WineCorrectionProposal.aggregate.mockResolvedValue([{
+      _id: P1, kind: 'field_correction', status: 'pending',
+      proposer: { _id: ADMIN_ID, username: 'somm1' },
+      wineDefinition: { _id: W1, name: 'Barolo', producer: 'Pira', country: { name: 'Italy' }, region: { name: 'Piedmont' } },
+      proposedFields: { producer: 'E. Pira e Figli', grapes: ['Nebbiolo'] },
+      reason: 'Producer verified on the estate website.',
+      amendments: [
+        { at: '2026-09-12T08:00:00.000Z', fields: ['grapes'], reason: 'Grapes from the back label.', evidenceUrl: 'https://label.example/back' },
+        { at: '2026-09-12T09:00:00.000Z', reason: 'Second look.' },
+      ],
+      createdAt: '2026-08-09T00:00:00.000Z',
+    }]);
+    WineCorrectionProposal.countDocuments.mockResolvedValueOnce(1).mockResolvedValueOnce(1);
+
+    const row = (await (await get('?status=pending')).json()).proposals[0];
+    expect(row.reason).toBe('Producer verified on the estate website.');
+    expect(row.amendments).toEqual([
+      { at: '2026-09-12T08:00:00.000Z', fields: ['grapes'], reason: 'Grapes from the back label.', evidenceUrl: 'https://label.example/back' },
+      { at: '2026-09-12T09:00:00.000Z', fields: [], reason: 'Second look.', evidenceUrl: null },
+    ]);
   });
 });
 

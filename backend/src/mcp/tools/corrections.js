@@ -27,7 +27,8 @@ registerTool({
     'reason saying what is wrong and how you know; an evidence URL (producer site, appellation register) makes ' +
     'one-click approval possible. Daily suggestion budget grows with the user\'s accepted contributions. ' +
     'ONE pending suggestion per wine, across ALL users: while the user\'s OWN suggestion is awaiting review, filing ' +
-    'again on that wine AMENDS it (new fields merged in, reason appended, no budget spent) — the way to add a fix ' +
+    'again on that wine AMENDS it (new fields merged in, this reason and evidence recorded as an amendment, no budget ' +
+    'spent, at most 10 amendments per suggestion) — the way to add a fix ' +
     'noticed right after filing; while SOMEONE ELSE\'s is pending the call fails with conflict. Check get_wine → ' +
     'pending_correction first: it says whether a suggestion is pending, which fields it covers and whether it is ' +
     'the caller\'s. NOT undoable via undo_last — an admin reads and decides. Sommeliers proposing merges or ' +
@@ -57,7 +58,10 @@ registerTool({
       { wineId: args.wine_id, fields: args.fields, reason: args.reason, evidenceUrl: args.evidence_url },
       { via: 'mcp', req: ctx.req }
     );
-    if (!result.ok) return fail(FAIL_CODE[result.code] || 'invalid_input', result.message);
+    if (!result.ok) {
+      const hint = result.code === 'conflict' ? ' get_wine → pending_correction shows which fields it covers.' : '';
+      return fail(FAIL_CODE[result.code] || 'invalid_input', result.message + hint);
+    }
     const pf = result.proposal.proposedFields;
     const allFields = Object.keys(pf && typeof pf.toObject === 'function' ? pf.toObject() : pf || {});
     const label = `${result.wine.producer || '?'} — ${result.wine.name}`;
@@ -69,6 +73,7 @@ registerTool({
           status: 'pending',
           amended: true,
           fields: allFields,
+          amendments: (result.proposal.amendments || []).length,
           note: 'No new queue row: the fields were merged into the suggestion already awaiting review, and no daily budget was spent.',
         }
       );

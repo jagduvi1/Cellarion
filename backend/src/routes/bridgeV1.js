@@ -369,7 +369,12 @@ router.post('/corrections', quota('contributions'), async (req, res) => {
     return sendResult(res, r, (out) => {
       logAudit(req, 'bridge.correction.forwarded', { type: 'wineCorrectionProposal', id: out.proposal?._id },
         { key: req.bridge.key.id, instanceHost: req.bridge.key.instanceHost, wine: req.body?.wineId });
-      res.status(201).json({ proposal: { id: out.proposal?._id, status: out.proposal?.status || 'pending', applied: !!out.applied } });
+      // 200 + amended when the key owner's own pending proposal absorbed the
+      // fields (support ticket 2026-09-12) — the install forwards each of its
+      // user's filings, so an amendment there is an amendment here.
+      res.status(out.amended ? 200 : 201).json({
+        proposal: { id: out.proposal?._id, status: out.proposal?.status || 'pending', applied: !!out.applied, amended: !!out.amended },
+      });
     });
   } catch (error) {
     console.error('Bridge correction error:', error);
