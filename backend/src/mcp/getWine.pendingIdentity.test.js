@@ -45,13 +45,35 @@ describe('get_wine — pendingIdentity is excluded in the QUERY', () => {
 
     await tool('get_wine').handler({ wine_id: WINE }, CTX);
 
+    // A signed-in caller's clause carries both exclusions PLUS the one
+    // exception (2026-09-12): their OWN private draft, keyed on the creator in
+    // the query itself, so nobody else's draft can match.
+    expect(WineDefinition.findOne).toHaveBeenCalledWith({
+      _id: WINE,
+      nonWine: { $ne: true },
+      $or: [{ pendingIdentity: { $ne: true } }, { draft: true, createdBy: CTX.user.id }],
+    });
+    // findById is what the dead-gate version used — it must not come back.
+    expect(WineDefinition.findById).not.toHaveBeenCalled();
+  });
+
+  test('the ANONYMOUS surface keeps the absolute exclusion — no creator to compare against', async () => {
+    WineDefinition.findOne.mockReturnValue(chain(null));
+    await tool('get_wine').handler({ wine_id: WINE }, { anonymous: true });
     expect(WineDefinition.findOne).toHaveBeenCalledWith({
       _id: WINE,
       nonWine: { $ne: true },
       pendingIdentity: { $ne: true },
     });
-    // findById is what the dead-gate version used — it must not come back.
-    expect(WineDefinition.findById).not.toHaveBeenCalled();
+  });
+
+  test('the creator reading their own draft is told it is one: no public page, no queue state', async () => {
+    WineDefinition.findOne.mockReturnValue(chain({ _id: WINE, name: 'Kaefferkopf', producer: 'Cave', slug: 'kaefferkopf', draft: true, grapes: [] }));
+    const body = parse(await tool('get_wine').handler({ wine_id: WINE }, CTX));
+    expect(body.data.draft).toBe(true);
+    expect(body.data.public_url).toBeNull();
+    expect(body.data.pending_correction).toBeNull();
+    expect(pendingForWine).not.toHaveBeenCalled();
   });
 
   test('a hidden row answers the SAME not_found a missing id does — existence never leaks', async () => {

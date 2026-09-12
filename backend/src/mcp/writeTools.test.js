@@ -256,3 +256,35 @@ describe('update_bottle', () => {
     expect(fields.reservedUntil).toBeNull();
   });
 });
+
+describe('add_bottle — private drafts (2026-09-12)', () => {
+  test('draft:true with new_wine rides into findOrCreateWine, is audited as a draft, and the envelope says so', async () => {
+    ownCellar();
+    findOrCreateWine.mockResolvedValue({
+      wine: { _id: oid('f'), name: 'Draft Wine', producer: 'P', grapes: [], draft: true, pendingIdentity: true }, created: true, draft: true,
+    });
+    bottleOps.addBottle.mockResolvedValue({ bottle: { _id: oid('d'), vintage: '2019', cellar: oid('c') } });
+    const body = parse(await tool('add_bottle').handler({
+      cellar_id: oid('c'), new_wine: { name: 'Draft Wine', producer: 'P', country: 'France' }, draft: true, vintage: '2019',
+    }, CTX));
+    expect(findOrCreateWine.mock.calls[0][2]).toMatchObject({ draft: true, allowPending: true, createdVia: 'mcp' });
+    expect(body.data.wine_draft).toBe(true);
+    expect(body.data.wine_pending_identity).toBeUndefined();
+    expect(body.summary).toContain('private draft');
+    expect(logAudit).toHaveBeenCalledWith(REQ, 'wine.create', { type: 'wine', id: oid('f') }, expect.objectContaining({ via: 'mcp', draft: true }));
+    expect(logAudit).not.toHaveBeenCalledWith(REQ, 'wine.create', expect.anything(), expect.objectContaining({ pendingIdentity: true }));
+  });
+
+  test('draft:true with an existing wine_id is refused; without the flag nothing changes', async () => {
+    ownCellar();
+    const body = parse(await tool('add_bottle').handler({ cellar_id: oid('c'), wine_id: oid('f'), draft: true }, CTX));
+    expect(body.error.code).toBe('invalid_input');
+    expect(bottleOps.addBottle).not.toHaveBeenCalled();
+
+    findOrCreateWine.mockResolvedValue({ wine: { _id: oid('f'), name: 'New Wine', producer: 'P', grapes: [] }, created: true });
+    bottleOps.addBottle.mockResolvedValue({ bottle: { _id: oid('d'), vintage: '2019', cellar: oid('c') } });
+    const plain = parse(await tool('add_bottle').handler({ cellar_id: oid('c'), new_wine: { name: 'New Wine', producer: 'P', country: 'France' } }, CTX));
+    expect(findOrCreateWine.mock.calls[0][2]).toMatchObject({ draft: false });
+    expect(plain.data.wine_draft).toBeUndefined();
+  });
+});

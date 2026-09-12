@@ -21,6 +21,7 @@ require('./consume');
 require('./openBottle');
 require('./write');
 require('./bulk');
+require('./wineDrafts');
 require('./somm');
 require('./rack');
 require('./similar');

@@ -99,7 +99,10 @@ registerTool({
     'search_registry / an existing bottle) — or, only after resolve_wine returned no_match and the user confirmed the ' +
     'details, pass new_wine to mint a registry entry. ALWAYS confirm with the user before adding (name, vintage, ' +
     'cellar). The bottle arrives UNPLACED (rack placement is a separate step in the web app for now). Reversible via ' +
-    'undo_last. Pass an idempotency_key when retrying.',
+    'undo_last. Pass an idempotency_key when retrying. With new_wine, draft:true keeps the new wine as the user\'s ' +
+    'PRIVATE DRAFT — visible only to them, editable with update_wine_draft without any review, published to the ' +
+    'shared registry with publish_wine when the record is complete (an untouched draft holding bottles publishes ' +
+    'by itself after 7 days). Prefer it when the user is still gathering the facts of a wine the registry does not know.',
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
@@ -107,6 +110,7 @@ registerTool({
     wine_id: z.string().optional().describe('Existing registry wine id (preferred — see resolve_wine)'),
     new_wine: z.object(NEW_WINE_SHAPE).optional().describe('Only after resolve_wine returned no_match'),
     confirm_new_wine: z.boolean().optional().describe('Set true to create despite close-but-unconfirmed candidates'),
+    draft: z.boolean().optional().describe('With new_wine only: keep the new wine as the user\'s private draft (see publish_wine)'),
     vintage: z.string().max(10).optional().describe('e.g. "2019" or "NV"'),
     price: z.number().min(0).optional(),
     currency: z.string().regex(/^[A-Za-z]{3}$/).optional(),
@@ -130,6 +134,9 @@ registerTool({
     }
     if (args.wine_id && args.new_wine) {
       return fail('invalid_input', 'Provide wine_id OR new_wine, not both.');
+    }
+    if (args.draft === true && !args.new_wine) {
+      return fail('invalid_input', 'draft:true applies to new_wine only — an existing registry wine cannot become a draft.');
     }
 
     const access = await resolveCellarAccess(ctx.user.id, args.cellar_id, 'editor');
@@ -163,6 +170,9 @@ registerTool({
           // apply to the deliberate registry-curation tool
           // (admin_add_registry_wine), which never passes this.
           allowPending: true,
+          // PRIVATE DRAFT (support ticket 2026-09-12): the row stays the
+          // user's until publish_wine. Strictly boolean true.
+          draft: args.draft === true,
         });
       } catch (err) {
         if (err?.status === 400) return fail('invalid_input', err.message);
@@ -186,7 +196,10 @@ registerTool({
         logAudit(ctx.req, 'wine.create',
           { type: 'wine', id: wineDoc._id },
           { via: 'mcp', name: wineDoc.name, producer: wineDoc.producer || null,
-            ...(wineDoc.pendingIdentity ? { pendingIdentity: true } : {}),
+            // A draft is pending by invariant; for the audit "pendingIdentity"
+            // keeps meaning "the producer was missing".
+            ...(wineDoc.pendingIdentity && !wineDoc.draft ? { pendingIdentity: true } : {}),
+            ...(wineDoc.draft ? { draft: true } : {}),
             // The refused producer string survives ONLY here (audit MED-1) —
             // the pending row stores '', and a curator needs what the label
             // scan / caller actually said.
@@ -213,9 +226,12 @@ registerTool({
     if (result.error) return fail('invalid_input', result.error.message);
     const { bottle } = result;
 
-    const pendingIdentity = wineDoc.pendingIdentity === true;
+    const wineDraft = wineDoc.draft === true;
+    // A draft is pending by invariant; "pending identity" here keeps its own
+    // meaning — the producer was missing and a curator finishes the row.
+    const pendingIdentity = wineDoc.pendingIdentity === true && !wineDraft;
     const envelope = {
-      summary: `Added ${wineDoc.name} ${bottle.vintage} to "${access.cellar.name}"${wineCreated ? (pendingIdentity ? ' (registry wine filed for sommelier completion — no producer)' : ' (new registry wine created)') : ''}`,
+      summary: `Added ${wineDoc.name} ${bottle.vintage} to "${access.cellar.name}"${wineDraft ? (wineCreated ? ' (private draft wine — only you can see it; publish_wine when the record is complete)' : ' (on your private draft wine)') : wineCreated ? (pendingIdentity ? ' (registry wine filed for sommelier completion — no producer)' : ' (new registry wine created)') : ''}`,
       data: {
         bottle_id: bottle._id,
         wine: { ...wineSummary(wineDoc) },
@@ -225,6 +241,10 @@ registerTool({
         ...(pendingIdentity ? {
           wine_pending_identity: true,
           note: 'The wine could not be fully identified, so it is filed for sommelier completion: the bottle is in the cellar and works normally, but the wine is invisible to other users until a curator finishes it.',
+        } : {}),
+        ...(wineDraft ? {
+          wine_draft: true,
+          note: 'The wine is the user\'s PRIVATE DRAFT: visible only to them (and to members of shared cellars holding a bottle of it), editable with update_wine_draft, published to the shared registry with publish_wine. Left untouched with bottles, it publishes by itself after 7 days.',
         } : {}),
         vintage: bottle.vintage,
         cellar_id: access.cellar._id,
@@ -237,7 +257,7 @@ registerTool({
       action: 'add',
       bottle: bottle._id,
       cellar: access.cellar._id,
-      detail: { wine: String(wineDoc._id), wine_created: wineCreated, vintage: bottle.vintage },
+      detail: { wine: String(wineDoc._id), wine_created: wineCreated, vintage: bottle.vintage, ...(wineDraft ? { wine_draft: true } : {}) },
       idempotencyKey: args.idempotency_key || null,
       result: envelope,
     });
