@@ -695,3 +695,53 @@ describe('resolveEffectiveWindow', () => {
     expect(resolveEffectiveWindow({ wineDefinition: { _id: W }, vintage: '2020' }, null)).toBeNull();
   });
 });
+
+// ─── parseMaturityFilter / matchesMaturityFilter ─────────────────────────────
+
+describe('parseMaturityFilter + matchesMaturityFilter (multi-select, OR)', () => {
+  const { parseMaturityFilter, matchesMaturityFilter, MATURITY_FILTER_VALUES } = require('./maturityUtils');
+
+  test('absent filter → null, and null matches every status incl. no data', () => {
+    expect(parseMaturityFilter(undefined)).toBeNull();
+    expect(parseMaturityFilter('')).toBeNull();
+    expect(matchesMaturityFilter('peak', null)).toBe(true);
+    expect(matchesMaturityFilter(null, null)).toBe(true);
+  });
+
+  test('one status behaves exactly like the old single-select', () => {
+    const set = parseMaturityFilter('late');
+    expect(matchesMaturityFilter('late', set)).toBe(true);
+    expect(matchesMaturityFilter('declining', set)).toBe(false);
+    expect(matchesMaturityFilter(null, set)).toBe(false);
+  });
+
+  test('several statuses, comma-separated, are OR-combined ("needs attention" = late + declining)', () => {
+    const set = parseMaturityFilter('late,declining');
+    expect(matchesMaturityFilter('late', set)).toBe(true);
+    expect(matchesMaturityFilter('declining', set)).toBe(true);
+    expect(matchesMaturityFilter('peak', set)).toBe(false);
+    expect(matchesMaturityFilter(null, set)).toBe(false);
+  });
+
+  test('"none" selects bottles with no maturity data, alone or alongside statuses', () => {
+    expect(matchesMaturityFilter(null, parseMaturityFilter('none'))).toBe(true);
+    expect(matchesMaturityFilter('peak', parseMaturityFilter('none'))).toBe(false);
+    expect(matchesMaturityFilter(null, parseMaturityFilter('peak,none'))).toBe(true);
+  });
+
+  test('tokens are trimmed and case-insensitive; unknown tokens are dropped', () => {
+    const set = parseMaturityFilter(' Late , NOT-READY ,bogus');
+    expect([...set].sort()).toEqual(['late', 'not-ready']);
+  });
+
+  test('a filter with no valid token matches NOTHING rather than widening to everything', () => {
+    const set = parseMaturityFilter('bogus');
+    expect(set.size).toBe(0);
+    expect(matchesMaturityFilter('peak', set)).toBe(false);
+    expect(matchesMaturityFilter(null, set)).toBe(false);
+  });
+
+  test('the accepted vocabulary is the six buckets the UI offers', () => {
+    expect(MATURITY_FILTER_VALUES).toEqual(['declining', 'late', 'peak', 'early', 'not-ready', 'none']);
+  });
+});

@@ -18,7 +18,7 @@ const { createNotification } = require('../services/notifications');
 const { transferCellarOwnership } = require('../services/cellarTransfer');
 const { sendCellarInviteEmail } = require('../services/mailgun');
 const { toNormalized } = require('../utils/ratingUtils');
-const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
+const { classifyMaturity, buildProfileMap, parseMaturityFilter, matchesMaturityFilter } = require('../utils/maturityUtils');
 const { isReserved } = require('../utils/reservationUtils');
 const { CONSUMED_STATUSES, WINE_POPULATE_LIST } = require('../config/constants');
 const mongoose = require('mongoose');
@@ -162,7 +162,8 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
   const appellation = coerceStringQuery(req.query.appellation);
   const minRating = coerceStringQuery(req.query.minRating);
   const maxRating = coerceStringQuery(req.query.maxRating);
-  const maturityFilter = coerceStringQuery(req.query.maturity);
+  // null when absent; a Set of statuses otherwise (multi-select, OR-combined).
+  const maturityFilter = parseMaturityFilter(coerceStringQuery(req.query.maturity));
   const sort = coerceStringQuery(req.query.sort) || '-createdAt';
   const { limit, offset: skip } = parsePagination(req.query, { limit: 30, maxLimit: 200 });
   const { isValidObjectId } = mongoose;
@@ -298,9 +299,7 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
     for (const b of bottles) maturityStatusMap.set(b._id.toString(), classifyMaturity(b, profileMap));
   }
   if (maturityFilter && maturityStatusMap) {
-    bottles = maturityFilter === 'none'
-      ? bottles.filter(b => maturityStatusMap.get(b._id.toString()) == null)
-      : bottles.filter(b => maturityStatusMap.get(b._id.toString()) === maturityFilter);
+    bottles = bottles.filter(b => matchesMaturityFilter(maturityStatusMap.get(b._id.toString()), maturityFilter));
   }
 
   // ── Sort ──
@@ -982,10 +981,13 @@ router.get('/:id', async (req, res) => {
       minRating,
       maxRating,
       search,
-      maturity: maturityFilter,
+      maturity: maturityRaw,
       sort = '-createdAt',
       exclude
     } = req.query;
+    // null when absent; a Set of statuses otherwise (multi-select, OR-combined
+    // — support ticket 2026-09-12). Coerced first: qs can hand us an array.
+    const maturityFilter = parseMaturityFilter(coerceStringQuery(maturityRaw));
 
     // Pagination — default 30, max 200; skip defaults to 0
     const { limit, offset: skip } = parsePagination(req.query, { limit: 30, maxLimit: 200 });
@@ -1285,11 +1287,7 @@ router.get('/:id', async (req, res) => {
     }
 
     if (maturityFilter && maturityStatusMap) {
-      if (maturityFilter === 'none') {
-        bottles = bottles.filter(b => maturityStatusMap.get(b._id.toString()) == null);
-      } else {
-        bottles = bottles.filter(b => maturityStatusMap.get(b._id.toString()) === maturityFilter);
-      }
+      bottles = bottles.filter(b => matchesMaturityFilter(maturityStatusMap.get(b._id.toString()), maturityFilter));
     }
 
     // Meilisearch can't sort by maturity (it needs vintage profiles), so the

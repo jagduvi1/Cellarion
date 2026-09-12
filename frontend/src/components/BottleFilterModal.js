@@ -1,9 +1,87 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from './Modal';
+import { SCALE_META, toNormalized, fromNormalized } from '../utils/ratingUtils';
+import {
+  MATURITY_FILTER_OPTIONS, NEEDS_ATTENTION, MATURITY_I18N_KEY, MATURITY_STATS_KEY, toMaturityArray,
+} from '../utils/filterLabels';
 import './BottleFilterModal.css';
 
 const COLLAPSED_LIMIT = 8;
+
+// Rating bounds live in the filter state as NORMALISED 0–100 strings (the wire
+// format every list endpoint speaks), but the person types in their own scale
+// — 3.8★, 16.5/20, 91pts — at the scale's own precision (support ticket
+// 2026-09-12: ratings are stored to one decimal, the old 2+/3+/4+ dropdown
+// rounded to whole stars). Text is local until blur/Enter so a half-typed
+// "3." is never round-tripped through the conversion mid-keystroke.
+function RatingRangeInputs({ minNorm, maxNorm, scale, onChange }) {
+  const { t } = useTranslation();
+  const meta = SCALE_META[scale] || SCALE_META['5'];
+  const toScaleText = (n) => (n === '' || n == null || isNaN(Number(n)) ? '' : String(fromNormalized(Number(n), scale)));
+  const [minText, setMinText] = useState(() => toScaleText(minNorm));
+  const [maxText, setMaxText] = useState(() => toScaleText(maxNorm));
+  // Re-sync when a bound changes from outside (chip removed, "clear all").
+  useEffect(() => { setMinText(toScaleText(minNorm)); }, [minNorm]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setMaxText(toScaleText(maxNorm)); }, [maxNorm]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const commit = (which, text) => {
+    const trimmed = String(text).trim();
+    if (trimmed === '') return onChange(which, '');
+    const v = Number(trimmed);
+    if (isNaN(v)) return onChange(which, '');
+    const clamped = Math.min(meta.max, Math.max(meta.min, v));
+    const norm = toNormalized(clamped, scale);
+    onChange(which, String(Math.round(norm * 100) / 100));
+  };
+  const onKey = (which, text) => (e) => { if (e.key === 'Enter') { e.preventDefault(); commit(which, text); } };
+
+  return (
+    <>
+      <div className="bfm-rating-row">
+        <div className="bfm-dropdown-group">
+          <label className="bfm-dropdown-label" htmlFor="bfm-rating-min">{t('cellarDetail.ratingFrom', 'From')}</label>
+          <div className="bfm-rating-input">
+            <input
+              id="bfm-rating-min"
+              className="bfm-select"
+              type="number"
+              inputMode="decimal"
+              min={meta.min}
+              max={meta.max}
+              step={meta.step}
+              value={minText}
+              onChange={e => setMinText(e.target.value)}
+              onBlur={() => commit('minRating', minText)}
+              onKeyDown={onKey('minRating', minText)}
+            />
+            <span className="bfm-rating-suffix">{meta.suffix}</span>
+          </div>
+        </div>
+        <div className="bfm-dropdown-group">
+          <label className="bfm-dropdown-label" htmlFor="bfm-rating-max">{t('cellarDetail.ratingTo', 'To')}</label>
+          <div className="bfm-rating-input">
+            <input
+              id="bfm-rating-max"
+              className="bfm-select"
+              type="number"
+              inputMode="decimal"
+              min={meta.min}
+              max={meta.max}
+              step={meta.step}
+              value={maxText}
+              onChange={e => setMaxText(e.target.value)}
+              onBlur={() => commit('maxRating', maxText)}
+              onKeyDown={onKey('maxRating', maxText)}
+            />
+            <span className="bfm-rating-suffix">{meta.suffix}</span>
+          </div>
+        </div>
+      </div>
+      <div className="bfm-hint">{t('cellarDetail.ratingRangeHint', 'Leave a field empty for no bound')}</div>
+    </>
+  );
+}
 
 function FilterPill({ label, count, selected, dimmed, onClick }) {
   return (
@@ -74,7 +152,13 @@ function FilterSection({ label, icon, children, defaultExpanded = true }) {
 // storage: the cellar's racks as [{ id, name, group }] — renders the "Stored
 // in" section (a rack group or one rack). null/empty hides it; the filter is
 // applied server-side after search like Placement, so no facet counts.
-function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, facetMeta, bottlesTotal, showRatingMaturity = true, showUnplaced = false, showReserved = false, storage = null }) {
+// ratingScale: the user's rating scale ('5' | '20' | '100') — the rating range
+// is typed in that scale and stored normalised.
+// maturityCounts: the cellar statistics' maturity buckets ({ peak, early,
+// late, declining, notReady, noProfile }) — rendered beside each maturity
+// pill so "Late (4) / Declining (0)" answers the question before the filter
+// is applied. null hides the counts (cross-cellar scope has no single stats).
+function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, facetMeta, bottlesTotal, showRatingMaturity = true, showUnplaced = false, showReserved = false, storage = null, ratingScale = '5', maturityCounts = null }) {
   const { t } = useTranslation();
 
   // baseFacets = all options in the cellar (unfiltered) — used to LIST available pills
@@ -93,13 +177,14 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
     onApply({
       ...filters,
       type: [], country: [], region: [], appellation: [], grapes: [], vintage: [],
-      minRating: '', maturity: '', unplaced: '', reserved: '', storage: ''
+      minRating: '', maxRating: '', maturity: [], unplaced: '', reserved: '', storage: ''
     });
   };
 
+  const maturitySelected = toMaturityArray(filters.maturity);
   const activeCount = (filters.type?.length || 0) + (filters.country?.length || 0) +
     (filters.region?.length || 0) + (filters.appellation?.length || 0) + (filters.grapes?.length || 0) +
-    (filters.vintage?.length || 0) + (filters.minRating ? 1 : 0) + (filters.maturity ? 1 : 0) +
+    (filters.vintage?.length || 0) + (filters.minRating || filters.maxRating ? 1 : 0) + (maturitySelected.length ? 1 : 0) +
     (filters.unplaced ? 1 : 0) + (filters.reserved ? 1 : 0) + (filters.storage ? 1 : 0);
 
   // For a given facet key, decide which counts to use:
@@ -326,39 +411,74 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
           </FilterSection>
         )}
 
-        {/* Rating + Maturity — side by side */}
+        {/* Maturity — several buckets at once, OR-combined, plus the one
+            combination almost every owner asks for: "needs attention" = Late
+            + Declining (support ticket 2026-09-12). Counts come from the
+            cellar statistics, not the facets (maturity is computed per row,
+            so Meilisearch cannot facet it) — they describe the whole cellar,
+            not the current filter combination, and a zero still shows so an
+            empty bucket reads as "0", not as missing. */}
+        {showRatingMaturity && (() => {
+          const countFor = (v) => (maturityCounts ? (maturityCounts[MATURITY_STATS_KEY[v]] ?? 0) : null);
+          const toggleMaturity = (v) => {
+            const next = maturitySelected.includes(v) ? maturitySelected.filter(x => x !== v) : [...maturitySelected, v];
+            onApply({ ...filters, maturity: next });
+          };
+          const attentionOn = NEEDS_ATTENTION.every(v => maturitySelected.includes(v));
+          const toggleAttention = () => {
+            const next = attentionOn
+              ? maturitySelected.filter(v => !NEEDS_ATTENTION.includes(v))
+              : [...new Set([...maturitySelected, ...NEEDS_ATTENTION])];
+            onApply({ ...filters, maturity: next });
+          };
+          const attentionCount = maturityCounts
+            ? NEEDS_ATTENTION.reduce((sum, v) => sum + (maturityCounts[MATURITY_STATS_KEY[v]] || 0), 0)
+            : null;
+          const pills = [
+            <FilterPill
+              key="needs-attention"
+              label={`${t('cellarDetail.needsAttention', 'Needs attention')} · ${t('cellarDetail.needsAttentionHint', 'Late + Declining')}`}
+              count={attentionCount}
+              selected={attentionOn}
+              onClick={toggleAttention}
+            />,
+            ...MATURITY_FILTER_OPTIONS.map(v => {
+              const count = countFor(v);
+              const selected = maturitySelected.includes(v);
+              return (
+                <FilterPill
+                  key={v}
+                  label={t(MATURITY_I18N_KEY[v])}
+                  count={count}
+                  selected={selected}
+                  dimmed={!selected && count === 0}
+                  onClick={() => toggleMaturity(v)}
+                />
+              );
+            }),
+          ];
+          return (
+            <FilterSection label={t('cellarDetail.maturityLabel', 'Maturity')} icon="⏳">
+              {pills}
+            </FilterSection>
+          );
+        })()}
+
+        {/* Rating — a range in the user's own scale, one decimal where the
+            scale has one; either bound may be left open. */}
         {showRatingMaturity && (
-        <div className="bfm-dropdowns-row">
-          <div className="bfm-dropdown-group">
-            <label className="bfm-dropdown-label">{t('cellarDetail.allRatings')}</label>
-            <select
-              value={filters.minRating}
-              onChange={e => onApply({ ...filters, minRating: e.target.value })}
-              className="bfm-select"
-            >
-              <option value="">{t('cellarDetail.allRatings')}</option>
-              <option value="80">{t('cellarDetail.stars4Plus')}</option>
-              <option value="60">{t('cellarDetail.stars3Plus')}</option>
-              <option value="40">{t('cellarDetail.stars2Plus')}</option>
-            </select>
+          <div className="bfm-section">
+            <div className="bfm-section-header bfm-section-header--static">
+              <span className="bfm-section-icon">⭐</span>
+              <span className="bfm-section-label">{t('cellarDetail.ratingLabel', 'Rating')}</span>
+            </div>
+            <RatingRangeInputs
+              minNorm={filters.minRating || ''}
+              maxNorm={filters.maxRating || ''}
+              scale={ratingScale}
+              onChange={(which, value) => onApply({ ...filters, [which]: value })}
+            />
           </div>
-          <div className="bfm-dropdown-group">
-            <label className="bfm-dropdown-label">{t('cellarDetail.allMaturity')}</label>
-            <select
-              value={filters.maturity}
-              onChange={e => onApply({ ...filters, maturity: e.target.value })}
-              className="bfm-select"
-            >
-              <option value="">{t('cellarDetail.allMaturity')}</option>
-              <option value="peak">{t('maturity.peak')}</option>
-              <option value="early">{t('maturity.early')}</option>
-              <option value="late">{t('maturity.late')}</option>
-              <option value="declining">{t('maturity.declining')}</option>
-              <option value="not-ready">{t('maturity.notReady')}</option>
-              <option value="none">{t('maturity.noData')}</option>
-            </select>
-          </div>
-        </div>
         )}
       </div>
 

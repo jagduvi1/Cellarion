@@ -288,7 +288,36 @@ function maturityLabel(status, profile, bottle = null) {
   }
 }
 
+const MATURITY_FILTER_VALUES = ['declining', 'late', 'peak', 'early', 'not-ready', 'none'];
+
+/**
+ * Parse a `?maturity=` query value into a Set of statuses, or null when the
+ * filter is absent. One status or several, comma-separated and OR-combined
+ * (support ticket 2026-09-12: "Late and Declining together" is the question
+ * owners actually ask, and the web filter is the only surface that can ask
+ * it — maturity is computed per row, so analytics cannot filter on it).
+ * `none` selects bottles with no maturity data. Unknown tokens are dropped;
+ * a value with no valid token yields an EMPTY set, which matches nothing —
+ * an explicit wrong filter must not silently widen to "everything".
+ */
+function parseMaturityFilter(raw) {
+  if (raw == null || raw === '') return null;
+  const set = new Set();
+  for (const token of String(raw).split(',')) {
+    const v = token.trim().toLowerCase();
+    if (MATURITY_FILTER_VALUES.includes(v)) set.add(v);
+  }
+  return set;
+}
+
+/** True when a classified status (null = no data) satisfies a parsed filter set. */
+function matchesMaturityFilter(status, filterSet) {
+  if (!filterSet) return true;
+  return status == null ? filterSet.has('none') : filterSet.has(status);
+}
+
 module.exports = {
   classifyMaturity, classifyPersonalWindow, buildProfileMap, maturityLabel,
   bottleAnchorYear, resolveWindow, resolveWindowForBottle, resolveEffectiveWindow,
+  MATURITY_FILTER_VALUES, parseMaturityFilter, matchesMaturityFilter,
 };
