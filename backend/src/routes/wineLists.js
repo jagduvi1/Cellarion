@@ -221,6 +221,11 @@ router.put('/:id', requireAuth, requireNonDemo, async (req, res) => {
       if (!wineList.branding) wineList.branding = {};
       wineList.branding.logoUrl = storedLogoUrl;
     }
+    // A client that sends groupBy without `levels` predates nested grouping:
+    // its single level wins, so stored levels must not silently override it.
+    if (req.body.autoGrouping && typeof req.body.autoGrouping === 'object' && !Array.isArray(req.body.autoGrouping.levels)) {
+      wineList.autoGrouping.levels = [];
+    }
 
     const pendingMsg = await pendingWineAdded(wineList, previousWineIds);
     if (pendingMsg) return res.status(400).json({ error: pendingMsg });

@@ -57,9 +57,79 @@ const GLASS_SECTION_TITLE = {
   de: 'Offene Weine', es: 'Vinos por Copa', it: 'Vini al Calice',
 };
 
+// The "last bottle" marker (layout.markLastBottle), in the list's language.
+// The PDF prints an asterisk after the wine and this text as a legend; the
+// web menu shows it as a small badge.
+const LAST_BOTTLE_LABEL = {
+  en: 'Last bottle', sv: 'Sista flaskan', fr: 'Dernière bouteille',
+  de: 'Letzte Flasche', es: 'Última botella', it: 'Ultima bottiglia',
+};
+
+// Auto-mode grouping: the fields a heading level may group on, outermost
+// first in the classic menu order, and the depth cap (support ticket
+// 2026-09-12 — a menu reads naturally at three).
+const LEVEL_FIELDS = ['type', 'country', 'region', 'appellation'];
+const MAX_LEVELS = 3;
+const DEFAULT_TYPE_ORDER = ['sparkling', 'white', 'rosé', 'red', 'dessert', 'fortified'];
+
+/**
+ * The grouping levels in force for an auto-mode list: the explicit `levels`
+ * (unknown fields and repeats dropped, capped at three) or, for lists saved
+ * before nested grouping existed, the single legacy `groupBy`.
+ */
+function groupingLevels(grouping = {}) {
+  const wanted = Array.isArray(grouping.levels) && grouping.levels.length
+    ? grouping.levels
+    : [grouping.groupBy || 'type'];
+  const out = [];
+  for (const level of wanted) {
+    if (LEVEL_FIELDS.includes(level) && !out.includes(level)) out.push(level);
+  }
+  return out.length ? out.slice(0, MAX_LEVELS) : ['type'];
+}
+
+// A wine missing the field of a nested level falls back up the geography —
+// but never to the heading it already sits under ("Italy › Italy"): that
+// goes to "Other", which sorts last.
+function groupKeyOf(wine, level, parentKey) {
+  if (level === 'type') return wine.type || 'other';
+  if (level === 'country') return wine.country || 'Other';
+  const key = level === 'region'
+    ? (wine.region || wine.country)
+    : (wine.appellation || wine.region || wine.country);
+  return key && key !== parentKey ? key : 'Other';
+}
+
+/** Split wines into ordered groups on one level: types in menu order, everything else A–Z, "Other" last. */
+function orderedGroups(wines, level, typeOrder, parentKey) {
+  const groups = new Map();
+  for (const wine of wines) {
+    const key = groupKeyOf(wine, level, parentKey);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(wine);
+  }
+  let keys;
+  if (level === 'type') {
+    keys = typeOrder.filter(t => groups.has(t));
+    for (const key of groups.keys()) {
+      if (!keys.includes(key)) keys.push(key);
+    }
+  } else {
+    keys = [...groups.keys()].sort((a, b) =>
+      (a === 'Other') - (b === 'Other') || a.localeCompare(b));
+  }
+  return keys.map(key => ({ key, wines: groups.get(key) }));
+}
+
 /**
  * Build structured sections from a WineList document and its wine map
  * (Map<entryKey, { wine, stock, avgPrice }> from wineListData.loadWineMap).
+ *
+ * Returns a flat, pre-ordered list of `{ title, level, wines }`: `level` is
+ * the heading depth (0 = a section, 1 and 2 = nested headings under it) and
+ * wines sit only under the deepest heading of their branch — a heading that
+ * only introduces deeper headings has an empty `wines`. Custom-mode sections
+ * and the by-the-glass lead section are always level 0.
  */
 function buildSections(wineList, wineMap) {
   const sections = wineList.structureMode === 'custom'
@@ -83,6 +153,7 @@ function buildSections(wineList, wineMap) {
       const lang = wineList.language || 'en';
       sections.unshift({
         title: GLASS_SECTION_TITLE[lang] || GLASS_SECTION_TITLE.en,
+        level: 0,
         wines: glassWines,
         isGlassSection: true,
       });
@@ -107,10 +178,17 @@ function resolveEntry(entry, wineMap, layout = {}) {
     bottleSize: entry.bottleSize || '750ml',
     country: wine.country?.name || '',
     region: wine.region?.name || '',
+    appellation: wine.appellation || '',
     grapes: (wine.grapes || []).map(g => g.name).filter(Boolean),
     type: wine.type || '',
     price: entry.listPrice != null ? entry.listPrice : info.avgPrice,
     glassPrice: entry.byGlass && entry.glassPrice != null ? entry.glassPrice : null,
+    // Kept apart from glassPrice so a hidden-price menu can still say
+    // "by the glass" and still build the by-the-glass lead section.
+    byGlass: !!entry.byGlass,
+    // Live cellar stock of exactly one — the marker is only ever shown for
+    // the last bottle, never a count (support ticket 2026-09-12).
+    lastBottle: !!layout.markLastBottle && info.stock === 1,
     sortOrder: entry.sortOrder || 0,
     stock: info.stock,
     wineDefinitionId: wine._id?.toString(),
@@ -127,52 +205,56 @@ function buildCustomSections(wineList, wineMap) {
       .filter(Boolean)
       .sort((a, b) => a.sortOrder - b.sortOrder);
 
-    return { title: section.title, wines };
+    return { title: section.title, level: 0, wines };
   }).filter(s => s.wines.length > 0);
 }
 
+/**
+ * Auto mode: nested headings from the wine records — e.g. type › country ›
+ * region — walked depth-first. A nested heading that would hold a single
+ * group says nothing (one dessert wine → "Dessert" straight to the wine, not
+ * Dessert › France › Sauternes), so it is skipped unless the list turns
+ * `collapseSingle` off. The top level is never skipped: a list of only reds
+ * still says "Red Wines".
+ */
 function buildAutoSections(wineList, wineMap) {
   const layout = wineList.layout || {};
   const grouping = wineList.autoGrouping || {};
-  const groupBy = grouping.groupBy || 'type';
-  const typeOrder = grouping.typeOrder || ['sparkling', 'white', 'rosé', 'red', 'dessert', 'fortified'];
-  const withinGroup = grouping.withinGroup || 'country-region-name';
+  const levels = groupingLevels(grouping);
+  const typeOrder = grouping.typeOrder || DEFAULT_TYPE_ORDER;
+  const collapse = grouping.collapseSingle !== false;
+  const sortFn = getSortFn(grouping.withinGroup || 'country-region-name');
   const lang = wineList.language || 'en';
 
   const wines = (wineList.autoGroupEntries || [])
     .map(e => resolveEntry(e, wineMap, layout))
     .filter(Boolean);
 
-  const groups = new Map();
-  for (const wine of wines) {
-    let key;
-    if (groupBy === 'type') key = wine.type || 'other';
-    else if (groupBy === 'country') key = wine.country || 'Other';
-    else key = wine.region || wine.country || 'Other';
-
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(wine);
-  }
-
-  let sortedKeys;
-  if (groupBy === 'type') {
-    sortedKeys = typeOrder.filter(t => groups.has(t));
-    for (const key of groups.keys()) {
-      if (!sortedKeys.includes(key)) sortedKeys.push(key);
+  const out = [];
+  // `depth` indexes `levels`; `level` is the rendered heading depth, which
+  // falls behind `depth` once a singleton heading has been skipped.
+  const walk = (subset, depth, level, parent, parentKey) => {
+    if (depth >= levels.length) {
+      parent.wines = [...subset].sort(sortFn);
+      return;
     }
-  } else {
-    sortedKeys = [...groups.keys()].sort();
-  }
-
-  const sortFn = getSortFn(withinGroup);
-
-  return sortedKeys.map(key => {
-    const sectionWines = groups.get(key);
-    sectionWines.sort(sortFn);
-
-    const title = groupBy === 'type' ? formatTypeTitle(key, lang) : key;
-    return { title, wines: sectionWines };
-  }).filter(s => s.wines.length > 0);
+    const groups = orderedGroups(subset, levels[depth], typeOrder, parentKey);
+    if (collapse && depth > 0 && groups.length === 1) {
+      walk(subset, depth + 1, level, parent, parentKey);
+      return;
+    }
+    for (const group of groups) {
+      const section = {
+        title: levels[depth] === 'type' ? formatTypeTitle(group.key, lang) : group.key,
+        level,
+        wines: [],
+      };
+      out.push(section);
+      walk(group.wines, depth + 1, level + 1, section, group.key);
+    }
+  };
+  walk(wines, 0, 0, null, null);
+  return out;
 }
 
 function getSortFn(withinGroup) {
@@ -185,6 +267,11 @@ function getSortFn(withinGroup) {
       return (a, b) => (a.vintage || '').localeCompare(b.vintage || '');
     case 'name':
       return (a, b) => a.name.localeCompare(b.name);
+    case 'producer':
+      return (a, b) =>
+        (a.producer || '').localeCompare(b.producer || '') ||
+        a.name.localeCompare(b.name) ||
+        (a.vintage || '').localeCompare(b.vintage || '');
     case 'country-region-name':
     default:
       return (a, b) => {
@@ -249,6 +336,18 @@ async function generateWineListPdf(wineList, wineMap, opts = {}) {
   });
 
   const sections = buildSections(wineList, wineMap);
+  const hidePrices = !!layout.hidePrices;
+  // The legacy single-level "type, then country — region" run-in sub-headers
+  // only make sense when there is no nested heading doing that job.
+  const levelsInForce = wineList.structureMode === 'auto' ? groupingLevels(wineList.autoGrouping || {}) : [];
+  const legacySubHeaders = levelsInForce.length === 1 && levelsInForce[0] === 'type' &&
+    wineList.autoGrouping?.withinGroup === 'country-region-name';
+  let anyLastBottle = false;
+  // Approximate heights of a heading per level, and of the first entry —
+  // a heading stack (type › country › region) breaks the page as ONE unit
+  // so no heading is ever orphaned at the foot of a page.
+  const HEADING_HEIGHT = [42, 22, 15];
+  const FIRST_ENTRY_HEIGHT = 26;
 
   // --- Header ---
   renderHeader(doc, branding, scheme, fontBold, fontItalic, contentWidth, margin, qrBuffer);
@@ -256,19 +355,39 @@ async function generateWineListPdf(wineList, wineMap, opts = {}) {
   // --- Sections ---
   for (let i = 0; i < sections.length; i++) {
     const section = sections[i];
+    const level = section.level || 0;
 
-    if (doc.y > pageSize[1] - margin - 80) {
+    // Room for this heading, the deeper headings that follow it before the
+    // first wine, and that wine — else start a new page here.
+    let need = HEADING_HEIGHT[Math.min(level, 2)] + FIRST_ENTRY_HEIGHT;
+    for (let k = i + 1; k < sections.length && (sections[k].level || 0) > level && !section.wines.length; k++) {
+      need += HEADING_HEIGHT[Math.min(sections[k].level || 0, 2)];
+      if (sections[k].wines.length) break;
+    }
+    if (doc.y > pageSize[1] - margin - Math.max(need, level === 0 ? 80 : 0)) {
       doc.addPage();
     }
 
-    doc.moveDown(i === 0 ? 0.5 : 1.2);
-    doc.font(fontBold).fontSize(13).fillColor(scheme.accent);
-    doc.text(section.title.toUpperCase(), margin, doc.y, { width: contentWidth });
+    if (level === 0) {
+      doc.moveDown(i === 0 ? 0.5 : 1.2);
+      doc.font(fontBold).fontSize(13).fillColor(scheme.accent);
+      doc.text(section.title.toUpperCase(), margin, doc.y, { width: contentWidth });
 
-    doc.moveDown(0.2);
-    doc.moveTo(margin, doc.y).lineTo(margin + contentWidth, doc.y)
-      .strokeColor(scheme.line).lineWidth(0.5).stroke();
-    doc.moveDown(0.4);
+      doc.moveDown(0.2);
+      doc.moveTo(margin, doc.y).lineTo(margin + contentWidth, doc.y)
+        .strokeColor(scheme.line).lineWidth(0.5).stroke();
+      doc.moveDown(0.4);
+    } else if (level === 1) {
+      doc.moveDown(0.6);
+      doc.font(fontBold).fontSize(10.5).fillColor(scheme.subheading);
+      doc.text(section.title, margin + 10, doc.y, { width: contentWidth - 10 });
+      doc.moveDown(0.25);
+    } else {
+      doc.moveDown(0.3);
+      doc.font(fontItalic).fontSize(9).fillColor(scheme.subheading);
+      doc.text(section.title, margin + 20, doc.y, { width: contentWidth - 20 });
+      doc.moveDown(0.15);
+    }
 
     let lastSubHeader = null;
 
@@ -276,11 +395,9 @@ async function generateWineListPdf(wineList, wineMap, opts = {}) {
       if (doc.y > pageSize[1] - margin - 35) {
         doc.addPage();
       }
+      if (wine.lastBottle) anyLastBottle = true;
 
-      if (!section.isGlassSection &&
-          wineList.structureMode === 'auto' &&
-          wineList.autoGrouping?.groupBy === 'type' &&
-          wineList.autoGrouping?.withinGroup === 'country-region-name') {
+      if (!section.isGlassSection && legacySubHeaders) {
         const sub = wine.region ? `${wine.country} — ${wine.region}` : wine.country;
         if (sub && sub !== lastSubHeader) {
           lastSubHeader = sub;
@@ -293,9 +410,17 @@ async function generateWineListPdf(wineList, wineMap, opts = {}) {
 
       renderWineEntry(doc, wine, {
         margin, contentWidth, font, fontBold, fontItalic,
-        scheme, currencySymbol, glassLabel,
+        scheme, currencySymbol, glassLabel, hidePrices,
       });
     }
+  }
+
+  // Legend for the "last bottle" asterisk, once, under the last section
+  if (anyLastBottle) {
+    if (doc.y > pageSize[1] - margin - 30) doc.addPage();
+    doc.moveDown(1);
+    doc.font(fontItalic).fontSize(8).fillColor(scheme.subheading);
+    doc.text(`* ${LAST_BOTTLE_LABEL[lang] || LAST_BOTTLE_LABEL.en}`, margin, doc.y, { width: contentWidth });
   }
 
   // Page numbers + footer on all pages
@@ -368,7 +493,7 @@ function renderHeader(doc, branding, scheme, fontBold, fontItalic, contentWidth,
 }
 
 function renderWineEntry(doc, wine, opts) {
-  const { margin, contentWidth, font, fontBold, fontItalic, scheme, currencySymbol, glassLabel } = opts;
+  const { margin, contentWidth, font, fontBold, fontItalic, scheme, currencySymbol, glassLabel, hidePrices } = opts;
   const indent = margin + 20;
   const priceColWidth = 100;
   const nameColWidth = contentWidth - 20 - priceColWidth;
@@ -376,7 +501,8 @@ function renderWineEntry(doc, wine, opts) {
   const vintage = wine.vintage && wine.vintage !== 'NV' ? wine.vintage : 'NV';
   // Non-standard formats (magnums, halves) are listed explicitly
   const sizeSuffix = wine.bottleSize && wine.bottleSize !== '750ml' ? ` (${wine.bottleSize})` : '';
-  const displayName = `${wine.name}, ${vintage}${sizeSuffix}`;
+  // The last-bottle asterisk is explained by a legend under the last section
+  const displayName = `${wine.name}, ${vintage}${sizeSuffix}${wine.lastBottle ? ' *' : ''}`;
 
   const y = doc.y;
 
@@ -384,10 +510,15 @@ function renderWineEntry(doc, wine, opts) {
   doc.text(displayName, indent, y, { width: nameColWidth, lineBreak: false });
 
   // A wine can be glass-only (no bottle price known) — render whichever
-  // prices exist rather than gating the glass price on the bottle price
+  // prices exist rather than gating the glass price on the bottle price.
+  // With prices hidden, a by-the-glass wine still says so, without a figure.
   const priceParts = [];
-  if (wine.price != null) priceParts.push(`${currencySymbol}${wine.price.toFixed(0)}`);
-  if (wine.glassPrice != null) priceParts.push(`${currencySymbol}${wine.glassPrice.toFixed(0)} ${glassLabel}`);
+  if (hidePrices) {
+    if (wine.byGlass) priceParts.push(glassLabel);
+  } else {
+    if (wine.price != null) priceParts.push(`${currencySymbol}${wine.price.toFixed(0)}`);
+    if (wine.glassPrice != null) priceParts.push(`${currencySymbol}${wine.glassPrice.toFixed(0)} ${glassLabel}`);
+  }
   const priceText = priceParts.join(' / ');
   if (priceText) {
     doc.font(font).fontSize(9.5).fillColor(scheme.text);
@@ -420,4 +551,7 @@ function renderWineEntry(doc, wine, opts) {
   doc.y = y + (details ? 26 : 15);
 }
 
-module.exports = { generateWineListPdf, buildSections, resolveEntry };
+module.exports = {
+  generateWineListPdf, buildSections, resolveEntry, groupingLevels,
+  LEVEL_FIELDS, MAX_LEVELS, LAST_BOTTLE_LABEL,
+};

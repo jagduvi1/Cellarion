@@ -12,6 +12,12 @@ jest.mock('../models/WineList', () => ({ findOne: jest.fn(), find: jest.fn(), co
 jest.mock('../models/WineDefinition', () => ({ findById: jest.fn(), findOne: jest.fn() }));
 jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
+// get_wine_list reads live stock + wine names through the renderer's wine
+// map (support ticket 2026-09-12); the key shape is pinned here on purpose.
+jest.mock('../services/wineListData', () => ({
+  entryKey: (e) => `${e.wine}|${e.vintage || 'NV'}|${e.bottleSize || '750ml'}`,
+  loadWineMap: jest.fn(async () => new Map()),
+}));
 // revert.js and tools/write.js top-require bottleOps (which pulls the search/
 // meili chain) — mock the full surface they read at load, same as
 // sommTools.test.js.
@@ -101,15 +107,50 @@ describe('list_wine_lists / get_wine_list', () => {
     expect(parse(res).error.code).toBe('not_found');
   });
 
-  test('get_wine_list groups custom-mode entries by section', async () => {
+  test('get_wine_list groups custom-mode entries by section, with the wine and live stock from the cellar', async () => {
+    const { loadWineMap } = require('../services/wineListData');
+    loadWineMap.mockResolvedValueOnce(new Map([
+      [`${WINE}|2019|750ml`, { wine: { _id: WINE, name: 'Barolo', producer: 'Rinaldi', type: 'red' }, stock: 1, avgPrice: null }],
+    ]));
     WineList.findOne.mockReturnValue(chain(makeList({
       structureMode: 'custom',
-      sections: [{ title: 'Reds', entries: [{ wine: { _id: WINE, name: 'Barolo' }, vintage: '2019', listPrice: 95, byGlass: false }] }],
+      sections: [{ title: 'Reds', entries: [{ wine: WINE, vintage: '2019', listPrice: 95, byGlass: false }] }],
     })));
     const { data } = parse(await tool('get_wine_list').handler({ list_id: LIST }, CTX));
     expect(data.sections).toEqual([expect.objectContaining({ section: 'Reds' })]);
-    expect(data.sections[0].entries[0]).toMatchObject({ vintage: '2019', list_price: 95, by_glass: false });
+    expect(data.sections[0].entries[0]).toMatchObject({
+      wine: { wine_id: WINE, name: 'Barolo', producer: 'Rinaldi', type: 'red' },
+      vintage: '2019', list_price: 95, by_glass: false, stock: 1, last_bottle: true,
+    });
+    expect(data.grouping).toBeNull();
     expect(data.glass_pricing_rule).toEqual({ glasses_per_bottle: 5, markup_percent: 20, rounding: '1' });
+  });
+
+  test('get_wine_list renders an auto-mode list with the SAME nested headings as the menu, path-labelled; unresolved entries trail (support ticket 2026-09-12)', async () => {
+    const { loadWineMap } = require('../services/wineListData');
+    const W2 = oid('f');
+    const GONE = oid('9');
+    loadWineMap.mockResolvedValueOnce(new Map([
+      [`${WINE}|2019|750ml`, { wine: { _id: WINE, name: 'Barolo', producer: 'Rinaldi', type: 'red', country: { name: 'Italy' }, region: { name: 'Piedmont' }, grapes: [] }, stock: 3, avgPrice: null }],
+      [`${W2}|NV|750ml`, { wine: { _id: W2, name: 'Rioja', producer: 'Muga', type: 'red', country: { name: 'Spain' }, region: { name: 'Rioja' }, grapes: [] }, stock: 0, avgPrice: null }],
+    ]));
+    WineList.findOne.mockReturnValue(chain(makeList({
+      autoGrouping: { levels: ['type', 'country', 'region'], collapseSingle: true, withinGroup: 'producer' },
+      layout: { hideOutOfStock: true, hidePrices: true, markLastBottle: true },
+      autoGroupEntries: [
+        { wine: WINE, vintage: '2019', bottleSize: '750ml', listPrice: 95 },
+        { wine: W2, vintage: 'NV', bottleSize: '750ml', listPrice: 30 },
+        { wine: GONE, vintage: 'NV', bottleSize: '750ml' },
+      ],
+    })));
+    const { data } = parse(await tool('get_wine_list').handler({ list_id: LIST }, CTX));
+    // hideOutOfStock is a menu rule, not a curator one: the zero-stock Rioja is listed, with stock 0
+    expect(data.sections.map((g) => g.section)).toEqual(['Red Wines › Italy', 'Red Wines › Spain', null]);
+    expect(data.sections[1].entries[0]).toMatchObject({ wine: { name: 'Rioja' }, stock: 0, last_bottle: false });
+    expect(data.sections[2].entries[0].wine).toEqual({ wine_id: GONE });
+    expect(data.grouping).toEqual({ levels: ['type', 'country', 'region'], collapse_single_group: true, within_group: 'producer' });
+    expect(data.hide_prices).toBe(true);
+    expect(data.mark_last_bottle).toBe(true);
   });
 });
 

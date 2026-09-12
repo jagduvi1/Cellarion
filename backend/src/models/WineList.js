@@ -118,18 +118,35 @@ const wineListSchema = new mongoose.Schema({
 
   // Auto mode: grouping config
   autoGrouping: {
+    // First (and, for lists saved before nested grouping, only) level.
+    // Kept in sync with levels[0] by the editor so older readers still work.
     groupBy: {
       type: String,
       enum: ['type', 'country', 'region'],
       default: 'type'
     },
+    // Nested headings, outermost first — the classic menu order is
+    // ['type', 'country', 'region']. Empty means "just groupBy". At most
+    // three levels (a menu reads naturally at three; support ticket
+    // 2026-09-12), each field at most once.
+    levels: {
+      type: [{ type: String, enum: ['type', 'country', 'region', 'appellation'] }],
+      default: [],
+      validate: {
+        validator: (v) => !v || (v.length <= 3 && new Set(v).size === v.length),
+        message: 'At most three distinct grouping levels',
+      },
+    },
+    // Skip a nested heading that would hold a single group (one dessert wine
+    // → "Dessert" straight to the wine, not Dessert › France › Sauternes).
+    collapseSingle: { type: Boolean, default: true },
     typeOrder: {
       type: [String],
       default: ['sparkling', 'white', 'rosé', 'red', 'dessert', 'fortified']
     },
     withinGroup: {
       type: String,
-      enum: ['country-region-name', 'name', 'price-asc', 'price-desc', 'vintage'],
+      enum: ['country-region-name', 'name', 'producer', 'price-asc', 'price-desc', 'vintage'],
       default: 'country-region-name'
     }
   },
@@ -199,6 +216,14 @@ const wineListSchema = new mongoose.Schema({
     glassSectionFirst: { type: Boolean, default: false },
     // Drop entries from the rendered list while their cellar stock is zero
     hideOutOfStock: { type: Boolean, default: false },
+    // Render the shared page and the PDF without any price — a menu handed to
+    // a guest at home is there to help them choose, not to bill them. The
+    // figures stay on the entries (support ticket 2026-09-12).
+    hidePrices: { type: Boolean, default: false },
+    // Mark an entry whose cellar stock is exactly one bottle ("last bottle").
+    // Read live at render time: the web menu follows the cellar, a printed
+    // sheet is a snapshot of the moment it was printed.
+    markLastBottle: { type: Boolean, default: false },
     currency: {
       type: String,
       default: 'USD',
@@ -260,6 +285,12 @@ function entryCapError(doc) {
 
 wineListSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
+  // The legacy single-level field always mirrors the first nested level, so
+  // readers that predate nesting (and a client that only sends groupBy) agree.
+  const levels = this.autoGrouping?.levels;
+  if (Array.isArray(levels) && levels.length) {
+    this.autoGrouping.groupBy = levels[0] === 'appellation' ? 'region' : levels[0];
+  }
   next(entryCapError(this)); // null when within the cap
 });
 

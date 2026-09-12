@@ -42,9 +42,14 @@ router.get('/:shareToken', async (req, res) => {
     if (!wineList) return res.status(404).json({ error: 'Wine list not found or not published' });
     if (!(await cellarIsActive(wineList))) return res.status(404).json({ error: 'Wine list not found or not published' });
 
+    const branding = wineList.branding || {};
+    const layout = wineList.layout || {};
+    const hidePrices = !!layout.hidePrices;
+
     const wineMap = await loadWineMap(wineList);
     const sections = buildSections(wineList, wineMap).map(s => ({
       title: s.title,
+      level: s.level || 0,
       isGlassSection: !!s.isGlassSection,
       wines: s.wines.map(w => ({
         name: w.name,
@@ -53,15 +58,17 @@ router.get('/:shareToken', async (req, res) => {
         bottleSize: w.bottleSize,
         country: w.country,
         region: w.region,
+        appellation: w.appellation,
         grapes: w.grapes,
         type: w.type,
-        price: w.price,
-        glassPrice: w.glassPrice,
+        byGlass: w.byGlass,
+        lastBottle: w.lastBottle,
+        // A list that hides its prices never sends them: this endpoint has
+        // no auth, so "hidden" must mean absent from the payload.
+        ...(hidePrices ? {} : { price: w.price, glassPrice: w.glassPrice }),
       })),
     }));
 
-    const branding = wineList.branding || {};
-    const layout = wineList.layout || {};
     res.setHeader('Cache-Control', 'public, max-age=300'); // 5 min cache
     res.json({
       name: wineList.name,
@@ -76,6 +83,7 @@ router.get('/:shareToken', async (req, res) => {
         colorScheme: layout.colorScheme || 'classic',
         fontFamily: layout.fontFamily || 'serif',
         currencySymbol: layout.currencySymbol || '$',
+        hidePrices,
       },
       sections,
     });

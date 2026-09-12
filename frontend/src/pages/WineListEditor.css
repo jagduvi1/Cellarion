@@ -115,6 +115,10 @@
   min-width: 200px;
 }
 
+.wle-auto-options-wide {
+  flex-basis: 100%;
+}
+
 /* Custom sections */
 .wle-custom-sections {
   margin-bottom: 1.25rem;

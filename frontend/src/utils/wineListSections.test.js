@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildSections } from './wineListSections';
+import { buildSections, groupingLevels } from './wineListSections';
 
 const WINES = {
   barolo: {
@@ -108,5 +108,82 @@ describe('buildSections', () => {
     }, winesByKey);
 
     expect(sections[0].wines[0].price).toBe(20);
+  });
+});
+
+describe('nested auto grouping, hidden prices and the last-bottle marker (support ticket 2026-09-12)', () => {
+  const rioja = {
+    _id: 'w4', name: 'Rioja Reserva', producer: 'Muga', type: 'red',
+    country: { name: 'Spain' }, region: { name: 'Rioja' }, grapes: [],
+  };
+  const winesByKey = mapOf(item(WINES.barolo, { stock: 1 }), item(WINES.chablis), item(rioja));
+  const outline = (sections) => sections.map(s =>
+    `${'  '.repeat(s.level)}${s.title}${s.wines.length ? ` (${s.wines.map(w => w.name).join(', ')})` : ''}`
+  );
+
+  it('renders type › country › region as nested levels, skipping a heading that would hold one group', () => {
+    const sections = buildSections({
+      structureMode: 'auto',
+      language: 'en',
+      autoGrouping: { levels: ['type', 'country', 'region'], withinGroup: 'producer' },
+      autoGroupEntries: [entry('w1'), entry('w2'), entry('w4')],
+      layout: {},
+    }, winesByKey);
+    expect(outline(sections)).toEqual([
+      'White Wines (Chablis)',
+      'Red Wines',
+      '  Italy (Barolo Riserva)',
+      '  Spain (Rioja Reserva)',
+    ]);
+  });
+
+  it('keeps every heading when collapseSingle is off, and stays flat for a legacy groupBy', () => {
+    const sections = buildSections({
+      structureMode: 'auto',
+      autoGrouping: { levels: ['type', 'country'], collapseSingle: false },
+      autoGroupEntries: [entry('w2')],
+      layout: {},
+    }, winesByKey);
+    expect(outline(sections)).toEqual(['White Wines', '  France (Chablis)']);
+
+    const legacy = buildSections({
+      structureMode: 'auto',
+      autoGrouping: { groupBy: 'country' },
+      autoGroupEntries: [entry('w1'), entry('w2')],
+      layout: {},
+    }, winesByKey);
+    expect(legacy.map(s => [s.title, s.level])).toEqual([['France', 0], ['Italy', 0]]);
+  });
+
+  it('marks the last bottle only when the list asks and stock is exactly one; byGlass survives hidden prices', () => {
+    const sections = buildSections({
+      structureMode: 'auto',
+      autoGrouping: { levels: ['type'] },
+      autoGroupEntries: [entry('w1', { byGlass: true, glassPrice: 14 }), entry('w2')],
+      layout: { markLastBottle: true, hidePrices: true },
+    }, winesByKey);
+    const byName = Object.fromEntries(sections.flatMap(s => s.wines).map(w => [w.name, w]));
+    expect(byName['Barolo Riserva']).toMatchObject({ lastBottle: true, byGlass: true, glassPrice: 14 });
+    expect(byName['Chablis'].lastBottle).toBe(false);
+  });
+
+  it('groupingLevels caps at three distinct known fields and falls back to groupBy', () => {
+    expect(groupingLevels({ levels: ['type', 'country', 'region', 'appellation'] })).toEqual(['type', 'country', 'region']);
+    expect(groupingLevels({ levels: ['region', 'region', 'bogus'] })).toEqual(['region']);
+    expect(groupingLevels({ groupBy: 'country' })).toEqual(['country']);
+    expect(groupingLevels({})).toEqual(['type']);
+  });
+});
+
+describe('nested grouping fallbacks (review 2026-09-12)', () => {
+  it('a wine without a region never repeats its country as a sub-heading; it goes to "Other", sorted last', () => {
+    const chianti = { _id: 'w6', name: 'Chianti', producer: 'Antinori', type: 'red', country: { name: 'Italy' }, region: null, grapes: [] };
+    const sections = buildSections({
+      structureMode: 'auto',
+      autoGrouping: { levels: ['type', 'country', 'region'], collapseSingle: false, withinGroup: 'name' },
+      autoGroupEntries: [entry('w1'), entry('w6')],
+      layout: {},
+    }, mapOf(item(WINES.barolo), item(chianti)));
+    expect(sections.map(s => `${'  '.repeat(s.level)}${s.title}`)).toEqual(['Red Wines', '  Italy', '    Piedmont', '    Other']);
   });
 });

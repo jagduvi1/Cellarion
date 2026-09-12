@@ -1,4 +1,4 @@
-import { GLASS_LABEL } from '../utils/wineListSections';
+import { GLASS_LABEL, LAST_BOTTLE_LABEL } from '../utils/wineListSections';
 import './WineListMenu.css';
 
 // Same palettes as the PDF generator (backend/src/services/wineListPdf.js)
@@ -9,6 +9,10 @@ const COLOR_SCHEMES = {
   minimal:  { heading: '#000000', subheading: '#666666', text: '#333333', accent: '#999999', line: '#eeeeee', bg: '#ffffff' },
 };
 
+// Heading depth → element. Level 0 is a section; 1 and 2 are the nested
+// auto-grouping headings (type › country › region).
+const HEADINGS = ['h2', 'h3', 'h4'];
+
 /**
  * Restaurant-facing wine list rendering — shared by the public /menu/:token
  * page and the editor's live preview tab.
@@ -16,7 +20,9 @@ const COLOR_SCHEMES = {
 function WineListMenu({ branding = {}, layout = {}, language = 'en', sections = [], logoSrc = null }) {
   const scheme = COLOR_SCHEMES[layout.colorScheme] || COLOR_SCHEMES.classic;
   const currencySymbol = layout.currencySymbol || '$';
+  const hidePrices = !!layout.hidePrices;
   const glassLabel = GLASS_LABEL[language] || GLASS_LABEL.en;
+  const lastBottleLabel = LAST_BOTTLE_LABEL[language] || LAST_BOTTLE_LABEL.en;
   const fontFamily = layout.fontFamily === 'sans-serif'
     ? "'Helvetica Neue', Helvetica, Arial, sans-serif"
     : "Georgia, 'Times New Roman', serif";
@@ -31,8 +37,10 @@ function WineListMenu({ branding = {}, layout = {}, language = 'en', sections = 
     fontFamily,
   };
 
-  // A wine can be glass-only (no bottle price) — render whichever prices exist
+  // A wine can be glass-only (no bottle price) — render whichever prices
+  // exist. With prices hidden, a by-the-glass wine still says so.
   const renderPrice = (wine) => {
+    if (hidePrices) return wine.byGlass ? glassLabel : null;
     const parts = [];
     if (wine.price != null) parts.push(`${currencySymbol}${Math.round(wine.price)}`);
     if (wine.glassPrice != null) parts.push(`${currencySymbol}${Math.round(wine.glassPrice)} ${glassLabel}`);
@@ -48,32 +56,41 @@ function WineListMenu({ branding = {}, layout = {}, language = 'en', sections = 
         <div className="wlm-rule" />
       </header>
 
-      {sections.map((section, i) => (
-        <section key={i} className="wlm-section">
-          <h2 className="wlm-section-title">{section.title}</h2>
-          <ul className="wlm-wines">
-            {section.wines.map((wine, j) => {
-              const sizeSuffix = wine.bottleSize && wine.bottleSize !== '750ml' ? ` (${wine.bottleSize})` : '';
-              const grapes = (wine.grapes || []).slice(0, 3).join(', ');
-              const producerRegion = [wine.producer, wine.region].filter(Boolean).join(' — ');
-              const details = [producerRegion, grapes].filter(Boolean).join(' · ');
-              const priceText = renderPrice(wine);
-              return (
-                <li key={wine.key || j} className="wlm-wine">
-                  <div className="wlm-wine-row">
-                    <span className="wlm-wine-name">
-                      {wine.name}, {wine.vintage || 'NV'}{sizeSuffix}
-                    </span>
-                    <span className="wlm-wine-dots" aria-hidden="true" />
-                    {priceText && <span className="wlm-wine-price">{priceText}</span>}
-                  </div>
-                  {details && <div className="wlm-wine-details">{details}</div>}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      ))}
+      {sections.map((section, i) => {
+        const level = Math.min(section.level || 0, HEADINGS.length - 1);
+        const Heading = HEADINGS[level];
+        return (
+          <section key={i} className={`wlm-section wlm-level-${level}`}>
+            <Heading className={level === 0 ? 'wlm-section-title' : `wlm-sub-title wlm-sub-title-${level}`}>
+              {section.title}
+            </Heading>
+            {section.wines.length > 0 && (
+              <ul className="wlm-wines">
+                {section.wines.map((wine, j) => {
+                  const sizeSuffix = wine.bottleSize && wine.bottleSize !== '750ml' ? ` (${wine.bottleSize})` : '';
+                  const grapes = (wine.grapes || []).slice(0, 3).join(', ');
+                  const producerRegion = [wine.producer, wine.region].filter(Boolean).join(' — ');
+                  const details = [producerRegion, grapes].filter(Boolean).join(' · ');
+                  const priceText = renderPrice(wine);
+                  return (
+                    <li key={wine.key || j} className="wlm-wine">
+                      <div className="wlm-wine-row">
+                        <span className="wlm-wine-name">
+                          {wine.name}, {wine.vintage || 'NV'}{sizeSuffix}
+                          {wine.lastBottle && <span className="wlm-last-bottle">{lastBottleLabel}</span>}
+                        </span>
+                        <span className="wlm-wine-dots" aria-hidden="true" />
+                        {priceText && <span className="wlm-wine-price">{priceText}</span>}
+                      </div>
+                      {details && <div className="wlm-wine-details">{details}</div>}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+        );
+      })}
 
       {branding.footerText && <footer className="wlm-footer">{branding.footerText}</footer>}
     </div>
