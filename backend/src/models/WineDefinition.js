@@ -445,6 +445,43 @@ const wineDefinitionSchema = new mongoose.Schema({
     default: false,
     index: true
   },
+  // PRIVATE DRAFT (support ticket 2026-09-12). A wine its creator is still
+  // finishing before it enters the shared registry: visible to the creator
+  // (and to members of a shared cellar holding a bottle of it), hidden from
+  // everyone else INCLUDING curators, freely editable by the creator without
+  // the correction queue, and published as an explicit step — at which point
+  // the duplicate check runs again and review / profiles / other users'
+  // attachments begin.
+  //
+  // INVARIANT: draft ⇒ pendingIdentity (enforced first thing in the
+  // pre-validate hook below). A draft therefore inherits every exclusion a
+  // pending row already has — Meilisearch, public reads, MCP registry tools,
+  // embeddings, enrichment, the maturity queue, sitemap/OG, the admin scan
+  // pools, wine lists, discussions — with no gate re-typed. What a draft adds
+  // is only what makes it DIFFERENT from a pending row: curators must not see
+  // it (services/wineVisibility, the curation queue in pendingWineOps, the
+  // curator scan/photo reads), it must not auto-promote while draft (the hook
+  // below), and its normalizedKey lives in the per-creator 'draft~' namespace
+  // (utils/normalize.js draftWineKey) so two users' drafts of one wine collide
+  // only at publish.
+  //
+  // Lifecycle (services/wineDraftExpiryJob): draftExpiresAt is the 7-day
+  // untouched clock, reset by every edit and bottle add; an EMPTY draft is
+  // deleted when it lapses (the creator is notified 24 h before —
+  // draftExpiryWarnedAt records that, cleared by a touch); a draft holding
+  // bottles is never deleted, it auto-publishes as it stands.
+  draft: {
+    type: Boolean,
+    default: false
+  },
+  draftExpiresAt: {
+    type: Date,
+    default: null
+  },
+  draftExpiryWarnedAt: {
+    type: Date,
+    default: null
+  },
   // The original label photo this wine was minted from, kept so a curator can
   // READ the label instead of guessing (the whole point of the pending queue).
   // Curation-visible only — never public, never in a bottle gallery; the
@@ -602,6 +639,10 @@ wineDefinitionSchema.index({ updatedAt: 1 });
 wineDefinitionSchema.index({ 'contribution.user': 1 }, { sparse: true });
 wineDefinitionSchema.index({ 'contribution.bridgeKey': 1 }, { sparse: true });
 wineDefinitionSchema.index({ 'contribution.instanceHost': 1 }, { sparse: true });
+// Drafts: the expiry sweep ("which drafts lapse before T") and "my drafts".
+// Partial on draft:true so the ordinary registry pays nothing for them.
+wineDefinitionSchema.index({ draft: 1, draftExpiresAt: 1 }, { partialFilterExpression: { draft: true } });
+wineDefinitionSchema.index({ createdBy: 1, draft: 1 }, { partialFilterExpression: { draft: true } });
 
 // Update timestamp on save
 wineDefinitionSchema.pre('save', function(next) {
@@ -646,7 +687,15 @@ wineDefinitionSchema.pre('validate', function(next) {
   // that completes the identity calls searchService.indexWine(), which owns
   // add-vs-remove. A promoting caller must also re-embed (the row was skipped
   // by the embedding pipeline while pending) and re-seed its maturity rows.
-  if (this.pendingIdentity === true &&
+  //
+  // A DRAFT is hidden by being pending (the invariant on the `draft` field):
+  // set that first so no write path can produce a visible draft, and keep a
+  // draft OUT of the auto-promote below — its identity may be complete from
+  // the first save, but leaving the private state is the creator's explicit
+  // publish step (services/wineDraftOps.publishDraft clears `draft` and saves,
+  // and THAT save promotes here).
+  if (this.draft === true) this.pendingIdentity = true;
+  if (this.pendingIdentity === true && this.draft !== true &&
       !isIdentitySentinel(this.producer) && !isIdentitySentinel(this.name) &&
       !isImplausibleIdentity(this.producer, this.name)) {
     this.pendingIdentity = false;

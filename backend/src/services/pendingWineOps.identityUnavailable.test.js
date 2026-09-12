@@ -155,21 +155,21 @@ describe('the queue listing', () => {
     primeCounts();
     await queryPendingWines({});
     expect(WineDefinition.find.mock.calls[0][0]).toEqual({
-      pendingIdentity: true, identityUnavailable: { $ne: true },
+      pendingIdentity: true, identityUnavailable: { $ne: true }, draft: { $ne: true },
     });
   });
 
   test('…and one flag shows them again, so the record can be reversed', async () => {
     primeCounts();
     await queryPendingWines({ includeUnavailable: true });
-    expect(WineDefinition.find.mock.calls[0][0]).toEqual({ pendingIdentity: true });
+    expect(WineDefinition.find.mock.calls[0][0]).toEqual({ pendingIdentity: true, draft: { $ne: true } });
   });
 
   test('the work figure excludes them and they are counted separately', async () => {
     primeCounts();
     await queryPendingWines({});
     const counted = WineDefinition.countDocuments.mock.calls.map(c => c[0]);
-    expect(counted).toContainEqual({ pendingIdentity: true, identityUnavailable: { $ne: true } });
-    expect(counted).toContainEqual({ pendingIdentity: true, identityUnavailable: true });
+    expect(counted).toContainEqual({ pendingIdentity: true, identityUnavailable: { $ne: true }, draft: { $ne: true } });
+    expect(counted).toContainEqual({ pendingIdentity: true, identityUnavailable: true, draft: { $ne: true } });
   });
 });

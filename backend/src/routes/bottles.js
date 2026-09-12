@@ -520,6 +520,15 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
     // country/region (additive `displayName`; canonical `name` untouched).
     if (bottleObj.wineDefinition) {
       bottleObj.wineDefinition = decorateGrapes(bottleObj.wineDefinition);
+      // A private draft wine (models/WineDefinition.draft): tell the page
+      // whose it is as a boolean — the client cannot compute that itself,
+      // list payloads strip createdBy — and when its clock lapses.
+      if (bottleObj.wineDefinition.draft === true) {
+        bottleObj.wineDraft = {
+          mine: String(bottleObj.wineDefinition.createdBy) === String(req.user.id),
+          expiresAt: bottleObj.wineDefinition.draftExpiresAt || null,
+        };
+      }
     }
     if (bottle.priceSetAt) {
       const date = bottle.priceSetAt.toISOString().slice(0, 10);

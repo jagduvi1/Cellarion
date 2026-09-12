@@ -121,7 +121,7 @@ test('a somm may read a bottle photo whose wine is STILL pending — named on th
   WineDefinition.exists.mockResolvedValue({ _id: W1 });
 
   expect((await get(tokenFor(CURATOR, ['admin']))).status).toBe(200);
-  expect(WineDefinition.exists).toHaveBeenCalledWith({ _id: W1, pendingIdentity: true });
+  expect(WineDefinition.exists).toHaveBeenCalledWith({ _id: W1, pendingIdentity: true, draft: { $ne: true } });
 });
 
 test('…and one that only names the BOTTLE (the plain AddBottle upload path)', async () => {

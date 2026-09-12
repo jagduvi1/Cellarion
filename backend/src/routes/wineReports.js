@@ -62,7 +62,8 @@ router.post('/', requireAuth, requireNonDemo, async (req, res) => {
     // a correction to it. Its creator still can: their row is the one most
     // likely to need one.
     const wine = await findVisibleWine(wineDefinitionId, {
-      userId: req.user.id, roles: req.user.roles, lean: true,
+      // noDrafts: a draft is edited directly by its creator, never reported.
+      userId: req.user.id, roles: req.user.roles, lean: true, noDrafts: true,
     });
     if (!wine) {
       return res.status(404).json({ error: 'Wine not found' });

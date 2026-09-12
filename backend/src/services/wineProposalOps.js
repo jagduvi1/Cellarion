@@ -154,6 +154,9 @@ async function createFieldCorrection(userId, { wineId, fields, reason, evidenceU
   const wine = await findVisibleWine(String(wineId), {
     userId,
     roles: req?.user?.roles || [],
+    // noDrafts: a draft is edited directly by its creator; the correction
+    // queue is for shared records (draft design 2026-09-12).
+    noDrafts: true,
     populate: ['country', 'region', 'grapes'],
   });
   if (!wine) return fail('not_found', 'Wine not found');

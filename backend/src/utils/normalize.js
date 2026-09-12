@@ -355,6 +355,19 @@ const pendingProducerKey = (userId) => `${PENDING_KEY_PREFIX}${String(userId)}`;
 const pendingWineKey = (name, userId, appellation = '') =>
   `${pendingProducerKey(userId)}:${normalizeString(name)}:${normalizeString(appellation)}`;
 
+// DRAFT namespace (support ticket 2026-09-12: a wine created privately and
+// published later). Same construction and the same argument as the pending
+// namespace above — '~' never survives normalizeString, so 'draft~' cannot be
+// produced by a real producer, and the creator id keeps two users' drafts of
+// the same wine apart under the unique index (they collide only at PUBLISH,
+// where the dedup check runs against the ordinary namespace). Unlike the
+// pending key it carries the producer segment: a draft usually has one.
+// See the `draft` field note on models/WineDefinition.js.
+const DRAFT_KEY_PREFIX = 'draft~';
+const draftProducerKey = (userId) => `${DRAFT_KEY_PREFIX}${String(userId)}`;
+const draftWineKey = (name, producer, userId, appellation = '') =>
+  `${draftProducerKey(userId)}:${normalizeString(producer || '')}:${normalizeString(name)}:${normalizeString(appellation)}`;
+
 /**
  * Generate a normalized key for wine deduplication
  * Combines producer + wine name + appellation
@@ -1123,6 +1136,9 @@ module.exports = {
   PENDING_KEY_PREFIX,
   pendingProducerKey,
   pendingWineKey,
+  DRAFT_KEY_PREFIX,
+  draftProducerKey,
+  draftWineKey,
   generateWineSlug,
   GRAPE_SYNONYMS,
   normalizeProducerKey,

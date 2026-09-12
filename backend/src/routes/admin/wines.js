@@ -1414,6 +1414,9 @@ router.get('/:id', async (req, res) => {
       .populate('country', 'name')
       .populate('region', 'name')
       .populate('grapes', 'name');
+    // A user's private draft is not registry content, not even to an admin —
+    // the same not-found a missing id gets (draft design 2026-09-12).
+    if (wine && wine.draft === true) return res.status(404).json({ error: 'Wine not found' });
     if (!wine) return res.status(404).json({ error: 'Wine not found' });
     res.json({ wine });
   } catch (error) {
@@ -1429,7 +1432,8 @@ router.put('/:id', async (req, res) => {
     const { name, producer, country, region, appellation, grapes, type, image } = req.body;
 
     const wine = await WineDefinition.findById(req.params.id);
-    if (!wine) {
+    // A private draft is not registry content, not even to an admin (draft design 2026-09-12).
+    if (!wine || wine.draft === true) {
       return res.status(404).json({ error: 'Wine not found' });
     }
 
@@ -1556,7 +1560,8 @@ router.delete('/:id', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const wine = await WineDefinition.findById(req.params.id);
-    if (!wine) {
+    // A private draft is not registry content, not even to an admin (draft design 2026-09-12).
+    if (!wine || wine.draft === true) {
       return res.status(404).json({ error: 'Wine not found' });
     }
     const id = wine._id;
@@ -1645,7 +1650,8 @@ router.post('/:id/strip-producer', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const wine = await WineDefinition.findById(req.params.id);
-    if (!wine) {
+    // A private draft is not registry content, not even to an admin (draft design 2026-09-12).
+    if (!wine || wine.draft === true) {
       return res.status(404).json({ error: 'Wine not found' });
     }
 
@@ -1744,10 +1750,14 @@ router.post('/:id/merge', async (req, res) => {
 // Returns { error: { status, message } } or { bottlesMoved, imageAction,
 // source, target }.
 async function performWineMerge(sourceId, targetId, req) {
-  const [source, target] = await Promise.all([
+  let [source, target] = await Promise.all([
     WineDefinition.findById(sourceId),
     WineDefinition.findById(targetId),
   ]);
+  // Neither side of a merge may be a user's private draft (draft design
+  // 2026-09-12): a draft is published or attached by its creator, never merged.
+  if (source && source.draft === true) source = null;
+  if (target && target.draft === true) target = null;
   if (!source) return { error: { status: 404, message: 'Source wine not found' } };
   if (!target) return { error: { status: 404, message: 'Target wine not found' } };
 

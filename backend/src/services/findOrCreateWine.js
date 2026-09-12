@@ -19,7 +19,12 @@ const Region = require('../models/Region');
 const Grape = require('../models/Grape');
 const Appellation = require('../models/Appellation');
 const searchService = require('./search');
-const { generateWineKey, pendingProducerKey, pendingWineKey, normalizeString, normalizeAppellation, normalizeAppellationKey, stripTrailingVintage, resolveGrapeName, resolveCountryName, isRecognizedCountry, isUnknownName, isIdentitySentinel, isImplausibleIdentity, isJunkGrapeName, sanitizeTaxonomyName } = require('../utils/normalize');
+const { generateWineKey, pendingProducerKey, pendingWineKey, draftWineKey, normalizeString, normalizeAppellation, normalizeAppellationKey, stripTrailingVintage, resolveGrapeName, resolveCountryName, isRecognizedCountry, isUnknownName, isIdentitySentinel, isImplausibleIdentity, isJunkGrapeName, sanitizeTaxonomyName } = require('../utils/normalize');
+
+// A private draft's untouched clock (models/WineDefinition.draftExpiresAt):
+// reset by every edit and bottle add, swept hourly by services/wineDraftExpiryJob.
+const DRAFT_TTL_DAYS = 7;
+const DRAFT_TTL_MS = DRAFT_TTL_DAYS * 24 * 60 * 60 * 1000;
 const { scoreAllMatches } = require('./wineMatching');
 const { canonicalizeWineName } = require('../utils/producerPrefix');
 const { computeCanonicalKey, canonicalSiblingPrefix } = require('../utils/wineIdentity');
@@ -335,7 +340,15 @@ async function unpolluteEstateName({ name, producer, appellation, classification
   };
 }
 
-async function findOrCreateWine({ name, producer, country, region, appellation, type, grapes, classification }, userId, { confirmCreate = false, skipSiblingMatch = false, matchOnly = false, createdVia = null, allowPending = false, provenance = null } = {}) {
+// `draft`: mint the row as the creator's PRIVATE DRAFT (support ticket
+// 2026-09-12; models/WineDefinition.draft). The resolve stages run as usual —
+// an already-published wine still wins over minting a draft, and the soft
+// zone still asks "did you mean" — but the producer gates are SKIPPED on the
+// create path (the row is private and freely editable; services/wineDraftOps
+// re-runs them at publish), and the row keys into the per-creator 'draft~'
+// namespace. `excludeId`: the publish-time re-check passes the draft's own id
+// so no stage can match the draft against itself.
+async function findOrCreateWine({ name, producer, country, region, appellation, type, grapes, classification }, userId, { confirmCreate = false, skipSiblingMatch = false, matchOnly = false, createdVia = null, allowPending = false, provenance = null, draft = false, excludeId = null } = {}) {
   // Internal whitespace collapses too, not just the ends: a double space is
   // invisible in every UI and every normalized key, so "Wrights  Estate" and
   // "Wrights Estate" would otherwise coexist as two display spellings forever
@@ -445,8 +458,25 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // gated on this predicate; the SAME creator still matches their own pending
   // row, which is what makes a retry (or a second bottle of the same wine)
   // resolve instead of minting again.
+  // A private draft is pending too, so a stranger's draft is blocked here by
+  // the same predicate. `excludeId` (the publish-time re-check) treats the
+  // row being published as blocked at every stage: it must never match itself.
   const pendingBlocked = (candidate) =>
-    !!candidate && candidate.pendingIdentity === true && String(candidate.createdBy) !== String(userId);
+    !!candidate && (
+      (excludeId != null && String(candidate._id) === String(excludeId)) ||
+      (candidate.pendingIdentity === true && String(candidate.createdBy) !== String(userId))
+    );
+
+  // 0. A DRAFT add resolves to the creator's own draft of the same identity
+  // first (a retry, or a second bottle of a wine still being finished) — the
+  // key is per-creator, so this can only ever find their own row.
+  if (draft) {
+    const ownDraft = await WineDefinition.findOne({
+      normalizedKey: draftWineKey(trimmedName, trimmedProducer, userId, trimmedAppellation),
+      draft: true,
+    }).populate(POPULATE);
+    if (ownDraft) return { wine: ownDraft, created: false, draft: true };
+  }
 
   // 1. Exact match by normalizedKey
   const normalizedKey = producerMissing
@@ -628,7 +658,12 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // works correctly (the model hook consults isIdentitySentinel alone), so a
   // curator CAN complete these rows; storing the original at mint needs a
   // script-aware key namespace, which is a registry-wide change.
-  if (!producerMissing && producerNorm.length < 2) {
+  // DRAFT: every producer gate below is skipped — the string is stored
+  // verbatim on a private row nobody else can see or attach to, and
+  // services/wineDraftOps.checkPublishIdentity runs the same gates when the
+  // creator publishes. (Country stays recognised-only; taxonomy behaviour is
+  // unchanged.)
+  if (!draft && !producerMissing && producerNorm.length < 2) {
     if (!allowPending) {
       const err = new Error(`"${trimmedProducer}" is not a usable producer name`);
       err.status = 400;
@@ -640,7 +675,7 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     trimmedProducer = '';
     producerNorm = '';
   }
-  if (!producerMissing) {
+  if (!draft && !producerMissing) {
     const [placeCountry, placeRegion, placeAppellation] = await Promise.all([
       Country.exists({ normalizedName: producerNorm }),
       Region.exists({ $or: [{ normalizedName: producerNorm }, { normalizedSynonyms: producerNorm }] }),
@@ -695,7 +730,7 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // case is already refused by the length gate above with its own message.
   // The echo is now a cross-field FLAG (producer-echoes-name.v1), reviewed by a
   // human with the label in front of them, never a refusal.
-  if (!producerMissing && isImplausibleIdentity(trimmedProducer, trimmedName)) {
+  if (!draft && !producerMissing && isImplausibleIdentity(trimmedProducer, trimmedName)) {
     if (!allowPending) {
       const err = new Error(
         `"${trimmedProducer}" is not a usable producer name — it is only house words (Domaine, Casa, Estate) with no winery attached to them`
@@ -731,7 +766,7 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // Same two outcomes as every gate above it: pending for the commit paths, an
   // untouched 400 for the deliberate curation surfaces.
   let producerRejected = null;
-  if (!producerMissing) {
+  if (!draft && !producerMissing) {
     // Lazy require, mirroring pendingWineOps' call site: the scan service pulls
     // the whole taxonomy + registry model tree, and this module is required at
     // boot by every write path.
@@ -793,9 +828,11 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // stage, which is fold-invariant. Recompute from the string actually being
   // stored, so the row lands under the key a repeat submission will look it
   // up by (and so the E11000 recovery below re-queries the right one).
-  const mintKey = producerMissing
-    ? pendingWineKey(trimmedName, userId, trimmedAppellation)
-    : generateWineKey(trimmedName, producerToStore, trimmedAppellation);
+  const mintKey = draft
+    ? draftWineKey(trimmedName, producerToStore, userId, trimmedAppellation)
+    : producerMissing
+      ? pendingWineKey(trimmedName, userId, trimmedAppellation)
+      : generateWineKey(trimmedName, producerToStore, trimmedAppellation);
 
   // Region canon: the appellation's own region wins when the taxonomy knows
   // it (see regionForAppellation) — this is what keeps one producer's wines
@@ -908,7 +945,11 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     // the identity (models/WineDefinition.pendingIdentity). The model's
     // pre-validate hook promotes it automatically once producer + name are both
     // real, so nothing has to remember to clear this.
-    pendingIdentity: producerMissing,
+    pendingIdentity: producerMissing || draft,
+    // A private draft is pending by invariant (the hook sets it anyway) and
+    // carries its 7-day untouched clock (services/wineDraftExpiryJob).
+    draft,
+    draftExpiresAt: draft ? new Date(Date.now() + DRAFT_TTL_MS) : null,
   });
 
   try {
@@ -938,6 +979,7 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   const created = { wine: newWine, created: true };
   if (nearMiss) created.nearMiss = nearMiss;
   if (producerMissing) created.pendingIdentity = true;
+  if (draft) created.draft = true;
   // The producer string the cross-field rules refused, for the caller's audit
   // entry. Only ever set on a create, and only when a rule actually fired.
   if (producerRejected) created.producerRejected = producerRejected;
@@ -952,5 +994,7 @@ module.exports = {
   regionForAppellation,
   pendingProducerKey,
   pendingWineKey,
+  draftWineKey,
+  DRAFT_TTL_MS,
   unpolluteEstateName,
 };

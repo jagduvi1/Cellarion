@@ -274,7 +274,7 @@ router.get('/wines/:id', quota('fetches'), async (req, res) => {
   if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid wine id', code: 'invalid' });
   try {
     const wine = await findVisibleWine(req.params.id, {
-      userId: null, roles: [], lean: true,
+      userId: null, roles: [], lean: true, noDrafts: true,
       select: `${IDENTITY_SELECT} aiProfile canary lwin communityRating updatedAt`,
       populate: ['country', 'region', 'grapes'],
     });

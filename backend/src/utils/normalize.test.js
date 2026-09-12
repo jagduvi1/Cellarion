@@ -806,3 +806,31 @@ describe('normalizeProducerKey — Saint fold + founding-year strip (tickets d49
     expect(normalizeProducerKey('Kumeu River Wines Limited')).toBe('kumeu river');
   });
 });
+
+// ─── draftWineKey — the private-draft key namespace (2026-09-12) ─────────────
+
+describe('draftWineKey', () => {
+  const { draftWineKey, draftProducerKey, DRAFT_KEY_PREFIX, generateWineKey, pendingWineKey, normalizeString } = require('./normalize');
+  const U1 = 'aaaaaaaaaaaaaaaaaaaaaaaa';
+  const U2 = 'bbbbbbbbbbbbbbbbbbbbbbbb';
+
+  test('is per-creator: two users\' drafts of the same wine never share a key', () => {
+    expect(draftWineKey('Kaefferkopf', 'Cave de Kaysersberg', U1, 'Alsace'))
+      .not.toBe(draftWineKey('Kaefferkopf', 'Cave de Kaysersberg', U2, 'Alsace'));
+    expect(draftWineKey('Kaefferkopf', 'Cave de Kaysersberg', U1, 'Alsace'))
+      .toBe(`${DRAFT_KEY_PREFIX}${U1}:cave de kaysersberg:kaefferkopf:alsace`);
+    expect(draftProducerKey(U1)).toBe(`draft~${U1}`);
+  });
+
+  test('is disjoint from the ordinary and the pending namespaces (the tilde never survives normalizeString)', () => {
+    expect(normalizeString('draft~x')).not.toContain('~');
+    expect(draftWineKey('Kaefferkopf', 'Cave de Kaysersberg', U1, 'Alsace'))
+      .not.toBe(generateWineKey('Kaefferkopf', 'Cave de Kaysersberg', 'Alsace'));
+    expect(draftWineKey('Kaefferkopf', '', U1, 'Alsace')).not.toBe(pendingWineKey('Kaefferkopf', U1, 'Alsace'));
+    expect(draftWineKey('Kaefferkopf', '', U1, 'Alsace').startsWith('draft~')).toBe(true);
+  });
+
+  test('tolerates a missing producer and appellation (a draft may be producerless)', () => {
+    expect(draftWineKey('Kaefferkopf', undefined, U1)).toBe(`draft~${U1}::kaefferkopf:`);
+  });
+});

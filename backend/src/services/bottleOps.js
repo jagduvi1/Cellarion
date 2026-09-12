@@ -507,6 +507,11 @@ async function addBottle(cellarDoc, wineDoc, fields = {}, req) {
     const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
     await ensurePendingVintageProfile(wineDoc._id, bottle.vintage);
   } catch (err) { /* profile bookkeeping must never fail the add */ }
+  // A bottle added to the creator's private draft is a "touch": the draft's
+  // untouched clock restarts (draft design 2026-09-12). Best-effort.
+  if (wineDoc.draft === true) {
+    try { await require('./wineDraftOps').touchDraft(wineDoc._id); } catch { /* never fails the add */ }
+  }
   // Include wineName so the Cellar Audit page shows what was added, matching
   // the REST POST /bottles audit (grand-audit M5 — AI-added bottles showed a
   // bare vintage with no wine name). wineDoc is the resolved registry wine.

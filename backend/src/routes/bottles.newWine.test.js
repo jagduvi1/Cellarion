@@ -35,6 +35,7 @@ jest.mock('../services/search', () => ({
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../services/indexNow', () => ({ submitUrls: jest.fn() }));
 jest.mock('../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn() }));
+jest.mock('../services/wineDraftOps', () => ({ touchDraft: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../services/embeddingJob', () => ({ embedSinglePair: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../services/enrichmentJob', () => ({ enrichWineById: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../services/restockChecker', () => ({
@@ -209,7 +210,7 @@ describe('POST /api/bottles — newWine mints at commit', () => {
     expect(userId).toBe(USER_ID);
     // allowPending: the commit path files an incomplete identity instead of
     // 400-ing the user's bottle away (pending-identity wines).
-    expect(opts).toEqual({ confirmCreate: false, skipSiblingMatch: false, createdVia: 'ui', allowPending: true });
+    expect(opts).toEqual({ confirmCreate: false, skipSiblingMatch: false, createdVia: 'ui', allowPending: true, draft: false });
 
     // audit parity with every other registry-write surface: same action name,
     // same detail shape — plus IndexNow on a real creation
@@ -238,8 +239,26 @@ describe('POST /api/bottles — newWine mints at commit', () => {
     await post({ cellar: CELLAR_ID, vintage: '2019', newWine: { ...NEW_WINE, confirmCreate: true } });
 
     expect(findOrCreateWine.mock.calls[0][2]).toEqual({
-      confirmCreate: true, skipSiblingMatch: true, createdVia: 'ui', allowPending: true,
+      confirmCreate: true, skipSiblingMatch: true, createdVia: 'ui', allowPending: true, draft: false,
     });
+  });
+
+  test('newWine.draft:true mints a PRIVATE DRAFT (strictly boolean — a string does not), audited as such, no IndexNow', async () => {
+    findOrCreateWine.mockResolvedValue({ wine: { ...WINE_DOC, draft: true, pendingIdentity: true }, created: true, draft: true });
+    const { status } = await post({ cellar: CELLAR_ID, vintage: '2019', newWine: { ...NEW_WINE, draft: true } });
+    expect(status).toBe(201);
+    expect(findOrCreateWine.mock.calls[0][2]).toMatchObject({ draft: true });
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'wine.create',
+      { type: 'wine', id: WINE_ID }, { via: 'ui', name: 'Kaefferkopf', producer: 'Cave de Kaysersberg', draft: true });
+    expect(submitUrls).not.toHaveBeenCalled();
+    // the add touched the draft's clock
+    expect(require('../services/wineDraftOps').touchDraft).toHaveBeenCalledWith(WINE_ID);
+
+    jest.clearAllMocks();
+    ownCellar();
+    findOrCreateWine.mockResolvedValue({ wine: WINE_DOC, created: true });
+    await post({ cellar: CELLAR_ID, vintage: '2019', newWine: { ...NEW_WINE, draft: 'yes' } });
+    expect(findOrCreateWine.mock.calls[0][2]).toMatchObject({ draft: false });
   });
 
   test('resolved to an EXISTING wine (created:false): bottle is created, but no wine.create audit and no IndexNow', async () => {

@@ -71,6 +71,9 @@ const isWithinPromotedGrace = (image, now = Date.now()) => {
  */
 const mayCurationReadScan = (wine, image, now = Date.now()) => {
   if (!wine) return false;
+  // A private draft is pending by invariant but is in nobody's queue: its
+  // creator has not asked anyone to read the label (draft design 2026-09-12).
+  if (wine.draft === true) return false;
   if (wine.pendingIdentity === true) return true;
   return isWithinPromotedGrace(image, now);
 };

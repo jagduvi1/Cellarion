@@ -1096,13 +1096,22 @@ router.get('/:id', requireAuth, async (req, res) => {
     if (!wine) {
       return res.status(404).json({ error: 'Wine not found' });
     }
-    if (wine.pendingIdentity === true) {
-      if (!isCurator && String(wine.createdBy) !== String(req.user.id)) {
-        return res.status(404).json({ error: 'Wine not found' });
-      }
+    // The one visibility rule (services/wineVisibility), on the loaded
+    // document — the select above is an exclusion list, so pendingIdentity,
+    // createdBy and draft are all present for it. A pending row is for its
+    // creator and curation; a private DRAFT is for its creator only, plus, on
+    // this READ surface, the members of a shared cellar holding a bottle of it
+    // (their bottle page has to render). A hidden row answers the same 404 a
+    // missing id gets.
+    const { canSeeWine, isDraftVisibleViaSharedCellar } = require('../services/wineVisibility');
+    if (!canSeeWine(wine, { userId: req.user.id, roles: req.user.roles })) {
+      const viaCellar = wine.draft === true && await isDraftVisibleViaSharedCellar(String(wine._id), req.user.id);
+      if (!viaCellar) return res.status(404).json({ error: 'Wine not found' });
     }
 
     const payload = decorateGrapes(wine);
+    // A draft says whose it is only as a boolean — never by id.
+    if (wine.draft === true) payload.draftMine = String(wine.createdBy) === String(req.user.id);
     if (!isCurator) delete payload.createdBy;
     res.json({ wine: payload });
   } catch (error) {
