@@ -25,13 +25,19 @@ const fail = (code, message) => ({ ok: false, code, message });
 /**
  * Load the user and apply ban + budget. Returns { ok: true, user } or the
  * transport-neutral failure the ops services already speak.
+ *
+ * `budget: false` applies the ban only. Used when the write AMENDS a row the
+ * user already has in a queue (support ticket 2026-09-12: adding a field to
+ * one's own pending wine correction) — nothing new enters the queue, so it
+ * must not be refused as "one more suggestion today".
  */
-async function checkContributionGate(userId) {
+async function checkContributionGate(userId, { budget = true } = {}) {
   const user = await User.findById(userId).select('contribution.tier discussionBan username');
   if (!user) return fail('not_found', 'User not found');
   if (user.isDiscussionBanned && user.isDiscussionBanned()) {
     return fail('banned', 'You are banned from posting content visible to other users');
   }
+  if (!budget) return { ok: true, user };
 
   const daily = TIER_DAILY[user.contribution?.tier] || TIER_DAILY.newcomer;
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);

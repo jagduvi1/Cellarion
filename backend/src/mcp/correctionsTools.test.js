@@ -10,6 +10,7 @@
 jest.mock('../services/wineProposalOps', () => ({
   createFieldCorrection: jest.fn(),
   listMineForWine: jest.fn(),
+  pendingForWine: jest.fn(),
   FIELDS: ['producer', 'name', 'appellation', 'region', 'country', 'classification'],
 }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
@@ -69,7 +70,32 @@ test('delegates to the shared service with the caller identity and via mcp', asy
   );
   const body = parse(res);
   expect(body.data.proposal_id).toBe(oid('9'));
+  expect(body.data.amended).toBe(false);
   expect(body.summary).toContain('admin will review');
+});
+
+// Support ticket 2026-09-12: filing on one's own pending suggestion amends it.
+test('an amended own suggestion is reported as such, with the full field set', async () => {
+  ops.createFieldCorrection.mockResolvedValue({
+    ok: true,
+    amended: true,
+    amendedFields: ['grapes'],
+    proposal: { _id: oid('7'), proposedFields: { toObject: () => ({ name: 'Château Martinat', grapes: ['Merlot', 'Malbec'] }) } },
+    wine: { producer: 'Chateau Martinat', name: 'Grand Vin de Bordeaux' },
+  });
+  const res = await tool().handler({ wine_id: WINE, fields: { grapes: ['Merlot', 'Malbec'] }, reason: 'Importer data sheet.' }, CTX);
+  const body = parse(res);
+  expect(res.isError).toBeFalsy();
+  expect(body.summary).toMatch(/amended with grapes/);
+  expect(body.summary).toMatch(/now covers name, grapes/);
+  expect(body.data).toMatchObject({ proposal_id: oid('7'), amended: true, fields: ['name', 'grapes'], status: 'pending' });
+  expect(body.data.note).toMatch(/no daily budget/);
+});
+
+test('the description states the per-wine (not per-user) limit and the amend rule', () => {
+  expect(tool().description).toMatch(/ONE pending suggestion per wine, across ALL users/);
+  expect(tool().description).toMatch(/AMENDS/);
+  expect(tool().description).toMatch(/pending_correction/);
 });
 
 test.each([

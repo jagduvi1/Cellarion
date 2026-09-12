@@ -13,6 +13,16 @@
  * MCP's no-token rule); HERE lives the shared part — discussion ban, the
  * per-contribution-tier daily budget, and the one-pending-per-wine conflict.
  *
+ * The one-pending rule is per WINE, not per user (partial unique index on
+ * WineCorrectionProposal). Support ticket 2026-09-12: a user who noticed a
+ * second gap right after filing was told "already awaiting review" — by their
+ * own suggestion. So when the pending row is the caller's OWN, a new filing
+ * AMENDS it (fields merged, reason appended, snapshot refreshed) instead of
+ * colliding; only somebody else's pending row is a conflict. An amendment
+ * enters nothing new into the queue, so it bypasses the daily budget (not the
+ * ban). `pendingForWine` exposes the same state to readers (get_wine) so the
+ * block is discoverable before a correction is composed.
+ *
  * Results are transport-neutral: { ok: true, ... } or { ok: false, code,
  * message } — codes: invalid | banned | limit | not_found | conflict.
  */
@@ -113,12 +123,18 @@ async function createFieldCorrection(userId, { wineId, fields, reason, evidenceU
     return fail('invalid', 'Suggest at least one changed field.');
   }
 
+  if (!isValidId(String(wineId))) return fail('invalid', 'Invalid wine id');
+
+  // Looked up BEFORE the gate so an amendment of the caller's own pending row
+  // is not refused as "one more suggestion today" — but acted on only AFTER
+  // the visibility check below, so a hidden wine's queue state never leaks.
+  const existing = await findPendingForWine(wineId);
+  const amending = !!existing && String(existing.proposer) === String(userId);
+
   // Ban + the ONE daily budget shared across all suggestion families.
-  const gate = await checkContributionGate(userId);
+  const gate = await checkContributionGate(userId, { budget: !amending });
   if (!gate.ok) return gate;
   const { user } = gate;
-
-  if (!isValidId(String(wineId))) return fail('invalid', 'Invalid wine id');
   // Visibility, not ownership: anyone who can SEE the wine may suggest a fix
   // (a pendingIdentity wine stays invisible to strangers, same as everywhere).
   const wine = await findVisibleWine(String(wineId), {
@@ -139,6 +155,44 @@ async function createFieldCorrection(userId, { wineId, fields, reason, evidenceU
     grapes: (wine.grapes || []).map((g) => (g && g.name) || String(g)),
   };
 
+  if (existing && !amending) {
+    return fail('conflict', 'A suggestion for this wine is already awaiting review (filed by another user — the limit is one pending suggestion per wine). ' +
+      'Wait for that decision, or check get_wine → pending_correction for what it covers.');
+  }
+
+  if (amending) {
+    const before = plain(existing.proposedFields);
+    const merged = { ...before, ...proposedFields };
+    const reasonSoFar = existing.reason || '';
+    const combinedReason = reasonSoFar ? `${reasonSoFar}\n\n${cleanReason}` : cleanReason;
+    if (combinedReason.length > REASON_MAX) {
+      return fail('invalid',
+        `Your pending suggestion on this wine already carries a ${reasonSoFar.length}-character reason; the addition ` +
+        `must fit in the remaining ${Math.max(0, REASON_MAX - reasonSoFar.length - 2)} characters.`);
+    }
+    existing.proposedFields = merged;
+    existing.reason = combinedReason;
+    if (cleanUrl) existing.evidenceUrl = cleanUrl;
+    // The admin diff renders against LIVE values; the snapshot is what shows
+    // drift since filing — an amendment is a fresh filing of the whole set.
+    existing.currentSnapshot = currentSnapshot;
+    await existing.save();
+
+    const { logAudit } = require('./audit');
+    logAudit(req || null, 'wine_proposal.user_amend',
+      { type: 'wine', id: wine._id },
+      {
+        proposalId: existing._id,
+        fields: Object.keys(proposedFields),
+        allFields: Object.keys(merged),
+        wine: `${wine.producer || '?'} — ${wine.name}`,
+        tier: user.contribution?.tier || 'newcomer',
+        ...(via ? { via } : {}),
+      });
+
+    return { ok: true, proposal: existing, wine, amended: true, amendedFields: Object.keys(proposedFields) };
+  }
+
   let proposal;
   try {
     proposal = await WineCorrectionProposal.create({
@@ -153,7 +207,8 @@ async function createFieldCorrection(userId, { wineId, fields, reason, evidenceU
     });
   } catch (err) {
     // One pending field_correction per wine (partial unique index) — a clean,
-    // human answer instead of a stack trace.
+    // human answer instead of a stack trace. Reached only on a race (a row
+    // appeared between the lookup above and this insert).
     if (err?.code === 11000) {
       return fail('conflict', 'A suggestion for this wine is already awaiting review — thank you, it is in the queue.');
     }
@@ -171,7 +226,50 @@ async function createFieldCorrection(userId, { wineId, fields, reason, evidenceU
       ...(via ? { via } : {}),
     });
 
-  return { ok: true, proposal, wine };
+  return { ok: true, proposal, wine, amended: false };
+}
+
+/** A mongoose subdoc or a plain object → plain object (never null). */
+function plain(v) {
+  if (!v) return {};
+  return typeof v.toObject === 'function' ? v.toObject() : v;
+}
+
+/** The pending field_correction on a wine, as a saveable document, or null. */
+function findPendingForWine(wineId) {
+  return WineCorrectionProposal.findOne({
+    wineDefinition: { $eq: String(wineId) },
+    kind: 'field_correction',
+    status: 'pending',
+  });
+}
+
+/**
+ * Read-side view of the one-pending-per-wine state, for get_wine and the
+ * like: which fields a pending suggestion covers, when it was filed, and
+ * whether it is the CALLER's — never whose it is otherwise (the #930
+ * anonymisation rule: proposer identity stays with admins). Proposed VALUES
+ * are not exposed either: the queue is not a second, unreviewed registry.
+ *
+ * Returns null when nothing is pending. `userId` may be null (anonymous
+ * caller) — then `mine` is false.
+ */
+async function pendingForWine(wineId, userId) {
+  if (!isValidId(String(wineId))) return null;
+  const row = await WineCorrectionProposal.findOne({
+    wineDefinition: { $eq: String(wineId) },
+    kind: 'field_correction',
+    status: 'pending',
+  }).select('proposer proposedFields createdAt').lean();
+  if (!row) return null;
+  const fields = Object.entries(plain(row.proposedFields))
+    .filter(([, v]) => v !== undefined && v !== null && v !== '')
+    .map(([k]) => k);
+  return {
+    fields,
+    filed_at: row.createdAt || null,
+    mine: !!userId && String(row.proposer) === String(userId),
+  };
 }
 
 /**
@@ -198,4 +296,5 @@ module.exports = {
   REASON_MIN,
   createFieldCorrection,
   listMineForWine,
+  pendingForWine,
 };

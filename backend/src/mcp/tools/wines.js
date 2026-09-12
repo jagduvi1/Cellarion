@@ -83,7 +83,9 @@ registerTool({
     'Full registry record for one wine: producer, region, appellation, classification, grapes, community rating, ' +
     'the AI tasting profile when the wine has been enriched, and the registry image (url + credit) when one is ' +
     'published — null means the wine has no public picture yet; to see the picture yourself, call get_photo with ' +
-    'the wine_id. Vintage-neutral (bottles carry the vintage). ' +
+    'the wine_id. Vintage-neutral (bottles carry the vintage). For signed-in callers, pending_correction says ' +
+    'whether a correction suggestion is awaiting review on this wine (one is allowed per wine, across all users), ' +
+    'which fields it covers and whether it is the caller\'s own — check it before composing suggest_wine_correction. ' +
     'Call after search_registry when the user wants depth on a specific wine.',
   // 'public' — same rationale as search_registry: this is the public wine
   // page's data over MCP.
@@ -119,6 +121,14 @@ registerTool({
     const gate = await gateMcpRead(ctx, w._id);
     if (!gate.allowed) return fail('rate_limited', CAP_MESSAGE);
     const profile = hasContent(w.aiProfile) ? w.aiProfile : null;
+    // Support ticket 2026-09-12: the one-pending-per-wine rule was only
+    // discoverable by composing a correction and having it refused. Signed-in
+    // callers see the queue state (fields + whether it is theirs; never whose
+    // otherwise, never the proposed values). Omitted for the anonymous
+    // surface — queue state is not public-site content.
+    const pendingCorrection = anonymous
+      ? undefined
+      : await require('../../services/wineProposalOps').pendingForWine(w._id, ctx.user.id);
     return ok(`${w.name}${w.producer ? ` — ${w.producer}` : ''}`, {
       ...wineSummary(w),
       classification: w.classification || null,
@@ -137,6 +147,7 @@ registerTool({
           }
         : null,
       public_url: w.slug ? `${siteBaseUrl()}/wines/${w.slug}` : null,
+      ...(anonymous ? {} : { pending_correction: pendingCorrection }),
     });
   },
 });

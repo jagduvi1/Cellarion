@@ -26,8 +26,12 @@ registerTool({
     'canonical one). Available to every user; nothing changes until an admin approves the diff. Give a ' +
     'reason saying what is wrong and how you know; an evidence URL (producer site, appellation register) makes ' +
     'one-click approval possible. Daily suggestion budget grows with the user\'s accepted contributions. ' +
-    'NOT undoable via undo_last — an admin reads and decides. Sommeliers proposing merges or non-wine flags use ' +
-    'propose_wine_correction instead.',
+    'ONE pending suggestion per wine, across ALL users: while the user\'s OWN suggestion is awaiting review, filing ' +
+    'again on that wine AMENDS it (new fields merged in, reason appended, no budget spent) — the way to add a fix ' +
+    'noticed right after filing; while SOMEONE ELSE\'s is pending the call fails with conflict. Check get_wine → ' +
+    'pending_correction first: it says whether a suggestion is pending, which fields it covers and whether it is ' +
+    'the caller\'s. NOT undoable via undo_last — an admin reads and decides. Sommeliers proposing merges or ' +
+    'non-wine flags use propose_wine_correction instead.',
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
@@ -54,11 +58,28 @@ registerTool({
       { via: 'mcp', req: ctx.req }
     );
     if (!result.ok) return fail(FAIL_CODE[result.code] || 'invalid_input', result.message);
+    const pf = result.proposal.proposedFields;
+    const allFields = Object.keys(pf && typeof pf.toObject === 'function' ? pf.toObject() : pf || {});
+    const label = `${result.wine.producer || '?'} — ${result.wine.name}`;
+    if (result.amended) {
+      return ok(
+        `Your pending suggestion for ${label} was amended with ${result.amendedFields.join(', ')} — it now covers ${allFields.join(', ')} (admin will review)`,
+        {
+          proposal_id: result.proposal._id,
+          status: 'pending',
+          amended: true,
+          fields: allFields,
+          note: 'No new queue row: the fields were merged into the suggestion already awaiting review, and no daily budget was spent.',
+        }
+      );
+    }
     return ok(
-      `Suggestion filed for ${result.wine.producer || '?'} — ${result.wine.name}: ${Object.keys(result.proposal.proposedFields.toObject ? result.proposal.proposedFields.toObject() : result.proposal.proposedFields).join(', ')} (admin will review)`,
+      `Suggestion filed for ${label}: ${allFields.join(', ')} (admin will review)`,
       {
         proposal_id: result.proposal._id,
         status: 'pending',
+        amended: false,
+        fields: allFields,
         note: 'An admin reviews the diff; the record changes only on approval. The user can see the outcome on the bottle page.',
       }
     );

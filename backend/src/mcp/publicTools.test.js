@@ -25,6 +25,11 @@ jest.mock('../models/Rack', () => ({ find: jest.fn(), findOne: jest.fn() }));
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('../models/WishlistItem', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/JournalEntry', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
+// get_wine reads the correction queue for signed-in callers (support ticket
+// 2026-09-12) — mocked as "nothing pending" so the real model never buffers.
+jest.mock('../models/WineCorrectionProposal', () => ({
+  findOne: jest.fn(() => ({ select: () => ({ lean: async () => null }) })),
+}));
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn() }));
 jest.mock('../models/WineEmbedding', () => ({ findOne: jest.fn() }));
 jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn() }));
