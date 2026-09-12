@@ -205,7 +205,8 @@ router.post('/ai-suggest', requireSommOrAdmin, async (req, res) => {
       .populate('region', 'name')
       .populate('grapes', 'name');
 
-    if (!wine) {
+    // A user's private draft is nobody's curation work (draft design 2026-09-12).
+    if (!wine || wine.draft === true) {
       return res.status(404).json({ error: 'Wine definition not found' });
     }
 
@@ -274,8 +275,8 @@ router.post('/', requireSommOrAdmin, async (req, res) => {
       return res.status(400).json({ error: 'price must be a non-negative number' });
     }
 
-    // Verify the wine exists
-    const wineExists = await WineDefinition.exists({ _id: wineDefId });
+    // Verify the wine exists (a private draft is not registry content — same 404)
+    const wineExists = await WineDefinition.exists({ _id: wineDefId, draft: { $ne: true } });
     if (!wineExists) {
       return res.status(404).json({ error: 'Wine definition not found' });
     }

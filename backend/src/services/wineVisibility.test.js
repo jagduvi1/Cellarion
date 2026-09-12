@@ -170,7 +170,9 @@ describe('findVisibleWine — drafts via a shared cellar, and noDrafts', () => {
     const got = await findVisibleWine(WINE, { userId: STRANGER, roles: ['user'], viaSharedCellar: true });
 
     expect(got).toBe(draftDoc);
-    expect(Cellar.find).toHaveBeenCalledWith({ 'members.user': STRANGER, deletedAt: null });
+    // Owner OR member: an editor's draft bottle in someone else's cellar must
+    // leave that owner able to read it (audit 2026-09-12).
+    expect(Cellar.find).toHaveBeenCalledWith({ $or: [{ user: STRANGER }, { 'members.user': STRANGER }], deletedAt: null });
     expect(Bottle.exists).toHaveBeenCalledWith({ wineDefinition: WINE, cellar: { $in: ['c1'] } });
     expect(WineDefinition.findOne).toHaveBeenLastCalledWith({ _id: WINE, draft: true });
   });

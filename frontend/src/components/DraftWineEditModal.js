@@ -97,7 +97,7 @@ function DraftWineEditModal({ apiFetch, wine, onClose, onSaved }) {
           </div>
           <div className="form-group">
             <label htmlFor="dw-grapes">{t('draftWine.fieldGrapes', 'Grapes (comma-separated)')}</label>
-            <input id="dw-grapes" type="text" value={form.grapeNames} onChange={set('grapeNames')} placeholder="Merlot, Cabernet Franc" />
+            <input id="dw-grapes" type="text" value={form.grapeNames} onChange={set('grapeNames')} placeholder={t('draftWine.fieldGrapesPlaceholder', 'e.g. Merlot, Cabernet Franc')} />
           </div>
         </div>
         {error && <div className="alert alert-error" role="alert">{error}</div>}

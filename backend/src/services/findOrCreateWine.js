@@ -466,6 +466,17 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
       (excludeId != null && String(candidate._id) === String(excludeId)) ||
       (candidate.pendingIdentity === true && String(candidate.createdBy) !== String(userId))
     );
+  // The same isolation as a QUERY clause, for the capped stages below
+  // (audit 2026-09-12): a `.limit(2)` that ran BEFORE the post-filter could
+  // be filled by two strangers' drafts of the same canonical identity — a
+  // draft keeps a producer, so it shares the published wine's canonicalKey —
+  // and the real published row was then never fetched, sending the add on to
+  // fuzzy scoring and a duplicate mint. Blocked rows never reach the cap now;
+  // the post-filter stays as the belt to this brace.
+  const isolation = {
+    $or: [{ pendingIdentity: { $ne: true } }, { pendingIdentity: true, createdBy: userId }],
+    ...(excludeId != null ? { _id: { $ne: excludeId } } : {}),
+  };
 
   // 0. A DRAFT add resolves to the creator's own draft of the same identity
   // first (a retry, or a second bottle of a wine still being finished) — the
@@ -502,7 +513,7 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // pending row can land here, so the isolation gate is load-bearing, not
   // defensive. Filtered BEFORE the length check so a blocked row doesn't make a
   // real single hit look ambiguous.
-  const canonicalHits = (await WineDefinition.find({ canonicalKey })
+  const canonicalHits = (await WineDefinition.find({ canonicalKey, ...isolation })
     .limit(2)
     .populate(POPULATE)).filter((c) => !pendingBlocked(c));
   if (canonicalHits.length === 1 && !conflictsCountry(canonicalHits[0])) {
@@ -532,6 +543,7 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     // creator's producerless row of the same name.
     const canonicalSiblings = (await WineDefinition.find({
       canonicalKey: new RegExp(`^${escapeRegex(canonicalSiblingPrefix(trimmedName, trimmedProducer))}`),
+      ...isolation,
     })
       .limit(2)
       .populate(POPULATE)).filter((c) => !pendingBlocked(c));
@@ -542,7 +554,7 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
       const siblingPrefix = producerMissing
         ? `${pendingProducerKey(userId)}:${normalizeString(trimmedName)}:`
         : `${normalizeString(trimmedProducer)}:${normalizeString(trimmedName)}:`;
-      const siblings = (await WineDefinition.find({ normalizedKey: new RegExp(`^${escapeRegex(siblingPrefix)}`) })
+      const siblings = (await WineDefinition.find({ normalizedKey: new RegExp(`^${escapeRegex(siblingPrefix)}`), ...isolation })
         .limit(2)
         .populate(POPULATE)).filter((c) => !pendingBlocked(c));
       if (siblings.length === 1 && !conflictsCountry(siblings[0])) {

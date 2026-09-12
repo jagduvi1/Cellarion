@@ -45,12 +45,22 @@ async function runWineDraftExpirySweep(now = new Date()) {
 
   // ── Warn: empty drafts lapsing within the next 24 h, not yet warned ──
   const soon = new Date(now.getTime() + ops.DRAFT_WARN_HOURS * 60 * 60 * 1000);
-  const toWarn = await WineDefinition.find({
+  // Drafts holding bottles are never deleted, so they are never warned — and
+  // they must not occupy the window either (audit 2026-09-12): a few hundred
+  // bottle-holding drafts in the 24 h band would otherwise fill SWEEP_LIMIT
+  // every hour and starve the empty ones the warning exists for.
+  const inWindow = await WineDefinition.find({
     draft: true, draftExpiresAt: { $lte: soon, $gt: now }, draftExpiryWarnedAt: null,
-  }).select('name producer createdBy draftExpiresAt').limit(SWEEP_LIMIT).lean();
+  }).select('_id').limit(SWEEP_LIMIT * 5).lean();
+  const held = new Set((await Bottle.distinct('wineDefinition', { wineDefinition: { $in: inWindow.map((w) => w._id) } })).map(String));
+  const emptyIds = inWindow.map((w) => w._id).filter((id) => !held.has(String(id))).slice(0, SWEEP_LIMIT);
+  const toWarn = emptyIds.length
+    ? await WineDefinition.find({ _id: { $in: emptyIds }, draft: true, draftExpiryWarnedAt: null })
+      .select('name producer createdBy draftExpiresAt').lean()
+    : [];
   for (const w of toWarn) {
     try {
-      // A draft with bottles is never deleted, so there is nothing to warn about.
+      // Re-checked at write time: a bottle added since the scan cancels the warning.
       if (await Bottle.exists({ wineDefinition: w._id })) continue;
       await notify(w.createdBy, 'wine_draft_expiring',
         'A draft wine is about to expire',
@@ -74,18 +84,19 @@ async function runWineDraftExpirySweep(now = new Date()) {
       const hasBottles = await Bottle.exists({ wineDefinition: wine._id });
       if (!hasBottles) {
         const d = await ops.deleteDraft(wine, null, { action: 'wine.draft_expire' });
-        if (d.ok) result.deleted += 1; else result.errors += 1;
+        // A bottle arriving mid-sweep keeps the draft (conflict) — not an error.
+        if (d.ok) result.deleted += 1; else if (d.code !== 'conflict') result.errors += 1;
         continue;
       }
       const creator = String(wine.createdBy);
-      const r = await ops.publishDraft(wine, { userId: creator, req: null, auto: true });
+      const r = await ops.publishDraft(wine, { userId: creator, req: null, auto: true, reason: 'expiry' });
       if (r.ok) {
         await notify(creator, 'wine_draft_published',
           'Your draft wine was published',
           `"${label(wine)}" sat untouched for ${ops.DRAFT_TTL_DAYS} days and has been published to the registry as it stood${r.pendingCuration ? ' (a curator will complete its producer)' : ''}.`);
         result.published += 1;
       } else if (r.code === 'duplicate' && r.match) {
-        const a = await ops.attachDraftBottles(wine, r.match.wine_id, { userId: creator, roles: [], req: null, auto: true });
+        const a = await ops.attachDraftBottles(wine, r.match.wine_id, { userId: creator, roles: [], req: null, auto: true, reason: 'expiry' });
         if (a.ok) {
           await notify(creator, 'wine_draft_merged',
             'Your draft matched a registry wine',

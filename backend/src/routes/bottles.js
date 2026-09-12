@@ -1207,6 +1207,13 @@ router.post('/:id/request-price-tracking', requireBottleAccess('viewer'), async 
     if (!bottle.wineDefinition || !bottle.vintage || bottle.vintage === 'NV' || bottle.vintage === 'Unknown') {
       return res.status(400).json({ error: 'This wine cannot be price-tracked (missing wine definition or vintage).' });
     }
+    // A private draft is not in the shared registry yet: a tracking request
+    // would put its name in front of the sommeliers who must not see it, and
+    // dangle if the draft is later attached elsewhere (audit 2026-09-12).
+    const wdId = bottle.wineDefinition?._id || bottle.wineDefinition;
+    if (await WineDefinition.exists({ _id: wdId, draft: true })) {
+      return res.status(400).json({ error: 'This wine is still a private draft — publish it first, then request price tracking.' });
+    }
 
     // A sommelier-declined pair stays declined: the decline flow (somm prices)
     // records a PriceTrackingSkip, and this check is what keeps the pair from

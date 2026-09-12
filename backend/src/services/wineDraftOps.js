@@ -30,8 +30,9 @@ const Appellation = require('../models/Appellation');
 const { logAudit } = require('./audit');
 const {
   generateWineKey, pendingWineKey, draftWineKey, normalizeAppellation, normalizeAppellationKey,
-  normalizeString, resolveCountryName, isIdentitySentinel, isImplausibleIdentity,
+  normalizeString, resolveCountryName, isIdentitySentinel, isImplausibleIdentity, stripTrailingVintage,
 } = require('../utils/normalize');
+const { canonicalizeWineName } = require('../utils/producerPrefix');
 const { resolveCanonicalAppellation } = require('./appellationResolve');
 const { resolveGrapeIdsStrict } = require('./wineProfileOps');
 const { validatePendingFix, runPromotionFollowThrough } = require('./pendingWineOps');
@@ -189,7 +190,10 @@ async function updateDraft(wine, clean, userId) {
   if (clean.classification !== undefined) wine.classification = clean.classification || null;
 
   let countryDoc = null;
-  if (clean.countryName !== undefined && clean.countryName) {
+  if (clean.countryName !== undefined) {
+    // Country is required on every registry row — it cannot be cleared, and
+    // saying so beats a silent no-op the form springs back from (audit 2026-09-12).
+    if (!clean.countryName) return fail('invalid_input', 'Country cannot be cleared — every wine needs one.');
     countryDoc = await Country.findOne({ normalizedName: normalizeString(resolveCountryName(clean.countryName)) });
     if (!countryDoc) {
       return fail('invalid_input', `Unknown country "${clean.countryName}" — pick one the registry already knows.`);
@@ -224,6 +228,13 @@ async function updateDraft(wine, clean, userId) {
   }
 
   if (clean.name || clean.producer !== undefined || clean.appellation !== undefined) {
+    // The stored name follows the resolver's own shaping (trailing vintage
+    // stripped, producer prefix folded out — services/findOrCreateWine does
+    // exactly this before keying a mint), so a retry add of the same wine
+    // resolves to this draft instead of minting a second one, and the key the
+    // publish step regenerates matches what the registry would compute
+    // (audit 2026-09-12).
+    wine.name = canonicalizeWineName(stripTrailingVintage(wine.name), wine.producer || '') || wine.name;
     wine.normalizedKey = draftWineKey(wine.name, wine.producer, wine.createdBy, wine.appellation);
   }
   wine.draftExpiresAt = new Date(Date.now() + DRAFT_TTL_MS);
@@ -319,13 +330,17 @@ async function identityForResolve(wine) {
  *      unique index, answered the same way as step 2.
  *   4. promoted → the one promotion follow-through, once.
  */
-async function publishDraft(wine, { userId = null, req = null, confirmCreate = false, auto = false } = {}) {
+async function publishDraft(wine, { userId = null, req = null, confirmCreate = false, auto = false, reason = null } = {}) {
   if (wine.draft !== true) return fail('conflict', 'This wine is not a draft.');
 
   const identity = await checkPublishIdentity(wine);
   let producerMissing = identity.ok ? identity.producerMissing === true : false;
+  // The producer string an unattended publish had to drop survives in the
+  // audit entry, as it does for a refused mint (audit 2026-09-12).
+  let rejectedProducer = null;
   if (!identity.ok) {
     if (!auto) return fail('invalid_identity', identity.message);
+    rejectedProducer = { producer: wine.producer, reason: identity.message };
     producerMissing = true;
   }
 
@@ -351,13 +366,22 @@ async function publishDraft(wine, { userId = null, req = null, confirmCreate = f
     nearMiss = resolved.candidates.map((c) => ({ wine_id: String(c.wine._id), score: c.score }));
   }
 
+  // Everything below mutates the document before the save; a failed save
+  // must hand the caller back the draft it passed in (the expiry job and the
+  // erasure path reuse the object for the attach that follows a duplicate —
+  // audit 2026-09-12).
+  const before = {
+    producer: wine.producer, normalizedKey: wine.normalizedKey, draft: wine.draft,
+    draftExpiresAt: wine.draftExpiresAt, draftExpiryWarnedAt: wine.draftExpiryWarnedAt,
+  };
   if (producerMissing) wine.producer = '';
   const willPromote = !producerMissing &&
     !isIdentitySentinel(wine.producer) && !isIdentitySentinel(wine.name) &&
     !isImplausibleIdentity(wine.producer, wine.name);
-  wine.normalizedKey = willPromote
+  const publishedKey = willPromote
     ? generateWineKey(wine.name, wine.producer, wine.appellation)
     : pendingWineKey(wine.name, wine.createdBy, wine.appellation);
+  wine.normalizedKey = publishedKey;
   wine.draft = false;
   wine.draftExpiresAt = null;
   wine.draftExpiryWarnedAt = null;
@@ -365,8 +389,10 @@ async function publishDraft(wine, { userId = null, req = null, confirmCreate = f
   try {
     await wine.save();
   } catch (err) {
+    // Whatever failed, the in-memory document is a draft again.
+    Object.assign(wine, before);
     if (err?.code === 11000) {
-      const holder = await WineDefinition.findOne({ normalizedKey: wine.normalizedKey, _id: { $ne: wine._id } })
+      const holder = await WineDefinition.findOne({ normalizedKey: publishedKey, _id: { $ne: wine._id } })
         .populate(POPULATE).lean();
       return {
         ok: false, code: 'duplicate',
@@ -380,11 +406,15 @@ async function publishDraft(wine, { userId = null, req = null, confirmCreate = f
   const promoted = wine.pendingIdentity !== true;
   if (promoted) await runPromotionFollowThrough(wine);
 
+  // Actor: the request user, or `system` for the jobs — never the creator's
+  // id in the detail (erasure could not scrub it there).
   logAudit(req || null, auto ? 'wine.draft_auto_publish' : 'wine.draft_publish',
     { type: 'wine', id: wine._id },
     {
       name: wine.name, producer: wine.producer || null, promoted, pendingCuration: !promoted,
-      ...(nearMiss ? { nearMiss } : {}), ...(userId ? { userId: String(userId) } : {}),
+      ...(reason ? { reason } : {}),
+      ...(nearMiss ? { nearMiss } : {}),
+      ...(rejectedProducer ? { rejectedProducer: rejectedProducer.producer, rejectedBecause: rejectedProducer.reason } : {}),
     });
   return { ok: true, wine, promoted, pendingCuration: !promoted };
 }
@@ -415,20 +445,35 @@ async function publishDrafts(ids, userId, { req = null, confirmCreate = false } 
  * (services/registryGc), minus the guards that protect curated registry
  * data — a draft has none.
  */
-async function removeDraftRow(wine, req, action, detail = {}) {
+async function removeDraftRow(wine, req, action, detail = {}, { requireEmpty = false } = {}) {
   await WineVintageProfile.deleteMany({ wineDefinition: wine._id, status: 'pending' });
-  const images = await BottleImage.find({ wineDefinition: wine._id });
-  if (images.length) {
-    const { unlinkImageFiles } = require('./imageProcessor');
-    for (const img of images) {
-      try { await unlinkImageFiles(img); } catch { /* file may already be gone */ }
-    }
-    await BottleImage.deleteMany({ wineDefinition: wine._id });
-  }
+  await deleteDraftImages(wine._id);
   try { require('./search').removeWine(wine._id); } catch { /* never indexed; best-effort */ }
-  await WineDefinition.deleteOne({ _id: wine._id, draft: true });
+  // The "no bottles" decision is repeated right before the delete: a bottle
+  // added during the cleanup above must not be left pointing at nothing
+  // (audit 2026-09-12). The predicate on draft:true guards a publish in the
+  // same window the same way.
+  if (requireEmpty && await Bottle.exists({ wineDefinition: wine._id })) {
+    return { ok: false, code: 'conflict', message: 'A bottle was added to this draft while it was being removed — it stays.' };
+  }
+  const del = await WineDefinition.deleteOne({ _id: wine._id, draft: true });
+  if (!del?.deletedCount) {
+    return { ok: false, code: 'conflict', message: 'This draft changed while it was being removed — it stays.' };
+  }
   logAudit(req || null, action, { type: 'wine', id: wine._id },
     { name: wine.name, producer: wine.producer || null, ...detail });
+  return { ok: true };
+}
+
+/** Unlink and delete every image row on the draft (or only the label-scan frames). */
+async function deleteDraftImages(wineId, filter = {}) {
+  const images = await BottleImage.find({ wineDefinition: wineId, ...filter });
+  if (!images.length) return;
+  const { unlinkImageFiles } = require('./imageProcessor');
+  for (const img of images) {
+    try { await unlinkImageFiles(img); } catch { /* file may already be gone */ }
+  }
+  await BottleImage.deleteMany({ _id: { $in: images.map((i) => i._id) } });
 }
 
 /**
@@ -437,22 +482,29 @@ async function removeDraftRow(wine, req, action, detail = {}) {
  * the draft. Co-members' bottles move too: the draft is being dissolved, and
  * a bottle pointing at a deleted wine is the worse outcome.
  */
-async function attachDraftBottles(wine, targetWineId, { userId, roles = [], req = null, auto = false } = {}) {
+async function attachDraftBottles(wine, targetWineId, { userId, roles = [], req = null, auto = false, reason = null } = {}) {
   if (wine.draft !== true) return fail('conflict', 'This wine is not a draft.');
   const target = await findVisibleWine(String(targetWineId), { userId, roles, noDrafts: true, populate: POPULATE });
   if (!target) return fail('not_found', 'No registry wine with that id.');
   if (String(target._id) === String(wine._id)) return fail('invalid_input', 'A draft cannot be attached to itself.');
 
   const bottleIds = await Bottle.distinct('_id', { wineDefinition: wine._id });
-  const vintages = await Bottle.distinct('vintage', { wineDefinition: wine._id });
-  await Bottle.updateMany({ wineDefinition: wine._id }, { $set: { wineDefinition: target._id } });
-  // The bottles' own photos follow them; the label-scan frames stay with the
-  // draft and go when it does (they are curation evidence for a row that is
-  // not becoming registry content).
-  await BottleImage.updateMany(
-    { wineDefinition: wine._id, kind: { $ne: 'label-scan' } },
-    { $set: { wineDefinition: target._id } }
-  );
+  // Only the vintages still in a cellar get a maturity row on the target
+  // (the promotion follow-through uses the same status filter).
+  const vintages = await Bottle.distinct('vintage', { wineDefinition: wine._id, status: 'active' });
+  // The label-scan frames stay with the draft and go with it: they are
+  // curation evidence for a row that is not becoming registry content, and
+  // on the target they would be unreadable-but-retained forever.
+  await deleteDraftImages(wine._id, { kind: 'label-scan' });
+  // Then EVERY reference follows the bottles — the admin merge's own
+  // re-pointer (audit 2026-09-12): bottles, their photos, price-tracking
+  // requests and skips, wishlist items, reviews, reports, discussions, journal
+  // pairings, recommendations, restock alerts, wine-list entries. A draft's
+  // bottle can acquire any of these exactly like an ordinary one, and a
+  // two-collection re-point left the rest pointing at a deleted id.
+  // Lazy: the admin router is a heavy module tree.
+  const { reassignWineRefs } = require('../routes/admin/wines');
+  await reassignWineRefs(wine._id, target._id);
   try {
     const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
     for (const v of vintages) if (v) await ensurePendingVintageProfile(target._id, v);
@@ -460,7 +512,7 @@ async function attachDraftBottles(wine, targetWineId, { userId, roles = [], req 
     console.warn('[wineDraftOps] maturity seed after attach failed (non-fatal):', err.message);
   }
   await removeDraftRow(wine, req, auto ? 'wine.draft_auto_attach' : 'wine.draft_attach',
-    { targetId: target._id, target: `${target.producer || '?'} — ${target.name}`, bottlesMoved: bottleIds.length });
+    { targetId: target._id, target: `${target.producer || '?'} — ${target.name}`, bottlesMoved: bottleIds.length, ...(reason ? { reason } : {}) });
   if (bottleIds.length) {
     try {
       const p = require('./search').bulkIndexBottles(bottleIds);
@@ -476,8 +528,7 @@ async function deleteDraft(wine, req = null, { action = 'wine.draft_delete' } = 
   if (await Bottle.exists({ wineDefinition: wine._id })) {
     return fail('conflict', 'This draft holds bottles — publish it, or attach the bottles to an existing wine, instead of deleting it.');
   }
-  await removeDraftRow(wine, req, action);
-  return { ok: true };
+  return removeDraftRow(wine, req, action, {}, { requireEmpty: true });
 }
 
 module.exports = {

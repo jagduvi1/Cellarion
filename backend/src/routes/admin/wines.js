@@ -95,7 +95,7 @@ router.get('/', async (req, res) => {
           sort: sort && sort !== 'name' ? sort : undefined
         });
 
-        const wines = await WineDefinition.find({ _id: { $in: ids } })
+        const wines = await WineDefinition.find({ _id: { $in: ids }, draft: { $ne: true } })
           .populate('country', 'name')
           .populate('region', 'name')
           .populate('grapes', 'name');
@@ -123,9 +123,13 @@ router.get('/', async (req, res) => {
     if (type) {
       conditions.push({ type });
     }
-    const query = conditions.length === 0 ? {}
+    const baseQuery = conditions.length === 0 ? {}
       : conditions.length === 1 ? conditions[0]
       : { $and: conditions };
+    // Users' private drafts are not registry content, not even to an admin
+    // (draft design 2026-09-12) — and this list would otherwise be the id
+    // source for every other admin surface.
+    const query = { ...baseQuery, draft: { $ne: true } };
 
     // When using $text, sort by relevance score first
     const mongoSort = search ? { score: { $meta: 'textScore' }, ...sortObj } : sortObj;
@@ -300,8 +304,9 @@ router.post('/:id/image', async (req, res) => {
     if (!mongoose.isValidObjectId(req.params.id)) {
       return res.status(400).json({ error: 'Invalid wine ID' });
     }
-    const wine = await WineDefinition.findById(req.params.id).select('_id name producer');
-    if (!wine) return res.status(404).json({ error: 'Wine not found' });
+    const wine = await WineDefinition.findById(req.params.id).select('_id name producer draft');
+    // A user's private draft is not registry content, not even to an admin.
+    if (!wine || wine.draft === true) return res.status(404).json({ error: 'Wine not found' });
 
     const { image_url: imageUrl, image_base64: imageBase64, credit } = req.body || {};
     if (!imageUrl && !imageBase64) {
@@ -666,7 +671,8 @@ router.post('/:id/non-wine', async (req, res) => {
       return res.status(400).json({ error: 'value must be a boolean' });
     }
     const wine = await WineDefinition.findById(req.params.id);
-    if (!wine) return res.status(404).json({ error: 'Wine not found' });
+    // A user's private draft is not registry content, not even to an admin.
+    if (!wine || wine.draft === true) return res.status(404).json({ error: 'Wine not found' });
 
     wine.nonWine = req.body.value;
     await wine.save();
@@ -689,8 +695,8 @@ router.post('/:id/non-wine', async (req, res) => {
 router.post('/:id/profile-reviewed', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    const wine = await WineDefinition.findById(req.params.id).select('name producer aiProfile.heldAt');
-    if (!wine) return res.status(404).json({ error: 'Wine not found' });
+    const wine = await WineDefinition.findById(req.params.id).select('name producer aiProfile.heldAt draft');
+    if (!wine || wine.draft === true) return res.status(404).json({ error: 'Wine not found' });
 
     // A HELD profile + an admin review = the human override the hold was
     // waiting for: regenerate and PUBLISH (the suspect flag stays on the row
@@ -2208,3 +2214,9 @@ module.exports = router;
 // The extracted single-pair merge, shared with the correction-proposal
 // approve route (wineProposals.js) so the two surfaces cannot drift.
 module.exports.performWineMerge = performWineMerge;
+// The full reference re-pointer, reused when a private draft is ATTACHED to
+// an existing wine (services/wineDraftOps): a draft's bottle can acquire
+// price-tracking requests, personal data, restock alerts and journal
+// pairings exactly like any other, and every one of them must follow the
+// bottles rather than dangle on a deleted id (audit 2026-09-12).
+module.exports.reassignWineRefs = reassignWineRefs;

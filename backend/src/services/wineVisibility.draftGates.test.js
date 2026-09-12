@@ -44,13 +44,13 @@ const KNOWN_SAFE = {
   'services/embeddingJob.js': ['wine.pendingIdentity === true'],  // skip guard
   'services/enrichmentJob.js': ['wine.pendingIdentity === true'], // skip guard
   'services/search.js': ['wine.pendingIdentity === true'],        // index REMOVAL: removes drafts too
-  'services/findOrCreateWine.js': ['candidate.pendingIdentity === true'], // resolver isolation (drafts blocked the same way)
+  'services/findOrCreateWine.js': ['candidate.pendingIdentity === true', 'pendingIdentity: true, createdBy: userId'], // resolver isolation: a stranger's pending row (draft included) is blocked, the caller's own is not
   'services/wineCommit.js': ['wine.pendingIdentity === true', 'pendingIdentity: true } : {}'], // audit
   'services/wineVisibility.js': ['*'],                             // the rule itself
   'utils/vintageProfile.js': ['{ pendingIdentity: true }'],        // seed REFUSAL: refuses drafts too
 };
 
-const GRANT = /pendingIdentity:\s*true\b|pendingIdentity\s*===\s*true/;
+const GRANT = /pendingIdentity:\s*(true\b|\{\s*\$eq:\s*true)|pendingIdentity\s*===\s*true|pendingIdentity:\s*\{\s*\$in:/;
 const isComment = (line) => /^\s*(\/\/|\*|\/\*)/.test(line);
 
 describe('every pendingIdentity grant site has been classified for private drafts', () => {
@@ -82,7 +82,12 @@ describe('every pendingIdentity grant site has been classified for private draft
     const offenders = [];
     for (const file of jsFiles(SRC)) {
       const text = fs.readFileSync(file, 'utf8');
-      if (!/\$set:\s*\{[^}]*\bdraft:/s.test(text)) continue;
+      // Any update operator whose payload names `draft:` within a few hundred
+      // characters — $set/$unset/$setOnInsert, and the findByIdAndUpdate /
+      // updateOne / updateMany / bulkWrite / insertMany call shapes.
+      const writesDraft = /\$(set|unset|setOnInsert):\s*\{[\s\S]{0,400}?\bdraft:/.test(text)
+        || /(findByIdAndUpdate|findOneAndUpdate|updateOne|updateMany|bulkWrite|insertMany)\([\s\S]{0,400}?\bdraft:\s*(true|false)/.test(text);
+      if (!writesDraft) continue;
       const r = rel(file);
       if (!ALLOWED.has(r)) offenders.push(r);
     }

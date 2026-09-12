@@ -129,7 +129,7 @@ registerTool({
       if (!loaded.ok) return fail('not_found', loaded.message);
       if (args.attach_to) {
         const a = await ops.attachDraftBottles(loaded.wine, args.attach_to, { userId: ctx.user.id, roles: ctx.user.roles, req: ctx.req });
-        if (!a.ok) return fail(a.code === 'not_found' ? 'not_found' : 'invalid_input', a.message);
+        if (!a.ok) return fail(a.code === 'not_found' ? 'not_found' : a.code === 'conflict' ? 'conflict' : 'invalid_input', a.message);
         return ok(`Attached ${a.bottlesMoved} bottle(s) to ${a.wine.producer ? `${a.wine.producer} — ` : ''}${a.wine.name}; the draft is gone`, {
           wine_id: String(a.wine._id), bottles_moved: a.bottlesMoved,
         });

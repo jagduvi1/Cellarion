@@ -708,7 +708,8 @@ registerTool({
     }
 
     const wine = await WineDefinition.findById(args.wine_id);
-    if (!wine) return fail('not_found', 'No such wine. Use search_registry to find it.');
+    // A user's private draft is nobody's curation work (draft design 2026-09-12).
+    if (!wine || wine.draft === true) return fail('not_found', 'No such wine. Use search_registry to find it.');
 
     const prev = snapshotProfile(wine);
     applyProfilePatch(wine, check.clean, ctx.user.id);
@@ -1094,8 +1095,8 @@ registerTool({
       return fail('invalid_input', `Unsupported currency ${currency}. Supported: ${SUPPORTED_CURRENCIES.join(', ')}`);
     }
     if (!isValidId(args.wine_id)) return fail('invalid_input', 'wine_id must be a 24-hex id.');
-    const wine = await WineDefinition.findById(args.wine_id).select('name producer');
-    if (!wine) return fail('not_found', 'No registry wine with that id.');
+    const wine = await WineDefinition.findById(args.wine_id).select('name producer draft');
+    if (!wine || wine.draft === true) return fail('not_found', 'No registry wine with that id.');
 
     const entry = new WineVintagePrice({
       wineDefinition: wine._id,
@@ -2199,13 +2200,14 @@ registerTool({
     if (!isValidId(args.wine_id)) return fail('invalid_input', 'wine_id must be a 24-hex id.');
     const wine = await WineDefinition.findById(args.wine_id)
       .populate('country', 'name').populate('region', 'name').populate('grapes', 'name');
-    if (!wine) return fail('not_found', 'No such wine. Use search_registry to find it.');
+    // A user's private draft is nobody's curation work (draft design 2026-09-12).
+    if (!wine || wine.draft === true) return fail('not_found', 'No such wine. Use search_registry to find it.');
 
     let target = null;
     if (args.kind === 'merge') {
       if (!isValidId(args.merge_target_id)) return fail('invalid_input', 'merge_target_id must be a 24-hex id.');
-      target = await WineDefinition.findById(args.merge_target_id).select('name producer');
-      if (!target) return fail('not_found', 'No registry wine with that merge_target_id. Use search_registry to find the surviving wine.');
+      target = await WineDefinition.findById(args.merge_target_id).select('name producer draft');
+      if (!target || target.draft === true) return fail('not_found', 'No registry wine with that merge_target_id. Use search_registry to find the surviving wine.');
     }
 
     // Identity fields as they stand NOW (region/country as display names) —
@@ -3295,8 +3297,8 @@ registerTool({
     if (denied) return denied;
     if (!isValidId(args.wine_id)) return fail('invalid_input', 'wine_id must be a 24-hex id.');
 
-    const wine = await WineDefinition.findById(args.wine_id).select('name producer crossChecksCleared');
-    if (!wine) return fail('not_found', 'No such wine.');
+    const wine = await WineDefinition.findById(args.wine_id).select('name producer crossChecksCleared draft');
+    if (!wine || wine.draft === true) return fail('not_found', 'No such wine.');
     if ((wine.crossChecksCleared || []).includes(COLOUR_RULE)) {
       return fail('conflict', 'That row is already set aside — restore_colour_conflict brings it back.');
     }
@@ -3336,8 +3338,8 @@ registerTool({
     const denied = requireSomm(ctx);
     if (denied) return denied;
     if (!isValidId(args.wine_id)) return fail('invalid_input', 'wine_id must be a 24-hex id.');
-    const wine = await WineDefinition.findById(args.wine_id).select('name producer crossChecksCleared');
-    if (!wine) return fail('not_found', 'No such wine.');
+    const wine = await WineDefinition.findById(args.wine_id).select('name producer crossChecksCleared draft');
+    if (!wine || wine.draft === true) return fail('not_found', 'No such wine.');
     if (!(wine.crossChecksCleared || []).includes(COLOUR_RULE)) {
       return fail('invalid_input', 'That row is not set aside.');
     }

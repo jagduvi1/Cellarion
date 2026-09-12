@@ -33,6 +33,8 @@ jest.mock('./crossFieldScan', () => ({ detectBlockingProducerIssue: jest.fn(asyn
 jest.mock('./search', () => ({ removeWine: jest.fn(), bulkIndexBottles: jest.fn(() => Promise.resolve()) }));
 jest.mock('./imageProcessor', () => ({ unlinkImageFiles: jest.fn(async () => {}) }));
 jest.mock('../utils/vintageProfile', () => ({ ensurePendingVintageProfile: jest.fn(async () => {}) }));
+// The admin merge's reference re-pointer — attach delegates to it (audit 2026-09-12).
+jest.mock('../routes/admin/wines', () => ({ reassignWineRefs: jest.fn(async () => 2) }));
 
 const WineDefinition = require('../models/WineDefinition');
 const Bottle = require('../models/Bottle');
@@ -49,6 +51,7 @@ const { findVisibleWine } = require('./wineVisibility');
 const { findOrCreateWine } = require('./findOrCreateWine');
 const { detectBlockingProducerIssue } = require('./crossFieldScan');
 const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
+const { reassignWineRefs } = require('../routes/admin/wines');
 const ops = require('./wineDraftOps');
 
 const ME = 'aaaaaaaaaaaaaaaaaaaaaaaa';
@@ -95,7 +98,7 @@ beforeEach(() => {
   BottleImage.updateMany.mockResolvedValue({});
   BottleImage.deleteMany.mockResolvedValue({});
   WineVintageProfile.deleteMany.mockResolvedValue({});
-  WineDefinition.deleteOne.mockResolvedValue({});
+  WineDefinition.deleteOne.mockResolvedValue({ deletedCount: 1 });
   WineDefinition.updateOne.mockResolvedValue({});
 });
 
@@ -155,11 +158,21 @@ describe('updateDraft', () => {
     expect(r.diff).toMatchObject({ name: { to: 'Kaefferkopf Grand Cru' }, producer: { to: '' } });
   });
 
-  test('an unknown country is refused, never minted; an unknown grape is refused', async () => {
+  test('an unknown country is refused, never minted; clearing the country is refused; an unknown grape is refused', async () => {
     Country.findOne.mockResolvedValue(null);
     expect(await ops.updateDraft(draft(), { countryName: 'Atlantis' }, ME)).toMatchObject({ ok: false, code: 'invalid_input' });
+    expect(await ops.updateDraft(draft(), { countryName: '' }, ME)).toMatchObject({ ok: false, code: 'invalid_input', message: expect.stringMatching(/cannot be cleared/) });
+    expect(Country.findOne).toHaveBeenCalledTimes(1);
     resolveGrapeIdsStrict.mockResolvedValue({ ok: false, unmatched: ['Blaufränkischx'] });
     expect(await ops.updateDraft(draft(), { grapeNames: ['Blaufränkischx'] }, ME)).toMatchObject({ ok: false, code: 'invalid_input' });
+  });
+
+  test('a renamed draft stores the resolver-shaped name (producer prefix folded, trailing vintage stripped) so a retry add resolves to it', async () => {
+    const w = draft({ producer: 'Amisfield' });
+    const r = await ops.updateDraft(w, { name: 'Amisfield Pinot Noir 2019' }, ME);
+    expect(r.ok).toBe(true);
+    expect(w.name).toBe('Pinot Noir');
+    expect(w.normalizedKey).toBe(`draft~${ME}:amisfield:pinot noir:alsace`);
   });
 
   test('E11000 → conflict ("you already have a draft of this wine")', async () => {
@@ -251,7 +264,7 @@ describe('publishDraft', () => {
     expect(runPromotionFollowThrough).toHaveBeenCalledWith(w);
   });
 
-  test('E11000 on the publish save is a duplicate found by the unique index — answered with the holder', async () => {
+  test('E11000 on the publish save is a duplicate found by the unique index — answered with the holder, and the document is a DRAFT again', async () => {
     findOrCreateWine.mockResolvedValue({ wine: null, noMatch: true });
     const w = draft();
     w.save = jest.fn().mockRejectedValue(Object.assign(new Error('dup'), { code: 11000 }));
@@ -260,6 +273,19 @@ describe('publishDraft', () => {
     expect(r).toMatchObject({ ok: false, code: 'duplicate', match: { wine_id: TARGET } });
     expect(WineDefinition.findOne).toHaveBeenCalledWith({ normalizedKey: 'cave de kaysersberg:kaefferkopf:alsace', _id: { $ne: WINE } });
     expect(runPromotionFollowThrough).not.toHaveBeenCalled();
+    // The expiry job and the erasure path reuse this object for the attach
+    // that follows — every pre-save mutation is undone (audit 2026-09-12).
+    expect(w).toMatchObject({ draft: true, normalizedKey: 'draft~x', draftExpiresAt: new Date('2026-09-19T00:00:00Z') });
+  });
+
+  test('the AUTO path keeps the producer it had to drop in the audit entry, with the reason', async () => {
+    Region.exists.mockResolvedValue({ _id: 'r' });
+    findOrCreateWine.mockResolvedValue({ wine: null, noMatch: true });
+    const w = draft({ producer: 'Bordeaux' });
+    await ops.publishDraft(w, { userId: ME, auto: true, reason: 'expiry' });
+    expect(logAudit).toHaveBeenCalledWith(null, 'wine.draft_auto_publish', expect.anything(),
+      expect.objectContaining({ reason: 'expiry', rejectedProducer: 'Bordeaux', rejectedBecause: expect.stringMatching(/wine region/) }));
+    expect(logAudit.mock.calls[0][3]).not.toHaveProperty('userId');
   });
 });
 
@@ -277,16 +303,23 @@ describe('publishDrafts (batch)', () => {
 });
 
 describe('attachDraftBottles', () => {
-  test('re-points bottles and their photos (never label scans), seeds the target\'s maturity rows, dissolves the draft', async () => {
+  test('deletes the label-scan frames, then re-points EVERY reference through the merge re-pointer, seeds the target\'s ACTIVE vintages, dissolves the draft', async () => {
     const target = { _id: TARGET, name: 'Kaefferkopf', producer: 'Cave de Kaysersberg' };
     findVisibleWine.mockResolvedValue(target);
     Bottle.distinct.mockResolvedValueOnce(['b1', 'b2']).mockResolvedValueOnce(['2019', '2020']);
+    BottleImage.find.mockResolvedValue([{ _id: 'scan1' }]);
     const w = draft();
     const r = await ops.attachDraftBottles(w, TARGET, { userId: ME, roles: ['user'] });
     expect(r).toMatchObject({ ok: true, bottlesMoved: 2, wine: target });
     expect(findVisibleWine).toHaveBeenCalledWith(TARGET, expect.objectContaining({ userId: ME, noDrafts: true }));
-    expect(Bottle.updateMany).toHaveBeenCalledWith({ wineDefinition: WINE }, { $set: { wineDefinition: TARGET } });
-    expect(BottleImage.updateMany).toHaveBeenCalledWith({ wineDefinition: WINE, kind: { $ne: 'label-scan' } }, { $set: { wineDefinition: TARGET } });
+    // Scans first (never moved onto the target), then the full re-point —
+    // price tracking, personal data, restock alerts, journal pairings and the
+    // rest follow the bottles exactly as in an admin merge (audit 2026-09-12).
+    expect(BottleImage.find).toHaveBeenCalledWith({ wineDefinition: WINE, kind: 'label-scan' });
+    expect(BottleImage.deleteMany).toHaveBeenCalledWith({ _id: { $in: ['scan1'] } });
+    expect(reassignWineRefs).toHaveBeenCalledWith(WINE, TARGET);
+    expect(Bottle.updateMany).not.toHaveBeenCalled();
+    expect(Bottle.distinct).toHaveBeenLastCalledWith('vintage', { wineDefinition: WINE, status: 'active' });
     expect(ensurePendingVintageProfile).toHaveBeenCalledTimes(2);
     expect(WineDefinition.deleteOne).toHaveBeenCalledWith({ _id: WINE, draft: true });
     expect(logAudit).toHaveBeenCalledWith(null, 'wine.draft_attach', expect.anything(), expect.objectContaining({ targetId: TARGET, bottlesMoved: 2 }));
@@ -313,9 +346,24 @@ describe('deleteDraft', () => {
     const r = await ops.deleteDraft(draft(), null, { action: 'wine.draft_expire' });
     expect(r).toEqual({ ok: true });
     expect(require('./imageProcessor').unlinkImageFiles).toHaveBeenCalledWith({ _id: 'i1' });
-    expect(BottleImage.deleteMany).toHaveBeenCalledWith({ wineDefinition: WINE });
+    expect(BottleImage.deleteMany).toHaveBeenCalledWith({ _id: { $in: ['i1'] } });
     expect(WineVintageProfile.deleteMany).toHaveBeenCalledWith({ wineDefinition: WINE, status: 'pending' });
     expect(WineDefinition.deleteOne).toHaveBeenCalledWith({ _id: WINE, draft: true });
     expect(logAudit).toHaveBeenCalledWith(null, 'wine.draft_expire', { type: 'wine', id: WINE }, expect.objectContaining({ name: 'Kaefferkopf' }));
+  });
+
+  test('a bottle that arrives during the cleanup keeps the draft: the emptiness check is repeated right before the delete', async () => {
+    Bottle.exists.mockResolvedValueOnce(null).mockResolvedValueOnce({ _id: 'late' });
+    const r = await ops.deleteDraft(draft(), null);
+    expect(r).toMatchObject({ ok: false, code: 'conflict' });
+    expect(WineDefinition.deleteOne).not.toHaveBeenCalled();
+    expect(logAudit).not.toHaveBeenCalled();
+  });
+
+  test('a draft that was published between the check and the delete is not deleted either', async () => {
+    WineDefinition.deleteOne.mockResolvedValue({ deletedCount: 0 });
+    const r = await ops.deleteDraft(draft(), null);
+    expect(r).toMatchObject({ ok: false, code: 'conflict' });
+    expect(logAudit).not.toHaveBeenCalled();
   });
 });

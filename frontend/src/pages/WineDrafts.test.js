@@ -56,10 +56,33 @@ describe('WineDrafts page', () => {
     expect(publishSelected).toBeDisabled();
     fireEvent.click(screen.getByLabelText('Select Kaefferkopf'));
     fireEvent.click(screen.getByLabelText('Select Empty One'));
+    // After the batch the published row is gone from the list — its outcome
+    // is kept in the "Just now" box (audit 2026-09-12).
+    api.listMyWineDrafts.mockResolvedValue(res({ drafts: [DRAFTS[1]] }));
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Publish selected \(2\)/ })); });
     expect(api.publishWineDrafts).toHaveBeenCalledWith(authState.apiFetch, ['d1', 'd2']);
-    expect(await screen.findByText('Published')).toBeInTheDocument();
+    expect(await screen.findByText('Just now')).toBeInTheDocument();
+    expect(screen.getByText(/Cave de Kaysersberg — Kaefferkopf: Published/)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Select Kaefferkopf')).not.toBeInTheDocument();
     expect(screen.getByText('The draft needs a wine name')).toBeInTheDocument();
+  });
+
+  test('a batch with several rows needing a choice keeps a Resolve button on each; cancelling the first does not lose the others', async () => {
+    api.publishWineDrafts.mockResolvedValue(res({ results: [
+      { id: 'd1', status: 'duplicate', error: 'dup', match: { wine_id: 't1', name: 'Kaefferkopf', producer: 'Cave' } },
+      { id: 'd2', status: 'similar', error: 'sim', candidates: [{ wine_id: 't2', name: 'Empty Two', score: 0.9 }] },
+    ] }));
+    render(<WineDrafts />);
+    await screen.findByText('Cave de Kaysersberg — Kaefferkopf');
+    fireEvent.click(screen.getByLabelText('Select Kaefferkopf'));
+    fireEvent.click(screen.getByLabelText('Select Empty One'));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Publish selected \(2\)/ })); });
+    expect(await screen.findByText('draftWine.duplicateIntro')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'common.cancel' }));
+    expect(screen.getAllByRole('button', { name: 'Resolve' })).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Resolve' })[1]);
+    expect(await screen.findByText('draftWine.similarIntro')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'similarWines.createNew' })).toBeInTheDocument();
   });
 
   test('a row publish that meets an exact registry match opens attach-only; picking attaches', async () => {
@@ -72,7 +95,8 @@ describe('WineDrafts page', () => {
     expect(screen.queryByRole('button', { name: 'similarWines.createNew' })).not.toBeInTheDocument();
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Attach my bottles' })); });
     expect(api.attachWineDraft).toHaveBeenCalledWith(authState.apiFetch, 'd1', 't1');
-    expect(await screen.findByText('Bottles attached to Kaefferkopf')).toBeInTheDocument();
+    // The row leaves the list; its outcome is kept in the "Just now" box.
+    expect(await screen.findByText(/Bottles attached to Kaefferkopf/)).toBeInTheDocument();
   });
 
   test('the empty state and the demo account (no actions)', async () => {
