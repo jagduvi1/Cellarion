@@ -127,17 +127,21 @@ function formatTypeTitle(type, lang = 'en') {
   return titles[type] || type.charAt(0).toUpperCase() + type.slice(1);
 }
 
-function groupKeyOf(wine, level) {
+// A wine missing the field of a nested level falls back up the geography —
+// but never to the heading it already sits under: that goes to "Other", last.
+function groupKeyOf(wine, level, parentKey) {
   if (level === 'type') return wine.type || 'other';
   if (level === 'country') return wine.country || 'Other';
-  if (level === 'region') return wine.region || wine.country || 'Other';
-  return wine.appellation || wine.region || wine.country || 'Other';
+  const key = level === 'region'
+    ? (wine.region || wine.country)
+    : (wine.appellation || wine.region || wine.country);
+  return key && key !== parentKey ? key : 'Other';
 }
 
-function orderedGroups(wines, level, typeOrder) {
+function orderedGroups(wines, level, typeOrder, parentKey) {
   const groups = new Map();
   for (const wine of wines) {
-    const key = groupKeyOf(wine, level);
+    const key = groupKeyOf(wine, level, parentKey);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(wine);
   }
@@ -148,7 +152,8 @@ function orderedGroups(wines, level, typeOrder) {
       if (!keys.includes(key)) keys.push(key);
     }
   } else {
-    keys = [...groups.keys()].sort((a, b) => a.localeCompare(b));
+    keys = [...groups.keys()].sort((a, b) =>
+      (a === 'Other') - (b === 'Other') || a.localeCompare(b));
   }
   return keys.map(key => ({ key, wines: groups.get(key) }));
 }
@@ -184,14 +189,14 @@ function buildAutoSections(wineList, winesByKey) {
     .filter(Boolean);
 
   const out = [];
-  const walk = (subset, depth, level, parent) => {
+  const walk = (subset, depth, level, parent, parentKey) => {
     if (depth >= levels.length) {
       parent.wines = [...subset].sort(sortFn);
       return;
     }
-    const groups = orderedGroups(subset, levels[depth], typeOrder);
+    const groups = orderedGroups(subset, levels[depth], typeOrder, parentKey);
     if (collapse && depth > 0 && groups.length === 1) {
-      walk(subset, depth + 1, level, parent);
+      walk(subset, depth + 1, level, parent, parentKey);
       return;
     }
     for (const group of groups) {
@@ -201,10 +206,10 @@ function buildAutoSections(wineList, winesByKey) {
         wines: [],
       };
       out.push(section);
-      walk(group.wines, depth + 1, level + 1, section);
+      walk(group.wines, depth + 1, level + 1, section, group.key);
     }
   };
-  walk(wines, 0, 0, null);
+  walk(wines, 0, 0, null, null);
   return out;
 }
 

@@ -156,7 +156,12 @@ registerTool({
         { ...list, layout: { ...(list.layout || {}), hideOutOfStock: false, glassSectionFirst: false } },
         wineMap
       );
-      const byKey = new Map((list.autoGroupEntries || []).map((e) => [entryKey(e), e]));
+      // First entry wins on a duplicated key, matching what the renderer shows first
+      const byKey = new Map();
+      for (const e of list.autoGroupEntries || []) {
+        const k = entryKey(e);
+        if (!byKey.has(k)) byKey.set(k, e);
+      }
       const seen = new Set();
       const path = [];
       groups = [];

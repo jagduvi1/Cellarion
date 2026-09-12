@@ -285,6 +285,12 @@ function entryCapError(doc) {
 
 wineListSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
+  // The legacy single-level field always mirrors the first nested level, so
+  // readers that predate nesting (and a client that only sends groupBy) agree.
+  const levels = this.autoGrouping?.levels;
+  if (Array.isArray(levels) && levels.length) {
+    this.autoGrouping.groupBy = levels[0] === 'appellation' ? 'region' : levels[0];
+  }
   next(entryCapError(this)); // null when within the cap
 });
 

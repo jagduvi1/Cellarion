@@ -174,3 +174,16 @@ describe('nested auto grouping, hidden prices and the last-bottle marker (suppor
     expect(groupingLevels({})).toEqual(['type']);
   });
 });
+
+describe('nested grouping fallbacks (review 2026-09-12)', () => {
+  it('a wine without a region never repeats its country as a sub-heading; it goes to "Other", sorted last', () => {
+    const chianti = { _id: 'w6', name: 'Chianti', producer: 'Antinori', type: 'red', country: { name: 'Italy' }, region: null, grapes: [] };
+    const sections = buildSections({
+      structureMode: 'auto',
+      autoGrouping: { levels: ['type', 'country', 'region'], collapseSingle: false, withinGroup: 'name' },
+      autoGroupEntries: [entry('w1'), entry('w6')],
+      layout: {},
+    }, mapOf(item(WINES.barolo), item(chianti)));
+    expect(sections.map(s => `${'  '.repeat(s.level)}${s.title}`)).toEqual(['Red Wines', '  Italy', '    Piedmont', '    Other']);
+  });
+});

@@ -88,18 +88,23 @@ function groupingLevels(grouping = {}) {
   return out.length ? out.slice(0, MAX_LEVELS) : ['type'];
 }
 
-function groupKeyOf(wine, level) {
+// A wine missing the field of a nested level falls back up the geography —
+// but never to the heading it already sits under ("Italy › Italy"): that
+// goes to "Other", which sorts last.
+function groupKeyOf(wine, level, parentKey) {
   if (level === 'type') return wine.type || 'other';
   if (level === 'country') return wine.country || 'Other';
-  if (level === 'region') return wine.region || wine.country || 'Other';
-  return wine.appellation || wine.region || wine.country || 'Other';
+  const key = level === 'region'
+    ? (wine.region || wine.country)
+    : (wine.appellation || wine.region || wine.country);
+  return key && key !== parentKey ? key : 'Other';
 }
 
-/** Split wines into ordered groups on one level: types in menu order, everything else A–Z. */
-function orderedGroups(wines, level, typeOrder) {
+/** Split wines into ordered groups on one level: types in menu order, everything else A–Z, "Other" last. */
+function orderedGroups(wines, level, typeOrder, parentKey) {
   const groups = new Map();
   for (const wine of wines) {
-    const key = groupKeyOf(wine, level);
+    const key = groupKeyOf(wine, level, parentKey);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(wine);
   }
@@ -110,7 +115,8 @@ function orderedGroups(wines, level, typeOrder) {
       if (!keys.includes(key)) keys.push(key);
     }
   } else {
-    keys = [...groups.keys()].sort((a, b) => a.localeCompare(b));
+    keys = [...groups.keys()].sort((a, b) =>
+      (a === 'Other') - (b === 'Other') || a.localeCompare(b));
   }
   return keys.map(key => ({ key, wines: groups.get(key) }));
 }
@@ -227,14 +233,14 @@ function buildAutoSections(wineList, wineMap) {
   const out = [];
   // `depth` indexes `levels`; `level` is the rendered heading depth, which
   // falls behind `depth` once a singleton heading has been skipped.
-  const walk = (subset, depth, level, parent) => {
+  const walk = (subset, depth, level, parent, parentKey) => {
     if (depth >= levels.length) {
       parent.wines = [...subset].sort(sortFn);
       return;
     }
-    const groups = orderedGroups(subset, levels[depth], typeOrder);
+    const groups = orderedGroups(subset, levels[depth], typeOrder, parentKey);
     if (collapse && depth > 0 && groups.length === 1) {
-      walk(subset, depth + 1, level, parent);
+      walk(subset, depth + 1, level, parent, parentKey);
       return;
     }
     for (const group of groups) {
@@ -244,10 +250,10 @@ function buildAutoSections(wineList, wineMap) {
         wines: [],
       };
       out.push(section);
-      walk(group.wines, depth + 1, level + 1, section);
+      walk(group.wines, depth + 1, level + 1, section, group.key);
     }
   };
-  walk(wines, 0, 0, null);
+  walk(wines, 0, 0, null, null);
   return out;
 }
 
@@ -333,11 +339,15 @@ async function generateWineListPdf(wineList, wineMap, opts = {}) {
   const hidePrices = !!layout.hidePrices;
   // The legacy single-level "type, then country — region" run-in sub-headers
   // only make sense when there is no nested heading doing that job.
-  const legacySubHeaders = wineList.structureMode === 'auto' &&
-    groupingLevels(wineList.autoGrouping || {}).length === 1 &&
-    wineList.autoGrouping?.groupBy === 'type' &&
+  const levelsInForce = wineList.structureMode === 'auto' ? groupingLevels(wineList.autoGrouping || {}) : [];
+  const legacySubHeaders = levelsInForce.length === 1 && levelsInForce[0] === 'type' &&
     wineList.autoGrouping?.withinGroup === 'country-region-name';
   let anyLastBottle = false;
+  // Approximate heights of a heading per level, and of the first entry —
+  // a heading stack (type › country › region) breaks the page as ONE unit
+  // so no heading is ever orphaned at the foot of a page.
+  const HEADING_HEIGHT = [42, 22, 15];
+  const FIRST_ENTRY_HEIGHT = 26;
 
   // --- Header ---
   renderHeader(doc, branding, scheme, fontBold, fontItalic, contentWidth, margin, qrBuffer);
@@ -347,7 +357,14 @@ async function generateWineListPdf(wineList, wineMap, opts = {}) {
     const section = sections[i];
     const level = section.level || 0;
 
-    if (doc.y > pageSize[1] - margin - 80) {
+    // Room for this heading, the deeper headings that follow it before the
+    // first wine, and that wine — else start a new page here.
+    let need = HEADING_HEIGHT[Math.min(level, 2)] + FIRST_ENTRY_HEIGHT;
+    for (let k = i + 1; k < sections.length && (sections[k].level || 0) > level && !section.wines.length; k++) {
+      need += HEADING_HEIGHT[Math.min(sections[k].level || 0, 2)];
+      if (sections[k].wines.length) break;
+    }
+    if (doc.y > pageSize[1] - margin - Math.max(need, level === 0 ? 80 : 0)) {
       doc.addPage();
     }
 
