@@ -1,4 +1,4 @@
-const { buildSections, resolveEntry, groupingLevels, generateWineListPdf } = require('./wineListPdf');
+const { buildSections, resolveEntry, groupingLevels, generateWineListPdf, priceWithSymbol } = require('./wineListPdf');
 
 // --- Fixtures ---------------------------------------------------------------
 
@@ -255,5 +255,79 @@ describe('nested grouping fallbacks (review 2026-09-12)', () => {
     }, wineMap);
     expect(sections.map(s => `${'  '.repeat(s.level)}${s.title}`)).toEqual(['Red Wines', '  Italy', '    Piedmont', '    Other']);
     expect(sections[3].wines.map(w => w.name)).toEqual(['Chianti']);
+  });
+});
+
+// --- Page layout (support ticket 2026-09-12: blank footer pages, splits) ---
+
+const pdfBytes = (doc) => new Promise((resolve, reject) => {
+  const chunks = [];
+  doc.on('data', c => chunks.push(c));
+  doc.on('end', () => resolve(Buffer.concat(chunks)));
+  doc.on('error', reject);
+});
+const pageCount = (bytes) => (bytes.toString('latin1').match(/\/Type \/Page(?![s])/g) || []).length;
+
+describe('PDF page layout', () => {
+  const manyReds = Array.from({ length: 90 }, (_, i) => ({
+    _id: `r${i}`, name: `Wine ${String(i).padStart(2, '0')}`, producer: `Producer ${i}`, type: 'red',
+    country: { name: 'Italy' }, region: { name: i < 45 ? 'Piedmont' : 'Tuscany' }, grapes: [{ name: 'Sangiovese' }],
+  }));
+  const wineMap = new Map(manyReds.map(w => mapEntry(w)));
+  const list = (layout = {}, branding = {}) => ({
+    name: 'Test', structureMode: 'auto', language: 'en',
+    autoGrouping: { levels: ['type', 'country', 'region'], collapseSingle: true, withinGroup: 'name' },
+    autoGroupEntries: manyReds.map(w => entry(w._id)),
+    layout, branding,
+  });
+
+  test('footer text and page numbers are stamped ON the content pages — no blank page per element', async () => {
+    const plain = pageCount(await pdfBytes(await generateWineListPdf(list(), wineMap)));
+    const withFooter = pageCount(await pdfBytes(await generateWineListPdf(list({}, { footerText: 'Prices include VAT' }), wineMap)));
+    expect(plain).toBeGreaterThan(1);
+    expect(withFooter).toBe(plain);
+  });
+
+  test('a group that runs over a page break repeats its heading stack, marked continued, in the list language', async () => {
+    // Content streams are compressed, so the written strings are captured at the source.
+    const PDFDocument = require('pdfkit');
+    const written = [];
+    const orig = PDFDocument.prototype.text;
+    const spy = jest.spyOn(PDFDocument.prototype, 'text').mockImplementation(function (str, ...rest) {
+      written.push(String(str));
+      return orig.call(this, str, ...rest);
+    });
+    try {
+      await pdfBytes(await generateWineListPdf({ ...list(), language: 'de' }, wineMap));
+    } finally {
+      spy.mockRestore();
+    }
+    // 90 reds over several pages: the type heading and the Italy / region
+    // headings come back on each new page, marked continued.
+    expect(written.filter(t => t === 'ROTWEINE (FORTSETZUNG)').length).toBeGreaterThanOrEqual(2);
+    // (Italy is the only country, so its heading is collapsed away — nothing to repeat there)
+    expect(written.some(t => /^Italy/.test(t))).toBe(false);
+    expect(written.some(t => /^(Piedmont|Tuscany) \(Fortsetzung\)$/.test(t))).toBe(true);
+    // Every wine is written exactly once — nothing lost or duplicated by the breaks
+    expect(written.filter(t => /^Wine \d\d, NV$/.test(t))).toHaveLength(90);
+  });
+
+  test('newPageEachSection puts every wine type on its own page; the QR rule sits below the QR code', async () => {
+    const whites = Array.from({ length: 3 }, (_, i) => ({ _id: `w${i}`, name: `White ${i}`, producer: 'P', type: 'white', country: { name: 'France' }, region: { name: 'Alsace' }, grapes: [] }));
+    const map = new Map([...whites, ...manyReds.slice(0, 3)].map(w => mapEntry(w)));
+    const small = (layout) => ({
+      ...list(layout), autoGroupEntries: [...whites, ...manyReds.slice(0, 3)].map(w => entry(w._id)),
+    });
+    const onePage = pageCount(await pdfBytes(await generateWineListPdf(small({}), map)));
+    const perType = pageCount(await pdfBytes(await generateWineListPdf(small({ newPageEachSection: true }), map, { publicUrl: 'https://cellarion.app/menu/x' })));
+    expect(onePage).toBe(1);
+    expect(perType).toBe(2);
+  });
+
+  test('priceWithSymbol: "CHF 16" but "$16"', () => {
+    expect(priceWithSymbol('CHF', '16')).toBe('CHF 16');
+    expect(priceWithSymbol('kr', '160')).toBe('kr 160');
+    expect(priceWithSymbol('$', '16')).toBe('$16');
+    expect(priceWithSymbol('€', '16')).toBe('€16');
   });
 });

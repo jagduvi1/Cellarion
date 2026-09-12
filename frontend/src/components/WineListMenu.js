@@ -41,9 +41,11 @@ function WineListMenu({ branding = {}, layout = {}, language = 'en', sections = 
   // exist. With prices hidden, a by-the-glass wine still says so.
   const renderPrice = (wine) => {
     if (hidePrices) return wine.byGlass ? glassLabel : null;
+    // "CHF 16" but "$16": a space after a symbol made of letters, none after a sign
+    const sym = /[A-Za-z]$/.test(currencySymbol) ? `${currencySymbol} ` : currencySymbol;
     const parts = [];
-    if (wine.price != null) parts.push(`${currencySymbol}${Math.round(wine.price)}`);
-    if (wine.glassPrice != null) parts.push(`${currencySymbol}${Math.round(wine.glassPrice)} ${glassLabel}`);
+    if (wine.price != null) parts.push(`${sym}${Math.round(wine.price)}`);
+    if (wine.glassPrice != null) parts.push(`${sym}${Math.round(wine.glassPrice)} ${glassLabel}`);
     return parts.length ? parts.join(' / ') : null;
   };
 
