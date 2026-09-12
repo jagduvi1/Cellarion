@@ -216,19 +216,19 @@ describe('GET — projection and anonymisation', () => {
     WineDefinition.countDocuments.mockResolvedValue(0);
     await get(tokenFor(['somm']), '?createdVia=' + encodeURIComponent('{"$ne":null}'));
     expect(WineDefinition.find).toHaveBeenCalledWith(
-      { pendingIdentity: true, identityUnavailable: { $ne: true } });
+      { pendingIdentity: true, identityUnavailable: { $ne: true }, draft: { $ne: true } });
   });
 
   test('rows dispositioned "no producer on the label" are excluded, and ?includeUnavailable=1 shows them', async () => {
     await get(tokenFor(['somm']));
     expect(WineDefinition.find).toHaveBeenCalledWith(
-      { pendingIdentity: true, identityUnavailable: { $ne: true } });
+      { pendingIdentity: true, identityUnavailable: { $ne: true }, draft: { $ne: true } });
 
     jest.clearAllMocks();
     WineDefinition.find.mockReturnValue(leanChain([]));
     WineDefinition.countDocuments.mockResolvedValue(0);
     await get(tokenFor(['somm']), '?includeUnavailable=1');
-    expect(WineDefinition.find).toHaveBeenCalledWith({ pendingIdentity: true });
+    expect(WineDefinition.find).toHaveBeenCalledWith({ pendingIdentity: true, draft: { $ne: true } });
   });
 });
 

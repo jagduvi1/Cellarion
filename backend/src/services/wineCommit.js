@@ -251,7 +251,13 @@ async function resolveOrMintWine(newWine, req, { allowPending = true } = {}) {
       // suggested matches (that is what confirmCreate means) — an appellation-
       // variant sibling must not silently override their explicit "create a
       // new wine anyway". Same semantics the find-or-create route had.
-      { confirmCreate: !!newWine.confirmCreate, skipSiblingMatch: !!newWine.confirmCreate, createdVia: via, allowPending }
+      {
+        confirmCreate: !!newWine.confirmCreate, skipSiblingMatch: !!newWine.confirmCreate, createdVia: via, allowPending,
+        // PRIVATE DRAFT (support ticket 2026-09-12): the caller asked for the
+        // wine to stay theirs until they publish it. Strictly boolean true —
+        // a body value can't turn a string into a draft by accident.
+        draft: newWine.draft === true,
+      }
     );
   } catch (err) {
     // The service's mint gates (unrecognized country, place-as-producer,
@@ -272,7 +278,11 @@ async function resolveOrMintWine(newWine, req, { allowPending = true } = {}) {
   }
 
   const { wine, created } = result;
-  const pendingIdentity = wine.pendingIdentity === true;
+  const draft = wine.draft === true;
+  // A draft is pending by invariant; for the audit "pendingIdentity" keeps its
+  // historical meaning — the producer was missing — so a draft only carries
+  // it when that is also true.
+  const pendingIdentity = wine.pendingIdentity === true && (!draft || result.pendingIdentity === true);
   if (created) {
     // Same action string + detail shape the find-or-create route emitted (and
     // the MCP/admin/import surfaces emit), so registry writes keep reading as
@@ -283,6 +293,7 @@ async function resolveOrMintWine(newWine, req, { allowPending = true } = {}) {
       {
         via, name: wine.name, producer: wine.producer || null,
         ...(pendingIdentity ? { pendingIdentity: true } : {}),
+        ...(draft ? { draft: true } : {}),
         // A producer the cross-field rules refused at mint time is NOT stored
         // on the row (the wine keys pending with producer ''), so the audit
         // entry is the only place the original string survives — which is what
@@ -296,10 +307,10 @@ async function resolveOrMintWine(newWine, req, { allowPending = true } = {}) {
           : {}),
       }
     );
-    // A pending row has no public wine page to announce — it 404s for everyone
-    // but its creator, so pinging IndexNow would advertise a dead URL. The
-    // promotion path submits it instead.
-    if (!pendingIdentity) submitUrls(`/wines/${wine.slug || wine._id}`);
+    // A pending row (or a draft) has no public wine page to announce — it 404s
+    // for everyone but its creator, so pinging IndexNow would advertise a dead
+    // URL. The promotion / publish path submits it instead.
+    if (!pendingIdentity && !draft) submitUrls(`/wines/${wine.slug || wine._id}`);
   }
   // Stamp the label scan on EVERY scan-originated mint — and on the creator's
   // OWN pending row that has none yet, which is how a second bottle of the same

@@ -143,7 +143,7 @@ describe('POST /api/wishlist — newWine mints at commit', () => {
     expect(findOrCreateWine.mock.calls[0][2]).toEqual({
       // allowPending: a wishlist add is a commit path too — an incomplete
       // identity is filed for curation instead of refusing the add.
-      confirmCreate: false, skipSiblingMatch: false, createdVia: 'ui', allowPending: true,
+      confirmCreate: false, skipSiblingMatch: false, createdVia: 'ui', allowPending: true, draft: false,
     });
     expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'wine.create',
       { type: 'wine', id: WINE_ID }, { via: 'ui', name: 'Kaefferkopf', producer: 'Cave de Kaysersberg' });
@@ -213,6 +213,15 @@ describe('POST /api/wishlist — demo accounts', () => {
     const { status } = await post({ wineDefinitionId: WINE_ID }, { userId: 'demo1', isDemo: true });
 
     expect(status).toBe(201);
+    expect(findOrCreateWine).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/wishlist — private drafts are for bottles', () => {
+  test('newWine.draft:true is a 400, service untouched (an empty draft expires and would orphan the item)', async () => {
+    const { status, body } = await post({ newWine: { ...NEW_WINE, draft: true } });
+    expect(status).toBe(400);
+    expect(body.error).toMatch(/private draft/);
     expect(findOrCreateWine).not.toHaveBeenCalled();
   });
 });

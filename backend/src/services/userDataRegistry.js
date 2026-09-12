@@ -1107,6 +1107,11 @@ const REGISTRY = [
     // curator-sourced (which is what keeps the AI job from regenerating over
     // it) and only the person is anonymised.
     purge: async (ctx) => {
+      // PRIVATE DRAFTS are the user's own data, not shared registry content
+      // (models/WineDefinition.draft): remember which rows those are BEFORE
+      // the createdBy reassign below makes them indistinguishable; postPurge
+      // decides each one once the user's bottles are gone.
+      ctx.draftWineIds = await WineDefinition.distinct('_id', { createdBy: ctx.userId, draft: true });
       await WineDefinition.updateMany({ createdBy: ctx.userId }, { $set: { createdBy: ctx.deletedUserId } });
       await WineDefinition.updateMany({ 'aiProfile.verifiedBy': ctx.userId }, { $set: { 'aiProfile.verifiedBy': ctx.deletedUserId } });
       // The contributor whose request produced this wine, anonymised the same
@@ -1118,8 +1123,56 @@ const REGISTRY = [
       // is the provenance-ledger work, not something to smuggle in here.
       await WineDefinition.updateMany({ 'contribution.user': ctx.userId }, { $set: { 'contribution.user': ctx.deletedUserId, 'contribution.instanceHost': null } });
     },
-    exportFragment: null,
-    note: 'shared registry; required createdBy + aiProfile.verifiedBy reassigned to [deleted] on erasure',
+    // The departing user's drafts, after the batch (their bottles are gone by
+    // now): a draft another member's bottle still points at (a shared cellar)
+    // is published as it stands — a lost bottle is the worse outcome — and an
+    // empty one is deleted. The same two outcomes the expiry job applies.
+    postPurge: async (ctx) => {
+      const ids = ctx.draftWineIds || [];
+      if (!ids.length) return;
+      // Lazy: the draft ops pull the resolver tree; erasure must stay light.
+      const ops = require('./wineDraftOps');
+      const Bottle = require('../models/Bottle');
+      for (const id of ids) {
+        try {
+          const wine = await WineDefinition.findOne({ _id: id, draft: true });
+          if (!wine) continue;
+          if (await Bottle.exists({ wineDefinition: wine._id })) {
+            const r = await ops.publishDraft(wine, { userId: null, req: null, auto: true });
+            if (!r.ok && r.code === 'duplicate' && r.match) {
+              await ops.attachDraftBottles(wine, r.match.wine_id, { userId: ctx.deletedUserId, roles: ['admin'], req: null, auto: true });
+            }
+          } else {
+            await ops.deleteDraft(wine, null, { action: 'wine.draft_expire' });
+          }
+        } catch (err) {
+          console.warn('[userDataRegistry] draft wine cleanup failed (non-fatal):', String(id), err.message);
+        }
+      }
+    },
+    // Only the drafts are exported: a published registry wine is shared data,
+    // not the user's.
+    exportFragment: async (ctx) => ({
+      draftWines: markTrunc(ctx, 'draftWines',
+        await WineDefinition.find({ createdBy: ctx.userId, draft: true })
+          .select('name producer appellation classification type country region grapes createdAt draftExpiresAt createdVia')
+          .populate([{ path: 'country', select: 'name' }, { path: 'region', select: 'name' }, { path: 'grapes', select: 'name' }])
+          .limit(EXPORT_MAX).lean())
+        .map((w) => ({
+          name: w.name,
+          producer: w.producer || null,
+          appellation: w.appellation || null,
+          classification: w.classification || null,
+          type: w.type || null,
+          country: w.country?.name || null,
+          region: w.region?.name || null,
+          grapes: (w.grapes || []).map((g) => g?.name).filter(Boolean),
+          createdVia: w.createdVia || null,
+          createdAt: w.createdAt,
+          draftExpiresAt: w.draftExpiresAt || null,
+        })),
+    }),
+    note: 'shared registry; required createdBy + aiProfile.verifiedBy reassigned to [deleted] on erasure; the user\'s PRIVATE DRAFTS are exported, and on erasure published (bottles remain) or deleted (empty)',
   },
   {
     model: Country, category: 'creator-ref', userFields: ['createdBy'],

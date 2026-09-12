@@ -207,7 +207,8 @@ async function suggestValue(userId, { wineId, keyId, keyName, value, reason, evi
   if (!gate.ok) return gate;
 
   if (!isValidId(String(wineId))) return fail('invalid', 'Invalid wine id');
-  const wine = await findVisibleWine(String(wineId), { userId, roles: req?.user?.roles || [] });
+  // noDrafts: public registry data is written against published wines only.
+  const wine = await findVisibleWine(String(wineId), { userId, roles: req?.user?.roles || [], noDrafts: true });
   if (!wine) return fail('not_found', 'Wine not found');
 
   // Same-as-published is a no-op the suggester should hear about — checked
@@ -272,7 +273,7 @@ async function suggestValue(userId, { wineId, keyId, keyName, value, reason, evi
  */
 async function dataForWine(wineId, userId = null, { roles, vintage, locale } = {}) {
   if (!isValidId(String(wineId))) return fail('invalid', 'Invalid wine id');
-  const wine = await findVisibleWine(String(wineId), { userId, roles: roles || [] });
+  const wine = await findVisibleWine(String(wineId), { userId, roles: roles || [], noDrafts: true });
   if (!wine) return fail('not_found', 'Wine not found');
   const wid = String(wine._id);
 

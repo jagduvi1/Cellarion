@@ -337,7 +337,7 @@ router.get('/:id', requireAuth, async (req, res) => {
         // (services/labelScanAccess).
         const WineDefinition = require('../models/WineDefinition');
         const scanWine = image.wineDefinition
-          ? await WineDefinition.findById(image.wineDefinition).select('pendingIdentity').lean()
+          ? await WineDefinition.findById(image.wineDefinition).select('pendingIdentity draft').lean()
           : null;
         authorized = mayCurationReadScan(scanWine, image);
         curationRead = authorized;
@@ -350,7 +350,9 @@ router.get('/:id', requireAuth, async (req, res) => {
           wineId = b?.wineDefinition || null;
         }
         const WineDefinition = require('../models/WineDefinition');
-        if (wineId && await WineDefinition.exists({ _id: wineId, pendingIdentity: true })) {
+        // A private draft is pending too, but its photos are not curation
+        // evidence — nobody has been asked to identify it (draft design 2026-09-12).
+        if (wineId && await WineDefinition.exists({ _id: wineId, pendingIdentity: true, draft: { $ne: true } })) {
           authorized = true;
           curationRead = true;
           curationWineId = wineId;

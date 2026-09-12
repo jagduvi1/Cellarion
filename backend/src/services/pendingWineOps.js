@@ -35,6 +35,7 @@ const { IDENTITY_BLOCKING_CROSS_FIELD_CHECK_IDS, resolveCrossFieldCheck } = requ
 // Top-level: labelScanAccess requires nothing at load (its own model require is
 // lazy), so it adds no module tree to the curation queue.
 const { stampPromotedScanRetention } = require('./labelScanAccess');
+const { DRAFT_EXCLUDED } = require('./wineVisibility');
 // Same reasoning: appellationResolve requires only the Appellation model and
 // utils/normalize, so the curation queue keeps its light module tree.
 const { resolveCanonicalAppellation } = require('./appellationResolve');
@@ -91,7 +92,9 @@ const CREATED_VIA_FILTERS = ['ui', 'import', 'mcp', 'ai'];
  * @returns {{ rows, total, pendingTotal, unavailableTotal }}
  */
 async function queryPendingWines({ limit = 20, offset = 0, createdVia = null, includeUnavailable = false } = {}) {
-  const filter = { pendingIdentity: true };
+  // A private draft is pending too (model invariant) but is NOT curation
+  // work — it is hidden from curators until its creator publishes it.
+  const filter = { pendingIdentity: true, ...DRAFT_EXCLUDED };
   if (!includeUnavailable) filter.identityUnavailable = { $ne: true };
   // Literal from the static array, never raw input (CodeQL query-injection
   // rule, the aiBudgetRequests pattern).
@@ -111,8 +114,8 @@ async function queryPendingWines({ limit = 20, offset = 0, createdVia = null, in
     // The WORK figure: rows still awaiting an identity, excluding the ones a
     // curator has already dispositioned. Counted separately below so the UI can
     // still say how many of those there are.
-    WineDefinition.countDocuments({ pendingIdentity: true, identityUnavailable: { $ne: true } }),
-    WineDefinition.countDocuments({ pendingIdentity: true, identityUnavailable: true }),
+    WineDefinition.countDocuments({ pendingIdentity: true, identityUnavailable: { $ne: true }, ...DRAFT_EXCLUDED }),
+    WineDefinition.countDocuments({ pendingIdentity: true, identityUnavailable: true, ...DRAFT_EXCLUDED }),
   ]);
 
   const ids = wines.map((w) => w._id);
@@ -584,7 +587,10 @@ async function loadPendingWine(wineId) {
     return { ok: false, code: 'invalid_input', message: 'Invalid wine id' };
   }
   const wine = await WineDefinition.findById(wineId);
-  if (!wine) return { ok: false, code: 'not_found', message: 'No wine with that id' };
+  // A private draft answers the same not_found a missing id gets — its
+  // existence is its creator's business until they publish it (full document
+  // loaded, so `draft` is present).
+  if (!wine || wine.draft === true) return { ok: false, code: 'not_found', message: 'No wine with that id' };
   if (wine.pendingIdentity !== true) {
     return {
       ok: false,

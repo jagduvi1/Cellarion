@@ -225,6 +225,11 @@ router.post('/', async (req, res) => {
       if (req.user.isDemo) {
         return res.status(403).json({ error: 'This action is not available in the demo. Create a free account to use it.' });
       }
+      // Drafts are for bottles (draft design 2026-09-12): an empty draft is
+      // deleted when its clock lapses, which would orphan a wishlist item.
+      if (newWine.draft === true) {
+        return res.status(400).json({ error: 'A wishlist wine cannot be a private draft — add it as a bottle first, or publish it.' });
+      }
       const minted = await resolveOrMintWine(newWine, req);
       if (minted.error) {
         return res.status(minted.error.status).json({ error: minted.error.message });
@@ -243,7 +248,8 @@ router.post('/', async (req, res) => {
       // be filed against any id, including a stranger's pending row, whose
       // name then came back through the populate above (security audit M-4).
       const wine = await findVisibleWine(wineDefinitionId, {
-        userId: req.user.id, roles: req.user.roles, select: '_id', lean: true,
+        // noDrafts: a wishlist item on an empty draft would be orphaned by its expiry.
+        userId: req.user.id, roles: req.user.roles, select: '_id', lean: true, noDrafts: true,
       });
       if (!wine) return res.status(404).json({ error: 'Wine not found' });
       resolvedWineId = wineDefinitionId;

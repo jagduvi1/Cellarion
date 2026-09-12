@@ -102,6 +102,8 @@ router.post('/', requireNonDemo, async (req, res) => {
     const wine = await findVisibleWine(wineId, {
       userId: req.user.id,
       roles: req.user.roles,
+      // A private draft is unshareable — not even its creator may send it on.
+      noDrafts: true,
       select: 'name producer appellation country region image',
       lean: true,
     });

@@ -2843,8 +2843,11 @@ registerTool({
     const BottleImage = require('../../models/BottleImage');
     const Bottle = require('../../models/Bottle');
     const wine = await WineDefinition.findById(args.wine_id)
-      .select('name producer pendingIdentity scanImage scanImageBack scanFieldConflicts').lean();
-    if (!wine) return fail('not_found', 'No wine with that id. Use list_pending_wines for valid ids.');
+      .select('name producer pendingIdentity draft scanImage scanImageBack scanFieldConflicts').lean();
+    // A private draft (pending by invariant, but in nobody's queue) answers
+    // the same not_found a missing id does — its label is not curation
+    // evidence. `draft` is selected above, so this check can see it.
+    if (!wine || wine.draft === true) return fail('not_found', 'No wine with that id. Use list_pending_wines for valid ids.');
 
     const stillPending = wine.pendingIdentity === true;
     const loadScan = async (id) => (id

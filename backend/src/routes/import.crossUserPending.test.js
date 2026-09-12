@@ -134,7 +134,7 @@ describe('H-3 — the candidate pool is scoped to wines the caller may see', () 
     ]);
   });
 
-  test('a CURATOR sees everything — the clause collapses to nothing', async () => {
+  test('a CURATOR sees every pending row — but not another user\'s private DRAFT (2026-09-12)', async () => {
     // Same account (cellar access is a separate axis), somm role added.
     await validate(tokenFor(ME, ['somm']), [CT_ROW]);
 
@@ -142,9 +142,13 @@ describe('H-3 — the candidate pool is scoped to wines the caller may see', () 
       .map((c) => c[0])
       .find((f) => JSON.stringify(f).includes('normalizedKey'));
 
-    // No $and wrapper: with an empty clause the key match is used directly.
-    expect(strategy3.$and).toBeUndefined();
-    expect(strategy3.$or).toBeDefined();
+    // The curator clause used to be empty (no $and wrapper). A private draft
+    // is nobody's registry content, not even a curator's, so the clause is
+    // now a draft exclusion — still no pendingIdentity term for curation.
+    expect(strategy3.$and).toBeDefined();
+    const clause = JSON.stringify(strategy3.$and);
+    expect(clause).toContain('"draft":{"$ne":true}');
+    expect(clause).not.toContain('pendingIdentity');
   });
 
   test('the exact-key lookup needs no gate — a real producer can never key into pending~', async () => {

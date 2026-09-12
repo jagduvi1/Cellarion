@@ -105,8 +105,11 @@ async function createOwnerInquiry({ wineId, userId, via = 'rest', question, req 
     return { ok: false, code: 'invalid_input', message: 'wine id must be a 24-hex id.' };
   }
 
-  const wine = await WineDefinition.findById(wineId).select('name producer pendingIdentity');
-  if (!wine) {
+  const wine = await WineDefinition.findById(wineId).select('name producer pendingIdentity draft');
+  // A private draft answers not_found: nobody but its creator knows it exists,
+  // and the creator IS the owner (draft design 2026-09-12). `draft` is in the
+  // projection above, so the check can see it.
+  if (!wine || wine.draft === true) {
     return { ok: false, code: 'not_found', message: 'No registry wine with that id.' };
   }
   // Pending-identity wines are deliberately ASKABLE. This used to be refused on

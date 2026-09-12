@@ -68,6 +68,11 @@ describe('the window itself', () => {
     expect(mayCurationReadScan({ pendingIdentity: true }, null)).toBe(true);
   });
 
+  test('a private DRAFT (pending by invariant) is NOT curation evidence — refused even within a grace window', () => {
+    expect(mayCurationReadScan({ pendingIdentity: true, draft: true }, { retainUntil: null })).toBe(false);
+    expect(mayCurationReadScan({ pendingIdentity: true, draft: true }, { retainUntil: daysFromNow(4) })).toBe(false);
+  });
+
   test('day 3 after promotion: served', () => {
     expect(mayCurationReadScan({ pendingIdentity: false }, { retainUntil: daysFromNow(4) })).toBe(true);
   });

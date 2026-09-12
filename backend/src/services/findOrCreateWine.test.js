@@ -661,6 +661,8 @@ describe('findOrCreateWine — creation', () => {
       createdBy: USER_ID,
       createdVia: null, // provenance default — 'mcp' only via the MCP write tools
       pendingIdentity: false, // complete identity — nothing for a curator to finish
+      draft: false, // an ordinary add is never a private draft
+      draftExpiresAt: null,
     });
     expect(result.created).toBe(true);
     expect(result.wine.save).toHaveBeenCalled();

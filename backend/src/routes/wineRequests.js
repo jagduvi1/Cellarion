@@ -36,7 +36,8 @@ router.post('/', requireNonDemo, async (req, res) => {
       // otherwise a grape suggestion is a probe that confirms a stranger's
       // pending row exists, and copies its name into the admin queue.
       const wine = await findVisibleWine(linkedWineDefinition, {
-        userId: req.user.id, roles: req.user.roles,
+        // noDrafts: a request names a registry wine for admins; a draft is nobody's yet.
+        userId: req.user.id, roles: req.user.roles, noDrafts: true,
       });
       if (!wine) return res.status(404).json({ error: 'Wine not found' });
 

@@ -1511,7 +1511,7 @@ router.post('/confirm', async (req, res) => {
           }
           // Audit 2026-09 D02-3: the registry's pendingIdentity visibility
           // rule applies here as everywhere else (services/wineVisibility.js).
-          const wishWine = await findVisibleWine(item.wineDefinition, { userId: req.user.id, roles: req.user.roles });
+          const wishWine = await findVisibleWine(item.wineDefinition, { userId: req.user.id, roles: req.user.roles, noDrafts: true });
           if (!wishWine) {
             errors.push({ index: i, reason: 'Wine definition not found' });
             continue;

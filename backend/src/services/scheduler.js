@@ -6,6 +6,7 @@ const { runUserDeletionJob } = require('./userDeletionJob');
 const { runCellarRetentionPurge } = require('./cellarRetentionJob');
 const { runRecommendationEmailScrub } = require('./recommendationRetentionJob');
 const { runScanImageRetentionSweep } = require('./scanImageRetentionJob');
+const { runWineDraftExpirySweep } = require('./wineDraftExpiryJob');
 const { runSearchIndexReconcile } = require('./searchReconcileJob');
 const { runSecurityAlertCheck } = require('./securityAlertJob');
 const { runClimateOfflineCheck } = require('./climateOfflineJob');
@@ -219,7 +220,20 @@ function startScheduler() {
     }
   });
 
-  console.log('[scheduler] Cron jobs registered (drink-window daily 06:00 UTC, value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, search-reconcile daily 02:37, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, recommendation-email-scrub daily 04:30 UTC, label-scan-retention daily 04:45 UTC, security-spike every 15 min, climate-offline every 15 min, demo-sweep every 15 min offset, registry-health weekly Mon 05:00 UTC, embed-sweep weekly Mon 05:30 UTC, bridge-refresh weekly Mon 06:30 UTC)');
+  // Private-draft expiry: hourly, because the 24-hour warning before an empty
+  // draft is deleted cannot be honoured by a daily pass (draft design 2026-09-12).
+  cron.schedule('23 * * * *', async () => {
+    try {
+      const r = await runWineDraftExpirySweep();
+      if (r.warned || r.deleted || r.published || r.merged || r.errors) {
+        console.log('[scheduler] Wine-draft expiry sweep:', JSON.stringify(r));
+      }
+    } catch (err) {
+      console.error('[scheduler] Wine-draft expiry sweep failed:', err);
+    }
+  });
+
+  console.log('[scheduler] Cron jobs registered (wine-draft-expiry hourly :23, drink-window daily 06:00 UTC, value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, search-reconcile daily 02:37, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, recommendation-email-scrub daily 04:30 UTC, label-scan-retention daily 04:45 UTC, security-spike every 15 min, climate-offline every 15 min, demo-sweep every 15 min offset, registry-health weekly Mon 05:00 UTC, embed-sweep weekly Mon 05:30 UTC, bridge-refresh weekly Mon 06:30 UTC)');
 }
 
 module.exports = { startScheduler };

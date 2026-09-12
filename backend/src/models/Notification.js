@@ -65,7 +65,14 @@ const notificationSchema = new mongoose.Schema({
       'forum_language_decided',
       // Registry lockdown (2026-09-06): the daily readers report found a
       // reader past the alert level — admins only.
-      'registry_read_alert'
+      'registry_read_alert',
+      // Private draft wines (2026-09-12, services/wineDraftExpiryJob): an
+      // EMPTY draft is about to be deleted; a draft holding bottles was
+      // auto-published as it stood; or auto-publish found the wine already
+      // in the registry and attached the bottles to it instead.
+      'wine_draft_expiring',
+      'wine_draft_published',
+      'wine_draft_merged'
     ],
     required: true
   },
