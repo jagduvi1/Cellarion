@@ -73,7 +73,19 @@ export function groupingLevels(grouping = {}) {
 const keyOf = (e) =>
   `${e.wine?._id || e.wine}|${e.vintage || 'NV'}|${e.bottleSize || '750ml'}`;
 
-function resolveEntry(entry, winesByKey, layout = {}) {
+// A taxonomy row's name in the LIST's language where it carries one, else
+// the canonical name (mirror of backend utils/localizedName): Toskana on a
+// German menu, but Bordeaux stays Bordeaux.
+export function localName(doc, lang) {
+  if (!doc) return '';
+  const canonical = typeof doc.name === 'string' ? doc.name : '';
+  const base = String(lang || 'en').toLowerCase().split(/[-_]/)[0];
+  if (base === 'en' || !doc.translations) return canonical;
+  const t = doc.translations[base];
+  return typeof t === 'string' && t.trim() ? t.trim() : canonical;
+}
+
+function resolveEntry(entry, winesByKey, layout = {}, lang = 'en') {
   const item = winesByKey.get(keyOf(entry));
   if (!item) return null;
   if (layout.hideOutOfStock && item.stock === 0) return null;
@@ -85,8 +97,8 @@ function resolveEntry(entry, winesByKey, layout = {}) {
     producer: wine.producer || '',
     vintage: entry.vintage || 'NV',
     bottleSize: entry.bottleSize || '750ml',
-    country: wine.country?.name || '',
-    region: wine.region?.name || '',
+    country: localName(wine.country, lang),
+    region: localName(wine.region, lang),
     appellation: wine.appellation || '',
     grapes: (wine.grapes || []).map(g => g.name).filter(Boolean),
     type: wine.type || '',
@@ -166,7 +178,7 @@ function buildCustomSections(wineList, winesByKey) {
     title: section.title,
     level: 0,
     wines: (section.entries || [])
-      .map(e => resolveEntry(e, winesByKey, layout))
+      .map(e => resolveEntry(e, winesByKey, layout, wineList.language || 'en'))
       .filter(Boolean)
       .sort((a, b) => a.sortOrder - b.sortOrder),
   })).filter(s => s.wines.length > 0);
@@ -185,7 +197,7 @@ function buildAutoSections(wineList, winesByKey) {
   const lang = wineList.language || 'en';
 
   const wines = (wineList.autoGroupEntries || [])
-    .map(e => resolveEntry(e, winesByKey, layout))
+    .map(e => resolveEntry(e, winesByKey, layout, wineList.language || 'en'))
     .filter(Boolean);
 
   const out = [];

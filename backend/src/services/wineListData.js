@@ -4,8 +4,8 @@ const WineDefinition = require('../models/WineDefinition');
 
 const WINE_SELECT = 'name producer type appellation country region grapes classification';
 const WINE_POPULATE = [
-  { path: 'country', select: 'name' },
-  { path: 'region', select: 'name' },
+  { path: 'country', select: 'name translations' },
+  { path: 'region', select: 'name translations' },
   { path: 'grapes', select: 'name' },
 ];
 

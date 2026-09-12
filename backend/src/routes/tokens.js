@@ -20,9 +20,9 @@ const authLimiter = passwordConfirmLimiter;
 // no device and 404 on every ingest, so it is not user-mintable via this route.
 const USER_MINTABLE_SCOPES = TOKEN_SCOPES.filter(s => s !== 'climate');
 
-// NOTE: none of these routes appear in the API-token scope allowlist
-// (middleware/apiTokenAuth.js), so a token can never create, list, or revoke
-// tokens — management is a logged-in-session (JWT) capability only.
+// NOTE: of these routes only DELETE /self appears in the API-token scope
+// allowlist (middleware/apiTokenAuth.js) — a token may end ITSELF and nothing
+// more; creating, listing and revoking by id are logged-in-session (JWT) only.
 
 // POST /api/tokens — create a personal API token (plaintext shown ONCE).
 // requireNonDemo: a cel_ token authenticates via apiTokenAuth (bypassing the JWT),

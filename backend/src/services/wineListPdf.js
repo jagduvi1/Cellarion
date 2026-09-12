@@ -3,6 +3,7 @@ const QRCode = require('qrcode');
 const fs = require('fs');
 const path = require('path');
 const { entryKey } = require('./wineListData');
+const { localizedName } = require('../utils/localizedName');
 
 // Page dimensions (points, 72pt = 1 inch)
 const PAGE_SIZES = {
@@ -168,7 +169,10 @@ function buildSections(wineList, wineMap) {
   return sections;
 }
 
-function resolveEntry(entry, wineMap, layout = {}) {
+// `lang` is the LIST's language: country and region print in it where the
+// taxonomy row carries that name, else the canonical name (Toskana, but
+// Bordeaux stays Bordeaux) — support ticket 2026-09-12.
+function resolveEntry(entry, wineMap, layout = {}, lang = 'en') {
   const key = entryKey(entry);
   const info = wineMap.get(key);
   if (!info) return null; // wine no longer in the registry
@@ -181,8 +185,8 @@ function resolveEntry(entry, wineMap, layout = {}) {
     producer: wine.producer || '',
     vintage: entry.vintage || 'NV',
     bottleSize: entry.bottleSize || '750ml',
-    country: wine.country?.name || '',
-    region: wine.region?.name || '',
+    country: wine.country ? localizedName(wine.country, lang) : '',
+    region: wine.region ? localizedName(wine.region, lang) : '',
     appellation: wine.appellation || '',
     grapes: (wine.grapes || []).map(g => g.name).filter(Boolean),
     type: wine.type || '',
@@ -206,7 +210,7 @@ function buildCustomSections(wineList, wineMap) {
 
   return sorted.map(section => {
     const wines = (section.entries || [])
-      .map(e => resolveEntry(e, wineMap, layout))
+      .map(e => resolveEntry(e, wineMap, layout, wineList.language || 'en'))
       .filter(Boolean)
       .sort((a, b) => a.sortOrder - b.sortOrder);
 
@@ -232,7 +236,7 @@ function buildAutoSections(wineList, wineMap) {
   const lang = wineList.language || 'en';
 
   const wines = (wineList.autoGroupEntries || [])
-    .map(e => resolveEntry(e, wineMap, layout))
+    .map(e => resolveEntry(e, wineMap, layout, wineList.language || 'en'))
     .filter(Boolean);
 
   const out = [];

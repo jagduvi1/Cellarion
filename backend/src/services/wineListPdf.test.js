@@ -331,3 +331,41 @@ describe('PDF page layout', () => {
     expect(priceWithSymbol('€', '16')).toBe('€16');
   });
 });
+
+// --- Geography in the list's language (support ticket 2026-09-12) ----------
+
+describe('country and region print in the list language', () => {
+  const tuscan = {
+    _id: 'g1', name: 'Brunello', producer: 'Biondi-Santi', type: 'red',
+    country: { name: 'Italy', translations: { de: 'Italien', fr: 'Italie' } },
+    region: { name: 'Tuscany', translations: { de: 'Toskana' } },
+    grapes: [],
+  };
+  const bordeaux = {
+    _id: 'g2', name: 'Pauillac', producer: 'Lynch-Bages', type: 'red',
+    country: { name: 'France', translations: { de: 'Frankreich' } },
+    region: { name: 'Bordeaux' }, // no German form — canonical stays
+    grapes: [],
+  };
+  const wineMap = new Map([mapEntry(tuscan), mapEntry(bordeaux)]);
+  const list = (language) => ({
+    structureMode: 'auto', language,
+    autoGrouping: { levels: ['type', 'country', 'region'], collapseSingle: false, withinGroup: 'name' },
+    autoGroupEntries: [entry('g1'), entry('g2')], layout: {},
+  });
+
+  test('a German list prints Italien › Toskana and Frankreich › Bordeaux; an English list is unchanged', () => {
+    const de = buildSections(list('de'), wineMap).map(s => `${'  '.repeat(s.level)}${s.title}`);
+    expect(de).toEqual(['Rotweine', '  Frankreich', '    Bordeaux', '  Italien', '    Toskana']);
+    const en = buildSections(list('en'), wineMap).map(s => `${'  '.repeat(s.level)}${s.title}`);
+    expect(en).toEqual(['Red Wines', '  France', '    Bordeaux', '  Italy', '    Tuscany']);
+  });
+
+  test('the resolved entry carries the localised names too (the producer — region line)', () => {
+    const r = resolveEntry(entry('g1'), wineMap, {}, 'de');
+    expect(r).toMatchObject({ country: 'Italien', region: 'Toskana' });
+    // A Mongoose Map (non-lean doc) works as well as a plain object
+    const mapDoc = { ...tuscan, region: { name: 'Tuscany', translations: new Map([['de', 'Toskana']]) } };
+    expect(resolveEntry(entry('g1'), new Map([mapEntry(mapDoc)]), {}, 'de-CH').region).toBe('Toskana');
+  });
+});
