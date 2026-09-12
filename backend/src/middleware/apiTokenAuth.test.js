@@ -385,3 +385,20 @@ describe('authenticateApiToken', () => {
     expect(auditJson).not.toContain(RAW);
   });
 });
+
+describe('self-revoke (DELETE /api/tokens/self) is reachable by every scope, and nothing else under /api/tokens is', () => {
+  test.each([['read'], ['consume'], ['write'], ['climate']])('scope %s may revoke its own token', (scope) => {
+    expect(isRequestAllowed([scope], 'DELETE', '/api/tokens/self')).toBe(true);
+    expect(isRequestAllowed([scope], 'DELETE', '/api/tokens/self/')).toBe(true);
+  });
+
+  test('the token list, another token by id, and creating tokens stay session-only', () => {
+    for (const scope of ['read', 'consume', 'write', 'climate']) {
+      expect(isRequestAllowed([scope], 'GET', '/api/tokens')).toBe(false);
+      expect(isRequestAllowed([scope], 'DELETE', `/api/tokens/${'a'.repeat(24)}`)).toBe(false);
+      expect(isRequestAllowed([scope], 'DELETE', '/api/tokens/selfish')).toBe(false);
+      expect(isRequestAllowed([scope], 'POST', '/api/tokens')).toBe(false);
+      expect(isRequestAllowed([scope], 'GET', '/api/tokens/self')).toBe(false);
+    }
+  });
+});

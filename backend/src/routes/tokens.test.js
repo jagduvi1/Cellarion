@@ -181,3 +181,50 @@ describe('DELETE /api/tokens/:id', () => {
     expect(res.status).toBe(404);
   });
 });
+
+// A personal token revoking ITSELF — what an integration being removed can do
+// with nothing but its own bearer (Home Assistant team, 2026-09-12).
+describe('DELETE /api/tokens/self', () => {
+  // requireAuth's cel_ path sets req.apiToken; here the JWT path runs and the
+  // token identity is injected ahead of the router, exactly as the middleware
+  // leaves it.
+  const withApiToken = (apiToken) => {
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => { if (apiToken) req.apiToken = apiToken; next(); });
+    app.use('/api/tokens', tokensRouter);
+    return new Promise((resolve) => {
+      const s = http.createServer(app);
+      s.listen(0, async () => {
+        const res = await fetch(`http://127.0.0.1:${s.address().port}/api/tokens/self`, { method: 'DELETE', headers: { Authorization: authHeader() } });
+        const body = await res.json();
+        s.closeAllConnections(); s.close();
+        resolve({ status: res.status, body });
+      });
+    });
+  };
+
+  test('revokes exactly the calling token, audits it as a self-revoke, and drops its streams', async () => {
+    const save = jest.fn();
+    ApiToken.findOne.mockResolvedValue({ _id: 't1', name: 'Home Assistant (kitchen)', save });
+    const { status, body } = await withApiToken({ id: 't1', scopes: ['read'] });
+    expect(status).toBe(200);
+    expect(body).toEqual({ message: 'Token revoked', id: 't1', name: 'Home Assistant (kitchen)' });
+    expect(ApiToken.findOne).toHaveBeenCalledWith({ _id: 't1', user: 'u1', revokedAt: null });
+    expect(save).toHaveBeenCalled();
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'token.revoked', { type: 'apiToken', id: 't1' }, { name: 'Home Assistant (kitchen)', self: true });
+  });
+
+  test('a signed-in session has no self token → 400 pointing at /:id; never reaches the model', async () => {
+    const { status, body } = await withApiToken(null);
+    expect(status).toBe(400);
+    expect(body.error).toMatch(/DELETE \/api\/tokens\/:id/);
+    expect(ApiToken.findOne).not.toHaveBeenCalled();
+  });
+
+  test('an already-revoked token → 404', async () => {
+    ApiToken.findOne.mockResolvedValue(null);
+    const { status } = await withApiToken({ id: 't9', scopes: ['read'] });
+    expect(status).toBe(404);
+  });
+});

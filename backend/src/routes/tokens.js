@@ -120,6 +120,35 @@ router.get('/', requireAuth, async (req, res) => {
 });
 
 // DELETE /api/tokens/:id — revoke (takes effect on the token's next request)
+// DELETE /api/tokens/self — a personal API token revokes ITSELF. An
+// integration that is being removed (the Home Assistant component on
+// "delete integration") holds only its own bearer token — no session login
+// and no token id — so this is the one way it can clean up after itself.
+// Any scope may call it (middleware/apiTokenAuth.js allow-lists exactly this
+// route for every token); a JWT session has no "self" token and is told to
+// use DELETE /api/tokens/:id. Declared BEFORE /:id so "self" never casts.
+router.delete('/self', requireAuth, async (req, res) => {
+  try {
+    if (!req.apiToken) {
+      return res.status(400).json({ error: 'Only a personal API token can revoke itself — from a signed-in session use DELETE /api/tokens/:id' });
+    }
+    const token = await ApiToken.findOne({ _id: req.apiToken.id, user: req.user.id, revokedAt: null });
+    if (!token) {
+      return res.status(404).json({ error: 'Token not found' });
+    }
+    token.revokedAt = new Date();
+    await token.save();
+
+    logAudit(req, 'token.revoked', { type: 'apiToken', id: token._id }, { name: token.name, self: true });
+    eventBus.dropToken(token._id);
+
+    res.json({ message: 'Token revoked', id: token._id, name: token.name });
+  } catch (error) {
+    console.error('Self-revoke API token error:', error);
+    res.status(500).json({ error: 'Failed to revoke token' });
+  }
+});
+
 router.delete('/:id', requireAuth, async (req, res) => {
   try {
     const token = await ApiToken.findOne({ _id: req.params.id, user: req.user.id, revokedAt: null });

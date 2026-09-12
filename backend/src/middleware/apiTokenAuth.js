@@ -111,11 +111,21 @@ function isMcpEndpoint(method, path) {
   return (method === 'POST' || method === 'GET' || method === 'DELETE') && /^\/api\/mcp$/.test(p);
 }
 
+/**
+ * The one route EVERY personal token may reach regardless of scope: revoking
+ * itself (DELETE /api/tokens/self — routes/tokens.js). An integration being
+ * removed holds only its own bearer token; letting it end that token is
+ * strictly narrowing, never widening. Exact-anchored; /api/tokens/:id and
+ * the token list stay session-only.
+ */
+const SELF_REVOKE = { method: 'DELETE', pattern: /^\/api\/tokens\/self$/ };
+
 /** Default-deny scope check. Exported for direct unit testing. */
 function isRequestAllowed(scopes, method, path) {
   // Normalize: Express treats HEAD as GET, and a trailing slash as the same route.
   const m = method === 'HEAD' ? 'GET' : method;
   const p = path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
+  if (m === SELF_REVOKE.method && SELF_REVOKE.pattern.test(p)) return true;
   if (TOKEN_EXCLUSIONS.some(rule => rule.test(p))) return false;
   for (const scope of scopes || []) {
     for (const rule of SCOPE_ALLOWLIST[scope] || []) {
