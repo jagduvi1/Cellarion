@@ -267,7 +267,10 @@ auth; JWT sessions implicitly have all scopes. Initial scopes:
 ```
 POST   /api/tokens          {name, scopes}     → {token: "cel_..."}  (shown once)
 GET    /api/tokens          → [{id, name, scopes, lastUsedAt, createdAt}]
-DELETE /api/tokens/:id      → revoke
+DELETE /api/tokens/:id      → revoke (session login)
+DELETE /api/tokens/self     → the calling token revokes ITSELF — bearer only, no
+                              session and no id; any scope. For an integration
+                              cleaning up when it is removed.
 ```
 
 Require a fresh password confirmation on create (same pattern as
