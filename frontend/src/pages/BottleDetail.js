@@ -274,9 +274,9 @@ function BottleDetail() {
     }
   };
 
-  const handleConsumeConfirm = async (reason, note, rating, consumedRatingScale) => {
+  const handleConsumeConfirm = async (reason, note, rating, consumedRatingScale, consumedAt) => {
     try {
-      const res = await consumeBottle(apiFetch, bottleId, { reason, note, rating, consumedRatingScale });
+      const res = await consumeBottle(apiFetch, bottleId, { reason, note, rating, consumedRatingScale, consumedAt });
       const data = await res.json();
       if (res.ok) {
         // Prompt for journal entry if user hasn't opted out

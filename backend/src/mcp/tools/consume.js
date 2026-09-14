@@ -35,7 +35,8 @@ registerTool({
   name: 'consume_bottle',
   title: 'Consume a bottle (drank / gifted / sold)',
   description:
-    'Marks one bottle as consumed: drank (default), gifted, sold or other, with an optional note and rating. ' +
+    'Marks one bottle as consumed: drank (default), gifted, sold or other, with an optional note, rating and, when ' +
+    'the bottle is being logged after the fact, the day it was actually drunk (consumed_at; default today). ' +
     'Frees its rack slot. ALWAYS confirm with the user first, naming the exact wine and vintage — this changes their ' +
     `cellar. Reversible for ${RESTORE_WINDOW_DAYS} days via restore_bottle / undo_last. ` +
     'A RESERVED ("spoken for") bottle is refused until you confirm the reservation with the user and retry with ' +
@@ -48,6 +49,8 @@ registerTool({
     note: z.string().max(1000).optional().describe('Tasting note / occasion'),
     rating: z.number().min(0).max(100).optional(),
     rating_scale: z.enum(['5', '20', '100']).optional().describe('Scale the rating is on (required with rating)'),
+    consumed_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+      .describe('The day the bottle was actually drunk (YYYY-MM-DD) when it is being logged after the fact; not in the future. Omit for today.'),
     acknowledge_reservation: z.boolean().optional()
       .describe('Required true to consume a reserved ("spoken for") bottle — only after the user explicitly confirmed'),
     idempotency_key: z.string().max(100).optional().describe('Unique key: a retry with the same key returns the original result'),
@@ -83,6 +86,7 @@ registerTool({
       note: args.note,
       rating: args.rating,
       ratingScale: args.rating_scale,
+      consumedAt: args.consumed_at,
     }, ctx.req);
     if (result.error) return fail('invalid_input', result.error.message);
 

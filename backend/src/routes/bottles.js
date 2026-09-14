@@ -757,8 +757,12 @@ router.put('/:id/default-image', requireBottleAccess('editor'), async (req, res)
 // POST /api/bottles/:id/consume - Soft-remove bottle (owner or editor)
 router.post('/:id/consume', requireBottleAccess('editor'), async (req, res) => {
   try {
-    const { reason = 'drank', note, rating, consumedRatingScale } = req.body;
-    const result = await consumeBottle(req.bottle, { reason, note, rating, ratingScale: consumedRatingScale }, req);
+    // consumedAt: the day the bottle was actually drunk, when that is not
+    // today (support ticket 2026-09-13: "how do I set the consumed date?").
+    // The service validates it (a real date, not in the future); absent →
+    // now, as before. The bulk action has taken the same field since v1.200.
+    const { reason = 'drank', note, rating, consumedRatingScale, consumedAt } = req.body;
+    const result = await consumeBottle(req.bottle, { reason, note, rating, ratingScale: consumedRatingScale, consumedAt }, req);
     if (result.error) return res.status(result.error.status).json({ error: result.error.message });
     res.json({ bottle: result.bottle });
   } catch (error) {

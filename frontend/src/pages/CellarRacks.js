@@ -374,10 +374,10 @@ function CellarRacks() {
   };
 
   // --- soft-remove bottle via the shared consume endpoint ---
-  const handleConsumeSubmit = async (reason, note, rating, consumedRatingScale) => {
+  const handleConsumeSubmit = async (reason, note, rating, consumedRatingScale, consumedAt) => {
     const { bottleId, bottle } = consumeModal;
     try {
-      const res = await consumeBottle(apiFetch, bottleId, { reason, note, rating, consumedRatingScale });
+      const res = await consumeBottle(apiFetch, bottleId, { reason, note, rating, consumedRatingScale, consumedAt });
       const data = await res.json();
       if (res.ok) {
         // Server already cleared the rack slot; update local racks state
@@ -1526,19 +1526,29 @@ function FilledSlotContent({ position, slot, zone, canEdit, onRemoveFromRack, on
 }
 
 // ---- Consume / remove modal ----
+// Local calendar date, YYYY-MM-DD — what <input type="date"> speaks.
+const todayLocal = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+// onSubmit(reason, note, rating, ratingScale, consumedAt) — consumedAt is the
+// day the bottle was actually drunk (YYYY-MM-DD, default today), mirroring
+// components/ConsumeModal and BulkConsumeModal (support ticket 2026-09-13).
 function ConsumeModal({ defaultRatingScale, onSubmit, onCancel, onPartial }) {
   const { t } = useTranslation();
   const [reason,       setReason]      = useState('drank');
   const [note,         setNote]        = useState('');
   const [rating,       setRating]      = useState('');
   const [ratingScale,  setRatingScale] = useState(defaultRatingScale || '5');
+  const [date,         setDate]        = useState(todayLocal);
   const [saving,       setSaving]      = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
     try {
-      await onSubmit(reason, note || undefined, rating || undefined, ratingScale);
+      await onSubmit(reason, note || undefined, rating || undefined, ratingScale, date || undefined);
     } finally {
       // Always re-enable the button — a rejected onSubmit must not leave the
       // modal stuck on "Saving...".
@@ -1575,6 +1585,16 @@ function ConsumeModal({ defaultRatingScale, onSubmit, onCancel, onPartial }) {
               <option value="sold">{t('bottleDetail.soldReason')}</option>
               <option value="other">{t('bottleDetail.otherReason')}</option>
             </select>
+          </div>
+          <div className="form-group">
+            <label>{t('bulk.consumeDate')}</label>
+            <input
+              type="date"
+              value={date}
+              max={todayLocal()}
+              onChange={e => setDate(e.target.value)}
+              disabled={saving}
+            />
           </div>
           {reason === 'drank' && (
             <div className="form-group">

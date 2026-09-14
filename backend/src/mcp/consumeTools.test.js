@@ -124,6 +124,21 @@ describe('consume_bottle', () => {
     expect(bottleOps.consumeBottle).not.toHaveBeenCalled();
   });
 
+  test('consumed_at (the day it was actually drunk) reaches the shared service; omitted → undefined (service stamps now)', async () => {
+    ownBottle();
+    bottleOps.consumeBottle.mockImplementation(async (bottle, opts) => {
+      bottle.status = opts.reason; bottle.consumedAt = opts.consumedAt ? new Date(opts.consumedAt) : new Date();
+      return { bottle };
+    });
+    const res = await tool('consume_bottle').handler({ bottle_id: oid('d'), consumed_at: '2026-09-06' }, CTX);
+    expect(parse(res).data.consumed_at).toBe('2026-09-06T00:00:00.000Z');
+    expect(bottleOps.consumeBottle.mock.calls[0][1]).toMatchObject({ reason: 'drank', consumedAt: '2026-09-06' });
+
+    ownBottle();
+    await tool('consume_bottle').handler({ bottle_id: oid('d') }, CTX);
+    expect(bottleOps.consumeBottle.mock.calls[1][1].consumedAt).toBeUndefined();
+  });
+
   test('success: shared service called with ctx.req; ledger row carries token id + reason, never the token value', async () => {
     ownBottle();
     bottleOps.consumeBottle.mockImplementation(async (bottle, opts) => {
