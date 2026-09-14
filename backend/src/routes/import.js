@@ -468,6 +468,45 @@ async function findExactRegistryWine(item) {
     .populate(['country', 'region', 'grapes']);
 }
 
+// Longest producer prefix tried against the registry, in tokens. Real
+// producer names run to five tokens ("Domaine de la Romanée-Conti", "A.A.
+// Badenhorst Family Wines"); six covers the rest without scanning a whole
+// display name word by word.
+const PRODUCER_PREFIX_MAX_TOKENS = 6;
+
+/**
+ * Split a producer-less display name on a producer the REGISTRY already knows.
+ *
+ * A CellarTracker export without a Producer column carries "Louis Jadot
+ * Moulin-à-Vent Château des Jacques" in its Wine column. The client used to
+ * guess the first word ("Louis"), which minted 285 wines under one-word
+ * producers on 2026-09-12 and cost 121 curator corrections. The registry is
+ * the better oracle: the longest leading token run that equals an existing
+ * producer (normalizedKey is `<producer>:<name>:<appellation>`, so an
+ * anchored prefix on the unique index is one cheap read per length) is the
+ * producer, and the rest is the wine's own name. Nothing matches → null, and
+ * the row goes to the model with the full display name instead.
+ *
+ * Pending and draft rows are excluded by construction (their key namespaces
+ * start with `pending~` / `draft~`), non-wine records explicitly.
+ */
+async function splitKnownProducerPrefix(displayName) {
+  const tokens = String(displayName || '').trim().split(/\s+/).filter(Boolean);
+  if (tokens.length < 2) return null;
+  for (let n = Math.min(PRODUCER_PREFIX_MAX_TOKENS, tokens.length - 1); n >= 1; n--) {
+    const prefixKey = normalizeString(tokens.slice(0, n).join(' '));
+    if (!prefixKey) continue;
+    const hit = await WineDefinition.findOne({
+      normalizedKey: new RegExp(`^${escapeRegex(prefixKey)}:`),
+      nonWine: { $ne: true },
+    }).select('producer').lean();
+    if (hit && hit.producer) {
+      return { producer: hit.producer, wineName: tokens.slice(n).join(' ') };
+    }
+  }
+  return null;
+}
+
 /**
  * Find best wine matches for a single import item.
  * Strategy:
@@ -678,11 +717,27 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     // the cascade's own "zero AI for known wines" intent. Only the AI fan-out
     // itself (Pass 1b) is gated on availability.
     const aiConfigured = aiProvider.isConfigured(); // invariant for the whole request
-    const cascadeEligible = preResults.filter(pr => !pr.errorMsg && pr.item.wineName && pr.item.producer);
+
+    // A row that names the wine but not the producer (a CellarTracker export
+    // without a Producer column: "Kim Crawford Pinot Gris" in one cell) is
+    // split on a producer the registry already knows BEFORE any lookup, so it
+    // joins the cascade as an ordinary row. The client no longer guesses the
+    // first word (2026-09-12: 285 wines minted under "Louis", "Kim", "19"…);
+    // rows the registry cannot split keep the full display name and go to
+    // the model, which is told the producer is embedded in it.
+    for (const pr of preResults) {
+      if (pr.errorMsg || !pr.item.wineName || pr.item.producer) continue;
+      const split = await splitKnownProducerPrefix(pr.item.wineName);
+      if (split) {
+        pr.item.producer = split.producer;
+        pr.item.wineName = split.wineName;
+      }
+    }
+    const identifyEligible = preResults.filter(pr => !pr.errorMsg && pr.item.wineName);
 
     // Build unique wine keys — one cascade/AI attempt per unique wine, not per bottle
     const aiKeyMap = new Map(); // normalizedKey -> preResult (representative)
-    for (const pr of cascadeEligible) {
+    for (const pr of identifyEligible) {
       const key = `${normalizeString(pr.item.wineName)}:${normalizeString(pr.item.producer)}`;
       if (!aiKeyMap.has(key)) aiKeyMap.set(key, pr);
       if (pr.forceAi) aiKeyMap.get(key).forceAi = true; // any row's Look-up button forces the key
@@ -728,6 +783,11 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     };
     for (const pr of uniquePrs) {
       if (clientDisconnected) break; // requester gone — stop the cascade, skip AI entirely
+      // A row still without a producer after the registry split runs the
+      // cascade too: (a) and (c) need a producer and simply return null, but
+      // (b)'s query variants were built for exactly this display-name shape
+      // (registry backlog 2026-09-06) and resolve a known wine at >= 0.95
+      // with zero AI. Only an unknown wine then reaches the model.
       // forceAi bypasses the cascade only when there is an AI to reach; with
       // no key configured the shared cascade is the best available outcome.
       if (pr.forceAi && aiConfigured) continue;
@@ -826,7 +886,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
 
     // Attach the shared cascade/AI result to every eligible preResult with
     // that key (duplicates share the representative's outcome, as before).
-    for (const pr of cascadeEligible) {
+    for (const pr of identifyEligible) {
       const key = `${normalizeString(pr.item.wineName)}:${normalizeString(pr.item.producer)}`;
       const rep = aiKeyMap.get(key);
       if (rep.registryWine) { pr.registryWine = rep.registryWine; continue; }

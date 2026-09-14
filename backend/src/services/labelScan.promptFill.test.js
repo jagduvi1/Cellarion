@@ -66,6 +66,21 @@ describe('prompt builders insert user text literally (audit 2026-09-02 D10-9)', 
     expect(sentPrompt()).not.toContain('N'.repeat(201));
   });
 
+  test('identifyWineFromText: a row with no producer is still asked, and the producer slot tells the model to split it out of the name', async () => {
+    const res = await identifyWineFromText({ name: 'Kim Crawford Pinot Gris', producer: '' });
+    expect(res.debugReason).not.toBe('missing_fields');
+    const prompt = sentPrompt();
+    expect(prompt).toContain('Wine: Kim Crawford Pinot Gris');
+    expect(prompt).toMatch(/Producer: not stated in the file .* BEGINS with the producer/);
+    expect(tails(prompt)).toBe(1);
+  });
+
+  test('identifyWineFromText: a producer with no name is not a wine — refused before any request', async () => {
+    const res = await identifyWineFromText({ name: '', producer: 'Kim Crawford' });
+    expect(res).toEqual({ data: null, debugRaw: null, debugReason: 'missing_fields' });
+    expect(create).not.toHaveBeenCalled();
+  });
+
   test('suggestDrinkWindow: registry text and grapes are literal, grapes capped per name', async () => {
     await suggestDrinkWindow({ name: "$'", producer: '$`', vintage: '2019', grapes: ["$'", 'Syrah', 'Grenache'] });
     const prompt = sentPrompt();

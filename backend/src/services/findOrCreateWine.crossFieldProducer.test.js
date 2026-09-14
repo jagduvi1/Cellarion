@@ -52,7 +52,7 @@ jest.mock('../models/Grape', () => {
   ctor.find = jest.fn();
   return ctor;
 });
-jest.mock('../models/Appellation', () => ({ exists: jest.fn(), find: jest.fn() }));
+jest.mock('../models/Appellation', () => ({ exists: jest.fn(), find: jest.fn(), findOne: jest.fn() }));
 jest.mock('./search', () => ({
   getIsAvailable: jest.fn(),
   search: jest.fn(),

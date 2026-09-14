@@ -98,6 +98,28 @@ const MAX_FIELD = 200;
 // Mirrors the route's cap so the import callers, which have none, get it too.
 const MAX_GRAPES = 20;
 
+/**
+ * The curated Appellation that a REGION-column string actually names, if any.
+ *
+ * Imports and label scans put appellations in the region column all the time
+ * ("Pauillac", "Fleurie", "Prosecco", "Cerasuolo d'Abruzzo"): the exporting
+ * app had one geography field, or the model thought at appellation
+ * granularity. The 2026-09-08 region review cleared 237 minted regions and
+ * 117 of them were appellations; the 09-12 import refilled the queue within
+ * a day. Country-scoped, canonical name or synonym, same key fold as the
+ * appellation resolver. Match-only: this never mints an Appellation.
+ */
+async function appellationInRegionColumn(rawName, countryId) {
+  const name = sanitizeTaxonomyName(rawName);
+  if (!name || isUnknownName(name) || !countryId) return null;
+  const key = normalizeAppellationKey(name);
+  if (!key) return null;
+  return Appellation.findOne({
+    country: countryId,
+    $or: [{ normalizedName: key }, { normalizedSynonyms: key }],
+  });
+}
+
 async function findOrCreateRegion(rawName, countryId, userId) {
   const name = sanitizeTaxonomyName(rawName);
   // "Unknown"/placeholder → null region (the schema's representation of unknown)
@@ -111,6 +133,17 @@ async function findOrCreateRegion(rawName, countryId, userId) {
     $or: [{ normalizedName }, { normalizedSynonyms: normalizedName }],
   });
   if (region) return region;
+  // An appellation in the region column resolves to the region the
+  // appellation belongs to — "Fleurie" lands on Beaujolais, never on a new
+  // region called Fleurie. An appellation the taxonomy has not placed yet
+  // yields null: the string IS an appellation, so minting a region named
+  // after it would be wrong regardless (Johan, 2026-09-08; see
+  // appellationInRegionColumn). The wine's appellation field is filled by
+  // the create path, which knows whether it was empty.
+  const appellation = await appellationInRegionColumn(name, countryId);
+  if (appellation) {
+    return appellation.region ? Region.findOne({ _id: appellation.region }) : null;
+  }
   // Mint gates (registry audit 2026-07-26 RC-8). A comma means the caller
   // packed a hierarchy into one string ("Bordeaux, Haut-Médoc", "Niagara
   // Peninsula, Ontario") — never a region name; and a region that IS a
@@ -421,6 +454,28 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
       trimmedName = shifted.name.slice(0, MAX_FIELD);
       trimmedAppellation = shifted.appellation || trimmedAppellation;
       classification = shifted.classification;
+    }
+  }
+
+  // An appellation typed in the REGION column fills an empty appellation
+  // field ("Fleurie" in region, nothing in appellation → appellation Fleurie;
+  // the region itself resolves to Beaujolais in findOrCreateRegion). Done
+  // BEFORE matching so the corrected identity drives the dedup keys: the
+  // same row imported twice must land on one record. Read-only country
+  // lookup — a country the taxonomy lacks has no appellations to match.
+  if (!trimmedAppellation && typeof region === 'string' && region.trim() && typeof country === 'string' && country.trim()) {
+    const countryForAppellation = await Country.findOne({ normalizedName: normalizeString(resolveCountryName(country.trim())) });
+    const fromRegionColumn = countryForAppellation
+      ? await appellationInRegionColumn(region, countryForAppellation._id)
+      : null;
+    if (fromRegionColumn) {
+      trimmedAppellation = fromRegionColumn.name;
+      // The value came from the region column, so the appellation's
+      // provenance is the region's — whatever the caller claimed for an
+      // appellation it never had ('model' is the import's default).
+      if (provenance && provenance.region) {
+        provenance = { ...provenance, appellation: provenance.region };
+      }
     }
   }
 
@@ -1004,6 +1059,7 @@ module.exports = {
   findOrCreateRegion,
   findOrCreateGrapes,
   regionForAppellation,
+  appellationInRegionColumn,
   pendingProducerKey,
   pendingWineKey,
   draftWineKey,

@@ -19,7 +19,7 @@ jest.mock('../models/WineVintageProfile', () => ({ deleteMany: jest.fn() }));
 jest.mock('../models/Country', () => ({ findOne: jest.fn(), findById: jest.fn(), exists: jest.fn() }));
 jest.mock('../models/Region', () => ({ findById: jest.fn(), exists: jest.fn() }));
 jest.mock('../models/Grape', () => ({ find: jest.fn() }));
-jest.mock('../models/Appellation', () => ({ exists: jest.fn() }));
+jest.mock('../models/Appellation', () => ({ exists: jest.fn(), findOne: jest.fn() }));
 jest.mock('./audit', () => ({ logAudit: jest.fn() }));
 jest.mock('./appellationResolve', () => ({ resolveCanonicalAppellation: jest.fn(async (s) => s) }));
 jest.mock('./wineProfileOps', () => ({ resolveGrapeIdsStrict: jest.fn() }));

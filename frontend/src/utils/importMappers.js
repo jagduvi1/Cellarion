@@ -768,7 +768,12 @@ const CT_PRODUCER_PARTICLE_RE =
  * particles plus one substantive token, so
  *   "Domaine de la Romanée-Conti La Tâche" → "Domaine de la Romanée-Conti"
  *   "Château Margaux"                      → "Château Margaux"
- * Otherwise keep the legacy rule: first word of a >2-word name.
+ * Anything else is left EMPTY on purpose. The old fallback took the first
+ * word of a longer name, which is right for "Penfolds Grange" and wrong for
+ * "Louis Jadot …", "Kim Crawford …", "19 Crimes …" — a 771-row export minted
+ * 285 registry wines under one-word producers on 2026-09-12. The backend
+ * splits a producer-less row on a producer the registry already knows, and
+ * asks the model for the rest; an empty producer here is what routes it there.
  */
 export function guessProducerFromWineName(wineName) {
   if (!wineName) return '';
@@ -780,7 +785,7 @@ export function guessProducerFromWineName(wineName) {
     if (end < parts.length) end++; // the substantive token
     return parts.slice(0, end).join(' ');
   }
-  return parts.length > 2 ? parts[0] : '';
+  return '';
 }
 
 /**

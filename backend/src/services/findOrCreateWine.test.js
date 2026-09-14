@@ -46,7 +46,7 @@ jest.mock('../models/Grape', () => {
   ctor.find = jest.fn();
   return ctor;
 });
-jest.mock('../models/Appellation', () => ({ exists: jest.fn(), find: jest.fn() }));
+jest.mock('../models/Appellation', () => ({ exists: jest.fn(), find: jest.fn(), findOne: jest.fn() }));
 jest.mock('./search', () => ({
   getIsAvailable: jest.fn(),
   search: jest.fn(),
@@ -842,6 +842,78 @@ describe('findOrCreateWine — creation', () => {
     expect(doc.appellation).toBeNull();
     expect(doc.region).toBeNull();
     expect(doc.normalizedKey).toBe(generateWineKey('Clos des Papes', 'Paul Avril', ''));
+  });
+
+  describe('an appellation typed in the region column (Johan, 2026-09-08)', () => {
+    const fleurie = { _id: 'ap-fleurie', name: 'Fleurie', region: 'region-beaujolais' };
+    const beaujolais = { _id: 'region-beaujolais', name: 'Beaujolais' };
+
+    beforeEach(() => {
+      Country.findOne.mockResolvedValue({ _id: 'country-1' });
+      // No Region is called "Fleurie"; the Appellation table knows it and places it.
+      Region.findOne.mockImplementation(async (q) => (q && q._id === 'region-beaujolais' ? beaujolais : null));
+      Region.mockImplementation(function () {
+        throw new Error('an appellation in the region column must never mint a region');
+      });
+      Appellation.findOne.mockImplementation(async (q) => {
+        const keys = (q.$or || []).map((c) => c.normalizedName || c.normalizedSynonyms);
+        return keys.includes('fleurie') ? fleurie : null;
+      });
+    });
+
+    test('resolves to the appellation\'s region and fills the empty appellation field', async () => {
+      await findOrCreateWine({ ...INPUT, region: 'Fleurie', appellation: '' }, USER_ID);
+
+      const doc = WineDefinition.mock.calls[0][0];
+      expect(doc.region).toBe('region-beaujolais');
+      expect(doc.appellation).toBe('Fleurie');
+      expect(doc.normalizedKey).toBe(generateWineKey('Clos des Papes', 'Paul Avril', 'Fleurie'));
+      expect(Appellation.findOne).toHaveBeenCalledWith(expect.objectContaining({ country: 'country-1' }));
+    });
+
+    test('keeps an appellation the file did state; only the region is corrected', async () => {
+      await findOrCreateWine({ ...INPUT, region: 'Fleurie', appellation: 'Beaujolais-Villages' }, USER_ID);
+
+      const doc = WineDefinition.mock.calls[0][0];
+      expect(doc.region).toBe('region-beaujolais');
+      expect(doc.appellation).toBe('Beaujolais-Villages');
+    });
+
+    test('carries the region column\'s provenance onto the filled appellation', async () => {
+      await findOrCreateWine({ ...INPUT, region: 'Fleurie', appellation: '' }, USER_ID, {
+        provenance: { name: 'model', producer: 'model', region: 'file', appellation: 'model' },
+      });
+
+      const doc = WineDefinition.mock.calls[0][0];
+      // 'appellation: model' was a claim about a value the model never gave;
+      // the string came from the file's region column.
+      expect(doc.identityProvenance.appellation).toBe('file');
+      expect(doc.identityProvenance.region).toBe('file');
+    });
+
+    test('an appellation the taxonomy has not placed yields NO region rather than a minted one', async () => {
+      Appellation.findOne.mockResolvedValue({ _id: 'ap-orphan', name: 'Vin de France', region: null });
+
+      await findOrCreateWine({ ...INPUT, region: 'Vin de France', appellation: '' }, USER_ID);
+
+      const doc = WineDefinition.mock.calls[0][0];
+      expect(doc.region).toBeNull();
+      expect(doc.appellation).toBe('Vin de France');
+    });
+
+    test('a string that is neither region nor appellation still mints, as before', async () => {
+      Appellation.findOne.mockResolvedValue(null);
+      Region.mockImplementation(function (fields) {
+        Object.assign(this, fields, { _id: 'region-new' });
+        this.save = jest.fn().mockResolvedValue(this);
+      });
+
+      await findOrCreateWine({ ...INPUT, region: 'Terra Incognita', appellation: '' }, USER_ID);
+
+      expect(Region).toHaveBeenCalledTimes(1);
+      expect(Region.mock.calls[0][0]).toMatchObject({ name: 'Terra Incognita', createdByUser: true });
+      expect(WineDefinition.mock.calls[0][0].region).toBe('region-new');
+    });
   });
 
   test('missing country rejects with a 400 error and creates nothing', async () => {

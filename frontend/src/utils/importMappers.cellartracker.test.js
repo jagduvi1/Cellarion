@@ -707,7 +707,7 @@ describe('loose CellarTracker fallback (browser-UI header drift)', () => {
       'iWine,Wine,Producer,Vintage,Location,Bin\n1,Ridge Monte Bello,Unknown,2019,(n/a),(unknown)'
     );
     expect(result.items[0].location).toBe('');
-    expect(result.items[0].producer).toBe('Ridge'); // Unknown → heuristic
+    expect(result.items[0].producer).toBe(''); // Unknown → empty, the backend splits it on a known producer
   });
 
   it('treats vintage 9999 as unknown (NV), not the year 9999', () => {
@@ -734,9 +734,13 @@ describe('guessProducerFromWineName', () => {
     expect(guessProducerFromWineName('Weingut Egon Müller Scharzhofberger')).toBe('Weingut Egon');
   });
 
-  it('keeps the legacy first-word rule for non-prefixed names', () => {
-    expect(guessProducerFromWineName('Ridge Monte Bello')).toBe('Ridge');
-    expect(guessProducerFromWineName('Penfolds Grange Shiraz')).toBe('Penfolds');
+  it('leaves non-prefixed names to the backend (registry split, then the model) — never the first word', () => {
+    // The first-word rule minted "Louis", "Kim" and "19" as producers on
+    // 2026-09-12; an empty producer is what routes the row to the backend split.
+    expect(guessProducerFromWineName('Ridge Monte Bello')).toBe('');
+    expect(guessProducerFromWineName('Penfolds Grange Shiraz')).toBe('');
+    expect(guessProducerFromWineName('Louis Jadot Moulin-à-Vent Château des Jacques')).toBe('');
+    expect(guessProducerFromWineName('19 Crimes Red Wine')).toBe('');
   });
 
   it('returns empty for short names it cannot split confidently', () => {

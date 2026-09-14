@@ -509,8 +509,20 @@ function validateWineIdentity(parsed) {
  *   debugRaw    – raw string from the model (or error message)
  *   debugReason – short explanation when data is null
  */
+// What the producer slot says when the import row has none. A CellarTracker
+// export without a Producer column carries "Kim Crawford Pinot Gris" as the
+// whole wine name; the client used to guess the first word and the registry
+// paid for it (2026-09-12). Inline in the slot rather than a template rule
+// for the same reason as the hints below: importLookupPrompt is
+// admin-editable, so the instruction must travel inside a placeholder the
+// stored prompt is guaranteed to have.
+const PRODUCER_EMBEDDED_IN_NAME =
+  'not stated in the file — the wine name above is the full display name and almost certainly BEGINS with the producer; split the producer out and return the wine\'s own name without it';
+
 async function identifyWineFromText({ name, producer, vintage, country, appellation, region }) {
-  if (!name || !producer) return { data: null, debugRaw: null, debugReason: 'missing_fields' };
+  // A name alone is enough to ask: the model splits an embedded producer out
+  // (see PRODUCER_EMBEDDED_IN_NAME). A producer alone is not a wine.
+  if (!name) return { data: null, debugRaw: null, debugReason: 'missing_fields' };
 
   let client;
   try { client = getClient(); } catch { return { data: null, debugRaw: null, debugReason: 'no_api_key' }; }
@@ -550,7 +562,7 @@ async function identifyWineFromText({ name, producer, vintage, country, appellat
   // output; their newlines are ours.
   const prompt = fill(aiConfig.get().importLookupPrompt, [
     ['{{name}}', field(name)],
-    ['{{producer}}', field(producer)],
+    ['{{producer}}', field(producer) || PRODUCER_EMBEDDED_IN_NAME],
     ['{{vintage}}', vintageHint],
     ['{{country}}', countryHint],
   ]);

@@ -81,6 +81,9 @@ jest.mock('../models/WineDefinition', () => {
         }
         return null;
       },
+      // The producer-prefix probe for producer-less rows (2026-09-14) — this
+      // harness's registry never answers it, so those rows take the fuzzy path.
+      select: () => ({ lean: async () => null }),
     })),
     find: jest.fn(() => chain(state.candidates)),
     findById: jest.fn(),
