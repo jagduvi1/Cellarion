@@ -98,7 +98,7 @@ registerTool({
           wine_id: wineDoc?._id || null,
           producer: wineDoc?.producer || null,
           wine: wineDoc?.name || p.wineName || null,
-          vintage: p.bottle?.vintage || null,
+          vintage: p.bottle?.vintage || p.vintage || null,
           notes: p.notes || null,
         };
       }),

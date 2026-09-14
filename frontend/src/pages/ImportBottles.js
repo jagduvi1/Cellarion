@@ -2046,7 +2046,8 @@ function ImportBottles() {
                             {isExpanded ? t('importBottles.review.hide') : t('importBottles.review.options', { count: r.matches.length })}
                           </button>
                         )}
-                        {r.status === 'fuzzy' && r.item.wineName && r.item.producer && !isSkipped && !isRequested && (
+                        {/* A producer-less row can be looked up too: the model splits the producer out of the display name (2026-09-14). */}
+                        {r.status === 'fuzzy' && r.item.wineName && !isSkipped && !isRequested && (
                           <button
                             className="btn btn-secondary btn-xs"
                             onClick={() => handleAiSearch(r.index)}

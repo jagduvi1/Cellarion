@@ -496,13 +496,19 @@ async function splitKnownProducerPrefix(displayName) {
   for (let n = Math.min(PRODUCER_PREFIX_MAX_TOKENS, tokens.length - 1); n >= 1; n--) {
     const prefixKey = normalizeString(tokens.slice(0, n).join(' '));
     if (!prefixKey) continue;
-    const hit = await WineDefinition.findOne({
-      normalizedKey: new RegExp(`^${escapeRegex(prefixKey)}:`),
-      nonWine: { $ne: true },
-    }).select('producer').lean();
-    if (hit && hit.producer) {
-      return { producer: hit.producer, wineName: tokens.slice(n).join(' ') };
+    const filter = { normalizedKey: new RegExp(`^${escapeRegex(prefixKey)}:`), nonWine: { $ne: true } };
+    const hit = await WineDefinition.findOne(filter).select('producer').lean();
+    if (!hit || !hit.producer) continue;
+    // A ONE-word producer is the shape the 2026-09-12 first-word guess left
+    // behind ("Kim", "Louis", "19"), and those junk rows are still in the
+    // registry until their purge. A single wine under a one-word producer is
+    // not corroboration; two or more is (Hugel, Penfolds, Ridge all qualify).
+    // Anything longer than one word is trusted as before (audit 2026-09-14 M1).
+    if (n === 1) {
+      const siblings = await WineDefinition.countDocuments(filter, { limit: 2 });
+      if (siblings < 2) continue;
     }
+    return { producer: hit.producer, wineName: tokens.slice(n).join(' ') };
   }
   return null;
 }
@@ -725,12 +731,37 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     // first word (2026-09-12: 285 wines minted under "Louis", "Kim", "19"…);
     // rows the registry cannot split keep the full display name and go to
     // the model, which is told the producer is embedded in it.
+    // Latch a client disconnect as EARLY as possible — before the split
+    // probes and the Pass 1a cascade — so a requester that has gone away
+    // stops us spending reads and, below, launching (and debiting) AI calls.
+    // res 'close' fires when the underlying connection closes; writableEnded
+    // distinguishes a premature client disconnect from normal completion.
+    // (req 'close' fires on message completion in Node >= 15, so it can't be
+    // used for disconnect detection here.)
+    let aiBudgetExhausted = false;
+    let clientDisconnected = false;
+    res.on('close', () => { if (!res.writableEnded) clientDisconnected = true; });
+
+    // ONE probe per distinct display name, not per row (a 2000-row file of
+    // the same six wines is six probes), and a sentinel producer ("Unknown",
+    // "-") counts as none — the CT mapper already sends '' for it, generic
+    // CSV/Vivino rows did not (audit 2026-09-14 M2/L4).
+    const splitByName = new Map(); // normalized display name → split result | null
     for (const pr of preResults) {
-      if (pr.errorMsg || !pr.item.wineName || pr.item.producer) continue;
-      const split = await splitKnownProducerPrefix(pr.item.wineName);
+      if (clientDisconnected) break;
+      if (pr.errorMsg || !pr.item.wineName) continue;
+      if (pr.item.producer && !isIdentitySentinel(pr.item.producer)) continue;
+      if (pr.item.producer) pr.item.producer = ''; // sentinel → genuinely producer-less
+      const nameKey = normalizeString(pr.item.wineName);
+      if (!splitByName.has(nameKey)) splitByName.set(nameKey, await splitKnownProducerPrefix(pr.item.wineName));
+      const split = splitByName.get(nameKey);
       if (split) {
         pr.item.producer = split.producer;
         pr.item.wineName = split.wineName;
+        // The file never stated this producer: the row may match the registry
+        // (a) exactly or (b) fuzzily, but it must not be treated as a
+        // complete, file-stated identity and minted without the model (c).
+        pr.producerFromRegistry = true;
       }
     }
     const identifyEligible = preResults.filter(pr => !pr.errorMsg && pr.item.wineName);
@@ -744,16 +775,8 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     }
     const uniquePrs = [...aiKeyMap.values()];
 
-    // Latch a client disconnect as EARLY as possible — BEFORE the sequential
-    // Pass 1a cascade — so a disconnect during Pass 1a (which can be long for a
-    // big batch) still stops us LAUNCHING (and debiting) the AI fan-out below.
-    // res 'close' fires when the underlying connection closes; writableEnded
-    // distinguishes a premature client disconnect from normal completion.
-    // (req 'close' fires on message completion in Node >= 15, so it can't be
-    // used for disconnect detection here.)
-    let aiBudgetExhausted = false;
-    let clientDisconnected = false;
-    res.on('close', () => { if (!res.writableEnded) clientDisconnected = true; });
+    // (The client-disconnect latch — clientDisconnected / aiBudgetExhausted —
+    // is armed above, before the producer-split probes.)
 
     // ── Pass 1a: registry-first cascade (zero AI for known wines) ──────────
     // (a) exact normalizedKey match (raw + producer-prefix-stripped variant);
@@ -813,7 +836,11 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
       // of its own; loading it is one taxonomy read for the whole request.
       const needsColourMap = !pr.item.type
         && Array.isArray(pr.item.grapes) && pr.item.grapes.length > 0;
-      const identity = fileCompleteIdentity(
+      // A producer the REGISTRY supplied (splitKnownProducerPrefix) is not a
+      // file-stated identity: such a row may match (a)/(b) above, but an
+      // unknown wine goes to the model rather than being minted from the
+      // guess (audit 2026-09-14 L3).
+      const identity = pr.producerFromRegistry ? null : fileCompleteIdentity(
         pr.item,
         needsColourMap ? await getGrapeColourOf() : null
       );

@@ -23,6 +23,15 @@ const pairingSchema = new mongoose.Schema({
     maxlength: 200,
     default: ''
   },
+  // The vintage as picked, kept beside the bottle reference: the reference is
+  // the truth while the bottle exists, and this survives its deletion so the
+  // entry still prints the year (audit 2026-09-14 M2). Empty for free text.
+  vintage: {
+    type: String,
+    trim: true,
+    maxlength: 12,
+    default: ''
+  },
   notes: {
     type: String,
     trim: true,

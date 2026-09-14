@@ -225,7 +225,8 @@ describe('addBottle (real execution)', () => {
     const b = res.bottle;
     expect(b.status).toBe('gifted');
     expect(b.consumedReason).toBe('gifted');
-    expect(b.consumedAt).toEqual(new Date('2025-12-31'));
+    // A bare day is stored as NOON UTC so every zone renders the same calendar day.
+    expect(b.consumedAt).toEqual(new Date('2025-12-31T12:00:00Z'));
     expect(b.consumedNote).toBe('to Anna x');
     expect(b.consumedRating).toBe(4);
     expect(b.consumedRatingScale).toBe('5');
@@ -640,6 +641,25 @@ describe('consumeBottle consumedAt (bulk "mark as drunk" puts one date on a sele
     const undated = freshBottle();
     await consumeBottle(undated, { reason: 'drank' }, REQ);
     expect(Date.now() - undated.consumedAt.getTime()).toBeLessThan(5000);
+  });
+
+  test('a bare calendar day is stored as NOON UTC (same day in every zone); a full timestamp passes through (audit 2026-09-14 H1)', async () => {
+    const day = freshBottle();
+    await consumeBottle(day, { reason: 'drank', consumedAt: '2026-09-13' }, REQ);
+    expect(day.consumedAt.toISOString()).toBe('2026-09-13T12:00:00.000Z');
+    // Honolulu (UTC-10), New York (UTC-4) and Tokyo (UTC+9) all read the 13th — noon UTC covers UTC-12…UTC+11.
+    expect(day.consumedAt.toLocaleDateString('en-CA', { timeZone: 'Pacific/Honolulu' })).toBe('2026-09-13');
+    expect(day.consumedAt.toLocaleDateString('en-CA', { timeZone: 'America/New_York' })).toBe('2026-09-13');
+    expect(day.consumedAt.toLocaleDateString('en-CA', { timeZone: 'Asia/Tokyo' })).toBe('2026-09-13');
+
+    const stamp = freshBottle();
+    await consumeBottle(stamp, { reason: 'drank', consumedAt: '2026-09-13T20:15:00.000Z' }, REQ);
+    expect(stamp.consumedAt.toISOString()).toBe('2026-09-13T20:15:00.000Z');
+
+    // "Today" for a UTC+14 user just after their midnight is ~26 h before its noon UTC — still accepted.
+    const ahead = freshBottle();
+    const tomorrowUtc = new Date(Date.now() + 14 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    expect((await consumeBottle(ahead, { reason: 'drank', consumedAt: tomorrowUtc }, REQ)).error).toBeUndefined();
   });
 
   test('a future date, an unparseable date and a pre-1900 date are refused', async () => {

@@ -145,7 +145,8 @@ describe('drunk bottles are pickable, and the stored text carries the producer, 
     expect(screen.getByText('Recently drunk')).toBeInTheDocument();
     fireEvent.click(screen.getAllByText('Sauvignon')[0].closest('button'));
 
-    expect(onChange).toHaveBeenLastCalledWith({ bottle: 'b-drunk', wine: 'w1', wineName: 'Jermann Sauvignon' });
+    // The vintage rides beside the reference so the entry keeps its year if the bottle is later deleted.
+    expect(onChange).toHaveBeenLastCalledWith({ bottle: 'b-drunk', wine: 'w1', wineName: 'Jermann Sauvignon', vintage: '2024' });
     // The input shows name + vintage; the stored fallback text never embeds the year.
     expect(screen.getByRole('textbox')).toHaveValue('Sauvignon 2024');
   });
@@ -158,7 +159,7 @@ describe('drunk bottles are pickable, and the stored text carries the producer, 
     const { onChange } = await setup();
 
     fireEvent.click(screen.getByText('Fabelhaft Tinto').closest('button'));
-    expect(onChange).toHaveBeenLastCalledWith({ bottle: 'b-active', wine: 'w2', wineName: 'Niepoort Fabelhaft Tinto' });
+    expect(onChange).toHaveBeenLastCalledWith({ bottle: 'b-active', wine: 'w2', wineName: 'Niepoort Fabelhaft Tinto', vintage: '2021' });
   });
 
   test('a response without a consumed list (older server) still renders', async () => {

@@ -16,8 +16,8 @@ jest.mock('../services/personalData', () => ({
 }));
 jest.mock('../models/Bottle', () => ({ findById: jest.fn(), aggregate: jest.fn(), find: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/Cellar', () => ({ findById: jest.fn(), find: jest.fn() }));
-jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
-jest.mock('../models/PersonalDataEntry', () => ({ findOne: jest.fn(), findOneAndDelete: jest.fn(), create: jest.fn() }));
+jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn(), updateOne: jest.fn().mockResolvedValue({}) }));
+jest.mock('../models/PersonalDataEntry', () => ({ findOne: jest.fn(), findOneAndDelete: jest.fn(), create: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/PersonalDataKey', () => ({ findOne: jest.fn(), create: jest.fn() }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 // revert.js and tools/write.js top-require bottleOps (which pulls the search/
@@ -110,7 +110,8 @@ describe('update_personal_key / delete_personal_key (ticket 6aa6c95e)', () => {
       tool: 'update_personal_key',
       action: 'personal_data',
       detail: expect.objectContaining({ op: 'key_update', keyId: KEY_ID }),
-      prev: { name: 'Falstaff', unit: '/100' },
+      // Only what THIS call changed rides in prev — a rename-only row carries no unit.
+      prev: { name: 'Falstaff' },
     }));
   });
 
@@ -136,8 +137,32 @@ describe('update_personal_key / delete_personal_key (ticket 6aa6c95e)', () => {
     }));
   });
 
+  test('undo of a unit change is refused once the key holds entries, and the claim is released (audit M2)', async () => {
+    McpActionLog.findOneAndUpdate.mockResolvedValue({ _id: 'row' });
+    PersonalDataKey.findOne.mockResolvedValue({ _id: KEY_ID, name: 'Falstaff', nameKey: 'falstaff', unit: '/20', save: jest.fn() });
+    PersonalDataEntry.countDocuments.mockResolvedValue(5);
+    const res = await revertLedgerRow({
+      _id: 'row', action: 'personal_data', tool: 'update_personal_key',
+      detail: { op: 'key_update', keyId: KEY_ID, key: 'Falstaff' }, prev: { unit: '/100' },
+    }, CTX, okHelpers);
+    expect(res.isError).toBe(true);
+    expect(parse(res).error.code).toBe('conflict');
+    // unclaim: the row is set back to reversed:false so the user can retry later
+    expect(McpActionLog.updateOne).toHaveBeenCalledWith({ _id: 'row' }, { $set: { reversed: false } });
+
+    // A rename-only row never touches the unit, entries or not.
+    const saved = jest.fn().mockResolvedValue(undefined);
+    PersonalDataKey.findOne.mockResolvedValue({ _id: KEY_ID, name: 'Falstaff score', nameKey: 'falstaff score', unit: '/20', save: saved });
+    const ok = await revertLedgerRow({
+      _id: 'row3', action: 'personal_data', tool: 'update_personal_key',
+      detail: { op: 'key_update', keyId: KEY_ID, key: 'Falstaff score' }, prev: { name: 'Falstaff' },
+    }, CTX, okHelpers);
+    expect(parse(ok)).toMatchObject({ undone: 'update_personal_key', restored: { name: 'Falstaff', unit: '/20' } });
+  });
+
   test('undo of key_update restores name + unit; undo of key_delete recreates the key under the same id', async () => {
     McpActionLog.findOneAndUpdate.mockResolvedValue({ _id: 'row' });
+    PersonalDataEntry.countDocuments.mockResolvedValue(0);
     const saved = jest.fn().mockResolvedValue(undefined);
     PersonalDataKey.findOne.mockResolvedValue({ _id: KEY_ID, name: 'Falstaff score', nameKey: 'falstaff score', unit: '/20', save: saved });
     const up = await revertLedgerRow({
@@ -219,7 +244,7 @@ describe('add_personal_data', () => {
 
   test('missing key_type on a NEW key gets the guidance suffix', async () => {
     grantAccess();
-    svc.createEntry.mockResolvedValue({ ok: false, code: 'invalid', message: 'Key type must be one of: …' });
+    svc.createEntry.mockResolvedValue({ ok: false, code: 'invalid', message: 'Key type must be one of: …', needsType: true });
     const res = await tool('add_personal_data').handler({
       bottle_id: BOTTLE_ID, level: 'wine', key: 'ABV', value: 13.5,
     }, CTX);

@@ -22,9 +22,11 @@
  */
 const PersonalDataKey = require('../models/PersonalDataKey');
 const PersonalDataEntry = require('../models/PersonalDataEntry');
+const SavedDashboard = require('../models/SavedDashboard');
+const SavedView = require('../models/SavedView');
 const User = require('../models/User');
 const { isValidId } = require('../utils/validation');
-const { validateValue, validateKeyDefinition } = require('../utils/personalDataTypes');
+const { validateValue, validateKeyDefinition, TYPES } = require('../utils/personalDataTypes');
 
 // Caps — this is user-writable storage (GDPR data-minimisation + abuse bound).
 const KEYS_PER_USER = 100;
@@ -150,6 +152,11 @@ async function resolveKey(userId, { keyId, newKey }) {
   });
   if (existing) {
     const suppliedType = newKey && newKey.type;
+    // A type that is not a type at all is still the old message, not a
+    // "keeps one type" conflict (audit 2026-09-14 L4).
+    if (suppliedType && !TYPES.includes(suppliedType)) {
+      return fail('invalid', `Key type must be one of: ${TYPES.join(', ')}`);
+    }
     if (suppliedType && existing.type !== suppliedType) {
       return fail(
         'type_conflict',
@@ -160,7 +167,10 @@ async function resolveKey(userId, { keyId, newKey }) {
   }
 
   const checked = validateKeyDefinition(newKey || {});
-  if (!checked.ok) return fail('invalid', checked.error);
+  // needsType lets the MCP layer add its "pass key_type" hint ONLY here —
+  // where the key is genuinely new — and not on a value error for an
+  // existing key (audit 2026-09-14 L2).
+  if (!checked.ok) return { ...fail('invalid', checked.error), needsType: !(newKey && newKey.type) };
   const { def } = checked;
 
   const count = await PersonalDataKey.countDocuments({ user: userId });
@@ -304,6 +314,12 @@ async function updateKey(userId, keyId, { name, unit } = {}) {
     cleanName = typeof name === 'string' ? name.trim() : '';
     if (!cleanName) return fail('invalid', 'Key name is required');
     if (cleanName.length > KEY_NAME_MAX) return fail('invalid', `Key name too long (max ${KEY_NAME_MAX} characters)`);
+    // A key's name is visible to shared-cellar members on every entry that
+    // carries it — the same surface the discussion ban protects on writes
+    // (audit 2026-09-14 M1).
+    if (await isBanned(userId)) {
+      return fail('banned', 'You are banned from posting content visible to other users');
+    }
   }
 
   let cleanUnit = key.unit || null;
@@ -349,15 +365,32 @@ async function deleteKey(userId, keyId) {
   if (entries > 0) {
     return fail('in_use', `"${key.name}" still holds ${entries} entr${entries === 1 ? 'y' : 'ies'} — delete them first`);
   }
-  await PersonalDataKey.deleteOne({ _id: key._id, user: userId });
-  return {
-    ok: true,
-    key: serializeKey(key),
-    definition: {
-      _id: String(key._id), name: key.name, type: key.type,
-      unit: key.unit || undefined, enumOptions: key.enumOptions || undefined,
-    },
+  // A saved board or table view may filter or group on `personal.<id>`; the
+  // analytics engine answers "Unknown field" for a deleted key and the board
+  // silently stops opening (audit 2026-09-14 L3). Refuse while referenced.
+  const fieldRef = `personal.${String(key._id)}`;
+  const [boards, views] = await Promise.all([
+    SavedDashboard.find({ user: userId }).select('name query').lean(),
+    SavedView.find({ user: userId }).select('name query').lean(),
+  ]);
+  const referencing = [...boards, ...views].filter((d) => JSON.stringify(d.query || {}).includes(fieldRef)).map((d) => d.name);
+  if (referencing.length) {
+    return fail('in_use', `"${key.name}" is used by saved analytics (${referencing.slice(0, 3).join(', ')}${referencing.length > 3 ? ', …' : ''}) — remove it there first`);
+  }
+  const definition = {
+    _id: String(key._id), name: key.name, type: key.type,
+    unit: key.unit || undefined, enumOptions: key.enumOptions || undefined,
   };
+  await PersonalDataKey.deleteOne({ _id: key._id, user: userId });
+  // Compensate the count→delete window: an entry written in between would
+  // otherwise dangle without a key (audit 2026-09-14 L1). Put the key back
+  // under its id and report the key as in use.
+  const late = await PersonalDataEntry.countDocuments({ key: key._id });
+  if (late > 0) {
+    await PersonalDataKey.create({ user: userId, ...definition });
+    return fail('in_use', `"${key.name}" received ${late} entr${late === 1 ? 'y' : 'ies'} while being deleted — it was kept`);
+  }
+  return { ok: true, key: serializeKey(key), definition };
 }
 
 module.exports = {

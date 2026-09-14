@@ -959,11 +959,11 @@ export default function CellarRoom() {
   };
 
   // Consume bottle
-  const handleConsumeSubmit = useCallback(async (reason, note, rating, ratingScale) => {
+  const handleConsumeSubmit = useCallback(async (reason, note, rating, ratingScale, consumedAt) => {
     if (!consumeModal) return;
     try {
       const res = await consumeBottle(apiFetch, consumeModal.bottleId, {
-        reason, note, rating, consumedRatingScale: ratingScale,
+        reason, note, rating, consumedRatingScale: ratingScale, consumedAt,
       });
       const data = await res.json();
       if (res.ok) {
@@ -1636,18 +1636,28 @@ export default function CellarRoom() {
   );
 }
 
+// LOCAL calendar date, YYYY-MM-DD — what <input type="date"> speaks.
+const roomToday = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+// onSubmit(reason, note, rating, ratingScale, consumedAt) — the third consume
+// dialog (after components/ConsumeModal and the racks view's own); the day the
+// bottle was actually drunk rides along like on the other two (audit 2026-09-14).
 function RoomConsumeForm({ onSubmit, onCancel, onPartial, defaultRatingScale, t }) {
   const [reason, setReason] = useState('drank');
   const [note, setNote] = useState('');
   const [rating, setRating] = useState('');
   const [ratingScale, setRatingScale] = useState(defaultRatingScale || '5');
+  const [date, setDate] = useState(roomToday);
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
     try {
-      await onSubmit(reason, note || undefined, rating || undefined, ratingScale);
+      await onSubmit(reason, note || undefined, rating || undefined, ratingScale, date || undefined);
     } finally {
       // Always re-enable the button — a rejected onSubmit must not leave the
       // form stuck on "Saving...".
@@ -1675,6 +1685,10 @@ function RoomConsumeForm({ onSubmit, onCancel, onPartial, defaultRatingScale, t 
           <option value="other">{t('bottleDetail.otherReason', 'Other')}</option>
         </select>
       </div>
+      <label className="form-group">
+        <span>{t('bulk.consumeDate', 'Date')}</span>
+        <input type="date" value={date} max={roomToday()} onChange={e => setDate(e.target.value)} disabled={saving} />
+      </label>
       {reason === 'drank' && (
         <div className="form-group">
           <label>{t('common.rating', 'Rating')}</label>

@@ -46,6 +46,22 @@ async function removeFromRacks(bottleId) {
  * re-index, audit (which also emits the stats_changed SSE nudge), and fire the
  * restock-gap check. Mirrors POST /api/bottles/:id/consume exactly.
  */
+// A bare calendar date (YYYY-MM-DD — what <input type="date">, the bulk
+// action and the MCP tool send) names a DAY, not an instant. Parse it as NOON
+// UTC so it renders as that same day in every zone from UTC-12 to UTC+11:
+// `new Date('2026-09-13')` is UTC midnight, which toLocaleDateString shows as
+// the 12th to everyone west of Greenwich (audit 2026-09-14 H1 — the default
+// "today" would have been a day off for the whole Americas cohort). A full
+// timestamp passes through unchanged.
+const DAY_ONLY_RX = /^\d{4}-\d{2}-\d{2}$/;
+// "Not in the future" slack: a UTC+14 user at 00:01 local is 26 h before
+// their own day's noon UTC, so 36 h rather than 24.
+const FUTURE_SLACK_MS = 36 * 60 * 60 * 1000;
+function parseConsumedAt(value) {
+  const raw = typeof value === 'string' ? value.trim() : value;
+  return new Date(typeof raw === 'string' && DAY_ONLY_RX.test(raw) ? `${raw}T12:00:00Z` : raw);
+}
+
 async function consumeBottle(bottle, { reason = 'drank', note, rating, ratingScale, consumedAt, skipRestockCheck = false } = {}, req) {
   if (!CONSUMED_STATUSES.includes(reason)) {
     return { error: { status: 400, message: 'Invalid reason' } };
@@ -62,8 +78,8 @@ async function consumeBottle(bottle, { reason = 'drank', note, rating, ratingSca
   // to now; never in the future, never before the app's earliest vintage year.
   let when = new Date();
   if (consumedAt !== undefined && consumedAt !== null && consumedAt !== '') {
-    const d = new Date(consumedAt);
-    if (Number.isNaN(d.getTime()) || d.getTime() > Date.now() + 24 * 60 * 60 * 1000 || d.getFullYear() < 1900) {
+    const d = parseConsumedAt(consumedAt);
+    if (Number.isNaN(d.getTime()) || d.getTime() > Date.now() + FUTURE_SLACK_MS || d.getFullYear() < 1900) {
       return { error: { status: 400, message: 'consumedAt must be a valid date and not in the future' } };
     }
     when = d;
@@ -484,7 +500,7 @@ async function addBottle(cellarDoc, wineDoc, fields = {}, req) {
     const reason = consumedReason || 'drank';
     bottle.status = reason;
     bottle.consumedReason = reason;
-    bottle.consumedAt = consumedAt ? new Date(consumedAt) : new Date();
+    bottle.consumedAt = consumedAt ? parseConsumedAt(consumedAt) : new Date();
     bottle.consumedLoggedAt = new Date();
     if (consumedNote) bottle.consumedNote = stripHtml(consumedNote);
     if (resolvedConsumedRating !== undefined) {

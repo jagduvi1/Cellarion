@@ -69,6 +69,9 @@ jest.mock('../models/WineDefinition', () => {
         }
         return null;
       },
+      // The producer-prefix probe for producer-less (incl. sentinel) rows —
+      // this harness's registry never answers it.
+      select: () => ({ lean: async () => null }),
     })),
     find: jest.fn(() => chain(state.candidates)),
     findById: jest.fn(),

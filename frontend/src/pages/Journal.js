@@ -210,7 +210,7 @@ export default function Journal() {
                           const wineName = wineDoc?.name
                             ? [wineDoc.producer, wineDoc.name].filter(Boolean).join(', ')
                             : p.wineName;
-                          const vintage = p.bottle?.vintage;
+                          const vintage = p.bottle?.vintage || p.vintage;
                           return (
                             <div key={i}>
                               <div className="journal-card__pairing">

@@ -114,10 +114,15 @@ async function appellationInRegionColumn(rawName, countryId) {
   if (!name || isUnknownName(name) || !countryId) return null;
   const key = normalizeAppellationKey(name);
   if (!key) return null;
-  return Appellation.findOne({
+  // Same ambiguity doctrine as regionForAppellation: TWO docs answering one
+  // key (a synonym collision) means the taxonomy holds a duplicate — never
+  // pick one arbitrarily; fall through to the ordinary region path instead
+  // (audit 2026-09-14 L5).
+  const hits = await Appellation.find({
     country: countryId,
     $or: [{ normalizedName: key }, { normalizedSynonyms: key }],
-  });
+  }).limit(2).lean();
+  return hits.length === 1 ? hits[0] : null;
 }
 
 async function findOrCreateRegion(rawName, countryId, userId) {

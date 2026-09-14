@@ -83,14 +83,16 @@ export default function WinePicker({ value, onChange, placeholder }) {
     setQuery(`${bottle.wine.name}${bottle.vintage ? ` ${bottle.vintage}` : ''}`);
     setSelected(true);
     setShowResults(false);
-    onChange({ bottle: bottle._id, wine: bottle.wine._id, wineName: fallbackName(bottle.wine) });
+    // vintage is kept beside the reference so the entry still prints the year
+    // after the bottle is deleted (models/JournalEntry pairingSchema.vintage).
+    onChange({ bottle: bottle._id, wine: bottle.wine._id, wineName: fallbackName(bottle.wine), vintage: bottle.vintage || '' });
   };
 
   const selectWine = (wine) => {
     setQuery(wine.name);
     setSelected(true);
     setShowResults(false);
-    onChange({ bottle: null, wine: wine._id, wineName: fallbackName(wine) });
+    onChange({ bottle: null, wine: wine._id, wineName: fallbackName(wine), vintage: '' });
   };
 
   const handleAiSearch = async () => {
@@ -123,7 +125,7 @@ export default function WinePicker({ value, onChange, placeholder }) {
         setQuery(label);
         setSelected(true);
         setShowResults(false);
-        onChange({ bottle: null, wine: null, wineName: label });
+        onChange({ bottle: null, wine: null, vintage: '', wineName: label });
         setAiNote(t('journal.aiNotInRegistry', "Not in the wine register — we'll save the name with your entry."));
         return;
       }
@@ -141,7 +143,7 @@ export default function WinePicker({ value, onChange, placeholder }) {
     setResults({ bottles: [], wines: [] });
     setAiError(null);
     setAiNote(null);
-    onChange({ bottle: null, wine: null, wineName: '' });
+    onChange({ bottle: null, wine: null, vintage: '', wineName: '' });
   };
 
   const hasResults = results.bottles.length > 0 || (results.consumed || []).length > 0 || results.wines.length > 0;
@@ -154,7 +156,7 @@ export default function WinePicker({ value, onChange, placeholder }) {
           type="text"
           className="input wine-picker__input"
           value={query}
-          onChange={(e) => { setQuery(e.target.value); setSelected(false); setAiError(null); setAiNote(null); onChange({ bottle: null, wine: null, wineName: e.target.value }); }}
+          onChange={(e) => { setQuery(e.target.value); setSelected(false); setAiError(null); setAiNote(null); onChange({ bottle: null, wine: null, vintage: '', wineName: e.target.value }); }}
           onFocus={() => { if (hasResults && !selected) setShowResults(true); }}
           placeholder={placeholder || t('journal.winePlaceholder', 'Search wine...')}
           maxLength={200}

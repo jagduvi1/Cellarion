@@ -18,9 +18,13 @@ jest.mock('../models/PersonalDataEntry', () => ({
   create: jest.fn(), countDocuments: jest.fn(),
 }));
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
+jest.mock('../models/SavedDashboard', () => ({ find: jest.fn() }));
+jest.mock('../models/SavedView', () => ({ find: jest.fn() }));
 
 const PersonalDataKey = require('../models/PersonalDataKey');
 const PersonalDataEntry = require('../models/PersonalDataEntry');
+const SavedDashboard = require('../models/SavedDashboard');
+const SavedView = require('../models/SavedView');
 const User = require('../models/User');
 const svc = require('./personalData');
 
@@ -39,7 +43,7 @@ const abvKey = { _id: KEY_ID, name: 'ABV', nameKey: 'abv', type: 'decimal', unit
 // find() chain used by listForBottle / listKeys
 const chain = (result) => {
   const c = {};
-  for (const m of ['sort', 'populate', 'limit']) c[m] = jest.fn(() => c);
+  for (const m of ['sort', 'populate', 'limit', 'select']) c[m] = jest.fn(() => c);
   c.lean = jest.fn(() => Promise.resolve(result));
   return c;
 };
@@ -71,6 +75,8 @@ beforeEach(() => {
   notBanned();
   PersonalDataEntry.countDocuments.mockResolvedValue(0);
   PersonalDataKey.countDocuments.mockResolvedValue(0);
+  SavedDashboard.find.mockReturnValue(chain([]));
+  SavedView.find.mockReturnValue(chain([]));
 });
 
 describe('listForBottle', () => {
@@ -355,6 +361,62 @@ describe('updateKey / deleteKey (ticket 6aa6c95e)', () => {
     const res = await svc.deleteKey(ME, KEY_ID);
     expect(res).toMatchObject({ ok: false, code: 'in_use' });
     expect(PersonalDataKey.deleteOne).not.toHaveBeenCalled();
+  });
+});
+
+describe('audit 2026-09-14 findings on the key vocabulary', () => {
+  const keyDoc = (over = {}) => ({
+    _id: KEY_ID, user: ME, name: 'Falstaff', nameKey: 'falstaff', type: 'decimal', unit: '/100',
+    save: jest.fn().mockResolvedValue(undefined),
+    ...over,
+  });
+
+  test('M1: a rename is a write visible to co-members — the discussion ban applies', async () => {
+    banned();
+    PersonalDataKey.findOne.mockResolvedValue(keyDoc());
+    const res = await svc.updateKey(ME, KEY_ID, { name: 'Falstaff score' });
+    expect(res).toMatchObject({ ok: false, code: 'banned' });
+    // …but a unit change on an empty key is not visible text and still goes through
+    PersonalDataEntry.countDocuments.mockResolvedValue(0);
+    expect((await svc.updateKey(ME, KEY_ID, { unit: '/20' })).ok).toBe(true);
+  });
+
+  test('L4: an invalid supplied type keeps the "must be one of" message, even on an existing key', async () => {
+    PersonalDataKey.findOne.mockResolvedValue(abvKey);
+    const res = await svc.createEntry(ME, bottle, { level: 'wine', newKey: { name: 'ABV', type: 'number' }, value: 13 });
+    expect(res).toMatchObject({ ok: false, code: 'invalid' });
+    expect(res.message).toMatch(/Key type must be one of/);
+  });
+
+  test('L2: needsType is set ONLY when the key is new and no type came along', async () => {
+    PersonalDataKey.findOne.mockResolvedValue(null);
+    const fresh = await svc.createEntry(ME, bottle, { level: 'wine', newKey: { name: 'Falstaff' }, value: 91 });
+    expect(fresh).toMatchObject({ ok: false, code: 'invalid', needsType: true });
+
+    PersonalDataKey.findOne.mockResolvedValue(abvKey);
+    const badValue = await svc.createEntry(ME, bottle, { level: 'wine', newKey: { name: 'ABV' }, value: 'strong' });
+    expect(badValue).toMatchObject({ ok: false, code: 'invalid' });
+    expect(badValue.needsType).toBeUndefined();
+  });
+
+  test('L3: a key referenced by a saved board or table view cannot be deleted', async () => {
+    PersonalDataKey.findOne.mockResolvedValue(keyDoc());
+    PersonalDataEntry.countDocuments.mockResolvedValue(0);
+    SavedDashboard.find.mockReturnValue(chain([{ name: 'Critic scores', query: { dimension: `personal.${KEY_ID}`, filters: [] } }]));
+    const res = await svc.deleteKey(ME, KEY_ID);
+    expect(res).toMatchObject({ ok: false, code: 'in_use' });
+    expect(res.message).toMatch(/Critic scores/);
+    expect(PersonalDataKey.deleteOne).not.toHaveBeenCalled();
+  });
+
+  test('L1: an entry that lands during the delete puts the key back under its id and reports in_use', async () => {
+    PersonalDataKey.findOne.mockResolvedValue(keyDoc());
+    PersonalDataEntry.countDocuments.mockResolvedValueOnce(0).mockResolvedValueOnce(1);
+    PersonalDataKey.deleteOne.mockResolvedValue({ deletedCount: 1 });
+    PersonalDataKey.create.mockResolvedValue({});
+    const res = await svc.deleteKey(ME, KEY_ID);
+    expect(res).toMatchObject({ ok: false, code: 'in_use' });
+    expect(PersonalDataKey.create).toHaveBeenCalledWith(expect.objectContaining({ _id: KEY_ID, user: ME, name: 'Falstaff', type: 'decimal', unit: '/100' }));
   });
 });
 

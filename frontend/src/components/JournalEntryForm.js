@@ -27,7 +27,7 @@ export default function JournalEntryForm({ existing, onClose, onSaved, prefilled
     existing?.pairings?.length > 0
       ? existing.pairings
       : prefilledBottle
-        ? [{ dish: '', bottle: prefilledBottle._id, wine: prefilledBottle.wineDefinition?._id, wineName: [prefilledBottle.wineDefinition?.producer, prefilledBottle.wineDefinition?.name].filter(Boolean).join(' '), notes: '' }]
+        ? [{ dish: '', bottle: prefilledBottle._id, wine: prefilledBottle.wineDefinition?._id, wineName: [prefilledBottle.wineDefinition?.producer, prefilledBottle.wineDefinition?.name].filter(Boolean).join(' '), vintage: prefilledBottle.vintage || '', notes: '' }]
         : [{ dish: '', bottle: null, wine: null, wineName: '', notes: '' }]
   );
 
@@ -97,6 +97,7 @@ export default function JournalEntryForm({ existing, onClose, onSaved, prefilled
           bottle: p.bottle,
           wine: p.wine,
           wineName: p.wineName,
+          vintage: p.vintage || '',
           notes: p.notes
         }))
       };

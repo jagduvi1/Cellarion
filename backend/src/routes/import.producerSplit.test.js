@@ -73,6 +73,11 @@ jest.mock('../models/WineDefinition', () => {
     }),
     find: jest.fn(() => chain(state.candidates)),
     findById: jest.fn(),
+    // The one-word corroboration count: wines whose key matches the anchored producer prefix.
+    countDocuments: jest.fn(async (filter) => {
+      const key = filter && filter.normalizedKey;
+      return key instanceof RegExp ? [...state.exactByKey.values()].filter((w) => key.test(w.normalizedKey) && !w.nonWine).length : 0;
+    }),
     __state: state,
   };
   return model;
@@ -231,4 +236,56 @@ test('a two-word display name with no known producer is left alone (one token is
   const [row] = res.body.results;
   expect(row.item.wineName).toBe('Opus One');
   expect(row.item.producer ?? '').toBe('');
+});
+
+describe('audit 2026-09-14 hardening of the registry split', () => {
+  const KIM_JUNK = { // the 09-12 first-word residue: ONE wine under a one-word producer
+    _id: '64b0000000000000000000c3', name: 'Crawford Pinot Gris', producer: 'Kim', appellation: null, type: 'white', image: null,
+    country: { name: 'New Zealand' }, region: { name: 'Marlborough' }, normalizedKey: 'kim:crawford pinot gris:',
+  };
+  const HUGEL_A = {
+    _id: '64b0000000000000000000c4', name: 'Gentil', producer: 'Hugel', appellation: 'Alsace', type: 'white', image: null,
+    country: { name: 'France' }, region: { name: 'Alsace' }, normalizedKey: 'hugel:gentil:alsace',
+  };
+  const HUGEL_B = {
+    _id: '64b0000000000000000000c5', name: 'Riesling Classic', producer: 'Hugel', appellation: 'Alsace', type: 'white', image: null,
+    country: { name: 'France' }, region: { name: 'Alsace' }, normalizedKey: 'hugel:riesling classic:alsace',
+  };
+
+  test('a ONE-word producer with a single registry wine is not trusted — the row keeps its display name (M1)', async () => {
+    WineDefinition.__state.exactByKey.set(KIM_JUNK.normalizedKey, KIM_JUNK);
+    const res = await validate([{ wineName: 'Kim Crawford Sauvignon Blanc', vintage: '2023' }]);
+    const [row] = res.body.results;
+    expect(row.item.producer ?? '').toBe('');
+    expect(row.item.wineName).toBe('Kim Crawford Sauvignon Blanc');
+  });
+
+  test('a ONE-word producer with two or more registry wines is corroborated and splits', async () => {
+    WineDefinition.__state.exactByKey.set(HUGEL_A.normalizedKey, HUGEL_A);
+    WineDefinition.__state.exactByKey.set(HUGEL_B.normalizedKey, HUGEL_B);
+    const res = await validate([{ wineName: 'Hugel Gewurztraminer Classic', vintage: '2022' }]);
+    const [row] = res.body.results;
+    expect(row.item.producer).toBe('Hugel');
+    expect(row.item.wineName).toBe('Gewurztraminer Classic');
+  });
+
+  test('a sentinel producer ("Unknown", "-") counts as none: cleared, then split like a producer-less row (L4)', async () => {
+    WineDefinition.__state.exactByKey.set(JADOT.normalizedKey, JADOT);
+    const res = await validate([
+      { wineName: 'Louis Jadot Moulin-à-Vent Château des Jacques', producer: 'Unknown', vintage: '2001' },
+      { wineName: 'Zyxwv Mystery Estate Cuvée', producer: '-', vintage: '2019' },
+    ]);
+    expect(res.body.results[0].item.producer).toBe('Louis Jadot');
+    expect(res.body.results[0].status).toBe('exact');
+    expect(res.body.results[1].item.producer ?? '').toBe(''); // sentinel gone, nothing to split on
+  });
+
+  test('duplicate display names are probed ONCE (M2)', async () => {
+    WineDefinition.__state.exactByKey.set(JADOT.normalizedKey, JADOT);
+    const row = { wineName: 'Louis Jadot Moulin-à-Vent Château des Jacques' };
+    await validate([{ ...row, vintage: '2001' }, { ...row, vintage: '2002' }, { ...row, vintage: '2003' }]);
+    const probes = WineDefinition.findOne.mock.calls.filter(([f]) => f && f.normalizedKey instanceof RegExp);
+    // Longest-first: 5 tokens down to the 2-token hit "louis jadot" → 4 probes for ONE distinct name, not 12.
+    expect(probes.length).toBeLessThanOrEqual(5);
+  });
 });

@@ -1586,8 +1586,8 @@ function ConsumeModal({ defaultRatingScale, onSubmit, onCancel, onPartial }) {
               <option value="other">{t('bottleDetail.otherReason')}</option>
             </select>
           </div>
-          <div className="form-group">
-            <label>{t('bulk.consumeDate')}</label>
+          <label className="form-group">
+            <span>{t('bulk.consumeDate')}</span>
             <input
               type="date"
               value={date}
@@ -1595,7 +1595,7 @@ function ConsumeModal({ defaultRatingScale, onSubmit, onCancel, onPartial }) {
               onChange={e => setDate(e.target.value)}
               disabled={saving}
             />
-          </div>
+          </label>
           {reason === 'drank' && (
             <div className="form-group">
               <label>{t('bottleDetail.ratingOptional')}</label>

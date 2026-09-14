@@ -847,6 +847,16 @@ describe('findOrCreateWine — creation', () => {
   describe('an appellation typed in the region column (Johan, 2026-09-08)', () => {
     const fleurie = { _id: 'ap-fleurie', name: 'Fleurie', region: 'region-beaujolais' };
     const beaujolais = { _id: 'region-beaujolais', name: 'Beaujolais' };
+    // appellationInRegionColumn queries find({country, $or}).limit(2).lean();
+    // every other Appellation.find caller in the flow gets an empty chain.
+    const apFind = (hitsFor) => Appellation.find.mockImplementation((q) => {
+      const mine = q && q.country && q.$or;
+      const c = {};
+      for (const m of ['select', 'sort', 'limit', 'populate']) c[m] = () => c;
+      c.lean = async () => (mine ? hitsFor(q) : []);
+      return c;
+    });
+    const byKey = (q) => (q.$or || []).map((c) => c.normalizedName || c.normalizedSynonyms);
 
     beforeEach(() => {
       Country.findOne.mockResolvedValue({ _id: 'country-1' });
@@ -855,10 +865,21 @@ describe('findOrCreateWine — creation', () => {
       Region.mockImplementation(function () {
         throw new Error('an appellation in the region column must never mint a region');
       });
-      Appellation.findOne.mockImplementation(async (q) => {
-        const keys = (q.$or || []).map((c) => c.normalizedName || c.normalizedSynonyms);
-        return keys.includes('fleurie') ? fleurie : null;
+      apFind((q) => (byKey(q).includes('fleurie') ? [fleurie] : []));
+    });
+
+    test('a synonym collision (two appellations answering one key) is ambiguous → no appellation route, ordinary region path', async () => {
+      apFind(() => [fleurie, { _id: 'ap-twin', name: 'Fleurie (twin)', region: 'region-elsewhere' }]);
+      Region.mockImplementation(function (fields) {
+        Object.assign(this, fields, { _id: 'region-new' });
+        this.save = jest.fn().mockResolvedValue(this);
       });
+
+      await findOrCreateWine({ ...INPUT, region: 'Fleurie', appellation: '' }, USER_ID);
+
+      const doc = WineDefinition.mock.calls[0][0];
+      expect(doc.appellation).toBeNull();           // not backfilled from an ambiguous match
+      expect(doc.region).toBe('region-new');        // fell through to the mint, as before the rule
     });
 
     test('resolves to the appellation\'s region and fills the empty appellation field', async () => {
@@ -868,7 +889,7 @@ describe('findOrCreateWine — creation', () => {
       expect(doc.region).toBe('region-beaujolais');
       expect(doc.appellation).toBe('Fleurie');
       expect(doc.normalizedKey).toBe(generateWineKey('Clos des Papes', 'Paul Avril', 'Fleurie'));
-      expect(Appellation.findOne).toHaveBeenCalledWith(expect.objectContaining({ country: 'country-1' }));
+      expect(Appellation.find).toHaveBeenCalledWith(expect.objectContaining({ country: 'country-1' }));
     });
 
     test('keeps an appellation the file did state; only the region is corrected', async () => {
@@ -892,7 +913,7 @@ describe('findOrCreateWine — creation', () => {
     });
 
     test('an appellation the taxonomy has not placed yields NO region rather than a minted one', async () => {
-      Appellation.findOne.mockResolvedValue({ _id: 'ap-orphan', name: 'Vin de France', region: null });
+      apFind(() => [{ _id: 'ap-orphan', name: 'Vin de France', region: null }]);
 
       await findOrCreateWine({ ...INPUT, region: 'Vin de France', appellation: '' }, USER_ID);
 
@@ -902,7 +923,7 @@ describe('findOrCreateWine — creation', () => {
     });
 
     test('a string that is neither region nor appellation still mints, as before', async () => {
-      Appellation.findOne.mockResolvedValue(null);
+      apFind(() => []);
       Region.mockImplementation(function (fields) {
         Object.assign(this, fields, { _id: 'region-new' });
         this.save = jest.fn().mockResolvedValue(this);

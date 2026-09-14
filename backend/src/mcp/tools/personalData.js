@@ -114,7 +114,10 @@ registerTool({
       value: args.value,
     });
     if (!result.ok) {
-      if (result.code === 'invalid' && !args.key_type) {
+      // Only when the key is genuinely NEW and no type came along — a value
+      // error on an existing key must not send the caller hunting for a
+      // duplicate key (audit 2026-09-14 L2).
+      if (result.code === 'invalid' && !args.key_type && result.needsType) {
         return svcFail({ ...result, message: `${result.message}. If "${args.key}" is a new key, pass key_type (${TYPES.join(' | ')}).` });
       }
       return svcFail(result);
@@ -255,17 +258,21 @@ registerTool({
       { from: result.prev, to: { name: result.key.name, unit: result.key.unit }, via: 'mcp' });
 
     const changes = [];
-    if (result.prev.name !== result.key.name) changes.push(`renamed "${result.prev.name}" → "${result.key.name}"`);
-    if ((result.prev.unit || null) !== (result.key.unit || null)) changes.push(`unit ${JSON.stringify(result.prev.unit || null)} → ${JSON.stringify(result.key.unit || null)}`);
+    const nameChanged = result.prev.name !== result.key.name;
+    const unitChanged = (result.prev.unit || null) !== (result.key.unit || null);
+    if (nameChanged) changes.push(`renamed "${result.prev.name}" → "${result.key.name}"`);
+    if (unitChanged) changes.push(`unit ${JSON.stringify(result.prev.unit || null)} → ${JSON.stringify(result.key.unit || null)}`);
     const envelope = {
       summary: changes.length ? `Key ${changes.join(', ')}` : `Key "${result.key.name}" unchanged`,
-      data: { key: keyOut(result.key), undo: 'undo_last restores the previous name and unit' },
+      data: { key: keyOut(result.key), undo: 'undo_last restores what this call changed' },
     };
     await logAction(ctx, {
       tool: 'update_personal_key',
       action: 'personal_data',
       detail: { op: 'key_update', keyId: String(result.key._id), key: result.key.name },
-      prev: { name: result.prev.name, unit: result.prev.unit },
+      // Only the fields THIS call changed — undoing a rename must not touch a
+      // unit set elsewhere (audit 2026-09-14 M2).
+      prev: { ...(nameChanged ? { name: result.prev.name } : {}), ...(unitChanged ? { unit: result.prev.unit } : {}) },
       result: envelope,
     });
     return ok(envelope.summary, envelope.data);

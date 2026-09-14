@@ -65,6 +65,7 @@ function sanitizeEntry(body) {
       bottle: p.bottle && isValidId(String(p.bottle)) ? p.bottle : null,
       wine: p.wine && isValidId(String(p.wine)) ? p.wine : null,
       wineName: stripHtml(String(p.wineName || '')).slice(0, 200),
+      vintage: stripHtml(String(p.vintage || '')).slice(0, 12),
       notes: stripHtml(String(p.notes || '')).slice(0, 500)
     }));
   }
