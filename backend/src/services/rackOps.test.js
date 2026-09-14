@@ -98,6 +98,16 @@ describe('placeBottleInRack', () => {
     expect((await placeBottleInRack(rack(), 5, 'bX', REQ)).error.status).toBe(404);
   });
 
+  test('a consumed bottle cannot be placed — consume clears the slot, so the reverse must hold (audit 2026-09-14)', async () => {
+    Bottle.findOne.mockReturnValue(selectable({ _id: 'b1', status: 'drank' }));
+    const res = await placeBottleInRack(rack(), 5, 'b1', REQ);
+    expect(res.error.status).toBe(400);
+    expect(res.error.message).toMatch(/consumed/);
+    // an active bottle, or a legacy lookup without status, still places
+    Bottle.findOne.mockReturnValue(selectable({ _id: 'b1', status: 'active' }));
+    expect((await placeBottleInRack(rack(), 5, 'b1', REQ)).error).toBeUndefined();
+  });
+
   test('filter-then-push: clears other racks, drops old slot + occupant, reports displaced', async () => {
     Bottle.findOne.mockReturnValue(selectable({ _id: 'b1' }));
     const r = rack([{ position: 3, bottle: 'b1' }, { position: 5, bottle: 'bOccupant' }]);

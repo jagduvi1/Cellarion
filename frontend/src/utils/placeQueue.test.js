@@ -1,4 +1,4 @@
-import { freePositions, planAutoPlace, readPlaceQueue, rackTotalSlots } from './placeQueue';
+import { freePositions, planAutoPlace, readPlaceQueue, rackTotalSlots, withoutPlaced } from './placeQueue';
 
 const grid = (over = {}) => ({ type: 'grid', rows: 2, cols: 3, slots: [], disabledPositions: [], ...over });
 
@@ -27,5 +27,15 @@ describe('placeQueue helpers (issue #1055)', () => {
     expect(readPlaceQueue(null)).toEqual([]);
     expect(readPlaceQueue({ placeQueue: 'nope' })).toEqual([]);
     expect(readPlaceQueue({ placeQueue: ['64b0000000000000000000b1', 'junk', 42] })).toEqual(['64b0000000000000000000b1']);
+  });
+
+  test('withoutPlaced drops bottles a loaded rack already holds (raw or populated slot refs), keeps the rest', () => {
+    const racks = [
+      grid({ slots: [{ position: 1, bottle: 'a' }] }),
+      grid({ slots: [{ position: 2, bottle: { _id: 'b', vintage: '2019' } }] }),
+    ];
+    expect(withoutPlaced(['a', 'b', 'c'], racks)).toEqual(['c']);
+    expect(withoutPlaced(['a'], [])).toEqual(['a']);
+    expect(withoutPlaced([], racks)).toEqual([]);
   });
 });

@@ -9,7 +9,7 @@ import { consumeBottle, pourBottle, openBottle } from '../api/bottles';
 import { glassesLeft, daysLeft, freshnessStatus, remainingMl } from '../utils/openBottle';
 import PreservationPickerModal from '../components/bottle/PreservationPickerModal';
 import { getTotalSlots, getModularTotalSlots } from '../utils/rackLayouts';
-import { readPlaceQueue, planAutoPlace } from '../utils/placeQueue';
+import { readPlaceQueue, planAutoPlace, withoutPlaced } from '../utils/placeQueue';
 import RackRenderer from '../components/racks/RackRenderer';
 import ShelfView from '../components/racks/ShelfView';
 // Lazy: ShelfView3D pulls in three.js (~250 kB gzip) — only load it when the
@@ -128,6 +128,24 @@ function CellarRacks() {
 
   // active popup: { rackId, position, slot: slotData|null } — rendered as fixed modal
   const [activePopup, setActivePopup] = useState(null);
+
+  // --- post-add placing mode (issue #1055) — HOOKS live up here, before the
+  // page's early `if (error) return` (audit 2026-09-14 H: hooks declared after
+  // a conditional return crash the page on a load error). The handlers that
+  // use them sit further down, next to the render.
+  const location = useLocation();
+  const [placeQueue, setPlaceQueue] = useState(() => readPlaceQueue(location.state));
+  const [placeTotal] = useState(() => readPlaceQueue(location.state).length);
+  const [placeNotice, setPlaceNotice] = useState(null);
+  const [placeBusy, setPlaceBusy] = useState(false);
+  // Back/reload after the queue drained used to re-enter the mode with the
+  // original ids and MOVE already-placed bottles: drop anything the loaded
+  // racks already hold (audit 2026-09-14 M).
+  useEffect(() => {
+    if (!placeQueue.length || !racks.length) return;
+    const trimmed = withoutPlaced(placeQueue, racks);
+    if (trimmed.length !== placeQueue.length) setPlaceQueue(trimmed);
+  }, [racks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // consume modal: { bottleId, bottle } or null
   const [consumeModal, setConsumeModal] = useState(null);
@@ -569,30 +587,30 @@ function CellarRacks() {
   const rack = racks.find(r => r._id === selectedRackId) || racks[0];
   const canEdit = cellar?.userRole !== 'viewer';
 
-  // --- post-add placing mode (issue #1055) ---
+  // --- post-add placing mode (issue #1055): handlers ---
   // The add flow hands over the ids of the bottles it just created as router
-  // state; each tap on a free slot places the next one, "auto-place" fills
-  // first-free slots, leaving the mode at any point keeps the rest unplaced —
-  // exactly what they were before. A slot taken concurrently keeps the bottle
-  // in the queue with a notice; the add itself can never fail on placement.
-  const location = useLocation();
-  const [placeQueue, setPlaceQueue] = useState(() => readPlaceQueue(location.state));
-  const [placeTotal] = useState(() => readPlaceQueue(location.state).length);
-  const [placeNotice, setPlaceNotice] = useState(null);
-  const [placeBusy, setPlaceBusy] = useState(false);
+  // state (hooks declared with the others above); each tap on a free slot
+  // places the next one, "auto-place" fills first-free slots, leaving the mode
+  // at any point keeps the rest unplaced — exactly what they were before. A
+  // slot taken concurrently keeps the bottle in the queue with a notice; the
+  // add itself can never fail on placement.
   const placingActive = placeTotal > 0 && (placeQueue.length > 0 || placeNotice?.kind === 'done');
   const placedCount = placeTotal - placeQueue.length;
+
+  // Drop the handed-over router state so Back/reload cannot re-enter the mode
+  // (and re-place bottles that are already in their slots).
+  const clearPlaceState = () => navigate(location.pathname + location.search, { replace: true, state: null });
 
   const finishPlacing = () => {
     setPlaceQueue([]);
     setPlaceNotice(null);
-    // Drop the handed-over state so a reload does not re-enter the mode.
-    navigate(location.pathname + location.search, { replace: true, state: null });
+    clearPlaceState();
   };
 
   // Returns true when the tap was consumed by the placing mode.
   const handlePlaceTap = async (targetRack, pos, slotData) => {
-    if (!placeQueue.length || !canEdit || placeBusy) return false;
+    if (!placeQueue.length || !canEdit) return false;
+    if (placeBusy) return true; // a placement is in flight — swallow the tap, do not open the slot picker
     const isDisabled = (targetRack.disabledPositions || []).includes(pos);
     if (slotData || isDisabled) return false; // a filled/disabled slot behaves as usual
     const bottleId = placeQueue[0];
@@ -600,6 +618,15 @@ function CellarRacks() {
     try {
       const res = await updateSlot(apiFetch, targetRack._id, pos, { bottleId });
       const data = await res.json();
+      if (res.status === 404) {
+        // The bottle is gone (deleted or moved since the add) — it must not
+        // block the rest of the queue.
+        const rest = placeQueue.slice(1);
+        setPlaceQueue(rest);
+        setPlaceNotice(rest.length === 0 ? { kind: 'done' } : { kind: 'error', text: data.error || t('racks.placeQueue.slotTaken') });
+        if (rest.length === 0) clearPlaceState();
+        return true;
+      }
       if (!res.ok) {
         setPlaceNotice({ kind: 'error', text: data.error || t('racks.placeQueue.slotTaken') });
         return true;
@@ -608,6 +635,7 @@ function CellarRacks() {
       const rest = placeQueue.slice(1);
       setPlaceQueue(rest);
       setPlaceNotice(rest.length === 0 ? { kind: 'done' } : null);
+      if (rest.length === 0) clearPlaceState();
     } catch {
       setPlaceNotice({ kind: 'error', text: t('common.networkError') });
     } finally {
@@ -634,7 +662,7 @@ function CellarRacks() {
         remaining = remaining.filter(id => id !== bottleId);
         setPlaceQueue(remaining);
       }
-      if (remaining.length === 0) setPlaceNotice({ kind: 'done' });
+      if (remaining.length === 0) { setPlaceNotice({ kind: 'done' }); clearPlaceState(); }
       else if (leftover.length && remaining.length === leftover.length) {
         setPlaceNotice({ kind: 'leftover', text: t('racks.placeQueue.leftover', { count: remaining.length }) });
       }

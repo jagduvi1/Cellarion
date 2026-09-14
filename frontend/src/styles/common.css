@@ -427,3 +427,13 @@
   color: var(--color-text-secondary);
 }
 .modal-hint a { color: inherit; }
+
+/* Modal footer buttons — shared so a dialog on any page (e.g. the post-add
+   placing offer) lays out the same as on the bottle page. */
+.modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  margin-top: 1.25rem;
+}

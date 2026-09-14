@@ -98,8 +98,16 @@ async function placeBottleInRack(rack, position, bottleId, req) {
   if (pos < 1 || pos > maxPos) return { error: { status: 400, message: `Position must be 1–${maxPos}` } };
   if ((rack.disabledPositions || []).includes(pos)) return { error: { status: 400, message: 'This slot is disabled' } };
 
-  const bottle = await Bottle.findOne({ _id: bottleId, cellar: rack.cellar }).select('_id');
+  const bottle = await Bottle.findOne({ _id: bottleId, cellar: rack.cellar }).select('_id status');
   if (!bottle) return { error: { status: 404, message: 'Bottle not found in this cellar' } };
+  // Consuming a bottle clears its rack slot (bottleOps.consumeBottle); the
+  // reverse must hold too — a consumed bottle cannot be put into a slot, from
+  // any surface (web slot picker, post-add placing queue, MCP place_bottle).
+  // Audit 2026-09-14: bottles added straight into the drinking history were
+  // offered for placement and this accepted them.
+  if (bottle.status && bottle.status !== 'active') {
+    return { error: { status: 400, message: 'Only a bottle still in the cellar can be placed in a rack — this one is consumed' } };
+  }
 
   const occupant = rack.slots.find((s) => s.position === pos && String(s.bottle) !== String(bottleId));
   const displaced = occupant ? String(occupant.bottle) : null;

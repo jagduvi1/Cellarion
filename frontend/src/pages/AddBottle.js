@@ -811,7 +811,9 @@ function AddBottle() {
       // #1055). One read; any failure to answer simply skips the offer.
       const newIds = createdBottlesRef.current.map(b => b?._id).filter(Boolean);
       let hasRacks = false;
-      if (newIds.length > 0) {
+      // Bottles added straight into the drinking history are consumed — a
+      // consumed bottle has no place in a rack (audit 2026-09-14 M).
+      if (newIds.length > 0 && !addToHistory) {
         try {
           const rr = await getRacks(apiFetch, cellarId);
           const rd = rr.ok ? await rr.json() : null;

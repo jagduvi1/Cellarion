@@ -47,3 +47,20 @@ export function readPlaceQueue(state) {
   const ids = state && Array.isArray(state.placeQueue) ? state.placeQueue : [];
   return ids.filter((id) => typeof id === 'string' && /^[0-9a-f]{24}$/i.test(id));
 }
+
+/**
+ * The queue minus every bottle some loaded rack already holds. Router state
+ * survives Back/reload, and placing an already-placed bottle again would MOVE
+ * it (the slot endpoint has move semantics) — so a re-entered queue must not
+ * contain them (audit 2026-09-14).
+ */
+export function withoutPlaced(ids, racks) {
+  const placed = new Set();
+  for (const r of racks || []) {
+    for (const s of r?.slots || []) {
+      const b = s.bottle && typeof s.bottle === 'object' ? s.bottle._id : s.bottle;
+      if (b) placed.add(String(b));
+    }
+  }
+  return (ids || []).filter((id) => !placed.has(String(id)));
+}
