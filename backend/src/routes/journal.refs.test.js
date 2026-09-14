@@ -350,3 +350,50 @@ describe('POST /api/journal response redaction (old rows / create echo)', () => 
     );
   });
 });
+
+describe('GET /api/journal/wine-search offers drunk bottles too (chfish ticket 6aa6c200)', () => {
+  // wine-search chains find → populate → select → (sort) → limit → lean, and
+  // is called twice: active bottles, then consumed ones (newest first).
+  const bottleChain = (docs) => {
+    const c = {};
+    for (const m of ['populate', 'select', 'sort', 'limit']) c[m] = jest.fn(() => c);
+    c.lean = jest.fn().mockResolvedValue(docs);
+    return c;
+  };
+  const wineChain = (docs) => ({
+    select: jest.fn().mockReturnValue({ limit: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(docs) }) }),
+  });
+  const JERMANN = { _id: KNOWN_WINE, name: 'Sauvignon', producer: 'Jermann', type: 'white' };
+
+  test('active bottles under "bottles", consumed ones under "consumed" with status + date, register under "wines"', async () => {
+    WineDefinition.find.mockReturnValue(wineChain([JERMANN]));
+    const active = bottleChain([{ _id: OWN_BOTTLE, vintage: '2023', wineDefinition: JERMANN }]);
+    const drunk = bottleChain([{ _id: SHARED_BOTTLE, vintage: '2024', status: 'drank', consumedAt: new Date('2026-09-06'), wineDefinition: JERMANN }]);
+    Bottle.find.mockReturnValueOnce(active).mockReturnValueOnce(drunk);
+
+    const { status, body } = await makeReq(buildApp(), 'GET', '/api/journal/wine-search?q=sauv', {
+      headers: { authorization: `Bearer ${authorToken()}` },
+    });
+
+    expect(status).toBe(200);
+    expect(body.bottles).toEqual([{ _id: OWN_BOTTLE, vintage: '2023', wine: JERMANN }]);
+    expect(body.consumed).toEqual([{ _id: SHARED_BOTTLE, vintage: '2024', wine: JERMANN, status: 'drank', consumedAt: '2026-09-06T00:00:00.000Z' }]);
+    expect(body.wines).toEqual([JERMANN]);
+
+    // The second lookup is the consumed one: every consumed status, newest first, the user's own bottles.
+    const consumedFilter = Bottle.find.mock.calls[1][0];
+    expect(consumedFilter).toMatchObject({ user: AUTHOR_ID, status: { $in: ['drank', 'gifted', 'sold', 'other'] } });
+    expect(drunk.sort).toHaveBeenCalledWith({ consumedAt: -1 });
+    expect(Bottle.find.mock.calls[0][0]).toMatchObject({ user: AUTHOR_ID, status: 'active' });
+  });
+
+  test('no matching registry wine → all three lists empty, no bottle lookup at all', async () => {
+    WineDefinition.find.mockReturnValue(wineChain([]));
+    const { status, body } = await makeReq(buildApp(), 'GET', '/api/journal/wine-search?q=zzzz', {
+      headers: { authorization: `Bearer ${authorToken()}` },
+    });
+    expect(status).toBe(200);
+    expect(body).toEqual({ bottles: [], consumed: [], wines: [] });
+    expect(Bottle.find).not.toHaveBeenCalled();
+  });
+});

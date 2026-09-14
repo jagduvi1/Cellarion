@@ -201,7 +201,15 @@ export default function Journal() {
                     {entry.pairings?.length > 0 && (
                       <div className="journal-card__pairings">
                         {entry.pairings.map((p, i) => {
-                          const wineName = p.wineName || p.wine?.name || p.bottle?.wineDefinition?.name;
+                          // Render from the REFERENCES while they exist — the
+                          // wine's current producer and name, the bottle's
+                          // vintage — so a registry correction reaches old
+                          // entries and the year prints once. The stored text
+                          // is the fallback for a deleted bottle or wine.
+                          const wineDoc = p.bottle?.wineDefinition || p.wine;
+                          const wineName = wineDoc?.name
+                            ? [wineDoc.producer, wineDoc.name].filter(Boolean).join(', ')
+                            : p.wineName;
                           const vintage = p.bottle?.vintage;
                           return (
                             <div key={i}>

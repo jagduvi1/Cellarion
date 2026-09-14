@@ -83,8 +83,9 @@ describe('WinePicker Smart Search — read-only', () => {
     await clickSmartSearch();
 
     await waitFor(() => {
+      // The stored text fallback is producer-first, like the AI-identified label.
       expect(onChange).toHaveBeenCalledWith(
-        expect.objectContaining({ wine: 'w42', wineName: 'Cuvée X' })
+        expect.objectContaining({ wine: 'w42', wineName: 'Chateau XYZ Cuvée X' })
       );
     });
   });
@@ -104,7 +105,7 @@ describe('WinePicker Smart Search — read-only', () => {
     fireEvent.click(option.closest('button'));
 
     expect(onChange).toHaveBeenCalledWith(
-      expect.objectContaining({ wine: 'w7', wineName: 'Cuvee X' })
+      expect.objectContaining({ wine: 'w7', wineName: 'Ch. XYZ Cuvee X' })
     );
   });
 
@@ -127,5 +128,43 @@ describe('WinePicker Smart Search — read-only', () => {
     await clickSmartSearch();
 
     expect(await screen.findByText(/couldn't identify that wine/i)).toBeInTheDocument();
+  });
+});
+
+describe('drunk bottles are pickable, and the stored text carries the producer, not the vintage (chfish ticket 6aa6c200)', () => {
+  const JERMANN = { _id: 'w1', name: 'Sauvignon', producer: 'Jermann', type: 'white' };
+
+  test('the dropdown shows a "Recently drunk" section and picking from it passes the bottle + wine ids', async () => {
+    apiFetch.mockResolvedValue(jsonRes({
+      bottles: [],
+      consumed: [{ _id: 'b-drunk', vintage: '2024', status: 'drank', consumedAt: '2026-09-06T00:00:00.000Z', wine: JERMANN }],
+      wines: [JERMANN],
+    }));
+    const { onChange } = await setup();
+
+    expect(screen.getByText('Recently drunk')).toBeInTheDocument();
+    fireEvent.click(screen.getAllByText('Sauvignon')[0].closest('button'));
+
+    expect(onChange).toHaveBeenLastCalledWith({ bottle: 'b-drunk', wine: 'w1', wineName: 'Jermann Sauvignon' });
+    // The input shows name + vintage; the stored fallback text never embeds the year.
+    expect(screen.getByRole('textbox')).toHaveValue('Sauvignon 2024');
+  });
+
+  test('an active bottle stores the same producer-first fallback, and a register wine too', async () => {
+    apiFetch.mockResolvedValue(jsonRes({
+      bottles: [{ _id: 'b-active', vintage: '2021', wine: { _id: 'w2', name: 'Fabelhaft Tinto', producer: 'Niepoort' } }],
+      wines: [{ _id: 'w3', name: 'Brut', producer: 'Nicolas Feuillatte' }],
+    }));
+    const { onChange } = await setup();
+
+    fireEvent.click(screen.getByText('Fabelhaft Tinto').closest('button'));
+    expect(onChange).toHaveBeenLastCalledWith({ bottle: 'b-active', wine: 'w2', wineName: 'Niepoort Fabelhaft Tinto' });
+  });
+
+  test('a response without a consumed list (older server) still renders', async () => {
+    apiFetch.mockResolvedValue(jsonRes({ bottles: [], wines: [JERMANN] }));
+    await setup();
+    expect(screen.getByText('Wine register')).toBeInTheDocument();
+    expect(screen.queryByText('Recently drunk')).not.toBeInTheDocument();
   });
 });

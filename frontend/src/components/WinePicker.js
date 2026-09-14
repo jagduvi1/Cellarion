@@ -71,19 +71,26 @@ export default function WinePicker({ value, onChange, placeholder }) {
     return () => clearTimeout(debounceRef.current);
   }, [query, selected]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The stored wineName is only the text FALLBACK for the day a referenced
+  // bottle or wine is gone — the entry renders producer, name and vintage
+  // from the references while they exist. So it carries the producer (which
+  // "Sauvignon" this was) and never the vintage: the vintage lives on the
+  // bottle reference, and a name that embedded it printed the year twice
+  // (chfish ticket 6aa6c200, 2026-09-13).
+  const fallbackName = (wine) => [wine.producer, wine.name].filter(Boolean).join(' ');
+
   const selectBottle = (bottle) => {
-    const name = `${bottle.wine.name}${bottle.vintage ? ` ${bottle.vintage}` : ''}`;
-    setQuery(name);
+    setQuery(`${bottle.wine.name}${bottle.vintage ? ` ${bottle.vintage}` : ''}`);
     setSelected(true);
     setShowResults(false);
-    onChange({ bottle: bottle._id, wine: bottle.wine._id, wineName: name });
+    onChange({ bottle: bottle._id, wine: bottle.wine._id, wineName: fallbackName(bottle.wine) });
   };
 
   const selectWine = (wine) => {
     setQuery(wine.name);
     setSelected(true);
     setShowResults(false);
-    onChange({ bottle: null, wine: wine._id, wineName: wine.name });
+    onChange({ bottle: null, wine: wine._id, wineName: fallbackName(wine) });
   };
 
   const handleAiSearch = async () => {
@@ -137,7 +144,7 @@ export default function WinePicker({ value, onChange, placeholder }) {
     onChange({ bottle: null, wine: null, wineName: '' });
   };
 
-  const hasResults = results.bottles.length > 0 || results.wines.length > 0;
+  const hasResults = results.bottles.length > 0 || (results.consumed || []).length > 0 || results.wines.length > 0;
   const noResults = query.trim().length >= 2 && !searching && !hasResults && showResults;
 
   return (
@@ -174,6 +181,24 @@ export default function WinePicker({ value, onChange, placeholder }) {
                     <strong>{b.wine.name}</strong>
                     {b.vintage && <span className="wine-picker__vintage"> {b.vintage}</span>}
                     {b.wine.producer && <span className="wine-picker__producer"> · {b.wine.producer}</span>}
+                  </span>
+                </button>
+              ))}
+            </>
+          )}
+
+          {/* Bottles already drunk — the likeliest subject of a journal entry */}
+          {(results.consumed || []).length > 0 && (
+            <>
+              <div className="wine-picker__section-label">{t('journal.recentlyDrunk', 'Recently drunk')}</div>
+              {results.consumed.map(b => (
+                <button key={b._id} type="button" className="wine-picker__option" onClick={() => selectBottle(b)}>
+                  <span className="wine-picker__option-icon">🥂</span>
+                  <span className="wine-picker__option-text">
+                    <strong>{b.wine.name}</strong>
+                    {b.vintage && <span className="wine-picker__vintage"> {b.vintage}</span>}
+                    {b.wine.producer && <span className="wine-picker__producer"> · {b.wine.producer}</span>}
+                    {b.consumedAt && <span className="wine-picker__producer"> · {new Date(b.consumedAt).toLocaleDateString()}</span>}
                   </span>
                 </button>
               ))}
