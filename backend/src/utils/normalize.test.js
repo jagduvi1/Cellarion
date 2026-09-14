@@ -208,6 +208,17 @@ describe('stripTrailingVintage (registry is vintage-neutral — audit B2)', () =
     expect(stripTrailingVintage('Bourgogne Rouge 2019 2019')).toBe('Bourgogne Rouge');
   });
 
+  test('a long separator run stays linear and still strips (CodeQL polynomial-redos, 2026-09-12)', () => {
+    // The separator class is bounded to 8 repetitions; the caller's trim
+    // removes what a longer run leaves behind, so the result is unchanged.
+    expect(stripTrailingVintage(`Cuvée${' '.repeat(40)}2019`)).toBe('Cuvée');
+    expect(stripTrailingVintage('Cuvée -- (2019)')).toBe('Cuvée'); // five separators, within the bound
+    // A run that ends in nothing must not be a quadratic scan: 200k tabs, one pass.
+    const started = Date.now();
+    expect(stripTrailingVintage(`A${'\t'.repeat(200000)}B`)).toBe(`A${'\t'.repeat(200000)}B`);
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
+
   test('LEADING years are brand names and survive', () => {
     expect(stripTrailingVintage('1924 Double Black')).toBe('1924 Double Black');
     expect(stripTrailingVintage('19 Crimes')).toBe('19 Crimes');

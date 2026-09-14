@@ -236,7 +236,13 @@ const normalizeAppellation = (appellation) => {
 // Black", "19 Crimes"), and a mid-name year is part of a cuvée. The window is
 // 1950–2049 so historic marks like "1865" (Viña San Pedro's brand) survive
 // even at the tail. Optional parens absorb "(2019)".
-const TRAILING_VINTAGE_RX = /[\s\-–—(]+(?:19[5-9]\d|20[0-4]\d)\)?$/;
+// The separator run is BOUNDED ({1,8}, not +): an unbounded run before an
+// anchored tail is quadratic on a long run of separators that ends in
+// nothing — every start position rescans the run (CodeQL js/polynomial-redos
+// on the two .replace calls below, 2026-09-12). Real names carry at most a
+// few separator characters before the year (" — (2019)" is four); the
+// caller trims whatever a longer run leaves behind.
+const TRAILING_VINTAGE_RX = /[\s\-–—(]{1,8}(?:19[5-9]\d|20[0-4]\d)\)?$/;
 
 /**
  * Strip trailing vintage-year token(s) from a wine name ("Rioja Reserva 2019"
