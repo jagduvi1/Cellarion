@@ -44,7 +44,7 @@ function redactPeople(entry, requesterId) {
 router.get('/wine-search', async (req, res) => {
   try {
     const q = String(req.query.q || '').trim();
-    if (!q || q.length < 2) return res.json({ bottles: [], wines: [] });
+    if (!q || q.length < 2) return res.json({ bottles: [], consumed: [], wines: [] });
 
     const regex = new RegExp(escapeRegex(q), 'i');
 

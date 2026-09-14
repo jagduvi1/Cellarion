@@ -72,7 +72,7 @@ describe('H-2 — GET /api/journal/wine-search is no longer a full-registry siev
       headers: { Authorization: `Bearer ${token}` },
     });
 
-    expect(await res.json()).toEqual({ bottles: [], wines: [] });
+    expect(await res.json()).toEqual({ bottles: [], consumed: [], wines: [] });
     expect(Bottle.find).not.toHaveBeenCalled();
   });
 
@@ -80,7 +80,7 @@ describe('H-2 — GET /api/journal/wine-search is no longer a full-registry siev
     const res = await fetch(`${baseUrl}/api/journal/wine-search?q=k`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    expect(await res.json()).toEqual({ bottles: [], wines: [] });
+    expect(await res.json()).toEqual({ bottles: [], consumed: [], wines: [] });
     expect(WineDefinition.find).not.toHaveBeenCalled();
   });
 });
