@@ -23,6 +23,8 @@ const FAIL_CODE = {
   banned: 'forbidden_scope',
   not_found: 'not_found',
   type_conflict: 'conflict',
+  conflict: 'conflict',
+  in_use: 'conflict',
 };
 const svcFail = (result) => fail(FAIL_CODE[result.code] || 'invalid_input', result.message);
 
@@ -214,6 +216,89 @@ registerTool({
         wineDefinition: result.target.wineDefinition ? String(result.target.wineDefinition) : null,
         bottle: result.target.bottle ? String(result.target.bottle) : null,
       },
+      result: envelope,
+    });
+    return ok(envelope.summary, envelope.data);
+  },
+});
+
+const keyOut = (k) => ({
+  key_id: k._id,
+  key: k.name,
+  type: k.type,
+  unit: k.unit,
+  ...(k.enumOptions ? { options: k.enumOptions } : {}),
+});
+
+registerTool({
+  name: 'update_personal_key',
+  title: 'Rename one of the user\'s personal data keys or change its unit',
+  description:
+    'Renames a key in the user\'s own personal-data vocabulary (key_id from list_analytics_fields — the part after ' +
+    '"personal." — or from an entry\'s key) and/or changes its unit. The id never changes, so every stored entry ' +
+    'and analytics field keeps working. The unit can change only on integer/decimal keys that hold NO entries yet ' +
+    '(a unit is part of what each stored value means); pass an empty string to clear it. The key\'s TYPE never ' +
+    'changes — create a new key instead. Reversible via undo_last.',
+  scope: 'write',
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  inputSchema: {
+    key_id: objectId,
+    name: z.string().min(1).max(60).optional().describe('New display name (case-insensitively unique among the user\'s keys)'),
+    unit: z.string().max(20).optional().describe('New unit for a numeric key with no entries; "" clears it'),
+  },
+  handler: async (args, ctx) => {
+    const result = await personalData.updateKey(ctx.user.id, args.key_id, { name: args.name, unit: args.unit });
+    if (!result.ok) return svcFail(result);
+
+    logAudit(ctx.req, 'personal_data.key_update',
+      { type: 'personalDataKey', id: result.key._id },
+      { from: result.prev, to: { name: result.key.name, unit: result.key.unit }, via: 'mcp' });
+
+    const changes = [];
+    if (result.prev.name !== result.key.name) changes.push(`renamed "${result.prev.name}" → "${result.key.name}"`);
+    if ((result.prev.unit || null) !== (result.key.unit || null)) changes.push(`unit ${JSON.stringify(result.prev.unit || null)} → ${JSON.stringify(result.key.unit || null)}`);
+    const envelope = {
+      summary: changes.length ? `Key ${changes.join(', ')}` : `Key "${result.key.name}" unchanged`,
+      data: { key: keyOut(result.key), undo: 'undo_last restores the previous name and unit' },
+    };
+    await logAction(ctx, {
+      tool: 'update_personal_key',
+      action: 'personal_data',
+      detail: { op: 'key_update', keyId: String(result.key._id), key: result.key.name },
+      prev: { name: result.prev.name, unit: result.prev.unit },
+      result: envelope,
+    });
+    return ok(envelope.summary, envelope.data);
+  },
+});
+
+registerTool({
+  name: 'delete_personal_key',
+  title: 'Delete one of the user\'s personal data keys that holds no entries',
+  description:
+    'Removes a key from the user\'s personal-data vocabulary (key_id as for update_personal_key). Only a key with ' +
+    'ZERO entries can be deleted — delete or move its entries first (delete_personal_data), so no stored value ' +
+    'ever loses its definition. Reversible via undo_last, which recreates the key under the same id.',
+  scope: 'write',
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+  inputSchema: { key_id: objectId },
+  handler: async (args, ctx) => {
+    const result = await personalData.deleteKey(ctx.user.id, args.key_id);
+    if (!result.ok) return svcFail(result);
+
+    logAudit(ctx.req, 'personal_data.key_delete',
+      { type: 'personalDataKey', id: result.key._id },
+      { name: result.key.name, type: result.key.type, via: 'mcp' });
+
+    const envelope = {
+      summary: `Deleted the empty key "${result.key.name}"`,
+      data: { deleted: true, key_id: result.key._id, undo: 'undo_last recreates this key' },
+    };
+    await logAction(ctx, {
+      tool: 'delete_personal_key',
+      action: 'personal_data',
+      detail: { op: 'key_delete', keyId: String(result.key._id), key: result.key.name },
+      prev: result.definition,
       result: envelope,
     });
     return ok(envelope.summary, envelope.data);

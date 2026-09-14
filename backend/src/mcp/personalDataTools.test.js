@@ -11,14 +11,14 @@
 
 jest.mock('../services/personalData', () => ({
   listForBottle: jest.fn(), createEntry: jest.fn(), updateEntry: jest.fn(),
-  deleteEntry: jest.fn(), listKeys: jest.fn(),
+  deleteEntry: jest.fn(), listKeys: jest.fn(), updateKey: jest.fn(), deleteKey: jest.fn(),
   KEYS_PER_USER: 100, ENTRIES_PER_TARGET: 20,
 }));
 jest.mock('../models/Bottle', () => ({ findById: jest.fn(), aggregate: jest.fn(), find: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/Cellar', () => ({ findById: jest.fn(), find: jest.fn() }));
 jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
 jest.mock('../models/PersonalDataEntry', () => ({ findOne: jest.fn(), findOneAndDelete: jest.fn(), create: jest.fn() }));
-jest.mock('../models/PersonalDataKey', () => ({ findOne: jest.fn() }));
+jest.mock('../models/PersonalDataKey', () => ({ findOne: jest.fn(), create: jest.fn() }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 // revert.js and tools/write.js top-require bottleOps (which pulls the search/
 // meili chain) — mock the full surface they read at load, same as
@@ -88,7 +88,74 @@ describe('registration + scopes', () => {
     expect(tool('add_personal_data').scope).toBe('write');
     expect(tool('update_personal_data').scope).toBe('write');
     expect(tool('delete_personal_data').scope).toBe('write');
+    expect(tool('update_personal_key').scope).toBe('write');
+    expect(tool('delete_personal_key').scope).toBe('write');
     expect(WRITE_REVERSIBLE).toContain('personal_data');
+  });
+});
+
+describe('update_personal_key / delete_personal_key (ticket 6aa6c95e)', () => {
+  const keyRow = { _id: KEY_ID, name: 'Falstaff', type: 'decimal', unit: '/100', enumOptions: null };
+
+  test('rename delegates to the service and logs an undoable key_update row carrying the previous definition', async () => {
+    svc.updateKey.mockResolvedValue({ ok: true, key: { ...keyRow, name: 'Falstaff score' }, prev: { name: 'Falstaff', unit: '/100' } });
+
+    const res = await tool('update_personal_key').handler({ key_id: KEY_ID, name: 'Falstaff score' }, CTX);
+
+    expect(svc.updateKey).toHaveBeenCalledWith(ME, KEY_ID, { name: 'Falstaff score', unit: undefined });
+    const body = parse(res);
+    expect(body.summary).toMatch(/renamed "Falstaff" → "Falstaff score"/);
+    expect(body.data.key).toMatchObject({ key_id: KEY_ID, key: 'Falstaff score', unit: '/100' });
+    expect(McpActionLog.create).toHaveBeenCalledWith(expect.objectContaining({
+      tool: 'update_personal_key',
+      action: 'personal_data',
+      detail: expect.objectContaining({ op: 'key_update', keyId: KEY_ID }),
+      prev: { name: 'Falstaff', unit: '/100' },
+    }));
+  });
+
+  test('service refusals map to MCP codes: in_use → conflict, not_found → not_found', async () => {
+    svc.updateKey.mockResolvedValue({ ok: false, code: 'in_use', message: 'holds entries' });
+    expect(parse(await tool('update_personal_key').handler({ key_id: KEY_ID, unit: '/20' }, CTX)).error.code).toBe('conflict');
+    svc.deleteKey.mockResolvedValue({ ok: false, code: 'not_found', message: 'Key not found' });
+    expect(parse(await tool('delete_personal_key').handler({ key_id: KEY_ID }, CTX)).error.code).toBe('not_found');
+    expect(McpActionLog.create).not.toHaveBeenCalled();
+  });
+
+  test('delete logs a key_delete row whose prev is the full definition (same id on undo)', async () => {
+    const definition = { _id: KEY_ID, name: 'Falstaff', type: 'decimal', unit: '/100', enumOptions: undefined };
+    svc.deleteKey.mockResolvedValue({ ok: true, key: keyRow, definition });
+
+    const res = await tool('delete_personal_key').handler({ key_id: KEY_ID }, CTX);
+
+    expect(parse(res).data).toMatchObject({ deleted: true, key_id: KEY_ID });
+    expect(McpActionLog.create).toHaveBeenCalledWith(expect.objectContaining({
+      tool: 'delete_personal_key',
+      detail: expect.objectContaining({ op: 'key_delete', keyId: KEY_ID }),
+      prev: definition,
+    }));
+  });
+
+  test('undo of key_update restores name + unit; undo of key_delete recreates the key under the same id', async () => {
+    McpActionLog.findOneAndUpdate.mockResolvedValue({ _id: 'row' });
+    const saved = jest.fn().mockResolvedValue(undefined);
+    PersonalDataKey.findOne.mockResolvedValue({ _id: KEY_ID, name: 'Falstaff score', nameKey: 'falstaff score', unit: '/20', save: saved });
+    const up = await revertLedgerRow({
+      _id: 'row', action: 'personal_data', tool: 'update_personal_key',
+      detail: { op: 'key_update', keyId: KEY_ID, key: 'Falstaff score' }, prev: { name: 'Falstaff', unit: '/100' },
+    }, CTX, okHelpers);
+    // okHelpers.ok flattens data into the body (no .data wrapper).
+    expect(parse(up)).toMatchObject({ undone: 'update_personal_key', restored: { name: 'Falstaff', unit: '/100' } });
+    expect(saved).toHaveBeenCalled();
+
+    PersonalDataKey.create.mockResolvedValue({ _id: KEY_ID, name: 'Falstaff' });
+    const del = await revertLedgerRow({
+      _id: 'row2', action: 'personal_data', tool: 'delete_personal_key',
+      detail: { op: 'key_delete', keyId: KEY_ID, key: 'Falstaff' },
+      prev: { _id: KEY_ID, name: 'Falstaff', type: 'decimal', unit: '/100' },
+    }, CTX, okHelpers);
+    expect(parse(del)).toMatchObject({ undone: 'delete_personal_key', key_id: KEY_ID });
+    expect(PersonalDataKey.create).toHaveBeenCalledWith(expect.objectContaining({ _id: KEY_ID, user: ME, name: 'Falstaff', type: 'decimal', unit: '/100' }));
   });
 });
 

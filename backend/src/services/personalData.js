@@ -133,18 +133,24 @@ async function resolveKey(userId, { keyId, newKey }) {
     return { ok: true, key };
   }
 
-  const checked = validateKeyDefinition(newKey || {});
-  if (!checked.ok) return fail('invalid', checked.error);
-  const { def } = checked;
-
-  // def.name is guaranteed a plain string by validateKeyDefinition; $eq for
-  // the same local no-injection property as above.
+  // Name first, type second: an EXISTING key is matched on its name alone, so
+  // a caller who declared the key once does not have to repeat its type on
+  // every write (chfish ticket 6aa6c90e, 2026-09-13 — the MCP schema promised
+  // "required only when the key is new" and this function made a liar of it
+  // by validating the full definition before looking the name up). A type
+  // that IS supplied still has to agree with the stored one; only a genuinely
+  // new key needs the full definition. The name is trimmed here exactly as
+  // validateKeyDefinition trims it, so the lookup key matches what create
+  // would have stored; $eq for the local no-injection property as above.
+  const rawName = typeof (newKey && newKey.name) === 'string' ? newKey.name.trim() : '';
+  if (!rawName) return fail('invalid', 'Key name is required');
   const existing = await PersonalDataKey.findOne({
     user: userId,
-    nameKey: { $eq: def.name.toLowerCase() },
+    nameKey: { $eq: rawName.toLowerCase() },
   });
   if (existing) {
-    if (existing.type !== def.type) {
+    const suppliedType = newKey && newKey.type;
+    if (suppliedType && existing.type !== suppliedType) {
       return fail(
         'type_conflict',
         `You already use "${existing.name}" as a ${existing.type} key — a key keeps one type`
@@ -152,6 +158,10 @@ async function resolveKey(userId, { keyId, newKey }) {
     }
     return { ok: true, key: existing };
   }
+
+  const checked = validateKeyDefinition(newKey || {});
+  if (!checked.ok) return fail('invalid', checked.error);
+  const { def } = checked;
 
   const count = await PersonalDataKey.countDocuments({ user: userId });
   if (count >= KEYS_PER_USER) {
@@ -253,6 +263,103 @@ async function listKeys(userId) {
   return { ok: true, keys: keys.map(serializeKey) };
 }
 
+const KEY_NAME_MAX = 60;
+const KEY_UNIT_MAX = 20;
+const NUMERIC_TYPES = ['integer', 'decimal'];
+
+/** The caller's own key, or not_found for everyone else (no existence oracle). */
+async function ownKey(userId, keyId) {
+  if (!isValidId(String(keyId))) return fail('invalid', 'Invalid key id');
+  const key = await PersonalDataKey.findOne({ _id: { $eq: String(keyId) }, user: userId });
+  if (!key) return fail('not_found', 'Key not found');
+  return { ok: true, key };
+}
+
+/**
+ * Rename a key and/or change its unit (chfish ticket 6aa6c95e, 2026-09-13).
+ *
+ * A key's name, type and unit are fixed by the very first write — the moment
+ * the user knows least about the data they are about to enter — so a typo or
+ * a wrong scale used to be permanent. The id never changes, so stored entries
+ * and analytics field ids stay valid. Rules:
+ *   - name: any time; must not collide with another of the user's keys
+ *     (case-insensitive, the unique {user, nameKey} index is the last word).
+ *   - unit: numeric keys only, and only while the key holds NO entries —
+ *     a unit is part of what every stored value means. An empty string
+ *     clears it.
+ *   - type: never (every stored value would need revalidation; not offered).
+ * Returns the previous name/unit so a caller (MCP undo) can restore them.
+ */
+async function updateKey(userId, keyId, { name, unit } = {}) {
+  const found = await ownKey(userId, keyId);
+  if (!found.ok) return found;
+  const { key } = found;
+
+  const wantsName = name !== undefined;
+  const wantsUnit = unit !== undefined;
+  if (!wantsName && !wantsUnit) return fail('invalid', 'Nothing to change — pass name and/or unit');
+
+  let cleanName = key.name;
+  if (wantsName) {
+    cleanName = typeof name === 'string' ? name.trim() : '';
+    if (!cleanName) return fail('invalid', 'Key name is required');
+    if (cleanName.length > KEY_NAME_MAX) return fail('invalid', `Key name too long (max ${KEY_NAME_MAX} characters)`);
+  }
+
+  let cleanUnit = key.unit || null;
+  if (wantsUnit) {
+    if (!NUMERIC_TYPES.includes(key.type)) {
+      return fail('invalid', `Only integer and decimal keys carry a unit — "${key.name}" is a ${key.type} key`);
+    }
+    const entries = await PersonalDataEntry.countDocuments({ key: key._id });
+    if (entries > 0) {
+      return fail('in_use', `"${key.name}" already holds ${entries} entr${entries === 1 ? 'y' : 'ies'} — the unit is part of what each stored value means, so it cannot change any more`);
+    }
+    cleanUnit = typeof unit === 'string' ? unit.trim() : '';
+    if (cleanUnit.length > KEY_UNIT_MAX) return fail('invalid', `Unit too long (max ${KEY_UNIT_MAX} characters)`);
+    cleanUnit = cleanUnit || null;
+  }
+
+  const prev = { name: key.name, unit: key.unit || null };
+  key.name = cleanName;
+  key.nameKey = cleanName.toLowerCase();
+  key.unit = cleanUnit || undefined;
+  try {
+    await key.save();
+  } catch (err) {
+    if (err && err.code === 11000) {
+      return fail('conflict', `You already have a key called "${cleanName}"`);
+    }
+    throw err;
+  }
+  return { ok: true, key: serializeKey(key), prev };
+}
+
+/**
+ * Delete a key that holds no entries. A key with values behind it is refused
+ * — delete or move the entries first, so nothing stored ever loses its
+ * definition. Returns the full definition so a caller (MCP undo) can put the
+ * key back under the same id.
+ */
+async function deleteKey(userId, keyId) {
+  const found = await ownKey(userId, keyId);
+  if (!found.ok) return found;
+  const { key } = found;
+  const entries = await PersonalDataEntry.countDocuments({ key: key._id });
+  if (entries > 0) {
+    return fail('in_use', `"${key.name}" still holds ${entries} entr${entries === 1 ? 'y' : 'ies'} — delete them first`);
+  }
+  await PersonalDataKey.deleteOne({ _id: key._id, user: userId });
+  return {
+    ok: true,
+    key: serializeKey(key),
+    definition: {
+      _id: String(key._id), name: key.name, type: key.type,
+      unit: key.unit || undefined, enumOptions: key.enumOptions || undefined,
+    },
+  };
+}
+
 module.exports = {
   KEYS_PER_USER,
   ENTRIES_PER_TARGET,
@@ -261,6 +368,8 @@ module.exports = {
   updateEntry,
   deleteEntry,
   listKeys,
+  updateKey,
+  deleteKey,
   // exported for tests
   serializeEntry,
   cellarMemberIds,

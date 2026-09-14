@@ -14,6 +14,7 @@ const CODE_STATUS = {
   not_found: 404,
   conflict: 409,
   type_conflict: 409,
+  in_use: 409,
 };
 
 /** Send a failed service result as its HTTP equivalent. */

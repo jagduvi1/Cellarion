@@ -333,6 +333,56 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
       return ok(envelope.summary, envelope.data);
     }
 
+    if (d.op === 'key_update') {
+      const PersonalDataKey = require('../models/PersonalDataKey');
+      const key = await PersonalDataKey.findOne({ _id: d.keyId, user: ctx.user.id });
+      if (!key) return fail('conflict', 'That key no longer exists; nothing was changed.');
+      const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+      if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
+      const prev = row.prev || {};
+      key.name = prev.name || key.name;
+      key.nameKey = key.name.toLowerCase();
+      key.unit = prev.unit || undefined;
+      try {
+        await key.save();
+      } catch (err) {
+        await unclaim(row._id); // failed → let the undo be retried
+        if (err?.code === 11000) return fail('conflict', `A key called "${prev.name}" exists again — rename it first, then retry.`);
+        throw err;
+      }
+      const envelope = {
+        summary: `Undid key change — "${key.name}"${prev.unit ? ` (${prev.unit})` : ''} restored`,
+        data: { undone: 'update_personal_key', key_id: key._id, restored: { name: key.name, unit: key.unit || null } },
+      };
+      await logAction(ctx, { tool: 'undo_last', action: 'personal_data', viaUndo: true, detail: { undid: String(row._id) }, result: envelope });
+      return ok(envelope.summary, envelope.data);
+    }
+
+    if (d.op === 'key_delete') {
+      const PersonalDataKey = require('../models/PersonalDataKey');
+      const prev = row.prev || {};
+      const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+      if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
+      let recreated;
+      try {
+        // Same id as before, so an analytics field id noted earlier still resolves.
+        recreated = await PersonalDataKey.create({
+          _id: prev._id, user: ctx.user.id, name: prev.name, type: prev.type,
+          unit: prev.unit || undefined, enumOptions: prev.enumOptions || undefined,
+        });
+      } catch (err) {
+        await unclaim(row._id); // failed → let the undo be retried
+        if (err?.code === 11000) return fail('conflict', `A key called "${prev.name}" exists again; nothing was recreated.`);
+        throw err;
+      }
+      const envelope = {
+        summary: `Undid key delete — "${recreated.name}" recreated`,
+        data: { undone: 'delete_personal_key', key_id: recreated._id },
+      };
+      await logAction(ctx, { tool: 'undo_last', action: 'personal_data', viaUndo: true, detail: { undid: String(row._id) }, result: envelope });
+      return ok(envelope.summary, envelope.data);
+    }
+
     return fail('unavailable', 'That personal-data action cannot be undone.');
   }
 

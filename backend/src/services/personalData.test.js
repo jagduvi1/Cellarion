@@ -11,7 +11,7 @@
  */
 
 jest.mock('../models/PersonalDataKey', () => ({
-  findOne: jest.fn(), find: jest.fn(), create: jest.fn(), countDocuments: jest.fn(),
+  findOne: jest.fn(), find: jest.fn(), create: jest.fn(), countDocuments: jest.fn(), deleteOne: jest.fn(),
 }));
 jest.mock('../models/PersonalDataEntry', () => ({
   find: jest.fn(), findOne: jest.fn(), findOneAndDelete: jest.fn(),
@@ -241,6 +241,120 @@ describe('deleteEntry', () => {
   test("someone else's entry is not_found", async () => {
     PersonalDataEntry.findOneAndDelete.mockReturnValue({ populate: jest.fn().mockResolvedValue(null) });
     expect((await svc.deleteEntry(OTHER, oid('f'))).code).toBe('not_found');
+  });
+});
+
+describe('resolveKey by name (ticket 6aa6c90e: key_type only for a NEW key)', () => {
+  test('an existing key is reused WITHOUT a type — the stored definition is the contract', async () => {
+    PersonalDataKey.findOne.mockResolvedValue(abvKey);
+    PersonalDataEntry.create.mockResolvedValue(entryDoc());
+
+    const res = await svc.createEntry(ME, bottle, {
+      level: 'wine', newKey: { name: ' ABV ' }, value: '13.5',
+    });
+
+    expect(res.ok).toBe(true);
+    expect(res.keyCreated).toBe(false);
+    expect(PersonalDataKey.findOne).toHaveBeenCalledWith({ user: ME, nameKey: { $eq: 'abv' } });
+    expect(PersonalDataKey.create).not.toHaveBeenCalled();
+  });
+
+  test('a NEW key without a type is still refused with the type message', async () => {
+    PersonalDataKey.findOne.mockResolvedValue(null);
+    const res = await svc.createEntry(ME, bottle, {
+      level: 'wine', newKey: { name: 'Falstaff' }, value: 91,
+    });
+    expect(res).toMatchObject({ ok: false, code: 'invalid' });
+    expect(res.message).toMatch(/Key type must be one of/);
+    expect(PersonalDataKey.create).not.toHaveBeenCalled();
+  });
+
+  test('an empty name is refused before any lookup', async () => {
+    const res = await svc.createEntry(ME, bottle, { level: 'wine', newKey: { name: '   ' }, value: 1 });
+    expect(res).toMatchObject({ ok: false, code: 'invalid', message: 'Key name is required' });
+    expect(PersonalDataKey.findOne).not.toHaveBeenCalled();
+  });
+});
+
+describe('updateKey / deleteKey (ticket 6aa6c95e)', () => {
+  const keyDoc = (over = {}) => ({
+    _id: KEY_ID, user: ME, name: 'Falstaff', nameKey: 'falstaff', type: 'decimal', unit: '/100',
+    save: jest.fn().mockResolvedValue(undefined),
+    ...over,
+  });
+
+  test('rename keeps the id, rewrites nameKey, and returns the previous definition', async () => {
+    const key = keyDoc();
+    PersonalDataKey.findOne.mockResolvedValue(key);
+
+    const res = await svc.updateKey(ME, KEY_ID, { name: '  Falstaff score ' });
+
+    expect(res.ok).toBe(true);
+    expect(key.name).toBe('Falstaff score');
+    expect(key.nameKey).toBe('falstaff score');
+    expect(key.save).toHaveBeenCalled();
+    expect(res.prev).toEqual({ name: 'Falstaff', unit: '/100' });
+    expect(res.key).toMatchObject({ _id: KEY_ID, name: 'Falstaff score', unit: '/100' });
+    expect(PersonalDataKey.findOne).toHaveBeenCalledWith({ _id: { $eq: KEY_ID }, user: ME });
+  });
+
+  test('a rename onto another key\'s name is a conflict (unique index is the last word)', async () => {
+    const dup = new Error('dup'); dup.code = 11000;
+    const key = keyDoc({ save: jest.fn().mockRejectedValue(dup) });
+    PersonalDataKey.findOne.mockResolvedValue(key);
+    const res = await svc.updateKey(ME, KEY_ID, { name: 'ABV' });
+    expect(res).toMatchObject({ ok: false, code: 'conflict' });
+  });
+
+  test('unit changes only on an EMPTY numeric key; "" clears it', async () => {
+    const key = keyDoc();
+    PersonalDataKey.findOne.mockResolvedValue(key);
+    PersonalDataEntry.countDocuments.mockResolvedValue(0);
+    const ok = await svc.updateKey(ME, KEY_ID, { unit: '/20' });
+    expect(ok.ok).toBe(true);
+    expect(key.unit).toBe('/20');
+
+    PersonalDataEntry.countDocuments.mockResolvedValue(3);
+    const inUse = await svc.updateKey(ME, KEY_ID, { unit: '/100' });
+    expect(inUse).toMatchObject({ ok: false, code: 'in_use' });
+
+    PersonalDataEntry.countDocuments.mockResolvedValue(0);
+    const cleared = await svc.updateKey(ME, KEY_ID, { unit: '' });
+    expect(cleared.ok).toBe(true);
+    expect(key.unit).toBeUndefined();
+  });
+
+  test('a unit on a text key is refused; nothing-to-change is refused', async () => {
+    PersonalDataKey.findOne.mockResolvedValue(keyDoc({ type: 'text', unit: undefined }));
+    expect(await svc.updateKey(ME, KEY_ID, { unit: 'pts' })).toMatchObject({ ok: false, code: 'invalid' });
+    expect(await svc.updateKey(ME, KEY_ID, {})).toMatchObject({ ok: false, code: 'invalid' });
+  });
+
+  test('someone else\'s key is not_found, never an existence oracle', async () => {
+    PersonalDataKey.findOne.mockResolvedValue(null);
+    expect(await svc.updateKey(OTHER, KEY_ID, { name: 'x' })).toMatchObject({ ok: false, code: 'not_found' });
+    expect(await svc.deleteKey(OTHER, KEY_ID)).toMatchObject({ ok: false, code: 'not_found' });
+    expect(PersonalDataKey.deleteOne).not.toHaveBeenCalled();
+  });
+
+  test('delete removes an EMPTY key and hands back its definition for undo', async () => {
+    PersonalDataKey.findOne.mockResolvedValue(keyDoc());
+    PersonalDataEntry.countDocuments.mockResolvedValue(0);
+    PersonalDataKey.deleteOne.mockResolvedValue({ deletedCount: 1 });
+
+    const res = await svc.deleteKey(ME, KEY_ID);
+
+    expect(res.ok).toBe(true);
+    expect(PersonalDataKey.deleteOne).toHaveBeenCalledWith({ _id: KEY_ID, user: ME });
+    expect(res.definition).toEqual({ _id: KEY_ID, name: 'Falstaff', type: 'decimal', unit: '/100', enumOptions: undefined });
+  });
+
+  test('delete refuses a key that still holds entries', async () => {
+    PersonalDataKey.findOne.mockResolvedValue(keyDoc());
+    PersonalDataEntry.countDocuments.mockResolvedValue(2);
+    const res = await svc.deleteKey(ME, KEY_ID);
+    expect(res).toMatchObject({ ok: false, code: 'in_use' });
+    expect(PersonalDataKey.deleteOne).not.toHaveBeenCalled();
   });
 });
 

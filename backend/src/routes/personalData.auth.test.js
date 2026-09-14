@@ -37,8 +37,10 @@ describe('personal-data router shape', () => {
     const map = routes.map((r) => `${r.methods.join(',')} ${r.path}`).sort();
     expect(map).toEqual([
       'DELETE /entries/:entryId',
+      'DELETE /keys/:keyId',
       'GET /bottle/:id',
       'GET /keys',
+      'PATCH /keys/:keyId',
       'POST /bottle/:id',
       'PUT /entries/:entryId',
     ]);
@@ -50,7 +52,7 @@ describe('personal-data router shape', () => {
 
   test('every write route carries requireNonDemo', () => {
     const writes = routes.filter((r) => r.methods.some((m) => m !== 'GET'));
-    expect(writes.length).toBe(3);
+    expect(writes.length).toBe(5);
     for (const r of writes) {
       expect(r.handlers).toContain(requireNonDemo);
     }
@@ -91,6 +93,8 @@ describe('unauthenticated requests are rejected before any handler runs', () => 
     ['POST', '/api/personal-data/bottle/aaaaaaaaaaaaaaaaaaaaaaaa'],
     ['PUT', '/api/personal-data/entries/aaaaaaaaaaaaaaaaaaaaaaaa'],
     ['DELETE', '/api/personal-data/entries/aaaaaaaaaaaaaaaaaaaaaaaa'],
+    ['PATCH', '/api/personal-data/keys/aaaaaaaaaaaaaaaaaaaaaaaa'],
+    ['DELETE', '/api/personal-data/keys/aaaaaaaaaaaaaaaaaaaaaaaa'],
   ];
 
   test.each(cases)('%s %s → 401 without a token', async (method, path) => {

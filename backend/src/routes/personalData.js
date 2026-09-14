@@ -102,4 +102,41 @@ router.delete('/entries/:entryId', requireNonDemo, async (req, res, next) => {
   }
 });
 
+/**
+ * PATCH /api/personal-data/keys/:keyId — rename a key and/or change its unit
+ * (unit: numeric keys only, and only while the key holds no entries). The id
+ * never changes. Body: { name?, unit? }.
+ */
+router.patch('/keys/:keyId', requireNonDemo, async (req, res, next) => {
+  try {
+    const result = await personalData.updateKey(req.user.id, req.params.keyId, {
+      name: req.body?.name,
+      unit: req.body?.unit,
+    });
+    if (!result.ok) return sendFail(res, result);
+    logAudit(req, 'personal_data.key_update',
+      { type: 'personalDataKey', id: result.key._id },
+      { from: result.prev, to: { name: result.key.name, unit: result.key.unit } });
+    res.json({ key: result.key });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * DELETE /api/personal-data/keys/:keyId — only a key with zero entries.
+ */
+router.delete('/keys/:keyId', requireNonDemo, async (req, res, next) => {
+  try {
+    const result = await personalData.deleteKey(req.user.id, req.params.keyId);
+    if (!result.ok) return sendFail(res, result);
+    logAudit(req, 'personal_data.key_delete',
+      { type: 'personalDataKey', id: result.key._id },
+      { name: result.key.name, type: result.key.type });
+    res.json({ deleted: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
