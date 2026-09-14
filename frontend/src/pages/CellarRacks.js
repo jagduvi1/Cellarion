@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from 'react';
 import { lazy } from '../utils/lazyWithReload';
-import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { useParams, Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getCellar } from '../api/cellars';
@@ -9,6 +9,7 @@ import { consumeBottle, pourBottle, openBottle } from '../api/bottles';
 import { glassesLeft, daysLeft, freshnessStatus, remainingMl } from '../utils/openBottle';
 import PreservationPickerModal from '../components/bottle/PreservationPickerModal';
 import { getTotalSlots, getModularTotalSlots } from '../utils/rackLayouts';
+import { readPlaceQueue, planAutoPlace } from '../utils/placeQueue';
 import RackRenderer from '../components/racks/RackRenderer';
 import ShelfView from '../components/racks/ShelfView';
 // Lazy: ShelfView3D pulls in three.js (~250 kB gzip) — only load it when the
@@ -568,6 +569,82 @@ function CellarRacks() {
   const rack = racks.find(r => r._id === selectedRackId) || racks[0];
   const canEdit = cellar?.userRole !== 'viewer';
 
+  // --- post-add placing mode (issue #1055) ---
+  // The add flow hands over the ids of the bottles it just created as router
+  // state; each tap on a free slot places the next one, "auto-place" fills
+  // first-free slots, leaving the mode at any point keeps the rest unplaced —
+  // exactly what they were before. A slot taken concurrently keeps the bottle
+  // in the queue with a notice; the add itself can never fail on placement.
+  const location = useLocation();
+  const [placeQueue, setPlaceQueue] = useState(() => readPlaceQueue(location.state));
+  const [placeTotal] = useState(() => readPlaceQueue(location.state).length);
+  const [placeNotice, setPlaceNotice] = useState(null);
+  const [placeBusy, setPlaceBusy] = useState(false);
+  const placingActive = placeTotal > 0 && (placeQueue.length > 0 || placeNotice?.kind === 'done');
+  const placedCount = placeTotal - placeQueue.length;
+
+  const finishPlacing = () => {
+    setPlaceQueue([]);
+    setPlaceNotice(null);
+    // Drop the handed-over state so a reload does not re-enter the mode.
+    navigate(location.pathname + location.search, { replace: true, state: null });
+  };
+
+  // Returns true when the tap was consumed by the placing mode.
+  const handlePlaceTap = async (targetRack, pos, slotData) => {
+    if (!placeQueue.length || !canEdit || placeBusy) return false;
+    const isDisabled = (targetRack.disabledPositions || []).includes(pos);
+    if (slotData || isDisabled) return false; // a filled/disabled slot behaves as usual
+    const bottleId = placeQueue[0];
+    setPlaceBusy(true);
+    try {
+      const res = await updateSlot(apiFetch, targetRack._id, pos, { bottleId });
+      const data = await res.json();
+      if (!res.ok) {
+        setPlaceNotice({ kind: 'error', text: data.error || t('racks.placeQueue.slotTaken') });
+        return true;
+      }
+      setRacks(prev => prev.map(r => r._id === targetRack._id ? data.rack : r));
+      const rest = placeQueue.slice(1);
+      setPlaceQueue(rest);
+      setPlaceNotice(rest.length === 0 ? { kind: 'done' } : null);
+    } catch {
+      setPlaceNotice({ kind: 'error', text: t('common.networkError') });
+    } finally {
+      setPlaceBusy(false);
+    }
+    return true;
+  };
+
+  // Sequential on purpose — each save bumps the rack version, so parallel
+  // PUTs would 409 each other (same rule as case placement).
+  const handleAutoPlace = async (targetRack) => {
+    if (!placeQueue.length || !canEdit || placeBusy) return;
+    setPlaceBusy(true);
+    let current = targetRack;
+    let remaining = [...placeQueue];
+    const { pairs, leftover } = planAutoPlace(current, remaining);
+    try {
+      for (const { position, bottleId } of pairs) {
+        const res = await updateSlot(apiFetch, current._id, position, { bottleId });
+        const data = await res.json();
+        if (!res.ok) { setPlaceNotice({ kind: 'error', text: data.error || t('racks.placeQueue.slotTaken') }); break; }
+        current = data.rack;
+        setRacks(prev => prev.map(r => r._id === current._id ? current : r));
+        remaining = remaining.filter(id => id !== bottleId);
+        setPlaceQueue(remaining);
+      }
+      if (remaining.length === 0) setPlaceNotice({ kind: 'done' });
+      else if (leftover.length && remaining.length === leftover.length) {
+        setPlaceNotice({ kind: 'leftover', text: t('racks.placeQueue.leftover', { count: remaining.length }) });
+      }
+    } catch {
+      setPlaceNotice({ kind: 'error', text: t('common.networkError') });
+    } finally {
+      setPlaceBusy(false);
+    }
+  };
+
   return (
     <div className="cellar-racks-page">
       <CellarPageHeader
@@ -586,6 +663,29 @@ function CellarRacks() {
 
       {/* Room View / Cellar Book live in the shared view switcher on every page */}
       <CellarNav cellarId={id} active="racks" />
+
+      {/* Post-add placing mode (issue #1055): progress + auto-place + leave */}
+      {placingActive && !loading && racks.length > 0 && (
+        <div className={`alert ${placeNotice?.kind === 'error' ? 'alert-warning' : 'alert-info'} place-queue-bar`} role="status">
+          <span>
+            {placeQueue.length > 0
+              ? t('racks.placeQueue.progress', { placed: placedCount, total: placeTotal })
+              : t('racks.placeQueue.allPlaced', { count: placeTotal })}
+            {placeQueue.length > 0 && <> · {t('racks.placeQueue.tapHint')}</>}
+            {placeNotice?.text && <> · {placeNotice.text}</>}
+          </span>
+          <span className="place-queue-bar__actions">
+            {placeQueue.length > 0 && canEdit && (
+              <button type="button" className="btn btn-secondary btn-small" onClick={() => handleAutoPlace(rack)} disabled={placeBusy}>
+                {t('racks.placeQueue.autoPlace', { count: placeQueue.length })}
+              </button>
+            )}
+            <button type="button" className="btn btn-small" onClick={finishPlacing} disabled={placeBusy}>
+              {placeQueue.length > 0 ? t('racks.placeQueue.leaveMode') : t('common.done', 'Done')}
+            </button>
+          </span>
+        </div>
+      )}
 
       {loading ? (
         <div className="loading">{t('racks.loadingRacks')}</div>
@@ -759,7 +859,9 @@ function CellarRacks() {
           <div id={`rack-${rack._id}`}>
           {rack.type === 'shelf' && !rack.isModular && (viewMode === 'shelf' || viewMode === '3d') ? (
             (() => {
-              const handleClick = (pos, slotData) => {
+              const handleClick = async (pos, slotData) => {
+                // Placing mode consumes a tap on a free slot (issue #1055).
+                if (placeQueue.length && await handlePlaceTap(rack, pos, slotData)) return;
                 const isDisabled = (rack.disabledPositions || []).includes(pos);
                 // Viewers can inspect filled or disabled slots, not empty ones
                 if (!canEdit && !slotData && !isDisabled) return;
@@ -795,7 +897,9 @@ function CellarRacks() {
               highlightPos={highlightPos?.rackId === rack._id ? highlightPos.position : null}
               getSlotStyle={getSlotStyle}
               onSlotMove={canEdit ? (from, to) => handleSlotMove(rack._id, from, to) : undefined}
-              onSlotClick={(pos, slotData) => {
+              onSlotClick={async (pos, slotData) => {
+                // Placing mode consumes a tap on a free slot (issue #1055).
+                if (placeQueue.length && await handlePlaceTap(rack, pos, slotData)) return;
                 // Viewers can only inspect filled or disabled slots, not interact with empty ones
                 const isDisabled = (rack.disabledPositions || []).includes(pos);
                 if (!canEdit && !slotData && !isDisabled) return;

@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { searchWines, resolveWine, identifyWineByText } from '../api/wines';
 import { adoptRegistryWine } from '../api/bridge';
+import { getRacks } from '../api/racks';
+import DialogBox from '../components/DialogBox';
 import useLabelScanner from '../hooks/useLabelScanner';
 import { CURRENCIES } from '../config/currencies';
 import { BOTTLE_SIZES, bottleSizeLabel } from '../config/bottleSizes';
@@ -109,6 +111,10 @@ function AddBottle() {
   // when POST k of N fails, a retry only creates the remaining N−k instead of
   // duplicating the whole batch. Reset whenever a new wine is selected.
   const createdBottlesRef = useRef([]);
+  // Post-add placing offer (issue #1055): { ids, count } once the save landed
+  // in a cellar that has racks. Skippable, never blocking — "Not now" goes to
+  // the cellar page exactly as before.
+  const [placePrompt, setPlacePrompt] = useState(null);
   const imagesLinkedRef = useRef(false);
 
   // ── Scan result state ──
@@ -801,6 +807,21 @@ function AddBottle() {
 
       // Link uploaded images to the first bottle
       linkUploadedImages();
+      // Offer to place the new bottles now when the cellar has racks (issue
+      // #1055). One read; any failure to answer simply skips the offer.
+      const newIds = createdBottlesRef.current.map(b => b?._id).filter(Boolean);
+      let hasRacks = false;
+      if (newIds.length > 0) {
+        try {
+          const rr = await getRacks(apiFetch, cellarId);
+          const rd = rr.ok ? await rr.json() : null;
+          hasRacks = Array.isArray(rd?.racks) ? rd.racks.length > 0 : Array.isArray(rd) && rd.length > 0;
+        } catch { /* no offer */ }
+      }
+      if (hasRacks) {
+        setPlacePrompt({ ids: newIds, count: newIds.length });
+        return;
+      }
       navigate(`/cellars/${cellarId}`);
     } catch (err) {
       setError(partialError(t('common.networkError'), createdBottlesRef.current.length));
@@ -1739,6 +1760,34 @@ function AddBottle() {
           }}
           onCancel={() => { setSoftCandidates(null); setSoftPending(null); }}
         />
+      )}
+
+      {/* Post-add placing offer (issue #1055) — skippable, never blocking */}
+      {placePrompt && (
+        <div className="modal-overlay" onClick={() => navigate(`/cellars/${cellarId}`)}>
+          <DialogBox
+            className="modal-box"
+            onClick={e => e.stopPropagation()}
+            onClose={() => navigate(`/cellars/${cellarId}`)}
+            label={t('addBottle.placePrompt.title', { count: placePrompt.count })}
+          >
+            <h2>{t('addBottle.placePrompt.title', { count: placePrompt.count })}</h2>
+            <p>{t('addBottle.placePrompt.body')}</p>
+            <div className="modal-actions">
+              <button type="button" className="btn btn-secondary" onClick={() => navigate(`/cellars/${cellarId}`)}>
+                {t('addBottle.placePrompt.notNow')}
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                data-testid="place-now"
+                onClick={() => navigate(`/cellars/${cellarId}/racks`, { state: { placeQueue: placePrompt.ids } })}
+              >
+                {t('addBottle.placePrompt.placeNow')}
+              </button>
+            </div>
+          </DialogBox>
+        </div>
       )}
     </div>
   );

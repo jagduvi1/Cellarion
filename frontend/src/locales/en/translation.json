@@ -985,6 +985,13 @@
     "identifyFailed": "Identification failed",
     "identifyNetworkError": "Network error during identification.",
     "addFailed": "Failed to add bottle",
+    "placePrompt": {
+      "title_one": "Place your bottle in a rack now?",
+      "title_other": "Place your {{count}} bottles in a rack now?",
+      "body": "The rack view opens in placing mode: tap a free slot for each bottle, or let it fill the first free slots for you. You can stop at any point — anything left unplaced stays exactly as it is.",
+      "placeNow": "Place now",
+      "notNow": "Not now"
+    },
     "partialAdded_one": "{{msg}} — {{count}} of {{total}} bottles was added. Retrying will add only the remaining {{remaining}}.",
     "partialAdded_other": "{{msg}} — {{count}} of {{total}} bottles were added. Retrying will add only the remaining {{remaining}}.",
     "aiIdentifiedTitle": "We think this is your wine",
@@ -1270,7 +1277,19 @@
     "viewCompact": "Compact",
     "viewShelf": "Shelf view",
     "view3d": "3D",
-    "consumeNotePlaceholder": "How was it?"
+    "consumeNotePlaceholder": "How was it?",
+    "placeQueue": {
+      "progress": "Placing your new bottles: {{placed}} of {{total}} placed",
+      "tapHint": "tap a free slot for the next one",
+      "autoPlace_one": "Auto-place the remaining bottle",
+      "autoPlace_other": "Auto-place the remaining {{count}}",
+      "allPlaced_one": "Your new bottle is placed.",
+      "allPlaced_other": "All {{count}} new bottles are placed.",
+      "leftover_one": "1 bottle did not fit in this rack and stays unplaced",
+      "leftover_other": "{{count}} bottles did not fit in this rack and stay unplaced",
+      "slotTaken": "That slot was taken meanwhile — pick another",
+      "leaveMode": "Stop placing"
+    }
   },
   "nfc": {
     "linkTitle": "Link NFC Tag",

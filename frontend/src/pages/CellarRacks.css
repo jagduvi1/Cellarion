@@ -1184,3 +1184,20 @@
 .edit-rack-form .form-group > span { font-size: 0.85rem; color: var(--color-text-secondary); }
 .edit-rack-form input { width: 100%; }
 .edit-rack-form .help-text { font-size: 0.78rem; color: var(--color-text-muted); }
+
+/* Post-add placing mode bar (issue #1055): progress on the left, actions on
+   the right; wraps to two rows on phones. Colours come from .alert-info /
+   .alert-warning in common.css. */
+.place-queue-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin: 0.5rem 0 0.75rem;
+}
+.place-queue-bar__actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
