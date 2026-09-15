@@ -1251,7 +1251,21 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving, grou
   const [doubleRowsText, setDoubleRowsText] = useState('');
   useEffect(() => { setDoubleRowsText(''); }, [newRack.type]);
 
-  // Synthetic rack for the preview renderer — empty slots, just the geometry.
+  // Synthetic rack for the preview renderer. The 3D view is filled with
+  // stand-in bottles so it reads as a loaded cabinet rather than an empty
+  // box; the map stays empty because its job is to show slot NUMBERING, which
+  // a bottle in every cell would cover up. Nothing here is ever saved.
+  const previewCapacity = getTotalSlots(newRack.type, newRack.rows, newRack.cols, newRack.typeConfig);
+  const previewSlots = useMemo(() => {
+    if (previewMode !== '3d') return [];
+    // A plausible cellar mix, weighted to red and white.
+    const mix = ['red', 'white', 'red', 'sparkling', 'white', 'red', 'rosé', 'white', 'red', 'dessert'];
+    return Array.from({ length: previewCapacity }, (_, i) => ({
+      position: i + 1,
+      bottle: { _id: `preview-${i + 1}`, wineDefinition: { _id: `preview-w-${i + 1}`, type: mix[i % mix.length] } },
+    }));
+  }, [previewMode, previewCapacity]);
+
   const previewRack = {
     _id: 'preview',
     name: newRack.name || t('racks.namePlaceholder', 'Preview'),
@@ -1259,7 +1273,7 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving, grou
     rows: newRack.rows,
     cols: newRack.cols,
     typeConfig: newRack.typeConfig,
-    slots: [],
+    slots: previewSlots,
     isModular: false,
   };
 
@@ -1477,7 +1491,7 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving, grou
       </div>
 
       <div className="new-rack-preview-hint">
-        {t('racks.totalSlots')}: {getTotalSlots(newRack.type, newRack.rows, newRack.cols, newRack.typeConfig)}
+        {t('racks.totalSlots')}: {previewCapacity}
       </div>
 
       {showPreview && (
