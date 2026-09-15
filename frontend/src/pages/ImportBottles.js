@@ -1530,7 +1530,23 @@ function ImportBottles() {
                         <input
                           type="number" min="1" max="20"
                           value={cfg.rows}
-                          onChange={(e) => updateCfg({ rows: parseInt(e.target.value, 10) || 1 })}
+                          onChange={(e) => {
+                            const newRows = parseInt(e.target.value, 10) || 1;
+                            if (cfg.type !== 'cabinet') { updateCfg({ rows: newRows }); return; }
+                            // Cabinet: keep the per-shelf list the length of the
+                            // shelf count. Extra shelves are 1-row shelves added at
+                            // the TOP for bottom-anchored files (Oeno numbers its
+                            // shelves from the bottom, so "more shelves than the
+                            // file shows" means shelves above) and at the bottom
+                            // otherwise; shrinking drops from the same end.
+                            const cur = Array.isArray(cfg.typeConfig?.shelfRows) ? cfg.typeConfig.shelfRows : [];
+                            const bottomAnchored = positionAnchor === 'bottom-left' || positionAnchor === 'bottom-right';
+                            const missing = newRows - cur.length;
+                            const next = missing >= 0
+                              ? (bottomAnchored ? [...Array(missing).fill(1), ...cur] : [...cur, ...Array(missing).fill(1)])
+                              : (bottomAnchored ? cur.slice(-newRows) : cur.slice(0, newRows));
+                            updateCfg({ rows: newRows, typeConfig: { ...(cfg.typeConfig || {}), shelfRows: next } });
+                          }}
                         />
                       </label>
                     )}

@@ -952,6 +952,7 @@ export default function RackMesh({
           bottomExtra={cab.bottomExtra}
           bodyColor={isSelected ? CABINET_COLORS.bodySelected : undefined}
           hovered={hovered}
+          lit={enableShelfPullOut}
         />
       ) : (
         <>

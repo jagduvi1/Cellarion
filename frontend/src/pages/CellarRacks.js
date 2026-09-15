@@ -922,11 +922,11 @@ function CellarRacks() {
               if (viewMode === '3d') {
                 return (
                   <Suspense fallback={<div className="loading">{t('common.loading')}</div>}>
-                    <ShelfView3D {...commonProps} />
+                    <ShelfView3D key={rack._id} {...commonProps} />
                   </Suspense>
                 );
               }
-              return <ShelfView {...commonProps} />;
+              return <ShelfView key={rack._id} {...commonProps} />;
             })()
           ) : (
             <RackRenderer

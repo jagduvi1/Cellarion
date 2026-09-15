@@ -95,6 +95,11 @@ registerTool({
       type: rack.isModular ? 'modular' : rack.type,
       rows: rack.isModular ? null : rack.rows ?? null,
       cols: rack.isModular ? null : rack.cols ?? null,
+      // Cabinet: the per-shelf row list is what turns a position into
+      // "shelf N, row R" (see the position contract in the instructions).
+      ...(rack.type === 'cabinet' && !rack.isModular
+        ? { shelf_rows: rack.typeConfig?.shelfRows || null, two_deep: rack.typeConfig?.twoDeep !== false }
+        : {}),
       modules: rack.isModular
         ? (rack.modules || []).map((m) => ({ type: m.type, rows: m.rows, cols: m.cols }))
         : undefined,

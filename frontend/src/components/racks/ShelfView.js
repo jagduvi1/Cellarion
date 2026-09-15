@@ -128,7 +128,7 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
     slotCenters,
     isValidTarget: (pos) => !disabledSet.has(pos),
     onMove: onSlotMove,
-    enabled: !!onSlotMove && isShelf,
+    enabled: !!onSlotMove && (isShelf || isCabinet),
   });
 
   // A click that lands right after a drop must not open the slot popup.

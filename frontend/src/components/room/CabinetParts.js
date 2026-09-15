@@ -42,7 +42,7 @@ const steelProps = { color: CABINET_COLORS.steel, metalness: 0.85, roughness: 0.
  * interior lighting. `topStrip` and `bottomExtra` are the extra thickness
  * above the top bay and below the bottom bay (roomConstants.getCabinetGeometry).
  */
-export function CabinetBody({ width, height, depth, topStrip, bottomExtra, bodyColor, hovered }) {
+export function CabinetBody({ width, height, depth, topStrip, bottomExtra, bodyColor, hovered, lit = false }) {
   const halfW = width / 2;
   const halfH = height / 2;
   const halfD = depth / 2;
@@ -121,14 +121,19 @@ export function CabinetBody({ width, height, depth, topStrip, bottomExtra, bodyC
         <boxGeometry args={[innerW - 0.02, 0.004, 0.004]} />
         <meshStandardMaterial color={CABINET_COLORS.led} emissive={CABINET_COLORS.led} emissiveIntensity={1.8} roughness={0.4} />
       </mesh>
-      {/* The glow itself: one soft cool light inside, near the top front */}
-      <pointLight
-        position={[0, halfH - PANEL_THICK - topStrip - 0.05, halfD - 0.08]}
-        intensity={0.55}
-        color="#DCE8FF"
-        distance={Math.max(height, depth) * 2.2}
-        decay={1.6}
-      />
+      {/* The glow itself: one soft cool light inside, near the top front.
+          Only in the single-rack 3D view — every extra light in the room
+          scene recompiles every material and adds a loop to every fragment,
+          and the emissive strips already read as a lit interior there. */}
+      {lit && (
+        <pointLight
+          position={[0, halfH - PANEL_THICK - topStrip - 0.05, halfD - 0.08]}
+          intensity={0.55}
+          color="#DCE8FF"
+          distance={Math.max(height, depth) * 2.2}
+          decay={1.6}
+        />
+      )}
     </group>
   );
 }

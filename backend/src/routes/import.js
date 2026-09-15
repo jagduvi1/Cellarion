@@ -39,7 +39,7 @@ const { WINE_TYPES } = require('../services/wineProfileOps');
 const { parseAndValidateVintage, parseDrinkYear } = require('../utils/validation');
 const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
 const { extractAiExplanation } = require('../utils/jsonExtract');
-const { getMaxPosition } = require('../utils/rackGeometry');
+const { getMaxPosition, cabinetShelfRows } = require('../utils/rackGeometry');
 const { planRackCreations, placeBottlesInRack, VALID_ANCHORS, DEFAULT_ANCHOR } = require('../utils/rackImport');
 const { RACK_TYPES } = require('../models/Rack');
 const { validatePriceSanity } = require('../utils/priceValidation');
@@ -1378,13 +1378,22 @@ router.post('/confirm', async (req, res) => {
           if (bpc !== undefined) tc.bottlesPerCell = bpc;
           if (bps !== undefined) tc.bottlesPerSection = bps;
           if (bc !== undefined) tc.backCols = bc;
-          // Cabinet racks: per-shelf row counts (fitted to rows, 1..12) and
-          // the two-deep flag. Validated for real by the Rack schema +
-          // validateCabinetConfig at creation; this only shapes the input.
-          if (Array.isArray(cfg.typeConfig.shelfRows)) {
-            tc.shelfRows = Array.from({ length: rows }, (_, i) => clampInt(cfg.typeConfig.shelfRows[i], 1, 12) || 1);
+          // Cabinet racks only: per-shelf row counts fitted to rows (1..12)
+          // and the two-deep flag. A list shorter than rows grows with 1-row
+          // shelves — at the TOP for bottom-anchored files (Oeno numbers
+          // shelves from the bottom, so "the cabinet has more shelves than
+          // the file shows" means extra shelves above), at the bottom
+          // otherwise (audit 2026-09-15).
+          if (entry.type === 'cabinet') {
+            const raw = Array.isArray(cfg.typeConfig.shelfRows) ? cfg.typeConfig.shelfRows : [];
+            const fitted = raw.slice(0, rows).map((v) => clampInt(v, 1, 12) || 1);
+            const missing = rows - fitted.length;
+            const bottomAnchored = positionAnchor === 'bottom-left' || positionAnchor === 'bottom-right';
+            tc.shelfRows = missing > 0
+              ? (bottomAnchored ? [...Array(missing).fill(1), ...fitted] : [...fitted, ...Array(missing).fill(1)])
+              : fitted;
+            tc.twoDeep = cfg.typeConfig.twoDeep !== false;
           }
-          if (typeof cfg.typeConfig.twoDeep === 'boolean') tc.twoDeep = cfg.typeConfig.twoDeep;
           if (Object.keys(tc).length > 0) entry.typeConfig = tc;
         }
 
@@ -1451,6 +1460,16 @@ router.post('/confirm', async (req, res) => {
             cols
           };
           if (override?.typeConfig) rackData.typeConfig = override.typeConfig;
+          // A cabinet is always stored with a list that matches its shelf count
+          // (the update route's shape gate would otherwise reject every later
+          // rename/group/zone edit — audit 2026-09-15).
+          if (safeType === 'cabinet') {
+            rackData.typeConfig = {
+              ...(rackData.typeConfig || {}),
+              shelfRows: cabinetShelfRows(rows, rackData.typeConfig),
+              twoDeep: rackData.typeConfig?.twoDeep !== false,
+            };
+          }
           const rack = new Rack(rackData);
           // Disabled positions beyond the created geometry address cells that
           // don't exist — drop them rather than storing dead entries.

@@ -241,7 +241,9 @@ router.put('/:id', async (req, res) => {
     }
     // A cabinet's shelf list must keep matching its shelf count: changing
     // rows or switching to cabinet without a fresh shelfRows is rejected.
-    {
+    // Only when the SHAPE is in the request — a rename, group, zone or NFC
+    // edit must never trip over a stored list (audit 2026-09-15).
+    if (type !== undefined || rows !== undefined || typeConfig !== undefined) {
       const effType = type !== undefined ? type : rack.type;
       const effRows = rows !== undefined ? rows : rack.rows;
       const effModular = isModular !== undefined ? isModular : rack.isModular;

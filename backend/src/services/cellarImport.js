@@ -46,7 +46,7 @@ const { unlinkImageFiles, safeUploadPath } = require('./imageProcessor');
 const { sanitizeImageBuffer, detectImageFormat } = require('./imageSanitizer');
 const { ORIGINALS_DIR, PROCESSED_DIR } = require('../config/upload');
 const { planRackCreations, placeBottlesInRack, DEFAULT_ANCHOR } = require('../utils/rackImport');
-const { getMaxPosition } = require('../utils/rackGeometry');
+const { getMaxPosition, cabinetShelfRows } = require('../utils/rackGeometry');
 const { resolveRating } = require('../utils/ratingUtils');
 const { normalizeBottleSize, DEFAULT_SIZE } = require('../config/bottleSizes');
 const { stripHtml } = require('../utils/sanitize');
@@ -327,6 +327,15 @@ async function createRacks(cellarId, userId, cellar, items, result) {
       cols: clampDim(spec?.cols || inf.cols, 1),
     };
     if (spec?.typeConfig) rackData.typeConfig = spec.typeConfig;
+    // A cabinet from a (possibly hand-edited) export is stored with a fitted,
+    // bounded shelf list — never a missing, short or million-entry one.
+    if (safeType === 'cabinet') {
+      rackData.typeConfig = {
+        ...(rackData.typeConfig || {}),
+        shelfRows: cabinetShelfRows(rackData.rows, rackData.typeConfig),
+        twoDeep: rackData.typeConfig?.twoDeep !== false,
+      };
+    }
     if (typeof spec?.group === 'string' && spec.group.trim()) rackData.group = spec.group.trim().slice(0, 40);
     const rackDoc = new Rack(rackData);
     // Restore disabled (unusable) positions, clamped to the created geometry.

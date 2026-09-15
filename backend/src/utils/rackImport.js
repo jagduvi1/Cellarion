@@ -204,16 +204,21 @@ function computeRackPosition({
     colWidth = frontWidth;
   }
 
-  // Apply anchor transforms in the cell grid (rows × cols).
+  // Apply anchor transforms in the cell grid (rows × cols). A cabinet's
+  // vertical extent for row/col input is its BOTTLE rows (Σ shelfRows), not
+  // its shelf count — numbering is row-major with stride cols either way.
+  const rowExtent = rackType === 'cabinet'
+    ? cabinetShelfRows(rows, { shelfRows }).reduce((sum, r) => sum + r, 0)
+    : rows;
   let effectiveRow = srcRow;
   let effectiveCol = srcCol;
 
   if (anchor === 'bottom-left' || anchor === 'bottom-right') {
-    if (isNaN(rows) || rows < 1) {
+    if (isNaN(rowExtent) || rowExtent < 1) {
       return { error: 'rackRows is required for bottom-anchored placement' };
     }
-    if (srcRow > rows) return { error: `row ${srcRow} exceeds rackRows ${rows}` };
-    effectiveRow = rows - srcRow + 1;
+    if (srcRow > rowExtent) return { error: `row ${srcRow} exceeds rackRows ${rowExtent}` };
+    effectiveRow = rowExtent - srcRow + 1;
   }
   if (anchor === 'top-right' || anchor === 'bottom-right') {
     if (isNaN(cols) || cols < 1) {
