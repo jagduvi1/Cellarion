@@ -79,9 +79,14 @@ function computeRackPosition({
   // bottles on the same shelf will fan out to adjacent cells via
   // placeBottles' forward-scan overflow (front cells first, then back).
   //
-  // Oeno's real two-section export additionally provides `layer` (1=front,
-  // 2=back) and `slotInLayer`, which let us compute the EXACT Cellarion
-  // slot for each bottle.
+  // Oeno's real two-section export additionally provides `layer` and
+  // `slotInLayer`, which let us compute the EXACT Cellarion slot for each
+  // bottle. What a layer MEANS follows the rack's shape (the importer picks
+  // it from the file, the picker can override):
+  //   - a rack with back columns: layer 1 = front row, 2 = back row;
+  //   - a rack with NO back columns and bottlesPerCell > 1: every layer is one
+  //     stacked row on the shelf (Vintec VWM storage shelves report up to 10),
+  //     numbered layer-major so layer 1 keeps the front-row formula.
   if (isShelf && position !== undefined && position !== null && position !== '') {
     const p = parseInt(position, 10);
     if (isNaN(p) || p < 1) return { error: 'Invalid shelf' };
@@ -107,6 +112,16 @@ function computeRackPosition({
     const layerNum = parseInt(layer, 10);
     const slotNum = parseInt(slotInLayer, 10);
     if (!isNaN(layerNum) && !isNaN(slotNum) && slotNum >= 1) {
+      const stacked = back === 0 && bpc > 1;
+      if (stacked) {
+        if (layerNum < 1 || layerNum > bpc) {
+          return { error: `layer ${layerNum} exceeds the ${bpc} stacked rows per shelf` };
+        }
+        if (slotNum > cols) {
+          return { error: `slot ${slotNum} exceeds shelf width ${cols}` };
+        }
+        return { position: shelfBase + (layerNum - 1) * cols + slotNum };
+      }
       if (layerNum === 1) {
         if (slotNum > cols * bpc) {
           return { error: `front slot ${slotNum} exceeds front capacity ${cols * bpc}` };

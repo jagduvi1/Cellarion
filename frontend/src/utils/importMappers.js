@@ -262,10 +262,21 @@ export function detectFormat(headers) {
  */
 export function detectOenoExportBoundary(rows) {
   for (let i = 0; i < rows.length; i++) {
-    const firstCell = (rows[i].split(',')[0] || '').trim();
-    if (firstCell === 'Bottle ID') return i;
+    if (firstCell(rows[i]) === 'Bottle ID') return i;
   }
   return -1;
+}
+
+/**
+ * First cell of a raw CSV line, quotes removed. Oeno wrote two dialects: the
+ * 2026-05 export (PR #406) had bare cells; the last exports before the
+ * shutdown quote EVERY cell. A raw split saw `"Bottle ID"`, never matched
+ * `Bottle ID`, the boundary came back -1 and the whole file fell through to
+ * the generic parser, which took the leading `,,,,` row as its header and
+ * dropped all 1,000 rows as "no wine name" (support mail 2026-09-15).
+ */
+function firstCell(line) {
+  return (splitCSVLine(line)[0] || '').trim();
 }
 
 /**
@@ -615,9 +626,14 @@ function ctClean(value) {
 // A missing vintage is filed as NV — but flagged, so the review can say so and
 // let the importer type the year. Silent NV on 85 vintage-dated bottles in one
 // file was the whole problem (audit ticket 2026-09-05).
+// "N.V." / "n.v." / "NV." (Oeno writes "N.V.") is a STATED non-vintage, not a
+// missing one — and the backend's vintage gate accepts only the bare "NV".
+const NV_RE = /^n\.?\s?v\.?$/i;
 function vintageOrNV(raw) {
   const v = String(raw || '').trim();
-  return v ? { vintage: v } : { vintage: 'NV', vintageMissing: true };
+  if (!v) return { vintage: 'NV', vintageMissing: true };
+  if (NV_RE.test(v)) return { vintage: 'NV' };
+  return { vintage: v };
 }
 
 function ctVintage(value) {
@@ -1345,11 +1361,19 @@ export function parseJSON(text) {
  *      layer. Cabinet fields can all be "null" for unshelved bottles.
  *
  * The parser maps each (cabinet, column) pair into a Cellarion shelf rack
- * sized for that column's shelves with cols=6, backCols=5, bpc=1 (Vintec/
- * Transtherm standard \u2014 users can override in the picker). Each bottle
- * carries an explicit shelf number, layer (1=front, 2=back), and
- * slotInLayer; the backend's computeRackPosition uses those to compute
- * the exact Cellarion slot.
+ * sized for that column's shelves. Oeno's "layer" means two different things
+ * depending on the cabinet, and the file does not say which, so the shape is
+ * read off the data (see geometryForColumn):
+ *   - layers 1–2 only: sliding shelves with a front and a back row
+ *     (Transtherm/Eurocave; Keith's file). cols=6, backCols=5, bpc=1, the
+ *     Vintec/Transtherm standard, widened if the file addresses a higher slot.
+ *   - layers 3+: stacked storage shelves (Vintec VWM; a 2026-09 user export, up to 10
+ *     layers × 7 slots, 44 bottles on one shelf). One cell per slot holding
+ *     bottlesPerCell = layer count, no back row.
+ * Users can override either shape in the picker. Each bottle carries an
+ * explicit shelf number, layer and slotInLayer; the backend's
+ * computeRackPosition turns those into the exact Cellarion slot under the
+ * same two models.
  *
  * Consumed bottles (Consumed On set) come in via the existing
  * addToHistory path. Unshelved bottles (Cabinet ID = null) skip rack
@@ -1375,8 +1399,14 @@ export function parseOenoExport(text) {
   // Per-cabinet metadata for the rack-spec output
   const cabinetById = new Map();
 
-  // Section 1 has a header row at index 0
-  for (let i = 1; i < boundary; i++) {
+  // Section 1's header row is usually line 0, but the last Oeno exports open
+  // with a title block ("User Cabinets Details With Unshelved Bottle Count")
+  // above it. Everything above the header is skipped.
+  let cabinetHeader = -1;
+  for (let i = 0; i < boundary; i++) {
+    if (firstCell(lines[i]) === 'Cabinet ID') { cabinetHeader = i; break; }
+  }
+  for (let i = cabinetHeader + 1; i < boundary; i++) {
     const cells = splitCSVLine(lines[i]);
     if (!cells[0] || !cells[0].trim()) continue;
     const cabinetId = cells[0].trim();
@@ -1420,10 +1450,11 @@ export function parseOenoExport(text) {
     }
     const cab = cabinetById.get(cabinetId);
     if (!cab.columns.has(columnIndex)) {
-      cab.columns.set(columnIndex, { maxShelf: 0 });
+      cab.columns.set(columnIndex, { maxShelf: 0, maxLayer: 0, slotWidth: new Map() });
     }
     const col = cab.columns.get(columnIndex);
     if (shelfIndex > col.maxShelf) col.maxShelf = shelfIndex;
+    noteLayerExtent(col, layerIndex, ...disabledSlots);
   }
 
   // \u2500\u2500 Section 2: bottle records \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -1451,6 +1482,11 @@ export function parseOenoExport(text) {
   const items = [];
   const rackNameFor = (cabinetLabel, columnIndex, totalColumns) =>
     totalColumns > 1 ? `${cabinetLabel} \u2013 Module ${columnIndex}` : cabinetLabel;
+  // Cells that hold a bottle, per rack, as "shelf/layer/slot". Oeno sometimes
+  // carries two definitions of the same shelf+layer (a re-created layer keeps
+  // its old row) whose disabled lists disagree; a bottle sitting in a cell is
+  // the stronger evidence that the cell is usable, so it wins below.
+  const occupiedByRack = new Map();
 
   for (let i = boundary + 1; i < lines.length; i++) {
     const cells = splitCSVLine(lines[i]);
@@ -1500,15 +1536,23 @@ export function parseOenoExport(text) {
       continue;
     }
 
-    const totalColumns = cabinetById.get(layer.cabinetId)?.columns.size || 1;
+    const cab = cabinetById.get(layer.cabinetId);
+    const totalColumns = cab?.columns.size || 1;
+    const slotInLayer = parseInt(slotRaw, 10) || undefined;
+    if (cab && slotInLayer) noteLayerExtent(cab.columns.get(layer.columnIndex), layer.layerIndex, slotInLayer);
+    const rackName = rackNameFor(layer.cabinetLabel, layer.columnIndex, totalColumns);
+    if (slotInLayer) {
+      if (!occupiedByRack.has(rackName)) occupiedByRack.set(rackName, new Set());
+      occupiedByRack.get(rackName).add(`${layer.shelfIndex}/${layer.layerIndex}/${slotInLayer}`);
+    }
     items.push({
       ...baseItem,
-      rackName: rackNameFor(layer.cabinetLabel, layer.columnIndex, totalColumns),
+      rackName,
       // For shelf racks the backend interprets rackPosition as the shelf
       // number (row). layer + slotInLayer pin down the exact cell.
       rackPosition: layer.shelfIndex,
       layer: layer.layerIndex,
-      slotInLayer: parseInt(slotRaw, 10) || undefined,
+      slotInLayer,
     });
   }
 
@@ -1519,18 +1563,20 @@ export function parseOenoExport(text) {
     for (const [columnIndex, col] of cab.columns) {
       const rackName = rackNameFor(cab.label, columnIndex, totalColumns);
       const rows = Math.min(20, col.maxShelf);
-      const cols = 6;
-      const backCols = 5;
-      const bpc = 1;
+      const { cols, backCols, bpc, stacked } = geometryForColumn(col);
 
       // Convert each layer's disabled slot-in-layer indices to GLOBAL Cellarion
       // positions, mirroring the backend's computeRackPosition shelf math with
       // the Oeno bottom-left anchor (shelf 1 = bottom → effectiveShelf =
       // rows - shelfIndex + 1):
       //   shelfBase = (effectiveShelf - 1) × (cols + backCols) × bottlesPerCell
-      //   front (layer 1): shelfBase + slotInLayer          (slotInLayer ≤ cols)
-      //   back  (layer 2): shelfBase + cols + slotInLayer   (slotInLayer ≤ backCols)
+      //   front/back model:
+      //     front (layer 1): shelfBase + slotInLayer          (slotInLayer ≤ cols)
+      //     back  (layer 2): shelfBase + cols + slotInLayer   (slotInLayer ≤ backCols)
+      //   stacked model (layer-major, so layer 1 matches the front formula):
+      //     layer L:         shelfBase + (L - 1) × cols + slotInLayer
       const disabled = new Set();
+      const occupied = occupiedByRack.get(rackName) || new Set();
       for (const layer of layerById.values()) {
         if (layer.cabinetId !== cabinetId || layer.columnIndex !== columnIndex) continue;
         if (layer.disabledSlots.size === 0) continue;
@@ -1538,7 +1584,11 @@ export function parseOenoExport(text) {
         if (layer.shelfIndex > rows) continue;
         const shelfBase = (rows - layer.shelfIndex) * (cols + backCols) * bpc;
         for (const n of layer.disabledSlots) {
-          if (layer.layerIndex === 1 && n <= cols) {
+          // A bottle in the cell beats a stale disabled flag (see occupiedByRack)
+          if (occupied.has(`${layer.shelfIndex}/${layer.layerIndex}/${n}`)) continue;
+          if (stacked) {
+            if (layer.layerIndex <= bpc && n <= cols) disabled.add(shelfBase + (layer.layerIndex - 1) * cols + n);
+          } else if (layer.layerIndex === 1 && n <= cols) {
             disabled.add(shelfBase + n);
           } else if (layer.layerIndex === 2 && n <= backCols) {
             disabled.add(shelfBase + cols + n);
@@ -1563,6 +1613,47 @@ export function parseOenoExport(text) {
     format: 'oeno-export',
     headers: bottleHeaders,
     oenoRackSpecs,
+  };
+}
+
+/**
+ * Record what a column's layers address: the highest layer index seen and the
+ * widest slot per layer. Fed from BOTH the layer definitions (disabled-slot
+ * indices reveal a layer's width even when no bottle sits there) and the
+ * bottle records (their Slot column). geometryForColumn reads it.
+ */
+function noteLayerExtent(col, layerIndex, ...slots) {
+  if (!col || isNaN(layerIndex)) return;
+  if (layerIndex > col.maxLayer) col.maxLayer = layerIndex;
+  const cur = col.slotWidth.get(layerIndex) || 0;
+  const widest = Math.max(cur, ...slots.filter((n) => Number.isFinite(n) && n > 0));
+  if (widest > cur) col.slotWidth.set(layerIndex, widest);
+}
+
+/**
+ * Pick the Cellarion shelf shape for one Oeno cabinet column. The file never
+ * states whether "layer" means front/back or a stacked row, so the layer
+ * count decides (rack model caps: cols ≤ 20, bottlesPerCell ≤ 20):
+ *   - up to 2 layers → front + back row, 6 + 5 (Vintec/Transtherm standard),
+ *     widened when the file addresses a higher slot;
+ *   - 3 or more     → stacked: cols = widest layer, bottlesPerCell = layer
+ *     count, no back row.
+ */
+function geometryForColumn(col) {
+  const widest = (layers) => Math.max(0, ...layers.map((l) => col.slotWidth.get(l) || 0));
+  if (col.maxLayer <= 2) {
+    return {
+      cols: Math.min(20, Math.max(6, widest([1]))),
+      backCols: Math.min(20, Math.max(5, widest([2]))),
+      bpc: 1,
+      stacked: false,
+    };
+  }
+  return {
+    cols: Math.min(20, Math.max(1, widest([...col.slotWidth.keys()]))),
+    backCols: 0,
+    bpc: Math.min(20, col.maxLayer),
+    stacked: true,
   };
 }
 
@@ -2173,7 +2264,7 @@ export function parseAndMap(text, forceFormat, opts = {}) {
   if (!forceFormat || forceFormat === 'oeno-export') {
     const lines = cleaned.split(/\r?\n/);
     if (detectOenoExportBoundary(lines) !== -1) {
-      const parsed = parseOenoExport(text);
+      const parsed = parseOenoExport(cleaned);
       if (parsed) return parsed;
     }
   }

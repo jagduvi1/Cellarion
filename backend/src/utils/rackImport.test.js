@@ -667,3 +667,57 @@ describe('shelf racks with bottlesPerCell > 1', () => {
       .toEqual({ position: (4 - 2) * 6 + 3 });
   });
 });
+
+// ── Stacked shelves: no back row, bottlesPerCell > 1 ────────────────────────
+// Oeno's Vintec VWM storage shelves report every stacked row as its own
+// "layer" (user export, 2026-09-15: up to 10 layers × 7 slots per shelf).
+// The importer maps such a cabinet to cols = width, bottlesPerCell = layer
+// count, backCols = 0, and the layer math here must follow: layer-major
+// numbering inside the shelf, so layer 1 keeps the front-row formula.
+describe('stacked shelf racks (backCols 0, bottlesPerCell > 1): layer N is the N-th stacked row', () => {
+  const stacked = { rackType: 'shelf', rackRows: 6, rackCols: 7, backCols: 0, bottlesPerCell: 10 };
+  const stride = 7 * 10; // positions per shelf
+
+  test('layer-major numbering: shelfBase + (layer - 1) × cols + slot', () => {
+    expect(computeRackPosition({ ...stacked, position: 1, layer: 1, slotInLayer: 3 })).toEqual({ position: 3 });
+    expect(computeRackPosition({ ...stacked, position: 1, layer: 2, slotInLayer: 1 })).toEqual({ position: 8 });
+    expect(computeRackPosition({ ...stacked, position: 1, layer: 10, slotInLayer: 7 })).toEqual({ position: 70 });
+    expect(computeRackPosition({ ...stacked, position: 2, layer: 3, slotInLayer: 4 })).toEqual({ position: stride + 14 + 4 });
+  });
+
+  test('bottom-left anchor (Oeno): shelf 6 of 6 is the top row of positions', () => {
+    expect(computeRackPosition({ ...stacked, position: 6, layer: 1, slotInLayer: 1, anchor: 'bottom-left' })).toEqual({ position: 1 });
+    expect(computeRackPosition({ ...stacked, position: 1, layer: 1, slotInLayer: 1, anchor: 'bottom-left' })).toEqual({ position: 5 * stride + 1 });
+  });
+
+  test('a row beyond bottlesPerCell or a slot beyond the shelf width is an error, never a silent neighbour', () => {
+    expect(computeRackPosition({ ...stacked, position: 1, layer: 11, slotInLayer: 1 }).error).toMatch(/layer 11/);
+    expect(computeRackPosition({ ...stacked, position: 1, layer: 1, slotInLayer: 8 }).error).toMatch(/slot 8/);
+  });
+
+  test('a front/back rack (backCols > 0) still rejects layer 3: layers mean front and back there', () => {
+    const frontBack = { rackType: 'shelf', rackRows: 6, rackCols: 6, backCols: 5, bottlesPerCell: 2 };
+    expect(computeRackPosition({ ...frontBack, position: 1, layer: 3, slotInLayer: 1 }).error).toMatch(/invalid layer 3/);
+  });
+
+  test('bpc = 1 with no back row keeps the historical capacity-0 error for layer 2', () => {
+    const single = { rackType: 'shelf', rackRows: 6, rackCols: 6, backCols: 0, bottlesPerCell: 1 };
+    expect(computeRackPosition({ ...single, position: 1, layer: 2, slotInLayer: 1 }).error).toMatch(/back capacity 0/);
+  });
+
+  test('end-to-end: a Vintec VWM-shaped cabinet places every stacked row exactly, and a doubled cell overflows next door', () => {
+    const rack = {
+      type: 'shelf', rows: 6, cols: 7, typeConfig: { bottlesPerCell: 10, backCols: 0 },
+      slots: [], maxPosition: 6 * 70
+    };
+    const { placements, unplaced } = placeBottlesInRack(rack, [
+      // shelf 5 of 6 (bottom-left) → effective shelf 2 → base 70; layer 7 slot 3 → 70 + 42 + 3
+      { item: { rackPosition: 5, layer: 7, slotInLayer: 3 }, bottleId: 'a', sourceIndex: 0 },
+      // Oeno duplicates a layer definition now and then: same cell twice → nearest free
+      { item: { rackPosition: 5, layer: 7, slotInLayer: 3 }, bottleId: 'b', sourceIndex: 1 },
+      { item: { rackPosition: 5, layer: 11, slotInLayer: 1 }, bottleId: 'c', sourceIndex: 2 },
+    ], 'bottom-left');
+    expect(placements.map(p => [p.bottle, p.position, !!p.overflowed])).toEqual([['a', 115, false], ['b', 116, true]]);
+    expect(unplaced).toEqual([{ sourceIndex: 2, requestedPosition: null, reason: 'layer 11 exceeds the 10 stacked rows per shelf' }]);
+  });
+});

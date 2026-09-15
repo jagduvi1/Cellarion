@@ -4252,7 +4252,7 @@
     },
     "rack": {
       "title": "Rack placement",
-      "oenoHint": "Detected an <1>Oeno by Vintec</1> export. Cabinets and per-column modules from your CSV have been mapped to one Open Shelf rack each (6 front + 5 back per shelf, shelf 1 at the bottom). Each bottle's exact slot is preserved — adjust shelf counts below only if a cabinet has more shelves than the file shows.",
+      "oenoHint": "Detected an <1>Oeno by Vintec</1> export. Cabinets and per-column modules from your CSV have been mapped to one Open Shelf rack each, shaped from the shelves, layers and slots the file describes (shelf 1 at the bottom). Each bottle's exact slot is preserved — adjust the shape below only if a cabinet has more shelves than the file shows.",
       "found_one": "Found <1>{{count}}</1> unique rack in your file. We've guessed sensible dimensions from the highest slot number used — adjust them to match your physical rack if you know better.",
       "found_other": "Found <1>{{count}}</1> unique racks in your file. We've guessed sensible dimensions from the highest slot number used — adjust them to match your physical rack if you know better.",
       "alreadyExists": "Already exists",

@@ -874,8 +874,11 @@ describe('parseOenoExport', () => {
     const result = parseOenoExport(fixture);
     // Layer 1001 = column 3, shelf 18 (top shelf of the 18-row rack →
     // Cellarion shelf 1, shelfBase 0), front layer, slots 5 & 6 disabled
-    // → global positions 5 and 6.
-    expect(result.oenoRackSpecs['Main Cellar – Module 3'].disabledPositions).toEqual([5, 6]);
+    // → global positions 5 and 6. Test Wine A sits IN slot 5, and a bottle in
+    // a cell beats the disabled flag (Oeno's duplicated layer rows disagree
+    // about disabled slots; the bottle is the stronger evidence), so only 6
+    // is disabled — the bottle keeps its exact cell instead of overflowing.
+    expect(result.oenoRackSpecs['Main Cellar – Module 3'].disabledPositions).toEqual([6]);
     // Racks without disabled slots don't carry the key at all
     expect(result.oenoRackSpecs['Main Cellar – Module 4'].disabledPositions).toBeUndefined();
     expect(result.oenoRackSpecs['Wine Fridge'].disabledPositions).toBeUndefined();
@@ -890,7 +893,8 @@ describe('parseOenoExport', () => {
       '10001,Main Cellar,TRANSTHERM,Espace Cellar,3,17,2,1002,"2, 4",702,30,2024-07-05,,0'
     );
     const result = parseOenoExport(withBackDisabled);
-    expect(result.oenoRackSpecs['Main Cellar – Module 3'].disabledPositions).toEqual([5, 6, 19, 21]);
+    // (5 is occupied by Test Wine A, see the previous test)
+    expect(result.oenoRackSpecs['Main Cellar – Module 3'].disabledPositions).toEqual([6, 19, 21]);
   });
 
   it('maps shelved bottles to rackName + shelfNumber + layer + slotInLayer', () => {
@@ -938,6 +942,89 @@ describe('parseOenoExport', () => {
     expect(result.format).toBe('oeno-export');
     expect(result.items.length).toBe(4);
     expect(result.oenoRackSpecs).toBeDefined();
+  });
+
+  // ── The last Oeno exports (2026-09-15 support mail) ─────────────────────
+  // Every cell quoted, a title block above the cabinet header, "null" for
+  // absent values, "N.V." vintages, and Vintec VWM storage shelves whose
+  // "layers" are STACKED rows (up to 10 per shelf), not front/back.
+  const quotedFixture = [
+    ',,,,,,,,,,,,,',
+    '"User Cabinets Details With Unshelved Bottle Count"',
+    ',,,,,,,,,,,,,',
+    '"Cabinet ID","Cabinet Label","Cabinet Brand","Cabinet Model","Column Index","Shelf Index","Layer Index","Layer ID","Disabled Slots","Total Slots","Empty Slots","Cabinet Added Date","Cabinet Purchased Date","Unshelved Bottle Count"',
+    '"43999","Darcy big","Vintec","VWM148SBA","1","1","1","820798","0","122","0","2025-10-26","","0"',
+    '"43999","Darcy big","Vintec","VWM148SBA","1","1","2","820799","0","122","0","2025-10-26","","0"',
+    '"43999","Darcy big","Vintec","VWM148SBA","1","1","3","820800","4, 5, 6","122","0","2025-10-26","","0"',
+    '"43999","Darcy big","Vintec","VWM148SBA","1","2","1","820801","0","122","0","2025-10-26","","0"',
+    ',,,,,,,,,,,,,',
+    ',,,,,,,,,,,,,,,,,,',
+    '"User Bottles Details"',
+    ',,,,,,,,,,,,,,,,,,',
+    '"Bottle ID","Cabinet ID","Column ID","Shelf ID","Layer ID","Slot","Bottle Size Liters","Wine Year","Wine Type","Bottle Note","Wine Title","Wine Country","Wine Region","Wine Winery","Purchase Cost","Purchase Currency","Purchase Date","Opened On","Consumed On"',
+    '"1584359","43999","72709","396601","820798","5","0.375","2018","Dessert Wine","","Sauternes","FR","Sauternes","Château d\'Yquem","900.0","AUD","2025-10-26","",""',
+    '"1584352","43999","72709","396601","820800","4","0.75","2023","White Wine","","Graacher Himmelreich Riesling Kabinett","DE","Graach","Joh. Jos. Prüm","143.3","AUD","2025-10-26","",""',
+    '"1727313","43999","72709","396602","820801","6","0.75","N.V.","Sparkling","","Impérial Brut Champagne","FR","Champagne","Moët & Chandon","82.49","AUD","2026-04-12","",""',
+    '"1584360","null","null","null","null","null","0.75","1998","Red Wine","","Grange","AU","South Australia","Penfolds","null","AUD","2002-10-02","","2026-02-28"',
+    ',,,,,,,,,,,,,,,,,,',
+  ].join('\n');
+
+  it('finds the boundary when every cell is quoted', () => {
+    // A raw split saw "Bottle ID" WITH its quotes and never matched, so the
+    // file fell through to the generic parser and lost every row.
+    const lines = quotedFixture.split('\n');
+    const idx = detectOenoExportBoundary(lines);
+    expect(idx).toBeGreaterThan(-1);
+    expect(lines[idx].startsWith('"Bottle ID"')).toBe(true);
+  });
+
+  it('parseAndMap routes a fully quoted export with a title block through the Oeno parser', () => {
+    const result = parseAndMap(quotedFixture);
+    expect(result.format).toBe('oeno-export');
+    expect(result.items).toHaveLength(4);
+    expect(result.warnings).toBeUndefined();
+
+    const sauternes = result.items.find(i => i.wineName === 'Sauternes');
+    expect(sauternes).toMatchObject({
+      producer: 'Château d\'Yquem', vintage: '2018', type: 'dessert', country: 'FR',
+      bottleSize: '375ml', price: 900, currency: 'AUD', purchaseDate: '2025-10-26',
+      rackName: 'Darcy big', rackPosition: 1, layer: 1, slotInLayer: 5,
+    });
+    const riesling = result.items.find(i => i.producer === 'Joh. Jos. Prüm');
+    expect(riesling).toMatchObject({ rackPosition: 1, layer: 3, slotInLayer: 4 });
+
+    // "null" cost → no price; consumed + unshelved → history, no rack
+    const grange = result.items.find(i => i.wineName === 'Grange');
+    expect(grange.price).toBeUndefined();
+    expect(grange.rackName).toBeUndefined();
+    expect(grange).toMatchObject({ addToHistory: true, consumedAt: '2026-02-28', consumedReason: 'drank' });
+  });
+
+  it('writes Oeno\'s "N.V." as the vintage NV the backend accepts, and does not flag it missing', () => {
+    const moet = parseAndMap(quotedFixture).items.find(i => i.wineName === 'Impérial Brut Champagne');
+    expect(moet.vintage).toBe('NV');
+    expect(moet.vintageMissing).toBeUndefined();
+    expect(moet.type).toBe('sparkling');
+  });
+
+  it('a cabinet with layers beyond 2 becomes a STACKED shelf: one cell per slot, bottlesPerCell = layer count, no back row', () => {
+    const spec = parseAndMap(quotedFixture).oenoRackSpecs['Darcy big'];
+    // rows = 2 shelves; width 6 = the widest layer (disabled slots 4-6 on layer
+    // 3, slot 6 on layer 1); 3 layers deep.
+    expect(spec).toMatchObject({ type: 'shelf', rows: 2, cols: 6, typeConfig: { bottlesPerCell: 3, backCols: 0 } });
+    // Disabled 4, 5, 6 on shelf 1 layer 3: shelf 1 is the BOTTOM of a 2-row rack
+    // → shelfBase = (2 - 1) × 6 × 3 = 18; layer 3 adds (3 - 1) × 6 = 12 → 34-36.
+    // Slot 4 holds the Riesling, and a bottle in a cell beats the disabled
+    // flag (Oeno's duplicated layer rows disagree about disabled slots), so
+    // only 35 and 36 stay disabled.
+    expect(spec.disabledPositions).toEqual([35, 36]);
+  });
+
+  it('a two-layer cabinet keeps the front + back shape (Keith-style files are unchanged)', () => {
+    const specs = parseAndMap(fixture).oenoRackSpecs;
+    for (const name of ['Main Cellar – Module 3', 'Main Cellar – Module 4', 'Wine Fridge']) {
+      expect(specs[name]).toMatchObject({ cols: 6, typeConfig: { bottlesPerCell: 1, backCols: 5 } });
+    }
   });
 });
 
