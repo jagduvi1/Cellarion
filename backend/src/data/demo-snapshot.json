@@ -4965,9 +4965,18 @@
         },
         {
           "name": "Wine Fridge",
-          "type": "grid",
-          "rows": 2,
-          "cols": 6
+          "type": "cabinet",
+          "rows": 3,
+          "cols": 4,
+          "typeConfig": {
+            "shelfRows": [
+              2,
+              2,
+              2
+            ],
+            "twoDeep": true,
+            "stagger": true
+          }
         }
       ],
       "bottles": [
