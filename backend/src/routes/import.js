@@ -1393,6 +1393,7 @@ router.post('/confirm', async (req, res) => {
               ? (bottomAnchored ? [...Array(missing).fill(1), ...fitted] : [...fitted, ...Array(missing).fill(1)])
               : fitted;
             tc.twoDeep = cfg.typeConfig.twoDeep !== false;
+            tc.stagger = cfg.typeConfig.stagger !== false;
           }
           if (Object.keys(tc).length > 0) entry.typeConfig = tc;
         }
@@ -1468,6 +1469,7 @@ router.post('/confirm', async (req, res) => {
               ...(rackData.typeConfig || {}),
               shelfRows: cabinetShelfRows(rows, rackData.typeConfig),
               twoDeep: rackData.typeConfig?.twoDeep !== false,
+              stagger: rackData.typeConfig?.stagger !== false,
             };
           }
           const rack = new Rack(rackData);

@@ -39,6 +39,11 @@ const rackModuleSchema = new mongoose.Schema({
     // (row 1 = bottom front, row 2 = bottom back, row 3 = next level front…).
     // Visual arrangement only — capacity is cols × Σ shelfRows either way.
     twoDeep: { type: Boolean },
+    // Cabinet racks only: stacked levels nest in the grooves of the level
+    // below, offset half a bottle (how bottles actually stack on a wooden
+    // shelf). Drawing only — every level still holds `cols` bottles and the
+    // position contract is unchanged, so turning it on never moves a bottle.
+    stagger: { type: Boolean },
     // Hex racks only: mirror the row sequence top-to-bottom. Pure reversal —
     // never changes total slot count (see rackSchema.typeConfig.hexFlip below).
     hexFlip: { type: Boolean, default: false },
@@ -80,6 +85,11 @@ const rackSchema = new mongoose.Schema({
     // (row 1 = bottom front, row 2 = bottom back, row 3 = next level front…).
     // Visual arrangement only — capacity is cols × Σ shelfRows either way.
     twoDeep: { type: Boolean },
+    // Cabinet racks only: stacked levels nest in the grooves of the level
+    // below, offset half a bottle (how bottles actually stack on a wooden
+    // shelf). Drawing only — every level still holds `cols` bottles and the
+    // position contract is unchanged, so turning it on never moves a bottle.
+    stagger: { type: Boolean },
     // Grid racks only: 1-indexed row numbers with headroom for a top layer
     // of bottles resting in the gaps (cols across + cols-1 on top).
     // POSITION NUMBERING CONTRACT (double-height rows): the base grid keeps

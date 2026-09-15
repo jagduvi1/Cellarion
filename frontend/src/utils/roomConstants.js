@@ -18,6 +18,10 @@ export const BOTTLE_RADIUS = 0.037;
 
 // ── Cabinet (wine fridge) dimensions ─────────────────────
 export const CABINET_LEVEL_H = 0.079;      // vertical pitch of stacked bottle rows
+// A level nested in the grooves of the level below sits √3/2 of a bottle
+// diameter higher, not a full one (touching circles offset by half a
+// diameter). Same ratio the hex layout uses.
+export const CABINET_NEST_RATIO = Math.sqrt(3) / 2;
 export const CABINET_BAY_HEADROOM = 0.03;  // air above the top row of a bay
 export const CABINET_TOP_STRIP = 0.04;     // control strip under the top panel
 export const CABINET_BOTTOM_EXTRA = 0.05;  // plinth / machine compartment
@@ -35,8 +39,14 @@ export const CABINET_DEPTH_SINGLE = 0.42;
 export function getCabinetGeometry(rack) {
   const shelfRows = cabinetShelfRows(rack.rows || 1, rack.typeConfig);
   const twoDeep = rack.typeConfig?.twoDeep !== false;
+  const stagger = rack.typeConfig?.stagger !== false;
+  const levelPitch = stagger ? CABINET_LEVEL_H * CABINET_NEST_RATIO : CABINET_LEVEL_H;
   const levelsOf = (rows) => (twoDeep ? Math.ceil(rows / 2) : rows);
-  const bayHeights = shelfRows.map((r) => Math.max(CELL_H, levelsOf(r) * CABINET_LEVEL_H + CABINET_BAY_HEADROOM));
+  // The first level rests on the plank; only the levels ABOVE it are nested.
+  const bayHeights = shelfRows.map((r) => Math.max(
+    CELL_H,
+    CABINET_LEVEL_H + Math.max(0, levelsOf(r) - 1) * levelPitch + CABINET_BAY_HEADROOM
+  ));
   const n = shelfRows.length;
   const innerH = CABINET_TOP_STRIP
     + bayHeights.reduce((a, b) => a + b, 0)
@@ -55,7 +65,7 @@ export function getCabinetGeometry(rack) {
     };
   });
   return {
-    shelfRows, twoDeep, bays, innerH, height,
+    shelfRows, twoDeep, stagger, levelPitch, bays, innerH, height,
     depth: twoDeep ? CABINET_DEPTH_TWO_DEEP : CABINET_DEPTH_SINGLE,
     topStrip: CABINET_TOP_STRIP, bottomExtra: CABINET_BOTTOM_EXTRA,
   };

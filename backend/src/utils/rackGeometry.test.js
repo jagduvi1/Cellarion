@@ -298,6 +298,18 @@ describe('cabinet rack geometry', () => {
     expect(validateCabinetConfig(null, 'cabinet', 2, false)).toBeNull();
   });
 
+  test('stagger is a boolean, cabinet-only, and never changes capacity', () => {
+    expect(validateCabinetConfig({ shelfRows: [2, 2], stagger: true }, 'cabinet', 2, false)).toBeNull();
+    expect(validateCabinetConfig({ shelfRows: [2, 2], stagger: false }, 'cabinet', 2, false)).toBeNull();
+    expect(validateCabinetConfig({ shelfRows: [2, 2], stagger: 'yes' }, 'cabinet', 2, false)).toMatch(/stagger must be a boolean/);
+    // stagger alone still needs the shelf list, and never rides on another type
+    expect(validateCabinetConfig({ stagger: true }, 'cabinet', 2, false)).toMatch(/required/);
+    expect(validateCabinetConfig({ stagger: true }, 'grid', 2, false)).toMatch(/cabinet racks only/);
+    // Drawing only: capacity is the same either way.
+    expect(totalSlots('cabinet', 3, 6, { shelfRows: [1, 3, 2], stagger: true }))
+      .toBe(totalSlots('cabinet', 3, 6, { shelfRows: [1, 3, 2], stagger: false }));
+  });
+
   test('getMaxPosition reads a cabinet document', () => {
     expect(getMaxPosition({ type: 'cabinet', rows: 2, cols: 4, typeConfig: { shelfRows: [1, 5] } })).toBe(24);
   });

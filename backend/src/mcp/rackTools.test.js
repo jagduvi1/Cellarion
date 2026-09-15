@@ -221,10 +221,10 @@ describe('rack groups (support ticket 2026-09-06)', () => {
     const body = parse(await tool('create_rack').handler({ cellar_id: oid('c'), name: 'Fridge', type: 'cabinet', rows: 2, cols: 5, shelf_rows: [1, 4] }, CTX));
     expect(rackOps.createGridRack).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ type: 'cabinet', rows: 2, cols: 5, typeConfig: { shelfRows: [1, 4], twoDeep: true } }),
+      expect.objectContaining({ type: 'cabinet', rows: 2, cols: 5, typeConfig: { shelfRows: [1, 4], twoDeep: true, stagger: true } }),
       expect.anything()
     );
-    expect(body.data).toMatchObject({ type: 'cabinet', capacity: 25, shelf_rows: [1, 4], two_deep: true });
+    expect(body.data).toMatchObject({ type: 'cabinet', capacity: 25, shelf_rows: [1, 4], two_deep: true, stagger: true });
     expect(body.summary).toMatch(/wine cabinet "Fridge".*2 shelves, 5 across, 25 bottles/);
   });
 

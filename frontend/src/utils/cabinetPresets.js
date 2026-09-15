@@ -50,7 +50,7 @@ export const CABINET_PRESETS = [
 ];
 
 /** Default shape when the user picks the cabinet type with no preset. */
-export const CABINET_DEFAULT = { shelves: 5, cols: 6, shelfRows: [2, 2, 2, 2, 2], twoDeep: true };
+export const CABINET_DEFAULT = { shelves: 5, cols: 6, shelfRows: [2, 2, 2, 2, 2], twoDeep: true, stagger: true };
 
 export const CABINET_MAX_ROWS_PER_SHELF = 12;
 

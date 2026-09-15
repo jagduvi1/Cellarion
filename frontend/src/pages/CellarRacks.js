@@ -267,9 +267,11 @@ function CellarRacks() {
         if (newRack.type === 'cabinet') {
           typeConfig.shelfRows = fitShelfRows(typeConfig.shelfRows, newRack.rows);
           typeConfig.twoDeep = typeConfig.twoDeep !== false;
+          typeConfig.stagger = typeConfig.stagger !== false;
         } else {
           delete typeConfig.shelfRows;
           delete typeConfig.twoDeep;
+          delete typeConfig.stagger;
         }
         payload.typeConfig = typeConfig;
       }
@@ -300,7 +302,7 @@ function CellarRacks() {
         ? { moduleRows: 2, moduleCols: 2 }
         : type === 'x-rack' ? { bottlesPerSection: 10 }
         : type === 'shelf' ? { bottlesPerCell: 1, backCols: 0 }
-        : type === 'cabinet' ? { shelfRows: [...CABINET_DEFAULT.shelfRows], twoDeep: CABINET_DEFAULT.twoDeep } : {},
+        : type === 'cabinet' ? { shelfRows: [...CABINET_DEFAULT.shelfRows], twoDeep: CABINET_DEFAULT.twoDeep, stagger: CABINET_DEFAULT.stagger } : {},
     }));
   };
 
@@ -1155,6 +1157,7 @@ function CabinetShapeFields({ newRack, setNewRack }) {
   const [presetKey, setPresetKey] = useState('custom');
   const shelfRows = fitShelfRows(newRack.typeConfig?.shelfRows, newRack.rows);
   const twoDeep = newRack.typeConfig?.twoDeep !== false;
+  const stagger = newRack.typeConfig?.stagger !== false;
   const preset = CABINET_PRESETS.find((p) => p.key === presetKey);
 
   const applyPreset = (key) => {
@@ -1165,7 +1168,7 @@ function CabinetShapeFields({ newRack, setNewRack }) {
       ...newRack,
       rows: p.shelves,
       cols: p.cols,
-      typeConfig: { ...newRack.typeConfig, shelfRows: [...p.shelfRows], twoDeep: p.twoDeep },
+      typeConfig: { ...newRack.typeConfig, shelfRows: [...p.shelfRows], twoDeep: p.twoDeep, stagger: p.stagger !== false },
     });
   };
   const setRow = (i, value) => {
@@ -1228,6 +1231,20 @@ function CabinetShapeFields({ newRack, setNewRack }) {
         </label>
         <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
           {t('racks.cabinetTwoDeepHelp', 'Bottles lie neck to neck, two rows per level. This changes how the cabinet is drawn, not how many bottles it holds.')}
+        </small>
+      </div>
+
+      <div className="form-group">
+        <label>
+          <input
+            type="checkbox"
+            checked={stagger}
+            onChange={(e) => setNewRack({ ...newRack, typeConfig: { ...newRack.typeConfig, stagger: e.target.checked } })}
+          />
+          {' '}{t('racks.cabinetStaggerLabel', 'Stacked rows nest (staggered)')}
+        </label>
+        <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
+          {t('racks.cabinetStaggerHelp', 'Each stacked row sits in the grooves of the row below, offset half a bottle, the way bottles actually stack on a shelf. Turn it off for rows stacked squarely on top of each other. Drawing only — the number of bottles is the same.')}
         </small>
       </div>
     </>

@@ -1262,6 +1262,8 @@
     "cabinetShelfN": "Shelf {{n}}",
     "cabinetTwoDeepLabel": "Two deep (neck to neck)",
     "cabinetTwoDeepHelp": "Bottles lie neck to neck, two rows per level. This changes how the cabinet is drawn, not how many bottles it holds.",
+    "cabinetStaggerLabel": "Stacked rows nest (staggered)",
+    "cabinetStaggerHelp": "Each stacked row sits in the grooves of the row below, offset half a bottle, the way bottles actually stack on a shelf. Turn it off for rows stacked squarely on top of each other. Drawing only — the number of bottles is the same.",
     "createRack": "Create Rack",
     "creating": "Creating…",
     "loadingRacks": "Loading racks...",

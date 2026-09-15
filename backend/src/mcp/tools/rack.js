@@ -81,6 +81,7 @@ registerTool({
     shelf_rows: z.array(z.number().int().min(1).max(12)).min(1).max(20).optional()
       .describe('Cabinet only: rows of bottles per shelf, top shelf first, one entry per shelf (must equal rows). Required for type "cabinet".'),
     two_deep: z.boolean().optional().describe('Cabinet only: bottles lie neck to neck, two rows deep per level (default true)'),
+    stagger: z.boolean().optional().describe('Cabinet only: stacked rows nest in the grooves of the row below, offset half a bottle (default true). Drawing only — capacity is unchanged.'),
     group: z.string().max(40).optional().describe('Optional group label (room or appliance), e.g. "Basement"'),
     idempotency_key: z.string().max(100).optional(),
   },
@@ -95,9 +96,9 @@ registerTool({
       if (!Array.isArray(args.shelf_rows)) {
         return fail('invalid_input', 'shelf_rows is required for a cabinet: one entry per shelf, rows of bottles each shelf holds (top shelf first)');
       }
-      typeConfig = { shelfRows: args.shelf_rows, twoDeep: args.two_deep !== false };
-    } else if (args.shelf_rows !== undefined || args.two_deep !== undefined) {
-      return fail('invalid_input', 'shelf_rows and two_deep apply to type "cabinet" only');
+      typeConfig = { shelfRows: args.shelf_rows, twoDeep: args.two_deep !== false, stagger: args.stagger !== false };
+    } else if (args.shelf_rows !== undefined || args.two_deep !== undefined || args.stagger !== undefined) {
+      return fail('invalid_input', 'shelf_rows, two_deep and stagger apply to type "cabinet" only');
     }
     const result = await createGridRack(access.cellar, { name: args.name, type, rows: args.rows, cols: args.cols, typeConfig, group: args.group }, ctx.req);
     if (result.error) {
@@ -110,7 +111,7 @@ registerTool({
         : `Created ${args.rows}×${args.cols} rack "${result.rack.name}" in "${access.cellar.name}"`,
       data: {
         rack_id: result.rack._id, cellar_id: access.cellar._id, type, rows: args.rows, cols: args.cols, capacity,
-        ...(type === 'cabinet' ? { shelf_rows: args.shelf_rows, two_deep: args.two_deep !== false } : {}),
+        ...(type === 'cabinet' ? { shelf_rows: args.shelf_rows, two_deep: args.two_deep !== false, stagger: args.stagger !== false } : {}),
         group: result.rack.group || null, undo: 'undo_last deletes it while still empty',
       },
     };

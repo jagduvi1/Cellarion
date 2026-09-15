@@ -298,6 +298,37 @@ describe('computeLayout', () => {
       expect(p(9).cy).toBeGreaterThan(p(1).cy); // bottom bay below
     });
 
+    it('stagger (default): stacked levels nest — offset half a bottle, sitting closer together, same positions', () => {
+      const square = computeLayout('cabinet', 3, 6, { ...tc, stagger: false });
+      // Numbering is identical with and without stagger — it is drawing only.
+      expect(layout.slots.map(s => s.position)).toEqual(square.slots.map(s => s.position));
+      expect(layout.totalSlots).toBe(square.totalSlots);
+      expect(layout.cabinet.stagger).toBe(true);
+      expect(square.cabinet.stagger).toBe(false);
+
+      const at = (l, p) => l.slots.find(s => s.position === p);
+      // Middle bay rows: 1 = level 1 front (7..12), 2 = level 1 back (13..18),
+      // 3 = level 2 front (19..24). Only EVEN levels are nudged, so level 1 —
+      // front and back alike — keeps its x and level 2 moves half a cell.
+      expect(at(layout, 7).cx).toBe(at(square, 7).cx);
+      expect(at(layout, 13).cx).toBe(at(square, 13).cx);
+      expect(at(layout, 19).cx).toBeGreaterThan(at(square, 19).cx);
+      // Nested levels sit closer to the level below than squared ones do.
+      const nestedGap = at(layout, 7).cy - at(layout, 19).cy;
+      const squareGap = at(square, 7).cy - at(square, 19).cy;
+      expect(nestedGap).toBeLessThan(squareGap);
+      expect(nestedGap).toBeGreaterThan(0);
+      // The staggered shelf is half a bottle wider, and nothing escapes it.
+      expect(layout.viewBox.width).toBeGreaterThan(square.viewBox.width);
+      layout.slots.forEach((slot) => {
+        expect(slot.cx).toBeLessThanOrEqual(layout.viewBox.width);
+      });
+      // A bay of a single row has nothing to nest, so it is unaffected.
+      const oneRow = computeLayout('cabinet', 1, 4, { shelfRows: [1] });
+      const oneRowSquare = computeLayout('cabinet', 1, 4, { shelfRows: [1], stagger: false });
+      expect(oneRow.slots.map(s => s.cx)).toEqual(oneRowSquare.slots.map(s => s.cx));
+    });
+
     it('draws one plank line between bays and exposes the bay list', () => {
       expect(layout.shelfYs).toHaveLength(2);
       expect(layout.cabinet.bays.map(b => b.rows)).toEqual([1, 3, 2]);

@@ -4,7 +4,7 @@ import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import {
   BOTTLE_RADIUS, CELL_W, CELL_H, RACK_DEPTH, WOOD_THICK, PANEL_THICK,
-  getDisplayDims, buildScaledLayout, getGridDoubleRows, getCabinetGeometry, CABINET_LEVEL_H,
+  getDisplayDims, buildScaledLayout, getGridDoubleRows, getCabinetGeometry,
 } from '../../utils/roomConstants';
 import { getTotalSlots, getModularTotalSlots, DOUBLE_ROW_HEADROOM } from '../../utils/rackLayouts';
 import { CabinetBody, CabinetDoor, CabinetShelfPlank, CABINET_COLORS } from './CabinetParts';
@@ -481,7 +481,10 @@ function computeShelfSlotPositions(rows, cols, backCols, width, height, bpc = 1,
 function computeCabinetSlotPositions(cab, width, depth) {
   const positions = [];
   const cols = Math.max(1, cab.cols);
-  const cW = width / cols;
+  // A staggered shelf is half a bottle wider than its bottle count, so the
+  // cells are sized against cols + 0.5 and the offset level lands inside the
+  // frame instead of through the side panel.
+  const cW = width / (cols + (cab.stagger ? 0.5 : 0));
   const halfD = depth / 2;
   // A bottle's local +Y axis is 0.285 long; a base 0.029 in from a face puts
   // the neck just short of the centreline (same figures as the shelf type).
@@ -494,11 +497,15 @@ function computeCabinetSlotPositions(cab, width, depth) {
     for (let r = 1; r <= bay.rows; r++) {
       const level = cab.twoDeep ? Math.ceil(r / 2) : r;
       const isBack = cab.twoDeep && r % 2 === 0;
-      const y = bay.bottom + BOTTLE_RADIUS + 0.003 + (level - 1) * CABINET_LEVEL_H;
+      const y = bay.bottom + BOTTLE_RADIUS + 0.003 + (level - 1) * cab.levelPitch;
+      // Nested levels alternate half a bottle left and right (see
+      // roomConstants.getCabinetGeometry): the shelf is half a bottle wider
+      // than its bottle count, exactly like a real fridge's staggered shelf.
+      const nudge = cab.stagger && level % 2 === 0 ? cW / 2 : 0;
       for (let c = 0; c < cols; c++) {
         positions.push({
           position: pos++,
-          x: -width / 2 + cW / 2 + c * cW,
+          x: -width / 2 + cW / 2 + c * cW + nudge,
           y,
           z: isBack ? backEmptyZ : frontEmptyZ,
           bottleZ: isBack ? backBottleZ : frontBottleZ,

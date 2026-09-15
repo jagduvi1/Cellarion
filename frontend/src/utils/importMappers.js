@@ -1608,7 +1608,7 @@ export function parseOenoExport(text) {
       }
 
       const shape = stacked
-        ? { type: 'cabinet', rows, cols, typeConfig: { shelfRows: geo.shelfRows, twoDeep: true } }
+        ? { type: 'cabinet', rows, cols, typeConfig: { shelfRows: geo.shelfRows, twoDeep: true, stagger: true } }
         : { type: 'shelf', rows, cols, typeConfig: { bottlesPerCell: bpc, backCols } };
       oenoRackSpecs[rackName] = {
         ...shape,

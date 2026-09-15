@@ -206,19 +206,21 @@ function cabinetPosition({ shelfIndex, row, slot, cols, shelfRows }) {
 /**
  * Request-time gate for a cabinet's typeConfig (create + update routes, MCP):
  * returns an error string or null. shelfRows must be an array of whole
- * numbers 1..12 whose length equals the shelf count; twoDeep a boolean.
- * Non-cabinet racks may not carry either field (a stale shelfRows on a grid
- * would be silently ignored by the geometry but is a client bug).
+ * numbers 1..12 whose length equals the shelf count; twoDeep and stagger
+ * booleans. Non-cabinet racks may not carry any of them (a stale shelfRows on
+ * a grid would be silently ignored by the geometry but is a client bug).
  */
 function validateCabinetConfig(typeConfig, effectiveType, effectiveRows, effectiveModular) {
   if (!typeConfig || typeof typeConfig !== 'object') return null;
   const hasRows = typeConfig.shelfRows !== undefined && typeConfig.shelfRows !== null;
   const hasDeep = typeConfig.twoDeep !== undefined && typeConfig.twoDeep !== null;
-  if (!hasRows && !hasDeep) return null;
+  const hasStagger = typeConfig.stagger !== undefined && typeConfig.stagger !== null;
+  if (!hasRows && !hasDeep && !hasStagger) return null;
   if (effectiveModular || effectiveType !== 'cabinet') {
-    return 'shelfRows and twoDeep apply to cabinet racks only';
+    return 'shelfRows, twoDeep and stagger apply to cabinet racks only';
   }
   if (hasDeep && typeof typeConfig.twoDeep !== 'boolean') return 'twoDeep must be a boolean';
+  if (hasStagger && typeof typeConfig.stagger !== 'boolean') return 'stagger must be a boolean';
   if (!hasRows) return 'shelfRows is required for a cabinet rack';
   const list = typeConfig.shelfRows;
   const rows = parseInt(effectiveRows, 10);
