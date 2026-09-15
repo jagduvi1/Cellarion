@@ -32,6 +32,9 @@ function AdminBlogEditor() {
   const [loading, setLoading] = useState(!isNew);
   const [showSource, setShowSource] = useState(false);
   const [sourceHtml, setSourceHtml] = useState('');
+  // Content fetched for an existing post, waiting for the editor to exist.
+  // null = nothing pending.
+  const [pendingContent, setPendingContent] = useState(null);
 
   const editor = useEditor({
     extensions: [
@@ -48,12 +51,21 @@ function AdminBlogEditor() {
     content: '',
   });
 
+  // Load the post ONCE per id. This deliberately does not depend on `editor`:
+  // useEditor hands back a fresh reference on re-render, so an `editor` dep
+  // made this callback — and the effect below — re-run after every state
+  // update it caused, refetching in a tight loop (221 requests in 1.2 s in the
+  // regression test) until a call landed on a replaced editor instance and
+  // threw, leaving the page stuck on its spinner behind a "Failed to load
+  // post" alert. No existing post could be opened.
   const loadPost = useCallback(async () => {
     if (isNew) return;
     setLoading(true);
     try {
       const res = await getAdminBlogPost(apiFetch, id);
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      // An error response is a failed load, not a TypeError further down.
+      if (!res.ok || !data.post) throw new Error(data.error || `HTTP ${res.status}`);
       const post = data.post;
       setTitle(post.title);
       setExcerpt(post.excerpt || '');
@@ -62,16 +74,26 @@ function AdminBlogEditor() {
       setStatus(post.status);
       setMetaTitle(post.metaTitle || '');
       setMetaDescription(post.metaDescription || '');
-      if (editor) editor.commands.setContent(post.content || '');
+      // Handed to the editor by the effect below, once it exists.
+      setPendingContent(post.content || '');
     } catch {
       alert(t('blog.editor.loadFailed'));
       navigate('/admin/blog');
     } finally {
       setLoading(false);
     }
-  }, [apiFetch, id, isNew, editor, navigate, t]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiFetch, id, isNew]);
 
   useEffect(() => { loadPost(); }, [loadPost]);
+
+  // Pour the loaded HTML into the editor as soon as it is ready — the fetch
+  // usually wins the race against useEditor, so this cannot live in loadPost.
+  useEffect(() => {
+    if (!editor || editor.isDestroyed || pendingContent === null) return;
+    editor.commands.setContent(pendingContent);
+    setPendingContent(null);
+  }, [editor, pendingContent]);
 
   const handleSave = async (publishOverride) => {
     if (!title.trim()) {
