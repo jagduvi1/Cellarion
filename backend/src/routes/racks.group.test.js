@@ -7,7 +7,7 @@ process.env.JWT_SECRET = 'test-secret';
 
 jest.mock('../models/Rack', () => {
   const model = { findOne: jest.fn() };
-  model.RACK_TYPES = ['grid', 'x-rack', 'hex', 'triangle', 'stack', 'cube', 'shelf'];
+  model.RACK_TYPES = ['grid', 'x-rack', 'hex', 'triangle', 'stack', 'cube', 'shelf', 'cabinet'];
   return model;
 });
 jest.mock('../models/Cellar', () => ({ findById: jest.fn() }));
@@ -18,7 +18,12 @@ jest.mock('../services/rackOps', () => ({
   createGridRack: jest.fn(),
   normalizeRackGroup: jest.requireActual('../services/rackOps').normalizeRackGroup,
 }));
-jest.mock('../utils/rackGeometry', () => ({ getMaxPosition: jest.fn(() => 32), validateDoubleHeightRows: jest.fn(() => null) }));
+jest.mock('../utils/rackGeometry', () => ({
+  getMaxPosition: jest.fn(() => 32),
+  validateDoubleHeightRows: jest.fn(() => null),
+  // Real validator — the cabinet gate is part of the pinned PUT contract.
+  validateCabinetConfig: jest.requireActual('../utils/rackGeometry').validateCabinetConfig,
+}));
 
 const express = require('express');
 const http = require('http');
@@ -123,5 +128,62 @@ describe('PUT /api/racks/:id group validation (audit 2026-09-07)', () => {
     expect(status).toBe(400);
     expect(doc.group).toBe('Basement');
     expect(doc.save).not.toHaveBeenCalled();
+  });
+});
+
+// ── A cabinet's drawing-only options are editable after creation ────────────
+// twoDeep and stagger change how the cabinet is DRAWN; capacity and slot
+// numbering are untouched, so flipping them on a loaded rack must not move a
+// bottle. The shape (rows / cols / shelfRows) stays creation-only.
+describe('PUT /api/racks/:id cabinet options', () => {
+  const cabinet = (over = {}) => rackDoc({
+    type: 'cabinet', rows: 3, cols: 4,
+    typeConfig: { shelfRows: [2, 2, 2], twoDeep: true, stagger: true },
+    slots: [{ position: 7, bottle: '64b0000000000000000000cc' }],
+    ...over,
+  });
+
+  test('turning nesting off keeps the shape, the slots and the capacity', async () => {
+    const doc = cabinet();
+    Rack.findOne.mockResolvedValue(doc);
+    const { status } = await request(buildApp(), 'PUT', `/api/racks/${RACK_ID}`, {
+      name: 'Fridge', group: '', typeConfig: { shelfRows: [2, 2, 2], twoDeep: true, stagger: false },
+    });
+    expect(status).toBe(200);
+    expect(doc.typeConfig).toEqual({ shelfRows: [2, 2, 2], twoDeep: true, stagger: false });
+    expect(doc.rows).toBe(3);
+    expect(doc.cols).toBe(4);
+    expect(doc.slots).toEqual([{ position: 7, bottle: '64b0000000000000000000cc' }]);
+    expect(doc.save).toHaveBeenCalled();
+  });
+
+  test('a typeConfig that drops the shelf list is refused, so the shape cannot be lost', async () => {
+    const doc = cabinet();
+    Rack.findOne.mockResolvedValue(doc);
+    const { status, body } = await request(buildApp(), 'PUT', `/api/racks/${RACK_ID}`, {
+      typeConfig: { twoDeep: false, stagger: false },
+    });
+    expect(status).toBe(400);
+    expect(body.error).toMatch(/shelfRows is required/);
+    expect(doc.save).not.toHaveBeenCalled();
+  });
+
+  test('a shelf list that no longer matches the shelf count is refused', async () => {
+    const doc = cabinet();
+    Rack.findOne.mockResolvedValue(doc);
+    const { status, body } = await request(buildApp(), 'PUT', `/api/racks/${RACK_ID}`, {
+      typeConfig: { shelfRows: [2, 2], twoDeep: true, stagger: true },
+    });
+    expect(status).toBe(400);
+    expect(body.error).toMatch(/one entry per shelf/);
+  });
+
+  test('renaming a cabinet without touching its shape still works', async () => {
+    const doc = cabinet();
+    Rack.findOne.mockResolvedValue(doc);
+    const { status } = await request(buildApp(), 'PUT', `/api/racks/${RACK_ID}`, { name: 'Kitchen fridge' });
+    expect(status).toBe(200);
+    expect(doc.name).toBe('Kitchen fridge');
+    expect(doc.typeConfig).toEqual({ shelfRows: [2, 2, 2], twoDeep: true, stagger: true });
   });
 });

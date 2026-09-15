@@ -570,12 +570,19 @@ function CellarRacks() {
 
   // Rename / regroup (support ticket 2026-09-06): PUT name + group and adopt
   // the returned values. An empty group clears it.
-  const handleEditRackSave = async (rackId, { name, group }) => {
+  const handleEditRackSave = async (rackId, { name, group, typeConfig }) => {
     try {
-      const res = await updateRack(apiFetch, rackId, { name, group });
+      const res = await updateRack(apiFetch, rackId, { name, group, ...(typeConfig ? { typeConfig } : {}) });
       const data = await res.json();
       if (!res.ok) return { ok: false, error: data.error };
-      setRacks(prev => prev.map(r => r._id === rackId ? { ...r, name: data.rack.name, group: data.rack.group ?? null } : r));
+      // Adopt the changed fields only — the rack in state carries populated
+      // slot bottles the PUT response does not.
+      setRacks(prev => prev.map(r => r._id === rackId ? {
+        ...r,
+        name: data.rack.name,
+        group: data.rack.group ?? null,
+        ...(typeConfig ? { typeConfig: data.rack.typeConfig || typeConfig } : {}),
+      } : r));
       return { ok: true };
     } catch {
       return { ok: false };

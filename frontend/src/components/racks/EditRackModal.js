@@ -7,11 +7,21 @@ import Modal from '../Modal';
  * (support ticket 2026-09-06: "the basement is not one rack, it is several").
  * The group input suggests the cellar's existing group names so "Basement"
  * keeps one spelling across racks; an empty group means ungrouped.
+ *
+ * For a wine cabinet it also edits the two DRAWING-ONLY options, two-deep and
+ * nesting: both change how the cabinet is drawn and neither changes its
+ * capacity or where a bottle sits, so they are safe to flip on a loaded rack.
+ * The shape itself (shelves, bottles across, rows per shelf) stays
+ * creation-only, because changing it would renumber the slots and move every
+ * bottle — same reason the honeycomb options are creation-only.
  */
 export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
   const { t } = useTranslation();
   const [name, setName] = useState(rack.name || '');
   const [group, setGroup] = useState(rack.group || '');
+  const isCabinet = rack.type === 'cabinet' && !rack.isModular;
+  const [twoDeep, setTwoDeep] = useState(rack.typeConfig?.twoDeep !== false);
+  const [stagger, setStagger] = useState(rack.typeConfig?.stagger !== false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -22,7 +32,13 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
     if (!trimmed) { setError(t('racks.nameRequired', 'Give the rack a name.')); return; }
     setSaving(true);
     setError('');
-    const result = await onSave({ name: trimmed, group: group.trim() });
+    // A cabinet's typeConfig is replaced wholesale by the route, so send the
+    // stored shape back untouched alongside the two flags being changed.
+    const result = await onSave({
+      name: trimmed,
+      group: group.trim(),
+      ...(isCabinet ? { typeConfig: { ...(rack.typeConfig || {}), twoDeep, stagger } } : {}),
+    });
     if (result?.ok) {
       onClose();
     } else {
@@ -54,6 +70,26 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
           </datalist>
           <small className="help-text">{t('racks.groupHint', 'Optional. Racks with the same group are shown together — a room, a fridge, a cooler. Leave it empty for no group.')}</small>
         </label>
+
+        {isCabinet && (
+          <>
+            <label className="form-group">
+              <span>
+                <input type="checkbox" checked={twoDeep} onChange={(e) => setTwoDeep(e.target.checked)} disabled={saving} />
+                {' '}{t('racks.cabinetTwoDeepLabel', 'Two deep (neck to neck)')}
+              </span>
+            </label>
+            <label className="form-group">
+              <span>
+                <input type="checkbox" checked={stagger} onChange={(e) => setStagger(e.target.checked)} disabled={saving} />
+                {' '}{t('racks.cabinetStaggerLabel', 'Stacked rows nest (staggered)')}
+              </span>
+            </label>
+            <small className="help-text">
+              {t('racks.cabinetEditHint', 'Both options only change how the cabinet is drawn — the number of bottles it holds and where each bottle sits stay the same. To change the shelves themselves, create a new cabinet.')}
+            </small>
+          </>
+        )}
 
         {error && <p className="error-message" role="alert">{error}</p>}
 
