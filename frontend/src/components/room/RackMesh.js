@@ -685,6 +685,10 @@ export default function RackMesh({
   highlightBottleId,
   getBottleStyle,
   enableShelfPullOut = false,
+  // Cabinet racks: light the interior. On in the single-rack 3D view, off in
+  // the room — every extra light there recompiles every material and adds a
+  // loop to every fragment, and the emissive LED strips carry the look.
+  cabinetLit = false,
 }) {
   // Which shelf row is currently pulled out (or null). Telescopic-drawer
   // behaviour: only one row at a time; clicking the active row's pull
@@ -952,7 +956,7 @@ export default function RackMesh({
           bottomExtra={cab.bottomExtra}
           bodyColor={isSelected ? CABINET_COLORS.bodySelected : undefined}
           hovered={hovered}
-          lit={enableShelfPullOut}
+          lit={cabinetLit}
         />
       ) : (
         <>

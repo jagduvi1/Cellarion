@@ -1,19 +1,52 @@
 /**
  * Starting shapes for the `cabinet` rack type (wine fridges / climate
- * cabinets). A preset seeds shelves, width, and per-shelf stack heights; the
- * user then edits them. They are STARTING SHAPES, never the truth: makers
- * ship a cabinet with sliding shelves and tell owners to pull shelves out
- * and stack bottles to reach the advertised capacity, so two owners of the
- * same model end up with different layouts (an imported Oeno file showed a
- * "148" running 6 shelves with up to 10 stacked rows).
+ * cabinets), grouped by maker and range.
  *
- * Shape: { key, shelves, cols, shelfRows, twoDeep } — see CABINET contract in
- * rackLayouts.cabinetLayout for what each field means.
+ * They are STARTING SHAPES, never the truth. Makers ship a cabinet with
+ * sliding shelves and tell owners to pull shelves out and stack bottles to
+ * reach the advertised capacity, so two owners of the same model end up with
+ * different layouts — an imported Oeno file showed a "148" running 6 shelves
+ * with up to 10 stacked rows. The create form says so and the user edits the
+ * rows afterwards.
+ *
+ * WHAT IS PUBLISHED AND WHAT IS INFERRED: each model's bottle capacity (in
+ * 0.75 l Bordeaux bottles) and, where the maker states it, its shelf count
+ * come from the maker's own specifications. The width (`cols`) and the split
+ * of rows across shelves are INFERRED so that cols × Σ shelfRows lands on the
+ * advertised capacity, or within a bottle or two of it where no uniform grid
+ * can hit it exactly (a real cabinet's bays are not uniform). `capacity` on
+ * each entry is the maker's figure, shown next to the computed total so the
+ * user can see the difference before they adjust.
+ *
+ * Shape: { key, group, shelves, cols, shelfRows, twoDeep, capacity } — see the
+ * cabinet contract in rackLayouts.cabinetLayout for what each field means.
  */
+
+export const CABINET_PRESET_GROUPS = ['vintec', 'liebherrGrandCru', 'liebherrVinidor', 'liebherrVinothek', 'generic'];
+
 export const CABINET_PRESETS = [
-  { key: 'vintec50',   shelves: 5, cols: 5, shelfRows: [2, 2, 2, 2, 2],    twoDeep: true },
-  { key: 'vintec148',  shelves: 5, cols: 7, shelfRows: [4, 4, 4, 4, 4],    twoDeep: true },
-  { key: 'sliding',    shelves: 6, cols: 6, shelfRows: [2, 2, 2, 2, 2, 2], twoDeep: true },
+  // ── Vintec ───────────────────────────────────────────────────────────────
+  { key: 'vintec50',  group: 'vintec', shelves: 5, cols: 5, shelfRows: [2, 2, 2, 2, 2], twoDeep: true, capacity: 50 },
+  { key: 'vintec148', group: 'vintec', shelves: 5, cols: 7, shelfRows: [5, 4, 4, 4, 4], twoDeep: true, capacity: 148 },
+
+  // ── Liebherr GrandCru (single temperature, long-term storage) ────────────
+  // Small built-ins hold one row per wooden shelf.
+  { key: 'liebherrWkes653',  group: 'liebherrGrandCru', shelves: 3, cols: 4, shelfRows: [1, 1, 1],          twoDeep: false, capacity: 12 },
+  { key: 'liebherrWkes553',  group: 'liebherrGrandCru', shelves: 3, cols: 6, shelfRows: [1, 1, 1],          twoDeep: false, capacity: 18 },
+  { key: 'liebherrWkes4552', group: 'liebherrGrandCru', shelves: 6, cols: 8, shelfRows: [5, 5, 4, 4, 4, 3], twoDeep: true,  capacity: 201 },
+  { key: 'liebherrWkt6451',  group: 'liebherrGrandCru', shelves: 6, cols: 8, shelfRows: [7, 7, 7, 6, 6, 6], twoDeep: true,  capacity: 312 },
+
+  // ── Liebherr Vinidor (two or three zones, many single-row shelves) ───────
+  { key: 'liebherrWtes1672', group: 'liebherrVinidor', shelves: 6,  cols: 6, shelfRows: [1, 1, 1, 1, 1, 1],                            twoDeep: false, capacity: 34 },
+  { key: 'liebherrWtes4677', group: 'liebherrVinidor', shelves: 13, cols: 8, shelfRows: [2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1],       twoDeep: true,  capacity: 143 },
+  { key: 'liebherrWtes5872', group: 'liebherrVinidor', shelves: 13, cols: 8, shelfRows: [2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1],       twoDeep: true,  capacity: 178 },
+  { key: 'liebherrWtes5972', group: 'liebherrVinidor', shelves: 13, cols: 8, shelfRows: [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],       twoDeep: true,  capacity: 211 },
+
+  // ── Liebherr Vinothek (single temperature, stacked bays) ─────────────────
+  { key: 'liebherrWkb4212', group: 'liebherrVinothek', shelves: 5, cols: 6, shelfRows: [7, 7, 7, 6, 6], twoDeep: true, capacity: 200 },
+
+  // ── Generic ──────────────────────────────────────────────────────────────
+  { key: 'sliding', group: 'generic', shelves: 6, cols: 6, shelfRows: [2, 2, 2, 2, 2, 2], twoDeep: true },
 ];
 
 /** Default shape when the user picks the cabinet type with no preset. */

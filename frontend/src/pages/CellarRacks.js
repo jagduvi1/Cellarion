@@ -16,7 +16,10 @@ import ShelfView from '../components/racks/ShelfView';
 // user actually switches to the 3D view, not on every visit to the racks page.
 const ShelfView3D = lazy(() => import('../components/racks/ShelfView3D'));
 import RackTypeSelector, { TYPE_DIMENSIONS } from '../components/racks/RackTypeSelector';
-import { CABINET_PRESETS, CABINET_DEFAULT, CABINET_MAX_ROWS_PER_SHELF, fitShelfRows } from '../utils/cabinetPresets';
+import {
+  CABINET_PRESETS, CABINET_PRESET_GROUPS, CABINET_DEFAULT, CABINET_MAX_ROWS_PER_SHELF,
+  fitShelfRows, cabinetCapacity,
+} from '../utils/cabinetPresets';
 import RatingInput from '../components/RatingInput';
 import WineImage from '../components/WineImage';
 import ConfirmModal from '../components/ConfirmModal';
@@ -1152,6 +1155,7 @@ function CabinetShapeFields({ newRack, setNewRack }) {
   const [presetKey, setPresetKey] = useState('custom');
   const shelfRows = fitShelfRows(newRack.typeConfig?.shelfRows, newRack.rows);
   const twoDeep = newRack.typeConfig?.twoDeep !== false;
+  const preset = CABINET_PRESETS.find((p) => p.key === presetKey);
 
   const applyPreset = (key) => {
     setPresetKey(key);
@@ -1177,12 +1181,17 @@ function CabinetShapeFields({ newRack, setNewRack }) {
         <label>{t('racks.cabinetPresetLabel', 'Start from')}</label>
         <select value={presetKey} onChange={(e) => applyPreset(e.target.value)}>
           <option value="custom">{t('racks.cabinetPresetCustom', 'Custom shape')}</option>
-          {CABINET_PRESETS.map((p) => (
-            <option key={p.key} value={p.key}>{t(`racks.cabinetPreset_${p.key}`, p.key)}</option>
+          {CABINET_PRESET_GROUPS.map((group) => (
+            <optgroup key={group} label={t(`racks.cabinetPresetGroup_${group}`, group)}>
+              {CABINET_PRESETS.filter((p) => p.group === group).map((p) => (
+                <option key={p.key} value={p.key}>{t(`racks.cabinetPreset_${p.key}`, p.key)}</option>
+              ))}
+            </optgroup>
           ))}
         </select>
         <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
           {t('racks.cabinetPresetHint', 'Starting shapes only. Owners pull shelves out and stack bottles, so edit the rows below to match your cabinet.')}
+          {preset?.capacity ? ` ${t('racks.cabinetPresetCapacity', { model: preset.capacity, shape: cabinetCapacity(newRack.cols, shelfRows) })}` : ''}
         </small>
       </div>
 
@@ -1230,6 +1239,12 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving, grou
   const { t } = useTranslation();
   const dims = TYPE_DIMENSIONS[newRack.type] || TYPE_DIMENSIONS.grid;
   const [showPreview, setShowPreview] = useState(false);
+  // Which preview to draw. A cabinet or an open shelf is about its SHAPE, so
+  // it opens in 3D; flat types open as the numbered map, which is the only
+  // view that shows slot numbering. Follows the type unless the user picks.
+  const prefers3d = newRack.type === 'cabinet' || newRack.type === 'shelf';
+  const [previewMode, setPreviewMode] = useState(prefers3d ? '3d' : 'map');
+  useEffect(() => { setPreviewMode(prefers3d ? '3d' : 'map'); }, [prefers3d]);
   // Raw text of the double-height rows input (grid only). Kept as text so
   // partial input like "1," doesn't fight the parser; cleared when the rack
   // type changes (the parent resets typeConfig at the same time).
@@ -1467,15 +1482,45 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving, grou
 
       {showPreview && (
         <div className="new-rack-preview-panel">
-          <div className="new-rack-preview-label">
-            {t('racks.previewLabel', 'Preview — this is how the rack will look once created')}
+          <div className="new-rack-preview-head">
+            <div className="new-rack-preview-label">
+              {t('racks.previewLabel', 'Preview — this is how the rack will look once created')}
+            </div>
+            <div className="rack-view-mode-toggle" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={previewMode === '3d'}
+                className={`view-mode-btn ${previewMode === '3d' ? 'active' : ''}`}
+                onClick={() => setPreviewMode('3d')}
+              >
+                {t('racks.view3d')}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={previewMode === 'map'}
+                className={`view-mode-btn ${previewMode === 'map' ? 'active' : ''}`}
+                onClick={() => setPreviewMode('map')}
+              >
+                {t('racks.viewCompact')}
+              </button>
+            </div>
           </div>
-          <div className="new-rack-preview-canvas">
-            <RackRenderer
-              rack={previewRack}
-              canEdit={false}
-              onSlotClick={() => {}}
-            />
+          <div className={`new-rack-preview-canvas ${previewMode === '3d' ? 'new-rack-preview-canvas--3d' : ''}`}>
+            {previewMode === '3d' ? (
+              <Suspense fallback={<div className="loading">{t('common.loading')}</div>}>
+                {/* pullOut={false}: a look-only preview, so every free cell
+                    shows its ring instead of hiding inside a closed cabinet. */}
+                <ShelfView3D rack={previewRack} pullOut={false} />
+              </Suspense>
+            ) : (
+              <RackRenderer
+                rack={previewRack}
+                canEdit={false}
+                onSlotClick={() => {}}
+              />
+            )}
           </div>
         </div>
       )}

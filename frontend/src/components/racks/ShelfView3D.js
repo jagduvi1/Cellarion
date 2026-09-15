@@ -15,8 +15,12 @@ import './ShelfView3D.css';
  * improvements to bottle/shelf geometry flow through to both views.
  * Click parity with the other views: clicking a bottle or empty slot
  * fires the parent's onSlotClick exactly like Compact / Shelf view do.
+ *
+ * `pullOut={false}` makes it a look-only preview: shelves and bays stay put
+ * and every free cell shows its ring, which is what the create-rack form
+ * wants (a closed cabinet hides its empty cells by design).
  */
-export default function ShelfView3D({ rack, activePosition, highlightPos, onSlotClick }) {
+export default function ShelfView3D({ rack, activePosition, highlightPos, onSlotClick, pullOut = true }) {
   const orbitRef = useRef();
 
   // Compute reasonable rack dimensions for camera placement (matches the
@@ -60,9 +64,11 @@ export default function ShelfView3D({ rack, activePosition, highlightPos, onSlot
     <div className="shelf-view-3d">
       <div className="shelf-view-3d-toolbar">
         <div className="shelf-view-hint">
-          {isCabinet
-            ? 'Drag to rotate · scroll to zoom · click the door handle to open the door · click a shelf handle to slide it out'
-            : 'Drag to rotate · scroll to zoom · click the wooden handle to slide a shelf out'}
+          {!pullOut
+            ? 'Drag to rotate · scroll to zoom'
+            : isCabinet
+              ? 'Drag to rotate · scroll to zoom · click the door handle to open the door · click a shelf handle to slide it out'
+              : 'Drag to rotate · scroll to zoom · click the wooden handle to slide a shelf out'}
         </div>
       </div>
       <div className="shelf-view-3d-canvas">
@@ -110,7 +116,8 @@ export default function ShelfView3D({ rack, activePosition, highlightPos, onSlot
               onBottleClick={(slot) => onSlotClick?.(slot.position, slot)}
               onEmptySlotClick={(slotPos) => onSlotClick?.(slotPos, null)}
               highlightBottleId={highlightBottleId}
-              enableShelfPullOut
+              {...(pullOut ? { enableShelfPullOut: true } : {})}
+              cabinetLit
             />
 
             <OrbitControls
