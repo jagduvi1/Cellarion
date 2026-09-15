@@ -36,6 +36,7 @@ describe('buildFillOrder', () => {
       { type: 'stack', rows: 5 },
       { type: 'cube', rows: 2, cols: 2, typeConfig: { moduleRows: 2, moduleCols: 2 } },
       { type: 'x-rack', typeConfig: { bottlesPerSection: 3 } },
+      { type: 'cabinet', rows: 3, cols: 4, typeConfig: { shelfRows: [1, 3, 2], twoDeep: true } },
       { isModular: true, modules: [
         { type: 'grid', rows: 2, cols: 2, x: 0, y: 0 },
         { type: 'stack', rows: 3, x: 3, y: 0 },

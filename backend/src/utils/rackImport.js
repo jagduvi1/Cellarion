@@ -10,7 +10,7 @@
  * explicitly in the CSV.
  */
 
-const { totalSlots } = require('./rackGeometry');
+const { totalSlots, cabinetShelfRows, cabinetPosition } = require('./rackGeometry');
 
 const DEFAULT_RACK_TYPE = 'grid';
 const VALID_ANCHORS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
@@ -47,6 +47,7 @@ function computeRackPosition({
   position, row, col,
   rackRows, rackCols,
   rackType, bottlesPerCell, backCols,
+  shelfRows,
   layer, slotInLayer,
   internalSlot,
   anchor = DEFAULT_ANCHOR
@@ -72,6 +73,32 @@ function computeRackPosition({
   const bpc = Math.max(1, parseInt(bottlesPerCell, 10) || 1);
   const back = Math.max(0, parseInt(backCols, 10) || 0);
   const isShelf = rackType === 'shelf';
+
+  // Cabinet (wine fridge): the source position is a SHELF NUMBER; `layer`
+  // is the row inside that shelf's bay (1 = resting on the plank) and
+  // `slotInLayer` the slot left to right — Oeno's own vocabulary. Without
+  // layer/slot the bottle takes the bay's first cell and placeBottles' overflow
+  // scan fans the rest out. Geometry contract: rackGeometry.cabinetPosition.
+  if (rackType === 'cabinet' && position !== undefined && position !== null && position !== '') {
+    const p = parseInt(position, 10);
+    if (isNaN(p) || p < 1) return { error: 'Invalid shelf' };
+    if (isNaN(rows) || rows < 1) return { error: 'rackRows is required for cabinet placement' };
+    if (isNaN(cols) || cols < 1) return { error: 'rackCols is required for cabinet placement' };
+    if (p > rows) return { error: `shelf ${p} exceeds rackRows ${rows}` };
+    const bottomAnchored = anchor === 'bottom-left' || anchor === 'bottom-right';
+    const shelfIndex = bottomAnchored ? rows - p : p - 1;
+    const list = cabinetShelfRows(rows, { shelfRows });
+    const layerNum = parseInt(layer, 10);
+    const slotNum = parseInt(slotInLayer, 10);
+    if (!isNaN(layerNum) && !isNaN(slotNum)) {
+      if (layerNum < 1 || layerNum > list[shelfIndex]) {
+        return { error: `row ${layerNum} exceeds the ${list[shelfIndex]} rows of shelf ${p}` };
+      }
+      if (slotNum < 1 || slotNum > cols) return { error: `slot ${slotNum} exceeds shelf width ${cols}` };
+      return { position: cabinetPosition({ shelfIndex, row: layerNum, slot: slotNum, cols, shelfRows: list }) };
+    }
+    return { position: cabinetPosition({ shelfIndex, row: 1, slot: 1, cols, shelfRows: list }) };
+  }
 
   // Shelf racks: the source position is a SHELF NUMBER (row), matching how
   // real-world cabinets (Vintec/Transtherm) label storage. Output is the
@@ -333,6 +360,7 @@ function placeBottlesInRack(rack, items, anchor) {
       rackType: rack.type,
       bottlesPerCell: rack.typeConfig?.bottlesPerCell,
       backCols: rack.typeConfig?.backCols,
+      shelfRows: rack.typeConfig?.shelfRows,
       anchor
     });
     if (result.error) {

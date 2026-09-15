@@ -13,7 +13,7 @@ const Cellar = require('../models/Cellar');
 const Rack = require('../models/Rack');
 const Bottle = require('../models/Bottle');
 const { logAudit } = require('./audit');
-const { getMaxPosition, validateDoubleHeightRows } = require('../utils/rackGeometry');
+const { getMaxPosition, validateDoubleHeightRows, validateCabinetConfig } = require('../utils/rackGeometry');
 const { removeFromRacks } = require('./bottleOps');
 
 const { RACK_TYPES } = Rack;
@@ -69,7 +69,11 @@ async function createGridRack(cellarDoc, { name, type = 'grid', rows = 4, cols =
   if (typeConfig) {
     const dhrError = validateDoubleHeightRows(typeConfig, rack.type, rack.rows, false);
     if (dhrError) return { error: { status: 400, message: dhrError } };
+    const cabError = validateCabinetConfig(typeConfig, rack.type, rack.rows, false);
+    if (cabError) return { error: { status: 400, message: cabError } };
     rack.typeConfig = typeConfig;
+  } else if (rack.type === 'cabinet') {
+    return { error: { status: 400, message: 'shelfRows is required for a cabinet rack' } };
   }
   try {
     await rack.save();

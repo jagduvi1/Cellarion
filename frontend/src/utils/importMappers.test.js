@@ -1007,17 +1007,20 @@ describe('parseOenoExport', () => {
     expect(moet.type).toBe('sparkling');
   });
 
-  it('a cabinet with layers beyond 2 becomes a STACKED shelf: one cell per slot, bottlesPerCell = layer count, no back row', () => {
+  it('a cabinet with layers beyond 2 becomes a WINE CABINET rack: one bay per shelf with its own row count, two deep', () => {
     const spec = parseAndMap(quotedFixture).oenoRackSpecs['Darcy big'];
-    // rows = 2 shelves; width 6 = the widest layer (disabled slots 4-6 on layer
-    // 3, slot 6 on layer 1); 3 layers deep.
-    expect(spec).toMatchObject({ type: 'shelf', rows: 2, cols: 6, typeConfig: { bottlesPerCell: 3, backCols: 0 } });
-    // Disabled 4, 5, 6 on shelf 1 layer 3: shelf 1 is the BOTTOM of a 2-row rack
-    // → shelfBase = (2 - 1) × 6 × 3 = 18; layer 3 adds (3 - 1) × 6 = 12 → 34-36.
-    // Slot 4 holds the Riesling, and a bottle in a cell beats the disabled
-    // flag (Oeno's duplicated layer rows disagree about disabled slots), so
-    // only 35 and 36 stay disabled.
-    expect(spec.disabledPositions).toEqual([35, 36]);
+    // 2 shelves; width 6 = the widest layer (disabled slots 4-6 on layer 3,
+    // slot 6 on layer 1). Bays are listed TOP first: Oeno shelf 2 (1 layer)
+    // then shelf 1 (3 layers).
+    expect(spec).toMatchObject({ type: 'cabinet', rows: 2, cols: 6, typeConfig: { shelfRows: [1, 3], twoDeep: true } });
+    // Disabled 4, 5, 6 on Oeno shelf 1 layer 3 → bay 1 (base 6 × 1 = 6), row 3:
+    // 6 + (3 - 1) × 6 + n → 22, 23, 24. Slot 4 holds the Riesling, and a bottle
+    // in a cell beats the disabled flag (Oeno's duplicated layer rows disagree
+    // about disabled slots), so only 23 and 24 stay disabled.
+    expect(spec.disabledPositions).toEqual([23, 24]);
+    // Bottles keep Oeno's own vocabulary; the backend's cabinet branch maps it.
+    const riesling = parseAndMap(quotedFixture).items.find(i => i.producer === 'Joh. Jos. Prüm');
+    expect(riesling).toMatchObject({ rackName: 'Darcy big', rackPosition: 1, layer: 3, slotInLayer: 4 });
   });
 
   it('a two-layer cabinet keeps the front + back shape (Keith-style files are unchanged)', () => {

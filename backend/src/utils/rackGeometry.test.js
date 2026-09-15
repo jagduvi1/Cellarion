@@ -249,3 +249,56 @@ describe('rackGeometry', () => {
     });
   });
 });
+
+// ── Cabinet (wine fridge) ───────────────────────────────────────────────────
+// Position contract: shelves top to bottom; inside a bay row 1 rests on the
+// plank; position = cols × Σ shelfRows[k<i] + (row − 1) × cols + slot.
+const { cabinetShelfRows, cabinetPosition, validateCabinetConfig } = require('./rackGeometry');
+
+describe('cabinet rack geometry', () => {
+  test('capacity is cols × Σ shelfRows; missing entries count as 1', () => {
+    expect(totalSlots('cabinet', 5, 7, { shelfRows: [4, 4, 4, 4, 4] })).toBe(140);
+    expect(totalSlots('cabinet', 3, 6, { shelfRows: [1, 2] })).toBe(6 + 12 + 6);
+    expect(totalSlots('cabinet', 2, 5, {})).toBe(10);
+    // entries are clamped to 1..12 on read; extras beyond rows are ignored
+    expect(totalSlots('cabinet', 1, 5, { shelfRows: [40, 9, 9] })).toBe(60);
+  });
+
+  test('cabinetShelfRows fits the list to the shelf count', () => {
+    expect(cabinetShelfRows(4, { shelfRows: [2, 3] })).toEqual([2, 3, 1, 1]);
+    expect(cabinetShelfRows(2, { shelfRows: [0, -3] })).toEqual([1, 1]);
+    expect(cabinetShelfRows(0, { shelfRows: [2] })).toEqual([]);
+  });
+
+  test('cabinetPosition follows the contract: bay base, then rows from the plank, slots left to right', () => {
+    const shape = { cols: 6, shelfRows: [1, 3, 2] }; // 6 + 18 + 12 = 36
+    expect(cabinetPosition({ ...shape, shelfIndex: 0, row: 1, slot: 1 })).toBe(1);
+    expect(cabinetPosition({ ...shape, shelfIndex: 0, row: 1, slot: 6 })).toBe(6);
+    expect(cabinetPosition({ ...shape, shelfIndex: 1, row: 1, slot: 1 })).toBe(7);
+    expect(cabinetPosition({ ...shape, shelfIndex: 1, row: 3, slot: 6 })).toBe(24);
+    expect(cabinetPosition({ ...shape, shelfIndex: 2, row: 2, slot: 4 })).toBe(24 + 6 + 4);
+    expect(cabinetPosition({ ...shape, shelfIndex: 2, row: 2, slot: 6 })).toBe(totalSlots('cabinet', 3, 6, shape));
+    // out of the bay's rows / the shelf width / the shelf list → null, never a neighbour
+    expect(cabinetPosition({ ...shape, shelfIndex: 0, row: 2, slot: 1 })).toBeNull();
+    expect(cabinetPosition({ ...shape, shelfIndex: 1, row: 1, slot: 7 })).toBeNull();
+    expect(cabinetPosition({ ...shape, shelfIndex: 3, row: 1, slot: 1 })).toBeNull();
+  });
+
+  test('validateCabinetConfig: shelfRows must match rows, 1..12 whole numbers; cabinet only', () => {
+    expect(validateCabinetConfig({ shelfRows: [2, 2, 2], twoDeep: true }, 'cabinet', 3, false)).toBeNull();
+    expect(validateCabinetConfig({}, 'cabinet', 3, false)).toBeNull(); // nothing to validate
+    expect(validateCabinetConfig({ shelfRows: [2, 2] }, 'cabinet', 3, false)).toMatch(/one entry per shelf/);
+    expect(validateCabinetConfig({ shelfRows: [2, 0, 2] }, 'cabinet', 3, false)).toMatch(/between 1 and 12/);
+    expect(validateCabinetConfig({ shelfRows: [2, 13, 2] }, 'cabinet', 3, false)).toMatch(/between 1 and 12/);
+    expect(validateCabinetConfig({ shelfRows: [2, 2.5, 2] }, 'cabinet', 3, false)).toMatch(/between 1 and 12/);
+    expect(validateCabinetConfig({ twoDeep: 'yes', shelfRows: [1] }, 'cabinet', 1, false)).toMatch(/boolean/);
+    expect(validateCabinetConfig({ twoDeep: true }, 'cabinet', 1, false)).toMatch(/required/);
+    expect(validateCabinetConfig({ shelfRows: [1, 1] }, 'grid', 2, false)).toMatch(/cabinet racks only/);
+    expect(validateCabinetConfig({ shelfRows: [1, 1] }, 'cabinet', 2, true)).toMatch(/cabinet racks only/);
+    expect(validateCabinetConfig(null, 'cabinet', 2, false)).toBeNull();
+  });
+
+  test('getMaxPosition reads a cabinet document', () => {
+    expect(getMaxPosition({ type: 'cabinet', rows: 2, cols: 4, typeConfig: { shelfRows: [1, 5] } })).toBe(24);
+  });
+});

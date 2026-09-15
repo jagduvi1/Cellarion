@@ -30,7 +30,7 @@
  *   rackRows, rackCols - Rack dimensions (used when auto-creating racks
  *                   and for row-origin math). Optional — also inferred from
  *                   max observed (row, col) per rack.
- *   rackType      - Optional rack type (grid|shelf|hex|triangle|stack|x-rack|cube)
+ *   rackType      - Optional rack type (grid|shelf|hex|triangle|stack|x-rack|cube|cabinet)
  *
  * CellarTracker imports additionally emit (consumed by the backend importer):
  *   grapes        - [string] grape varieties (from Varietal/MasterVarietal)
@@ -1368,8 +1368,10 @@ export function parseJSON(text) {
  *     (Transtherm/Eurocave; Keith's file). cols=6, backCols=5, bpc=1, the
  *     Vintec/Transtherm standard, widened if the file addresses a higher slot.
  *   - layers 3+: stacked storage shelves (Vintec VWM; a 2026-09 user export, up to 10
- *     layers × 7 slots, 44 bottles on one shelf). One cell per slot holding
- *     bottlesPerCell = layer count, no back row.
+ *     layers × 7 slots, 44 bottles on one shelf). Mapped to the `cabinet`
+ *     rack type: one bay per shelf with the file's own layer count as the
+ *     bay's rows, two deep, so every bottle lands in its exact cell and the
+ *     3D view draws a wine fridge.
  * Users can override either shape in the picker. Each bottle carries an
  * explicit shelf number, layer and slotInLayer; the backend's
  * computeRackPosition turns those into the exact Cellarion slot under the
@@ -1450,11 +1452,12 @@ export function parseOenoExport(text) {
     }
     const cab = cabinetById.get(cabinetId);
     if (!cab.columns.has(columnIndex)) {
-      cab.columns.set(columnIndex, { maxShelf: 0, maxLayer: 0, slotWidth: new Map() });
+      cab.columns.set(columnIndex, { maxShelf: 0, maxLayer: 0, slotWidth: new Map(), layersByShelf: new Map() });
     }
     const col = cab.columns.get(columnIndex);
     if (shelfIndex > col.maxShelf) col.maxShelf = shelfIndex;
     noteLayerExtent(col, layerIndex, ...disabledSlots);
+    noteShelfLayer(col, shelfIndex, layerIndex);
   }
 
   // \u2500\u2500 Section 2: bottle records \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -1540,6 +1543,7 @@ export function parseOenoExport(text) {
     const totalColumns = cab?.columns.size || 1;
     const slotInLayer = parseInt(slotRaw, 10) || undefined;
     if (cab && slotInLayer) noteLayerExtent(cab.columns.get(layer.columnIndex), layer.layerIndex, slotInLayer);
+    if (cab) noteShelfLayer(cab.columns.get(layer.columnIndex), layer.shelfIndex, layer.layerIndex);
     const rackName = rackNameFor(layer.cabinetLabel, layer.columnIndex, totalColumns);
     if (slotInLayer) {
       if (!occupiedByRack.has(rackName)) occupiedByRack.set(rackName, new Set());
@@ -1563,18 +1567,19 @@ export function parseOenoExport(text) {
     for (const [columnIndex, col] of cab.columns) {
       const rackName = rackNameFor(cab.label, columnIndex, totalColumns);
       const rows = Math.min(20, col.maxShelf);
-      const { cols, backCols, bpc, stacked } = geometryForColumn(col);
+      const geo = geometryForColumn(col, rows);
+      const { cols, backCols, bpc, stacked } = geo;
 
       // Convert each layer's disabled slot-in-layer indices to GLOBAL Cellarion
-      // positions, mirroring the backend's computeRackPosition shelf math with
-      // the Oeno bottom-left anchor (shelf 1 = bottom → effectiveShelf =
-      // rows - shelfIndex + 1):
-      //   shelfBase = (effectiveShelf - 1) × (cols + backCols) × bottlesPerCell
-      //   front/back model:
+      // positions, mirroring the backend's placement math with the Oeno
+      // bottom-left anchor (shelf 1 = bottom):
+      //   Open Shelf (front/back model, computeRackPosition):
+      //     effectiveShelf = rows - shelfIndex + 1
+      //     shelfBase = (effectiveShelf - 1) × (cols + backCols) × bottlesPerCell
       //     front (layer 1): shelfBase + slotInLayer          (slotInLayer ≤ cols)
       //     back  (layer 2): shelfBase + cols + slotInLayer   (slotInLayer ≤ backCols)
-      //   stacked model (layer-major, so layer 1 matches the front formula):
-      //     layer L:         shelfBase + (L - 1) × cols + slotInLayer
+      //   Wine cabinet (rackGeometry.cabinetPosition): bay i = rows - shelfIndex
+      //     position = cols × Σ shelfRows[k<i] + (layer - 1) × cols + slotInLayer
       const disabled = new Set();
       const occupied = occupiedByRack.get(rackName) || new Set();
       for (const layer of layerById.values()) {
@@ -1582,13 +1587,19 @@ export function parseOenoExport(text) {
         if (layer.disabledSlots.size === 0) continue;
         // Shelves clamped away by the 20-row cap have no cells to disable
         if (layer.shelfIndex > rows) continue;
-        const shelfBase = (rows - layer.shelfIndex) * (cols + backCols) * bpc;
         for (const n of layer.disabledSlots) {
           // A bottle in the cell beats a stale disabled flag (see occupiedByRack)
           if (occupied.has(`${layer.shelfIndex}/${layer.layerIndex}/${n}`)) continue;
           if (stacked) {
-            if (layer.layerIndex <= bpc && n <= cols) disabled.add(shelfBase + (layer.layerIndex - 1) * cols + n);
-          } else if (layer.layerIndex === 1 && n <= cols) {
+            const bay = rows - layer.shelfIndex;
+            if (layer.layerIndex > geo.shelfRows[bay] || n > cols) continue;
+            let base = 0;
+            for (let k = 0; k < bay; k++) base += cols * geo.shelfRows[k];
+            disabled.add(base + (layer.layerIndex - 1) * cols + n);
+            continue;
+          }
+          const shelfBase = (rows - layer.shelfIndex) * (cols + backCols) * bpc;
+          if (layer.layerIndex === 1 && n <= cols) {
             disabled.add(shelfBase + n);
           } else if (layer.layerIndex === 2 && n <= backCols) {
             disabled.add(shelfBase + cols + n);
@@ -1596,11 +1607,11 @@ export function parseOenoExport(text) {
         }
       }
 
+      const shape = stacked
+        ? { type: 'cabinet', rows, cols, typeConfig: { shelfRows: geo.shelfRows, twoDeep: true } }
+        : { type: 'shelf', rows, cols, typeConfig: { bottlesPerCell: bpc, backCols } };
       oenoRackSpecs[rackName] = {
-        type: 'shelf',
-        rows,
-        cols,
-        typeConfig: { bottlesPerCell: bpc, backCols },
+        ...shape,
         ...(disabled.size > 0
           ? { disabledPositions: [...disabled].sort((a, b) => a - b) }
           : {}),
@@ -1630,16 +1641,26 @@ function noteLayerExtent(col, layerIndex, ...slots) {
   if (widest > cur) col.slotWidth.set(layerIndex, widest);
 }
 
+/** Highest layer index seen on one Oeno shelf of a column (definitions + bottles). */
+function noteShelfLayer(col, shelfIndex, layerIndex) {
+  if (!col || isNaN(shelfIndex) || isNaN(layerIndex)) return;
+  const cur = col.layersByShelf.get(shelfIndex) || 0;
+  if (layerIndex > cur) col.layersByShelf.set(shelfIndex, layerIndex);
+}
+
 /**
- * Pick the Cellarion shelf shape for one Oeno cabinet column. The file never
+ * Pick the Cellarion rack shape for one Oeno cabinet column. The file never
  * states whether "layer" means front/back or a stacked row, so the layer
- * count decides (rack model caps: cols ≤ 20, bottlesPerCell ≤ 20):
- *   - up to 2 layers → front + back row, 6 + 5 (Vintec/Transtherm standard),
- *     widened when the file addresses a higher slot;
- *   - 3 or more     → stacked: cols = widest layer, bottlesPerCell = layer
- *     count, no back row.
+ * count decides:
+ *   - up to 2 layers → Open Shelf with a front + back row, 6 + 5 (Vintec/
+ *     Transtherm sliding shelves), widened when the file addresses a higher
+ *     slot;
+ *   - 3 or more     → Wine cabinet (`cabinet` type): cols = widest layer,
+ *     shelfRows[i] = the layers that shelf holds, TOP shelf first (Oeno
+ *     numbers shelves from the bottom, Cellarion bays from the top), two deep.
+ * `rows` is the (capped) shelf count the rack will have.
  */
-function geometryForColumn(col) {
+function geometryForColumn(col, rows) {
   const widest = (layers) => Math.max(0, ...layers.map((l) => col.slotWidth.get(l) || 0));
   if (col.maxLayer <= 2) {
     return {
@@ -1649,10 +1670,16 @@ function geometryForColumn(col) {
       stacked: false,
     };
   }
+  const shelfRows = [];
+  for (let i = 0; i < rows; i++) {
+    const oenoShelf = rows - i; // bay 0 = the top shelf = the highest Oeno shelf number
+    shelfRows.push(Math.min(12, Math.max(1, col.layersByShelf.get(oenoShelf) || 1)));
+  }
   return {
     cols: Math.min(20, Math.max(1, widest([...col.slotWidth.keys()]))),
     backCols: 0,
-    bpc: Math.min(20, col.maxLayer),
+    bpc: 1,
+    shelfRows,
     stacked: true,
   };
 }

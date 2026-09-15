@@ -11,6 +11,7 @@ const RACK_TYPES = [
   { key: 'stack',    preview: { rows: 5, cols: 1 } },
   { key: 'cube',     preview: { rows: 2, cols: 2, typeConfig: { moduleRows: 2, moduleCols: 2 } } },
   { key: 'shelf',    preview: { rows: 3, cols: 2 } },
+  { key: 'cabinet',  preview: { rows: 3, cols: 3, typeConfig: { shelfRows: [1, 2, 3], twoDeep: false } } },
 ];
 
 /** Dimension config: which inputs to show per type, with sensible defaults */
@@ -22,6 +23,9 @@ export const TYPE_DIMENSIONS = {
   stack:    { showRows: true,  showCols: false, defaultRows: 8, defaultCols: 1, rowLabel: 'racks.heightLabel' },
   cube:     { showRows: true,  showCols: true,  defaultRows: 2, defaultCols: 3, showModule: true },
   shelf:    { showRows: true,  showCols: true,  defaultRows: 3, defaultCols: 2, showBottlesPerCell: true, showBackCols: true },
+  // Wine cabinet: rows = shelves, cols = bottles across; the per-shelf stack
+  // heights + two-deep flag live in typeConfig (see utils/cabinetPresets).
+  cabinet:  { showRows: true,  showCols: true,  defaultRows: 5, defaultCols: 6, rowLabel: 'racks.shelvesLabel', colLabel: 'racks.bottlesAcrossLabel', showCabinet: true },
 };
 
 export default function RackTypeSelector({ value, onChange }) {
@@ -82,7 +86,7 @@ function MiniRackPreview({ type, rows, cols, typeConfig }) {
         width={layout.viewBox.width}
         height={layout.viewBox.height}
         rx={4}
-        fill="#C8AD82"
+        fill={type === 'cabinet' ? '#2B2D31' : '#C8AD82'}
       />
 
       {/* X-Rack: two diagonal dividers forming an X */}
@@ -106,6 +110,12 @@ function MiniRackPreview({ type, rows, cols, typeConfig }) {
           );
         });
       })()}
+
+      {/* Cabinet: beech planks between bays, where the layout puts them */}
+      {type === 'cabinet' && (layout.shelfYs || []).map((y, i) => (
+        <line key={`cab-${i}`} x1={4} y1={y} x2={layout.viewBox.width - 4} y2={y}
+          stroke="#D9B98A" strokeWidth={3} opacity={0.85} />
+      ))}
 
       {/* Slots: rectangles for shelf, circles for others */}
       {type === 'shelf' ? uniqueSlots.map(({ position, cx, cy }) => (

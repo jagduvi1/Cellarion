@@ -16,6 +16,7 @@ import ShelfView from '../components/racks/ShelfView';
 // user actually switches to the 3D view, not on every visit to the racks page.
 const ShelfView3D = lazy(() => import('../components/racks/ShelfView3D'));
 import RackTypeSelector, { TYPE_DIMENSIONS } from '../components/racks/RackTypeSelector';
+import { CABINET_PRESETS, CABINET_DEFAULT, CABINET_MAX_ROWS_PER_SHELF, fitShelfRows } from '../utils/cabinetPresets';
 import RatingInput from '../components/RatingInput';
 import WineImage from '../components/WineImage';
 import ConfirmModal from '../components/ConfirmModal';
@@ -257,6 +258,16 @@ function CellarRacks() {
             .filter(r => r >= 1 && r <= newRack.rows);
           if (typeConfig.doubleHeightRows.length === 0) delete typeConfig.doubleHeightRows;
         }
+        // Cabinet: the per-shelf list must match the final shelf count (the
+        // rows input may have changed after the list was edited); other
+        // types must not carry cabinet keys (the backend rejects them).
+        if (newRack.type === 'cabinet') {
+          typeConfig.shelfRows = fitShelfRows(typeConfig.shelfRows, newRack.rows);
+          typeConfig.twoDeep = typeConfig.twoDeep !== false;
+        } else {
+          delete typeConfig.shelfRows;
+          delete typeConfig.twoDeep;
+        }
         payload.typeConfig = typeConfig;
       }
       const res = await createRack(apiFetch, payload);
@@ -285,7 +296,8 @@ function CellarRacks() {
       typeConfig: type === 'cube'
         ? { moduleRows: 2, moduleCols: 2 }
         : type === 'x-rack' ? { bottlesPerSection: 10 }
-        : type === 'shelf' ? { bottlesPerCell: 1, backCols: 0 } : {},
+        : type === 'shelf' ? { bottlesPerCell: 1, backCols: 0 }
+        : type === 'cabinet' ? { shelfRows: [...CABINET_DEFAULT.shelfRows], twoDeep: CABINET_DEFAULT.twoDeep } : {},
     }));
   };
 
@@ -770,7 +782,7 @@ function CellarRacks() {
           ))}
 
           {/* Lens + search toolbar (the 3D shelf view doesn't support lenses yet) */}
-          {!(rack.type === 'shelf' && !rack.isModular && viewMode === '3d') && (
+          {!((rack.type === 'shelf' || rack.type === 'cabinet') && !rack.isModular && viewMode === '3d') && (
             <>
               <div className="rack-lens-toolbar">
                 <div className="rack-lens-search-wrap">
@@ -856,7 +868,7 @@ function CellarRacks() {
               )}
             </>
           )}
-          {rack.type === 'shelf' && !rack.isModular && (
+          {(rack.type === 'shelf' || rack.type === 'cabinet') && !rack.isModular && (
             <div className="rack-view-mode-toggle" role="tablist">
               <button
                 role="tab"
@@ -885,7 +897,7 @@ function CellarRacks() {
             </div>
           )}
           <div id={`rack-${rack._id}`}>
-          {rack.type === 'shelf' && !rack.isModular && (viewMode === 'shelf' || viewMode === '3d') ? (
+          {(rack.type === 'shelf' || rack.type === 'cabinet') && !rack.isModular && (viewMode === 'shelf' || viewMode === '3d') ? (
             (() => {
               const handleClick = async (pos, slotData) => {
                 // Placing mode consumes a tap on a free slot (issue #1055).
@@ -1130,6 +1142,89 @@ function parseDoubleHeightRows(text) {
     });
 }
 
+// ---- Wine cabinet shape: preset, rows of bottles per shelf, two deep ----
+// A preset is a STARTING shape — makers ship sliding shelves and tell owners
+// to pull shelves out and stack bottles, so two owners of one model end up
+// with different layouts. The per-shelf list is always kept the length of the
+// shelves input (fitShelfRows) so a changed shelf count never desyncs it.
+function CabinetShapeFields({ newRack, setNewRack }) {
+  const { t } = useTranslation();
+  const [presetKey, setPresetKey] = useState('custom');
+  const shelfRows = fitShelfRows(newRack.typeConfig?.shelfRows, newRack.rows);
+  const twoDeep = newRack.typeConfig?.twoDeep !== false;
+
+  const applyPreset = (key) => {
+    setPresetKey(key);
+    const p = CABINET_PRESETS.find((x) => x.key === key);
+    if (!p) return;
+    setNewRack({
+      ...newRack,
+      rows: p.shelves,
+      cols: p.cols,
+      typeConfig: { ...newRack.typeConfig, shelfRows: [...p.shelfRows], twoDeep: p.twoDeep },
+    });
+  };
+  const setRow = (i, value) => {
+    const next = [...shelfRows];
+    next[i] = Math.max(1, Math.min(CABINET_MAX_ROWS_PER_SHELF, parseInt(value, 10) || 1));
+    setPresetKey('custom');
+    setNewRack({ ...newRack, typeConfig: { ...newRack.typeConfig, shelfRows: next } });
+  };
+
+  return (
+    <>
+      <div className="form-group">
+        <label>{t('racks.cabinetPresetLabel', 'Start from')}</label>
+        <select value={presetKey} onChange={(e) => applyPreset(e.target.value)}>
+          <option value="custom">{t('racks.cabinetPresetCustom', 'Custom shape')}</option>
+          {CABINET_PRESETS.map((p) => (
+            <option key={p.key} value={p.key}>{t(`racks.cabinetPreset_${p.key}`, p.key)}</option>
+          ))}
+        </select>
+        <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
+          {t('racks.cabinetPresetHint', 'Starting shapes only. Owners pull shelves out and stack bottles, so edit the rows below to match your cabinet.')}
+        </small>
+      </div>
+
+      <div className="form-group">
+        <label>{t('racks.cabinetShelfRowsLabel', 'Rows of bottles per shelf, top shelf first')}</label>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem 0.75rem' }}>
+          {shelfRows.map((v, i) => (
+            <label key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem' }}>
+              <span>{t('racks.cabinetShelfN', { n: i + 1 })}</span>
+              <input
+                type="number"
+                min={1} max={CABINET_MAX_ROWS_PER_SHELF}
+                value={v}
+                onChange={(e) => setRow(i, e.target.value)}
+                style={{ width: '4.2rem' }}
+                aria-label={t('racks.cabinetShelfN', { n: i + 1 })}
+              />
+            </label>
+          ))}
+        </div>
+        <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
+          {t('racks.cabinetShelfRowsHelp', '1 = a sliding shelf with a single row. More = a stacking bay: the shelf is out and bottles are stacked.')}
+        </small>
+      </div>
+
+      <div className="form-group">
+        <label>
+          <input
+            type="checkbox"
+            checked={twoDeep}
+            onChange={(e) => setNewRack({ ...newRack, typeConfig: { ...newRack.typeConfig, twoDeep: e.target.checked } })}
+          />
+          {' '}{t('racks.cabinetTwoDeepLabel', 'Two deep (neck to neck)')}
+        </label>
+        <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
+          {t('racks.cabinetTwoDeepHelp', 'Bottles lie neck to neck, two rows per level. This changes how the cabinet is drawn, not how many bottles it holds.')}
+        </small>
+      </div>
+    </>
+  );
+}
+
 // ---- New rack creation form with type selector ----
 function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving, groups = [] }) {
   const { t } = useTranslation();
@@ -1303,6 +1398,10 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving, grou
               />
             </div>
           </>
+        )}
+
+        {dims.showCabinet && (
+          <CabinetShapeFields newRack={newRack} setNewRack={setNewRack} />
         )}
 
         {dims.showBottlesPerCell && (

@@ -376,11 +376,95 @@ function shelfLayout(rows, cols, typeConfig) {
   };
 }
 
+// ── Cabinet (wine fridge / climate cabinet) ─────────────────────────
+// `rows` shelves top to bottom; shelf i is a bay holding shelfRows[i] rows
+// of `cols` bottles (1 = a sliding shelf with one row, more = a stacking
+// bay). With twoDeep the rows pair up neck to neck: row 1 = bottom front,
+// row 2 = bottom back, row 3 = next level front, … — the back row of a level
+// is drawn as a smaller circle peeking up between the front bottles, like
+// shelfLayout's back row.
+//
+// POSITION NUMBERING CONTRACT (mirrors backend rackGeometry.cabinetPosition):
+//   position = cols × Σ_{k<i} shelfRows[k] + (row − 1) × cols + slot
+// rows counted from the plank up, slots left to right. twoDeep never changes
+// the numbering, only where a row is drawn.
+export const CABINET_MAX_ROWS_PER_SHELF = 12;
+
+/** Per-shelf row list fitted to `rows` (missing → 1, clamped 1..12). */
+export function cabinetShelfRows(rows, typeConfig) {
+  const n = Math.max(0, Math.min(20, parseInt(rows, 10) || 0));
+  const src = Array.isArray(typeConfig?.shelfRows) ? typeConfig.shelfRows : [];
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const v = parseInt(src[i], 10);
+    out.push(Number.isFinite(v) ? Math.max(1, Math.min(CABINET_MAX_ROWS_PER_SHELF, v)) : 1);
+  }
+  return out;
+}
+
+const CAB_BACK_R = SLOT_R * 0.72;
+const CAB_BACK_LIFT = SLOT_R * 0.9;   // how far a back bottle peeks above its front row
+const CAB_PLANK = SLOT_GAP * 2;        // extra room under each plank
+
+function cabinetLayout(rows, cols, typeConfig) {
+  const shelfRows = cabinetShelfRows(rows, typeConfig);
+  const twoDeep = typeConfig?.twoDeep !== false;
+  const slots = [];
+  const shelfYs = [];
+  const bays = [];
+  let pos = 1;
+  let y = PADDING;
+
+  shelfRows.forEach((rowCount, i) => {
+    const levels = twoDeep ? Math.ceil(rowCount / 2) : rowCount;
+    // Level pitch: a full bottle plus, when two deep, the lift of the back row.
+    const levelH = CELL + (twoDeep ? CAB_BACK_LIFT : 0);
+    const bayTop = y;
+    const bayH = levels * levelH + CAB_PLANK;
+    // Rows are numbered from the plank UP, so the last level is drawn at the
+    // top of the bay and row 1 at the bottom (resting on the plank).
+    for (let r = 1; r <= rowCount; r++) {
+      const level = twoDeep ? Math.ceil(r / 2) : r;
+      const isBack = twoDeep && r % 2 === 0;
+      const levelBottomY = bayTop + bayH - CAB_PLANK - (level - 1) * levelH;
+      const frontCY = levelBottomY - SLOT_R;
+      const backCY = frontCY - CAB_BACK_LIFT;
+      for (let c = 0; c < cols; c++) {
+        const cx = isBack
+          ? PADDING + SLOT_R + (c + 0.5) * CELL
+          : PADDING + SLOT_R + c * CELL;
+        slots.push({
+          position: pos++, cx, cy: isBack ? backCY : frontCY,
+          ...(isBack ? { isBack: true } : {}),
+          ...(!isBack && level > 1 ? { isTop: true } : {}),
+        });
+      }
+    }
+    bays.push({ index: i, top: bayTop, height: bayH, rows: rowCount, levels });
+    y += bayH;
+    if (i < shelfRows.length - 1) shelfYs.push(y - SLOT_GAP / 2);
+  });
+
+  const contentRight = PADDING + SLOT_R + (cols - 1) * CELL + SLOT_R + (twoDeep ? CELL * 0.5 : 0);
+  return {
+    totalSlots: slots.length,
+    bottlesPerCell: 1,
+    backRadius: twoDeep ? CAB_BACK_R : undefined,
+    shelfYs: shelfYs.length ? shelfYs : undefined,
+    cabinet: { shelfRows, twoDeep, bays },
+    viewBox: {
+      width: contentRight + PADDING,
+      height: y + PADDING - SLOT_GAP,
+    },
+    slots,
+  };
+}
+
 // ── Public API ───────────────────────────────────────────────────────
 
 /**
  * Compute the layout for a given rack type.
- * @param {string} type - one of: grid, x-rack, hex, triangle, stack, cube, shelf
+ * @param {string} type - one of: grid, x-rack, hex, triangle, stack, cube, shelf, cabinet
  * @param {number} rows
  * @param {number} cols
  * @param {object} [typeConfig] - extra config (e.g. moduleRows/moduleCols for cube)
@@ -394,6 +478,7 @@ export function computeLayout(type, rows, cols, typeConfig) {
     case 'stack':    return stackLayout(rows);
     case 'cube':     return cubeLayout(rows, cols, typeConfig);
     case 'shelf':    return shelfLayout(rows, cols, typeConfig);
+    case 'cabinet':  return cabinetLayout(rows, cols, typeConfig);
     case 'grid':
     default:         return gridLayout(rows, cols, typeConfig);
   }
@@ -509,6 +594,9 @@ export function getTotalSlots(type, rows, cols, typeConfig) {
       const bpc = typeConfig?.bottlesPerCell || 1;
       return cells * bpc;
     }
+    case 'cabinet':
+      // cols × Σ shelfRows — mirrors backend rackGeometry.totalSlots.
+      return cabinetShelfRows(rows, typeConfig).reduce((sum, r) => sum + cols * r, 0);
     case 'grid':
     default: {
       // POSITION NUMBERING CONTRACT (double-height rows): base grid keeps

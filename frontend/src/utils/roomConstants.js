@@ -5,7 +5,7 @@
 
 import {
   computeLayout, computeModularLayout, CELL_SIZE,
-  validDoubleHeightRows, DOUBLE_ROW_HEADROOM,
+  validDoubleHeightRows, DOUBLE_ROW_HEADROOM, cabinetShelfRows,
 } from './rackLayouts';
 
 // ── Rack physical dimensions (metres) ────────────────────
@@ -15,6 +15,51 @@ export const RACK_DEPTH = 0.34;    // default rack depth
 export const WOOD_THICK = 0.012;   // internal shelf/beam thickness
 export const PANEL_THICK = 0.018;  // outer frame panel thickness
 export const BOTTLE_RADIUS = 0.037;
+
+// ── Cabinet (wine fridge) dimensions ─────────────────────
+export const CABINET_LEVEL_H = 0.079;      // vertical pitch of stacked bottle rows
+export const CABINET_BAY_HEADROOM = 0.03;  // air above the top row of a bay
+export const CABINET_TOP_STRIP = 0.04;     // control strip under the top panel
+export const CABINET_BOTTOM_EXTRA = 0.05;  // plinth / machine compartment
+export const CABINET_DEPTH_TWO_DEEP = 0.62; // neck-to-neck bottles need ~2 × 0.285
+export const CABINET_DEPTH_SINGLE = 0.42;
+
+/**
+ * Bay-by-bay geometry of a cabinet rack in rack-local metres (rack centred
+ * at y = 0, top at +height/2). Shelf i (from the top) is a bay of
+ * shelfRows[i] rows; with twoDeep two rows share one level, so the bay is
+ * ceil(rows / 2) levels tall. Every renderer (RackMesh body, bays, bottles,
+ * ShelfView3D camera, RoomScene stacking) reads this one function so they
+ * agree on where each plank and bottle is.
+ */
+export function getCabinetGeometry(rack) {
+  const shelfRows = cabinetShelfRows(rack.rows || 1, rack.typeConfig);
+  const twoDeep = rack.typeConfig?.twoDeep !== false;
+  const levelsOf = (rows) => (twoDeep ? Math.ceil(rows / 2) : rows);
+  const bayHeights = shelfRows.map((r) => Math.max(CELL_H, levelsOf(r) * CABINET_LEVEL_H + CABINET_BAY_HEADROOM));
+  const n = shelfRows.length;
+  const innerH = CABINET_TOP_STRIP
+    + bayHeights.reduce((a, b) => a + b, 0)
+    + Math.max(0, n - 1) * WOOD_THICK
+    + CABINET_BOTTOM_EXTRA;
+  const height = innerH + PANEL_THICK * 2;
+  let y = height / 2 - PANEL_THICK - CABINET_TOP_STRIP;
+  const bays = shelfRows.map((rows, i) => {
+    const top = y;
+    const bottom = y - bayHeights[i];
+    y = bottom - WOOD_THICK;
+    return {
+      index: i, rows, levels: levelsOf(rows), height: bayHeights[i], top, bottom,
+      // The beech plank under this bay (the bottom bay rests on the cabinet floor).
+      plankY: i < n - 1 ? bottom - WOOD_THICK / 2 : null,
+    };
+  });
+  return {
+    shelfRows, twoDeep, bays, innerH, height,
+    depth: twoDeep ? CABINET_DEPTH_TWO_DEEP : CABINET_DEPTH_SINGLE,
+    topStrip: CABINET_TOP_STRIP, bottomExtra: CABINET_BOTTOM_EXTRA,
+  };
+}
 
 // Metres per SVG pixel: one 2D layout cell (CELL_SIZE px, centre-to-centre)
 // maps to one 3D cell (CELL_W metres). Lets us reuse the 2D layout engine
@@ -105,6 +150,7 @@ export function getRackHeight(rack) {
   if (usesScaledLayout(rack)) {
     return buildScaledLayout(rack).innerH + PANEL_THICK * 2;
   }
+  if (rack.type === 'cabinet' && !rack.isModular) return getCabinetGeometry(rack).height;
   const { displayRows } = getDisplayDims(rack);
   return displayRows * CELL_H + getGridExtraHeight(rack) + PANEL_THICK * 2;
 }
@@ -114,6 +160,7 @@ export function getRackHeight(rack) {
  * front + back bottles end-to-end inside the shelf.
  */
 export function getDefaultRackDepth(rack) {
+  if (rack.type === 'cabinet' && !rack.isModular) return getCabinetGeometry(rack).depth;
   const hasShelfBack = rack.type === 'shelf' && (rack.typeConfig?.backCols || 0) > 0;
   return hasShelfBack ? RACK_DEPTH * 1.7 : RACK_DEPTH;
 }

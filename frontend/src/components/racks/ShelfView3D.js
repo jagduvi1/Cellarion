@@ -3,7 +3,7 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import RackMesh from '../room/RackMesh';
 import {
-  CELL_W, CELL_H, RACK_DEPTH, PANEL_THICK, getDisplayDims,
+  CELL_W, PANEL_THICK, getDisplayDims, getRackHeight, getDefaultRackDepth,
 } from '../../utils/roomConstants';
 import './ShelfView3D.css';
 
@@ -21,12 +21,13 @@ export default function ShelfView3D({ rack, activePosition, highlightPos, onSlot
 
   // Compute reasonable rack dimensions for camera placement (matches the
   // formulas RackMesh uses internally so the camera frames the rack tightly).
-  const { displayRows, displayCols } = getDisplayDims(rack);
-  const rackType = rack.type || 'grid';
-  const hasShelfBack = rackType === 'shelf' && (rack.typeConfig?.backCols || 0) > 0;
+  const { displayCols } = getDisplayDims(rack);
+  const isCabinet = (rack.type || 'grid') === 'cabinet';
   const width  = displayCols * CELL_W + PANEL_THICK * 2;
-  const height = displayRows * CELL_H + PANEL_THICK * 2;
-  const depth  = hasShelfBack ? RACK_DEPTH * 1.7 : RACK_DEPTH;
+  // Same helpers RackMesh and RoomScene use, so the camera frames the real
+  // body — cabinet bays and double-height rows included.
+  const height = getRackHeight(rack);
+  const depth  = getDefaultRackDepth(rack);
 
   // RackMesh centres the rack at y=0 internally. We shift it up by height/2
   // so it stands ON the ground plane (its base touches y=0) instead of
@@ -59,7 +60,9 @@ export default function ShelfView3D({ rack, activePosition, highlightPos, onSlot
     <div className="shelf-view-3d">
       <div className="shelf-view-3d-toolbar">
         <div className="shelf-view-hint">
-          Drag to rotate · scroll to zoom · click the wooden handle to slide a shelf out
+          {isCabinet
+            ? 'Drag to rotate · scroll to zoom · click the door handle to open the door · click a shelf handle to slide it out'
+            : 'Drag to rotate · scroll to zoom · click the wooden handle to slide a shelf out'}
         </div>
       </div>
       <div className="shelf-view-3d-canvas">

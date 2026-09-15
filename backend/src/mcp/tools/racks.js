@@ -32,6 +32,11 @@ registerTool({
         // are meaningless there and would mislead placement reasoning.
         rows: r.isModular ? null : r.rows ?? null,
         cols: r.isModular ? null : r.cols ?? null,
+        // Cabinet (wine fridge): rows = shelves, cols = bottles across; the
+        // per-shelf row list + two-deep flag complete the shape.
+        ...(r.type === 'cabinet' && !r.isModular
+          ? { shelf_rows: r.typeConfig?.shelfRows || null, two_deep: r.typeConfig?.twoDeep !== false }
+          : {}),
         modules: r.isModular ? (r.modules || []).length : undefined,
         capacity,
         filled: (r.slots || []).length,

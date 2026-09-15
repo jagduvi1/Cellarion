@@ -207,6 +207,27 @@ describe('rack groups (support ticket 2026-09-06)', () => {
     expect(body.summary).toMatch(/groups: Basement/);
   });
 
+  test('create_rack type "cabinet" needs shelf_rows, builds typeConfig, reports capacity', async () => {
+    ownCellar();
+    const bad = parse(await tool('create_rack').handler({ cellar_id: oid('c'), name: 'Fridge', type: 'cabinet', rows: 2, cols: 5 }, CTX));
+    expect(bad.error.code).toBe('invalid_input');
+    expect(bad.error.message).toMatch(/shelf_rows is required/);
+    expect(rackOps.createGridRack).not.toHaveBeenCalled();
+
+    const misuse = parse(await tool('create_rack').handler({ cellar_id: oid('c'), name: 'G', rows: 2, cols: 5, shelf_rows: [1, 1] }, CTX));
+    expect(misuse.error.message).toMatch(/type "cabinet" only/);
+
+    rackOps.createGridRack.mockResolvedValue({ rack: { _id: oid('e'), name: 'Fridge', group: null } });
+    const body = parse(await tool('create_rack').handler({ cellar_id: oid('c'), name: 'Fridge', type: 'cabinet', rows: 2, cols: 5, shelf_rows: [1, 4] }, CTX));
+    expect(rackOps.createGridRack).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ type: 'cabinet', rows: 2, cols: 5, typeConfig: { shelfRows: [1, 4], twoDeep: true } }),
+      expect.anything()
+    );
+    expect(body.data).toMatchObject({ type: 'cabinet', capacity: 25, shelf_rows: [1, 4], two_deep: true });
+    expect(body.summary).toMatch(/wine cabinet "Fridge".*2 shelves, 5 across, 25 bottles/);
+  });
+
   test('create_rack passes the group to the shared creator and echoes it back', async () => {
     ownCellar();
     rackOps.createGridRack.mockResolvedValue({ rack: { _id: oid('e'), name: 'Left', group: 'Basement' } });

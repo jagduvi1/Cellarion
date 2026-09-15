@@ -142,12 +142,95 @@ function totalSlots(type, rows, cols, typeConfig) {
       return cells * bpc;
     }
 
+    case 'cabinet': {
+      // Wine cabinet: `rows` shelves, shelf i holds shelfRows[i] rows of
+      // `cols` bottles. See cabinetShelfRows / cabinetPosition for the
+      // position contract.
+      return cabinetShelfRows(rows, typeConfig).reduce((sum, r) => sum + cols * r, 0);
+    }
+
     default: {
       // Fall back to grid behaviour (including double-height rows)
       const doubles = validDoubleHeightRows(rows, cols, typeConfig?.doubleHeightRows);
       return rows * cols + doubles.length * (cols - 1);
     }
   }
+}
+
+// ── Cabinet (wine fridge) geometry ───────────────────────────────────────
+// POSITION NUMBERING CONTRACT (cabinet): shelves top to bottom (shelf index
+// 0 = the top bay, so position 1 is top-left like every other type). Inside
+// a bay, row r = 1..shelfRows[i] (row 1 rests on the plank), slot s = 1..cols
+// left to right:
+//     position = cols × Σ_{k<i} shelfRows[k] + (r − 1) × cols + s
+// With typeConfig.twoDeep, row 1 is the bottom FRONT row, row 2 the bottom
+// BACK row, row 3 the second level's front row, … — a visual arrangement the
+// renderers share; the numbering above never changes with it. Oeno imports
+// map shelf p (1 = bottom) → i = rows − p and layer L → r = L, so an
+// imported bottle lands in its exact cell. Mirrored in
+// frontend/src/utils/rackLayouts.cabinetLayout.
+
+const CABINET_MAX_ROWS_PER_SHELF = 12;
+
+/**
+ * The per-shelf row list a cabinet rack actually uses: typeConfig.shelfRows
+ * fitted to `rows` (missing entries count as 1, extras ignored, each entry
+ * clamped to 1..12). Tolerant on READ so a rack whose config went missing
+ * still renders; the WRITE gate is validateCabinetConfig.
+ */
+function cabinetShelfRows(rows, typeConfig) {
+  const n = Number.isFinite(rows) && rows > 0 ? Math.min(20, Math.floor(rows)) : 0;
+  const src = Array.isArray(typeConfig?.shelfRows) ? typeConfig.shelfRows : [];
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const v = parseInt(src[i], 10);
+    out.push(Number.isFinite(v) ? Math.max(1, Math.min(CABINET_MAX_ROWS_PER_SHELF, v)) : 1);
+  }
+  return out;
+}
+
+/**
+ * Global position of one cabinet cell, or null when the cell doesn't exist.
+ * @param {{ shelfIndex: number, row: number, slot: number, cols: number, shelfRows: number[] }} c
+ *   shelfIndex 0-based from the TOP; row and slot 1-based (see contract).
+ */
+function cabinetPosition({ shelfIndex, row, slot, cols, shelfRows }) {
+  if (!Array.isArray(shelfRows) || shelfIndex < 0 || shelfIndex >= shelfRows.length) return null;
+  if (!Number.isInteger(row) || row < 1 || row > shelfRows[shelfIndex]) return null;
+  if (!Number.isInteger(slot) || slot < 1 || slot > cols) return null;
+  let base = 0;
+  for (let k = 0; k < shelfIndex; k++) base += cols * shelfRows[k];
+  return base + (row - 1) * cols + slot;
+}
+
+/**
+ * Request-time gate for a cabinet's typeConfig (create + update routes, MCP):
+ * returns an error string or null. shelfRows must be an array of whole
+ * numbers 1..12 whose length equals the shelf count; twoDeep a boolean.
+ * Non-cabinet racks may not carry either field (a stale shelfRows on a grid
+ * would be silently ignored by the geometry but is a client bug).
+ */
+function validateCabinetConfig(typeConfig, effectiveType, effectiveRows, effectiveModular) {
+  if (!typeConfig || typeof typeConfig !== 'object') return null;
+  const hasRows = typeConfig.shelfRows !== undefined && typeConfig.shelfRows !== null;
+  const hasDeep = typeConfig.twoDeep !== undefined && typeConfig.twoDeep !== null;
+  if (!hasRows && !hasDeep) return null;
+  if (effectiveModular || effectiveType !== 'cabinet') {
+    return 'shelfRows and twoDeep apply to cabinet racks only';
+  }
+  if (hasDeep && typeof typeConfig.twoDeep !== 'boolean') return 'twoDeep must be a boolean';
+  if (!hasRows) return 'shelfRows is required for a cabinet rack';
+  const list = typeConfig.shelfRows;
+  const rows = parseInt(effectiveRows, 10);
+  if (!Array.isArray(list) || !Number.isFinite(rows) || list.length !== rows) {
+    return 'shelfRows must list one entry per shelf (its length must equal rows)';
+  }
+  for (const v of list) {
+    if (!Number.isInteger(v) || v < 1 || v > CABINET_MAX_ROWS_PER_SHELF) {
+      return `Each shelfRows entry must be a whole number between 1 and ${CABINET_MAX_ROWS_PER_SHELF}`;
+    }
+  }
+  return null;
 }
 
 /**
@@ -173,4 +256,7 @@ function getMaxPosition(rack) {
   return totalSlots(rack.type || 'grid', rack.rows, rack.cols, rack.typeConfig);
 }
 
-module.exports = { totalSlots, modularTotalSlots, getMaxPosition, validDoubleHeightRows, validateDoubleHeightRows };
+module.exports = {
+  totalSlots, modularTotalSlots, getMaxPosition, validDoubleHeightRows, validateDoubleHeightRows,
+  cabinetShelfRows, cabinetPosition, validateCabinetConfig, CABINET_MAX_ROWS_PER_SHELF,
+};

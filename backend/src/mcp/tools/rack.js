@@ -61,19 +61,26 @@ registerTool({
 
 registerTool({
   name: 'create_rack',
-  title: 'Create a grid rack in a cellar',
+  title: 'Create a rack or wine cabinet in a cellar',
   description:
-    'Adds a grid rack (rows × cols) to a cellar the user owns or edits. Confirm name and size first; group is the ' +
-    'optional room or appliance label the rack belongs to ("Basement", "Kitchen fridge") — reuse a group name ' +
-    'list_racks already shows so racks section together. For modular racks, zones or disabled slots, use the web app. ' +
-    'Reversible via undo_last while the rack is still empty.',
+    'Adds a rack to a cellar the user owns or edits. type "grid" (default): rows × cols slots. type "cabinet": a wine ' +
+    'fridge — rows = shelves, cols = bottles across, shelf_rows = rows of bottles each shelf holds top to bottom ' +
+    '(1 = a sliding shelf with one row, more = a stacking bay; one entry per shelf), two_deep = bottles lie neck to ' +
+    'neck two rows deep (default true). Confirm name and shape first; group is the optional room or appliance label ' +
+    'the rack belongs to ("Basement", "Kitchen fridge") — reuse a group name list_racks already shows so racks ' +
+    'section together. For other rack shapes, modular racks, zones or disabled slots, use the web app. Reversible ' +
+    'via undo_last while the rack is still empty.',
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
     cellar_id: objectId,
     name: z.string().min(1).max(120),
-    rows: z.number().int().min(1).max(20).default(4),
-    cols: z.number().int().min(1).max(20).default(8),
+    type: z.enum(['grid', 'cabinet']).default('grid').describe('"grid" = rows × cols slots; "cabinet" = a wine fridge with shelves (see shelf_rows)'),
+    rows: z.number().int().min(1).max(20).default(4).describe('Rows of slots (grid) or number of shelves (cabinet)'),
+    cols: z.number().int().min(1).max(20).default(8).describe('Slots per row (grid) or bottles across one row (cabinet)'),
+    shelf_rows: z.array(z.number().int().min(1).max(12)).min(1).max(20).optional()
+      .describe('Cabinet only: rows of bottles per shelf, top shelf first, one entry per shelf (must equal rows). Required for type "cabinet".'),
+    two_deep: z.boolean().optional().describe('Cabinet only: bottles lie neck to neck, two rows deep per level (default true)'),
     group: z.string().max(40).optional().describe('Optional group label (room or appliance), e.g. "Basement"'),
     idempotency_key: z.string().max(100).optional(),
   },
@@ -82,13 +89,30 @@ registerTool({
     if (replayed) return replayed;
     const access = await resolveCellarAccess(ctx.user.id, args.cellar_id, 'editor');
     if (!access) return fail('not_found', MSG_CELLAR_NOT_FOUND);
-    const result = await createGridRack(access.cellar, { name: args.name, type: 'grid', rows: args.rows, cols: args.cols, group: args.group }, ctx.req);
+    const type = args.type || 'grid';
+    let typeConfig;
+    if (type === 'cabinet') {
+      if (!Array.isArray(args.shelf_rows)) {
+        return fail('invalid_input', 'shelf_rows is required for a cabinet: one entry per shelf, rows of bottles each shelf holds (top shelf first)');
+      }
+      typeConfig = { shelfRows: args.shelf_rows, twoDeep: args.two_deep !== false };
+    } else if (args.shelf_rows !== undefined || args.two_deep !== undefined) {
+      return fail('invalid_input', 'shelf_rows and two_deep apply to type "cabinet" only');
+    }
+    const result = await createGridRack(access.cellar, { name: args.name, type, rows: args.rows, cols: args.cols, typeConfig, group: args.group }, ctx.req);
     if (result.error) {
       return fail(result.error.code === 'duplicate' ? 'conflict' : 'invalid_input', result.error.message);
     }
+    const capacity = type === 'cabinet' ? args.shelf_rows.reduce((sum, r) => sum + r * args.cols, 0) : args.rows * args.cols;
     const envelope = {
-      summary: `Created ${args.rows}×${args.cols} rack "${result.rack.name}" in "${access.cellar.name}"`,
-      data: { rack_id: result.rack._id, cellar_id: access.cellar._id, rows: args.rows, cols: args.cols, group: result.rack.group || null, undo: 'undo_last deletes it while still empty' },
+      summary: type === 'cabinet'
+        ? `Created wine cabinet "${result.rack.name}" in "${access.cellar.name}": ${args.rows} shelves, ${args.cols} across, ${capacity} bottles`
+        : `Created ${args.rows}×${args.cols} rack "${result.rack.name}" in "${access.cellar.name}"`,
+      data: {
+        rack_id: result.rack._id, cellar_id: access.cellar._id, type, rows: args.rows, cols: args.cols, capacity,
+        ...(type === 'cabinet' ? { shelf_rows: args.shelf_rows, two_deep: args.two_deep !== false } : {}),
+        group: result.rack.group || null, undo: 'undo_last deletes it while still empty',
+      },
     };
     await logAction(ctx, {
       tool: 'create_rack', action: 'rack_create', cellar: access.cellar._id,

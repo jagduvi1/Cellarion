@@ -11,7 +11,7 @@ jest.mock('../models/Cellar', () => {
 });
 jest.mock('../models/Rack', () => {
   const M = jest.fn(function (doc) { Object.assign(this, doc); this._id = 'rack-new'; this.save = jest.fn().mockResolvedValue(undefined); });
-  M.RACK_TYPES = ['grid', 'x-rack', 'hex', 'triangle', 'stack', 'cube', 'shelf'];
+  M.RACK_TYPES = ['grid', 'x-rack', 'hex', 'triangle', 'stack', 'cube', 'shelf', 'cabinet'];
   M.updateMany = jest.fn().mockResolvedValue({});
   return M;
 });
@@ -22,6 +22,7 @@ jest.mock('../utils/rackGeometry', () => ({
   // Real validator — createGridRack's typeConfig gate is part of the pinned
   // contract (shared with the REST rack-update route).
   validateDoubleHeightRows: jest.requireActual('../utils/rackGeometry').validateDoubleHeightRows,
+  validateCabinetConfig: jest.requireActual('../utils/rackGeometry').validateCabinetConfig,
 }));
 jest.mock('./bottleOps', () => ({ removeFromRacks: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('./search', () => ({ indexBottle: jest.fn() }));
@@ -78,6 +79,25 @@ describe('createGridRack', () => {
     const nonGrid = await createGridRack(cellar, { name: 'DH3', type: 'hex', typeConfig: { doubleHeightRows: [1] } }, REQ);
     expect(nonGrid.error.status).toBe(400);
     expect(nonGrid.error.message).toMatch(/only supported on grid racks/);
+  });
+
+  test('cabinet: shelfRows is required and must match rows; a valid shape is stored as given', async () => {
+    const cellar = { _id: 'c1', user: 'owner' };
+    let res = await createGridRack(cellar, { name: 'Fridge', type: 'cabinet', rows: 3, cols: 6 }, REQ);
+    expect(res.error.status).toBe(400);
+    expect(res.error.message).toMatch(/shelfRows is required/);
+
+    res = await createGridRack(cellar, { name: 'Fridge', type: 'cabinet', rows: 3, cols: 6, typeConfig: { shelfRows: [2, 2] } }, REQ);
+    expect(res.error.status).toBe(400);
+    expect(res.error.message).toMatch(/one entry per shelf/);
+
+    res = await createGridRack(cellar, { name: 'Fridge', type: 'cabinet', rows: 3, cols: 6, typeConfig: { shelfRows: [1, 4, 6], twoDeep: true } }, REQ);
+    expect(res.error).toBeUndefined();
+    expect(res.rack).toMatchObject({ type: 'cabinet', rows: 3, cols: 6, typeConfig: { shelfRows: [1, 4, 6], twoDeep: true } });
+
+    // shelfRows on a non-cabinet type is a client bug, not silently ignored
+    res = await createGridRack(cellar, { name: 'G', type: 'grid', rows: 2, cols: 2, typeConfig: { shelfRows: [1, 1] } }, REQ);
+    expect(res.error.message).toMatch(/cabinet racks only/);
   });
 
   test('trims the rack name', async () => {

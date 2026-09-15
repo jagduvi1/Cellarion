@@ -7,7 +7,7 @@ const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const CellarLayout = require('../models/CellarLayout');
 const { getCellarRole } = require('../utils/cellarAccess');
-const { getMaxPosition, validateDoubleHeightRows } = require('../utils/rackGeometry');
+const { getMaxPosition, validateDoubleHeightRows, validateCabinetConfig } = require('../utils/rackGeometry');
 const {
   createGridRack, placeBottleInRack, clearRackSlot,
   buildAnnotatedEntries, validateArrangementTarget, applyArrangement,
@@ -231,6 +231,26 @@ router.put('/:id', async (req, res) => {
         isModular !== undefined ? isModular : rack.isModular
       );
       if (dhrError) return res.status(400).json({ error: dhrError });
+      const cabError = validateCabinetConfig(
+        typeConfig,
+        type !== undefined ? type : rack.type,
+        rows !== undefined ? rows : rack.rows,
+        isModular !== undefined ? isModular : rack.isModular
+      );
+      if (cabError) return res.status(400).json({ error: cabError });
+    }
+    // A cabinet's shelf list must keep matching its shelf count: changing
+    // rows or switching to cabinet without a fresh shelfRows is rejected.
+    {
+      const effType = type !== undefined ? type : rack.type;
+      const effRows = rows !== undefined ? rows : rack.rows;
+      const effModular = isModular !== undefined ? isModular : rack.isModular;
+      const effConfig = typeConfig !== undefined ? typeConfig : rack.typeConfig;
+      if (!effModular && effType === 'cabinet') {
+        const cabError = validateCabinetConfig(effConfig || {}, effType, effRows, false)
+          || (Array.isArray(effConfig?.shelfRows) ? null : 'shelfRows is required for a cabinet rack');
+        if (cabError) return res.status(400).json({ error: cabError });
+      }
     }
 
     if (name !== undefined) rack.name = name;

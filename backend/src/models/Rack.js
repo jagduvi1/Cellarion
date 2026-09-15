@@ -1,6 +1,9 @@
 const mongoose = require('mongoose');
 
-const RACK_TYPES = ['grid', 'x-rack', 'hex', 'triangle', 'stack', 'cube', 'shelf'];
+// 'cabinet' = a wine fridge / climate cabinet: shelves top to bottom, each a
+// bay holding typeConfig.shelfRows[i] rows of `cols` bottles, optionally two
+// deep (neck to neck). Geometry + position contract: utils/rackGeometry.js.
+const RACK_TYPES = ['grid', 'x-rack', 'hex', 'triangle', 'stack', 'cube', 'shelf', 'cabinet'];
 
 const slotSchema = new mongoose.Schema({
   position: { type: Number, required: true },
@@ -27,6 +30,15 @@ const rackModuleSchema = new mongoose.Schema({
     bottlesPerCell: { type: Number, min: 1, max: 20 },
     bottlesPerSection: { type: Number, min: 1, max: 30 },
     backCols: { type: Number, min: 0, max: 20 },
+    // Cabinet racks only: rows of bottles per shelf, top shelf first (length
+    // === rows, each 1..12). 1 = a sliding shelf with one row; more = a
+    // stacking bay. Validated in utils/rackGeometry.validateCabinetConfig;
+    // `default: undefined` so non-cabinet racks don't store an empty array.
+    shelfRows: { type: [Number], default: undefined },
+    // Cabinet racks only: bottles lie neck to neck, two rows deep per level
+    // (row 1 = bottom front, row 2 = bottom back, row 3 = next level front…).
+    // Visual arrangement only — capacity is cols × Σ shelfRows either way.
+    twoDeep: { type: Boolean },
     // Hex racks only: mirror the row sequence top-to-bottom. Pure reversal —
     // never changes total slot count (see rackSchema.typeConfig.hexFlip below).
     hexFlip: { type: Boolean, default: false },
@@ -59,6 +71,15 @@ const rackSchema = new mongoose.Schema({
     bottlesPerCell: { type: Number, min: 1, max: 20 },
     bottlesPerSection: { type: Number, min: 1, max: 30 },
     backCols: { type: Number, min: 0, max: 20 },
+    // Cabinet racks only: rows of bottles per shelf, top shelf first (length
+    // === rows, each 1..12). 1 = a sliding shelf with one row; more = a
+    // stacking bay. Validated in utils/rackGeometry.validateCabinetConfig;
+    // `default: undefined` so non-cabinet racks don't store an empty array.
+    shelfRows: { type: [Number], default: undefined },
+    // Cabinet racks only: bottles lie neck to neck, two rows deep per level
+    // (row 1 = bottom front, row 2 = bottom back, row 3 = next level front…).
+    // Visual arrangement only — capacity is cols × Σ shelfRows either way.
+    twoDeep: { type: Boolean },
     // Grid racks only: 1-indexed row numbers with headroom for a top layer
     // of bottles resting in the gaps (cols across + cols-1 on top).
     // POSITION NUMBERING CONTRACT (double-height rows): the base grid keeps

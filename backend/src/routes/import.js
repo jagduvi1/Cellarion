@@ -1378,6 +1378,13 @@ router.post('/confirm', async (req, res) => {
           if (bpc !== undefined) tc.bottlesPerCell = bpc;
           if (bps !== undefined) tc.bottlesPerSection = bps;
           if (bc !== undefined) tc.backCols = bc;
+          // Cabinet racks: per-shelf row counts (fitted to rows, 1..12) and
+          // the two-deep flag. Validated for real by the Rack schema +
+          // validateCabinetConfig at creation; this only shapes the input.
+          if (Array.isArray(cfg.typeConfig.shelfRows)) {
+            tc.shelfRows = Array.from({ length: rows }, (_, i) => clampInt(cfg.typeConfig.shelfRows[i], 1, 12) || 1);
+          }
+          if (typeof cfg.typeConfig.twoDeep === 'boolean') tc.twoDeep = cfg.typeConfig.twoDeep;
           if (Object.keys(tc).length > 0) entry.typeConfig = tc;
         }
 
