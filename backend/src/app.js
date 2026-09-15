@@ -6,7 +6,7 @@ const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
 const { rateLimitKey } = require('./utils/clientIp');
 const { requireAuth } = require('./middleware/auth');
-const { uploadsGuard } = require('./middleware/uploadsStatic');
+const { uploadsGuard, uploadsCacheHeaders } = require('./middleware/uploadsStatic');
 const healthRoute = require('./routes/health');
 const siteRoute = require('./routes/site');
 const authRoute = require('./routes/auth');
@@ -297,8 +297,9 @@ const writeLimiter = rateLimit({
 app.use('/api/', writeLimiter);
 
 // Serve uploaded images — no auth required (filenames are random UUIDs).
-// Long cache: images are immutable once uploaded.
-app.use('/api/uploads', uploadsGuard, express.static('/app/uploads'));
+// Long cache for a file that EXISTS (setHeaders runs only on a hit); a miss
+// stays no-store, so a 404 can never be cached by a CDN — see uploadsStatic.
+app.use('/api/uploads', uploadsGuard, express.static('/app/uploads', { setHeaders: uploadsCacheHeaders }));
 
 // Routes
 app.use('/api/health', healthRoute);

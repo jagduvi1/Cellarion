@@ -8,10 +8,12 @@
  * extension allowlist so the mount can never serve non-image files (e.g. a
  * smuggled .html or .svg that could execute script, or server config files).
  * This suite pins the real exported guard used by app.js — the allowlist and
- * the immutable-cache header.
+ * the caching contract: only a file that was actually SERVED may carry the
+ * immutable long cache. A 404 carrying it got cached by Cloudflare for a year
+ * (2026-09-15), with no purge available.
  */
 
-const { uploadsGuard, ALLOWED_EXTENSIONS } = require('../middleware/uploadsStatic');
+const { uploadsGuard, uploadsCacheHeaders, ALLOWED_EXTENSIONS, IMMUTABLE_CACHE } = require('../middleware/uploadsStatic');
 
 function run(reqPath) {
   const req = { path: reqPath };
@@ -67,14 +69,32 @@ describe('uploadsGuard extension allowlist', () => {
 });
 
 describe('uploadsGuard caching', () => {
-  test('allowed files get an immutable long-cache header', () => {
+  // The guard cannot know whether a file exists — express.static decides that
+  // — so it must NOT pre-authorise a long cache. An image-looking path with no
+  // file behind it falls through to the 404 handler, and that 404 inherits
+  // whatever the guard set.
+  test('an allowed path is no-store until a file is actually found', () => {
     const { headers } = run('/originals/bottle.png');
-    expect(headers['Cache-Control']).toBe('public, max-age=31536000, immutable');
+    expect(headers['Cache-Control']).toBe('no-store');
   });
 
   test('rejected files get no cache header', () => {
     const { headers } = run('/originals/bottle.exe');
     expect(headers['Cache-Control']).toBeUndefined();
+  });
+
+  test('a file that IS served becomes immutable — express.static setHeaders', () => {
+    const headers = {};
+    uploadsCacheHeaders({ setHeader: (k, v) => { headers[k] = v; } });
+    expect(headers['Cache-Control']).toBe(IMMUTABLE_CACHE);
+    expect(IMMUTABLE_CACHE).toBe('public, max-age=31536000, immutable');
+  });
+
+  test('the hit header replaces the miss header, so a served file is never no-store', () => {
+    const { headers } = run('/processed/bottle.webp');
+    expect(headers['Cache-Control']).toBe('no-store');
+    uploadsCacheHeaders({ setHeader: (k, v) => { headers[k] = v; } });
+    expect(headers['Cache-Control']).toBe(IMMUTABLE_CACHE);
   });
 });
 
