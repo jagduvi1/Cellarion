@@ -323,10 +323,25 @@ describe('computeLayout', () => {
       layout.slots.forEach((slot) => {
         expect(slot.cx).toBeLessThanOrEqual(layout.viewBox.width);
       });
-      // A bay of a single row has nothing to nest, so it is unaffected.
+      // A bay of a single row has nothing to nest, so it is unaffected —
+      // horizontally AND vertically (the first level rests on the plank).
       const oneRow = computeLayout('cabinet', 1, 4, { shelfRows: [1] });
       const oneRowSquare = computeLayout('cabinet', 1, 4, { shelfRows: [1], stagger: false });
       expect(oneRow.slots.map(s => s.cx)).toEqual(oneRowSquare.slots.map(s => s.cx));
+      expect(oneRow.slots.map(s => s.cy)).toEqual(oneRowSquare.slots.map(s => s.cy));
+      expect(oneRow.viewBox.height).toBe(oneRowSquare.viewBox.height);
+      // Only the levels above the first close up: a 3-level bay nests twice.
+      const three = computeLayout('cabinet', 1, 4, { shelfRows: [3], twoDeep: false });
+      const threeSquare = computeLayout('cabinet', 1, 4, { shelfRows: [3], twoDeep: false, stagger: false });
+      expect(three.viewBox.height).toBeLessThan(threeSquare.viewBox.height);
+      // Exactly one nesting step per level ABOVE the first: a 3-level bay
+      // closes up twice as much as a 2-level bay. (The bay is anchored at its
+      // top, so a shorter bay legitimately lifts its own plank.)
+      const twoLvl = computeLayout("cabinet", 1, 4, { shelfRows: [2], twoDeep: false });
+      const twoLvlSquare = computeLayout("cabinet", 1, 4, { shelfRows: [2], twoDeep: false, stagger: false });
+      const step = twoLvlSquare.viewBox.height - twoLvl.viewBox.height;
+      expect(step).toBeGreaterThan(0);
+      expect(threeSquare.viewBox.height - three.viewBox.height).toBeCloseTo(step * 2, 6);
     });
 
     it('draws one plank line between bays and exposes the bay list', () => {

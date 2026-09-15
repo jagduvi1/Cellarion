@@ -1147,6 +1147,9 @@ function parseDoubleHeightRows(text) {
     });
 }
 
+// How many stand-in bottles the 3D preview draws at most (see previewSlots).
+const PREVIEW_FILL_MAX = 180;
+
 // ---- Wine cabinet shape: preset, rows of bottles per shelf, two deep ----
 // A preset is a STARTING shape — makers ship sliding shelves and tell owners
 // to pull shelves out and stack bottles, so two owners of one model end up
@@ -1159,6 +1162,12 @@ function CabinetShapeFields({ newRack, setNewRack }) {
   const twoDeep = newRack.typeConfig?.twoDeep !== false;
   const stagger = newRack.typeConfig?.stagger !== false;
   const preset = CABINET_PRESETS.find((p) => p.key === presetKey);
+  // The shelves / bottles-across inputs live in the parent form, so editing
+  // them must drop the preset label: the shape is no longer that model.
+  useEffect(() => {
+    if (preset && (newRack.rows !== preset.shelves || newRack.cols !== preset.cols)) setPresetKey('custom');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newRack.rows, newRack.cols]);
 
   const applyPreset = (key) => {
     setPresetKey(key);
@@ -1194,7 +1203,9 @@ function CabinetShapeFields({ newRack, setNewRack }) {
         </select>
         <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
           {t('racks.cabinetPresetHint', 'Starting shapes only. Owners pull shelves out and stack bottles, so edit the rows below to match your cabinet.')}
-          {preset?.capacity ? ` ${t('racks.cabinetPresetCapacity', { model: preset.capacity, shape: cabinetCapacity(newRack.cols, shelfRows) })}` : ''}
+          {preset?.capacity
+            ? ` ${t('racks.cabinetPresetCapacity', 'The maker quotes {{model}} bottles; this shape holds {{shape}}.', { model: preset.capacity, shape: cabinetCapacity(newRack.cols, shelfRows) })}`
+            : ''}
         </small>
       </div>
 
@@ -1277,7 +1288,13 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving, grou
     if (previewMode !== '3d') return [];
     // A plausible cellar mix, weighted to red and white.
     const mix = ['red', 'white', 'red', 'sparkling', 'white', 'red', 'rosé', 'white', 'red', 'dessert'];
-    return Array.from({ length: previewCapacity }, (_, i) => ({
+    // Each bottle is a four-mesh group with its own transmissive material, so
+    // a 312-bottle cabinet (the largest preset) would cost ~1250 draw calls
+    // and a hand-built shape far more. Fill the first PREVIEW_FILL_MAX cells
+    // and leave the rest showing their rings — the shape still reads, and the
+    // phone survives it.
+    const filled = Math.min(previewCapacity, PREVIEW_FILL_MAX);
+    return Array.from({ length: filled }, (_, i) => ({
       position: i + 1,
       bottle: { _id: `preview-${i + 1}`, wineDefinition: { _id: `preview-w-${i + 1}`, type: mix[i % mix.length] } },
     }));

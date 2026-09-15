@@ -58,6 +58,7 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
   // Ovals per row on the active layer (drives the "no cells" message + width).
   const layerCols = isCabinet ? cols : (layerMode === 'front' ? cols : backCols);
   const rowPitch = BOTTLE_RY * 2 + BOTTLE_GAP;
+  const colPitch = BOTTLE_RX * 2 + BOTTLE_GAP;
 
   // Per-shelf geometry for the active layer — every slot with its own centre.
   // Display order: highest shelf-NUMBER label at the top of the SVG (matches
@@ -86,7 +87,7 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
           const level = twoDeep ? Math.ceil(r / 2) : r;
           const cy = height - SHELF_PAD_Y - BOTTLE_RY - (level - 1) * rowPitch;
           // Nested levels alternate half a bottle left and right.
-          const nudge = stagger && level % 2 === 0 ? BOTTLE_RX : 0;
+          const nudge = stagger && cols > 1 && level % 2 === 0 ? colPitch / 2 : 0;
           for (let c = 0; c < cols; c++) {
             slots.push({ position: base + (r - 1) * cols + c + 1, cx: slotX(c) + nudge, cy });
           }
@@ -112,10 +113,10 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
       }
     }
     const width = SHELF_LABEL_W + BOTTLE_GAP + perRow * (BOTTLE_RX * 2 + BOTTLE_GAP)
-      + (isCabinet && stagger ? BOTTLE_RX : 0);
+      + (isCabinet && stagger && cols > 1 ? colPitch / 2 : 0);
     return { shelves, width, height: y };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isCabinet, rows, cols, backCols, bpc, twoDeep, stagger, layerMode, rack?.typeConfig?.shelfRows, rowPitch]);
+  }, [isCabinet, rows, cols, backCols, bpc, twoDeep, stagger, layerMode, rack?.typeConfig?.shelfRows, rowPitch, colPitch]);
 
   // Absolute svg coords of every visible oval on the active layer — the
   // drag hit map (mirrors the geometry in the render loop below).

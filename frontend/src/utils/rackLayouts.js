@@ -426,10 +426,13 @@ function cabinetLayout(rows, cols, typeConfig) {
   shelfRows.forEach((rowCount, i) => {
     const levels = twoDeep ? Math.ceil(rowCount / 2) : rowCount;
     // Level pitch: a full bottle plus, when two deep, the lift of the back
-    // row. Nested levels sit CAB_NEST_RATIO closer together.
+    // row. Nested levels sit CAB_NEST_RATIO closer together — but the FIRST
+    // level rests on the plank, so only the levels above it are nested (same
+    // formula as roomConstants.getCabinetGeometry).
+    const baseH = CELL + (twoDeep ? CAB_BACK_LIFT : 0);
     const levelH = (stagger ? CELL * CAB_NEST_RATIO : CELL) + (twoDeep ? CAB_BACK_LIFT : 0);
     const bayTop = y;
-    const bayH = levels * levelH + CAB_PLANK;
+    const bayH = baseH + Math.max(0, levels - 1) * levelH + CAB_PLANK;
     // Rows are numbered from the plank UP, so the last level is drawn at the
     // top of the bay and row 1 at the bottom (resting on the plank).
     for (let r = 1; r <= rowCount; r++) {
@@ -441,7 +444,7 @@ function cabinetLayout(rows, cols, typeConfig) {
       // Nested levels alternate half a bottle left and right, so the shelf
       // is half a bottle wider than its bottle count — the equal-rows
       // staggered shelf of a real fridge (same model as hexEqualRows).
-      const nudge = stagger && level % 2 === 0 ? 0.5 : 0;
+      const nudge = stagger && cols > 1 && level % 2 === 0 ? 0.5 : 0;
       for (let c = 0; c < cols; c++) {
         const cx = isBack
           ? PADDING + SLOT_R + (c + 0.5 + nudge) * CELL
@@ -458,7 +461,7 @@ function cabinetLayout(rows, cols, typeConfig) {
     if (i < shelfRows.length - 1) shelfYs.push(y - SLOT_GAP / 2);
   });
 
-  const widest = (twoDeep ? 0.5 : 0) + (stagger ? 0.5 : 0);
+  const widest = (twoDeep ? 0.5 : 0) + (stagger && cols > 1 ? 0.5 : 0);
   const contentRight = PADDING + SLOT_R + (cols - 1) * CELL + SLOT_R + CELL * widest;
   return {
     totalSlots: slots.length,

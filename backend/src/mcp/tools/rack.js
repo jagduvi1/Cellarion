@@ -66,7 +66,8 @@ registerTool({
     'Adds a rack to a cellar the user owns or edits. type "grid" (default): rows × cols slots. type "cabinet": a wine ' +
     'fridge — rows = shelves, cols = bottles across, shelf_rows = rows of bottles each shelf holds top to bottom ' +
     '(1 = a sliding shelf with one row, more = a stacking bay; one entry per shelf), two_deep = bottles lie neck to ' +
-    'neck two rows deep (default true). Confirm name and shape first; group is the optional room or appliance label ' +
+    'neck two rows deep (default true), stagger = stacked rows nest in the grooves of the row below (default true, ' +
+    'drawing only). Confirm name and shape first; group is the optional room or appliance label ' +
     'the rack belongs to ("Basement", "Kitchen fridge") — reuse a group name list_racks already shows so racks ' +
     'section together. For other rack shapes, modular racks, zones or disabled slots, use the web app. Reversible ' +
     'via undo_last while the rack is still empty.',

@@ -501,7 +501,7 @@ function computeCabinetSlotPositions(cab, width, depth) {
       // Nested levels alternate half a bottle left and right (see
       // roomConstants.getCabinetGeometry): the shelf is half a bottle wider
       // than its bottle count, exactly like a real fridge's staggered shelf.
-      const nudge = cab.stagger && level % 2 === 0 ? cW / 2 : 0;
+      const nudge = cab.stagger && cols > 1 && level % 2 === 0 ? cW / 2 : 0;
       for (let c = 0; c < cols; c++) {
         positions.push({
           position: pos++,
@@ -738,7 +738,8 @@ export default function RackMesh({
   const cab = useMemo(
     () => (isCabinet ? { ...getCabinetGeometry(rack), cols: displayCols } : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isCabinet, rack.rows, rack.cols, rack.typeConfig?.shelfRows, rack.typeConfig?.twoDeep, displayCols]
+    [isCabinet, rack.rows, rack.cols, rack.typeConfig?.shelfRows, rack.typeConfig?.twoDeep,
+      rack.typeConfig?.stagger, displayCols]
   );
 
   // Double-height rows (grid racks only) — the rack grows taller by
@@ -996,8 +997,10 @@ export default function RackMesh({
 
       {/* Grid / hex / stack / triangle: shelves + scallops + rails. Cube and
           modular racks have irregular internal layouts (driven by the scaled
-          2D layout), so the simple per-row planks/scallops don't apply. */}
-      {rackType !== 'x-rack' && rackType !== 'shelf' && rackType !== 'cube' && !rack.isModular && (
+          2D layout), so the simple per-row planks/scallops don't apply — and
+          a cabinet brings its own beech shelves (and would get grid cradles
+          that no longer line up under its narrowed, staggered cells). */}
+      {rackType !== 'x-rack' && rackType !== 'shelf' && rackType !== 'cube' && !isCabinet && !rack.isModular && (
         <>
           {/* Shelves between rows (thin planks). headroomAbove shifts a
               plank down past the extra headroom of every double-height row
