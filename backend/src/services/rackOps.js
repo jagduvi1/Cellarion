@@ -69,7 +69,7 @@ async function createGridRack(cellarDoc, { name, type = 'grid', rows = 4, cols =
   if (typeConfig) {
     const dhrError = validateDoubleHeightRows(typeConfig, rack.type, rack.rows, false);
     if (dhrError) return { error: { status: 400, message: dhrError } };
-    const cabError = validateCabinetConfig(typeConfig, rack.type, rack.rows, false);
+    const cabError = validateCabinetConfig(typeConfig, rack.type, rack.rows, false, rack.cols);
     if (cabError) return { error: { status: 400, message: cabError } };
     rack.typeConfig = typeConfig;
   } else if (rack.type === 'cabinet') {

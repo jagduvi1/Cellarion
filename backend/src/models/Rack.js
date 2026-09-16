@@ -54,6 +54,14 @@ const rackModuleSchema = new mongoose.Schema({
     // the UI offers it at creation only and the update route's resize guard
     // blocks a shrink past placed bottles. Implies stagger when drawn.
     alternate: { type: Boolean },
+    // Cabinet racks only, per shelf (top first, length === rows when set):
+    // a shelf narrower than the cabinet (1..cols) and a shelf that alternates
+    // or not on its own — so one cabinet holds the Liebherr GrandCru 5001's
+    // 4-wide staggered top and bottom shelves between its 6-wide honeycomb
+    // ones (support ticket 2026-08-31). A missing entry means the cabinet's
+    // own cols / alternate. Shape, like shelfRows: creation-only in the UI.
+    shelfCols: { type: [Number], default: undefined },
+    shelfAlternate: { type: [Boolean], default: undefined },
     // Hex racks only: mirror the row sequence top-to-bottom. Pure reversal —
     // never changes total slot count (see rackSchema.typeConfig.hexFlip below).
     hexFlip: { type: Boolean, default: false },
@@ -110,6 +118,14 @@ const rackSchema = new mongoose.Schema({
     // the UI offers it at creation only and the update route's resize guard
     // blocks a shrink past placed bottles. Implies stagger when drawn.
     alternate: { type: Boolean },
+    // Cabinet racks only, per shelf (top first, length === rows when set):
+    // a shelf narrower than the cabinet (1..cols) and a shelf that alternates
+    // or not on its own — so one cabinet holds the Liebherr GrandCru 5001's
+    // 4-wide staggered top and bottom shelves between its 6-wide honeycomb
+    // ones (support ticket 2026-08-31). A missing entry means the cabinet's
+    // own cols / alternate. Shape, like shelfRows: creation-only in the UI.
+    shelfCols: { type: [Number], default: undefined },
+    shelfAlternate: { type: [Boolean], default: undefined },
     // Grid racks only: 1-indexed row numbers with headroom for a top layer
     // of bottles resting in the gaps (cols across + cols-1 on top).
     // POSITION NUMBERING CONTRACT (double-height rows): the base grid keeps

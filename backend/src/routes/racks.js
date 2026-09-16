@@ -235,7 +235,8 @@ router.put('/:id', async (req, res) => {
         typeConfig,
         type !== undefined ? type : rack.type,
         rows !== undefined ? rows : rack.rows,
-        isModular !== undefined ? isModular : rack.isModular
+        isModular !== undefined ? isModular : rack.isModular,
+        cols !== undefined ? cols : rack.cols
       );
       if (cabError) return res.status(400).json({ error: cabError });
     }
@@ -248,8 +249,9 @@ router.put('/:id', async (req, res) => {
       const effRows = rows !== undefined ? rows : rack.rows;
       const effModular = isModular !== undefined ? isModular : rack.isModular;
       const effConfig = typeConfig !== undefined ? typeConfig : rack.typeConfig;
+      const effCols = cols !== undefined ? cols : rack.cols;
       if (!effModular && effType === 'cabinet') {
-        const cabError = validateCabinetConfig(effConfig || {}, effType, effRows, false)
+        const cabError = validateCabinetConfig(effConfig || {}, effType, effRows, false, effCols)
           || (Array.isArray(effConfig?.shelfRows) ? null : 'shelfRows is required for a cabinet rack');
         if (cabError) return res.status(400).json({ error: cabError });
       }

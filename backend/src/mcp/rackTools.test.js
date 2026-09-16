@@ -243,8 +243,28 @@ describe('rack groups (support ticket 2026-09-06)', () => {
       expect.anything()
     );
     // (6 + 5) + (6 + 5 + 5), not 6 × 5.
-    expect(body.data).toMatchObject({ capacity: 27, alternate: true });
+    expect(body.data).toMatchObject({ capacity: 27, alternate: true, shelf_cols: null, shelf_alternate: null });
     expect(body.summary).toMatch(/27 bottles/);
+  });
+
+  test('create_rack cabinet with shelf_cols / shelf_alternate: the GrandCru 5001 loading diagram is 196', async () => {
+    ownCellar();
+    rackOps.createGridRack.mockResolvedValue({ rack: { _id: oid('e'), name: '5001', group: null } });
+    const body = parse(await tool('create_rack').handler({
+      cellar_id: oid('c'), name: '5001', type: 'cabinet', rows: 5, cols: 6,
+      shelf_rows: [8, 8, 8, 8, 8], shelf_cols: [4, 6, 6, 6, 4], shelf_alternate: [false, true, true, true, false],
+    }, CTX));
+    expect(rackOps.createGridRack).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ typeConfig: {
+        shelfRows: [8, 8, 8, 8, 8], twoDeep: true, stagger: true, alternate: false,
+        shelfCols: [4, 6, 6, 6, 4], shelfAlternate: [false, true, true, true, false],
+      } }),
+      expect.anything()
+    );
+    expect(body.data).toMatchObject({ capacity: 196, shelf_cols: [4, 6, 6, 6, 4], shelf_alternate: [false, true, true, true, false] });
+    const misuse = parse(await tool('create_rack').handler({ cellar_id: oid('c'), name: 'G', rows: 2, cols: 6, shelf_cols: [4, 6] }, CTX));
+    expect(misuse.error.message).toMatch(/type "cabinet" only/);
   });
 
   test('create_rack passes the group to the shared creator and echoes it back', async () => {

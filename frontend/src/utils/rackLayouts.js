@@ -391,6 +391,9 @@ function shelfLayout(rows, cols, typeConfig) {
 // cols−1 like a honeycomb (cabinetRowWidth) — the narrow rows are the ones
 // drawn offset, centred in the gaps of the wide rows, so the shelf is exactly
 // cols bottles wide and every level nests (alternate implies stagger).
+// A shelf may also have its own width (shelfCols[i] ≤ cols) and its own
+// pattern (shelfAlternate[i]); cabinetBays resolves them, and a narrower bay
+// is drawn centred in the cabinet.
 //
 // POSITION NUMBERING CONTRACT (mirrors backend rackGeometry.cabinetPosition):
 //   position = cols × Σ_{k<i} shelfRows[k] + (row − 1) × cols + slot
@@ -439,6 +442,50 @@ export function cabinetBayCapacity(rowCount, cols, opts) {
   return n;
 }
 
+/** Per-shelf widths fitted to `rows` (missing → cols, clamped 1..cols). Mirrors the backend. */
+export function cabinetShelfCols(rows, cols, typeConfig) {
+  const n = Math.max(0, Math.min(20, parseInt(rows, 10) || 0));
+  const full = Math.max(1, Math.min(20, parseInt(cols, 10) || 1));
+  const src = Array.isArray(typeConfig?.shelfCols) ? typeConfig.shelfCols : [];
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const v = parseInt(src[i], 10);
+    out.push(Number.isFinite(v) ? Math.max(1, Math.min(full, v)) : full);
+  }
+  return out;
+}
+
+/** Per-shelf alternate flags fitted to `rows` (missing → the cabinet's alternate). Mirrors the backend. */
+export function cabinetShelfAlternate(rows, typeConfig) {
+  const n = Math.max(0, Math.min(20, parseInt(rows, 10) || 0));
+  const fallback = typeConfig?.alternate === true;
+  const src = Array.isArray(typeConfig?.shelfAlternate) ? typeConfig.shelfAlternate : [];
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(typeof src[i] === 'boolean' ? src[i] : fallback);
+  return out;
+}
+
+/**
+ * Every bay top first with its resolved shape { rows, cols, alternate } —
+ * the one place the per-shelf lists are combined (mirrors backend cabinetBays).
+ */
+export function cabinetBays(rows, cols, typeConfig) {
+  const rowList = cabinetShelfRows(rows, typeConfig);
+  const colList = cabinetShelfCols(rows, cols, typeConfig);
+  const altList = cabinetShelfAlternate(rows, typeConfig);
+  return rowList.map((r, i) => ({ rows: r, cols: colList[i], alternate: altList[i] }));
+}
+
+/**
+ * How many bottle widths a bay spans when drawn: its width plus the half
+ * bottle a two-deep back row or a nested full-width level pokes out (an
+ * alternating bay never does — its offset rows are the narrow ones).
+ */
+export function cabinetBayUnits(bay, { twoDeep, stagger }) {
+  if (bay.alternate) return bay.cols;
+  return bay.cols + (twoDeep ? 0.5 : 0) + (stagger && bay.cols > 1 ? 0.5 : 0);
+}
+
 const CAB_BACK_R = SLOT_R * 0.72;
 const CAB_BACK_LIFT = SLOT_R * 0.9;   // how far a back bottle peeks above its front row
 const CAB_PLANK = SLOT_GAP * 2;        // extra room under each plank
@@ -449,26 +496,36 @@ const CAB_NEST_RATIO = Math.sqrt(3) / 2;
 
 function cabinetLayout(rows, cols, typeConfig) {
   const shelfRows = cabinetShelfRows(rows, typeConfig);
-  const { twoDeep, alternate } = cabinetOptions(typeConfig);
-  // A narrow row can only lie in the grooves of the wide row below, so an
-  // alternating cabinet always nests — the flag overrides stagger.
-  const stagger = alternate || typeConfig?.stagger !== false;
+  const bayShapes = cabinetBays(rows, cols, typeConfig);
+  const { twoDeep } = cabinetOptions(typeConfig);
+  const stagger = typeConfig?.stagger !== false;
+  // Every bay alternates → the cabinet does; drawn nesting follows per bay
+  // (a narrow row can only lie in the grooves of the wide row below, so an
+  // alternating bay always nests, whatever stagger says).
+  const alternate = bayShapes.length > 0 && bayShapes.every((b) => b.alternate);
+  const nestOf = (bay) => bay.alternate || stagger;
+  // The cabinet is as wide as its widest bay when drawn; narrower bays sit
+  // centred inside it, like the 4-wide top shelf of a 6-wide GrandCru.
+  const units = Math.max(1, ...bayShapes.map((b) => cabinetBayUnits(b, { twoDeep, stagger })));
   const slots = [];
   const shelfYs = [];
   const bays = [];
   let pos = 1;
   let y = PADDING;
 
-  shelfRows.forEach((rowCount, i) => {
+  bayShapes.forEach((bay, i) => {
+    const rowCount = bay.rows;
     const levels = twoDeep ? Math.ceil(rowCount / 2) : rowCount;
+    const nest = nestOf(bay);
     // Level pitch: a full bottle plus, when two deep, the lift of the back
     // row. Nested levels sit CAB_NEST_RATIO closer together — but the FIRST
     // level rests on the plank, so only the levels above it are nested (same
     // formula as roomConstants.getCabinetGeometry).
     const baseH = CELL + (twoDeep ? CAB_BACK_LIFT : 0);
-    const levelH = (stagger ? CELL * CAB_NEST_RATIO : CELL) + (twoDeep ? CAB_BACK_LIFT : 0);
+    const levelH = (nest ? CELL * CAB_NEST_RATIO : CELL) + (twoDeep ? CAB_BACK_LIFT : 0);
     const bayTop = y;
     const bayH = baseH + Math.max(0, levels - 1) * levelH + CAB_PLANK;
+    const x0 = PADDING + SLOT_R + ((units - cabinetBayUnits(bay, { twoDeep, stagger })) / 2) * CELL;
     // Rows are numbered from the plank UP, so the last level is drawn at the
     // top of the bay and row 1 at the bottom (resting on the plank).
     for (let r = 1; r <= rowCount; r++) {
@@ -480,17 +537,17 @@ function cabinetLayout(rows, cols, typeConfig) {
       // Nested levels alternate half a bottle left and right, so the shelf
       // is half a bottle wider than its bottle count — the equal-rows
       // staggered shelf of a real fridge (same model as hexEqualRows).
-      // Alternating cabinet: the NARROW rows are the offset ones, centred in
+      // Alternating bay: the NARROW rows are the offset ones, centred in
       // the gaps of the wide rows (front and back alike), and the shelf is
-      // exactly cols wide — the classic honeycomb.
-      const width = cabinetRowWidth(r, cols, { twoDeep, alternate });
-      const nudge = alternate
-        ? (width < cols ? 0.5 : 0)
-        : (stagger && cols > 1 && level % 2 === 0 ? 0.5 : 0);
+      // exactly its width — the classic honeycomb.
+      const width = cabinetRowWidth(r, bay.cols, { twoDeep, alternate: bay.alternate });
+      const nudge = bay.alternate
+        ? (width < bay.cols ? 0.5 : 0)
+        : (nest && bay.cols > 1 && level % 2 === 0 ? 0.5 : 0);
       for (let c = 0; c < width; c++) {
-        const cx = isBack && !alternate
-          ? PADDING + SLOT_R + (c + 0.5 + nudge) * CELL
-          : PADDING + SLOT_R + (c + nudge) * CELL;
+        const cx = isBack && !bay.alternate
+          ? x0 + (c + 0.5 + nudge) * CELL
+          : x0 + (c + nudge) * CELL;
         slots.push({
           position: pos++, cx, cy: isBack ? backCY : frontCY,
           ...(isBack ? { isBack: true } : {}),
@@ -498,19 +555,18 @@ function cabinetLayout(rows, cols, typeConfig) {
         });
       }
     }
-    bays.push({ index: i, top: bayTop, height: bayH, rows: rowCount, levels });
+    bays.push({ index: i, top: bayTop, height: bayH, rows: rowCount, levels, cols: bay.cols, alternate: bay.alternate });
     y += bayH;
-    if (i < shelfRows.length - 1) shelfYs.push(y - SLOT_GAP / 2);
+    if (i < bayShapes.length - 1) shelfYs.push(y - SLOT_GAP / 2);
   });
 
-  const widest = alternate ? 0 : (twoDeep ? 0.5 : 0) + (stagger && cols > 1 ? 0.5 : 0);
-  const contentRight = PADDING + SLOT_R + (cols - 1) * CELL + SLOT_R + CELL * widest;
+  const contentRight = PADDING + SLOT_R + (units - 1) * CELL + SLOT_R;
   return {
     totalSlots: slots.length,
     bottlesPerCell: 1,
     backRadius: twoDeep ? CAB_BACK_R : undefined,
     shelfYs: shelfYs.length ? shelfYs : undefined,
-    cabinet: { shelfRows, twoDeep, stagger, alternate, bays },
+    cabinet: { shelfRows, twoDeep, stagger: alternate || stagger, alternate, bays },
     viewBox: {
       width: contentRight + PADDING,
       height: y + PADDING - SLOT_GAP,
@@ -654,10 +710,11 @@ export function getTotalSlots(type, rows, cols, typeConfig) {
       return cells * bpc;
     }
     case 'cabinet': {
-      // cols × Σ shelfRows, or the honeycomb sum when the cabinet alternates
-      // — mirrors backend rackGeometry.totalSlots.
-      const opts = cabinetOptions(typeConfig);
-      return cabinetShelfRows(rows, typeConfig).reduce((sum, r) => sum + cabinetBayCapacity(r, cols, opts), 0);
+      // Σ over bays of the bay's own capacity (cols × rows, or the honeycomb
+      // sum when it alternates) — mirrors backend rackGeometry.totalSlots.
+      const { twoDeep } = cabinetOptions(typeConfig);
+      return cabinetBays(rows, cols, typeConfig)
+        .reduce((sum, bay) => sum + cabinetBayCapacity(bay.rows, bay.cols, { twoDeep, alternate: bay.alternate }), 0);
     }
     case 'grid':
     default: {

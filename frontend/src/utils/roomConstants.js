@@ -5,7 +5,7 @@
 
 import {
   computeLayout, computeModularLayout, CELL_SIZE,
-  validDoubleHeightRows, DOUBLE_ROW_HEADROOM, cabinetShelfRows,
+  validDoubleHeightRows, DOUBLE_ROW_HEADROOM, cabinetShelfRows, cabinetBays,
 } from './rackLayouts';
 
 // ── Rack physical dimensions (metres) ────────────────────
@@ -38,17 +38,20 @@ export const CABINET_DEPTH_SINGLE = 0.42;
  */
 export function getCabinetGeometry(rack) {
   const shelfRows = cabinetShelfRows(rack.rows || 1, rack.typeConfig);
+  const shapes = cabinetBays(rack.rows || 1, rack.cols || 1, rack.typeConfig);
   const twoDeep = rack.typeConfig?.twoDeep !== false;
-  const alternate = rack.typeConfig?.alternate === true;
+  const stagger = rack.typeConfig?.stagger !== false;
   // Alternating rows always nest (a narrow row lies in the grooves of the
-  // wide row below), so the flag overrides stagger — as in rackLayouts.
-  const stagger = alternate || rack.typeConfig?.stagger !== false;
-  const levelPitch = stagger ? CABINET_LEVEL_H * CABINET_NEST_RATIO : CABINET_LEVEL_H;
+  // wide row below), so a bay that alternates nests whatever stagger says —
+  // as in rackLayouts. `alternate` here = every bay does.
+  const alternate = shapes.length > 0 && shapes.every((b) => b.alternate);
+  const pitchOf = (bay) => ((bay.alternate || stagger) ? CABINET_LEVEL_H * CABINET_NEST_RATIO : CABINET_LEVEL_H);
+  const levelPitch = (alternate || stagger) ? CABINET_LEVEL_H * CABINET_NEST_RATIO : CABINET_LEVEL_H;
   const levelsOf = (rows) => (twoDeep ? Math.ceil(rows / 2) : rows);
   // The first level rests on the plank; only the levels ABOVE it are nested.
-  const bayHeights = shelfRows.map((r) => Math.max(
+  const bayHeights = shapes.map((b) => Math.max(
     CELL_H,
-    CABINET_LEVEL_H + Math.max(0, levelsOf(r) - 1) * levelPitch + CABINET_BAY_HEADROOM
+    CABINET_LEVEL_H + Math.max(0, levelsOf(b.rows) - 1) * pitchOf(b) + CABINET_BAY_HEADROOM
   ));
   const n = shelfRows.length;
   const innerH = CABINET_TOP_STRIP
@@ -63,6 +66,8 @@ export function getCabinetGeometry(rack) {
     y = bottom - WOOD_THICK;
     return {
       index: i, rows, levels: levelsOf(rows), height: bayHeights[i], top, bottom,
+      // The bay's own width and pattern, and the pitch its levels stack at.
+      cols: shapes[i].cols, alternate: shapes[i].alternate, levelPitch: pitchOf(shapes[i]),
       // The beech plank under this bay (the bottom bay rests on the cabinet floor).
       plankY: i < n - 1 ? bottom - WOOD_THICK / 2 : null,
     };

@@ -20,6 +20,7 @@ import {
   CABINET_PRESETS, CABINET_PRESET_GROUPS, CABINET_DEFAULT, CABINET_MAX_ROWS_PER_SHELF,
   fitShelfRows, cabinetCapacity,
 } from '../utils/cabinetPresets';
+import { cabinetShelfCols, cabinetShelfAlternate } from '../utils/rackLayouts';
 import RatingInput from '../components/RatingInput';
 import WineImage from '../components/WineImage';
 import ConfirmModal from '../components/ConfirmModal';
@@ -269,11 +270,14 @@ function CellarRacks() {
           typeConfig.twoDeep = typeConfig.twoDeep !== false;
           typeConfig.stagger = typeConfig.stagger !== false;
           typeConfig.alternate = typeConfig.alternate === true;
+          // Per-shelf width / pattern: fitted to the final shelf count and
+          // width, and stored only where a shelf differs from the cabinet.
+          const widths = cabinetShelfCols(newRack.rows, newRack.cols, typeConfig);
+          if (widths.some((w) => w !== newRack.cols)) typeConfig.shelfCols = widths; else delete typeConfig.shelfCols;
+          const patterns = cabinetShelfAlternate(newRack.rows, typeConfig);
+          if (patterns.some((a) => a !== typeConfig.alternate)) typeConfig.shelfAlternate = patterns; else delete typeConfig.shelfAlternate;
         } else {
-          delete typeConfig.shelfRows;
-          delete typeConfig.twoDeep;
-          delete typeConfig.stagger;
-          delete typeConfig.alternate;
+          for (const k of ['shelfRows', 'twoDeep', 'stagger', 'alternate', 'shelfCols', 'shelfAlternate']) delete typeConfig[k];
         }
         payload.typeConfig = typeConfig;
       }
@@ -1168,13 +1172,20 @@ const PREVIEW_FILL_MAX = 180;
 // GrandCru shelf — support ticket 2026-09-15) changes capacity and the slot
 // numbering, so unlike two-deep and nesting it is offered here only, never
 // in the edit dialog; and since a narrow row can only nest, it forces nesting.
+// Every shelf can then differ from the cabinet — its rows, its width and its
+// pattern — so a preset is the maker's loading diagram and the owner edits it
+// into their own cabinet (support ticket 2026-08-31: a GrandCru 5001 has
+// 4-wide staggered shelves top and bottom around 6-wide honeycomb ones).
 function CabinetShapeFields({ newRack, setNewRack }) {
   const { t } = useTranslation();
   const [presetKey, setPresetKey] = useState('custom');
   const shelfRows = fitShelfRows(newRack.typeConfig?.shelfRows, newRack.rows);
+  const shelfCols = cabinetShelfCols(newRack.rows, newRack.cols, newRack.typeConfig);
+  const shelfAlt = cabinetShelfAlternate(newRack.rows, newRack.typeConfig);
   const twoDeep = newRack.typeConfig?.twoDeep !== false;
   const alternate = newRack.typeConfig?.alternate === true;
-  const stagger = alternate || newRack.typeConfig?.stagger !== false;
+  const allAlternate = shelfAlt.length > 0 && shelfAlt.every(Boolean);
+  const stagger = allAlternate || newRack.typeConfig?.stagger !== false;
   const preset = CABINET_PRESETS.find((p) => p.key === presetKey);
   // The shelves / bottles-across inputs live in the parent form, so editing
   // them must drop the preset label: the shape is no longer that model.
@@ -1191,14 +1202,32 @@ function CabinetShapeFields({ newRack, setNewRack }) {
       ...newRack,
       rows: p.shelves,
       cols: p.cols,
-      typeConfig: { ...newRack.typeConfig, shelfRows: [...p.shelfRows], twoDeep: p.twoDeep, stagger: p.stagger !== false, alternate: p.alternate === true },
+      typeConfig: {
+        ...newRack.typeConfig,
+        shelfRows: [...p.shelfRows], twoDeep: p.twoDeep, stagger: p.stagger !== false, alternate: p.alternate === true,
+        shelfCols: p.shelfCols ? [...p.shelfCols] : undefined,
+        shelfAlternate: p.shelfAlternate ? [...p.shelfAlternate] : undefined,
+      },
     });
+  };
+  const setShelf = (patch) => {
+    setPresetKey('custom');
+    setNewRack({ ...newRack, typeConfig: { ...newRack.typeConfig, ...patch } });
   };
   const setRow = (i, value) => {
     const next = [...shelfRows];
     next[i] = Math.max(1, Math.min(CABINET_MAX_ROWS_PER_SHELF, parseInt(value, 10) || 1));
-    setPresetKey('custom');
-    setNewRack({ ...newRack, typeConfig: { ...newRack.typeConfig, shelfRows: next } });
+    setShelf({ shelfRows: next });
+  };
+  const setWidth = (i, value) => {
+    const next = [...shelfCols];
+    next[i] = Math.max(1, Math.min(newRack.cols || 1, parseInt(value, 10) || 1));
+    setShelf({ shelfCols: next });
+  };
+  const setPattern = (i, value) => {
+    const next = [...shelfAlt];
+    next[i] = !!value;
+    setShelf({ shelfAlternate: next });
   };
 
   return (
@@ -1224,24 +1253,47 @@ function CabinetShapeFields({ newRack, setNewRack }) {
       </div>
 
       <div className="form-group">
-        <label>{t('racks.cabinetShelfRowsLabel', 'Rows of bottles per shelf, top shelf first')}</label>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem 0.75rem' }}>
+        <label>{t('racks.cabinetShelfRowsLabel', 'Each shelf, top shelf first: rows of bottles, bottles across, rows alternating')}</label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
           {shelfRows.map((v, i) => (
-            <label key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem' }}>
-              <span>{t('racks.cabinetShelfN', { n: i + 1 })}</span>
-              <input
-                type="number"
-                min={1} max={CABINET_MAX_ROWS_PER_SHELF}
-                value={v}
-                onChange={(e) => setRow(i, e.target.value)}
-                style={{ width: '4.2rem' }}
-                aria-label={t('racks.cabinetShelfN', { n: i + 1 })}
-              />
-            </label>
+            <div key={i} style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.35rem 0.6rem', fontSize: '0.85rem' }}>
+              <span style={{ minWidth: '4.5rem' }}>{t('racks.cabinetShelfN', { n: i + 1 })}</span>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                <input
+                  type="number"
+                  min={1} max={CABINET_MAX_ROWS_PER_SHELF}
+                  value={v}
+                  onChange={(e) => setRow(i, e.target.value)}
+                  style={{ width: '4.2rem' }}
+                  aria-label={`${t('racks.cabinetShelfN', { n: i + 1 })} ${t('racks.cabinetShelfRowsShort', 'rows')}`}
+                />
+                <span>{t('racks.cabinetShelfRowsShort', 'rows')}</span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                <input
+                  type="number"
+                  min={1} max={newRack.cols || 1}
+                  value={shelfCols[i]}
+                  onChange={(e) => setWidth(i, e.target.value)}
+                  style={{ width: '4.2rem' }}
+                  aria-label={`${t('racks.cabinetShelfN', { n: i + 1 })} ${t('racks.cabinetShelfAcrossShort', 'across')}`}
+                />
+                <span>{t('racks.cabinetShelfAcrossShort', 'across')}</span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                <input
+                  type="checkbox"
+                  checked={shelfAlt[i]}
+                  onChange={(e) => setPattern(i, e.target.checked)}
+                  aria-label={`${t('racks.cabinetShelfN', { n: i + 1 })} ${t('racks.cabinetShelfAlternateShort', '6 / 5 alternating')}`}
+                />
+                <span>{t('racks.cabinetShelfAlternateShort', '6 / 5 alternating')}</span>
+              </label>
+            </div>
           ))}
         </div>
         <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
-          {t('racks.cabinetShelfRowsHelp', '1 = a sliding shelf with a single row. More = a stacking bay: the shelf is out and bottles are stacked.')}
+          {t('racks.cabinetShelfRowsHelp', 'Rows: 1 = a sliding shelf with a single row, more = a stacking bay. Across: a shelf narrower than the cabinet is drawn centred. Alternating: the rows of that shelf go full width, one fewer, full width … (6 in front of 5, then 5 in front of 6). The maker\'s presets fill this in; change any shelf to match how you load yours.')}
         </small>
       </div>
 
@@ -1265,14 +1317,14 @@ function CabinetShapeFields({ newRack, setNewRack }) {
             type="checkbox"
             checked={alternate}
             onChange={(e) => {
-              setPresetKey('custom');
-              setNewRack({ ...newRack, typeConfig: { ...newRack.typeConfig, alternate: e.target.checked } });
+              // The cabinet-wide setting: every shelf follows it until one is changed.
+              setShelf({ alternate: e.target.checked, shelfAlternate: undefined });
             }}
           />
-          {' '}{t('racks.cabinetAlternateLabel', 'Rows alternate in width (6 / 5 / 6 …)')}
+          {' '}{t('racks.cabinetAlternateLabel', 'Rows alternate in width on every shelf (6 / 5 / 6 …)')}
         </label>
         <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
-          {t('racks.cabinetAlternateHelp', 'The first level holds a full row in front of one bottle fewer behind it; the level above nests in its grooves, one fewer in front of a full row, and so on — the honeycomb of a Liebherr GrandCru shelf. This changes how many bottles the cabinet holds, so it is set when the cabinet is created.')}
+          {t('racks.cabinetAlternateHelp', 'The first level holds a full row in front of one bottle fewer behind it; the level above nests in its grooves, one fewer in front of a full row, and so on — the honeycomb of a Liebherr GrandCru shelf. Sets every shelf at once; untick single shelves above. This changes how many bottles the cabinet holds, so it is set when the cabinet is created.')}
         </small>
       </div>
 
@@ -1281,13 +1333,13 @@ function CabinetShapeFields({ newRack, setNewRack }) {
           <input
             type="checkbox"
             checked={stagger}
-            disabled={alternate}
+            disabled={allAlternate}
             onChange={(e) => setNewRack({ ...newRack, typeConfig: { ...newRack.typeConfig, stagger: e.target.checked } })}
           />
           {' '}{t('racks.cabinetStaggerLabel', 'Stacked rows nest (staggered)')}
         </label>
         <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
-          {alternate
+          {allAlternate
             ? t('racks.cabinetAlternateNests', 'Rows that alternate in width always nest: each narrow row lies in the grooves of the wide row below it.')
             : t('racks.cabinetStaggerHelp', 'Each stacked row sits in the grooves of the row below, offset half a bottle, the way bottles actually stack on a shelf. Turn it off for rows stacked squarely on top of each other. Drawing only — the number of bottles is the same.')}
         </small>

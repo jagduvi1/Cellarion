@@ -10,7 +10,7 @@
  * explicitly in the CSV.
  */
 
-const { totalSlots, cabinetShelfRows, cabinetPosition, cabinetRows, cabinetRowWidth, cabinetOptions } = require('./rackGeometry');
+const { totalSlots, cabinetPosition, cabinetRows, cabinetRowWidth, cabinetOptions, cabinetBays } = require('./rackGeometry');
 
 const DEFAULT_RACK_TYPE = 'grid';
 const VALID_ANCHORS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
@@ -47,7 +47,7 @@ function computeRackPosition({
   position, row, col,
   rackRows, rackCols,
   rackType, bottlesPerCell, backCols,
-  shelfRows, twoDeep, alternate,
+  shelfRows, twoDeep, alternate, shelfCols, shelfAlternate,
   layer, slotInLayer,
   internalSlot,
   anchor = DEFAULT_ANCHOR
@@ -88,19 +88,21 @@ function computeRackPosition({
     if (p > rows) return { error: `shelf ${p} exceeds rackRows ${rows}` };
     const bottomAnchored = anchor === 'bottom-left' || anchor === 'bottom-right';
     const shelfIndex = bottomAnchored ? rows - p : p - 1;
-    const list = cabinetShelfRows(rows, { shelfRows });
-    const opts = cabinetOptions({ twoDeep, alternate });
+    const cab = { shelfRows, twoDeep, alternate, shelfCols, shelfAlternate };
+    const bays = cabinetBays(rows, cols, cab);
+    const bay = bays[shelfIndex];
+    const cell = { shelfIndex, cols, ...cab, shelfRows: bays.map((b) => b.rows) };
     const layerNum = parseInt(layer, 10);
     const slotNum = parseInt(slotInLayer, 10);
     if (!isNaN(layerNum) && !isNaN(slotNum)) {
-      if (layerNum < 1 || layerNum > list[shelfIndex]) {
-        return { error: `row ${layerNum} exceeds the ${list[shelfIndex]} rows of shelf ${p}` };
+      if (layerNum < 1 || layerNum > bay.rows) {
+        return { error: `row ${layerNum} exceeds the ${bay.rows} rows of shelf ${p}` };
       }
-      const width = cabinetRowWidth(layerNum, cols, opts);
+      const width = cabinetRowWidth(layerNum, bay.cols, { twoDeep: cabinetOptions(cab).twoDeep, alternate: bay.alternate });
       if (slotNum < 1 || slotNum > width) return { error: `slot ${slotNum} exceeds shelf width ${width}` };
-      return { position: cabinetPosition({ shelfIndex, row: layerNum, slot: slotNum, cols, shelfRows: list, ...opts }) };
+      return { position: cabinetPosition({ ...cell, row: layerNum, slot: slotNum }) };
     }
-    return { position: cabinetPosition({ shelfIndex, row: 1, slot: 1, cols, shelfRows: list, ...opts }) };
+    return { position: cabinetPosition({ ...cell, row: 1, slot: 1 }) };
   }
 
   // Cabinet with (row, col) input (a cabinet's `position` is always a shelf
@@ -113,7 +115,7 @@ function computeRackPosition({
   if (rackType === 'cabinet') {
     if (isNaN(rows) || rows < 1) return { error: 'rackRows is required for cabinet placement' };
     if (isNaN(cols) || cols < 1) return { error: 'rackCols is required for cabinet placement' };
-    const bottleRows = cabinetRows(rows, cols, { shelfRows, twoDeep, alternate });
+    const bottleRows = cabinetRows(rows, cols, { shelfRows, twoDeep, alternate, shelfCols, shelfAlternate });
     const srcRow = parseInt(row, 10);
     const srcCol = parseInt(col, 10);
     if (isNaN(srcRow) || srcRow < 1) return { error: 'Invalid row' };
@@ -392,6 +394,8 @@ function placeBottlesInRack(rack, items, anchor) {
       shelfRows: rack.typeConfig?.shelfRows,
       twoDeep: rack.typeConfig?.twoDeep,
       alternate: rack.typeConfig?.alternate,
+      shelfCols: rack.typeConfig?.shelfCols,
+      shelfAlternate: rack.typeConfig?.shelfAlternate,
       anchor
     });
     if (result.error) {

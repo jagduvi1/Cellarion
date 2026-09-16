@@ -1,7 +1,7 @@
 import {
   computeLayout, computeModularLayout, getModularTotalSlots, getTotalSlots,
   SLOT_RADIUS, validDoubleHeightRows, DOUBLE_ROW_HEADROOM, cabinetShelfRows,
-  cabinetRowWidth, cabinetBayCapacity,
+  cabinetRowWidth, cabinetBayCapacity, cabinetBays,
 } from './rackLayouts';
 
 describe('computeLayout', () => {
@@ -413,6 +413,37 @@ describe('computeLayout', () => {
         expect(single.slots.some(s => s.isBack)).toBe(false);
       });
 
+      it('per-shelf width and pattern: a narrower bay is centred, and the 5001 loading diagram is 196', () => {
+        const tc = { shelfRows: [8, 8, 8, 8, 8], shelfCols: [4, 6, 6, 6, 4], shelfAlternate: [false, true, true, true, false], twoDeep: true };
+        const l = computeLayout('cabinet', 5, 6, tc);
+        expect(l.totalSlots).toBe(196);
+        expect(getTotalSlots('cabinet', 5, 6, tc)).toBe(196);
+        expect(l.cabinet.bays.map(b => [b.cols, b.alternate])).toEqual([[4, false], [6, true], [6, true], [6, true], [4, false]]);
+        expect(l.cabinet.alternate).toBe(false); // not EVERY bay
+        const p = (n) => l.slots.find(s => s.position === n);
+        // Top bay: 8 rows of 4 (positions 1..32), staggered — the second
+        // level nudged half a cell; the honeycomb bay below starts at 33.
+        expect(l.slots.filter(s => s.position <= 32).map(s => s.isBack).filter(Boolean)).toHaveLength(16);
+        expect(p(9).cx).toBeCloseTo(p(1).cx + (p(2).cx - p(1).cx) / 2, 6);
+        expect(p(33).cy).toBeGreaterThan(p(1).cy);
+        // The 4-wide bay (4.5 units with its stagger + back row: 4 + 0.5 + 0.5
+        // = 5) sits centred inside the 6-wide cabinet (6.5 units: 6 + 0.5 for
+        // the back row… an alternating bay is exactly 6), so its first bottle
+        // starts to the right of the honeycomb bay's first bottle.
+        expect(p(1).cx).toBeGreaterThan(p(33).cx);
+        // A layout without per-shelf lists is unchanged by the new fields.
+        const plain = computeLayout('cabinet', 2, 6, { shelfRows: [2, 3], twoDeep: true });
+        const explicit = computeLayout('cabinet', 2, 6, { shelfRows: [2, 3], twoDeep: true, shelfCols: [6, 6], shelfAlternate: [false, false] });
+        expect(explicit.slots).toEqual(plain.slots);
+        expect(explicit.viewBox).toEqual(plain.viewBox);
+        expect(cabinetBays(2, 6, { shelfRows: [1, 2], shelfCols: [3] })).toEqual([{ rows: 1, cols: 3, alternate: false }, { rows: 2, cols: 6, alternate: false }]);
+        // Every slot stays inside the drawing.
+        l.slots.forEach((slot) => {
+          expect(slot.cx + SLOT_RADIUS).toBeLessThanOrEqual(l.viewBox.width);
+          expect(slot.cx - SLOT_RADIUS).toBeGreaterThanOrEqual(0);
+        });
+      });
+
       it('the helpers mirror the backend: widths 6/5/5/6…, a bay of 8 holds 44, the 5001 preset 198', () => {
         const deep = { twoDeep: true, alternate: true };
         expect([1, 2, 3, 4, 5, 6, 7, 8].map((r) => cabinetRowWidth(r, 6, deep))).toEqual([6, 5, 5, 6, 6, 5, 5, 6]);
@@ -443,6 +474,7 @@ describe('computeLayout', () => {
       ['cabinet', 2, 4, undefined],
       ['cabinet', 2, 6, { shelfRows: [3, 4], twoDeep: true, alternate: true }],
       ['cabinet', 2, 5, { shelfRows: [3, 2], twoDeep: false, alternate: true }],
+      ['cabinet', 3, 6, { shelfRows: [4, 4, 2], shelfCols: [4, 6, 3], shelfAlternate: [false, true, false] }],
     ];
 
     test.each(cases)('%s layout has positive coordinates within viewBox', (type, rows, cols, tc) => {

@@ -46,7 +46,7 @@ const { unlinkImageFiles, safeUploadPath } = require('./imageProcessor');
 const { sanitizeImageBuffer, detectImageFormat } = require('./imageSanitizer');
 const { ORIGINALS_DIR, PROCESSED_DIR } = require('../config/upload');
 const { planRackCreations, placeBottlesInRack, DEFAULT_ANCHOR } = require('../utils/rackImport');
-const { getMaxPosition, cabinetShelfRows } = require('../utils/rackGeometry');
+const { getMaxPosition, cabinetShelfRows, cabinetShelfCols, cabinetShelfAlternate } = require('../utils/rackGeometry');
 const { resolveRating } = require('../utils/ratingUtils');
 const { normalizeBottleSize, DEFAULT_SIZE } = require('../config/bottleSizes');
 const { stripHtml } = require('../utils/sanitize');
@@ -336,6 +336,8 @@ async function createRacks(cellarId, userId, cellar, items, result) {
         twoDeep: rackData.typeConfig?.twoDeep !== false,
         stagger: rackData.typeConfig?.stagger !== false,
         alternate: rackData.typeConfig?.alternate === true,
+        ...(Array.isArray(rackData.typeConfig?.shelfCols) ? { shelfCols: cabinetShelfCols(rackData.rows, rackData.cols, rackData.typeConfig) } : {}),
+        ...(Array.isArray(rackData.typeConfig?.shelfAlternate) ? { shelfAlternate: cabinetShelfAlternate(rackData.rows, rackData.typeConfig) } : {}),
       };
     }
     if (typeof spec?.group === 'string' && spec.group.trim()) rackData.group = spec.group.trim().slice(0, 40);

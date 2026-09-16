@@ -784,6 +784,28 @@ describe('cabinet racks: shelf + layer + slotInLayer land in the exact cell', ()
     expect(placements.map(p => [p.bottle, p.position])).toEqual([['a', 33]]);
   });
 
+  test('per-shelf width and pattern: a 4-wide staggered top shelf above a 6-wide honeycomb one', () => {
+    const cab5001 = {
+      rackType: 'cabinet', rackRows: 2, rackCols: 6, shelfRows: [2, 2],
+      shelfCols: [4, 6], shelfAlternate: [false, true], twoDeep: true,
+    }; // top bay 4 + 4 = 8, bottom bay 6 + 5 = 11
+    expect(computeRackPosition({ ...cab5001, position: 1, layer: 2, slotInLayer: 4 })).toEqual({ position: 8 });
+    expect(computeRackPosition({ ...cab5001, position: 1, layer: 1, slotInLayer: 5 }).error).toMatch(/slot 5 exceeds shelf width 4/);
+    expect(computeRackPosition({ ...cab5001, position: 2, layer: 1, slotInLayer: 6 })).toEqual({ position: 14 });
+    expect(computeRackPosition({ ...cab5001, position: 2, layer: 2, slotInLayer: 5 })).toEqual({ position: 19 });
+    expect(computeRackPosition({ ...cab5001, position: 2, layer: 2, slotInLayer: 6 }).error).toMatch(/slot 6 exceeds shelf width 5/);
+    expect(computeRackPosition({ ...cab5001, row: 3, col: 6 })).toEqual({ position: 14 });
+    // Bottom-right: row 1 is the bottom bay's back row (5 wide, from 14); col 4 mirrored is col 2.
+    expect(computeRackPosition({ ...cab5001, row: 1, col: 4, anchor: 'bottom-right' })).toEqual({ position: 16 });
+    const rack = { type: 'cabinet', rows: 2, cols: 6, typeConfig: { shelfRows: [2, 2], shelfCols: [4, 6], shelfAlternate: [false, true] }, slots: [], maxPosition: 19 };
+    const { placements, unplaced } = placeBottlesInRack(rack, [
+      { item: { rackPosition: 1, layer: 1, slotInLayer: 6, }, bottleId: 'a', sourceIndex: 0 },
+      { item: { rackPosition: 2, layer: 2, slotInLayer: 5 }, bottleId: 'b', sourceIndex: 1 },
+    ], 'top-left');
+    expect(unplaced.map((u) => u.reason)).toEqual(['slot 6 exceeds shelf width 4']);
+    expect(placements.map(p => [p.bottle, p.position])).toEqual([['b', 19]]);
+  });
+
   test('without layer/slot the bottle takes the bay\'s first cell and overflow fans the rest out', () => {
     expect(computeRackPosition({ ...cab, position: 2 })).toEqual({ position: 7 });
     const rack = { type: 'cabinet', rows: 3, cols: 6, typeConfig: { shelfRows: [1, 3, 2], twoDeep: true }, slots: [], maxPosition: 36 };

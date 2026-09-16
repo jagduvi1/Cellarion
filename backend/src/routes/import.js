@@ -39,7 +39,7 @@ const { WINE_TYPES } = require('../services/wineProfileOps');
 const { parseAndValidateVintage, parseDrinkYear } = require('../utils/validation');
 const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
 const { extractAiExplanation } = require('../utils/jsonExtract');
-const { getMaxPosition, cabinetShelfRows } = require('../utils/rackGeometry');
+const { getMaxPosition, cabinetShelfRows, cabinetShelfCols, cabinetShelfAlternate } = require('../utils/rackGeometry');
 const { planRackCreations, placeBottlesInRack, VALID_ANCHORS, DEFAULT_ANCHOR } = require('../utils/rackImport');
 const { RACK_TYPES } = require('../models/Rack');
 const { validatePriceSanity } = require('../utils/priceValidation');
@@ -1395,6 +1395,10 @@ router.post('/confirm', async (req, res) => {
             tc.twoDeep = cfg.typeConfig.twoDeep !== false;
             tc.stagger = cfg.typeConfig.stagger !== false;
             tc.alternate = cfg.typeConfig.alternate === true;
+            // Per-shelf width / pattern, when the file has them (a Cellarion
+            // export); fitted to the shelf count the same way as shelfRows.
+            if (Array.isArray(cfg.typeConfig.shelfCols)) tc.shelfCols = cabinetShelfCols(rows, cols, cfg.typeConfig);
+            if (Array.isArray(cfg.typeConfig.shelfAlternate)) tc.shelfAlternate = cabinetShelfAlternate(rows, cfg.typeConfig);
           }
           if (Object.keys(tc).length > 0) entry.typeConfig = tc;
         }
@@ -1472,6 +1476,8 @@ router.post('/confirm', async (req, res) => {
               twoDeep: rackData.typeConfig?.twoDeep !== false,
               stagger: rackData.typeConfig?.stagger !== false,
               alternate: rackData.typeConfig?.alternate === true,
+              ...(Array.isArray(rackData.typeConfig?.shelfCols) ? { shelfCols: cabinetShelfCols(rows, cols, rackData.typeConfig) } : {}),
+              ...(Array.isArray(rackData.typeConfig?.shelfAlternate) ? { shelfAlternate: cabinetShelfAlternate(rows, rackData.typeConfig) } : {}),
             };
           }
           const rack = new Rack(rackData);

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../Modal';
+import { cabinetShelfAlternate } from '../../utils/rackLayouts';
 
 /**
  * Rename a rack and set its group — the room or appliance it belongs to
@@ -23,7 +24,9 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
   const [name, setName] = useState(rack.name || '');
   const [group, setGroup] = useState(rack.group || '');
   const isCabinet = rack.type === 'cabinet' && !rack.isModular;
-  const alternate = isCabinet && rack.typeConfig?.alternate === true;
+  // Nesting is implied on every bay that alternates; the box is locked only
+  // when all of them do (otherwise it still governs the other bays).
+  const alternate = isCabinet && cabinetShelfAlternate(rack.rows, rack.typeConfig).every(Boolean);
   const [twoDeep, setTwoDeep] = useState(rack.typeConfig?.twoDeep !== false);
   const [stagger, setStagger] = useState(alternate || rack.typeConfig?.stagger !== false);
   const [saving, setSaving] = useState(false);
