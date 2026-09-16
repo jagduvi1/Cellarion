@@ -1,6 +1,7 @@
 import {
   computeLayout, computeModularLayout, getModularTotalSlots, getTotalSlots,
   SLOT_RADIUS, validDoubleHeightRows, DOUBLE_ROW_HEADROOM, cabinetShelfRows,
+  cabinetRowWidth, cabinetBayCapacity,
 } from './rackLayouts';
 
 describe('computeLayout', () => {
@@ -350,6 +351,80 @@ describe('computeLayout', () => {
       expect(layout.cabinet.bays.map(b => b.levels)).toEqual([1, 2, 1]);
       expect(computeLayout('cabinet', 1, 3, { shelfRows: [2] }).shelfYs).toBeUndefined();
     });
+
+    // Support ticket 2026-09-15: a Liebherr GrandCru 5001 stacks 6 in front
+    // of 5, then 5 in front of 6 — rows alternate cols / cols−1, the narrow
+    // ones lying in the grooves of the wide ones. Changes capacity and the
+    // numbering, so unlike stagger it is pinned slot by slot.
+    describe('alternate', () => {
+      const alt = computeLayout('cabinet', 1, 6, { shelfRows: [4], twoDeep: true, alternate: true });
+      const at = (p) => alt.slots.find(s => s.position === p);
+
+      it('rows are 6, 5, 5, 6 wide and numbered straight on — 22 slots, not 24', () => {
+        expect(alt.totalSlots).toBe(22);
+        expect(alt.slots.map(s => s.position)).toEqual(Array.from({ length: 22 }, (_, i) => i + 1));
+        expect(getTotalSlots('cabinet', 1, 6, { shelfRows: [4], twoDeep: true, alternate: true })).toBe(22);
+        // row 1 (level 1 front) 1..6, row 2 (level 1 back) 7..11, row 3 (level 2 front) 12..16, row 4 (level 2 back) 17..22
+        const rowOf = (from, to) => alt.slots.filter(s => s.position >= from && s.position <= to);
+        expect(new Set(rowOf(1, 6).map(s => s.cy)).size).toBe(1);
+        expect(rowOf(7, 11).every(s => s.isBack)).toBe(true);
+        expect(rowOf(12, 16).every(s => !s.isBack && s.isTop)).toBe(true);
+        expect(rowOf(17, 22).every(s => s.isBack)).toBe(true);
+        expect(at(7).cy).toBeLessThan(at(1).cy);
+        expect(at(12).cy).toBeLessThan(at(7).cy);
+        expect(at(17).cy).toBeLessThan(at(12).cy);
+      });
+
+      it('the narrow rows sit half a bottle over, in the gaps of the wide rows; the wide rows line up', () => {
+        const half = (at(2).cx - at(1).cx) / 2;
+        expect(at(7).cx).toBeCloseTo(at(1).cx + half, 6);   // level 1 back (5) between the 6 in front
+        expect(at(12).cx).toBeCloseTo(at(1).cx + half, 6);  // level 2 front (5) in the grooves of level 1
+        expect(at(17).cx).toBeCloseTo(at(1).cx, 6);         // level 2 back (6) full width again
+        expect(at(11).cx).toBeCloseTo(at(5).cx + half, 6);
+        expect(at(22).cx).toBeCloseTo(at(6).cx, 6);
+      });
+
+      it('the shelf is exactly cols wide — no half-bottle overhang — and nothing escapes it', () => {
+        const plain = computeLayout('cabinet', 1, 6, { shelfRows: [4], twoDeep: false, stagger: false });
+        expect(alt.viewBox.width).toBe(plain.viewBox.width);
+        alt.slots.forEach((slot) => {
+          expect(slot.cx + SLOT_RADIUS).toBeLessThanOrEqual(alt.viewBox.width);
+          expect(slot.cx - SLOT_RADIUS).toBeGreaterThanOrEqual(0);
+        });
+      });
+
+      it('alternating rows always nest: stagger is implied, and the levels sit at the nested pitch', () => {
+        const forced = computeLayout('cabinet', 1, 6, { shelfRows: [4], twoDeep: true, alternate: true, stagger: false });
+        expect(forced.cabinet.stagger).toBe(true);
+        expect(forced.cabinet.alternate).toBe(true);
+        expect(forced.slots.map(s => [s.cx, s.cy])).toEqual(alt.slots.map(s => [s.cx, s.cy]));
+        const nested = computeLayout('cabinet', 1, 6, { shelfRows: [4], twoDeep: true, stagger: true });
+        expect(alt.viewBox.height).toBe(nested.viewBox.height);
+      });
+
+      it('single deep: levels alternate 4, 3, 4 with the 3 centred in the grooves', () => {
+        const single = computeLayout('cabinet', 1, 4, { shelfRows: [3], twoDeep: false, alternate: true });
+        expect(single.totalSlots).toBe(11);
+        const p = (n) => single.slots.find(s => s.position === n);
+        const half = (p(2).cx - p(1).cx) / 2;
+        expect(p(5).cx).toBeCloseTo(p(1).cx + half, 6);
+        expect(p(7).cx).toBeCloseTo(p(3).cx + half, 6);
+        expect(p(8).cx).toBeCloseTo(p(1).cx, 6);
+        expect(single.slots.some(s => s.isBack)).toBe(false);
+      });
+
+      it('the helpers mirror the backend: widths 6/5/5/6…, a bay of 8 holds 44, the 5001 holds 196', () => {
+        const deep = { twoDeep: true, alternate: true };
+        expect([1, 2, 3, 4, 5, 6, 7, 8].map((r) => cabinetRowWidth(r, 6, deep))).toEqual([6, 5, 5, 6, 6, 5, 5, 6]);
+        expect([1, 2, 3].map((r) => cabinetRowWidth(r, 6, { twoDeep: false, alternate: true }))).toEqual([6, 5, 6]);
+        expect([1, 2].map((r) => cabinetRowWidth(r, 1, deep))).toEqual([1, 1]);
+        expect(cabinetBayCapacity(8, 6, deep)).toBe(44);
+        expect(cabinetBayCapacity(8, 6, { twoDeep: true, alternate: false })).toBe(48);
+        expect(getTotalSlots('cabinet', 5, 6, { shelfRows: [8, 7, 7, 7, 7], twoDeep: true, alternate: true })).toBe(196);
+        // Off by default: an existing cabinet keeps cols × Σ shelfRows.
+        expect(getTotalSlots('cabinet', 5, 6, { shelfRows: [8, 7, 7, 7, 7], twoDeep: true })).toBe(216);
+      });
+    });
   });
 
   describe('all types have valid coordinates', () => {
@@ -366,6 +441,8 @@ describe('computeLayout', () => {
       ['cabinet', 3, 6, { shelfRows: [1, 3, 2], twoDeep: true }],
       ['cabinet', 2, 4, { shelfRows: [2, 5], twoDeep: false }],
       ['cabinet', 2, 4, undefined],
+      ['cabinet', 2, 6, { shelfRows: [3, 4], twoDeep: true, alternate: true }],
+      ['cabinet', 2, 5, { shelfRows: [3, 2], twoDeep: false, alternate: true }],
     ];
 
     test.each(cases)('%s layout has positive coordinates within viewBox', (type, rows, cols, tc) => {
@@ -526,6 +603,7 @@ describe('getTotalSlots', () => {
       ['shelf', 3, 2, undefined],
       ['cabinet', 3, 6, { shelfRows: [1, 3, 2], twoDeep: true }],
       ['cabinet', 2, 4, { shelfRows: [2, 5], twoDeep: false }],
+      ['cabinet', 2, 6, { shelfRows: [3, 4], twoDeep: true, alternate: true }],
     ];
     cases.forEach(([type, rows, cols, tc]) => {
       expect(getTotalSlots(type, rows, cols, tc)).toBe(computeLayout(type, rows, cols, tc).totalSlots);

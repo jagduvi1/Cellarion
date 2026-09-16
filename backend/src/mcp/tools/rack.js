@@ -16,6 +16,7 @@ const {
   resolveCellarAccess, resolveBottleAccess,
 } = require('../toolUtil');
 const { logAction, replay } = require('../actionLedger');
+const { totalSlots } = require('../../utils/rackGeometry');
 
 // Load a rack + confirm the caller can edit its cellar. Returns { rack, cellar }
 // or null (missing/foreign → not_found, same as the rest of the surface).
@@ -67,7 +68,8 @@ registerTool({
     'fridge — rows = shelves, cols = bottles across, shelf_rows = rows of bottles each shelf holds top to bottom ' +
     '(1 = a sliding shelf with one row, more = a stacking bay; one entry per shelf), two_deep = bottles lie neck to ' +
     'neck two rows deep (default true), stagger = stacked rows nest in the grooves of the row below (default true, ' +
-    'drawing only). Confirm name and shape first; group is the optional room or appliance label ' +
+    'drawing only), alternate = rows alternate cols / cols−1 like a honeycomb (6 in front of 5, then 5 in front of 6; ' +
+    'default false, changes capacity). Confirm name and shape first; group is the optional room or appliance label ' +
     'the rack belongs to ("Basement", "Kitchen fridge") — reuse a group name list_racks already shows so racks ' +
     'section together. For other rack shapes, modular racks, zones or disabled slots, use the web app. Reversible ' +
     'via undo_last while the rack is still empty.',
@@ -83,6 +85,7 @@ registerTool({
       .describe('Cabinet only: rows of bottles per shelf, top shelf first, one entry per shelf (must equal rows). Required for type "cabinet".'),
     two_deep: z.boolean().optional().describe('Cabinet only: bottles lie neck to neck, two rows deep per level (default true)'),
     stagger: z.boolean().optional().describe('Cabinet only: stacked rows nest in the grooves of the row below, offset half a bottle (default true). Drawing only — capacity is unchanged.'),
+    alternate: z.boolean().optional().describe('Cabinet only: rows alternate in width like a honeycomb — the first level holds cols bottles in front of cols−1, the level above cols−1 in front of cols, and so on (a Liebherr GrandCru shelf: 6 / 5 then 5 / 6). Default false. CHANGES capacity, so pass it only when the cabinet really stacks that way.'),
     group: z.string().max(40).optional().describe('Optional group label (room or appliance), e.g. "Basement"'),
     idempotency_key: z.string().max(100).optional(),
   },
@@ -97,22 +100,23 @@ registerTool({
       if (!Array.isArray(args.shelf_rows)) {
         return fail('invalid_input', 'shelf_rows is required for a cabinet: one entry per shelf, rows of bottles each shelf holds (top shelf first)');
       }
-      typeConfig = { shelfRows: args.shelf_rows, twoDeep: args.two_deep !== false, stagger: args.stagger !== false };
-    } else if (args.shelf_rows !== undefined || args.two_deep !== undefined || args.stagger !== undefined) {
-      return fail('invalid_input', 'shelf_rows, two_deep and stagger apply to type "cabinet" only');
+      typeConfig = { shelfRows: args.shelf_rows, twoDeep: args.two_deep !== false, stagger: args.stagger !== false, alternate: args.alternate === true };
+    } else if (args.shelf_rows !== undefined || args.two_deep !== undefined || args.stagger !== undefined || args.alternate !== undefined) {
+      return fail('invalid_input', 'shelf_rows, two_deep, stagger and alternate apply to type "cabinet" only');
     }
     const result = await createGridRack(access.cellar, { name: args.name, type, rows: args.rows, cols: args.cols, typeConfig, group: args.group }, ctx.req);
     if (result.error) {
       return fail(result.error.code === 'duplicate' ? 'conflict' : 'invalid_input', result.error.message);
     }
-    const capacity = type === 'cabinet' ? args.shelf_rows.reduce((sum, r) => sum + r * args.cols, 0) : args.rows * args.cols;
+    // Geometry owns the count: an alternating cabinet's rows are not all `cols` wide.
+    const capacity = type === 'cabinet' ? totalSlots('cabinet', args.rows, args.cols, typeConfig) : args.rows * args.cols;
     const envelope = {
       summary: type === 'cabinet'
         ? `Created wine cabinet "${result.rack.name}" in "${access.cellar.name}": ${args.rows} shelves, ${args.cols} across, ${capacity} bottles`
         : `Created ${args.rows}×${args.cols} rack "${result.rack.name}" in "${access.cellar.name}"`,
       data: {
         rack_id: result.rack._id, cellar_id: access.cellar._id, type, rows: args.rows, cols: args.cols, capacity,
-        ...(type === 'cabinet' ? { shelf_rows: args.shelf_rows, two_deep: args.two_deep !== false, stagger: args.stagger !== false } : {}),
+        ...(type === 'cabinet' ? { shelf_rows: args.shelf_rows, two_deep: args.two_deep !== false, stagger: args.stagger !== false, alternate: args.alternate === true } : {}),
         group: result.rack.group || null, undo: 'undo_last deletes it while still empty',
       },
     };

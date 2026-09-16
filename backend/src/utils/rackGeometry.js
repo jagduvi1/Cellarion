@@ -144,9 +144,10 @@ function totalSlots(type, rows, cols, typeConfig) {
 
     case 'cabinet': {
       // Wine cabinet: `rows` shelves, shelf i holds shelfRows[i] rows of
-      // `cols` bottles. See cabinetShelfRows / cabinetPosition for the
-      // position contract.
-      return cabinetShelfRows(rows, typeConfig).reduce((sum, r) => sum + cols * r, 0);
+      // `cols` bottles — or, when the cabinet alternates, of cols and cols−1
+      // in turn (cabinetRowWidth). See cabinetPosition for the contract.
+      const opts = cabinetOptions(typeConfig);
+      return cabinetShelfRows(rows, typeConfig).reduce((sum, r) => sum + cabinetBayCapacity(r, cols, opts), 0);
     }
 
     default: {
@@ -167,7 +168,12 @@ function totalSlots(type, rows, cols, typeConfig) {
 // BACK row, row 3 the second level's front row, … — a visual arrangement the
 // renderers share; the numbering above never changes with it. Oeno imports
 // map shelf p (1 = bottom) → i = rows − p and layer L → r = L, so an
-// imported bottle lands in its exact cell. Mirrored in
+// imported bottle lands in its exact cell.
+// With typeConfig.alternate the rows are NOT all `cols` wide: they alternate
+// cols / cols−1 like a honeycomb (cabinetRowWidth), so the general form is
+//     position = Σ (width of every row before this one, bay by bay) + s
+// which reduces to the formula above when every row is `cols` wide. A cabinet
+// created without the flag keeps its numbering exactly. Mirrored in
 // frontend/src/utils/rackLayouts.cabinetLayout.
 
 const CABINET_MAX_ROWS_PER_SHELF = 12;
@@ -190,37 +196,101 @@ function cabinetShelfRows(rows, typeConfig) {
 }
 
 /**
- * Global position of one cabinet cell, or null when the cell doesn't exist.
- * @param {{ shelfIndex: number, row: number, slot: number, cols: number, shelfRows: number[] }} c
- *   shelfIndex 0-based from the TOP; row and slot 1-based (see contract).
+ * The shape flags of a cabinet's typeConfig with their defaults: twoDeep is
+ * on unless switched off, alternate is off unless switched on. (stagger is
+ * drawing only and never reaches the geometry.)
  */
-function cabinetPosition({ shelfIndex, row, slot, cols, shelfRows }) {
+function cabinetOptions(typeConfig) {
+  return { twoDeep: typeConfig?.twoDeep !== false, alternate: typeConfig?.alternate === true };
+}
+
+/**
+ * Bottles in row `row` (1-based, from the plank) of a cabinet bay. Every row
+ * holds `cols` unless the cabinet ALTERNATES (typeConfig.alternate): then the
+ * bay is a honeycomb — the first level's front row holds cols, its back row
+ * lies in the gaps between those bottles and holds one fewer, the level
+ * above nests in the grooves of the first so its front row holds one fewer
+ * and its back row is full width again, and so on: 6 / 5 in front of 5 / 6,
+ * the wooden shelf of a Liebherr GrandCru (support ticket 2026-09-15).
+ * Without twoDeep the levels simply alternate cols, cols−1, cols, …
+ * A single-bottle-wide cabinet has nothing to alternate (never 0 wide).
+ */
+function cabinetRowWidth(row, cols, { twoDeep = true, alternate = false } = {}) {
+  if (!alternate) return cols;
+  const level = twoDeep ? Math.ceil(row / 2) : row;
+  const isBack = twoDeep && row % 2 === 0;
+  const wide = (level % 2 === 1) !== isBack;
+  return wide ? cols : Math.max(1, cols - 1);
+}
+
+/** Bottles a bay of `rowCount` rows holds — cols × rowCount unless alternating. */
+function cabinetBayCapacity(rowCount, cols, opts) {
+  if (!opts?.alternate) return cols * rowCount;
+  let n = 0;
+  for (let r = 1; r <= rowCount; r++) n += cabinetRowWidth(r, cols, opts);
+  return n;
+}
+
+/**
+ * Every bottle row of a cabinet in position order — bay by bay from the top,
+ * rows from the plank up — as { shelfIndex, row, start, width }: `start` is
+ * the position just before the row's first slot, `width` its bottle count.
+ * The one walk importers and the row/col mapping share.
+ */
+function cabinetRows(rows, cols, typeConfig) {
+  const opts = cabinetOptions(typeConfig);
+  const out = [];
+  let start = 0;
+  cabinetShelfRows(rows, typeConfig).forEach((count, shelfIndex) => {
+    for (let row = 1; row <= count; row++) {
+      const width = cabinetRowWidth(row, cols, opts);
+      out.push({ shelfIndex, row, start, width });
+      start += width;
+    }
+  });
+  return out;
+}
+
+/**
+ * Global position of one cabinet cell, or null when the cell doesn't exist.
+ * @param {{ shelfIndex: number, row: number, slot: number, cols: number, shelfRows: number[],
+ *   twoDeep?: boolean, alternate?: boolean }} c
+ *   shelfIndex 0-based from the TOP; row and slot 1-based (see contract).
+ *   twoDeep / alternate as stored on typeConfig (defaults true / false); they
+ *   only matter when the cabinet alternates, where they decide a row's width.
+ */
+function cabinetPosition({ shelfIndex, row, slot, cols, shelfRows, twoDeep, alternate }) {
   if (!Array.isArray(shelfRows) || shelfIndex < 0 || shelfIndex >= shelfRows.length) return null;
   if (!Number.isInteger(row) || row < 1 || row > shelfRows[shelfIndex]) return null;
-  if (!Number.isInteger(slot) || slot < 1 || slot > cols) return null;
+  const opts = cabinetOptions({ twoDeep, alternate });
+  if (!Number.isInteger(slot) || slot < 1 || slot > cabinetRowWidth(row, cols, opts)) return null;
   let base = 0;
-  for (let k = 0; k < shelfIndex; k++) base += cols * shelfRows[k];
-  return base + (row - 1) * cols + slot;
+  for (let k = 0; k < shelfIndex; k++) base += cabinetBayCapacity(shelfRows[k], cols, opts);
+  for (let r = 1; r < row; r++) base += cabinetRowWidth(r, cols, opts);
+  return base + slot;
 }
 
 /**
  * Request-time gate for a cabinet's typeConfig (create + update routes, MCP):
  * returns an error string or null. shelfRows must be an array of whole
- * numbers 1..12 whose length equals the shelf count; twoDeep and stagger
- * booleans. Non-cabinet racks may not carry any of them (a stale shelfRows on
- * a grid would be silently ignored by the geometry but is a client bug).
+ * numbers 1..12 whose length equals the shelf count; twoDeep, stagger and
+ * alternate booleans. Non-cabinet racks may not carry any of them (a stale
+ * shelfRows on a grid would be silently ignored by the geometry but is a
+ * client bug).
  */
 function validateCabinetConfig(typeConfig, effectiveType, effectiveRows, effectiveModular) {
   if (!typeConfig || typeof typeConfig !== 'object') return null;
   const hasRows = typeConfig.shelfRows !== undefined && typeConfig.shelfRows !== null;
   const hasDeep = typeConfig.twoDeep !== undefined && typeConfig.twoDeep !== null;
   const hasStagger = typeConfig.stagger !== undefined && typeConfig.stagger !== null;
-  if (!hasRows && !hasDeep && !hasStagger) return null;
+  const hasAlternate = typeConfig.alternate !== undefined && typeConfig.alternate !== null;
+  if (!hasRows && !hasDeep && !hasStagger && !hasAlternate) return null;
   if (effectiveModular || effectiveType !== 'cabinet') {
-    return 'shelfRows, twoDeep and stagger apply to cabinet racks only';
+    return 'shelfRows, twoDeep, stagger and alternate apply to cabinet racks only';
   }
   if (hasDeep && typeof typeConfig.twoDeep !== 'boolean') return 'twoDeep must be a boolean';
   if (hasStagger && typeof typeConfig.stagger !== 'boolean') return 'stagger must be a boolean';
+  if (hasAlternate && typeof typeConfig.alternate !== 'boolean') return 'alternate must be a boolean';
   if (!hasRows) return 'shelfRows is required for a cabinet rack';
   const list = typeConfig.shelfRows;
   const rows = parseInt(effectiveRows, 10);
@@ -261,4 +331,5 @@ function getMaxPosition(rack) {
 module.exports = {
   totalSlots, modularTotalSlots, getMaxPosition, validDoubleHeightRows, validateDoubleHeightRows,
   cabinetShelfRows, cabinetPosition, validateCabinetConfig, CABINET_MAX_ROWS_PER_SHELF,
+  cabinetOptions, cabinetRowWidth, cabinetBayCapacity, cabinetRows,
 };

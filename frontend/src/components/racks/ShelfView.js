@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import useSlotDrag from '../../hooks/useSlotDrag';
 import { isReserved } from '../../utils/reservation';
 import { ReservedRibbon } from './RackRenderer';
-import { cabinetShelfRows } from '../../utils/rackLayouts';
+import { cabinetShelfRows, cabinetRowWidth } from '../../utils/rackLayouts';
 import './ShelfView.css';
 
 const WINE_COLORS = {
@@ -53,7 +53,9 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
   const bpc = rack?.typeConfig?.bottlesPerCell || 1;
   const rows = rack?.rows || 0;
   const twoDeep = rack?.typeConfig?.twoDeep !== false;
-  const stagger = rack?.typeConfig?.stagger !== false;
+  const alternate = rack?.typeConfig?.alternate === true;
+  // Alternating rows always nest (rackLayouts.cabinetLayout).
+  const stagger = alternate || rack?.typeConfig?.stagger !== false;
   const hasBack = isCabinet ? twoDeep : backCols > 0;
   // Ovals per row on the active layer (drives the "no cells" message + width).
   const layerCols = isCabinet ? cols : (layerMode === 'front' ? cols : backCols);
@@ -67,7 +69,9 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
   // 3D views (position 1 = top-left of the rack), so the top shelf shows the
   // LOW positions. Cabinet bays follow rackLayouts.cabinetLayout's contract:
   // position = cols × Σ shelfRows[k<i] + (row − 1) × cols + slot, row 1 on
-  // the plank; two-deep pairs odd (front) and even (back) rows per level.
+  // the plank; two-deep pairs odd (front) and even (back) rows per level. On
+  // an alternating cabinet the rows are cols / cols−1 wide in turn, so the
+  // position simply runs on row by row (Σ earlier widths + slot).
   const geometry = useMemo(() => {
     const slotX = (c) => SHELF_LABEL_W + BOTTLE_GAP + BOTTLE_RX + c * (BOTTLE_RX * 2 + BOTTLE_GAP);
     const shelves = [];
@@ -76,25 +80,30 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
     if (isCabinet) {
       const shelfRows = cabinetShelfRows(rows, rack?.typeConfig);
       perRow = Math.max(1, cols);
-      let base = 0;
+      let pos = 0; // positions handed out so far (rows on the other layer included)
       shelfRows.forEach((rowCount, i) => {
         const levels = twoDeep ? Math.ceil(rowCount / 2) : rowCount;
         const height = SHELF_PAD_Y * 2 + levels * rowPitch - BOTTLE_GAP;
         const slots = [];
         for (let r = 1; r <= rowCount; r++) {
+          const width = cabinetRowWidth(r, cols, { twoDeep, alternate });
+          const start = pos;
+          pos += width;
           const isBackRow = twoDeep && r % 2 === 0;
           if (twoDeep && (layerMode === 'back') !== isBackRow) continue;
           const level = twoDeep ? Math.ceil(r / 2) : r;
           const cy = height - SHELF_PAD_Y - BOTTLE_RY - (level - 1) * rowPitch;
-          // Nested levels alternate half a bottle left and right.
-          const nudge = stagger && cols > 1 && level % 2 === 0 ? colPitch / 2 : 0;
-          for (let c = 0; c < cols; c++) {
-            slots.push({ position: base + (r - 1) * cols + c + 1, cx: slotX(c) + nudge, cy });
+          // Nested levels alternate half a bottle left and right; on an
+          // alternating cabinet it is the narrow rows that sit offset.
+          const nudge = alternate
+            ? (width < cols ? colPitch / 2 : 0)
+            : (stagger && cols > 1 && level % 2 === 0 ? colPitch / 2 : 0);
+          for (let c = 0; c < width; c++) {
+            slots.push({ position: start + c + 1, cx: slotX(c) + nudge, cy });
           }
         }
         shelves.push({ number: shelfRows.length - i, y, height, slots });
         y += height;
-        base += rowCount * cols;
       });
     } else {
       const slotsPerShelf = (cols + backCols) * bpc;
@@ -112,11 +121,13 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
         y += height;
       }
     }
+    // A nested shelf is half a bottle wider than its count — unless the rows
+    // alternate, where the offset rows are the narrow ones and it is not.
     const width = SHELF_LABEL_W + BOTTLE_GAP + perRow * (BOTTLE_RX * 2 + BOTTLE_GAP)
-      + (isCabinet && stagger && cols > 1 ? colPitch / 2 : 0);
+      + (isCabinet && stagger && !alternate && cols > 1 ? colPitch / 2 : 0);
     return { shelves, width, height: y };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isCabinet, rows, cols, backCols, bpc, twoDeep, stagger, layerMode, rack?.typeConfig?.shelfRows, rowPitch, colPitch]);
+  }, [isCabinet, rows, cols, backCols, bpc, twoDeep, stagger, alternate, layerMode, rack?.typeConfig?.shelfRows, rowPitch, colPitch]);
 
   // Absolute svg coords of every visible oval on the active layer — the
   // drag hit map (mirrors the geometry in the render loop below).

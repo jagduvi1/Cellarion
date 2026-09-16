@@ -178,6 +178,22 @@ describe('PUT /api/racks/:id cabinet options', () => {
     expect(body.error).toMatch(/one entry per shelf/);
   });
 
+  test('the alternate flag rides along untouched, and a non-boolean one is refused', async () => {
+    const doc = cabinet({ typeConfig: { shelfRows: [2, 2, 2], twoDeep: true, stagger: true, alternate: true } });
+    Rack.findOne.mockResolvedValue(doc);
+    const ok = await request(buildApp(), 'PUT', `/api/racks/${RACK_ID}`, {
+      typeConfig: { shelfRows: [2, 2, 2], twoDeep: false, stagger: true, alternate: true },
+    });
+    expect(ok.status).toBe(200);
+    expect(doc.typeConfig).toEqual({ shelfRows: [2, 2, 2], twoDeep: false, stagger: true, alternate: true });
+
+    const bad = await request(buildApp(), 'PUT', `/api/racks/${RACK_ID}`, {
+      typeConfig: { shelfRows: [2, 2, 2], twoDeep: true, stagger: true, alternate: 'yes' },
+    });
+    expect(bad.status).toBe(400);
+    expect(bad.body.error).toMatch(/alternate must be a boolean/);
+  });
+
   test('renaming a cabinet without touching its shape still works', async () => {
     const doc = cabinet();
     Rack.findOne.mockResolvedValue(doc);

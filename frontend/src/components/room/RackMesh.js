@@ -6,7 +6,7 @@ import {
   BOTTLE_RADIUS, CELL_W, CELL_H, RACK_DEPTH, WOOD_THICK, PANEL_THICK,
   getDisplayDims, buildScaledLayout, getGridDoubleRows, getCabinetGeometry,
 } from '../../utils/roomConstants';
-import { getTotalSlots, getModularTotalSlots, DOUBLE_ROW_HEADROOM } from '../../utils/rackLayouts';
+import { getTotalSlots, getModularTotalSlots, DOUBLE_ROW_HEADROOM, cabinetRowWidth } from '../../utils/rackLayouts';
 import { CabinetBody, CabinetDoor, CabinetShelfPlank, CABINET_COLORS } from './CabinetParts';
 
 // ── Bright, visible wine colors by type ──────────────────
@@ -477,14 +477,19 @@ function computeShelfSlotPositions(rows, cols, backCols, width, height, bpc = 1,
 // rows are the front row of a level (base toward the viewer, neck pointing
 // in) and even rows the back row (neck-to-neck behind them). Geometry comes
 // from roomConstants.getCabinetGeometry so body, planks and bottles agree.
+// On an alternating cabinet the rows are cols / cols−1 wide in turn
+// (rackLayouts.cabinetRowWidth) and the narrow ones sit half a bottle over,
+// in the grooves of the wide row below — the shelf is exactly cols wide.
 // `row` carries the BAY index so PullOutShelfRow can slide a whole bay.
 function computeCabinetSlotPositions(cab, width, depth) {
   const positions = [];
   const cols = Math.max(1, cab.cols);
   // A staggered shelf is half a bottle wider than its bottle count, so the
   // cells are sized against cols + 0.5 and the offset level lands inside the
-  // frame instead of through the side panel.
-  const cW = width / (cols + (cab.stagger ? 0.5 : 0));
+  // frame instead of through the side panel. (Not when the rows alternate:
+  // there the offset rows are the narrow ones and never poke out.)
+  const cW = width / (cols + (cab.stagger && !cab.alternate ? 0.5 : 0));
+  const rowOpts = { twoDeep: cab.twoDeep, alternate: cab.alternate };
   const halfD = depth / 2;
   // A bottle's local +Y axis is 0.285 long; a base 0.029 in from a face puts
   // the neck just short of the centreline (same figures as the shelf type).
@@ -501,8 +506,12 @@ function computeCabinetSlotPositions(cab, width, depth) {
       // Nested levels alternate half a bottle left and right (see
       // roomConstants.getCabinetGeometry): the shelf is half a bottle wider
       // than its bottle count, exactly like a real fridge's staggered shelf.
-      const nudge = cab.stagger && cols > 1 && level % 2 === 0 ? cW / 2 : 0;
-      for (let c = 0; c < cols; c++) {
+      // Alternating rows: the narrow rows are the offset ones instead.
+      const rowWidth = cabinetRowWidth(r, cols, rowOpts);
+      const nudge = cab.alternate
+        ? (rowWidth < cols ? cW / 2 : 0)
+        : (cab.stagger && cols > 1 && level % 2 === 0 ? cW / 2 : 0);
+      for (let c = 0; c < rowWidth; c++) {
         positions.push({
           position: pos++,
           x: -width / 2 + cW / 2 + c * cW + nudge,
@@ -739,7 +748,7 @@ export default function RackMesh({
     () => (isCabinet ? { ...getCabinetGeometry(rack), cols: displayCols } : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [isCabinet, rack.rows, rack.cols, rack.typeConfig?.shelfRows, rack.typeConfig?.twoDeep,
-      rack.typeConfig?.stagger, displayCols]
+      rack.typeConfig?.stagger, rack.typeConfig?.alternate, displayCols]
   );
 
   // Double-height rows (grid racks only) — the rack grows taller by

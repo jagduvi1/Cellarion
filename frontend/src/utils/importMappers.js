@@ -1580,6 +1580,8 @@ export function parseOenoExport(text) {
       //     back  (layer 2): shelfBase + cols + slotInLayer   (slotInLayer ≤ backCols)
       //   Wine cabinet (rackGeometry.cabinetPosition): bay i = rows - shelfIndex
       //     position = cols × Σ shelfRows[k<i] + (layer - 1) × cols + slotInLayer
+      //     (every row `cols` wide: an Oeno cabinet is never created with the
+      //     alternating-rows option, whose rows are cols / cols−1 in turn)
       const disabled = new Set();
       const occupied = occupiedByRack.get(rackName) || new Set();
       for (const layer of layerById.values()) {

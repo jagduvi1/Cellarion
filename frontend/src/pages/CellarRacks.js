@@ -268,10 +268,12 @@ function CellarRacks() {
           typeConfig.shelfRows = fitShelfRows(typeConfig.shelfRows, newRack.rows);
           typeConfig.twoDeep = typeConfig.twoDeep !== false;
           typeConfig.stagger = typeConfig.stagger !== false;
+          typeConfig.alternate = typeConfig.alternate === true;
         } else {
           delete typeConfig.shelfRows;
           delete typeConfig.twoDeep;
           delete typeConfig.stagger;
+          delete typeConfig.alternate;
         }
         payload.typeConfig = typeConfig;
       }
@@ -302,7 +304,7 @@ function CellarRacks() {
         ? { moduleRows: 2, moduleCols: 2 }
         : type === 'x-rack' ? { bottlesPerSection: 10 }
         : type === 'shelf' ? { bottlesPerCell: 1, backCols: 0 }
-        : type === 'cabinet' ? { shelfRows: [...CABINET_DEFAULT.shelfRows], twoDeep: CABINET_DEFAULT.twoDeep, stagger: CABINET_DEFAULT.stagger } : {},
+        : type === 'cabinet' ? { shelfRows: [...CABINET_DEFAULT.shelfRows], twoDeep: CABINET_DEFAULT.twoDeep, stagger: CABINET_DEFAULT.stagger, alternate: CABINET_DEFAULT.alternate } : {},
     }));
   };
 
@@ -1162,12 +1164,17 @@ const PREVIEW_FILL_MAX = 180;
 // to pull shelves out and stack bottles, so two owners of one model end up
 // with different layouts. The per-shelf list is always kept the length of the
 // shelves input (fitShelfRows) so a changed shelf count never desyncs it.
+// `alternate` (rows alternate cols / cols−1, the honeycomb of a Liebherr
+// GrandCru shelf — support ticket 2026-09-15) changes capacity and the slot
+// numbering, so unlike two-deep and nesting it is offered here only, never
+// in the edit dialog; and since a narrow row can only nest, it forces nesting.
 function CabinetShapeFields({ newRack, setNewRack }) {
   const { t } = useTranslation();
   const [presetKey, setPresetKey] = useState('custom');
   const shelfRows = fitShelfRows(newRack.typeConfig?.shelfRows, newRack.rows);
   const twoDeep = newRack.typeConfig?.twoDeep !== false;
-  const stagger = newRack.typeConfig?.stagger !== false;
+  const alternate = newRack.typeConfig?.alternate === true;
+  const stagger = alternate || newRack.typeConfig?.stagger !== false;
   const preset = CABINET_PRESETS.find((p) => p.key === presetKey);
   // The shelves / bottles-across inputs live in the parent form, so editing
   // them must drop the preset label: the shape is no longer that model.
@@ -1184,7 +1191,7 @@ function CabinetShapeFields({ newRack, setNewRack }) {
       ...newRack,
       rows: p.shelves,
       cols: p.cols,
-      typeConfig: { ...newRack.typeConfig, shelfRows: [...p.shelfRows], twoDeep: p.twoDeep, stagger: p.stagger !== false },
+      typeConfig: { ...newRack.typeConfig, shelfRows: [...p.shelfRows], twoDeep: p.twoDeep, stagger: p.stagger !== false, alternate: p.alternate === true },
     });
   };
   const setRow = (i, value) => {
@@ -1211,7 +1218,7 @@ function CabinetShapeFields({ newRack, setNewRack }) {
         <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
           {t('racks.cabinetPresetHint', 'Starting shapes only. Owners pull shelves out and stack bottles, so edit the rows below to match your cabinet.')}
           {preset?.capacity
-            ? ` ${t('racks.cabinetPresetCapacity', 'The maker quotes {{model}} bottles; this shape holds {{shape}}.', { model: preset.capacity, shape: cabinetCapacity(newRack.cols, shelfRows) })}`
+            ? ` ${t('racks.cabinetPresetCapacity', 'The maker quotes {{model}} bottles; this shape holds {{shape}}.', { model: preset.capacity, shape: cabinetCapacity(newRack.cols, shelfRows, newRack.typeConfig) })}`
             : ''}
         </small>
       </div>
@@ -1256,13 +1263,33 @@ function CabinetShapeFields({ newRack, setNewRack }) {
         <label>
           <input
             type="checkbox"
+            checked={alternate}
+            onChange={(e) => {
+              setPresetKey('custom');
+              setNewRack({ ...newRack, typeConfig: { ...newRack.typeConfig, alternate: e.target.checked } });
+            }}
+          />
+          {' '}{t('racks.cabinetAlternateLabel', 'Rows alternate in width (6 / 5 / 6 …)')}
+        </label>
+        <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
+          {t('racks.cabinetAlternateHelp', 'The first level holds a full row in front of one bottle fewer behind it; the level above nests in its grooves, one fewer in front of a full row, and so on — the honeycomb of a Liebherr GrandCru shelf. This changes how many bottles the cabinet holds, so it is set when the cabinet is created.')}
+        </small>
+      </div>
+
+      <div className="form-group">
+        <label>
+          <input
+            type="checkbox"
             checked={stagger}
+            disabled={alternate}
             onChange={(e) => setNewRack({ ...newRack, typeConfig: { ...newRack.typeConfig, stagger: e.target.checked } })}
           />
           {' '}{t('racks.cabinetStaggerLabel', 'Stacked rows nest (staggered)')}
         </label>
         <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
-          {t('racks.cabinetStaggerHelp', 'Each stacked row sits in the grooves of the row below, offset half a bottle, the way bottles actually stack on a shelf. Turn it off for rows stacked squarely on top of each other. Drawing only — the number of bottles is the same.')}
+          {alternate
+            ? t('racks.cabinetAlternateNests', 'Rows that alternate in width always nest: each narrow row lies in the grooves of the wide row below it.')
+            : t('racks.cabinetStaggerHelp', 'Each stacked row sits in the grooves of the row below, offset half a bottle, the way bottles actually stack on a shelf. Turn it off for rows stacked squarely on top of each other. Drawing only — the number of bottles is the same.')}
         </small>
       </div>
     </>

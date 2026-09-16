@@ -11,17 +11,21 @@ import Modal from '../Modal';
  * For a wine cabinet it also edits the two DRAWING-ONLY options, two-deep and
  * nesting: both change how the cabinet is drawn and neither changes its
  * capacity or where a bottle sits, so they are safe to flip on a loaded rack.
- * The shape itself (shelves, bottles across, rows per shelf) stays
- * creation-only, because changing it would renumber the slots and move every
- * bottle — same reason the honeycomb options are creation-only.
+ * The shape itself (shelves, bottles across, rows per shelf, and whether the
+ * rows alternate in width) stays creation-only, because changing it would
+ * renumber the slots and move every bottle — same reason the honeycomb
+ * options are creation-only. On a cabinet whose rows alternate, nesting is
+ * implied (a narrow row lies in the grooves of the wide row below), so the
+ * nesting box is shown ticked and locked.
  */
 export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
   const { t } = useTranslation();
   const [name, setName] = useState(rack.name || '');
   const [group, setGroup] = useState(rack.group || '');
   const isCabinet = rack.type === 'cabinet' && !rack.isModular;
+  const alternate = isCabinet && rack.typeConfig?.alternate === true;
   const [twoDeep, setTwoDeep] = useState(rack.typeConfig?.twoDeep !== false);
-  const [stagger, setStagger] = useState(rack.typeConfig?.stagger !== false);
+  const [stagger, setStagger] = useState(alternate || rack.typeConfig?.stagger !== false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -81,11 +85,12 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
             </label>
             <label className="form-group">
               <span>
-                <input type="checkbox" checked={stagger} onChange={(e) => setStagger(e.target.checked)} disabled={saving} />
+                <input type="checkbox" checked={stagger} onChange={(e) => setStagger(e.target.checked)} disabled={saving || alternate} />
                 {' '}{t('racks.cabinetStaggerLabel', 'Stacked rows nest (staggered)')}
               </span>
             </label>
             <small className="help-text">
+              {alternate ? `${t('racks.cabinetAlternateNests', 'Rows that alternate in width always nest: each narrow row lies in the grooves of the wide row below it.')} ` : ''}
               {t('racks.cabinetEditHint', 'Both options only change how the cabinet is drawn — the number of bottles it holds and where each bottle sits stay the same. To change the shelves themselves, create a new cabinet.')}
             </small>
           </>

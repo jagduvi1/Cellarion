@@ -18,9 +18,14 @@
  * each entry is the maker's figure, shown next to the computed total so the
  * user can see the difference before they adjust.
  *
- * Shape: { key, group, shelves, cols, shelfRows, twoDeep, capacity } — see the
- * cabinet contract in rackLayouts.cabinetLayout for what each field means.
+ * Shape: { key, group, shelves, cols, shelfRows, twoDeep, alternate, capacity }
+ * — see the cabinet contract in rackLayouts.cabinetLayout for what each field
+ * means. `alternate` marks the honeycomb shelf whose rows alternate cols /
+ * cols−1 (6 in front of 5, then 5 in front of 6); it changes capacity, so a
+ * preset carrying it is one whose maker stacks that way.
  */
+
+import { cabinetBayCapacity, cabinetOptions } from './rackLayouts';
 
 export const CABINET_PRESET_GROUPS = ['vintec', 'liebherrGrandCru', 'liebherrVinidor', 'liebherrVinothek', 'generic'];
 
@@ -35,6 +40,11 @@ export const CABINET_PRESETS = [
   { key: 'liebherrWkes553',  group: 'liebherrGrandCru', shelves: 3, cols: 6, shelfRows: [1, 1, 1],          twoDeep: false, capacity: 18 },
   { key: 'liebherrWkes4552', group: 'liebherrGrandCru', shelves: 6, cols: 8, shelfRows: [5, 5, 4, 4, 4, 3], twoDeep: true,  capacity: 201 },
   { key: 'liebherrWkt6451',  group: 'liebherrGrandCru', shelves: 6, cols: 8, shelfRows: [7, 7, 7, 6, 6, 6], twoDeep: true,  capacity: 312 },
+  // WPbl 5001 (glass door) / WSbl 5001 (solid door): 196 bottles on beech
+  // shelves that stack as a honeycomb — 6 in front of 5, then 5 in front of 6
+  // (support ticket 2026-09-15). Five bays of 6 across, alternating: a bay of
+  // 8 rows holds 44, of 7 rows 38, and 44 + 4 × 38 lands on the maker's 196.
+  { key: 'liebherrWpbl5001', group: 'liebherrGrandCru', shelves: 5, cols: 6, shelfRows: [8, 7, 7, 7, 7], twoDeep: true, alternate: true, capacity: 196 },
 
   // ── Liebherr Vinidor (two or three zones, many single-row shelves) ───────
   { key: 'liebherrWtes1672', group: 'liebherrVinidor', shelves: 6,  cols: 6, shelfRows: [1, 1, 1, 1, 1, 1],                            twoDeep: false, capacity: 34 },
@@ -50,7 +60,7 @@ export const CABINET_PRESETS = [
 ];
 
 /** Default shape when the user picks the cabinet type with no preset. */
-export const CABINET_DEFAULT = { shelves: 5, cols: 6, shelfRows: [2, 2, 2, 2, 2], twoDeep: true, stagger: true };
+export const CABINET_DEFAULT = { shelves: 5, cols: 6, shelfRows: [2, 2, 2, 2, 2], twoDeep: true, stagger: true, alternate: false };
 
 export const CABINET_MAX_ROWS_PER_SHELF = 12;
 
@@ -70,8 +80,14 @@ export function fitShelfRows(shelfRows, shelves) {
   return out;
 }
 
-/** Capacity of a cabinet shape. */
-export function cabinetCapacity(cols, shelfRows) {
+/**
+ * Capacity of a cabinet shape. `typeConfig` carries twoDeep / alternate —
+ * an alternating cabinet's rows are not all `cols` wide, so the count is the
+ * geometry's, not cols × Σ rows.
+ */
+export function cabinetCapacity(cols, shelfRows, typeConfig) {
   const c = parseInt(cols, 10) || 0;
-  return (Array.isArray(shelfRows) ? shelfRows : []).reduce((sum, r) => sum + c * (parseInt(r, 10) || 0), 0);
+  const opts = cabinetOptions(typeConfig);
+  return (Array.isArray(shelfRows) ? shelfRows : [])
+    .reduce((sum, r) => sum + cabinetBayCapacity(parseInt(r, 10) || 0, c, opts), 0);
 }

@@ -22,7 +22,9 @@ jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.f
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineEmbedding', () => ({ findOne: jest.fn() }));
 jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
-jest.mock('../utils/rackGeometry', () => ({ getMaxPosition: jest.fn(() => 32) }));
+// Real geometry (create_rack reports a cabinet's capacity through it); only
+// the max-position lookup is stubbed.
+jest.mock('../utils/rackGeometry', () => ({ ...jest.requireActual('../utils/rackGeometry'), getMaxPosition: jest.fn(() => 32) }));
 jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false), search: jest.fn(), searchBottles: jest.fn() }));
 jest.mock('../services/statsService', () => ({ computeOverview: jest.fn(), buildEmptyStats: jest.fn() }));
 jest.mock('../services/vectorStore', () => ({ getPoints: jest.fn(), searchSimilar: jest.fn() }));
@@ -221,11 +223,28 @@ describe('rack groups (support ticket 2026-09-06)', () => {
     const body = parse(await tool('create_rack').handler({ cellar_id: oid('c'), name: 'Fridge', type: 'cabinet', rows: 2, cols: 5, shelf_rows: [1, 4] }, CTX));
     expect(rackOps.createGridRack).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ type: 'cabinet', rows: 2, cols: 5, typeConfig: { shelfRows: [1, 4], twoDeep: true, stagger: true } }),
+      expect.objectContaining({ type: 'cabinet', rows: 2, cols: 5, typeConfig: { shelfRows: [1, 4], twoDeep: true, stagger: true, alternate: false } }),
       expect.anything()
     );
-    expect(body.data).toMatchObject({ type: 'cabinet', capacity: 25, shelf_rows: [1, 4], two_deep: true, stagger: true });
+    expect(body.data).toMatchObject({ type: 'cabinet', capacity: 25, shelf_rows: [1, 4], two_deep: true, stagger: true, alternate: false });
     expect(body.summary).toMatch(/wine cabinet "Fridge".*2 shelves, 5 across, 25 bottles/);
+  });
+
+  test('create_rack cabinet with alternate: the honeycomb rows (6/5, 5/6) set the capacity, and it is cabinet-only', async () => {
+    ownCellar();
+    const misuse = parse(await tool('create_rack').handler({ cellar_id: oid('c'), name: 'G', rows: 2, cols: 6, alternate: true }, CTX));
+    expect(misuse.error.message).toMatch(/type "cabinet" only/);
+
+    rackOps.createGridRack.mockResolvedValue({ rack: { _id: oid('e'), name: 'GrandCru', group: null } });
+    const body = parse(await tool('create_rack').handler({ cellar_id: oid('c'), name: 'GrandCru', type: 'cabinet', rows: 2, cols: 6, shelf_rows: [2, 3], alternate: true }, CTX));
+    expect(rackOps.createGridRack).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ typeConfig: { shelfRows: [2, 3], twoDeep: true, stagger: true, alternate: true } }),
+      expect.anything()
+    );
+    // (6 + 5) + (6 + 5 + 5), not 6 × 5.
+    expect(body.data).toMatchObject({ capacity: 27, alternate: true });
+    expect(body.summary).toMatch(/27 bottles/);
   });
 
   test('create_rack passes the group to the shared creator and echoes it back', async () => {

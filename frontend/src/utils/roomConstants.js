@@ -39,7 +39,10 @@ export const CABINET_DEPTH_SINGLE = 0.42;
 export function getCabinetGeometry(rack) {
   const shelfRows = cabinetShelfRows(rack.rows || 1, rack.typeConfig);
   const twoDeep = rack.typeConfig?.twoDeep !== false;
-  const stagger = rack.typeConfig?.stagger !== false;
+  const alternate = rack.typeConfig?.alternate === true;
+  // Alternating rows always nest (a narrow row lies in the grooves of the
+  // wide row below), so the flag overrides stagger — as in rackLayouts.
+  const stagger = alternate || rack.typeConfig?.stagger !== false;
   const levelPitch = stagger ? CABINET_LEVEL_H * CABINET_NEST_RATIO : CABINET_LEVEL_H;
   const levelsOf = (rows) => (twoDeep ? Math.ceil(rows / 2) : rows);
   // The first level rests on the plank; only the levels ABOVE it are nested.
@@ -65,7 +68,7 @@ export function getCabinetGeometry(rack) {
     };
   });
   return {
-    shelfRows, twoDeep, stagger, levelPitch, bays, innerH, height,
+    shelfRows, twoDeep, stagger, alternate, levelPitch, bays, innerH, height,
     depth: twoDeep ? CABINET_DEPTH_TWO_DEEP : CABINET_DEPTH_SINGLE,
     topStrip: CABINET_TOP_STRIP, bottomExtra: CABINET_BOTTOM_EXTRA,
   };

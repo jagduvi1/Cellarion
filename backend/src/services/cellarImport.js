@@ -335,6 +335,7 @@ async function createRacks(cellarId, userId, cellar, items, result) {
         shelfRows: cabinetShelfRows(rackData.rows, rackData.typeConfig),
         twoDeep: rackData.typeConfig?.twoDeep !== false,
         stagger: rackData.typeConfig?.stagger !== false,
+        alternate: rackData.typeConfig?.alternate === true,
       };
     }
     if (typeof spec?.group === 'string' && spec.group.trim()) rackData.group = spec.group.trim().slice(0, 40);
