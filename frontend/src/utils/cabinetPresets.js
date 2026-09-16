@@ -31,11 +31,16 @@
 
 import { getTotalSlots } from './rackLayouts';
 
-export const CABINET_PRESET_GROUPS = ['vintec', 'liebherrGrandCru', 'liebherrVinidor', 'liebherrVinothek', 'generic'];
+export const CABINET_PRESET_GROUPS = [
+  'liebherrGrandCru', 'liebherrVinidor', 'liebherrVinothek', 'eurocave', 'vintec',
+  'mquvee', 'dometic', 'temptech', 'boschSiemens', 'caso', 'generic',
+];
 
 export const CABINET_PRESETS = [
   // ── Vintec ───────────────────────────────────────────────────────────────
   { key: 'vintec50',  group: 'vintec', shelves: 5, cols: 5, shelfRows: [2, 2, 2, 2, 2], twoDeep: true, capacity: 50 },
+  // V110SGE: 108 bottles on 11 sliding shelves — seven two deep, four single.
+  { key: 'vintec110', group: 'vintec', shelves: 11, cols: 6, shelfRows: [2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1], twoDeep: true, capacity: 108 },
   { key: 'vintec148', group: 'vintec', shelves: 5, cols: 7, shelfRows: [5, 4, 4, 4, 4], twoDeep: true, capacity: 148 },
 
   // ── Liebherr GrandCru (single temperature, long-term storage) ────────────
@@ -44,6 +49,15 @@ export const CABINET_PRESETS = [
   { key: 'liebherrWkes553',  group: 'liebherrGrandCru', shelves: 3, cols: 6, shelfRows: [1, 1, 1],          twoDeep: false, capacity: 18 },
   { key: 'liebherrWkes4552', group: 'liebherrGrandCru', shelves: 6, cols: 8, shelfRows: [5, 5, 4, 4, 4, 3], twoDeep: true,  capacity: 201 },
   { key: 'liebherrWkt6451',  group: 'liebherrGrandCru', shelves: 6, cols: 8, shelfRows: [7, 7, 7, 6, 6, 6], twoDeep: true,  capacity: 312 },
+  // The current 59.7 cm GrandCru range stacks its beech shelves as the 5001
+  // below does — 6 in front of 5, then 5 in front of 6 — so these start as
+  // alternating bays 6 across; only the 5001's split is the maker's own
+  // diagram, the others are split to land on the maker's figure.
+  { key: 'liebherrWpbl4201', group: 'liebherrGrandCru', shelves: 4, cols: 6, shelfRows: [7, 7, 6, 6],       twoDeep: true, alternate: true, capacity: 141 },
+  { key: 'liebherrWpbl4601', group: 'liebherrGrandCru', shelves: 5, cols: 6, shelfRows: [5, 8, 8, 5, 4],    twoDeep: true, alternate: true, capacity: 166 },
+  { key: 'liebherrWpbli5231', group: 'liebherrGrandCru', shelves: 6, cols: 6, shelfRows: [4, 7, 7, 8, 8, 8], twoDeep: true, alternate: true, capacity: 229 },
+  // 74.7 cm wide: 8 across.
+  { key: 'liebherrWsbli7731', group: 'liebherrGrandCru', shelves: 6, cols: 8, shelfRows: [8, 8, 8, 8, 6, 5], twoDeep: true, alternate: true, capacity: 324 },
   // WPbl 5001 (glass door) / WSbl 5001 (solid door): 196 bottles in five
   // compartments, front and back sections each — the maker's loading diagram
   // as an owner mapped it against the manual (support tickets 2026-08-31 and
@@ -61,9 +75,39 @@ export const CABINET_PRESETS = [
   { key: 'liebherrWtes4677', group: 'liebherrVinidor', shelves: 13, cols: 8, shelfRows: [2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1],       twoDeep: true,  capacity: 143 },
   { key: 'liebherrWtes5872', group: 'liebherrVinidor', shelves: 13, cols: 8, shelfRows: [2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1],       twoDeep: true,  capacity: 178 },
   { key: 'liebherrWtes5972', group: 'liebherrVinidor', shelves: 13, cols: 8, shelfRows: [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],       twoDeep: true,  capacity: 211 },
+  // WPbsi 5252: 155 bottles in two zones on 8 shelves, 59.7 cm wide.
+  { key: 'liebherrWpbsi5252', group: 'liebherrVinidor', shelves: 8, cols: 6, shelfRows: [4, 4, 3, 3, 3, 3, 3, 3], twoDeep: true, capacity: 155 },
 
   // ── Liebherr Vinothek (single temperature, stacked bays) ─────────────────
   { key: 'liebherrWkb4212', group: 'liebherrVinothek', shelves: 5, cols: 6, shelfRows: [7, 7, 7, 6, 6], twoDeep: true, capacity: 200 },
+
+  // ── EuroCave (Pure and Première share sizes: S 74, M 141, L 178) ─────────
+  // EuroCave sells shelves à la carte, so the shelf count is a typical fit,
+  // not a maker's figure; the width (6 across, two deep) is inferred.
+  { key: 'eurocaveS', group: 'eurocave', shelves: 5, cols: 6, shelfRows: [2, 2, 2, 3, 3],          twoDeep: true, capacity: 74 },
+  { key: 'eurocaveM', group: 'eurocave', shelves: 6, cols: 6, shelfRows: [4, 4, 4, 4, 4, 4],       twoDeep: true, capacity: 141 },
+  { key: 'eurocaveL', group: 'eurocave', shelves: 7, cols: 6, shelfRows: [5, 5, 4, 4, 4, 4, 4],    twoDeep: true, capacity: 178 },
+
+  // ── mQuvée ───────────────────────────────────────────────────────────────
+  // WineCave 700 60D: 45 bottles, four slide-out shelves, two zones.
+  { key: 'mquveeWinecave70060d', group: 'mquvee', shelves: 4, cols: 5, shelfRows: [2, 2, 2, 3], twoDeep: true, capacity: 45 },
+
+  // ── Dometic ──────────────────────────────────────────────────────────────
+  // C46B / D46B: 46 bottles on six sliding shelves, two zones.
+  { key: 'dometicC46', group: 'dometic', shelves: 6, cols: 5, shelfRows: [2, 2, 2, 1, 1, 1], twoDeep: true, capacity: 46 },
+
+  // ── Temptech ─────────────────────────────────────────────────────────────
+  // Collector COL150SD: up to 138 bottles on three movable shelves (four bays).
+  { key: 'temptechCol150', group: 'temptech', shelves: 4, cols: 6, shelfRows: [6, 6, 6, 5], twoDeep: true, capacity: 138 },
+
+  // ── Bosch / Siemens (built-under, oak shelves, neck to neck) ─────────────
+  // KUW21AHG0 / KU21WAHG0: 44 bottles, two zones — four shelves of 6 in
+  // front of 5 land on the figure exactly.
+  { key: 'boschKuw21', group: 'boschSiemens', shelves: 4, cols: 6, shelfRows: [2, 2, 2, 2], twoDeep: true, alternate: true, capacity: 44 },
+
+  // ── CASO ─────────────────────────────────────────────────────────────────
+  // WineComfort 66 / 660: 66 bottles on seven pull-out shelves, two zones.
+  { key: 'casoWinecomfort66', group: 'caso', shelves: 7, cols: 5, shelfRows: [2, 2, 2, 2, 2, 2, 1], twoDeep: true, capacity: 66 },
 
   // ── Generic ──────────────────────────────────────────────────────────────
   { key: 'sliding', group: 'generic', shelves: 6, cols: 6, shelfRows: [2, 2, 2, 2, 2, 2], twoDeep: true },
