@@ -413,16 +413,16 @@ describe('computeLayout', () => {
         expect(single.slots.some(s => s.isBack)).toBe(false);
       });
 
-      it('the helpers mirror the backend: widths 6/5/5/6…, a bay of 8 holds 44, the 5001 holds 196', () => {
+      it('the helpers mirror the backend: widths 6/5/5/6…, a bay of 8 holds 44, the 5001 preset 198', () => {
         const deep = { twoDeep: true, alternate: true };
         expect([1, 2, 3, 4, 5, 6, 7, 8].map((r) => cabinetRowWidth(r, 6, deep))).toEqual([6, 5, 5, 6, 6, 5, 5, 6]);
         expect([1, 2, 3].map((r) => cabinetRowWidth(r, 6, { twoDeep: false, alternate: true }))).toEqual([6, 5, 6]);
         expect([1, 2].map((r) => cabinetRowWidth(r, 1, deep))).toEqual([1, 1]);
         expect(cabinetBayCapacity(8, 6, deep)).toBe(44);
         expect(cabinetBayCapacity(8, 6, { twoDeep: true, alternate: false })).toBe(48);
-        expect(getTotalSlots('cabinet', 5, 6, { shelfRows: [8, 7, 7, 7, 7], twoDeep: true, alternate: true })).toBe(196);
+        expect(getTotalSlots('cabinet', 5, 6, { shelfRows: [6, 8, 8, 8, 6], twoDeep: true, alternate: true })).toBe(198);
         // Off by default: an existing cabinet keeps cols × Σ shelfRows.
-        expect(getTotalSlots('cabinet', 5, 6, { shelfRows: [8, 7, 7, 7, 7], twoDeep: true })).toBe(216);
+        expect(getTotalSlots('cabinet', 5, 6, { shelfRows: [6, 8, 8, 8, 6], twoDeep: true })).toBe(216);
       });
     });
   });

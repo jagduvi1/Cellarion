@@ -331,14 +331,15 @@ describe('cabinet rack geometry', () => {
       expect([1, 2, 3, 4].map((r) => cabinetRowWidth(r, 1, deep))).toEqual([1, 1, 1, 1]);
     });
 
-    test('capacity is the sum of the real row widths, and lands on the maker\'s 196 for the 5001', () => {
+    test('capacity is the sum of the real row widths: a GrandCru shelf of 6/5, 5/6, 6/5, 5/6 holds 44', () => {
       expect(cabinetBayCapacity(8, 6, { twoDeep: true, alternate: true })).toBe(44);
       expect(cabinetBayCapacity(7, 6, { twoDeep: true, alternate: true })).toBe(38);
       expect(cabinetBayCapacity(7, 6, { twoDeep: true, alternate: false })).toBe(42);
-      expect(totalSlots('cabinet', 5, 6, { shelfRows: [8, 7, 7, 7, 7], twoDeep: true, alternate: true })).toBe(196);
+      // The 5001 preset: three honeycomb shelves of 44 between two of 33.
+      expect(totalSlots('cabinet', 5, 6, { shelfRows: [6, 8, 8, 8, 6], twoDeep: true, alternate: true })).toBe(198);
       expect(totalSlots('cabinet', 1, 6, { shelfRows: [4], twoDeep: false, alternate: true })).toBe(6 + 5 + 6 + 5);
       // Not set → the plain cols × Σ shelfRows of every existing cabinet.
-      expect(totalSlots('cabinet', 5, 6, { shelfRows: [8, 7, 7, 7, 7], twoDeep: true })).toBe(216);
+      expect(totalSlots('cabinet', 5, 6, { shelfRows: [6, 8, 8, 8, 6], twoDeep: true })).toBe(216);
       expect(getMaxPosition({ type: 'cabinet', rows: 2, cols: 6, typeConfig: { shelfRows: [2, 3], alternate: true } })).toBe(11 + 16);
     });
 

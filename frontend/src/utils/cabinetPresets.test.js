@@ -25,10 +25,12 @@ describe('cabinetPresets', () => {
     expect(cabinetCapacity(6, [2, 3], { alternate: true })).toBe(11 + 16);
   });
 
-  it('the Liebherr GrandCru 5001 preset alternates 6 / 5 and lands on the maker\'s 196 bottles', () => {
+  it('the Liebherr GrandCru 5001 preset alternates 6 / 5: three exact honeycomb shelves of 44, 198 in all', () => {
     const p = CABINET_PRESETS.find((x) => x.key === 'liebherrWpbl5001');
     expect(p).toMatchObject({ group: 'liebherrGrandCru', cols: 6, twoDeep: true, alternate: true, capacity: 196 });
-    expect(cabinetCapacity(p.cols, p.shelfRows, p)).toBe(196);
+    expect(p.shelfRows).toEqual([6, 8, 8, 8, 6]);
+    expect(cabinetCapacity(6, [8], p)).toBe(44); // 6/5, 5/6, 6/5, 5/6 — the manual's middle shelf
+    expect(cabinetCapacity(p.cols, p.shelfRows, p)).toBe(198);
   });
 
   it('a maker figure is within a couple of bottles of its starting shape', () => {

@@ -40,11 +40,18 @@ export const CABINET_PRESETS = [
   { key: 'liebherrWkes553',  group: 'liebherrGrandCru', shelves: 3, cols: 6, shelfRows: [1, 1, 1],          twoDeep: false, capacity: 18 },
   { key: 'liebherrWkes4552', group: 'liebherrGrandCru', shelves: 6, cols: 8, shelfRows: [5, 5, 4, 4, 4, 3], twoDeep: true,  capacity: 201 },
   { key: 'liebherrWkt6451',  group: 'liebherrGrandCru', shelves: 6, cols: 8, shelfRows: [7, 7, 7, 6, 6, 6], twoDeep: true,  capacity: 312 },
-  // WPbl 5001 (glass door) / WSbl 5001 (solid door): 196 bottles on beech
-  // shelves that stack as a honeycomb — 6 in front of 5, then 5 in front of 6
-  // (support ticket 2026-09-15). Five bays of 6 across, alternating: a bay of
-  // 8 rows holds 44, of 7 rows 38, and 44 + 4 × 38 lands on the maker's 196.
-  { key: 'liebherrWpbl5001', group: 'liebherrGrandCru', shelves: 5, cols: 6, shelfRows: [8, 7, 7, 7, 7], twoDeep: true, alternate: true, capacity: 196 },
+  // WPbl 5001 (glass door) / WSbl 5001 (solid door): 196 bottles in five
+  // compartments, front and back sections each (support tickets 2026-08-31
+  // and 2026-09-15, from an owner who mapped the whole cabinet against the
+  // manual). The three middle shelves stack as a honeycomb four levels high —
+  // 6 in front of 5, then 5 in front of 6 — 44 each; the top and bottom
+  // shelves are four levels of 4 in front of 4, staggered, 32 each. A cabinet
+  // is one width, so the top and bottom bays here are three levels of the
+  // same 6-wide honeycomb (33 each): 198 against the maker's 196, with the
+  // middle shelves exact. The owner said they lay out the top and bottom
+  // shelves to their own use anyway; disabling two slots per row gets the
+  // factory 4-4-4-4 if wanted.
+  { key: 'liebherrWpbl5001', group: 'liebherrGrandCru', shelves: 5, cols: 6, shelfRows: [6, 8, 8, 8, 6], twoDeep: true, alternate: true, capacity: 196 },
 
   // ── Liebherr Vinidor (two or three zones, many single-row shelves) ───────
   { key: 'liebherrWtes1672', group: 'liebherrVinidor', shelves: 6,  cols: 6, shelfRows: [1, 1, 1, 1, 1, 1],                            twoDeep: false, capacity: 34 },
