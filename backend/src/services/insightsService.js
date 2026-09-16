@@ -369,13 +369,40 @@ async function computeValueReport(userId, currencyOverride) {
 // ── Case journeys ────────────────────────────────────────────────────────────
 
 const JOURNEY_MAX_EVENTS = 20;
+// MCP keeps consumed notes short (an envelope carries many lots); the bottle
+// page shows the note as the user wrote it, so the cap is an option.
+const JOURNEY_NOTE_MAX = 200;
+
+/**
+ * '' and null vintages read as NV everywhere else (the grouped cellar view,
+ * services/bottleLot's sibling query), so a lot groups them together too —
+ * otherwise an imported bottle with a blank vintage forms a lot of its own
+ * and never joins the NV bottles it belongs with.
+ */
+const normalizeVintage = (v) => (typeof v === 'string' && v.trim() ? v.trim() : 'NV');
+
+/**
+ * Newest vintage first. A non-numeric vintage ('NV', '', 'Unknown') has no
+ * year to place, so it sorts last rather than jumbled among the years.
+ */
+function vintageSortKey(vintage) {
+  const n = parseInt(vintage, 10);
+  return Number.isFinite(n) ? n : -Infinity;
+}
 
 /**
  * Multi-bottle lots (same wine + vintage) with their acquisition/consumption
  * story. focusWineId/focusVintage narrow to one wine (all vintages / one lot);
  * in focus mode minCount is 1.
+ *
+ * `sort`: 'count' (default — the biggest holdings first, what a cellar-plan
+ * review wants) or 'vintage' (newest first — what a per-wine page wants, so
+ * the vintages read as a column rather than by how many bottles are left).
  */
-async function buildCaseJourneys(userId, { focusWineId = null, focusVintage = null, minCount = 3, limit = 8 } = {}) {
+async function buildCaseJourneys(userId, {
+  focusWineId = null, focusVintage = null, minCount = 3, limit = 8,
+  sort = 'count', noteMaxLength = JOURNEY_NOTE_MAX,
+} = {}) {
   const cellars = await Cellar.find({ user: userId, deletedAt: null }).select('_id').lean();
   if (cellars.length === 0) return { summary: 'No cellars yet', data: [] };
   const scope = { cellar: { $in: cellars.map((c) => c._id) } };
@@ -384,19 +411,30 @@ async function buildCaseJourneys(userId, { focusWineId = null, focusVintage = nu
 
   // Group into lots by wine + vintage.
   const lots = new Map();
+  // null/undefined = every vintage of the wine; a PROVIDED but blank vintage
+  // is the NV lot, not a missing filter (case_journey passes a bottle's own
+  // vintage, and an imported bottle's can be '').
+  const focus = focusVintage == null ? null : normalizeVintage(focusVintage);
   for (const b of bottles) {
     if (!b.wineDefinition?._id) continue;
-    if (focusVintage && b.vintage !== focusVintage) continue;
-    const key = `${b.wineDefinition._id}:${b.vintage}`;
-    const lot = lots.get(key) || { wine: b.wineDefinition, vintage: b.vintage, bottles: [] };
+    const vintage = normalizeVintage(b.vintage);
+    if (focus && vintage !== focus) continue;
+    const key = `${b.wineDefinition._id}:${vintage}`;
+    const lot = lots.get(key) || { wine: b.wineDefinition, vintage, bottles: [] };
     lot.bottles.push(b);
     lots.set(key, lot);
   }
 
   const effectiveMin = focusWineId ? 1 : minCount;
+  const byCount = (a, b) => b.bottles.length - a.bottles.length;
+  const byVintage = (a, b) => {
+    const av = vintageSortKey(a.vintage);
+    const bv = vintageSortKey(b.vintage);
+    return av === bv ? byCount(a, b) : bv - av;
+  };
   const eligible = [...lots.values()]
     .filter((l) => l.bottles.length >= effectiveMin)
-    .sort((a, b) => b.bottles.length - a.bottles.length)
+    .sort(sort === 'vintage' ? byVintage : byCount)
     .slice(0, limit);
   if (eligible.length === 0) {
     return {
@@ -418,12 +456,16 @@ async function buildCaseJourneys(userId, { focusWineId = null, focusVintage = nu
 
     const acquiredDates = lot.bottles.map((b) => b.purchaseDate || b.createdAt).filter(Boolean).sort((a, b) => new Date(a) - new Date(b));
 
+    // Oldest first: a case's story reads forward, and rating_trend below is
+    // computed the same way. bottle_id lets a caller link the event back to
+    // the bottle it happened to (the bottle page links each row).
     const events = consumed.slice(-JOURNEY_MAX_EVENTS).map((b) => ({
+      bottle_id: b._id,
       date: b.consumedAt,
       reason: b.consumedReason || b.status,
       rating: b.consumedRating ?? null,
       rating_scale: b.consumedRating != null ? b.consumedRatingScale || '5' : undefined,
-      note: b.consumedNote ? String(b.consumedNote).slice(0, 200) : null,
+      note: b.consumedNote ? String(b.consumedNote).slice(0, noteMaxLength) : null,
     }));
 
     // Rating trend over the drunk bottles (normalized 0–100 for comparability).

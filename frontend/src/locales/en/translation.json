@@ -1156,6 +1156,19 @@
       "success_other": "{{count}} more bottles added to this cellar. They're unplaced — place them from the cellar page whenever you like."
     }
   },
+  "lotHistory": {
+    "title": "This wine in your cellar",
+    "remaining_one": "{{count}} in your cellar",
+    "remaining_other": "{{count}} in your cellar",
+    "consumed_one": "{{count}} drunk",
+    "consumed_other": "{{count}} drunk",
+    "thisBottle": "this bottle",
+    "noneThisVintage": "No bottles of this vintage.",
+    "showOtherVintages_one": "Other vintage you have ({{count}})",
+    "showOtherVintages_other": "Other vintages you have ({{count}})",
+    "hideOtherVintages": "Hide other vintages",
+    "otherVintagesHint": "Kept apart on purpose: how a different vintage showed says nothing about when this one is ready."
+  },
   "bottles": {
     "title": "All bottles",
     "loading": "Loading…",

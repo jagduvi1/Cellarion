@@ -18,6 +18,15 @@ export const listBottles = (apiFetch, params = {}) => {
 export const getBottle = (apiFetch, id) =>
   apiFetch(`/api/bottles/${id}`);
 
+/**
+ * The viewer's own story with this bottle's wine: their other bottles of it,
+ * how many remain and what happened to the ones already drunk.
+ * `vintages`: 'this' (default, the bottle's own vintage) or 'all' — every
+ * vintage of the wine as its own group, newest first.
+ */
+export const fetchLotHistory = (apiFetch, id, { vintages } = {}) =>
+  apiFetch(`/api/bottles/${id}/lot-history${vintages ? `?vintages=${encodeURIComponent(vintages)}` : ''}`);
+
 // Create ONE bottle (POST /api/bottles). There is no batch endpoint — a
 // multi-bottle add is N sequential calls of this (see AddMoreBottlesModal).
 export const createBottle = (apiFetch, data) =>

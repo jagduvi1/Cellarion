@@ -23,6 +23,7 @@ import ViewDetails from '../components/bottle/ViewDetails';
 import BottleJourney from '../components/BottleJourney';
 import OwnerInquiryCard from '../components/bottle/OwnerInquiryCard';
 import PersonalDataCard from '../components/bottle/PersonalDataCard';
+import LotHistory from '../components/bottle/LotHistory';
 import DialogBox from '../components/DialogBox';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
 import './BottleDetail.css';
@@ -612,6 +613,12 @@ function BottleDetail() {
       {!user?.isDemo && (
         <PersonalDataCard apiFetch={apiFetch} bottleId={bottleId} currentUserId={user?.id} wineId={wine?._id} vintage={bottle?.vintage} />
       )}
+
+      {/* ── The viewer's other bottles of this wine, and what happened to the
+          ones already drunk (support ticket 2026-09-16). Hides itself when
+          there is nothing to say. Personal, so it sits with the personal
+          cards, above the registry's profile and the community reviews. ── */}
+      <LotHistory apiFetch={apiFetch} bottleId={bottleId} vintage={bottle?.vintage} />
 
       {/* ── AI tasting profile (generated, vintage-neutral) ── */}
       {wine?.aiProfile?.description && (

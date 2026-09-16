@@ -1,0 +1,110 @@
+/* "This wine in your cellar" — the viewer's other bottles of the wine, and
+   what happened to the ones already drunk. Card chrome (.card) and the colour
+   tokens come from styles/common.css, so this file only lays the rows out and
+   both themes follow automatically. */
+
+.lot-history__lot + .lot-history__lot {
+  margin-top: 1.25rem;
+}
+
+.lot-history__vintage {
+  font-size: 0.95rem;
+  margin: 0 0 0.15rem;
+  color: var(--color-text);
+}
+
+.lot-history__counts {
+  margin: 0 0 0.6rem;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.lot-history__events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+/* A left rule ties the drunk bottles together as one column without drawing
+   a full box around each of them. */
+.lot-history__event {
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--color-input-border);
+}
+
+.lot-history__event--current {
+  border-left-color: var(--color-border-focus);
+}
+
+.lot-history__event-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.6rem;
+}
+
+.lot-history__link,
+.lot-history__self {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.lot-history__link:hover,
+.lot-history__link:focus-visible {
+  text-decoration: underline;
+}
+
+.lot-history__self em {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-style: normal;
+}
+
+.lot-history__date {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.lot-history__note {
+  margin: 0.3rem 0 0;
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--color-text-secondary);
+  /* A 1000-character note must not push the page's other cards off screen. */
+  overflow-wrap: anywhere;
+}
+
+.lot-history__others {
+  margin-top: 1.1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--color-input-border);
+}
+
+.lot-history__toggle {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.lot-history__toggle:hover,
+.lot-history__toggle:focus-visible {
+  color: var(--color-text);
+}
+
+.lot-history__hint {
+  margin: 0.5rem 0 0.9rem;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
