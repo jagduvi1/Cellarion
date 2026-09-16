@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchLotHistory } from '../../api/bottles';
 import RatingDisplay from '../RatingDisplay';
+import { CONSUMED_LABEL_KEYS } from '../BottleJourney';
 import './LotHistory.css';
 
 const REASON_ICONS = { drank: '\u{1F377}', gifted: '\u{1F381}', sold: '\u{1F4B0}', other: '\u{1F4E6}' };
@@ -40,7 +41,7 @@ function EventRow({ event, currentBottleId }) {
     <>
       <span className="lot-history__icon" aria-hidden="true">{REASON_ICONS[reason] || REASON_ICONS.other}</span>
       <span className="lot-history__reason">
-        {t(`history.reason_${reason}`, reason.charAt(0).toUpperCase() + reason.slice(1))}
+        {t(CONSUMED_LABEL_KEYS[reason] || CONSUMED_LABEL_KEYS.other)}
       </span>
       {date && <span className="lot-history__date">{date}</span>}
     </>
@@ -53,7 +54,7 @@ function EventRow({ event, currentBottleId }) {
             but must not link to the page you are on. */}
         {isCurrent
           ? <span className="lot-history__self">{head} <em>{t('lotHistory.thisBottle', 'this bottle')}</em></span>
-          : <Link className="lot-history__link" to={`/bottles/${event.bottle_id}`}>{head}</Link>}
+          : <Link className="lot-history__link" to={`/cellars/${event.cellar_id}/bottles/${event.bottle_id}`}>{head}</Link>}
         {event.rating != null && (
           <RatingDisplay
             value={event.rating}
@@ -98,7 +99,7 @@ function LotBlock({ lot, currentBottleId, heading }) {
   );
 }
 
-export default function LotHistory({ apiFetch, bottleId, vintage }) {
+export default function LotHistory({ apiFetch, bottleId, vintage, isOwner = true }) {
   const { t } = useTranslation();
   const [lots, setLots] = useState(null);
   const [showOthers, setShowOthers] = useState(false);
@@ -107,6 +108,10 @@ export default function LotHistory({ apiFetch, bottleId, vintage }) {
     let cancelled = false;
     setLots(null);
     setShowOthers(false);
+    // Owned cellars only (the route answers empty for anyone else), so a
+    // shared-cellar bottle costs no request; and it waits for the bottle
+    // itself, so the card never renders against a vintage not yet loaded.
+    if (!isOwner) return undefined;
     (async () => {
       try {
         // Every vintage in one call: the toggle below is then instant, and the
@@ -120,7 +125,7 @@ export default function LotHistory({ apiFetch, bottleId, vintage }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [apiFetch, bottleId]);
+  }, [apiFetch, bottleId, isOwner]);
 
   if (!lots) return null;
 
@@ -128,9 +133,10 @@ export default function LotHistory({ apiFetch, bottleId, vintage }) {
   const thisLot = lots.find((l) => String(l.vintage) === own) || null;
   const otherLots = lots.filter((l) => String(l.vintage) !== own);
 
-  // Nothing to say: this is the only bottle, it was never drunk, and there is
-  // no other vintage of the wine in the cellar.
-  const thisLotSpeaks = !!thisLot && ((thisLot.counts?.total ?? 0) > 1 || (thisLot.consumed_events || []).length > 0);
+  // Nothing to say: this is the only bottle of its vintage (drunk or not — a
+  // lone drunk bottle's row would only repeat the consumption card above it),
+  // and there is no other vintage of the wine in the cellar.
+  const thisLotSpeaks = !!thisLot && (thisLot.counts?.total ?? 0) > 1;
   if (!thisLotSpeaks && otherLots.length === 0) return null;
 
   return (

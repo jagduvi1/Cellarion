@@ -7,7 +7,7 @@ const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const CellarLayout = require('../models/CellarLayout');
 const { getCellarRole } = require('../utils/cellarAccess');
-const { getMaxPosition, validateDoubleHeightRows, validateCabinetConfig } = require('../utils/rackGeometry');
+const { getMaxPosition, validateDoubleHeightRows, validateCabinetConfig, cabinetShelfAlternate } = require('../utils/rackGeometry');
 const {
   createGridRack, placeBottleInRack, clearRackSlot,
   buildAnnotatedEntries, validateArrangementTarget, applyArrangement,
@@ -240,11 +240,13 @@ router.put('/:id', async (req, res) => {
       );
       if (cabError) return res.status(400).json({ error: cabError });
     }
-    // A cabinet's shelf list must keep matching its shelf count: changing
-    // rows or switching to cabinet without a fresh shelfRows is rejected.
-    // Only when the SHAPE is in the request — a rename, group, zone or NFC
-    // edit must never trip over a stored list (audit 2026-09-15).
-    if (type !== undefined || rows !== undefined || typeConfig !== undefined) {
+    // A cabinet's shelf lists must keep matching its shape: changing rows or
+    // switching to cabinet without a fresh shelfRows is rejected, and so is a
+    // cols narrower than a stored per-shelf width (audit 2026-09-16 — a
+    // cols-only PUT used to slip past and leave a cabinet no later edit
+    // could save). Only when the SHAPE is in the request — a rename, group,
+    // zone or NFC edit must never trip over a stored list (audit 2026-09-15).
+    if (type !== undefined || rows !== undefined || cols !== undefined || typeConfig !== undefined) {
       const effType = type !== undefined ? type : rack.type;
       const effRows = rows !== undefined ? rows : rack.rows;
       const effModular = isModular !== undefined ? isModular : rack.isModular;
@@ -256,6 +258,22 @@ router.put('/:id', async (req, res) => {
         if (cabError) return res.status(400).json({ error: cabError });
       }
     }
+
+    // Two-deep is drawing-only on a plain cabinet, but on one whose rows
+    // alternate it decides which rows are the narrow ones (cabinetRowWidth),
+    // so flipping it renumbers every placed bottle. Fixed once bottles are in.
+    if (typeConfig && !rack.isModular && (type !== undefined ? type : rack.type) === 'cabinet' && (rack.slots || []).length > 0) {
+      const effRows = rows !== undefined ? rows : rack.rows;
+      const wasTwoDeep = rack.typeConfig?.twoDeep !== false;
+      const willTwoDeep = typeConfig.twoDeep !== false;
+      if (wasTwoDeep !== willTwoDeep && cabinetShelfAlternate(effRows, typeConfig).some(Boolean)) {
+        return res.status(400).json({ error: 'Two deep cannot change on a loaded cabinet whose rows alternate: it decides which rows are the narrow ones. Clear the cabinet first.' });
+      }
+    }
+
+    // A shape edit renumbers slots; keep both sides for the audit row below.
+    const shapeOf = (r) => ({ type: r.type, rows: r.rows, cols: r.cols, typeConfig: r.typeConfig ? JSON.parse(JSON.stringify(r.typeConfig)) : null });
+    const shapeBefore = shapeOf(rack);
 
     if (name !== undefined) rack.name = name;
     // '' or null clears the group (ungrouped); absent leaves it alone.
@@ -311,7 +329,13 @@ router.put('/:id', async (req, res) => {
     });
 
     // cellarId so the update shows on the cellar's audit page like rack.create.
-    logAudit(req, 'rack.update', { type: 'rack', id: rack._id, cellarId: rack.cellar }, { name: rack.name, group: rack.group || null });
+    const shapeAfter = shapeOf(rack);
+    const shapeChanged = JSON.stringify(shapeBefore) !== JSON.stringify(shapeAfter);
+    logAudit(req, 'rack.update', { type: 'rack', id: rack._id, cellarId: rack.cellar }, {
+      name: rack.name,
+      group: rack.group || null,
+      ...(shapeChanged ? { shape: { from: shapeBefore, to: shapeAfter } } : {}),
+    });
     res.json({ rack: await withMaturity(rack) });
   } catch (err) {
     if (err.code === 11000) {

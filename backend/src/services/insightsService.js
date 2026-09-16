@@ -398,10 +398,16 @@ function vintageSortKey(vintage) {
  * `sort`: 'count' (default — the biggest holdings first, what a cellar-plan
  * review wants) or 'vintage' (newest first — what a per-wine page wants, so
  * the vintages read as a column rather than by how many bottles are left).
+ *
+ * `pinVintage`: a vintage that must survive `limit`. The bottle page asks
+ * for every vintage of the wine capped at 20, and the bottle it is showing
+ * must be among them — or a 21-vintage vertical's oldest bottle would read
+ * "no bottles of this vintage" about the one in the owner's hand (audit
+ * 2026-09-16). The pinned lot takes the last place when it would be cut.
  */
 async function buildCaseJourneys(userId, {
   focusWineId = null, focusVintage = null, minCount = 3, limit = 8,
-  sort = 'count', noteMaxLength = JOURNEY_NOTE_MAX,
+  sort = 'count', noteMaxLength = JOURNEY_NOTE_MAX, pinVintage = null,
 } = {}) {
   const cellars = await Cellar.find({ user: userId, deletedAt: null }).select('_id').lean();
   if (cellars.length === 0) return { summary: 'No cellars yet', data: [] };
@@ -432,10 +438,17 @@ async function buildCaseJourneys(userId, {
     const bv = vintageSortKey(b.vintage);
     return av === bv ? byCount(a, b) : bv - av;
   };
-  const eligible = [...lots.values()]
+  const ranked = [...lots.values()]
     .filter((l) => l.bottles.length >= effectiveMin)
-    .sort(sort === 'vintage' ? byVintage : byCount)
-    .slice(0, limit);
+    .sort(sort === 'vintage' ? byVintage : byCount);
+  let eligible = ranked.slice(0, limit);
+  if (pinVintage != null) {
+    const pinned = normalizeVintage(pinVintage);
+    if (!eligible.some((l) => l.vintage === pinned)) {
+      const lot = ranked.find((l) => l.vintage === pinned);
+      if (lot) eligible = [...eligible.slice(0, Math.max(0, limit - 1)), lot];
+    }
+  }
   if (eligible.length === 0) {
     return {
       summary: focusWineId ? 'No bottles of that wine' : `No lots with ${effectiveMin}+ bottles`,
@@ -461,6 +474,9 @@ async function buildCaseJourneys(userId, {
     // the bottle it happened to (the bottle page links each row).
     const events = consumed.slice(-JOURNEY_MAX_EVENTS).map((b) => ({
       bottle_id: b._id,
+      // The bottle page lives under its cellar (/cellars/:id/bottles/:id),
+      // and a sibling may sit in another of the owner's cellars.
+      cellar_id: b.cellar,
       date: b.consumedAt,
       reason: b.consumedReason || b.status,
       rating: b.consumedRating ?? null,
@@ -482,7 +498,9 @@ async function buildCaseJourneys(userId, {
     }
 
     // Window + pace verdict from a representative active bottle.
-    const rep = active[0] || null;
+    // Prefer a bottle whose vintage is written out: '' and 'NV' share a lot,
+    // and a blank vintage has no profile key (buildProfileMap skips it).
+    const rep = active.find((b) => typeof b.vintage === 'string' && b.vintage.trim()) || active[0] || null;
     const status = rep ? classifyMaturity(rep, profileMap) : null;
     const wdId = rep?.wineDefinition?._id ? String(rep.wineDefinition._id) : null;
     const vintageProfile = rep && wdId ? profileMap.get(`${wdId}:${rep.vintage}`) : null;

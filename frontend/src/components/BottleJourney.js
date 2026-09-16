@@ -5,7 +5,7 @@ function fmtDate(d) {
   return new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-const CONSUMED_LABEL_KEYS = {
+export const CONSUMED_LABEL_KEYS = {
   drank:  'history.reasonDrank',
   gifted: 'history.reasonGifted',
   sold:   'history.reasonSold',

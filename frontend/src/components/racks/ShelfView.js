@@ -77,7 +77,7 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
     let perRow = 1;
     if (isCabinet) {
       const bays = cabinetBays(rows, cols, rack?.typeConfig);
-      const drawOpts = { twoDeep, stagger };
+      const drawOpts = { twoDeep, stagger, backOffset: false };
       // The view is as wide as the widest bay; narrower bays sit centred.
       const units = Math.max(1, ...bays.map((b) => cabinetBayUnits(b, drawOpts)));
       perRow = units;
@@ -125,8 +125,8 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
         y += height;
       }
     }
-    // For a cabinet perRow already counts the half bottle a nested or
-    // two-deep bay pokes out (cabinetBayUnits).
+    // For a cabinet perRow already counts the half bottle a nested bay pokes
+    // out (cabinetBayUnits; the back row sits straight behind the front here).
     const width = SHELF_LABEL_W + BOTTLE_GAP + perRow * (BOTTLE_RX * 2 + BOTTLE_GAP);
     return { shelves, width, height: y };
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -37,7 +37,7 @@ const lot = (vintage, over = {}) => ({
   ...over,
 });
 const event = (id, over = {}) => ({
-  bottle_id: id, date: '2026-01-10T00:00:00.000Z', reason: 'drank',
+  bottle_id: id, cellar_id: 'c1', date: '2026-01-10T00:00:00.000Z', reason: 'drank',
   rating: 4, rating_scale: '5', note: 'Singing now', ...over,
 });
 
@@ -74,7 +74,7 @@ describe('LotHistory', () => {
     expect(screen.getAllByTestId('rating').map((n) => n.textContent)).toEqual(['4', '3']);
 
     const links = screen.getAllByRole('link');
-    expect(links.map((a) => a.getAttribute('href'))).toEqual(['/bottles/b2', '/bottles/b3']);
+    expect(links.map((a) => a.getAttribute('href'))).toEqual(['/cellars/c1/bottles/b2', '/cellars/c1/bottles/b3']);
   });
 
   test('the bottle you are looking at is counted but never linked to the page you are on', async () => {
@@ -87,7 +87,7 @@ describe('LotHistory', () => {
     expect(await screen.findByText('lotHistory.thisBottle')).toBeInTheDocument();
     const links = screen.getAllByRole('link');
     expect(links).toHaveLength(1);
-    expect(links[0]).toHaveAttribute('href', '/bottles/b2');
+    expect(links[0]).toHaveAttribute('href', '/cellars/c1/bottles/b2');
   });
 
   test('other vintages are a collapsed section, never merged into this vintage', async () => {
@@ -124,6 +124,27 @@ describe('LotHistory', () => {
     respond([lot('2019', { counts: { total: 1, remaining: 0, consumed: 1 }, consumed_events: [event('b9')] })]);
     mount({ vintage: '2021' });
     expect(await screen.findByText('lotHistory.noneThisVintage')).toBeInTheDocument();
+  });
+
+  test('a lone drunk bottle renders nothing — its one row would only repeat the consumption card above', async () => {
+    respond([lot('2020', { counts: { total: 1, remaining: 0, consumed: 1 }, consumed_events: [event('b1')] })]);
+    const { container } = mount();
+    await waitFor(() => expect(fetchLotHistory).toHaveBeenCalled());
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  test('a bottle in a cellar the viewer does not own asks for nothing and renders nothing', async () => {
+    respond([lot('2020', { counts: { total: 3, remaining: 1, consumed: 2 }, consumed_events: [event('b2'), event('b3')] })]);
+    const { container } = mount({ isOwner: false });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(fetchLotHistory).not.toHaveBeenCalled();
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  test('the reason label uses the shared history keys, so it translates like the rest of the page', async () => {
+    respond([lot('2020', { counts: { total: 2, remaining: 1, consumed: 1 }, consumed_events: [event('b2', { reason: 'gifted' })] })]);
+    mount();
+    expect(await screen.findByText('history.reasonGifted')).toBeInTheDocument();
   });
 
   test('a failed request renders nothing instead of breaking the bottle page', async () => {

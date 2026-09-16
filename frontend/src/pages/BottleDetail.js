@@ -618,7 +618,7 @@ function BottleDetail() {
           ones already drunk (support ticket 2026-09-16). Hides itself when
           there is nothing to say. Personal, so it sits with the personal
           cards, above the registry's profile and the community reviews. ── */}
-      <LotHistory apiFetch={apiFetch} bottleId={bottleId} vintage={bottle?.vintage} />
+      <LotHistory apiFetch={apiFetch} bottleId={bottleId} vintage={bottle?.vintage} isOwner={userRole === 'owner'} />
 
       {/* ── AI tasting profile (generated, vintage-neutral) ── */}
       {wine?.aiProfile?.description && (

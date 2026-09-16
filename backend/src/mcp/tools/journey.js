@@ -20,7 +20,8 @@ registerTool({
     'they were acquired, every bottle drunk so far (date, rating, tasting note), how many remain, the drink window, ' +
     'the rating trend across the case, and whether the current pace finishes the lot before its window closes. ' +
     'Call for "how is my case of X developing", "which cases should I start drinking", or cellar-plan reviews. ' +
-    'Pass wine_id or bottle_id to focus one lot; otherwise all lots with at least min_count bottles are returned.',
+    'Pass wine_id or bottle_id to focus one lot; otherwise all lots with at least min_count bottles are returned. ' +
+    'Each consumed event carries the bottle_id and cellar_id it happened to.',
   scope: 'read',
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {

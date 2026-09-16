@@ -686,6 +686,9 @@ router.get('/:id/lot-history', requireBottleAccess('viewer'), async (req, res) =
       focusVintage: scope === 'all' ? null : (bottle.vintage || 'NV'),
       sort: 'vintage',
       limit: scope === 'all' ? LOT_HISTORY_MAX_VINTAGES : 1,
+      // The bottle on screen must be among the capped vintages, or a
+      // 21-vintage vertical's oldest bottle reads "no bottles of this vintage".
+      pinVintage: scope === 'all' ? (bottle.vintage || 'NV') : null,
       // The page shows a note as the user wrote it (the field allows 1000).
       noteMaxLength: 1000,
     });

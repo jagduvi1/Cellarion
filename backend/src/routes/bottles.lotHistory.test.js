@@ -104,7 +104,7 @@ describe('GET /api/bottles/:id/lot-history', () => {
     expect(status).toBe(200);
     expect(body).toEqual({ scope: 'this', vintage: '2020', lots: [LOT] });
     expect(buildCaseJourneys).toHaveBeenCalledWith(USER, expect.objectContaining({
-      focusWineId: WINE, focusVintage: '2020', sort: 'vintage', limit: 1, noteMaxLength: 1000,
+      focusWineId: WINE, focusVintage: '2020', sort: 'vintage', limit: 1, noteMaxLength: 1000, pinVintage: null,
     }));
   });
 
@@ -116,6 +116,8 @@ describe('GET /api/bottles/:id/lot-history', () => {
     expect(body.scope).toBe('all');
     expect(buildCaseJourneys).toHaveBeenCalledWith(USER, expect.objectContaining({
       focusVintage: null, sort: 'vintage', limit: 20,
+      // The bottle on screen survives the cap (a 21-vintage vertical).
+      pinVintage: '2020',
     }));
   });
 

@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { updateConsumedRating } from '../../api/bottles';
 import RatingDisplay from '../RatingDisplay';
 import RatingInput from '../RatingInput';
+import { CONSUMED_LABEL_KEYS } from '../BottleJourney';
 
 const CONSUMED_REASON_ICONS = { drank: '\u{1F377}', gifted: '\u{1F381}', sold: '\u{1F4B0}', other: '\u{1F4E6}' };
 
@@ -46,7 +47,7 @@ function ConsumedDetails({ bottle, canEdit, onUpdate }) {
       <div className="bd-consumed__header">
         <span className="bd-consumed__icon">{icon}</span>
         <span className="bd-consumed__reason">
-          {t(`history.reason_${reason}`, reason.charAt(0).toUpperCase() + reason.slice(1))}
+          {t(CONSUMED_LABEL_KEYS[reason] || CONSUMED_LABEL_KEYS.other)}
         </span>
         {consumedDate && <span className="bd-consumed__date">{consumedDate}</span>}
       </div>

@@ -60,8 +60,27 @@ describe('buildCaseJourneys for the bottle page', () => {
     expect(data).toHaveLength(1);
     expect(data[0].counts).toEqual({ total: 2, remaining: 1, consumed: 1 });
     expect(data[0].consumed_events).toEqual([expect.objectContaining({
-      bottle_id: gone._id, reason: 'drank', rating: 4, rating_scale: '5', note: 'Good',
+      bottle_id: gone._id, cellar_id: CELLAR, reason: 'drank', rating: 4, rating_scale: '5', note: 'Good',
     })]);
+  });
+
+  test('pinVintage keeps the focus vintage inside the limit — the bottle on screen is never "no bottles of this vintage"', async () => {
+    // A 5-vintage vertical asked for 3 lots, newest first: the 2000 would be
+    // cut, and the page showing a 2000 would then deny it exists.
+    const bottles = ['2000', '2001', '2002', '2003', '2004'].map((y) => active(y));
+    const { data } = await run(bottles, { focusWineId: 'w1', sort: 'vintage', limit: 3, pinVintage: '2000' });
+    expect(data.map((l) => l.vintage)).toEqual(['2004', '2003', '2000']);
+  });
+
+  test('a pinned vintage already inside the limit changes nothing, and one the user does not hold adds nothing', async () => {
+    const bottles = ['2004', '2003', '2002'].map((y) => active(y));
+    const inside = await run(bottles, { focusWineId: 'w1', sort: 'vintage', limit: 2, pinVintage: '2004' });
+    expect(inside.data.map((l) => l.vintage)).toEqual(['2004', '2003']);
+    const absent = await run(bottles, { focusWineId: 'w1', sort: 'vintage', limit: 2, pinVintage: '1999' });
+    expect(absent.data.map((l) => l.vintage)).toEqual(['2004', '2003']);
+    // A blank pin is the NV lot, like a blank focus.
+    const nv = await run([active('2004'), active('2003'), active('')], { focusWineId: 'w1', sort: 'vintage', limit: 2, pinVintage: '' });
+    expect(nv.data.map((l) => l.vintage)).toEqual(['2004', 'NV']);
   });
 
   test('only the most recent events are listed, but the count still reports them all', async () => {

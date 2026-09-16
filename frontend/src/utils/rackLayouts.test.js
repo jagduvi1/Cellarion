@@ -1,7 +1,7 @@
 import {
   computeLayout, computeModularLayout, getModularTotalSlots, getTotalSlots,
   SLOT_RADIUS, validDoubleHeightRows, DOUBLE_ROW_HEADROOM, cabinetShelfRows,
-  cabinetRowWidth, cabinetBayCapacity, cabinetBays,
+  cabinetRowWidth, cabinetBayCapacity, cabinetBays, cabinetBayUnits,
 } from './rackLayouts';
 
 describe('computeLayout', () => {
@@ -647,5 +647,20 @@ describe('getTotalSlots', () => {
     expect(getTotalSlots('cabinet', 3, 6, { shelfRows: [1, 3, 2] })).toBe(36);
     expect(getTotalSlots('cabinet', 2, 5)).toBe(10);
     expect(cabinetShelfRows(4, { shelfRows: [2, 30] })).toEqual([2, 12, 1, 1]);
+  });
+});
+
+describe('cabinetBayUnits', () => {
+  it("counts the two-deep back row's half bottle only where the back row is drawn offset (audit 2026-09-16)", () => {
+    const bay = { rows: 2, cols: 6, alternate: false };
+    // The 2D map draws the back row at c + 0.5, so it needs the half.
+    expect(cabinetBayUnits(bay, { twoDeep: true, stagger: false })).toBe(6.5);
+    // The shelf view and the 3D room stack the back row straight behind the
+    // front: without backOffset the default cabinet gained a blank strip.
+    expect(cabinetBayUnits(bay, { twoDeep: true, stagger: false, backOffset: false })).toBe(6);
+    expect(cabinetBayUnits(bay, { twoDeep: true, stagger: true, backOffset: false })).toBe(6.5);
+    expect(cabinetBayUnits({ ...bay, cols: 1 }, { twoDeep: false, stagger: true })).toBe(1);
+    // An alternating bay never pokes out: its offset rows are the narrow ones.
+    expect(cabinetBayUnits({ ...bay, alternate: true }, { twoDeep: true, stagger: true })).toBe(6);
   });
 });

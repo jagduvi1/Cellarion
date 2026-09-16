@@ -1397,8 +1397,16 @@ router.post('/confirm', async (req, res) => {
             tc.alternate = cfg.typeConfig.alternate === true;
             // Per-shelf width / pattern, when the file has them (a Cellarion
             // export); fitted to the shelf count the same way as shelfRows.
-            if (Array.isArray(cfg.typeConfig.shelfCols)) tc.shelfCols = cabinetShelfCols(rows, cols, cfg.typeConfig);
-            if (Array.isArray(cfg.typeConfig.shelfAlternate)) tc.shelfAlternate = cabinetShelfAlternate(rows, cfg.typeConfig);
+            // A short list grows at the same end as shelfRows above, or a
+            // bottom-anchored file's narrow bottom shelf would be read as a
+            // full-width top one (audit 2026-09-16).
+            const grown = (list) => {
+              const kept = list.slice(0, rows);
+              const gap = rows - kept.length;
+              return gap > 0 && bottomAnchored ? [...Array(gap).fill(undefined), ...kept] : kept;
+            };
+            if (Array.isArray(cfg.typeConfig.shelfCols)) tc.shelfCols = cabinetShelfCols(rows, cols, { shelfCols: grown(cfg.typeConfig.shelfCols) });
+            if (Array.isArray(cfg.typeConfig.shelfAlternate)) tc.shelfAlternate = cabinetShelfAlternate(rows, { alternate: tc.alternate, shelfAlternate: grown(cfg.typeConfig.shelfAlternate) });
           }
           if (Object.keys(tc).length > 0) entry.typeConfig = tc;
         }

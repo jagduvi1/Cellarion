@@ -489,7 +489,7 @@ function computeCabinetSlotPositions(cab, width, depth) {
   // lands inside the frame instead of through the side panel. (Not for an
   // alternating bay: there the offset rows are the narrow ones and never
   // poke out.)
-  const drawOpts = { twoDeep: cab.twoDeep, stagger: cab.stagger };
+  const drawOpts = { twoDeep: cab.twoDeep, stagger: cab.stagger, backOffset: false };
   const units = Math.max(1, ...cab.bays.map((b) => cabinetBayUnits(b, drawOpts)));
   const cW = width / units;
   const halfD = depth / 2;

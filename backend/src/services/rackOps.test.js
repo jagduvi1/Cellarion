@@ -100,6 +100,15 @@ describe('createGridRack', () => {
     expect(res.error.message).toMatch(/cabinet racks only/);
   });
 
+  test('rows and cols must be whole numbers in range — 5.5, "5", 0 or 21 are 400, never saved (audit 2026-09-16)', async () => {
+    for (const dims of [{ rows: 5.5, cols: 6 }, { rows: '5', cols: 6 }, { rows: 5, cols: 0 }, { rows: 21, cols: 6 }]) {
+      const res = await createGridRack(cellar, { name: 'Bad', type: 'grid', ...dims }, REQ);
+      expect(res.error).toEqual(expect.objectContaining({ status: 400 }));
+      expect(res.error.message).toMatch(/whole numbers/);
+    }
+    expect(Rack).not.toHaveBeenCalled();
+  });
+
   test('trims the rack name', async () => {
     const res = await createGridRack(cellar, { name: '  Wall rack  ' }, REQ);
     expect(res.rack.name).toBe('Wall rack');

@@ -11,6 +11,9 @@
 // on Rack) surfaces as a 409/conflict so a losing concurrent writer retries.
 const Cellar = require('../models/Cellar');
 const Rack = require('../models/Rack');
+// Same bound the PUT route applies (routes/racks.js MAX_RACK_DIM).
+const MAX_RACK_DIM = 20;
+const isRackDim = (v) => Number.isInteger(v) && v >= 1 && v <= MAX_RACK_DIM;
 const Bottle = require('../models/Bottle');
 const { logAudit } = require('./audit');
 const { getMaxPosition, validateDoubleHeightRows, validateCabinetConfig } = require('../utils/rackGeometry');
@@ -56,6 +59,13 @@ async function createGridRack(cellarDoc, { name, type = 'grid', rows = 4, cols =
   if (!name || !String(name).trim()) return { error: { status: 400, message: 'Rack name is required' } };
   if (type && !RACK_TYPES.includes(type)) {
     return { error: { status: 400, message: `Invalid rack type. Must be one of: ${RACK_TYPES.join(', ')}` } };
+  }
+  // The schema's min/max fires only at save(), after validateCabinetConfig
+  // has compared the shelf list against parseInt(rows) — so a rows of 5.5
+  // used to save as a cabinet with 5.5 shelves (audit 2026-09-16). MCP
+  // already enforces this through zod; REST did not.
+  if ((rows != null && !isRackDim(rows)) || (cols != null && !isRackDim(cols))) {
+    return { error: { status: 400, message: `rows and cols must be whole numbers between 1 and ${MAX_RACK_DIM}` } };
   }
   const rack = new Rack({
     cellar: cellarDoc._id,

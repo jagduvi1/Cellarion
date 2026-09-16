@@ -11,7 +11,9 @@ import { cabinetShelfAlternate } from '../../utils/rackLayouts';
  *
  * For a wine cabinet it also edits the two DRAWING-ONLY options, two-deep and
  * nesting: both change how the cabinet is drawn and neither changes its
- * capacity or where a bottle sits, so they are safe to flip on a loaded rack.
+ * capacity or where a bottle sits, so they are safe to flip on a loaded rack —
+ * except two-deep on a cabinet whose rows alternate, where it decides which
+ * rows are the narrow ones (6/5 vs 5/6) and so is part of the shape.
  * The shape itself (shelves, bottles across, rows per shelf, and whether the
  * rows alternate in width) stays creation-only, because changing it would
  * renumber the slots and move every bottle — same reason the honeycomb
@@ -26,7 +28,12 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
   const isCabinet = rack.type === 'cabinet' && !rack.isModular;
   // Nesting is implied on every bay that alternates; the box is locked only
   // when all of them do (otherwise it still governs the other bays).
-  const alternate = isCabinet && cabinetShelfAlternate(rack.rows, rack.typeConfig).every(Boolean);
+  const altList = isCabinet ? cabinetShelfAlternate(rack.rows, rack.typeConfig) : [];
+  const alternate = isCabinet && altList.every(Boolean);
+  // Two-deep decides which rows of an alternating bay are the narrow ones, so
+  // on such a cabinet it stays as created; the route refuses the flip on a
+  // loaded rack (audit 2026-09-16).
+  const anyAlternate = altList.some(Boolean);
   const [twoDeep, setTwoDeep] = useState(rack.typeConfig?.twoDeep !== false);
   const [stagger, setStagger] = useState(alternate || rack.typeConfig?.stagger !== false);
   const [saving, setSaving] = useState(false);
@@ -82,7 +89,7 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
           <>
             <label className="form-group">
               <span>
-                <input type="checkbox" checked={twoDeep} onChange={(e) => setTwoDeep(e.target.checked)} disabled={saving} />
+                <input type="checkbox" checked={twoDeep} onChange={(e) => setTwoDeep(e.target.checked)} disabled={saving || anyAlternate} />
                 {' '}{t('racks.cabinetTwoDeepLabel', 'Two deep (neck to neck)')}
               </span>
             </label>
@@ -93,6 +100,7 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
               </span>
             </label>
             <small className="help-text">
+              {anyAlternate ? `${t('racks.cabinetTwoDeepLocked', 'Two deep is part of the shape on a cabinet whose rows alternate — it sets which rows are the narrow ones — so it stays as created.')} ` : ''}
               {alternate ? `${t('racks.cabinetAlternateNests', 'Rows that alternate in width always nest: each narrow row lies in the grooves of the wide row below it.')} ` : ''}
               {t('racks.cabinetEditHint', 'Both options only change how the cabinet is drawn — the number of bottles it holds and where each bottle sits stay the same. To change the shelves themselves, create a new cabinet.')}
             </small>

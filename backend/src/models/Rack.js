@@ -37,7 +37,9 @@ const rackModuleSchema = new mongoose.Schema({
     shelfRows: { type: [Number], default: undefined },
     // Cabinet racks only: bottles lie neck to neck, two rows deep per level
     // (row 1 = bottom front, row 2 = bottom back, row 3 = next level front…).
-    // Visual arrangement only — capacity is cols × Σ shelfRows either way.
+    // Drawing-only on a plain cabinet — capacity is cols × Σ shelfRows either
+    // way. On alternating rows it decides which rows are the narrow ones, so
+    // the PUT route refuses to flip it once bottles are placed.
     twoDeep: { type: Boolean },
     // Cabinet racks only: stacked levels nest in the grooves of the level
     // below, offset half a bottle (how bottles actually stack on a wooden
@@ -101,7 +103,9 @@ const rackSchema = new mongoose.Schema({
     shelfRows: { type: [Number], default: undefined },
     // Cabinet racks only: bottles lie neck to neck, two rows deep per level
     // (row 1 = bottom front, row 2 = bottom back, row 3 = next level front…).
-    // Visual arrangement only — capacity is cols × Σ shelfRows either way.
+    // Drawing-only on a plain cabinet — capacity is cols × Σ shelfRows either
+    // way. On alternating rows it decides which rows are the narrow ones, so
+    // the PUT route refuses to flip it once bottles are placed.
     twoDeep: { type: Boolean },
     // Cabinet racks only: stacked levels nest in the grooves of the level
     // below, offset half a bottle (how bottles actually stack on a wooden
