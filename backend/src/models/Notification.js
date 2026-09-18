@@ -60,6 +60,10 @@ const notificationSchema = new mongoose.Schema({
       // reach it.
       'registry_key_decided',
       'registry_value_decided',
+      // The third of that family (2026-09-18): a user's suggested fix to a
+      // wine's identity, type or grapes was applied or not — the bottle page
+      // had been promising "you'll see the outcome" with nothing delivering it.
+      'wine_correction_decided',
       // A member asked for a forum language section; same principle as the
       // two above — whoever asked gets told what was decided.
       'forum_language_decided',

@@ -286,9 +286,15 @@ async function dataForWine(wineId, userId = null, { roles, vintage, locale } = {
   const keys = await acceptedKeys();
   if (keys.length === 0) return { ok: true, fields: [], vintage: forVintage };
 
+  // WHO contributed a published value stays on the row (`suggestedBy` — the
+  // admin queues, the audit trail and the contributor's own export read it) and
+  // goes no further: this function feeds every user-facing surface (the bottle
+  // page, the connector), and none of them names the contributor (Johan,
+  // 2026-09-18 — the record is the registry's, not a byline; same rule as a
+  // correction's proposer, #930). So it is not even loaded here.
   const [publishedRows, pendingRows] = await Promise.all([
     RegistryDataValue.find({ wineDefinition: { $eq: wid }, status: 'published' })
-      .populate('suggestedBy', 'username displayName').lean(),
+      .select('key value vintage').lean(),
     RegistryDataValue.find({ wineDefinition: { $eq: wid }, status: 'suggested' })
       .select('key value status suggestedBy createdAt vintage').lean(),
   ]);
@@ -326,9 +332,6 @@ async function dataForWine(wineId, userId = null, { roles, vintage, locale } = {
         // wine-wide default; null = blank. The UI tags the value with it.
         resolvedFrom: from,
         resolvedVintage: from === 'vintage' ? pub.vintage : null,
-        contributedBy: pub
-          ? (pub.suggestedBy?.displayName || pub.suggestedBy?.username || null)
-          : null,
         wineValue: dflt ? dflt.value : null,
         overrides,
         // Someone's suggestion holds the slot (no attribution leaked) — the

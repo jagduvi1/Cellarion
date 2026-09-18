@@ -380,3 +380,116 @@ describe('pendingForWine', () => {
     });
   });
 });
+
+// The web bottle page reads the wine's review slot BEFORE a correction is
+// typed (support ticket 2026-09-17) — behind the same visibility rule as
+// filing, so a hidden wine's queue state reads as "nothing pending".
+describe('pendingForViewer', () => {
+  const chain = (doc) => ({ select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(doc) }) });
+
+  test('a wine the viewer cannot see answers null without ever reading the queue', async () => {
+    findVisibleWine.mockResolvedValue(null);
+    expect(await ops.pendingForViewer(ME, WINE, ['user'])).toBeNull();
+    expect(WineCorrectionProposal.findOne).not.toHaveBeenCalled();
+    expect(findVisibleWine).toHaveBeenCalledWith(WINE, expect.objectContaining({ userId: ME, roles: ['user'], noDrafts: true }));
+  });
+
+  test('a visible wine answers the slot: fields and mine, never whose', async () => {
+    WineCorrectionProposal.findOne.mockReturnValue(chain({
+      proposer: oid('c'), createdAt: new Date(), proposedFields: { grapes: ['Merlot'] },
+    }));
+    expect(await ops.pendingForViewer(ME, WINE, [])).toEqual({ fields: ['grapes'], mine: false });
+  });
+
+  test('a malformed id is null, not a query', async () => {
+    expect(await ops.pendingForViewer(ME, 'nope', [])).toBeNull();
+    expect(findVisibleWine).not.toHaveBeenCalled();
+  });
+});
+
+// A variety the taxonomy lacks (support ticket 2026-09-17). The web grape
+// picker can only produce an unknown name through its explicit "add as a new
+// variety" action, and says so in `fields.newGrapes`; everything else about
+// an unknown name stays exactly as strict as before.
+describe('a deliberately-new grape variety', () => {
+  const file = (fields) => ops.createFieldCorrection(ME, { ...GOOD, fields });
+
+  test('a declared name is kept as typed, after the canonical names of the rest', async () => {
+    resolveGrapeIdsStrict
+      .mockResolvedValueOnce({ ok: false, unmatched: ['Souvignier  Gris'] })
+      .mockResolvedValueOnce({ ok: true, ids: ['g1'], names: ['Syrah'], substitutions: [{ from: 'Shiraz', to: 'Syrah' }] });
+    const res = await file({ grapes: ['Shiraz', 'Souvignier  Gris'], newGrapes: ['souvignier gris'] });
+    expect(res.ok).toBe(true);
+    // The second pass resolves only what the taxonomy knows.
+    expect(resolveGrapeIdsStrict).toHaveBeenLastCalledWith(['Shiraz']);
+    expect(WineCorrectionProposal.create).toHaveBeenCalledWith(expect.objectContaining({
+      // `newGrapes` qualifies the list; it is never stored as a field.
+      proposedFields: { grapes: ['Syrah', 'Souvignier Gris'] },
+    }));
+    expect(logAudit.mock.calls[0][1]).toBe('wine_proposal.user_create');
+    expect(logAudit.mock.calls[0][3]).toMatchObject({ newGrapes: ['Souvignier Gris'], fields: ['grapes'] });
+  });
+
+  test('an unknown name that was NOT declared is still refused, naming only that one', async () => {
+    resolveGrapeIdsStrict.mockResolvedValue({ ok: false, unmatched: ['Souvignier Gris', 'Muskat Olivierx'] });
+    const res = await file({ grapes: ['Souvignier Gris', 'Muskat Olivierx'], newGrapes: ['Souvignier Gris'] });
+    expect(res).toMatchObject({ ok: false, code: 'invalid' });
+    expect(res.message).toMatch(/Muskat Olivierx/);
+    expect(res.message).not.toMatch(/Souvignier/);
+    expect(WineCorrectionProposal.create).not.toHaveBeenCalled();
+  });
+
+  test('declaring a name the taxonomy already has costs nothing — it resolves', async () => {
+    resolveGrapeIdsStrict.mockResolvedValue({ ok: true, ids: ['g1'], names: ['Syrah'], substitutions: [] });
+    const res = await file({ grapes: ['Syrah'], newGrapes: ['Syrah'] });
+    expect(res.ok).toBe(true);
+    expect(WineCorrectionProposal.create).toHaveBeenCalledWith(expect.objectContaining({ proposedFields: { grapes: ['Syrah'] } }));
+    expect(logAudit.mock.calls[0][3]).not.toHaveProperty('newGrapes');
+  });
+
+  test.each([
+    ['a percentage', '60% Merlot'],
+    ['two varieties in one', 'Merlot & Cabernet'],
+    ['a single letter', 'X'],
+    ['a pasted sentence', 'mostly merlot I think with some cabernet'],
+  ])('%s is not a variety name, declared or not', async (_label, junk) => {
+    resolveGrapeIdsStrict.mockImplementation(async (names) => ({ ok: false, unmatched: names }));
+    const res = await file({ grapes: [junk], newGrapes: [junk] });
+    expect(res).toMatchObject({ ok: false, code: 'invalid' });
+    expect(WineCorrectionProposal.create).not.toHaveBeenCalled();
+  });
+
+  test('a name in a script that normalizes to nothing can never be declared', async () => {
+    resolveGrapeIdsStrict.mockResolvedValue({ ok: false, unmatched: ['Ркацители'] });
+    const res = await file({ grapes: ['Ркацители'], newGrapes: ['Ркацители'] });
+    expect(res).toMatchObject({ ok: false, code: 'invalid' });
+    expect(res.message).toMatch(/not in the taxonomy/);
+  });
+
+  test('real variety names with their punctuation pass the name guard', async () => {
+    for (const name of ['Müller-Thurgau', 'VB 32-7', 'Pinot Meunier (Auxerrois)', 'Cabernet Cortis', 'Saint-Macaire']) {
+      jest.clearAllMocks();
+      mockUser();
+      WineCorrectionProposal.countDocuments.mockResolvedValue(0);
+      WineCorrectionProposal.findOne.mockResolvedValue(null);
+      WineCorrectionProposal.create.mockResolvedValue({ _id: oid('9'), proposedFields: {}, status: 'pending' });
+      findVisibleWine.mockResolvedValue(wineDoc);
+      resolveGrapeIdsStrict.mockResolvedValue({ ok: false, unmatched: [name] });
+      const res = await file({ grapes: [name], newGrapes: [name] });
+      expect(res.ok).toBe(true);
+    }
+  });
+
+  test('newGrapes without a grapes list, or not a list, is refused', async () => {
+    expect((await file({ producer: 'X', newGrapes: ['Solaris'] })).message).toMatch(/only qualifies a grapes list/);
+    resolveGrapeIdsStrict.mockResolvedValue({ ok: false, unmatched: ['Solaris'] });
+    expect((await file({ grapes: ['Solaris'], newGrapes: 'Solaris' })).message).toMatch(/newGrapes must be a list/);
+  });
+
+  test('the same new variety typed twice is stored once', async () => {
+    resolveGrapeIdsStrict.mockResolvedValue({ ok: false, unmatched: ['Solaris', 'solaris'] });
+    const res = await file({ grapes: ['Solaris', 'solaris'], newGrapes: ['Solaris'] });
+    expect(res.ok).toBe(true);
+    expect(WineCorrectionProposal.create).toHaveBeenCalledWith(expect.objectContaining({ proposedFields: { grapes: ['Solaris'] } }));
+  });
+});

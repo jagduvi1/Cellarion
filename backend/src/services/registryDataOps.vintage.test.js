@@ -138,13 +138,16 @@ describe('dataForWine with a vintage', () => {
     const for23 = await ops.dataForWine(WINE, ME, { vintage: '2023' });
     expect(for23.vintage).toBe('2023');
     expect(for23.fields[0]).toMatchObject({
-      value: 14, resolvedFrom: 'vintage', resolvedVintage: '2023', contributedBy: 'akki',
+      value: 14, resolvedFrom: 'vintage', resolvedVintage: '2023',
       wineValue: 13.5, overrides: [{ vintage: '2023', value: 14 }],
     });
+    // Whichever layer answers, who contributed it is never part of the answer.
+    expect(for23.fields[0]).not.toHaveProperty('contributedBy');
 
     twoLayers();
     const for21 = await ops.dataForWine(WINE, ME, { vintage: '2021' });
-    expect(for21.fields[0]).toMatchObject({ value: 13.5, resolvedFrom: 'wine', resolvedVintage: null, contributedBy: 'kurt' });
+    expect(for21.fields[0]).toMatchObject({ value: 13.5, resolvedFrom: 'wine', resolvedVintage: null });
+    expect(for21.fields[0]).not.toHaveProperty('contributedBy');
 
     twoLayers();
     const plain = await ops.dataForWine(WINE, ME);

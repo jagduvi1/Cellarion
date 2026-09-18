@@ -33,7 +33,6 @@ const ReportWineModal = lazy(() => import('../components/ReportWineModal'));
 const MoveBottleModal = lazy(() => import('../components/MoveBottleModal'));
 const ReviewForm = lazy(() => import('../components/ReviewForm'));
 const ConsumeModal = lazy(() => import('../components/ConsumeModal').then(m => ({ default: m.ConsumeModal })));
-const SuggestGrapesModal = lazy(() => import('../components/SuggestGrapesModal').then(m => ({ default: m.SuggestGrapesModal })));
 const RecommendWineModal = lazy(() => import('../components/RecommendWineModal'));
 const AddMoreBottlesModal = lazy(() => import('../components/AddMoreBottlesModal'));
 
@@ -69,7 +68,9 @@ function BottleDetail() {
   const [restoreError, setRestoreError] = useState(null);
   const [mistakeOpen, setMistakeOpen] = useState(false);
   const [mistakeBusy, setMistakeBusy] = useState(false);
-  const [suggestGrapesOpen, setSuggestGrapesOpen] = useState(false);
+  // Bumped to send the reader to the wine record in "suggest a fix" mode —
+  // wrong DATA is corrected there, with the right value, not reported in prose.
+  const [suggestFixSignal, setSuggestFixSignal] = useState(0);
   // What the last draft publish / attach did; survives the refetch that
   // unmounts the draft banner. Cleared when the page moves to another bottle.
   const [draftNotice, setDraftNotice] = useState(null);
@@ -598,7 +599,7 @@ function BottleDetail() {
           canEdit={canEdit}
           hasImage={!!(defaultImage || pendingImage || bottle.wineDefinition?.image)}
           onEdit={() => setEditing(true)}
-          onSuggestGrapes={() => setSuggestGrapesOpen(true)}
+          suggestFixSignal={suggestFixSignal}
           onRemove={() => setConsumeOpen(true)}
           onReportWine={(reason) => { setReportWineOpen(true); setReportDefaultReason(typeof reason === 'string' ? reason : null); }}
           wineDraft={bottle.wineDraft || null}
@@ -904,13 +905,6 @@ function BottleDetail() {
           />
         )}
 
-        {suggestGrapesOpen && (
-          <SuggestGrapesModal
-            wine={wine}
-            onClose={() => setSuggestGrapesOpen(false)}
-          />
-        )}
-
         {addMoreOpen && bottle && (
           <AddMoreBottlesModal
             bottle={bottle}
@@ -923,6 +917,11 @@ function BottleDetail() {
           <ReportWineModal
             wine={bottle.wineDefinition}
             defaultReason={reportDefaultReason}
+            // Offered only where the record's own suggest actions are (not the
+            // demo, not a private draft — same gate as WineRecordSection).
+            onSuggestFix={!user?.isDemo && bottle.wineDefinition.draft !== true
+              ? () => { setReportWineOpen(false); setReportDefaultReason(null); setSuggestFixSignal(n => n + 1); }
+              : undefined}
             onClose={() => { setReportWineOpen(false); setReportDefaultReason(null); }}
           />
         )}

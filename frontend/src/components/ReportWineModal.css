@@ -53,3 +53,23 @@
   line-height: 1.6;
   color: var(--color-text);
 }
+
+/* "Wrong info" on a page that has the wine record: the better route, offered
+   before the prose box rather than instead of it. */
+.report-wine-redirect {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-light);
+}
+
+.report-wine-redirect p {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}

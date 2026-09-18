@@ -171,9 +171,27 @@ describe('dataForWine', () => {
       .mockReturnValueOnce(chain([{ key: oid('e'), value: true, status: 'suggested', suggestedBy: oid('9') }]));
 
     const res = await ops.dataForWine(WINE, ME);
-    expect(res.fields[0]).toMatchObject({ value: 13.5, contributedBy: 'kurt', hasPendingSuggestion: false, mySuggestion: null });
+    expect(res.fields[0]).toMatchObject({ value: 13.5, hasPendingSuggestion: false, mySuggestion: null });
     // Someone ELSE's pending suggestion: slot shown occupied, value not mine
     expect(res.fields[1]).toMatchObject({ value: null, hasPendingSuggestion: true, mySuggestion: null });
+  });
+
+  // Who contributed a value is STORED (suggestedBy stays on the row for the
+  // admin queues, the audit trail and the contributor's own export) and shown
+  // to nobody (Johan, 2026-09-18): this function feeds the bottle page and the
+  // connector, and neither names the contributor. Pinned at the source — the
+  // name is not in the answer, and the account is never even loaded.
+  test('a published value never carries who contributed it, and the contributor is not loaded', async () => {
+    RegistryDataKey.find.mockReturnValue(chain([acceptedKey]));
+    const published = chain([{ key: KEY, value: 13.5, suggestedBy: { username: 'kurt', displayName: 'Kurt' } }]);
+    RegistryDataValue.find.mockReturnValueOnce(published).mockReturnValueOnce(chain([]));
+
+    const res = await ops.dataForWine(WINE, ME);
+    expect(res.fields[0].value).toBe(13.5);
+    expect(res.fields[0]).not.toHaveProperty('contributedBy');
+    expect(JSON.stringify(res)).not.toMatch(/kurt/i);
+    expect(published.populate).not.toHaveBeenCalled();
+    expect(published.select).toHaveBeenCalledWith('key value vintage');
   });
 
   test('the vocabulary is cached between calls and invalidated on a key decision', async () => {

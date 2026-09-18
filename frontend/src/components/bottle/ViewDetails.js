@@ -17,7 +17,7 @@ import MaturityPhaseTable from './MaturityPhaseTable';
 import PriceHistoryTimeline from './PriceHistoryTimeline';
 import PriceTrackingToggle from './PriceTrackingToggle';
 
-function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory, currentRelease, rates, userCurrency, canEdit, hasImage, onEdit, onSuggestGrapes, onRemove, onReportWine, wineDraft = null, onDraftChanged, draftNotice = null }) {
+function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory, currentRelease, rates, userCurrency, canEdit, hasImage, onEdit, onRemove, onReportWine, suggestFixSignal = 0, wineDraft = null, onDraftChanged, draftNotice = null }) {
   const { t } = useTranslation();
   const { user, apiFetch } = useAuth();
   const anchorYear = bottleAnchorYear(bottle);
@@ -32,7 +32,6 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
   const maturityReviewed = vintageProfile?.status === 'reviewed' && (!isNv || vintageProfile.relative);
   const [showSommNotes, setShowSommNotes] = useState(false);
   const wine = bottle.wineDefinition;
-  const grapes = wine?.grapes || [];
 
   return (
     <div className="bd-details card">
@@ -126,30 +125,10 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
         />
       )}
 
-      {/* Grapes */}
-      <div className="bd-section">
-        <span className="bd-section-label">{t('bottleDetail.grapes', 'Grape Varieties')}</span>
-        {grapes.length > 0 ? (
-          <div className="bd-grapes">
-            {grapes.map(g => (
-              // displayName = regionally correct label ("Tinta Roriz" on a
-              // Douro Port); name stays the canonical variety.
-              <span key={g._id} className="bd-grape-pill">{g.displayName || g.name}</span>
-            ))}
-          </div>
-        ) : canEdit && wine?.draft !== true ? (
-          <ContributePrompt
-            storageKey={`cellarion_contrib_grapes_${wine?._id}`}
-            icon="🍇"
-            title={t('bottleDetail.contributeGrapesTitle', 'Help the community')}
-            message={t('bottleDetail.contributeGrapesMsg', 'Grape varieties aren\'t listed for this wine yet. Suggest them and our team will review.')}
-            actionLabel={t('bottleDetail.contributeGrapesAction', 'Suggest grapes')}
-            onAction={onSuggestGrapes}
-          />
-        ) : (
-          <span className="bd-missing-hint">{t('bottleDetail.noGrapes', 'No grape varieties listed')}</span>
-        )}
-      </div>
+      {/* Grapes are a row of the wine record below, not a section of their
+          own (support ticket 2026-09-17): next to the rest of the record they
+          can be corrected the same way — a separate section could only ever
+          be ADDED to, and only while it was empty. */}
 
       {/* A PRIVATE DRAFT wine: its creator edits and publishes it here; a
           shared-cellar member only sees that it is one. Drafts are edited
@@ -167,7 +146,16 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
       {/* The full public record with visible blanks + per-field suggestions
           (#985). Demo visitors see the record but not the suggest actions
           (writes are requireNonDemo). */}
-      <WineRecordSection wine={wine} vintage={bottle?.vintage} canSuggest={!user?.isDemo && wine?.draft !== true} apiFetch={apiFetch} />
+      <WineRecordSection
+        wine={wine}
+        vintage={bottle?.vintage}
+        canSuggest={!user?.isDemo && wine?.draft !== true}
+        apiFetch={apiFetch}
+        // The "no grapes yet" invitation stays for whoever looks after the
+        // bottle, as it always was — it now opens the record's own grape form.
+        promptMissingGrapes={canEdit}
+        suggestSignal={suggestFixSignal}
+      />
 
       {/* Personal drink window — the user's own drinkFrom/drinkTo. Takes
           precedence over the sommelier profile status below, so the profile

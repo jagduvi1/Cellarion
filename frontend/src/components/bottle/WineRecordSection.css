@@ -2,22 +2,48 @@
    and per-field suggest actions. Same key-value ledger language as the
    personal-data card. */
 
+/* Clears the app header when another surface scrolls the record into view. */
+.wr-section {
+  scroll-margin-top: 5rem;
+}
+
 .wr-header {
   display: flex;
   align-items: baseline;
   gap: 0.75rem;
 }
 
-.wr-header .wr-mode-toggle {
+/* The ONE affordance the record shows by default: a quiet text link. */
+.wr-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
   margin-left: auto;
+  padding: 0.15rem 0.3rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
   font-size: 0.8rem;
+  color: var(--color-primary, #7c2d3a);
+  cursor: pointer;
   opacity: 0.85;
+  transition: opacity var(--transition-fast), background var(--transition-fast);
+}
+
+.wr-mode-toggle:hover {
+  opacity: 1;
+  text-decoration: underline;
 }
 
 .wr-mode-toggle--active {
+  padding: 0.15rem 0.6rem;
+  background: var(--color-primary-light);
   font-weight: 700;
-  text-decoration: underline;
   opacity: 1;
+}
+
+.wr-icon {
+  flex: none;
 }
 
 .wr-intro {
@@ -26,21 +52,42 @@
   color: var(--color-text-muted);
 }
 
+/* Suggest mode: the framing line becomes the instruction, set apart so the
+   change of mode is seen rather than guessed. */
+.wr-intro--suggest {
+  margin: 0.35rem 0 0.5rem;
+  padding: 0.5rem 0.7rem;
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-light);
+  color: var(--color-text-secondary);
+  line-height: 1.45;
+}
+
 .wr-grid {
   margin-top: 0.15rem;
 }
 
+/* One line per field on every width — key, value, action. The record used to
+   stack key over value on a phone, which made eight fields fill the screen;
+   the short "Fix" / "Add" actions are what let it stay a ledger there too. */
 .wr-row {
   display: grid;
   grid-template-columns: minmax(110px, 34%) 1fr auto;
   align-items: center;
   column-gap: 0.75rem;
+  row-gap: 0.15rem;
   padding: 0.4rem 0;
   border-bottom: 1px solid var(--color-border, rgba(0, 0, 0, 0.06));
 }
 
 .wr-row:last-child {
   border-bottom: none;
+}
+
+/* Room for the action without the row changing height when the mode flips. */
+.wr-grid--suggest .wr-row {
+  min-height: 2.5rem;
 }
 
 .wr-key {
@@ -62,18 +109,58 @@
   color: var(--color-text-muted);
 }
 
+/* Grapes keep the pill look they had as a section of their own. */
+.wr-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.wr-pill {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  background: rgba(154, 148, 132, 0.1);
+  border: 1px solid rgba(154, 148, 132, 0.2);
+  border-radius: 10px;
+  padding: 0.1rem 0.55rem;
+}
+
+/* Per-row action: a small tinted pill — a real tap target, still quiet. Eight
+   of them in a column read as one soft band; outlined, they read as a fence. */
 .wr-suggest-btn {
+  min-height: 1.9rem;
+  padding: 0.15rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full, 9999px);
+  background: var(--color-primary-light);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--color-primary, #7c2d3a);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color var(--transition-fast);
+}
+
+.wr-suggest-btn:hover,
+.wr-suggest-btn:focus-visible {
+  border-color: var(--color-primary, #7c2d3a);
+}
+
+/* Secondary text action ("+ Propose a new data field"). */
+.wr-text-btn {
   border: none;
   background: none;
-  padding: 0.15rem 0.3rem;
+  padding: 0.15rem 0;
   font-size: 0.78rem;
   color: var(--color-primary, #7c2d3a);
   cursor: pointer;
-  opacity: 0.75;
+  opacity: 0.8;
   transition: opacity var(--transition-fast);
 }
 
-.wr-suggest-btn:hover {
+.wr-text-btn:hover {
   opacity: 1;
   text-decoration: underline;
 }
@@ -85,37 +172,119 @@
   white-space: nowrap;
 }
 
+/* The suggester's own pending value, under the recorded one. */
+.wr-pending-line {
+  grid-column: 2 / -1;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--color-text-muted);
+}
+
+.wr-pending-label::after {
+  content: ':';
+}
+
+.wr-pending-value {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.wr-pending-line .wr-pending {
+  white-space: normal;
+}
+
+.wr-pending-line .wr-pending::before {
+  content: '· ';
+  font-style: normal;
+}
+
 .wr-thanks {
   margin: 0.5rem 0 0;
   font-size: 0.85rem;
   font-weight: 600;
 }
 
+/* Reads as a read-only field: the page ground inside the modal's surface (on
+   the surface colour itself the box was invisible). */
 .wr-current {
   padding: 0.45rem 0.65rem;
-  background: var(--color-surface, rgba(0, 0, 0, 0.04));
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
+  background: var(--color-bg);
   font-size: 0.92rem;
-}
-
-.wr-contributor {
-  font-size: 0.75rem;
-  font-weight: 400;
-  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
 }
 
 .wr-propose-key {
   margin-top: 0.4rem;
-  padding-left: 0;
+  font-weight: 600;
+}
+
+/* ── Suggest-a-fix form ── */
+
+.wr-help {
+  margin: 0.4rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.wr-help--note {
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-light);
+  color: var(--color-text-secondary);
+}
+
+/* Reads as a form label; a radiogroup is labelled by id, not by <label for>. */
+.wr-group-label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+}
+
+.wr-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.wr-choice {
+  min-height: 2.4rem;
+  padding: 0.3rem 0.95rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full, 9999px);
+  background: var(--color-surface);
+  font-size: 0.9rem;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.wr-choice:hover {
+  border-color: var(--color-primary);
+}
+
+.wr-choice--on {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+  color: var(--color-primary);
   font-weight: 600;
 }
 
 @media (max-width: 480px) {
   .wr-row {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(84px, 32%) 1fr auto;
+    column-gap: 0.6rem;
   }
-  .wr-value {
-    grid-column: 1 / -1;
+  /* A status marker has no business squeezing the value on a phone: it drops
+     under it, where the identity rows' pending line already sits. */
+  .wr-row > .wr-pending {
+    grid-column: 2 / -1;
+    white-space: normal;
   }
 }
 

@@ -17,7 +17,9 @@ router.use(requireAuth);
 
 /**
  * POST /api/wine-proposals
- * Body: { wineId, fields: {producer?…classification?}, reason, evidenceUrl? }
+ * Body: { wineId, fields: {producer?…classification?, type?, grapes?[], newGrapes?[]}, reason, evidenceUrl? }
+ * `grapes` is the COMPLETE corrected list; `newGrapes` names the entries in it
+ * the user deliberately added as a variety the taxonomy does not have yet.
  */
 router.post('/', requireNonDemo, async (req, res, next) => {
   try {
@@ -51,12 +53,17 @@ router.post('/', requireNonDemo, async (req, res, next) => {
 /**
  * GET /api/wine-proposals/mine?wine=<wineId>
  * The caller's own suggestions on one wine — powers the pending/outcome UI.
+ * `pending` is the wine's ONE review slot as this viewer may know it: which
+ * fields it covers and whether it is theirs, never whose it is otherwise — so
+ * the page can say "someone else's suggestion is waiting" before a correction
+ * is typed instead of after (the slot is per wine, across all users).
  */
 router.get('/mine', async (req, res, next) => {
   try {
     const result = await ops.listMineForWine(req.user.id, req.query.wine);
     if (!result.ok) return sendFail(res, result);
-    res.json({ proposals: result.proposals });
+    const pending = await ops.pendingForViewer(req.user.id, req.query.wine, req.user.roles || []);
+    res.json({ proposals: result.proposals, pending });
   } catch (err) {
     next(err);
   }

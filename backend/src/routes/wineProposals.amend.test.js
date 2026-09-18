@@ -13,6 +13,7 @@ jest.mock('../middleware/auth', () => ({
 jest.mock('../services/wineProposalOps', () => ({
   createFieldCorrection: jest.fn(),
   listMineForWine: jest.fn(),
+  pendingForViewer: jest.fn(),
 }));
 jest.mock('../services/registryBridge', () => ({ forwardCorrection: jest.fn() }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
@@ -77,6 +78,34 @@ test('an amendment answers 200 with amended: true and still forwards to the brid
   expect(body.proposal.proposedFields).toEqual({ name: 'Château Martinat', grapes: ['Merlot', 'Malbec'] });
   expect(registryBridge.forwardCorrection).toHaveBeenCalledWith(wine, {
     fields: { grapes: ['Merlot', 'Malbec'] }, reason: 'Importer data sheet.', evidenceUrl: 'https://x.example/s',
+  });
+});
+
+// GET /mine also answers the wine's ONE review slot (support ticket
+// 2026-09-17), so the bottle page can say "another member's suggestion is
+// waiting" before a correction is typed instead of after, as a 409.
+describe('GET /mine', () => {
+  const mine = () => fetch(`${base}/api/wine-proposals/mine?wine=${WINE}`);
+
+  test('answers the caller\'s proposals and the slot, read as THIS viewer with their roles', async () => {
+    ops.listMineForWine.mockResolvedValue({ ok: true, proposals: [] });
+    ops.pendingForViewer.mockResolvedValue({ fields: ['grapes'], mine: false });
+    const res = await mine();
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ proposals: [], pending: { fields: ['grapes'], mine: false } });
+    expect(ops.pendingForViewer).toHaveBeenCalledWith(oid('a'), WINE, ['user']);
+  });
+
+  test('nothing pending is an explicit null', async () => {
+    ops.listMineForWine.mockResolvedValue({ ok: true, proposals: [] });
+    ops.pendingForViewer.mockResolvedValue(null);
+    expect((await (await mine()).json()).pending).toBeNull();
+  });
+
+  test('a bad wine id fails before the slot is ever read', async () => {
+    ops.listMineForWine.mockResolvedValue({ ok: false, code: 'invalid', message: 'Invalid wine id' });
+    expect((await mine()).status).toBe(400);
+    expect(ops.pendingForViewer).not.toHaveBeenCalled();
   });
 });
 

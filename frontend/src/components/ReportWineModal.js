@@ -11,7 +11,15 @@ const REASON_VALUES = ['wrong_info', 'duplicate', 'wrong_price', 'wrong_tasting_
 const SUGGESTABLE_FIELDS = ['name', 'producer', 'appellation', 'type'];
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
 
-function ReportWineModal({ wine, defaultReason, onClose }) {
+/**
+ * `onSuggestFix` — set by a page that also shows the wine record (the bottle
+ * page). Wrong DATA is then corrected there: every field including grapes, the
+ * corrected value attached, one click for a curator to apply. This dialog keeps
+ * what a correction cannot express (a duplicate, a price, something
+ * inappropriate) and still takes a wrong-info report in prose. A page without
+ * the record (the public wine page) keeps the one-field suggestion below.
+ */
+function ReportWineModal({ wine, defaultReason, onClose, onSuggestFix }) {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const [form, setForm] = useState({ reason: defaultReason || 'wrong_info', details: '', suggestedField: '', suggestedValue: '' });
@@ -88,7 +96,16 @@ function ReportWineModal({ wine, defaultReason, onClose }) {
           </select>
         </label>
 
-        {form.reason === 'wrong_info' && (
+        {form.reason === 'wrong_info' && onSuggestFix && (
+          <div className="report-wine-redirect">
+            <p>{t('reportWine.suggestFixHint', 'Know what it should say? Correct it yourself in the wine record — producer, name, grapes, region and more. Your correction goes straight to a curator and is the quickest way to get it fixed.')}</p>
+            <button type="button" className="btn btn-secondary" onClick={onSuggestFix}>
+              {t('reportWine.suggestFixAction', 'Suggest a fix instead')}
+            </button>
+          </div>
+        )}
+
+        {form.reason === 'wrong_info' && !onSuggestFix && (
           <div className="report-wine-suggestion">
             <label>
               {t('reportWine.suggestField')} <span className="optional">{t('reportWine.optional')}</span>

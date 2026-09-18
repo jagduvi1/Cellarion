@@ -5,6 +5,10 @@ vi.mock('../../api/wineProposals', () => ({
   getMyWineProposals: vi.fn(),
 }));
 
+vi.mock('../../api/taxonomy', () => ({
+  getGrapeNames: vi.fn(),
+}));
+
 vi.mock('../../api/registryData', () => ({
   getWinePublicData: vi.fn(),
   suggestWineValue: vi.fn(),
@@ -22,17 +26,29 @@ vi.mock('react-i18next', () => ({
 
 const { createWineProposal, getMyWineProposals } = await import('../../api/wineProposals');
 const { getWinePublicData, suggestWineValue } = await import('../../api/registryData');
+const { getGrapeNames } = await import('../../api/taxonomy');
+const { __resetGrapeNamesCache } = await import('../../hooks/useGrapeNames');
 const WineRecordSection = (await import('./WineRecordSection')).default;
 
 const WINE = {
   _id: 'w1',
   producer: 'Cloudy Bay',
-  name: 'Sauvignon Blanc',
+  name: 'Te Koko',
   appellation: null,
   classification: null,
+  type: 'white',
+  grapes: [{ _id: 'g1', name: 'Sauvignon Blanc' }],
   country: { name: 'New Zealand' },
   region: { name: 'Marlborough' },
 };
+
+// What GET /api/taxonomy/grape-names answers with.
+const GRAPES = [
+  { name: 'Sauvignon Blanc', color: 'White', synonyms: ['Fumé Blanc'], wineCount: 400 },
+  { name: 'Sémillon', color: 'White', synonyms: [], wineCount: 90 },
+  { name: 'Syrah', color: 'Red', synonyms: ['Shiraz'], wineCount: 700 },
+  { name: 'Sauvignon Gris', color: 'White', synonyms: [], wineCount: 6 },
+];
 
 const ok = (body) => ({ ok: true, json: async () => body });
 
@@ -40,6 +56,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   getMyWineProposals.mockResolvedValue(ok({ proposals: [] }));
   getWinePublicData.mockResolvedValue(ok({ fields: [] }));
+  getGrapeNames.mockResolvedValue(ok({ grapes: GRAPES }));
+  __resetGrapeNamesCache();
 });
 
 const renderSection = (props = {}) =>
@@ -118,7 +136,7 @@ test('demo/read-only mode renders the record without suggest actions', async () 
   expect(getMyWineProposals).not.toHaveBeenCalled();
 });
 
-test('public data fields render with values, attribution and blanks; a blank invites Add value', async () => {
+test('public data fields render with values and blanks — never with who contributed them; a blank invites Add value', async () => {
   getWinePublicData.mockResolvedValue(ok({
     fields: [
       { key: { _id: 'k1', name: 'ABV', type: 'decimal', unit: '%', enumOptions: null }, value: 13.5, contributedBy: 'Kurt', mySuggestion: null },
@@ -130,7 +148,10 @@ test('public data fields render with values, attribution and blanks; a blank inv
 
   expect(await screen.findByText('More data')).toBeInTheDocument();
   expect(screen.getByText('13.5 %')).toBeInTheDocument();
-  expect(screen.getByText('by Kurt')).toBeInTheDocument();
+  // The contributor is stored, never shown (Johan, 2026-09-18). The fixture
+  // still carries a name on purpose: a server that sent one would not get it
+  // rendered either.
+  expect(screen.queryByText(/Kurt/)).not.toBeInTheDocument();
 
   enterSuggestMode();
   // Blank field offers "Add value" with the type-driven input (boolean → select)
@@ -201,4 +222,206 @@ describe('key display names', () => {
     expect(await screen.findByText('ABV')).toBeInTheDocument();
     expect(screen.getByText('Organic')).toBeInTheDocument();
   });
+});
+
+// Type and grapes are part of the record (support ticket 2026-09-17). Grapes
+// used to be a section of their own whose only action — a free-text "suggest
+// grapes" box — appeared while the list was EMPTY, so a wrong or incomplete
+// list could not be corrected at all.
+describe('type and grapes', () => {
+  const openGrapesForm = async () => {
+    enterSuggestMode();
+    fireEvent.click(screen.getByLabelText('Suggest a fix for Grapes'));
+    await screen.findByText('Suggest a fix: Grapes');
+    // The list arrives when the form opens, not with the page.
+    await waitFor(() => expect(screen.getByLabelText('The grapes in this wine')).not.toBeDisabled());
+  };
+  const typeGrape = (text) =>
+    fireEvent.change(screen.getByLabelText('The grapes in this wine'), { target: { value: text } });
+
+  test('both are rows of the record, and a regional grape name is what the page shows', async () => {
+    renderSection({ wine: { ...WINE, grapes: [{ _id: 'g9', name: 'Tempranillo', displayName: 'Tinta Roriz' }] } });
+    await screen.findAllByText('not recorded');
+    expect(screen.getByText('Type')).toBeInTheDocument();
+    expect(screen.getByText('White')).toBeInTheDocument();
+    expect(screen.getByText('Grapes')).toBeInTheDocument();
+    expect(screen.getByText('Tinta Roriz')).toBeInTheDocument();
+    expect(getGrapeNames).not.toHaveBeenCalled();
+  });
+
+  test('a filled field offers Fix and a blank one Add', async () => {
+    renderSection();
+    await screen.findAllByText('not recorded');
+    enterSuggestMode();
+    expect(screen.getByLabelText('Suggest a fix for Grapes')).toHaveTextContent('Fix');
+    expect(screen.getByLabelText('Suggest a fix for Appellation')).toHaveTextContent('Add');
+  });
+
+  test('the grape form starts from the current list and sends the COMPLETE corrected one', async () => {
+    createWineProposal.mockResolvedValue(ok({
+      proposal: { _id: 'p1', status: 'pending', proposedFields: { grapes: ['Sauvignon Blanc', 'Sémillon'] } },
+    }));
+    renderSection();
+    await screen.findAllByText('not recorded');
+    await openGrapesForm();
+
+    // Unchanged list + a reason is still nothing to send.
+    fireEvent.change(screen.getByLabelText('How do you know?'), { target: { value: 'The back label lists both.' } });
+    expect(screen.getByText('Send suggestion')).toBeDisabled();
+
+    typeGrape('semil');
+    fireEvent.click(await screen.findByRole('option', { name: /Sémillon/ }));
+    expect(screen.getByLabelText('Remove Sémillon')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Send suggestion'));
+
+    await waitFor(() => expect(createWineProposal).toHaveBeenCalledWith(expect.any(Function), {
+      wineId: 'w1',
+      fields: { grapes: ['Sauvignon Blanc', 'Sémillon'] },
+      reason: 'The back label lists both.',
+    }));
+    // "See the grapes even while they are in review": the suggester's own
+    // pending list shows under the recorded one.
+    expect(await screen.findByText('Sauvignon Blanc, Sémillon')).toBeInTheDocument();
+    expect(screen.getByText('suggestion pending')).toBeInTheDocument();
+  });
+
+  test('a synonym finds the canonical variety and says which name matched', async () => {
+    renderSection();
+    await screen.findAllByText('not recorded');
+    await openGrapesForm();
+    typeGrape('shiraz');
+    const option = await screen.findByRole('option', { name: /Syrah/ });
+    expect(option).toHaveTextContent('also Shiraz');
+  });
+
+  test('a variety the list lacks can be added deliberately, and is declared as new', async () => {
+    createWineProposal.mockResolvedValue(ok({ proposal: { _id: 'p1', status: 'pending' } }));
+    renderSection();
+    await screen.findAllByText('not recorded');
+    await openGrapesForm();
+
+    typeGrape('Souvignier Gris');
+    fireEvent.click(await screen.findByRole('option', { name: /as a new variety/ }));
+    expect(screen.getByText(/Not in our grape list yet: “Souvignier Gris”/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('How do you know?'), { target: { value: 'Named on the producer tech sheet.' } });
+    fireEvent.click(screen.getByText('Send suggestion'));
+
+    await waitFor(() => expect(createWineProposal).toHaveBeenCalledWith(expect.any(Function), {
+      wineId: 'w1',
+      fields: { grapes: ['Sauvignon Blanc', 'Souvignier Gris'], newGrapes: ['Souvignier Gris'] },
+      reason: 'Named on the producer tech sheet.',
+    }));
+  });
+
+  test('a grape list that fails to load says so and can be retried', async () => {
+    getGrapeNames.mockResolvedValueOnce({ ok: false, json: async () => ({}) });
+    renderSection();
+    await screen.findAllByText('not recorded');
+    enterSuggestMode();
+    fireEvent.click(screen.getByLabelText('Suggest a fix for Grapes'));
+    expect(await screen.findByText('Couldn’t load the grape list.')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Try again'));
+    await waitFor(() => expect(screen.getByLabelText('The grapes in this wine')).not.toBeDisabled());
+  });
+
+  test('type is picked from the other types, never typed', async () => {
+    createWineProposal.mockResolvedValue(ok({ proposal: { _id: 'p1', status: 'pending' } }));
+    renderSection();
+    await screen.findAllByText('not recorded');
+    enterSuggestMode();
+    fireEvent.click(screen.getByLabelText('Suggest a fix for Type'));
+    await screen.findByText('Suggest a fix: Type');
+    // The recorded type is not a choice.
+    expect(screen.queryByRole('radio', { name: 'White' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: 'Sparkling' }));
+    fireEvent.change(screen.getByLabelText('How do you know?'), { target: { value: 'It is a traditional-method fizz.' } });
+    fireEvent.click(screen.getByText('Send suggestion'));
+    await waitFor(() => expect(createWineProposal).toHaveBeenCalledWith(expect.any(Function), {
+      wineId: 'w1',
+      fields: { type: 'sparkling' },
+      reason: 'It is a traditional-method fizz.',
+    }));
+    expect(await screen.findByText('Sparkling')).toBeInTheDocument();
+  });
+
+  test('the missing-grapes invitation opens the grape form directly', async () => {
+    renderSection({ wine: { ...WINE, _id: 'w-nograpes', grapes: [] }, promptMissingGrapes: true });
+    await screen.findAllByText('not recorded');
+    fireEvent.click(screen.getByText(/Suggest grapes/));
+    expect(await screen.findByText('Suggest a fix: Grapes')).toBeInTheDocument();
+  });
+
+  test('no invitation once my grape suggestion is already pending', async () => {
+    getMyWineProposals.mockResolvedValue(ok({
+      proposals: [{ status: 'pending', proposedFields: { grapes: ['Sauvignon Blanc'] } }],
+      pending: { mine: true, fields: ['grapes'] },
+    }));
+    renderSection({ wine: { ...WINE, _id: 'w-nograpes2', grapes: [] }, promptMissingGrapes: true });
+    expect(await screen.findByText('suggestion pending')).toBeInTheDocument();
+    expect(screen.queryByText(/Suggest grapes/)).not.toBeInTheDocument();
+  });
+});
+
+test('a text field opens pre-filled, and an unchanged value cannot be sent', async () => {
+  renderSection();
+  await screen.findAllByText('not recorded');
+  enterSuggestMode();
+  fireEvent.click(screen.getByLabelText('Suggest a fix for Producer'));
+  await screen.findByText('Suggest a fix: Producer');
+  expect(screen.getByLabelText('Should be')).toHaveValue('Cloudy Bay');
+  fireEvent.change(screen.getByLabelText('How do you know?'), { target: { value: 'Long enough reason here.' } });
+  expect(screen.getByText('Send suggestion')).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('Should be'), { target: { value: 'Cloudy Bay Vineyards' } });
+  expect(screen.getByText('Send suggestion')).not.toBeDisabled();
+});
+
+test('a too-short reason explains itself instead of leaving Send silently greyed out', async () => {
+  renderSection();
+  await screen.findAllByText('not recorded');
+  enterSuggestMode();
+  fireEvent.click(screen.getByLabelText('Suggest a fix for Producer'));
+  await screen.findByText('Suggest a fix: Producer');
+  fireEvent.change(screen.getByLabelText('How do you know?'), { target: { value: 'label' } });
+  expect(screen.getByText(/A few more words, please/)).toBeInTheDocument();
+});
+
+// One pending suggestion per wine across ALL users: the page says so before a
+// correction is typed, instead of answering a finished form with a 409.
+test('somebody else holding the review slot is said up front, and no field offers a fix', async () => {
+  getMyWineProposals.mockResolvedValue(ok({ proposals: [], pending: { mine: false, fields: ['producer'] } }));
+  renderSection();
+  await screen.findAllByText('not recorded');
+  enterSuggestMode();
+  expect(await screen.findByText(/Another member’s suggestion for this wine is waiting/)).toBeInTheDocument();
+  expect(screen.queryByLabelText('Suggest a fix for Producer')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Suggest a fix for Grapes')).not.toBeInTheDocument();
+});
+
+test('a second filing merges into my pending suggestion instead of replacing it', async () => {
+  getMyWineProposals.mockResolvedValue(ok({
+    proposals: [{ status: 'pending', proposedFields: { producer: 'Cloudy Bay Vineyards' } }],
+    pending: { mine: true, fields: ['producer'] },
+  }));
+  createWineProposal.mockResolvedValue(ok({
+    amended: true,
+    proposal: { _id: 'p1', status: 'pending', proposedFields: { producer: 'Cloudy Bay Vineyards', appellation: 'Marlborough' } },
+  }));
+  renderSection();
+  await screen.findByText('Cloudy Bay Vineyards');
+  enterSuggestMode();
+  fireEvent.click(screen.getByLabelText('Suggest a fix for Appellation'));
+  await screen.findByText('Suggest a fix: Appellation');
+  fireEvent.change(screen.getByLabelText('Should be'), { target: { value: 'Marlborough' } });
+  fireEvent.change(screen.getByLabelText('How do you know?'), { target: { value: 'Printed on the back label.' } });
+  fireEvent.click(screen.getByText('Send suggestion'));
+  await waitFor(() => expect(screen.getAllByText('suggestion pending')).toHaveLength(2));
+  expect(screen.getByText('Cloudy Bay Vineyards')).toBeInTheDocument();
+});
+
+test('another surface can send the reader here in suggest mode', async () => {
+  const { rerender } = renderSection();
+  await screen.findAllByText('not recorded');
+  expect(screen.queryByLabelText('Suggest a fix for Producer')).not.toBeInTheDocument();
+  rerender(<WineRecordSection wine={WINE} canSuggest apiFetch={vi.fn()} suggestSignal={1} />);
+  expect(await screen.findByLabelText('Suggest a fix for Producer')).toBeInTheDocument();
 });

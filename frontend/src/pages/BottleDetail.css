@@ -514,27 +514,8 @@
   margin-bottom: 0.4rem;
 }
 
-/* ── Grapes ── */
-.bd-grapes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.bd-grape-pill {
-  font-size: 0.78rem;
-  color: var(--color-text-muted);
-  background: rgba(154, 148, 132, 0.1);
-  border: 1px solid rgba(154, 148, 132, 0.2);
-  border-radius: 10px;
-  padding: 0.1rem 0.55rem;
-}
-
-.bd-missing-hint {
-  font-size: 0.85rem;
-  color: var(--color-input-placeholder);
-  font-style: italic;
-}
+/* Grapes are a row of the wine record now — their pills live in
+   components/bottle/WineRecordSection.css (.wr-pill). */
 
 /* ── Drink window ── */
 .bd-drink-window {

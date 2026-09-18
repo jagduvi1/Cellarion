@@ -466,6 +466,13 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
                       {t('admin.wines.proposals.drift', { value: p.currentSnapshot[field] || '—' })}
                     </em>
                   )}
+                  {/* A variety the submitter knowingly added as new: approving
+                      refuses it until the taxonomy has it, so say so up front. */}
+                  {Array.isArray(d.unknown) && d.unknown.length > 0 && (
+                    <em style={{ flexBasis: '100%', fontSize: '0.78rem', color: 'var(--color-warning)' }}>
+                      {t('admin.wines.proposals.unknownGrapes', 'Not in the grape taxonomy yet: {{names}} — add it under Taxonomy first, then approve.', { names: d.unknown.join(', ') })}
+                    </em>
+                  )}
                 </div>
               ))}
 

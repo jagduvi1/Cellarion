@@ -58,7 +58,8 @@ registerTool({
       applies_to: f.resolvedFrom === 'vintage' ? f.resolvedVintage : (f.resolvedFrom === 'wine' ? 'all vintages' : null),
       wine_value: f.wineValue,
       overrides: f.overrides,
-      contributed_by: f.contributedBy,
+      // No contributor: the record is the registry's, and who supplied a value
+      // is not something a reader is told (services/registryDataOps).
       // A pending suggestion (anyone's) holds this slot's one review slot —
       // do not file another for the same slot; it would only conflict.
       suggestion_pending: f.hasPendingSuggestion,

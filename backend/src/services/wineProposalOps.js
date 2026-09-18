@@ -53,6 +53,15 @@ const FIELDS = ['producer', 'name', 'appellation', 'region', 'country', 'classif
 // variety list and every name must already exist in the taxonomy — resolved
 // at filing so the user learns about a typo now, and again at approval.
 const EXTRA_FIELDS = ['type', 'grapes'];
+// Not a field but a MODIFIER of `grapes` (support ticket 2026-09-17): the names
+// in the grape list the caller asserts are genuinely missing from the taxonomy.
+// It rides inside `fields` so every transport that forwards `fields` verbatim
+// (the REST route, the Registry Bridge) carries it without a protocol change;
+// the MCP tool's schema does not declare it, so an assistant's typo is still
+// refused at filing exactly as before. A declared name is kept VERBATIM in the
+// proposal — nothing is minted here or at approval, which still refuses an
+// unknown variety until an admin has added it to the taxonomy deliberately.
+const FIELD_MODIFIERS = ['newGrapes'];
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
 const GRAPES_MAX = 12;
 const GRAPE_NAME_MAX = 60;
@@ -93,11 +102,16 @@ async function createFieldCorrection(userId, { wineId, fields, reason, evidenceU
   }
 
   const proposedFields = {};
+  // Varieties the caller declared missing from the taxonomy — audit only.
+  let newGrapeNames = [];
   const src = fields || {};
   for (const f of Object.keys(src)) {
-    if (!FIELDS.includes(f) && !EXTRA_FIELDS.includes(f)) {
+    if (!FIELDS.includes(f) && !EXTRA_FIELDS.includes(f) && !FIELD_MODIFIERS.includes(f)) {
       return fail('invalid', `Unknown field "${f}" — correctable fields: ${[...FIELDS, ...EXTRA_FIELDS].join(', ')}.`);
     }
+  }
+  if (src.newGrapes !== undefined && src.newGrapes !== null && (src.grapes === undefined || src.grapes === null)) {
+    return fail('invalid', 'newGrapes only qualifies a grapes list — send the complete corrected grapes list with it.');
   }
   for (const f of FIELDS) {
     if (src[f] === undefined || src[f] === null) continue;
@@ -123,15 +137,12 @@ async function createFieldCorrection(userId, { wineId, fields, reason, evidenceU
     if (names.length === 0 || names.some((n) => n.length > GRAPE_NAME_MAX)) {
       return fail('invalid', `Each grape name must be 1 to ${GRAPE_NAME_MAX} characters.`);
     }
-    const { resolveGrapeIdsStrict } = require('./wineProfileOps');
-    const resolved = await resolveGrapeIdsStrict(names);
-    if (!resolved.ok) {
-      return fail('invalid',
-        `These grape names are not in the taxonomy: ${resolved.unmatched.map((g) => `"${g}"`).join(', ')}. ` +
-        'Check the spelling or use the grape\'s canonical name — a suggestion cannot create a variety.');
-    }
-    // Canonical names, so the admin diff shows what would actually be written.
+    const resolved = await resolveProposedGrapes(names, src.newGrapes);
+    if (!resolved.ok) return resolved;
+    // Canonical names, so the admin diff shows what would actually be written
+    // (a declared new variety stays as typed — there is no canonical form yet).
     proposedFields.grapes = resolved.names;
+    newGrapeNames = resolved.newNames;
   }
   if (Object.keys(proposedFields).length === 0) {
     return fail('invalid', 'Suggest at least one changed field.');
@@ -176,7 +187,12 @@ async function createFieldCorrection(userId, { wineId, fields, reason, evidenceU
 
   const addendum = { fields: Object.keys(proposedFields), reason: cleanReason, evidenceUrl: cleanUrl };
   const label = `${wine.producer || '?'} — ${wine.name}`;
-  const auditMeta = { wine: label, tier: user.contribution?.tier || 'newcomer', ...(via ? { via } : {}) };
+  const auditMeta = {
+    wine: label,
+    tier: user.contribution?.tier || 'newcomer',
+    ...(via ? { via } : {}),
+    ...(newGrapeNames.length ? { newGrapes: newGrapeNames } : {}),
+  };
 
   // Two rounds at most: a round either settles (amend / create / conflict) or
   // learns the queue moved under it (decided or raced) and re-reads once.
@@ -253,6 +269,78 @@ const OTHER_USER_CONFLICT =
   'suggestion per wine. Wait for that decision.';
 
 const isOwn = (row, userId) => !!row && String(row.proposer) === String(userId);
+
+// A deliberately-new variety is still a NAME: it starts with a letter or digit
+// and carries nothing but letters, digits and the punctuation real variety
+// names use ("Rkatsiteli", "Müller-Thurgau", "VB 32-7", "Pinot Meunier (Auxerrois)").
+// That refuses the shapes that polluted the taxonomy before the review gate —
+// "60% Merlot", "Merlot & Cabernet" — and, by length, a pasted sentence: the
+// longest real name runs to five words ("Muscat Blanc à Petits Grains").
+const NEW_GRAPE_NAME = /^[\p{L}\d][\p{L}\p{M}\d .'’()/-]*$/u;
+const NEW_GRAPE_MAX_WORDS = 5;
+const looksLikeGrapeName = (s) => NEW_GRAPE_NAME.test(s)
+  && (s.match(/\p{L}/gu) || []).length >= 2
+  && s.trim().split(/\s+/).length <= NEW_GRAPE_MAX_WORDS;
+
+/**
+ * Resolve a proposed grape list against the taxonomy. Every name must match a
+ * variety (by name or synonym) EXCEPT the ones the caller declared in
+ * `declaredNew`: those are kept as typed, for an admin to add to the taxonomy
+ * before approving. Returns { ok: true, names, newNames } or a fail().
+ */
+async function resolveProposedGrapes(names, declaredNew) {
+  const { resolveGrapeIdsStrict } = require('./wineProfileOps');
+  const { normalizeString } = require('../utils/normalize');
+
+  let declared = new Set();
+  if (declaredNew !== undefined && declaredNew !== null) {
+    if (!Array.isArray(declaredNew) || declaredNew.length > GRAPES_MAX) {
+      return fail('invalid', `newGrapes must be a list of at most ${GRAPES_MAX} variety names.`);
+    }
+    declared = new Set(
+      declaredNew.map((g) => normalizeString(stripHtml(String(g == null ? '' : g)))).filter(Boolean)
+    );
+  }
+
+  const strict = await resolveGrapeIdsStrict(names);
+  // Declaring a name that IS in the taxonomy costs nothing: it resolves.
+  if (strict.ok) return { ok: true, names: strict.names, newNames: [] };
+
+  // A name that normalizes to nothing (non-Latin script) can never be declared:
+  // it could not be matched or deduplicated later either.
+  const undeclared = strict.unmatched.filter((g) => !declared.has(normalizeString(g)));
+  if (undeclared.length) {
+    return fail('invalid',
+      `These grape names are not in the taxonomy: ${undeclared.map((g) => `"${g}"`).join(', ')}. ` +
+      'Check the spelling or use the grape\'s canonical name — a suggestion cannot create a variety.');
+  }
+  const implausible = strict.unmatched.filter((g) => !looksLikeGrapeName(g));
+  if (implausible.length) {
+    return fail('invalid',
+      `${implausible.map((g) => `"${g}"`).join(', ')} does not look like a grape variety name — ` +
+      'leave out percentages and anything that is not the variety itself.');
+  }
+
+  const unmatched = new Set(strict.unmatched);
+  const known = names.filter((n) => !unmatched.has(n));
+  let canonical = [];
+  if (known.length) {
+    const again = await resolveGrapeIdsStrict(known);
+    // The taxonomy moved between the two reads — the caller simply retries.
+    if (!again.ok) return fail('conflict', 'The grape taxonomy changed while filing — please try again.');
+    canonical = again.names;
+  }
+  const seen = new Set(canonical.map((n) => normalizeString(n)));
+  const newNames = [];
+  for (const raw of strict.unmatched) {
+    const clean = raw.replace(/\s+/g, ' ').trim();
+    const key = normalizeString(clean);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    newNames.push(clean);
+  }
+  return { ok: true, names: [...canonical, ...newNames], newNames };
+}
 
 /**
  * The atomic amendment. Returns { proposal } on success, { proposal: null }
@@ -335,6 +423,20 @@ async function pendingForWine(wineId, userId) {
 }
 
 /**
+ * pendingForWine for the web bottle page, behind the same visibility rule as
+ * filing: a hidden wine's queue state never leaks, so a wine the caller cannot
+ * see reads as "nothing pending". This is what lets the page say "another
+ * member's suggestion is awaiting review" BEFORE the user has typed a
+ * correction that could only come back as a 409.
+ */
+async function pendingForViewer(userId, wineId, roles = []) {
+  if (!isValidId(String(wineId))) return null;
+  const wine = await findVisibleWine(String(wineId), { userId, roles, noDrafts: true, select: '_id', lean: true });
+  if (!wine) return null;
+  return pendingForWine(wineId, userId);
+}
+
+/**
  * The caller's own proposals on one wine (pending + decided), newest first —
  * what lets the bottle page show "suggestion pending" / the outcome.
  */
@@ -360,4 +462,5 @@ module.exports = {
   createFieldCorrection,
   listMineForWine,
   pendingForWine,
+  pendingForViewer,
 };

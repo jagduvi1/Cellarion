@@ -24,6 +24,9 @@ jest.mock('../../models/WineDefinition', () => ({ findById: jest.fn() }));
 jest.mock('../../models/WineVintageProfile', () => ({ deleteMany: jest.fn() }));
 jest.mock('../../models/Bottle', () => ({ distinct: jest.fn() }));
 jest.mock('../../models/Country', () => ({ findOne: jest.fn() }));
+// Read by the list only, to flag a proposed variety the taxonomy lacks.
+jest.mock('../../models/Grape', () => ({ find: jest.fn() }));
+jest.mock('../../services/notifications', () => ({ createNotification: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../../services/indexNow', () => ({ submitUrls: jest.fn() }));
 jest.mock('../../services/search', () => ({ indexWine: jest.fn(), bulkIndexBottles: jest.fn() }));
@@ -59,6 +62,8 @@ const WineDefinition = require('../../models/WineDefinition');
 const WineVintageProfile = require('../../models/WineVintageProfile');
 const Bottle = require('../../models/Bottle');
 const Country = require('../../models/Country');
+const Grape = require('../../models/Grape');
+const { createNotification } = require('../../services/notifications');
 const { performWineMerge } = require('./wines');
 const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const searchService = require('../../services/search');
@@ -87,6 +92,12 @@ beforeEach(() => {
   WineCorrectionProposal.populate.mockResolvedValue(undefined); // rows arrive pre-shaped below
   WineCorrectionProposal.updateOne.mockResolvedValue({});
   Bottle.distinct.mockResolvedValue([]);
+  // Every proposed grape is a known variety unless a test says otherwise.
+  Grape.find.mockImplementation((filter) => {
+    const keys = filter.$or[0].normalizedName.$in;
+    return { select: () => ({ lean: async () => keys.map((k) => ({ normalizedName: k, normalizedSynonyms: [] })) }) };
+  });
+  createNotification.mockResolvedValue(undefined);
 });
 
 const get = (qs = '') => fetch(`${baseUrl}/api/admin/wine-proposals${qs}`, {
@@ -166,6 +177,132 @@ describe('GET / (list)', () => {
       { at: '2026-09-12T08:00:00.000Z', fields: ['grapes'], reason: 'Grapes from the back label.', evidenceUrl: 'https://label.example/back' },
       { at: '2026-09-12T09:00:00.000Z', fields: [], reason: 'Second look.', evidenceUrl: null },
     ]);
+  });
+
+  // The web grape picker lets a user deliberately propose a variety the
+  // taxonomy lacks (support ticket 2026-09-17). Approving refuses it until the
+  // variety exists — so the list says which names those are, up front.
+  describe('a proposed variety the taxonomy does not have', () => {
+    const rowWith = (over) => ({
+      _id: P1, kind: 'field_correction', status: 'pending',
+      proposer: { _id: ADMIN_ID, username: 'rudi' },
+      wineDefinition: { _id: W1, name: 'Cuvée', producer: 'Weingut X', grapes: [{ name: 'Riesling' }] },
+      proposedFields: { grapes: ['Riesling', 'Souvignier Gris'] },
+      reason: 'Named on the producer tech sheet.',
+      createdAt: '2026-09-18T00:00:00.000Z',
+      ...over,
+    });
+    const knownOnly = (...known) => Grape.find.mockReturnValue({
+      select: () => ({ lean: async () => known.map((k) => ({ normalizedName: k, normalizedSynonyms: [] })) }),
+    });
+
+    test('is named on the grapes diff row, from ONE batched taxonomy lookup', async () => {
+      WineCorrectionProposal.aggregate.mockResolvedValue([rowWith()]);
+      WineCorrectionProposal.countDocuments.mockResolvedValueOnce(1).mockResolvedValueOnce(1);
+      knownOnly('riesling');
+
+      const row = (await (await get('?status=pending')).json()).proposals[0];
+      expect(row.diff.grapes).toEqual({ current: 'Riesling', proposed: 'Riesling, Souvignier Gris', unknown: ['Souvignier Gris'] });
+      expect(Grape.find).toHaveBeenCalledTimes(1);
+      expect(Grape.find.mock.calls[0][0].$or[0].normalizedName.$in.sort()).toEqual(['riesling', 'souvignier gris']);
+    });
+
+    test('a synonym counts as known; a decided row is not flagged; no grapes means no lookup at all', async () => {
+      WineCorrectionProposal.aggregate.mockResolvedValue([rowWith({ proposedFields: { grapes: ['Tinta Roriz'] } })]);
+      WineCorrectionProposal.countDocuments.mockResolvedValueOnce(1).mockResolvedValueOnce(1);
+      Grape.find.mockReturnValue({ select: () => ({ lean: async () => [{ normalizedName: 'tempranillo', normalizedSynonyms: ['tinta roriz'] }] }) });
+      let row = (await (await get('?status=pending')).json()).proposals[0];
+      expect(row.diff.grapes).not.toHaveProperty('unknown');
+
+      WineCorrectionProposal.aggregate.mockResolvedValue([rowWith({ status: 'approved' })]);
+      WineCorrectionProposal.countDocuments.mockResolvedValueOnce(1).mockResolvedValueOnce(0);
+      knownOnly('riesling');
+      row = (await (await get('?status=decided')).json()).proposals[0];
+      expect(row.diff.grapes).not.toHaveProperty('unknown');
+
+      Grape.find.mockClear();
+      WineCorrectionProposal.aggregate.mockResolvedValue([rowWith({ proposedFields: { producer: 'Weingut Y' } })]);
+      WineCorrectionProposal.countDocuments.mockResolvedValueOnce(1).mockResolvedValueOnce(1);
+      await get('?status=pending');
+      expect(Grape.find).not.toHaveBeenCalled();
+    });
+  });
+});
+
+// Every other submitter-facing queue told its submitter what happened; a
+// decided correction recorded it where only a GDPR export could reach — while
+// the bottle page promised "you'll see the outcome" (2026-09-18).
+describe('telling the submitter', () => {
+  const USER_ID = '64b000000000000000000002';
+  const userProposal = (over = {}) => ({
+    _id: P1, kind: 'field_correction', wineDefinition: W1, proposer: USER_ID, via: 'ui',
+    proposedFields: { producer: 'E. Pira e Figli', grapes: ['Nebbiolo'] },
+    ...over,
+  });
+  const wine = () => ({ _id: W1, name: 'Barolo', producer: 'Pira', appellation: 'Barolo', country: 'c1', grapes: [], save: jest.fn().mockResolvedValue(undefined) });
+  const { resolveGrapeIdsStrict } = require('../../services/wineProfileOps');
+
+  test('an applied correction notifies its submitter, naming the wine and the fields, linking to it', async () => {
+    WineCorrectionProposal.findOneAndUpdate.mockResolvedValue(userProposal());
+    WineDefinition.findById.mockResolvedValue(wine());
+    resolveGrapeIdsStrict.mockResolvedValue({ ok: true, ids: ['g1'], names: ['Nebbiolo'], substitutions: [] });
+
+    expect((await post(`/${P1}/approve`)).status).toBe(200);
+    expect(createNotification).toHaveBeenCalledTimes(1);
+    const [to, type, title, message, link] = createNotification.mock.calls[0];
+    expect(to).toBe(USER_ID);
+    expect(type).toBe('wine_correction_decided');
+    expect(title).toBe('Wine correction applied');
+    // The label is the wine AFTER the fix — what the submitter will find.
+    expect(message).toMatch(/E\. Pira e Figli — Barolo \(producer, grapes\) is now live/);
+    expect(link).toBe(`/wines/${W1}`);
+  });
+
+  test('a rejection carries the curator\'s reason', async () => {
+    WineCorrectionProposal.findOneAndUpdate.mockResolvedValue(userProposal());
+    WineDefinition.findById.mockReturnValue({ select: () => ({ lean: async () => ({ _id: W1, name: 'Barolo', producer: 'Pira' }) }) });
+
+    expect((await post(`/${P1}/reject`, { reason: 'The estate site still says Pira.' })).status).toBe(200);
+    const [to, type, title, message] = createNotification.mock.calls[0];
+    expect([to, type, title]).toEqual([USER_ID, 'wine_correction_decided', 'Wine correction not applied']);
+    expect(message).toMatch(/Pira — Barolo \(producer, grapes\) was not applied\.\n\nThe estate site still says Pira\./);
+  });
+
+  test('a sommelier\'s own proposal (filed without an origin) notifies nobody — batches of a hundred would bury the inbox', async () => {
+    WineCorrectionProposal.findOneAndUpdate.mockResolvedValue(userProposal({ via: null }));
+    WineDefinition.findById.mockResolvedValue(wine());
+    resolveGrapeIdsStrict.mockResolvedValue({ ok: true, ids: ['g1'], names: ['Nebbiolo'], substitutions: [] });
+    await post(`/${P1}/approve`);
+
+    WineCorrectionProposal.findOneAndUpdate.mockResolvedValue(userProposal({ via: undefined }));
+    await post(`/${P1}/reject`, { reason: 'Not convincing enough.' });
+    expect(createNotification).not.toHaveBeenCalled();
+  });
+
+  test('deciding one\'s own suggestion notifies nobody; neither does a failed apply', async () => {
+    WineCorrectionProposal.findOneAndUpdate.mockResolvedValue(userProposal({ proposer: ADMIN_ID }));
+    WineDefinition.findById.mockResolvedValue(wine());
+    resolveGrapeIdsStrict.mockResolvedValue({ ok: true, ids: ['g1'], names: ['Nebbiolo'], substitutions: [] });
+    await post(`/${P1}/approve`);
+    expect(createNotification).not.toHaveBeenCalled();
+
+    // An unknown variety reverts the claim: nothing was decided, nobody is told.
+    WineCorrectionProposal.findOneAndUpdate.mockResolvedValue(userProposal());
+    WineDefinition.findById.mockResolvedValue(wine());
+    resolveGrapeIdsStrict.mockResolvedValue({ ok: false, unmatched: ['Nebbiolo'] });
+    expect((await post(`/${P1}/approve`)).status).toBe(400);
+    expect(createNotification).not.toHaveBeenCalled();
+  });
+
+  test('a notification failure never undoes a recorded decision', async () => {
+    createNotification.mockRejectedValue(new Error('push service down'));
+    WineCorrectionProposal.findOneAndUpdate.mockResolvedValue(userProposal({ proposedFields: { producer: 'E. Pira e Figli' } }));
+    WineDefinition.findById.mockResolvedValue(wine());
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const res = await post(`/${P1}/approve`);
+    expect(res.status).toBe(200);
+    await new Promise((r) => setImmediate(r));
+    warn.mockRestore();
   });
 });
 
