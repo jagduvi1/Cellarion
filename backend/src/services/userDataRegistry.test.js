@@ -286,3 +286,56 @@ describe('WineOwnerInquiry — recipient-entry erasure + asker nulling', () => {
     }
   });
 });
+
+// Portability of wine corrections (pre-deploy audit 2026-09-18). `amendments`
+// was selected but never mapped into the export. It was an edge while
+// corrections came from a connector; the bottle page files ONE field at a
+// time, so fixing a second field IS an amendment — and the reason and the
+// evidence link the user typed for it lived nowhere but there.
+describe('WineCorrectionProposal export', () => {
+  const WineCorrectionProposal = require('../models/WineCorrectionProposal');
+  const entry = REGISTRY.find((e) => e.model === WineCorrectionProposal);
+
+  test('carries every amendment the user typed, and the outcome', async () => {
+    const chain = (rows) => {
+      const c = {};
+      for (const m of ['select', 'limit']) c[m] = jest.fn(() => c);
+      c.lean = jest.fn(async () => rows);
+      return c;
+    };
+    const q = chain([{
+      kind: 'field_correction',
+      currentSnapshot: { producer: 'Pira', name: 'Barolo' },
+      proposedFields: { type: 'red', grapes: ['Nebbiolo'] },
+      reason: 'It is a red wine.', evidenceUrl: null,
+      amendments: [{ at: 'a1', fields: ['grapes'], reason: 'Back label says 100% Nebbiolo.', evidenceUrl: 'https://label.example/back' }],
+      status: 'rejected', rejectReason: 'The estate lists a field blend.', appliedNote: undefined,
+      createdAt: 'c1', decidedAt: 'd1',
+    }, {
+      kind: 'field_correction', currentSnapshot: null, proposedFields: { producer: 'X' },
+      reason: 'Never amended, approved.', status: 'approved', appliedNote: 'Applied: producer', createdAt: 'c2',
+    }]);
+    const findSpy = jest.spyOn(WineCorrectionProposal, 'find').mockReturnValue(q);
+    try {
+      const frag = await entry.exportFragment({ userId: 'u1', truncated: {} });
+      expect(q.select.mock.calls[0][0]).toEqual(expect.stringContaining('amendments'));
+      expect(q.select.mock.calls[0][0]).toEqual(expect.stringContaining('rejectReason'));
+      expect(frag.wineCorrectionProposals[0]).toEqual({
+        kind: 'field_correction',
+        wine: 'Pira — Barolo',
+        proposedFields: { type: 'red', grapes: ['Nebbiolo'] },
+        reason: 'It is a red wine.',
+        evidenceUrl: null,
+        amendments: [{ at: 'a1', fields: ['grapes'], reason: 'Back label says 100% Nebbiolo.', evidenceUrl: 'https://label.example/back' }],
+        status: 'rejected',
+        rejectReason: 'The estate lists a field blend.',
+        appliedNote: null,
+        createdAt: 'c1',
+        decidedAt: 'd1',
+      });
+      expect(frag.wineCorrectionProposals[1]).toMatchObject({ amendments: [], rejectReason: null, appliedNote: 'Applied: producer', wine: null });
+    } finally {
+      findSpy.mockRestore();
+    }
+  });
+});

@@ -75,6 +75,28 @@ test('delegates to the shared service with the caller identity and via mcp', asy
   expect(body.summary).toContain('admin will review');
 });
 
+// `newGrapes` is the WEB grape picker's "this variety is deliberately new"
+// modifier. It is not part of this tool: a name an assistant gets wrong must
+// keep being refused at filing. The schema does not declare it (zod strips
+// it), and the handler drops it as well — that second half is what a test can
+// pin, since handlers are called here without the SDK's parsing in front.
+test('newGrapes never reaches the service over the connector, and the schema does not declare it', async () => {
+  ops.createFieldCorrection.mockResolvedValue({
+    ok: true,
+    proposal: { _id: oid('9'), proposedFields: { grapes: ['Merlot'] } },
+    wine: { producer: 'Cloudy Bay', name: 'Sauvignon Blanc' },
+  });
+  await tool().handler({
+    wine_id: WINE,
+    fields: { grapes: ['Merlot', 'Souvignier Grisx'], newGrapes: ['Souvignier Grisx'] },
+    reason: 'An assistant trying to wave a typo through.',
+  }, CTX);
+  const sent = ops.createFieldCorrection.mock.calls[0][1].fields;
+  expect(sent).toEqual({ grapes: ['Merlot', 'Souvignier Grisx'] });
+  expect(sent).not.toHaveProperty('newGrapes');
+  expect(Object.keys(tool().inputSchema.fields.shape)).not.toContain('newGrapes');
+});
+
 // Support ticket 2026-09-12: filing on one's own pending suggestion amends it.
 test('an amended own suggestion is reported as such, with the full field set', async () => {
   ops.createFieldCorrection.mockResolvedValue({

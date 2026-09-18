@@ -193,6 +193,14 @@
   color: var(--color-text-muted);
 }
 
+/* On its own (a status line, not a list row) it keeps the list's frame. */
+.gti-empty--alone {
+  margin: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
 .gti-note {
   margin: 0;
   font-size: 0.82rem;

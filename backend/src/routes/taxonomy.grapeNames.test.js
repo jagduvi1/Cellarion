@@ -96,6 +96,22 @@ test('each entry is name, colour, synonyms and wine count — no ids, no provena
   expect(grapes.find((g) => g.name === 'Souvignier Gris')).toEqual({ name: 'Souvignier Gris', color: 'White', synonyms: [], wineCount: 0 });
 });
 
+// Stamped before the queries ran, a 500 went out cacheable for an hour too —
+// and the picker's "Try again" would have been answered by the browser's cache
+// (pre-deploy audit 2026-09-18).
+test('a failure carries no cache header, and is not kept in the list cache either', async () => {
+  const err = jest.spyOn(console, 'error').mockImplementation(() => {});
+  WineDefinition.aggregate.mockRejectedValueOnce(new Error('primary stepped down'));
+  const failed = await get();
+  err.mockRestore();
+  expect(failed.status).toBe(500);
+  expect(failed.cacheControl || '').not.toMatch(/max-age/);
+
+  const ok = await get();
+  expect(ok.status).toBe(200);
+  expect(ok.cacheControl).toBe('private, max-age=3600');
+});
+
 test('the aggregation runs once and the answer is served from the list cache until taxonomy changes', async () => {
   await get();
   await get();

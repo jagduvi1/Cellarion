@@ -294,6 +294,22 @@ describe('telling the submitter', () => {
     expect(createNotification).not.toHaveBeenCalled();
   });
 
+  // The decision is claimed and audited BEFORE the label is read. A failed read
+  // used to bubble up as a 500: the admin retried into a 409, and the submitter
+  // never heard (pre-deploy audit 2026-09-18).
+  test('a failed label lookup on reject still answers 200 and still tells the submitter', async () => {
+    WineCorrectionProposal.findOneAndUpdate.mockResolvedValue(userProposal());
+    WineDefinition.findById.mockReturnValue({ select: () => ({ lean: async () => { throw new Error('primary stepped down'); } }) });
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const res = await post(`/${P1}/reject`, { reason: 'The estate site still says Pira.' });
+    expect(res.status).toBe(200);
+    await new Promise((r) => setImmediate(r));
+    warn.mockRestore();
+    expect(createNotification).toHaveBeenCalledTimes(1);
+    expect(createNotification.mock.calls[0][3].startsWith('Your suggested fix for a wine (producer, grapes) was not applied.')).toBe(true);
+    expect(createNotification.mock.calls[0][4]).toBeNull();
+  });
+
   test('a notification failure never undoes a recorded decision', async () => {
     createNotification.mockRejectedValue(new Error('push service down'));
     WineCorrectionProposal.findOneAndUpdate.mockResolvedValue(userProposal({ proposedFields: { producer: 'E. Pira e Figli' } }));

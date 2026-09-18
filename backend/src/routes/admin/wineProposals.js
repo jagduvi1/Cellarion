@@ -47,55 +47,11 @@ const { generateWineKey, normalizeAppellation, normalizeString, resolveCountryNa
 const { parsePagination } = require('../../utils/pagination');
 const { isValidId } = require('../../utils/validation');
 const { stripHtml } = require('../../utils/sanitize');
-const { createNotification } = require('../../services/notifications');
+// Telling the submitter lives in a service: merges and deletes close pending
+// corrections too (routes/admin/wines.js) and owe the same notification.
+const { notifyProposer } = require('../../services/wineCorrectionNotify');
 
 router.use(requireAuth, requireRole('admin'));
-
-// What a submitter calls each correctable field, for the decision notification.
-const FIELD_WORDS = {
-  producer: 'producer', name: 'wine name', appellation: 'appellation', region: 'region',
-  country: 'country', classification: 'classification', type: 'type', grapes: 'grapes',
-};
-
-/**
- * Tell the submitter what became of their suggestion. Every other submitter-
- * facing queue already did (wine requests, reports, images, registry keys and
- * values); a decided correction recorded its outcome where only a GDPR export
- * could reach it, while the bottle page promised "you'll see the outcome".
- *
- * Only the USER pipeline (services/wineProposalOps stamps `via` on every row it
- * files — web, connector or bridge). A sommelier's own proposals are filed
- * without one and decided in batches of a hundred; a notification per row
- * would bury that account's inbox under its own work. And never for a
- * decision on one's own proposal.
- *
- * Fire-and-forget, like every notify call: a notification failure must never
- * undo a recorded decision.
- */
-function notifyProposer(proposal, wineDoc, deciderId, approved, rejectReason) {
-  if (proposal.kind !== 'field_correction' || !proposal.via || !proposal.proposer) return;
-  if (String(proposal.proposer) === String(deciderId)) return;
-  const pf = proposal.proposedFields && typeof proposal.proposedFields.toObject === 'function'
-    ? proposal.proposedFields.toObject()
-    : (proposal.proposedFields || {});
-  const fields = Object.keys(pf)
-    .filter((f) => FIELD_WORDS[f] && pf[f] !== undefined && pf[f] !== null && pf[f] !== '' && !(Array.isArray(pf[f]) && !pf[f].length))
-    .map((f) => FIELD_WORDS[f]);
-  const what = fields.length ? ` (${fields.join(', ')})` : '';
-  const label = wineDoc ? [wineDoc.producer, wineDoc.name].filter(Boolean).join(' — ') : 'a wine';
-  const message = approved
-    ? `Your suggested fix for ${label}${what} is now live in the registry. Thank you for improving it.`
-    : `Your suggested fix for ${label}${what} was not applied.${rejectReason ? `\n\n${rejectReason}` : ''}`;
-  createNotification(
-    proposal.proposer,
-    'wine_correction_decided',
-    approved ? 'Wine correction applied' : 'Wine correction not applied',
-    message,
-    wineDoc ? `/wines/${wineDoc._id}` : null
-  ).catch((err) => {
-    console.warn('[wineProposals] decision notification failed (non-fatal):', err.message);
-  });
-}
 
 // Keep in sync with the WineCorrectionProposal schema enums. 'decided' is a
 // list-only alias for approved+rejected (the review modal's second tab).
@@ -536,9 +492,17 @@ async function rejectProposal(proposalId, reason, req) {
     { type: 'WineCorrectionProposal', id: proposal._id },
     { kind: proposal.kind, wineDefinitionId: proposal.wineDefinition, reason });
 
-  // Only the label is needed — and only when there is somebody to tell.
+  // Only the label is needed — and only when there is somebody to tell. The
+  // decision is ALREADY recorded and audited above, so a failed label read must
+  // not answer 500 (the admin would retry into a 409 and the submitter would
+  // never hear): the notification then simply goes out without the label.
   if (proposal.kind === 'field_correction' && proposal.via) {
-    const wineDoc = await WineDefinition.findById(proposal.wineDefinition).select('name producer').lean();
+    let wineDoc = null;
+    try {
+      wineDoc = await WineDefinition.findById(proposal.wineDefinition).select('name producer').lean();
+    } catch (err) {
+      console.warn('[wineProposals] label lookup for the rejection notice failed (non-fatal):', err.message);
+    }
     notifyProposer(proposal, wineDoc, req.user.id, false, reason);
   }
 

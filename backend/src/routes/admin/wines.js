@@ -31,7 +31,9 @@ const Discussion = require('../../models/Discussion');
 const DiscussionReply = require('../../models/DiscussionReply');
 const WineEmbedding = require('../../models/WineEmbedding');
 const WineNotDuplicate = require('../../models/WineNotDuplicate');
-const WineCorrectionProposal = require('../../models/WineCorrectionProposal');
+// Pending correction proposals close with their wine THROUGH this service, so
+// a user who filed one is told what happened (it owns the model access).
+const { closePendingForWine } = require('../../services/wineCorrectionNotify');
 const { repointInquiriesForWineMerge, closeInquiriesForWineDelete } = require('../../services/ownerInquiryOps');
 const WineList = require('../../models/WineList');
 const WishlistItem = require('../../models/WishlistItem');
@@ -1609,10 +1611,10 @@ router.delete('/:id', async (req, res) => {
       WineNotDuplicate.deleteMany({ $or: [{ wineA: id }, { wineB: id }] }),
       // Pending correction proposals on (or targeting) a deleted wine would
       // dangle in the review queue forever — same closure as performWineMerge.
-      WineCorrectionProposal.updateMany(
-        { status: 'pending', $or: [{ wineDefinition: id }, { mergeTargetId: id }] },
-        { $set: { status: 'rejected', decidedAt: new Date(), rejectReason: 'Closed automatically: the wine was deleted before review.' } }
-      ),
+      // Through the shared closer, so a user who filed one is told (the wine is
+      // gone, so the notification has nowhere to link).
+      closePendingForWine(id, 'Closed automatically: the wine was deleted before review.',
+        { wine, actorId: req.user?.id }),
       // Active owner inquiries have nothing left to verify — same closure.
       closeInquiriesForWineDelete(id, req),
       // Qdrant points + WineEmbedding bookkeeping rows (same helper as merge).
@@ -1839,13 +1841,14 @@ async function performWineMerge(sourceId, targetId, req) {
   // than asking the somm to re-file against the keeper. decidedBy stays null —
   // this is lifecycle closure, not a reviewer's judgement.
   const keeperLabel = [target.producer, target.name].filter(Boolean).join(' — ');
-  await WineCorrectionProposal.updateMany(
-    { status: 'pending', $or: [{ wineDefinition: sourceId }, { mergeTargetId: sourceId }] },
-    { $set: {
-      status: 'rejected',
-      decidedAt: new Date(),
-      rejectReason: `Closed automatically: the wine was merged into "${keeperLabel}". Re-file against that wine if the issue still applies.`.slice(0, 500),
-    } }
+  // The shared closer also TELLS a user who filed one (pre-deploy audit
+  // 2026-09-18): this is where a correction that made the wine collide with its
+  // twin ends up, and the bottle now points at the keeper, so nothing on the
+  // web would ever show them the outcome. The notification links to the keeper.
+  await closePendingForWine(
+    sourceId,
+    `Closed automatically: the wine was merged into "${keeperLabel}". Re-file against that wine if the issue still applies.`.slice(0, 500),
+    { wine: source, linkWineId: targetId, actorId: req?.user?.id }
   );
 
   // Owner inquiries take the opposite path to proposals: the merge does NOT
@@ -2142,15 +2145,10 @@ router.post('/merge', async (req, res) => {
     const goldenKeeperLabel = [keeper.producer, keeper.name].filter(Boolean).join(' — ');
     for (const src of sources) {
       bottlesMoved += await reassignWineRefs(src._id, keeperOid);
-      await WineCorrectionProposal.updateMany(
-        { status: 'pending', $or: [{ wineDefinition: src._id }, { mergeTargetId: src._id }] },
-        {
-          $set: {
-            status: 'rejected',
-            decidedAt: new Date(),
-            rejectReason: `Closed automatically: the wine was merged into "${goldenKeeperLabel}". Re-file against that wine if the issue still applies.`.slice(0, 500),
-          },
-        }
+      await closePendingForWine(
+        src._id,
+        `Closed automatically: the wine was merged into "${goldenKeeperLabel}". Re-file against that wine if the issue still applies.`.slice(0, 500),
+        { wine: src, linkWineId: keeperOid, actorId: req.user?.id }
       );
       await repointInquiriesForWineMerge(src._id, keeperOid, goldenKeeperLabel, req);
     }

@@ -290,7 +290,9 @@ const looksLikeGrapeName = (s) => NEW_GRAPE_NAME.test(s)
  */
 async function resolveProposedGrapes(names, declaredNew) {
   const { resolveGrapeIdsStrict } = require('./wineProfileOps');
-  const { normalizeString } = require('../utils/normalize');
+  const { normalizeString, resolveGrapeName } = require('../utils/normalize');
+  // The key the resolver itself dedupes and matches on.
+  const keyOf = (n) => normalizeString(resolveGrapeName(n));
 
   let declared = new Set();
   if (declaredNew !== undefined && declaredNew !== null) {
@@ -321,8 +323,13 @@ async function resolveProposedGrapes(names, declaredNew) {
       'leave out percentages and anything that is not the variety itself.');
   }
 
-  const unmatched = new Set(strict.unmatched);
-  const known = names.filter((n) => !unmatched.has(n));
+  // By the resolver's KEY, not by raw string: it skips a second spelling of a
+  // name it has already seen ("Solaris", "solaris" — only the first comes back
+  // unmatched), so a raw comparison read the repeat as a KNOWN variety and the
+  // second pass below failed it as "the taxonomy changed", on every retry
+  // (pre-deploy audit 2026-09-18).
+  const unmatchedKeys = new Set(strict.unmatched.map(keyOf));
+  const known = names.filter((n) => { const k = keyOf(n); return !!k && !unmatchedKeys.has(k); });
   let canonical = [];
   if (known.length) {
     const again = await resolveGrapeIdsStrict(known);

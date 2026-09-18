@@ -66,9 +66,18 @@ registerTool({
     const replayed = await replay(ctx, args.idempotency_key, 'suggest_wine_correction');
     if (replayed) return replayed;
 
+    // `newGrapes` — the web grape picker's "this variety is deliberately new"
+    // modifier (services/wineProposalOps) — is NOT part of this tool: a name an
+    // assistant gets wrong must keep being refused at filing, which is the whole
+    // point of resolving grapes strictly here. The schema above does not declare
+    // it and zod strips undeclared keys, but that is the SDK's behaviour, not a
+    // guarantee of ours — so it is dropped here too, where a test can pin it.
+    const fields = { ...(args.fields || {}) };
+    delete fields.newGrapes;
+
     const result = await ops.createFieldCorrection(
       ctx.user.id,
-      { wineId: args.wine_id, fields: args.fields, reason: args.reason, evidenceUrl: args.evidence_url },
+      { wineId: args.wine_id, fields, reason: args.reason, evidenceUrl: args.evidence_url },
       { via: 'mcp', req: ctx.req }
     );
     if (!result.ok) {

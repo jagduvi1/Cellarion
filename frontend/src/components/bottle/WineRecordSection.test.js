@@ -425,3 +425,79 @@ test('another surface can send the reader here in suggest mode', async () => {
   rerender(<WineRecordSection wine={WINE} canSuggest apiFetch={vi.fn()} suggestSignal={1} />);
   expect(await screen.findByLabelText('Suggest a fix for Producer')).toBeInTheDocument();
 });
+
+// ── Pre-deploy audit 2026-09-18 ─────────────────────────────────────────────
+describe('audit 2026-09-18', () => {
+  // The page keeps the counter for the whole visit and this section remounts
+  // whenever the edit form has been shown: acting on the MOUNTED value re-opened
+  // suggest mode and scrolled the page after every later edit.
+  test('the hand-off signal is an event: a value already set at mount does nothing, a change acts', async () => {
+    const { rerender } = renderSection({ suggestSignal: 1 });
+    await screen.findAllByText('not recorded');
+    expect(screen.queryByLabelText('Suggest a fix for Producer')).not.toBeInTheDocument();
+    expect(screen.getByText('Suggest a fix')).toBeInTheDocument();
+
+    rerender(<WineRecordSection wine={WINE} canSuggest apiFetch={vi.fn()} suggestSignal={2} />);
+    expect(await screen.findByLabelText('Suggest a fix for Producer')).toBeInTheDocument();
+  });
+
+  // The bottle page stays mounted from bottle to bottle. A failed refetch used
+  // to leave wine A's pending lines — and A's review slot — on wine B.
+  test('nothing that belongs to one wine survives a change of wine, even when the refetch fails', async () => {
+    getMyWineProposals.mockResolvedValueOnce(ok({
+      proposals: [{ status: 'pending', proposedFields: { producer: 'Cloudy Bay Vineyards' } }],
+      pending: { mine: true, fields: ['producer'] },
+    }));
+    const apiFetch = vi.fn();
+    const { rerender } = render(<WineRecordSection wine={WINE} canSuggest apiFetch={apiFetch} />);
+    expect(await screen.findByText('Cloudy Bay Vineyards')).toBeInTheDocument();
+
+    getMyWineProposals.mockResolvedValueOnce({ ok: false, json: async () => ({}) });
+    rerender(<WineRecordSection wine={{ ...WINE, _id: 'w2', producer: 'Dog Point' }} canSuggest apiFetch={apiFetch} />);
+    expect(await screen.findByText('Dog Point')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Cloudy Bay Vineyards')).not.toBeInTheDocument());
+    expect(screen.queryByText('suggestion pending')).not.toBeInTheDocument();
+  });
+
+  // My earlier suggestion was decided while this page was open, so the next
+  // filing is a FRESH proposal. Merging the stale local fields back in kept
+  // showing the decided one as pending.
+  test('a fresh filing replaces my stale pending fields instead of inheriting them', async () => {
+    getMyWineProposals.mockResolvedValue(ok({
+      proposals: [{ status: 'pending', proposedFields: { producer: 'Cloudy Bay Vineyards' } }],
+      pending: { mine: true, fields: ['producer'] },
+    }));
+    createWineProposal.mockResolvedValue(ok({
+      amended: false,
+      proposal: { _id: 'p2', status: 'pending', proposedFields: { appellation: 'Marlborough' } },
+    }));
+    renderSection();
+    await screen.findByText('Cloudy Bay Vineyards');
+    enterSuggestMode();
+    fireEvent.click(screen.getByLabelText('Suggest a fix for Appellation'));
+    await screen.findByText('Suggest a fix: Appellation');
+    fireEvent.change(screen.getByLabelText('Should be'), { target: { value: 'Marlborough' } });
+    fireEvent.change(screen.getByLabelText('How do you know?'), { target: { value: 'Printed on the back label.' } });
+    fireEvent.click(screen.getByText('Send suggestion'));
+    await waitFor(() => expect(screen.queryByText('Cloudy Bay Vineyards')).not.toBeInTheDocument());
+    expect(screen.getAllByText('suggestion pending')).toHaveLength(1);
+  });
+
+  test('the type chooser is one tab stop, and the arrow keys move within it', async () => {
+    renderSection();
+    await screen.findAllByText('not recorded');
+    enterSuggestMode();
+    fireEvent.click(screen.getByLabelText('Suggest a fix for Type'));
+    await screen.findByText('Suggest a fix: Type');
+    // Nothing chosen yet: the first choice is the group's tab stop.
+    expect(screen.getAllByRole('radio').map((r) => r.tabIndex)).toEqual([0, -1, -1, -1, -1]);
+
+    fireEvent.keyDown(screen.getByRole('radiogroup'), { key: 'ArrowRight' });
+    expect(screen.getByRole('radio', { name: 'Red' })).toHaveAttribute('aria-checked', 'true');
+    fireEvent.keyDown(screen.getByRole('radiogroup'), { key: 'ArrowLeft' });
+    // Wraps to the last choice, which becomes the only tab stop.
+    expect(screen.getByRole('radio', { name: 'Fortified' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getAllByRole('radio').filter((r) => r.tabIndex === 0)).toHaveLength(1);
+    expect(screen.getByRole('radio', { name: 'Fortified' })).toHaveFocus();
+  });
+});

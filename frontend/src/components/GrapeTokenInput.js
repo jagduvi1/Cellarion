@@ -55,6 +55,7 @@ const looksLikeGrapeName = (s) => NEW_NAME.test(s)
 
 const MAX_RESULTS = 7;
 const NEW_MIN_CHARS = 3;
+const NONE_TAKEN = new Set();
 
 // One entry per name (a variety's own, or a synonym): `id` to compare,
 // `key` + `words` to search.
@@ -143,7 +144,14 @@ function GrapeTokenInput({ options, value = [], onChange, max = 12, allowNew = f
   const alreadyChosen = !!chosenAs || (!!typedId && takenIds.has(typedId));
   // … and only when NOTHING matches. Next to real matches it is noise that
   // invites junk: "sauv" is the start of two varieties, not a third one.
-  const offerNew = allowNew && !!options && hits.length === 0 && typed.length >= NEW_MIN_CHARS
+  // "Nothing" is judged against the WHOLE list: `hits` leaves out what is
+  // already chosen, so with Zinfandel picked, "Zinf" had no hits and was
+  // offered as a new variety (pre-deploy audit 2026-09-18).
+  const hiddenMatch = useMemo(
+    () => (hits.length === 0 && typedId ? (searchGrapes(index, query, NONE_TAKEN, 1)[0] || null) : null),
+    [hits.length, typedId, index, query]
+  );
+  const offerNew = allowNew && !!options && hits.length === 0 && !hiddenMatch && typed.length >= NEW_MIN_CHARS
     && !existsExactly && !alreadyChosen && looksLikeGrapeName(typed);
 
   const items = [
@@ -183,7 +191,10 @@ function GrapeTokenInput({ options, value = [], onChange, max = 12, allowNew = f
       e.preventDefault();
       e.stopPropagation();
       setQuery('');
-    } else if (e.key === 'Backspace' && !query && value.length) {
+    } else if (e.key === 'Backspace' && !query && value.length && !e.repeat) {
+      // Not on key REPEAT: holding Backspace to clear a typo kept firing once
+      // the box was empty and took one recorded grape per repeat — in a form
+      // whose list REPLACES the wine's.
       removeAt(value.length - 1);
     }
   };
@@ -225,8 +236,8 @@ function GrapeTokenInput({ options, value = [], onChange, max = 12, allowNew = f
           disabled={!options || full}
           role="combobox"
           aria-autocomplete="list"
-          aria-expanded={open}
-          aria-controls={listId}
+          aria-expanded={open && items.length > 0}
+          aria-controls={open && items.length > 0 ? listId : undefined}
           aria-activedescendant={open && items.length ? `${listId}-${activeIndex}` : undefined}
           autoComplete="off"
           autoCapitalize="words"
@@ -246,7 +257,21 @@ function GrapeTokenInput({ options, value = [], onChange, max = 12, allowNew = f
         </p>
       )}
 
-      {open && (
+      {open && items.length === 0 && (
+        // A status line, not a listbox row: inside the list it was presentational
+        // and a screen reader never heard why nothing was offered.
+        <p className="gti-empty gti-empty--alone" role="status">
+          {chosenAs && foldGrapeName(chosenAs) !== typedId
+            ? t('grapeInput.alreadyChosenAs', '“{{name}}” is {{canonical}}, which is already in the list.', { name: typed, canonical: chosenAs })
+            : alreadyChosen
+              ? t('grapeInput.alreadyChosen', '“{{name}}” is already in the list.', { name: typed })
+              : hiddenMatch
+                ? t('grapeInput.alreadyChosen', '“{{name}}” is already in the list.', { name: hiddenMatch.grape.name })
+                : t('grapeInput.noMatch', 'No variety matches “{{name}}”.', { name: typed })}
+        </p>
+      )}
+
+      {open && items.length > 0 && (
         <ul className="gti-list" role="listbox" id={listId}>
           {items.map((item, i) => (
             <li
@@ -279,15 +304,6 @@ function GrapeTokenInput({ options, value = [], onChange, max = 12, allowNew = f
               )}
             </li>
           ))}
-          {items.length === 0 && (
-            <li className="gti-empty" role="presentation">
-              {chosenAs && foldGrapeName(chosenAs) !== typedId
-                ? t('grapeInput.alreadyChosenAs', '“{{name}}” is {{canonical}}, which is already in the list.', { name: typed, canonical: chosenAs })
-                : alreadyChosen
-                  ? t('grapeInput.alreadyChosen', '“{{name}}” is already in the list.', { name: typed })
-                  : t('grapeInput.noMatch', 'No variety matches “{{name}}”.', { name: typed })}
-            </li>
-          )}
         </ul>
       )}
     </div>

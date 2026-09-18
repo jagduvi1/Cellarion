@@ -699,7 +699,7 @@ const REGISTRY = [
       // snapshot so it survives the wine being merged away or renamed.
       wineCorrectionProposals: markTrunc(ctx, 'wineCorrectionProposals',
         await WineCorrectionProposal.find({ proposer: ctx.userId })
-          .select('kind currentSnapshot proposedFields reason evidenceUrl amendments status createdAt decidedAt')
+          .select('kind currentSnapshot proposedFields reason evidenceUrl amendments status rejectReason appliedNote createdAt decidedAt')
           .limit(EXPORT_MAX).lean())
         .map(p => ({
           kind: p.kind,
@@ -707,7 +707,22 @@ const REGISTRY = [
           proposedFields: p.proposedFields || null,
           reason: p.reason,
           evidenceUrl: p.evidenceUrl || null,
+          // Later filings on the same pending suggestion: each carries a reason
+          // and an evidence link the USER typed. `amendments` was selected but
+          // never mapped, so they never came back out — and since the bottle
+          // page files one field at a time, fixing a second field IS an
+          // amendment: the normal path, not an edge (pre-deploy audit 2026-09-18).
+          amendments: (p.amendments || []).map(a => ({
+            at: a.at || null,
+            fields: a.fields || [],
+            reason: a.reason,
+            evidenceUrl: a.evidenceUrl || null,
+          })),
           status: p.status,
+          // The outcome, as the sibling queues export it (what a curator wrote
+          // about the submission, and what an approval actually applied).
+          rejectReason: p.rejectReason || null,
+          appliedNote: p.appliedNote || null,
           createdAt: p.createdAt,
           decidedAt: p.decidedAt || null,
         })),

@@ -352,10 +352,13 @@ router.get('/grapes', async (req, res) => {
  * a crawler walks.
  */
 router.get('/grape-names', requireAuth, async (req, res) => {
+  // Set on the two success paths only: stamped up front, a 500 went out
+  // cacheable for an hour too, and the picker's "Try again" would have been
+  // answered from the browser's cache (pre-deploy audit 2026-09-18).
+  const cacheable = () => res.set('Cache-Control', 'private, max-age=3600');
   try {
-    res.set('Cache-Control', 'private, max-age=3600');
     const cached = getCachedList('grape-names');
-    if (cached) return res.json(cached);
+    if (cached) { cacheable(); return res.json(cached); }
 
     const [grapes, countByGrape] = await Promise.all([
       Grape.find({})
@@ -374,6 +377,7 @@ router.get('/grape-names', requireAuth, async (req, res) => {
 
     const body = { grapes: result };
     listCache.set('grape-names', { at: Date.now(), body });
+    cacheable();
     res.json(body);
   } catch (err) {
     console.error('[taxonomy] grape names error:', err);

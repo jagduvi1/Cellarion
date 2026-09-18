@@ -117,11 +117,42 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
 
   // Another surface asking for the fix flow (the report dialog's "suggest a fix
   // instead"): open the mode and bring the record into view.
+  // The counter is an EVENT, not a state: only a CHANGE acts. The page keeps it
+  // for the whole visit and this section remounts whenever the edit form has
+  // been shown — acting on the mounted value re-opened the mode and scrolled
+  // the page after every later edit (pre-deploy audit 2026-09-18).
+  const seenSignal = useRef(suggestSignal);
   useEffect(() => {
-    if (!suggestSignal || !canSuggest) return;
+    if (suggestSignal === seenSignal.current) return;
+    seenSignal.current = suggestSignal;
+    if (!canSuggest) return;
     setSuggestMode(true);
     sectionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   }, [suggestSignal, canSuggest]);
+
+  // The bottle page stays mounted from one bottle to the next, so everything
+  // that belongs to ONE wine goes when the wine changes — otherwise a failed
+  // refetch left wine A's "Your suggestion …" lines (and A's review slot, which
+  // can hide the Fix buttons) on wine B.
+  const shownWineId = useRef(wine?._id);
+  useEffect(() => {
+    if (shownWineId.current === wine?._id) return;
+    shownWineId.current = wine?._id;
+    setMine([]);
+    setSlot(null);
+    setSentField(null);
+    setModal(null);
+  }, [wine?._id]);
+
+  // Focus goes INTO the suggest dialog and Tab stays there (trapFocus below).
+  // The trap lands on the first control — right for a text field, wrong for the
+  // grape form, whose first control is a chip's "remove" button: there the
+  // dialog itself takes focus, so a screen reader reads the title and a phone
+  // does not throw its keyboard over a form whose first job is often a tap.
+  const formRef = useRef(null);
+  useEffect(() => {
+    if (modal?.field === 'grapes') formRef.current?.closest('[role="dialog"]')?.focus();
+  }, [modal?.field]);
 
   const displayNames = useTaxonomyNames();
   // Fetched when the grapes form opens, not with the page: most visits never do.
@@ -222,8 +253,14 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
         // grape names, and every field of it when this filing amended one.
         const stored = body.proposal?.proposedFields;
         setSentField(modal.field);
+        // `stored` is authoritative when present: after an amendment it holds
+        // every field; after a FRESH filing (my earlier suggestion was decided
+        // while this page was open) it holds only the new ones — merging the
+        // stale local fields back in kept showing a decided suggestion as
+        // pending. The local merge is only the fallback for a bare answer.
         setMine((prev) => {
-          const merged = { ...(prev.find((p) => p.status === 'pending')?.proposedFields || {}), ...sent, ...(stored || {}) };
+          const before = prev.find((p) => p.status === 'pending')?.proposedFields || {};
+          const merged = stored || { ...(body.amended === false ? {} : before), ...sent };
           return [{ status: 'pending', proposedFields: merged }, ...prev.filter((p) => p.status !== 'pending')];
         });
         setSlot((s) => s || { mine: true, fields: Object.keys(sent) });
@@ -321,6 +358,21 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
         {shown || t('wineRecord.notRecorded', 'not recorded')}
       </span>
     );
+  };
+
+  // The recorded type is not a choice.
+  const typeChoices = WINE_TYPES.filter((v) => v !== values.type);
+  const onTypeKey = (e) => {
+    const dir = (e.key === 'ArrowRight' || e.key === 'ArrowDown') ? 1
+      : (e.key === 'ArrowLeft' || e.key === 'ArrowUp') ? -1 : 0;
+    if (!dir || !typeChoices.length) return;
+    e.preventDefault();
+    const i = typeChoices.indexOf(proposedType);
+    const next = i === -1
+      ? typeChoices[dir > 0 ? 0 : typeChoices.length - 1]
+      : typeChoices[(i + dir + typeChoices.length) % typeChoices.length];
+    setProposedType(next);
+    Array.from(e.currentTarget.querySelectorAll('[role="radio"]')).find((b) => b.dataset.type === next)?.focus();
   };
 
   const canSend = !!draftFields() && reason.trim().length >= REASON_MIN;
@@ -485,8 +537,8 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
       )}
 
       {modal && (
-        <Modal title={t('wineRecord.modalTitle', 'Suggest a fix: {{field}}', { field: fieldLabel(modal.field) })} onClose={() => !busy && setModal(null)}>
-          <form onSubmit={submit} className="pd-form">
+        <Modal trapFocus title={t('wineRecord.modalTitle', 'Suggest a fix: {{field}}', { field: fieldLabel(modal.field) })} onClose={() => !busy && setModal(null)}>
+          <form onSubmit={submit} className="pd-form" ref={formRef}>
             {error && <div className="alert alert-error" style={{ marginBottom: 8 }}>{error}</div>}
 
             {modal.field === 'grapes' ? (
@@ -526,13 +578,16 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
                 {modal.field === 'type' ? (
                   <div className="form-group">
                     <span className="wr-group-label" id="wr-type-label">{t('wineRecord.proposed', 'Should be')}</span>
-                    <div className="wr-choices" role="radiogroup" aria-labelledby="wr-type-label">
-                      {WINE_TYPES.filter((v) => v !== values.type).map((v) => (
+                    <div className="wr-choices" role="radiogroup" aria-labelledby="wr-type-label" onKeyDown={onTypeKey}>
+                      {typeChoices.map((v, idx) => (
                         <button
                           key={v}
                           type="button"
                           role="radio"
+                          data-type={v}
                           aria-checked={proposedType === v}
+                          // One tab stop for the group; the arrows move within it.
+                          tabIndex={(proposedType ? proposedType === v : idx === 0) ? 0 : -1}
                           className={`wr-choice${proposedType === v ? ' wr-choice--on' : ''}`}
                           onClick={() => setProposedType(v)}
                         >

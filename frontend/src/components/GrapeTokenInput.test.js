@@ -208,3 +208,39 @@ describe('GrapeTokenInput', () => {
     expect(onRetry).toHaveBeenCalled();
   });
 });
+
+// ── Pre-deploy audit 2026-09-18 ─────────────────────────────────────────────
+describe('audit 2026-09-18', () => {
+  // `hits` leaves out what is already chosen, so with Syrah picked, "Syr" had no
+  // hits — and was offered as a brand-new variety that would have passed the
+  // server's name guard and reached the admin queue.
+  test('a query matching only an already-chosen variety is not a new variety — and says which one', () => {
+    render(<Host allowNew initial={[{ name: 'Syrah' }]} />);
+    type('Syr');
+    expect(optionNames()).toEqual([]);
+    expect(screen.getByText('“Syrah” is already in the list.')).toBeInTheDocument();
+  });
+
+  // Holding Backspace to clear a typo keeps firing once the box is empty. In a
+  // form whose list REPLACES the wine's, that took one recorded grape per repeat.
+  test('a held Backspace stops at the empty box; a fresh press removes one chip', () => {
+    const onValue = vi.fn();
+    render(<Host initial={[{ name: 'Syrah' }, { name: 'Tempranillo' }]} onValue={onValue} />);
+    fireEvent.keyDown(box(), { key: 'Backspace', repeat: true });
+    fireEvent.keyDown(box(), { key: 'Backspace', repeat: true });
+    expect(onValue).not.toHaveBeenCalled();
+    fireEvent.keyDown(box(), { key: 'Backspace' });
+    expect(onValue).toHaveBeenLastCalledWith([{ name: 'Syrah' }]);
+  });
+
+  test('"nothing to offer" is a status line a screen reader hears, and the box does not claim an open list', () => {
+    render(<Host />);
+    type('Xyzzy');
+    expect(screen.getByRole('status')).toHaveTextContent('No variety matches “Xyzzy”.');
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(box()).toHaveAttribute('aria-expanded', 'false');
+    type('syr');
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
+    expect(box()).toHaveAttribute('aria-expanded', 'true');
+  });
+});

@@ -486,10 +486,27 @@ describe('a deliberately-new grape variety', () => {
     expect((await file({ grapes: ['Solaris'], newGrapes: 'Solaris' })).message).toMatch(/newGrapes must be a list/);
   });
 
-  test('the same new variety typed twice is stored once', async () => {
-    resolveGrapeIdsStrict.mockResolvedValue({ ok: false, unmatched: ['Solaris', 'solaris'] });
+  // The REAL resolver skips a second spelling of a name it has already seen,
+  // so only the FIRST comes back unmatched. This test used to mock both as
+  // unmatched — a shape the resolver never produces — and so passed while the
+  // real call failed forever with "the taxonomy changed" (pre-deploy audit
+  // 2026-09-18): the repeat was read as a KNOWN variety and sent to the second
+  // pass, which could not match it either.
+  test('the same new variety typed twice is stored once — and never sent to the second pass as "known"', async () => {
+    resolveGrapeIdsStrict.mockResolvedValue({ ok: false, unmatched: ['Solaris'] });
     const res = await file({ grapes: ['Solaris', 'solaris'], newGrapes: ['Solaris'] });
     expect(res.ok).toBe(true);
+    expect(resolveGrapeIdsStrict).toHaveBeenCalledTimes(1); // nothing known → no second pass
     expect(WineCorrectionProposal.create).toHaveBeenCalledWith(expect.objectContaining({ proposedFields: { grapes: ['Solaris'] } }));
+  });
+
+  test('a repeat that differs only in punctuation is the same variety too; the known ones still resolve', async () => {
+    resolveGrapeIdsStrict
+      .mockResolvedValueOnce({ ok: false, unmatched: ['Foo-Bar'] })   // 'Foobar' skipped as a seen key
+      .mockResolvedValueOnce({ ok: true, ids: ['g1'], names: ['Merlot'], substitutions: [] });
+    const res = await file({ grapes: ['Merlot', 'Foo-Bar', 'Foobar'], newGrapes: ['Foo-Bar'] });
+    expect(res.ok).toBe(true);
+    expect(resolveGrapeIdsStrict).toHaveBeenLastCalledWith(['Merlot']);
+    expect(WineCorrectionProposal.create).toHaveBeenCalledWith(expect.objectContaining({ proposedFields: { grapes: ['Merlot', 'Foo-Bar'] } }));
   });
 });

@@ -47,7 +47,11 @@ jest.mock('../../models/JournalEntry', () => ({}));
 jest.mock('../../models/Recommendation', () => ({}));
 jest.mock('../../models/RestockAlert', () => ({}));
 jest.mock('../../models/WineRequest', () => ({}));
-jest.mock('../../models/WineCorrectionProposal', () => ({ updateMany: jest.fn().mockResolvedValue({}) }));
+jest.mock('../../models/WineCorrectionProposal', () => ({
+  updateMany: jest.fn().mockResolvedValue({}),
+  // The shared closer (services/wineCorrectionNotify) reads who to tell first.
+  find: jest.fn(() => ({ select: () => ({ lean: async () => [] }) })),
+}));
 jest.mock('../../models/Country', () => ({ findById: jest.fn() }));
 jest.mock('../../services/vectorStore', () => ({}));
 jest.mock('../../services/imageProcessor', () => ({ unlinkImageFiles: jest.fn() }));

@@ -918,8 +918,11 @@ function BottleDetail() {
             wine={bottle.wineDefinition}
             defaultReason={reportDefaultReason}
             // Offered only where the record's own suggest actions are (not the
-            // demo, not a private draft — same gate as WineRecordSection).
-            onSuggestFix={!user?.isDemo && bottle.wineDefinition.draft !== true
+            // demo, not a private draft — same gate as WineRecordSection) AND
+            // while the record is on screen: the edit form replaces it, and the
+            // tasting-profile report button stays clickable there, so the
+            // hand-off would have been a dead click (pre-deploy audit 2026-09-18).
+            onSuggestFix={!editing && !user?.isDemo && bottle.wineDefinition.draft !== true
               ? () => { setReportWineOpen(false); setReportDefaultReason(null); setSuggestFixSignal(n => n + 1); }
               : undefined}
             onClose={() => { setReportWineOpen(false); setReportDefaultReason(null); }}
