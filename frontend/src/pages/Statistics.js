@@ -66,16 +66,27 @@ function Statistics() {
   const [error, setError]  = useState(null);
   const [valueHistory, setValueHistory] = useState(null);
 
-  // Each chart segment hands us a value; we encode it into a URL on
-  // the cross-cellar /bottles list which then renders just those bottles.
+  // Each chart segment hands us a value; we encode it into a URL that lists
+  // just those bottles. Bottles you still have open in the cellar view,
+  // widened to every cellar you own (?scope=owned) — the same list, filters,
+  // sorting, grouping and photos as a cellar (support ticket 2026-09-19: the
+  // separate drill-down list had none of that). The consumption charts list
+  // DRUNK bottles, which the cellar view does not show, so they keep /bottles.
+  const drillCellarId = stats?.cellarBreakdown?.[0]?.id || null;
   const goWithFilter = useCallback((params) => {
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries(params)) {
       if (v == null || v === '') continue;
       qs.set(k, String(v));
     }
-    navigate(`/bottles?${qs.toString()}`);
-  }, [navigate]);
+    const consumed = 'status' in params || 'consumedYear' in params;
+    if (!consumed && drillCellarId) {
+      qs.set('scope', 'owned');
+      navigate(`/cellars/${drillCellarId}?${qs.toString()}`);
+    } else {
+      navigate(`/bottles?${qs.toString()}`);
+    }
+  }, [navigate, drillCellarId]);
 
   const load = useCallback(async () => {
     try {

@@ -20,6 +20,9 @@ const { sendCellarInviteEmail } = require('../services/mailgun');
 const { toNormalized } = require('../utils/ratingUtils');
 const { classifyMaturity, buildProfileMap, parseMaturityFilter, matchesMaturityFilter } = require('../utils/maturityUtils');
 const { isReserved } = require('../utils/reservationUtils');
+const {
+  normalizeTaxonomyQuery, parseExtraBottleFilters, applyExtraBottleFilters, groupIdenticalBottles,
+} = require('../utils/bottleListFilters');
 const { CONSUMED_STATUSES, WINE_POPULATE_LIST } = require('../config/constants');
 const mongoose = require('mongoose');
 const { parsePagination } = require('../utils/pagination');
@@ -173,6 +176,8 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
     ? String(grapes).split(',').map(g => g.trim()).filter(isValidObjectId)
     : [];
   const hasMeiliFilters = !!(search || type || country || region || grapes || vintage || appellation);
+  // ?producer / ?bottleSize / ?purchaseYear (chart deep links) — post-filters.
+  const extraFilters = parseExtraBottleFilters(req.query);
   const needsMaturity = statusFilter !== 'consumed' && !!(maturityFilter || sortField === 'maturity');
   const statusMongo = statusFilter === 'consumed'
     ? { $in: CONSUMED_STATUSES }
@@ -185,7 +190,7 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
   // trivially correct here since the cross-cellar view never groups.
   const canPaginateInDb = paginate
     && !hasMeiliFilters
-    && !minRating && !maxRating && !maturityFilter
+    && !minRating && !maxRating && !maturityFilter && !extraFilters
     && ['createdAt', 'vintage', 'price', 'rating'].includes(sortField);
   if (canPaginateInDb) {
     const filter = { cellar: { $in: objectIds }, status: statusMongo };
@@ -283,7 +288,8 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
     }
   }
 
-  // ── Shared post-filters (rating + maturity), applied to both paths ──
+  // ── Shared post-filters (extra + rating + maturity), applied to both paths ──
+  bottles = applyExtraBottleFilters(bottles, extraFilters);
   if (minRating) {
     const min = parseFloat(minRating);
     bottles = bottles.filter(b => b.rating && toNormalized(b.rating, b.ratingScale || '5') >= min);
@@ -553,9 +559,24 @@ router.get('/multi/bottles', async (req, res) => {
     const cellarIds = [...new Set(requested)].filter(id => accessibleMap.has(id));
     if (cellarIds.length === 0) return res.status(403).json({ error: 'No accessible cellars selected' });
 
-    const result = await queryBottlesAcrossCellars(req, { cellarIds, statusFilter: 'active' });
-    const { total, limit, skip, maturityStatusMap } = result;
+    await normalizeTaxonomyQuery(req.query);
+    // ?group=1 collapses identical bottles (same cellar + wine + vintage +
+    // size) like the single-cellar view — needed now that chart deep links
+    // land here (support ticket 2026-09-19: "multiple identical bottles are
+    // listed sequentially"). Paginates over groups, so it takes the whole
+    // filtered set (the query's own 10k cap still bounds it).
+    const grouped = req.query.group === '1' || req.query.group === 'true';
+    const result = await queryBottlesAcrossCellars(req, { cellarIds, statusFilter: 'active', paginate: !grouped });
+    const { limit, skip, maturityStatusMap } = result;
+    let { total } = result;
     let items = result.items;
+    let groupsForPage = null;
+    if (grouped) {
+      const allGroups = groupIdenticalBottles(items, { byCellar: true });
+      total = allGroups.length;
+      groupsForPage = allGroups.slice(skip, skip + limit);
+      items = groupsForPage.flatMap(g => g.bottles);
+    }
     // Facets only change the filter modal, which the client reads on the first
     // page only — skip the extra Meili + distinct queries on every Load More.
     const { facets, baseFacets, facetMeta } = skip === 0
@@ -571,13 +592,22 @@ router.get('/multi/bottles', async (req, res) => {
       b.cellarName = c?.name || null;
       b.cellarColor = c ? getUserColor(c, req.user.id) : null;
     }
+    // Re-nest the enriched bottles into their groups: same { key, count,
+    // bottles } entries as the single-cellar ?group=1 response.
+    if (groupsForPage) {
+      const itemById = new Map(items.map(it => [it._id.toString(), it]));
+      items = groupsForPage.map(g => {
+        const members = g.bottles.map(b => itemById.get(b._id.toString())).filter(Boolean);
+        return { key: g.key, count: members.length, bottles: members };
+      });
+    }
 
     res.json({
       cellars: cellarIds.map(id => {
         const c = accessibleMap.get(id);
         return { _id: id, name: c.name, userColor: getUserColor(c, req.user.id) };
       }),
-      bottles: { count: items.length, total, limit, skip, items },
+      bottles: { count: items.length, total, limit, skip, grouped, items },
       facets, baseFacets, facetMeta,
     });
   } catch (error) {
@@ -971,6 +1001,12 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Cellar not found' });
     }
 
+    // Chart deep links pass country/region/grape NAMES; every path below
+    // (Meilisearch, Mongo, facets) filters by id.
+    await normalizeTaxonomyQuery(req.query);
+    // ?producer / ?bottleSize / ?purchaseYear — in-memory post-filters.
+    const extraFilters = parseExtraBottleFilters(req.query);
+
     const {
       country,
       region,
@@ -1068,7 +1104,7 @@ router.get('/:id', async (req, res) => {
     // Group + paginate inside MongoDB instead of hydrating the whole cellar.
     const groupedInDb = grouped
       && !hasMeiliFilters
-      && !minRating && !maxRating && !maturityFilter && !reservedOnly
+      && !minRating && !maxRating && !maturityFilter && !reservedOnly && !extraFilters
       && ['createdAt', 'vintage', 'price', 'rating'].includes(sortField);
     if (groupedInDb) {
       ({ groupsForPage, bottles, totalCount } = await loadGroupedBottlePage({
@@ -1181,7 +1217,7 @@ router.get('/:id', async (req, res) => {
 
       const directSortFields = ['createdAt', 'vintage', 'price', 'rating'];
       const canSortInDb_ = directSortFields.includes(sortField);
-      const needsInMemoryFilter = !!(search || minRating || maxRating || maturityFilter || reservedOnly);
+      const needsInMemoryFilter = !!(search || minRating || maxRating || maturityFilter || reservedOnly || extraFilters);
       const needsInMemorySort = !canSortInDb_;
       // Grouping needs every matching bottle in memory before it can collapse
       // duplicates, so it disables DB-level pagination.
@@ -1261,6 +1297,8 @@ router.get('/:id', async (req, res) => {
       bottles = bottles.filter(isReserved);
     }
 
+    bottles = applyExtraBottleFilters(bottles, extraFilters);
+
     if (minRating) {
       const min = parseFloat(minRating);
       bottles = bottles.filter(b => {
@@ -1307,22 +1345,10 @@ router.get('/:id', async (req, res) => {
     // `bottles` is fully filtered + sorted here; grouping preserves that order.
     // (Skipped when the DB-grouped hot path already produced groupsForPage.)
     if (grouped && !groupsForPage) {
-      const groupMap = new Map();
-      const order = [];
-      for (const b of bottles) {
-        const wineId = b.wineDefinition?._id
-          ? b.wineDefinition._id.toString()
-          : (b.wineDefinition ? b.wineDefinition.toString() : `none:${b._id}`);
-        // Group by wine + vintage + bottle size, so a magnum and a 750ml of the
-        // same wine/vintage stay as separate groups.
-        const key = `${wineId}::${b.vintage || 'NV'}::${b.bottleSize || '750ml'}`;
-        let arr = groupMap.get(key);
-        if (!arr) { arr = []; groupMap.set(key, arr); order.push(key); }
-        arr.push(b);
-      }
-      totalCount = order.length;                      // total = number of groups
-      const pageKeys = order.slice(skip, skip + limit);
-      groupsForPage = pageKeys.map(key => ({ key, bottles: groupMap.get(key) }));
+      // Wine + vintage + bottle size, so a magnum and a 750ml stay apart.
+      const allGroups = groupIdenticalBottles(bottles);
+      totalCount = allGroups.length;                  // total = number of groups
+      groupsForPage = allGroups.slice(skip, skip + limit);
       bottles = groupsForPage.flatMap(g => g.bottles); // flatten so image attach below works
     } else if (!canPaginateInDb && !groupsForPage) {
       totalCount = bottles.length;

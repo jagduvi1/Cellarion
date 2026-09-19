@@ -353,6 +353,19 @@ router.get('/', async (req, res) => {
       bottles = bottles.slice(skip, skip + limit);
     }
 
+    // The user's own photos (chosen default, own uploads by bottle or wine) —
+    // the same resolution every cellar list uses. Without it this list showed
+    // registry images only, so bottles photographed by their owner rendered
+    // blank (support ticket 2026-09-19). Required lazily: routes/cellars is a
+    // router module and this keeps load order out of it. A failed photo
+    // lookup degrades to registry images; it never fails the list.
+    try {
+      const { attachBottleImageUrls } = require('./cellars');
+      bottles = await attachBottleImageUrls(bottles, req.user.id);
+    } catch (err) {
+      console.error('GET /api/bottles photo lookup failed:', err.message);
+    }
+
     const items = bottles.map(b => ({
       ...b,
       // Regional grape display names resolved per wine (additive `displayName`

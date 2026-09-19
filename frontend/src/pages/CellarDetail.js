@@ -53,8 +53,18 @@ const BOTTLES_PER_PAGE = 30;
 const FILTERS_STORAGE_PREFIX = 'cellarFilters:';
 const buildDefaultFilters = () => ({
   search: '', type: [], country: [], region: [], appellation: [],
-  grapes: [], vintage: [], minRating: '', maxRating: '', maturity: [], unplaced: '', reserved: '', storage: '', sort: '-createdAt'
+  grapes: [], vintage: [], minRating: '', maxRating: '', maturity: [], unplaced: '', reserved: '', storage: '',
+  // Only set by Statistics chart deep links (no control in the filter modal);
+  // shown as removable chips.
+  producer: '', bottleSize: '', purchaseYear: '',
+  sort: '-createdAt'
 });
+// Every URL param the page reads on arrival (and then clears from the URL).
+// `scope=owned` widens the view to every cellar the user owns — how the
+// Statistics page's chart segments land here (support ticket 2026-09-19).
+const URL_FILTER_KEYS = ['search', 'type', 'country', 'region', 'appellation',
+  'grapes', 'vintage', 'minRating', 'maxRating', 'maturity', 'unplaced', 'reserved', 'storage',
+  'producer', 'bottleSize', 'purchaseYear', 'sort'];
 const readSavedFilters = (cellarId) => {
   try {
     const raw = sessionStorage.getItem(FILTERS_STORAGE_PREFIX + cellarId);
@@ -107,9 +117,7 @@ function CellarDetail() {
   const [filters, setFilters] = useState(() => {
     // A deep link with any filter param wins (shared/bookmarked URL). Otherwise
     // restore the last-used selection for this cellar so browser-back keeps it.
-    const hasUrlFilters = ['search', 'type', 'country', 'region', 'appellation',
-      'grapes', 'vintage', 'minRating', 'maxRating', 'maturity', 'unplaced', 'reserved', 'storage', 'sort']
-      .some(k => searchParams.has(k));
+    const hasUrlFilters = URL_FILTER_KEYS.some(k => searchParams.has(k));
     if (!hasUrlFilters) return readSavedFilters(id) || buildDefaultFilters();
     return {
       search: searchParams.get('search') || '',
@@ -127,9 +135,16 @@ function CellarDetail() {
       reserved: searchParams.get('reserved') || '',
       // 'group:<name>' or 'rack:<id>' — where the bottle is stored
       storage: searchParams.get('storage') || '',
+      producer: searchParams.get('producer') || '',
+      bottleSize: searchParams.get('bottleSize') || '',
+      purchaseYear: searchParams.get('purchaseYear') || '',
       sort: searchParams.get('sort') || '-createdAt'
     };
   });
+  // ?scope=owned (chart deep link): read once; applied when the cellar list
+  // arrives. Until then the first fetch waits, so the page never flashes this
+  // one cellar's bottles under an "all my cellars" filter.
+  const [pendingOwnedScope, setPendingOwnedScope] = useState(() => searchParams.get('scope') === 'owned');
   const [facets, setFacets] = useState(null);
   const [baseFacets, setBaseFacets] = useState(null);
   const [facetMeta, setFacetMeta] = useState(null);
@@ -154,12 +169,35 @@ function CellarDetail() {
   useEffect(() => {
     listCellars(apiFetch)
       .then(r => r.json())
-      .then(d => setAllCellars(d.cellars || []))
-      .catch(() => {});
-  }, [apiFetch]);
+      .then(d => {
+        const list = d.cellars || [];
+        setAllCellars(list);
+        // Mount-time value: this effect runs once, on arrival.
+        if (pendingOwnedScope) {
+          // This cellar first, then the rest the user owns — the same set the
+          // Statistics page counts, so the chart number and the list agree.
+          const owned = list.filter(c => c.userRole === 'owner').map(c => String(c._id));
+          setScopeIds([id, ...owned.filter(cid => cid !== id)]);
+          setPendingOwnedScope(false);
+          // The cross-cellar response carries no `cellar`; the header, edit
+          // rights and add-bottle button still need this one's details.
+          getCellar(apiFetch, id, 'limit=1')
+            .then(r => (r.ok ? r.json() : null))
+            .then(data => { if (data?.cellar) setCellar(prev => prev || data.cellar); })
+            .catch(() => {});
+        }
+      })
+      .catch(() => setPendingOwnedScope(false));
+  }, [apiFetch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset scope to just this cellar when navigating to another cellar.
-  useEffect(() => { setScopeIds([id]); }, [id]);
+  const scopeResetFirstRun = useRef(true);
+  useEffect(() => {
+    // Skip the mount run: the initial state already is [id], and resetting
+    // here would race the ?scope=owned widening above.
+    if (scopeResetFirstRun.current) { scopeResetFirstRun.current = false; return; }
+    setScopeIds([id]);
+  }, [id]);
 
   // The unplaced filter is single-cellar only (placement is per-cellar; the
   // cross-cellar endpoint doesn't resolve rack slots) — drop it when the scope
@@ -190,7 +228,7 @@ function CellarDetail() {
 
   // Clear URL search params after they've been read into filter/tab state
   useEffect(() => {
-    if (searchParams.has('search') || searchParams.has('vintage') || searchParams.has('minRating') || searchParams.has('maxRating') || searchParams.has('maturity') || searchParams.has('appellation') || searchParams.has('sort') || searchParams.has('type') || searchParams.has('country') || searchParams.has('region') || searchParams.has('grapes') || searchParams.has('unplaced') || searchParams.has('reserved') || searchParams.has('storage') || searchParams.has('tab')) {
+    if (URL_FILTER_KEYS.some(k => searchParams.has(k)) || searchParams.has('tab') || searchParams.has('scope')) {
       setSearchParams({}, { replace: true });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -209,7 +247,8 @@ function CellarDetail() {
     filters.type.join(','), filters.country.join(','), filters.region.join(','),
     filters.appellation.join(','), filters.grapes.join(','), filters.vintage.join(','),
     filters.minRating, filters.maxRating, toMaturityArray(filters.maturity).join(','),
-    filters.unplaced, filters.reserved, filters.storage, filters.sort
+    filters.unplaced, filters.reserved, filters.storage,
+    filters.producer, filters.bottleSize, filters.purchaseYear, filters.sort
   ].join('|');
 
   // Refetch on cellar id, filters, or scope change. `id` is included so an
@@ -217,8 +256,9 @@ function CellarDetail() {
   // current one still refetches; the fetch-seq guard drops the transient
   // stale-scope response that the id→scope-reset produces.
   useEffect(() => {
+    if (pendingOwnedScope) return;
     fetchCellarData(0);
-  }, [id, filterKey, scopeKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id, filterKey, scopeKey, pendingOwnedScope]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchStatistics();
@@ -256,6 +296,8 @@ function CellarDetail() {
       let res;
       if (multi) {
         params.set('cellars', scopeIds.join(','));
+        // Identical bottles collapse per cellar, like the single-cellar view.
+        params.set('group', '1');
         res = await getMultiCellarBottles(apiFetch, params.toString());
       } else {
         params.set('group', '1');
@@ -604,6 +646,9 @@ function CellarDetail() {
             toMaturityArray(filters.maturity).forEach(v => activeChips.push({ key: 'maturity', value: v, label: t(MATURITY_I18N_KEY[v] || v, v) }));
             if (filters.unplaced) activeChips.push({ key: 'unplaced', value: '1', label: t('cellarDetail.unplacedOnly', 'Unplaced only') });
             if (filters.reserved) activeChips.push({ key: 'reserved', value: '1', label: t('cellarDetail.reservedOnly', 'Reserved only') });
+            if (filters.producer) activeChips.push({ key: 'producer', value: filters.producer, label: t('bottles.chipProducer', 'Producer: {{value}}', { value: filters.producer }) });
+            if (filters.bottleSize) activeChips.push({ key: 'bottleSize', value: filters.bottleSize, label: t('bottles.chipSize', 'Size: {{value}}', { value: filters.bottleSize }) });
+            if (filters.purchaseYear) activeChips.push({ key: 'purchaseYear', value: filters.purchaseYear, label: t('bottles.chipPurchased', 'Purchased: {{value}}', { value: filters.purchaseYear }) });
             if (filters.storage) {
               const m = /^(group|rack):(.+)$/.exec(String(filters.storage));
               const rackRow = m && m[1] === 'rack' ? storageRacks.find(r => r.id === m[2]) : null;
@@ -625,7 +670,8 @@ function CellarDetail() {
             const clearAll = () => setFilters(prev => ({
               ...prev,
               type: [], country: [], region: [], appellation: [], grapes: [], vintage: [],
-              minRating: '', maxRating: '', maturity: [], unplaced: '', reserved: '', storage: ''
+              minRating: '', maxRating: '', maturity: [], unplaced: '', reserved: '', storage: '',
+              producer: '', bottleSize: '', purchaseYear: ''
             }));
 
             return (
@@ -723,7 +769,7 @@ function CellarDetail() {
           {loading ? (
             <div className="loading">{t('cellarDetail.loadingCellar')}</div>
           ) : bottles.length === 0 && !bottlesLoading ? (
-            (filters.search || filters.vintage?.length || filters.minRating || filters.maxRating || toMaturityArray(filters.maturity).length || filters.unplaced || filters.reserved || filters.storage || filters.type?.length || filters.country?.length || filters.region?.length || filters.appellation?.length || filters.grapes?.length) ? (
+            (filters.search || filters.vintage?.length || filters.minRating || filters.maxRating || toMaturityArray(filters.maturity).length || filters.unplaced || filters.reserved || filters.storage || filters.producer || filters.bottleSize || filters.purchaseYear || filters.type?.length || filters.country?.length || filters.region?.length || filters.appellation?.length || filters.grapes?.length) ? (
               <div className="empty-state">
                 <p>{t('cellarDetail.noSearchResults')}</p>
               </div>
@@ -805,9 +851,10 @@ function CellarDetail() {
 }
 
 // ── Bottle list (list or card view) ──
-// `multi` = cross-cellar view: `bottles` is a flat list (no grouping), each item
-// carries its own `cellar` id + `cellarName` so it links to and is badged with
-// the right cellar.
+// `multi` = cross-cellar view: each bottle carries its own `cellar` id +
+// `cellarName` so it links to and is badged with the right cellar. Items are
+// grouped ({ key, count, bottles }) in both views — cross-cellar groups never
+// span two cellars — with a flat-bottle fallback for ungrouped responses.
 // `canBulkMove` (owner of this one cellar) enables select mode and its bulk
 // actions; `onBulkDone` refreshes the parent's list, stats and racks after
 // one; `onSelectModeChange` tells the parent to hide the FAB meanwhile.
@@ -992,8 +1039,8 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
 
       <div className={viewMode === 'list' ? 'bottles-list' : 'bottles-grid'}>
         {bottles.map(item => {
-          // Cross-cellar view: flat bottles, each linked to + badged with its cellar.
-          if (multi) {
+          // Cross-cellar view, flat (ungrouped) item: linked to + badged with its cellar.
+          if (multi && !Array.isArray(item?.bottles)) {
             return (
               <BottleCard
                 key={item._id}
@@ -1011,9 +1058,11 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
           // Grouped response: item = { key, count, bottles: [...] }
           if (item && Array.isArray(item.bottles)) {
             const rep = item.bottles[0];
+            // Cross-cellar groups live in one cellar: link + badge with it.
+            const groupCellarId = multi ? (rep.cellar || cellarId) : cellarId;
             if (item.count === 1) {
               return (
-                <BottleCard key={rep._id} bottle={rep} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} compact={compact} rackKnown={rackKnown} showNotes={notesOn} selectable={selectableNow} selected={isSelected(idsOf(item))} onToggleSelect={() => toggleIds(idsOf(item))} onLongPress={canBulkMove ? () => enterSelectWith(idsOf(item)) : undefined} />
+                <BottleCard key={rep._id} bottle={rep} rackMap={rackMap} cellarId={groupCellarId} showCellarBadge={multi} viewMode={viewMode} compact={compact} rackKnown={rackKnown} showNotes={notesOn} selectable={selectableNow} selected={isSelected(idsOf(item))} onToggleSelect={() => toggleIds(idsOf(item))} onLongPress={canBulkMove ? () => enterSelectWith(idsOf(item)) : undefined} />
               );
             }
             if (!expandedGroups.has(item.key)) {
@@ -1022,7 +1071,8 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
                   key={item.key}
                   bottle={rep}
                   rackMap={rackMap}
-                  cellarId={cellarId}
+                  cellarId={groupCellarId}
+                  showCellarBadge={multi}
                   viewMode={viewMode}
                   groupCount={item.count}
                   onClick={() => toggleGroup(item.key)}
@@ -1046,7 +1096,7 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
                   </button>
                 </div>
                 {item.bottles.map(b => (
-                  <BottleCard key={b._id} bottle={b} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} compact={compact} rackKnown={rackKnown} showNotes={notesOn} selectable={selectableNow} selected={isSelected([b._id])} onToggleSelect={() => toggleIds([b._id])} onLongPress={canBulkMove ? () => enterSelectWith([b._id]) : undefined} />
+                  <BottleCard key={b._id} bottle={b} rackMap={rackMap} cellarId={groupCellarId} showCellarBadge={multi} viewMode={viewMode} compact={compact} rackKnown={rackKnown} showNotes={notesOn} selectable={selectableNow} selected={isSelected([b._id])} onToggleSelect={() => toggleIds([b._id])} onLongPress={canBulkMove ? () => enterSelectWith([b._id]) : undefined} />
                 ))}
               </Fragment>
             );

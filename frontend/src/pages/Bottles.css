@@ -35,9 +35,12 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  background: rgba(122, 30, 45, 0.18);
-  color: #E8DFD0;
-  border: 1px solid rgba(122, 30, 45, 0.4);
+  /* Theme tokens, like the cellar view's chips: the old fixed light-beige
+     text was unreadable on the light theme's pale fill (support ticket
+     2026-09-19). */
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  border: 1px solid var(--color-border);
   padding: 0.3rem 0.7rem;
   border-radius: 999px;
   font-size: 0.85rem;
@@ -71,7 +74,7 @@
 }
 
 .bottles-chip-clear:hover {
-  color: #E8DFD0;
+  color: var(--color-text);
 }
 
 .bottles-empty {
@@ -99,9 +102,9 @@
 }
 
 .bottles-pagination button {
-  background: rgba(255, 255, 255, 0.06);
-  color: #E8DFD0;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
   padding: 0.5rem 1rem;
   border-radius: 6px;
   cursor: pointer;
@@ -114,7 +117,7 @@
 }
 
 .bottles-pagination button:not(:disabled):hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-primary-light);
 }
 
 .bottles-page-indicator {
