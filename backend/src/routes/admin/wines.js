@@ -14,7 +14,7 @@ const {
 } = require('../../utils/normalize');
 const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const { validateImageRef } = require('../../services/accountOps');
-const { WINE_COLOURS } = require('../../utils/wineColour');
+const { WINE_COLOURS, stateColour, colourTypeConflict } = require('../../utils/wineColour');
 const { scoreWineMatch } = require('../../services/wineMatching');
 const { conflictingStyleTerms } = require('../../utils/styleTerms');
 const { sameProducerAppellationGroups, nearProducerPairs, nameSubsetPairs } = require('../../services/registryFragmentation');
@@ -179,6 +179,11 @@ router.post('/', async (req, res) => {
     }
     if (colour != null && colour !== '' && !WINE_COLOURS.includes(colour)) {
       return res.status(400).json({ error: `Colour must be one of: ${WINE_COLOURS.join(', ')}` });
+    }
+    {
+      // Refused, not accepted-and-dropped by the model hook (audit 2026-09-19).
+      const colourErr = colourTypeConflict(type || null, colour);
+      if (colourErr) return res.status(400).json({ error: colourErr });
     }
     if (typeof name !== 'string' || typeof producer !== 'string') {
       return res.status(400).json({ error: 'Name and producer must be strings' });
@@ -385,7 +390,7 @@ router.get('/duplicate-clusters', async (req, res) => {
     // merge candidate against a wine (#844's stated contract, which this pool
     // was missed out of — code audit 2026-07-27, H3).
     const wines = await WineDefinition.find({ nonWine: { $ne: true }, pendingIdentity: { $ne: true } })
-      .select('name producer appellation image type country region')
+      .select('name producer appellation image type colour country region')
       .populate('country', 'name')
       .populate('region', 'name')
       .lean();
@@ -1454,6 +1459,11 @@ router.put('/:id', async (req, res) => {
     if (colour != null && colour !== '' && !WINE_COLOURS.includes(colour)) {
       return res.status(400).json({ error: `Colour must be one of: ${WINE_COLOURS.join(', ')}` });
     }
+    {
+      // Judged against the type this save leaves the wine with.
+      const colourErr = colourTypeConflict(type || wine.type, colour);
+      if (colourErr) return res.status(400).json({ error: colourErr });
+    }
 
     // Snapshot the profile-feeding fields BEFORE any mutation — the re-enrich
     // decision below compares against this, so only a REAL change (not the
@@ -1473,7 +1483,9 @@ router.put('/:id', async (req, res) => {
     if (type) wine.type = type;
     // Absent = leave alone; '' or null = clear. The model hook drops it again
     // if the (possibly new) type is itself a colour.
-    if (colour !== undefined) wine.colour = colour || null;
+    // stateColour: an explicit "not stated" sent with a retype must not be
+    // re-inferred from the name by the model hook.
+    if (colour !== undefined) stateColour(wine, colour);
 
     // Image handling. When the admin clears the default image, look for an
     // approved+public gallery image to promote in its place — otherwise the

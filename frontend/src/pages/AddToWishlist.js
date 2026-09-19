@@ -97,7 +97,8 @@ function AddToWishlist() {
   // wine fields ride along and are minted by POST /api/wishlist on save.
   const applyPendingNewWine = useCallback((wineData) => {
     setPendingNewWine(wineData);
-    setSelectedWine({ name: wineData.name, producer: wineData.producer, type: wineData.type });
+    // colour rides along: step 2 draws the wine the user just described.
+    setSelectedWine({ name: wineData.name, producer: wineData.producer, type: wineData.type, colour: wineData.colour || null });
     setScanResult(null);
     setLabelImage(null);
     // The scan ids and conflicts survive — this path ends in a pendingIdentity

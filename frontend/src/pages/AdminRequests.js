@@ -10,6 +10,7 @@ import { WINE_TYPES } from '../config/wineTypes';
 import GrapePicker from '../components/GrapePicker';
 import safeUrl from '../utils/safeUrl';
 import displayableImage from '../utils/displayableImage';
+import { WINE_COLOURS, isStyleType, colourLabel } from '../utils/wineColour';
 import './AdminRequests.css';
 
 function AdminRequests() {
@@ -308,7 +309,10 @@ function AdminRequests() {
         body.applyGrapes = resolveData.applyGrapes || [];
       } else if (resolveData.mode === 'create') {
         body.createNew = true;
-        body.wineData = resolveData.wineData;
+        // The one place the payload leaves: a colour only with a type that can
+        // carry it (the AI lookup can retype the form without touching the select).
+        const { colour, ...wineData } = resolveData.wineData;
+        body.wineData = { ...wineData, colour: isStyleType(wineData.type) ? (colour || null) : null };
         // Only after the admin explicitly chose "create anyway" — skips the
         // server-side duplicate probe.
         if (confirmCreate) body.confirmCreate = true;
@@ -647,7 +651,12 @@ function AdminRequests() {
                           <select
                             value={resolveData.wineData.type}
                             onChange={(e) => {
-                              const wineData = { ...resolveData.wineData, type: e.target.value };
+                              // A colour belongs to sparkling/dessert/fortified only.
+                              const wineData = {
+                                ...resolveData.wineData,
+                                type: e.target.value,
+                                ...(isStyleType(e.target.value) ? {} : { colour: '' }),
+                              };
                               setResolveData({ ...resolveData, wineData });
                             }}
                           >
@@ -656,6 +665,22 @@ function AdminRequests() {
                             ))}
                           </select>
                         </div>
+                        {/* Left "not stated", a rosé name ("Brut Rosé") still fills it in. */}
+                        {isStyleType(resolveData.wineData.type) && (
+                          <div className="form-group">
+                            <label htmlFor="request-wine-colour">{t('wineColour.label', 'Colour')}</label>
+                            <select
+                              id="request-wine-colour"
+                              value={resolveData.wineData.colour || ''}
+                              onChange={(e) => setResolveData({ ...resolveData, wineData: { ...resolveData.wineData, colour: e.target.value } })}
+                            >
+                              <option value="">{t('wineColour.notStated', 'Not stated')}</option>
+                              {WINE_COLOURS.map(c => (
+                                <option key={c} value={c}>{colourLabel(c, t)}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
                         <div className="form-group">
                           <label>{t('admin.requests.appellationLabel')}</label>
                           <select

@@ -21,7 +21,7 @@
  */
 
 const { stripMarkdown } = require('../utils/stripMarkdown');
-const { WINE_COLOURS } = require('../utils/wineColour');
+const { WINE_COLOURS, stateColour } = require('../utils/wineColour');
 
 // Mirrors the value sets the enrichment prompt is told to emit
 // (config/aiConfig.js) — an editable field must not accept a value the
@@ -295,7 +295,9 @@ function applyProfilePatch(wine, clean, userId, { now = new Date() } = {}) {
     wine.aiProfile[field] = value;
   }
   if (clean.type !== undefined) wine.type = clean.type;
-  if (clean.colour !== undefined) wine.colour = clean.colour;
+  // stateColour, not a bare assignment: an explicit "none" sent with a retype
+  // must not be re-inferred from the name by the model hook.
+  if (clean.colour !== undefined) stateColour(wine, clean.colour);
   if (clean.grapes !== undefined) wine.grapes = clean.grapes;
 
   const isClear = (v) => v === null || (Array.isArray(v) && v.length === 0);
@@ -332,7 +334,7 @@ function restoreProfile(wine, snap) {
   if (typeof snap.type === 'string' && snap.type) wine.type = snap.type;
   // Only when the snapshot carries the key: ledger rows written before colour
   // existed must not clear one set since.
-  if (Object.prototype.hasOwnProperty.call(snap, 'colour')) wine.colour = snap.colour || null;
+  if (Object.prototype.hasOwnProperty.call(snap, 'colour')) stateColour(wine, snap.colour);
   if (Array.isArray(snap.grapes)) wine.grapes = [...snap.grapes];
   wine.markModified('aiProfile');
   return wine;

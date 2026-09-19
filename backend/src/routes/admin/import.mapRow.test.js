@@ -105,3 +105,33 @@ describe('resolveImportAppellation', () => {
     expect(resolveCanonicalAppellation).toHaveBeenCalledTimes(1);
   });
 });
+
+// Audit 2026-09-19: LWIN states COLOUR beside SUB_TYPE, and the bulk upsert
+// never reaches the model hook — a sparkling rosé kept its style and lost its
+// colour. The colour is mapped only for the style types (utils/wineColour).
+describe('mapRow — colour of a sparkling, dessert or fortified row', () => {
+  test('lwin: SUB_TYPE Sparkling + COLOUR Rosé → type sparkling, colour rosé', () => {
+    const m = mapRow(lwinRow({ PRODUCER_NAME: 'Billecart-Salmon', WINE: 'Brut', COLOUR: 'Rosé', SUB_TYPE: 'Sparkling' }), 'lwin');
+    expect(m.type).toBe('sparkling');
+    expect(m.colour).toBe('rosé');
+  });
+
+  test('lwin: a still row spends COLOUR on its type and carries no colour', () => {
+    const m = mapRow(lwinRow({ PRODUCER_NAME: 'G.D. Vajra', WINE: 'Albe', COLOUR: 'Red', SUB_TYPE: 'Still' }), 'lwin');
+    expect(m.type).toBe('red');
+    expect(m.colour).toBeNull();
+  });
+
+  test('lwin: no COLOUR stated → the same rosé-name inference the model hook runs', () => {
+    const m = mapRow(lwinRow({ PRODUCER_NAME: 'Ferrari', WINE: 'Perlé Rosé', COLOUR: 'NA', SUB_TYPE: 'Sparkling' }), 'lwin');
+    expect(m.colour).toBe('rosé');
+    const plain = mapRow(lwinRow({ PRODUCER_NAME: 'Ferrari', WINE: 'Perlé', COLOUR: 'NA', SUB_TYPE: 'Sparkling' }), 'lwin');
+    expect(plain.colour).toBeNull();
+  });
+
+  test('simple format: inferred from the name for a style type only', () => {
+    const row = { Producer: 'Maso Martis', Wine: 'Rosé Extra Brut', Country: 'Italy', WineType: 'sparkling' };
+    expect(mapRow(row, 'simple').colour).toBe('rosé');
+    expect(mapRow({ ...row, WineType: 'rose' }, 'simple').colour).toBeNull();
+  });
+});

@@ -34,10 +34,15 @@ function Modal({ title, onClose, children, wide, showClose, boxStyle, trapFocus 
     if (!trapFocus) return;
     const box = boxRef.current;
     if (!box) return;
+    // tabIndex -1 is OUT of the tab order by definition — the unchecked members
+    // of a roving-tabindex group (the Wine record's type/colour chips). Counting
+    // them put the opening focus on an unchecked chip, where Space proposed the
+    // wrong type, and let Shift+Tab from the group's real tab stop walk out of
+    // the dialog (audit 2026-09-19).
     const focusable = () =>
       Array.from(
         box.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
-      ).filter((el) => !el.disabled && el.offsetParent !== null);
+      ).filter((el) => !el.disabled && el.tabIndex !== -1 && el.offsetParent !== null);
 
     // Move focus into the dialog on open.
     (focusable()[0] || box).focus();

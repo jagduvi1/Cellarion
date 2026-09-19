@@ -749,12 +749,16 @@ wineDefinitionSchema.pre('validate', function(next) {
   // COLOUR belongs to the style types only. Anything else holds none — a
   // colour left behind by a retype to red/white/rosé (or to no type) would
   // contradict the type that now says it. For a style type with no colour, a
-  // rosé NAME supplies one, but only when the wine is created or its type
-  // changes: afterwards the stored value is a curator's, and a later save must
-  // not re-infer over a colour someone deliberately cleared.
+  // rosé NAME supplies one, but only when the wine is created, its type
+  // changes, or a private draft is published (drafts that predate the field
+  // get their colour as they enter the registry): afterwards the stored value
+  // is a curator's, and a later save must not re-infer over a colour someone
+  // deliberately cleared. Nor in THIS save, when the caller stated the colour
+  // — "none" included (utils/wineColour.stateColour).
   if (!isStyleType(this.type)) {
     if (this.colour != null) this.colour = null;
-  } else if (this.colour == null && (this.isNew || this.isModified('type'))) {
+  } else if (this.colour == null && !this.$locals.colourStated &&
+             (this.isNew || this.isModified('type') || this.isModified('draft'))) {
     const inferred = inferColourFromName(this.name, this.producer);
     if (inferred) this.colour = inferred;
   }

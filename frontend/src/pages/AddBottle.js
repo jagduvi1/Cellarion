@@ -331,7 +331,8 @@ function AddBottle() {
     // answer belonged to a different wine (audit 2026-09-12).
     setCreateAsDraft(false);
     setPendingNewWine(wineData);
-    setSelectedWine({ name: wineData.name, producer: wineData.producer, type: wineData.type });
+    // colour rides along: step 2 draws the wine the user just described.
+    setSelectedWine({ name: wineData.name, producer: wineData.producer, type: wineData.type, colour: wineData.colour || null });
     setBottleData(prev => ({ ...prev, vintage: carriedVintage || '' }));
     setScanResult(null);
     setLabelImage(null);

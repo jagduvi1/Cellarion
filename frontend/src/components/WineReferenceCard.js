@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getWine } from '../api/wines';
 import Modal from './Modal';
 import WineImage from './WineImage';
+import { swatchType, wineTypeLabel } from '../utils/wineColour';
 import './WineReferenceCard.css';
 
 /**
@@ -11,13 +13,15 @@ import './WineReferenceCard.css';
  */
 export default function WineReferenceCard({ wine }) {
   const { apiFetch } = useAuth();
+  const { t } = useTranslation();
   const [showModal, setShowModal] = useState(false);
   const [fullWine, setFullWine] = useState(null);
   const [loading, setLoading] = useState(false);
 
   if (!wine || !wine.name) return null;
 
-  const typeLabel = wine.type ? wine.type.charAt(0).toUpperCase() + wine.type.slice(1) : '';
+  // "Sparkling rosé", drawn rosé — not the bare type (utils/wineColour).
+  const typeLabel = wineTypeLabel(wine, t) || '';
 
   const handleClick = async () => {
     setShowModal(true);
@@ -45,7 +49,7 @@ export default function WineReferenceCard({ wine }) {
   return (
     <>
       <button type="button" className="wine-ref-card" onClick={handleClick} title="View wine details">
-        <span className={`wine-ref-card__dot ${wine.type || ''}`} />
+        <span className={`wine-ref-card__dot ${swatchType(wine, '')}`} />
         <div className="wine-ref-card__info">
           <span className="wine-ref-card__name">{wine.name}</span>
           {wine.producer && <span className="wine-ref-card__producer">{wine.producer}</span>}
@@ -67,8 +71,8 @@ export default function WineReferenceCard({ wine }) {
             <div className="wine-modal">
               <WineImage image={detail.image} alt={detail.name} className="wine-modal__image" wrapClass="wine-modal__image-wrap" />
               <div className="wine-modal__header">
-                <span className={`wine-modal__type-badge ${detail.type || ''}`}>
-                  {detail.type ? detail.type.charAt(0).toUpperCase() + detail.type.slice(1) : 'Wine'}
+                <span className={`wine-modal__type-badge ${swatchType(detail, '')}`}>
+                  {wineTypeLabel(detail, t) || 'Wine'}
                 </span>
                 {hasRating && (
                   <span className="wine-modal__rating">

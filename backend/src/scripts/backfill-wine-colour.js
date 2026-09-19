@@ -9,6 +9,10 @@
  *      carries a rosé word, by the SAME inference the hook runs: set 'rosé'.
  *      A plain $set (the field is new and no search document carries it);
  *      updatedAt moves with it so Registry Bridge change checks pass it on.
+ *      Wines ADOPTED over the bridge (registryId set, self-hosted installs
+ *      only) are left alone: moving their updatedAt past registrySyncedAt
+ *      reads as a local edit and would stop every later registry refresh of
+ *      that wine — and the registry sends them their colour anyway.
  *   2. RETYPE CANDIDATES — rows typed 'rosé' that are plainly sparkling (a
  *      sparkling-only appellation, or a sparkling term in the name). Before
  *      the colour existed a sparkling rosé had to pick one of the two, and
@@ -36,8 +40,11 @@ const SPARKLING_APPELLATION = /^(champagne|cr[ée]mant|cava|franciacorta|trento|
 const SPARKLING_TERM = /(?<!\p{L})(brut|extra[ -]brut|brut nature|pas dos[ée]|dosage z[ée]ro|spumante|cr[ée]mant|sekt|cava|metodo classico|m[ée]thode (champenoise|traditionnelle)|p[ée]t[- ]?nat|p[ée]tillant naturel|frizzante)(?!\p{L})/iu;
 
 const label = (w) => `${w.producer || '?'} — ${w.name} [${w.appellation || '-'}] ${w._id}`;
-// A private draft is its creator's, not registry content — both reads skip it.
+// A private draft is its creator's, not registry content — both reads skip it
+// (publishing one infers its colour, in the model hook).
 const NOT_A_DRAFT = { draft: { $ne: true } };
+// Matches null and missing: this install's own wines, not bridge copies.
+const NOT_ADOPTED = { registryId: null };
 
 (async () => {
   const apply = process.argv.includes('--apply');
@@ -48,6 +55,7 @@ const NOT_A_DRAFT = { draft: { $ne: true } };
     type: { $in: STYLE_TYPES },
     $or: [{ colour: null }, { colour: { $exists: false } }],
     ...NOT_A_DRAFT,
+    ...NOT_ADOPTED,
   }).select('name producer appellation type').lean();
 
   const toSet = styled.filter((w) => inferColourFromName(w.name, w.producer) === 'rosé');
@@ -62,7 +70,7 @@ const NOT_A_DRAFT = { draft: { $ne: true } };
     const res = await WineDefinition.bulkWrite(toSet.map((w) => ({
       updateOne: {
         // Re-checked in the filter: a colour set since the read is never overwritten.
-        filter: { _id: w._id, type: w.type, $or: [{ colour: null }, { colour: { $exists: false } }] },
+        filter: { _id: w._id, type: w.type, ...NOT_ADOPTED, $or: [{ colour: null }, { colour: { $exists: false } }] },
         update: { $set: { colour: 'rosé', updatedAt: now } },
       },
     })), { ordered: false });

@@ -19,7 +19,7 @@ const { parsePagination } = require('../../utils/pagination');
 const { isValidId } = require('../../utils/validation');
 const { validateImageRef } = require('../../services/accountOps');
 const { ensurePendingVintageProfile } = require('../../utils/vintageProfile');
-const { WINE_COLOURS } = require('../../utils/wineColour');
+const { WINE_COLOURS, colourTypeConflict } = require('../../utils/wineColour');
 
 const router = express.Router();
 
@@ -125,6 +125,12 @@ router.put('/:id/resolve', async (req, res) => {
       }
       if (!isValidId(String(country))) {
         return res.status(400).json({ error: 'Invalid country' });
+      }
+      {
+        // Same rule as the admin wine editor: refuse a colour the type cannot
+        // carry rather than approve the request and silently drop it.
+        const colourErr = colourTypeConflict(type || null, WINE_COLOURS.includes(colour) ? colour : null);
+        if (colourErr) return res.status(400).json({ error: colourErr });
       }
 
       // Image: an explicitly blank field means "no image" — it must NOT fall

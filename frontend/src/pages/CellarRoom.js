@@ -16,7 +16,7 @@ import { LENSES, getLensStyle, getLensLegend, bottleMatchesSearch } from '../uti
 import CellarNav from '../components/CellarNav';
 import CellarPageHeader from '../components/CellarPageHeader';
 import DialogBox from '../components/DialogBox';
-import { swatchType } from '../utils/wineColour';
+import { swatchType, wineTypeLabel } from '../utils/wineColour';
 import './CellarRoom.css';
 
 const DEFAULT_DIMENSIONS = { width: 10, depth: 10, height: 3 };
@@ -1310,7 +1310,7 @@ export default function CellarRoom() {
                 <div className="room-bottle-panel-info">
                   {wine?.producer && <p className="room-bottle-producer">{wine.producer}</p>}
                   <div className="room-bottle-meta">
-                    {wine?.type && <span className={`room-bottle-type type-${wine.type}`}>{wine.type}</span>}
+                    {wine?.type && <span className={`room-bottle-type type-${swatchType(wine)}`}>{wineTypeLabel(wine, t)}</span>}
                     {bottle?.vintage && <span>{bottle.vintage}</span>}
                   </div>
                   {wine?.country?.name && (

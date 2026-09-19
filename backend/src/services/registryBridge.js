@@ -32,7 +32,7 @@ const searchService = () => require('./search');
 
 const POPULATE = ['country', 'region', 'grapes'];
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
-const { WINE_COLOURS } = require('../utils/wineColour');
+const { WINE_COLOURS, stateColour } = require('../utils/wineColour');
 const PROFILE_FIELDS = ['body', 'tannin', 'acidity', 'sweetness', 'flavors', 'foodPairings', 'description', 'source', 'generatedAt', 'verifiedAt'];
 const REGISTRY_NOTE = 'From the shared registry (cellarion.app)';
 const isId = (v) => /^[a-f0-9]{24}$/i.test(String(v || ''));
@@ -312,6 +312,11 @@ async function adoptWine(registryId, userId) {
       registrySyncedAt: now,
       ...(profile ? { aiProfile: profile } : {}),
     });
+    // The registry's colour is authoritative when it sends one — null included.
+    // Without the mark, the model hook inferred rosé for a new "… Rosé" copy the
+    // registry holds as uncoloured, and the next refresh cleared it again
+    // (audit 2026-09-19). An older registry sends no key: the hook infers.
+    if (Object.prototype.hasOwnProperty.call(w, 'colour')) stateColour(wine, wine.colour);
     try {
       await wine.save();
     } catch (err) {
@@ -363,6 +368,8 @@ async function applyRegistryUpdate(local, w) {
     // must not blank one this install already shows.
     if (!fields.image && wine.image) { delete fields.image; delete fields.imageCredit; }
     Object.assign(wine, fields);
+    // Same as adopt: a colour the registry states is stored as stated.
+    if (Object.prototype.hasOwnProperty.call(fields, 'colour')) stateColour(wine, fields.colour);
     wine.normalizedKey = generateWineKey(w.name, w.producer || '', w.appellation || '');
   } else if (!wine.image && w.image) {
     wine.image = w.image; wine.imageCredit = w.imageCredit || null;

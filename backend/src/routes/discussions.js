@@ -146,7 +146,7 @@ router.get('/', optionalAuth, async (req, res) => {
 
         const docs = await Discussion.find({ _id: { $in: ids } })
           .populate('author', 'username displayName roles plan contribution.tier contribution.specialty')
-          .populate({ path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } });
+          .populate({ path: 'wineDefinition', select: 'name producer type colour', populate: { path: 'country', select: 'name' } });
 
         // Preserve Meilisearch relevance ordering
         const byId = new Map(docs.map(d => [d._id.toString(), d]));
@@ -193,7 +193,7 @@ router.get('/', optionalAuth, async (req, res) => {
         .skip(skip)
         .limit(limit)
         .populate('author', 'username displayName roles plan contribution.tier contribution.specialty')
-        .populate({ path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } }),
+        .populate({ path: 'wineDefinition', select: 'name producer type colour', populate: { path: 'country', select: 'name' } }),
       Discussion.countDocuments(filter)
     ]);
 
@@ -411,7 +411,7 @@ router.get('/:idOrSlug', optionalAuth, async (req, res) => {
 
     const discussion = await Discussion.findOne(filter)
       .populate('author', 'username displayName roles plan contribution.tier contribution.specialty')
-      .populate({ path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } });
+      .populate({ path: 'wineDefinition', select: 'name producer type colour', populate: { path: 'country', select: 'name' } });
 
     if (!discussion) return res.status(404).json({ error: 'Discussion not found' });
 
@@ -683,7 +683,7 @@ router.get('/:idOrSlug/replies', optionalAuth, async (req, res) => {
         .skip(skip)
         .limit(limit)
         .populate('author', 'username displayName roles plan contribution.tier contribution.specialty')
-        .populate({ path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } }),
+        .populate({ path: 'wineDefinition', select: 'name producer type colour', populate: { path: 'country', select: 'name' } }),
       DiscussionReply.countDocuments({ discussion: discussionId })
     ]);
 
@@ -967,7 +967,7 @@ router.post('/:idOrSlug/replies', requireAuth, requireNonDemo, async (req, res) 
     logAudit(req, 'discussion_reply.create', { type: 'discussion_reply', id: reply._id }, { discussion: discussion._id });
 
     await reply.populate('author', 'username displayName roles plan contribution.tier contribution.specialty');
-    await reply.populate({ path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } });
+    await reply.populate({ path: 'wineDefinition', select: 'name producer type colour', populate: { path: 'country', select: 'name' } });
 
     res.status(201).json({ reply });
   } catch (err) {

@@ -97,7 +97,7 @@ router.post('/', requireNonDemo, async (req, res) => {
     // Populate for response
     await review.populate([
       { path: 'author', select: 'username displayName plan contribution.tier contribution.specialty' },
-      { path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } }
+      { path: 'wineDefinition', select: 'name producer type colour', populate: { path: 'country', select: 'name' } }
     ]);
 
     res.status(201).json({ review });
@@ -194,7 +194,7 @@ router.get('/user/:userId', async (req, res) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate({ path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } }),
+        .populate({ path: 'wineDefinition', select: 'name producer type colour', populate: { path: 'country', select: 'name' } }),
       Review.countDocuments(filter)
     ]);
 
@@ -242,7 +242,7 @@ router.get('/feed', async (req, res) => {
         .skip(skip)
         .limit(limit)
         .populate('author', 'username displayName plan contribution.tier contribution.specialty')
-        .populate({ path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } }),
+        .populate({ path: 'wineDefinition', select: 'name producer type colour', populate: { path: 'country', select: 'name' } }),
       Review.countDocuments(feedFilter)
     ]);
 
@@ -294,7 +294,7 @@ router.get('/discover', async (req, res) => {
         .skip(skip)
         .limit(limit)
         .populate('author', 'username displayName plan contribution.tier contribution.specialty')
-        .populate({ path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } }),
+        .populate({ path: 'wineDefinition', select: 'name producer type colour', populate: { path: 'country', select: 'name' } }),
       Review.countDocuments(discoverFilter)
     ]);
 
@@ -367,7 +367,7 @@ router.put('/:id', async (req, res) => {
 
     await review.populate([
       { path: 'author', select: 'username displayName plan contribution.tier contribution.specialty' },
-      { path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } }
+      { path: 'wineDefinition', select: 'name producer type colour', populate: { path: 'country', select: 'name' } }
     ]);
 
     res.json({ review });

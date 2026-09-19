@@ -28,7 +28,7 @@ const { isValidId } = require('../../utils/validation');
 const { stripHtml } = require('../../utils/sanitize');
 const { normalizeString, sanitizeTaxonomyName } = require('../../utils/normalize');
 const { classifyProposal } = require('../../services/proposalDirectApply');
-const { WINE_COLOURS } = require('../../utils/wineColour');
+const { WINE_COLOURS, colourTypeConflict } = require('../../utils/wineColour');
 const { ok, fail, objectId, pageParams } = require('../toolUtil');
 const { logAction } = require('../actionLedger');
 const {
@@ -714,6 +714,11 @@ registerTool({
     const wine = await WineDefinition.findById(args.wine_id);
     // A user's private draft is nobody's curation work (draft design 2026-09-12).
     if (!wine || wine.draft === true) return fail('not_found', 'No such wine. Use search_registry to find it.');
+
+    // Refused rather than accepted-and-dropped: the model hook keeps a colour
+    // only on a sparkling, dessert or fortified wine.
+    const colourErr = colourTypeConflict(check.clean.type || wine.type, check.clean.colour);
+    if (colourErr) return fail('invalid_input', colourErr);
 
     const prev = snapshotProfile(wine);
     applyProfilePatch(wine, check.clean, ctx.user.id);
@@ -2211,6 +2216,14 @@ registerTool({
       .populate('country', 'name').populate('region', 'name').populate('grapes', 'name');
     // A user's private draft is nobody's curation work (draft design 2026-09-12).
     if (!wine || wine.draft === true) return fail('not_found', 'No such wine. Use search_registry to find it.');
+
+    // Same rule the user path applies at filing (wineProposalOps): a colour on
+    // a wine this proposal leaves red/white/rosé would be "approved" and then
+    // skipped at apply — refuse it now, while the curator can still add the type.
+    if (proposedFields?.colour) {
+      const colourErr = colourTypeConflict(proposedFields.type || wine.type, proposedFields.colour);
+      if (colourErr) return fail('invalid_input', colourErr);
+    }
 
     let target = null;
     if (args.kind === 'merge') {

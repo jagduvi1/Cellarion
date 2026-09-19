@@ -301,7 +301,10 @@ async function buildCellarDataExport(userId, scope) {
           { path: 'region', select: 'name' },
           { path: 'grapes', select: 'name' },
         ],
-        select: 'name producer type appellation country region grapes',
+        // Every wine field mapBottlesForExport emits has to be listed here —
+        // `colour` was emitted but not selected, so no export ever carried one
+        // (audit 2026-09-19; pinned by cellarExport.select.test.js).
+        select: 'name producer type colour appellation country region grapes',
       })
       .limit(EXPORT_MAX)
       .lean(),

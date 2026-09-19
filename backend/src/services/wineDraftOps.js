@@ -38,6 +38,7 @@ const { resolveGrapeIdsStrict } = require('./wineProfileOps');
 const { validatePendingFix, runPromotionFollowThrough } = require('./pendingWineOps');
 const { findVisibleWine } = require('./wineVisibility');
 const { isValidId } = require('../utils/validation');
+const { stateColour, colourTypeConflict } = require('../utils/wineColour');
 
 const DRAFT_TTL_DAYS = 7;
 const DRAFT_TTL_MS = DRAFT_TTL_DAYS * 24 * 60 * 60 * 1000;
@@ -187,8 +188,11 @@ async function updateDraft(wine, clean, userId) {
       ? await resolveCanonicalAppellation(normalizeAppellation(clean.appellation))
       : null;
   }
+  // Refused, not accepted-and-dropped by the model hook (audit 2026-09-19).
+  const colourErr = colourTypeConflict(clean.type || wine.type, clean.colour);
+  if (colourErr) return fail('invalid_input', colourErr);
   if (clean.type) wine.type = clean.type;
-  if (clean.colour !== undefined) wine.colour = clean.colour;
+  if (clean.colour !== undefined) stateColour(wine, clean.colour);
   if (clean.classification !== undefined) wine.classification = clean.classification || null;
 
   let countryDoc = null;

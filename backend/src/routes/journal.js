@@ -62,7 +62,7 @@ router.get('/wine-search', async (req, res) => {
       pendingIdentity: { $ne: true },
       nonWine: { $ne: true },
     })
-      .select('name producer type')
+      .select('name producer type colour')
       .limit(200)
       .lean();
     const matchedWineIds = matchedWines.map(w => w._id);
@@ -76,12 +76,12 @@ router.get('/wine-search', async (req, res) => {
     const [bottles, consumedBottles] = matchedWineIds.length
       ? await Promise.all([
           Bottle.find({ user: req.user.id, status: 'active', wineDefinition: { $in: matchedWineIds } })
-            .populate({ path: 'wineDefinition', select: 'name producer type' })
+            .populate({ path: 'wineDefinition', select: 'name producer type colour' })
             .select('vintage wineDefinition')
             .limit(10)
             .lean(),
           Bottle.find({ user: req.user.id, status: { $in: CONSUMED_STATUSES }, wineDefinition: { $in: matchedWineIds } })
-            .populate({ path: 'wineDefinition', select: 'name producer type' })
+            .populate({ path: 'wineDefinition', select: 'name producer type colour' })
             .select('vintage wineDefinition status consumedAt')
             .sort({ consumedAt: -1 })
             .limit(10)
@@ -109,8 +109,8 @@ router.get('/wine-search', async (req, res) => {
 });
 
 const POPULATE_PAIRINGS = [
-  { path: 'pairings.bottle', select: 'vintage wineDefinition', populate: { path: 'wineDefinition', select: 'name producer type' } },
-  { path: 'pairings.wine', select: 'name producer type' },
+  { path: 'pairings.bottle', select: 'vintage wineDefinition', populate: { path: 'wineDefinition', select: 'name producer type colour' } },
+  { path: 'pairings.wine', select: 'name producer type colour' },
   // profileVisibility is fetched ONLY for redactPeople's gate — it is
   // stripped from every response before send.
   { path: 'people.user', select: 'username displayName profileVisibility' }

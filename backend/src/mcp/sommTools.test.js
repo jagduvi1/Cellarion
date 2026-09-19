@@ -538,6 +538,20 @@ describe('set_wine_profile', () => {
     expect(McpActionLog.create.mock.calls[0][0].prev).toMatchObject({ type: 'rosé', colour: null });
   });
 
+  // Audit 2026-09-19: the model hook would drop it, so the tool used to report
+  // a success that stored nothing.
+  test('a colour on a wine that stays red/white/rosé is refused, nothing written', async () => {
+    const w = wine({ type: 'red' });
+    const body = parse(await tool('set_wine_profile').handler({ wine_id: oid('f'), colour: 'rosé' }, SOMM_CTX));
+    expect(body.error.code).toBe('invalid_input');
+    expect(body.error.message).toMatch(/only applies to sparkling, dessert and fortified/);
+    expect(w.save).not.toHaveBeenCalled();
+    expect(McpActionLog.create).not.toHaveBeenCalled();
+    // Clearing is always fine — there is nothing to refuse.
+    const cleared = parse(await tool('set_wine_profile').handler({ wine_id: oid('f'), colour: null }, SOMM_CTX));
+    expect(cleared.error).toBeUndefined();
+  });
+
   // Ticket 2026-08-11: "Tinta Roriz" was silently stored as Tempranillo. The
   // canonicalisation itself is the design (one variety doc keeps search and
   // stats coherent) — but the response must SAY it happened, at every reading
@@ -1610,6 +1624,25 @@ describe('propose_wine_correction', () => {
       expect(body.data.status).toBe('pending');
       expect(approveProposal).not.toHaveBeenCalled();
     });
+  });
+
+  // Audit 2026-09-19: the somm path had no type check at filing, so an admin
+  // could "approve" a colour that the apply step then skipped.
+  test('a colour on a wine the proposal leaves red/white/rosé is refused at filing; with the type it files', async () => {
+    mkWine({ type: 'red' });
+    const refused = parse(await tool('propose_wine_correction').handler({
+      wine_id: WINE_ID, kind: 'field_correction', proposed_fields: { colour: 'rosé' }, reason: REASON,
+    }, SOMM_CTX));
+    expect(refused.error.code).toBe('invalid_input');
+    expect(refused.error.message).toMatch(/typed red/);
+    expect(WineCorrectionProposal.create).not.toHaveBeenCalled();
+
+    WineCorrectionProposal.create.mockResolvedValue({ _id: 'prop-c' });
+    const filed = parse(await tool('propose_wine_correction').handler({
+      wine_id: WINE_ID, kind: 'field_correction', proposed_fields: { type: 'sparkling', colour: 'rosé' }, reason: REASON,
+    }, SOMM_CTX));
+    expect(filed.error).toBeUndefined();
+    expect(WineCorrectionProposal.create.mock.calls[0][0].proposedFields).toEqual({ type: 'sparkling', colour: 'rosé' });
   });
 
   test('files a field_correction: snapshot captured, ledger row + audit written, nothing applied', async () => {

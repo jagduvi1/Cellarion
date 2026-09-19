@@ -44,6 +44,20 @@ describe('validatePendingFix — colour', () => {
   });
 });
 
+// Audit 2026-09-19: refused, not accepted-and-dropped by the model hook.
+test('applyPendingFix refuses a colour on a wine that stays red/white/rosé, before any write', async () => {
+  const wine = {
+    _id: 'wine-2', name: 'Rich Ruby Red', producer: '', appellation: null, type: 'red',
+    country: 'country-1', createdBy: 'u1', pendingIdentity: true, identityUnavailable: false,
+    save: jest.fn(),
+  };
+  const res = await applyPendingFix(wine, { colour: 'rosé' }, 'curator-1');
+  expect(res).toMatchObject({ ok: false, code: 'invalid_input' });
+  expect(res.message).toMatch(/typed red/);
+  expect(wine.colour).toBeUndefined();
+  expect(wine.save).not.toHaveBeenCalled();
+});
+
 test('applyPendingFix writes the colour beside the type', async () => {
   const wine = {
     _id: 'wine-1', name: 'Rosé Extra Brut', producer: '', appellation: null, type: 'rosé',

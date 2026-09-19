@@ -30,7 +30,7 @@ registerTool({
     const [total, items] = await Promise.all([
       WishlistItem.countDocuments(filter),
       WishlistItem.find(filter)
-        .populate({ path: 'wineDefinition', select: 'name producer type', populate: ['country', 'region'] })
+        .populate({ path: 'wineDefinition', select: 'name producer type colour', populate: ['country', 'region'] })
         .sort({ createdAt: -1 }).skip(offset).limit(limit).lean(),
     ]);
     const data = items.map((it) => ({
@@ -41,6 +41,7 @@ registerTool({
             name: it.wineDefinition.name,
             producer: it.wineDefinition.producer || null,
             type: it.wineDefinition.type || null,
+            ...(it.wineDefinition.colour ? { colour: it.wineDefinition.colour } : {}),
             country: it.wineDefinition.country?.name || null,
             region: it.wineDefinition.region?.name || null,
           }

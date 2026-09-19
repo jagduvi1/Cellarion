@@ -207,11 +207,13 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
     const v = pendingValues[f];
     if (f === 'grapes') return (v || []).join(', ');
     if (f === 'type') {
-      // The type and colour the suggestion would leave: a colour-only
-      // suggestion keeps the recorded type, a type change starts colourless.
+      // The type and colour the suggestion would leave. A colour-only
+      // suggestion keeps the recorded type; a type-only one keeps the recorded
+      // colour when the new type can carry one — exactly what approval does
+      // (wineTypeLabel ignores a colour on red/white/rosé).
       return wineTypeLabel({
         type: v || values.type,
-        colour: hasValue(pendingValues.colour) ? pendingValues.colour : (v ? null : values.colour),
+        colour: hasValue(pendingValues.colour) ? pendingValues.colour : values.colour,
       }, t);
     }
     return v;
@@ -243,10 +245,10 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
       const nextType = proposedType || values.type;
       const out = {};
       if (proposedType && proposedType !== values.type) out.type = proposedType;
-      // Compared with the colour the wine has under THAT type — none, when
-      // the type itself is changing.
-      const colourNow = nextType === values.type ? values.colour : null;
-      if (isStyleType(nextType) && proposedColour && proposedColour !== colourNow) out.colour = proposedColour;
+      // Sent only when it differs from the recorded colour — which the wine
+      // KEEPS when it moves between two style types (the model drops a colour
+      // only on red/white/rosé), so "no change" must mean the same here.
+      if (isStyleType(nextType) && proposedColour && proposedColour !== values.colour) out.colour = proposedColour;
       return Object.keys(out).length ? out : null;
     }
     if (f === 'grapes') {
@@ -391,10 +393,15 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
   // The recorded type is not a choice — unless it is a style whose colour may
   // be the thing to fix.
   const typeChoices = WINE_TYPES.filter((v) => v !== values.type || isStyleType(v));
-  const chooseType = (v) => {
-    setProposedType(v);
-    if (!isStyleType(v)) setProposedColour('');
-  };
+  // The colour choice is KEPT while a still type is selected (the row is
+  // hidden and draftFields ignores it): arrow keys select as they move, and a
+  // pass through "Rosé" on the way back to "Sparkling" used to wipe it.
+  const chooseType = (v) => setProposedType(v);
+  // Tapping the chosen colour again takes the choice back — to the recorded
+  // colour, or to none.
+  const chooseColour = (c) => setProposedColour(
+    (prev) => (prev === c ? (values.colour && values.colour !== c ? values.colour : '') : c)
+  );
   // Arrow keys move within a chip group; the group is one tab stop.
   const radioKeys = (choices, current, choose) => (e) => {
     const dir = (e.key === 'ArrowRight' || e.key === 'ArrowDown') ? 1
@@ -409,7 +416,7 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
     Array.from(e.currentTarget.querySelectorAll('[role="radio"]')).find((b) => b.dataset.value === next)?.focus();
   };
   const onTypeKey = radioKeys(typeChoices, proposedType, chooseType);
-  const onColourKey = radioKeys(WINE_COLOURS, proposedColour, setProposedColour);
+  const onColourKey = radioKeys(WINE_COLOURS, proposedColour, (c) => setProposedColour(c));
 
   const canSend = !!draftFields() && reason.trim().length >= REASON_MIN;
   const newInDraft = proposedGrapes.filter((g) => g.isNew).map((g) => g.name);
@@ -648,7 +655,7 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
                               aria-checked={proposedColour === c}
                               tabIndex={(proposedColour ? proposedColour === c : idx === 0) ? 0 : -1}
                               className={`wr-choice${proposedColour === c ? ' wr-choice--on' : ''}`}
-                              onClick={() => setProposedColour(c)}
+                              onClick={() => chooseColour(c)}
                             >
                               {colourLabel(c, t)}
                             </button>

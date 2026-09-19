@@ -3,6 +3,7 @@ const multer = require('multer');
 const { parse } = require('csv-parse');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const { generateWineKey, generateWineSlug, normalizeString, normalizeAppellation, normalizeAppellationKey, resolveCountryName, isRecognizedCountry, isUnknownName, sanitizeTaxonomyName } = require('../../utils/normalize');
+const { STYLE_TYPES, isStyleType, inferColourFromName } = require('../../utils/wineColour');
 const { canonicalizeWineName } = require('../../utils/producerPrefix');
 const { computeCanonicalKey } = require('../../utils/wineIdentity');
 const WineDefinition = require('../../models/WineDefinition');
@@ -51,6 +52,21 @@ function mapType(colour, subType, wineTypeCol) {
   // Unknown colour is NULL (somm ticket 6a85ad44) — a guessed red closes the
   // question a blank would have kept open.
   return null;
+}
+
+/**
+ * The colour of a sparkling/dessert/fortified row (utils/wineColour). LWIN
+ * states COLOUR beside SUB_TYPE, and mapType spends COLOUR only when the row is
+ * still — so "Sparkling" + "Rosé" kept the style and threw the colour away.
+ * Falls back to the same rosé-name inference the model hook runs, because the
+ * bulk upsert below never reaches that hook (audit 2026-09-19).
+ */
+function mapColour(colour, type, name, producer) {
+  if (!isStyleType(type)) return null;
+  const col = (colour || '').toLowerCase().trim();
+  if (col === 'red' || col === 'white') return col;
+  if (col === 'rosé' || col === 'rose') return 'rosé';
+  return inferColourFromName(name, producer);
 }
 
 // ── Format detection & row mapping ───────────────────────────────────────────
@@ -119,6 +135,7 @@ function mapRow(row, format) {
       // LWIN SUB_REGION carries "… DOCG"/"DO …" forms too (audit RC-4).
       appellation: normalizeAppellation(lwinVal(row.SUB_REGION)),
       type: mapType(row.COLOUR, row.SUB_TYPE, null),
+      colour: mapColour(row.COLOUR, mapType(row.COLOUR, row.SUB_TYPE, null), name, producer),
       classification: lwinVal(row.CLASSIFICATION),
       status: (row.STATUS || '').trim() || 'Live',
       rowType: (row.TYPE || '').trim() || 'Wine',
@@ -134,6 +151,7 @@ function mapRow(row, format) {
     region: (row.Region || '').trim() || null,
     appellation: normalizeAppellation((row.Appellation || '').trim()) || null,
     type: mapType(null, null, row.WineType),
+    colour: mapColour(null, mapType(null, null, row.WineType), (row.Wine || '').trim(), (row.Producer || '').trim()),
     classification: (row.Classification || '').trim() || null,
     status: 'Live',
     rowType: 'Wine',
@@ -378,6 +396,19 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
         createdAt: { $ifNull: ['$createdAt', '$$NOW'] },
         updatedAt: '$$NOW',
       };
+
+      // This upsert never reaches the model hook, so the hook's colour rule is
+      // restated here: a colour only where the STORED type (after the $ifNull
+      // above) is a style type, and never over one already recorded.
+      if (mapped.colour) {
+        setFields.colour = {
+          $cond: [
+            { $in: [{ $ifNull: ['$type', { $literal: mapped.type }] }, STYLE_TYPES] },
+            { $ifNull: ['$colour', { $literal: mapped.colour }] },
+            { $ifNull: ['$colour', null] },
+          ],
+        };
+      }
 
       if (regionId) setFields.region = { $ifNull: ['$region', regionId] };
       if (mapped.appellation) setFields.appellation = { $ifNull: ['$appellation', { $literal: mapped.appellation }] };

@@ -40,7 +40,7 @@ const { DRAFT_EXCLUDED } = require('./wineVisibility');
 // utils/normalize, so the curation queue keeps its light module tree.
 const { resolveCanonicalAppellation } = require('./appellationResolve');
 const { resolveGrapeIdsStrict, GRAPES_MAX, GRAPE_NAME_MAX, WINE_TYPES } = require('./wineProfileOps');
-const { WINE_COLOURS } = require('../utils/wineColour');
+const { WINE_COLOURS, stateColour, colourTypeConflict } = require('../utils/wineColour');
 
 // Fields a curator may set. `producer` and `name` are the two that promote the
 // row; the rest ride along so one pass can fix everything the misread label
@@ -360,8 +360,11 @@ async function applyPendingFix(wine, clean, userId) {
       ? await resolveCanonicalAppellation(normalizeAppellation(clean.appellation))
       : null;
   }
+  // Refused, not accepted-and-dropped by the model hook (audit 2026-09-19).
+  const colourErr = colourTypeConflict(clean.type || wine.type, clean.colour);
+  if (colourErr) return { ok: false, code: 'invalid_input', message: colourErr };
   if (clean.type) wine.type = clean.type;
-  if (clean.colour !== undefined) wine.colour = clean.colour;
+  if (clean.colour !== undefined) stateColour(wine, clean.colour);
 
   let countryDoc = null;
   if (clean.countryName !== undefined && clean.countryName) {

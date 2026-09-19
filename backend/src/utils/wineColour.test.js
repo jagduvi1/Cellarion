@@ -74,3 +74,40 @@ test('drift: WINE_COLOURS match the WineDefinition schema enum', () => {
   const types = WineDefinition.schema.path('type').enumValues;
   expect(types.filter((t) => !WINE_COLOURS.includes(t))).toEqual(STYLE_TYPES);
 });
+
+// Audit 2026-09-19: a stated colour beats the hook's inference, and a colour
+// the type cannot carry is refused instead of silently dropped.
+describe('stateColour / colourTypeConflict', () => {
+  const { stateColour, colourTypeConflict } = require('./wineColour');
+
+  test('stateColour writes the value (null included) and marks the document', () => {
+    const doc = { colour: 'rosé', $locals: {} };
+    stateColour(doc, null);
+    expect(doc.colour).toBeNull();
+    expect(doc.$locals.colourStated).toBe(true);
+    stateColour(doc, '');
+    expect(doc.colour).toBeNull();
+    stateColour(doc, 'red');
+    expect(doc.colour).toBe('red');
+  });
+
+  test('stateColour works on a plain test double with no $locals', () => {
+    const plain = {};
+    expect(() => stateColour(plain, 'rosé')).not.toThrow();
+    expect(plain.colour).toBe('rosé');
+  });
+
+  test('colourTypeConflict: null when storable or when nothing is being set', () => {
+    expect(colourTypeConflict('sparkling', 'rosé')).toBeNull();
+    expect(colourTypeConflict('fortified', 'red')).toBeNull();
+    expect(colourTypeConflict('red', null)).toBeNull();
+    expect(colourTypeConflict('red', undefined)).toBeNull();
+    expect(colourTypeConflict('red', '')).toBeNull();
+  });
+
+  test('colourTypeConflict: says why, and the way out', () => {
+    expect(colourTypeConflict('rosé', 'rosé')).toMatch(/typed rosé/);
+    expect(colourTypeConflict(null, 'rosé')).toMatch(/not typed yet/);
+    expect(colourTypeConflict('white', 'red')).toMatch(/correct the type in the same call/);
+  });
+});

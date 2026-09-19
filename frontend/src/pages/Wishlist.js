@@ -6,7 +6,7 @@ import { getWishlist, updateWishlistItem, removeWishlistItem } from '../api/wish
 import Modal from '../components/Modal';
 import './AddBottle.css';
 import WineImage from '../components/WineImage';
-import { swatchType } from '../utils/wineColour';
+import { swatchType, wineTypeLabel } from '../utils/wineColour';
 import './Wishlist.css';
 
 const PRIORITY_KEYS = { high: 'wishlist.priorityHigh', medium: 'wishlist.priorityMedium', low: 'wishlist.priorityLow' };
@@ -258,7 +258,7 @@ function Wishlist() {
                     <div className="wine-meta">
                       {wd?.country?.name && <span>{wd.country.name}</span>}
                       {wd?.region?.name && <span>• {wd.region.name}</span>}
-                      {wd?.type && <span className={`wine-type-pill ${wd.type}`}>{wd.type}</span>}
+                      {wd?.type && <span className={`wine-type-pill ${swatchType(wd)}`}>{wineTypeLabel(wd, t)}</span>}
                     </div>
                     {item.vintage && <span className="wishlist-item-vintage">{t('wishlist.vintageLine', { vintage: item.vintage })}</span>}
                     {item.notes && <p className="wishlist-item-notes">{item.notes}</p>}

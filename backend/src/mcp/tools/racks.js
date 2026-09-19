@@ -74,7 +74,7 @@ registerTool({
       .populate({
         path: 'slots.bottle',
         select: 'vintage status wineDefinition',
-        populate: { path: 'wineDefinition', select: 'name producer type' },
+        populate: { path: 'wineDefinition', select: 'name producer type colour' },
       })
       .lean();
     if (!rack) return fail('not_found', NOT_FOUND);
@@ -84,7 +84,11 @@ registerTool({
         position: s.position,
         bottle_id: s.bottle._id,
         wine: s.bottle.wineDefinition
-          ? { name: s.bottle.wineDefinition.name, producer: s.bottle.wineDefinition.producer || null, type: s.bottle.wineDefinition.type || null }
+          ? {
+              name: s.bottle.wineDefinition.name, producer: s.bottle.wineDefinition.producer || null, type: s.bottle.wineDefinition.type || null,
+              // Additive, only when set: a sparkling rosé is type sparkling + colour rosé.
+              ...(s.bottle.wineDefinition.colour ? { colour: s.bottle.wineDefinition.colour } : {}),
+            }
           : null,
         vintage: s.bottle.vintage,
       }))

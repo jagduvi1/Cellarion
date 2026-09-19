@@ -18,7 +18,7 @@ const {
   applyProfilePatch,
   snapshotProfile,
 } = require('../../services/wineProfileOps');
-const { WINE_COLOURS } = require('../../utils/wineColour');
+const { WINE_COLOURS, colourTypeConflict } = require('../../utils/wineColour');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -81,6 +81,11 @@ router.put('/:wineId', requireSommOrAdmin, async (req, res) => {
     const wine = await WineDefinition.findById(req.params.wineId);
     // A user's private draft is nobody's curation work (draft design 2026-09-12).
     if (!wine || wine.draft === true) return res.status(404).json({ error: 'Wine not found' });
+
+    // A colour the wine's (resulting) type cannot carry is refused, not
+    // accepted and silently dropped by the model hook.
+    const colourErr = colourTypeConflict(check.clean.type || wine.type, check.clean.colour);
+    if (colourErr) return res.status(400).json({ error: colourErr });
 
     const before = snapshotProfile(wine);
     applyProfilePatch(wine, check.clean, req.user.id);

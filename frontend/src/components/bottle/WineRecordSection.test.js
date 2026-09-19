@@ -587,6 +587,54 @@ describe('colour of a sparkling, dessert or fortified wine', () => {
     }));
   });
 
+  // Audit 2026-09-19 ────────────────────────────────────────────────────────
+  const openTypeFix = async (wine) => {
+    renderSection({ wine });
+    await screen.findAllByText('not recorded');
+    enterSuggestMode();
+    fireEvent.click(screen.getByLabelText('Suggest a fix for Type'));
+    await screen.findByText('Suggest a fix: Type');
+    return screen.getByRole('radiogroup', { name: 'Should be' });
+  };
+
+  test('a detour through a still type does not wipe the chosen colour', async () => {
+    createWineProposal.mockResolvedValue(ok({ proposal: { _id: 'p4', status: 'pending' } }));
+    const typeGroup = await openTypeFix(SPARKLING);
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Colour' })).getByRole('radio', { name: 'Rosé' }));
+    // Arrow keys select as they move: Sparkling → Dessert … a mis-tap on Red and back.
+    fireEvent.click(within(typeGroup).getByRole('radio', { name: 'Red' }));
+    expect(screen.queryByRole('radiogroup', { name: 'Colour' })).not.toBeInTheDocument();
+    fireEvent.click(within(typeGroup).getByRole('radio', { name: 'Sparkling' }));
+    expect(within(screen.getByRole('radiogroup', { name: 'Colour' })).getByRole('radio', { name: 'Rosé' }))
+      .toHaveAttribute('aria-checked', 'true');
+    fireEvent.change(screen.getByLabelText('How do you know?'), { target: { value: 'The label says Rosé Extra Brut.' } });
+    fireEvent.click(screen.getByText('Send suggestion'));
+    await waitFor(() => expect(createWineProposal).toHaveBeenCalledWith(expect.any(Function),
+      expect.objectContaining({ fields: { colour: 'rosé' } })));
+  });
+
+  test('tapping the chosen colour again takes the choice back', async () => {
+    await openTypeFix(SPARKLING);
+    const colourGroup = screen.getByRole('radiogroup', { name: 'Colour' });
+    fireEvent.click(within(colourGroup).getByRole('radio', { name: 'Red' }));
+    fireEvent.click(within(colourGroup).getByRole('radio', { name: 'Red' }));
+    expect(within(colourGroup).getByRole('radio', { name: 'Red' })).toHaveAttribute('aria-checked', 'false');
+    fireEvent.change(screen.getByLabelText('How do you know?'), { target: { value: 'Nothing to change after all.' } });
+    expect(screen.getByText('Send suggestion')).toBeDisabled();
+  });
+
+  test('sparkling rosé → dessert sends the type alone, and the pending line keeps the colour approval will keep', async () => {
+    createWineProposal.mockResolvedValue(ok({ proposal: { _id: 'p5', status: 'pending' } }));
+    const typeGroup = await openTypeFix({ ...SPARKLING, colour: 'rosé' });
+    fireEvent.click(within(typeGroup).getByRole('radio', { name: 'Dessert' }));
+    fireEvent.change(screen.getByLabelText('How do you know?'), { target: { value: 'It is a sweet wine, not a fizz.' } });
+    fireEvent.click(screen.getByText('Send suggestion'));
+    await waitFor(() => expect(createWineProposal).toHaveBeenCalledWith(expect.any(Function),
+      expect.objectContaining({ fields: { type: 'dessert' } })));
+    // The model keeps a recorded colour between two style types.
+    expect(await screen.findByText('Rosé dessert wine')).toBeInTheDocument();
+  });
+
   test('my pending colour-only suggestion shows on the Type row', async () => {
     getMyWineProposals.mockResolvedValue(ok({
       proposals: [{ status: 'pending', proposedFields: { colour: 'rosé' } }],

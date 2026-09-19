@@ -109,3 +109,40 @@ describe('on a later save', () => {
     expect(doc.colour).toBe('rosé');
   });
 });
+
+// Audit 2026-09-19.
+describe('a stated colour is never re-inferred in the same save', () => {
+  const { stateColour } = require('../utils/wineColour');
+
+  test('"not stated" sent together with a retype stays null', async () => {
+    const doc = await savedWine({ type: 'rosé' }); // "Rosé Extra Brut", typed rosé
+    doc.type = 'sparkling';
+    stateColour(doc, null);
+    await doc.validate();
+    expect(doc.colour).toBeNull();
+  });
+
+  test('clearing rosé while moving between two style types stays cleared', async () => {
+    const doc = await savedWine({ colour: 'rosé' });
+    doc.type = 'dessert';
+    stateColour(doc, null);
+    await doc.validate();
+    expect(doc.colour).toBeNull();
+  });
+
+  test('without a stated colour a style→style retype keeps the recorded one', async () => {
+    const doc = await savedWine({ colour: 'rosé' });
+    doc.type = 'dessert';
+    await doc.validate();
+    expect(doc.colour).toBe('rosé');
+  });
+});
+
+test('publishing a private draft infers its colour (drafts that predate the field)', async () => {
+  // A draft saved before the field existed: sparkling, rosé name, no colour.
+  const doc = await savedWine({ draft: true, colour: null });
+  doc.colour = null; // as loaded from a legacy document
+  doc.draft = false; // what wineDraftOps.publishDraft does before save()
+  await doc.validate();
+  expect(doc.colour).toBe('rosé');
+});
