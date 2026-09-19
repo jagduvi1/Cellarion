@@ -31,7 +31,7 @@ RUN npm run build
 # (uid 101), so an nginx compromise never holds root in the container (audit
 # L-25). Non-root cannot bind <1024, so the server listens on 8080 — compose
 # and Traefik map onto that port.
-FROM nginxinc/nginx-unprivileged:alpine@sha256:2ddec616f1cb58bcac057aa388f28cb81e35137641ef4226d321714499329bd1
+FROM nginxinc/nginx-unprivileged:alpine@sha256:b54ac358b83fc6c965793fd271839b4ea4cdb6e99895bb19618cbc2ca152d972
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
