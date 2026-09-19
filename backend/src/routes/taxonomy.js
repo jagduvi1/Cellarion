@@ -80,7 +80,7 @@ function clearTaxonomyListCache() {
 }
 
 // Shared wine projection for public lists
-const WINE_PROJECTION = 'name producer slug type appellation region country image communityRating';
+const WINE_PROJECTION = 'name producer slug type colour appellation region country image communityRating';
 
 // Registry lockdown (2026-09-06, L2): these four listings are the one
 // unauthenticated surface that pages through the registry. At 100 a page with

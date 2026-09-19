@@ -520,9 +520,22 @@ describe('set_wine_profile', () => {
     expect(w.grapes).toEqual([oid('9')]);
     expect(w.aiProfile.source).toBe('ai'); // profile untouched, still enrichment-eligible
     expect(body.summary).toMatch(/record fields corrected/);
-    expect(body.data.record).toEqual({ type: 'white', grapes: ['Savagnin'] });
+    expect(body.data.record).toEqual({ type: 'white', colour: null, grapes: ['Savagnin'] });
     // The undo snapshot carries the record fields so undo_last can put them back.
     expect(McpActionLog.create.mock.calls[0][0].prev).toMatchObject({ type: 'fortified', grapes: [] });
+  });
+
+  // Support ticket 2026-09-17: a sparkling rosé is type sparkling + colour rosé.
+  test('colour is a record field too — set beside the type, snapshotted for undo', async () => {
+    const w = wine({ type: 'rosé', colour: null });
+    const body = parse(await tool('set_wine_profile').handler(
+      { wine_id: oid('f'), type: 'sparkling', colour: 'rosé' }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(w.type).toBe('sparkling');
+    expect(w.colour).toBe('rosé');
+    expect(w.aiProfile.source).toBe('ai');
+    expect(body.data.record).toEqual({ type: 'sparkling', colour: 'rosé' });
+    expect(McpActionLog.create.mock.calls[0][0].prev).toMatchObject({ type: 'rosé', colour: null });
   });
 
   // Ticket 2026-08-11: "Tinta Roriz" was silently stored as Tempranillo. The
@@ -1628,6 +1641,8 @@ describe('propose_wine_correction', () => {
       // Both proposable since 2026-08-19, so both must ride in the snapshot —
       // the admin drift check compares against it field by field.
       type: null, grapes: null,
+      // Proposable since 2026-09-19 (colour of a sparkling/dessert/fortified wine).
+      colour: null,
     });
 
     const row = McpActionLog.create.mock.calls[0][0];

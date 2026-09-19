@@ -16,6 +16,7 @@ import { LENSES, getLensStyle, getLensLegend, bottleMatchesSearch } from '../uti
 import CellarNav from '../components/CellarNav';
 import CellarPageHeader from '../components/CellarPageHeader';
 import DialogBox from '../components/DialogBox';
+import { swatchType } from '../utils/wineColour';
 import './CellarRoom.css';
 
 const DEFAULT_DIMENSIONS = { width: 10, depth: 10, height: 3 };
@@ -1378,7 +1379,7 @@ export default function CellarRoom() {
                         className="room-slot-bottle-item"
                         onClick={() => handleAssignBottle(b._id)}
                       >
-                        <span className={`room-slot-type-dot type-${b.wineDefinition?.type || 'red'}`} />
+                        <span className={`room-slot-type-dot type-${swatchType(b.wineDefinition, 'red')}`} />
                         <div className="room-slot-bottle-info">
                           <strong>{b.wineDefinition?.name || 'Unknown'}</strong>
                           <span>

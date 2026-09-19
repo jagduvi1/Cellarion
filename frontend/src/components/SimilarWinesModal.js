@@ -1,6 +1,7 @@
 import { useTranslation, Trans } from 'react-i18next';
 import Modal from './Modal';
 import WineImage from './WineImage';
+import { swatchType } from '../utils/wineColour';
 import './WineModalThumbs.css';
 
 /**
@@ -52,7 +53,7 @@ function SimilarWinesModal({ candidates, queryName, onPick, onCreateNew, onCance
                 image={wine.image}
                 alt={wine.name}
                 className="similar-wine-thumb"
-                wineType={wine.type}
+                wineType={swatchType(wine)}
                 placeholder="similar-wine-placeholder"
               />
             </div>

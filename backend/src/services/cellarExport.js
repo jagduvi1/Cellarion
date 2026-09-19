@@ -91,6 +91,9 @@ function mapBottlesForExport(bottles, racks, imagesByBottle = new Map(), reviews
       region: wine.region?.name || '',
       appellation: wine.appellation || '',
       type: wine.type || '',
+      // The colour of a sparkling/dessert/fortified wine, when recorded — so a
+      // sparkling rosé survives an export → import round-trip as one.
+      ...(wine.colour ? { colour: wine.colour } : {}),
       // Grape varieties (names only) so the importer can reconstruct them via
       // findOrCreateGrapes on a cross-instance migration — otherwise every
       // auto-created wine lands with an empty grape list.

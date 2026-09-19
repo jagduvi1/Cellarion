@@ -949,7 +949,7 @@ router.post('/ai-info', requireAuth, aiBurstLimiter, asyncHandler(async (req, re
 
 // GET /api/wines/:idOrSlug/public — Public wine detail (no auth required)
 // Accepts both ObjectId and slug. Used for shared links and social previews.
-const PUBLIC_PROJECTION = 'name producer slug country region appellation grapes type image communityRating classification aiProfile canary';
+const PUBLIC_PROJECTION = 'name producer slug country region appellation grapes type colour image communityRating classification aiProfile canary';
 
 // Anti-enumeration limit for the ONE wine endpoint that needs no account.
 //

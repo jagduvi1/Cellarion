@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import Modal from './Modal';
 import WineImage from './WineImage';
 import { adminGetWine, adminSaveWine, adminMergeCluster } from '../api/admin';
+import { swatchType } from '../utils/wineColour';
 import './WineModalThumbs.css';
 
 /**
@@ -210,13 +211,13 @@ function WineClusterCompareModal({ cluster, apiFetch, onClose, onMerged }) {
                     <button type="button" onClick={() => pickWine('image', id)} disabled={merging}
                       title={w.image ? (isPicked ? 'Surviving photo' : 'Keep this photo') : 'No photo'}
                       style={{ border: isPicked ? `2px solid ${accent}` : '2px solid transparent', borderRadius: 6, padding: 2, background: 'none', cursor: w.image ? 'pointer' : 'default' }}>
-                      <WineImage image={w.image} alt={w.name} wineType={w.type} className="compare-wine-thumb" placeholder="compare-wine-placeholder" />
+                      <WineImage image={w.image} alt={w.name} wineType={swatchType(w)} className="compare-wine-thumb" placeholder="compare-wine-placeholder" />
                     </button>
                   </td>
                 );
               })}
               <td style={{ ...tdStyle, textAlign: 'center' }}>
-                <WineImage image={(byId[picks.image] || {}).image} alt="result" wineType={keeper?.type} className="compare-wine-thumb" placeholder="compare-wine-placeholder" />
+                <WineImage image={(byId[picks.image] || {}).image} alt="result" wineType={swatchType(keeper)} className="compare-wine-thumb" placeholder="compare-wine-placeholder" />
               </td>
             </tr>
           </tbody>

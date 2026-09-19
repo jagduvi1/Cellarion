@@ -2,6 +2,7 @@ import { useState, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSlotDrag from '../../hooks/useSlotDrag';
 import { isReserved } from '../../utils/reservation';
+import { swatchType } from '../../utils/wineColour';
 import { ReservedRibbon } from './RackRenderer';
 import { cabinetBays, cabinetBayUnits, cabinetRowWidth } from '../../utils/rackLayouts';
 import './ShelfView.css';
@@ -269,7 +270,7 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
           {/* Drag ghost — a floating oval that follows the pointer */}
           {drag && (() => {
             const originSlot = slotMap[drag.from];
-            const wineType = originSlot?.bottle?.wineDefinition?.type || 'red';
+            const wineType = swatchType(originSlot?.bottle?.wineDefinition, 'red');
             const colors = WINE_COLORS[wineType] || WINE_COLORS.red;
             const custom = getSlotStyle && originSlot ? getSlotStyle(originSlot) : null;
             return (
@@ -296,7 +297,7 @@ function BottleOval({ cx, cy, slot, position, disabled, isActive, isHighlight, o
   const { t } = useTranslation();
   const bottle = slot?.bottle;
   const wine = bottle?.wineDefinition;
-  const wineType = wine?.type || 'red';
+  const wineType = swatchType(wine, 'red');
   const colors = bottle ? (WINE_COLORS[wineType] || WINE_COLORS.red) : null;
   const filled = !!bottle;
   // Lens/search style: overrides fill/stroke/text for filled ovals, dims

@@ -32,6 +32,7 @@ const searchService = () => require('./search');
 
 const POPULATE = ['country', 'region', 'grapes'];
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
+const { WINE_COLOURS } = require('../utils/wineColour');
 const PROFILE_FIELDS = ['body', 'tannin', 'acidity', 'sweetness', 'flavors', 'foodPairings', 'description', 'source', 'generatedAt', 'verifiedAt'];
 const REGISTRY_NOTE = 'From the shared registry (cellarion.app)';
 const isId = (v) => /^[a-f0-9]{24}$/i.test(String(v || ''));
@@ -193,6 +194,11 @@ function identityFields(w, tax) {
     appellation: w.appellation || null,
     classification: w.classification || null,
     ...(WINE_TYPES.includes(w.type) ? { type: w.type } : {}),
+    // Only when the registry SAYS something about colour: an older registry
+    // sends no key at all, and that must not clear a colour held here.
+    ...(w && Object.prototype.hasOwnProperty.call(w, 'colour')
+      ? { colour: WINE_COLOURS.includes(w.colour) ? w.colour : null }
+      : {}),
     ...(tax.country ? { country: tax.country._id } : {}),
     region: tax.region ? tax.region._id : null,
     grapes: tax.grapes,

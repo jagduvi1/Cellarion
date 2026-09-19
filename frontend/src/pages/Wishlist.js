@@ -6,6 +6,7 @@ import { getWishlist, updateWishlistItem, removeWishlistItem } from '../api/wish
 import Modal from '../components/Modal';
 import './AddBottle.css';
 import WineImage from '../components/WineImage';
+import { swatchType } from '../utils/wineColour';
 import './Wishlist.css';
 
 const PRIORITY_KEYS = { high: 'wishlist.priorityHigh', medium: 'wishlist.priorityMedium', low: 'wishlist.priorityLow' };
@@ -164,7 +165,7 @@ function Wishlist() {
   };
 
   const wineImage = (wd) => (
-    <WineImage image={wd?.image} alt={wd?.name} className="wishlist-wine-img" wineType={wd?.type} placeholder="wishlist-wine-placeholder" />
+    <WineImage image={wd?.image} alt={wd?.name} className="wishlist-wine-img" wineType={swatchType(wd)} placeholder="wishlist-wine-placeholder" />
   );
 
   return (

@@ -404,7 +404,7 @@ async function resolveWine(item, userId, cache, result, demoMode = false) {
       // of being minted as "Chardonnay — Chardonnay". Demo mode is matchOnly,
       // so it never reaches the mint and can't create pending rows either.
       { name, producer, country: item.country, region: item.region,
-        appellation: item.appellation, type: item.type,
+        appellation: item.appellation, type: item.type, colour: item.colour,
         grapes: Array.isArray(item.grapes) ? item.grapes : [] },
       userId,
       // demo: match existing only; else match >= 0.95 or create. allowPending:

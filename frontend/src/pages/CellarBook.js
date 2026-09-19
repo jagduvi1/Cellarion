@@ -9,6 +9,7 @@ import { formatRating } from '../utils/ratingUtils';
 import PrintRackMap from '../components/racks/PrintRackMap';
 import CellarNav from '../components/CellarNav';
 import CellarPageHeader from '../components/CellarPageHeader';
+import { swatchType, wineTypeLabel } from '../utils/wineColour';
 import './CellarBook.css';
 
 // The cellar bottles endpoint caps page size at 200 — loop until we have
@@ -204,8 +205,8 @@ function BottleTable({ entries, t }) {
               </td>
               <td className="cb-col-vintage">{bottle?.vintage || 'NV'}</td>
               <td className="cb-col-type">
-                {type && <span className={`cb-type-dot type-${type}`} aria-hidden="true" />}
-                {type ? t(`statistics.typeLabels.${type}`, type) : '—'}
+                {type && <span className={`cb-type-dot type-${swatchType(wine)}`} aria-hidden="true" />}
+                {type ? wineTypeLabel(wine, t) : '—'}
               </td>
               <td className="cb-col-rating">
                 {bottle?.rating != null ? formatRating(bottle.rating, bottle.ratingScale || '5') : '—'}

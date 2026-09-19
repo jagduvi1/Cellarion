@@ -41,6 +41,7 @@ const { findOrCreateRegion } = require('../../services/findOrCreateWine');
 // Same helpers the somm's own set_wine_profile writes through, so an approved
 // proposal and a direct curator edit resolve varieties identically.
 const { WINE_TYPES, resolveGrapeIdsStrict } = require('../../services/wineProfileOps');
+const { WINE_COLOURS, isStyleType } = require('../../utils/wineColour');
 const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const { performWineMerge } = require('./wines');
 const { generateWineKey, normalizeAppellation, normalizeString, resolveCountryName, resolveGrapeName } = require('../../utils/normalize');
@@ -59,7 +60,7 @@ const PROPOSAL_STATUSES = ['pending', 'approved', 'rejected'];
 // `grapes` is deliberately NOT here: it is a LIST, and the diff/drift shape
 // this list feeds is string-to-string. It is rendered by joining the names,
 // alongside these, in the diff builder below.
-const IDENTITY_FIELDS = ['producer', 'name', 'appellation', 'region', 'country', 'classification', 'type'];
+const IDENTITY_FIELDS = ['producer', 'name', 'appellation', 'region', 'country', 'classification', 'type', 'colour'];
 
 /** Grape names for display in a diff row — the same join both sides use. */
 const grapeLabel = (names) => (Array.isArray(names) && names.length ? names.join(', ') : null);
@@ -76,6 +77,7 @@ const liveIdentity = (wine) => ({
   country: wine.country?.name || null,
   classification: wine.classification || null,
   type: wine.type || null,
+  colour: wine.colour || null,
   // Populated when the caller asked for it; a bare id array joins to nothing
   // and the row simply reads "—", which is honest for an unpopulated read.
   grapes: grapeLabel((wine.grapes || []).map((g) => g && g.name).filter(Boolean)),
@@ -115,7 +117,7 @@ router.get('/', async (req, res) => {
       { path: 'proposer', select: 'username' },
       {
         path: 'wineDefinition',
-        select: 'name producer appellation classification type nonWine country region grapes',
+        select: 'name producer appellation classification type colour nonWine country region grapes',
         populate: [
           { path: 'country', select: 'name' },
           { path: 'region', select: 'name' },
@@ -335,6 +337,23 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false } =
           }
           wine.type = pf.type;
           applied.push('type');
+        }
+
+        // Colour is judged against the type the wine has NOW (after any type
+        // in this same proposal): on a red/white/rosé wine the type already is
+        // the colour, and the model hook would drop it anyway — say so rather
+        // than report a field as applied that was not stored.
+        if (pf.colour) {
+          if (!WINE_COLOURS.includes(pf.colour)) {
+            await revertClaim();
+            return { status: 400, body: { error: `Unknown colour "${pf.colour}" — must be one of: ${WINE_COLOURS.join(', ')}` } };
+          }
+          if (isStyleType(wine.type)) {
+            wine.colour = pf.colour;
+            applied.push('colour');
+          } else {
+            applied.push('colour (skipped — only sparkling, dessert and fortified wines carry one)');
+          }
         }
 
         // Grapes resolve against LIVE taxonomy at approval, not at filing: a

@@ -7,6 +7,7 @@ import {
   getDisplayDims, buildScaledLayout, getGridDoubleRows, getCabinetGeometry,
 } from '../../utils/roomConstants';
 import { getTotalSlots, getModularTotalSlots, DOUBLE_ROW_HEADROOM, cabinetRowWidth, cabinetBayUnits } from '../../utils/rackLayouts';
+import { swatchType } from '../../utils/wineColour';
 import { CabinetBody, CabinetDoor, CabinetShelfPlank, CABINET_COLORS } from './CabinetParts';
 
 // ── Bright, visible wine colors by type ──────────────────
@@ -624,7 +625,7 @@ function PullOutShelfRow({
       {rowSlots.map(({ position: pos, x, y, z = 0, bottleZ, isBack, flipNeck }) => {
         const slot = slotMap[pos];
         const filled = !!slot;
-        const wineType = slot?.bottle?.wineDefinition?.type || 'red';
+        const wineType = swatchType(slot?.bottle?.wineDefinition, 'red');
         const finalBottleZ = bottleZ !== undefined ? bottleZ : (-0.08 + z);
         if (!filled && disabledSet?.has(pos)) {
           return <DisabledSlotDisc key={pos} position={[x, y, z]} isBack={isBack} />;
@@ -1165,7 +1166,7 @@ export default function RackMesh({
         slotPositions.map(({ position: pos, x, y, z = 0, bottleZ, isBack, flipNeck }) => {
           const slot = slotMap[pos];
           const filled = !!slot;
-          const wineType = slot?.bottle?.wineDefinition?.type || 'red';
+          const wineType = swatchType(slot?.bottle?.wineDefinition, 'red');
           const finalBottleZ = bottleZ !== undefined ? bottleZ : (-0.08 + z);
           if (!filled && disabledSet.has(pos)) {
             return (

@@ -25,6 +25,7 @@ import GrapePicker from '../components/GrapePicker';
 import ImageUpload from '../components/ImageUpload';
 import ImageGallery from '../components/ImageGallery';
 import { getWineImageUrl } from '../utils/wineImageUrl';
+import { WINE_COLOURS, isStyleType, recordedColour, colourLabel } from '../utils/wineColour';
 import './AdminWines.css';
 
 const emptyForm = {
@@ -33,6 +34,7 @@ const emptyForm = {
   country: '',
   region: '',
   type: 'red',
+  colour: '',
   appellation: '',
   grapes: [],
 };
@@ -297,6 +299,7 @@ function AdminWines() {
           country: countryId,
           region: regionId,
           type: w.type || 'red',
+          colour: recordedColour(w) || '',
           appellation: w.appellation || '',
           grapes: (w.grapes || []).map(g => g._id || g),
         });
@@ -329,6 +332,8 @@ function AdminWines() {
         country: formData.country,
         region: formData.region || null,
         type: formData.type,
+        // Only a sparkling/dessert/fortified wine keeps one ('' clears it).
+        colour: isStyleType(formData.type) ? (formData.colour || null) : null,
         appellation: formData.appellation.trim() || null,
         grapes: formData.grapes,
         // Only meaningful on create: skips the server-side duplicate probe
@@ -643,13 +648,32 @@ function AdminWines() {
                 <label>{t('admin.wines.typeLabel')}</label>
                 <select
                   value={formData.type}
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    type: e.target.value,
+                    ...(isStyleType(e.target.value) ? {} : { colour: '' }),
+                  })}
                 >
                   {WINE_TYPES.map(type => (
                     <option key={type} value={type}>{type}</option>
                   ))}
                 </select>
               </div>
+              {isStyleType(formData.type) && (
+                <div className="form-group">
+                  <label htmlFor="admin-wine-colour">{t('wineColour.label', 'Colour')}</label>
+                  <select
+                    id="admin-wine-colour"
+                    value={formData.colour}
+                    onChange={(e) => setFormData({ ...formData, colour: e.target.value })}
+                  >
+                    <option value="">{t('wineColour.notStated', 'Not stated')}</option>
+                    {WINE_COLOURS.map(c => (
+                      <option key={c} value={c}>{colourLabel(c, t)}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="form-group">
                 <label>{t('admin.wines.appellationLabel')}</label>
                 <select

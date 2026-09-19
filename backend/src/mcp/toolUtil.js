@@ -100,6 +100,9 @@ function wineSummary(wd) {
     name: wd.name,
     producer: wd.producer || null,
     type: wd.type || null,
+    // Only a sparkling/dessert/fortified wine carries one (utils/wineColour) —
+    // included when set, so the common still wine pays nothing for it.
+    ...(wd.colour ? { colour: wd.colour } : {}),
     country: wd.country?.name || null,
     region: wd.region?.name || null,
     appellation: wd.appellation || null,
@@ -119,6 +122,7 @@ function bottleSummary(b) {
     wine: b.wineDefinition
       ? {
           name: b.wineDefinition.name, producer: b.wineDefinition.producer || null, type: b.wineDefinition.type || null,
+          ...(b.wineDefinition.colour ? { colour: b.wineDefinition.colour } : {}),
           // The user's private draft wine (publish_wine to share it).
           ...(b.wineDefinition.draft === true ? { draft: true } : {}),
         }

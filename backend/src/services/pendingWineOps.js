@@ -40,12 +40,13 @@ const { DRAFT_EXCLUDED } = require('./wineVisibility');
 // utils/normalize, so the curation queue keeps its light module tree.
 const { resolveCanonicalAppellation } = require('./appellationResolve');
 const { resolveGrapeIdsStrict, GRAPES_MAX, GRAPE_NAME_MAX, WINE_TYPES } = require('./wineProfileOps');
+const { WINE_COLOURS } = require('../utils/wineColour');
 
 // Fields a curator may set. `producer` and `name` are the two that promote the
 // row; the rest ride along so one pass can fix everything the misread label
 // got wrong. Deliberately NOT here: type-only/profile fields (set_wine_profile
 // owns those), nonWine (a quarantine proposal), and anything about the bottle.
-const FIXABLE_FIELDS = ['producer', 'name', 'appellation', 'regionName', 'countryName', 'grapeNames', 'type', 'identityUnavailable'];
+const FIXABLE_FIELDS = ['producer', 'name', 'appellation', 'regionName', 'countryName', 'grapeNames', 'type', 'colour', 'identityUnavailable'];
 /**
  * Not a field — an explicit, audited OVERRIDE of the cross-field refusal below.
  *
@@ -253,6 +254,17 @@ function validatePendingFix(patch) {
       clean.type = patch.type;
       continue;
     }
+    if (field === 'colour') {
+      // The colour of a sparkling/dessert/fortified wine; null or '' clears it.
+      // Whether the type can carry one is the model hook's call — it drops the
+      // value on a red/white/rosé wine, whose type already is the colour.
+      const c = patch.colour;
+      if (c !== null && c !== '' && !WINE_COLOURS.includes(c)) {
+        return { ok: false, error: `colour must be one of: ${WINE_COLOURS.join(', ')} (or null to clear)` };
+      }
+      clean.colour = c || null;
+      continue;
+    }
     if (field === 'identityUnavailable') {
       // A disposition, not a value — strictly boolean so `false` (the UNDO)
       // survives the loop instead of being read as "unset".
@@ -349,6 +361,7 @@ async function applyPendingFix(wine, clean, userId) {
       : null;
   }
   if (clean.type) wine.type = clean.type;
+  if (clean.colour !== undefined) wine.colour = clean.colour;
 
   let countryDoc = null;
   if (clean.countryName !== undefined && clean.countryName) {

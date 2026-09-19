@@ -42,6 +42,7 @@ const { originFrom } = require('../utils/contributionOrigin');
 const { findVisibleWine } = require('./wineVisibility');
 const { stripHtml } = require('../utils/sanitize');
 const { isValidId } = require('../utils/validation');
+const { WINE_COLOURS, isStyleType } = require('../utils/wineColour');
 
 const { TIER_DAILY, checkContributionGate } = require('./contributionGate');
 
@@ -52,7 +53,9 @@ const FIELDS = ['producer', 'name', 'appellation', 'region', 'country', 'classif
 // `type` is validated against the wine-type enum; `grapes` REPLACES the whole
 // variety list and every name must already exist in the taxonomy — resolved
 // at filing so the user learns about a typo now, and again at approval.
-const EXTRA_FIELDS = ['type', 'grapes'];
+// `colour` (support ticket 2026-09-17) is the colour of a sparkling, dessert or
+// fortified wine — refused on a wine the suggestion leaves red/white/rosé.
+const EXTRA_FIELDS = ['type', 'colour', 'grapes'];
 // Not a field but a MODIFIER of `grapes` (support ticket 2026-09-17): the names
 // in the grape list the caller asserts are genuinely missing from the taxonomy.
 // It rides inside `fields` so every transport that forwards `fields` verbatim
@@ -129,6 +132,13 @@ async function createFieldCorrection(userId, { wineId, fields, reason, evidenceU
     }
     proposedFields.type = t;
   }
+  if (src.colour !== undefined && src.colour !== null) {
+    const c = String(src.colour).trim().toLowerCase();
+    if (!WINE_COLOURS.includes(c)) {
+      return fail('invalid', `colour must be one of ${WINE_COLOURS.join(', ')}.`);
+    }
+    proposedFields.colour = c;
+  }
   if (src.grapes !== undefined && src.grapes !== null) {
     if (!Array.isArray(src.grapes) || src.grapes.length === 0 || src.grapes.length > GRAPES_MAX) {
       return fail('invalid', `grapes must be a list of 1 to ${GRAPES_MAX} variety names — the complete corrected list, since it replaces the current one.`);
@@ -172,6 +182,21 @@ async function createFieldCorrection(userId, { wineId, fields, reason, evidenceU
   });
   if (!wine) return fail('not_found', 'Wine not found');
 
+  // A colour only means something on a style type — judged against the type
+  // this suggestion leaves the wine with: its own type field, else the type in
+  // the caller's pending suggestion it is amending, else the stored one.
+  if (proposedFields.colour) {
+    const typeAfter = proposedFields.type
+      || (amending ? plain(existing.proposedFields)?.type : null)
+      || wine.type
+      || null;
+    if (!isStyleType(typeAfter)) {
+      return fail('invalid',
+        `A colour only applies to sparkling, dessert and fortified wines — this wine is ${typeAfter ? `typed ${typeAfter}` : 'not typed yet'}. ` +
+        'If the type is wrong, suggest the type in the same suggestion.');
+    }
+  }
+
   const currentSnapshot = {
     producer: wine.producer || null,
     name: wine.name || null,
@@ -180,6 +205,7 @@ async function createFieldCorrection(userId, { wineId, fields, reason, evidenceU
     country: wine.country?.name || null,
     classification: wine.classification || null,
     type: wine.type || null,
+    colour: wine.colour || null,
     // Joined names, the shape the admin diff compares against (its liveIdentity
     // and the somm path both join) — an array here rendered as permanent drift.
     grapes: (wine.grapes || []).map((g) => (g && g.name) || String(g)).filter(Boolean).join(', ') || null,

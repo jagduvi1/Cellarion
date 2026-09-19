@@ -34,6 +34,7 @@ import CellarPageHeader from '../components/CellarPageHeader';
 import DialogBox from '../components/DialogBox';
 import EditRackModal from '../components/racks/EditRackModal';
 import { groupRacks, groupNames } from '../utils/rackGroups';
+import { swatchType, wineTypeLabel } from '../utils/wineColour';
 import './CellarRacks.css';
 
 function CellarRacks() {
@@ -1807,7 +1808,7 @@ function EmptySlotContent({ position, zone, apiFetch, cellarId, canEdit, onAssig
               role="button"
               tabIndex={0}
             >
-              <span className={`slot-bottle-type-dot type-${g.sample.wineDefinition?.type || 'red'}`} aria-hidden="true" />
+              <span className={`slot-bottle-type-dot type-${swatchType(g.sample.wineDefinition, 'red')}`} aria-hidden="true" />
               <div className="slot-bottle-info">
                 <strong>
                   {g.sample.wineDefinition?.name || t('common.unknown')}
@@ -1896,8 +1897,8 @@ function FilledSlotContent({ position, slot, zone, canEdit, onRemoveFromRack, on
           <h4>{wine?.name || t('common.unknown')}</h4>
           {wine?.producer && <p className="slot-detail-producer">{wine.producer}</p>}
           <p className="slot-detail-meta">
-            <span className={`slot-bottle-type-dot type-${wine?.type || 'red'}`} />
-            {wine?.type} &middot; {bottle?.vintage}
+            <span className={`slot-bottle-type-dot type-${swatchType(wine, 'red')}`} />
+            {wineTypeLabel(wine, t)} &middot; {bottle?.vintage}
           </p>
           {wine?.country?.name && (
             <p className="slot-detail-meta">

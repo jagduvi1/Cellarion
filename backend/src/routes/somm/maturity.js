@@ -52,7 +52,7 @@ router.get('/', requireSommOrAdmin, async (req, res) => {
           // around it silently and the bad data survives. appellation feeds
           // the same judgement (a Vintage Port's style follows from Porto).
           path: 'wineDefinition',
-          select: 'name producer type image country region appellation aiProfile',
+          select: 'name producer type colour image country region appellation aiProfile',
           populate: [
             { path: 'country', select: 'name' },
             { path: 'region', select: 'name' }
@@ -169,7 +169,7 @@ router.put('/:id', requireSommOrAdmin, async (req, res) => {
     await profile.populate([
       {
         path: 'wineDefinition',
-        select: 'name producer type image country region',
+        select: 'name producer type colour image country region',
         populate: [
           { path: 'country', select: 'name' },
           { path: 'region', select: 'name' }

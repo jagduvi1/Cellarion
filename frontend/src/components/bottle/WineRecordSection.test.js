@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 
 vi.mock('../../api/wineProposals', () => ({
   createWineProposal: vi.fn(),
@@ -495,9 +495,105 @@ describe('audit 2026-09-18', () => {
     fireEvent.keyDown(screen.getByRole('radiogroup'), { key: 'ArrowRight' });
     expect(screen.getByRole('radio', { name: 'Red' })).toHaveAttribute('aria-checked', 'true');
     fireEvent.keyDown(screen.getByRole('radiogroup'), { key: 'ArrowLeft' });
-    // Wraps to the last choice, which becomes the only tab stop.
-    expect(screen.getByRole('radio', { name: 'Fortified' })).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getAllByRole('radio').filter((r) => r.tabIndex === 0)).toHaveLength(1);
-    expect(screen.getByRole('radio', { name: 'Fortified' })).toHaveFocus();
+    // Wraps to the last choice, which becomes the TYPE group's only tab stop
+    // (Fortified is a style, so the colour group opens with a stop of its own).
+    const typeGroup = screen.getByRole('radiogroup', { name: 'Should be' });
+    expect(within(typeGroup).getByRole('radio', { name: 'Fortified' })).toHaveAttribute('aria-checked', 'true');
+    expect(within(typeGroup).getAllByRole('radio').filter((r) => r.tabIndex === 0)).toHaveLength(1);
+    expect(within(typeGroup).getByRole('radio', { name: 'Fortified' })).toHaveFocus();
+  });
+});
+
+// Support ticket 2026-09-17 ("Colour Sparkling/Rosè"): sparkling, dessert and
+// fortified say nothing about colour, so the record carries one for them.
+describe('colour of a sparkling, dessert or fortified wine', () => {
+  const SPARKLING = { ...WINE, _id: 'w-mm', producer: 'Maso Martis', name: 'Rosé Extra Brut', type: 'sparkling', colour: null };
+
+  test('the Type row reads as one phrase when a colour is recorded', async () => {
+    renderSection({ wine: { ...SPARKLING, colour: 'rosé' } });
+    await screen.findAllByText('not recorded');
+    expect(screen.getByText('Sparkling rosé')).toBeInTheDocument();
+  });
+
+  test('a colour on a red/white/rosé wine is ignored — the type already is the colour', async () => {
+    renderSection({ wine: { ...WINE, colour: 'rosé' } });
+    await screen.findAllByText('not recorded');
+    expect(screen.getByText('White')).toBeInTheDocument();
+    expect(screen.queryByText(/Sparkling/)).not.toBeInTheDocument();
+  });
+
+  test('fixing only the colour of a sparkling wine is one tap, and sends only the colour', async () => {
+    createWineProposal.mockResolvedValue(ok({ proposal: { _id: 'p1', status: 'pending' } }));
+    renderSection({ wine: SPARKLING });
+    await screen.findAllByText('not recorded');
+    enterSuggestMode();
+    fireEvent.click(screen.getByLabelText('Suggest a fix for Type'));
+    await screen.findByText('Suggest a fix: Type');
+    // Opens on its own type, with the colour question already showing.
+    expect(screen.getByRole('radio', { name: 'Sparkling' })).toHaveAttribute('aria-checked', 'true');
+    const colourGroup = screen.getByRole('radiogroup', { name: 'Colour' });
+    // Nothing changed yet → nothing to send.
+    fireEvent.change(screen.getByLabelText('How do you know?'), { target: { value: 'The label says Rosé Extra Brut.' } });
+    expect(screen.getByText('Send suggestion')).toBeDisabled();
+
+    fireEvent.click(within(colourGroup).getByRole('radio', { name: 'Rosé' }));
+    fireEvent.click(screen.getByText('Send suggestion'));
+    await waitFor(() => expect(createWineProposal).toHaveBeenCalledWith(expect.any(Function), {
+      wineId: 'w-mm',
+      fields: { colour: 'rosé' },
+      reason: 'The label says Rosé Extra Brut.',
+    }));
+    // Pending on the Type row, in the words the reader will see once approved.
+    expect(await screen.findByText('Sparkling rosé')).toBeInTheDocument();
+    expect(screen.getByText('suggestion pending')).toBeInTheDocument();
+  });
+
+  test('retyping a still rosé as sparkling can carry its colour in the same suggestion', async () => {
+    createWineProposal.mockResolvedValue(ok({ proposal: { _id: 'p2', status: 'pending' } }));
+    renderSection({ wine: { ...WINE, type: 'rosé' } });
+    await screen.findAllByText('not recorded');
+    enterSuggestMode();
+    fireEvent.click(screen.getByLabelText('Suggest a fix for Type'));
+    await screen.findByText('Suggest a fix: Type');
+    // A still type opens with nothing chosen and no colour question.
+    expect(screen.queryByRole('radiogroup', { name: 'Colour' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: 'Sparkling' }));
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Colour' })).getByRole('radio', { name: 'Rosé' }));
+    fireEvent.change(screen.getByLabelText('How do you know?'), { target: { value: 'Metodo classico, Trento DOC.' } });
+    fireEvent.click(screen.getByText('Send suggestion'));
+    await waitFor(() => expect(createWineProposal).toHaveBeenCalledWith(expect.any(Function), {
+      wineId: 'w1',
+      fields: { type: 'sparkling', colour: 'rosé' },
+      reason: 'Metodo classico, Trento DOC.',
+    }));
+  });
+
+  test('choosing a type that is itself a colour drops the colour question and any choice in it', async () => {
+    createWineProposal.mockResolvedValue(ok({ proposal: { _id: 'p3', status: 'pending' } }));
+    renderSection({ wine: { ...SPARKLING, colour: 'rosé' } });
+    await screen.findAllByText('not recorded');
+    enterSuggestMode();
+    fireEvent.click(screen.getByLabelText('Suggest a fix for Type'));
+    await screen.findByText('Suggest a fix: Type');
+    // "Rosé" is both a type and a colour here — the TYPE one.
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Should be' })).getByRole('radio', { name: 'Rosé' }));
+    expect(screen.queryByRole('radiogroup', { name: 'Colour' })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('How do you know?'), { target: { value: 'It is a still rosé, not a fizz.' } });
+    fireEvent.click(screen.getByText('Send suggestion'));
+    await waitFor(() => expect(createWineProposal).toHaveBeenCalledWith(expect.any(Function), {
+      wineId: 'w-mm',
+      fields: { type: 'rosé' },
+      reason: 'It is a still rosé, not a fizz.',
+    }));
+  });
+
+  test('my pending colour-only suggestion shows on the Type row', async () => {
+    getMyWineProposals.mockResolvedValue(ok({
+      proposals: [{ status: 'pending', proposedFields: { colour: 'rosé' } }],
+      pending: { mine: true, fields: ['colour'] },
+    }));
+    renderSection({ wine: SPARKLING });
+    expect(await screen.findByText('Sparkling rosé')).toBeInTheDocument();
+    expect(screen.getByText('suggestion pending')).toBeInTheDocument();
   });
 });

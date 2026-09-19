@@ -14,6 +14,7 @@ const {
 } = require('../../utils/normalize');
 const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const { validateImageRef } = require('../../services/accountOps');
+const { WINE_COLOURS } = require('../../utils/wineColour');
 const { scoreWineMatch } = require('../../services/wineMatching');
 const { conflictingStyleTerms } = require('../../utils/styleTerms');
 const { sameProducerAppellationGroups, nearProducerPairs, nameSubsetPairs } = require('../../services/registryFragmentation');
@@ -171,10 +172,13 @@ router.get('/', async (req, res) => {
 // "create anyway".
 router.post('/', async (req, res) => {
   try {
-    const { name, producer, country, region, appellation, grapes, type, image, confirmCreate } = req.body;
+    const { name, producer, country, region, appellation, grapes, type, colour, image, confirmCreate } = req.body;
 
     if (!name || !producer || !country) {
       return res.status(400).json({ error: 'Name, producer, and country are required' });
+    }
+    if (colour != null && colour !== '' && !WINE_COLOURS.includes(colour)) {
+      return res.status(400).json({ error: `Colour must be one of: ${WINE_COLOURS.join(', ')}` });
     }
     if (typeof name !== 'string' || typeof producer !== 'string') {
       return res.status(400).json({ error: 'Name and producer must be strings' });
@@ -265,6 +269,9 @@ router.post('/', async (req, res) => {
       classification: pradikatSplit.classification || undefined,
       grapes: grapes || [],
       type: type || null, // no guessed red (ticket 6a85ad44)
+      // Kept only on a sparkling/dessert/fortified wine — the model hook drops
+      // it otherwise, and fills it from a rosé name when none is given.
+      colour: colour || null,
       image: image || null,
       normalizedKey,
       createdBy: req.user.id,
@@ -1437,12 +1444,15 @@ router.get('/:id', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    const { name, producer, country, region, appellation, grapes, type, image } = req.body;
+    const { name, producer, country, region, appellation, grapes, type, colour, image } = req.body;
 
     const wine = await WineDefinition.findById(req.params.id);
     // A private draft is not registry content, not even to an admin (draft design 2026-09-12).
     if (!wine || wine.draft === true) {
       return res.status(404).json({ error: 'Wine not found' });
+    }
+    if (colour != null && colour !== '' && !WINE_COLOURS.includes(colour)) {
+      return res.status(400).json({ error: `Colour must be one of: ${WINE_COLOURS.join(', ')}` });
     }
 
     // Snapshot the profile-feeding fields BEFORE any mutation — the re-enrich
@@ -1461,6 +1471,9 @@ router.put('/:id', async (req, res) => {
     }
     if (grapes !== undefined) wine.grapes = grapes;
     if (type) wine.type = type;
+    // Absent = leave alone; '' or null = clear. The model hook drops it again
+    // if the (possibly new) type is itself a colour.
+    if (colour !== undefined) wine.colour = colour || null;
 
     // Image handling. When the admin clears the default image, look for an
     // approved+public gallery image to promote in its place — otherwise the

@@ -3,6 +3,7 @@ import Modal from './Modal';
 import WineImage from './WineImage';
 import WineClusterCompareModal from './WineClusterCompareModal';
 import { adminGetWineDuplicateClusters, adminMergeWine, adminDismissDuplicateCluster, adminUndismissDuplicateCluster } from '../api/admin';
+import { swatchType } from '../utils/wineColour';
 import './WineModalThumbs.css';
 
 /**
@@ -281,7 +282,7 @@ function ClusterCard({ cluster, apiFetch, onMerged, onOpenCompare, onDismiss }) 
                 title="Keep this wine"
               />
               <div style={{ width: 36, height: 48, flexShrink: 0 }}>
-                <WineImage image={wine.image} alt={wine.name} wineType={wine.type} className="dup-wine-thumb" />
+                <WineImage image={wine.image} alt={wine.name} wineType={swatchType(wine)} className="dup-wine-thumb" />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 600 }}>{wine.name}</div>

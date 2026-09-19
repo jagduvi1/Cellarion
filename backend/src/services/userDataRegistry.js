@@ -1180,7 +1180,7 @@ const REGISTRY = [
     exportFragment: async (ctx) => ({
       draftWines: markTrunc(ctx, 'draftWines',
         await WineDefinition.find({ createdBy: ctx.userId, draft: true })
-          .select('name producer appellation classification type country region grapes createdAt draftExpiresAt createdVia')
+          .select('name producer appellation classification type colour country region grapes createdAt draftExpiresAt createdVia')
           .populate([{ path: 'country', select: 'name' }, { path: 'region', select: 'name' }, { path: 'grapes', select: 'name' }])
           .limit(EXPORT_MAX).lean())
         .map((w) => ({
@@ -1189,6 +1189,7 @@ const REGISTRY = [
           appellation: w.appellation || null,
           classification: w.classification || null,
           type: w.type || null,
+          colour: w.colour || null,
           country: w.country?.name || null,
           region: w.region?.name || null,
           grapes: (w.grapes || []).map((g) => g?.name).filter(Boolean),

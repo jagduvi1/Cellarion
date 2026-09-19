@@ -244,6 +244,9 @@ async function resolveOrMintWine(newWine, req, { allowPending = true } = {}) {
         // legitimate slot for it and it landed in the NAME (ticket 6a8162c5).
         classification: newWine.classification,
         type: newWine.type,
+        // The colour of a sparkling/dessert/fortified wine, when the form
+        // states one; findOrCreateWine keeps only a valid value.
+        colour: newWine.colour,
         grapes: newWine.grapes || [],
       },
       req.user.id,

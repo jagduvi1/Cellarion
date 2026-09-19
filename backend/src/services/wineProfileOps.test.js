@@ -317,3 +317,44 @@ describe('snapshot / restore (the undo_last contract)', () => {
     expect(wine.grapes).toEqual(['g-1']);
   });
 });
+
+// Support ticket 2026-09-17 ("Colour Sparkling/Rosè"): the colour of a
+// sparkling/dessert/fortified wine is a record field beside type and grapes.
+describe('colour (record field)', () => {
+  test('validates against red/white/rosé; null clears it', () => {
+    expect(validateProfilePatch({ colour: 'rosé' })).toEqual({ ok: true, clean: { colour: 'rosé' } });
+    expect(validateProfilePatch({ colour: null })).toEqual({ ok: true, clean: { colour: null } });
+    const bad = validateProfilePatch({ colour: 'orange' });
+    expect(bad.ok).toBe(false);
+    expect(bad.error).toMatch(/colour must be one of: red, white, rosé/);
+  });
+
+  test('is applied beside type without touching the tasting profile\'s provenance', () => {
+    const wine = fakeWine({ source: 'ai', description: 'x' });
+    wine.type = 'white';
+    applyProfilePatch(wine, { type: 'sparkling', colour: 'rosé' }, 'user-1');
+    expect(wine.type).toBe('sparkling');
+    expect(wine.colour).toBe('rosé');
+    expect(wine.aiProfile.source).toBe('ai');
+    expect(wine.profileReviewedAt).toBeNull();
+  });
+
+  test('round-trips through snapshot/restore', () => {
+    const wine = fakeWine({ source: 'ai' });
+    wine.type = 'sparkling';
+    wine.colour = null;
+    const snap = snapshotProfile(wine);
+    expect(snap.colour).toBeNull();
+    applyProfilePatch(wine, { colour: 'rosé' }, 'user-1');
+    restoreProfile(wine, snap);
+    expect(wine.colour).toBeNull();
+  });
+
+  test('a snapshot from before colour existed leaves the colour alone', () => {
+    const wine = fakeWine({ source: 'ai' });
+    wine.type = 'sparkling';
+    wine.colour = 'rosé';
+    restoreProfile(wine, { description: 'y', source: 'ai', type: 'sparkling', grapes: [] });
+    expect(wine.colour).toBe('rosé');
+  });
+});

@@ -6,6 +6,7 @@ import { fetchRates, convertAmountHistorical } from '../utils/currency';
 import { declinePriceTrackingRequest } from '../api/somm';
 import WineImage from '../components/WineImage';
 import timeAgo from '../utils/timeAgo';
+import { swatchType } from '../utils/wineColour';
 import './SommPrices.css';
 
 // Mirror of the backend minimum (routes/somm/prices.js DECLINE_REASON_MIN) —
@@ -203,7 +204,7 @@ function PriceCard({ item, defaultCurrency, userCurrency, rates, onSaved }) {
       {/* ── Header ── */}
       <div className="somm-card-header" role="button" tabIndex={0} onClick={() => setExpanded(o => !o)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(o => !o); } }}>
         <div className="somm-card-identity">
-          <WineImage image={wine?.image} alt={wine?.name} className="somm-wine-thumb" wineType={wine?.type} placeholder="somm-wine-thumb-placeholder" />
+          <WineImage image={wine?.image} alt={wine?.name} className="somm-wine-thumb" wineType={swatchType(wine)} placeholder="somm-wine-thumb-placeholder" />
           <div>
             <span className="somm-wine-name">{wine?.name || 'Unknown'}</span>
             <span className="somm-wine-meta">

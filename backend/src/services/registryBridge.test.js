@@ -76,6 +76,18 @@ beforeEach(() => {
 });
 
 describe('adoptWine', () => {
+  // Support ticket 2026-09-17: a sparkling rosé arrives as one.
+  test('carries the colour the registry sends; an older registry that sends no colour key clears nothing', async () => {
+    client.fetchWine.mockResolvedValue(registryWine({ type: 'sparkling', colour: 'rosé' }));
+    await bridge.adoptWine(RID, USER);
+    expect(WineDefinition.mock.calls[0][0]).toMatchObject({ type: 'sparkling', colour: 'rosé' });
+
+    WineDefinition.mockClear();
+    client.fetchWine.mockResolvedValue(registryWine());
+    await bridge.adoptWine(RID, USER);
+    expect(WineDefinition.mock.calls[0][0]).not.toHaveProperty('colour');
+  });
+
   test('copies a registry wine as a local wine: computed dedup key, bridge provenance, profile, windows, values, local index', async () => {
     client.fetchWine.mockResolvedValue(registryWine());
     const r = await bridge.adoptWine(RID, USER);

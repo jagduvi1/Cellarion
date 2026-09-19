@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { computeLayout, computeModularLayout, SLOT_RADIUS } from '../../utils/rackLayouts';
+import { swatchType } from '../../utils/wineColour';
 
 // Print-tuned wine-type palette — same hues as the compact rack view, kept
 // saturated so slots stay distinguishable in color print; the position
@@ -83,7 +84,7 @@ export default function PrintRackMap({ rack }) {
             </g>
           );
         }
-        const type = slot.bottle?.wineDefinition?.type || 'red';
+        const type = swatchType(slot.bottle?.wineDefinition, 'red');
         const fill = TYPE_FILLS[type] || TYPE_FILLS.red;
         const textFill = DARK_TEXT_TYPES.has(type) ? '#332B00' : '#fff';
         return (

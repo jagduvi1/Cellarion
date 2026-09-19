@@ -508,6 +508,42 @@ describe('POST /:id/approve', () => {
     expect(revert).toBeTruthy();
   });
 
+  // Support ticket 2026-09-17 ("Colour Sparkling/Rosè"): a colour is judged
+  // against the type the wine has once THIS proposal's own type is applied.
+  test('field_correction: colour applies on a style type — including one the same proposal sets', async () => {
+    claim({ _id: P1, kind: 'field_correction', wineDefinition: W1, proposedFields: { type: 'sparkling', colour: 'rosé' } });
+    const wine = { _id: W1, name: 'Rosé Extra Brut', producer: 'Maso Martis', appellation: 'Trento', type: 'rosé', country: 'c1', save: jest.fn().mockResolvedValue(undefined) };
+    WineDefinition.findById.mockResolvedValue(wine);
+
+    const res = await post(`/${P1}/approve`);
+    expect(res.status).toBe(200);
+    expect(wine.type).toBe('sparkling');
+    expect(wine.colour).toBe('rosé');
+    expect((await res.json()).appliedNote).toBe('Applied: type, colour');
+  });
+
+  test('field_correction: a colour on a red/white/rosé wine is skipped, and the receipt says so', async () => {
+    claim({ _id: P1, kind: 'field_correction', wineDefinition: W1, proposedFields: { colour: 'rosé' } });
+    const wine = { _id: W1, name: 'Te Koko', producer: 'Cloudy Bay', appellation: null, type: 'white', country: 'c1', save: jest.fn().mockResolvedValue(undefined) };
+    WineDefinition.findById.mockResolvedValue(wine);
+
+    const res = await post(`/${P1}/approve`);
+    expect(res.status).toBe(200);
+    expect(wine.colour).toBeUndefined();
+    expect((await res.json()).appliedNote).toMatch(/colour \(skipped — only sparkling, dessert and fortified/);
+  });
+
+  test('field_correction: an unknown colour → 400 and the claim is reverted', async () => {
+    claim({ _id: P1, kind: 'field_correction', wineDefinition: W1, proposedFields: { colour: 'orange' } });
+    WineDefinition.findById.mockResolvedValue({ _id: W1, name: 'X', producer: 'Y', type: 'sparkling', country: 'c1', save: jest.fn() });
+
+    const res = await post(`/${P1}/approve`);
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/Unknown colour "orange"/);
+    const revert = WineCorrectionProposal.updateOne.mock.calls.find(c => c[1]?.$set?.status === 'pending');
+    expect(revert).toBeTruthy();
+  });
+
   test('merge: invokes the EXTRACTED performWineMerge with source=proposal wine, target=mergeTargetId', async () => {
     claim({ _id: P1, kind: 'merge', wineDefinition: W1, mergeTargetId: W2 });
     performWineMerge.mockResolvedValue({ bottlesMoved: 3, imageAction: 'none', source: {}, target: { name: 'Barolo', producer: 'E. Pira e Figli' } });

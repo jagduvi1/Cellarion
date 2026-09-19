@@ -2,6 +2,7 @@ import { useState, Suspense } from 'react';
 import { lazy } from '../../utils/lazyWithReload';
 import { useTranslation } from 'react-i18next';
 import AuthImage from '../AuthImage';
+import { swatchType } from '../../utils/wineColour';
 
 const ImageGallery = lazy(() => import('../ImageGallery'));
 
@@ -49,7 +50,7 @@ function HeroImage({ bottle, wine, defaultImage, pendingImage, isPending, displa
 
   // No image at all
   return (
-    <div className={`bd-wine-placeholder ${wine?.type || ''}`}>
+    <div className={`bd-wine-placeholder ${swatchType(wine, '')}`}>
       {isPending && (
         <span className="bd-pending-badge">{t('bottleDetail.pendingReview', 'Pending review')}</span>
       )}

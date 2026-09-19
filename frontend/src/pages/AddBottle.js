@@ -17,6 +17,7 @@ import RatingInput from '../components/RatingInput';
 import WineImage from '../components/WineImage';
 import SimilarWinesModal from '../components/SimilarWinesModal';
 import { WINE_TYPES } from '../config/wineTypes';
+import { swatchType, wineTypeLabel, isStyleType, colourLabel, WINE_COLOURS } from '../utils/wineColour';
 import './AddBottle.css';
 
 function AddBottle() {
@@ -619,14 +620,14 @@ function AddBottle() {
   // the local-row renderer keeps its "SAVED wine only" contract.
   const renderRegistryRow = (item) => (
     <div key={`registry-${item.registryId}`} className="wine-row registry-wine-row" onClick={() => handleAdoptRegistry(item)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleAdoptRegistry(item); } }}>
-      <WineImage image={item.image} alt={item.name} className="wine-row-image" wrapClass="wine-row-img-wrap" credit={item.imageCredit} creditClass="wine-row-credit" wineType={item.type} placeholder="wine-row-placeholder" />
+      <WineImage image={item.image} alt={item.name} className="wine-row-image" wrapClass="wine-row-img-wrap" credit={item.imageCredit} creditClass="wine-row-credit" wineType={swatchType(item)} placeholder="wine-row-placeholder" />
       <div className="wine-info">
         <h3>{item.name} <span className="registry-badge">{t('addBottle.registryBadge', 'shared registry')}</span></h3>
         <p className="producer">{item.producer}</p>
         <div className="wine-meta">
           {item.country && <span>{item.country}</span>}
           {item.region && <span>• {item.region}</span>}
-          {item.type && <span className={`wine-type-pill ${item.type}`}>{item.type}</span>}
+          {item.type && <span className={`wine-type-pill ${swatchType(item)}`}>{wineTypeLabel(item, t)}</span>}
         </div>
         {item.grapes?.length > 0 && (
           <p className="wine-grapes">{item.grapes.join(', ')}</p>
@@ -657,14 +658,14 @@ function AddBottle() {
   // list, so the two can never drift. Takes a SAVED wine only.
   const renderWineRow = (wine) => (
     <div key={wine._id} className="wine-row" onClick={() => handleSelectWine(wine)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelectWine(wine); } }}>
-      <WineImage image={wine.image} alt={wine.name} className="wine-row-image" wrapClass="wine-row-img-wrap" credit={wine.imageCredit} creditClass="wine-row-credit" wineType={wine.type} placeholder="wine-row-placeholder" />
+      <WineImage image={wine.image} alt={wine.name} className="wine-row-image" wrapClass="wine-row-img-wrap" credit={wine.imageCredit} creditClass="wine-row-credit" wineType={swatchType(wine)} placeholder="wine-row-placeholder" />
       <div className="wine-info">
         <h3>{wine.name}</h3>
         <p className="producer">{wine.producer}</p>
         <div className="wine-meta">
           <span>{wine.country?.name}</span>
           {wine.region && <span>• {wine.region.name}</span>}
-          <span className={`wine-type-pill ${wine.type}`}>{wine.type}</span>
+          <span className={`wine-type-pill ${swatchType(wine, '')}`}>{wineTypeLabel(wine, t)}</span>
         </div>
         {wine.grapes?.length > 0 && (
           <p className="wine-grapes">{wine.grapes.map(g => g.displayName || g.name).join(', ')}</p>
@@ -994,7 +995,7 @@ function AddBottle() {
                       wrapClass="scan-wine-shot-img-wrap"
                       credit={scanMatchedWine.imageCredit}
                       creditClass="wine-row-credit"
-                      wineType={scanMatchedWine.type}
+                      wineType={swatchType(scanMatchedWine)}
                       placeholder="wine-row-placeholder scan-wine-placeholder"
                     />
                     <figcaption className="scan-wine-shot-caption">{t('addBottle.scanRegistryPhoto')}</figcaption>
@@ -1104,7 +1105,12 @@ function AddBottle() {
                 <div className="form-group">
                   <label>{t('addBottle.scanType')}</label>
                   <select value={pendingWineData.type}
-                    onChange={e => setPendingWineData(p => ({ ...p, type: e.target.value }))}>
+                    onChange={e => setPendingWineData(p => ({
+                      ...p,
+                      type: e.target.value,
+                      // A colour belongs to sparkling/dessert/fortified only.
+                      ...(isStyleType(e.target.value) ? {} : { colour: '' }),
+                    }))}>
                     {/* Unknown is a real answer: the scan and the AI now return
                         null rather than defaulting to red (ticket 6a85ad44), so
                         the form must be able to carry that through instead of
@@ -1113,6 +1119,18 @@ function AddBottle() {
                     {WINE_TYPES.map(wt => <option key={wt} value={wt}>{wt}</option>)}
                   </select>
                 </div>
+                {/* Only where the type does not already say the colour. Left
+                    "not stated", a rosé name ("Brut Rosé") still fills it in. */}
+                {isStyleType(pendingWineData.type) && (
+                  <div className="form-group">
+                    <label htmlFor="new-wine-colour">{t('wineColour.label', 'Colour')}</label>
+                    <select id="new-wine-colour" value={pendingWineData.colour || ''}
+                      onChange={e => setPendingWineData(p => ({ ...p, colour: e.target.value }))}>
+                      <option value="">{t('wineColour.notStated', 'Not stated')}</option>
+                      {WINE_COLOURS.map(c => <option key={c} value={c}>{colourLabel(c, t)}</option>)}
+                    </select>
+                  </div>
+                )}
                 <div className="form-group form-group-full">
                   <label>{t('addBottle.scanGrapes')}</label>
                   <input type="text" value={pendingWineData.grapes}
@@ -1206,7 +1224,7 @@ function AddBottle() {
                       {isRegistryWine ? t('addBottle.aiMatchHint') : t('addBottle.aiIdentifiedHint')}
                     </p>
                     <div className="ai-result-wine">
-                      <WineImage image={card.image} alt={card.name} className="wine-row-image" wrapClass="wine-row-img-wrap" credit={card.imageCredit} creditClass="wine-row-credit" wineType={card.type} placeholder="wine-row-placeholder" />
+                      <WineImage image={card.image} alt={card.name} className="wine-row-image" wrapClass="wine-row-img-wrap" credit={card.imageCredit} creditClass="wine-row-credit" wineType={swatchType(card)} placeholder="wine-row-placeholder" />
                       <div className="wine-info">
                         <h3>{card.name}</h3>
                         <p className="producer">{card.producer}</p>
@@ -1214,7 +1232,7 @@ function AddBottle() {
                           {countryName && <span>{countryName}</span>}
                           {regionName && <span>• {regionName}</span>}
                           {card.appellation && <span>• {card.appellation}</span>}
-                          <span className={`wine-type-pill ${card.type || 'unknown'}`}>{card.type || t('common.unknown')}</span>
+                          <span className={`wine-type-pill ${swatchType(card, 'unknown')}`}>{wineTypeLabel(card, t) || t('common.unknown')}</span>
                         </div>
                         {grapeNames.length > 0 && (
                           <p className="wine-grapes">{grapeNames.join(', ')}</p>

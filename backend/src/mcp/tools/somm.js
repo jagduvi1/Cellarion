@@ -28,6 +28,7 @@ const { isValidId } = require('../../utils/validation');
 const { stripHtml } = require('../../utils/sanitize');
 const { normalizeString, sanitizeTaxonomyName } = require('../../utils/normalize');
 const { classifyProposal } = require('../../services/proposalDirectApply');
+const { WINE_COLOURS } = require('../../utils/wineColour');
 const { ok, fail, objectId, pageParams } = require('../toolUtil');
 const { logAction } = require('../actionLedger');
 const {
@@ -642,9 +643,10 @@ registerTool({
   title: 'Sommelier: write or correct a wine\'s tasting profile, type or grapes',
   description:
     'WRITES or corrects the tasting profile on a registry wine — body, tannin, acidity, sweetness, flavours, food ' +
-    'pairings and the prose description — and the wine\'s structural record fields type and grapes (a wrong type ' +
+    'pairings and the prose description — and the wine\'s structural record fields type, colour and grapes (a wrong type ' +
     'changes filtering, serving and storage guidance; use when e.g. a vin jaune is typed "fortified" or a cider ' +
-    '"rosé"). Get wine_id from list_maturity_queue, search_registry or get_wine. FIELD-LEVEL: omit a field to leave ' +
+    '"rosé"). colour is the colour of a sparkling, dessert or fortified wine — a Trento DOC or Champagne rosé is type ' +
+    '"sparkling", colour "rosé"; red/white/rosé wines never carry one. Get wine_id from list_maturity_queue, search_registry or get_wine. FIELD-LEVEL: omit a field to leave ' +
     'it alone, pass null to CLEAR it — except type, which can only be corrected, never cleared. Grape values are ' +
     'variety NAMES resolved against the taxonomy (synonyms work: "Shiraz" finds Syrah); an unknown variety is ' +
     'refused, never created. Authoring from nothing is now the NORMAL path, not the exception: records with no ' +
@@ -671,6 +673,8 @@ registerTool({
       .describe('Plain-text tasting note shown to owners. null clears it.'),
     type: z.enum(WINE_TYPES).optional()
       .describe('Correct the wine\'s structural type. Cannot be cleared — every wine has one.'),
+    colour: z.enum(WINE_COLOURS).nullable().optional()
+      .describe('The colour of a sparkling, dessert or fortified wine (e.g. a sparkling rosé: type "sparkling", colour "rosé"). Dropped on red/white/rosé wines, whose type is already the colour. null clears it.'),
     grapes: z.array(z.string().min(1).max(GRAPE_NAME_MAX)).max(GRAPES_MAX).nullable().optional()
       .describe('Replace the grape list with these variety NAMES (taxonomy-resolved, synonyms ok). null clears the list.'),
   },
@@ -681,7 +685,7 @@ registerTool({
     // Same validator the REST route uses, so the two surfaces cannot drift.
     // snake_case is the MCP convention; map to the model's camelCase first.
     const patch = {};
-    for (const f of ['body', 'tannin', 'acidity', 'sweetness', 'description', 'flavors', 'type', 'grapes']) {
+    for (const f of ['body', 'tannin', 'acidity', 'sweetness', 'description', 'flavors', 'type', 'colour', 'grapes']) {
       if (args[f] !== undefined) patch[f] = args[f];
     }
     if (args.food_pairings !== undefined) patch.foodPairings = args.food_pairings;
@@ -736,7 +740,7 @@ registerTool({
     // Say what actually happened to provenance: a pure-clear on an AI profile
     // deliberately does NOT verify (the wine stays enrichment-eligible), and a
     // type/grapes-only write never touches the tasting profile's provenance.
-    const profileTouched = Object.keys(check.clean).some((f) => !['type', 'grapes'].includes(f));
+    const profileTouched = Object.keys(check.clean).some((f) => !['type', 'colour', 'grapes'].includes(f));
     const curatorNow = wine.aiProfile?.source === 'curator';
     const outcome = !profileTouched
       ? 'record fields corrected'
@@ -765,6 +769,7 @@ registerTool({
         },
         record: {
           type: wine.type || null,
+          colour: wine.colour || null,
           ...(grapeNames !== null ? { grapes: grapeNames } : {}),
           ...(grapeSubs.length ? { grape_substitutions: grapeSubs.map((s) => `${s.from} → ${s.to}`) } : {}),
         },
@@ -772,7 +777,7 @@ registerTool({
           ? (curatorNow
             ? 'The AI enrichment job will no longer overwrite this wine.'
             : 'Cleared without verifying — the AI enrichment job may regenerate this profile.')
-          : 'Type/grape corrections do not claim the tasting profile was verified.')
+          : 'Type/colour/grape corrections do not claim the tasting profile was verified.')
           + (grapeSubs.length
             ? ' Grape names are stored under their canonical variety doc (same variety, canonical display) — see grape_substitutions.'
             : ''),
@@ -2065,7 +2070,7 @@ const PROPOSAL_KINDS = ['field_correction', 'merge', 'non_wine'];
 // (added 2026-08-19, somm ticket 6a85ad44) but validate differently — an enum
 // and a taxonomy-resolved list — so they are handled apart from this loop.
 const PROPOSAL_FIELDS = ['producer', 'name', 'appellation', 'region', 'country', 'classification'];
-const PROPOSAL_ALL_FIELDS = [...PROPOSAL_FIELDS, 'type', 'grapes'];
+const PROPOSAL_ALL_FIELDS = [...PROPOSAL_FIELDS, 'type', 'colour', 'grapes'];
 const PROPOSAL_REASON_MIN = 10;
 const PROPOSAL_REASON_MAX = 1000;
 const PROPOSAL_FIELD_MAX = 200;
@@ -2107,8 +2112,9 @@ registerTool({
       country: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional(),
       classification: z.string().min(1).max(PROPOSAL_FIELD_MAX).optional(),
       type: z.enum(WINE_TYPES).optional(),
+      colour: z.enum(WINE_COLOURS).optional(),
       grapes: z.array(z.string().min(1).max(GRAPE_NAME_MAX)).min(1).max(GRAPES_MAX).optional(),
-    }).optional().describe('kind "field_correction" only: the corrected value per field (omit fields that are right). Region/country as plain names. `type` is the wine colour/style; `grapes` REPLACES the whole variety list (send every variety the wine has, not just the added one) and each name must already exist in the taxonomy — synonyms resolve, unknown names are refused so an approval can never mint a variety. A BRAND THAT CHANGED HANDS (somm ticket 6a8698d5): registry wines are vintage-neutral, so a producer that was acquired has no single true value. The convention is CURRENT OWNER WINS — put today\'s owner in `producer` and record the predecessor in the reason, e.g. "ZAREA acquired the brand from Domeniile Tohani in 2019". Do not uphold a suspect flag on a wine whose producer is knowable just because ownership moved: that leaves a permanent cannot-identify caveat on an identifiable wine and inflates the residue count the scaling review reads.'),
+    }).optional().describe('kind "field_correction" only: the corrected value per field (omit fields that are right). Region/country as plain names. `type` is the wine colour/style; `colour` is the colour of a sparkling, dessert or fortified wine (a sparkling rosé is type "sparkling", colour "rosé"); `grapes` REPLACES the whole variety list (send every variety the wine has, not just the added one) and each name must already exist in the taxonomy — synonyms resolve, unknown names are refused so an approval can never mint a variety. A BRAND THAT CHANGED HANDS (somm ticket 6a8698d5): registry wines are vintage-neutral, so a producer that was acquired has no single true value. The convention is CURRENT OWNER WINS — put today\'s owner in `producer` and record the predecessor in the reason, e.g. "ZAREA acquired the brand from Domeniile Tohani in 2019". Do not uphold a suspect flag on a wine whose producer is knowable just because ownership moved: that leaves a permanent cannot-identify caveat on an identifiable wine and inflates the residue count the scaling review reads.'),
     merge_target_id: objectId.optional().describe('kind "merge" only: the duplicate\'s SURVIVING wine — must differ from wine_id'),
     evidence_url: z.string().max(PROPOSAL_URL_MAX).optional()
       .describe('http(s) URL backing the claim — cite one whenever the somm has it; it is what makes approval fast'),
@@ -2163,6 +2169,9 @@ registerTool({
       }
       // type: the zod enum already refused anything outside WINE_TYPES.
       if (src.type) proposedFields.type = src.type;
+      // colour: same — the enum is the validation. Whether the wine's type can
+      // carry one is judged at approval, against the type it has by then.
+      if (src.colour) proposedFields.colour = src.colour;
       // grapes: resolved against the taxonomy HERE so the curator finds out now
       // rather than when an admin tries to approve. The approve path resolves
       // again (taxonomy moves), but a name that is unknown today is almost
@@ -2223,6 +2232,7 @@ registerTool({
       // new proposable fields have to be in it — otherwise every type/grapes
       // proposal would render as "drifted since filing" against undefined.
       type: wine.type || null,
+      colour: wine.colour || null,
       grapes: (wine.grapes || []).map((g) => g && g.name).filter(Boolean).join(', ') || null,
     };
 
@@ -3075,6 +3085,8 @@ registerTool({
     grapes: z.array(z.string().min(1).max(GRAPE_NAME_MAX)).max(GRAPES_MAX).optional()
       .describe('Variety NAMES, taxonomy-resolved (synonyms ok). Replaces the whole list.'),
     type: z.enum(WINE_TYPES).optional(),
+    colour: z.enum(WINE_COLOURS).nullable().optional()
+      .describe('Colour of a sparkling, dessert or fortified wine (e.g. a sparkling rosé). null clears it; dropped on red/white/rosé wines.'),
     cross_field_override: z.boolean().optional()
       .describe(
         'Force through a producer the cross-field rules refuse. Use ONLY when the label plainly prints this name ' +
@@ -3108,6 +3120,7 @@ registerTool({
     if (args.country !== undefined) patch.countryName = args.country;
     if (args.grapes !== undefined) patch.grapeNames = args.grapes;
     if (args.type !== undefined) patch.type = args.type;
+    if (args.colour !== undefined) patch.colour = args.colour;
     if (args.cross_field_override !== undefined) patch.crossFieldOverride = args.cross_field_override;
 
     const check = validatePendingFix(patch);

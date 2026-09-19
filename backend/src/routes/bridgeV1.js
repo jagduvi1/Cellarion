@@ -46,7 +46,7 @@ const VISIBLE = { nonWine: { $ne: true }, pendingIdentity: { $ne: true } };
 // that does not exist); a direct fetch still serves one — that is the path a
 // copier walks, and the fetch is what gets reported.
 const SEARCH_VISIBLE = { ...VISIBLE, canary: { $ne: true } };
-const IDENTITY_SELECT = 'name producer slug country region appellation classification grapes type image imageCredit';
+const IDENTITY_SELECT = 'name producer slug country region appellation classification grapes type colour image imageCredit';
 // The profile fields that are registry content. Never the hold/suspect
 // bookkeeping, the model name, the input snapshot or the producer note.
 const PROFILE_FIELDS = ['body', 'tannin', 'acidity', 'sweetness', 'flavors', 'foodPairings', 'description', 'source', 'generatedAt', 'verifiedAt'];
@@ -116,6 +116,9 @@ function identity(w) {
     producer: w.producer || null,
     name: w.name,
     type: w.type || null,
+    // Additive (v1 clients ignore unknown keys): the colour of a sparkling,
+    // dessert or fortified wine, null for the rest.
+    colour: w.colour || null,
     appellation: w.appellation || null,
     classification: w.classification || null,
     region: nameOf(w.region),

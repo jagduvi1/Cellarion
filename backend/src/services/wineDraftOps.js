@@ -47,7 +47,7 @@ const FIELD_MAX = 200;
 // What a creator may edit on their draft. The same names the curation queue's
 // fix takes (validatePendingFix), plus classification (display data a draft
 // commonly carries from a scan).
-const DRAFT_FIELDS = ['name', 'producer', 'appellation', 'regionName', 'countryName', 'grapeNames', 'type', 'classification'];
+const DRAFT_FIELDS = ['name', 'producer', 'appellation', 'regionName', 'countryName', 'grapeNames', 'type', 'colour', 'classification'];
 
 const fail = (code, message) => ({ ok: false, code, message });
 const POPULATE = [
@@ -66,6 +66,7 @@ function draftSummary(w, extra = {}) {
     appellation: w.appellation || null,
     classification: w.classification || null,
     type: w.type || null,
+    colour: w.colour || null,
     country: name(w.country),
     region: name(w.region),
     grapes: Array.isArray(w.grapes) ? w.grapes.map((g) => name(g)).filter(Boolean) : [],
@@ -187,6 +188,7 @@ async function updateDraft(wine, clean, userId) {
       : null;
   }
   if (clean.type) wine.type = clean.type;
+  if (clean.colour !== undefined) wine.colour = clean.colour;
   if (clean.classification !== undefined) wine.classification = clean.classification || null;
 
   let countryDoc = null;

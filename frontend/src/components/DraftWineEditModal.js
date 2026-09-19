@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from './Modal';
 import { updateWineDraft } from '../api/wineDrafts';
+import { WINE_COLOURS, isStyleType, recordedColour, colourLabel } from '../utils/wineColour';
 
 const TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
 
@@ -26,6 +27,8 @@ function DraftWineEditModal({ apiFetch, wine, onClose, onSaved }) {
     appellation: wine?.appellation || '',
     classification: wine?.classification || '',
     type: wine?.type || 'red',
+    // The colour of a sparkling/dessert/fortified wine ('' = not stated).
+    colour: recordedColour(wine) || '',
     countryName: nameOf(wine?.country),
     regionName: nameOf(wine?.region),
     grapeNames: Array.isArray(wine?.grapes) ? wine.grapes.map(nameOf).filter(Boolean).join(', ') : '',
@@ -35,6 +38,12 @@ function DraftWineEditModal({ apiFetch, wine, onClose, onSaved }) {
   const [error, setError] = useState(null);
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  // A colour belongs to sparkling/dessert/fortified only — a type that already
+  // is a colour takes it away.
+  const setType = (e) => {
+    const type = e.target.value;
+    setForm((f) => ({ ...f, type, ...(isStyleType(type) ? {} : { colour: '' }) }));
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -42,6 +51,8 @@ function DraftWineEditModal({ apiFetch, wine, onClose, onSaved }) {
     for (const k of ['name', 'producer', 'appellation', 'classification', 'type', 'countryName', 'regionName']) {
       if (form[k] !== initial[k]) patch[k] = form[k];
     }
+    // '' clears it (the server takes null or '' as "not stated").
+    if (form.colour !== initial.colour) patch.colour = form.colour || null;
     if (form.grapeNames !== initial.grapeNames) {
       patch.grapeNames = form.grapeNames.split(',').map((s) => s.trim()).filter(Boolean);
     }
@@ -91,10 +102,19 @@ function DraftWineEditModal({ apiFetch, wine, onClose, onSaved }) {
           </div>
           <div className="form-group">
             <label htmlFor="dw-type">{t('draftWine.fieldType', 'Type')}</label>
-            <select id="dw-type" value={form.type} onChange={set('type')}>
+            <select id="dw-type" value={form.type} onChange={setType}>
               {TYPES.map((v) => <option key={v} value={v}>{t(`statistics.typeLabels.${v}`, v)}</option>)}
             </select>
           </div>
+          {isStyleType(form.type) && (
+            <div className="form-group">
+              <label htmlFor="dw-colour">{t('wineColour.label', 'Colour')}</label>
+              <select id="dw-colour" value={form.colour} onChange={set('colour')}>
+                <option value="">{t('wineColour.notStated', 'Not stated')}</option>
+                {WINE_COLOURS.map((c) => <option key={c} value={c}>{colourLabel(c, t)}</option>)}
+              </select>
+            </div>
+          )}
           <div className="form-group">
             <label htmlFor="dw-grapes">{t('draftWine.fieldGrapes', 'Grapes (comma-separated)')}</label>
             <input id="dw-grapes" type="text" value={form.grapeNames} onChange={set('grapeNames')} placeholder={t('draftWine.fieldGrapesPlaceholder', 'e.g. Merlot, Cabernet Franc')} />

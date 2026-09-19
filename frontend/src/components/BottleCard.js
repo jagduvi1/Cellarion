@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import AuthImage from './AuthImage';
 import { glassesLeft, daysLeft, freshnessStatus } from '../utils/openBottle';
 import { isReserved, reservationSummary } from '../utils/reservation';
+import { swatchType } from '../utils/wineColour';
 import './BottleCard.css';
 
 const MATURITY_LABELS = {
@@ -176,7 +177,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
               {credit && <span className="img-credit-tooltip">{credit}</span>}
             </>
           ) : (
-            <div className={`bottle-grid-placeholder ${bottle.wineDefinition?.type}`} />
+            <div className={`bottle-grid-placeholder ${swatchType(bottle.wineDefinition, '')}`} />
           )}
         </div>
         <div className="bottle-grid-info">
@@ -274,7 +275,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
           {credit && <span className="img-credit-tooltip">{credit}</span>}
         </div>
       ) : (
-        <div className={`bottle-wine-placeholder ${bottle.wineDefinition?.type}`} />
+        <div className={`bottle-wine-placeholder ${swatchType(bottle.wineDefinition, '')}`} />
       )}
 
       <div className="bottle-info">

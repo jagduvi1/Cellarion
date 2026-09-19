@@ -9,6 +9,7 @@ import { getWinePublicData, suggestWineValue, proposeRegistryKey } from '../../a
 import useTaxonomyNames from '../../hooks/useTaxonomyNames';
 import useGrapeNames from '../../hooks/useGrapeNames';
 import { taxonomyName } from '../../utils/taxonomyName';
+import { WINE_COLOURS, isStyleType, recordedColour, wineTypeLabel, colourLabel } from '../../utils/wineColour';
 import './WineRecordSection.css';
 
 /**
@@ -62,6 +63,9 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
   const [modal, setModal] = useState(null); // { field }
   const [proposed, setProposed] = useState('');
   const [proposedType, setProposedType] = useState('');
+  // The colour of a sparkling/dessert/fortified wine — asked only once the
+  // chosen type is one of those (support ticket 2026-09-17).
+  const [proposedColour, setProposedColour] = useState('');
   const [proposedGrapes, setProposedGrapes] = useState([]); // [{ name, isNew? }]
   const [reason, setReason] = useState('');
   const [evidenceUrl, setEvidenceUrl] = useState('');
@@ -173,6 +177,8 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
     producer: wine.producer || null,
     name: wine.name || null,
     type: wine.type || null,
+    // Not a row of its own: it qualifies the Type row ("Sparkling rosé").
+    colour: recordedColour(wine),
     grapes: wineGrapes.map((g) => g.name),
     country: wine.country?.name || null,
     region: wine.region?.name || null,
@@ -194,11 +200,20 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
   const hasValue = (v) => (Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null && v !== '');
   const myPending = mine.find((p) => p.status === 'pending') || null;
   const pendingValues = myPending?.proposedFields || {};
-  const pendingFields = new Set(RECORD_FIELDS.filter((f) => hasValue(pendingValues[f])));
+  // A pending colour is a pending change to the Type row.
+  const pendingFields = new Set(RECORD_FIELDS.filter((f) => hasValue(pendingValues[f])
+    || (f === 'type' && hasValue(pendingValues.colour))));
   const formatPending = (f) => {
     const v = pendingValues[f];
     if (f === 'grapes') return (v || []).join(', ');
-    if (f === 'type') return typeLabel(v);
+    if (f === 'type') {
+      // The type and colour the suggestion would leave: a colour-only
+      // suggestion keeps the recorded type, a type change starts colourless.
+      return wineTypeLabel({
+        type: v || values.type,
+        colour: hasValue(pendingValues.colour) ? pendingValues.colour : (v ? null : values.colour),
+      }, t);
+    }
     return v;
   };
   // One pending suggestion per wine, across ALL users: while somebody else's
@@ -209,7 +224,11 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
     setModal({ field });
     // Pre-filled with what is recorded: fixing a typo is an edit, not a retype.
     setProposed(field === 'type' || field === 'grapes' ? '' : (values[field] || ''));
-    setProposedType('');
+    // A sparkling/dessert/fortified wine opens on its own type, so fixing only
+    // its colour is one tap; a red/white/rosé wine opens with nothing chosen.
+    const keepType = field === 'type' && isStyleType(values.type);
+    setProposedType(keepType ? values.type : '');
+    setProposedColour(keepType ? (values.colour || '') : '');
     setProposedGrapes(values.grapes.map((name) => ({ name })));
     setReason('');
     setEvidenceUrl('');
@@ -220,7 +239,16 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
   const draftFields = () => {
     if (!modal) return null;
     const f = modal.field;
-    if (f === 'type') return proposedType && proposedType !== values.type ? { type: proposedType } : null;
+    if (f === 'type') {
+      const nextType = proposedType || values.type;
+      const out = {};
+      if (proposedType && proposedType !== values.type) out.type = proposedType;
+      // Compared with the colour the wine has under THAT type — none, when
+      // the type itself is changing.
+      const colourNow = nextType === values.type ? values.colour : null;
+      if (isStyleType(nextType) && proposedColour && proposedColour !== colourNow) out.colour = proposedColour;
+      return Object.keys(out).length ? out : null;
+    }
     if (f === 'grapes') {
       const names = proposedGrapes.map((g) => g.name);
       if (!names.length || sameGrapes(names, values.grapes)) return null;
@@ -352,7 +380,7 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
         </span>
       );
     }
-    const shown = f === 'type' ? typeLabel(values.type) : (f === 'grapes' ? null : displayValues[f]);
+    const shown = f === 'type' ? wineTypeLabel(wine, t) : (f === 'grapes' ? null : displayValues[f]);
     return (
       <span className={shown ? 'wr-value' : 'wr-value wr-value--blank'}>
         {shown || t('wineRecord.notRecorded', 'not recorded')}
@@ -360,20 +388,28 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
     );
   };
 
-  // The recorded type is not a choice.
-  const typeChoices = WINE_TYPES.filter((v) => v !== values.type);
-  const onTypeKey = (e) => {
+  // The recorded type is not a choice — unless it is a style whose colour may
+  // be the thing to fix.
+  const typeChoices = WINE_TYPES.filter((v) => v !== values.type || isStyleType(v));
+  const chooseType = (v) => {
+    setProposedType(v);
+    if (!isStyleType(v)) setProposedColour('');
+  };
+  // Arrow keys move within a chip group; the group is one tab stop.
+  const radioKeys = (choices, current, choose) => (e) => {
     const dir = (e.key === 'ArrowRight' || e.key === 'ArrowDown') ? 1
       : (e.key === 'ArrowLeft' || e.key === 'ArrowUp') ? -1 : 0;
-    if (!dir || !typeChoices.length) return;
+    if (!dir || !choices.length) return;
     e.preventDefault();
-    const i = typeChoices.indexOf(proposedType);
+    const i = choices.indexOf(current);
     const next = i === -1
-      ? typeChoices[dir > 0 ? 0 : typeChoices.length - 1]
-      : typeChoices[(i + dir + typeChoices.length) % typeChoices.length];
-    setProposedType(next);
-    Array.from(e.currentTarget.querySelectorAll('[role="radio"]')).find((b) => b.dataset.type === next)?.focus();
+      ? choices[dir > 0 ? 0 : choices.length - 1]
+      : choices[(i + dir + choices.length) % choices.length];
+    choose(next);
+    Array.from(e.currentTarget.querySelectorAll('[role="radio"]')).find((b) => b.dataset.value === next)?.focus();
   };
+  const onTypeKey = radioKeys(typeChoices, proposedType, chooseType);
+  const onColourKey = radioKeys(WINE_COLOURS, proposedColour, setProposedColour);
 
   const canSend = !!draftFields() && reason.trim().length >= REASON_MIN;
   const newInDraft = proposedGrapes.filter((g) => g.isNew).map((g) => g.name);
@@ -572,30 +608,56 @@ function WineRecordSection({ wine, canSuggest, apiFetch, vintage, promptMissingG
                 <div className="form-group">
                   <label>{t('wineRecord.current', 'Currently recorded')}</label>
                   <div className="wr-current">
-                    {(modal.field === 'type' ? typeLabel(values.type) : values[modal.field]) || t('wineRecord.notRecorded', 'not recorded')}
+                    {(modal.field === 'type' ? wineTypeLabel(wine, t) : values[modal.field]) || t('wineRecord.notRecorded', 'not recorded')}
                   </div>
                 </div>
                 {modal.field === 'type' ? (
-                  <div className="form-group">
-                    <span className="wr-group-label" id="wr-type-label">{t('wineRecord.proposed', 'Should be')}</span>
-                    <div className="wr-choices" role="radiogroup" aria-labelledby="wr-type-label" onKeyDown={onTypeKey}>
-                      {typeChoices.map((v, idx) => (
-                        <button
-                          key={v}
-                          type="button"
-                          role="radio"
-                          data-type={v}
-                          aria-checked={proposedType === v}
-                          // One tab stop for the group; the arrows move within it.
-                          tabIndex={(proposedType ? proposedType === v : idx === 0) ? 0 : -1}
-                          className={`wr-choice${proposedType === v ? ' wr-choice--on' : ''}`}
-                          onClick={() => setProposedType(v)}
-                        >
-                          {typeLabel(v)}
-                        </button>
-                      ))}
+                  <>
+                    <div className="form-group">
+                      <span className="wr-group-label" id="wr-type-label">{t('wineRecord.proposed', 'Should be')}</span>
+                      <div className="wr-choices" role="radiogroup" aria-labelledby="wr-type-label" onKeyDown={onTypeKey}>
+                        {typeChoices.map((v, idx) => (
+                          <button
+                            key={v}
+                            type="button"
+                            role="radio"
+                            data-value={v}
+                            aria-checked={proposedType === v}
+                            // One tab stop for the group; the arrows move within it.
+                            tabIndex={(proposedType ? proposedType === v : idx === 0) ? 0 : -1}
+                            className={`wr-choice${proposedType === v ? ' wr-choice--on' : ''}`}
+                            onClick={() => chooseType(v)}
+                          >
+                            {typeLabel(v)}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                    {/* Only for the styles that say nothing about colour — a
+                        sparkling rosé is Sparkling + Rosé. */}
+                    {isStyleType(proposedType) && (
+                      <div className="form-group">
+                        <span className="wr-group-label" id="wr-colour-label">{t('wineColour.label', 'Colour')}</span>
+                        <div className="wr-choices" role="radiogroup" aria-labelledby="wr-colour-label" onKeyDown={onColourKey}>
+                          {WINE_COLOURS.map((c, idx) => (
+                            <button
+                              key={c}
+                              type="button"
+                              role="radio"
+                              data-value={c}
+                              aria-checked={proposedColour === c}
+                              tabIndex={(proposedColour ? proposedColour === c : idx === 0) ? 0 : -1}
+                              className={`wr-choice${proposedColour === c ? ' wr-choice--on' : ''}`}
+                              onClick={() => setProposedColour(c)}
+                            >
+                              {colourLabel(c, t)}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="wr-help">{t('wineColour.hint', 'Sparkling, dessert and fortified wines can be red, white or rosé.')}</p>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <div className="form-group">
                     <label htmlFor="wr-proposed">{t('wineRecord.proposed', 'Should be')}</label>

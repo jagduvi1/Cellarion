@@ -65,6 +65,8 @@ registerTool({
     appellation: z.string().max(200).optional(),
     classification: z.string().max(200).optional(),
     type: z.enum(['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified']).optional(),
+    colour: z.enum(['red', 'white', 'rosé']).nullable().optional()
+      .describe('Colour of a sparkling, dessert or fortified wine (e.g. a sparkling rosé); null clears it'),
     country: z.string().max(200).optional(),
     region: z.string().max(200).optional(),
     grapes: z.array(z.string().min(1).max(60)).max(12).optional().describe('The COMPLETE variety list'),
@@ -73,7 +75,7 @@ registerTool({
     const loaded = await ops.loadOwnDraft(args.wine_id, ctx.user.id);
     if (!loaded.ok) return fail(loaded.code === 'invalid_input' ? 'invalid_input' : 'not_found', loaded.message);
     const patch = {};
-    for (const k of ['name', 'producer', 'appellation', 'classification', 'type']) if (args[k] !== undefined) patch[k] = args[k];
+    for (const k of ['name', 'producer', 'appellation', 'classification', 'type', 'colour']) if (args[k] !== undefined) patch[k] = args[k];
     if (args.country !== undefined) patch.countryName = args.country;
     if (args.region !== undefined) patch.regionName = args.region;
     if (args.grapes !== undefined) patch.grapeNames = args.grapes;

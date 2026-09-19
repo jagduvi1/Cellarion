@@ -28,6 +28,7 @@ const DRAFT_TTL_MS = DRAFT_TTL_DAYS * 24 * 60 * 60 * 1000;
 const { scoreAllMatches } = require('./wineMatching');
 const { canonicalizeWineName } = require('../utils/producerPrefix');
 const { computeCanonicalKey, canonicalSiblingPrefix } = require('../utils/wineIdentity');
+const { WINE_COLOURS } = require('../utils/wineColour');
 const { buildSurfaceForms, inferGrapeIds } = require('./grapeInference');
 const { isLabelVariant, grapeTokenSet } = require('./labelVariantMatch');
 const { resolveCanonicalProducerSpelling } = require('./producerSpelling');
@@ -386,7 +387,7 @@ async function unpolluteEstateName({ name, producer, appellation, classification
 // re-runs them at publish), and the row keys into the per-creator 'draft~'
 // namespace. `excludeId`: the publish-time re-check passes the draft's own id
 // so no stage can match the draft against itself.
-async function findOrCreateWine({ name, producer, country, region, appellation, type, grapes, classification }, userId, { confirmCreate = false, skipSiblingMatch = false, matchOnly = false, createdVia = null, allowPending = false, provenance = null, draft = false, excludeId = null } = {}) {
+async function findOrCreateWine({ name, producer, country, region, appellation, type, colour, grapes, classification }, userId, { confirmCreate = false, skipSiblingMatch = false, matchOnly = false, createdVia = null, allowPending = false, provenance = null, draft = false, excludeId = null } = {}) {
   // Internal whitespace collapses too, not just the ends: a double space is
   // invisible in every UI and every normalized key, so "Wrights  Estate" and
   // "Wrights Estate" would otherwise coexist as two display spellings forever
@@ -981,6 +982,10 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
 
   const validTypes = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
   const wineType = validTypes.includes(type) ? type : 'red';
+  // A stated colour (sparkling/dessert/fortified only — the model hook drops it
+  // on any other type, and infers rosé from the name when none is stated).
+  // Stored on creates only, like classification: never matched or keyed on.
+  const wineColour = WINE_COLOURS.includes(colour) ? colour : null;
 
   // Classification is display/curation data, not identity: stored on creates
   // only, never matched or keyed on. Same whitespace fold + cap as the
@@ -997,6 +1002,7 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     appellation: trimmedAppellation || null,
     classification: trimmedClassification,
     type: wineType,
+    colour: wineColour,
     grapes: grapeIds,
     normalizedKey: mintKey,
     createdBy: userId,

@@ -5,6 +5,7 @@ import WineImage from '../components/WineImage';
 import ConfirmModal from '../components/ConfirmModal';
 import SommWineProfilePanel from '../components/SommWineProfilePanel';
 import { removeMaturityProfile } from '../api/somm';
+import { swatchType } from '../utils/wineColour';
 import './SommMaturity.css';
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -302,7 +303,7 @@ function ProfileCard({ profile, isPending, onSaved, onReset, onRemoved }) {
       {/* ── Card header (click to expand) ── */}
       <div className="somm-card-header" role="button" tabIndex={0} onClick={() => setExpanded(o => !o)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(o => !o); } }}>
         <div className="somm-card-identity">
-          <WineImage image={wine?.image} alt={wine?.name} className="somm-wine-thumb" wineType={wine?.type} placeholder="somm-wine-thumb-placeholder" />
+          <WineImage image={wine?.image} alt={wine?.name} className="somm-wine-thumb" wineType={swatchType(wine)} placeholder="somm-wine-thumb-placeholder" />
           <div>
             <span className="somm-wine-name">{wine?.name || 'Unknown'}</span>
             <span className="somm-wine-meta">

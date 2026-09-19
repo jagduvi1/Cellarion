@@ -2036,6 +2036,7 @@
           "country": "Country",
           "classification": "Classification",
           "type": "Type",
+          "colour": "Colour",
           "grapes": "Grapes"
         },
         "drift": "was \"{{value}}\" when proposed",
@@ -4857,6 +4858,28 @@
     "rowAttached": "Bottles attached to {{wine}}",
     "deleteConfirm": "Delete this empty draft?",
     "backToCellars": "← Back to my cellars"
+  },
+  "wineColour": {
+    "combined": {
+      "sparkling": {
+        "red": "Sparkling red",
+        "white": "Sparkling white",
+        "rosé": "Sparkling rosé"
+      },
+      "dessert": {
+        "red": "Red dessert wine",
+        "white": "White dessert wine",
+        "rosé": "Rosé dessert wine"
+      },
+      "fortified": {
+        "red": "Red fortified wine",
+        "white": "White fortified wine",
+        "rosé": "Rosé fortified wine"
+      }
+    },
+    "label": "Colour",
+    "notStated": "Not stated",
+    "hint": "Sparkling, dessert and fortified wines can be red, white or rosé."
   },
   "reportWine": {
     "title": "Report Wine",

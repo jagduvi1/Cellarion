@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { computeLayout, computeModularLayout, SLOT_RADIUS, CELL_SIZE } from '../../utils/rackLayouts';
 import useSlotDrag from '../../hooks/useSlotDrag';
 import { isReserved } from '../../utils/reservation';
+import { swatchType } from '../../utils/wineColour';
 import './RackRenderer.css';
 
 const WINE_COLORS = {
@@ -417,7 +418,7 @@ export default function RackRenderer({
           {drag && (() => {
             const originSlot = slotMap[drag.from];
             const wine = originSlot?.bottle?.wineDefinition;
-            const colors = WINE_COLORS[wine?.type || 'red'] || WINE_COLORS.red;
+            const colors = WINE_COLORS[swatchType(wine, 'red')] || WINE_COLORS.red;
             const custom = getSlotStyle && originSlot ? getSlotStyle(originSlot) : null;
             const r = slotCenters.find(s => s.position === drag.from)?.r || R;
             return (
@@ -465,7 +466,7 @@ export function ReservedRibbon({ cx, cy, r }) {
 function SlotCircle({ position, cx, cy, R, slot, disabled, isActive, isHighlight, onSlotClick, getSlotStyle, onDragStart, isDragOrigin, isDragTarget }) {
   const { t } = useTranslation();
   const wine = slot?.bottle?.wineDefinition;
-  const wineType = wine?.type || 'red';
+  const wineType = swatchType(wine, 'red');
   const colors = slot ? (WINE_COLORS[wineType] || WINE_COLORS.red) : null;
   // Lens/search style: overrides fill/stroke for filled slots, dims
   // non-matching slots while a search is active.

@@ -14,7 +14,7 @@ const router = express.Router();
 // What a wishlist response may say about a registry wine. Never createdBy,
 // scanImage, normalizedKey or canonicalKey — see the populate comments below.
 const WINE_RESPONSE_SELECT =
-  'name producer slug type appellation classification country region grapes image communityRating aiProfile lwin pendingIdentity';
+  'name producer slug type colour appellation classification country region grapes image communityRating aiProfile lwin pendingIdentity';
 
 // All wishlist routes require authentication
 router.use(requireAuth);

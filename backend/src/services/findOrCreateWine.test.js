@@ -656,6 +656,7 @@ describe('findOrCreateWine — creation', () => {
       appellation: 'Châteauneuf-du-Pape',
       classification: null, // scan-supplied only — absent input stores null
       type: 'red',
+      colour: null, // none stated; the model hook infers one for a rosé-named style type
       grapes: ['grape-grenache', 'grape-syrah'],
       normalizedKey: INPUT_KEY,
       createdBy: USER_ID,

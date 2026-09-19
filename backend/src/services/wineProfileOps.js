@@ -21,6 +21,7 @@
  */
 
 const { stripMarkdown } = require('../utils/stripMarkdown');
+const { WINE_COLOURS } = require('../utils/wineColour');
 
 // Mirrors the value sets the enrichment prompt is told to emit
 // (config/aiConfig.js) — an editable field must not accept a value the
@@ -65,7 +66,10 @@ const EDITABLE_FIELDS = [
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
 const GRAPES_MAX = 20;      // mirrors findOrCreateWine's MAX_GRAPES cap
 const GRAPE_NAME_MAX = 60;
-const RECORD_FIELDS = ['type', 'grapes'];
+// colour: the colour of a sparkling/dessert/fortified wine (utils/wineColour).
+// Same closed-vocabulary, non-key reasoning as type; the model hook drops it on
+// any wine whose type is itself a colour.
+const RECORD_FIELDS = ['type', 'colour', 'grapes'];
 
 function normalizeList(raw, { max, maxLen }) {
   if (!Array.isArray(raw)) return null;
@@ -121,6 +125,16 @@ function validateProfilePatch(patch) {
         return { ok: false, error: `type must be one of: ${WINE_TYPES.join(', ')}` };
       }
       clean.type = value;
+      continue;
+    }
+
+    if (field === 'colour') {
+      // Unlike type, colour HAS a cleared state: null = "not stated", which is
+      // what most white sparkling wines are.
+      if (value !== null && (typeof value !== 'string' || !WINE_COLOURS.includes(value))) {
+        return { ok: false, error: `colour must be one of: ${WINE_COLOURS.join(', ')} (or null to clear)` };
+      }
+      clean.colour = value;
       continue;
     }
 
@@ -246,6 +260,7 @@ function snapshotProfile(wine) {
   snap.profileReviewedAt = wine.profileReviewedAt || null;
   // Record fields (may hold populated docs — keep bare ids for the undo).
   snap.type = wine.type || null;
+  snap.colour = wine.colour || null;
   snap.grapes = Array.isArray(wine.grapes) ? wine.grapes.map((g) => String(g && g._id ? g._id : g)) : [];
   return snap;
 }
@@ -280,6 +295,7 @@ function applyProfilePatch(wine, clean, userId, { now = new Date() } = {}) {
     wine.aiProfile[field] = value;
   }
   if (clean.type !== undefined) wine.type = clean.type;
+  if (clean.colour !== undefined) wine.colour = clean.colour;
   if (clean.grapes !== undefined) wine.grapes = clean.grapes;
 
   const isClear = (v) => v === null || (Array.isArray(v) && v.length === 0);
@@ -314,6 +330,9 @@ function restoreProfile(wine, snap) {
   wine.aiProfile.verifiedAt = snap.verifiedAt || null;
   wine.profileReviewedAt = snap.profileReviewedAt || null;
   if (typeof snap.type === 'string' && snap.type) wine.type = snap.type;
+  // Only when the snapshot carries the key: ledger rows written before colour
+  // existed must not clear one set since.
+  if (Object.prototype.hasOwnProperty.call(snap, 'colour')) wine.colour = snap.colour || null;
   if (Array.isArray(snap.grapes)) wine.grapes = [...snap.grapes];
   wine.markModified('aiProfile');
   return wine;

@@ -26,6 +26,7 @@ import PersonalDataCard from '../components/bottle/PersonalDataCard';
 import LotHistory from '../components/bottle/LotHistory';
 import DialogBox from '../components/DialogBox';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
+import { swatchType, wineTypeLabel } from '../utils/wineColour';
 import './BottleDetail.css';
 
 // Lazy-load heavy components only needed on user interaction
@@ -546,7 +547,7 @@ function BottleDetail() {
               {wine?.country?.name && <span className="bd-country">{displayProducer ? ' · ' : ' — '}{wine.country.name}</span>}
             </p>
             {wine?.type && (
-              <span className={`wine-type-pill ${wine.type}`}>{wine.type}</span>
+              <span className={`wine-type-pill ${swatchType(wine)}`}>{wineTypeLabel(wine, t)}</span>
             )}
           </div>
         </div>

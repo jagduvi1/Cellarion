@@ -25,6 +25,8 @@ const FIELD_KEYS = {
   // Proposable since 2026-08-19 (somm ticket 6a85ad44). Grapes arrive as a
   // joined string from the route, so the generic diff row renders them as-is.
   type: 'admin.wines.proposals.fields.type',
+  // The colour of a sparkling/dessert/fortified wine (support ticket 2026-09-17).
+  colour: 'admin.wines.proposals.fields.colour',
   grapes: 'admin.wines.proposals.fields.grapes',
 };
 

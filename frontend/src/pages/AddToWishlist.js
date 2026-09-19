@@ -11,6 +11,7 @@ import './AddBottle.css';
 import WineImage from '../components/WineImage';
 import SimilarWinesModal from '../components/SimilarWinesModal';
 import { WINE_TYPES } from '../config/wineTypes';
+import { swatchType, wineTypeLabel, isStyleType, colourLabel, WINE_COLOURS } from '../utils/wineColour';
 import './AddToWishlist.css';
 
 function AddToWishlist() {
@@ -491,14 +492,14 @@ function AddToWishlist() {
 
   const renderRegistryRow = (item) => (
     <div key={`registry-${item.registryId}`} className="wine-row registry-wine-row" onClick={() => handleAdoptRegistry(item)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleAdoptRegistry(item); } }}>
-      <WineImage image={item.image} alt={item.name} className="wine-row-image" wrapClass="wine-row-img-wrap" wineType={item.type} placeholder="wine-row-placeholder" />
+      <WineImage image={item.image} alt={item.name} className="wine-row-image" wrapClass="wine-row-img-wrap" wineType={swatchType(item)} placeholder="wine-row-placeholder" />
       <div className="wine-info">
         <h3>{item.name} <span className="registry-badge">{t('addToWishlist.registryBadge', 'shared registry')}</span></h3>
         <p className="producer">{item.producer}</p>
         <div className="wine-meta">
           {item.country && <span>{item.country}</span>}
           {item.region && <span>• {item.region}</span>}
-          {item.type && <span className={`wine-type-pill ${item.type}`}>{item.type}</span>}
+          {item.type && <span className={`wine-type-pill ${swatchType(item)}`}>{wineTypeLabel(item, t)}</span>}
         </div>
         {item.grapes?.length > 0 && (
           <p className="wine-grapes">{item.grapes.join(', ')}</p>
@@ -514,14 +515,14 @@ function AddToWishlist() {
   // list. Takes a SAVED wine only.
   const renderWineRow = (wine) => (
     <div key={wine._id} className="wine-row" onClick={() => handleSelectWine(wine)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelectWine(wine); } }}>
-      <WineImage image={wine.image} alt={wine.name} className="wine-row-image" wrapClass="wine-row-img-wrap" wineType={wine.type} placeholder="wine-row-placeholder" />
+      <WineImage image={wine.image} alt={wine.name} className="wine-row-image" wrapClass="wine-row-img-wrap" wineType={swatchType(wine)} placeholder="wine-row-placeholder" />
       <div className="wine-info">
         <h3>{wine.name}</h3>
         <p className="producer">{wine.producer}</p>
         <div className="wine-meta">
           <span>{wine.country?.name}</span>
           {wine.region && <span>• {wine.region.name}</span>}
-          <span className={`wine-type-pill ${wine.type}`}>{wine.type}</span>
+          <span className={`wine-type-pill ${swatchType(wine, '')}`}>{wineTypeLabel(wine, t)}</span>
         </div>
         {wine.grapes?.length > 0 && (
           <p className="wine-grapes">{wine.grapes.map(g => g.displayName || g.name).join(', ')}</p>
@@ -794,12 +795,28 @@ function AddToWishlist() {
                 <div className="form-group">
                   <label>{t('addToWishlist.type')}</label>
                   <select value={pendingWineData.type}
-                    onChange={e => setPendingWineData(p => ({ ...p, type: e.target.value }))}>
+                    onChange={e => setPendingWineData(p => ({
+                      ...p,
+                      type: e.target.value,
+                      // A colour belongs to sparkling/dessert/fortified only.
+                      ...(isStyleType(e.target.value) ? {} : { colour: '' }),
+                    }))}>
                     {/* See AddBottle: unknown is a real answer, not a gap. */}
                     <option value="">{t('common.unknown')}</option>
                     {WINE_TYPES.map(wt => <option key={wt} value={wt}>{wt}</option>)}
                   </select>
                 </div>
+                {/* See AddBottle: only where the type does not say the colour. */}
+                {isStyleType(pendingWineData.type) && (
+                  <div className="form-group">
+                    <label htmlFor="wishlist-wine-colour">{t('wineColour.label', 'Colour')}</label>
+                    <select id="wishlist-wine-colour" value={pendingWineData.colour || ''}
+                      onChange={e => setPendingWineData(p => ({ ...p, colour: e.target.value }))}>
+                      <option value="">{t('wineColour.notStated', 'Not stated')}</option>
+                      {WINE_COLOURS.map(c => <option key={c} value={c}>{colourLabel(c, t)}</option>)}
+                    </select>
+                  </div>
+                )}
                 <div className="form-group form-group-full">
                   <label>{t('addToWishlist.grapes')}</label>
                   <input type="text" value={pendingWineData.grapes}
@@ -892,7 +909,7 @@ function AddToWishlist() {
                       {isRegistryWine ? t('addToWishlist.aiMatchHint') : t('addToWishlist.aiIdentifiedHint')}
                     </p>
                     <div className="ai-result-wine">
-                      <WineImage image={card.image} alt={card.name} className="wine-row-image" wrapClass="wine-row-img-wrap" wineType={card.type} placeholder="wine-row-placeholder" />
+                      <WineImage image={card.image} alt={card.name} className="wine-row-image" wrapClass="wine-row-img-wrap" wineType={swatchType(card)} placeholder="wine-row-placeholder" />
                       <div className="wine-info">
                         <h3>{card.name}</h3>
                         <p className="producer">{card.producer}</p>
@@ -900,7 +917,7 @@ function AddToWishlist() {
                           {countryName && <span>{countryName}</span>}
                           {regionName && <span>• {regionName}</span>}
                           {card.appellation && <span>• {card.appellation}</span>}
-                          <span className={`wine-type-pill ${card.type || 'unknown'}`}>{card.type || t('common.unknown')}</span>
+                          <span className={`wine-type-pill ${swatchType(card, 'unknown')}`}>{wineTypeLabel(card, t) || t('common.unknown')}</span>
                         </div>
                         {grapeNames.length > 0 && (
                           <p className="wine-grapes">{grapeNames.join(', ')}</p>

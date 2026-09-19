@@ -30,7 +30,9 @@ registerTool({
   title: 'Suggest a correction to a registry wine (admin-reviewed)',
   description:
     'Files a SUGGESTION to fix a shared registry wine — the identity fields producer, name, appellation, region, ' +
-    'country, classification, and the structural fields type and grapes. `grapes` REPLACES the whole variety list ' +
+    'country, classification, and the structural fields type, colour and grapes. `colour` is the colour of a ' +
+    'sparkling, dessert or fortified wine (a sparkling rosé is type "sparkling", colour "rosé"; red/white/rosé wines ' +
+    'never carry one). `grapes` REPLACES the whole variety list ' +
     '(send every variety the wine has, as on the label; names must exist in the taxonomy — describe_grape finds the ' +
     'canonical one). Available to every user; nothing changes until an admin approves the diff. Give a ' +
     'reason saying what is wrong and how you know; an evidence URL (producer site, appellation register) makes ' +
@@ -56,6 +58,8 @@ registerTool({
       classification: z.string().max(200).optional(),
       type: z.enum(['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified']).optional()
         .describe('The wine\'s colour/style, when the record has it wrong'),
+      colour: z.enum(['red', 'white', 'rosé']).optional()
+        .describe('The colour of a sparkling, dessert or fortified wine, when the record is missing it or has it wrong. Refused on a wine that stays red/white/rosé — suggest type too if that is the error.'),
       grapes: z.array(z.string().min(1).max(60)).min(1).max(12).optional()
         .describe('The COMPLETE corrected variety list (replaces the current one); every name must already be in the taxonomy'),
     }).describe('Only the fields that should CHANGE, with their corrected values'),

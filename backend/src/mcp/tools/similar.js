@@ -122,7 +122,7 @@ registerTool({
     const possiblyMore = ranked.length < limit && hits.length >= FETCH;
 
     const docs = await WineDefinition.find({ _id: { $in: ranked.map(([id]) => id) }, pendingIdentity: { $ne: true }, canary: { $ne: true } })
-      .select('name producer slug country region appellation classification grapes type communityRating')
+      .select('name producer slug country region appellation classification grapes type colour communityRating')
       .populate(['country', 'region', 'grapes'])
       .lean();
     const byId = new Map(docs.map((d) => [String(d._id), d]));

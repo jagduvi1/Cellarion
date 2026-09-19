@@ -171,6 +171,7 @@ describe('creation', () => {
         country: 'New Zealand',
         classification: null,
         type: null,
+        colour: null,
         grapes: null,
       },
     }));
@@ -238,6 +239,57 @@ describe('creation', () => {
 
   test('a fresh filing reports amended: false', async () => {
     expect(await ops.createFieldCorrection(ME, GOOD)).toMatchObject({ ok: true, amended: false });
+  });
+});
+
+// Support ticket 2026-09-17 ("Colour Sparkling/Rosè"): sparkling, dessert and
+// fortified say nothing about colour, so a suggestion can carry one — judged
+// against the type the suggestion leaves the wine with.
+describe('colour', () => {
+  test('is accepted on a sparkling wine, normalized, with the live colour in the snapshot', async () => {
+    findVisibleWine.mockResolvedValue({ ...wineDoc, type: 'sparkling', colour: null });
+    const res = await ops.createFieldCorrection(ME, { ...GOOD, fields: { colour: ' Rosé ' } });
+    expect(res.ok).toBe(true);
+    expect(WineCorrectionProposal.create).toHaveBeenCalledWith(expect.objectContaining({
+      proposedFields: { colour: 'rosé' },
+      currentSnapshot: expect.objectContaining({ type: 'sparkling', colour: null }),
+    }));
+  });
+
+  test('is refused on a wine that stays red, white or rosé — and the refusal says the way out', async () => {
+    findVisibleWine.mockResolvedValue({ ...wineDoc, type: 'rosé' });
+    const res = await ops.createFieldCorrection(ME, { ...GOOD, fields: { colour: 'rosé' } });
+    expect(res).toMatchObject({ ok: false, code: 'invalid' });
+    expect(res.message).toMatch(/only applies to sparkling, dessert and fortified/);
+    expect(res.message).toMatch(/typed rosé/);
+    expect(res.message).toMatch(/suggest the type/);
+    expect(WineCorrectionProposal.create).not.toHaveBeenCalled();
+  });
+
+  test('rides along when the same suggestion retypes the wine to a style', async () => {
+    findVisibleWine.mockResolvedValue({ ...wineDoc, type: 'rosé' });
+    const res = await ops.createFieldCorrection(ME, { ...GOOD, fields: { type: 'sparkling', colour: 'rosé' } });
+    expect(res.ok).toBe(true);
+    expect(WineCorrectionProposal.create).toHaveBeenCalledWith(expect.objectContaining({
+      proposedFields: { type: 'sparkling', colour: 'rosé' },
+    }));
+  });
+
+  test('an amendment is judged against the type my pending suggestion already proposes', async () => {
+    findVisibleWine.mockResolvedValue({ ...wineDoc, type: 'rosé' });
+    WineCorrectionProposal.findOne.mockResolvedValue(pendingRow({ proposedFields: { toObject: () => ({ type: 'sparkling' }) } }));
+    WineCorrectionProposal.findOneAndUpdate.mockResolvedValue(updatedRow());
+    const res = await ops.createFieldCorrection(ME, { ...GOOD, fields: { colour: 'rosé' } });
+    expect(res).toMatchObject({ ok: true, amended: true, amendedFields: ['colour'] });
+    const [, update] = WineCorrectionProposal.findOneAndUpdate.mock.calls[0];
+    expect(update.$set['proposedFields.colour']).toBe('rosé');
+  });
+
+  test('an unknown colour is refused before anything is looked up', async () => {
+    const res = await ops.createFieldCorrection(ME, { ...GOOD, fields: { colour: 'orange' } });
+    expect(res).toMatchObject({ ok: false, code: 'invalid' });
+    expect(res.message).toMatch(/colour must be one of red, white, rosé/);
+    expect(findVisibleWine).not.toHaveBeenCalled();
   });
 });
 

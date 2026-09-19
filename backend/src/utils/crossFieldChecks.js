@@ -662,4 +662,7 @@ module.exports = {
   CROSS_FIELD_CHECK_SELECT, resolveCrossFieldCheck, runCrossFieldChecks,
   buildCrossFieldRefs,
   detectPlacePlusFillerProducer, SCAN_SUSPECT_PLACE_FILLER_ID,
+  // Read by utils/wineColour's drift test: its rosé words must stay this
+  // vocabulary's rosé entries.
+  NAME_COLOUR_TERMS,
 };

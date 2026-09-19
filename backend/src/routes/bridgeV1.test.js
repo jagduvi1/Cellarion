@@ -131,7 +131,7 @@ describe('GET /search', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.wines[0]).toEqual({
-      id: ID, slug: 'torres-salmos', producer: 'Torres', name: 'Salmos', type: 'red', appellation: 'Priorat', classification: null,
+      id: ID, slug: 'torres-salmos', producer: 'Torres', name: 'Salmos', type: 'red', colour: null, appellation: 'Priorat', classification: null,
       region: 'Catalonia', country: 'Spain', grapes: ['Cariñena', 'Syrah'], image: 'https://api.test/api/uploads/processed/x.png', imageCredit: 'Estate',
     });
     expect(body.wines[0]).not.toHaveProperty('profile');

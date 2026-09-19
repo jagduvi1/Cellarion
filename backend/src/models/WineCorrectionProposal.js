@@ -43,6 +43,11 @@ const proposedFieldsSchema = new mongoose.Schema({
   // renamed or merged between filing and approval). A plain String here matches
   // how country and region are already carried.
   type:           { type: String, trim: true, maxlength: 20 },
+  // The colour of a sparkling/dessert/fortified wine (utils/wineColour.js,
+  // support ticket 2026-09-17). Validated at filing against the vocabulary and
+  // at approval against the type the wine has BY THEN — a colour means nothing
+  // once the wine is red, white or rosé.
+  colour:         { type: String, trim: true, maxlength: 20 },
   // Variety NAMES, not ids: the proposal records what the curator meant, and
   // resolution to taxonomy happens at approval — same reason country travels as
   // a name. A proposed list REPLACES the wine's list; `default: undefined`

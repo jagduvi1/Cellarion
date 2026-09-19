@@ -13,6 +13,7 @@ import WineImage from '../components/WineImage';
 import WineDiscussionsPanel from '../components/WineDiscussionsPanel';
 import { getWineImageUrl } from '../utils/wineImageUrl';
 import { API_URL } from '../api/apiConstants';
+import { swatchType, wineTypeLabel } from '../utils/wineColour';
 import './WineDetail.css';
 
 // Lazy like BottleDetail: the report modal is a rare interaction and must not
@@ -154,7 +155,7 @@ export default function WineDetail() {
           <p className="wd-producer">{wine.producer}</p>
 
           {wine.type && (
-            <span className={`wine-type-pill ${wine.type}`}>{wine.type}</span>
+            <span className={`wine-type-pill ${swatchType(wine)}`}>{wineTypeLabel(wine, t)}</span>
           )}
 
           <div className="wd-details">
