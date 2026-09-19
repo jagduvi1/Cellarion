@@ -39,7 +39,11 @@ registerTool({
     'ones). Filters: free-text query (wine name, producer, region, grape, notes), status (active | consumed | all), ' +
     'vintage, wine type, reserved (only/exclude "spoken for" bottles). Paginated and bounded; every item includes its ' +
     'rating, so filter by rating yourself from the results, and has_photo (own or published photo, or a registry ' +
-    'image — get_bottle → photos has the detail). Call for any "what do I have…", "find my…", "do I own…" question. ' +
+    'image — get_bottle → photos has the detail). wine carries grapes, region and country. maturity is the drink ' +
+    'window that governs each active bottle — the user\'s own when set (source "own"), else the curated sommelier ' +
+    'window (source "sommelier") — with its status; null = no window at all. drink_from/drink_to/peak_from/peak_until ' +
+    'are ONLY the user\'s own overrides, so null there does NOT mean the bottle has no window. ' +
+    'Call for any "what do I have…", "find my…", "do I own…" question. ' +
     'Prefer filters over fetching everything.',
   scope: 'read',
   annotations: { readOnlyHint: true, openWorldHint: false },
@@ -168,14 +172,55 @@ registerTool({
 // before attaching one). A failing lookup degrades to "no flag" with a
 // warning — a photo nicety never fails the search.
 async function withPhotoFlag(userId, docs, warnings) {
+  const rows = await withWineDetail(docs, warnings);
   let presence = new Map();
   try {
     presence = await photoPresence(userId, docs);
   } catch (err) {
     warnings.push('Photo lookup failed for this page — has_photo is omitted.');
-    return docs.map(bottleSummary);
+    return rows;
   }
-  return docs.map((d) => ({ ...bottleSummary(d), has_photo: presence.get(String(d._id)) === true }));
+  return rows.map((r) => ({ ...r, has_photo: presence.get(String(r.bottle_id)) === true }));
+}
+
+// Grapes/region/country and the RESOLVED drink window on every list row
+// (support tickets 6aad5481 + 6aad5c67). drink_from/peak_from are the
+// bottle's OWN overrides and read null on nearly every bottle, which an
+// assistant took to mean "no drink window" — while the curated sommelier
+// window was there all along, one drink_window_for call per bottle away.
+// `maturity` is the window that actually governs the bottle (own when set,
+// else curated) with its verdict, from ONE profile query per page. Active
+// bottles only: a verdict on a drunk bottle means nothing. A failed lookup
+// degrades to rows without `maturity`, never a failed search.
+async function withWineDetail(docs, warnings) {
+  const { buildProfileMap, classifyMaturity, resolveEffectiveWindow } = require('../../utils/maturityUtils');
+  const active = docs.filter((d) => !CONSUMED_STATUSES.includes(d.status));
+  let profileMap = null;
+  try {
+    profileMap = await buildProfileMap(active);
+  } catch (err) {
+    warnings.push('Drink-window lookup failed for this page — maturity is omitted.');
+  }
+  return docs.map((d) => {
+    const row = bottleSummary(d);
+    const wd = d.wineDefinition;
+    if (wd && row.wine) {
+      row.wine.grapes = (wd.grapes || []).map((g) => g?.name).filter(Boolean);
+      row.wine.region = wd.region?.name || null;
+      row.wine.country = wd.country?.name || null;
+    }
+    if (profileMap && !CONSUMED_STATUSES.includes(d.status)) {
+      const w = resolveEffectiveWindow(d, profileMap);
+      row.maturity = w
+        ? {
+            status: classifyMaturity(d, profileMap),
+            source: w.source === 'personal' ? 'own' : 'sommelier',
+            drink_from: w.drinkFrom, peak_from: w.peakFrom, peak_until: w.peakUntil, drink_to: w.drinkTo,
+          }
+        : null;
+    }
+    return row;
+  });
 }
 
 registerTool({
