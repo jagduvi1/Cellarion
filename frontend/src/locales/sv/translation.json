@@ -1957,6 +1957,7 @@
           "country": "Land",
           "classification": "Klassificering",
           "type": "Typ",
+          "colour": "Färg",
           "grapes": "Druvor"
         },
         "drift": "var ”{{value}}” när förslaget lades",
@@ -5038,5 +5039,27 @@
     "alreadyChosenAs": "”{{name}}” är {{canonical}}, som redan finns i listan.",
     "loadFailed": "Det gick inte att läsa in druvlistan.",
     "retry": "Försök igen"
+  },
+  "wineColour": {
+    "combined": {
+      "sparkling": {
+        "red": "Mousserande rött",
+        "white": "Mousserande vitt",
+        "rosé": "Mousserande rosé"
+      },
+      "dessert": {
+        "red": "Rött dessertvin",
+        "white": "Vitt dessertvin",
+        "rosé": "Rosé dessertvin"
+      },
+      "fortified": {
+        "red": "Rött starkvin",
+        "white": "Vitt starkvin",
+        "rosé": "Rosé starkvin"
+      }
+    },
+    "label": "Färg",
+    "notStated": "Ej angiven",
+    "hint": "Mousserande viner, dessertviner och starkviner kan vara röda, vita eller rosé."
   }
 }
