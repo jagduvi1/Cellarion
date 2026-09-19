@@ -7,27 +7,45 @@ name: Weblate auto-merge
 # string, a placeholder that drifted, a broken plural family
 # (frontend/src/locales/translation.test.js). So a translator's finished work
 # was waiting on a person only to click Merge, and in August the first
-# external contribution sat for four days. This removes the click.
+# external contribution sat for four days. This removes the click — but only
+# for translators we already know. The tests cannot tell a translation from
+# vandalism: "Save" rendered as an insult, or a fake "your account is locked,
+# visit example.com" notice, passes every one of them.
 #
 # Guards, in order:
 #   1. The PR is authored by the Weblate bot AND comes from its own fork — a
 #      human who names a branch "weblate" does not qualify.
 #   2. Every changed file is a non-English locale file. Anything else — code,
-#      en/translation.json, a workflow — leaves the PR for a person.
+#      en/translation.json, a workflow, the trusted list — leaves the PR for a
+#      person.
 #   3. No file loses more than 500 lines. A translation batch adds and edits;
 #      a Weblate rebase gone wrong ("Reset and reapply", 2026-07-23) rewrites
 #      whole files and reverts newer strings, and shows up as mass deletions.
+#   4. The strings themselves are compared, value by value, against the merge
+#      base. A PR that changes no value at all (Weblate reordering plural keys,
+#      committed as "Anonymous" — PR #1285) merges whoever wrote it.
+#   5. No changed string carries a link, e-mail address or HTML tag that its
+#      English original lacks, or is wildly longer than the English. That is
+#      what an injected message looks like, and it holds even for trusted
+#      translators — a compromised account is still a compromised account.
+#   6. Every commit author is on .github/weblate-trusted-translators.txt
+#      (read from main, never from the PR). A first-time translator's batch
+#      waits for a maintainer to read it once; then add them to the list.
 #
 # What it does: enables GitHub auto-merge (squash). GitHub still waits for
 # every required check on main — Backend tests, Frontend tests, DCO — and
 # merges only if they pass. A red locale test leaves the PR open, as today.
+# When a guard fails it DISABLES auto-merge too: Weblate pushes new commits
+# into an open PR, so a PR that qualified on its first push can pick up a
+# stranger's batch on the next. It comments with the reason, once per reason.
 # Translations then ship with the next release, like everything else.
 #
 # Why pull_request_target: a plain pull_request run from a fork gets a
 # read-only token and cannot enable auto-merge. pull_request_target runs with
 # the base repository's token. That is safe HERE because this workflow never
-# checks out or executes anything from the fork — it reads PR metadata through
-# the API and calls `gh pr merge --auto`. Keep it that way: no actions/checkout.
+# checks out or executes anything from the fork — it reads PR metadata and
+# file contents through the API, parses the JSON as data, and calls
+# `gh pr merge`. Keep it that way: no actions/checkout.
 
 on:
   pull_request_target:
@@ -75,19 +93,129 @@ jobs:
           fi
           echo "ok=yes" >> "$GITHUB_OUTPUT"
 
-      - name: Enable auto-merge
+      - name: Check the changed strings and who wrote them
+        id: content
         if: steps.scope.outputs.ok == 'yes'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          raw() { gh api -H 'Accept: application/vnd.github.raw' "repos/${GITHUB_REPOSITORY}/contents/$1?ref=$2"; }
+
+          # Compare against the merge base, not main's tip: strings main changed
+          # since the fork point are not the translator's doing.
+          merge_base=$(gh api "repos/${GITHUB_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}" --jq .merge_base_commit.sha)
+          mkdir -p snap
+          raw frontend/src/locales/en/translation.json "$merge_base" > snap/en.json
+          raw .github/weblate-trusted-translators.txt "$BASE_SHA" > snap/trusted.txt
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR}/commits" \
+            --jq '.[] | "\(.commit.author.email)\t\(.commit.author.name)"' > snap/authors.tsv
+          i=0
+          cut -f1 files.tsv | while read -r path; do
+            i=$((i+1))
+            printf '%s\n' "$path" > "snap/$i.path"
+            # A new language has no file at the merge base.
+            raw "$path" "$merge_base" > "snap/$i.base.json" 2>/dev/null || echo '{}' > "snap/$i.base.json"
+            raw "$path" "$HEAD_SHA" > "snap/$i.head.json"
+          done
+
+          node - <<'JS'
+          const fs = require('fs');
+          const read = (p) => fs.readFileSync('snap/' + p, 'utf8');
+          const flat = (obj, pre = '', out = {}) => {
+            for (const [k, v] of Object.entries(obj)) {
+              const key = pre ? `${pre}.${k}` : k;
+              if (v && typeof v === 'object') flat(v, key, out); else out[key] = String(v);
+            }
+            return out;
+          };
+          // en has no `_many`/`_few`; look a plural form up via its `_other`.
+          const enOf = (en, key) => en[key] ?? en[key.replace(/_(zero|one|two|few|many)$/, '_other')] ?? '';
+
+          const LINK = /https?:\/\/\S+|www\.\S+|[\w.+-]+@[\w-]+\.[\w.-]+|\b[\w-]+\.(?:com|net|org|io|app|eu|se|de|fr|ee|info|xyz|ru|cn|me|co|ly|to|gg|link|click|top)\b/gi;
+          const TAG = /<\/?[a-z][a-z0-9]*/gi;
+          const tokens = (s, re) => (s.match(re) || []).map((t) => t.toLowerCase());
+
+          const en = flat(JSON.parse(read('en.json')));
+          const files = fs.readdirSync('snap').filter((f) => f.endsWith('.path')).map((f) => f.slice(0, -5));
+          let changed = 0;
+          const flagged = [];
+          for (const n of files) {
+            const path = read(`${n}.path`).trim();
+            const base = flat(JSON.parse(read(`${n}.base.json`)));
+            const head = flat(JSON.parse(read(`${n}.head.json`)));
+            for (const [key, value] of Object.entries(head)) {
+              if (base[key] === value) continue;
+              changed++;
+              const source = enOf(en, key);
+              const why = [];
+              const newLinks = tokens(value, LINK).filter((t) => !source.toLowerCase().includes(t));
+              const srcTags = new Set(tokens(source, TAG));
+              const newTags = tokens(value, TAG).filter((t) => !srcTags.has(t));
+              if (newLinks.length) why.push(`a link or address the English lacks (${newLinks.join(', ')})`);
+              if (newTags.length) why.push(`HTML the English lacks (${newTags.join(', ')})`);
+              if (value.length > source.length * 3 + 30) why.push(`${value.length} characters against ${source.length} in English`);
+              if (why.length) flagged.push({ path, key, value, why });
+            }
+          }
+
+          const trusted = new Set(read('trusted.txt').split('\n')
+            .map((l) => l.replace(/#.*/, '').trim().toLowerCase()).filter(Boolean));
+          const untrusted = new Map();
+          for (const line of read('authors.tsv').split('\n').filter(Boolean)) {
+            const [email, name] = line.split('\t');
+            if (!trusted.has(email.toLowerCase())) untrusted.set(email.toLowerCase(), name);
+          }
+
+          const md = (s) => s.replace(/[`|]/g, "'").replace(/\s+/g, ' ').slice(0, 200);
+          let ok = 'yes', reason = '', body = '';
+          if (changed === 0) {
+            console.log('No string value changed (key order or formatting only) — safe whoever wrote it.');
+          } else if (flagged.length) {
+            ok = 'no';
+            reason = `${flagged.length} changed string(s) look out of place for a translation`;
+            body = `These strings carry something their English original does not. Read them before merging:\n\n| File | Key | Why | Text |\n|---|---|---|---|\n` +
+              flagged.slice(0, 30).map((f) => `| ${f.path.split('/').slice(-2, -1)} | \`${f.key}\` | ${f.why.join('; ')} | ${md(f.value)} |`).join('\n') +
+              (flagged.length > 30 ? `\n\n…and ${flagged.length - 30} more.` : '');
+          } else if (untrusted.size) {
+            ok = 'no';
+            const names = [...untrusted.values()].join(', ');
+            reason = `first translation batch from ${names}`;
+            body = `${changed} string(s) changed by someone not yet on \`.github/weblate-trusted-translators.txt\`: ${names}.\n\n` +
+              `Read the diff once. If it is honest work, merge it and add their commit e-mail to that file so their next batch merges on its own.`;
+          }
+          console.log(`${changed} string value(s) changed; ${flagged.length} flagged; untrusted authors: ${[...untrusted.values()].join(', ') || 'none'}`);
+          if (body) console.log(body);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `ok=${ok}\nreason=${reason}\n`);
+          fs.writeFileSync('comment.md', body);
+          JS
+
+      - name: Enable auto-merge
+        if: steps.scope.outputs.ok == 'yes' && steps.content.outputs.ok == 'yes'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
         run: gh pr merge --auto --squash "$PR_URL"
 
-      # Once, when the PR opens — not on every push to it.
-      - name: Say why a person is needed
-        if: steps.scope.outputs.ok == 'no' && github.event.action == 'opened'
+      - name: Leave it for a person, and say why
+        if: steps.scope.outputs.ok == 'no' || steps.content.outputs.ok == 'no'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
-          REASON: ${{ steps.scope.outputs.reason }}
+          REASON: ${{ steps.scope.outputs.reason || steps.content.outputs.reason }}
         run: |
-          gh pr comment "$PR_URL" --body "Not merged automatically: ${REASON}. A maintainer will look at it. (.github/workflows/weblate-automerge.yml)"
+          set -euo pipefail
+          # An earlier push may have qualified; this one does not.
+          gh pr merge --disable-auto "$PR_URL" 2>/dev/null || true
+          { echo "Not merged automatically: ${REASON}. A maintainer will look at it. (.github/workflows/weblate-automerge.yml)"
+            if [ -s comment.md ]; then echo; cat comment.md; fi; } > body.md
+          # Once per distinct reason, not on every push.
+          first_line=$(head -n1 body.md)
+          if gh pr view "$PR_URL" --json comments --jq '.comments[].body' | grep -qxF -- "$first_line"; then
+            echo "Already said: $first_line"
+          else
+            gh pr comment "$PR_URL" --body-file body.md
+          fi

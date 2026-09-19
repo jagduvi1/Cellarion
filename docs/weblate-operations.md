@@ -84,7 +84,7 @@ A `Review` team covering **all languages** already exists — Weblate creates it
 
 ## 5. Routine: when a Weblate PR appears
 
-**Since 2026-09-09 there is no routine.** `.github/workflows/weblate-automerge.yml` enables auto-merge on every pull request the Weblate bot opens, provided it changes nothing but non-English locale files and rewrites none of them wholesale (no file may lose more than 500 lines). GitHub then merges it the moment the required checks pass — [`translation.test.js`](../frontend/src/locales/translation.test.js) is the real gate (no keys `en` lacks, no empty strings, placeholder parity, complete plural families). The DCO check skips the bot: translators certify their work by accepting the translation licence in Weblate, and a sign-off typed by a robot would certify nothing.
+**Since 2026-09-09 there is no routine — for translators you already know.** `.github/workflows/weblate-automerge.yml` enables auto-merge on a pull request the Weblate bot opens when it changes nothing but non-English locale files, rewrites none of them wholesale (no file may lose more than 500 lines), adds no link, e-mail address or HTML to any string that its English original lacks, and every commit in it is by someone on [`.github/weblate-trusted-translators.txt`](../.github/weblate-trusted-translators.txt). A PR that changes no string value at all (Weblate reordering keys, committed as "Anonymous") merges whoever wrote it. GitHub then merges it the moment the required checks pass — [`translation.test.js`](../frontend/src/locales/translation.test.js) is the real gate (no keys `en` lacks, no empty strings, placeholder parity, complete plural families). The DCO check skips the bot: translators certify their work by accepting the translation licence in Weblate, and a sign-off typed by a robot would certify nothing.
 
 The merged translations then ship with the next release, like everything else.
 
@@ -92,6 +92,8 @@ The merged translations then ship with the next release, like everything else.
 
 - it touches `en/translation.json`, code, or anything outside `frontend/src/locales/`
 - a locale file loses more than 500 lines — that is the signature of a Weblate rebase gone wrong (§7, "Reset and reapply"), not of a translation batch
+- **a translator not yet on the trusted list** — the locale tests cannot tell a translation from vandalism ("Save" rendered as an insult passes all of them). Read the diff once — for Swedish that is you — then merge it and add the commit e-mail from `gh pr view <N> --json commits` to `.github/weblate-trusted-translators.txt` in a normal PR, so their next batch merges on its own
+- a changed string carries a link, address or HTML tag its English original lacks, or is far longer than it — the workflow's comment lists them. This applies to trusted translators too
 - CI is red — most often an empty plural form Weblate scaffolded, or a key that `en` has since dropped
 
 In those cases: content-diff against `main` first (`git fetch origin pull/N/head && git checkout FETCH_HEAD`, compare the flattened JSON), then squash-merge if it is right, or close it and fix the Weblate side (§7).

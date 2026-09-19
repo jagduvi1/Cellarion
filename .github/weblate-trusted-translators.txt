@@ -1,0 +1,14 @@
+# Translators whose Weblate PRs may merge without a person reading them.
+#
+# One commit e-mail per line, exactly as Weblate writes it into the commit
+# author (see `gh pr view <N> --json commits`). Everything after # is a note.
+# A Weblate PR auto-merges only when EVERY commit in it is by someone on this
+# list — anyone else's first batch waits for a maintainer to read it once and
+# then add them here. See .github/workflows/weblate-automerge.yml.
+#
+# Weblate PRs cannot edit this file: the workflow leaves any PR that touches
+# something other than a non-English locale file for a person.
+
+jagduvi79@gmail.com                                # Johan Eklund (maintainer, sv)
+yeagersthlm@gmail.com                              # Daniel Nylander (sv)
+jrthwlate@users.noreply.hosted.weblate.org         # Priit Jõerüüt (et)
