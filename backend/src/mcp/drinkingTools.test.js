@@ -228,8 +228,43 @@ describe('what_should_i_open_tonight', () => {
     wireCandidates([first, second]);
 
     const res = await tool('what_should_i_open_tonight').handler({}, ctxFor(oid('9')));
-    expect(parse(res).data).toHaveLength(2);
+    // Same wine + vintage → ONE candidate carrying both bottles.
+    const data = parse(res).data;
+    expect(data).toHaveLength(1);
+    expect(data[0].bottles).toBe(2);
+    expect(data[0].other_bottle_ids.map(String)).toEqual([String(second._id)]);
     expectWineIdQueries([sharedHex]);
+  });
+
+  test('a bottle within 2 years of its window is included last as "approaching"; further out stays excluded', async () => {
+    // Ticket 6aad5481: a 2025 Riesling curated "from 2027" was hidden from a
+    // pairing, and it was the right wine. Youthful is not wrong.
+    const peak = mkBottle({ drinkFrom: THIS_YEAR - 2, drinkTo: THIS_YEAR + 2 });
+    const nextYear = mkBottle({ drinkFrom: THIS_YEAR + 1 });
+    const twoYears = mkBottle({ drinkFrom: THIS_YEAR + 2 });
+    const threeYears = mkBottle({ drinkFrom: THIS_YEAR + 3 });
+    wireCandidates([threeYears, twoYears, nextYear, peak]);
+
+    const body = parse(await tool('what_should_i_open_tonight').handler({}, ctxFor(oid('c'))));
+    expect(body.data.map((c) => c.readiness)).toEqual(['peak', 'approaching', 'approaching']);
+    expect(body.data.slice(1).map((c) => c.years_until_window).sort()).toEqual([1, 2]);
+    expect(body.data[0].years_until_window).toBeUndefined();
+    expect(body.data.map((c) => String(c.bottle_id))).not.toContain(String(threeYears._id));
+    const w = body.warnings.join(' ');
+    expect(w).toMatch(/2 bottle\(s\) are within 2 year\(s\)/);
+    expect(w).toMatch(/1 bottle\(s\) further from their window excluded/);
+  });
+
+  test('a curated (sommelier) window counts toward "approaching" too', async () => {
+    const b = mkBottle({ vintage: '2025' });
+    wireCandidates([b]);
+    WineVintageProfile.find.mockReturnValue(chain([{
+      wineDefinition: b.wineDefinition._id, vintage: '2025', status: 'reviewed',
+      earlyFrom: THIS_YEAR + 1, earlyUntil: THIS_YEAR + 3, peakFrom: THIS_YEAR + 4, peakUntil: THIS_YEAR + 7,
+    }]));
+    const body = parse(await tool('what_should_i_open_tonight').handler({}, ctxFor(oid('d'))));
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0]).toMatchObject({ readiness: 'approaching', maturity: 'not-ready', years_until_window: 1 });
   });
 
   test('an all-pending shortlist skips WineDefinition queries without dropping bottles', async () => {
@@ -326,6 +361,60 @@ describe('pair_with_dish', () => {
     expect(body.data.style_spread.map((b) => b.wine.name)).toContain('Pending registry wine');
     expect(body.data.style_spread[0].taste).toBeNull();
     expectWineIdQueries([resolved.wineDefinition._id]);
+  });
+
+  test('style spread gives every wine type a slot before any type gets a second, and groups identical bottles', async () => {
+    // Ticket 6aad5481: a 3-slot spread filled by two reds and a sparkling hid
+    // nine Rieslings; the same Chenin took three slots.
+    const wine = (type, name) => ({ ...mkBottle().wineDefinition, type, name });
+    const redA = wine('red', 'Rioja'); const redB = wine('red', 'Syrah');
+    const chenin = wine('white', 'Chenin');
+    const bubbles = wine('sparkling', 'Champagne');
+    const sweet = wine('dessert', 'Tokaji');
+    const ready = { drinkFrom: THIS_YEAR - 1, drinkTo: THIS_YEAR + 3 };
+    wireCandidates([
+      mkBottle({ ...ready, wineDefinition: redA }), mkBottle({ ...ready, wineDefinition: redA }),
+      mkBottle({ ...ready, wineDefinition: redB }),
+      mkBottle({ ...ready, wineDefinition: chenin }), mkBottle({ ...ready, wineDefinition: chenin }),
+      mkBottle({ ...ready, wineDefinition: chenin }),
+      mkBottle({ ...ready, wineDefinition: bubbles }),
+      mkBottle({ ...ready, wineDefinition: sweet }),
+    ]);
+    const body = parse(await tool('pair_with_dish').handler({ dish: 'surströmming', limit: 1 }, ctxFor(oid('b'))));
+    const spread = body.data.style_spread;
+    // limit 1 would once have capped the spread at 3; every type still appears.
+    expect(new Set(spread.map((c) => c.wine.type))).toEqual(new Set(['red', 'white', 'sparkling', 'dessert']));
+    expect(spread.slice(0, 4).map((c) => c.wine.type).sort()).toEqual(['dessert', 'red', 'sparkling', 'white']);
+    expect(spread.find((c) => c.wine.name === 'Chenin').bottles).toBe(3);
+    expect(spread.filter((c) => c.wine.name === 'Chenin')).toHaveLength(1);
+  });
+
+  test('cellar_composition counts every active bottle by type and grape, not just the shortlist', async () => {
+    const riesling = { ...mkBottle().wineDefinition, type: 'white', grapes: [{ name: 'Riesling' }] };
+    const far = mkBottle({ drinkFrom: THIS_YEAR + 5, wineDefinition: riesling });
+    const reserved = mkBottle({ drinkTo: THIS_YEAR + 2, reservedFor: 'Anna', wineDefinition: riesling });
+    const red = mkBottle({ drinkTo: THIS_YEAR + 2 });
+    wireCandidates([far, reserved, red]);
+    const body = parse(await tool('pair_with_dish').handler({ dish: 'spicy snacks' }, ctxFor(oid('e'))));
+    expect(body.data.cellar_composition).toEqual({
+      by_type: { white: 2, red: 1 },
+      by_grape: { Riesling: 2, Nebbiolo: 1 },
+    });
+    expect(body.warnings.join(' ')).toMatch(/1 bottle\(s\) further from their window excluded/);
+  });
+
+  test('taste carries its source and confidence; a curator profile reports no AI confidence', async () => {
+    const ai = mkBottle({ drinkTo: THIS_YEAR + 2 });
+    const curated = mkBottle({ drinkTo: THIS_YEAR + 2 });
+    wireCandidates([ai, curated]);
+    WineDefinition.find.mockReturnValue(chain([
+      { _id: ai.wineDefinition._id, aiProfile: { sweetness: 'off-dry', foodPairings: ['thai curry'], source: 'ai', confidence: 0.65 } },
+      { _id: curated.wineDefinition._id, aiProfile: { sweetness: 'dry', foodPairings: ['thai curry'], source: 'curator', confidence: 0.4 } },
+    ]));
+    const body = parse(await tool('pair_with_dish').handler({ dish: 'thai curry' }, ctxFor(oid('f'))));
+    const byId = new Map(body.data.matched.map((c) => [String(c.bottle_id), c.taste]));
+    expect(byId.get(String(ai._id))).toMatchObject({ source: 'ai', confidence: 0.65 });
+    expect(byId.get(String(curated._id))).toMatchObject({ source: 'sommelier', confidence: null });
   });
 });
 

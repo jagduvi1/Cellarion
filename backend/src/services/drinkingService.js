@@ -13,14 +13,22 @@ const Bottle = require('../models/Bottle');
 const Rack = require('../models/Rack');
 const WineDefinition = require('../models/WineDefinition');
 const { CONSUMED_STATUSES, WINE_POPULATE_LIST } = require('../config/constants');
-const { classifyMaturity, buildProfileMap, maturityLabel } = require('../utils/maturityUtils');
+const { classifyMaturity, buildProfileMap, maturityLabel, resolveEffectiveWindow } = require('../utils/maturityUtils');
 const { toNormalized } = require('../utils/ratingUtils');
 const { isReserved } = require('../utils/reservationUtils');
 
 // Readiness order: already-open bottles first (finish before opening anew),
 // then closing windows (drinking them tonight is a rescue), then peak.
-// 'not-ready' is excluded from candidates entirely.
-const READINESS_RANK = { open: 0, declining: 1, late: 2, peak: 3, early: 4, unknown: 5 };
+// 'approaching' = not-ready but within APPROACHING_YEARS of its window: last,
+// yet still on the table. Further out than that is excluded entirely.
+const READINESS_RANK = { open: 0, declining: 1, late: 2, peak: 3, early: 4, unknown: 5, approaching: 6 };
+
+// A wine a year or two short of its drink window is usually a fine bottle
+// tonight — youthful, not wrong (support ticket 6aad5481: a 2025 Pfalz
+// Riesling curated "from 2027" was hidden from a chili-snack pairing, and it
+// was exactly the right wine). Hard-excluding it left the calling model
+// unaware the bottle existed. Beyond this margin a wine is genuinely unready.
+const APPROACHING_YEARS = 2;
 
 const parseMl = (size) => {
   const n = parseInt(String(size || '750').replace(/[^0-9]/g, ''), 10);
@@ -52,8 +60,9 @@ function uniqueWineIds(entries) {
 
 /**
  * Select and rank ready-to-drink candidates within the given cellars.
- * Returns { ranked, profileMap, totalActive, considered, notReady,
- * reservedExcluded, priceWarning }.
+ * Returns { ranked, profileMap, totalActive, considered, notReady, approaching,
+ * reservedExcluded, priceWarning, composition }. `approaching` bottles are IN
+ * `ranked` (readiness 'approaching'); `notReady` counts only those excluded.
  *
  * `totalActive` is the UNFILTERED live-bottle count in scope — what "screened
  * the cellar" honestly means. `considered` is what survived the reserved/type/
@@ -92,13 +101,21 @@ async function readyCandidates(userId, cellarIds, { wineType, maxPrice, currency
   }
 
   const profileMap = await buildProfileMap(pool);
+  const currentYear = new Date().getFullYear();
   let notReady = 0;
+  let approaching = 0;
   const ranked = [];
   for (const b of pool) {
     const status = classifyMaturity(b, profileMap);
-    if (status === 'not-ready') { notReady++; continue; }
-    const readiness = b.openedAt ? 'open' : (status || 'unknown');
-    ranked.push({ b, status, readiness, rank: READINESS_RANK[readiness] });
+    let yearsToWindow = null;
+    if (status === 'not-ready') {
+      const from = resolveEffectiveWindow(b, profileMap)?.drinkFrom;
+      yearsToWindow = Number.isFinite(from) ? from - currentYear : null;
+      if (yearsToWindow == null || yearsToWindow > APPROACHING_YEARS) { notReady++; continue; }
+      approaching++;
+    }
+    const readiness = b.openedAt ? 'open' : (status === 'not-ready' ? 'approaching' : (status || 'unknown'));
+    ranked.push({ b, status, readiness, rank: READINESS_RANK[readiness], yearsToWindow });
   }
   ranked.sort((a, x) => {
     if (a.rank !== x.rank) return a.rank - x.rank;
@@ -108,7 +125,52 @@ async function readyCandidates(userId, cellarIds, { wineType, maxPrice, currency
     return String(a.b.vintage).localeCompare(String(x.b.vintage));
   });
 
-  return { ranked, profileMap, totalActive: bottles.length, considered: pool.length, notReady, reservedExcluded, priceWarning };
+  return {
+    ranked, profileMap, totalActive: bottles.length, considered: pool.length, notReady, approaching,
+    reservedExcluded, priceWarning, composition: cellarComposition(bottles),
+  };
+}
+
+/**
+ * Whole-cellar headcount by wine type and by grape (every active bottle in
+ * scope, ready or not, reserved included). A shortlist alone hides what else
+ * is in the cellar: with zero keyword hits the model never learned nine
+ * Rieslings were there to ask about (ticket 6aad5481). Grape counts include
+ * blends, so they can sum past the bottle total.
+ */
+function cellarComposition(bottles) {
+  const byType = {};
+  const byGrape = {};
+  for (const b of bottles) {
+    const t = b.wineDefinition?.type || 'unknown';
+    byType[t] = (byType[t] || 0) + 1;
+    for (const g of b.wineDefinition?.grapes || []) {
+      if (g?.name) byGrape[g.name] = (byGrape[g.name] || 0) + 1;
+    }
+  }
+  const desc = (o) => Object.fromEntries(Object.entries(o).sort((a, b) => b[1] - a[1]));
+  return { by_type: desc(byType), by_grape: desc(byGrape) };
+}
+
+/**
+ * Collapse ranked entries to one per wine + vintage (an open bottle stays
+ * apart — its state differs), preserving order. Identical bottles used to take
+ * separate shortlist slots (3× the same Chenin in an 8-slot answer); now the
+ * first entry stands for the group and carries the other bottle ids.
+ */
+function groupSameWine(ranked) {
+  const groups = new Map();
+  const out = [];
+  for (const r of ranked) {
+    const wdId = r.b.wineDefinition?._id;
+    const key = wdId ? `${wdId}:${r.b.vintage}:${r.b.openedAt ? 'open' : ''}` : `bottle:${r.b._id}`;
+    const g = groups.get(key);
+    if (g) { g.otherBottleIds.push(r.b._id); continue; }
+    const entry = { ...r, otherBottleIds: [] };
+    groups.set(key, entry);
+    out.push(entry);
+  }
+  return out;
 }
 
 /** Serialize the top `limit` ranked entries, enriching with taste + position. */
@@ -137,7 +199,7 @@ async function serializeCandidates(ranked, profileMap, cellarIds, limit) {
     }
   }
 
-  return top.map(({ b, status, readiness }) => {
+  return top.map(({ b, status, readiness, yearsToWindow, otherBottleIds }) => {
     const profile = b.wineDefinition ? tasteOf.get(String(b.wineDefinition._id)) : null;
     const taste = profile && hasContent(profile)
       ? {
@@ -147,6 +209,10 @@ async function serializeCandidates(ranked, profileMap, cellarIds, limit) {
           sweetness: profile.sweetness || null,
           flavors: profile.flavors || [],
           food_pairings: profile.foodPairings || [],
+          // Who wrote it and how sure: an AI profile at 0.65 is a guess, and
+          // sweetness is often the field a pairing turns on (ticket 6aad5481).
+          source: profile.source === 'curator' ? 'sommelier' : 'ai',
+          confidence: profile.source === 'curator' ? null : (profile.confidence ?? null),
         }
       : null;
     const wdId = b.wineDefinition?._id ? String(b.wineDefinition._id) : null;
@@ -162,8 +228,11 @@ async function serializeCandidates(ranked, profileMap, cellarIds, limit) {
         country: b.wineDefinition?.country?.name || null,
       },
       vintage: b.vintage,
+      bottles: 1 + (otherBottleIds?.length || 0),
+      ...(otherBottleIds?.length ? { other_bottle_ids: otherBottleIds } : {}),
       readiness,
       maturity: status,
+      ...(readiness === 'approaching' ? { years_until_window: yearsToWindow } : {}),
       window: maturityLabel(status, vintageProfile, b),
       open: b.openedAt
         ? {
@@ -215,4 +284,6 @@ async function scoreDishMatches(dish, ranked) {
   return scoreOf;
 }
 
-module.exports = { readyCandidates, serializeCandidates, scoreDishMatches, READINESS_RANK };
+module.exports = {
+  readyCandidates, serializeCandidates, scoreDishMatches, groupSameWine, READINESS_RANK, APPROACHING_YEARS,
+};

@@ -33,6 +33,18 @@ async function resolveScope(ctx, args) {
   return { cellarIds: cellars.map((c) => c._id), cellarName: null };
 }
 
+/** Both tools disclose what readiness screening did, not just what it kept. */
+function notReadyNote(sel) {
+  const { APPROACHING_YEARS } = require('../../services/drinkingService');
+  const parts = [];
+  if (sel.approaching) {
+    parts.push(`${sel.approaching} bottle(s) are within ${APPROACHING_YEARS} year(s) of their drink window and are included as ` +
+      'readiness "approaching" (see years_until_window) — youthful rather than wrong; weigh them yourself.');
+  }
+  parts.push(`${sel.notReady} bottle(s) further from their window excluded.`);
+  return parts.join(' ');
+}
+
 registerTool({
   name: 'what_should_i_open_tonight',
   title: 'Tonight\'s candidates (ready to drink)',
@@ -41,6 +53,8 @@ registerTool({
     'bottles in closing drink windows, then peak-maturity bottles — each with taste profile, rating, price, drink ' +
     'window and exact rack position. Call for "what should I open/drink tonight", picking a bottle for an occasion, ' +
     'or any drink-now decision. YOU choose for the occasion and explain why; the list is ranked by readiness only. ' +
+    'Bottles within 2 years of their drink window come last as readiness "approaching" (with years_until_window); ' +
+    'identical bottles are one entry with a bottles count. ' +
     'Reserved ("spoken for") bottles are excluded — they are being held for someone or something.',
   scope: 'read',
   annotations: { readOnlyHint: true, openWorldHint: false },
@@ -55,7 +69,7 @@ registerTool({
     'tonight', String(ctx.user.id),
     JSON.stringify([args.wine_type, args.cellar_id, args.max_price, args.currency, args.limit]),
     async () => {
-    const { readyCandidates, serializeCandidates } = require('../../services/drinkingService');
+    const { readyCandidates, serializeCandidates, groupSameWine } = require('../../services/drinkingService');
     const scope = await resolveScope(ctx, args);
     if (scope.error) return scope.error;
     const limit = Math.min(Math.max(parseInt(args.limit, 10) || 8, 1), MAX_LIMIT);
@@ -74,7 +88,7 @@ registerTool({
         ],
       });
     }
-    const data = await serializeCandidates(sel.ranked, sel.profileMap, scope.cellarIds, limit);
+    const data = await serializeCandidates(groupSameWine(sel.ranked), sel.profileMap, scope.cellarIds, limit);
     const openCount = data.filter((c) => c.readiness === 'open').length;
     const urgentCount = data.filter((c) => c.readiness === 'declining' || c.readiness === 'late').length;
     return ok(
@@ -90,7 +104,7 @@ registerTool({
       data,
       {
         warnings: [
-          `Ranked by readiness, not by occasion — weigh price, occasion and taste yourself. ${sel.notReady} not-ready bottle(s) excluded.`,
+          `Ranked by readiness, not by occasion — weigh price, occasion and taste yourself. ${notReadyNote(sel)}`,
           ...reservedNote,
           ...(sel.priceWarning ? [sel.priceWarning] : []),
         ],
@@ -105,8 +119,10 @@ registerTool({
   description:
     'Bottles from the user\'s OWN cellar that fit a dish: matches the dish against each wine\'s stored food-pairing ' +
     'and flavour data (keyword evidence, listed per match) and returns ready-to-drink candidates with full taste ' +
-    'profiles, plus a style spread of other ready bottles so every style is on the table. Call for "what goes with ' +
-    'X", menu planning, or dinner-party picks. The keyword matches are HINTS — apply real pairing judgement over ' +
+    'profiles, plus a style spread of other ready bottles so every style is on the table, and cellar_composition ' +
+    '(every bottle counted by type and grape). Near-ready bottles (within 2 years of their window) are included as ' +
+    'readiness "approaching"; taste.source/confidence say whether a profile is a sommelier\'s or an AI estimate. ' +
+    'Call for "what goes with X", menu planning, or dinner-party picks. The keyword matches are HINTS — apply real pairing judgement over ' +
     'the taste profiles yourself. For buying ideas outside the cellar use semantic_search_wines instead.',
   scope: 'read',
   annotations: { readOnlyHint: true, openWorldHint: false },
@@ -119,7 +135,7 @@ registerTool({
     'pair', String(ctx.user.id),
     JSON.stringify([String(args.dish || '').toLowerCase(), args.cellar_id, args.limit]),
     async () => {
-    const { readyCandidates, serializeCandidates, scoreDishMatches } = require('../../services/drinkingService');
+    const { readyCandidates, serializeCandidates, scoreDishMatches, groupSameWine } = require('../../services/drinkingService');
     const scope = await resolveScope(ctx, args);
     if (scope.error) return scope.error;
     const limit = Math.min(Math.max(parseInt(args.limit, 10) || 8, 1), MAX_LIMIT);
@@ -134,27 +150,34 @@ registerTool({
     }
 
     const scoreOf = await scoreDishMatches(args.dish, sel.ranked);
-    const matched = sel.ranked
+    // One slot per wine + vintage: identical bottles are one candidate.
+    const grouped = groupSameWine(sel.ranked);
+    const matched = grouped
       .filter((r) => scoreOf.has(String(r.b._id)))
       .sort((a, b) => scoreOf.get(String(b.b._id)).score - scoreOf.get(String(a.b._id)).score || a.rank - b.rank);
-    const rest = sel.ranked.filter((r) => !scoreOf.has(String(r.b._id)));
+    const rest = grouped.filter((r) => !scoreOf.has(String(r.b._id)));
 
-    // Style spread: best-readiness bottle or two per wine type from the rest,
+    // Style spread: best-readiness wine or two per wine type from the rest,
     // so the model can pair by style knowledge even with zero keyword hits.
+    // Every type's first pick comes before any type's second, and the cap
+    // never drops below the number of types — a 3-slot cap filled by two reds
+    // and a sparkling once hid every white in the cellar (ticket 6aad5481).
     const perType = new Map();
     for (const r of rest) {
       const t = r.b.wineDefinition?.type || 'unknown';
       const arr = perType.get(t) || [];
       if (arr.length < 2) { arr.push(r); perType.set(t, arr); }
     }
-    const spread = [...perType.values()].flat();
+    const firsts = [...perType.values()].map((arr) => arr[0]);
+    const spread = [...firsts, ...[...perType.values()].flatMap((arr) => arr.slice(1))];
 
     const matchedOut = await serializeCandidates(matched, sel.profileMap, scope.cellarIds, Math.min(matched.length, limit));
     for (const c of matchedOut) {
       const s = scoreOf.get(String(c.bottle_id));
       c.match = { score: s.score, matched_on: s.terms };
     }
-    const spreadOut = await serializeCandidates(spread, sel.profileMap, scope.cellarIds, Math.max(limit - matchedOut.length, 3));
+    const spreadLimit = Math.max(limit - matchedOut.length, 3, firsts.length);
+    const spreadOut = await serializeCandidates(spread, sel.profileMap, scope.cellarIds, spreadLimit);
 
     return ok(
       // Lead with the screened total (support ticket 2026-08-12 "IA bottles
@@ -164,10 +187,13 @@ registerTool({
       `Screened all ${sel.totalActive} active bottle(s) in the cellar; returning a shortlist — ` +
         `${matchedOut.length} keyword match(es) for "${args.dish}", ${spreadOut.length} style-spread candidate(s). ` +
         'Tell the user the whole cellar was considered.',
-      { matched: matchedOut, style_spread: spreadOut },
+      { matched: matchedOut, style_spread: spreadOut, cellar_composition: sel.composition },
       {
         warnings: [
           'Keyword matches come from stored pairing/flavour text — evidence, not verdicts. Wines without an enriched taste profile never keyword-match; judge those from grape, region and type.',
+          'cellar_composition counts EVERY active bottle by type and grape — if a style that suits the dish is there but not shortlisted, find it with search_bottles.',
+          'taste.source "ai" profiles are estimates (see taste.confidence); treat their sweetness and body as unverified.',
+          notReadyNote(sel),
           ...(sel.reservedExcluded ? [`${sel.reservedExcluded} reserved ("spoken for") bottle(s) excluded — they are being held and are not candidates.`] : []),
         ],
       }
