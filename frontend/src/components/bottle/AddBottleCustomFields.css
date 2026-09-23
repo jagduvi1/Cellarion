@@ -1,0 +1,115 @@
+/* Custom fields on the add-bottle form. Layout only — the chip, select and
+   label styling is PersonalDataCard's, imported by the component so the two
+   surfaces onto the same data look like the same feature rather than two
+   that merely do the same thing. */
+
+.abcf {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.abcf-intro {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.abcf-known {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.abcf-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.6rem;
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-hover);
+}
+
+/* Names the value input for a screen reader without spending a row on it. */
+.abcf-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.abcf-row-main {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.abcf-name {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+.abcf-value {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+
+.abcf-value input,
+.abcf-value select {
+  width: 100%;
+}
+
+.abcf-remove {
+  flex: 0 0 auto;
+  padding: 0.3rem 0.7rem;
+  line-height: 1;
+  font-size: 1.1rem;
+}
+
+.abcf-row-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.abcf-type,
+.abcf-level,
+.abcf-unit {
+  font-size: 0.82rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.abcf-level {
+  margin-left: auto;
+}
+
+.abcf-chips-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.abcf-add {
+  align-self: flex-start;
+  font-size: 0.85rem;
+}
+
+/* The row's controls stack rather than squeeze on a phone — a 3-across row
+   at 360px leaves the value input too narrow to read what you typed. */
+@media (max-width: 480px) {
+  .abcf-name,
+  .abcf-value {
+    flex: 1 1 100%;
+  }
+
+  .abcf-level {
+    margin-left: 0;
+  }
+}

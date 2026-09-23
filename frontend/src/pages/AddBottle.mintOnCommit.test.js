@@ -46,6 +46,12 @@ vi.mock('../hooks/useLabelScanner', () => ({
 }));
 vi.mock('../components/ImageUpload', () => ({ default: () => <div /> }));
 vi.mock('../components/RatingInput', () => ({ default: () => <div /> }));
+// The custom-fields block reads the key vocabulary through apiFetch; these
+// tests route apiFetch positionally, so a stub keeps them about the bottles.
+vi.mock('../components/bottle/AddBottleCustomFields', () => ({
+  default: () => <div />,
+  buildPersonalDataPayload: () => [],
+}));
 
 // Key-only so assertions target keys, never copy.
 vi.mock('react-i18next', () => {

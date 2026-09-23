@@ -28,6 +28,7 @@ const { stripHtml, escapeRegex } = require('../utils/sanitize');
 const { toNormalized } = require('../utils/ratingUtils');
 const { classifyMaturity, buildProfileMap, parseMaturityFilter, matchesMaturityFilter } = require('../utils/maturityUtils');
 const { parsePagination } = require('../utils/pagination');
+const personalData = require('../services/personalData');
 // Read-surface decoration: populated grapes gain `displayName` — the
 // regionally correct label for the bottle's wine (Tinta Roriz on a Douro
 // Port) — while `name` stays canonical for storage/filters/stats.
@@ -49,6 +50,11 @@ const { resolveOrMintWine } = require('../services/wineCommit');
 const { moveBottleToCellar } = require('../services/rackOps');
 
 const router = express.Router();
+
+// Custom fields accepted on one bottle create. The service enforces the real
+// cap per target (personalData.ENTRIES_PER_TARGET); this only bounds the loop
+// so a long array cannot turn one POST into unbounded work.
+const MAX_CUSTOM_FIELDS = 20;
 
 // All routes require authentication
 router.use(requireAuth);
@@ -419,7 +425,7 @@ router.get('/', async (req, res) => {
 // semantics to the old find-or-create route, so the UI dialog is unchanged).
 router.post('/', requireNonDemo, async (req, res) => {
   try {
-    const { cellar, wineDefinition, newWine, price, currency } = req.body;
+    const { cellar, wineDefinition, newWine, price, currency, personalData: customFields } = req.body;
 
     if (!cellar || (!wineDefinition && !newWine)) {
       return res.status(400).json({ error: 'Cellar and a wine (wineDefinition or newWine) are required' });
@@ -494,6 +500,55 @@ router.post('/', requireNonDemo, async (req, res) => {
     const { bottle } = result;
     await bottle.populate(WINE_POPULATE);
 
+    // Custom fields typed in the add form (user ticket 6ab05cca — "adding ABV
+    // when adding bottles"). Same typed key/value data the bottle page writes,
+    // through the same service, so the two surfaces cannot drift; the add form
+    // is only a second entry point to it.
+    //
+    // NOT fatal: the bottle exists by now, so a rejected field cannot undo it
+    // and a 400 here would be a lie. Each failure is reported back the way
+    // priceWarnings are, and the form shows them without losing the add.
+    const customFieldErrors = [];
+    if (Array.isArray(customFields) && customFields.length > 0) {
+      // Say what was dropped. A silent truncation is the one failure mode the
+      // caller cannot see: the bottle is 201 and the field simply is not there.
+      for (const field of customFields.slice(MAX_CUSTOM_FIELDS)) {
+        customFieldErrors.push({
+          key: field?.newKey?.name || null,
+          error: `Too many custom fields in one add (max ${MAX_CUSTOM_FIELDS})`,
+        });
+      }
+      for (const field of customFields.slice(0, MAX_CUSTOM_FIELDS)) {
+        const spec = {
+          level: field?.level === 'wine' ? 'wine' : 'bottle',
+          keyId: field?.keyId,
+          newKey: field?.newKey,
+          value: field?.value,
+          vintageScoped: field?.vintageScoped === true,
+        };
+        try {
+          // dedupe: an N-bottle add posts the same WINE-level field once per
+          // bottle (they share one wine record), and a retry after a partial
+          // failure re-posts what the first attempt already wrote.
+          const entryRes = await personalData.createEntry(req.user.id, bottle, spec, { dedupe: true });
+          if (!entryRes.ok) {
+            customFieldErrors.push({ key: spec.newKey?.name || null, error: entryRes.message });
+            continue;
+          }
+          if (entryRes.deduped) continue;
+          logAudit(
+            req,
+            'personal_data.entry_create',
+            { type: spec.level, id: entryRes.entry._id, cellarId: cellarDoc._id },
+            { key: entryRes.entry.key.name, keyCreated: entryRes.keyCreated, via: 'add-bottle' }
+          );
+        } catch (err) {
+          console.warn('Custom field on bottle create failed (non-fatal):', err.message);
+          customFieldErrors.push({ key: spec.newKey?.name || null, error: 'Could not be saved' });
+        }
+      }
+    }
+
     // Non-blocking sanity warnings on the entered price — a REST-only response
     // affordance (the add form highlights a likely mistake — 100×, cents-as-
     // units, etc. — without rejecting the save). See utils/priceValidation.
@@ -514,7 +569,11 @@ router.post('/', requireNonDemo, async (req, res) => {
       }
     }
 
-    res.status(201).json({ bottle, priceWarnings });
+    res.status(201).json({
+      bottle,
+      priceWarnings,
+      ...(customFieldErrors.length > 0 ? { customFieldErrors } : {}),
+    });
   } catch (error) {
     console.error('Create bottle error:', error);
     res.status(500).json({ error: 'Failed to create bottle' });

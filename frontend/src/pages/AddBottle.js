@@ -16,6 +16,7 @@ import ImageGallery from '../components/ImageGallery';
 import RatingInput from '../components/RatingInput';
 import WineImage from '../components/WineImage';
 import SimilarWinesModal from '../components/SimilarWinesModal';
+import AddBottleCustomFields, { buildPersonalDataPayload } from '../components/bottle/AddBottleCustomFields';
 import { WINE_TYPES } from '../config/wineTypes';
 import { swatchType, wineTypeLabel, isStyleType, colourLabel, WINE_COLOURS } from '../utils/wineColour';
 import './AddBottle.css';
@@ -85,6 +86,16 @@ function AddBottle() {
     consumedRating: '',
     consumedRatingScale: user?.preferences?.ratingScale || '5'
   });
+  // Custom fields typed on the form (user ticket 6ab05cca). Held here, written
+  // only by the bottle POST — an abandoned form mints no keys and no entries,
+  // the same discipline the wine itself follows. savedPersonalKeys is the
+  // user's existing vocabulary, kept alongside so the payload builder can send
+  // a key id instead of re-resolving a name the user already has.
+  const [customFields, setCustomFields] = useState([]);
+  const [savedPersonalKeys, setSavedPersonalKeys] = useState([]);
+  // Fields the server would not take. The bottles exist by then, so this is a
+  // notice shown once before the normal after-add flow, never a failure.
+  const [customFieldNotice, setCustomFieldNotice] = useState(null);
   const [uploadedImages, setUploadedImages] = useState([]);
   // How many public photos the registry holds, KEYED BY WINE ID. A single
   // counter was wrong twice over: a passive reset effect runs a render late, so
@@ -112,6 +123,11 @@ function AddBottle() {
   // when POST k of N fails, a retry only creates the remaining N−k instead of
   // duplicating the whole batch. Reset whenever a new wine is selected.
   const createdBottlesRef = useRef([]);
+  // Whether a POST carrying the WINE-level custom fields has already come back
+  // ok. They attach to the shared wine record, so they belong on exactly one
+  // bottle of the batch — tracked here rather than by loop index, which a
+  // retry resuming mid-batch would read as "already sent" when it never was.
+  const wineFieldsSentRef = useRef(false);
   // Post-add placing offer (issue #1055): { ids, count } once the save landed
   // in a cellar that has racks. Skippable, never blocking — "Not now" goes to
   // the cellar page exactly as before.
@@ -300,6 +316,7 @@ function AddBottle() {
   const applyResolvedWine = useCallback((wine, carriedVintage) => {
     createdBottlesRef.current = [];
     imagesLinkedRef.current = false;
+    wineFieldsSentRef.current = false;
     setSelectedWine(wine);
     setPendingNewWine(null);
     setBottleData(prev => ({ ...prev, vintage: carriedVintage || '' }));
@@ -327,6 +344,7 @@ function AddBottle() {
   const applyPendingNewWine = useCallback((wineData, carriedVintage) => {
     createdBottlesRef.current = [];
     imagesLinkedRef.current = false;
+    wineFieldsSentRef.current = false;
     // A fresh new-wine choice starts with the draft toggle off — the earlier
     // answer belonged to a different wine (audit 2026-09-12).
     setCreateAsDraft(false);
@@ -591,6 +609,7 @@ function AddBottle() {
   const handleSelectWine = (wine) => {
     createdBottlesRef.current = [];
     imagesLinkedRef.current = false;
+    wineFieldsSentRef.current = false;
     setSelectedWine(wine);
     setPendingNewWine(null);
     setStep(2);
@@ -696,6 +715,31 @@ function AddBottle() {
     });
   };
 
+  // What happens once every bottle exists: link the photos, then either offer
+  // to place them or go to the cellar. Extracted so the custom-field notice
+  // can hold it back for one dialog and then resume exactly the same flow.
+  const finishAdd = async () => {
+    linkUploadedImages();
+    // Offer to place the new bottles now when the cellar has racks (issue
+    // #1055). One read; any failure to answer simply skips the offer.
+    const newIds = createdBottlesRef.current.map(b => b?._id).filter(Boolean);
+    let hasRacks = false;
+    // Bottles added straight into the drinking history are consumed — a
+    // consumed bottle has no place in a rack (audit 2026-09-14 M).
+    if (newIds.length > 0 && !addToHistory) {
+      try {
+        const rr = await getRacks(apiFetch, cellarId);
+        const rd = rr.ok ? await rr.json() : null;
+        hasRacks = Array.isArray(rd?.racks) ? rd.racks.length > 0 : Array.isArray(rd) && rd.length > 0;
+      } catch { /* no offer */ }
+    }
+    if (hasRacks) {
+      setPlacePrompt({ ids: newIds, count: newIds.length });
+      return;
+    }
+    navigate(`/cellars/${cellarId}`);
+  };
+
   // Create the bottle records that are still missing. wineRef is EITHER
   // { wineId } (an existing registry wine) or { newWinePayload } — in the
   // latter case only the FIRST POST carries `newWine`: the backend mints (or
@@ -741,6 +785,18 @@ function AddBottle() {
         } : {})
       };
 
+      // Custom fields (user ticket 6ab05cca). A BOTTLE-level field rides every
+      // POST — each bottle gets its own copy, which is the point of the level.
+      // A WINE-level field attaches to the shared wine record, so it rides
+      // only the first POST of the batch; sending it N times would ask the
+      // backend to dedupe N-1 writes it should never have been given.
+      const customFieldRows = buildPersonalDataPayload(customFields, savedPersonalKeys, {
+        hasVintage: !!(bottleData.vintage || '').trim(),
+      });
+      const bottleLevelFields = customFieldRows.filter(f => f.level === 'bottle');
+      const wineLevelFields = customFieldRows.filter(f => f.level === 'wine');
+      const fieldWarnings = [];
+
       // createdBottlesRef carries the bottles a previous, partially-failed
       // attempt already created, so a retry never duplicates them — and if
       // that first attempt already minted the wine, its id is reused here
@@ -751,14 +807,22 @@ function AddBottle() {
         || (typeof createdBottles[0]?.wineDefinition === 'string' ? createdBottles[0].wineDefinition : undefined);
 
       for (let i = createdBottles.length; i < numBottles; i++) {
+        // The wine-level fields go with the first POST that accepts them, not
+        // with `i === 0`: a retry resumes at createdBottles.length, so keying
+        // off the index would drop fields the user added between attempts and
+        // never report it. The ref flips only after a POST carrying them came
+        // back ok, and the backend dedupes if one slips through twice.
+        const sendWineFields = !wineFieldsSentRef.current && wineLevelFields.length > 0;
+        const fields = sendWineFields ? [...wineLevelFields, ...bottleLevelFields] : bottleLevelFields;
+        const withFields = fields.length > 0 ? { personalData: fields } : {};
         const payload = wineRefId
-          ? { ...base, wineDefinition: wineRefId }
+          ? { ...base, ...withFields, wineDefinition: wineRefId }
           // The scan evidence rides here, at the ONE place a newWine payload is
           // sent, so every entry path (scan confirm, manual form, soft-zone
           // "create new") carries it without each remembering to. All three
           // parts travel together: the front frame, the optional back frame,
           // and what the two labels disagreed about.
-          : { ...base, newWine: {
+          : { ...base, ...withFields, newWine: {
             ...newWinePayload,
             // Private draft: the row is the user's until they publish it.
             ...(createAsDraft ? { draft: true } : {}),
@@ -782,7 +846,13 @@ function AddBottle() {
           return;
         }
         if (!res.ok) {
-          setError(partialError(data.error || t('addBottle.addFailed'), createdBottles.length));
+          // Custom fields refused by the bottles that DID succeed are folded
+          // into this message: the batch stops here, so the notice dialog
+          // never runs and they would otherwise be lost with the attempt.
+          setError([
+            partialError(data.error || t('addBottle.addFailed'), createdBottles.length),
+            ...fieldWarnings,
+          ].join(' — '));
           // Release-audit MEDIUM: a mint-gate 400 ("Riquewihr is a village,
           // not a producer") lands here AFTER the wine form is gone. When the
           // failed POST carried newWine and nothing was created yet, reopen
@@ -800,6 +870,15 @@ function AddBottle() {
           return;
         }
         createdBottles.push(data.bottle);
+        if (sendWineFields) wineFieldsSentRef.current = true;
+        // The bottle was created; a rejected custom field rides back beside it
+        // rather than failing the add. Deduplicated across the batch — a
+        // bottle-level field that fails on bottle 1 fails on all N for the
+        // same reason, and N copies of one message is noise.
+        for (const w of data.customFieldErrors || []) {
+          const msg = w.key ? `${w.key}: ${w.error}` : w.error;
+          if (!fieldWarnings.includes(msg)) fieldWarnings.push(msg);
+        }
         if (!wineRefId) {
           // First bottle of a newWine batch — every remaining bottle
           // references the wine this create just minted/resolved.
@@ -807,26 +886,15 @@ function AddBottle() {
         }
       }
 
-      // Link uploaded images to the first bottle
-      linkUploadedImages();
-      // Offer to place the new bottles now when the cellar has racks (issue
-      // #1055). One read; any failure to answer simply skips the offer.
-      const newIds = createdBottlesRef.current.map(b => b?._id).filter(Boolean);
-      let hasRacks = false;
-      // Bottles added straight into the drinking history are consumed — a
-      // consumed bottle has no place in a rack (audit 2026-09-14 M).
-      if (newIds.length > 0 && !addToHistory) {
-        try {
-          const rr = await getRacks(apiFetch, cellarId);
-          const rd = rr.ok ? await rr.json() : null;
-          hasRacks = Array.isArray(rd?.racks) ? rd.racks.length > 0 : Array.isArray(rd) && rd.length > 0;
-        } catch { /* no offer */ }
-      }
-      if (hasRacks) {
-        setPlacePrompt({ ids: newIds, count: newIds.length });
+      // A custom field the server would not take (a name already used as
+      // another type, a value that fails its type) must not pass silently —
+      // the bottles ARE added, so this is a notice, not a failure, and the
+      // normal after-add flow resumes when it is dismissed.
+      if (fieldWarnings.length > 0) {
+        setCustomFieldNotice(fieldWarnings);
         return;
       }
-      navigate(`/cellars/${cellarId}`);
+      await finishAdd();
     } catch (err) {
       setError(partialError(t('common.networkError'), createdBottlesRef.current.length));
       linkUploadedImages();
@@ -1661,6 +1729,24 @@ function AddBottle() {
                   <p className="help-text">{t('addBottle.drinkWindowHint')}</p>
                 </div>
 
+                {/* ── Custom fields (user ticket 6ab05cca) ──
+                    ABV and anything else the label carries, typed while the
+                    bottle is still in hand. The same personal typed data the
+                    bottle page writes (#986) — this is a second entry point to
+                    it, not a second store. Nothing is written until the bottle
+                    POST carries it, so an abandoned form leaves no rows. */}
+                <div className="form-group">
+                  <label>{t('addBottle.customFields', 'Custom fields')}</label>
+                  <AddBottleCustomFields
+                    apiFetch={apiFetch}
+                    wineId={selectedWine?._id}
+                    vintage={bottleData.vintage}
+                    rows={customFields}
+                    onChange={setCustomFields}
+                    onKeysLoaded={setSavedPersonalKeys}
+                  />
+                </div>
+
                 {/* ── Add to History ── */}
                 <div className="add-to-history-section">
                   <label className="toggle-label">
@@ -1781,6 +1867,33 @@ function AddBottle() {
           }}
           onCancel={() => { setSoftCandidates(null); setSoftPending(null); }}
         />
+      )}
+
+      {/* A custom field the server refused. The bottles were added — say so
+          plainly, name what was dropped, and carry on. */}
+      {customFieldNotice && (
+        <div className="modal-overlay">
+          <DialogBox
+            className="modal-box"
+            onClose={() => { setCustomFieldNotice(null); finishAdd(); }}
+            label={t('addBottle.customFieldsNotSaved', 'Some custom fields were not saved')}
+          >
+            <h2>{t('addBottle.customFieldsNotSaved', 'Some custom fields were not saved')}</h2>
+            <p>{t('addBottle.customFieldsNotSavedBody', 'The bottles were added. These fields were not — you can add them on the bottle page.')}</p>
+            <ul>
+              {customFieldNotice.map(w => <li key={w}>{w}</li>)}
+            </ul>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => { setCustomFieldNotice(null); finishAdd(); }}
+              >
+                {t('common.close')}
+              </button>
+            </div>
+          </DialogBox>
+        </div>
       )}
 
       {/* Post-add placing offer (issue #1055) — skippable, never blocking */}

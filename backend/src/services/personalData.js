@@ -184,8 +184,14 @@ async function resolveKey(userId, { keyId, newKey }) {
 /**
  * Create an entry on a bottle (level 'bottle') or its wine (level 'wine').
  * Caller has already resolved bottle access for userId.
+ *
+ * `dedupe` returns the caller's existing entry for the same key and target
+ * slot instead of writing a second one. Off by default — the bottle page has
+ * always allowed a repeat and nothing should change under it — and ON for the
+ * add-bottle form, where a six-bottle batch posts the same WINE-level field
+ * once per bottle and a retry re-posts what the first attempt already wrote.
  */
-async function createEntry(userId, bottle, { level, keyId, newKey, value, vintageScoped = false }) {
+async function createEntry(userId, bottle, { level, keyId, newKey, value, vintageScoped = false }, { dedupe = false } = {}) {
   if (level !== 'wine' && level !== 'bottle') {
     return fail('invalid', "level must be 'wine' or 'bottle'");
   }
@@ -213,6 +219,35 @@ async function createEntry(userId, bottle, { level, keyId, newKey, value, vintag
 
   const target =
     level === 'wine' ? { wineDefinition: bottle.wineDefinition } : { bottle: bottle._id };
+  const slotVintage = vintageScoped ? bottle.vintage.trim() : null;
+
+  if (dedupe) {
+    // Rows written before the vintage field existed have no `vintage` at all,
+    // and Mongo matches a missing field against null — so the default slot
+    // finds them, exactly as the RegistryDataValue index does.
+    const existing = await PersonalDataEntry.findOne({
+      author: userId, key: key._id, ...target, vintage: slotVintage,
+    })
+      .populate('key')
+      .populate('author', AUTHOR_SELECT)
+      .lean();
+    // Only the SAME value is a duplicate. A different one is the user saying
+    // something new, and swallowing it would lose what they typed with no
+    // trace — so it comes back as a conflict they can act on, rather than
+    // being quietly overwritten from a form that cannot show them the old
+    // value. Every cast value is a primitive (dates canonicalise to ISO
+    // strings in personalDataTypes), so === is the whole comparison.
+    if (existing && existing.value === checked.value) {
+      return { ok: true, entry: serializeEntry(existing), deduped: true };
+    }
+    if (existing) {
+      return fail(
+        'conflict',
+        `You already recorded "${key.name}" here as ${existing.value} — change it on the bottle page`
+      );
+    }
+  }
+
   const count = await PersonalDataEntry.countDocuments({ author: userId, ...target });
   if (count >= ENTRIES_PER_TARGET) {
     return fail('limit', `Entry limit reached for this ${level} (max ${ENTRIES_PER_TARGET})`);
@@ -223,7 +258,7 @@ async function createEntry(userId, bottle, { level, keyId, newKey, value, vintag
     key: key._id,
     targetType: level,
     ...target,
-    ...(vintageScoped ? { vintage: bottle.vintage.trim() } : {}),
+    ...(slotVintage ? { vintage: slotVintage } : {}),
     value: checked.value,
   });
   await entry.populate([{ path: 'key' }, { path: 'author', select: AUTHOR_SELECT }]);
