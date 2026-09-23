@@ -48,7 +48,7 @@ const NEW_ROW = {
  * than sent half-built, and a row whose name matches a saved key rides that
  * key's id so the backend reuses it instead of resolving by name.
  */
-export function buildPersonalDataPayload(rows, savedKeys, { hasVintage }) {
+export function buildPersonalDataPayload(rows, savedKeys, { hasVintage, registryKeys = [] } = {}) {
   const out = [];
   for (const row of rows || []) {
     const name = (row.keyName || '').trim();
@@ -58,7 +58,17 @@ export function buildPersonalDataPayload(rows, savedKeys, { hasVintage }) {
     const saved = (savedKeys || []).find(
       (k) => k.name.toLowerCase() === name.toLowerCase()
     );
-    const type = saved ? saved.type : row.keyType;
+    // A name that matches the PUBLIC vocabulary takes the registry's type and
+    // unit even when the user typed it by hand rather than tapping the chip —
+    // otherwise "ABV" typed into a fresh row goes out as text, and the user
+    // ends up with a text ABV key beside everyone else's decimal one. The id
+    // is NOT reused: a RegistryDataKey id is not a PersonalDataKey id, so the
+    // definition rides as newKey and the service matches it by name.
+    const publicKey = saved ? null : (registryKeys || []).find(
+      (k) => k.name.toLowerCase() === name.toLowerCase()
+    );
+    const known = saved || publicKey;
+    const type = known ? known.type : row.keyType;
     // A vintage scope the bottle cannot satisfy is rejected by the service,
     // so it degrades to the wine-wide entry rather than costing the field.
     const level = row.level === 'wine-vintage' && !hasVintage ? 'wine' : row.level;
@@ -71,11 +81,19 @@ export function buildPersonalDataPayload(rows, savedKeys, { hasVintage }) {
         ? { keyId: saved._id }
         : {
           newKey: {
-            name,
+            // The public vocabulary's own spelling, so everyone's "ABV" is
+            // one key rather than ABV / abv / Abv.
+            name: publicKey ? publicKey.name : name,
             type,
-            ...(row.unit && row.unit.trim() ? { unit: row.unit.trim() } : {}),
+            ...(publicKey
+              ? (publicKey.unit ? { unit: publicKey.unit } : {})
+              : (row.unit && row.unit.trim() ? { unit: row.unit.trim() } : {})),
             ...(type === 'enum'
-              ? { enumOptions: (row.enumOptions || '').split(',').map((o) => o.trim()).filter(Boolean) }
+              ? {
+                enumOptions: publicKey
+                  ? (publicKey.enumOptions || [])
+                  : (row.enumOptions || '').split(',').map((o) => o.trim()).filter(Boolean),
+              }
               : {}),
           },
         }),
@@ -84,7 +102,7 @@ export function buildPersonalDataPayload(rows, savedKeys, { hasVintage }) {
   return out;
 }
 
-function AddBottleCustomFields({ apiFetch, wineId, vintage, rows, onChange, onKeysLoaded }) {
+function AddBottleCustomFields({ apiFetch, wineId, vintage, rows, onChange, onKeysLoaded, onRegistryKeysLoaded }) {
   const { t } = useTranslation();
   const [savedKeys, setSavedKeys] = useState([]);
   const [registryKeys, setRegistryKeys] = useState([]);
@@ -110,15 +128,17 @@ function AddBottleCustomFields({ apiFetch, wineId, vintage, rows, onChange, onKe
         }
         if (rk.ok) {
           const body = await rk.json().catch(() => ({}));
-          setRegistryKeys(body.keys || []);
+          const keys = body.keys || [];
+          setRegistryKeys(keys);
+          onRegistryKeysLoaded?.(keys);
         }
       } catch {
         // Suggestions are a convenience — typing a name by hand still works.
       }
     })();
     return () => { live = false; };
-    // onKeysLoaded is a setter from the parent; re-running on its identity
-    // would refetch the vocabulary on every parent render.
+    // The onLoaded props are setters from the parent; re-running on their
+    // identity would refetch the vocabulary on every parent render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiFetch]);
 
@@ -215,11 +235,15 @@ function AddBottleCustomFields({ apiFetch, wineId, vintage, rows, onChange, onKe
       )}
 
       {rows.map((row, i) => {
-        const saved = savedKeys.find(
-          (k) => k.name.toLowerCase() === (row.keyName || '').trim().toLowerCase()
-        );
-        const type = saved ? saved.type : row.keyType;
-        const unit = saved ? saved.unit : row.unit;
+        const rowName = (row.keyName || '').trim().toLowerCase();
+        const saved = savedKeys.find((k) => k.name.toLowerCase() === rowName);
+        // A public key is a canonical definition too: its type and unit are
+        // the registry's answer, not a choice to re-make on this form. Showing
+        // a type selector on "ABV" invites exactly the text-vs-decimal split
+        // the shared vocabulary exists to prevent.
+        const known = saved || registryKeys.find((k) => k.name.toLowerCase() === rowName);
+        const type = known ? known.type : row.keyType;
+        const unit = known ? known.unit : row.unit;
         // A vintage scope the bottle can no longer satisfy (the vintage was
         // cleared after the row was seeded) shows as the wine-wide entry the
         // payload builder will actually send — never as a blank select.
@@ -250,7 +274,7 @@ function AddBottleCustomFields({ apiFetch, wineId, vintage, rows, onChange, onKe
                 </label>
                 <TypedValueInput
                   id={`abcf-value-${i}`}
-                  keyDef={{ type, unit, enumOptions: saved ? saved.enumOptions : (row.enumOptions || '').split(',').map((o) => o.trim()).filter(Boolean) }}
+                  keyDef={{ type, unit, enumOptions: known ? known.enumOptions : (row.enumOptions || '').split(',').map((o) => o.trim()).filter(Boolean) }}
                   value={row.value}
                   onChange={(v) => update(i, { value: v })}
                   // A blank row is dropped, not rejected — these inputs sit in
@@ -269,7 +293,7 @@ function AddBottleCustomFields({ apiFetch, wineId, vintage, rows, onChange, onKe
             </div>
 
             <div className="abcf-row-opts">
-              {!saved && row.keyName.trim() && (
+              {!known && row.keyName.trim() && (
                 <>
                   <select
                     className="pd-select abcf-type"

@@ -79,11 +79,22 @@
   gap: 0.4rem;
 }
 
-.abcf-type,
-.abcf-level,
-.abcf-unit {
+/* `.form-group select` in common.css sets `width: 100%`, which stacks these
+   one per line and turns a one-line row into a block. They are secondary
+   controls on an already-labelled row, so they size to content — the extra
+   class here is what outranks that global rule. */
+.abcf .abcf-type,
+.abcf .abcf-level,
+.abcf .abcf-unit {
   font-size: 0.82rem;
-  padding: 0.25rem 0.5rem;
+  padding: 0.25rem 2.2rem 0.25rem 0.5rem;
+  width: auto;
+  max-width: 100%;
+}
+
+.abcf .abcf-unit {
+  flex: 0 1 9rem;
+  padding-right: 0.5rem;
 }
 
 .abcf-level {
@@ -104,12 +115,18 @@
 /* The row's controls stack rather than squeeze on a phone — a 3-across row
    at 360px leaves the value input too narrow to read what you typed. */
 @media (max-width: 480px) {
-  .abcf-name,
-  .abcf-value {
+  /* The name takes its own line; the value keeps the remove button beside it
+     rather than stranding a lone × on a third line. */
+  .abcf-name {
     flex: 1 1 100%;
   }
 
-  .abcf-level {
+  .abcf-value {
+    flex: 1 1 0;
+  }
+
+  .abcf .abcf-level {
     margin-left: 0;
+    width: 100%;
   }
 }

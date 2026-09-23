@@ -93,6 +93,9 @@ function AddBottle() {
   // a key id instead of re-resolving a name the user already has.
   const [customFields, setCustomFields] = useState([]);
   const [savedPersonalKeys, setSavedPersonalKeys] = useState([]);
+  // The accepted PUBLIC vocabulary, so a name typed by hand still resolves to
+  // the registry type rather than defaulting to text.
+  const [publicKeys, setPublicKeys] = useState([]);
   // Fields the server would not take. The bottles exist by then, so this is a
   // notice shown once before the normal after-add flow, never a failure.
   const [customFieldNotice, setCustomFieldNotice] = useState(null);
@@ -792,6 +795,7 @@ function AddBottle() {
       // backend to dedupe N-1 writes it should never have been given.
       const customFieldRows = buildPersonalDataPayload(customFields, savedPersonalKeys, {
         hasVintage: !!(bottleData.vintage || '').trim(),
+        registryKeys: publicKeys,
       });
       const bottleLevelFields = customFieldRows.filter(f => f.level === 'bottle');
       const wineLevelFields = customFieldRows.filter(f => f.level === 'wine');
@@ -1744,6 +1748,7 @@ function AddBottle() {
                     rows={customFields}
                     onChange={setCustomFields}
                     onKeysLoaded={setSavedPersonalKeys}
+                    onRegistryKeysLoaded={setPublicKeys}
                   />
                 </div>
 

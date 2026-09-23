@@ -87,6 +87,26 @@ describe('buildPersonalDataPayload', () => {
     expect(buildPersonalDataPayload(rows, [], { hasVintage: true })).toHaveLength(1);
   });
 
+  test('a hand-typed public-key name takes the registry’s name, type and unit', () => {
+    // Without this, "abv" typed into a fresh row goes out as a TEXT key named
+    // "abv" — a second private ABV beside the decimal one everyone else has,
+    // which is the fragmentation the shared vocabulary exists to stop.
+    const rows = [{ keyName: 'abv', keyType: 'text', unit: '', value: '13.5', level: 'wine-vintage' }];
+    const [out] = buildPersonalDataPayload(rows, [], { hasVintage: true, registryKeys: [ABV_KEY] });
+
+    expect(out.newKey).toEqual({ name: 'ABV', type: 'decimal', unit: '%' });
+  });
+
+  test('the user’s OWN key still wins over the public one, and rides its id', () => {
+    // Their key already exists with its own type; the service would reject a
+    // conflicting definition, and their data belongs under their key.
+    const mine = { _id: 'pk9', name: 'ABV', type: 'text', unit: null, enumOptions: null };
+    const rows = [{ keyName: 'ABV', keyType: 'decimal', unit: '%', value: 'high', level: 'bottle' }];
+    const [out] = buildPersonalDataPayload(rows, [mine], { hasVintage: true, registryKeys: [ABV_KEY] });
+
+    expect(out).toEqual({ level: 'bottle', value: 'high', keyId: 'pk9' });
+  });
+
   test('a boolean row is coerced; enum options are split', () => {
     const rows = [
       { keyName: 'Opened', keyType: 'boolean', value: 'true', level: 'bottle' },
@@ -194,6 +214,68 @@ describe('AddBottleCustomFields', () => {
 
     await screen.findByRole('button', { name: '+ Add a field' });
     expect(getWinePublicData).not.toHaveBeenCalled();
+  });
+
+  test('the public key and the user’s own key are both offered, side by side', async () => {
+    // The case the ticket actually describes: someone who has recorded "Cork
+    // type" before starts a new bottle and should see BOTH the shared ABV and
+    // their own key, without going looking for either.
+    getRegistryKeys.mockResolvedValue(ok({ keys: [ABV_KEY] }));
+    getPersonalDataKeys.mockResolvedValue(ok({ keys: [SAVED_CORK] }));
+
+    render(<Host vintage="2019" />);
+
+    expect(await screen.findByRole('button', { name: '+ ABV' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '+ Cork' })).toBeInTheDocument();
+    // Grouped, so it is clear which one everybody shares and which is theirs.
+    expect(screen.getByText('Add:')).toBeInTheDocument();
+    expect(screen.getByText('Your saved keys:')).toBeInTheDocument();
+
+    // And both can be used in the same add.
+    fireEvent.click(screen.getByRole('button', { name: '+ ABV' }));
+    fireEvent.click(screen.getByRole('button', { name: '+ Cork' }));
+    expect(screen.getAllByLabelText('Field name').map((el) => el.value)).toEqual(['ABV', 'Cork']);
+  });
+
+  test('a personal key of the same name as a public one is not offered twice', async () => {
+    // Seven users had their own private "ABV" key. Whoever already has one
+    // must see ONE chip, and it must be the registry's canonical definition.
+    getRegistryKeys.mockResolvedValue(ok({ keys: [ABV_KEY] }));
+    getPersonalDataKeys.mockResolvedValue(ok({
+      keys: [{ _id: 'pk9', name: 'abv', type: 'decimal', unit: null, enumOptions: null }],
+    }));
+
+    render(<Host vintage="2019" />);
+
+    await screen.findByRole('button', { name: '+ ABV' });
+    expect(screen.queryByRole('button', { name: '+ abv' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Your saved keys:')).not.toBeInTheDocument();
+  });
+
+  test('a public key locks its type and unit — they are the registry’s answer', async () => {
+    getRegistryKeys.mockResolvedValue(ok({ keys: [ABV_KEY] }));
+    render(<Host vintage="2019" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '+ ABV' }));
+
+    // Offering a type selector on ABV invites exactly the text-vs-decimal
+    // split the shared vocabulary exists to prevent.
+    expect(screen.queryByLabelText('Value type')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Unit (optional)')).not.toBeInTheDocument();
+    expect(screen.getByText('%')).toBeInTheDocument();
+  });
+
+  test('typing a public key’s name by hand resolves to its definition too', async () => {
+    getRegistryKeys.mockResolvedValue(ok({ keys: [ABV_KEY] }));
+    render(<Host vintage="2019" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '+ Add a field' }));
+    // The default type is text; the name must override it, or a hand-typed
+    // "abv" becomes a text key beside everyone else's decimal one.
+    fireEvent.change(screen.getByLabelText('Field name'), { target: { value: 'abv' } });
+
+    await waitFor(() => expect(screen.queryByLabelText('Value type')).not.toBeInTheDocument());
+    expect(screen.getByText('%')).toBeInTheDocument();
   });
 
   test('a saved key offers a chip and locks the type it already has', async () => {
