@@ -2,22 +2,23 @@
  * Offline mode (#1355): keep the app and the signed-in session usable when the
  * device has no network (a cellar in a basement).
  *
- * NOT RELEASED YET. Until OFFLINE_MODE_RELEASED is flipped, it is on only when
- * explicitly switched on for this browser:
- *     localStorage.setItem('cellarion-offline', 'on')   // then reload
- * When released, the default becomes: on in the installed app (standalone /
- * the Android TWA), off in a plain browser tab — a shared or borrowed computer
- * should not keep a copy of someone's cellar unless they ask for it.
+ * The switch is Settings → Offline mode (components/OfflineSettings), stored per
+ * browser. Without a choice the default is: on in the installed app
+ * (standalone / the Android TWA), off in a plain browser tab — a shared or
+ * borrowed computer should not keep a copy of someone's cellar unless they ask.
  *
  * What it switches on (this module is the only switch):
  *  - the service worker keeps the whole app for offline use (public/service-worker.js)
  *  - a network failure at startup keeps the last signed-in profile instead of
  *    showing the login page (contexts/AuthContext.js, below)
  */
-export const OFFLINE_MODE_RELEASED = false;
+export const OFFLINE_MODE_RELEASED = true;
 
 const PREF_KEY = 'cellarion-offline';          // 'on' | 'off' | absent (default)
 const USER_KEY = 'cellarion-offline-user';
+// The Android app is only recognisable on its first page load (the
+// android-app:// referrer; a reload loses it), so once seen it is remembered.
+const INSTALLED_KEY = 'cellarion-installed-app';
 
 function readPref() {
   try { return localStorage.getItem(PREF_KEY); } catch { return null; }
@@ -25,9 +26,14 @@ function readPref() {
 
 export function isStandaloneApp() {
   try {
-    if (window.matchMedia?.('(display-mode: standalone)').matches) return true;
-    if (window.navigator.standalone === true) return true;            // iOS home screen
-    return document.referrer.startsWith('android-app://');             // Android TWA
+    const now = window.matchMedia?.('(display-mode: standalone)').matches
+      || window.navigator.standalone === true                         // iOS home screen
+      || document.referrer.startsWith('android-app://');              // Android TWA
+    if (now) {
+      try { localStorage.setItem(INSTALLED_KEY, '1'); } catch { /* noop */ }
+      return true;
+    }
+    return localStorage.getItem(INSTALLED_KEY) === '1';
   } catch {
     return false;
   }
