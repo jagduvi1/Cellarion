@@ -3,6 +3,7 @@ import { lazy } from './utils/lazyWithReload';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import OfflineSync from './components/OfflineSync';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import Layout from './components/Layout';
@@ -98,6 +99,8 @@ function AppRoutes() {
 
   return (
     <>
+    {/* Offline mode: keeps the device's copy of the cellars fresh (renders nothing) */}
+    <OfflineSync />
     <Suspense fallback={null}>
       <Routes>
         {/* Public routes */}

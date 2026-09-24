@@ -46,7 +46,11 @@ export function setOfflineModePreference(value) {
     if (value === 'on' || value === 'off') localStorage.setItem(PREF_KEY, value);
     else localStorage.removeItem(PREF_KEY);
   } catch { /* storage blocked — the default applies */ }
-  if (!isOfflineModeEnabled()) clearOfflineUser();
+  if (!isOfflineModeEnabled()) {
+    clearOfflineUser();
+    // Loaded on demand: offlineSnapshot imports this module.
+    import('./offlineSnapshot').then((m) => m.clearOfflineData()).catch(() => {});
+  }
   return syncOfflineShell();
 }
 

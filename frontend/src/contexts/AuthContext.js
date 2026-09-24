@@ -3,6 +3,14 @@ import { findLanguage } from '../config/locales';
 import { createApiFetch } from '../utils/apiFetch';
 import { clearApiCaches } from '../serviceWorkerRegistration';
 import { saveOfflineUser, loadOfflineUser, clearOfflineUser } from '../utils/offlineMode';
+import { offlineAnswer, markLive, clearOfflineData } from '../utils/offlineSnapshot';
+
+// A write succeeded somewhere in the app: OfflineSync refreshes the device's
+// copy shortly after (components/OfflineSync.js).
+export const API_MUTATION_EVENT = 'cellarion-api-mutation';
+const notifyApiMutation = () => {
+  try { window.dispatchEvent(new Event(API_MUTATION_EVENT)); } catch { /* noop */ }
+};
 import i18n, { hasLanguagePreview } from '../i18n';
 
 const AuthContext = createContext();
@@ -26,6 +34,10 @@ export const AuthProvider = ({ children }) => {
   // Keep a ref to the latest token so apiFetch always reads the current value
   // without needing to be recreated on every token change
   const tokenRef = useRef(token);
+  // The signed-in user's id for apiFetch's offline answers (the snapshot is
+  // stored per account); kept in a ref so apiFetch stays a stable reference.
+  const userIdRef = useRef(null);
+  userIdRef.current = user ? String(user.id || user._id || '') || null : null;
   useEffect(() => { tokenRef.current = token; }, [token]);
 
   // ------------------------------------------------------------------
@@ -158,6 +170,7 @@ export const AuthProvider = ({ children }) => {
     // and the profile kept for an offline start.
     await clearApiCaches();
     clearOfflineUser();
+    await clearOfflineData(); // the saved cellar copy and its photos
     clearToken();
     setOfflineSession(false);
     setUser(null);
@@ -173,7 +186,12 @@ export const AuthProvider = ({ children }) => {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const apiFetch = useCallback(
-    createApiFetch(() => tokenRef.current, handleRefresh, onRefreshFailed),
+    createApiFetch(() => tokenRef.current, handleRefresh, onRefreshFailed, {
+      // Offline mode: reads the network can't answer come from the device's copy.
+      offlineFallback: (url) => offlineAnswer(url, userIdRef.current),
+      onLive: markLive,
+      onMutation: notifyApiMutation,
+    }),
     [] // stable: getToken via ref, callbacks are stable via useCallback
   );
 
