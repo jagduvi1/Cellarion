@@ -61,7 +61,7 @@ afterEach(() => vi.unstubAllGlobals());
 describe('AuthProvider offline start', () => {
   it('offline mode on + no network at startup → carries on as the kept user, offline', async () => {
     localStorage.setItem('cellarion-offline', 'on');
-    localStorage.setItem('cellarion-offline-user', JSON.stringify(KEPT_USER));
+    localStorage.setItem('cellarion-offline-user', JSON.stringify({ ...KEPT_USER, _verifiedAt: Date.now() }));
     stubFetch({ '/api/auth/refresh': offline });
     renderAuth();
     expect(await screen.findByText('user:anna (offline)')).toBeInTheDocument();
@@ -69,7 +69,7 @@ describe('AuthProvider offline start', () => {
   });
 
   it('offline mode off + no network → the login page, as before', async () => {
-    localStorage.setItem('cellarion-offline-user', JSON.stringify(KEPT_USER)); // stale leftover
+    localStorage.setItem('cellarion-offline-user', JSON.stringify({ ...KEPT_USER, _verifiedAt: Date.now() })); // stale leftover
     stubFetch({ '/api/auth/refresh': offline });
     renderAuth();
     expect(await screen.findByText('no user')).toBeInTheDocument();
@@ -77,7 +77,7 @@ describe('AuthProvider offline start', () => {
 
   it('a rejected refresh ends the session and deletes the kept profile', async () => {
     localStorage.setItem('cellarion-offline', 'on');
-    localStorage.setItem('cellarion-offline-user', JSON.stringify(KEPT_USER));
+    localStorage.setItem('cellarion-offline-user', JSON.stringify({ ...KEPT_USER, _verifiedAt: Date.now() }));
     stubFetch({ '/api/auth/refresh': () => Promise.resolve(json(401, {})) });
     renderAuth();
     expect(await screen.findByText('no user')).toBeInTheDocument();
@@ -87,7 +87,7 @@ describe('AuthProvider offline start', () => {
   it('an online start with offline mode on keeps a minimal profile for next time', async () => {
     localStorage.setItem('cellarion-offline', 'on');
     stubFetch({
-      '/api/auth/refresh': () => Promise.resolve(json(200, { token: 'T1' })),
+      '/api/auth/refresh': () => Promise.resolve(json(200, { token: 'T1', persistent: true })),
       '/api/auth/me': () => Promise.resolve(json(200, { user: SERVER_USER })),
     });
     renderAuth();
@@ -102,7 +102,7 @@ describe('AuthProvider offline start', () => {
 
   it('leaves the offline session when the network comes back', async () => {
     localStorage.setItem('cellarion-offline', 'on');
-    localStorage.setItem('cellarion-offline-user', JSON.stringify(KEPT_USER));
+    localStorage.setItem('cellarion-offline-user', JSON.stringify({ ...KEPT_USER, _verifiedAt: Date.now() }));
     const routes = { '/api/auth/refresh': offline };
     stubFetch(routes);
     renderAuth();
@@ -116,7 +116,7 @@ describe('AuthProvider offline start', () => {
 
   it('ends the offline session if the server rejects it on reconnect', async () => {
     localStorage.setItem('cellarion-offline', 'on');
-    localStorage.setItem('cellarion-offline-user', JSON.stringify(KEPT_USER));
+    localStorage.setItem('cellarion-offline-user', JSON.stringify({ ...KEPT_USER, _verifiedAt: Date.now() }));
     const routes = { '/api/auth/refresh': offline, '/api/auth/logout': () => Promise.resolve(json(200, {})) };
     stubFetch(routes);
     renderAuth();
@@ -161,4 +161,74 @@ describe('apiFetch when a refresh gets no answer', () => {
     await act(async () => { await ctx.apiFetch('/api/cellars'); });
     expect(await screen.findByText('no user')).toBeInTheDocument();
   });
+});
+
+describe('audit fixes', () => {
+  it('a logout made offline is finished before anything else at the next start', async () => {
+    localStorage.setItem('cellarion-pending-logout', '1');
+    const calls = [];
+    const fetchMock = stubFetch({
+      '/api/auth/logout': () => { calls.push('logout'); return Promise.resolve(json(200, {})); },
+      '/api/auth/refresh': () => { calls.push('refresh'); return Promise.resolve(json(401, {})); },
+    });
+    renderAuth();
+    expect(await screen.findByText('no user')).toBeInTheDocument();
+    expect(calls).toEqual(['logout', 'refresh']);
+    expect(localStorage.getItem('cellarion-pending-logout')).toBeNull();
+    expect(fetchMock.mock.calls[0][1].headers).toEqual({}); // no token: the cookie identifies the session
+  });
+
+  it('still offline with a pending logout → stays signed out, no refresh attempted', async () => {
+    localStorage.setItem('cellarion-offline', 'on');
+    localStorage.setItem('cellarion-offline-user', JSON.stringify({ ...KEPT_USER, _verifiedAt: Date.now() }));
+    localStorage.setItem('cellarion-pending-logout', '1');
+    const calls = [];
+    stubFetch({
+      '/api/auth/logout': () => { calls.push('logout'); return offline(); },
+      '/api/auth/refresh': () => { calls.push('refresh'); return offline(); },
+    });
+    renderAuth();
+    expect(await screen.findByText('no user')).toBeInTheDocument();
+    expect(calls).toEqual(['logout']);
+    expect(localStorage.getItem('cellarion-pending-logout')).toBe('1');
+  });
+
+  it('a logout with no network is remembered for the next start', async () => {
+    localStorage.setItem('cellarion-offline', 'on');
+    localStorage.setItem('cellarion-offline-user', JSON.stringify({ ...KEPT_USER, _verifiedAt: Date.now() }));
+    stubFetch({ '/api/auth/refresh': offline, '/api/auth/logout': offline });
+    renderAuth();
+    expect(await screen.findByText('user:anna (offline)')).toBeInTheDocument();
+    await act(async () => { await ctx.logout(); });
+    expect(await screen.findByText('no user')).toBeInTheDocument();
+    expect(localStorage.getItem('cellarion-pending-logout')).toBe('1');
+  });
+
+  it('a profile kept without a verification stamp (or too old) does not start offline', async () => {
+    localStorage.setItem('cellarion-offline', 'on');
+    localStorage.setItem('cellarion-offline-user', JSON.stringify(KEPT_USER));
+    stubFetch({ '/api/auth/refresh': offline });
+    renderAuth();
+    expect(await screen.findByText('no user')).toBeInTheDocument();
+  });
+
+  it('a browser-only session is not kept for an offline start', async () => {
+    localStorage.setItem('cellarion-offline', 'on');
+    stubFetch({
+      '/api/auth/refresh': () => Promise.resolve(json(200, { token: 'T1', persistent: false })),
+      '/api/auth/me': () => Promise.resolve(json(200, { user: SERVER_USER })),
+    });
+    renderAuth();
+    expect(await screen.findByText('user:anna')).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(localStorage.getItem('cellarion-offline-user')).toBeNull();
+  });
+
+  it('one bar of signal (the refresh hangs) → opens offline after a few seconds', async () => {
+    localStorage.setItem('cellarion-offline', 'on');
+    localStorage.setItem('cellarion-offline-user', JSON.stringify({ ...KEPT_USER, _verifiedAt: Date.now() }));
+    stubFetch({ '/api/auth/refresh': () => new Promise(() => {}) });
+    renderAuth();
+    expect(await screen.findByText('user:anna (offline)', {}, { timeout: 7000 })).toBeInTheDocument();
+  }, 10000);
 });

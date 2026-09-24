@@ -1,4 +1,5 @@
-const express = require('express');
+const express = require('express');
+const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
@@ -338,6 +339,7 @@ router.post('/login', authLimiter, async (req, res) => {
 
     res.json({
       token: accessToken,
+      persistent: rememberMe !== false, // see POST /refresh
       user: loginUserJson
     });
   } catch (error) {
@@ -508,7 +510,10 @@ router.post('/refresh', refreshLimiter, async (req, res) => {
     // detection, deadline preserved (legacy null backfilled to a fresh cap).
     const accessToken = await issueTokens(user, res, { session });
 
-    res.json({ token: accessToken });
+    // persistent: whether this device's session is a "remember me" one. The
+    // cookie is httpOnly, so the app cannot see it — offline mode (#1355) only
+    // allows an offline start for a session that survives closing the browser.
+    res.json({ token: accessToken, persistent: session.persistent !== false });
   } catch (error) {
     console.error('Refresh error:', error);
     clearRefreshCookie(res);
@@ -588,15 +593,31 @@ router.post('/change-password', requireAuth, requireNonDemo, authLimiter, async 
 });
 
 // POST /api/auth/logout - Invalidate refresh token
-router.post('/logout', requireAuth, async (req, res) => {
+router.post('/logout', async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
+    // Who is signing out: the bearer token when there is a valid one, else the
+    // httpOnly refresh cookie itself. An offline session (#1355) has no access
+    // token; when this route required one, logging out there wiped the device
+    // but left the server session and cookie alive — the next online start
+    // signed the same account straight back in. The cookie is SameSite=Lax,
+    // so another site cannot post this with it.
+    const raw = req.cookies?.refreshToken;
+    const hash = raw ? hashRefreshToken(raw) : null;
+    let user = null;
+    const bearer = (req.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+    if (bearer) {
+      try {
+        const decoded = jwt.verify(bearer, process.env.JWT_SECRET, { algorithms: ['HS256'] });
+        user = await User.findById(decoded.id);
+      } catch { /* expired or invalid — fall back to the cookie */ }
+    }
+    if (!user && hash) {
+      user = await User.findOne({ $or: [{ 'sessions.hash': hash }, { 'sessions.prevHash': hash }, { refreshTokenHash: hash }] });
+    }
     if (user) {
       // Sign out THIS device only: drop the session its refresh cookie belongs
       // to (by current or just-rotated hash). Other devices keep their sessions.
       // A pre-sessions cookie still on the legacy field is cleared the same way.
-      const raw = req.cookies?.refreshToken;
-      const hash = raw ? hashRefreshToken(raw) : null;
       if (hash) {
         user.sessions = (user.sessions || []).filter((s) => s.hash !== hash && s.prevHash !== hash);
         if (user.refreshTokenHash === hash) {
@@ -609,7 +630,7 @@ router.post('/logout', requireAuth, async (req, res) => {
       // Open SSE event streams are per account, so close them only when no
       // device session is left. An integration holding valid credentials
       // simply reconnects.
-      if ((user.sessions || []).length === 0 && !user.refreshTokenHash) eventBus.dropUser(req.user.id);
+      if ((user.sessions || []).length === 0 && !user.refreshTokenHash) eventBus.dropUser(user._id);
     }
     clearRefreshCookie(res);
     res.json({ message: 'Logged out' });

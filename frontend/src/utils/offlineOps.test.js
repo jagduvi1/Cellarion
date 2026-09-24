@@ -40,7 +40,8 @@ describe('queueableKind', () => {
     expect(queueableKind(`/api/racks/${R1}/slots/3`, 'PUT')).toBe('place');
     expect(queueableKind(`/api/racks/${R1}/slots/3`, 'DELETE')).toBe('clear');
     expect(queueableKind(`/api/racks/${R1}/slots/3/move`, 'POST')).toBe('move');
-    for (const [u, m] of [[`/api/bottles/${b1}`, 'DELETE'], ['/api/bottles', 'POST'], [`/api/racks/${R1}`, 'PUT'], [`/api/bottles/${b1}/pour`, 'POST'], [`/api/bottles/${b1}`, 'GET']]) {
+    expect(queueableKind(`/api/bottles/${b1}/pour`, 'POST')).toBe('pour');
+    for (const [u, m] of [[`/api/bottles/${b1}`, 'DELETE'], ['/api/bottles', 'POST'], [`/api/racks/${R1}`, 'PUT'], [`/api/bottles/${b1}`, 'GET']]) {
       expect(queueableKind(u, m)).toBeNull();
     }
   });
@@ -71,7 +72,7 @@ describe('buildOp', () => {
 
   it('edit: a rating change sends rating (and a scale change sends the rating it resets)', () => {
     expect(op(`/api/bottles/${b1}`, 'PUT', { notes: 'old note', rating: 5, ratingScale: '5' }).body)
-      .toEqual({ rating: 5, ifUnchanged: { rating: 4 } });
+      .toEqual({ rating: 5, ratingScale: '5', ifUnchanged: { rating: 4, ratingScale: '5' } }); // a rating always travels with its scale
     expect(op(`/api/bottles/${b1}`, 'PUT', { rating: null, ratingScale: '100' }).body)
       .toEqual({ rating: null, ratingScale: '100', ifUnchanged: { rating: 4, ratingScale: '5' } });
   });
@@ -155,5 +156,34 @@ describe('responseFor — what the page gets back', () => {
     const o = op(`/api/racks/${R1}/slots/5`, 'PUT', { bottleId: b3 });
     const r = responseFor(o, indexSnapshot(applyOp(SNAP, o)), idx);
     expect(r.rack.slots.find((s) => s.position === 5).bottle).toMatchObject({ _id: b3, wineDefinition: { name: 'Barolo' } });
+  });
+});
+
+describe('audit fixes', () => {
+  it('a notes change is seen even when the notes start with a date', () => {
+    const snap = { ...SNAP, bottles: SNAP.bottles.map((b) => (b._id === b1 ? { ...b, notes: '2024-06-01: closed' } : b)) };
+    const i = indexSnapshot(snap);
+    const o2 = buildOp({ url: `/api/bottles/${b1}`, method: 'PUT', body: { notes: '2024-06-01: open now, lovely', rating: 4, ratingScale: '5' }, idx: i, id: 'k'.repeat(20), userId: 'u1', now: NOW });
+    expect(o2.body).toEqual({ notes: '2024-06-01: open now, lovely', ifUnchanged: { notes: '2024-06-01: closed' } });
+  });
+
+  it('a pour is queueable and adds the glass to the copy', () => {
+    const p = op(`/api/bottles/${b1}/pour`, 'POST', { ml: 150 });
+    expect(p).toMatchObject({ kind: 'pour', body: { ml: 150 } });
+    expect(indexSnapshot(applyOp(SNAP, p)).bottleById.get(b1).pours).toEqual([{ at: p.createdAt, ml: 150 }]);
+  });
+
+  it('a move is not applied twice when the copy already has it (no swap back)', () => {
+    const mv = op(`/api/racks/${R1}/slots/1/move`, 'POST', { toPosition: 2 });
+    const once = applyOp(SNAP, mv);
+    const twice = applyOp(once, mv);
+    expect(indexSnapshot(twice).placement.get(b1).position).toBe(2);
+    expect(indexSnapshot(twice).placement.get(b2).position).toBe(1);
+  });
+
+  it('a take-out only empties the slot while it still holds that bottle', () => {
+    const cl = op(`/api/racks/${R1}/slots/1`, 'DELETE', null);
+    const moved = applyOp(SNAP, op(`/api/racks/${R1}/slots/1/move`, 'POST', { toPosition: 2 })); // b2 now in slot 1
+    expect(indexSnapshot(applyOp(moved, cl)).placement.get(b2).position).toBe(1);
   });
 });

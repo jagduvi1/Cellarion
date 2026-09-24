@@ -7,6 +7,7 @@
  * Queueable, owner/editor only:
  *   consume   POST   /api/bottles/:id/consume          (+ ifActive, consumedAt)
  *   open      POST   /api/bottles/:id/open             (+ openedAt)
+ *   pour      POST   /api/bottles/:id/pour             (a glass from an open bottle)
  *   edit      PUT    /api/bottles/:id                  notes / rating / ratingScale only (+ ifUnchanged)
  *   place     PUT    /api/racks/:id/slots/:pos         (+ expectOccupant)
  *   clear     DELETE /api/racks/:id/slots/:pos         (+ ?expect=)
@@ -25,6 +26,7 @@ export function queueableKind(url, method) {
   const m = String(method || 'GET').toUpperCase();
   if (m === 'POST' && new RegExp(`^/api/bottles/${ID}/consume$`).test(p)) return 'consume';
   if (m === 'POST' && new RegExp(`^/api/bottles/${ID}/open$`).test(p)) return 'open';
+  if (m === 'POST' && new RegExp(`^/api/bottles/${ID}/pour$`).test(p)) return 'pour';
   if (m === 'PUT' && new RegExp(`^/api/bottles/${ID}$`).test(p)) return 'edit';
   if (m === 'PUT' && new RegExp(`^/api/racks/${ID}/slots/\\d+$`).test(p)) return 'place';
   if (m === 'DELETE' && new RegExp(`^/api/racks/${ID}/slots/\\d+$`).test(p)) return 'clear';
@@ -32,17 +34,21 @@ export function queueableKind(url, method) {
   return null;
 }
 
-const norm = (v) => {
+// Fields the edit form sends as a day but the bottle holds as a timestamp.
+const DATE_FIELDS = new Set(['purchaseDate']);
+const norm = (v, key) => {
   if (v === undefined || v === null || v === '') return null;
   if (typeof v === 'number') return v;
   const s = String(v).trim();
   if (s === '') return null;
   if (/^-?\d+(\.\d+)?$/.test(s)) return Number(s);
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  // Only a date field is compared by its day — a note that happens to start
+  // with a date must be compared in full.
+  if (DATE_FIELDS.has(key) && /^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
   return s;
 };
-const sameVal = (a, b) => {
-  const x = norm(a); const y = norm(b);
+const sameVal = (a, b, key) => {
+  const x = norm(a, key); const y = norm(b, key);
   if (x && typeof x === 'object') return JSON.stringify(x) === JSON.stringify(y);
   return x === y;
 };
@@ -72,7 +78,7 @@ export function buildOp({ url, method, body, idx, id, userId, now = new Date() }
   const base = { id, userId, kind, createdAt: now.toISOString(), status: 'pending' };
   const canEdit = (cellarId) => ['owner', 'editor'].includes(idx.cellarById.get(String(cellarId))?.userRole);
 
-  if (kind === 'consume' || kind === 'open' || kind === 'edit') {
+  if (kind === 'consume' || kind === 'open' || kind === 'pour' || kind === 'edit') {
     const bottleId = seg[3];
     const bottle = idx.bottleById.get(bottleId);
     if (!bottle || !canEdit(bottle.cellar)) return null;
@@ -84,6 +90,9 @@ export function buildOp({ url, method, body, idx, id, userId, now = new Date() }
       return { ...base, bottleId, cellarId: String(bottle.cellar), label, method: 'POST', url: path,
         body: { ...payload, consumedAt: payload.consumedAt || at, ifActive: true } };
     }
+    if (kind === 'pour') {
+      return { ...base, bottleId, cellarId: String(bottle.cellar), label, method: 'POST', url: path, body: { ...payload } };
+    }
     if (kind === 'open') {
       const at = new Date(now.getTime() - 5000).toISOString();
       return { ...base, bottleId, cellarId: String(bottle.cellar), label, method: 'POST', url: path,
@@ -91,13 +100,18 @@ export function buildOp({ url, method, body, idx, id, userId, now = new Date() }
     }
     // edit: only a change to notes / rating / ratingScale is queueable. The
     // edit form sends the whole form, so compare it with what is on the device.
-    const changed = Object.keys(payload).filter((k) => !sameVal(payload[k], bottle[k]));
+    const changed = Object.keys(payload).filter((k) => !sameVal(payload[k], bottle[k], k));
     if (!changed.length || changed.some((k) => !EDITABLE.includes(k))) return null;
     const send = {};
     const ifUnchanged = {};
+    // A rating is only meaningful with its scale: whenever either changes,
+    // both are sent and both are checked — "keep mine" on a conflict must not
+    // save 4.5 on someone else's 100-point scale.
+    const ratingTouched = changed.includes('rating') || changed.includes('ratingScale');
     for (const k of EDITABLE) {
-      if (!changed.includes(k) && !(k === 'rating' && changed.includes('ratingScale'))) continue;
-      send[k] = payload[k] ?? null;
+      const include = changed.includes(k) || (ratingTouched && (k === 'rating' || k === 'ratingScale'));
+      if (!include) continue;
+      send[k] = k in payload ? payload[k] ?? null : bottle[k] ?? null;
       ifUnchanged[k] = bottle[k] ?? null;
     }
     return { ...base, bottleId, cellarId: String(bottle.cellar), label: { ...label, fields: Object.keys(send) },
@@ -150,6 +164,14 @@ export function applyOp(snapshot, op) {
     case 'open':
       if (bi >= 0) s.bottles[bi] = { ...s.bottles[bi], openedAt: op.body.openedAt, preservationMethod: op.body.preservationMethod, pours: [] };
       break;
+    case 'pour':
+      if (bi >= 0) {
+        const b = s.bottles[bi];
+        const glasses = Math.max(1, parseInt(op.body.count, 10) || 1);
+        const ml = Number(op.body.ml) || 125;
+        s.bottles[bi] = { ...b, pours: [...(b.pours || []), ...Array.from({ length: glasses }, () => ({ at: op.createdAt, ml: Math.round(ml) }))] };
+      }
+      break;
     case 'edit': {
       if (bi < 0) break;
       const { ifUnchanged, ...fields } = op.body;
@@ -164,14 +186,20 @@ export function applyOp(snapshot, op) {
       r.slots.push({ position: op.position, bottle: op.bottleId });
       break;
     }
+    // Move and clear only apply while the copy still shows the bottle where
+    // the user acted on it — the same check the server makes. A copy that
+    // already includes the change (fetched after it landed) is left alone, so
+    // a move is never applied twice (which would swap it back).
     case 'clear': {
       const r = s.racks.find((x) => String(x._id) === op.rackId);
-      if (r) r.slots = r.slots.filter((x) => x.position !== op.position);
+      if (r && r.slots.some((x) => x.position === op.position && String(x.bottle) === op.bottleId)) {
+        r.slots = r.slots.filter((x) => x.position !== op.position);
+      }
       break;
     }
     case 'move': {
       const r = s.racks.find((x) => String(x._id) === op.rackId);
-      if (!r) break;
+      if (!r || !r.slots.some((x) => x.position === op.position && String(x.bottle) === op.bottleId)) break;
       r.slots = r.slots.map((x) => {
         if (x.position === op.position) return { ...x, position: op.toPosition };
         if (x.position === op.toPosition) return { ...x, position: op.position }; // swap, as the server does
@@ -205,7 +233,7 @@ export function responseFor(op, idx, before) {
     const b = before?.bottleById.get(op.bottleId) || { _id: op.bottleId };
     return { bottle: { ...b, status: op.body.reason || 'drank', consumedAt: op.body.consumedAt, consumedReason: op.body.reason || 'drank' } };
   }
-  if (op.kind === 'open' || op.kind === 'edit') {
+  if (op.kind === 'open' || op.kind === 'pour' || op.kind === 'edit') {
     return { bottle: idx.bottleById.get(op.bottleId) || { _id: op.bottleId } };
   }
   const r = [...idx.racksByCellar.values()].flat().find((x) => String(x._id) === op.rackId);

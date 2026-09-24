@@ -146,3 +146,20 @@ describe('offline writes', () => {
     expect(init.headers['Idempotency-Key']).toBe('q'.repeat(32));
   });
 });
+
+test('a slow GET is not replaced by a "not found" from the device copy — the real answer is awaited', async () => {
+  vi.useFakeTimers();
+  let resolve;
+  fetchMock.mockReturnValue(new Promise((r) => { resolve = r; }));
+  const notFound = { status: 404, ok: false, body: 'saved-404', headers: new Headers({ 'X-Cellarion-Offline': 'x' }) };
+  const p = make(vi.fn(async () => notFound))('/api/bottles/b-consumed');
+  await vi.advanceTimersByTimeAsync(SLOW_GET_MS + 1);
+  resolve(live('real'));
+  expect((await p).body).toBe('real');
+});
+
+test('a failed GET may still be answered "not found" from the device copy', async () => {
+  fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+  const notFound = { status: 404, ok: false, body: 'saved-404', headers: new Headers({ 'X-Cellarion-Offline': 'x' }) };
+  expect((await make(vi.fn(async () => notFound))('/api/bottles/b-x')).status).toBe(404);
+});

@@ -13,7 +13,7 @@ import { isPushSupported, getPushPermissionState, subscribeToPush, unsubscribeFr
 import { downloadBlobObject } from '../utils/downloadBlob';
 import ApiTokensSection from '../components/ApiTokensSection';
 import LanguagePicker from '../components/LanguagePicker';
-import AiConnectSection from '../components/AiConnectSection';
+import AiConnectSection from '../components/AiConnectSection';
 import SelfHostedBridgeSection from '../components/SelfHostedBridgeSection';
 import RegistryConnectionSection from '../components/RegistryConnectionSection';
 import { isHostedOrigin } from '../utils/mcpConnect';
@@ -21,6 +21,7 @@ import SetPasswordNotice from '../components/SetPasswordNotice';
 import McpActivitySection from '../components/McpActivitySection';
 import ClimateDevicesSection from '../components/ClimateDevicesSection';
 import { journalPromptOptedOut, setJournalPromptOptOut } from '../components/JournalPrompt';
+import OfflineSettings from '../components/OfflineSettings';
 import './Settings.css';
 
 function Settings() {
@@ -794,6 +795,9 @@ function Settings() {
           </div>
         </form>
       </div>
+
+      {/* ── Offline mode (#1355; admins only until released) ── */}
+      <OfflineSettings />
 
       {/* ── Your Data (GDPR) ── */}
       <div className="card settings-card">

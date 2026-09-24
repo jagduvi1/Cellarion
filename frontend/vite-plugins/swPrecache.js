@@ -25,7 +25,13 @@ export function buildManifest(fileNames, indexHtml) {
     .update(indexHtml || '')
     .digest('hex')
     .slice(0, 16);
-  return { version, files: ['/index.html', ...files.map((f) => `/${f}`)] };
+  // indexRefs: the build's own files that index.html loads (its entry script
+  // and stylesheet). The worker refuses to store an index.html that does not
+  // reference them — one from another build must never sit next to this
+  // build's bundles. References, not a hash of the file: a CDN may rewrite
+  // bits of HTML in transit, never the asset names.
+  const indexRefs = [...new Set((String(indexHtml || '').match(/\/assets\/[A-Za-z0-9._-]+\.(?:js|css)/g) || []))].sort();
+  return { version, indexRefs, files: ['/index.html', ...files.map((f) => `/${f}`)] };
 }
 
 /**

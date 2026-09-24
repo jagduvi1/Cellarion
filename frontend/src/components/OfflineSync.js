@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth, API_MUTATION_EVENT } from '../contexts/AuthContext';
-import { isOfflineModeEnabled } from '../utils/offlineMode';
+import { isOfflineModeEnabled, OFFLINE_MODE_EVENT } from '../utils/offlineMode';
 import { getOfflineStatus, primeOfflineStatus, refreshSnapshot } from '../utils/offlineSnapshot';
 import { flushQueue, getQueueStatus, refreshQueueStatus, QUEUE_CHANGED_EVENT } from '../utils/offlineQueue';
 
@@ -22,7 +22,14 @@ const ageOf = () => {
  * signed in only; renders nothing. Mounted once, in App.
  */
 export default function OfflineSync() {
-  const { user, token, offlineSession, apiFetch } = useAuth();
+  const { user, token, offlineSession, apiFetch, getSessionGeneration } = useAuth();
+  // Re-read the switch when Settings flips it.
+  const [, setModeTick] = useState(0);
+  useEffect(() => {
+    const onMode = () => setModeTick((n) => n + 1);
+    window.addEventListener(OFFLINE_MODE_EVENT, onMode);
+    return () => window.removeEventListener(OFFLINE_MODE_EVENT, onMode);
+  }, []);
   const userId = user ? String(user.id || user._id || '') || null : null;
   const enabled = isOfflineModeEnabled();
   const live = enabled && !!userId && !!token && !offlineSession;
@@ -40,9 +47,12 @@ export default function OfflineSync() {
   // queued, and every 30 s while any wait (a 5xx or a busy server).
   useEffect(() => {
     if (!live) return undefined;
+    // Sending stops the moment this session ends (logout, another account).
+    const generation = getSessionGeneration();
+    const isActive = () => getSessionGeneration() === generation;
     const send = () => {
       if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
-      flushQueue(apiFetch, userId);
+      flushQueue(apiFetch, userId, isActive);
     };
     send();
     const timer = setInterval(() => { if (getQueueStatus().pending > 0) send(); }, RESEND_EVERY_MS);

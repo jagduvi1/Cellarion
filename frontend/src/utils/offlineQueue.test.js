@@ -151,3 +151,56 @@ describe('the user\'s decision', () => {
     expect(next.body).toEqual({ bottleId: b2, expectOccupant: b1 });
   });
 });
+
+describe('audit fixes', () => {
+  it('sending stops the moment the session changes (logout / another account)', async () => {
+    await queue(`/api/bottles/${b1}/consume`, 'POST', {});
+    await queue(`/api/bottles/${b2}/consume`, 'POST', {});
+    let active = true;
+    const apiFetch = vi.fn(async () => { active = false; return res(200); }); // session ends during the first send
+    expect(await flushQueue(apiFetch, 'u1', () => active)).toBe(1);
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+    expect([...mem.queue.values()].filter((o) => o.status === 'pending')).toHaveLength(1);
+  });
+
+  it('"apply anyway" on a move keeps "it must still be MY bottle" (expectFrom)', async () => {
+    const { key } = await queue(`/api/racks/${R1}/slots/1/move`, 'POST', { toPosition: 3 });
+    await flushQueue(vi.fn(async () => res(409, { error: 'x', code: 'slot_changed' })), 'u1');
+    await resolveAttention(key, 'force', 'u1');
+    const [next] = [...mem.queue.values()];
+    expect(next.body).toEqual({ toPosition: 3, expectFrom: b1 });
+  });
+
+  it('a take-out keeps its ?expect= even when retried', async () => {
+    const { key } = await queue(`/api/racks/${R1}/slots/1`, 'DELETE', null);
+    await flushQueue(vi.fn(async () => res(409, { error: 'x', code: 'slot_changed' })), 'u1');
+    await resolveAttention(key, 'force', 'u1');
+    expect([...mem.queue.values()][0].url).toBe(`/api/racks/${R1}/slots/1?expect=${b1}`);
+  });
+
+  it('two conflicting edits of the same field: the newest wins in either order', async () => {
+    const put = async (notes, at) => {
+      const { key } = await queue(`/api/bottles/${b1}`, 'PUT', { notes });
+      mem.queue.set(key, { ...mem.queue.get(key), createdAt: at, status: 'attention', code: 'field_changed' });
+      return key;
+    };
+    const older = await put('first', '2026-09-24T10:00:00Z');
+    const newer = await put('second', '2026-09-24T11:00:00Z');
+    await resolveAttention(newer, 'force', 'u1'); // resolving the newer one first…
+    expect([...mem.queue.values()].map((o) => o.body.notes)).toEqual(['second']); // …drops the older
+    mem.queue.clear();
+    const o2 = await put('first', '2026-09-24T10:00:00Z');
+    await put('second', '2026-09-24T11:00:00Z');
+    await resolveAttention(o2, 'force', 'u1'); // forcing the older while a newer waits → superseded
+    expect([...mem.queue.values()].map((o) => o.body.notes)).toEqual(['second']);
+  });
+
+  it('the user\'s own changes are never dropped unseen; another account\'s after 30 days', async () => {
+    const { key } = await queue(`/api/bottles/${b1}/consume`, 'POST', {});
+    mem.queue.set(key, { ...mem.queue.get(key), createdAt: '2020-01-01T00:00:00Z' });
+    mem.queue.set('other', { id: 'other', userId: 'u9', status: 'pending', createdAt: '2020-01-01T00:00:00Z' });
+    await flushQueue(vi.fn(async () => { throw new TypeError('offline'); }), 'u1');
+    expect(mem.queue.has(key)).toBe(true);
+    expect(mem.queue.has('other')).toBe(false);
+  });
+});
