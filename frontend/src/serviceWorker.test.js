@@ -17,30 +17,53 @@ function fakeResponse(status, body) {
   return { status, ok: status >= 200 && status < 300, body, clone() { return this; } };
 }
 
-function makeCaches(initial = {}) {
+// Cache keys are full URLs; the worker passes both Request-likes and paths.
+const keyOf = (req) => {
+  const u = typeof req === 'string' ? req : req.url;
+  return u.startsWith('/') ? `https://cellarion.test${u}` : u;
+};
+
+function makeCaches(initial = {}, network = null) {
   const store = new Map(Object.entries(initial).map(([name, entries]) => [name, new Map(entries)]));
   const open = async (name) => {
     if (!store.has(name)) store.set(name, new Map());
     const entries = store.get(name);
     return {
-      match: async (req) => entries.get(req.url),
-      put: async (req, res) => { entries.set(req.url, res); },
-      delete: async (req) => entries.delete(req.url),
-      addAll: async () => {},
+      match: async (req) => entries.get(keyOf(req)),
+      put: async (req, res) => { entries.set(keyOf(req), res); },
+      delete: async (req) => entries.delete(keyOf(req)),
+      addAll: async (urls) => {
+        const got = [];
+        for (const u of urls) {
+          const res = await network(u);
+          if (!res.ok) throw new TypeError(`addAll: ${u} → ${res.status}`);
+          got.push([keyOf(u), res]);
+        }
+        for (const [k, v] of got) entries.set(k, v);
+      },
     };
   };
   return {
     store,
     api: {
       open,
+      has: async (name) => store.has(name),
       keys: async () => [...store.keys()],
       delete: async (name) => store.delete(name),
-      match: async () => undefined,
+      match: async (req) => {
+        for (const entries of store.values()) if (entries.has(keyOf(req))) return entries.get(keyOf(req));
+        return undefined;
+      },
     },
   };
 }
 
-function loadWorker({ caches, network }) {
+class FakeResponse {
+  constructor(body) { this.body = body; this.status = 200; this.ok = true; }
+  clone() { return this; }
+}
+
+function loadWorker({ caches, network, build = null }) {
   const handlers = {};
   const self = {
     location: { origin: 'https://cellarion.test' },
@@ -48,8 +71,9 @@ function loadWorker({ caches, network }) {
     skipWaiting: () => {},
     clients: { claim: () => {} },
   };
-  vm.runInNewContext(SW_SOURCE, {
-    self, caches: caches.api, fetch: network, atob, URL, console, Promise,
+  const source = build ? SW_SOURCE.replace('/*__CELLARION_BUILD__*/null', JSON.stringify(build)) : SW_SOURCE;
+  vm.runInNewContext(source, {
+    self, caches: caches.api, fetch: network, atob, URL, console, Promise, Response: FakeResponse, MessageChannel,
   });
   return handlers;
 }
@@ -143,5 +167,174 @@ describe('service worker API cache', () => {
     handlers.activate({ waitUntil: (p) => { done = p; } });
     await done;
     expect([...caches.store.keys()].sort()).toEqual(['cellarion-api-v2-' + ALICE, 'cellarion-v4']);
+  });
+});
+
+describe('service worker offline shell', () => {
+  const BUILD = { version: 'v2', files: ['/index.html', '/assets/index-abc.js', '/assets/index-abc.css'] };
+  const SHELL = 'cellarion-shell-v2';
+
+  const okNetwork = () => vi.fn(async (u) => fakeResponse(200, `body of ${typeof u === 'string' ? u : u.url}`));
+  const offlineNetwork = () => vi.fn(async () => { throw new TypeError('Failed to fetch'); });
+
+  function setup({ initial = {}, network = okNetwork(), build = BUILD } = {}) {
+    const caches = makeCaches(initial, network);
+    const handlers = loadWorker({ caches, network, build });
+    return { caches, handlers, network };
+  }
+
+  async function send(handlers, type) {
+    const channel = new MessageChannel();
+    const reply = new Promise((resolve) => { channel.port1.onmessage = (e) => { channel.port1.close(); resolve(e.data); }; });
+    let work;
+    handlers.message({ data: { type }, ports: [channel.port2], waitUntil: (p) => { work = p; } });
+    await work;
+    return reply;
+  }
+
+  const navigate = (path = '/cellars/c1') => ({ url: `https://cellarion.test${path}`, method: 'GET', headers: new Headers(), mode: 'navigate' });
+
+  it('offline-enable stores the whole build, marked complete', async () => {
+    const { caches, handlers } = setup();
+    expect(await send(handlers, 'offline-enable')).toEqual({ type: 'offline-shell', ok: true });
+    const shell = caches.store.get(SHELL);
+    for (const f of BUILD.files) expect(shell.has(`https://cellarion.test${f}`)).toBe(true);
+    expect(shell.has('https://cellarion.test/__cellarion-shell-complete__')).toBe(true);
+  });
+
+  it('a second offline-enable downloads nothing', async () => {
+    const { handlers, network } = setup();
+    await send(handlers, 'offline-enable');
+    network.mockClear();
+    await send(handlers, 'offline-enable');
+    expect(network).not.toHaveBeenCalled();
+  });
+
+  it('a failed download leaves no complete shell and reports ok:false', async () => {
+    const network = vi.fn(async (u) => (u === '/assets/index-abc.css' ? fakeResponse(404, '') : fakeResponse(200, 'x')));
+    const { caches, handlers } = setup({ network });
+    expect(await send(handlers, 'offline-enable')).toEqual({ type: 'offline-shell', ok: false });
+    const shell = caches.store.get(SHELL);
+    expect(shell && shell.has('https://cellarion.test/__cellarion-shell-complete__')).toBeFalsy();
+  });
+
+  it('offline navigation opens the stored app when offline mode is on', async () => {
+    const network = okNetwork();
+    const { handlers } = setup({ network });
+    await send(handlers, 'offline-enable');
+    network.mockImplementation(async () => { throw new TypeError('Failed to fetch'); });
+    const res = await dispatchFetch(handlers, navigate());
+    expect(res.body).toBe('body of /index.html');
+  });
+
+  it('offline navigation falls back to offline.html when offline mode is off', async () => {
+    const { handlers } = setup({
+      initial: { 'cellarion-v4': [['https://cellarion.test/offline.html', fakeResponse(200, 'offline page')]] },
+      network: offlineNetwork(),
+    });
+    const res = await dispatchFetch(handlers, navigate());
+    expect(res.body).toBe('offline page');
+  });
+
+  it('online navigation still goes to the network', async () => {
+    const { handlers } = setup();
+    await send(handlers, 'offline-enable');
+    const res = await dispatchFetch(handlers, navigate('/racks'));
+    expect(res.body).toBe('body of https://cellarion.test/racks');
+  });
+
+  it('offline, an older complete shell still opens the app', async () => {
+    const old = [
+      ['https://cellarion.test/index.html', fakeResponse(200, 'old shell')],
+      ['https://cellarion.test/__cellarion-shell-complete__', fakeResponse(200, 'ok')],
+    ];
+    const { handlers } = setup({ initial: { 'cellarion-shell-v1': old }, network: offlineNetwork() });
+    const res = await dispatchFetch(handlers, navigate());
+    expect(res.body).toBe('old shell');
+  });
+
+  it('install brings the new build down when offline mode is on, and activate then drops the old shell', async () => {
+    const old = [['https://cellarion.test/__cellarion-shell-complete__', fakeResponse(200, 'ok')]];
+    const { caches, handlers } = setup({ initial: { 'cellarion-shell-v1': old } });
+    let work;
+    handlers.install({ waitUntil: (p) => { work = p; } });
+    await work;
+    expect(caches.store.get(SHELL).has('https://cellarion.test/__cellarion-shell-complete__')).toBe(true);
+    handlers.activate({ waitUntil: (p) => { work = p; } });
+    await work;
+    expect(caches.store.has('cellarion-shell-v1')).toBe(false);
+    expect(caches.store.has(SHELL)).toBe(true);
+  });
+
+  it('install does not download the app when offline mode is off', async () => {
+    const { caches, handlers, network } = setup();
+    let work;
+    handlers.install({ waitUntil: (p) => { work = p; } });
+    await work;
+    expect(caches.store.has(SHELL)).toBe(false);
+    expect(network.mock.calls.map((c) => c[0])).toEqual(['/offline.html', '/manifest.json']);
+  });
+
+  it('keeps the old shell when the new one could not be downloaded', async () => {
+    const old = [['https://cellarion.test/__cellarion-shell-complete__', fakeResponse(200, 'ok')]];
+    const network = vi.fn(async (u) => (u.startsWith('/assets/') ? fakeResponse(500, '') : fakeResponse(200, 'x')));
+    const { caches, handlers } = setup({ initial: { 'cellarion-shell-v1': old }, network });
+    let work;
+    handlers.install({ waitUntil: (p) => { work = p; } });
+    await work; // does not throw: the update must not be blocked
+    handlers.activate({ waitUntil: (p) => { work = p; } });
+    await work;
+    expect(caches.store.has('cellarion-shell-v1')).toBe(true);
+  });
+
+  it('offline-disable deletes every stored build', async () => {
+    const { caches, handlers } = setup({ initial: { 'cellarion-shell-v1': [], [SHELL]: [] } });
+    await send(handlers, 'offline-disable');
+    expect([...caches.store.keys()].filter((n) => n.startsWith('cellarion-shell-'))).toEqual([]);
+  });
+
+  it('without a stamped build (dev server) nothing is stored', async () => {
+    const { caches, handlers } = setup({ build: null });
+    expect(await send(handlers, 'offline-enable')).toEqual({ type: 'offline-shell', ok: false });
+    expect([...caches.store.keys()].some((n) => n.startsWith('cellarion-shell-'))).toBe(false);
+  });
+
+  it('offline, a stored bundle is served without an unhandled rejection', async () => {
+    const network = okNetwork();
+    const { handlers } = setup({ network });
+    await send(handlers, 'offline-enable');
+    network.mockImplementation(async () => { throw new TypeError('Failed to fetch'); });
+    const res = await dispatchFetch(handlers, { url: 'https://cellarion.test/assets/index-abc.js', method: 'GET', headers: new Headers(), mode: 'no-cors' });
+    expect(res.body).toBe('body of /assets/index-abc.js');
+  });
+});
+
+describe('service worker offline shell — updates', () => {
+  it('a new build copies unchanged hashed files from the old shell and downloads only what changed', async () => {
+    const OLD = 'cellarion-shell-v1';
+    const initial = {
+      [OLD]: [
+        ['https://cellarion.test/index.html', fakeResponse(200, 'old shell')],
+        ['https://cellarion.test/assets/vendor-same.js', fakeResponse(200, 'vendor')],
+        ['https://cellarion.test/__cellarion-shell-complete__', fakeResponse(200, 'ok')],
+      ],
+    };
+    const build = { version: 'v2', files: ['/index.html', '/assets/vendor-same.js', '/assets/app-new.js'] };
+    const network = vi.fn(async (u) => fakeResponse(200, `fresh ${u}`));
+    const caches = makeCaches(initial, network);
+    const handlers = loadWorker({ caches, network, build });
+
+    let work;
+    handlers.install({ waitUntil: (p) => { work = p; } });
+    await work;
+
+    const fetched = network.mock.calls.map((c) => c[0]);
+    expect(fetched).toContain('/index.html');          // always fresh
+    expect(fetched).toContain('/assets/app-new.js');   // new chunk
+    expect(fetched).not.toContain('/assets/vendor-same.js');
+    const shell = caches.store.get('cellarion-shell-v2');
+    expect(shell.get('https://cellarion.test/assets/vendor-same.js').body).toBe('vendor');
+    expect(shell.get('https://cellarion.test/index.html').body).toBe('fresh /index.html');
+    expect(shell.has('https://cellarion.test/__cellarion-shell-complete__')).toBe(true);
   });
 });

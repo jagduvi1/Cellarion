@@ -32,10 +32,79 @@ function deleteApiCaches() {
   );
 }
 
+// ── Offline app shell (#1355) ──────────────────────────────────────────────
+// BUILD is stamped in by the build (vite-plugins/swPrecache.js): this build's
+// version and every file of it — /index.html plus all hashed JS/CSS/woff2.
+// It stays null on the dev server, where nothing is precached.
+const BUILD = /*__CELLARION_BUILD__*/null;
+// The whole app is kept in ONE cache per build version, index.html together
+// with the exact bundles it references — so an offline shell can never point at
+// assets a later deploy deleted (why the shell used to be left uncached).
+// Offline mode is opt-in: the page asks for it ('offline-enable'), and the
+// existence of any shell cache is what remembers the choice across updates.
+const SHELL_CACHE_PREFIX = 'cellarion-shell-';
+const SHELL_COMPLETE = '/__cellarion-shell-complete__';
+const shellCacheName = BUILD ? SHELL_CACHE_PREFIX + BUILD.version : null;
+
+function shellCacheNames() {
+  return caches.keys().then((names) => names.filter((name) => name.startsWith(SHELL_CACHE_PREFIX)));
+}
+
+async function isShellComplete(name) {
+  if (!name || !(await caches.has(name))) return false;
+  const cache = await caches.open(name);
+  return !!(await cache.match(SHELL_COMPLETE));
+}
+
+// Download this build into its shell cache. Idempotent: a complete cache is
+// left alone, so a page asking on every load costs nothing after the first.
+// Hashed files never change under their name, so any already on the device
+// (an older build's shell, the static cache) are copied rather than downloaded
+// — a deploy that touched three chunks downloads three chunks, not 5 MB.
+// index.html is always fetched fresh. Only a complete run sets the marker.
+async function precacheShell() {
+  if (!BUILD) return false;
+  if (await isShellComplete(shellCacheName)) return true;
+  const cache = await caches.open(shellCacheName);
+  const toFetch = [];
+  for (const url of BUILD.files) {
+    const have = url === '/index.html' ? undefined : await caches.match(url);
+    if (have) await cache.put(url, have);
+    else toFetch.push(url);
+  }
+  await cache.addAll(toFetch);
+  await cache.put(SHELL_COMPLETE, new Response('ok'));
+  return true;
+}
+
+// Once this build's shell is complete, older builds' shells are dead weight.
+// Until then they stay: an older complete shell still opens the app offline.
+async function pruneOldShells() {
+  if (!(await isShellComplete(shellCacheName))) return;
+  const names = await shellCacheNames();
+  await Promise.all(names.filter((name) => name !== shellCacheName).map((name) => caches.delete(name)));
+}
+
+async function deleteShellCaches() {
+  const names = await shellCacheNames();
+  await Promise.all(names.map((name) => caches.delete(name)));
+}
+
+// The shell for an offline navigation: this build's, else any complete older one.
+async function offlineShell() {
+  if (await isShellComplete(shellCacheName)) {
+    return (await caches.open(shellCacheName)).match('/index.html');
+  }
+  for (const name of await shellCacheNames()) {
+    if (await isShellComplete(name)) return (await caches.open(name)).match('/index.html');
+  }
+  return undefined;
+}
+
 // App shell files to pre-cache on install
-// Only truly static, un-hashed assets are precached. The HTML shell ('/' and
-// '/index.html') is deliberately NOT precached — it maps to build-hashed
-// bundles, so a frozen shell would request deleted assets (404) after a deploy.
+// Only truly static, un-hashed assets are precached here. The HTML shell and
+// the hashed bundles are precached only for offline mode, per build version,
+// in the shell cache above.
 const PRECACHE_URLS = [
   '/offline.html',
   '/manifest.json'
@@ -51,9 +120,16 @@ const CACHEABLE_API_PATTERNS = [
 
 // Install: pre-cache app shell
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS))
-  );
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    await cache.addAll(PRECACHE_URLS);
+    // Offline mode on (a shell cache exists): bring the new build down now, so
+    // the app still opens offline after this update. A failure must not block
+    // the update — the page asks again on its next load.
+    if ((await shellCacheNames()).length > 0) {
+      try { await precacheShell(); } catch { /* retried via 'offline-enable' */ }
+    }
+  })());
   self.skipWaiting();
 });
 
@@ -63,12 +139,28 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((names) =>
       Promise.all(
         names
-          .filter((name) => name !== CACHE_NAME && !name.startsWith(API_CACHE_PREFIX))
+          .filter((name) => name !== CACHE_NAME && !name.startsWith(API_CACHE_PREFIX) && !name.startsWith(SHELL_CACHE_PREFIX))
           .map((name) => caches.delete(name))
       )
-    )
+    ).then(pruneOldShells)
   );
   self.clients.claim();
+});
+
+// The page turns offline mode on or off (utils/offlineMode.js). A reply goes
+// back on the MessageChannel port when the page sent one.
+self.addEventListener('message', (event) => {
+  const type = event.data && event.data.type;
+  const reply = (msg) => { if (event.ports && event.ports[0]) event.ports[0].postMessage(msg); };
+  if (type === 'offline-enable') {
+    event.waitUntil(
+      precacheShell()
+        .then((ok) => pruneOldShells().then(() => reply({ type: 'offline-shell', ok })))
+        .catch(() => reply({ type: 'offline-shell', ok: false }))
+    );
+  } else if (type === 'offline-disable') {
+    event.waitUntil(deleteShellCaches().then(() => reply({ type: 'offline-shell', ok: false })));
+  }
 });
 
 // ── Push Notifications ──────────────────────────────────────────────────────
@@ -158,12 +250,14 @@ self.addEventListener('fetch', (event) => {
   // Skip other API requests — always go to network
   if (url.pathname.startsWith('/api/')) return;
 
-  // Navigation requests (HTML pages): always network-first, NEVER cached. The
-  // SPA shell references build-hashed bundles, so a cached shell would request
-  // deleted assets (404) after a deploy. Fall back to offline.html only offline.
+  // Navigation requests (HTML pages): always network-first, never cached here.
+  // The SPA shell references build-hashed bundles, so a shell cached on its own
+  // would request deleted assets (404) after a deploy. Offline, fall back to
+  // offline.html — or, with offline mode on, to the precached shell of a complete
+  // build, whose bundles sit in the same cache — the app itself opens.
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).catch(() => caches.match('/offline.html'))
+      fetch(request).catch(async () => (await offlineShell()) || caches.match('/offline.html'))
     );
     return;
   }
@@ -179,7 +273,11 @@ self.addEventListener('fetch', (event) => {
         return response;
       });
 
-      return cached || networkFetch;
+      if (cached) {
+        networkFetch.catch(() => {}); // offline: the cached copy stands
+        return cached;
+      }
+      return networkFetch;
     })
   );
 });

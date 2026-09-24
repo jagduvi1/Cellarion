@@ -2,6 +2,7 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
 import localeCoverage from './vite-plugins/localeCoverage.js';
+import swPrecache from './vite-plugins/swPrecache.js';
 
 export default defineConfig({
   plugins: [
@@ -12,6 +13,9 @@ export default defineConfig({
     // over user-facing strings only. Drives which languages are offered and
     // which are flagged beta.
     localeCoverage(),
+    // Stamps this build's file list into dist/service-worker.js so the worker
+    // can keep the app on the device for offline use (#1355).
+    swPrecache(),
   ],
   server: {
     port: 3000,
