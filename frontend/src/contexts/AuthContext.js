@@ -15,6 +15,28 @@ import i18n, { hasLanguagePreview } from '../i18n';
 
 const AuthContext = createContext();
 
+// Refresh-in-flight marker (see doRefresh). Only a marker younger than
+// REFRESH_MARK_TTL_MS counts; waiting is capped so a stale marker (a refresh
+// that died with its page) costs at most REFRESH_WAIT_MAX_MS once.
+const REFRESH_MARK = 'cellarion-refresh-inflight';
+const REFRESH_MARK_TTL_MS = 5000;
+export const REFRESH_WAIT_MAX_MS = 2500;
+
+function markRefreshInFlight(on) {
+  try {
+    if (on) localStorage.setItem(REFRESH_MARK, String(Date.now()));
+    else localStorage.removeItem(REFRESH_MARK);
+  } catch { /* storage blocked — no guard, as before */ }
+}
+
+async function waitForUnloadedRefresh() {
+  let started = NaN;
+  try { started = Number(localStorage.getItem(REFRESH_MARK)); } catch { /* noop */ }
+  const age = Date.now() - started;
+  if (!Number.isFinite(age) || age < 0 || age >= REFRESH_MARK_TTL_MS) return;
+  await new Promise((resolve) => setTimeout(resolve, Math.min(REFRESH_WAIT_MAX_MS, REFRESH_MARK_TTL_MS - age)));
+}
+
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -110,16 +132,31 @@ export const AuthProvider = ({ children }) => {
   // Only 'rejected' may end the session; see onRefreshFailed below.
   const refreshOutcomeRef = useRef('ok');
 
+  // A reload in the middle of a refresh used to sign the user out: the server
+  // had already rotated the cookie, the page that asked was gone before the
+  // response (and its new cookie) arrived, and the reloaded page presented
+  // the rotated-away token — which the server answers with 401 and a cleared
+  // cookie. Likely with offline mode (#1355): the app refreshes the moment the
+  // signal returns, which is exactly when people pull to refresh. Two guards:
+  //  - keepalive: the request outlives the page, so its cookie still lands;
+  //  - a timestamp in localStorage while a refresh is in flight: a page that
+  //    starts while one from a page that just unloaded may still be landing
+  //    waits briefly for its cookie instead of racing it.
   const doRefresh = async () => {
+    await waitForUnloadedRefresh();
+    markRefreshInFlight(true);
     let res;
     try {
       res = await fetch('/api/auth/refresh', {
         method: 'POST',
-        credentials: 'include' // sends the httpOnly refresh cookie
+        credentials: 'include', // sends the httpOnly refresh cookie
+        keepalive: true,
       });
     } catch (err) {
       refreshOutcomeRef.current = 'network';
       throw err;
+    } finally {
+      markRefreshInFlight(false);
     }
     refreshOutcomeRef.current = res.ok ? 'ok' : 'rejected';
     if (!res.ok) return null;
