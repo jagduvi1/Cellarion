@@ -1,7 +1,36 @@
 /* eslint-disable no-restricted-globals */
 
 const CACHE_NAME = 'cellarion-v4';
-const API_CACHE_NAME = 'cellarion-api-v1';
+// API responses are cached PER USER: one cache per account, named
+// `${API_CACHE_PREFIX}<userId>`. The Cache API matches on URL alone and ignores
+// the Authorization header, so a single shared cache let the next person on a
+// shared device be served the previous account's cellar straight from the
+// cache — the server's access check never ran. v1 was that shared cache; the
+// activate step deletes it. The page wipes every API cache on logout
+// (clearApiCaches in serviceWorkerRegistration.js).
+const API_CACHE_PREFIX = 'cellarion-api-v2-';
+
+// The account a request is made as, read from its bearer token. The payload is
+// NOT verified here — it does not need to be: it only picks which of this
+// device's caches to use, and the server still authorises the network request.
+// No token (or an unreadable one) → null → the request is never cached.
+function apiCacheNameFor(request) {
+  const match = /^Bearer\s+[^.\s]+\.([^.\s]+)\.[^.\s]+$/.exec(request.headers.get('Authorization') || '');
+  if (!match) return null;
+  try {
+    const payload = JSON.parse(atob(match[1].replace(/-/g, '+').replace(/_/g, '/')));
+    const id = String(payload && payload.id);
+    return /^[a-f0-9]{24}$/i.test(id) ? API_CACHE_PREFIX + id : null;
+  } catch {
+    return null;
+  }
+}
+
+function deleteApiCaches() {
+  return caches.keys().then((names) =>
+    Promise.all(names.filter((name) => name.startsWith(API_CACHE_PREFIX)).map((name) => caches.delete(name)))
+  );
+}
 
 // App shell files to pre-cache on install
 // Only truly static, un-hashed assets are precached. The HTML shell ('/' and
@@ -30,11 +59,12 @@ self.addEventListener('install', (event) => {
 
 // Activate: clean up old caches
 self.addEventListener('activate', (event) => {
-  const validCaches = new Set([CACHE_NAME, API_CACHE_NAME]);
   event.waitUntil(
     caches.keys().then((names) =>
       Promise.all(
-        names.filter((name) => !validCaches.has(name)).map((name) => caches.delete(name))
+        names
+          .filter((name) => name !== CACHE_NAME && !name.startsWith(API_CACHE_PREFIX))
+          .map((name) => caches.delete(name))
       )
     )
   );
@@ -90,7 +120,9 @@ self.addEventListener('fetch', (event) => {
   // — wipe the API cache so the next page load fetches fresh data instead of showing stale content.
   if (request.method !== 'GET') {
     if (url.pathname.startsWith('/api/')) {
-      caches.delete(API_CACHE_NAME);
+      // A write can change what other accounts see too (a shared cellar), so
+      // every account's cache on this device goes, not only the writer's.
+      deleteApiCaches();
     }
     return;
   }
@@ -98,13 +130,21 @@ self.addEventListener('fetch', (event) => {
   // ── Cacheable API requests: stale-while-revalidate ──
   // Serve the cached response instantly (eliminates the API wait on repeat visits),
   // then update the cache in the background so the next load is fresh.
-  if (url.pathname.startsWith('/api/') && CACHEABLE_API_PATTERNS.some((p) => url.pathname.startsWith(p))) {
+  const apiCacheName = url.pathname.startsWith('/api/') && CACHEABLE_API_PATTERNS.some((p) => url.pathname.startsWith(p))
+    ? apiCacheNameFor(request)
+    : null;
+  if (apiCacheName) {
     event.respondWith(
-      caches.open(API_CACHE_NAME).then((cache) =>
+      caches.open(apiCacheName).then((cache) =>
         cache.match(request).then((cached) => {
           const networkFetch = fetch(request).then((response) => {
             if (response.ok) {
               cache.put(request, response.clone());
+            } else if (response.status === 403 || response.status === 404) {
+              // Access withdrawn (a share revoked) or the thing is gone: stop
+              // serving the stale copy on the next visit. (Not 401 — that is
+              // only an expired access token, and apiFetch retries at once.)
+              cache.delete(request);
             }
             return response;
           });

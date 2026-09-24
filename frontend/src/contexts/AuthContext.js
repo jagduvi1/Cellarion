@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect, useRef, useCallback } from 'react';
 import { findLanguage } from '../config/locales';
 import { createApiFetch } from '../utils/apiFetch';
+import { clearApiCaches } from '../serviceWorkerRegistration';
 import i18n, { hasLanguagePreview } from '../i18n';
 
 const AuthContext = createContext();
@@ -137,6 +138,8 @@ export const AuthProvider = ({ children }) => {
     // Wipe per-tab user state so chat history etc. don't bleed across logins.
     // Only sessionStorage — localStorage holds theme / language / persisted token.
     try { sessionStorage.clear(); } catch { /* noop */ }
+    // …and the service worker's cached API responses (cellars, bottles, wines).
+    await clearApiCaches();
     clearToken();
     setUser(null);
   }, []);
