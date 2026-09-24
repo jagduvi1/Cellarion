@@ -29,6 +29,11 @@ jest.mock('../models/WineCorrectionProposal', () => ({
   findOne: jest.fn(() => ({ select: () => ({ lean: async () => null }) })),
 }));
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn(), findOne: jest.fn() }));
+// cellar://bottle/{id} shares get_bottle's builder, which looks up an
+// unanswered curator question for the viewer — "none", never a real query.
+jest.mock('../models/WineOwnerInquiry', () => ({
+  findOne: jest.fn(() => ({ select: () => ({ lean: async () => null }) })),
+}));
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineEmbedding', () => ({ findOne: jest.fn() }));
 jest.mock('../utils/rackGeometry', () => ({ getMaxPosition: jest.fn(() => 12) }));

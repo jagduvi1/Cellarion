@@ -30,6 +30,10 @@ jest.mock('../models/WineCorrectionProposal', () => ({
   findOne: jest.fn(() => ({ select: () => ({ lean: async () => null }) })),
 }));
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn(), findOne: jest.fn() }));
+// get_bottle's open-curator-question lookup — "none", so the real model never buffers.
+jest.mock('../models/WineOwnerInquiry', () => ({
+  findOne: jest.fn(() => ({ select: () => ({ lean: async () => null }) })),
+}));
 jest.mock('../models/WineEmbedding', () => ({ findOne: jest.fn() }));
 jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
 jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false), search: jest.fn(), searchBottles: jest.fn() }));
