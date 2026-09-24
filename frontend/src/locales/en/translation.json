@@ -5117,6 +5117,13 @@
       "savedAt": "Saved: {{time}}",
       "notSaved": "Not saved yet",
       "usage": "Space used on this device: {{size}}"
+    },
+    "page": {
+      "title": "You're offline",
+      "needsConnection": "This page needs an internet connection. It will load by itself as soon as you are back online.",
+      "whatWorks": "Your cellars, racks and bottles are saved on this device and work offline.",
+      "toCellars": "Go to my cellars",
+      "modeHint": "Turn on offline mode in Settings to keep your cellar available without a connection."
     }
   }
 }

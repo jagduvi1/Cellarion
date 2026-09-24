@@ -11,6 +11,8 @@ import AnnouncementBanner from './AnnouncementBanner';
 import DemoBanner from './DemoBanner';
 import OfflineBanner from './OfflineBanner';
 import { getQueueStatus } from '../utils/offlineQueue';
+import OfflinePageNotice from './OfflinePageNotice';
+import { useOfflineNow, isOfflineCapablePage } from '../utils/useOfflineNow';
 import './Layout.css';
 
 const LOGO_LIGHT_WEBP = '/cellarion-logo-light.webp';
@@ -24,6 +26,7 @@ function Layout({ children }) {
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
+  const { offline, modeOn } = useOfflineNow();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const unreadBlog = useUnreadBlog();
 
@@ -368,7 +371,12 @@ function Layout({ children }) {
       <OfflineBanner />
 
       <main id="main-content" className="main-content" tabIndex={-1}>
-        {children}
+        {/* Offline: a page that needs the network gets a calm notice instead of
+            its own "Network error"; it renders (and loads) again by itself
+            when the connection returns. */}
+        {offline && !(modeOn && isOfflineCapablePage(location.pathname))
+          ? <OfflinePageNotice modeOn={modeOn} />
+          : children}
       </main>
 
       {/* ── Mobile bottom tab bar ── */}
