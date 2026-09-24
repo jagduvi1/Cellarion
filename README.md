@@ -20,6 +20,7 @@ This is the primary way to use Cellarion. Create an account and start using the 
 - **Bottle tracking** — Log every bottle with vintage, producer, region, price, rating, and tasting notes; add more of a bottle you already own in one click
 - **Cellar & rack management** — Multiple cellars with customizable rack grids (up to 20×20) and a 3D cellar room view for physical placement
 - **Open-bottle tracking** — Open a bottle, pour glasses over days, close or finish it — with preservation-aware drink-soon nudges
+- **Offline mode** — Keeps a copy of your cellars, racks and bottles on the device, so the app works in the cellar with no signal: browse, find a bottle in its rack, consume/open/pour, place and move bottles, edit notes and ratings. Changes sync when you're back online — applied once (idempotency keys), and never silently over someone else's change (conflicts land in *Needs attention*). On by default in the installed app, a switch in Settings otherwise
 - **Reserved bottles** — Mark bottles as "spoken for" (a birthday, a dinner) so suggestions and consume flows respect them
 - **Drink-window alerts** — Sommelier-curated maturity windows per wine and vintage; alerts when bottles approach peak, are in window, or slipping past it
 - **Rich statistics** — Charts, world choropleth map, breakdowns by country, grape, value, and drink status
@@ -44,7 +45,7 @@ This is the primary way to use Cellarion. Create an account and start using the 
 **Platform**
 - **Climate monitoring** — Connect cellar temperature/humidity sensors (Home Assistant-friendly ingest API) with per-cellar dashboards
 - **Single sign-on** — Optional Google SSO, or your own OIDC provider (Pocket ID, Authentik, Keycloak, Zitadel, Authelia), alongside email/password
-- **Installable app** — PWA with push notifications, plus an Android app on [Google Play](https://play.google.com/store/apps/details?id=app.cellarion.twa)
+- **Installable app** — PWA with push notifications and offline support (the service worker keeps each build for offline use), plus an Android app on [Google Play](https://play.google.com/store/apps/details?id=app.cellarion.twa)
 - **Internationalization** — Community-translated via Weblate ([help translate](#translations))
 - **Privacy & GDPR** — Full data export, account deletion with cooling-off, one-click email opt-out, optional self-hosted cookie-free analytics (Umami)
 - **Everything free** — Optional Supporter/Patron/Benefactor tiers (Stripe, monthly or yearly) and GitHub Sponsors fund development; they unlock nothing extra
@@ -314,6 +315,14 @@ The backend exposes ~65 route modules; this is the core surface, not an exhausti
 | POST | `/:id/consume` · `/:id/open` · pour/close | Drink-tracking lifecycle |
 | POST | `/import/validate` | Validate import data and match wines (registry-read-only) |
 | POST | `/import/confirm` | Create bottles from validated import |
+
+Writes on `/api/bottles` and `/api/racks` accept an optional `Idempotency-Key` header: a repeat with the same key gets the first answer back instead of being applied again (kept 8 days). Offline-queued writes also send preconditions (`ifActive`, `ifUnchanged`, `expectOccupant`/`expectFrom`/`expectTo`, `?expect=`) and get `409` when the cellar changed meanwhile.
+
+### Offline — `/api/offline` *(auth required)*
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/snapshot` | The user's cellars (own + shared), unconsumed bottles and racks in one document, for offline mode (`no-store`, rate-limited) |
 
 ### Wine Registry — `/api/wines`
 

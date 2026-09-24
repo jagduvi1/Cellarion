@@ -51,10 +51,10 @@ describe('offline page notice', () => {
     expect(screen.getByText('the page')).toBeInTheDocument();
   });
 
-  it('with offline mode on it points to the cellars; off (unreleased) it makes no promise', () => {
+  it('with offline mode on it points to the cellars; off, it says where to turn it on', () => {
     render(<MemoryRouter><OfflinePageNotice modeOn /></MemoryRouter>);
     expect(screen.getByRole('link', { name: 'Go to my cellars' })).toHaveAttribute('href', '/cellars');
     const { container } = render(<MemoryRouter><OfflinePageNotice modeOn={false} /></MemoryRouter>);
-    expect(container.textContent).not.toMatch(/Turn on offline mode/);
+    expect(container.textContent).toMatch(/Turn on offline mode in Settings/);
   });
 });

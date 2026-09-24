@@ -31,8 +31,23 @@ beforeEach(() => { vi.stubGlobal('localStorage', memoryStorage()); });
 afterEach(() => vi.unstubAllGlobals());
 
 describe('offline mode switch', () => {
-  it('is not released yet: off by default', () => {
-    expect(OFFLINE_MODE_RELEASED).toBe(false);
+  it('is released: off by default in a plain browser tab', () => {
+    expect(OFFLINE_MODE_RELEASED).toBe(true);
+    expect(isOfflineModeEnabled()).toBe(false);
+  });
+
+  it('on by default in the installed app — and still after a reload that loses the app marker', () => {
+    const mm = window.matchMedia;
+    window.matchMedia = (q) => ({ matches: q === '(display-mode: standalone)' });
+    try {
+      expect(isOfflineModeEnabled()).toBe(true);
+    } finally {
+      window.matchMedia = mm;
+    }
+    // A later load where the app isn't recognisable (the TWA referrer is gone):
+    expect(isOfflineModeEnabled()).toBe(true);
+    // The user's own choice always wins.
+    localStorage.setItem('cellarion-offline', 'off');
     expect(isOfflineModeEnabled()).toBe(false);
   });
 
