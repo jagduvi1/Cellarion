@@ -5100,7 +5100,23 @@
       "edit": "Edit {{fields}} on {{wine}}",
       "place": "Place {{wine}} in {{rack}}, slot {{position}}",
       "clear": "Take {{wine}} out of {{rack}}, slot {{position}}",
-      "move": "Move {{wine}} in {{rack}} from slot {{position}} to {{toPosition}}"
+      "move": "Move {{wine}} in {{rack}} from slot {{position}} to {{toPosition}}",
+      "pour": "Pour a glass of {{wine}}"
+    },
+    "settings": {
+      "title": "Offline mode",
+      "betaAdmin": "(beta — admins only)",
+      "intro": "Keep a copy of your cellars, racks and bottles on this device, so you can browse them — and consume, open, place or move bottles — where there is no signal. Changes are sent when you are back online.",
+      "appHint": "You are using the installed app.",
+      "browserHint": "On a shared or borrowed computer, leave this off: the copy stays on the device until you log out or turn it off.",
+      "toggle": "Keep my cellar available offline on this device",
+      "saving": "Saving your cellar on this device…",
+      "ready": "Ready — your cellar is saved on this device.",
+      "notYet": "Turned on. Your cellar will be saved the next time you are online.",
+      "cleared": "Turned off. The offline copy has been deleted from this device.",
+      "savedAt": "Saved: {{time}}",
+      "notSaved": "Not saved yet",
+      "usage": "Space used on this device: {{size}}"
     }
   }
 }

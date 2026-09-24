@@ -51,8 +51,13 @@ export function setOfflineModePreference(value) {
     // Loaded on demand: offlineSnapshot imports this module.
     import('./offlineSnapshot').then((m) => m.clearOfflineData()).catch(() => {});
   }
+  // Components that read the switch at render (banner, sync) re-render.
+  try { window.dispatchEvent(new Event(OFFLINE_MODE_EVENT)); } catch { /* noop */ }
   return syncOfflineShell();
 }
+
+/** Fired when the switch changes (setOfflineModePreference). */
+export const OFFLINE_MODE_EVENT = 'cellarion-offline-mode';
 
 /**
  * Tell the service worker to keep (or drop) the offline copy of the app.
@@ -61,8 +66,13 @@ export function setOfflineModePreference(value) {
 export async function syncOfflineShell() {
   try {
     if (!('serviceWorker' in navigator)) return false;
-    const reg = await navigator.serviceWorker.ready;
-    const worker = reg.active;
+    // ready never settles when registration failed (blocked service workers,
+    // dev) — don't wait on it forever.
+    const reg = await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise((resolve) => setTimeout(() => resolve(null), 10000)),
+    ]);
+    const worker = reg?.active;
     if (!worker) return false;
     const enable = isOfflineModeEnabled();
     return await new Promise((resolve) => {
@@ -86,9 +96,16 @@ const KEPT_FIELDS = [
   'deletionScheduledFor',
 ];
 
-export function saveOfflineUser(user) {
+// An offline start is only allowed for a "remember me" session (one that
+// survives closing the browser — a shared computer's browser-only session must
+// not reopen offline for the next person) that the server confirmed within the
+// refresh cookie's lifetime.
+const OFFLINE_START_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
+export function saveOfflineUser(user, { persistent = false } = {}) {
   if (!user || !isOfflineModeEnabled()) return;
-  const kept = {};
+  if (!persistent) { clearOfflineUser(); return; }
+  const kept = { _verifiedAt: Date.now() };
   for (const k of KEPT_FIELDS) if (user[k] !== undefined) kept[k] = user[k];
   try { localStorage.setItem(USER_KEY, JSON.stringify(kept)); } catch { /* quota / blocked */ }
 }
@@ -97,10 +114,23 @@ export function loadOfflineUser() {
   if (!isOfflineModeEnabled()) return null;
   try {
     const u = JSON.parse(localStorage.getItem(USER_KEY) || 'null');
-    return u && typeof u === 'object' && typeof u.username === 'string' ? u : null;
+    if (!u || typeof u !== 'object' || typeof u.username !== 'string') return null;
+    if (!(Date.now() - Number(u._verifiedAt) < OFFLINE_START_MAX_AGE_MS)) return null;
+    const { _verifiedAt, ...user } = u;
+    return user;
   } catch {
     return null;
   }
+}
+
+// A logout made with no network could not end the server session; this marks
+// it so the next start ends it before anything else (AuthContext).
+const PENDING_LOGOUT_KEY = 'cellarion-pending-logout';
+export function markPendingLogout(on) {
+  try { if (on) localStorage.setItem(PENDING_LOGOUT_KEY, '1'); else localStorage.removeItem(PENDING_LOGOUT_KEY); } catch { /* noop */ }
+}
+export function hasPendingLogout() {
+  try { return localStorage.getItem(PENDING_LOGOUT_KEY) === '1'; } catch { return false; }
 }
 
 export function clearOfflineUser() {

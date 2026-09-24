@@ -13,8 +13,9 @@ const mongoose = require('mongoose');
  *
  * Scoped per user: a key is only ever looked up together with its owner, so one
  * account can never read or collide with another's outcome. `status: null`
- * marks a write still in progress. Rows expire 48 h after creation (TTL) —
- * long enough for a phone to come back online, short enough to be transient.
+ * marks a write still in progress. Rows expire 8 days after creation (TTL) —
+ * longer than the offline queue keeps a change (utils/offlineQueue, 7 days), so
+ * a change is never retried after the server has forgotten it arrived.
  *
  * GDPR: registered in services/userDataRegistry.js — purged on account
  * deletion; not exported (a transient technical record of a request already
@@ -33,6 +34,6 @@ const idempotencyRecordSchema = new mongoose.Schema({
 idempotencyRecordSchema.index({ user: 1, key: 1 }, { unique: true });
 // TTL on its own single-field index (a competing plain index on createdAt would
 // silently disable TTL — see models/ExportLink.js).
-idempotencyRecordSchema.index({ createdAt: 1 }, { expireAfterSeconds: 48 * 60 * 60 });
+idempotencyRecordSchema.index({ createdAt: 1 }, { expireAfterSeconds: 8 * 24 * 60 * 60 });
 
 module.exports = mongoose.model('IdempotencyRecord', idempotencyRecordSchema);

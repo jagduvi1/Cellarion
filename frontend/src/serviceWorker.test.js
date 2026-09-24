@@ -14,7 +14,7 @@ const b64url = (obj) => btoa(JSON.stringify(obj)).replace(/\+/g, '-').replace(/\
 const tokenFor = (id) => `${b64url({ alg: 'HS256', typ: 'JWT' })}.${b64url({ id, roles: ['user'] })}.signature`;
 
 function fakeResponse(status, body) {
-  return { status, ok: status >= 200 && status < 300, body, clone() { return this; } };
+  return { status, ok: status >= 200 && status < 300, body, clone() { return this; }, text: async () => String(body ?? '') };
 }
 
 // Cache keys are full URLs; the worker passes both Request-likes and paths.
@@ -32,6 +32,7 @@ function makeCaches(initial = {}, network = null) {
       match: async (req) => entries.get(keyOf(req)),
       put: async (req, res) => { entries.set(keyOf(req), res); },
       delete: async (req) => entries.delete(keyOf(req)),
+      keys: async () => [...entries.keys()].map((url) => ({ url })),
       addAll: async (urls) => {
         const got = [];
         for (const u of urls) {
@@ -74,7 +75,7 @@ function loadWorker({ caches, network, build = null }) {
   };
   const source = build ? SW_SOURCE.replace('/*__CELLARION_BUILD__*/null', JSON.stringify(build)) : SW_SOURCE;
   vm.runInNewContext(source, {
-    self, caches: caches.api, fetch: network, atob, URL, console, Promise, Response: FakeResponse, MessageChannel,
+    self, caches: caches.api, fetch: network, atob, URL, console, Promise, Response: FakeResponse, MessageChannel, setTimeout, clearTimeout,
   });
   return handlers;
 }
@@ -388,5 +389,84 @@ describe('service worker offline photos', () => {
     handlers.activate({ waitUntil: (p) => { work = p; } });
     await work;
     expect([...caches.store.keys()].sort()).toEqual(['cellarion-photos', 'cellarion-v4']);
+  });
+});
+
+describe('service worker — audit fixes', () => {
+  const BUILD = { version: 'v2', indexRefs: ['/assets/index-abc.js'], files: ['/index.html', '/assets/index-abc.js', '/assets/index-abc.css'] };
+  const SHELL = 'cellarion-shell-v2';
+  const okIndex = (u) => fakeResponse(200, u === '/index.html' ? '<script src="/assets/index-abc.js"></script>' : `body of ${u}`);
+  async function enable(handlers) {
+    const channel = new MessageChannel();
+    const reply = new Promise((resolve) => { channel.port1.onmessage = (e) => { channel.port1.close(); resolve(e.data); }; });
+    let work;
+    handlers.message({ data: { type: 'offline-enable' }, ports: [channel.port2], waitUntil: (p) => { work = p; } });
+    await work;
+    return reply;
+  }
+  const nav = () => ({ url: 'https://cellarion.test/cellars', method: 'GET', headers: new Headers(), mode: 'navigate' });
+
+  it('a page load that hangs opens the stored app after a few seconds', async () => {
+    vi.useFakeTimers();
+    try {
+      const network = vi.fn(async (u) => okIndex(u));
+      const caches = makeCaches({}, network);
+      const handlers = loadWorker({ caches, network, build: BUILD });
+      await enable(handlers);
+      network.mockImplementation(() => new Promise(() => {})); // one bar: never answers
+      let responded;
+      handlers.fetch({ request: nav(), respondWith: (p) => { responded = p; } });
+      await vi.advanceTimersByTimeAsync(4100);
+      expect((await responded).body).toContain('/assets/index-abc.js');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('an index.html from another build is not stored as this build\'s shell', async () => {
+    const network = vi.fn(async (u) => fakeResponse(200, u === '/index.html' ? '<script src="/assets/index-OLD.js"></script>' : 'x'));
+    const caches = makeCaches({}, network);
+    const handlers = loadWorker({ caches, network, build: BUILD });
+    expect((await enable(handlers)).ok).toBe(false);
+    expect(caches.store.get(SHELL).has('https://cellarion.test/__cellarion-shell-complete__')).toBe(false);
+  });
+
+  it('a flaky download keeps what arrived; the next attempt fetches only the rest', async () => {
+    let fail = true;
+    const network = vi.fn(async (u) => (u === '/assets/index-abc.css' && fail ? fakeResponse(503, '') : okIndex(u)));
+    const caches = makeCaches({}, network);
+    const handlers = loadWorker({ caches, network, build: BUILD });
+    expect((await enable(handlers)).ok).toBe(false);
+    expect(caches.store.get(SHELL).has('https://cellarion.test/assets/index-abc.js')).toBe(true);
+    fail = false;
+    network.mockClear();
+    expect((await enable(handlers)).ok).toBe(true);
+    expect(network.mock.calls.map((c) => c[0]).sort()).toEqual(['/assets/index-abc.css', '/index.html']);
+  });
+
+  it('a POST to another origin\'s /api/ (the analytics beacon) does not wipe the API caches', async () => {
+    const caches = makeCaches({ 'cellarion-api-v2-aaaaaaaaaaaaaaaaaaaaaaaa': [] });
+    const handlers = loadWorker({ caches, network: vi.fn() });
+    handlers.fetch({ request: { url: 'https://analytics.cellarion.app/api/send', method: 'POST', headers: new Headers(), mode: 'cors' }, respondWith: () => {} });
+    await flush();
+    expect(caches.store.has('cellarion-api-v2-aaaaaaaaaaaaaaaaaaaaaaaa')).toBe(true);
+  });
+
+  it('activate drops old builds\' bundles from the static cache, keeps this build\'s', async () => {
+    const caches = makeCaches({
+      'cellarion-v4': [
+        ['https://cellarion.test/assets/index-abc.js', fakeResponse(200, 'current')],
+        ['https://cellarion.test/assets/index-OLD.js', fakeResponse(200, 'old')],
+        ['https://cellarion.test/logo192.png', fakeResponse(200, 'icon')],
+      ],
+    });
+    const handlers = loadWorker({ caches, network: vi.fn(), build: BUILD });
+    let work;
+    handlers.activate({ waitUntil: (p) => { work = p; } });
+    await work;
+    expect([...caches.store.get('cellarion-v4').keys()].sort()).toEqual([
+      'https://cellarion.test/assets/index-abc.js',
+      'https://cellarion.test/logo192.png',
+    ]);
   });
 });

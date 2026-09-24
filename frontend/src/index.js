@@ -15,6 +15,20 @@ import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import * as serviceWorkerRegistration from './serviceWorkerRegistration';
 
+// A page's code file that no longer exists: this tab is on a build that a
+// deploy has replaced (and, offline, the stored app is now the new build).
+// Reload once onto the current build instead of showing a broken page. The
+// sessionStorage stamp keeps a genuinely missing file from reloading forever.
+window.addEventListener('vite:preloadError', (event) => {
+  try {
+    const last = Number(sessionStorage.getItem('cellarion-chunk-reload') || 0);
+    if (Date.now() - last < 30000) return;
+    sessionStorage.setItem('cellarion-chunk-reload', String(Date.now()));
+  } catch { /* storage blocked: reload anyway, once per page */ }
+  event.preventDefault();
+  window.location.reload();
+});
+
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>

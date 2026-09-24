@@ -303,7 +303,10 @@ describe('POST /api/auth/refresh — rotation', () => {
     const res = await request({ path: '/api/auth/refresh', cookie: `refreshToken=${oldRaw}` });
 
     expect(res.status).toBe(200);
-    expect(Object.keys(res.body)).toEqual(['token']); // no user object leaks on refresh
+    // no user object leaks on refresh — only the token and whether this
+    // device's session is a "remember me" one (offline mode, #1355)
+    expect(Object.keys(res.body).sort()).toEqual(['persistent', 'token']);
+    expect(typeof res.body.persistent).toBe('boolean');
 
     // The access token is a real HS256 JWT carrying id/roles/plan
     const decoded = jwt.verify(res.body.token, 'test-secret', { algorithms: ['HS256'] });
@@ -552,11 +555,43 @@ describe('POST /api/auth/logout', () => {
     expectClearedCookies(res);
   });
 
-  test('requires authentication (real requireAuth middleware) → 401 without a bearer token', async () => {
+  // Offline mode (#1355): an offline session has no access token. A logout
+  // that required one left the server session and cookie alive, and the next
+  // online start signed the same account back in.
+  test('without a bearer token the cookie alone identifies and ends this device\'s session', async () => {
+    const user = makeUserDoc();
+    const laptop = plantRefreshToken(user, { client: 'Windows / Chrome' });
+    const phone = plantRefreshToken(user, { client: 'Android / Chrome' });
+
+    const res = await request({ path: '/api/auth/logout', cookie: `refreshToken=${phone}` });
+
+    expect(res.status).toBe(200);
+    expect(sessionOf(user, phone)).toBeUndefined();
+    expect(sessionOf(user, laptop)).toBeDefined();
+    expectClearedCookies(res);
+    expect((await request({ path: '/api/auth/refresh', cookie: `refreshToken=${phone}` })).status).toBe(401);
+  });
+
+  test('an expired bearer token falls back to the cookie', async () => {
+    const user = makeUserDoc();
+    const raw = plantRefreshToken(user);
+    const expired = jwt.sign({ id: 'u1', roles: ['user'] }, process.env.JWT_SECRET, { algorithm: 'HS256', expiresIn: -10 });
+
+    const res = await request({ path: '/api/auth/logout', bearer: expired, cookie: `refreshToken=${raw}` });
+
+    expect(res.status).toBe(200);
+    expect(user.sessions).toHaveLength(0);
+  });
+
+  test('neither token nor cookie → nothing to end, cookie still cleared', async () => {
+    const user = makeUserDoc();
+    plantRefreshToken(user);
+
     const res = await request({ path: '/api/auth/logout' });
 
-    expect(res.status).toBe(401);
-    expect(res.body).toEqual({ error: 'No token provided' });
+    expect(res.status).toBe(200);
+    expect(user.sessions).toHaveLength(1);
+    expectClearedCookies(res);
   });
 });
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { isOfflineModeEnabled } from '../utils/offlineMode';
+import { isOfflineModeEnabled, OFFLINE_MODE_EVENT } from '../utils/offlineMode';
 import { getOfflineStatus, subscribeOfflineStatus } from '../utils/offlineSnapshot';
 import { getQueueStatus, subscribeQueueStatus } from '../utils/offlineQueue';
 import OfflineAttentionModal from './OfflineAttentionModal';
@@ -36,6 +36,12 @@ export default function OfflineBanner() {
   const [reviewing, setReviewing] = useState(false);
   const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine !== false));
 
+  const [, setModeTick] = useState(0);
+  useEffect(() => {
+    const onMode = () => setModeTick((n) => n + 1);
+    window.addEventListener(OFFLINE_MODE_EVENT, onMode);
+    return () => window.removeEventListener(OFFLINE_MODE_EVENT, onMode);
+  }, []);
   useEffect(() => subscribeOfflineStatus(setStatus), []);
   useEffect(() => subscribeQueueStatus(setQueue), []);
   useEffect(() => {

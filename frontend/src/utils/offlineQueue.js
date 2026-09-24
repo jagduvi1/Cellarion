@@ -13,14 +13,15 @@
  *   changed meanwhile, a rule)    → "needs attention": the user chooses
  *                                   (discard / try again / apply anyway)
  * Nothing is ever dropped without the user seeing it. Ops are per account and
- * only ever sent for the account that made them; one left 7 days is dropped.
+ * only ever sent for the account that made them, and never dropped unseen
+ * (another account's are dropped after 30 days).
  */
 import { putQueued, deleteQueued, readQueue } from './offlineStore';
 import { buildOp, queueableKind, responseFor } from './offlineOps';
 import { getWorkingIndex, rebuildWorking } from './offlineSnapshot';
 import { isOfflineModeEnabled } from './offlineMode';
 
-const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const OTHER_ACCOUNT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const SENT_KEEP_MS = 60 * 60 * 1000;
 export const QUEUE_CHANGED_EVENT = 'cellarion-offline-queue';
 
@@ -39,7 +40,11 @@ export async function refreshQueueStatus(userId) {
   const now = Date.now();
   const mine = [];
   for (const op of all) {
-    if (now - Date.parse(op.createdAt) > MAX_AGE_MS) { await deleteQueued(op.id); continue; }
+    // Another account's ops (it hasn't signed in here for a month): dropped.
+    // The user's own pending / needs-attention ops are never dropped unseen.
+    if (String(op.userId) !== String(userId) && now - Date.parse(op.createdAt) > OTHER_ACCOUNT_MAX_AGE_MS) {
+      await deleteQueued(op.id); continue;
+    }
     // A sent op whose confirming refresh never came (offline mode switched
     // off meanwhile, …): the server has it; stop laying it over the copy.
     if (op.status === 'sent' && now - Date.parse(op.sentAt) > SENT_KEEP_MS) { await deleteQueued(op.id); continue; }
@@ -111,7 +116,7 @@ let flushing = false;
  * (auth + refresh); `__direct` keeps it from queueing them again. Returns the
  * number sent. Across tabs a Web Lock makes sure only one tab sends.
  */
-export async function flushQueue(apiFetch, userId) {
+export async function flushQueue(apiFetch, userId, isActive = () => true) {
   if (!userId || flushing || !isOfflineModeEnabled()) return 0;
   const run = async () => {
     flushing = true;
@@ -123,6 +128,9 @@ export async function flushQueue(apiFetch, userId) {
         .filter((o) => o.status === 'pending')
         .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
       for (const op of ops) {
+        // The session changed while sending (logout, another account signed
+        // in): stop — the rest must never go out under someone else's login.
+        if (!isActive()) break;
         let res;
         try {
           res = await apiFetch(op.url, {
@@ -183,11 +191,14 @@ function withoutPreconditions(op) {
   if (body) {
     delete body.ifActive;
     delete body.ifUnchanged;
-    delete body.expectOccupant;
-    delete body.expectFrom;
-    delete body.expectTo;
+    delete body.expectOccupant; // place: my bottle goes there, whatever is in the slot now
+    delete body.expectTo;       // move: into the target even if it is taken now (a swap)
+    // expectFrom stays: a move must still move MY bottle — never whatever
+    // someone else has put in that slot since.
   }
-  return { ...op, body, url: op.url.split('?')[0] };
+  // A take-out keeps its ?expect= for the same reason (it is not offered
+  // "apply anyway" at all — OfflineAttentionModal).
+  return { ...op, body };
 }
 
 /**
@@ -199,9 +210,21 @@ function withoutPreconditions(op) {
 export async function resolveAttention(opId, action, userId) {
   const op = (await readQueue()).find((o) => o.id === opId && String(o.userId) === String(userId));
   if (!op) return;
-  if (action === 'discard') {
+  // Edits of the same fields on the same bottle: the newest wins, whichever
+  // order the user resolves them in. A newer one supersedes this one; this one
+  // supersedes older ones still waiting.
+  const all = await readQueue();
+  const fieldsOf = (o) => Object.keys(o.body || {}).filter((k) => k !== 'ifUnchanged');
+  const sameEdit = (o) => o.id !== op.id && o.kind === 'edit' && op.kind === 'edit'
+    && o.bottleId === op.bottleId && String(o.userId) === String(userId);
+  const covers = (a, b) => fieldsOf(b).every((k) => fieldsOf(a).includes(k)); // a sets every field b sets
+  const supersededByNewer = all.some((o) => sameEdit(o) && o.createdAt > op.createdAt && covers(o, op));
+  if (action === 'discard' || (action !== 'discard' && supersededByNewer)) {
     await deleteQueued(op.id);
   } else {
+    for (const o of all) {
+      if (sameEdit(o) && o.createdAt < op.createdAt && o.status !== 'sent' && covers(op, o)) await deleteQueued(o.id);
+    }
     const next = action === 'force' ? withoutPreconditions(op) : op;
     await deleteQueued(op.id);
     await putQueued({

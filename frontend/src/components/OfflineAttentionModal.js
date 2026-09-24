@@ -3,10 +3,13 @@ import { useTranslation } from 'react-i18next';
 import Modal from './Modal';
 import { listAttention, resolveAttention } from '../utils/offlineQueue';
 
-// Refusals where the cellar changed after the user acted: "apply mine anyway"
-// is a meaningful choice. (state_changed — the bottle already left the cellar —
-// is not: consuming it again would overwrite that record, so only discard.)
-const FORCEABLE = new Set(['slot_changed', 'field_changed']);
+// Refusals where "apply mine anyway" is a meaningful choice: a notes/rating
+// conflict (keep mine), and a place or move into a slot that changed (the move
+// still only moves MY bottle — offlineQueue keeps that check). Not a take-out
+// of a slot that now holds another bottle (it would take out the wrong one),
+// nor a bottle that already left the cellar (it would overwrite that record).
+const isForceable = (op) => op.code === 'field_changed'
+  || (op.code === 'slot_changed' && (op.kind === 'place' || op.kind === 'move'));
 
 function describe(op, t) {
   const l = op.label || {};
@@ -14,6 +17,7 @@ function describe(op, t) {
   switch (op.kind) {
     case 'consume': return t('offline.op.consume', 'Remove {{wine}} from the cellar', { wine });
     case 'open': return t('offline.op.open', 'Open {{wine}}', { wine });
+    case 'pour': return t('offline.op.pour', 'Pour a glass of {{wine}}', { wine });
     case 'edit': return t('offline.op.edit', 'Edit {{fields}} on {{wine}}', { wine, fields: (l.fields || []).join(', ') });
     case 'place': return t('offline.op.place', 'Place {{wine}} in {{rack}}, slot {{position}}', { wine, rack: l.rack, position: l.position });
     case 'clear': return t('offline.op.clear', 'Take {{wine}} out of {{rack}}, slot {{position}}', { wine, rack: l.rack, position: l.position });
@@ -65,7 +69,7 @@ export default function OfflineAttentionModal({ userId, onClose }) {
               </div>
             )}
             <div className="modal-actions" style={{ justifyContent: 'flex-start', marginTop: '0.5rem' }}>
-              {FORCEABLE.has(op.code) ? (
+              {isForceable(op) ? (
                 <button type="button" className="btn btn-primary btn-small" disabled={!!busy} onClick={() => act(op, 'force')}>
                   {op.code === 'field_changed' ? t('offline.keepMine', 'Keep mine') : t('offline.applyAnyway', 'Apply anyway')}
                 </button>

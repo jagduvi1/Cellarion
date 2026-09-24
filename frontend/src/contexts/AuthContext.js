@@ -2,7 +2,7 @@ import React, { createContext, useState, useContext, useEffect, useRef, useCallb
 import { findLanguage } from '../config/locales';
 import { createApiFetch } from '../utils/apiFetch';
 import { clearApiCaches } from '../serviceWorkerRegistration';
-import { saveOfflineUser, loadOfflineUser, clearOfflineUser } from '../utils/offlineMode';
+import { saveOfflineUser, loadOfflineUser, clearOfflineUser, markPendingLogout, hasPendingLogout } from '../utils/offlineMode';
 import { offlineAnswer, markLive, clearOfflineData } from '../utils/offlineSnapshot';
 import { writeKeyFor, queueWrite } from '../utils/offlineQueue';
 
@@ -30,6 +30,33 @@ function markRefreshInFlight(on) {
   } catch { /* storage blocked — no guard, as before */ }
 }
 
+// Offline mode (#1355): how long a start waits for a refresh / profile on a
+// weak signal before opening offline from the kept profile.
+const START_WAIT_MS = 5000;
+const TIMED_OUT = Symbol('timed-out');
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * End this device's session on the server. The refresh cookie identifies it
+ * (the bearer is optional), so this also works from an offline session. True
+ * when the server answered; false with no network (then retried at next start).
+ */
+async function sendLogout(token) {
+  try {
+    const res = await Promise.race([
+      fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      }),
+      wait(8000).then(() => { throw new Error('timeout'); }),
+    ]);
+    return !!res && res.status < 500;
+  } catch {
+    return false;
+  }
+}
+
 async function waitForUnloadedRefresh() {
   let started = NaN;
   try { started = Number(localStorage.getItem(REFRESH_MARK)); } catch { /* noop */ }
@@ -53,6 +80,12 @@ export const AuthProvider = ({ children }) => {
   // True while running on the profile kept for an offline start (offline mode,
   // utils/offlineMode.js): `user` is set but there is no token yet.
   const [offlineSession, setOfflineSession] = useState(false);
+  // Whether the server says this device's session is a "remember me" one
+  // (login / refresh responses). Only such a session may start offline.
+  const sessionPersistentRef = useRef(false);
+  // Bumped on logout: work still running for the old session (the offline
+  // queue sending) checks it and stops, so it can't continue as someone else.
+  const sessionGenRef = useRef(0);
 
   // Keep a ref to the latest token so apiFetch always reads the current value
   // without needing to be recreated on every token change
@@ -88,6 +121,7 @@ export const AuthProvider = ({ children }) => {
   const applySession = (token, userData) => {
     storeToken(token);
     setUser(userData);
+    setOfflineSession(false); // a session applied from the server is a live one
     // An explicit account preference is honoured even for an incomplete
     // ("beta") language — the beta rule only governs automatic detection, never
     // a choice the user made. A code whose locale no longer exists (translation
@@ -162,6 +196,7 @@ export const AuthProvider = ({ children }) => {
     refreshOutcomeRef.current = res.ok ? 'ok' : 'rejected';
     if (!res.ok) return null;
     const data = await res.json();
+    sessionPersistentRef.current = data.persistent === true;
     storeToken(data.token);
     return data.token;
   };
@@ -193,18 +228,12 @@ export const AuthProvider = ({ children }) => {
   // back in. A user-initiated logout deletes everything (Layout confirms first
   // when changes are waiting).
   const logout = useCallback(async ({ keepQueue = false } = {}) => {
-    try {
-      // Tell the server to clear the refresh token hash + cookie
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        credentials: 'include',
-        headers: tokenRef.current
-          ? { 'Authorization': `Bearer ${tokenRef.current}` }
-          : {}
-      });
-    } catch {
-      // Best-effort; clear client state regardless
-    }
+    // Tell the server to end this device's session and clear its cookie. With
+    // no network (offline mode) that can't happen now — remember it, and the
+    // next start finishes it before anything else (restoreSession).
+    const ended = await sendLogout(tokenRef.current);
+    markPendingLogout(!ended);
+    sessionGenRef.current += 1; // anything still running for this session stops (offline queue)
     // Wipe per-tab user state so chat history etc. don't bleed across logins.
     // Only sessionStorage — localStorage holds theme / language / persisted token.
     try { sessionStorage.clear(); } catch { /* noop */ }
@@ -252,21 +281,48 @@ export const AuthProvider = ({ children }) => {
 
     // On mount, attempt to restore session via httpOnly refresh cookie
     const restoreSession = async () => {
-      const newToken = await handleRefresh();
+      // A logout that could not reach the server finishes first — otherwise
+      // the refresh below would sign that account straight back in.
+      if (hasPendingLogout()) {
+        const ended = await sendLogout(null);
+        if (!ended) { setLoading(false); return; } // still offline: stay signed out
+        markPendingLogout(false);
+      }
+
+      const kept = loadOfflineUser(); // null unless offline mode + a recent "remember me" session
+      const goOffline = () => {
+        setOfflineSession(true);
+        setUser(kept);
+        setLoading(false);
+      };
+      const refresh = handleRefresh();
+      // One bar of signal hangs rather than fails: with an offline profile,
+      // don't wait for it — start offline; the refresh carries on and the
+      // reconnect effect picks the session up when it lands.
+      const newToken = kept
+        ? await Promise.race([refresh, wait(START_WAIT_MS).then(() => TIMED_OUT)])
+        : await refresh;
+      if (newToken === TIMED_OUT) {
+        refresh.then((tok) => { if (tok) window.dispatchEvent(new Event('online')); });
+        goOffline();
+        return;
+      }
       if (newToken) {
-        await fetchUserProfile(newToken);
+        const profile = fetchUserProfile(newToken);
+        if (kept && (await Promise.race([profile.then(() => true), wait(START_WAIT_MS).then(() => TIMED_OUT)])) === TIMED_OUT) {
+          goOffline(); // the profile call applies the session when it lands
+        }
         return;
       }
       if (refreshOutcomeRef.current === 'network') {
-        // Offline start (offline mode only): carry on as the last signed-in
-        // user, with no token, until the network is back (effect below).
-        const kept = loadOfflineUser();
-        if (kept) {
-          setOfflineSession(true);
-          setUser(kept);
-        }
+        // Offline start: carry on as the last signed-in user, with no token,
+        // until the network is back (reconnect effect below).
+        if (kept) { goOffline(); return; }
       } else {
-        clearOfflineUser(); // the server ended this session
+        // The server ended this session (signed out elsewhere, expired,
+        // account deleted): nothing of it may stay on this device.
+        clearOfflineUser();
+        await clearOfflineData({ keepQueue: true });
       }
       setLoading(false);
     };
@@ -319,7 +375,8 @@ export const AuthProvider = ({ children }) => {
   // ------------------------------------------------------------------
 
   useEffect(() => {
-    if (user && !offlineSession) saveOfflineUser(user); // no-op unless offline mode is on
+    // No-op unless offline mode is on; a non-"remember me" session is not kept.
+    if (user && !offlineSession) saveOfflineUser(user, { persistent: sessionPersistentRef.current });
   }, [user, offlineSession]);
 
   useEffect(() => {
@@ -413,6 +470,7 @@ export const AuthProvider = ({ children }) => {
         throw err;
       }
 
+      sessionPersistentRef.current = data.persistent === true;
       applySession(data.token, data.user);
       return { success: true };
     } catch (error) {
@@ -511,6 +569,9 @@ export const AuthProvider = ({ children }) => {
     token,
     loading,
     offlineSession,
+    // A number that changes when the session ends (logout) — long-running work
+    // compares it to stop acting for a session that is gone.
+    getSessionGeneration: () => sessionGenRef.current,
     register,
     login,
     demoLogin,

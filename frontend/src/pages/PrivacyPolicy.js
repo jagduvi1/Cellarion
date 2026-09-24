@@ -186,6 +186,7 @@ function PrivacyPolicy() {
           <li><strong>Import records:</strong> when you import a cellar file, we keep a record of the wine rows it contained — producer, wine name, vintage, region, grapes and the like — for 30 days, so we can diagnose an import problem you report afterwards. Prices, purchase details, notes and ratings are <em>not</em> kept in this record. It is included in your data export, deleted with the cellar it belongs to, and expires automatically.</li>
           <li><strong>Account deletion:</strong> when you request account deletion, there is a 7-day cooling-off period. After that, your personal data (account, cellar, bottles, journal, settings, forum reactions, thread subscriptions, read-state markers, reports) is permanently and irreversibly deleted.</li>
           <li><strong>Forum content (discussions and replies):</strong> to preserve multi-party conversations for other users, your forum posts are <em>anonymised</em> rather than hard-deleted — your authorship is replaced with "[Deleted user]" and the personal-data link is severed (GDPR Art. 17 compliant). The post text remains visible. If you need a specific post fully removed, contact support before requesting account deletion.</li>
+          <li><strong>Offline sync records:</strong> when a change you made offline is sent (see "Offline mode" below), the server keeps the outcome of that one request for 8 days, so a change resent after a dropped connection is applied only once. The records are then deleted automatically, and with your account.</li>
           <li><strong>Backups:</strong> encrypted snapshots are kept on a rolling schedule — seven daily, four weekly and six monthly. Anything you delete is gone from the live service straight away, and then ages out of the backups as those snapshots rotate, within six months at the outside. Backups exist only to bring the service back after a failure; they are never browsed, and never used to answer questions about an individual account.</li>
         </ul>
 
@@ -213,6 +214,14 @@ function PrivacyPolicy() {
           separate consent. On the hosted cellarion.app, Cloudflare may also set a strictly-necessary
           security cookie to distinguish humans from bots. No tracking, analytics, or advertising
           cookies are used (our Umami analytics is cookieless).
+        </p>
+        <h3>Offline mode (storage on your device)</h3>
+        <p>
+          If you turn on offline mode in Settings, a copy of your cellars, racks and bottles — including
+          cellars shared with you — and small photos of those bottles are kept in your browser's storage
+          on that device, so the app works without a connection. Changes you make offline are kept there
+          too until they are sent. This copy is only on your device: it is never sent anywhere else, and it
+          is deleted when you log out or turn offline mode off. Turn it off on a shared or borrowed computer.
         </p>
 
         <h2>10. International data transfers</h2>

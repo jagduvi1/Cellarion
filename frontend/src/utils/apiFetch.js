@@ -59,8 +59,12 @@ async function withOffline(url, init, slowMs, offline) {
   ]);
   clearTimeout(timer);
   if (first === TIMED_OUT) {
+    // Merely slow — the real answer may still come. Only an offline answer
+    // that is a real hit may stand in; a "not found" from the device copy
+    // (a consumed bottle, a cellar shared since the copy was made) must not
+    // replace a slow but correct server answer.
     const saved = await offline();
-    if (saved) return saved;
+    if (saved && saved.ok !== false) return saved;
   }
   const settled = first === TIMED_OUT ? await request : first;
   if (settled.e) {

@@ -879,7 +879,7 @@ const REGISTRY = [
   {
     model: IdempotencyRecord, category: 'personal-data', userFields: ['user'],
     // Hard-delete on erasure. The stored outcome of a write sent with an
-    // Idempotency-Key, kept 48 h (TTL) so a resent write is not applied twice.
+    // Idempotency-Key, kept 8 days (TTL) so a resent write is not applied twice.
     // Nothing to export: a transient technical record of a request whose
     // effect is already in the exported data (bottles, racks).
     purge: (ctx) => IdempotencyRecord.deleteMany({ user: ctx.userId }),

@@ -1,7 +1,7 @@
 /**
  * Idempotent writes (#1355): a non-GET request carrying an `Idempotency-Key`
  * header is applied at most once per user. The first request's status and JSON
- * body are stored (models/IdempotencyRecord, 48 h); a repeat with the same key
+ * body are stored (models/IdempotencyRecord, 8 days); a repeat with the same key
  * gets that stored answer back (`Idempotent-Replayed: true`) without running
  * the handler again.
  *
