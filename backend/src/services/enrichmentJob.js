@@ -373,7 +373,8 @@ async function runJob(cfg) {
     // an AI spend on a row strangers cannot see, whose output would then be
     // presented as the registry's tasting note the moment it is promoted.
     // The promoting write re-enriches (runPromotionFollowThrough), which is
-    // when the wine genuinely enters.
+    // when the wine genuinely enters — unless wine data is somm-owned
+    // (enrichmentOnAdd 'off'), when the sommelier writes that profile instead.
     // Canaries (registry lockdown L4) carry hand-written profiles and are never regenerated.
     // A wine copied from the shared registry (Registry Bridge, registryId set)
     // carries the registry's profile and is refreshed from there — the local

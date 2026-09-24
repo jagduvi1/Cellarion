@@ -764,6 +764,10 @@ describe('gap-report items 2/3/5/6 (2026-08-18 evening)', () => {
 
 describe('held-profile review queue over MCP (somm ticket 2026-08-18)', () => {
   const { releaseHeldProfile } = require('../services/enrichmentJob');
+  // aiConfig.get's return value is set by earlier describes and survives
+  // clearAllMocks — pin the default (automatic profiles on) so release runs
+  // as it does on a self-hosted install unless a test says otherwise.
+  beforeEach(() => require('../config/aiConfig').get.mockReturnValue({ vectorIndex: 'v1' }));
   const heldWine = (over = {}) => ({
     _id: oid('7'), name: 'Crianza', producer: 'Finca X',
     aiProfile: { heldAt: new Date('2026-08-18'), heldReason: 'low_confidence', producerSuspect: false, description: null, generatedAt: new Date('2026-08-17'), source: 'ai' },
@@ -925,6 +929,37 @@ describe('held-profile review queue over MCP (somm ticket 2026-08-18)', () => {
     WineDefinition.findById.mockReturnValue(selectChain(heldWine()));
     body = parse(await tool('review_held_profile').handler({ wine_id: oid('7'), decision: 'release' }, SOMM_CTX));
     expect(body.error.code).toBe('unavailable');
+  });
+
+  // Somm-owned wine data (enrichmentOnAdd 'off'): a release is a forced AI
+  // regeneration, so it is refused — naming the verb that does the job instead.
+  test('release is refused while automatic AI profiles are off — no AI call, set_wine_profile named', async () => {
+    const aiConfig = require('../config/aiConfig');
+    aiConfig.get.mockReturnValue({ vectorIndex: 'v1', enrichmentOnAdd: 'off' });
+    try {
+      WineDefinition.findById.mockReturnValue(selectChain(heldWine()));
+      const body = parse(await tool('review_held_profile').handler({ wine_id: oid('7'), decision: 'release' }, SOMM_CTX));
+      expect(body.error.code).toBe('unavailable');
+      expect(body.error.message).toMatch(/set_wine_profile/);
+      expect(releaseHeldProfile).not.toHaveBeenCalled();
+      expect(WineDefinition.updateOne).not.toHaveBeenCalled();
+    } finally {
+      aiConfig.get.mockReturnValue({ vectorIndex: 'v1' });
+    }
+  });
+
+  test('reject under somm-owned data does not promise a regeneration that never comes', async () => {
+    const aiConfig = require('../config/aiConfig');
+    aiConfig.get.mockReturnValue({ vectorIndex: 'v1', enrichmentOnAdd: 'off' });
+    try {
+      WineDefinition.findById.mockReturnValue(selectChain(heldWine()));
+      const body = parse(await tool('review_held_profile').handler({ wine_id: oid('7'), decision: 'reject' }, SOMM_CTX));
+      expect(body.error).toBeUndefined();
+      expect(body.summary).toMatch(/set_wine_profile/);
+      expect(body.summary).not.toMatch(/fresh attempt/);
+    } finally {
+      aiConfig.get.mockReturnValue({ vectorIndex: 'v1' });
+    }
   });
 
   test('confirm STAMPS profileReviewedAt — the rule the 57 unstamped rows exist to teach', async () => {

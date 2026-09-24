@@ -1793,7 +1793,9 @@ registerTool({
   description:
     'The decision verb for list_held_profiles. decision "release" (HELD rows): the doubt was unfounded — the ' +
     'profile REGENERATES under the human override and publishes; costs one AI call, and on generation failure the ' +
-    'row simply stays in the queue for another try. decision "confirm": the CURRENT state is correct — a held row ' +
+    'row simply stays in the queue for another try. When this server has automatic AI profiles switched off (wine ' +
+    'data is sommelier-owned), release is refused: write the profile with set_wine_profile instead, which replaces ' +
+    'the held one and clears the hold in one step. decision "confirm": the CURRENT state is correct — a held row ' +
     'stays held (its owner keeps seeing "Not yet assessed"), a published_suspect row stays published WITH THE ' +
     'SUSPECT FLAG CLEARED (a human adjudicated the doubt away), and producerUnknown clears too when set — confirm ' +
     'also works on a published row whose ONLY doubt flag is producerUnknown ("I have placed this producer"; the ' +
@@ -1804,7 +1806,8 @@ registerTool({
     'the flag is CORRECT — the producer value really is a brand/style/non-winery — so the row stays published, ' +
     'KEEPS the flag and the owner-visible caveat, and leaves the queue as the registry\'s honest residue; ' +
     'upheld-count is the true cannot-identify number the scaling review reads. decision "reject" (HELD rows only): ' +
-    'this generation is garbage — the profile clears entirely and the wine returns to the enrichment pool. Every ' +
+    'this generation is garbage — the profile clears entirely and the wine returns to the enrichment pool (with ' +
+    'automatic AI profiles off, nothing regenerates it — write it with set_wine_profile). Every ' +
     'path removes the row from the queue by construction — release/confirm/uphold stamp profileReviewedAt, reject ' +
     'clears the generation itself. To instead WRITE the correct profile yourself, use set_wine_profile.',
   scope: 'write',
@@ -1861,6 +1864,14 @@ registerTool({
 
       if (args.decision === 'release') {
         if (!held) return { wine_id: id, error: 'already_published — use confirm, or set_wine_profile to correct' };
+        // Somm-owned wine data (enrichmentOnAdd 'off', 2026-08-22): the AI
+        // writes no profile, and a release IS a profile write — a forced
+        // regeneration. Refused with the way out rather than performed; the
+        // curator's own set_wine_profile replaces the held text and clears the
+        // hold (services/wineProfileOps.applyProfilePatch).
+        if (aiConfig.get().enrichmentOnAdd === 'off') {
+          return { wine_id: id, error: 'ai_profiles_off — automatic AI profiles are switched off on this server, so a held profile is not regenerated; write it with set_wine_profile (that replaces the held one and clears the hold)' };
+        }
         const { releaseHeldProfile } = require('../../services/enrichmentJob');
         const published = await releaseHeldProfile(wine._id, { context });
         if (!published) return { wine_id: id, error: 'generation_failed — row stays queued; retry or set_wine_profile' };
@@ -2006,7 +2017,10 @@ registerTool({
       const r = await decideOne(ids[0]);
       if (r.error === 'not_found') return fail('not_found', 'No registry wine with that id.');
       if (r.error === 'nothing_to_review') return fail('invalid_input', 'This wine has no held or suspect-flagged profile to review — list_held_profiles shows the queue.');
-      if (r.error) return fail(r.error.startsWith('generation_failed') ? 'unavailable' : 'invalid_input', `${r.error} (${ids[0]})`);
+      if (r.error) {
+        const unavailable = r.error.startsWith('generation_failed') || r.error.startsWith('ai_profiles_off');
+        return fail(unavailable ? 'unavailable' : 'invalid_input', `${r.error} (${ids[0]})`);
+      }
       const msg = r.decision === 'release'
         ? `Released and published the held profile for ${r.label} (regenerated under the human override${context ? ', with curator context' : ''}; review stamped).`
         : r.decision === 'confirm'
@@ -2015,7 +2029,11 @@ registerTool({
             : `Confirmed ${r.label} as published — the suspect flag is CLEARED (a human adjudicated the doubt); producer_note stays for context.`)
           : r.decision === 'uphold'
             ? `Upheld the flag on ${r.label} — stays published WITH the caveat, review stamped; the row is now honest residue, not queue.`
-            : `Rejected the held generation for ${r.label} — profile cleared; the wine returns to the enrichment pool for a fresh attempt.`;
+            : aiConfig.get().enrichmentOnAdd === 'off'
+              // Somm-owned data: nothing regenerates it, so "a fresh attempt"
+              // would tell the curator to wait for a profile that never comes.
+              ? `Rejected the held generation for ${r.label} — profile cleared. Automatic AI profiles are off on this server, so nothing will regenerate it: write it with set_wine_profile.`
+              : `Rejected the held generation for ${r.label} — profile cleared; the wine returns to the enrichment pool for a fresh attempt.`;
       const { label, ...data } = r;
       return ok(msg, data);
     }

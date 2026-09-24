@@ -575,7 +575,16 @@ async function runPromotionFollowThrough(wine) {
   // policy exists to stop paying for profiles on records nobody has looked
   // at, and this is the opposite — a curator has just supplied the identity
   // by hand. Same family as reenrichAfterRecordEdit: chosen, not incidental.
-  require('./enrichmentJob').enrichWineById(wine._id).catch?.(() => {});
+  //
+  // …except under 'off', which since 2026-08-22 means wine data is somm-owned
+  // and the AI writes NOTHING automatically — reenrichAfterRecordEdit honours
+  // it, and this hook, a day older than the rule, did not. On prod the
+  // sommelier had already replaced 106 of the 113 AI profiles generated in the
+  // 30 days to 2026-09-24. The draft-publish paths (services/wineDraftOps) run
+  // this same function, so this one check covers them too.
+  if (require('../config/aiConfig').get().enrichmentOnAdd !== 'off') {
+    require('./enrichmentJob').enrichWineById(wine._id).catch?.(() => {});
+  }
   // The maturity queue refused to seed this wine while pending; seed it from
   // the bottles that are already in cellars, so the drink windows the owners
   // are waiting for finally get curated.

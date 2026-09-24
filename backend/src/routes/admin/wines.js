@@ -723,6 +723,16 @@ router.post('/:id/profile-reviewed', async (req, res) => {
     // admin instead agrees the identity is wrong, the fix is the wine editor
     // — the identity edit re-enriches.
     if (wine.aiProfile?.heldAt) {
+      // Somm-owned wine data (enrichmentOnAdd 'off', 2026-08-22): the AI writes
+      // no profile, and a release is a forced regeneration. Refused with the
+      // way out — writing the profile by hand replaces the held one and clears
+      // the hold (services/wineProfileOps.applyProfilePatch). The MCP twin,
+      // review_held_profile, refuses the same way.
+      if (require('../../config/aiConfig').get().enrichmentOnAdd === 'off') {
+        return res.status(409).json({
+          error: 'Automatic AI profiles are switched off (SuperAdmin → AI Spend Controls), so a held profile is not regenerated. Write the profile by hand instead — that replaces the held one and clears the hold.',
+        });
+      }
       const { releaseHeldProfile } = require('../../services/enrichmentJob');
       releaseHeldProfile(wine._id).catch(() => {});
       logAudit(req, 'admin.wine.profileReviewed', { type: 'wine', id: wine._id },

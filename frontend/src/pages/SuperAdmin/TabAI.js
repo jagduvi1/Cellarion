@@ -516,7 +516,7 @@ function EnrichmentOnAddPanel({ mode, maturitySuggest, priceSuggest, apiFetch })
         const d = await res.json();
         setMsg({ ok: false, text: d.error || 'Save failed' });
       } else {
-        setMsg({ ok: true, text: 'Saved — applies to the next bottle added' });
+        setMsg({ ok: true, text: 'Saved — applies immediately' });
       }
     } catch {
       setMsg({ ok: false, text: 'Network error' });
@@ -536,8 +536,9 @@ function EnrichmentOnAddPanel({ mode, maturitySuggest, priceSuggest, apiFetch })
         <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 12 }}>
           The paths that spend API credit without a user asking. Label scan, AI wine search and cellar chat are
           deliberately NOT here — they are the add-bottle experience and the product. Batch enrichment is separate and
-          only runs when you start one. Curator work — releases, identity-edit re-enrichment, promoting a pending
-          wine — is never gated.
+          only runs when you start one. &ldquo;off&rdquo; means wine data is sommelier-owned: the AI writes no profile
+          at all — not on add, not after an identity edit, not when a pending wine is completed or a draft is
+          published — and releasing a held profile is refused (write it by hand instead, which also clears the hold).
         </div>
         <div className="sa-kv">
           <div className="sa-kv-row">

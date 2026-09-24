@@ -204,6 +204,32 @@ describe('profile-reviewed toggle', () => {
     expect(WineDefinition.updateOne).not.toHaveBeenCalled();
   });
 
+  test('a HELD row is not regenerated while automatic AI profiles are off — 409 names the way out', async () => {
+    // Somm-owned wine data (enrichmentOnAdd 'off'): a release is a forced AI
+    // regeneration, so the route refuses it instead of spending, and says what
+    // to do — WineLowConfidenceModal shows this error on the row.
+    const aiConfig = require('../../config/aiConfig');
+    const spy = jest.spyOn(aiConfig, 'get').mockReturnValue({ ...aiConfig.getRaw(), enrichmentOnAdd: 'off' });
+    try {
+      const { releaseHeldProfile } = require('../../services/enrichmentJob');
+      WineDefinition.findById.mockReturnValue({
+        select: jest.fn().mockResolvedValue({ _id: WINE_ID, name: 'Douro Tinto', producer: 'Fabelhaft', aiProfile: { heldAt: new Date() } }),
+      });
+
+      const res = await fetch(`${baseUrl}/api/admin/wines/${WINE_ID}/profile-reviewed`, {
+        method: 'POST', headers: { Authorization: `Bearer ${adminToken()}` },
+      });
+
+      expect(res.status).toBe(409);
+      expect((await res.json()).error).toMatch(/by hand/);
+      expect(releaseHeldProfile).not.toHaveBeenCalled();
+      expect(WineDefinition.updateOne).not.toHaveBeenCalled();
+      expect(logAudit).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   test('POST records the review with the current time and audits', async () => {
     WineDefinition.findById.mockReturnValue({
       select: jest.fn().mockResolvedValue({ _id: WINE_ID, name: 'Le Valet d’Épée', producer: 'Arcane' }),
