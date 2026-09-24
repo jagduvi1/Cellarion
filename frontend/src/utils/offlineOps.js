@@ -184,10 +184,13 @@ export function applyOp(snapshot, op) {
   return s;
 }
 
-/** Apply every still-pending op for this snapshot's user, in order. */
+/**
+ * Apply this snapshot's user's pending ops — and those already sent but not
+ * yet reflected in a copy fetched after they were sent — in order.
+ */
 export function applyPending(snapshot, ops) {
   return (ops || [])
-    .filter((op) => op.status === 'pending' && String(op.userId) === String(snapshot.userId))
+    .filter((op) => (op.status === 'pending' || op.status === 'sent') && String(op.userId) === String(snapshot.userId))
     .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0))
     .reduce(applyOp, snapshot);
 }

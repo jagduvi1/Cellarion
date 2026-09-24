@@ -10,7 +10,7 @@
  * Only ever active with offline mode on (utils/offlineMode).
  */
 import { indexSnapshot, answerOffline } from './offlineData';
-import { readSnapshot, writeSnapshot, clearSnapshots, readQueue } from './offlineStore';
+import { readSnapshot, writeSnapshot, clearSnapshots, readQueue, deleteQueued } from './offlineStore';
 import { applyPending } from './offlineOps';
 import { isOfflineModeEnabled } from './offlineMode';
 import { thumbUrl } from './thumbUrl';
@@ -103,6 +103,7 @@ export async function offlineAnswer(url, userId) {
  */
 export async function refreshSnapshot(apiFetch, userId) {
   if (!userId || !isOfflineModeEnabled()) return false;
+  const requestedAt = Date.now(); // device clock, like an op's sentAt
   let res;
   try { res = await apiFetch('/api/offline/snapshot'); } catch { return false; }
   if (!res.ok || res.headers?.get?.('X-Cellarion-Offline')) return false;
@@ -110,6 +111,10 @@ export async function refreshSnapshot(apiFetch, userId) {
   try { snap = await res.json(); } catch { return false; }
   if (!snap || snap.schema !== SNAPSHOT_SCHEMA || String(snap.userId) !== String(userId)) return false;
   if (!(await writeSnapshot(snap))) return false;
+  // Writes sent before this copy was requested are in it now.
+  for (const op of await readQueue()) {
+    if (op.status === 'sent' && Date.parse(op.sentAt) < requestedAt) await deleteQueued(op.id);
+  }
   await setCurrent(String(userId), snap);
   syncPhotos(snap).catch(() => {});
   return true;

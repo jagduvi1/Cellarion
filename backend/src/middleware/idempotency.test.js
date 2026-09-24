@@ -6,6 +6,7 @@
  */
 const express = require('express');
 const http = require('http');
+const rateLimit = require('express-rate-limit');
 
 // In-memory stand-in for the model, enforcing the unique (user, key) index.
 const mockRows = new Map();
@@ -37,6 +38,9 @@ let slow;
 beforeAll(async () => {
   const app = express();
   app.use(express.json());
+  // Like the real app (app.js mounts API rate limiters ahead of every router);
+  // generous enough never to trip in these tests.
+  app.use(rateLimit({ windowMs: 60 * 1000, max: 10000, standardHeaders: false, legacyHeaders: false }));
   app.use((req, _res, next) => { req.user = { id: req.get('X-Test-User') || 'u1' }; next(); });
   app.use(idempotency);
   app.post('/api/bottles/:id/consume', async (req, res) => {

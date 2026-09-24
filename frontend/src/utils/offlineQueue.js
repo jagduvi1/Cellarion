@@ -21,6 +21,7 @@ import { getWorkingIndex, rebuildWorking } from './offlineSnapshot';
 import { isOfflineModeEnabled } from './offlineMode';
 
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const SENT_KEEP_MS = 60 * 60 * 1000;
 export const QUEUE_CHANGED_EVENT = 'cellarion-offline-queue';
 
 let status = { pending: 0, attention: 0, syncing: false };
@@ -39,6 +40,9 @@ export async function refreshQueueStatus(userId) {
   const mine = [];
   for (const op of all) {
     if (now - Date.parse(op.createdAt) > MAX_AGE_MS) { await deleteQueued(op.id); continue; }
+    // A sent op whose confirming refresh never came (offline mode switched
+    // off meanwhile, …): the server has it; stop laying it over the copy.
+    if (op.status === 'sent' && now - Date.parse(op.sentAt) > SENT_KEEP_MS) { await deleteQueued(op.id); continue; }
     if (String(op.userId) === String(userId)) mine.push(op);
   }
   status = {
@@ -131,7 +135,10 @@ export async function flushQueue(apiFetch, userId) {
           break; // still offline — try again later
         }
         if (res.ok) {
-          await deleteQueued(op.id);
+          // Kept, as 'sent', laid over the device copy until a copy fetched
+          // after now arrives (offlineSnapshot.refreshSnapshot) — otherwise a
+          // bottle just consumed would reappear until the next refresh.
+          await putQueued({ ...op, status: 'sent', sentAt: new Date().toISOString() });
           sent++;
           continue;
         }

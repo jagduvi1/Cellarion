@@ -67,7 +67,7 @@ describe('queueing', () => {
 });
 
 describe('sending', () => {
-  it('sends in order with the op\'s key; successes are removed', async () => {
+  it('sends in order with the op\'s key; successes are kept as sent (still laid over the copy), not pending', async () => {
     const a = await queue(`/api/racks/${R1}/slots/5`, 'PUT', { bottleId: b2 });
     const b = await queue(`/api/bottles/${b1}/consume`, 'POST', { reason: 'drank' });
     const apiFetch = vi.fn(async () => res(200, {}));
@@ -75,7 +75,12 @@ describe('sending', () => {
     expect(apiFetch.mock.calls.map((c) => c[1].headers['Idempotency-Key'])).toEqual([a.key, b.key]);
     expect(apiFetch.mock.calls[0][1]).toMatchObject({ method: 'PUT', __direct: true });
     expect(JSON.parse(apiFetch.mock.calls[0][1].body)).toEqual({ bottleId: b2, expectOccupant: null });
-    expect(mem.queue.size).toBe(0);
+    expect([...mem.queue.values()].map((o) => o.status)).toEqual(['sent', 'sent']);
+    expect(getQueueStatus()).toMatchObject({ pending: 0, attention: 0 });
+    // …and never sent again
+    apiFetch.mockClear();
+    await flushQueue(apiFetch, 'u1');
+    expect(apiFetch).not.toHaveBeenCalled();
   });
 
   it('still offline → stops and keeps everything pending', async () => {
