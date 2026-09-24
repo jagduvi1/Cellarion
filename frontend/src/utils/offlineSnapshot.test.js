@@ -3,6 +3,8 @@ vi.mock('./offlineStore', () => ({
   readSnapshot: vi.fn(async (uid) => store.data.get(String(uid)) || null),
   writeSnapshot: vi.fn(async (s) => { store.data.set(String(s.userId), s); return true; }),
   clearSnapshots: vi.fn(async () => { store.data.clear(); }),
+  readQueue: vi.fn(async () => store.queue || []),
+  deleteQueued: vi.fn(async (id) => { store.queue = (store.queue || []).filter((o) => o.id !== id); }),
 }));
 
 import {
@@ -91,5 +93,36 @@ describe('photoUrlsOf', () => {
       '/api/uploads/thumbs/processed/own.png.webp',
       '/api/uploads/thumbs/processed/wine.png.webp',
     ]);
+  });
+});
+
+describe('pending offline changes over the saved copy', () => {
+  beforeEach(() => localStorage.setItem('cellarion-offline', 'on'));
+  afterEach(() => { store.queue = []; });
+
+  it('a pending change stays visible after a refresh brings a newer copy', async () => {
+    vi.stubGlobal('caches', undefined);
+    const bid = 'b00000000000000000000001';
+    store.queue = [{ id: 'k', userId: 'u1', kind: 'consume', status: 'pending', bottleId: bid, createdAt: '2026-09-24T13:00:00Z', body: { reason: 'drank' } }];
+    expect(await refreshSnapshot(vi.fn(async () => jsonRes({ ...SNAP, generatedAt: '2026-09-24T14:00:00.000Z' })), 'u1')).toBe(true);
+    const res = await offlineAnswer(`/api/bottles/${bid}`, 'u1');
+    expect(res.status).toBe(404); // consumed offline, still gone from the device copy
+    const list = await (await offlineAnswer(`/api/cellars/${C1}`, 'u1')).json();
+    expect(list.bottles.total).toBe(0);
+  });
+
+  it('a sent change stays laid over the copy until a copy requested after it arrives', async () => {
+    vi.stubGlobal('caches', undefined);
+    const bid = 'b00000000000000000000001';
+    const sentOp = (sentAt) => ({ id: 's', userId: 'u1', kind: 'consume', status: 'sent', sentAt, bottleId: bid, createdAt: '2026-09-24T13:00:00Z', body: { reason: 'drank' } });
+    // Sent after this refresh was requested → the copy may not have it: still overlaid.
+    store.queue = [sentOp(new Date(Date.now() + 60000).toISOString())];
+    await refreshSnapshot(vi.fn(async () => jsonRes(SNAP)), 'u1');
+    expect(store.queue).toHaveLength(1);
+    expect((await offlineAnswer(`/api/bottles/${bid}`, 'u1')).status).toBe(404);
+    // Sent before this refresh was requested → the new copy has it: dropped.
+    store.queue = [sentOp(new Date(Date.now() - 60000).toISOString())];
+    await refreshSnapshot(vi.fn(async () => jsonRes(SNAP)), 'u1');
+    expect(store.queue).toHaveLength(0);
   });
 });

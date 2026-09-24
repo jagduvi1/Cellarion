@@ -2,10 +2,12 @@ import { useEffect } from 'react';
 import { useAuth, API_MUTATION_EVENT } from '../contexts/AuthContext';
 import { isOfflineModeEnabled } from '../utils/offlineMode';
 import { getOfflineStatus, primeOfflineStatus, refreshSnapshot } from '../utils/offlineSnapshot';
+import { flushQueue, getQueueStatus, refreshQueueStatus, QUEUE_CHANGED_EVENT } from '../utils/offlineQueue';
 
 const REFRESH_EVERY_MS = 15 * 60 * 1000;
 const STALE_ON_START_MS = 2 * 60 * 1000;
 const AFTER_CHANGE_MS = 4000;
+const RESEND_EVERY_MS = 30 * 1000;
 
 const ageOf = () => {
   const { savedAt } = getOfflineStatus();
@@ -25,10 +27,33 @@ export default function OfflineSync() {
   const enabled = isOfflineModeEnabled();
   const live = enabled && !!userId && !!token && !offlineSession;
 
-  // The banner's "saved at" time, from the device alone (works offline too).
+  // The banner's "saved at" time and change counts, from the device alone
+  // (works offline too).
   useEffect(() => {
-    if (enabled && userId) primeOfflineStatus(userId);
+    if (enabled && userId) {
+      primeOfflineStatus(userId);
+      refreshQueueStatus(userId);
+    }
   }, [enabled, userId]);
+
+  // Send changes made offline: now, when the network returns, when a change is
+  // queued, and every 30 s while any wait (a 5xx or a busy server).
+  useEffect(() => {
+    if (!live) return undefined;
+    const send = () => {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+      flushQueue(apiFetch, userId);
+    };
+    send();
+    const timer = setInterval(() => { if (getQueueStatus().pending > 0) send(); }, RESEND_EVERY_MS);
+    window.addEventListener('online', send);
+    window.addEventListener(QUEUE_CHANGED_EVENT, send);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('online', send);
+      window.removeEventListener(QUEUE_CHANGED_EVENT, send);
+    };
+  }, [live, userId, apiFetch]);
 
   useEffect(() => {
     if (!live) return undefined;

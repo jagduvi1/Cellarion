@@ -5074,6 +5074,33 @@
   "offline": {
     "bannerSavedToday": "Offline — showing your cellar as saved at {{time}}",
     "bannerSavedEarlier": "Offline — showing your cellar as saved on {{time}}",
-    "bannerNoCopy": "Offline — your cellar hasn't been saved on this device yet"
+    "bannerNoCopy": "Offline — your cellar hasn't been saved on this device yet",
+    "pending_one": "{{count}} change waiting to sync",
+    "pending_other": "{{count}} changes waiting to sync",
+    "syncing_one": "Syncing {{count}} change…",
+    "syncing_other": "Syncing {{count}} changes…",
+    "attention_one": "{{count}} change needs your attention",
+    "attention_other": "{{count}} changes need your attention",
+    "review": "Review",
+    "logoutConfirm_one": "{{count}} change made offline hasn't been synced yet. Log out anyway? It will be lost.",
+    "logoutConfirm_other": "{{count}} changes made offline haven't been synced yet. Log out anyway? They will be lost.",
+    "attentionTitle": "Changes that need your attention",
+    "attentionIntro": "These changes were made offline, but the cellar had changed by the time they reached the server.",
+    "theirs": "now",
+    "mine": "yours",
+    "keepMine": "Keep mine",
+    "keepTheirs": "Keep theirs",
+    "applyAnyway": "Apply anyway",
+    "retry": "Try again",
+    "discard": "Discard",
+    "op": {
+      "aBottle": "a bottle",
+      "consume": "Remove {{wine}} from the cellar",
+      "open": "Open {{wine}}",
+      "edit": "Edit {{fields}} on {{wine}}",
+      "place": "Place {{wine}} in {{rack}}, slot {{position}}",
+      "clear": "Take {{wine}} out of {{rack}}, slot {{position}}",
+      "move": "Move {{wine}} in {{rack}} from slot {{position}} to {{toPosition}}"
+    }
   }
 }
