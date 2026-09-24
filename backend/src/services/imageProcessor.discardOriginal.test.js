@@ -158,11 +158,13 @@ describe('discardOriginal', () => {
 });
 
 describe('unlinkImageFiles (same contract after the refactor)', () => {
-  test('unlinks both files of an unreferenced record', async () => {
+  test('unlinks both files of an unreferenced record, and the processed file\'s thumbnail', async () => {
     await unlinkImageFiles(makeDoc({ processedUrl: PROC }));
-    expect(fs.promises.unlink).toHaveBeenCalledTimes(2);
+    expect(fs.promises.unlink).toHaveBeenCalledTimes(3);
     expect(fs.promises.unlink).toHaveBeenCalledWith('/app/uploads/originals/abc.jpg');
     expect(fs.promises.unlink).toHaveBeenCalledWith('/app/uploads/processed/abc.png');
+    // services/thumbnails — only processed/ files have one.
+    expect(fs.promises.unlink).toHaveBeenCalledWith('/app/uploads/thumbs/processed/abc.png.webp');
   });
 
   test('keeps a file another record shares', async () => {

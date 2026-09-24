@@ -171,6 +171,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
                 src={imgSrc}
                 alt={displayName}
                 className="bottle-grid-image"
+                thumb
                 loading="lazy"
                 onError={e => { e.target.style.display = 'none'; }}
               />
@@ -269,6 +270,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
             src={imgSrc}
             alt={displayName}
             className="bottle-wine-image"
+            thumb
             loading="lazy"
             onError={e => { e.target.style.display = 'none'; }}
           />

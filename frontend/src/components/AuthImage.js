@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { thumbUrl } from '../utils/thumbUrl';
 
 /**
  * Renders an image whose URL may require a Bearer token.
@@ -21,7 +22,10 @@ const API_PATH = /^\/api\/(?!\/)[^\\]*$/;
 // admin-entered registry links have them); backslashes never are.
 const PLAIN_SRC = /^(?:https?:\/\/[^\\]+|data:image\/(?:png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]+|blob:[^\\\s]+)$/i;
 
-function AuthImage({ src, alt, className, onError, style, loading }) {
+// `thumb`: show an upload's card-size thumbnail (utils/thumbUrl) instead of the
+// full image; if the thumbnail fails to load, the full image is tried once
+// before the caller's onError runs.
+function AuthImage({ src, alt, className, onError, style, loading, thumb = false }) {
   const { apiFetch } = useAuth();
   const [displaySrc, setDisplaySrc] = useState(null);
   const blobUrlRef = useRef(null);
@@ -41,7 +45,7 @@ function AuthImage({ src, alt, className, onError, style, loading }) {
 
     // Upload paths — served without auth, use direct src for browser caching
     if (src.startsWith('/api/uploads/')) {
-      setDisplaySrc(src);
+      setDisplaySrc(thumb ? thumbUrl(src) : src);
       return;
     }
 
@@ -69,9 +73,17 @@ function AuthImage({ src, alt, className, onError, style, loading }) {
         blobUrlRef.current = null;
       }
     };
-  }, [src]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [src, thumb]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!displaySrc) return null;
+
+  const handleError = (e) => {
+    if (displaySrc !== src && typeof src === 'string' && displaySrc === thumbUrl(src)) {
+      setDisplaySrc(src); // thumbnail missing or busy — fall back to the full image
+      return;
+    }
+    if (onError) onError(e);
+  };
 
   return (
     <img
@@ -80,7 +92,7 @@ function AuthImage({ src, alt, className, onError, style, loading }) {
       className={className}
       style={style}
       loading={loading}
-      onError={onError}
+      onError={handleError}
     />
   );
 }
