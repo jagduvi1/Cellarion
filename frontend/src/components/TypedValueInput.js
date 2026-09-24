@@ -25,14 +25,19 @@ export function formatTypedValue(keyDef, value, t) {
  * date / enum (select of the key's options). Controlled: (value, onChange).
  * The backend re-validates against the key's stored type — this only shapes
  * the affordance.
+ *
+ * `required` defaults on, because the card only mounts this inside a modal the
+ * user opened to enter ONE value. The add-bottle form turns it off: its rows
+ * sit in the page's own form, where a half-filled row must be droppable rather
+ * than block the whole submit behind a native bubble.
  */
-function TypedValueInput({ id, keyDef, value, onChange }) {
+function TypedValueInput({ id, keyDef, value, onChange, required = true }) {
   const { t } = useTranslation();
   const type = keyDef?.type || 'text';
 
   if (type === 'boolean') {
     return (
-      <select id={id} className="pd-select" value={value} onChange={(e) => onChange(e.target.value)} required>
+      <select id={id} className="pd-select" value={value} onChange={(e) => onChange(e.target.value)} required={required}>
         <option value="">{t('personalData.choose', 'Choose…')}</option>
         <option value="true">{t('personalData.yes', 'Yes')}</option>
         <option value="false">{t('personalData.no', 'No')}</option>
@@ -43,7 +48,7 @@ function TypedValueInput({ id, keyDef, value, onChange }) {
   if (type === 'enum') {
     const options = keyDef?.enumOptions || [];
     return (
-      <select id={id} className="pd-select" value={value} onChange={(e) => onChange(e.target.value)} required>
+      <select id={id} className="pd-select" value={value} onChange={(e) => onChange(e.target.value)} required={required}>
         <option value="">{t('personalData.choose', 'Choose…')}</option>
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
       </select>
@@ -59,7 +64,7 @@ function TypedValueInput({ id, keyDef, value, onChange }) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         maxLength={type === 'text' ? 500 : undefined}
-        required
+        required={required}
         style={{ flex: 1 }}
       />
       {keyDef?.unit && (
