@@ -18,16 +18,24 @@ jest.mock('../models/WineOwnerInquiry', () => ({
   exists: jest.fn(),
   aggregate: jest.fn(),
   countDocuments: jest.fn(),
+  find: jest.fn(),
+  findById: jest.fn(),
+  findOne: jest.fn(),
 }));
 jest.mock('../models/WineDefinition', () => ({ findById: jest.fn() }));
 jest.mock('../models/Bottle', () => ({ aggregate: jest.fn(), find: jest.fn() }));
-jest.mock('./notifications', () => ({ createNotifications: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../models/User', () => ({ findById: jest.fn() }));
+jest.mock('./notifications', () => ({
+  createNotifications: jest.fn().mockResolvedValue(undefined),
+  createNotification: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock('./audit', () => ({ logAudit: jest.fn() }));
 
 const WineOwnerInquiry = require('../models/WineOwnerInquiry');
 const WineDefinition = require('../models/WineDefinition');
 const Bottle = require('../models/Bottle');
-const { createNotifications } = require('./notifications');
+const User = require('../models/User');
+const { createNotifications, createNotification } = require('./notifications');
 const { logAudit } = require('./audit');
 const { CONSUMED_STATUSES } = require('../config/constants');
 const {
@@ -40,6 +48,9 @@ const {
   queryInquiryPage,
   repointInquiriesForWineMerge,
   closeInquiriesForWineDelete,
+  listInquiriesForRecipient,
+  openQuestionForRecipient,
+  respondToOwnerInquiry,
 } = require('./ownerInquiryOps');
 
 const oid = (c) => c.repeat(24);
@@ -478,5 +489,184 @@ describe('closeInquiriesForWineDelete', () => {
     expect(update.$set.resolutionNote).toMatch(/wine was deleted/);
     expect(logAudit).toHaveBeenCalledWith(null, 'admin.wine.ownerInquiry.close',
       { type: 'wine', id: WINE }, { reason: 'wine-deleted', count: 2 });
+  });
+});
+
+// ── The OWNER side (2026-09-24): shared by routes/ownerInquiries.js and the
+// MCP tools list_curator_questions / answer_curator_question. The route test
+// pins the HTTP contract; these pin the service the MCP path calls directly.
+describe('owner side', () => {
+  const ME = oid('1');
+  const OTHER = oid('2');
+  const I1 = oid('c');
+  const findChain = (rows) => {
+    const c = {};
+    for (const m of ['sort', 'limit', 'populate']) c[m] = jest.fn(() => c);
+    c.lean = jest.fn(() => Promise.resolve(rows));
+    return c;
+  };
+  const row = (over = {}) => ({
+    _id: I1,
+    status: 'open',
+    question: QUESTION,
+    wineDefinition: wineDoc,
+    recipients: [
+      { user: ME, bottle: oid('5'), response: null, respondedAt: null },
+      { user: OTHER, bottle: oid('6'), response: 'Secret answer from another owner', respondedAt: new Date('2026-08-02') },
+    ],
+    createdAt: new Date('2026-08-01'),
+    expiresAt: new Date('2026-10-01'),
+    ...over,
+  });
+
+  describe('listInquiriesForRecipient', () => {
+    test('projects ONLY the caller recipient entry — never the other recipients, their ids or answers', async () => {
+      WineOwnerInquiry.find.mockReturnValue(findChain([row()]));
+
+      const out = await listInquiriesForRecipient(ME);
+
+      expect(out).toHaveLength(1);
+      expect(out[0]).toMatchObject({ _id: I1, status: 'open', question: QUESTION, responded: false, myResponse: null, curatorReply: null });
+      expect(String(out[0].bottle)).toBe(oid('5'));
+      expect(out[0].wine).toEqual({ _id: WINE, name: 'Barolo', producer: 'Pira' });
+      const raw = JSON.stringify(out);
+      expect(raw).not.toContain('recipients');
+      expect(raw).not.toContain(OTHER);
+      expect(raw).not.toContain('Secret answer from another owner');
+      // Addressed to me; answered, or open-and-not-expired, or recently resolved.
+      const filter = WineOwnerInquiry.find.mock.calls[0][0];
+      expect(filter['recipients.user']).toBe(ME);
+      expect(filter.$or[0]).toEqual({ status: 'answered' });
+      expect(filter.$or[1].status).toBe('open');
+      expect(filter.$or[1].expiresAt.$gt).toBeInstanceOf(Date);
+      expect(filter.$or[2].status).toBe('resolved');
+    });
+
+    test('a resolved row comes back with the curator reply only for someone who answered; the private note never', async () => {
+      const resolved = row({
+        status: 'resolved',
+        recipients: [
+          { user: ME, bottle: oid('5'), response: 'Label says E. Pira e Figli', respondedAt: new Date('2026-08-02') },
+          { user: OTHER, bottle: oid('6'), response: 'Secret answer from another owner' },
+        ],
+        ownerReply: 'Thank you — recorded as E. Pira e Figli.',
+        resolutionNote: 'Curator-only: applied.',
+        resolvedAt: new Date('2026-08-10'),
+      });
+      WineOwnerInquiry.find.mockReturnValue(findChain([resolved]));
+      let out = await listInquiriesForRecipient(ME);
+      expect(out[0]).toMatchObject({ responded: true, myResponse: 'Label says E. Pira e Figli', curatorReply: 'Thank you — recorded as E. Pira e Figli.' });
+      expect(JSON.stringify(out)).not.toContain('Curator-only');
+
+      // The recipient who ignored the question was never replied to.
+      WineOwnerInquiry.find.mockReturnValue(findChain([{ ...resolved, recipients: [{ user: ME, bottle: oid('5'), response: null }, resolved.recipients[1]] }]));
+      out = await listInquiriesForRecipient(ME);
+      expect(out).toEqual([]);
+    });
+
+    test('wineId scopes the query; an invalid one yields [] without querying', async () => {
+      WineOwnerInquiry.find.mockReturnValue(findChain([]));
+      await listInquiriesForRecipient(ME, { wineId: WINE });
+      expect(WineOwnerInquiry.find.mock.calls[0][0].wineDefinition).toBe(WINE);
+
+      expect(await listInquiriesForRecipient(ME, { wineId: 'not-an-id' })).toEqual([]);
+      expect(WineOwnerInquiry.find).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('openQuestionForRecipient', () => {
+    const selectChain = (doc) => ({ select: () => ({ lean: async () => doc }) });
+
+    test('finds the one unanswered active question addressed to the caller about the wine', async () => {
+      WineOwnerInquiry.findOne.mockReturnValue(selectChain({ _id: I1, question: QUESTION, createdAt: new Date('2026-08-01'), expiresAt: new Date('2026-10-01') }));
+      const q = await openQuestionForRecipient(ME, WINE);
+      expect(q).toMatchObject({ inquiryId: I1, question: QUESTION });
+      const filter = WineOwnerInquiry.findOne.mock.calls[0][0];
+      expect(filter.wineDefinition).toBe(WINE);
+      expect(filter.recipients.$elemMatch).toEqual({ user: ME, response: null });
+      expect(filter.$or[0]).toEqual({ status: 'answered' });
+      expect(filter.$or[1].expiresAt.$gt).toBeInstanceOf(Date);
+    });
+
+    test('null when there is none, and null without a query for a non-id', async () => {
+      WineOwnerInquiry.findOne.mockReturnValue(selectChain(null));
+      expect(await openQuestionForRecipient(ME, WINE)).toBeNull();
+      expect(await openQuestionForRecipient(ME, 'nope')).toBeNull();
+      expect(WineOwnerInquiry.findOne).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('respondToOwnerInquiry', () => {
+    const claimed = () => {
+      const doc = { _id: I1, status: 'answered', askedBy: ASKER, wineDefinition: wineDoc };
+      WineOwnerInquiry.findOneAndUpdate.mockReturnValue({ populate: jest.fn().mockResolvedValue(doc) });
+      return doc;
+    };
+    const askerIs = (roles) => User.findById.mockReturnValue({ select: () => ({ lean: async () => ({ _id: ASKER, roles }) }) });
+    const failClaim = () => WineOwnerInquiry.findOneAndUpdate.mockReturnValue({ populate: jest.fn().mockResolvedValue(null) });
+    const diagnose = (doc) => WineOwnerInquiry.findById.mockReturnValue({ select: () => ({ lean: async () => doc }) });
+
+    test('atomic recipient claim, positional write, flips to answered, notifies the asker, audits via', async () => {
+      claimed();
+      askerIs(['admin']);
+
+      const res = await respondToOwnerInquiry({ inquiryId: I1, userId: ME, response: 'The label says E. Pira e Figli.', via: 'mcp', req: { user: { id: ME } } });
+
+      expect(res.ok).toBe(true);
+      expect(res.status).toBe('answered');
+      const [filter, update] = WineOwnerInquiry.findOneAndUpdate.mock.calls[0];
+      expect(filter._id).toBe(I1);
+      expect(filter.recipients.$elemMatch).toEqual({ user: ME, response: null });
+      expect(filter.$or[0]).toEqual({ status: 'answered' });
+      expect(update.$set['recipients.$.response']).toBe('The label says E. Pira e Figli.');
+      expect(update.$set['recipients.$.respondedAt']).toBeInstanceOf(Date);
+      expect(update.$set.status).toBe('answered');
+
+      await new Promise((r) => setTimeout(r, 0)); // asker notify is fire-and-forget
+      expect(createNotification).toHaveBeenCalledWith(ASKER, 'owner_inquiry_response',
+        expect.any(String), expect.stringContaining('Pira — Barolo'), '/admin/wines', 'community');
+      const audit = logAudit.mock.calls.find((c) => c[1] === 'user.ownerInquiry.respond');
+      expect(audit[3]).toMatchObject({ responseLength: 31, via: 'mcp' });
+      expect(JSON.stringify(audit[3])).not.toContain('E. Pira e Figli');
+    });
+
+    test('a somm asker is notified without the admin-queue link; the rest audit detail carries no via', async () => {
+      claimed();
+      askerIs(['somm']);
+      await respondToOwnerInquiry({ inquiryId: I1, userId: ME, response: 'answer' });
+      await new Promise((r) => setTimeout(r, 0));
+      expect(createNotification.mock.calls[0][4]).toBeNull();
+      const audit = logAudit.mock.calls.find((c) => c[1] === 'user.ownerInquiry.respond');
+      expect(audit[3].via).toBeUndefined();
+    });
+
+    test('HTML strips to plain text; empty, overlong or a non-id refuse before any write', async () => {
+      expect((await respondToOwnerInquiry({ inquiryId: I1, userId: ME, response: '<b></b>' })).code).toBe('invalid_input');
+      expect((await respondToOwnerInquiry({ inquiryId: I1, userId: ME, response: 'x'.repeat(1001) })).code).toBe('invalid_input');
+      expect((await respondToOwnerInquiry({ inquiryId: 'nope', userId: ME, response: 'fine' })).code).toBe('invalid_input');
+      expect(WineOwnerInquiry.findOneAndUpdate).not.toHaveBeenCalled();
+    });
+
+    test('a failed claim is diagnosed: not_found, forbidden (not a recipient), conflict (answered / no longer open)', async () => {
+      failClaim();
+
+      diagnose(null);
+      expect((await respondToOwnerInquiry({ inquiryId: I1, userId: ME, response: 'a' })).code).toBe('not_found');
+
+      diagnose({ status: 'open', expiresAt: new Date(Date.now() + 1000), recipients: [{ user: OTHER, response: null }] });
+      expect((await respondToOwnerInquiry({ inquiryId: I1, userId: ME, response: 'a' })).code).toBe('forbidden');
+
+      diagnose({ status: 'answered', recipients: [{ user: ME, response: 'already said so' }] });
+      let r = await respondToOwnerInquiry({ inquiryId: I1, userId: ME, response: 'a' });
+      expect(r.code).toBe('conflict');
+      expect(r.message).toMatch(/already answered/);
+
+      diagnose({ status: 'resolved', recipients: [{ user: ME, response: null }] });
+      r = await respondToOwnerInquiry({ inquiryId: I1, userId: ME, response: 'a' });
+      expect(r.code).toBe('conflict');
+      expect(r.message).toMatch(/no longer open/);
+      expect(createNotification).not.toHaveBeenCalled();
+      expect(logAudit).not.toHaveBeenCalled();
+    });
   });
 });

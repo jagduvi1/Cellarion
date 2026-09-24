@@ -32,6 +32,7 @@ require('./semantic');
 require('./tasting');
 require('./arrange');
 require('./notify');
+require('./ownerQuestions');
 require('./publicContent');
 require('./taxonomy');
 require('./images');

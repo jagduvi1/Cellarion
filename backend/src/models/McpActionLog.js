@@ -29,7 +29,10 @@ const mcpActionLogSchema = new mongoose.Schema({
     // Irreversible writes that reach a human queue or the shared registry
     // (support ticket 2026-09-12): recorded so an idempotency_key can replay
     // them after an ambiguous transport failure. Never undo-eligible.
-    'support_ticket', 'support_reply', 'wine_request', 'suggest_correction', 'suggest_value', 'propose_key'], required: true },
+    'support_ticket', 'support_reply', 'wine_request', 'suggest_correction', 'suggest_value', 'propose_key',
+    // An owner's answer to a curator's question (answer_curator_question,
+    // 2026-09-24): single-shot on the inquiry itself, so never undo-eligible.
+    'inquiry_answer'], required: true },
   bottle: { type: mongoose.Schema.Types.ObjectId, ref: 'Bottle' },
   cellar: { type: mongoose.Schema.Types.ObjectId, ref: 'Cellar' },
   // Small, non-PII operational detail (reason, ml, …) for the timeline.

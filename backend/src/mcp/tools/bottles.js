@@ -24,6 +24,7 @@ const {
   wineSummary, bottleSummary, pageParams, hasContent,
 } = require('../toolUtil');
 const { photosForBottle, photoPresence } = require('../../services/photoState');
+const { openQuestionForRecipient } = require('../../services/ownerInquiryOps');
 
 function statusToMongo(status) {
   if (status === 'all') return {};
@@ -232,7 +233,9 @@ registerTool({
     'consumption info if consumed, and photos — every photo that applies to the bottle with its state (queued, ' +
     'processing, awaiting_review, published, rejected), so an upload can be confirmed and a duplicate avoided; ' +
     'photos.label_scans lists the frames the user scanned to identify the wine. The URLs are for people; to SEE ' +
-    'a photo yourself (read a label, check an ABV), pass its image_id to get_photo. ' +
+    'a photo yourself (read a label, check an ABV), pass its image_id to get_photo. open_curator_question, when ' +
+    'present, is a question a curator asked this user about the wine\'s record that they have not answered yet — ' +
+    'the bottle is in their hand, so relay it and answer with answer_curator_question. ' +
     'Call when the user asks about a specific bottle you already have a bottle_id for.',
   scope: 'read',
   annotations: { readOnlyHint: true, openWorldHint: false },
@@ -264,6 +267,27 @@ async function buildBottleDetail(userId, bottleId) {
     photos = await photosForBottle(userId, b);
   } catch (err) {
     photos = { error: 'photo lookup failed — retry get_bottle for the photo list' };
+  }
+  // A curator's unanswered question about this wine, addressed to this
+  // viewer (services/ownerInquiryOps): the moment they have the bottle in
+  // view is the moment they can read the back label. Absent, not null, when
+  // there is none — and the dossier never fails over it.
+  let openQuestion = null;
+  if (wd) {
+    try {
+      const q = await openQuestionForRecipient(userId, wd._id);
+      if (q) {
+        openQuestion = {
+          inquiry_id: q.inquiryId,
+          question: q.question,
+          asked_at: q.createdAt,
+          expires_at: q.expiresAt,
+          answer_with: 'answer_curator_question',
+        };
+      }
+    } catch (err) {
+      console.warn('[mcp] open-question lookup failed for bottle %s: %s', b._id, err.message);
+    }
   }
   return {
     summary: `${wd ? wd.name : 'Bottle'} ${b.vintage}`,
@@ -319,6 +343,7 @@ async function buildBottleDetail(userId, bottleId) {
       photos,
       cellar: { cellar_id: cellar._id, name: cellar.name, your_role: role },
       added_at: b.addedToCellarAt || b.createdAt,
+      ...(openQuestion ? { open_curator_question: openQuestion } : {}),
     },
   };
 }

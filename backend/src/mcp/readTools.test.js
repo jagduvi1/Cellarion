@@ -35,6 +35,12 @@ jest.mock('../models/WineCorrectionProposal', () => ({
 }));
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn(), findOne: jest.fn() }));
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
+// get_bottle looks up an unanswered curator question for the viewer
+// (open_curator_question, 2026-09-24) — "none" by default so the real model
+// never buffers; the dedicated test below overrides it.
+jest.mock('../models/WineOwnerInquiry', () => ({
+  findOne: jest.fn(() => ({ select: () => ({ lean: async () => null }) })),
+}));
 jest.mock('../utils/rackGeometry', () => ({ getMaxPosition: jest.fn(() => 12) }));
 // Lazy-required inside handlers; jest still intercepts by resolved path.
 jest.mock('../services/search', () => ({
@@ -177,6 +183,35 @@ describe('ownership scoping', () => {
     const body = parse(res);
     expect(body.data.wine.name).toBe('Barolo');
     expect(body.data.placement).toBeNull();
+    // No curator question waiting → the field is absent, not null.
+    expect(body.data).not.toHaveProperty('open_curator_question');
+  });
+
+  // The owner has the bottle in view — the moment they can read the back
+  // label for the curator (services/ownerInquiryOps, answer_curator_question).
+  test('get_bottle carries the viewer\'s unanswered curator question about the wine', async () => {
+    const WineOwnerInquiry = require('../models/WineOwnerInquiry');
+    const cellarId = new mongoose.Types.ObjectId(oid('c'));
+    Bottle.findById.mockReturnValue(chain({
+      _id: oid('d'), cellar: cellarId, vintage: '2015', status: 'active',
+      wineDefinition: { _id: oid('f'), name: 'Barolo', producer: 'X', grapes: [] },
+      pours: [],
+    }));
+    Cellar.findById.mockReturnValue(chain({ _id: cellarId, user: ME, members: [], deletedAt: null, name: 'Mine' }));
+    Rack.findOne.mockReturnValue(chain(null));
+    WineOwnerInquiry.findOne.mockReturnValueOnce({
+      select: () => ({ lean: async () => ({ _id: oid('9'), question: 'Is the producer written as "E. Pira e Figli"?', createdAt: new Date('2026-09-20'), expiresAt: new Date('2026-11-19') }) }),
+    });
+
+    const body = parse(await tool('get_bottle').handler({ bottle_id: oid('d') }, CTX));
+
+    expect(body.data.open_curator_question).toMatchObject({
+      inquiry_id: oid('9'), question: 'Is the producer written as "E. Pira e Figli"?', answer_with: 'answer_curator_question',
+    });
+    // Scoped to THIS viewer's unanswered entry on THIS wine.
+    const filter = WineOwnerInquiry.findOne.mock.calls[0][0];
+    expect(String(filter.wineDefinition)).toBe(oid('f'));
+    expect(filter.recipients.$elemMatch).toEqual({ user: ME, response: null });
   });
 
   test('get_rack succeeds for the owner (ObjectId cellar ref) and hides existence from strangers', async () => {

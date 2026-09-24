@@ -5,6 +5,12 @@
  * the lazy expiry sweep every queue read runs (the bottleOps pattern: REST
  * and MCP must not drift on recipient building or conflict semantics).
  *
+ * The OWNER side lives here too (2026-09-24): the recipient view and the
+ * single-shot answer are shared by routes/ownerInquiries.js (the bottle-page
+ * card) and the MCP tools list_curator_questions / answer_curator_question
+ * (mcp/tools/ownerQuestions.js), so the privacy projection and the claim
+ * semantics cannot fork between the web and a user's AI assistant.
+ *
  * Results are transport-neutral: { ok: true, ... } or { ok: false, code,
  * message } with codes the callers map to HTTP statuses / MCP fail codes.
  */
@@ -12,8 +18,9 @@ const mongoose = require('mongoose');
 const WineOwnerInquiry = require('../models/WineOwnerInquiry');
 const WineDefinition = require('../models/WineDefinition');
 const Bottle = require('../models/Bottle');
+const User = require('../models/User');
 const { CONSUMED_STATUSES } = require('../config/constants');
-const { createNotifications } = require('./notifications');
+const { createNotifications, createNotification } = require('./notifications');
 const { logAudit } = require('./audit');
 const { stripHtml } = require('../utils/sanitize');
 const { isValidId } = require('../utils/validation');
@@ -22,8 +29,9 @@ const QUESTION_MIN = 10;
 const QUESTION_MAX = 500;
 const NOTE_MIN = 5;
 const NOTE_MAX = 500;
-// Matches the recipient answer cap — a reply should be able to be as long as
-// the answer it responds to.
+// The recipient's answer cap. The curator's reply (OWNER_REPLY_MAX) matches
+// it — a reply should be able to be as long as the answer it responds to.
+const RESPONSE_MAX = 1000;
 const OWNER_REPLY_MAX = 1000;
 // How long a resolved inquiry keeps rendering its reply on the owner's bottle
 // page. Long enough that an owner who answered and went quiet still sees it;
@@ -36,6 +44,184 @@ const RECIPIENT_CAP = 20;
 const EXPIRY_NOTE = 'Closed automatically: the inquiry expired after 60 days without resolution.';
 
 const wineLabel = (wine) => [wine?.producer, wine?.name].filter(Boolean).join(' — ') || 'this wine';
+
+// An inquiry a recipient may still see/answer: answered, or open and not
+// expired. Expired-open rows are excluded query-time on the owner paths (they
+// run no global writes); the curator queue reads run the closing sweep.
+const activeFor = (now) => ([
+  { status: 'answered' },
+  { status: 'open', expiresAt: { $gt: now } },
+]);
+
+// …plus, for READING only, recently resolved ones: an owner who answered gets
+// the curator's reply back on the same card rather than watching the question
+// silently disappear. Narrowed to answerers in the projection below — a
+// recipient who ignored the question was never replied to.
+const replyWindowFrom = (now) => new Date(now.getTime() - REPLY_VISIBLE_DAYS * 24 * 60 * 60 * 1000);
+const visibleFor = (now) => ([
+  ...activeFor(now),
+  { status: 'resolved', resolvedAt: { $gt: replyWindowFrom(now) } },
+]);
+
+/**
+ * The caller's RECIPIENT view of their inquiries: question, wine, THEIR
+ * bottle and THEIR response state only. Other recipients' identities and
+ * answers never leave the server here — an owner must not learn who else
+ * owns the wine (privacy). `resolutionNote` is absent BY DESIGN: it is the
+ * curator's private record, and only `ownerReply` was written to be read
+ * here. Newest first, capped at 50.
+ *
+ * @param {string} userId
+ * @param {object} [opts]
+ * @param {string} [opts.wineId]  narrow to one wine; an invalid id yields []
+ *   rather than a cast error (what the BottleDetail card asks)
+ */
+async function listInquiriesForRecipient(userId, { wineId } = {}) {
+  const filter = {
+    'recipients.user': userId,
+    $or: visibleFor(new Date()),
+  };
+  if (wineId !== undefined && wineId !== null && wineId !== '') {
+    if (!isValidId(String(wineId))) return [];
+    filter.wineDefinition = wineId;
+  }
+
+  const rows = await WineOwnerInquiry.find(filter)
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .populate('wineDefinition', 'name producer')
+    .lean();
+
+  return rows
+    // A resolved row is worth showing only to someone who answered it.
+    .filter((i) => i.status !== 'resolved'
+      || (i.recipients || []).some((r) => String(r.user) === String(userId) && r.response))
+    .map((i) => {
+      const mine = (i.recipients || []).find((r) => String(r.user) === String(userId));
+      return {
+        _id: i._id,
+        status: i.status,
+        question: i.question,
+        wine: i.wineDefinition
+          ? { _id: i.wineDefinition._id, name: i.wineDefinition.name, producer: i.wineDefinition.producer || null }
+          : null,
+        bottle: mine?.bottle || null,
+        responded: !!mine?.response,
+        myResponse: mine?.response || null,
+        respondedAt: mine?.respondedAt || null,
+        // Only set once a curator has resolved it — the reply the owner is owed.
+        curatorReply: i.ownerReply || null,
+        resolvedAt: i.resolvedAt || null,
+        createdAt: i.createdAt,
+        expiresAt: i.expiresAt || null,
+      };
+    });
+}
+
+/**
+ * The one unanswered question addressed to `userId` about `wineId`, or null —
+ * for the bottle dossier, where the owner has the bottle in view and can read
+ * the back label. Same active rule as the list; only rows the caller has NOT
+ * answered, because the point is to prompt an answer.
+ */
+async function openQuestionForRecipient(userId, wineId) {
+  if (!isValidId(String(wineId))) return null;
+  const row = await WineOwnerInquiry.findOne({
+    wineDefinition: wineId,
+    $or: activeFor(new Date()),
+    recipients: { $elemMatch: { user: userId, response: null } },
+  }).select('question createdAt expiresAt').lean();
+  if (!row) return null;
+  return { inquiryId: row._id, question: row.question, createdAt: row.createdAt, expiresAt: row.expiresAt || null };
+}
+
+/**
+ * One immutable answer per recipient. Shared by the REST respond route and
+ * the MCP tool answer_curator_question — identical claim, refusal diagnosis,
+ * asker notification and audit string on both surfaces (via distinguishes
+ * them in the audit detail).
+ *
+ * @param {object} p
+ * @param {string} p.inquiryId
+ * @param {string} p.userId    the answering recipient
+ * @param {*}      p.response  raw client value — sanitised here (1–RESPONSE_MAX plain chars)
+ * @param {'rest'|'mcp'} [p.via]
+ * @param {object|null} [p.req] for audit attribution only
+ * @returns {{ok:true, inquiry, status:string}
+ *         | {ok:false, code:'invalid_input'|'not_found'|'forbidden'|'conflict', message:string}}
+ */
+async function respondToOwnerInquiry({ inquiryId, userId, response, via = 'rest', req = null }) {
+  if (!isValidId(String(inquiryId))) {
+    return { ok: false, code: 'invalid_input', message: 'Invalid ID' };
+  }
+  // Plain text only, bounded even after strip — the curator reads it
+  // verbatim in the review queue.
+  const clean = stripHtml(typeof response === 'string' ? response : '');
+  if (!clean) {
+    return { ok: false, code: 'invalid_input', message: 'A response is required' };
+  }
+  if (clean.length > RESPONSE_MAX) {
+    return { ok: false, code: 'invalid_input', message: `Response must be at most ${RESPONSE_MAX} characters` };
+  }
+
+  // Atomic claim: recipient + no prior answer + inquiry still answerable,
+  // in ONE filter — two concurrent submits can't both write, and the `$`
+  // positional update targets exactly the caller's recipient entry.
+  const now = new Date();
+  const inquiry = await WineOwnerInquiry.findOneAndUpdate(
+    {
+      _id: inquiryId,
+      $or: activeFor(now),
+      recipients: { $elemMatch: { user: userId, response: null } },
+    },
+    { $set: { 'recipients.$.response': clean, 'recipients.$.respondedAt': now, status: 'answered' } },
+    { new: true }
+  ).populate('wineDefinition', 'name producer');
+
+  if (!inquiry) {
+    // Diagnose the refusal for a useful message (the write already failed
+    // atomically — these reads only pick the message).
+    const existing = await WineOwnerInquiry.findById(inquiryId)
+      .select('status expiresAt recipients')
+      .lean();
+    if (!existing) return { ok: false, code: 'not_found', message: 'Inquiry not found' };
+    const mine = (existing.recipients || []).find((r) => String(r.user) === String(userId));
+    if (!mine) return { ok: false, code: 'forbidden', message: 'This inquiry was not addressed to you' };
+    if (mine.response) return { ok: false, code: 'conflict', message: 'You already answered this inquiry — answers cannot be changed' };
+    return { ok: false, code: 'conflict', message: 'This inquiry is no longer open' };
+  }
+
+  // Notify the asker (best-effort — never blocks the answer). The admin
+  // review queue lives on /admin/wines; a somm asker reads answers over
+  // MCP instead, so their notification carries no link.
+  if (inquiry.askedBy) {
+    const label = [inquiry.wineDefinition?.producer, inquiry.wineDefinition?.name].filter(Boolean).join(' — ') || 'a wine';
+    User.findById(inquiry.askedBy).select('roles').lean()
+      .then((asker) => {
+        const link = asker?.roles?.includes('admin') ? '/admin/wines' : null;
+        return createNotification(
+          inquiry.askedBy,
+          'owner_inquiry_response',
+          'A bottle owner answered your inquiry',
+          `An owner of ${label} answered your question — it is waiting in the owner-inquiry queue.`,
+          link,
+          'community'
+        );
+      })
+      .catch(() => {});
+  }
+
+  // Ids and lengths only — the answer text is the owner's data, not audit detail.
+  logAudit(req, 'user.ownerInquiry.respond',
+    { type: 'WineOwnerInquiry', id: inquiry._id },
+    {
+      wineDefinitionId: inquiry.wineDefinition?._id || inquiry.wineDefinition,
+      responseLength: clean.length,
+      ...(via === 'mcp' ? { via: 'mcp' } : {}),
+    });
+
+  return { ok: true, inquiry, status: inquiry.status };
+}
 
 /**
  * Distinct owners of bottles referencing the wine, newest bottle first, one
@@ -415,12 +601,16 @@ module.exports = {
   RECIPIENT_CAP,
   NOTE_MIN,
   NOTE_MAX,
+  RESPONSE_MAX,
   OWNER_REPLY_MAX,
   REPLY_VISIBLE_DAYS,
   EXPIRY_NOTE,
   buildRecipients,
   createOwnerInquiry,
   resolveOwnerInquiry,
+  listInquiriesForRecipient,
+  openQuestionForRecipient,
+  respondToOwnerInquiry,
   sweepExpiredInquiries,
   queryInquiryPage,
   repointInquiriesForWineMerge,
