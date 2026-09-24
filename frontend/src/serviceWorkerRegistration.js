@@ -1,3 +1,5 @@
+import { syncOfflineShell } from './utils/offlineMode';
+
 const isLocalhost = Boolean(
   window.location.hostname === 'localhost' ||
   window.location.hostname === '[::1]' ||
@@ -38,6 +40,9 @@ function registerValidSW(swUrl) {
   navigator.serviceWorker
     .register(swUrl)
     .then((registration) => {
+      // Keep (or drop) the offline copy of the app to match offline mode.
+      syncOfflineShell();
+
       registration.onupdatefound = () => {
         const installingWorker = registration.installing;
         if (!installingWorker) return;

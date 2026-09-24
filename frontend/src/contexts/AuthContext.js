@@ -2,6 +2,7 @@ import React, { createContext, useState, useContext, useEffect, useRef, useCallb
 import { findLanguage } from '../config/locales';
 import { createApiFetch } from '../utils/apiFetch';
 import { clearApiCaches } from '../serviceWorkerRegistration';
+import { saveOfflineUser, loadOfflineUser, clearOfflineUser } from '../utils/offlineMode';
 import i18n, { hasLanguagePreview } from '../i18n';
 
 const AuthContext = createContext();
@@ -18,6 +19,9 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
+  // True while running on the profile kept for an offline start (offline mode,
+  // utils/offlineMode.js): `user` is set but there is no token yet.
+  const [offlineSession, setOfflineSession] = useState(false);
 
   // Keep a ref to the latest token so apiFetch always reads the current value
   // without needing to be recreated on every token change
@@ -89,11 +93,23 @@ export const AuthProvider = ({ children }) => {
   // (Sessions are per DEVICE server-side since 2026-09-04, so signing in on
   // another device no longer invalidates this browser's cookie; the race
   // above is the only remaining way two refreshes can collide.)
+  // How the last refresh ended: 'ok', 'rejected' (the server said no — the
+  // session is dead) or 'network' (no answer at all — the device is offline).
+  // Only 'rejected' may end the session; see onRefreshFailed below.
+  const refreshOutcomeRef = useRef('ok');
+
   const doRefresh = async () => {
-    const res = await fetch('/api/auth/refresh', {
-      method: 'POST',
-      credentials: 'include' // sends the httpOnly refresh cookie
-    });
+    let res;
+    try {
+      res = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        credentials: 'include' // sends the httpOnly refresh cookie
+      });
+    } catch (err) {
+      refreshOutcomeRef.current = 'network';
+      throw err;
+    }
+    refreshOutcomeRef.current = res.ok ? 'ok' : 'rejected';
     if (!res.ok) return null;
     const data = await res.json();
     storeToken(data.token);
@@ -138,15 +154,26 @@ export const AuthProvider = ({ children }) => {
     // Wipe per-tab user state so chat history etc. don't bleed across logins.
     // Only sessionStorage — localStorage holds theme / language / persisted token.
     try { sessionStorage.clear(); } catch { /* noop */ }
-    // …and the service worker's cached API responses (cellars, bottles, wines).
+    // …and the service worker's cached API responses (cellars, bottles, wines),
+    // and the profile kept for an offline start.
     await clearApiCaches();
+    clearOfflineUser();
     clearToken();
+    setOfflineSession(false);
     setUser(null);
   }, []);
 
+  // A refresh that got NO answer (offline, a dead zone in the cellar) is not a
+  // dead session: logging out there would throw the user out — and wipe their
+  // offline data — every time the signal drops. Only a real rejection logs out.
+  const onRefreshFailed = useCallback(() => {
+    if (refreshOutcomeRef.current === 'network') return;
+    logout();
+  }, [logout]);
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const apiFetch = useCallback(
-    createApiFetch(() => tokenRef.current, handleRefresh, logout),
+    createApiFetch(() => tokenRef.current, handleRefresh, onRefreshFailed),
     [] // stable: getToken via ref, callbacks are stable via useCallback
   );
 
@@ -165,9 +192,20 @@ export const AuthProvider = ({ children }) => {
       const newToken = await handleRefresh();
       if (newToken) {
         await fetchUserProfile(newToken);
-      } else {
-        setLoading(false);
+        return;
       }
+      if (refreshOutcomeRef.current === 'network') {
+        // Offline start (offline mode only): carry on as the last signed-in
+        // user, with no token, until the network is back (effect below).
+        const kept = loadOfflineUser();
+        if (kept) {
+          setOfflineSession(true);
+          setUser(kept);
+        }
+      } else {
+        clearOfflineUser(); // the server ended this session
+      }
+      setLoading(false);
     };
     restoreSession();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -211,6 +249,56 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     }
   };
+
+  // ------------------------------------------------------------------
+  // Offline mode: keep the profile for an offline start, and leave the
+  // offline session as soon as the server answers again
+  // ------------------------------------------------------------------
+
+  useEffect(() => {
+    if (user && !offlineSession) saveOfflineUser(user); // no-op unless offline mode is on
+  }, [user, offlineSession]);
+
+  useEffect(() => {
+    if (!offlineSession) return undefined;
+    let cancelled = false;
+    const reconnect = async () => {
+      const newToken = await handleRefresh();
+      if (cancelled) return;
+      if (!newToken) {
+        // Still no network: stay. The server rejected the session: end it.
+        if (refreshOutcomeRef.current === 'rejected') logout();
+        return;
+      }
+      let res = null;
+      try {
+        res = await fetch('/api/auth/me', {
+          headers: { 'Authorization': `Bearer ${newToken}` },
+          credentials: 'include'
+        });
+      } catch { /* dropped again — the next attempt retries */ }
+      if (cancelled || !res) return;
+      if (res.ok) {
+        const data = await res.json();
+        if (cancelled) return;
+        applySession(newToken, data.user);
+        setOfflineSession(false);
+      } else if (res.status === 401 || res.status === 404) {
+        logout();
+      }
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') reconnect(); };
+    window.addEventListener('online', reconnect);
+    document.addEventListener('visibilitychange', onVisible);
+    const timer = setInterval(reconnect, 30000);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('online', reconnect);
+      document.removeEventListener('visibilitychange', onVisible);
+      clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offlineSession]);
 
   // ------------------------------------------------------------------
   // register / login
@@ -359,6 +447,7 @@ export const AuthProvider = ({ children }) => {
     user,
     token,
     loading,
+    offlineSession,
     register,
     login,
     demoLogin,
