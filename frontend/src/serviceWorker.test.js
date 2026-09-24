@@ -50,7 +50,8 @@ function makeCaches(initial = {}, network = null) {
       has: async (name) => store.has(name),
       keys: async () => [...store.keys()],
       delete: async (name) => store.delete(name),
-      match: async (req) => {
+      match: async (req, opts = {}) => {
+        if (opts.cacheName) return store.get(opts.cacheName)?.get(keyOf(req));
         for (const entries of store.values()) if (entries.has(keyOf(req))) return entries.get(keyOf(req));
         return undefined;
       },
@@ -336,5 +337,56 @@ describe('service worker offline shell — updates', () => {
     expect(shell.get('https://cellarion.test/assets/vendor-same.js').body).toBe('vendor');
     expect(shell.get('https://cellarion.test/index.html').body).toBe('fresh /index.html');
     expect(shell.has('https://cellarion.test/__cellarion-shell-complete__')).toBe(true);
+  });
+});
+
+describe('service worker offline photos', () => {
+  const THUMB = 'https://cellarion.test/api/uploads/thumbs/processed/abc.png.webp';
+  const FULL = '/api/uploads/processed/abc.png';
+  const img = (path) => ({ url: `https://cellarion.test${path}`, method: 'GET', headers: new Headers(), mode: 'no-cors' });
+
+  it('serves a saved thumbnail without the network', async () => {
+    const network = vi.fn(async () => fakeResponse(200, 'network'));
+    const caches = makeCaches({ 'cellarion-photos': [[THUMB, fakeResponse(200, 'saved thumb')]] }, network);
+    const handlers = loadWorker({ caches, network });
+    const res = await dispatchFetch(handlers, img('/api/uploads/thumbs/processed/abc.png.webp'));
+    expect(res.body).toBe('saved thumb');
+    expect(network).not.toHaveBeenCalled();
+  });
+
+  it('fetches a thumbnail that is not saved', async () => {
+    const network = vi.fn(async () => fakeResponse(200, 'network thumb'));
+    const handlers = loadWorker({ caches: makeCaches({}, network), network });
+    const res = await dispatchFetch(handlers, img('/api/uploads/thumbs/processed/zzz.png.webp'));
+    expect(res.body).toBe('network thumb');
+  });
+
+  it('online, a full-size photo comes from the network', async () => {
+    const network = vi.fn(async () => fakeResponse(200, 'full photo'));
+    const caches = makeCaches({ 'cellarion-photos': [[THUMB, fakeResponse(200, 'saved thumb')]] }, network);
+    const res = await dispatchFetch(loadWorker({ caches, network }), img(FULL));
+    expect(res.body).toBe('full photo');
+  });
+
+  it('offline, a full-size photo falls back to its saved thumbnail', async () => {
+    const network = vi.fn(async () => { throw new TypeError('Failed to fetch'); });
+    const caches = makeCaches({ 'cellarion-photos': [[THUMB, fakeResponse(200, 'saved thumb')]] }, network);
+    const res = await dispatchFetch(loadWorker({ caches, network }), img(FULL));
+    expect(res.body).toBe('saved thumb');
+  });
+
+  it('offline with no saved thumbnail, the request fails as before', async () => {
+    const network = vi.fn(async () => { throw new TypeError('Failed to fetch'); });
+    const handlers = loadWorker({ caches: makeCaches({}, network), network });
+    await expect(dispatchFetch(handlers, img(FULL))).rejects.toThrow('Failed to fetch');
+  });
+
+  it('activate keeps the photo cache', async () => {
+    const caches = makeCaches({ 'cellarion-v4': [], 'cellarion-photos': [], 'something-old': [] });
+    const handlers = loadWorker({ caches, network: vi.fn() });
+    let work;
+    handlers.activate({ waitUntil: (p) => { work = p; } });
+    await work;
+    expect([...caches.store.keys()].sort()).toEqual(['cellarion-photos', 'cellarion-v4']);
   });
 });

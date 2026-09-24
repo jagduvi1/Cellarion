@@ -5070,5 +5070,10 @@
     "transferWarning": "You cannot undo this yourself — afterwards only the new owner can transfer it back. Export a copy first if you want your own record of this cellar.",
     "transferExportLink": "Export this cellar",
     "transferCancel": "Cancel"
+  },
+  "offline": {
+    "bannerSavedToday": "Offline — showing your cellar as saved at {{time}}",
+    "bannerSavedEarlier": "Offline — showing your cellar as saved on {{time}}",
+    "bannerNoCopy": "Offline — your cellar hasn't been saved on this device yet"
   }
 }

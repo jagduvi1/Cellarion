@@ -101,6 +101,29 @@ async function offlineShell() {
   return undefined;
 }
 
+// ── Offline photos (#1355) ─────────────────────────────────────────────────
+// The page (utils/offlineSnapshot.syncPhotos) keeps the card-size thumbnails
+// of the user's bottles in this cache. Here they are served from it, and when
+// a full-size photo can't be fetched offline its thumbnail stands in — so the
+// bottle page still shows the bottle without ever storing full-size photos.
+const PHOTO_CACHE = 'cellarion-photos';
+const PROCESSED_PHOTO = /^\/api\/uploads\/processed\/([A-Za-z0-9_-]+\.(?:png|jpe?g|webp))$/i;
+
+async function servePhoto(request, url) {
+  if (url.pathname.startsWith('/api/uploads/thumbs/')) {
+    const saved = await caches.match(request, { cacheName: PHOTO_CACHE });
+    return saved || fetch(request);
+  }
+  try {
+    return await fetch(request);
+  } catch (err) {
+    const m = PROCESSED_PHOTO.exec(url.pathname);
+    const thumb = m && await caches.match(`/api/uploads/thumbs/processed/${m[1]}.webp`, { cacheName: PHOTO_CACHE });
+    if (thumb) return thumb;
+    throw err;
+  }
+}
+
 // App shell files to pre-cache on install
 // Only truly static, un-hashed assets are precached here. The HTML shell and
 // the hashed bundles are precached only for offline mode, per build version,
@@ -139,7 +162,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((names) =>
       Promise.all(
         names
-          .filter((name) => name !== CACHE_NAME && !name.startsWith(API_CACHE_PREFIX) && !name.startsWith(SHELL_CACHE_PREFIX))
+          .filter((name) => name !== CACHE_NAME && name !== PHOTO_CACHE && !name.startsWith(API_CACHE_PREFIX) && !name.startsWith(SHELL_CACHE_PREFIX))
           .map((name) => caches.delete(name))
       )
     ).then(pruneOldShells)
@@ -244,6 +267,12 @@ self.addEventListener('fetch', (event) => {
         })
       )
     );
+    return;
+  }
+
+  // Photos: saved thumbnails first; offline, a thumbnail for a full-size photo.
+  if (url.pathname.startsWith('/api/uploads/')) {
+    event.respondWith(servePhoto(request, url));
     return;
   }
 

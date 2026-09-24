@@ -9,6 +9,7 @@ import useUnreadBlog from '../hooks/useUnreadBlog';
 import InstallPrompt from './InstallPrompt';
 import AnnouncementBanner from './AnnouncementBanner';
 import DemoBanner from './DemoBanner';
+import OfflineBanner from './OfflineBanner';
 import './Layout.css';
 
 const LOGO_LIGHT_WEBP = '/cellarion-logo-light.webp';
@@ -356,6 +357,9 @@ function Layout({ children }) {
 
       {/* Persistent notice for ephemeral demo sessions (data resets + sign-up CTA) */}
       <DemoBanner />
+
+      {/* Offline mode: working from the device's saved copy of the cellar */}
+      <OfflineBanner />
 
       <main id="main-content" className="main-content" tabIndex={-1}>
         {children}

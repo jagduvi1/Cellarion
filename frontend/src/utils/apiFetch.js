@@ -30,7 +30,48 @@ export function isApiTarget(url) {
   }
 }
 
-export function createApiFetch(getToken, onRefresh, onLogout) {
+// A GET that has not answered after this long, with an offline answer
+// available, is answered from the device's copy (offline mode): a basement's
+// one-bar signal hangs far more often than it fails.
+export const SLOW_GET_MS = 6000;
+
+const TIMED_OUT = Symbol('timed-out');
+
+/**
+ * Offline mode hooks (#1355), both optional:
+ *  - offlineFallback(url) → Promise<Response|null>: the device copy's answer
+ *    to a GET. Used when the browser reports it is offline, when the request
+ *    fails, or when it is slower than SLOW_GET_MS. null → behave as before.
+ *  - onLive(): a real server response arrived.
+ *  - onMutation(url): a write (non-GET) succeeded.
+ */
+export function createApiFetch(getToken, onRefresh, onLogout, { offlineFallback, onLive, onMutation } = {}) {
+  async function send(url, init, isGet) {
+    if (!isGet || !offlineFallback) return fetch(url, init);
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      const saved = await offlineFallback(url);
+      if (saved) return saved;
+    }
+    const request = fetch(url, init).then((r) => ({ r }), (e) => ({ e }));
+    let timer;
+    const first = await Promise.race([
+      request,
+      new Promise((resolve) => { timer = setTimeout(() => resolve(TIMED_OUT), SLOW_GET_MS); }),
+    ]);
+    clearTimeout(timer);
+    if (first === TIMED_OUT) {
+      const saved = await offlineFallback(url);
+      if (saved) return saved;
+    }
+    const settled = first === TIMED_OUT ? await request : first;
+    if (settled.e) {
+      const saved = await offlineFallback(url);
+      if (saved) return saved;
+      throw settled.e;
+    }
+    return settled.r;
+  }
+
   return async function apiFetch(url, options = {}) {
     if (!isApiTarget(url)) {
       const { headers: callerHeaders = {}, ...rest } = options;
@@ -40,9 +81,12 @@ export function createApiFetch(getToken, onRefresh, onLogout) {
     const token = getToken();
     const headers = { ...options.headers };
     if (token) headers['Authorization'] = `Bearer ${token}`;
+    const isGet = !options.method || String(options.method).toUpperCase() === 'GET';
 
     // credentials: 'include' is required so the httpOnly refresh cookie is sent
-    let res = await fetch(url, { ...options, headers, credentials: 'include' });
+    let res = await send(url, { ...options, headers, credentials: 'include' }, isGet);
+    if (res.headers?.get?.('X-Cellarion-Offline') != null) return res; // the device's copy
+    if (onLive) onLive();
 
     if (res.status === 401) {
       const newToken = await onRefresh();
@@ -54,6 +98,7 @@ export function createApiFetch(getToken, onRefresh, onLogout) {
       }
     }
 
+    if (!isGet && res.ok && onMutation) onMutation(url);
     return res;
   };
 }
