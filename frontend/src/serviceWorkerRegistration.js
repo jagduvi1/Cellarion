@@ -4,6 +4,18 @@ const isLocalhost = Boolean(
   /^127(?:\.(?:25[0-5]|2[0-4]\d|[01]?\d\d?)){3}$/.test(window.location.hostname)
 );
 
+// Delete every cached API response on this device — the service worker's
+// per-account caches and the old shared one (v1) an older worker may still be
+// using. Called on logout so the next person on a shared device finds none of
+// this account's data. Best-effort: resolves even where the Cache API is absent.
+export async function clearApiCaches() {
+  try {
+    if (typeof caches === 'undefined') return;
+    const names = await caches.keys();
+    await Promise.all(names.filter((name) => name.startsWith('cellarion-api-')).map((name) => caches.delete(name)));
+  } catch { /* noop */ }
+}
+
 export function register() {
   if ('serviceWorker' in navigator) {
     const publicUrl = new URL(import.meta.env.BASE_URL, window.location.href);
