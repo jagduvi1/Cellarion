@@ -1,5 +1,6 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth');
+const { idempotency } = require('../middleware/idempotency');
 const { requireCellarAccess } = require('../middleware/cellarAccess');
 const Rack = require('../models/Rack');
 const { RACK_TYPES } = require('../models/Rack');
@@ -80,6 +81,9 @@ router.get('/nfc/:id', requireAuth, async (req, res) => {
 });
 
 router.use(requireAuth);
+// Writes sent with an Idempotency-Key (the offline queue, #1355) apply at
+// most once; without the header nothing changes.
+router.use(idempotency);
 
 // GET /api/racks?cellar=:id  — list racks for a cellar (owner, editor, viewer)
 router.get('/', requireCellarAccess('viewer'), async (req, res) => {
@@ -397,6 +401,20 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// Offline-queue preconditions (#1355): a write queued offline carries what the
+// user saw when they made it — the occupant of each slot it touches (a bottle
+// id, or null for an empty slot). If the rack has changed since (a partner
+// placed a bottle there meanwhile), the write is refused with 409 instead of
+// silently displacing that bottle. Not sent (undefined) → not checked: every
+// live client is unaffected.
+const SLOT_CHANGED = { error: 'This slot has changed since — check the rack and try again.', code: 'slot_changed' };
+function slotChanged(rack, position, expected) {
+  if (expected === undefined) return false;
+  const slot = rack.slots.find((s) => s.position === position);
+  const actual = slot && slot.bottle ? String(slot.bottle) : null;
+  return actual !== (expected ? String(expected) : null);
+}
+
 // PUT /api/racks/:id/slots/:position  — assign a bottle to a slot (owner or editor)
 router.put('/:id/slots/:position', async (req, res) => {
   try {
@@ -414,6 +432,7 @@ router.put('/:id/slots/:position', async (req, res) => {
     if (!role || role === 'viewer') {
       return res.status(403).json({ error: 'Not authorized to modify rack slots' });
     }
+    if (slotChanged(rack, position, req.body.expectOccupant)) return res.status(409).json(SLOT_CHANGED);
 
     // Placement invariants + slot write are shared with the MCP place tool.
     const result = await placeBottleInRack(rack, position, bottleId, req);
@@ -461,6 +480,9 @@ router.post('/:id/slots/:position/move', async (req, res) => {
       return res.status(400).json({ error: 'This slot is disabled' });
     }
 
+    if (slotChanged(rack, from, req.body?.expectFrom) || slotChanged(rack, to, req.body?.expectTo)) {
+      return res.status(409).json(SLOT_CHANGED);
+    }
     const fromSlot = rack.slots.find(s => s.position === from);
     if (!fromSlot) return res.status(400).json({ error: 'Source slot is empty' });
     const toSlot = rack.slots.find(s => s.position === to);
@@ -635,6 +657,10 @@ router.delete('/:id/slots/:position', async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to modify rack slots' });
     }
 
+    // ?expect=<bottleId> — the bottle the user saw in the slot (offline queue).
+    if (req.query.expect !== undefined && slotChanged(rack, position, String(req.query.expect))) {
+      return res.status(409).json(SLOT_CHANGED);
+    }
     const result = await clearRackSlot(rack, position, req);
     if (result.error) return res.status(result.error.status).json({ error: result.error.message });
 

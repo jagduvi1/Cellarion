@@ -10,7 +10,8 @@
  * Only ever active with offline mode on (utils/offlineMode).
  */
 import { indexSnapshot, answerOffline } from './offlineData';
-import { readSnapshot, writeSnapshot, clearSnapshots } from './offlineStore';
+import { readSnapshot, writeSnapshot, clearSnapshots, readQueue } from './offlineStore';
+import { applyPending } from './offlineOps';
 import { isOfflineModeEnabled } from './offlineMode';
 import { thumbUrl } from './thumbUrl';
 import { getWineImageUrl } from './wineImageUrl';
@@ -19,7 +20,10 @@ export const SNAPSHOT_SCHEMA = 1;
 export const PHOTO_CACHE = 'cellarion-photos';      // also named in public/service-worker.js
 const PHOTO_BUDGET_BYTES = 25 * 1024 * 1024;         // prod 2026-09: the largest cellar needs ~7 MB
 
-let current = null;           // { userId, idx, generatedAt }
+// { userId, base, idx, generatedAt } — base: the snapshot as the server sent
+// it; idx: base with the user's still-pending offline writes applied on top,
+// so a refresh never makes a change the user just made disappear.
+let current = null;
 let usingSaved = false;       // the last read was answered from the snapshot
 const listeners = new Set();
 
@@ -43,14 +47,32 @@ export function markLive() {
   if (usingSaved) { usingSaved = false; notify(); }
 }
 
+async function setCurrent(uid, base) {
+  const working = applyPending(base, await readQueue());
+  current = { userId: uid, base, idx: indexSnapshot(working), generatedAt: base.generatedAt };
+  notify();
+  return current.idx;
+}
+
 async function loadIndex(userId) {
   const uid = String(userId);
   if (current?.userId === uid) return current.idx;
   const snap = await readSnapshot(uid);
   if (!snap || snap.schema !== SNAPSHOT_SCHEMA || String(snap.userId) !== uid) return null;
-  current = { userId: uid, idx: indexSnapshot(snap), generatedAt: snap.generatedAt };
-  notify();
-  return current.idx;
+  return setCurrent(uid, snap);
+}
+
+/** The working index (snapshot + pending writes) for a user, or null. */
+export async function getWorkingIndex(userId) {
+  if (!userId) return null;
+  return loadIndex(userId);
+}
+
+/** Recompute the working index after the queue changed. */
+export async function rebuildWorking(userId) {
+  const uid = String(userId);
+  if (current?.userId !== uid) return loadIndex(uid);
+  return setCurrent(uid, current.base);
 }
 
 /** Load the stored snapshot's timestamp for the banner (no network). */
@@ -88,8 +110,7 @@ export async function refreshSnapshot(apiFetch, userId) {
   try { snap = await res.json(); } catch { return false; }
   if (!snap || snap.schema !== SNAPSHOT_SCHEMA || String(snap.userId) !== String(userId)) return false;
   if (!(await writeSnapshot(snap))) return false;
-  current = { userId: String(userId), idx: indexSnapshot(snap), generatedAt: snap.generatedAt };
-  notify();
+  await setCurrent(String(userId), snap);
   syncPhotos(snap).catch(() => {});
   return true;
 }
@@ -144,11 +165,15 @@ export async function syncPhotos(snap) {
   }
 }
 
-/** Forget the offline copy on this device: snapshot and photos. */
-export async function clearOfflineData() {
+/**
+ * Forget the offline copy on this device: snapshot and photos, and the queued
+ * writes unless `keepQueue` (an automatic sign-out: the same user's changes
+ * still go out once they sign back in).
+ */
+export async function clearOfflineData({ keepQueue = false } = {}) {
   current = null;
   usingSaved = false;
-  await clearSnapshots();
+  await clearSnapshots({ keepQueue });
   try { if (typeof caches !== 'undefined') await caches.delete(PHOTO_CACHE); } catch { /* noop */ }
   notify();
 }

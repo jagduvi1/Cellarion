@@ -34,6 +34,7 @@ const BridgeKey = require('../models/BridgeKey');
 const BRIDGE_REGISTRY_NOTE = 'From the shared registry (cellarion.app)';
 const BridgeUsageDay = require('../models/BridgeUsageDay');
 const ExportLink = require('../models/ExportLink');
+const IdempotencyRecord = require('../models/IdempotencyRecord');
 const OAuthAuthCode = require('../models/OAuthAuthCode');
 const McpActionLog = require('../models/McpActionLog');
 const AiUsage = require('../models/AiUsage');
@@ -871,6 +872,17 @@ const REGISTRY = [
     // through its own registry entries (cellars, account, …). Nothing to export
     // here (and the tokenHash, like ApiToken's, never leaves the DB).
     purge: (ctx) => ExportLink.deleteMany({ user: ctx.userId }),
+    exportFragment: null,
+  },
+
+  // ── Idempotent-write records (offline queue, #1355) ──────────────────────
+  {
+    model: IdempotencyRecord, category: 'personal-data', userFields: ['user'],
+    // Hard-delete on erasure. The stored outcome of a write sent with an
+    // Idempotency-Key, kept 48 h (TTL) so a resent write is not applied twice.
+    // Nothing to export: a transient technical record of a request whose
+    // effect is already in the exported data (bottles, racks).
+    purge: (ctx) => IdempotencyRecord.deleteMany({ user: ctx.userId }),
     exportFragment: null,
   },
 

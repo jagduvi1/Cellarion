@@ -1,5 +1,6 @@
 const express = require('express');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
+const { idempotency } = require('../middleware/idempotency');
 const { requireBottleAccess, ROLE_LEVELS } = require('../middleware/bottleAccess');
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
@@ -58,6 +59,9 @@ const MAX_CUSTOM_FIELDS = 20;
 
 // All routes require authentication
 router.use(requireAuth);
+// Writes sent with an Idempotency-Key (the offline queue, #1355) apply at
+// most once; without the header nothing changes.
+router.use(idempotency);
 
 // GET /api/bottles — list the authenticated user's active bottles across all
 // cellars they OWN (shared/read-only cellars are excluded, matching the
@@ -776,6 +780,25 @@ router.put('/:id', requireBottleAccess('editor'), async (req, res) => {
   try {
     const { bottle } = req;
 
+    // ifUnchanged (offline queue, #1355): the values of notes / rating /
+    // ratingScale the user saw when they edited offline. A field someone else
+    // has changed since — and not to the same new value — is a conflict: 409
+    // with the current values, so the user chooses instead of one edit
+    // silently overwriting the other. Absent → not checked (live clients).
+    const { ifUnchanged } = req.body || {};
+    if (ifUnchanged !== undefined) {
+      delete req.body.ifUnchanged;
+      if (ifUnchanged && typeof ifUnchanged === 'object') {
+        const same = (a, b) => (a ?? null) === (b ?? null);
+        const conflicts = ['notes', 'rating', 'ratingScale'].filter((k) => k in ifUnchanged
+          && !same(bottle[k], ifUnchanged[k]) && !same(bottle[k], req.body[k]));
+        if (conflicts.length) {
+          const current = Object.fromEntries(conflicts.map((k) => [k, bottle[k] ?? null]));
+          return res.status(409).json({ error: 'Changed elsewhere since your edit', code: 'field_changed', current });
+        }
+      }
+    }
+
     // ONE shared implementation with the MCP update_bottle tool (plan §7):
     // validation, vintage/size coercion, change detection, priceSetAt
     // anchoring, notifier-marker reset, re-index, vintage re-embed and the
@@ -884,7 +907,13 @@ router.post('/:id/consume', requireBottleAccess('editor'), async (req, res) => {
     // today (support ticket 2026-09-13: "how do I set the consumed date?").
     // The service validates it (a real date, not in the future); absent →
     // now, as before. The bulk action has taken the same field since v1.200.
-    const { reason = 'drank', note, rating, consumedRatingScale, consumedAt } = req.body;
+    const { reason = 'drank', note, rating, consumedRatingScale, consumedAt, ifActive } = req.body;
+    // ifActive (offline queue, #1355): only consume a bottle still in the
+    // cellar — one consumed elsewhere meanwhile must not have its record
+    // overwritten by a queued consume. Absent → unchanged behaviour.
+    if (ifActive === true && req.bottle.status !== 'active') {
+      return res.status(409).json({ error: 'This bottle has already left the cellar', code: 'state_changed' });
+    }
     const result = await consumeBottle(req.bottle, { reason, note, rating, ratingScale: consumedRatingScale, consumedAt }, req);
     if (result.error) return res.status(result.error.status).json({ error: result.error.message });
     res.json({ bottle: result.bottle });
@@ -904,7 +933,9 @@ router.post('/:id/consume', requireBottleAccess('editor'), async (req, res) => {
 // POST /api/bottles/:id/open — mark an active bottle as opened (owner or editor)
 router.post('/:id/open', requireBottleAccess('editor'), async (req, res) => {
   try {
-    const result = await openBottle(req.bottle, { preservationMethod: req.body?.preservationMethod }, req);
+    // openedAt: when it was really opened — an open queued offline (#1355) is
+    // sent later. Validated by the service (not future, at most 90 days back).
+    const result = await openBottle(req.bottle, { preservationMethod: req.body?.preservationMethod, openedAt: req.body?.openedAt }, req);
     if (result.error) return res.status(result.error.status).json({ error: result.error.message });
     res.json({ bottle: result.bottle });
   } catch (error) {

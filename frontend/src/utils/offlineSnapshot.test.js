@@ -3,6 +3,7 @@ vi.mock('./offlineStore', () => ({
   readSnapshot: vi.fn(async (uid) => store.data.get(String(uid)) || null),
   writeSnapshot: vi.fn(async (s) => { store.data.set(String(s.userId), s); return true; }),
   clearSnapshots: vi.fn(async () => { store.data.clear(); }),
+  readQueue: vi.fn(async () => store.queue || []),
 }));
 
 import {
@@ -91,5 +92,21 @@ describe('photoUrlsOf', () => {
       '/api/uploads/thumbs/processed/own.png.webp',
       '/api/uploads/thumbs/processed/wine.png.webp',
     ]);
+  });
+});
+
+describe('pending offline changes over the saved copy', () => {
+  beforeEach(() => localStorage.setItem('cellarion-offline', 'on'));
+  afterEach(() => { store.queue = []; });
+
+  it('a pending change stays visible after a refresh brings a newer copy', async () => {
+    vi.stubGlobal('caches', undefined);
+    const bid = 'b00000000000000000000001';
+    store.queue = [{ id: 'k', userId: 'u1', kind: 'consume', status: 'pending', bottleId: bid, createdAt: '2026-09-24T13:00:00Z', body: { reason: 'drank' } }];
+    expect(await refreshSnapshot(vi.fn(async () => jsonRes({ ...SNAP, generatedAt: '2026-09-24T14:00:00.000Z' })), 'u1')).toBe(true);
+    const res = await offlineAnswer(`/api/bottles/${bid}`, 'u1');
+    expect(res.status).toBe(404); // consumed offline, still gone from the device copy
+    const list = await (await offlineAnswer(`/api/cellars/${C1}`, 'u1')).json();
+    expect(list.bottles.total).toBe(0);
   });
 });

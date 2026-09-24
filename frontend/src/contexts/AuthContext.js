@@ -4,6 +4,7 @@ import { createApiFetch } from '../utils/apiFetch';
 import { clearApiCaches } from '../serviceWorkerRegistration';
 import { saveOfflineUser, loadOfflineUser, clearOfflineUser } from '../utils/offlineMode';
 import { offlineAnswer, markLive, clearOfflineData } from '../utils/offlineSnapshot';
+import { writeKeyFor, queueWrite } from '../utils/offlineQueue';
 
 // A write succeeded somewhere in the app: OfflineSync refreshes the device's
 // copy shortly after (components/OfflineSync.js).
@@ -187,7 +188,11 @@ export const AuthProvider = ({ children }) => {
   // apiFetch — stable reference, used by all components instead of fetch
   // ------------------------------------------------------------------
 
-  const logout = useCallback(async () => {
+  // keepQueue: an automatic sign-out (the session ended) keeps the user's
+  // unsent offline changes, so they still go out once the same user signs
+  // back in. A user-initiated logout deletes everything (Layout confirms first
+  // when changes are waiting).
+  const logout = useCallback(async ({ keepQueue = false } = {}) => {
     try {
       // Tell the server to clear the refresh token hash + cookie
       await fetch('/api/auth/logout', {
@@ -207,7 +212,7 @@ export const AuthProvider = ({ children }) => {
     // and the profile kept for an offline start.
     await clearApiCaches();
     clearOfflineUser();
-    await clearOfflineData(); // the saved cellar copy and its photos
+    await clearOfflineData({ keepQueue }); // the saved cellar copy, its photos, queued changes
     clearToken();
     setOfflineSession(false);
     setUser(null);
@@ -218,7 +223,7 @@ export const AuthProvider = ({ children }) => {
   // offline data — every time the signal drops. Only a real rejection logs out.
   const onRefreshFailed = useCallback(() => {
     if (refreshOutcomeRef.current === 'network') return;
-    logout();
+    logout({ keepQueue: true });
   }, [logout]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -226,6 +231,9 @@ export const AuthProvider = ({ children }) => {
     createApiFetch(() => tokenRef.current, handleRefresh, onRefreshFailed, {
       // Offline mode: reads the network can't answer come from the device's copy.
       offlineFallback: (url) => offlineAnswer(url, userIdRef.current),
+      // …and writes it can't take are queued on the device (offline mode).
+      offlineWriteKey: (url, method) => writeKeyFor(url, method, userIdRef.current),
+      offlineWrite: (url, init, key) => queueWrite({ url, method: init.method, body: init.body, key, userId: userIdRef.current }),
       onLive: markLive,
       onMutation: notifyApiMutation,
     }),
@@ -322,7 +330,7 @@ export const AuthProvider = ({ children }) => {
       if (cancelled) return;
       if (!newToken) {
         // Still no network: stay. The server rejected the session: end it.
-        if (refreshOutcomeRef.current === 'rejected') logout();
+        if (refreshOutcomeRef.current === 'rejected') logout({ keepQueue: true });
         return;
       }
       let res = null;
@@ -339,7 +347,7 @@ export const AuthProvider = ({ children }) => {
         applySession(newToken, data.user);
         setOfflineSession(false);
       } else if (res.status === 401 || res.status === 404) {
-        logout();
+        logout({ keepQueue: true });
       }
     };
     const onVisible = () => { if (document.visibilityState === 'visible') reconnect(); };

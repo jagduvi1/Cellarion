@@ -10,6 +10,7 @@ import InstallPrompt from './InstallPrompt';
 import AnnouncementBanner from './AnnouncementBanner';
 import DemoBanner from './DemoBanner';
 import OfflineBanner from './OfflineBanner';
+import { getQueueStatus } from '../utils/offlineQueue';
 import './Layout.css';
 
 const LOGO_LIGHT_WEBP = '/cellarion-logo-light.webp';
@@ -27,6 +28,11 @@ function Layout({ children }) {
   const unreadBlog = useUnreadBlog();
 
   const handleLogout = () => {
+    // Offline mode (#1355): logging out deletes changes made offline that
+    // haven't reached the server yet — say so before they are lost.
+    const { pending, attention } = getQueueStatus();
+    const waiting = pending + attention;
+    if (waiting > 0 && !window.confirm(t('offline.logoutConfirm', { count: waiting }))) return;
     logout();
     navigate('/login');
   };
