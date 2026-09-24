@@ -3,6 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { PROCESSED_DIR } = require('../config/upload');
 const BottleImage = require('../models/BottleImage');
+const { unlinkThumbFor, sweepOrphanThumbs } = require('./thumbnails');
 
 /**
  * SHA-256 (hex) of an image's bytes — the dedup key stored on BottleImage.contentHash.
@@ -62,6 +63,9 @@ async function unlinkIfUnreferenced(imageId, url) {
       console.warn(`[images] could not unlink ${url}:`, err.message);
     }
   }
+  // Its card thumbnail (services/thumbnails) goes with it — a no-op for a file
+  // that never had one.
+  await unlinkThumbFor(url);
   return true;
 }
 
@@ -174,6 +178,9 @@ async function processImage(imageId) {
     const processedPath = path.join(PROCESSED_DIR, processedFilename);
 
     fs.writeFileSync(processedPath, resultBuffer);
+    // A re-run (retry / admin reprocess) rewrites the same filename: drop the
+    // thumbnail rendered from the previous bytes so the next request re-renders.
+    await unlinkThumbFor(`/api/uploads/processed/${processedFilename}`);
 
     // Update document. The processed (cropped) image is now the version we keep
     // and export, so the dedup hash is computed from it (overriding the
@@ -236,6 +243,13 @@ async function cleanupOrphanedImages() {
     );
     if (result.modifiedCount > 0) {
       console.log(`[cleanup] Reset ${result.modifiedCount} stuck processing images to uploaded`);
+    }
+
+    // Thumbnails whose source is gone (a deletion path that skipped
+    // unlinkThumbFor). Runs before the originals sweep, which can return early.
+    const thumbsRemoved = await sweepOrphanThumbs();
+    if (thumbsRemoved > 0) {
+      console.log(`[cleanup] Removed ${thumbsRemoved} orphaned thumbnails`);
     }
 
     // Remove orphaned files from disk (originals with no DB record)

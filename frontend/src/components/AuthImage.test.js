@@ -1,4 +1,4 @@
-import { render, waitFor } from '@testing-library/react';
+import { render, waitFor, fireEvent } from '@testing-library/react';
 import AuthImage from './AuthImage';
 
 // Audit 2026-09 S7-1 / F06-1 / F01-1: a registry wine.image is user-influenced
@@ -49,4 +49,30 @@ test('shapes that would leave the origin render nothing and never reach apiFetch
     expect(c.querySelector('img')).toBeNull();
   }
   expect(apiFetch).not.toHaveBeenCalled();
+});
+
+describe('thumb', () => {
+  const FULL = '/api/uploads/processed/0f3b2a1c-1111-4222-8333-944445555666.png';
+  const THUMB = '/api/uploads/thumbs/processed/0f3b2a1c-1111-4222-8333-944445555666.png.webp';
+
+  test('shows the card-size thumbnail of a processed upload', async () => {
+    const c = render(<AuthImage src={FULL} alt="x" thumb />).container;
+    await waitFor(() => expect(c.querySelector('img')).toHaveAttribute('src', THUMB));
+  });
+
+  test('falls back to the full image once, then hands the error to the caller', async () => {
+    const onError = vi.fn();
+    const c = render(<AuthImage src={FULL} alt="x" thumb onError={onError} />).container;
+    await waitFor(() => expect(c.querySelector('img')).toHaveAttribute('src', THUMB));
+    fireEvent.error(c.querySelector('img'));
+    await waitFor(() => expect(c.querySelector('img')).toHaveAttribute('src', FULL));
+    expect(onError).not.toHaveBeenCalled();
+    fireEvent.error(c.querySelector('img'));
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  test('without thumb the full image is shown', async () => {
+    const c = render(<AuthImage src={FULL} alt="x" />).container;
+    await waitFor(() => expect(c.querySelector('img')).toHaveAttribute('src', FULL));
+  });
 });

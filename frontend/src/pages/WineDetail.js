@@ -148,7 +148,7 @@ export default function WineDetail() {
       />
 
       <div className="wd-card">
-        <WineImage image={wine.image} alt={wine.name} className="wd-image" wrapClass="wd-image-wrap" />
+        <WineImage image={wine.image} alt={wine.name} className="wd-image" wrapClass="wd-image-wrap" full />
 
         <div className="wd-info">
           <h1 className="wd-name">{wine.name}</h1>

@@ -7,6 +7,7 @@ const cookieParser = require('cookie-parser');
 const { rateLimitKey } = require('./utils/clientIp');
 const { requireAuth } = require('./middleware/auth');
 const { uploadsGuard, uploadsCacheHeaders } = require('./middleware/uploadsStatic');
+const { thumbnailHandler } = require('./services/thumbnails');
 const healthRoute = require('./routes/health');
 const siteRoute = require('./routes/site');
 const authRoute = require('./routes/auth');
@@ -299,6 +300,10 @@ app.use('/api/', writeLimiter);
 // Serve uploaded images — no auth required (filenames are random UUIDs).
 // Long cache for a file that EXISTS (setHeaders runs only on a hit); a miss
 // stays no-store, so a 404 can never be cached by a CDN — see uploadsStatic.
+// Card-size WebP thumbnails of processed photos, rendered on first request
+// (services/thumbnails). Mounted first so a thumbnail path never reaches the
+// plain static mount.
+app.use('/api/uploads/thumbs', thumbnailHandler);
 app.use('/api/uploads', uploadsGuard, express.static('/app/uploads', { setHeaders: uploadsCacheHeaders }));
 
 // Routes

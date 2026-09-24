@@ -69,7 +69,7 @@ export default function WineReferenceCard({ wine }) {
             <div className="wine-modal__loading">Loading wine details...</div>
           ) : (
             <div className="wine-modal">
-              <WineImage image={detail.image} alt={detail.name} className="wine-modal__image" wrapClass="wine-modal__image-wrap" />
+              <WineImage image={detail.image} alt={detail.name} className="wine-modal__image" wrapClass="wine-modal__image-wrap" full />
               <div className="wine-modal__header">
                 <span className={`wine-modal__type-badge ${swatchType(detail, '')}`}>
                   {wineTypeLabel(detail, t) || 'Wine'}
