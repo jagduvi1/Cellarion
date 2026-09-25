@@ -42,7 +42,7 @@ async function runClimateOfflineCheck(now = new Date()) {
       'climate_offline',
       `Sensor offline: ${device.name}`,
       `No readings for ${Math.round(silentMs / 60000)} minutes${cellar ? ` from the sensor in "${cellar.name}"` : ''}. Check power and Wi-Fi.`,
-      cellar ? `/cellars/${cellar._id}` : '/settings'
+      cellar ? `/cellars/${cellar._id}` : '/settings#climate'
     );
     notified++;
   }

@@ -251,7 +251,7 @@ function ImportCellar() {
       <p className="settings-hint" style={{ marginTop: '1rem' }}>
         <Trans
           i18nKey="importCellar.noExportYet"
-          components={{ 1: <Link to="/settings" /> }}
+          components={{ 1: <Link to="/settings#data" /> }}
         />
       </p>
     </div>

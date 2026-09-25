@@ -50,7 +50,7 @@ describe('RegistryConnectionSection (self-hosted Settings card)', () => {
     expect(await screen.findByText(/Not connected/)).toBeInTheDocument();
     expect(screen.getByText(/No bridge key is configured on this server/)).toBeInTheDocument();
     expect(screen.getByText(/Put the two lines into this server's \.env/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Open cellarion\.app settings/ })).toHaveAttribute('href', 'https://cellarion.app/settings');
+    expect(screen.getByRole('link', { name: /Open cellarion\.app settings/ })).toHaveAttribute('href', 'https://cellarion.app/settings#bridge'); // opens the AI & connections group
     expect(screen.getByRole('link', { name: /How the bridge works/ })).toHaveAttribute('href', expect.stringContaining('docs/registry-bridge.md'));
   });
 
