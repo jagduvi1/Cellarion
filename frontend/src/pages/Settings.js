@@ -22,6 +22,7 @@ import McpActivitySection from '../components/McpActivitySection';
 import ClimateDevicesSection from '../components/ClimateDevicesSection';
 import { journalPromptOptedOut, setJournalPromptOptOut } from '../components/JournalPrompt';
 import OfflineSettings from '../components/OfflineSettings';
+import SettingsGroup from '../components/SettingsGroup';
 import './Settings.css';
 
 function Settings() {
@@ -364,6 +365,14 @@ function Settings() {
         <h1>{t('settings.title')}</h1>
       </div>
 
+      {/* Grouped and collapsible (components/SettingsGroup): a few calm blocks
+          instead of one long page — especially with API tokens and MCP. */}
+      <SettingsGroup
+        id="account"
+        title={t('settings.groups.account.title')}
+        summary={t('settings.groups.account.summary')}
+        defaultOpen
+      >
       {/* ── Profile card ── */}
       <div className="card settings-card">
         <h2 className="settings-section-title">{t('settings.profile.title', 'Profile')}</h2>
@@ -504,23 +513,6 @@ function Settings() {
       </div>
       )}
 
-      {/* ── API tokens card (hidden for demo — token creation is blocked) ── */}
-      {!user?.isDemo && <ApiTokensSection />}
-
-      {/* ── Connect your AI card (needs a token → hidden for demo too) ── */}
-      {!user?.isDemo && <AiConnectSection />}
-
-      {/* ── Registry Bridge: on cellarion.app the card issues keys to self-hosters;
-           on a self-hosted install it shows this server's own connection ── */}
-      {!user?.isDemo && isHostedOrigin(window.location.origin) && <SelfHostedBridgeSection />}
-      {!user?.isDemo && !isHostedOrigin(window.location.origin) && <RegistryConnectionSection />}
-
-      {/* ── Recent AI activity card (self-hides when the ledger is empty) ── */}
-      {!user?.isDemo && <McpActivitySection />}
-
-      {/* ── Climate devices card (hidden for demo) ── */}
-      {!user?.isDemo && <ClimateDevicesSection />}
-
       {/* ── Your Supporter Tier card ── */}
       <div className="card settings-card settings-plan-card">
         <h2 className="settings-section-title">{t('settings.plan.title')}</h2>
@@ -539,6 +531,13 @@ function Settings() {
         </Link>
       </div>
 
+      </SettingsGroup>
+
+      <SettingsGroup
+        id="preferences"
+        title={t('settings.groups.preferences.title')}
+        summary={t('settings.groups.preferences.summary')}
+      >
       {/* ── Notifications card ── */}
       <div className="card settings-card">
         <h2 className="settings-section-title">{t('settings.notifications.title')}</h2>
@@ -796,9 +795,35 @@ function Settings() {
         </form>
       </div>
 
-      {/* ── Offline mode (#1355; admins only until released) ── */}
+      {/* ── Offline mode (#1355) ── */}
       <OfflineSettings />
 
+      </SettingsGroup>
+
+      {/* ── AI & connections (none of it for demo — tokens are blocked there) ── */}
+      {!user?.isDemo && (
+      <SettingsGroup
+        id="connections"
+        title={t('settings.groups.connections.title')}
+        summary={t('settings.groups.connections.summary')}
+      >
+        {/* Tokens first: Connect your AI tells you to create one "above" */}
+        <ApiTokensSection />
+        <AiConnectSection />
+        {/* Recent AI activity (self-hides when the ledger is empty) */}
+        <McpActivitySection />
+        {/* Registry Bridge: on cellarion.app the card issues keys to self-hosters;
+            on a self-hosted install it shows this server's own connection */}
+        {isHostedOrigin(window.location.origin) ? <SelfHostedBridgeSection /> : <RegistryConnectionSection />}
+        <ClimateDevicesSection />
+      </SettingsGroup>
+      )}
+
+      <SettingsGroup
+        id="data"
+        title={t('settings.groups.data.title')}
+        summary={t('settings.groups.data.summary')}
+      >
       {/* ── Your Data (GDPR) ── */}
       <div className="card settings-card">
         <h2 className="settings-section-title">{t('settings.data.title', 'Your Data')}</h2>
@@ -840,6 +865,16 @@ function Settings() {
       </div>
       )}
 
+      </SettingsGroup>
+
+      {!user?.isDemo && (
+      <SettingsGroup
+        id="danger"
+        title={t('settings.groups.danger.title')}
+        summary={t('settings.groups.danger.summary')}
+        danger
+        forceOpen={!!isDeletionScheduled}
+      >
       {/* ── Danger zone (hidden for demo — account deletion is blocked) ── */}
       {!user?.isDemo && (
       <div className="card settings-card settings-danger-card">
@@ -905,6 +940,9 @@ function Settings() {
           </>
         )}
       </div>
+      )}
+
+      </SettingsGroup>
       )}
 
       {appVersion && (

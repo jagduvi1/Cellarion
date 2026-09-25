@@ -266,7 +266,7 @@ describe('POST /api/climate/ingest', () => {
 
     await deviceRequest({ readings: [{ channel: 'a', type: 'temperature', value: 12 }] });
     expect(device.offlineNotifiedAt).toBeNull();
-    expect(createNotification).toHaveBeenCalledWith('u1', 'climate_recovered', expect.stringContaining('back online'), expect.any(String), '/settings');
+    expect(createNotification).toHaveBeenCalledWith('u1', 'climate_recovered', expect.stringContaining('back online'), expect.any(String), '/settings#climate');
   });
 
   test('daily quota: an exhausted device gets 429, liveness still updates, nothing inserted', async () => {

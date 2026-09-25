@@ -562,6 +562,28 @@
       "revertingBtn": "Reverting…",
       "errorLoad": "Failed to load AI activity.",
       "errorRevert": "Couldn't revert that change. It may have already been undone or changed since."
+    },
+    "groups": {
+      "account": {
+        "title": "Account",
+        "summary": "Profile, password and supporter tier"
+      },
+      "preferences": {
+        "title": "Preferences",
+        "summary": "Notifications, display and offline mode"
+      },
+      "connections": {
+        "title": "AI & connections",
+        "summary": "Connect your AI assistant, API tokens, AI activity, registry bridge and climate sensors"
+      },
+      "data": {
+        "title": "Your data",
+        "summary": "Download your data, or take your cellars with you"
+      },
+      "danger": {
+        "title": "Delete account",
+        "summary": "Permanently delete your account and all your data"
+      }
     }
   },
   "climate": {

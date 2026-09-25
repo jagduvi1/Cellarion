@@ -215,7 +215,7 @@ router.post('/ingest', requireAuth, ingestLimiter, async (req, res) => {
       }
     );
 
-    const link = cellar ? `/cellars/${cellar._id}` : '/settings';
+    const link = cellar ? `/cellars/${cellar._id}` : '/settings#climate';
     if (wasOffline) {
       createNotification(device.user, 'climate_recovered', `Sensor back online: ${device.name}`,
         'The sensor is posting readings again.', link).catch(() => {});

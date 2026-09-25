@@ -148,7 +148,7 @@ function RegistryConnectionSection() {
             <li>{t('settings.registryConnection.step3', 'Put the two lines into this server\'s .env and restart the backend.')}</li>
           </ol>
           <div className="settings-actions">
-            <a className="btn btn-secondary" href={`${HOSTED_ORIGIN}/settings`} target="_blank" rel="noopener noreferrer">
+            <a className="btn btn-secondary" href={`${HOSTED_ORIGIN}/settings#bridge`} target="_blank" rel="noopener noreferrer">
               {t('settings.registryConnection.hostedSettingsLink', 'Open cellarion.app settings')}
             </a>
             <a className="btn btn-secondary" href="https://github.com/jagduvi1/Cellarion/blob/main/docs/registry-bridge.md" target="_blank" rel="noopener noreferrer">

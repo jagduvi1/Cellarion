@@ -8,7 +8,7 @@ function Unsubscribed() {
       <p>{t('unsubscribed.message')}</p>
       <p>
         <Trans i18nKey="unsubscribed.reEnable">
-          You can re-enable individual categories at any time from <a href="/settings">Settings</a>.
+          You can re-enable individual categories at any time from <a href="/settings#notifications">Settings</a>.
         </Trans>
       </p>
     </div>

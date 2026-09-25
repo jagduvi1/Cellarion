@@ -456,3 +456,96 @@
   color: var(--color-text-secondary, #777);
   font-style: italic;
 }
+
+/* ── Collapsible groups (components/SettingsGroup) ───────────────────────────
+   Account · Preferences · AI & connections · Your data · Delete account. The
+   group is the card; the cards inside lose their own shadow so the page reads
+   as a few calm blocks instead of a long stack. */
+.settings-group {
+  margin-bottom: 1rem;
+  scroll-margin-top: 5rem;
+}
+
+.settings-group > details {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+}
+
+.settings-group-summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-md);
+}
+
+.settings-group-summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-group-summary:hover {
+  background: var(--color-surface-hover);
+}
+
+.settings-group-summary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.settings-group-heading {
+  min-width: 0;
+}
+
+.settings-group-title {
+  display: block;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.settings-group-desc {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.settings-group-chevron {
+  flex: none;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-right: 2px solid var(--color-text-muted);
+  border-bottom: 2px solid var(--color-text-muted);
+  transform: rotate(45deg);
+  transition: transform var(--transition-base);
+  margin-right: 0.25rem;
+}
+
+.settings-group > details[open] .settings-group-chevron {
+  transform: rotate(-135deg);
+}
+
+.settings-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0 0.75rem 0.75rem;
+}
+
+.settings-group-body > .card {
+  margin: 0;
+  box-shadow: none;
+}
+
+.settings-group--danger .settings-group-title {
+  color: var(--color-danger);
+}
+
+.settings-group--danger > details {
+  border-color: var(--color-danger-border);
+}
