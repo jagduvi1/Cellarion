@@ -2,10 +2,11 @@
  * Offline mode (#1355): keep the app and the signed-in session usable when the
  * device has no network (a cellar in a basement).
  *
- * The switch is Settings → Offline mode (components/OfflineSettings), stored per
- * browser. Without a choice the default is: on in the installed app
- * (standalone / the Android TWA), off in a plain browser tab — a shared or
- * borrowed computer should not keep a copy of someone's cellar unless they ask.
+ * Off until the user chooses it — nothing is stored on a device before they
+ * say yes (storage on a user's device needs their request: ePrivacy art. 5(3)).
+ * The installed app (standalone / the Android TWA) asks once, after sign-in
+ * (components/OfflinePrompt); anywhere, Settings → Offline mode switches it
+ * (components/OfflineSettings). The choice is stored per browser.
  *
  * What it switches on (this module is the only switch):
  *  - the service worker keeps the whole app for offline use (public/service-worker.js)
@@ -40,10 +41,13 @@ export function isStandaloneApp() {
 }
 
 export function isOfflineModeEnabled() {
+  return OFFLINE_MODE_RELEASED && readPref() === 'on';
+}
+
+/** The installed app, and the user hasn't chosen yet: ask once (OfflinePrompt). */
+export function needsOfflineChoice() {
   const pref = readPref();
-  if (pref === 'on') return true;
-  if (pref === 'off') return false;
-  return OFFLINE_MODE_RELEASED && isStandaloneApp();
+  return OFFLINE_MODE_RELEASED && pref !== 'on' && pref !== 'off' && isStandaloneApp();
 }
 
 /** 'on' / 'off' for this browser; null returns to the default. */

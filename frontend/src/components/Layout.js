@@ -12,6 +12,7 @@ import DemoBanner from './DemoBanner';
 import OfflineBanner from './OfflineBanner';
 import { getQueueStatus } from '../utils/offlineQueue';
 import OfflinePageNotice from './OfflinePageNotice';
+import OfflinePrompt from './OfflinePrompt';
 import { useOfflineNow, isOfflineCapablePage } from '../utils/useOfflineNow';
 import './Layout.css';
 
@@ -369,6 +370,8 @@ function Layout({ children }) {
 
       {/* Offline mode: working from the device's saved copy of the cellar */}
       <OfflineBanner />
+      {/* The installed app asks once whether to keep the cellar offline */}
+      <OfflinePrompt />
 
       <main id="main-content" className="main-content" tabIndex={-1}>
         {/* Offline: a page that needs the network gets a calm notice instead of

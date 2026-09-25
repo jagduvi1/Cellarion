@@ -5124,6 +5124,13 @@
       "whatWorks": "Your cellars, racks and bottles are saved on this device and work offline.",
       "toCellars": "Go to my cellars",
       "modeHint": "Turn on offline mode in Settings to keep your cellar available without a connection."
+    },
+    "prompt": {
+      "title": "Use Cellarion without a signal?",
+      "body": "Keep a copy of your cellars, racks and bottles on this phone, so you can browse them — and take out, open or move bottles — where there is no signal. Changes are sent when you are back online.",
+      "where": "The copy stays on this phone only and is deleted when you log out. You can change this any time in Settings → Offline mode.",
+      "no": "No thanks",
+      "yes": "Yes, keep it offline"
     }
   }
 }
