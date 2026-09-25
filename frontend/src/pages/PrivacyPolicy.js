@@ -217,7 +217,7 @@ function PrivacyPolicy() {
         </p>
         <h3>Offline mode (storage on your device)</h3>
         <p>
-          If you turn on offline mode in Settings, a copy of your cellars, racks and bottles — including
+          If you turn on offline mode — the installed app asks you once; anywhere, it is in Settings — a copy of your cellars, racks and bottles — including
           cellars shared with you — and small photos of those bottles are kept in your browser's storage
           on that device, so the app works without a connection. Changes you make offline are kept there
           too until they are sent. This copy is only on your device: it is never sent anywhere else, and it

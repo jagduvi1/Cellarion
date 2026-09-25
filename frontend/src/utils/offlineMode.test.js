@@ -1,5 +1,6 @@
 import {
   OFFLINE_MODE_RELEASED,
+  needsOfflineChoice,
   isOfflineModeEnabled,
   saveOfflineUser,
   loadOfflineUser,
@@ -36,19 +37,28 @@ describe('offline mode switch', () => {
     expect(isOfflineModeEnabled()).toBe(false);
   });
 
-  it('on by default in the installed app — and still after a reload that loses the app marker', () => {
+  it('the installed app is off until the user says yes — it asks once (also after a reload that loses the app marker)', () => {
     const mm = window.matchMedia;
     window.matchMedia = (q) => ({ matches: q === '(display-mode: standalone)' });
     try {
-      expect(isOfflineModeEnabled()).toBe(true);
+      expect(isOfflineModeEnabled()).toBe(false); // nothing stored before a yes
+      expect(needsOfflineChoice()).toBe(true);
     } finally {
       window.matchMedia = mm;
     }
     // A later load where the app isn't recognisable (the TWA referrer is gone):
+    expect(needsOfflineChoice()).toBe(true);
+    // Answered → never asked again, and the answer is what counts.
+    localStorage.setItem('cellarion-offline', 'on');
+    expect(needsOfflineChoice()).toBe(false);
     expect(isOfflineModeEnabled()).toBe(true);
-    // The user's own choice always wins.
     localStorage.setItem('cellarion-offline', 'off');
+    expect(needsOfflineChoice()).toBe(false);
     expect(isOfflineModeEnabled()).toBe(false);
+  });
+
+  it('a browser tab never asks', () => {
+    expect(needsOfflineChoice()).toBe(false);
   });
 
   it('can be switched on (and off) for this browser', () => {
