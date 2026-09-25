@@ -6,7 +6,10 @@
  * responses, because aiChat.js / labelScan.js are written against that shape.
  */
 
+jest.mock('./aiCostLedger', () => ({ recordAiUsage: jest.fn() }));
+
 const aiProvider = require('./aiProvider');
+const { recordAiUsage } = require('./aiCostLedger');
 
 const ENV_KEYS = [
   'AI_PROVIDER', 'ANTHROPIC_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_API_KEY',
@@ -110,14 +113,75 @@ describe('provider selection', () => {
     expect(aiProvider.effectiveModels()).toEqual({ text: 'llama3.1', vision: 'qwen2.5-vl' });
   });
 
-  test('getChatClient returns an Anthropic SDK client in anthropic mode', () => {
+  test('getChatClient returns a cached Anthropic client in anthropic mode', () => {
     process.env.ANTHROPIC_API_KEY = 'sk-test';
     const client = aiProvider.getChatClient();
-    // Real SDK instance — has the messages surface and is cached
+    // The SDK client behind the spend-ledger wrapper — messages surface, cached
     expect(typeof client.messages.create).toBe('function');
+    expect(typeof client.messages.stream).toBe('function');
     expect(aiProvider.getChatClient()).toBe(client);
     // Distinct retry budgets get distinct clients
     expect(aiProvider.getChatClient({ maxRetries: 4 })).not.toBe(client);
+    // …and so do distinct ledger features
+    expect(aiProvider.getChatClient({ feature: 'label_scan' })).not.toBe(client);
+    expect(aiProvider.getChatClient({ feature: 'label_scan' })).toBe(aiProvider.getChatClient({ feature: 'label_scan' }));
+  });
+});
+
+// ── Spend ledger wrapper ────────────────────────────────────────────────────
+
+describe('spend ledger', () => {
+  beforeEach(() => {
+    recordAiUsage.mockClear();
+    process.env.AI_PROVIDER = 'openai';
+    process.env.OPENAI_BASE_URL = 'http://llm.local/v1';
+    process.env.AI_MODEL = 'llama3.1';
+  });
+
+  test('a completed create is recorded under its feature and the requested model', async () => {
+    global.fetch.mockResolvedValueOnce(okJson({
+      model: 'llama3.1',
+      choices: [{ message: { content: 'hi' } }],
+      usage: { prompt_tokens: 12, completion_tokens: 3 },
+    }));
+    await aiProvider.getChatClient({ feature: 'label_scan' }).messages.create({
+      model: 'claude-sonnet-5', max_tokens: 10, messages: [{ role: 'user', content: 'x' }],
+    });
+    expect(recordAiUsage).toHaveBeenCalledWith({
+      feature: 'label_scan', model: 'claude-sonnet-5', usage: { input_tokens: 12, output_tokens: 3 },
+    });
+  });
+
+  test('an untagged call is recorded as "other"', async () => {
+    global.fetch.mockResolvedValueOnce(okJson({ choices: [{ message: { content: 'hi' } }] }));
+    await aiProvider.getChatClient().messages.create({ max_tokens: 10, messages: [{ role: 'user', content: 'x' }] });
+    expect(recordAiUsage.mock.calls[0][0].feature).toBe('other');
+  });
+
+  test('a failed call records nothing', async () => {
+    global.fetch.mockResolvedValueOnce(errorRes(400));
+    await expect(aiProvider.getChatClient({ feature: 'chat' }).messages.create({
+      max_tokens: 10, messages: [{ role: 'user', content: 'x' }],
+    })).rejects.toThrow();
+    expect(recordAiUsage).not.toHaveBeenCalled();
+  });
+
+  test('a stream is recorded when its final message arrives', async () => {
+    global.fetch.mockResolvedValueOnce(streamRes([
+      'data: {"choices":[{"delta":{"content":"ok"}}]}\n\n',
+      'data: {"choices":[],"usage":{"prompt_tokens":7,"completion_tokens":2}}\n\n',
+      'data: [DONE]\n\n',
+    ]));
+    const stream = aiProvider.getChatClient({ feature: 'chat' }).messages.stream({
+      model: 'claude-sonnet-5', max_tokens: 10, messages: [{ role: 'user', content: 'q' }],
+    });
+    await new Promise((resolve, reject) => {
+      stream.on('finalMessage', resolve);
+      stream.on('error', reject);
+    });
+    expect(recordAiUsage).toHaveBeenCalledWith({
+      feature: 'chat', model: 'claude-sonnet-5', usage: { input_tokens: 7, output_tokens: 2 },
+    });
   });
 });
 
@@ -134,6 +198,20 @@ describe('toOpenAiMessages', () => {
       { role: 'user', content: 'hello' },
     ]);
     expect(hasImage).toBe(false);
+  });
+
+  test('a cached system block is flattened to plain text, without the cache markers', () => {
+    const { messages } = aiProvider.toOpenAiMessages({
+      system: [
+        { type: 'text', text: 'Rules part one.', cache_control: { type: 'ephemeral', ttl: '1h' } },
+        { type: 'text', text: 'Rules part two.' },
+      ],
+      messages: [{ role: 'user', content: 'identify' }],
+    });
+    expect(messages).toEqual([
+      { role: 'system', content: 'Rules part one.\n\nRules part two.' },
+      { role: 'user', content: 'identify' },
+    ]);
   });
 
   test('maps base64 image blocks to data-URL image_url parts', () => {

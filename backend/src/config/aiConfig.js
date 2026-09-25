@@ -430,6 +430,13 @@ const defaults = {
   // experience and the product. These two are conveniences for one operator.
   sommMaturitySuggestEnabled: true,
   sommPriceSuggestEnabled: true,
+  // Prompt caching (2026-09-25): the label-scan instructions and the import
+  // lookup's fixed rules are sent as a cached system block, so a repeat call
+  // within the cache lifetime pays 10% for that part. The model reads the same
+  // words; only where they sit in the request changes. Anthropic provider only.
+  // This is the instant way back (SuperAdmin → AI) should identification ever
+  // look different — no deploy needed. See services/labelScan.cachedSystemBlock.
+  promptCaching: true,
 };
 
 const ENRICHMENT_ON_ADD_MODES = ['always', 'sufficient', 'off'];
@@ -484,6 +491,8 @@ async function load() {
           ? doc.value.sommMaturitySuggestEnabled : defaults.sommMaturitySuggestEnabled,
         sommPriceSuggestEnabled: typeof doc.value.sommPriceSuggestEnabled === 'boolean'
           ? doc.value.sommPriceSuggestEnabled : defaults.sommPriceSuggestEnabled,
+        promptCaching: typeof doc.value.promptCaching === 'boolean'
+          ? doc.value.promptCaching : defaults.promptCaching,
       };
 
       // One-time migration: a stored config from before the embedding-quality

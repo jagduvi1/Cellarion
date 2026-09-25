@@ -5,7 +5,7 @@ const { textFromResponse, thinkingOff } = require('../utils/aiResponse');
 
 const aiProvider = require('./aiProvider');
 
-function getClient() {
+function getClient(feature) {
   // maxRetries lets the provider transparently wait out 429 / 529 (overloaded)
   // / 5xx with exponential backoff that honors the `retry-after` header,
   // instead of failing the call. This is what keeps a large bottle import
@@ -14,8 +14,77 @@ function getClient() {
   // so a single import chunk request can't hang indefinitely.
   // Throws a 503-shaped error when the active provider is not configured
   // (callers map that to their 'no_api_key' degrade path).
-  return aiProvider.getChatClient({ maxRetries: 4 });
+  // `feature` labels the call in the AI spend ledger (services/aiCostLedger).
+  return aiProvider.getChatClient({ maxRetries: 4, feature });
 }
+
+/**
+ * Prompt caching (2026-09-25).
+ *
+ * A label scan and an import lookup each resend ~1,500–1,900 tokens of fixed
+ * instructions on every call — about two thirds of what a scan costs. Anthropic
+ * caches a stable request PREFIX: sent as a cached system block, a repeat within
+ * the cache lifetime pays 10% for that part (the first write pays 125% for a
+ * 5-minute lifetime, 200% for an hour). Measured on prod 2026-09-25: 68% of
+ * label scans follow another scan within 5 minutes and 85% within an hour, and
+ * import rows arrive 25 per request, five at a time.
+ *
+ * The model reads the same words as before — the fixed instructions as the
+ * system prompt instead of inside the message. The cached layout is used only
+ * when all three hold; otherwise the caller keeps its original single-message
+ * layout, unchanged:
+ *   - the text is long enough to be cached at all (Sonnet 5 caches nothing under
+ *     1,024 tokens — restructuring a prompt for no saving is change for nothing);
+ *   - the provider is Anthropic (OpenAI-compatible servers keep their layout);
+ *   - the SuperAdmin switch aiConfig.promptCaching is on (the instant way back).
+ */
+const MIN_CACHEABLE_CHARS = 3500; // ≈1,024 tokens of English prose on Sonnet 5's tokenizer
+
+function promptCachingActive() {
+  if (aiConfig.get().promptCaching === false) return false;
+  // A test double of aiProvider may not define providerName — no caching then.
+  return typeof aiProvider.providerName === 'function' && aiProvider.providerName() === 'anthropic';
+}
+
+/** The system param for a cached instruction block, or null (keep the old layout). */
+function cachedSystemBlock(text, ttl) {
+  if (typeof text !== 'string' || text.length < MIN_CACHEABLE_CHARS) return null;
+  if (!promptCachingActive()) return null;
+  const cacheControl = ttl === '1h' ? { type: 'ephemeral', ttl: '1h' } : { type: 'ephemeral' };
+  return [{ type: 'text', text, cache_control: cacheControl }];
+}
+
+/**
+ * Split an admin-editable template at the end of the line holding its LAST
+ * {{placeholder}}. Everything after that line is identical on every call (the
+ * rules) and can be cached; everything up to it carries the per-call values.
+ * Returns { head, tail }, or null when there is no fixed tail.
+ */
+function splitTemplateForCache(template) {
+  const text = String(template ?? '');
+  let end = -1;
+  for (const m of text.matchAll(/\{\{[a-zA-Z]+\}\}/g)) end = m.index + m[0].length;
+  let cut = 0;
+  if (end !== -1) {
+    const newline = text.indexOf('\n', end);
+    cut = newline === -1 ? text.length : newline + 1;
+  }
+  const tail = text.slice(cut).trim();
+  return tail ? { head: text.slice(0, cut), tail } : null;
+}
+
+// The message that rides with the photo when the scan instructions are the
+// cached system prompt.
+const SCAN_LABEL_REQUEST = 'Identify the wine in this photo, following your instructions exactly.';
+
+// Closes the import row's message in the cached layout. The single-message
+// layout put the rules AFTER the row, and instructions read last are followed
+// most closely; with the rules moved up into the cached system block, this line
+// keeps the one rule that protects the shared registry at the end. Measured on
+// 50 curated registry wines (2026-09-25), confidently WRONG type/region/grape
+// answers: single message 10, cached layout 7, cached layout + this line 5 —
+// at 65% lower cost per call than the single message.
+const IMPORT_ROW_REMINDER = 'Return the JSON object exactly as your instructions specify. Give region, appellation, type and grapes only where you actually know them for THIS wine — otherwise null (and [] for grapes).';
 
 /**
  * Prompt-substitution helpers shared by EVERY prompt builder in this file.
@@ -112,14 +181,21 @@ function validateMediaType(mediaType) {
  */
 async function scanLabelFull(image, mediaType = 'image/jpeg', { allowPartial = false } = {}) {
   validateMediaType(mediaType);
-  const client = getClient();
+  const client = getClient('label_scan');
+  const { labelScanModel, labelScanPrompt } = aiConfig.get();
+
+  // The instructions as a cached system block when caching applies (see
+  // cachedSystemBlock). One-hour lifetime: scans come in bursts, but a user
+  // can pause between bottles — on prod 85% of scans land within the hour
+  // after the previous one, 68% within five minutes.
+  const system = cachedSystemBlock(labelScanPrompt, '1h');
 
   const response = await client.messages.create({
-    model: aiConfig.get().labelScanModel,
+    model: labelScanModel,
     max_tokens: 600,
-    ...thinkingOff(aiConfig.get().labelScanModel),
+    ...thinkingOff(labelScanModel),
+    ...(system ? { system } : {}),
     messages: [
-      // Prime the assistant to start with '{' so it can't add preamble
       {
         role: 'user',
         content: [
@@ -129,7 +205,7 @@ async function scanLabelFull(image, mediaType = 'image/jpeg', { allowPartial = f
           },
           {
             type: 'text',
-            text: aiConfig.get().labelScanPrompt
+            text: system ? SCAN_LABEL_REQUEST : labelScanPrompt
           }
         ]
       }
@@ -226,7 +302,9 @@ async function scanLabelFull(image, mediaType = 'image/jpeg', { allowPartial = f
 async function scanLabelBack({ backImage, backMediaType = 'image/jpeg', frontImage, frontMediaType = 'image/jpeg', frontExtracted = {} } = {}) {
   validateMediaType(backMediaType);
   if (frontImage) validateMediaType(frontMediaType);
-  const client = getClient();
+  // No cached layout here: the back-label prompt's fixed part is ~500 tokens,
+  // under the size the API caches at all.
+  const client = getClient('label_scan_back');
 
   // EVERY value below is client-supplied text on its way into a prompt — the
   // client sends back the front extraction it was handed, and nothing stops it
@@ -403,7 +481,8 @@ function mergeBackScan(front = {}, back = {}, { suspectProducer = false } = {}) 
  * (identifyWineFromText / identifyWineFromQuery / suggestDrinkWindow /
  * suggestPrice / suggestProfile).
  *
- * Sends `prompt` as a single user message and returns
+ * Sends `prompt` as a single user message — after `system` when the caller
+ * passes one (a cached instruction block, see cachedSystemBlock) — and returns
  * { data, debugRaw, debugReason }:
  *   data        – parsed object, or null if not usable
  *   debugRaw    – raw string from the model (or error message)
@@ -413,18 +492,23 @@ function mergeBackScan(front = {}, back = {}, { suspectProducer = false } = {}) 
  * error-reason string to reject the payload, or null to accept it.
  * On 429 the call is retried once after waiting out the retry-after header.
  */
-async function callClaudeJson({ client, model, maxTokens, prompt, validate, tools }) {
+async function callClaudeJson({ client, model, maxTokens, prompt, system, validate, tools }) {
   // Backstop (audit 2026-09-02 D10-9): every builder inserts fields literally,
   // but a superadmin-customised template or a future builder that bypasses
   // fill() must still not turn one call into a 100k-token request. Refused
-  // before any request is made, so the reason is refundable.
-  if (typeof prompt === 'string' && prompt.length > MAX_PROMPT_CHARS) {
+  // before any request is made, so the reason is refundable. The system block
+  // counts too — it is the same template, only split.
+  const systemChars = Array.isArray(system)
+    ? system.reduce((n, block) => n + String(block?.text ?? '').length, 0)
+    : String(system ?? '').length;
+  if (typeof prompt === 'string' && prompt.length + systemChars > MAX_PROMPT_CHARS) {
     return { data: null, debugRaw: null, debugReason: 'prompt_too_long' };
   }
   const apiParams = {
     model,
     max_tokens: maxTokens,
     ...thinkingOff(model),
+    ...(system ? { system } : {}),
     // Server-side tools (Anthropic web_search): the API runs the searches and
     // the response still ends in text blocks — textFromResponse filters the
     // tool blocks out, so parsing is unchanged.
@@ -525,7 +609,7 @@ async function identifyWineFromText({ name, producer, vintage, country, appellat
   if (!name) return { data: null, debugRaw: null, debugReason: 'missing_fields' };
 
   let client;
-  try { client = getClient(); } catch { return { data: null, debugRaw: null, debugReason: 'no_api_key' }; }
+  try { client = getClient('import_identify'); } catch { return { data: null, debugRaw: null, debugReason: 'no_api_key' }; }
 
   const vintageHint = vintage && vintage !== 'NV' ? `Vintage: ${field(vintage, 12)}\n` : '';
 
@@ -560,18 +644,30 @@ async function identifyWineFromText({ name, producer, vintage, country, appellat
   // literally (audit 2026-09-02 D10-9 — a `$'` producer used to re-insert the
   // template per occurrence). The hint strings are built above from field()
   // output; their newlines are ours.
-  const prompt = fill(aiConfig.get().importLookupPrompt, [
+  const pairs = [
     ['{{name}}', field(name)],
     ['{{producer}}', field(producer) || PRODUCER_EMBEDDED_IN_NAME],
     ['{{vintage}}', vintageHint],
     ['{{country}}', countryHint],
-  ]);
+  ];
+  const { importLookupPrompt: template, importLookupModel: model } = aiConfig.get();
+
+  // Cached layout when it applies (see cachedSystemBlock): the rules after the
+  // template's last placeholder line become the cached system block, and the
+  // filled head — intro plus this row's values — is the message, closed by
+  // IMPORT_ROW_REMINDER. Five-minute lifetime: rows arrive 25 per request, five
+  // at a time, so one write serves the whole run. A template whose values sit
+  // at the very end has no fixed tail and keeps the single-message layout.
+  const split = splitTemplateForCache(template);
+  const system = split && split.head ? cachedSystemBlock(split.tail, '5m') : null;
 
   return callClaudeJson({
     client,
-    model: aiConfig.get().importLookupModel,
+    model,
     maxTokens: 800,
-    prompt,
+    ...(system
+      ? { system, prompt: `${fill(split.head, pairs).trim()}\n\n${IMPORT_ROW_REMINDER}` }
+      : { prompt: fill(template, pairs) }),
     validate: validateWineIdentity,
   });
 }
@@ -584,7 +680,7 @@ async function identifyWineFromQuery(query) {
   if (!query || !query.trim()) return { data: null, debugRaw: null, debugReason: 'missing_query' };
 
   let client;
-  try { client = getClient(); } catch { return { data: null, debugRaw: null, debugReason: 'no_api_key' }; }
+  try { client = getClient('text_lookup'); } catch { return { data: null, debugRaw: null, debugReason: 'no_api_key' }; }
 
   const { DEFAULT_TEXT_SEARCH_PROMPT } = require('../config/aiConfig');
   // Free text typed by the user, inserted literally (audit 2026-09-02 D10-9).
@@ -608,7 +704,7 @@ async function suggestDrinkWindow({ name, producer, vintage, country, region, ap
   if (!name || !vintage) return { data: null, debugRaw: null, debugReason: 'missing_fields' };
 
   let client;
-  try { client = getClient(); } catch { return { data: null, debugRaw: null, debugReason: 'no_api_key' }; }
+  try { client = getClient('maturity_suggest'); } catch { return { data: null, debugRaw: null, debugReason: 'no_api_key' }; }
 
   const qualityTier = classifyQualityTier({ name, appellation });
 
@@ -651,7 +747,7 @@ async function suggestPrice({ name, producer, vintage, country, region, appellat
   if (!name || !vintage) return { data: null, debugRaw: null, debugReason: 'missing_fields' };
 
   let client;
-  try { client = getClient(); } catch { return { data: null, debugRaw: null, debugReason: 'no_api_key' }; }
+  try { client = getClient('price_suggest'); } catch { return { data: null, debugRaw: null, debugReason: 'no_api_key' }; }
 
   const qualityTier = classifyQualityTier({ name, appellation });
 
@@ -689,7 +785,7 @@ async function suggestProfile({ name, producer, vintage, country, region, appell
   if (!name) return { data: null, debugRaw: null, debugReason: 'missing_fields' };
 
   let client;
-  try { client = getClient(); } catch { return { data: null, debugRaw: null, debugReason: 'no_api_key' }; }
+  try { client = getClient('wine_profile'); } catch { return { data: null, debugRaw: null, debugReason: 'no_api_key' }; }
 
   // Every value below is registry text a user can author, and enrichment fires
   // automatically when a bottle is added — so these substitutions are the one

@@ -120,7 +120,13 @@ function openAiEnv() {
 function toOpenAiMessages(params) {
   const out = [];
   let hasImage = false;
-  if (params.system) out.push({ role: 'system', content: params.system });
+  // `system` may arrive as Anthropic content blocks (a cached instruction block
+  // carries cache_control) — OpenAI-compatible servers take a plain string, and
+  // prompt caching is an Anthropic-only concept, so the markers are dropped.
+  const system = Array.isArray(params.system)
+    ? params.system.map((b) => (b && b.type === 'text' ? b.text : '')).filter(Boolean).join('\n\n')
+    : params.system;
+  if (system) out.push({ role: 'system', content: system });
 
   for (const m of params.messages || []) {
     if (typeof m.content === 'string') {
@@ -368,6 +374,37 @@ function makeOpenAiClient({ maxRetries = 2 } = {}) {
 // Anthropic clients cached per retry budget (aiChat uses the SDK default,
 // labelScan asks for 4 to survive rate-limited bulk imports).
 const _anthropicClients = new Map();
+// The ledger-wrapped views of those clients, cached per retry budget + feature.
+const _ledgerClients = new Map();
+
+/**
+ * Wrap a client so every completed call is recorded in the AI spend ledger
+ * (services/aiCostLedger) under `feature`. Only the two methods the services
+ * use are exposed. Recording is fire-and-forget: it never delays or fails the
+ * call it measures.
+ */
+function withUsageLedger(client, feature) {
+  const { recordAiUsage } = require('./aiCostLedger');
+  const label = feature || 'other';
+  return {
+    messages: {
+      create: async (params, ...rest) => {
+        const response = await client.messages.create(params, ...rest);
+        recordAiUsage({ feature: label, model: params?.model || response?.model, usage: response?.usage });
+        return response;
+      },
+      stream: (params, ...rest) => {
+        const stream = client.messages.stream(params, ...rest);
+        if (stream && typeof stream.on === 'function') {
+          stream.on('finalMessage', (message) => {
+            recordAiUsage({ feature: label, model: params?.model || message?.model, usage: message?.usage });
+          });
+        }
+        return stream;
+      },
+    },
+  };
+}
 
 /**
  * Return a chat client for the active provider. Throws a 503-shaped error
@@ -376,11 +413,13 @@ const _anthropicClients = new Map();
  *
  * @param {object} [opts]
  * @param {number} [opts.maxRetries] – transparent retry budget for 429/5xx
+ * @param {string} [opts.feature]    – what the calls are for, for the spend
+ *                                     ledger ('label_scan', 'chat', …)
  */
 function getChatClient(opts = {}) {
   assertConfigured();
   if (providerName() === 'openai') {
-    return makeOpenAiClient(opts);
+    return withUsageLedger(makeOpenAiClient(opts), opts.feature);
   }
   const key = opts.maxRetries ?? 'default';
   if (!_anthropicClients.has(key)) {
@@ -390,12 +429,17 @@ function getChatClient(opts = {}) {
     if (opts.maxRetries !== undefined) clientOpts.maxRetries = opts.maxRetries;
     _anthropicClients.set(key, new Anthropic(clientOpts));
   }
-  return _anthropicClients.get(key);
+  const ledgerKey = `${key}|${opts.feature || 'other'}`;
+  if (!_ledgerClients.has(ledgerKey)) {
+    _ledgerClients.set(ledgerKey, withUsageLedger(_anthropicClients.get(key), opts.feature));
+  }
+  return _ledgerClients.get(ledgerKey);
 }
 
 /** Test hook — drop cached Anthropic clients (e.g. after changing env keys). */
 function _resetForTests() {
   _anthropicClients.clear();
+  _ledgerClients.clear();
 }
 
 module.exports = { providerName, assertConfigured, isConfigured, effectiveModels, getChatClient, toOpenAiMessages, _resetForTests };
