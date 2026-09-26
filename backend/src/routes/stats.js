@@ -1,5 +1,4 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const { requireAuth } = require('../middleware/auth');
 const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
@@ -7,64 +6,57 @@ const User = require('../models/User');
 const CellarValueSnapshot = require('../models/CellarValueSnapshot');
 const { CONSUMED_STATUSES, WINE_POPULATE_LIST } = require('../config/constants');
 const { computeOverview, buildEmptyStats } = require('../services/statsService');
+const { getDataVersion } = require('../services/dataVersion');
 const { getOrCreateDailySnapshot, getSnapshotsForDates, convertCurrency } = require('../utils/exchangeRates');
 
 const router = express.Router();
 router.use(requireAuth);
 
-// Short server-side cache for the overview. Computing it loads the user's
-// entire bottle set, so without a cache every page visit recomputes from
-// scratch. The invalidation probe is one cheap indexed aggregation producing
-// a per-cellar {count, max(updatedAt)} signature: adds, deletes, consumes,
-// edits (pre-save bumps updatedAt) and bottle moves between cellars all
-// change it. Residual staleness (≤TTL): writes that bypass save() middleware,
-// and cellar renames.
-const overviewCache = new Map(); // userId -> { at, key, signature, stats }
-const OVERVIEW_TTL_MS = 2 * 60 * 1000;
+// Server-side cache for the overview. Computing it loads the user's entire
+// bottle set. Home Assistant polls it every few minutes and is nudged after
+// every change, so the old 2-minute window almost never matched and every poll
+// recomputed everything — the #1 database load (scaling audit 2026-09-25).
+// Now an entry stays valid while the user's data version (services/dataVersion,
+// moved by every audited bottle./cellar. change) is the one it was computed
+// at. The max age bounds what the version cannot see: registry edits, curated
+// drink windows, exchange rates, jobs and scripts.
+const overviewCache = new Map(); // userId -> { at, key, version, stats }
+const OVERVIEW_MAX_AGE_MS = 30 * 60 * 1000;
 const OVERVIEW_CACHE_MAX_ENTRIES = 5000;
-
-// Per-cellar bottle signature for cache invalidation. Aggregation pipelines
-// bypass Mongoose casting, so the user id is cast explicitly (cellarIds are
-// already ObjectIds from Cellar.find).
-async function bottleSignature(userId, cellarIds) {
-  const rows = await Bottle.aggregate([
-    { $match: { user: new mongoose.Types.ObjectId(String(userId)), cellar: { $in: cellarIds } } },
-    { $group: { _id: '$cellar', n: { $sum: 1 }, u: { $max: '$updatedAt' } } },
-    { $sort: { _id: 1 } },
-  ]);
-  const cellarPart = cellarIds.map(String).sort().join(',');
-  return `${cellarPart}|${rows.map(r => `${r._id}:${r.n}:${r.u ? new Date(r.u).getTime() : 0}`).join(';')}`;
-}
 
 // GET /api/stats/overview — collection analytics (all authenticated users)
 router.get('/overview', async (req, res) => {
   try {
+    // Read BEFORE anything is loaded: a change landing while this computes
+    // moves the version on, so the entry stored below can never outlive it.
+    // (The old change signature was taken after the load, so a write in
+    // between was cached as current.)
+    const version = getDataVersion(req.user.id);
+
     const dbUser = await User.findById(req.user.id)
       .select('preferences')
       .lean();
-
-    const cellars = await Cellar.find({ user: req.user.id, deletedAt: null }).lean();
-    const cellarIds = cellars.map(c => c._id);
 
     // dbUser can be null: requireAuth only verifies the JWT, so a just-deleted
     // account with a still-valid access token reaches here.
     const targetCurrency    = dbUser?.preferences?.currency      || 'USD';
     const targetRatingScale = dbUser?.preferences?.ratingScale  || '5';
 
+    const cacheKey = `${targetCurrency}:${targetRatingScale}`;
+    const cached = overviewCache.get(req.user.id);
+    if (cached && cached.key === cacheKey && cached.version === version
+      && Date.now() - cached.at < OVERVIEW_MAX_AGE_MS) {
+      return res.json({ stats: cached.stats });
+    }
+
+    const cellars = await Cellar.find({ user: req.user.id, deletedAt: null }).lean();
+    const cellarIds = cellars.map(c => c._id);
+
     if (cellarIds.length === 0) {
       return res.json({ stats: buildEmptyStats(targetCurrency) });
     }
 
     const scope = { user: req.user.id, cellar: { $in: cellarIds } };
-    const cacheKey = `${targetCurrency}:${targetRatingScale}`;
-    const cached = overviewCache.get(req.user.id);
-    let signature = null;
-    if (cached && cached.key === cacheKey && Date.now() - cached.at < OVERVIEW_TTL_MS) {
-      signature = await bottleSignature(req.user.id, cellarIds);
-      if (signature === cached.signature) {
-        return res.json({ stats: cached.stats });
-      }
-    }
 
     const [activeBottles, consumedBottles] = await Promise.all([
       Bottle.find({ ...scope, status: { $nin: CONSUMED_STATUSES } })
@@ -78,12 +70,7 @@ router.get('/overview', async (req, res) => {
     const stats = await computeOverview({ activeBottles, consumedBottles, cellars, targetCurrency, targetRatingScale });
 
     if (overviewCache.size >= OVERVIEW_CACHE_MAX_ENTRIES) overviewCache.clear();
-    overviewCache.set(req.user.id, {
-      at: Date.now(),
-      key: cacheKey,
-      signature: signature || await bottleSignature(req.user.id, cellarIds),
-      stats,
-    });
+    overviewCache.set(req.user.id, { at: Date.now(), key: cacheKey, version, stats });
 
     res.json({ stats });
   } catch (error) {

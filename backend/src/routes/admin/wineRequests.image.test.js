@@ -130,3 +130,14 @@ test('a public https link typed by the admin is stored as given', async () => {
   expect(res.status).toBe(200);
   expect(WineDefinition.mock.calls[0][0].image).toBe('https://cdn.example.com/bottle.png');
 });
+
+test('approving moves the data version of every owner of a pending bottle — their statistics change', async () => {
+  const { getDataVersion } = require('../../services/dataVersion');
+  Bottle.distinct.mockImplementation(async (field) => (field === 'user' ? ['owner-a', 'owner-b'] : []));
+  Bottle.updateMany.mockResolvedValue({ modifiedCount: 2 });
+  const before = [getDataVersion('owner-a'), getDataVersion('owner-b')];
+  const res = await resolve({});
+  expect(res.status).toBe(200);
+  expect(getDataVersion('owner-a')).not.toBe(before[0]);
+  expect(getDataVersion('owner-b')).not.toBe(before[1]);
+});

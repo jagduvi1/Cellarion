@@ -32,6 +32,7 @@ const Discussion = require('../../models/Discussion');
 const DiscussionReply = require('../../models/DiscussionReply');
 const WineEmbedding = require('../../models/WineEmbedding');
 const WineNotDuplicate = require('../../models/WineNotDuplicate');
+const { bumpDataVersion } = require('../../services/dataVersion');
 // Pending correction proposals close with their wine THROUGH this service, so
 // a user who filed one is told what happened (it owns the model access).
 const { closePendingForWine } = require('../../services/wineCorrectionNotify');
@@ -2065,7 +2066,11 @@ async function reassignRestockSimilar(sourceId, keeperId) {
 // (updateMany by wineDefinition) and does NOT delete the source, so it's safe
 // to re-run after a partial failure. Returns the number of bottles moved.
 async function reassignWineRefs(sourceId, keeperId) {
+  const owners = await Bottle.distinct('user', { wineDefinition: sourceId });
   const bottleRes = await Bottle.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } });
+  // Their owners' statistics change with it; after the write, so no cache
+  // pairs the new version with the old data (services/dataVersion).
+  owners.forEach(bumpDataVersion);
   await Promise.all([
     reassignWineListEntries(sourceId, keeperId),
     BottleImage.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } }),
