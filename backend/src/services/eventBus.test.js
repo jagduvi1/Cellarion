@@ -225,3 +225,36 @@ describe('in-process listeners (MCP sessions, plan §4)', () => {
     expect(eventBus.streamCounts().total).toBe(0);
   });
 });
+
+describe('closeAll (graceful shutdown)', () => {
+  test('ends every stream with a longer retry hint and frees every slot', () => {
+    const a = mockRes();
+    const b = mockRes();
+    const c = mockRes();
+    eventBus.register('u1', a);
+    eventBus.register('u1', b, 'tok1');
+    eventBus.register('u2', c);
+    eventBus.emit('u1', 'stats_changed', {}); // a pending nudge must not fire into ended streams
+
+    eventBus.closeAll();
+
+    for (const res of [a, b, c]) {
+      expect(res.written).toEqual(['retry: 10000\n\n']);
+      expect(res.writableEnded).toBe(true);
+    }
+    expect(eventBus.streamCounts()).toEqual({ total: 0, users: 0 });
+    jest.advanceTimersByTime(eventBus.DEBOUNCE_MS);
+    expect(a.written).toHaveLength(1);
+    // The close handler of each stream still runs unregister — a no-op now.
+    eventBus.unregister('u1', a);
+    expect(eventBus.streamCounts()).toEqual({ total: 0, users: 0 });
+  });
+
+  test('a stream that already died is skipped, not thrown on', () => {
+    const dead = mockRes();
+    dead.destroyed = true;
+    dead.write = () => { throw new Error('write after destroy'); };
+    eventBus.register('u1', dead);
+    expect(() => eventBus.closeAll()).not.toThrow();
+  });
+});

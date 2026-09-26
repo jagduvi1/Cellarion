@@ -121,7 +121,27 @@ async function discardOriginal(image) {
   image.originalUrl = null;
 }
 
+// Background removals in progress — graceful shutdown (services/shutdown)
+// lets them finish, so a deploy no longer strands a photo in 'processing'
+// until the hourly cleanup resets it for a manual retry.
+const inFlight = new Set();
+
 async function processImage(imageId) {
+  const run = runProcessImage(imageId);
+  inFlight.add(run);
+  try {
+    return await run;
+  } finally {
+    inFlight.delete(run);
+  }
+}
+
+/** Resolves once no background removal is running — including ones started while waiting. */
+async function whenProcessingIdle() {
+  while (inFlight.size > 0) await Promise.allSettled([...inFlight]);
+}
+
+async function runProcessImage(imageId) {
   const image = await BottleImage.findById(imageId);
   if (!image) return;
   // A label scan is curation evidence kept exactly as received — never sent
@@ -303,4 +323,4 @@ async function cleanupOrphanedImages() {
   }
 }
 
-module.exports = { processImage, cleanupOrphanedImages, safeUploadPath, unlinkImageFiles, unlinkIfUnreferenced, discardOriginal, hashImageBytes };
+module.exports = { processImage, whenProcessingIdle, cleanupOrphanedImages, safeUploadPath, unlinkImageFiles, unlinkIfUnreferenced, discardOriginal, hashImageBytes };

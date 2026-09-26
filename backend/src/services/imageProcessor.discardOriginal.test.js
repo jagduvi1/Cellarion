@@ -42,7 +42,7 @@ const fs = require('fs');
 const BottleImage = require('../models/BottleImage');
 const { prepareRembgInput, encodeKeptPhoto } = require('./photoFormat');
 const { warmThumbFor } = require('./thumbnails');
-const { processImage, discardOriginal, unlinkImageFiles } = require('./imageProcessor');
+const { processImage, discardOriginal, unlinkImageFiles, whenProcessingIdle } = require('./imageProcessor');
 
 const ORIG = '/api/uploads/originals/abc.jpg';
 const PROC = '/api/uploads/processed/abc.webp';
@@ -267,5 +267,32 @@ describe('processImage gates (post-ship audit 2026-09-03)', () => {
     await processImage('img1');
     expect(global.fetch).not.toHaveBeenCalled();
     expect(doc.save).not.toHaveBeenCalled();
+  });
+});
+
+describe('whenProcessingIdle (graceful shutdown waits for it)', () => {
+  test('resolves at once when nothing is running', async () => {
+    await expect(whenProcessingIdle()).resolves.toBeUndefined();
+  });
+
+  test('resolves only once the background removal in progress has finished', async () => {
+    let answer;
+    global.fetch = jest.fn(() => new Promise((resolve) => {
+      answer = () => resolve({ ok: true, status: 200, arrayBuffer: async () => Uint8Array.from([137, 80, 78, 71]).buffer, text: async () => '' });
+    }));
+    const doc = makeDoc();
+    loadDoc(doc);
+
+    const run = processImage('img1');
+    let idle = false;
+    const waiting = whenProcessingIdle().then(() => { idle = true; });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(idle).toBe(false); // rembg has not answered yet
+
+    answer();
+    await run;
+    await waiting;
+    expect(idle).toBe(true);
+    expect(doc.status).toBe('processed');
   });
 });

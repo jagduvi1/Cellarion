@@ -203,6 +203,25 @@ function streamCounts() {
   return { total: totalStreams, users: streams.size };
 }
 
+/**
+ * End every open stream (graceful shutdown, services/shutdown). The retry
+ * frame asks EventSource clients to wait out the restart before reconnecting
+ * instead of the 5 s set at connect; pending nudges are dropped — a client
+ * refreshes everything when it reconnects anyway.
+ */
+function closeAll({ retryMs = 10000 } = {}) {
+  for (const [key, set] of streams) {
+    for (const entry of set) {
+      safeWrite(entry.res, `retry: ${retryMs}\n\n`);
+      safeEnd(entry.res);
+    }
+    clearTimeout(timers.get(key));
+  }
+  streams.clear();
+  timers.clear();
+  totalStreams = 0;
+}
+
 module.exports = {
   emit,
   register,
@@ -212,6 +231,7 @@ module.exports = {
   onDropToken,
   dropUser,
   dropToken,
+  closeAll,
   streamCounts,
   MAX_STREAMS_PER_USER,
   MAX_STREAMS_GLOBAL,

@@ -248,6 +248,7 @@ const request = ({ method = 'POST', path, body, cookie, bearer }) => new Promise
         status: res.statusCode,
         body: raw ? JSON.parse(raw) : null,
         setCookies: res.headers['set-cookie'] || [],
+        headers: res.headers,
       });
     });
   });
@@ -418,6 +419,42 @@ describe('POST /api/auth/refresh — rotation', () => {
     expect(res.status).toBe(401);
     expect(res.body).toEqual({ error: 'Invalid or expired refresh token' });
     expectClearedCookies(res);
+  });
+
+  // A server-side failure is not a verdict on the session (scaling audit
+  // 2026-09-25): it used to clear the cookie and answer 401, signing the user
+  // out whenever the database blinked — a deploy, a restart.
+  test('a database failure → 503 "try again" with Retry-After, and the cookie is KEPT', async () => {
+    const user = makeUserDoc();
+    const raw = plantRefreshToken(user);
+    User.findOne.mockRejectedValueOnce(new Error('connection closed'));
+    const error = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const res = await request({ path: '/api/auth/refresh', cookie: `refreshToken=${raw}` });
+
+    expect(res.status).toBe(503);
+    expect(res.headers['retry-after']).toBe('5');
+    expect(res.setCookies).toEqual([]);
+    expect(sessionOf(user, raw)).toBeDefined();
+
+    // …and the same cookie works as soon as the database answers again.
+    const again = await request({ path: '/api/auth/refresh', cookie: `refreshToken=${raw}` });
+    expect(again.status).toBe(200);
+    expect(typeof again.body.token).toBe('string');
+    error.mockRestore();
+  });
+
+  test('a save that fails mid-rotation (e.g. racing a login on another device) → 503, cookie kept', async () => {
+    const user = makeUserDoc();
+    const raw = plantRefreshToken(user);
+    user.save.mockRejectedValueOnce(Object.assign(new Error('No matching document found'), { name: 'VersionError' }));
+    const error = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const res = await request({ path: '/api/auth/refresh', cookie: `refreshToken=${raw}` });
+
+    expect(res.status).toBe(503);
+    expect(refreshCookies(res)).toEqual([]); // no new token, and the old one is not cleared
+    error.mockRestore();
   });
 
   test('a rotated token replayed within 60 s is a lost tab race: generic 401, nothing revoked', async () => {

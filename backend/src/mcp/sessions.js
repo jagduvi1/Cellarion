@@ -228,13 +228,23 @@ function dropTokenSessions(tokenId) {
 eventBus.onDropUser(dropUserSessions);
 eventBus.onDropToken(dropTokenSessions);
 
+/**
+ * Graceful shutdown (services/shutdown): unroute every session. Each one
+ * closes at once — or, while a tool call is being served on it, as soon as
+ * that call returns. Clients re-initialize against the next process (the SDK
+ * handles the 404 transparently).
+ */
+function closeAllSessions(reason = 'shutdown') {
+  for (const s of [...sessions.values()]) destroySession(s.id, reason);
+}
+
 /** Counts for tests/ops. */
 function sessionCounts() {
   return { total: sessions.size, users: perUserCounts.size, draining: draining.size };
 }
 
 module.exports = {
-  createSession, getSession, destroySession, sessionCounts,
+  createSession, getSession, destroySession, closeAllSessions, sessionCounts,
   beginRequest, endRequest,
   dropUserSessions, dropTokenSessions,
   MAX_SESSIONS_PER_USER, MAX_SESSIONS_GLOBAL, IDLE_TTL_MS, ABSOLUTE_TTL_MS, DRAIN_MAX_MS,

@@ -93,6 +93,7 @@ const rateLimitsConfig = require('./config/rateLimits');
 const aiConfig = require('./config/aiConfig');
 const announcementConfig = require('./config/announcement');
 const { logAudit, logger } = require('./services/audit');
+const { drainingConnectionClose } = require('./services/shutdown');
 
 const app = express();
 
@@ -131,6 +132,9 @@ app.use(helmet({
 }));
 
 // Middleware
+// During a graceful shutdown (services/shutdown) every response closes its
+// connection, so keep-alive clients reconnect to the next process.
+app.use(drainingConnectionClose);
 app.use(compression());
 app.use(cookieParser()); // lgtm[js/missing-token-validation] — auth uses JWT Bearer tokens, not cookies; CSRF does not apply
 // Stripe webhook needs the raw body for signature verification — must be before express.json()

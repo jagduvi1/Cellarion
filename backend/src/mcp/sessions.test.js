@@ -229,3 +229,27 @@ describe('draining sessions (post-ship audit 2026-09-12 M1)', () => {
     expect(sessions.sessionCounts().draining).toBe(0);
   });
 });
+
+describe('closeAllSessions (graceful shutdown)', () => {
+  test('closes idle sessions at once and lets one mid-tool-call finish first', async () => {
+    const idle = sessions.createSession({ userId: 'u1' });
+    idle.transport = mkTransport();
+    const busy = sessions.createSession({ userId: 'u2', tokenId: 'tok2' });
+    busy.transport = mkTransport();
+    sessions.beginRequest(busy);
+
+    sessions.closeAllSessions();
+
+    // Nothing is routable any more: clients re-initialize on the next process.
+    expect(sessions.sessionCounts()).toEqual({ total: 0, users: 0, draining: 1 });
+    expect(sessions.getSession(idle.id, { userId: 'u1', tokenId: null })).toBeNull();
+    await Promise.resolve(); await Promise.resolve();
+    expect(idle.transport.close).toHaveBeenCalled();
+    expect(busy.transport.close).not.toHaveBeenCalled(); // its answer still goes out
+
+    sessions.endRequest(busy);
+    await Promise.resolve(); await Promise.resolve();
+    expect(busy.transport.close).toHaveBeenCalled();
+    expect(sessions.sessionCounts().draining).toBe(0);
+  });
+});
