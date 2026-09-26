@@ -100,7 +100,14 @@ const MCP_PERSONAL_SCOPES = ['read', 'consume', 'write'];
 // accountOps validation, and the MCP tool's input schema (grand-audit M9).
 const SUPPORT_CATEGORIES = ['bug', 'help', 'feature', 'other'];
 
+// The orders a cellar's bottle list can open in: the values of the cellar
+// page's sort select (the frontend's utils/cellarSort.js keeps the same list).
+// Remembered per account as preferences.cellarSort, validated in accountOps
+// and offered by the MCP update_preferences tool.
+const CELLAR_SORTS = ['-createdAt', 'createdAt', 'name', '-name', 'vintage', '-vintage', 'price', '-price', 'maturity'];
+
 module.exports = {
+  CELLAR_SORTS,
   CONSUMED_STATUSES,
   MCP_PERSONAL_SCOPES,
   SUPPORT_CATEGORIES,

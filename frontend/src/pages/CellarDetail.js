@@ -14,6 +14,7 @@ import CellarNav from '../components/CellarNav';
 import CellarPageHeader from '../components/CellarPageHeader';
 import { readBottleViewMode, storeBottleViewMode } from '../utils/bottleViewMode';
 import { ratingRangeLabel, toMaturityArray, MATURITY_I18N_KEY } from '../utils/filterLabels';
+import { CELLAR_SORTS, DEFAULT_CELLAR_SORT, preferredCellarSort } from '../utils/cellarSort';
 import './CellarDetail.css';
 
 // Stable empty rack map for the cross-cellar view (rack placement is per-cellar,
@@ -51,13 +52,13 @@ const BOTTLES_PER_PAGE = 30;
 // a separate route, so CellarDetail unmounts and remounts on the way back).
 // Deep-link URL params still take priority; this is only the fallback.
 const FILTERS_STORAGE_PREFIX = 'cellarFilters:';
-const buildDefaultFilters = () => ({
+const buildDefaultFilters = (sort = DEFAULT_CELLAR_SORT) => ({
   search: '', type: [], country: [], region: [], appellation: [],
   grapes: [], vintage: [], minRating: '', maxRating: '', maturity: [], unplaced: '', reserved: '', storage: '',
   // Only set by Statistics chart deep links (no control in the filter modal);
   // shown as removable chips.
   producer: '', bottleSize: '', purchaseYear: '',
-  sort: '-createdAt'
+  sort
 });
 // Every URL param the page reads on arrival (and then clears from the URL).
 // `scope=owned` widens the view to every cellar the user owns — how the
@@ -81,7 +82,7 @@ const readSavedFilters = (cellarId) => {
 function CellarDetail() {
   const { t } = useTranslation();
   const { id } = useParams();
-  const { apiFetch, user } = useAuth();
+  const { apiFetch, user, updatePreferences } = useAuth();
   const ratingScale = user?.preferences?.ratingScale || '5';
   const userCurrency = user?.preferences?.currency || 'USD';
   const navigate = useNavigate();
@@ -117,8 +118,10 @@ function CellarDetail() {
   const [filters, setFilters] = useState(() => {
     // A deep link with any filter param wins (shared/bookmarked URL). Otherwise
     // restore the last-used selection for this cellar so browser-back keeps it.
+    // A fresh visit opens in the sort the user picked last, on any cellar.
+    const preferredSort = preferredCellarSort(user);
     const hasUrlFilters = URL_FILTER_KEYS.some(k => searchParams.has(k));
-    if (!hasUrlFilters) return readSavedFilters(id) || buildDefaultFilters();
+    if (!hasUrlFilters) return readSavedFilters(id) || buildDefaultFilters(preferredSort);
     return {
       search: searchParams.get('search') || '',
       type: searchParams.get('type')?.split(',').filter(Boolean) || [],
@@ -138,7 +141,7 @@ function CellarDetail() {
       producer: searchParams.get('producer') || '',
       bottleSize: searchParams.get('bottleSize') || '',
       purchaseYear: searchParams.get('purchaseYear') || '',
-      sort: searchParams.get('sort') || '-createdAt'
+      sort: searchParams.get('sort') || preferredSort
     };
   });
   // ?scope=owned (chart deep link): read once; applied when the cellar list
@@ -240,6 +243,16 @@ function CellarDetail() {
       sessionStorage.setItem(FILTERS_STORAGE_PREFIX + id, JSON.stringify(filters));
     } catch { /* quota / private mode — persistence is best-effort */ }
   }, [id, filters]);
+
+  // Picking a sort also remembers it on the account (support ticket
+  // 2026-09-26), so the next visit to any cellar opens in that order. Only a
+  // pick here counts: a deep link's sort is not the user's choice.
+  const changeSort = (sort) => {
+    setFilters(prev => ({ ...prev, sort }));
+    if (CELLAR_SORTS.includes(sort) && sort !== user?.preferences?.cellarSort) {
+      updatePreferences({ cellarSort: sort });
+    }
+  };
 
   // Serialize array filters for dependency comparison
   const filterKey = [
@@ -701,7 +714,7 @@ function CellarDetail() {
                   </button>
                   <select
                     value={filters.sort}
-                    onChange={e => setFilters({ ...filters, sort: e.target.value })}
+                    onChange={e => changeSort(e.target.value)}
                     className="filter-select sort-select"
                     aria-label={t('cellarDetail.sortBottlesAria')}
                   >

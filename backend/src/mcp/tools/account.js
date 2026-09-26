@@ -30,7 +30,7 @@ const RETRY_NOTE = (readBack) =>
 const {
   updatePreferences, updateProfile, createSupportTicket, replyToTicket, createWineRequest,
   ALLOWED_CURRENCIES, LANGUAGE_TAG, LANGUAGE_TAG_MAX, ALLOWED_RATING_SCALES,
-  ALLOWED_RACK_NAV, ALLOWED_RESTOCK_SCOPE, ALLOWED_VISIBILITY, SUPPORT_CATEGORIES,
+  ALLOWED_RACK_NAV, ALLOWED_RESTOCK_SCOPE, ALLOWED_CELLAR_SORTS, ALLOWED_VISIBILITY, SUPPORT_CATEGORIES,
   TICKET_REPLY_CAP,
 } = require('../../services/accountOps');
 
@@ -44,6 +44,7 @@ function prefsView(user) {
     rating_scale: p.ratingScale || '5',
     rack_navigation: p.rackNavigation || 'auto',
     restock_scope: p.restockScope || 'all',
+    cellar_sort: ALLOWED_CELLAR_SORTS.includes(p.cellarSort) ? p.cellarSort : '-createdAt',
     default_cellar_id: p.defaultCellarId || null,
     notifications: {
       drink_window: { enabled: n.drinkWindow?.enabled ?? true, email: !!n.drinkWindow?.email, push: !!n.drinkWindow?.push },
@@ -87,7 +88,8 @@ registerTool({
   title: 'Get account preferences',
   description:
     'The user\'s display and notification settings: preferred currency, interface language, rating scale ' +
-    '(5 / 20 / 100), rack-navigation mode, restock-alert scope, default cellar, and per-category email/push ' +
+    '(5 / 20 / 100), rack-navigation mode, restock-alert scope, the order a cellar\'s bottle list opens in, ' +
+    'default cellar, and per-category email/push ' +
     'notification toggles. Call this EARLY so you format money in their currency and ratings on their scale, and ' +
     'before changing any setting so you know the current value.',
   scope: 'read',
@@ -107,7 +109,8 @@ registerTool({
     `Changes one or more settings; send only the fields to change. currency (a 3-letter code from ${ALLOWED_CURRENCIES.slice(0, 6).join('/')}…), ` +
     `language (a language tag such as en/sv/fr — the interface falls back to English wherever that language ` +
     `is not translated yet), rating_scale (${ALLOWED_RATING_SCALES.join('/')}), rack_navigation ` +
-    `(${ALLOWED_RACK_NAV.join('/')}), restock_scope (${ALLOWED_RESTOCK_SCOPE.join('/')}), default_cellar_id (a cellar the ` +
+    `(${ALLOWED_RACK_NAV.join('/')}), restock_scope (${ALLOWED_RESTOCK_SCOPE.join('/')}), cellar_sort (the order a ` +
+    `cellar's bottle list opens in: ${ALLOWED_CELLAR_SORTS.join('/')}; a leading "-" is descending), default_cellar_id (a cellar the ` +
     'user owns, or null to clear), and notification email/push toggles. Confirm the change with the user first. ' +
     'Cosmetic and reversible — the response echoes the new settings, so set a value back to undo.',
   scope: 'write',
@@ -118,6 +121,7 @@ registerTool({
     rating_scale: z.enum(['5', '20', '100']).optional(),
     rack_navigation: z.enum(['auto', 'room', 'rack']).optional(),
     restock_scope: z.enum(['all', 'cellar']).optional(),
+    cellar_sort: z.enum(ALLOWED_CELLAR_SORTS).optional(),
     default_cellar_id: z.string().regex(/^[a-f0-9]{24}$/i).nullable().optional(),
     notifications: NOTIFICATION_SHAPE,
   },
@@ -130,6 +134,7 @@ registerTool({
     if (args.rating_scale !== undefined) body.ratingScale = args.rating_scale;
     if (args.rack_navigation !== undefined) body.rackNavigation = args.rack_navigation;
     if (args.restock_scope !== undefined) body.restockScope = args.restock_scope;
+    if (args.cellar_sort !== undefined) body.cellarSort = args.cellar_sort;
     if (args.default_cellar_id !== undefined) body.defaultCellarId = args.default_cellar_id;
     if (args.notifications !== undefined) body.notifications = args.notifications;
 

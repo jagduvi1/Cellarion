@@ -180,6 +180,15 @@ const userSchema = new mongoose.Schema({
       type: String,
       enum: ['all', 'cellar'],
       default: 'all'
+    },
+    // The order the cellar page's bottle list opens in: the last sort the user
+    // picked there (support ticket 2026-09-26). Absent means newest first.
+    // Validated against CELLAR_SORTS in accountOps and deliberately not a
+    // schema enum: every sign-in saves the user document, so retiring a sort
+    // option later must never make an old stored value fail validation. The
+    // frontend ignores a value it doesn't offer.
+    cellarSort: {
+      type: String
     }
   },
   // One entry per signed-in device/browser (per-device sessions, 2026-09-04):
