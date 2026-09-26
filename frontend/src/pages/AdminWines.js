@@ -169,7 +169,7 @@ function AdminWines() {
     try {
       const res = await adminReindexSearch(apiFetch);
       const data = await res.json();
-      if (res.ok) pushToast(t('admin.wines.reindexDone', { winesMs: data.winesMs, bottlesMs: data.bottlesMs }));
+      if (res.ok) pushToast(t('admin.wines.reindexDoneTotal', 'Search reindexed in {{ms}} ms', { ms: (data.winesMs || 0) + (data.discussionsMs || 0) }));
       else pushToast(data.error || t('admin.wines.reindexFailed'), 'error');
     } catch {
       pushToast(t('admin.wines.reindexFailed'), 'error');

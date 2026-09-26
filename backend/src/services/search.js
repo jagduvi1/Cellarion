@@ -2,19 +2,19 @@
 // Alias it back to MeiliSearch locally so the rest of this file is unchanged.
 const { Meilisearch: MeiliSearch } = require('meilisearch');
 const WineDefinition = require('../models/WineDefinition');
-const Bottle = require('../models/Bottle');
 const Discussion = require('../models/Discussion');
-const { WINE_POPULATE, CONSUMED_STATUSES } = require('../config/constants');
 const { stripHtml } = require('../utils/sanitize');
-const { resolveGrapeDisplayName } = require('../utils/grapeDisplay');
+const { grapeSearchNames } = require('../utils/grapeDisplay');
 
 const INDEX_NAME = 'wines';
-const BOTTLES_INDEX_NAME = 'bottles';
 const DISCUSSIONS_INDEX_NAME = 'discussions';
+// Indexes this code no longer uses. `bottles` held a copy of every bottle —
+// private notes included — until cellar search moved to MongoDB
+// (services/bottleSearch, 2026-09). Deleted at boot when still present.
+const RETIRED_INDEXES = ['bottles'];
 
 let client = null;
 let index = null;
-let bottlesIndex = null;
 let discussionsIndex = null;
 let isAvailable = false;
 
@@ -42,40 +42,6 @@ async function initialize() {
       sortableAttributes: ['name', 'producer', 'type', 'createdAt'],
       separatorTokens: ['.'],
       pagination: { maxTotalHits: 5000 }
-    });
-
-    // ── Bottles index ──
-    bottlesIndex = client.index(BOTTLES_INDEX_NAME);
-
-    await bottlesIndex.updateSettings({
-      searchableAttributes: [
-        'wineName',
-        'producer',
-        'appellation',
-        'countryName',
-        'regionName',
-        'grapeNames',
-        'type',
-        'notes',
-        'location',
-        'vintage'
-      ],
-      filterableAttributes: [
-        'cellarId',
-        'status',
-        'type',
-        'countryId',
-        'countryName',
-        'regionId',
-        'regionName',
-        'appellation',
-        'grapeIds',
-        'vintage',
-        'rating'
-      ],
-      sortableAttributes: ['wineName', 'vintage', 'price', 'rating', 'createdAt'],
-      separatorTokens: ['.'],
-      pagination: { maxTotalHits: 10000 }
     });
 
     // ── Discussions index ──
@@ -108,7 +74,7 @@ async function initialize() {
     // the meili-data volume is wiped). Meilisearch persists documents on its
     // volume, so on a normal restart the data is already there — re-uploading
     // the whole catalog every boot is wasteful. Live data changes are kept in
-    // sync incrementally by indexWine/indexBottle/indexDiscussion. Set
+    // sync incrementally by indexWine/indexDiscussion. Set
     // MEILI_FORCE_REINDEX=1 to force a rebuild (e.g. after a settings change).
     //
     // The syncs run in the BACKGROUND: a full catalog upload takes minutes at
@@ -116,8 +82,8 @@ async function initialize() {
     // the container healthcheck) on it would make first-boot/recovery deploys
     // fail. Search may briefly return partial results during an initial sync.
     (async () => {
+      await dropRetiredIndexes();
       await syncIfNeeded(index, fullSync, 'wines');
-      await syncIfNeeded(bottlesIndex, fullSyncBottles, 'bottles');
       await syncIfNeeded(discussionsIndex, fullSyncDiscussions, 'discussions');
     })().catch(err => console.error(`Meilisearch initial sync failed: ${err.message}`));
   } catch (err) {
@@ -130,7 +96,26 @@ async function initialize() {
 // searches against it must fail so callers take their MongoDB fallback —
 // callers like the cellar route treat zero Meili hits as authoritative, and
 // a half-built index would confidently return empty results for minutes.
-const initialSyncing = { wines: false, bottles: false, discussions: false };
+const initialSyncing = { wines: false, discussions: false };
+
+// Delete what is left of a retired index (RETIRED_INDEXES). Rolling back to a
+// release that still uses one is safe: its boot recreates the index and, finding
+// it empty, runs the initial sync.
+async function dropRetiredIndexes() {
+  for (const uid of RETIRED_INDEXES) {
+    try {
+      await client.getRawIndex(uid);
+    } catch {
+      continue; // already gone
+    }
+    try {
+      await client.deleteIndex(uid);
+      console.log(`Meilisearch: deleted the retired '${uid}' index`);
+    } catch (err) {
+      console.warn(`Meilisearch: could not delete the retired '${uid}' index: ${err.message}`);
+    }
+  }
+}
 
 function assertIndexReady(label) {
   if (initialSyncing[label]) {
@@ -177,21 +162,11 @@ async function syncIfNeeded(idx, syncFn, label, attempt = 0) {
 }
 
 // Canonical grape names, plus any regionally correct display name that
-// applies to THIS wine ("Tinta Roriz" alongside "Tempranillo" on a Douro
-// row) — additive recall so the label-true spelling matches too, while
-// grapeIds filters stay on the single canonical vocabulary. Wines with no
-// applicable mapping index exactly what they indexed before. Shared by
-// buildDocument AND buildBottleDocument: bottle cards show the same regional
-// label, so cellar search must match on it too (audit 2026-08-11).
+// applies to THIS wine — see utils/grapeDisplay.grapeSearchNames, which cellar
+// search (services/bottleSearch) shares. Wines with no applicable mapping
+// index exactly what they indexed before.
 function wineGrapeSearchNames(wine) {
-  const names = [];
-  for (const g of wine.grapes || []) {
-    if (!g || !g.name) continue;
-    names.push(g.name);
-    const display = resolveGrapeDisplayName(g, { countryId: wine.country, regionId: wine.region, wineName: wine.name });
-    if (display && display !== g.name) names.push(display);
-  }
-  return names.join(', ');
+  return grapeSearchNames(wine).join(', ');
 }
 
 function buildDocument(wine) {
@@ -252,8 +227,9 @@ async function fullSync() {
       // Quarantined non-wine rows (spirits/cider/sake kept for their owners —
       // registry audit 2026-07-26, policy: keep, hide) never enter the index.
       // Neither do pendingIdentity rows: a half-identified wine must not be
-      // findable by strangers in registry search. The BOTTLES index is
-      // deliberately untouched — an owner keeps finding their own bottle.
+      // findable by strangers in registry search. Cellar search
+      // (services/bottleSearch) is unaffected — an owner keeps finding their
+      // own bottle.
       // Canary rows (registry lockdown L4) are not searchable either: a
       // customer must never be able to find, let alone add, a wine that
       // does not exist. They stay reachable by id/slug on purpose.
@@ -352,304 +328,6 @@ async function search(query, { countryId, regionId, type, grapeIds, limit = 50, 
   return {
     ids: result.hits.map(hit => hit.id),
     estimatedTotalHits: result.estimatedTotalHits || 0
-  };
-}
-
-// ── Bottle index helpers ─────────────────────────────────────────────────────
-
-function buildBottleDocument(bottle) {
-  const wd = bottle.wineDefinition || {};
-  return {
-    id: bottle._id.toString(),
-    cellarId: (bottle.cellar?._id || bottle.cellar || '').toString(),
-    status: bottle.status || 'active',
-    wineDefinitionId: (wd._id || '').toString(),
-    wineName: wd.name || '',
-    producer: wd.producer || '',
-    appellation: wd.appellation || '',
-    type: wd.type || '',
-    countryId: (wd.country?._id || wd.country || '').toString(),
-    countryName: wd.country?.name || '',
-    regionId: (wd.region?._id || wd.region || '').toString(),
-    regionName: wd.region?.name || '',
-    grapeIds: (wd.grapes || []).map(g => (g._id || g).toString()),
-    // Same helper as the wines index (never duplicate its logic): canonical
-    // names first, then any regional display name that applies to this wine —
-    // byte-identical to the old plain join when no mapping applies.
-    grapeNames: wineGrapeSearchNames(wd),
-    vintage: bottle.vintage || '',
-    price: bottle.price || 0,
-    rating: bottle.rating || 0,
-    ratingScale: bottle.ratingScale || '',
-    notes: bottle.notes || '',
-    location: bottle.location || '',
-    createdAt: bottle.createdAt ? Math.floor(new Date(bottle.createdAt).getTime() / 1000) : 0
-  };
-}
-
-async function fullSyncBottles() {
-  if (!isAvailable) return;
-
-  try {
-    // Sync ALL bottles (active + consumed) so history search works too
-    return await syncViaCursor(
-      Bottle.find().populate(WINE_POPULATE).lean(),
-      buildBottleDocument,
-      bottlesIndex,
-      'bottles'
-    );
-  } catch (err) {
-    console.error(`Meilisearch bottle full sync failed: ${err.message}`);
-  }
-}
-
-async function indexBottle(bottleId) {
-  if (!isAvailable) return;
-
-  try {
-    const bottle = await Bottle.findById(bottleId)
-      .populate(WINE_POPULATE)
-      .lean();
-
-    if (!bottle) return;
-
-    // Always re-index (including consumed bottles for history search)
-    await bottlesIndex.addDocuments([buildBottleDocument(bottle)], { primaryKey: 'id' });
-  } catch (err) {
-    console.error(`Meilisearch index bottle ${bottleId} failed: ${err.message}`);
-  }
-}
-
-async function removeBottle(bottleId) {
-  if (!isAvailable) return;
-
-  try {
-    await bottlesIndex.deleteDocument(bottleId.toString());
-  } catch (err) {
-    console.error(`Meilisearch remove bottle ${bottleId} failed: ${err.message}`);
-  }
-}
-
-// Batch removal — one Meilisearch call for many ids (used by GDPR erasure,
-// where a user may own thousands of bottles).
-async function removeBottles(bottleIds) {
-  if (!isAvailable || !bottleIds || bottleIds.length === 0) return;
-
-  try {
-    await bottlesIndex.deleteDocuments(bottleIds.map(id => id.toString()));
-  } catch (err) {
-    console.error(`Meilisearch remove ${bottleIds.length} bottles failed: ${err.message}`);
-  }
-}
-
-async function bulkIndexBottles(bottleIds) {
-  if (!isAvailable || !bottleIds || bottleIds.length === 0) return;
-
-  try {
-    const bottles = await Bottle.find({ _id: { $in: bottleIds } })
-      .populate(WINE_POPULATE)
-      .lean();
-
-    const documents = bottles.map(buildBottleDocument);
-
-    if (documents.length > 0) {
-      await bottlesIndex.addDocuments(documents, { primaryKey: 'id' });
-    }
-  } catch (err) {
-    console.error(`Meilisearch bulk index bottles failed: ${err.message}`);
-  }
-}
-
-/**
- * Drop index hits whose Mongo row is gone, and self-heal the index.
- *
- * PROD 2026-08-13: 567 of 9,918 documents in the `bottles` index named bottles
- * that no longer existed. Over MCP that read as "0 of 14"; across ~9 callers in
- * routes/cellars.js it produced phantom counts and short pages. Every delete
- * path DOES unindex — the debris was operational (a restore from backup, raw
- * scripts), and it will happen again, so the fix belongs here rather than at
- * the call sites: every caller of searchBottles inherits it and none of them
- * has to know.
- *
- * Cheap RELATIVE TO WHAT THE CALLER ALREADY DOES, which is the honest way to
- * put it: one `_id`-only covered query over the returned ids. The MCP tool
- * pages at ≤50 and the facet-only calls pass limit: 0 (arriving here with an
- * empty list and costing nothing), but the three cellar-list callers pass
- * limit: 10000 — and each of those follows this with
- * `Bottle.find({_id: {$in: ids}}).populate(WINE_POPULATE_LIST)` over the SAME
- * ids, a strictly heavier query. So the added cost is a covered-index
- * duplicate of a fetch that was happening anyway, never a new round trip
- * shape. Fire-and-forget on the removal — a search must never wait on, or fail
- * because of, a repair.
- *
- * FAIL-OPEN: if the verification itself errors (a Mongo hiccup, an index doc
- * whose id is not an ObjectId → CastError), the raw hits are served unchanged.
- * A resilience fix must not become a new way for search to break.
- *
- * @returns {Promise<{ids: string[], dropped: number}>}
- */
-async function dropStaleBottleIds(ids) {
-  if (!ids || ids.length === 0) return { ids: ids || [], dropped: 0 };
-  try {
-    const rows = await Bottle.find({ _id: { $in: ids } }).select('_id').lean();
-    if (rows.length === ids.length) return { ids, dropped: 0 };
-    const live = new Set(rows.map(r => String(r._id)));
-    const missing = ids.filter(id => !live.has(String(id)));
-    // Self-heal, unawaited: removeBottles swallows its own errors, so this
-    // cannot reject, and the caller's response does not wait for Meilisearch to
-    // process the deletion task.
-    removeBottles(missing);
-    console.warn(`Meilisearch: dropped ${missing.length} stale bottle hit(s) and queued them for removal`);
-    return { ids: ids.filter(id => live.has(String(id))), dropped: missing.length };
-  } catch (err) {
-    console.warn(`Meilisearch bottle-hit verification failed (serving raw hits): ${err.message}`);
-    return { ids, dropped: 0 };
-  }
-}
-
-/**
- * The honest total after stale hits were dropped.
- *
- * Reduced by what this page dropped — an estimate is all Meilisearch offers
- * anyway, and a count that includes rows the user can never be shown is worse
- * than a slightly low one. Floored at 0, and never below what was actually
- * returned: "showing 12 of 8" is a bug report waiting to happen.
- */
-const honestTotal = (estimated, dropped, returned) =>
-  Math.max(returned, Math.max(0, (estimated || 0) - dropped));
-
-async function searchBottles(query, {
-  cellarId,
-  cellarIds,
-  type,
-  countryId,
-  regionId,
-  appellation,
-  grapeIds,
-  vintage,
-  minRating,
-  sort,
-  statusFilter = 'active',  // 'active' | 'consumed' | 'all'
-  limit = 30,
-  offset = 0
-} = {}) {
-  if (!isAvailable) {
-    throw new Error('Meilisearch is not available');
-  }
-  assertIndexReady('bottles');
-
-  const isObjectId = (v) => /^[a-f0-9]{24}$/i.test(String(v));
-  const VALID_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
-  const filters = [];
-
-  // Scope to cellar(s). cellarId / cellarIds are server-set/access-checked, but
-  // strip any double-quote defensively so a value can never break out of the
-  // filter string. (We strip rather than drop on invalid input — dropping would
-  // un-scope the search and leak across cellars.)
-  // `cellarIds` (array) scopes across a set of cellars for the cross-cellar view;
-  // `cellarId` (single) is kept for the per-cellar callers.
-  const scopeIds = Array.isArray(cellarIds) && cellarIds.length > 0
-    ? cellarIds
-    : (cellarId ? [cellarId] : []);
-  const cleanScopeIds = scopeIds.map(id => String(id).replace(/"/g, '')).filter(Boolean);
-  if (cleanScopeIds.length === 1) {
-    filters.push(`cellarId = "${cleanScopeIds[0]}"`);
-  } else if (cleanScopeIds.length > 1) {
-    filters.push(`cellarId IN ["${cleanScopeIds.join('","')}"]`);
-  } else {
-    // No usable scope — every id stripped to empty, OR the caller passed an
-    // EMPTY cellar list (a user who owns no cellar), OR nothing at all. Push a
-    // filter that matches nothing rather than no filter at all: an unscoped
-    // query searches every tenant's bottles. Until 2026-09-02 this branch only
-    // covered "ids given but all stripped", so a freshly registered account
-    // (registration creates no cellar) could read the whole index through MCP
-    // search_bottles (security audit D10-5). searchBottles has no legitimate
-    // unscoped caller — every REST and MCP path passes an access-checked scope.
-    filters.push('cellarId = ""');
-  }
-  // Status filter: active (exclude consumed), consumed (only consumed), or all
-  if (statusFilter === 'active') {
-    filters.push(`status NOT IN ["${CONSUMED_STATUSES.join('","')}"]`);
-  } else if (statusFilter === 'consumed') {
-    filters.push(`status IN ["${CONSUMED_STATUSES.join('","')}"]`);
-  }
-
-  // Type: single or comma-separated multi-select
-  if (type) {
-    const types = String(type).split(',').map(t => t.trim()).filter(t => VALID_TYPES.includes(t.toLowerCase()));
-    if (types.length === 1) filters.push(`type = "${types[0]}"`);
-    else if (types.length > 1) filters.push(`type IN ["${types.join('","')}"]`);
-  }
-  // Country: single or comma-separated ObjectIds
-  if (countryId) {
-    const ids = String(countryId).split(',').map(c => c.trim()).filter(isObjectId);
-    if (ids.length === 1) filters.push(`countryId = "${ids[0]}"`);
-    else if (ids.length > 1) filters.push(`countryId IN ["${ids.join('","')}"]`);
-  }
-  // Region: single or comma-separated ObjectIds
-  if (regionId) {
-    const ids = String(regionId).split(',').map(r => r.trim()).filter(isObjectId);
-    if (ids.length === 1) filters.push(`regionId = "${ids[0]}"`);
-    else if (ids.length > 1) filters.push(`regionId IN ["${ids.join('","')}"]`);
-  }
-  if (grapeIds && grapeIds.length > 0) {
-    const validIds = grapeIds.filter(isObjectId);
-    if (validIds.length === 1) filters.push(`grapeIds = "${validIds[0]}"`);
-    else if (validIds.length > 1) filters.push(`grapeIds IN ["${validIds.join('","')}"]`);
-  }
-  // Appellation: single or comma-separated free-text values (e.g. "Barolo",
-  // "Châteauneuf-du-Pape"). Values are the facet keys the client got back, so
-  // they're echoed as-is — but strip any double-quote defensively so a value
-  // can never break out of the quoted Meili filter string.
-  if (appellation) {
-    const apps = String(appellation)
-      .split(',')
-      .map(a => a.trim().replace(/"/g, ''))
-      .filter(Boolean);
-    if (apps.length === 1) filters.push(`appellation = "${apps[0]}"`);
-    else if (apps.length > 1) filters.push(`appellation IN ["${apps.join('","')}"]`);
-  }
-  // Vintage: single or comma-separated. Only alphanumeric tokens (years / NV /
-  // Unknown) are allowed — this drops anything containing a double-quote or
-  // other special char that could inject into the Meili filter string.
-  if (vintage) {
-    const vintages = String(vintage).split(',').map(v => v.trim()).filter(v => /^[A-Za-z0-9]+$/.test(v));
-    if (vintages.length === 1) filters.push(`vintage = "${vintages[0]}"`);
-    else if (vintages.length > 1) filters.push(`vintage IN ["${vintages.join('","')}"]`);
-  }
-  if (minRating) filters.push(`rating >= ${parseFloat(minRating)}`);
-
-  // Build sort
-  const meiliSort = [];
-  if (sort && typeof sort === 'string') {
-    const desc = sort.startsWith('-');
-    const field = desc ? sort.slice(1) : sort;
-    const sortMap = { name: 'wineName', createdAt: 'createdAt', vintage: 'vintage', price: 'price', rating: 'rating' };
-    if (sortMap[field]) {
-      meiliSort.push(`${sortMap[field]}:${desc ? 'desc' : 'asc'}`);
-    }
-  }
-
-  const result = await bottlesIndex.search(query || '', {
-    filter: filters.length > 0 ? filters : undefined,
-    sort: meiliSort.length > 0 ? meiliSort : undefined,
-    facets: ['type', 'countryName', 'regionName', 'appellation', 'vintage', 'countryId', 'regionId', 'grapeIds'],
-    limit,
-    offset
-  });
-
-  // Verify the page against Mongo before anybody counts it (see
-  // dropStaleBottleIds). Facet distributions are NOT adjusted: they are
-  // Meilisearch's own aggregation over the whole index and cannot be corrected
-  // from one page of ids — the reconcile job (services/searchReconcileJob) is
-  // what makes them right, by emptying the index of debris in the first place.
-  const { ids, dropped } = await dropStaleBottleIds(result.hits.map(hit => hit.id));
-
-  return {
-    ids,
-    estimatedTotalHits: honestTotal(result.estimatedTotalHits, dropped, ids.length),
-    facetDistribution: result.facetDistribution || {},
-    facetStats: result.facetStats || {}
   };
 }
 
@@ -845,11 +523,10 @@ function getIsAvailable() {
 // module owns the client, and the `meilisearch` package is ESM-only — a second
 // require of it elsewhere is the #702 jest failure mode all over again. The job
 // requires THIS module, which every suite already knows how to mock.
-const RECONCILABLE_INDEXES = ['wines', 'bottles'];
+const RECONCILABLE_INDEXES = ['wines'];
 
 const indexByLabel = (label) => {
   if (label === 'wines') return index;
-  if (label === 'bottles') return bottlesIndex;
   return null;
 };
 
@@ -858,8 +535,8 @@ const indexByLabel = (label) => {
  * internal order (stable within a run — deleteDocuments only ENQUEUES a task,
  * so nothing shifts under the paging while a sweep is walking).
  *
- * `fields: ['id']` keeps the payload to ids: a full document page of the
- * bottles index would be megabytes for no purpose.
+ * `fields: ['id']` keeps the payload to ids: a full document page would be
+ * megabytes for no purpose.
  *
  * @returns {Promise<{ids: string[], total: number}>}
  */
@@ -899,17 +576,11 @@ async function waitForTasks(taskUids, { timeOutMs = 120000 } = {}) {
 module.exports = {
   initialize,
   fullSync,
-  fullSyncBottles,
   waitForTasks,
   fullSyncDiscussions,
   indexWine,
   removeWine,
   search,
-  indexBottle,
-  removeBottle,
-  removeBottles,
-  bulkIndexBottles,
-  searchBottles,
   indexDiscussion,
   removeDiscussion,
   searchDiscussions,
@@ -917,7 +588,4 @@ module.exports = {
   RECONCILABLE_INDEXES,
   listIndexDocumentIds,
   deleteIndexDocuments,
-  // Pure document builder, exported for unit tests
-  // (search.buildBottleDocument.test.js) — no client needed.
-  buildBottleDocument,
 };

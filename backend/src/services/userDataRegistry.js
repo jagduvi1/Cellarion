@@ -177,14 +177,10 @@ const REGISTRY = [
   // ── Core wine data ──────────────────────────────────────────────────────
   {
     model: Bottle, category: 'personal-data', userFields: ['user'],
-    // Collect the ids BEFORE deleteMany so the Meilisearch documents (which
-    // carry the user's free-text notes/location) can be removed too — there
-    // is no scheduled resync, so skipping this leaves personal data in the
-    // search index indefinitely.
+    // Collect the ids BEFORE deleteMany — the rack slots below still need them.
     purge: async (ctx) => {
       const bottleIds = await Bottle.find({ user: ctx.userId }).distinct('_id');
       await Bottle.deleteMany({ user: ctx.userId });
-      await searchService.removeBottles(bottleIds);
       // The Rack entry below only purges racks in the user's OWN cellars, so a
       // deleted bottle placed in ANOTHER owner's cellar would leave a dangling
       // slot ref in that cellar's racks — pull those slots too.
@@ -281,7 +277,7 @@ const REGISTRY = [
       // (legacy data — bottle.user is set to the cellar owner on every current
       // creation path, but older/moved rows can differ) are missed by the
       // user-scoped Bottle purge and would survive pointing at a deleted
-      // cellar. Delete them too, cleaning their images + search docs the same
+      // cellar. Delete them too, cleaning their images the same
       // reference-safe way as the Bottle/BottleImage entries: ids collected
       // before deleteMany, files unlinked before their only referencing docs
       // go, shared (assignedToWine) images kept with the bottle ref detached.
@@ -295,7 +291,6 @@ const REGISTRY = [
           BottleImage.updateMany({ bottle: { $in: orphanIds }, assignedToWine: true }, { $unset: { bottle: '' } }),
           Bottle.deleteMany({ _id: { $in: orphanIds } }),
         ]);
-        await searchService.removeBottles(orphanIds);
       }
       await Promise.all([
         Cellar.deleteMany({ user: ctx.userId }),

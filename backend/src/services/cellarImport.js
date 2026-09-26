@@ -39,7 +39,6 @@ const { findOrCreatePendingRequest, pickImportHints } = require('./wineRequestIn
 const Review = require('../models/Review');
 const WineVintageProfile = require('../models/WineVintageProfile');
 
-const searchService = require('./search');
 const { findOrCreateWine } = require('./findOrCreateWine');
 const { logAudit } = require('./audit');
 const { unlinkImageFiles, safeUploadPath } = require('./imageProcessor');
@@ -241,9 +240,6 @@ async function clearCellarContents(cellarId) {
     for (const img of images) await unlinkImageFiles(img); // reference-safe (dedup-shared files survive)
     await BottleImage.deleteMany({ bottle: { $in: bottleIds } });
     await Review.deleteMany({ bottle: { $in: bottleIds } });
-    for (const id of bottleIds) {
-      try { await searchService.removeBottle(id); } catch { /* keep Meili clean, best-effort */ }
-    }
     await Bottle.deleteMany({ cellar: cellarId });
   }
   await Rack.deleteMany({ cellar: cellarId });
@@ -775,8 +771,7 @@ async function createLayout(cellarId, layout, result) {
  * Build all of a cellar's content — racks, 3D room layout, then bottles (+ their
  * wines, images, reviews and maturity windows) and finally rack placement — into
  * the cellar identified by `cellarId`. Per-bottle problems are collected into
- * `result`; only an unexpected failure rejects. Returns the ids of the active
- * bottles created, for search indexing.
+ * `result`; only an unexpected failure rejects.
  */
 async function buildCellarContents({ cellarId, ownerId, userId, cellar, items, imagesByIndex, anchor, getFileBuffer, defaultCurrency, result, demoMode = false, canCurate = false, audit = null }) {
   // Racks (exact geometry, fallback inference), then the 3D room layout.
@@ -785,7 +780,6 @@ async function buildCellarContents({ cellarId, ownerId, userId, cellar, items, i
 
   // Bottles + wines + images. Collect placement intents.
   const requestCache = new Map();
-  const createdActiveIds = [];
   const pendingPlacements = [];
   const seenMaturity = new Set(); // wine+vintage pairs already reconstituted
   const seenPendingProfile = new Set(); // wine+vintage pairs already queued for a somm
@@ -859,7 +853,6 @@ async function buildCellarContents({ cellarId, ownerId, userId, cellar, items, i
 
       await bottle.save();
       result.bottlesCreated++;
-      if (bottle.status === 'active') createdActiveIds.push(bottle._id);
 
       await attachImages(bottle, imagesByIndex[i], userId, getFileBuffer, result, wineImageDedup, i);
       // Demo clones deliberately create NOTHING in the shared registry: no
@@ -924,8 +917,6 @@ async function buildCellarContents({ cellarId, ownerId, userId, cellar, items, i
       }
     }
   }
-
-  return createdActiveIds;
 }
 
 /**
@@ -989,10 +980,9 @@ async function importCellar(userId, cellar, opts) {
   if (!liveCellar) result.mode = 'create';
 
   // 2. Build everything into buildCellar; 3. swap onto the live cellar (overwrite).
-  let createdActiveIds = [];
   let swapStarted = false;
   try {
-    createdActiveIds = await buildCellarContents({
+    await buildCellarContents({
       cellarId: buildCellar._id, ownerId: buildCellar.user, userId, cellar,
       items, imagesByIndex, anchor, getFileBuffer,
       defaultCurrency: opts.defaultCurrency, result,
@@ -1027,10 +1017,6 @@ async function importCellar(userId, cellar, opts) {
     }
     throw err;
   }
-
-  // 4. Index the new active bottles (fire-and-forget) — after any swap so their
-  //    cellar pointer is final.
-  if (createdActiveIds.length) searchService.bulkIndexBottles(createdActiveIds);
 
   return result;
 }

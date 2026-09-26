@@ -8,10 +8,10 @@
 // the real req on both surfaces). Returns { error: { status, message, code? } }
 // for client faults, or the mutated { bottle } on success.
 //
-// services/search and services/restockChecker are required LAZILY inside the
-// functions: search top-requires the ESM-only meilisearch package, which jest
-// cannot parse — a top-level require here would break every suite that loads
-// the MCP tool registry (the #702 failure mode).
+// services/restockChecker is required LAZILY inside the functions. Anything
+// that reaches the ESM-only meilisearch package (services/search) must never be
+// a top-level require here: jest cannot parse it, and it would break every
+// suite that loads the MCP tool registry (the #702 failure mode).
 const { CONSUMED_STATUSES } = require('../config/constants');
 const { resolveRating } = require('../utils/ratingUtils');
 const resolveRatingUtil = resolveRating;
@@ -103,10 +103,6 @@ async function consumeBottle(bottle, { reason = 'drank', note, rating, ratingSca
   // active bottle already pulled from its rack.
   await removeFromRacks(bottle._id);
 
-  // Consumed bottles stay in the index for history search (filtered at query
-  // time) — re-index so status is current. Fire-and-forget.
-  require('./search').indexBottle(bottle._id);
-
   logAudit(req, 'bottle.consume',
     { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
     { reason }
@@ -161,8 +157,6 @@ async function restoreBottle(bottle, req) {
   bottle.consumedRating = undefined;
   bottle.consumedRatingScale = undefined;
   await bottle.save();
-
-  require('./search').indexBottle(bottle._id);
 
   logAudit(req, 'bottle.restore',
     { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
@@ -515,10 +509,7 @@ async function addBottle(cellarDoc, wineDoc, fields = {}, req) {
     throw err;
   }
 
-  // Post-save side effects, one order for both surfaces. Consumed
-  // (add-to-history) bottles ARE indexed too — the History tab's search path
-  // filters on status at query time (grand-audit H3).
-  require('./search').indexBottle(bottle._id);
+  // Post-save side effects, one order for both surfaces.
   try {
     const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
     await ensurePendingVintageProfile(wineDoc._id, bottle.vintage);
@@ -761,7 +752,6 @@ async function updateBottleFields(bottle, fields, req) {
     if (err?.name === 'VersionError') return { error: { status: 409, message: 'This bottle was modified by another request. Please refresh and try again.' } };
     throw err;
   }
-  require('./search').indexBottle(bottle._id);
   // Vintage changed: the old (wine, oldVintage) embedding is still in Qdrant
   // but no longer matches this bottle — embed the new pair. Skipped for demo
   // accounts (a novel year misses the cache and would fire a paid Voyage call).
@@ -790,7 +780,7 @@ async function updateBottleFields(bottle, fields, req) {
 
 /**
  * Reverse an incorrectly-added ACTIVE bottle — the full cleanup cascade of
- * REST POST /api/bottles/:id/undo (rack slots, search index, own images +
+ * REST POST /api/bottles/:id/undo (rack slots, own images +
  * file unlink, wine-assigned image unassignment, pending wine request, then
  * the bottle document itself). auditAction distinguishes 'bottle.undo' from
  * 'bottle.delete', which run the identical cascade.
@@ -804,7 +794,6 @@ async function removeBottleCascade(bottle, req, auditAction) {
   const pendingRequestId = bottle.pendingWineRequest || null;
 
   await removeFromRacks(bottleId);
-  require('./search').removeBottle(bottleId);
 
   const { unlinkImageFiles } = require('./imageProcessor');
   const ownImages = await BottleImage.find({ bottle: bottleId, assignedToWine: false });

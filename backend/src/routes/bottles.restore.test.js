@@ -55,7 +55,6 @@ const http = require('http');
 const jwt = require('jsonwebtoken');
 const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
-const searchService = require('../services/search');
 const bottlesRouter = require('./bottles');
 
 const USER_ID = '64b000000000000000000001';
@@ -140,7 +139,6 @@ describe('POST /api/bottles/:id/restore', () => {
     expect(bottle.consumedRating).toBeUndefined();
     expect(bottle.consumedRatingScale).toBeUndefined();
     expect(bottle.save).toHaveBeenCalledTimes(1);
-    expect(searchService.indexBottle).toHaveBeenCalledWith(bottle._id);
     expect(body.bottle.status).toBe('active');
   });
 

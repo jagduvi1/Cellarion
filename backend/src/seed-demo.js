@@ -262,25 +262,19 @@ async function seed() {
     }
   }
 
-  // Index the seeded data into Meilisearch. The backend's boot-time full sync
+  // Index the seeded wines into Meilisearch. The backend's boot-time full sync
   // already ran against the then-empty DB and only re-fires when the index is
-  // empty — without this, registry and cellar search return zero hits for the
-  // demo data until a backend restart.
+  // empty — without this, registry search returns zero hits for the demo data
+  // until a backend restart. (Cellar search reads MongoDB directly.)
   const searchService = require('./services/search');
   await searchService.initialize();
   if (searchService.getIsAvailable?.() === false) {
     console.warn('\nMeilisearch unavailable — restart the backend to index the demo data for search.');
   } else {
     const WineDef = require('./models/WineDefinition');
-    const BottleModel = require('./models/Bottle');
-    const [wineIds, bottleIds] = await Promise.all([
-      WineDef.distinct('_id'),
-      BottleModel.distinct('_id'),
-    ]);
+    const wineIds = await WineDef.distinct('_id');
     for (const id of wineIds) await searchService.indexWine(id);
-    require('./models/WineRequest'); // WINE_POPULATE refs it; standalone runs must register it
-    await searchService.bulkIndexBottles(bottleIds);
-    console.log(`\nIndexed ${wineIds.length} wines + ${bottleIds.length} bottles into Meilisearch.`);
+    console.log(`\nIndexed ${wineIds.length} wines into Meilisearch.`);
   }
 
   console.log('\nDemo seed complete!');

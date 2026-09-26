@@ -330,10 +330,9 @@ async function run() {
   // --- 7. Search resync ----------------------------------------------------
   log(`\nSummary: ${stats.done} actions, ${stats.skipped} skipped, ${stats.warned} warnings.`);
   if (APPLY) {
-    log('Rebuilding search indexes (wines + bottles denormalize taxonomy names)…');
+    log('Rebuilding the wines search index (it denormalizes taxonomy names)…');
     await searchService.initialize();
     await searchService.fullSync();
-    await searchService.fullSyncBottles();
     log('Search resync done.');
   }
 

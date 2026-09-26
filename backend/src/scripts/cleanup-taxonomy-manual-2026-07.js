@@ -285,7 +285,7 @@ async function run() {
     console.log('Rebuilding wines search index…');
     await searchService.initialize();
     await searchService.fullSync();
-    console.log('Done. NOTE: run a bottles resync separately (fullSyncBottles needs all models registered).');
+    console.log('Done.');
   }
 
   await mongoose.disconnect();

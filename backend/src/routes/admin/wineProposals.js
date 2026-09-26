@@ -28,7 +28,6 @@ const router = express.Router();
 const WineCorrectionProposal = require('../../models/WineCorrectionProposal');
 const WineDefinition = require('../../models/WineDefinition');
 const WineVintageProfile = require('../../models/WineVintageProfile');
-const Bottle = require('../../models/Bottle');
 const Country = require('../../models/Country');
 const Grape = require('../../models/Grape');
 const { requireAuth, requireRole } = require('../../middleware/auth');
@@ -394,15 +393,11 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false } =
           throw err;
         }
 
-        // The PUT's follow-through: registry index, the bottles' denormalized
-        // search docs (no scheduled resync exists), the embedding text — and
+        // The PUT's follow-through: registry index, the embedding text — and
         // the IndexNow ping (an approved identity fix changes the public wine
         // page exactly like a PUT rename; parity per audit 2026-08-10).
         submitUrls(`/wines/${wine._id}`);
         searchService.indexWine(wine._id);
-        Bottle.distinct('_id', { wineDefinition: wine._id })
-          .then((ids) => searchService.bulkIndexBottles(ids))
-          .catch((err) => console.error('Bottle re-index after proposal apply failed:', err.message));
         // And the PUT's re-enrich (parity gap found live 2026-08-16: approving
         // "Fabelhaft" → "Niepoort" left the négociant-fiction profile attached
         // until a manual force re-enrich). Real-change only, curator-safe —

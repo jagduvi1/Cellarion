@@ -2163,6 +2163,7 @@
       "reindexSearch": "Reindex search",
       "reindexSearchTitle": "Rebuild the search indexes from the database — required after restoring a backup, or whenever search results look stale",
       "reindexDone": "Search reindexed ({{winesMs}} ms wines, {{bottlesMs}} ms bottles)",
+      "reindexDoneTotal": "Search reindexed in {{ms}} ms",
       "reindexFailed": "Reindex failed",
       "incompleteGeo": {
         "button": "Missing region",

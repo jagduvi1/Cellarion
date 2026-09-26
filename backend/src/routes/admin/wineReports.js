@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const WineReport = require('../../models/WineReport');
 const WineDefinition = require('../../models/WineDefinition');
-const Bottle = require('../../models/Bottle');
 const searchService = require('../../services/search');
 const { generateWineKey, normalizeAppellation, stripTrailingVintage } = require('../../utils/normalize');
 const { canonicalizeWineName } = require('../../utils/producerPrefix');
@@ -118,12 +117,6 @@ router.put('/:id/resolve', async (req, res) => {
         throw err;
       }
       searchService.indexWine(wine._id).catch(() => {});
-      // Bottles denormalize wineName/producer/appellation into their own
-      // search index — without this, cellar search matches the OLD values
-      // indefinitely (mirrors the admin wine-edit route; audit R7-#3).
-      Bottle.distinct('_id', { wineDefinition: wine._id })
-        .then(ids => searchService.bulkIndexBottles(ids))
-        .catch(() => {});
       applied = { field: report.suggestedField, from: previous, to: report.suggestedValue };
       logAudit(req, 'admin.wine.update',
         { type: 'wine', id: wine._id },

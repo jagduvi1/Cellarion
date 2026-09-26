@@ -205,10 +205,9 @@ router.put('/countries/:id', async (req, res) => {
       { name: country.name }
     );
 
-    // Resync search indexes if name changed (denormalized data). Bottle
-    // documents denormalize taxonomy names too — fullSync() alone rebuilds
-    // only the wines index, leaving cellar search matching the old name.
-    if (name) { searchService.fullSync(); searchService.fullSyncBottles(); }
+    // Resync the registry index if the name changed (denormalized data).
+    // Cellar search (services/bottleSearch) reads names live from MongoDB.
+    if (name) searchService.fullSync();
 
     res.json({ country });
   } catch (error) {
@@ -425,10 +424,9 @@ router.put('/regions/:id', async (req, res) => {
       { name: region.name }
     );
 
-    // Resync search indexes if name changed (denormalized data). Bottle
-    // documents denormalize taxonomy names too — fullSync() alone rebuilds
-    // only the wines index, leaving cellar search matching the old name.
-    if (name) { searchService.fullSync(); searchService.fullSyncBottles(); }
+    // Resync the registry index if the name changed (denormalized data).
+    // Cellar search (services/bottleSearch) reads names live from MongoDB.
+    if (name) searchService.fullSync();
 
     res.json({ region });
   } catch (error) {
@@ -704,15 +702,12 @@ router.put('/grapes/:id', async (req, res) => {
       }
     );
 
-    // Resync search indexes if name changed (denormalized data). Bottle
-    // documents denormalize taxonomy names too — fullSync() alone rebuilds
-    // only the wines index, leaving cellar search matching the old name.
-    // regionalNames feed the grapeNames of BOTH indexes (regional display
-    // recall — buildDocument and buildBottleDocument share the same helper),
-    // so a mapping change rebuilds both as well.
+    // Resync the registry index if the name changed (denormalized data).
+    // regionalNames feed its grapeNames too (regional display recall), so a
+    // mapping change rebuilds it as well. Cellar search (services/bottleSearch)
+    // reads both live from MongoDB.
     if (name || regionalNames !== undefined) {
       searchService.fullSync();
-      searchService.fullSyncBottles();
     }
 
     // Non-blocking curator-trap warnings (see computeRegionalNameWarnings),
@@ -987,9 +982,7 @@ for (const [path, { fn, type }] of Object.entries(MERGERS)) {
         { type, id: toId },
         { from: fromId, ...summary }
       );
-      // Affected wines are reindexed by the service; bottle documents
-      // denormalize taxonomy names too, so rebuild the bottles index.
-      searchService.fullSyncBottles();
+      // Affected wines are reindexed by the service.
       res.json({ merged: true, ...summary });
     } catch (error) {
       if (error.status) return res.status(error.status).json({ error: error.message });

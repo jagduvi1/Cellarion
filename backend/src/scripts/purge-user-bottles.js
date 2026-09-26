@@ -5,7 +5,6 @@
  *
  * Mirrors everything DELETE /api/bottles/:id cleans up, in bulk:
  *  - pulls the bottles out of any rack slots
- *  - removes them from the Meilisearch index
  *  - deletes their BottleImages + image files on disk — EXCEPT images that
  *    were promoted to a shared wine (assignedToWine), which other users see;
  *    those keep their file and doc, only the dangling bottle ref is cleared
@@ -46,12 +45,7 @@ async function main() {
   const Bottle = require('../models/Bottle');
   const BottleImage = require('../models/BottleImage');
   const Rack = require('../models/Rack');
-  const searchService = require('../services/search');
   const { safeUploadPath } = require('../services/imageProcessor');
-
-  // Connect Meilisearch too — without initialize() every removeBottle call
-  // below is a silent no-op (the service's isAvailable flag stays false).
-  await searchService.initialize();
 
   const user = await User.findOne({
     $or: [{ email: userArg.toLowerCase() }, { username: userArg }],
@@ -113,19 +107,7 @@ async function main() {
   );
   console.log(`[purge-user-bottles] Images: ${imgRes.deletedCount} doc(s) + ${filesRemoved} file(s) deleted, ${sharedRes.modifiedCount} shared image(s) detached`);
 
-  // 3. Meilisearch — awaited per bottle. There is NO automatic index resync:
-  // anything skipped here stays in the index as a ghost entry until someone
-  // runs a manual full sync.
-  if (searchService.getIsAvailable()) {
-    for (const id of ids) {
-      await searchService.removeBottle(id); // logs + swallows per-doc errors itself
-    }
-    console.log(`[purge-user-bottles] Removed ${ids.length} bottle(s) from the search index`);
-  } else {
-    console.warn('[purge-user-bottles] WARNING: Meilisearch is unavailable — the search index will keep ghost entries for these bottles until a manual full sync is run.');
-  }
-
-  // 4. The bottles themselves
+  // 3. The bottles themselves
   const delRes = await Bottle.deleteMany({ _id: { $in: ids } });
   console.log(`[purge-user-bottles] Deleted ${delRes.deletedCount} bottle(s)`);
   console.log('[purge-user-bottles] Done. Tip: run `node src/runCommunityPrices.js` to refresh community price curves now (otherwise Sunday 02:00 UTC).');

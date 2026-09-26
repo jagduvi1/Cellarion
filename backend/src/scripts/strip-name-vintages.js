@@ -155,10 +155,6 @@ async function run() {
       // internally and can lose the connection mid-flight, leaving Meili on the
       // old name with the error swallowed (code audit 2026-07-27, M4).
       reindexing.push(searchService.indexWine(w._id));
-      const bottleIds = await Bottle.distinct('_id', { wineDefinition: w._id });
-      if (bottleIds.length) {
-        reindexing.push(searchService.bulkIndexBottles(bottleIds));
-      }
     }
     stats.changed += 1;
   }
