@@ -53,7 +53,8 @@ const SIGNIN_ACTIONS = ['auth.login.success', 'auth.oauth.success'];
 // Connection bookkeeping, written by machines rather than done by people, and
 // therefore NOT presence.
 //
-// token.used is written once an hour per API token by whatever is holding it.
+// token.used is written once a day per API token by whatever is holding it
+// (hourly until 2026-09-26; see middleware/apiTokenAuth).
 // Production tokens are named "Home Assistant", "Homeassistant" and "Climate
 // device: Kallaren": integrations that poll around the clock and would mark
 // their owner present every single day, for ever. Measured on 2026-09-09 they
