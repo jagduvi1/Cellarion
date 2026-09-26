@@ -6,6 +6,10 @@
 const sharp = require('sharp');
 const { encodeKeptPhoto, prepareRembgInput, KEPT_MAX_EDGE, REMBG_MAX_EDGE } = require('./photoFormat');
 
+// Real encodes: the noisy lossless PNG below takes about 2 s alone and more
+// than the 5 s default when every Jest worker is encoding at once.
+jest.setTimeout(30000);
+
 // A tall bottle-shaped cut-out: transparent canvas, opaque body.
 function cutout(width, height) {
   const body = { create: { width: Math.round(width / 3), height: Math.round(height * 0.8), channels: 4, background: { r: 120, g: 20, b: 40, alpha: 1 } } };
