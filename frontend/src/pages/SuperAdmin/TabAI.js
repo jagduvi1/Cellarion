@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { num, ago, StatusDot, PlanBadge, useApi } from './helpers';
+import { superadminAiCostsPath, superadminSetPromptCaching } from '../../api/admin';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -26,9 +27,11 @@ const CHAT_MODELS = [
   {
     id: 'claude-sonnet-5',
     name: 'Claude Sonnet 5',
-    description: 'Near-Opus quality — recommended for wine identification & profiles ($2/$10 intro until Aug 2026)',
-    inputPrice: '$3.00',
-    outputPrice: '$15.00',
+    // The $2/$10 launch price became the standard price; the increase that was
+    // scheduled for 2026-09-01 was cancelled (platform.claude.com pricing, 2026-09-25).
+    description: 'Near-Opus quality — recommended for wine identification & profiles',
+    inputPrice: '$2.00',
+    outputPrice: '$10.00',
     tier: 'standard',
   },
   {
@@ -624,6 +627,164 @@ function EnrichmentSearchPanel({ enabled, dailyCap, apiFetch }) {
   );
 }
 
+export function PromptCachingPanel({ enabled, apiFetch }) {
+  const [on, setOn] = useState(enabled ?? true);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const save = async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await superadminSetPromptCaching(apiFetch, on);
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setMsg({ ok: false, text: d.error || `Save failed (HTTP ${res.status})` });
+      } else {
+        setMsg({ ok: true, text: 'Saved — applies to the next scan and import' });
+      }
+    } catch {
+      setMsg({ ok: false, text: 'Network error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="sa-panel" style={{ marginBottom: 16 }}>
+      <div className="sa-panel-header">
+        <span className="sa-panel-title">Prompt Caching — Label Scan &amp; Import</span>
+        <button className="sa-btn" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
+      </div>
+      <div className="sa-panel-body">
+        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 12 }}>
+          The label-scan instructions and the import lookup&rsquo;s fixed rules are marked for Anthropic&rsquo;s prompt cache, so a
+          repeat call within the cache lifetime (1 hour for scans, 5 minutes for imports) pays 10% for them. This is a pure cost
+          switch: the prompt the model reads is exactly the same with it on or off. Models only cache instructions above a
+          minimum size (1,024 tokens on Sonnet 5, 4,096 on Haiku 4.5) — below it the switch has no effect.
+        </div>
+        <div className="sa-kv">
+          <div className="sa-kv-row">
+            <span className="sa-kv-key">Enabled</span>
+            <input type="checkbox" checked={!!on} onChange={e => setOn(e.target.checked)} />
+          </div>
+        </div>
+        {msg && <div style={{ fontSize: 11, marginTop: 8, color: msg.ok ? 'var(--sa-green)' : 'var(--sa-red)' }}>{msg.text}</div>}
+      </div>
+    </div>
+  );
+}
+
+// Display names for the spend ledger's feature labels (services/aiCostLedger).
+const AI_FEATURE_LABELS = {
+  label_scan: 'Label scan',
+  label_scan_back: 'Back-label scan',
+  import_identify: 'Import identification',
+  text_lookup: 'Text lookup',
+  chat: 'Cellar Chat — answers',
+  chat_query: 'Cellar Chat — search rewrite',
+  wine_profile: 'Wine profiles',
+  maturity_suggest: 'Drink-window suggestion',
+  price_suggest: 'Price suggestion',
+  other: 'Other',
+};
+
+const usd = (v) => {
+  if (v === null || v === undefined) return '—';
+  return v > 0 && v < 0.01 ? `$${v.toFixed(4)}` : `$${v.toFixed(2)}`;
+};
+const pct = (v) => (v === null || v === undefined ? '—' : `${Math.round(v * 100)}%`);
+
+export function AiCostPanel() {
+  const [days, setDays] = useState(30);
+  // useApi: follows the shell's Refresh / auto-refresh, and a slower answer
+  // for a previously selected period never lands on top of the current one.
+  const { data, loading, error, reload } = useApi(superadminAiCostsPath(days));
+  const features = data?.features || [];
+
+  return (
+    <div className="sa-panel" style={{ marginBottom: 16 }}>
+      <div className="sa-panel-header">
+        <span className="sa-panel-title">AI Cost — Estimated</span>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <select className="sa-input" value={days} onChange={e => setDays(Number(e.target.value))} style={{ width: 120 }}>
+            <option value={1}>Today</option>
+            <option value={7}>Last 7 days</option>
+            <option value={30}>Last 30 days</option>
+            <option value={90}>Last 90 days</option>
+          </select>
+          <button className="sa-btn" onClick={reload}>Refresh</button>
+        </div>
+      </div>
+      <div className="sa-panel-body">
+        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 12 }}>
+          Every Claude call records its tokens per feature (no user data). Dollars are estimated from list prices
+          {data?.pricesCheckedAt ? ` (checked ${data.pricesCheckedAt})` : ''} — the Anthropic console is the bill.
+          <em> Cached</em> is the share of input read from the prompt cache at 10% of the price.
+        </div>
+        {error ? (
+          <div className="sa-error">{error}</div>
+        ) : loading ? (
+          <div className="sa-loading">Loading AI costs...</div>
+        ) : features.length === 0 ? (
+          <div style={{ color: 'var(--sa-text-dim)', fontSize: 12, padding: '8px 0' }}>
+            No AI calls recorded in this period — recording starts with the release that added this ledger.
+          </div>
+        ) : (
+          <>
+            <div style={{ marginBottom: 12, display: 'flex', gap: 24, flexWrap: 'wrap', fontSize: 12, color: 'var(--sa-text-dim)' }}>
+              <span><strong style={{ color: 'var(--sa-accent)' }}>{usd(data.total.usd)}</strong> in this period</span>
+              <span>
+                {data.projectedUsdPer30Days !== null
+                  ? <><strong style={{ color: 'var(--sa-text)' }}>{usd(data.projectedUsdPer30Days)}</strong> per 30 days at the rate of the last full days</>
+                  : 'no full day in this period to project from yet'}
+              </span>
+              <span><strong style={{ color: 'var(--sa-text)' }}>{num(data.total.calls)}</strong> calls</span>
+              {data.recordingSince && <span>recording since {data.recordingSince}</span>}
+            </div>
+            <div className="sa-table-wrap">
+              <table className="sa-table">
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Calls</th>
+                    <th>Input tokens</th>
+                    <th>Cached</th>
+                    <th>Output tokens</th>
+                    <th>Est. cost</th>
+                    <th>Per call</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {features.map(f => (
+                    <tr key={f.feature}>
+                      <td>
+                        <div>{AI_FEATURE_LABELS[f.feature] || f.feature}</div>
+                        {f.models.length > 0 && <div style={{ fontSize: 10, color: 'var(--sa-text-dim)' }}>{f.models.join(', ')}</div>}
+                      </td>
+                      <td>{num(f.calls)}</td>
+                      <td>{num(f.inputTokensTotal)}</td>
+                      <td>{pct(f.cachedInputShare)}</td>
+                      <td>{num(f.outputTokens)}</td>
+                      <td style={{ fontWeight: 600 }}>{usd(f.usd)}</td>
+                      <td style={{ color: 'var(--sa-text-dim)' }}>{f.usdPerCall === null ? '—' : `$${f.usdPerCall.toFixed(4)}`}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {data.unpricedModels.length > 0 && (
+              <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginTop: 8 }}>
+                No price known for {data.unpricedModels.join(', ')} — counted in calls and tokens, not in dollars.
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ChatLimitPanel({ limit, apiFetch }) {
   const [val, setVal] = useState(limit ?? 50);
   const [saving, setSaving] = useState(false);
@@ -923,6 +1084,9 @@ export default function TabAI() {
           Prompts and all other settings still apply.
         </div>
       )}
+
+      <AiCostPanel />
+      <PromptCachingPanel enabled={config.promptCaching ?? true} apiFetch={apiFetch} />
 
       <div className="sa-grid-2">
         {/* AI Config */}

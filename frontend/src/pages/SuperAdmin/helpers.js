@@ -107,9 +107,15 @@ export function useApi(path, { skip = false } = {}) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const loadedPathRef = useRef(null);
+  // Only the newest request may update state: when the path changes while an
+  // earlier request is still in flight (a panel's period picker), the slower
+  // earlier answer must not land on top of the newer one.
+  const latestRequestRef = useRef(0);
 
   const load = useCallback(async () => {
     if (skip) return;
+    const requestId = ++latestRequestRef.current;
+    const isCurrent = () => requestId === latestRequestRef.current;
     // Re-fetching the same path is a background refresh: keep the previous
     // data on screen (so panels stay mounted and unsaved edits survive) and
     // only flip `refreshing`. The initial load — or a new path — shows the
@@ -124,13 +130,17 @@ export function useApi(path, { skip = false } = {}) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || `HTTP ${res.status}`);
       }
-      setData(await res.json());
+      const json = await res.json();
+      if (!isCurrent()) return;
+      setData(json);
       loadedPathRef.current = path;
     } catch (e) {
-      setError(e.message);
+      if (isCurrent()) setError(e.message);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isCurrent()) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
     // refreshKey bump (shell Refresh / auto-refresh) recreates load → re-fetch
   }, [apiFetch, path, skip, refreshKey]);

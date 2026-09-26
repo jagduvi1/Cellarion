@@ -19,6 +19,7 @@ const aiConfig = require('../config/aiConfig');
 const announcementConfig = require('../config/announcement');
 const aiChat = require('../services/aiChat');
 const aiProvider = require('../services/aiProvider');
+const { summarizeCosts } = require('../services/aiCostLedger');
 const { isEmbeddingConfigured, embeddingProviderName } = require('../services/embedding');
 const { updateSiteConfig } = require('../utils/siteConfig');
 const { parsePagination } = require('../utils/pagination');
@@ -547,6 +548,46 @@ router.patch('/ai/enrichment-search', async (req, res) => {
   } catch (error) {
     console.error('[superadmin] enrichment-search error:', error);
     res.status(500).json({ error: 'Failed to save search settings' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /api/superadmin/ai/prompt-caching
+// The prompt-caching switch (2026-09-25): on, the label-scan instructions and
+// the import lookup's fixed rules carry Anthropic's cache marker (see
+// services/labelScan.systemBlock); off, they are billed at the full price. A
+// pure cost switch — the prompt the model reads is the same either way.
+// ---------------------------------------------------------------------------
+router.patch('/ai/prompt-caching', async (req, res) => {
+  const { enabled } = req.body;
+  if (typeof enabled !== 'boolean') {
+    return res.status(400).json({ error: 'enabled must be a boolean' });
+  }
+  try {
+    const current = aiConfig.getRaw();
+    const updated = { ...current, promptCaching: enabled };
+    await updateSiteConfig('aiConfig', updated, req.user.id);
+    aiConfig.set(updated);
+    res.json({ promptCaching: enabled });
+  } catch (error) {
+    console.error('[superadmin] prompt-caching error:', error);
+    res.status(500).json({ error: 'Failed to save prompt caching' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/superadmin/ai/costs?days=30
+// Estimated AI spend per feature and per day, from the ledger every Claude
+// call writes (services/aiCostLedger). Estimates from list prices — the
+// Anthropic console is the bill. Aggregates only: no user appears in it.
+// ---------------------------------------------------------------------------
+router.get('/ai/costs', async (req, res) => {
+  const days = parseInt(req.query.days, 10);
+  try {
+    res.json(await summarizeCosts({ days: Number.isInteger(days) ? days : 30 }));
+  } catch (error) {
+    console.error('[superadmin] ai costs error:', error);
+    res.status(500).json({ error: 'Failed to load AI costs' });
   }
 });
 

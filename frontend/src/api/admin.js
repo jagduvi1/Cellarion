@@ -353,6 +353,18 @@ export const superadminSaveAnnouncement = (apiFetch, data) =>
     body: JSON.stringify(data),
   });
 
+// ── AI spend (SuperAdmin → AI) ────────────────────────────────────────────────
+// Estimated AI spend per feature over the last `days` UTC days.
+export const superadminAiCostsPath = (days = 30) => `/api/superadmin/ai/costs?days=${days}`;
+
+// The prompt-caching switch: a pure cost switch — the prompt stays the same.
+export const superadminSetPromptCaching = (apiFetch, enabled) =>
+  apiFetch('/api/superadmin/ai/prompt-caching', {
+    method: 'PATCH',
+    headers: J,
+    body: JSON.stringify({ enabled: !!enabled }),
+  });
+
 // ── MCP (usage overview + kill switches) ─────────────────────────────────────
 export const adminGetMcpUsage = (apiFetch, days = 30) =>
   apiFetch(`/api/admin/mcp/usage?days=${days}`);

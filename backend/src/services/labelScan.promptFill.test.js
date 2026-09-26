@@ -12,7 +12,10 @@
  * exported builders through a captured client and assert on what would have
  * been sent.
  */
-jest.mock('./aiProvider', () => ({ getChatClient: jest.fn() }));
+// providerName 'openai': the single-message layout these tests were written
+// against (the Anthropic system-block layout has its own suite,
+// labelScan.promptCache).
+jest.mock('./aiProvider', () => ({ getChatClient: jest.fn(), providerName: jest.fn(() => 'openai') }));
 jest.mock('../config/aiConfig', () => ({
   get: jest.fn(),
   DEFAULT_TEXT_SEARCH_PROMPT: ['Identify this wine.', 'Query: {{query}}', 'Rules: be terse. Never invent awards.'].join('\n'),

@@ -280,7 +280,7 @@ async function fetchEnrichmentData(userId, matches, scopedCellarIds = null) {
  */
 async function expandQuery(message, hasHistory = false) {
   const cfg = aiConfig.get();
-  const client = aiProvider.getChatClient();
+  const client = aiProvider.getChatClient({ feature: 'chat_query' });
 
   // First message or no history — always search, use the original expansion prompt
   const systemPrompt = hasHistory
@@ -497,7 +497,7 @@ async function chat(userId, message, opts = {}) {
   const { cfg, callParams, wines, searchQuery, needsNewSearch, wineSection, useQueryExpansion } =
     await _prepareChatContext(userId, message, opts);
 
-  const client = aiProvider.getChatClient();
+  const client = aiProvider.getChatClient({ feature: 'chat' });
   let response;
   try {
     response = await client.messages.create({ ...callParams, model: cfg.chatModel, ...thinkingOff(cfg.chatModel) });
@@ -569,7 +569,7 @@ async function chatStream(userId, message, opts, res) {
     wineContext: wineSection,
   });
 
-  const client = aiProvider.getChatClient();
+  const client = aiProvider.getChatClient({ feature: 'chat' });
 
   // messages.stream() returns synchronously and reports HTTP failures via the
   // 'error' event (never by throwing), so the model fallback has to live in
