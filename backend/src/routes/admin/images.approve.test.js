@@ -26,7 +26,11 @@ jest.mock('../../services/imageProcessor', () => {
   const actual = jest.requireActual('../../services/imageProcessor');
   return { ...actual, unlinkImageFiles: jest.fn() };
 });
+// The real module with the file operations under test stubbed — not a bare
+// object: the auth middleware loads the User model, whose native bcrypt finds
+// its prebuilt binary through fs.readdirSync.
 jest.mock('fs', () => ({
+  ...jest.requireActual('fs'),
   readFileSync: jest.fn(),
   writeFileSync: jest.fn(),
   existsSync: jest.fn(() => true),
