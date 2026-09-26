@@ -74,6 +74,7 @@ function Settings() {
   const crInit = notifPrefs.communityReply || {};
   const cmInit = notifPrefs.communityMention || {};
   const cfInit = notifPrefs.communityFollow || {};
+  const srInit = notifPrefs.supportReply || {};
   const [drinkWindowEnabled, setDrinkWindowEnabled] = useState(dwInit.enabled !== false);
   const [drinkWindowEmail, setDrinkWindowEmail] = useState(dwInit.email === true);
   const [drinkWindowPush,  setDrinkWindowPush]  = useState(dwInit.push  === true);
@@ -82,6 +83,8 @@ function Settings() {
   const [communityMentionEmail, setCommunityMentionEmail] = useState(cmInit.email === true);
   const [communityMentionPush,  setCommunityMentionPush]  = useState(cmInit.push  !== false);
   const [communityFollowPush,   setCommunityFollowPush]   = useState(cfInit.push  !== false);
+  // Support answers are a service email, on unless turned off (User schema).
+  const [supportReplyEmail,     setSupportReplyEmail]     = useState(srInit.email !== false);
   // Combined "any push enabled?" flag — drives the device-registration UX
   // below. If the user turns off all push categories there's no reason to
   // keep a registered device.
@@ -182,7 +185,8 @@ function Settings() {
         drinkWindow:      { enabled: drinkWindowEnabled, email: drinkWindowEmail, push: drinkWindowPush },
         communityReply:   { email: communityReplyEmail,   push: communityReplyPush },
         communityMention: { email: communityMentionEmail, push: communityMentionPush },
-        communityFollow:  { push: communityFollowPush }
+        communityFollow:  { push: communityFollowPush },
+        supportReply:     { email: supportReplyEmail }
       }
     });
     setNotifSaving(false);
@@ -613,6 +617,14 @@ function Settings() {
                   onChange={e => setCommunityFollowPush(e.target.checked)}
                   disabled={!pushSupported || pushDenied} />
               </td>
+            </tr>
+            <tr>
+              <td>{t('settings.notifications.supportReply')}</td>
+              <td>
+                <input type="checkbox" aria-label={`${t('settings.notifications.supportReply')} — ${t('settings.notifications.email')}`}
+                  checked={supportReplyEmail} onChange={e => setSupportReplyEmail(e.target.checked)} />
+              </td>
+              <td className="settings-notif-grid__na">—</td>
             </tr>
           </tbody>
         </table>

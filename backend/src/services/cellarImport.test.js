@@ -45,6 +45,10 @@ const { mapBottlesForExport } = require('./cellarExport');
 const WineVintageProfile = require('../models/WineVintageProfile');
 const BottleImage = require('../models/BottleImage');
 
+// Real encodes of full-size photos: quick alone, but past the 5 s default
+// when every Jest worker is encoding at once.
+jest.setTimeout(30000);
+
 // Valid 24-hex ObjectIds so buildBottle's `new Bottle({...})` casts cleanly.
 const OID = {
   cellar: '64b0000000000000000000bb',

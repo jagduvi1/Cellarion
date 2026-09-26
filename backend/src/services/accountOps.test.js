@@ -74,12 +74,14 @@ describe('buildPreferencesUpdate', () => {
         communityReply: { email: true },
         evil: { hacked: true },              // ignored: not a known category
         communityFollow: { email: true },    // ignored: follow has no email leaf
+        supportReply: { email: false, push: true }, // push ignored: support answers are email-only
       },
     });
     expect(update).toEqual({
       'preferences.notifications.drinkWindow.enabled': false,
       'preferences.notifications.drinkWindow.push': true,
       'preferences.notifications.communityReply.email': true,
+      'preferences.notifications.supportReply.email': false,
     });
     expect(Object.keys(update).some((k) => k.includes('evil') || k.includes('hacked'))).toBe(false);
   });

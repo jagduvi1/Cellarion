@@ -78,6 +78,10 @@ async function buildPreferencesUpdate(userId, body = {}) {
     if (cf && typeof cf === 'object') {
       if (cf.push !== undefined) setLeaf('communityFollow.push', cf.push);
     }
+    const sr = notifications.supportReply;
+    if (sr && typeof sr === 'object') {
+      if (sr.email !== undefined) setLeaf('supportReply.email', sr.email);
+    }
   }
 
   if (currency !== undefined) {

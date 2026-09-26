@@ -24,6 +24,7 @@ describe('NOTIFICATION_CATEGORIES', () => {
       'communityReply',
       'communityMention',
       'communityFollow',
+      'supportReply',
     ]);
   });
 
@@ -158,5 +159,36 @@ describe('unsubscribeAllNotifications', () => {
     expect(user.preferences.notifications.drinkWindow.push).toBe(false);
     expect(user.markModified).toHaveBeenCalledTimes(1);
     expect(user.markModified).toHaveBeenCalledWith('preferences.notifications.drinkWindow');
+  });
+});
+
+// Support answers are emailed by default (2026-09-26). "Unsubscribe from all
+// Cellarion emails" must stop them too, including on accounts whose stored
+// settings were saved before the category existed.
+describe('support-reply emails and the one-click unsubscribe', () => {
+  it('turns the support-reply email off with everything else', () => {
+    const user = makeUser({ communityFollow: { push: true }, supportReply: { email: true } });
+
+    expect(unsubscribeAllNotifications(user)).toBe(true);
+    expect(user.preferences.notifications.supportReply.email).toBe(false);
+    expect(user.markModified).toHaveBeenCalledWith('preferences.notifications.supportReply');
+  });
+
+  it('covers an account stored before the category existed (the schema default fills it in)', () => {
+    const mongoose = require('mongoose');
+    const User = require('../models/User');
+    const user = User.hydrate({
+      _id: new mongoose.Types.ObjectId(),
+      username: 'older', email: 'older@cellarion.app',
+      preferences: { notifications: {
+        drinkWindow: { enabled: true, email: false, push: false },
+        communityReply: { email: false, push: true },
+      } },
+    });
+    expect(user.preferences.notifications.supportReply.email).toBe(true);
+
+    expect(unsubscribeAllNotifications(user)).toBe(true);
+    expect(user.preferences.notifications.supportReply.email).toBe(false);
+    expect(user.isModified('preferences.notifications.supportReply')).toBe(true);
   });
 });

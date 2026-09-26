@@ -36,6 +36,13 @@
   text-align: right;
 }
 
+/* Why we would email them, said where they give us the reason. */
+.support-modal-email-notice {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
 .support-modal-error {
   color: var(--color-danger);
   font-size: 0.875rem;

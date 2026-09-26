@@ -9,6 +9,7 @@
  *     communityReply:  { email, push },
  *     communityMention:{ email, push },
  *     communityFollow: { push },                 // no email — too noisy
+ *     supportReply:    { email },                // support answered your ticket
  *   }
  *
  * There is NO top-level `email` / `push` flag — writing to one is silently
@@ -29,6 +30,7 @@ const NOTIFICATION_CATEGORIES = [
   'communityReply',
   'communityMention',
   'communityFollow',
+  'supportReply',
 ];
 
 // Outbound channels we treat as "subject to unsubscribe". The in-app bell

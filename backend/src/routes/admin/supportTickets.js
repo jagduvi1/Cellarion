@@ -2,13 +2,48 @@ const express = require('express');
 const router = express.Router();
 const SupportTicket = require('../../models/SupportTicket');
 const Notification = require('../../models/Notification');
+const User = require('../../models/User');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const { logAudit } = require('../../services/audit');
+const { sendSupportReplyEmail, EMAIL_VERIFICATION_ENABLED } = require('../../services/mailgun');
 const { stripHtml } = require('../../utils/sanitize');
 const { parsePagination } = require('../../utils/pagination');
 const { isValidId } = require('../../utils/validation');
 
 const TICKET_STATUSES = ['open', 'in_progress', 'closed'];
+const REPLY_EMAIL_TIMEOUT_MS = 10000;
+
+/**
+ * Email the answer to the ticket's author too (2026-09-26): the in-app bell
+ * alone never reached someone who asked and left. Only to a verified address,
+ * and not when they turned support-reply emails off or unsubscribed (a missing
+ * setting means on). Best-effort and bounded: a mail outage must never fail
+ * or stall the reply itself. Resolves to whether the email went out.
+ */
+async function emailSupportReply(ticket, replyText) {
+  if (!EMAIL_VERIFICATION_ENABLED) return false;
+  let timer;
+  try {
+    const user = await User.findById(ticket.user)
+      .select('email emailVerified username displayName preferences.notifications.supportReply')
+      .lean();
+    if (!user || !user.email || !user.emailVerified) return false;
+    if (user.preferences?.notifications?.supportReply?.email === false) return false;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('timed out')), REPLY_EMAIL_TIMEOUT_MS);
+    });
+    await Promise.race([
+      sendSupportReplyEmail(user.email, user.displayName || user.username || 'there', String(ticket.user), ticket.subject, replyText),
+      timeout,
+    ]);
+    return true;
+  } catch (err) {
+    console.error('Support reply email failed:', err.message);
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 router.use(requireAuth, requireRole('admin'));
 
@@ -76,14 +111,16 @@ router.put('/:id/respond', async (req, res) => {
       message: `Your support ticket "${ticket.subject}" has received a response.`,
       link: '/support'
     });
+    const emailed = await emailSupportReply(ticket, cleaned);
 
     logAudit(req, 'support.ticket.responded', { type: 'SupportTicket', id: ticket._id }, {
-      status: newStatus
+      status: newStatus,
+      emailed
     });
 
     await ticket.populate('user', 'username email');
     await ticket.populate('respondedBy', 'username');
-    res.json({ ticket });
+    res.json({ ticket, emailed });
   } catch (err) {
     console.error('Admin respond to support ticket error:', err);
     res.status(500).json({ error: 'Failed to respond to support ticket' });
