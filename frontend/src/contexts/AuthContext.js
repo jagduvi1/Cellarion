@@ -37,6 +37,26 @@ const TIMED_OUT = Symbol('timed-out');
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
+ * What a refresh answer says about the session. Only the server saying no
+ * (401, or another 4xx that no retry can change) ends it. A 429 or a 5xx says
+ * the server can't answer right now — a deploy restarting it (502/503 for a
+ * few seconds), a hiccup, a rate limit — and used to sign people out exactly
+ * like a rejection (scaling audit 2026-09-25).
+ * @returns {'ok' | 'rejected' | 'unavailable'}
+ */
+export function refreshOutcome(status) {
+  if (status >= 200 && status < 300) return 'ok';
+  if (status === 408 || status === 425 || status === 429 || status >= 500) return 'unavailable';
+  return 'rejected';
+}
+
+// A start whose refresh the server couldn't answer, with no device copy to
+// open offline instead, tries again for a few seconds before showing the
+// login page: a deploy is over by then.
+export const START_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000];
+const transientStatus = (status) => refreshOutcome(status) === 'unavailable';
+
+/**
  * End this device's session on the server. The refresh cookie identifies it
  * (the bearer is optional), so this also works from an offline session. True
  * when the server answered; false with no network (then retried at next start).
@@ -163,8 +183,10 @@ export const AuthProvider = ({ children }) => {
   // another device no longer invalidates this browser's cookie; the race
   // above is the only remaining way two refreshes can collide.)
   // How the last refresh ended: 'ok', 'rejected' (the server said no — the
-  // session is dead) or 'network' (no answer at all — the device is offline).
-  // Only 'rejected' may end the session; see onRefreshFailed below.
+  // session is dead), 'network' (no answer at all — the device is offline) or
+  // 'unavailable' (the server answered but couldn't serve: a deploy, a 5xx,
+  // a rate limit — see refreshOutcome). Only 'rejected' may end the session;
+  // see onRefreshFailed below.
   const refreshOutcomeRef = useRef('ok');
 
   // A reload in the middle of a refresh used to sign the user out: the server
@@ -193,7 +215,7 @@ export const AuthProvider = ({ children }) => {
     } finally {
       markRefreshInFlight(false);
     }
-    refreshOutcomeRef.current = res.ok ? 'ok' : 'rejected';
+    refreshOutcomeRef.current = refreshOutcome(res.status);
     if (!res.ok) return null;
     const data = await res.json();
     sessionPersistentRef.current = data.persistent === true;
@@ -247,11 +269,13 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   }, []);
 
-  // A refresh that got NO answer (offline, a dead zone in the cellar) is not a
-  // dead session: logging out there would throw the user out — and wipe their
-  // offline data — every time the signal drops. Only a real rejection logs out.
+  // A refresh that got NO answer (offline, a dead zone in the cellar) or one
+  // the server couldn't serve (a deploy, a hiccup) is not a dead session:
+  // logging out there would throw the user out — and wipe their offline data —
+  // every time the signal drops or the server restarts. Only a real rejection
+  // logs out; the caller's request fails and the next one tries again.
   const onRefreshFailed = useCallback(() => {
-    if (refreshOutcomeRef.current === 'network') return;
+    if (refreshOutcomeRef.current !== 'rejected') return;
     logout({ keepQueue: true });
   }, [logout]);
 
@@ -299,13 +323,23 @@ export const AuthProvider = ({ children }) => {
       // One bar of signal hangs rather than fails: with an offline profile,
       // don't wait for it — start offline; the refresh carries on and the
       // reconnect effect picks the session up when it lands.
-      const newToken = kept
+      let newToken = kept
         ? await Promise.race([refresh, wait(START_WAIT_MS).then(() => TIMED_OUT)])
         : await refresh;
       if (newToken === TIMED_OUT) {
         refresh.then((tok) => { if (tok) window.dispatchEvent(new Event('online')); });
         goOffline();
         return;
+      }
+      // The server answered but couldn't serve (a deploy restarting it): with
+      // no device copy to open instead, give it a few seconds before showing
+      // the login page.
+      if (!newToken && !kept && refreshOutcomeRef.current === 'unavailable') {
+        for (const delay of START_RETRY_DELAYS_MS) {
+          await wait(delay);
+          newToken = await handleRefresh();
+          if (newToken || refreshOutcomeRef.current !== 'unavailable') break;
+        }
       }
       if (newToken) {
         const profile = fetchUserProfile(newToken);
@@ -314,15 +348,17 @@ export const AuthProvider = ({ children }) => {
         }
         return;
       }
-      if (refreshOutcomeRef.current === 'network') {
-        // Offline start: carry on as the last signed-in user, with no token,
-        // until the network is back (reconnect effect below).
-        if (kept) { goOffline(); return; }
-      } else {
+      if (refreshOutcomeRef.current === 'rejected') {
         // The server ended this session (signed out elsewhere, expired,
         // account deleted): nothing of it may stay on this device.
         clearOfflineUser();
         await clearOfflineData({ keepQueue: true });
+      } else if (kept) {
+        // Offline start — no network, or a server that can't answer right
+        // now: carry on as the last signed-in user, with no token, until it
+        // answers again (reconnect effect below).
+        goOffline();
+        return;
       }
       setLoading(false);
     };
@@ -332,10 +368,18 @@ export const AuthProvider = ({ children }) => {
 
   const fetchUserProfile = async (authToken) => {
     try {
-      const response = await fetch('/api/auth/me', {
+      const getMe = () => fetch('/api/auth/me', {
         headers: { 'Authorization': `Bearer ${authToken}` },
         credentials: 'include'
       });
+      let response = await getMe();
+      // The token is fresh: a server that can't answer right now (a deploy
+      // mid-restart) gets the same few seconds as the refresh does.
+      for (const delay of START_RETRY_DELAYS_MS) {
+        if (!transientStatus(response.status)) break;
+        await wait(delay);
+        response = await getMe();
+      }
 
       if (response.ok) {
         const data = await response.json();

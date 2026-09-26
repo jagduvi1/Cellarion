@@ -236,4 +236,13 @@ function startScheduler() {
   console.log('[scheduler] Cron jobs registered (wine-draft-expiry hourly :23, drink-window daily 06:00 UTC, value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, search-reconcile daily 02:37, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, recommendation-email-scrub daily 04:30 UTC, label-scan-retention daily 04:45 UTC, security-spike every 15 min, climate-offline every 15 min, demo-sweep every 15 min offset, registry-health weekly Mon 05:00 UTC, embed-sweep weekly Mon 05:30 UTC, bridge-refresh weekly Mon 06:30 UTC)');
 }
 
-module.exports = { startScheduler };
+/**
+ * Stop every scheduled job, so no new run starts (graceful shutdown,
+ * services/shutdown). A run already under way is not waited for: the jobs are
+ * capped, re-runnable sweeps, and the next process picks up at the next tick.
+ */
+async function stopScheduler() {
+  await Promise.allSettled([...cron.getTasks().values()].map((task) => task.stop()));
+}
+
+module.exports = { startScheduler, stopScheduler };

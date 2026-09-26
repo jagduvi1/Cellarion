@@ -101,6 +101,11 @@ services:
     build: ./backend
     container_name: cellarion-backend
     restart: unless-stopped
+    # A stop (every deploy) gives the backend up to 8 s to finish the work in
+    # progress (src/services/shutdown.js). Leave room for it before Docker's
+    # SIGKILL: the engine default is 10 s, and some installs (Docker Desktop)
+    # default to 1 s.
+    stop_grace_period: 15s
     security_opt:
       - no-new-privileges:true
     cap_drop:

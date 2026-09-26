@@ -444,10 +444,33 @@ router.post('/resend-verification', resendLimiter, async (req, res) => {
   }
 });
 
-// Rate limiter for refresh — 30 per 15 min to prevent abuse
+// Rate limiters for refresh — 30 per 15 min for one refresh token.
+//
+// Keyed on the token, not the address (scaling audit 2026-09-25): many people
+// can share one address — a mobile carrier's NAT, an office — and a per-IP
+// bucket made their refreshes compete, with a 429 for whoever came last.
+// Every successful refresh rotates the token, so this bounds a client retrying
+// the SAME token (a retry loop against a failing server), which is what needs
+// bounding. A request without a cookie falls back to its address.
+const refreshKey = (req) => {
+  const raw = req.cookies?.refreshToken;
+  return raw ? `rt:${hashRefreshToken(raw).slice(0, 32)}` : `ip:${rateLimitKey(req)}`;
+};
 const refreshLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
+  keyGenerator: refreshKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    res.status(429).json({ error: 'Too many refresh attempts, please try again later' });
+  }
+});
+// …plus a per-address ceiling far above any household or shared network, so
+// made-up cookies (each its own bucket above) can't hammer the session lookup.
+const refreshIpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
   keyGenerator: (req) => rateLimitKey(req),
   standardHeaders: true,
   legacyHeaders: false,
@@ -457,7 +480,7 @@ const refreshLimiter = rateLimit({
 });
 
 // POST /api/auth/refresh - Issue new access token using httpOnly refresh token cookie
-router.post('/refresh', refreshLimiter, async (req, res) => {
+router.post('/refresh', refreshIpLimiter, refreshLimiter, async (req, res) => {
   const incomingToken = req.cookies?.refreshToken;
   if (!incomingToken) {
     return res.status(401).json({ error: 'No refresh token' });
@@ -515,9 +538,14 @@ router.post('/refresh', refreshLimiter, async (req, res) => {
     // allows an offline start for a session that survives closing the browser.
     res.json({ token: accessToken, persistent: session.persistent !== false });
   } catch (error) {
+    // A server-side failure — the database mid-restart during a deploy, a
+    // save racing a login on another device — says nothing about the
+    // session. Answer "try again" and KEEP the cookie: nothing was rotated,
+    // so the token the client holds is still the live one. This used to
+    // clear the cookie and answer 401, signing people out on any hiccup.
     console.error('Refresh error:', error);
-    clearRefreshCookie(res);
-    res.status(401).json({ error: 'Invalid or expired refresh token' });
+    res.setHeader('Retry-After', '5');
+    res.status(503).json({ error: 'Could not refresh the session right now, please try again' });
   }
 });
 

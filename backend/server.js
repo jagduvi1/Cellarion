@@ -49,12 +49,26 @@ process.on('unhandledRejection', (reason) => {
   console.error('[unhandledRejection]', reason);
 });
 
+// Stop signals (a deploy sends SIGTERM). Until the server is up there is
+// nothing to finish, so a signal during boot exits at once; once it listens,
+// this becomes the graceful routine (services/shutdown).
+let shutdown = (signal) => {
+  console.log(`[shutdown] ${signal} before the server started — exiting`);
+  process.exit(0);
+};
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
 const fs = require('fs');
+const mongoose = require('mongoose');
 const app = require('./src/app');
 const connectDB = require('./src/config/db');
 const searchService = require('./src/services/search');
-const { startScheduler } = require('./src/services/scheduler');
-const { cleanupOrphanedImages } = require('./src/services/imageProcessor');
+const eventBus = require('./src/services/eventBus');
+const mcpSessions = require('./src/mcp/sessions');
+const { startScheduler, stopScheduler } = require('./src/services/scheduler');
+const { cleanupOrphanedImages, whenProcessingIdle } = require('./src/services/imageProcessor');
+const { createShutdown } = require('./src/services/shutdown');
 
 const PORT = process.env.PORT || 5000;
 
@@ -105,11 +119,11 @@ connectDB().then(async () => {
   // Purge expired soft-deleted reply texts on startup and every 24h
   const DiscussionReply = require('./src/models/DiscussionReply');
   DiscussionReply.purgeExpiredDeletes().catch(() => {});
-  setInterval(() => DiscussionReply.purgeExpiredDeletes().catch(() => {}), 24 * 60 * 60 * 1000);
+  const purgeTimer = setInterval(() => DiscussionReply.purgeExpiredDeletes().catch(() => {}), 24 * 60 * 60 * 1000);
 
   // Clean up orphaned images on startup and every hour
   cleanupOrphanedImages().catch(() => {});
-  setInterval(() => cleanupOrphanedImages().catch(() => {}), 60 * 60 * 1000);
+  const cleanupTimer = setInterval(() => cleanupOrphanedImages().catch(() => {}), 60 * 60 * 1000);
 
   // Start scheduled jobs (drink-window notifier, value snapshots)
   startScheduler();
@@ -123,4 +137,20 @@ connectDB().then(async () => {
   // are unaffected — they send their request quickly and stream the reply.
   server.requestTimeout = 120000; // 2 min to receive the full request
   server.headersTimeout = 65000;  // 65s to receive request headers
+
+  // From here a stop signal finishes the work in progress before exiting.
+  shutdown = createShutdown({
+    server,
+    stopJobs: async () => {
+      clearInterval(purgeTimer);
+      clearInterval(cleanupTimer);
+      await stopScheduler();
+    },
+    closeStreams: () => {
+      eventBus.closeAll();
+      mcpSessions.closeAllSessions('shutdown');
+    },
+    drains: [whenProcessingIdle],
+    closeDb: () => mongoose.disconnect(),
+  });
 });
