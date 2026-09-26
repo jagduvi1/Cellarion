@@ -236,7 +236,8 @@ function createSitemapRouter({
       res.set('Cache-Control', 'public, max-age=3600');
       return res.send(xml);
     } catch (err) {
-      console.error(`[sitemap] ${part} generation error:`, err);
+      // The part is an argument, never part of the format string.
+      console.error('[sitemap] generation error for part %s:', part, err);
       return res.status(500).set({ 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' }).send('Sitemap generation failed');
     }
   });
