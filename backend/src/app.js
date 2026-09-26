@@ -6,7 +6,7 @@ const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
 const { rateLimitKey } = require('./utils/clientIp');
 const { requireAuth } = require('./middleware/auth');
-const { uploadsGuard, uploadsCacheHeaders } = require('./middleware/uploadsStatic');
+const { uploadsGuard, uploadsCacheHeaders, convertedPhotoFallback } = require('./middleware/uploadsStatic');
 const { thumbnailHandler } = require('./services/thumbnails');
 const healthRoute = require('./routes/health');
 const siteRoute = require('./routes/site');
@@ -303,9 +303,11 @@ app.use('/api/', writeLimiter);
 // stays no-store, so a 404 can never be cached by a CDN — see uploadsStatic.
 // Card-size WebP thumbnails of processed photos, rendered on first request
 // (services/thumbnails). Mounted first so a thumbnail path never reaches the
-// plain static mount.
+// plain static mount. A miss on a photo's pre-WebP address (x.png) is answered
+// with its converted file (x.webp) — convertedPhotoFallback, after the static
+// mount so it only runs on a miss.
 app.use('/api/uploads/thumbs', thumbnailHandler);
-app.use('/api/uploads', uploadsGuard, express.static('/app/uploads', { setHeaders: uploadsCacheHeaders }));
+app.use('/api/uploads', uploadsGuard, express.static('/app/uploads', { setHeaders: uploadsCacheHeaders }), convertedPhotoFallback);
 
 // Routes
 app.use('/api/health', healthRoute);

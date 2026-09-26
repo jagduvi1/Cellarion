@@ -10,11 +10,18 @@
  * (see middleware/uploadsStatic.js — a cached 404 once stuck at Cloudflare for
  * a year).
  *
- * Why: the processed photos are full-resolution PNGs (prod 2026-09: median
- * ~300 KB, some over 10 MB) and they are tall and narrow, while cards and list
- * rows show them 36–350 CSS px tall. A 400×640 WebP is ~13 KB on average —
- * about 40× less for every card grid, and small enough to keep a whole cellar's
- * photos on a phone for offline use (#1355).
+ * Why: the processed photos are up to 2048 px tall (services/photoFormat —
+ * until 2026-09 full-resolution PNGs, median ~300 KB, some over 10 MB), while
+ * cards and list rows show them 36–350 CSS px tall. A 400×640 WebP is ~13 KB
+ * on average — a fraction of the full photo for every card grid, and small
+ * enough to keep a whole cellar's photos on a phone for offline use (#1355).
+ * A new photo's thumbnail is rendered when it is processed (warmThumbFor), so
+ * only older photos pay the first-request render.
+ *
+ * A photo converted to WebP (scripts/convert-photos-webp.js) keeps its old
+ * thumbnail address working: `x.png.webp` is answered with the thumbnail of
+ * `x.webp` once `x.png` is gone — offline copies and API answers from before
+ * the conversion still ask for the old name.
  *
  * Unauthenticated like the rest of /api/uploads: it can only derive a thumbnail
  * from a file that is already publicly served there.
@@ -38,6 +45,21 @@ function thumbUrlFor(url) {
   if (typeof url !== 'string') return null;
   const m = /^\/api\/uploads\/processed\/([^/]+)$/.exec(url);
   return m && SOURCE_NAME.test(m[1]) ? `/api/uploads/${THUMBS_SUBDIR}/${SOURCE_SUBDIR}/${m[1]}.webp` : null;
+}
+
+/** `x.png` / `x.jpg` → `x.webp`, the name a converted photo lives under; else null. */
+function webpSibling(sourceName) {
+  const m = /^([A-Za-z0-9_-]+)\.(?:png|jpe?g)$/i.exec(sourceName);
+  return m ? `${m[1]}.webp` : null;
+}
+
+async function exists(file) {
+  try {
+    await fs.promises.access(file);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function createThumbnailService({ uploadsRoot = '/app/uploads', sharp: sharpImpl = null } = {}) {
@@ -90,26 +112,31 @@ function createThumbnailService({ uploadsRoot = '/app/uploads', sharp: sharpImpl
     if (req.method !== 'GET' && req.method !== 'HEAD') return res.status(405).json({ error: 'Method not allowed' });
     const m = /^\/processed\/([^/]+)\.webp$/.exec(req.path);
     if (!m || !SOURCE_NAME.test(m[1])) return res.status(404).json({ error: 'Not found' });
-    const sourceName = m[1];
-    const thumbPath = path.join(thumbDir, `${sourceName}.webp`);
+    let sourceName = m[1];
+    let thumbPath = path.join(thumbDir, `${sourceName}.webp`);
 
-    try {
-      await fs.promises.access(thumbPath);
-    } catch {
-      try {
-        await fs.promises.access(path.join(sourceDir, sourceName));
-      } catch {
-        return res.status(404).json({ error: 'Not found' });
-      }
-      try {
-        await ensureThumb(sourceName, thumbPath);
-      } catch (err) {
-        if (err.code === 'BUSY') {
-          res.setHeader('Retry-After', '5');
-          return res.status(503).json({ error: 'Thumbnail busy' });
+    if (!(await exists(thumbPath))) {
+      if (!(await exists(path.join(sourceDir, sourceName)))) {
+        // Converted to WebP since this address was handed out: answer with
+        // the thumbnail of the photo's new file.
+        const sibling = webpSibling(sourceName);
+        if (!sibling || !(await exists(path.join(sourceDir, sibling)))) {
+          return res.status(404).json({ error: 'Not found' });
         }
-        console.warn(`[thumbs] could not render ${sourceName}:`, err.message);
-        return res.status(500).json({ error: 'Thumbnail failed' });
+        sourceName = sibling;
+        thumbPath = path.join(thumbDir, `${sibling}.webp`);
+      }
+      if (!(await exists(thumbPath))) {
+        try {
+          await ensureThumb(sourceName, thumbPath);
+        } catch (err) {
+          if (err.code === 'BUSY') {
+            res.setHeader('Retry-After', '5');
+            return res.status(503).json({ error: 'Thumbnail busy' });
+          }
+          console.warn(`[thumbs] could not render ${sourceName}:`, err.message);
+          return res.status(500).json({ error: 'Thumbnail failed' });
+        }
       }
     }
 
@@ -123,6 +150,26 @@ function createThumbnailService({ uploadsRoot = '/app/uploads', sharp: sharpImpl
         res.status(404).json({ error: 'Not found' });
       }
     });
+  }
+
+  /**
+   * Render the thumbnail of a processed upload URL now, if it isn't on disk
+   * yet — called when a photo is processed, so its first card view is a plain
+   * file read. Shares the render limit with requests. Never throws; returns
+   * whether the thumbnail exists afterwards.
+   */
+  async function warmThumbFor(url) {
+    try {
+      if (!thumbUrlFor(url)) return false;
+      const sourceName = path.basename(url);
+      const thumbPath = path.join(thumbDir, `${sourceName}.webp`);
+      if (await exists(thumbPath)) return true;
+      await ensureThumb(sourceName, thumbPath);
+      return true;
+    } catch (err) {
+      if (err.code !== 'BUSY') console.warn(`[thumbs] could not pre-render the thumbnail of ${url}:`, err.message);
+      return false;
+    }
   }
 
   /** Delete the thumbnail of a source upload URL. Never throws. */
@@ -169,7 +216,7 @@ function createThumbnailService({ uploadsRoot = '/app/uploads', sharp: sharpImpl
     return removed;
   }
 
-  return { handler, unlinkThumbFor, sweepOrphanThumbs };
+  return { handler, warmThumbFor, unlinkThumbFor, sweepOrphanThumbs };
 }
 
 const defaultService = createThumbnailService();
@@ -178,6 +225,7 @@ module.exports = {
   createThumbnailService,
   thumbUrlFor,
   thumbnailHandler: defaultService.handler,
+  warmThumbFor: defaultService.warmThumbFor,
   unlinkThumbFor: defaultService.unlinkThumbFor,
   sweepOrphanThumbs: defaultService.sweepOrphanThumbs,
   THUMB_MAX_WIDTH,

@@ -103,3 +103,85 @@ describe('allowlist contents', () => {
     expect([...ALLOWED_EXTENSIONS].sort()).toEqual(['.jpeg', '.jpg', '.png', '.webp']);
   });
 });
+
+describe('convertedPhotoFallback — a converted photo keeps its old address', () => {
+  // A real express stack in app.js order: guard → static → fallback → 404.
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const http = require('http');
+  const express = require('express');
+  const rateLimit = require('express-rate-limit');
+  const { createConvertedPhotoFallback } = require('../middleware/uploadsStatic');
+
+  const STEM = '0f3b2a1c-1111-4222-8333-944445555666';
+  const WEBP = Buffer.from('RIFF\x10\x00\x00\x00WEBPVP8 fake-bytes', 'latin1');
+  let root;
+  let server;
+  let base;
+
+  beforeAll(async () => {
+    root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'uploads-'));
+    await fs.promises.mkdir(path.join(root, 'processed'));
+    await fs.promises.mkdir(path.join(root, 'originals'));
+    await fs.promises.writeFile(path.join(root, 'processed', `${STEM}.webp`), WEBP);
+    await fs.promises.writeFile(path.join(root, 'originals', `${STEM}.webp`), WEBP);
+    await fs.promises.writeFile(path.join(root, 'processed', 'still-a.png'), 'PNG-BYTES');
+    await fs.promises.writeFile(path.join(root, 'processed', 'still-a.webp'), WEBP);
+
+    const app = express();
+    // Like the real app (app.js mounts its API rate limiter ahead of
+    // /api/uploads); generous enough never to trip in these tests.
+    app.use(rateLimit({ windowMs: 60 * 1000, max: 10000, standardHeaders: false, legacyHeaders: false }));
+    app.use('/api/uploads', uploadsGuard, express.static(root, { setHeaders: uploadsCacheHeaders }), createConvertedPhotoFallback({ uploadsRoot: root }));
+    app.use((req, res) => res.status(404).json({ error: 'Not found' }));
+    server = http.createServer(app);
+    await new Promise((r) => server.listen(0, r));
+    base = `http://127.0.0.1:${server.address().port}/api/uploads`;
+  });
+
+  afterAll(async () => {
+    await new Promise((r) => server.close(r));
+    await fs.promises.rm(root, { recursive: true, force: true });
+  });
+
+  test.each([
+    `/processed/${STEM}.png`,
+    `/processed/${STEM}.jpg`,
+    `/processed/${STEM}.JPEG`,
+    `/originals/${STEM}.png`,
+  ])('%s is answered with the converted WebP, cached like any served file', async (p) => {
+    const res = await fetch(`${base}${p}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('image/webp');
+    expect(res.headers.get('cache-control')).toBe(IMMUTABLE_CACHE);
+    expect(Buffer.from(await res.arrayBuffer())).toEqual(WEBP);
+  });
+
+  test('HEAD works the same way', async () => {
+    const res = await fetch(`${base}/processed/${STEM}.png`, { method: 'HEAD' });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('image/webp');
+  });
+
+  test('a file that still exists under its own name is served as itself', async () => {
+    const res = await fetch(`${base}/processed/still-a.png`);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe('PNG-BYTES');
+  });
+
+  test('no converted file → the ordinary no-store 404 (never a cached miss)', async () => {
+    const res = await fetch(`${base}/processed/aaaaaaaa-0000-4000-8000-000000000000.png`);
+    expect(res.status).toBe(404);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+  });
+
+  test.each([
+    `/thumbs/${STEM}.png`,               // only processed/ and originals/
+    `/processed/${STEM}.gif`,            // not an allowed type at all
+    '/processed/..%2Foriginals%2Fx.png', // never leaves its folder
+  ])('%s is not rewritten', async (p) => {
+    const res = await fetch(`${base}${p}`);
+    expect(res.status).not.toBe(200);
+  });
+});

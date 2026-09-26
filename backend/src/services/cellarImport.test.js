@@ -454,8 +454,8 @@ describe('attachImages sanitization (SECURITY_AUDIT L-13)', () => {
   });
 
   test('the file extension follows the actual bytes, not the archive filename', async () => {
-    // A real JPEG smuggled under a "processed …png" archive name must be
-    // written as .jpg (the sanitizer preserves the decoded format).
+    // A real JPEG smuggled under a "processed …png" archive name: the kept
+    // file is the WebP it is converted to, named for what it really is.
     const jpeg = await jpegWithExif();
     const result = freshResult();
 
@@ -464,12 +464,63 @@ describe('attachImages sanitization (SECURITY_AUDIT L-13)', () => {
       () => jpeg, result, new Map(), 0
     );
 
-    const [writtenPath] = writeSpy.mock.calls[0];
-    expect(String(writtenPath)).toMatch(/\.jpg$/);
+    const [writtenPath, writtenBuf] = writeSpy.mock.calls[0];
+    expect(String(writtenPath)).toMatch(/\.webp$/);
+    const meta = await sharp(writtenBuf).metadata();
+    expect(meta.format).toBe('webp');
+    // Encoded from the accepted archive bytes — EXIF/GPS still never land on disk.
+    expect(meta.exif).toBeUndefined();
     expect(BottleImage.create).toHaveBeenCalledWith(
-      expect.objectContaining({ processedUrl: expect.stringMatching(/\.jpg$/) })
+      expect.objectContaining({ processedUrl: expect.stringMatching(/^\/api\/uploads\/processed\/.+\.webp$/) })
     );
     expect(result.imagesAttached).toBe(1);
+  });
+
+  test('a processed image that fails the sanitizer is never encoded or written', async () => {
+    const result = freshResult();
+    await attachImages(
+      freshBottle(), [{ processed: 'images/processed/evil.png' }], 'u1',
+      () => Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'), result, new Map(), 0
+    );
+    expect(result.imagesSkipped).toBe(1);
+    expect(writeSpy).not.toHaveBeenCalled();
+  });
+
+  test('a cut-out photo from an older export (full-size PNG) is kept as a WebP of at most 2048 px, transparency intact', async () => {
+    const png = await sharp({ create: { width: 900, height: 3000, channels: 4, background: { r: 90, g: 10, b: 30, alpha: 0.5 } } })
+      .png()
+      .toBuffer();
+    const result = freshResult();
+
+    await attachImages(
+      freshBottle(), [{ processed: 'images/processed/old.png' }], 'u1',
+      () => png, result, new Map(), 0
+    );
+
+    const [writtenPath, writtenBuf] = writeSpy.mock.calls[0];
+    expect(String(writtenPath)).toMatch(/processed[\\/][^\\/]+\.webp$/);
+    const meta = await sharp(writtenBuf).metadata();
+    expect(meta.format).toBe('webp');
+    expect(meta.height).toBe(2048);
+    expect(meta.hasAlpha).toBe(true);
+    // Dedup still keys on the bytes AS EXPORTED — a re-import of the same
+    // archive must keep matching.
+    expect(BottleImage.create).toHaveBeenCalledWith(expect.objectContaining({
+      contentHash: require('crypto').createHash('sha256').update(png).digest('hex'),
+    }));
+  });
+
+  test('an original-only photo (never cut out) is kept in its own format — it may still go to rembg', async () => {
+    const jpeg = await jpegWithExif();
+    const result = freshResult();
+
+    await attachImages(
+      freshBottle(), [{ original: 'images/originals/raw.jpg' }], 'u1',
+      () => jpeg, result, new Map(), 0
+    );
+
+    const [writtenPath] = writeSpy.mock.calls[0];
+    expect(String(writtenPath)).toMatch(/originals[\\/][^\\/]+\.jpg$/);
   });
 
   test('all images bad → nothing written, import result still sane', async () => {

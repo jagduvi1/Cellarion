@@ -3,7 +3,8 @@ const path = require('path');
 const crypto = require('crypto');
 const { PROCESSED_DIR } = require('../config/upload');
 const BottleImage = require('../models/BottleImage');
-const { unlinkThumbFor, sweepOrphanThumbs } = require('./thumbnails');
+const { unlinkThumbFor, warmThumbFor, sweepOrphanThumbs } = require('./thumbnails');
+const { encodeKeptPhoto, prepareRembgInput, KEPT_EXTENSION } = require('./photoFormat');
 
 /**
  * SHA-256 (hex) of an image's bytes — the dedup key stored on BottleImage.contentHash.
@@ -155,10 +156,14 @@ async function processImage(imageId) {
     const originalPath = safeUploadPath(image.originalUrl.replace('/api/uploads/', ''));
     const fileBuffer = fs.readFileSync(originalPath);
 
+    // rembg gets the frame scaled down to what is kept anyway — a full-size
+    // phone photo could exhaust its memory (services/photoFormat).
+    const input = await prepareRembgInput(fileBuffer);
+
     // Build multipart form data using Node 20 built-in fetch
     const formData = new FormData();
-    const blob = new Blob([fileBuffer], { type: 'image/jpeg' });
-    formData.append('image', blob, 'input.jpg');
+    const blob = new Blob([input.buffer], { type: input.type });
+    formData.append('image', blob, input.filename);
 
     const response = await fetch(`${REMBG_URL}/remove-bg`, {
       method: 'POST',
@@ -171,13 +176,15 @@ async function processImage(imageId) {
       throw new Error(`rembg returned ${response.status}: ${errText}`);
     }
 
-    // Save processed PNG
+    // rembg answers with a lossless PNG; what is kept is a WebP of it
+    // (services/photoFormat — about 8× smaller, transparency intact).
     const resultBuffer = Buffer.from(await response.arrayBuffer());
+    const keptBuffer = await encodeKeptPhoto(resultBuffer);
     const basename = path.basename(image.originalUrl, path.extname(image.originalUrl));
-    const processedFilename = `${basename}.png`;
+    const processedFilename = `${basename}.${KEPT_EXTENSION}`;
     const processedPath = path.join(PROCESSED_DIR, processedFilename);
 
-    fs.writeFileSync(processedPath, resultBuffer);
+    fs.writeFileSync(processedPath, keptBuffer);
     // A re-run (retry / admin reprocess) rewrites the same filename: drop the
     // thumbnail rendered from the previous bytes so the next request re-renders.
     await unlinkThumbFor(`/api/uploads/processed/${processedFilename}`);
@@ -188,7 +195,7 @@ async function processImage(imageId) {
     // cellar export carries and re-imports.
     image.processedUrl = `/api/uploads/processed/${processedFilename}`;
     image.status = settledStatus;
-    image.contentHash = hashImageBytes(resultBuffer);
+    image.contentHash = hashImageBytes(keptBuffer);
     await image.save();
 
     // Official wine images (assignedToWine) may have been APPROVED before (or
@@ -211,6 +218,11 @@ async function processImage(imageId) {
     // AFTER the wine-image upgrade above, so WineDefinition.image never points
     // at a file that has just been deleted, even for a moment.
     await discardOriginal(image);
+
+    // Render the card thumbnail now, so the first cellar view after an upload
+    // reads a file instead of queueing a render. Best-effort: a miss here is
+    // rendered on first request as before.
+    await warmThumbFor(image.processedUrl);
 
     console.log(`Image ${imageId} processed successfully`);
   } catch (error) {

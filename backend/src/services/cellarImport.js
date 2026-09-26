@@ -43,6 +43,7 @@ const { findOrCreateWine } = require('./findOrCreateWine');
 const { logAudit } = require('./audit');
 const { unlinkImageFiles, safeUploadPath } = require('./imageProcessor');
 const { sanitizeImageBuffer, detectImageFormat } = require('./imageSanitizer');
+const { encodeKeptPhoto, KEPT_EXTENSION } = require('./photoFormat');
 const { ORIGINALS_DIR, PROCESSED_DIR } = require('../config/upload');
 const { planRackCreations, placeBottlesInRack, DEFAULT_ANCHOR } = require('../utils/rackImport');
 const { getMaxPosition, cabinetShelfRows, cabinetShelfCols, cabinetShelfAlternate } = require('../utils/rackGeometry');
@@ -594,8 +595,21 @@ async function attachImages(bottle, images, userId, getFileBuffer, result, dedup
       const uuid = crypto.randomUUID();
       const ext = { jpeg: '.jpg', png: '.png', webp: '.webp' }[detectImageFormat(safeBuf)] || '.jpg';
       if (procBuf) {
-        const procName = `${uuid}${ext}`;
-        fs.writeFileSync(path.join(PROCESSED_DIR, procName), safeBuf);
+        // Stored the way every kept photo is (services/photoFormat: WebP, at
+        // most 2048 px) — an older export carries the full-size PNG. Encoded
+        // from the archive bytes the sanitizer has just accepted, not from its
+        // re-encode: one lossy step, not two, for a re-imported export. The
+        // encode drops EXIF/GPS the same way.
+        let keptBuf;
+        try {
+          keptBuf = await encodeKeptPhoto(primaryBuf);
+        } catch {
+          result.imagesSkipped++;
+          result.errors.push({ index: sourceIndex, reason: `Image "${procArchive}" skipped: it could not be converted` });
+          continue;
+        }
+        const procName = `${uuid}.${KEPT_EXTENSION}`;
+        fs.writeFileSync(path.join(PROCESSED_DIR, procName), keptBuf);
         processedUrl = `/api/uploads/processed/${procName}`;
       } else {
         // Original-only image (never cropped) — keep it so the photo isn't lost.
