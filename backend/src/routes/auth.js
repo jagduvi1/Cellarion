@@ -1,7 +1,7 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const bcrypt = require('bcryptjs');
+const bcrypt = require('bcrypt');
 const rateLimit = require('express-rate-limit');
 const User = require('../models/User');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
@@ -31,7 +31,7 @@ const router = express.Router();
 // cannot be used for account enumeration (L-1). It MUST be generated at
 // User.BCRYPT_COST (12) — a cheaper hash compares ~4x faster and reopens the
 // timing oracle. Regenerate if the cost ever changes:
-//   node -e "console.log(require('bcryptjs').hashSync(require('crypto').randomBytes(32).toString('hex'), 12))"
+//   node -e "console.log(require('bcrypt').hashSync(require('crypto').randomBytes(32).toString('hex'), 12))"
 const DUMMY_HASH = '$2a$12$KHe5z0O8iNPzEuBLuI.qQOzUxRhCDEIAkNnrno5lWxvC4andqTkfm';
 if (bcrypt.getRounds(DUMMY_HASH) !== User.BCRYPT_COST) {
   throw new Error(`DUMMY_HASH cost ${bcrypt.getRounds(DUMMY_HASH)} != BCRYPT_COST ${User.BCRYPT_COST} — regenerate DUMMY_HASH in routes/auth.js`);
