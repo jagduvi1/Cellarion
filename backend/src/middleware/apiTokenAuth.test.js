@@ -368,21 +368,54 @@ describe('authenticateApiToken', () => {
     expect(req.user.plan).toBe('free');
   });
 
-  test('lastUsedAt is written (and token.used audited) only when stale', async () => {
-    // Fresh lastUsedAt → no write, no audit
-    ApiToken.findOne.mockResolvedValue(activeToken({ lastUsedAt: new Date() }));
-    User.findById.mockReturnValue(selectable(activeUser()));
-    await authenticateApiToken(mockReq(), mockRes(), jest.fn(), RAW);
-    expect(ApiToken.updateOne).not.toHaveBeenCalled();
-    expect(logAudit).not.toHaveBeenCalled();
+  describe('usage bookkeeping: lastUsedAt hourly, token.used once a day', () => {
+    // A fixed clock: 2026-09-26 10:00 UTC.
+    beforeEach(() => jest.useFakeTimers({ now: new Date('2026-09-26T10:00:00Z') }));
+    afterEach(() => jest.useRealTimers());
+    const use = async (lastUsedAt) => {
+      ApiToken.findOne.mockResolvedValue(activeToken({ lastUsedAt }));
+      User.findById.mockReturnValue(selectable(activeUser()));
+      await authenticateApiToken(mockReq(), mockRes(), jest.fn(), RAW);
+    };
 
-    // Stale lastUsedAt → one write + one audit with the token id, never the token
-    ApiToken.findOne.mockResolvedValue(activeToken({ lastUsedAt: new Date(Date.now() - 2 * 3600 * 1000) }));
-    await authenticateApiToken(mockReq(), mockRes(), jest.fn(), RAW);
-    expect(ApiToken.updateOne).toHaveBeenCalledTimes(1);
-    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'token.used', { type: 'apiToken', id: tokenId }, {});
-    const auditJson = JSON.stringify(logAudit.mock.calls);
-    expect(auditJson).not.toContain(RAW);
+    test('used within the hour: no write, no audit', async () => {
+      await use(new Date('2026-09-26T09:30:00Z'));
+      expect(ApiToken.updateOne).not.toHaveBeenCalled();
+      expect(logAudit).not.toHaveBeenCalled();
+    });
+
+    test('stale but already used today: lastUsedAt is written, no second token.used today', async () => {
+      await use(new Date('2026-09-26T07:59:00Z'));
+      expect(ApiToken.updateOne).toHaveBeenCalledTimes(1);
+      expect(logAudit).not.toHaveBeenCalled();
+    });
+
+    test('the first use of the day: write + one token.used with the token id, never the token', async () => {
+      await use(new Date('2026-09-25T23:30:00Z'));
+      expect(ApiToken.updateOne).toHaveBeenCalledTimes(1);
+      expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'token.used', { type: 'apiToken', id: tokenId }, {});
+      expect(JSON.stringify(logAudit.mock.calls)).not.toContain(RAW);
+    });
+
+    test('a token never used before is audited on its first use', async () => {
+      await use(null);
+      expect(ApiToken.updateOne).toHaveBeenCalledTimes(1);
+      expect(logAudit).toHaveBeenCalledTimes(1);
+    });
+
+    test('a token polling all day long writes lastUsedAt every time the hour is up, token.used once', async () => {
+      let lastUsedAt = new Date('2026-09-25T23:10:00Z');
+      ApiToken.updateOne.mockImplementation((q, u) => { lastUsedAt = u.$set.lastUsedAt; return Promise.resolve({}); });
+      let polls = 0;
+      for (let t = Date.UTC(2026, 8, 26, 0, 15); t < Date.UTC(2026, 8, 27); t += 65 * 60 * 1000) {
+        jest.setSystemTime(new Date(t));
+        await use(lastUsedAt);
+        polls++;
+      }
+      expect(polls).toBeGreaterThan(20);
+      expect(ApiToken.updateOne).toHaveBeenCalledTimes(polls);
+      expect(logAudit).toHaveBeenCalledTimes(1);
+    });
   });
 });
 

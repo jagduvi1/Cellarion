@@ -26,7 +26,9 @@ RUN npm ci --omit=dev
 # require() time from the @img/sharp-linuxmusl-* optional deps, so a lockfile
 # regenerated off-alpine (which drops them) breaks only when the first image
 # upload hits imageProcessor. A Node major bump is exactly when that can slip.
-RUN node -e "require('sharp')"
+# bcrypt is native the same way (its musl build ships inside the package):
+# checked here too, or a broken binary would first show as failed logins.
+RUN node -e "require('sharp'); require('bcrypt')"
 
 COPY . .
 

@@ -26,12 +26,21 @@ jest.mock('../../services/imageProcessor', () => {
   const actual = jest.requireActual('../../services/imageProcessor');
   return { ...actual, unlinkImageFiles: jest.fn() };
 });
-jest.mock('fs', () => ({
-  readFileSync: jest.fn(),
-  writeFileSync: jest.fn(),
-  existsSync: jest.fn(() => true),
-  promises: { unlink: jest.fn().mockResolvedValue(undefined), readdir: jest.fn(), stat: jest.fn() },
-}));
+// The real module with the file operations under test stubbed — not a bare
+// object: the auth middleware loads the User model, and native bcrypt's loader
+// probes the real disk (fs.readdirSync for its prebuilds, and
+// existsSync('/etc/alpine-release') to pick musl vs glibc — answering "yes"
+// to every path made it load the musl binary on a glibc CI runner).
+jest.mock('fs', () => {
+  const real = jest.requireActual('fs');
+  return {
+    ...real,
+    readFileSync: jest.fn(),
+    writeFileSync: jest.fn(),
+    existsSync: jest.fn((p) => (String(p).startsWith('/app/uploads') ? true : real.existsSync(p))),
+    promises: { unlink: jest.fn().mockResolvedValue(undefined), readdir: jest.fn(), stat: jest.fn() },
+  };
+});
 jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../../services/notifications', () => ({ createNotification: jest.fn() }));
 jest.mock('../../utils/cellarCred', () => ({ incrementCred: jest.fn().mockResolvedValue(undefined) }));

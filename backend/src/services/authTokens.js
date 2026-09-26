@@ -219,17 +219,8 @@ const issueTokens = async (user, res, { rememberMe, session, client, expiresAt }
     if (!session.expiresAt) session.expiresAt = new Date(now + REFRESH_ABSOLUTE_LIFETIME_MS);
     persistent = session.persistent !== false;
   } else {
-    pruneSessions(user, now);
-    const list = sessionsOf(user);
-    while (list.length >= MAX_SESSIONS_PER_USER) {
-      let oldest = 0;
-      for (let i = 1; i < list.length; i++) {
-        if (new Date(list[i].lastUsedAt).getTime() < new Date(list[oldest].lastUsedAt).getTime()) oldest = i;
-      }
-      list.splice(oldest, 1);
-    }
     persistent = rememberMe !== false;
-    list.push({
+    await saveWithNewSession(user, {
       hash,
       prevHash: null,
       rotatedAt: null,
@@ -238,13 +229,68 @@ const issueTokens = async (user, res, { rememberMe, session, client, expiresAt }
       createdAt: new Date(now),
       lastUsedAt: new Date(now),
       client: client || 'Unknown device',
-    });
+    }, now);
+    res.cookie('refreshToken', refreshToken, buildCookieOptions(persistent));
+    return accessToken;
   }
 
   await user.save();
   res.cookie('refreshToken', refreshToken, buildCookieOptions(persistent));
   return accessToken;
 };
+
+// Start a device session on a user doc: drop expired entries, evict the
+// least-recently-used one at the cap, append the new one.
+const addSession = (user, entry, now) => {
+  pruneSessions(user, now);
+  const list = sessionsOf(user);
+  while (list.length >= MAX_SESSIONS_PER_USER) {
+    let oldest = 0;
+    for (let i = 1; i < list.length; i++) {
+      if (new Date(list[i].lastUsedAt).getTime() < new Date(list[oldest].lastUsedAt).getTime()) oldest = i;
+    }
+    list.splice(oldest, 1);
+  }
+  list.push(entry);
+};
+
+const NEW_SESSION_ATTEMPTS = 5;
+
+/**
+ * Save a user who gained a new device session.
+ *
+ * Two sign-ins of one account at the same moment (a double-clicked button,
+ * two devices) both change the same sessions array, and Mongoose's version
+ * check fails the later save with a VersionError — a "Login failed" for a
+ * sign-in that was fine. Pure-JS bcrypt used to hide this by serialising
+ * logins on the event loop; the native one lets them overlap.
+ *
+ * When the new session is the ONLY unsaved change, it is re-applied to a
+ * fresh copy and saved again. A doc carrying other unsaved changes — a
+ * password change persists through here, with every old session revoked —
+ * is never replayed from a fresh copy, which would silently drop them; its
+ * conflict is thrown, as before.
+ */
+async function saveWithNewSession(user, entry, now) {
+  const replayable = !user.isNew
+    && typeof user.modifiedPaths === 'function'
+    && user.modifiedPaths().every((p) => p === 'sessions' || p.startsWith('sessions.'));
+  addSession(user, entry, now);
+  let doc = user;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await doc.save();
+      return;
+    } catch (err) {
+      if (err?.name !== 'VersionError' || !replayable || attempt >= NEW_SESSION_ATTEMPTS) throw err;
+      // A little jitter so a burst of sign-ins doesn't collide again in step.
+      await new Promise((resolve) => setTimeout(resolve, 5 + Math.floor(Math.random() * 20)));
+      doc = await User.findById(user._id);
+      if (!doc) throw err;
+      addSession(doc, entry, now);
+    }
+  }
+}
 
 module.exports = {
   generateAccessToken,

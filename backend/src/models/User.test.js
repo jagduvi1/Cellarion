@@ -53,7 +53,7 @@ describe('BCRYPT_COST (L-1)', () => {
     // also self-checks at load time and throws on drift.
     const fs = require('fs');
     const path = require('path');
-    const bcrypt = require('bcryptjs');
+    const bcrypt = require('bcrypt');
     const src = fs.readFileSync(path.join(__dirname, '../routes/auth.js'), 'utf8');
     const match = src.match(/DUMMY_HASH = '(\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53})'/);
     expect(match).not.toBeNull();

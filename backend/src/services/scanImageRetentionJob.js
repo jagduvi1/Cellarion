@@ -52,9 +52,33 @@ const { unlinkImageFiles } = require('./imageProcessor');
 const { PROMOTED_SCAN_GRACE_DAYS } = require('./labelScanAccess');
 
 const SCAN_IMAGE_RETENTION_DAYS = 30;
-// Bounded per run so one sweep can never hold the event loop for minutes on an
-// instance that has accumulated a backlog; the next run picks up the rest.
+// One batch is bounded, so a single find + unlink + delete never holds the
+// event loop for long.
 const SWEEP_LIMIT = 500;
+// …and a daily run keeps taking batches until a clock is clear (scaling audit
+// 2026-09-25). One batch a day was a ceiling on retention itself: once more
+// than 500 rows lapse in a day — scan volume at roughly 10× today — the
+// backlog only grows and the 30-day / 7-day promises quietly become weeks.
+// The run yields between batches, and stops after MAX_BATCHES_PER_RUN so a
+// huge backlog drains over a few days instead of holding the process.
+const MAX_BATCHES_PER_RUN = 40;
+
+/**
+ * Run one clock's batch until it comes back short (the clock is clear), a
+ * batch deletes nothing (every selected row changed under it — nothing left
+ * to gain from another pass today), or the run's batch budget is spent.
+ * `batch()` returns { selected, deleted }; the result is the total deleted.
+ */
+async function drainBatches(batch) {
+  let total = 0;
+  for (let i = 0; i < MAX_BATCHES_PER_RUN; i++) {
+    const { selected, deleted } = await batch();
+    total += deleted;
+    if (selected < SWEEP_LIMIT || deleted === 0) break;
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  return total;
+}
 
 /**
  * The SECOND clock, added with the promotion grace window: a label scan whose
@@ -78,6 +102,17 @@ const SWEEP_LIMIT = 500;
  * nulling a pointer to a document that survived.
  */
 async function runPromotedScanExpirySweep() {
+  const deleted = await drainBatches(promotedScanExpiryBatch);
+  if (deleted > 0) {
+    console.log(
+      `[scanImageRetention] Deleted ${deleted} promoted label scan(s) past their ${PROMOTED_SCAN_GRACE_DAYS}-day grace window`
+    );
+  }
+  return { expired: deleted };
+}
+
+/** One bounded batch of the promoted-scan clock: { selected, deleted }. */
+async function promotedScanExpiryBatch() {
   const now = new Date();
   const expired = await BottleImage.find({
     kind: 'label-scan',
@@ -91,7 +126,7 @@ async function runPromotedScanExpirySweep() {
     .limit(SWEEP_LIMIT)
     .lean();
 
-  if (expired.length === 0) return { expired: 0 };
+  if (expired.length === 0) return { selected: 0, deleted: 0 };
 
   for (const img of expired) {
     try { await unlinkImageFiles(img); } catch (err) {
@@ -144,15 +179,21 @@ async function runPromotedScanExpirySweep() {
       { $set: { scanImageBack: null, scanFieldConflicts: [] } }
     );
   }
-  if (deleted > 0) {
-    console.log(
-      `[scanImageRetention] Deleted ${deleted} promoted label scan(s) past their ${PROMOTED_SCAN_GRACE_DAYS}-day grace window`
-    );
-  }
-  return { expired: deleted };
+  return { selected: expired.length, deleted };
 }
 
 async function runUnattachedScanSweep() {
+  const deleted = await drainBatches(unattachedScanBatch);
+  if (deleted > 0) {
+    console.log(
+      `[scanImageRetention] Deleted ${deleted} unattached label scan(s) older than ${SCAN_IMAGE_RETENTION_DAYS} days`
+    );
+  }
+  return { deleted };
+}
+
+/** One bounded batch of the unattached-scan clock: { selected, deleted }. */
+async function unattachedScanBatch() {
   const cutoff = new Date(Date.now() - SCAN_IMAGE_RETENTION_DAYS * 24 * 60 * 60 * 1000);
   const stale = await BottleImage.find({
     kind: 'label-scan',
@@ -164,7 +205,7 @@ async function runUnattachedScanSweep() {
     .limit(SWEEP_LIMIT)
     .lean();
 
-  if (stale.length === 0) return { deleted: 0 };
+  if (stale.length === 0) return { selected: 0, deleted: 0 };
 
   for (const img of stale) {
     // unlinkImageFiles refuses paths outside the uploads dir and skips a file
@@ -186,13 +227,7 @@ async function runUnattachedScanSweep() {
     bottle: null,
     createdAt: { $lt: cutoff },
   });
-  const deleted = res.deletedCount || 0;
-  if (deleted > 0) {
-    console.log(
-      `[scanImageRetention] Deleted ${deleted} unattached label scan(s) older than ${SCAN_IMAGE_RETENTION_DAYS} days`
-    );
-  }
-  return { deleted };
+  return { selected: stale.length, deleted: res.deletedCount || 0 };
 }
 
 /**
@@ -224,6 +259,17 @@ async function runUnattachedScanSweep() {
  * what this window exists to clear.
  */
 async function runUnattachedBottleImageSweep() {
+  const deleted = await drainBatches(unattachedBottleImageBatch);
+  if (deleted > 0) {
+    console.log(
+      `[scanImageRetention] Deleted ${deleted} unattached bottle photo(s) older than ${SCAN_IMAGE_RETENTION_DAYS} days`
+    );
+  }
+  return { deleted };
+}
+
+/** One bounded batch of the orphan-photo clock: { selected, deleted }. */
+async function unattachedBottleImageBatch() {
   const cutoff = new Date(Date.now() - SCAN_IMAGE_RETENTION_DAYS * 24 * 60 * 60 * 1000);
   const selector = {
     kind: { $ne: 'label-scan' },
@@ -237,7 +283,7 @@ async function runUnattachedBottleImageSweep() {
     .limit(SWEEP_LIMIT)
     .lean();
 
-  if (stale.length === 0) return { deleted: 0 };
+  if (stale.length === 0) return { selected: 0, deleted: 0 };
 
   for (const img of stale) {
     try { await unlinkImageFiles(img); } catch (err) {
@@ -252,13 +298,7 @@ async function runUnattachedBottleImageSweep() {
     _id: { $in: stale.map((i) => i._id) },
     ...selector,
   });
-  const deleted = res.deletedCount || 0;
-  if (deleted > 0) {
-    console.log(
-      `[scanImageRetention] Deleted ${deleted} unattached bottle photo(s) older than ${SCAN_IMAGE_RETENTION_DAYS} days`
-    );
-  }
-  return { deleted };
+  return { selected: stale.length, deleted: res.deletedCount || 0 };
 }
 
 /**
@@ -279,5 +319,7 @@ module.exports = {
   runPromotedScanExpirySweep,
   runUnattachedBottleImageSweep,
   SCAN_IMAGE_RETENTION_DAYS,
+  SWEEP_LIMIT,
+  MAX_BATCHES_PER_RUN,
   PROMOTED_SCAN_GRACE_DAYS,
 };

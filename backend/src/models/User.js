@@ -1,5 +1,10 @@
 const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
+// Native bcrypt: hash/compare run on libuv's thread pool, so a login no longer
+// stalls every other request for ~0.3 s the way pure-JS bcryptjs did (scaling
+// audit 2026-09-25). Stored bcryptjs hashes ($2a$) verify unchanged, the
+// 72-byte truncation is the same, and bcryptjs can read the $2b$ hashes this
+// writes — see User.bcrypt.test.js.
+const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const { CURRENT_PRIVACY_POLICY_VERSION } = require('../config/legal');
 const { PLAN_NAMES } = require('../config/plans');
@@ -451,8 +456,8 @@ userSchema.pre('save', async function(next) {
 
   // Ephemeral demo accounts skip the expensive bcrypt hash entirely: they never
   // password-login (JWT only, on an unroutable address), and under a burst of
-  // demo-logins N parallel cost-12 hashes on the single Node thread would degrade
-  // latency for everyone. The demo's random password is complexity-valid (so it
+  // demo-logins N parallel cost-12 hashes would eat the CPU (and the thread pool
+  // file and DNS work shares), degrading latency for everyone. The demo's random password is complexity-valid (so it
   // passes the schema validator, which re-runs on the later issueTokens save) but
   // is left UNHASHED — it is never used, and comparePassword returns false against
   // a non-bcrypt value, so it can never authenticate. (Do NOT substitute a fixed

@@ -4,9 +4,15 @@ const { logAudit } = require('../services/audit');
 
 const { TOKEN_PREFIX } = ApiToken;
 
-// How often lastUsedAt is persisted (and token.used audited) per token. Keeps
-// a polling integration from turning every authenticated request into a write.
+// How often lastUsedAt is persisted per token. Keeps a polling integration
+// from turning every authenticated request into a write.
 const LAST_USED_THROTTLE_MS = 60 * 60 * 1000; // 1 hour
+
+// token.used is audited once per token per UTC day — on the day's first use —
+// not with every hourly lastUsedAt write. Integrations polling around the
+// clock made the hourly row 41% of all audit rows (scaling audit 2026-09-25)
+// while it said nothing a daily one doesn't; lastUsedAt keeps its hour.
+const utcDay = (d) => d.toISOString().slice(0, 10);
 
 /**
  * Scope → route allowlist. DEFAULT-DENY: an API token is accepted ONLY on the
@@ -195,9 +201,12 @@ async function authenticateApiToken(req, res, next, rawToken) {
 
     // Throttled usage bookkeeping — fire-and-forget, never blocks the request.
     if (!token.lastUsedAt || Date.now() - token.lastUsedAt.getTime() > LAST_USED_THROTTLE_MS) {
-      ApiToken.updateOne({ _id: token._id }, { $set: { lastUsedAt: new Date() } }).catch(() => {});
-      // Audit the token id, never the token itself.
-      logAudit(req, 'token.used', { type: 'apiToken', id: token._id }, {});
+      const now = new Date();
+      ApiToken.updateOne({ _id: token._id }, { $set: { lastUsedAt: now } }).catch(() => {});
+      // Audit the token id, never the token itself — once a day (see utcDay).
+      if (!token.lastUsedAt || utcDay(token.lastUsedAt) !== utcDay(now)) {
+        logAudit(req, 'token.used', { type: 'apiToken', id: token._id }, {});
+      }
     }
 
     next();
