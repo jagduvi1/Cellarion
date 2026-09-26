@@ -12,6 +12,7 @@ const { findOrCreateWine } = require('../../services/findOrCreateWine');
 const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const searchService = require('../../services/search');
 const { logAudit } = require('../../services/audit');
+const { bumpDataVersion } = require('../../services/dataVersion');
 const { createNotification } = require('../../services/notifications');
 const { stripHtml } = require('../../utils/sanitize');
 const { incrementCred } = require('../../utils/cellarCred');
@@ -281,12 +282,16 @@ router.put('/:id/resolve', async (req, res) => {
       // — needed to seed the maturity queue once the wine is known.
       const pendingVintages = await Bottle.distinct('vintage', { pendingWineRequest: wineRequest._id });
       const pendingBottleIds = await Bottle.distinct('_id', { pendingWineRequest: wineRequest._id });
+      const pendingOwners = await Bottle.distinct('user', { pendingWineRequest: wineRequest._id });
 
       const result = await Bottle.updateMany(
         { pendingWineRequest: wineRequest._id },
         { $set: { wineDefinition: linkedWine._id }, $unset: { pendingWineRequest: '' } }
       );
       backfilledCount = result.modifiedCount || 0;
+      // Their owners' statistics change with it; after the write, so no cache
+      // pairs the new version with the old data (services/dataVersion).
+      pendingOwners.forEach(bumpDataVersion);
 
       // Photos uploaded while these bottles waited for their wine carry no
       // wineDefinition; stamp it now so the by-wine photo lookups (cellar

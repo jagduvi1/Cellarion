@@ -49,8 +49,26 @@ const {
 // wishlist route; findOrCreateWine itself is lazy-required inside the service.
 const { resolveOrMintWine } = require('../services/wineCommit');
 const { moveBottleToCellar } = require('../services/rackOps');
+const { getDataVersion } = require('../services/dataVersion');
 
 const router = express.Router();
+
+// Machine polling: Home Assistant asks `?maturity=…&limit=…` every few minutes
+// and again after every change nudge, and the maturity path loads and
+// classifies the whole collection per request (scaling audit 2026-09-25).
+// API-token requests are answered from memory while the user's data version
+// (services/dataVersion, moved by every audited bottle./cellar. change) is the
+// one the answer was computed at; the max age bounds registry edits, curated
+// drink windows, photos and anything else the version cannot see. Browser
+// lists are never cached — they show fresh photos.
+const tokenListCache = new Map(); // `${userId}|${query}` -> { at, version, body }
+const TOKEN_LIST_MAX_AGE_MS = 30 * 60 * 1000;
+const TOKEN_LIST_CACHE_MAX_ENTRIES = 2000;
+// The string params in a stable order — the handler ignores everything else.
+const canonicalQuery = (query) => Object.keys(query).sort()
+  .filter((k) => typeof query[k] === 'string')
+  .map((k) => `${k}=${query[k]}`)
+  .join('&');
 
 // Custom fields accepted on one bottle create. The service enforces the real
 // cap per target (personalData.ENTRIES_PER_TARGET); this only bounds the loop
@@ -86,6 +104,17 @@ router.use(idempotency);
 router.get('/', async (req, res) => {
   try {
     const { isValidObjectId } = mongoose;
+
+    // Version read BEFORE anything is loaded, so a change landing mid-compute
+    // leaves the stored answer already out of date (see tokenListCache).
+    const listCacheKey = req.apiToken ? `${req.user.id}|${canonicalQuery(req.query)}` : null;
+    const listVersion = getDataVersion(req.user.id);
+    if (listCacheKey) {
+      const hit = tokenListCache.get(listCacheKey);
+      if (hit && hit.version === listVersion && Date.now() - hit.at < TOKEN_LIST_MAX_AGE_MS) {
+        return res.json(hit.body);
+      }
+    }
 
     const cellarIds = await Cellar.find({ user: req.user.id, deletedAt: null }).distinct('_id');
     const { limit, offset: skip } = parsePagination(req.query, { limit: 30, maxLimit: 200 });
@@ -384,7 +413,7 @@ router.get('/', async (req, res) => {
       ...(maturityMap ? { maturityStatus: maturityMap.get(b._id.toString()) || null } : {}),
     }));
 
-    res.json({
+    const body = {
       bottles: {
         count: items.length,
         total: totalCount,
@@ -392,7 +421,12 @@ router.get('/', async (req, res) => {
         skip,
         items,
       },
-    });
+    };
+    if (listCacheKey) {
+      if (tokenListCache.size >= TOKEN_LIST_CACHE_MAX_ENTRIES) tokenListCache.clear();
+      tokenListCache.set(listCacheKey, { at: Date.now(), version: listVersion, body });
+    }
+    res.json(body);
   } catch (err) {
     console.error('GET /api/bottles error:', err);
     res.status(500).json({ error: 'Failed to load bottles' });
