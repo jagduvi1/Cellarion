@@ -90,6 +90,37 @@ test('returning to the tab re-checks without waiting for the interval', async ()
 });
 
 /**
+ * Background tabs left open all day were most of this endpoint's traffic
+ * (scaling audit 2026-09-25): no one can see a banner in a hidden tab, and
+ * returning to it re-checks at once.
+ */
+test('a hidden tab does not poll, and re-checks once when it is shown again', async () => {
+  const Banner = await freshBanner();
+  let hidden = false;
+  Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => (hidden ? 'hidden' : 'visible') });
+  try {
+    fetch.mockResolvedValueOnce(ok({ enabled: false }));
+    render(<Banner />);
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+
+    hidden = true;
+    await act(async () => { document.dispatchEvent(new Event('visibilitychange')); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(60 * 60 * 1000); }); // an hour in the background
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    fetch.mockResolvedValue(ok(banner()));
+    hidden = false;
+    await act(async () => { document.dispatchEvent(new Event('visibilitychange')); });
+    expect(await screen.findByText('Planned maintenance at 18:15 UTC')).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledTimes(2);
+  } finally {
+    delete document.hidden;
+    delete document.visibilityState;
+  }
+});
+
+/**
  * With polling, a single dropped request must not blink a live notice off the
  * page — the failure keeps the last known state instead of resolving to
  * "no banner".

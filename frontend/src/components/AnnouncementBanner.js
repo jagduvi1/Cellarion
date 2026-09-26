@@ -60,8 +60,11 @@ function AnnouncementBanner() {
 
     // Poll, so a banner raised while someone is mid-session still reaches
     // them. Both triggers go through the same CACHE_TTL-respecting fetch, so
-    // a tab that is switched to repeatedly cannot spam the endpoint.
-    const timer = setInterval(load, POLL_MS);
+    // a tab that is switched to repeatedly cannot spam the endpoint. A hidden
+    // tab doesn't ask: no one would see the answer, and coming back to it
+    // re-checks at once (below). Background tabs left open all day were most
+    // of this endpoint's traffic (scaling audit 2026-09-25).
+    const timer = setInterval(() => { if (!document.hidden) load(); }, POLL_MS);
     // Returning to the tab is the moment a stale banner is most likely and
     // most wanted — a user coming back after an hour gets the current state
     // without waiting out the interval.
