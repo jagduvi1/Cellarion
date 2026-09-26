@@ -6,12 +6,10 @@
  */
 
 jest.mock('../models/Rack', () => ({ updateMany: jest.fn().mockResolvedValue({}) }));
-jest.mock('./search', () => ({ indexBottle: jest.fn(), removeBottle: jest.fn() }));
 jest.mock('./audit', () => ({ logAudit: jest.fn() }));
 jest.mock('./restockChecker', () => ({ checkRestockGap: jest.fn().mockResolvedValue(undefined), resolveRestockAlerts: jest.fn().mockResolvedValue(undefined) }));
 
 const Rack = require('../models/Rack');
-const searchService = require('./search');
 const { logAudit } = require('./audit');
 const { checkRestockGap } = require('./restockChecker');
 const { consumeBottle, restoreBottle, RESTORE_WINDOW_MS } = require('./bottleOps');
@@ -33,7 +31,7 @@ describe('consumeBottle', () => {
     expect((await consumeBottle(freshBottle(), { rating: 9 }, REQ)).error.status).toBe(400);
   });
 
-  test('sets the consumed fields, saves, THEN frees the rack slot, reindexes, audits', async () => {
+  test('sets the consumed fields, saves, THEN frees the rack slot, audits', async () => {
     const bottle = freshBottle();
     const callOrder = [];
     bottle.save.mockImplementation(async () => callOrder.push('save'));
@@ -55,7 +53,6 @@ describe('consumeBottle', () => {
     expect(Rack.updateMany).toHaveBeenCalledWith(
       { 'slots.bottle': 'b1' }, { $pull: { slots: { bottle: 'b1' } }, $inc: { __v: 1 } }
     );
-    expect(searchService.indexBottle).toHaveBeenCalledWith('b1');
     expect(logAudit).toHaveBeenCalledWith(REQ, 'bottle.consume',
       { type: 'bottle', id: 'b1', cellarId: 'c1' }, { reason: 'gifted' });
   });
@@ -87,7 +84,7 @@ describe('restoreBottle', () => {
     expect(res.error.code).toBe('restore_window_expired');
   });
 
-  test('clears every consumed-* field, reindexes, audits with the previous status', async () => {
+  test('clears every consumed-* field, audits with the previous status', async () => {
     const bottle = consumed({ status: 'gifted', consumedReason: 'gifted' });
     const res = await restoreBottle(bottle, REQ);
     expect(res.error).toBeUndefined();
@@ -97,7 +94,6 @@ describe('restoreBottle', () => {
       expect(bottle[f]).toBeUndefined();
     }
     expect(bottle.save).toHaveBeenCalled();
-    expect(searchService.indexBottle).toHaveBeenCalledWith('b1');
     expect(logAudit).toHaveBeenCalledWith(REQ, 'bottle.restore',
       { type: 'bottle', id: 'b1', cellarId: 'c1' }, { from: 'gifted' });
   });
@@ -451,7 +447,6 @@ describe('removeBottleCascade (real execution)', () => {
     const res = await removeBottleCascade(b, REQ, 'bottle.undo');
     expect(res.removed).toBe(true);
     expect(Rack.updateMany).toHaveBeenCalled();          // slot freed
-    expect(searchService.removeBottle).toHaveBeenCalledWith('new-bottle');
     expect(BottleImage.deleteMany).toHaveBeenCalledWith({ bottle: 'new-bottle', assignedToWine: false });
     expect(b.deleteOne).toHaveBeenCalled();
     expect(logAudit).toHaveBeenCalledWith(REQ, 'bottle.undo', expect.anything(), { reason: 'mistake' });

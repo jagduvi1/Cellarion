@@ -8,7 +8,8 @@ router.use(requireAuth, requireRole('admin'));
 
 /**
  * POST /api/admin/search/reindex — force a full Meilisearch rebuild of the
- * wines + bottles + discussions indexes from the RUNNING process.
+ * wines + discussions indexes from the RUNNING process. (Cellar search runs on
+ * MongoDB — services/bottleSearch — so bottles have no index to rebuild.)
  *
  * Why this exists (found testing a prod-copy restore, 2026-07-29): after a
  * mongo restore the boot-time sync skips — the index "looks populated" — and
@@ -41,16 +42,12 @@ router.post('/reindex', async (req, res) => {
     await searchService.waitForTasks(wineTasks);
     const winesMs = Date.now() - t0;
     const t1 = Date.now();
-    const bottleTasks = await searchService.fullSyncBottles();
-    await searchService.waitForTasks(bottleTasks);
-    const bottlesMs = Date.now() - t1;
-    const t2 = Date.now();
     const discussionTasks = await searchService.fullSyncDiscussions();
     await searchService.waitForTasks(discussionTasks);
-    const discussionsMs = Date.now() - t2;
+    const discussionsMs = Date.now() - t1;
 
-    logAudit(req, 'admin.search.reindex', {}, { winesMs, bottlesMs, discussionsMs });
-    res.json({ ok: true, winesMs, bottlesMs, discussionsMs });
+    logAudit(req, 'admin.search.reindex', {}, { winesMs, discussionsMs });
+    res.json({ ok: true, winesMs, discussionsMs });
   } catch (error) {
     console.error('Search reindex error:', error);
     res.status(500).json({ error: 'Reindex failed' });

@@ -18,8 +18,7 @@
  * Every function returns a summary object and never deletes until all
  * references are rewritten. Search reindexing of affected wines is included;
  * callers doing bulk runs can pass { resync: false } and fullSync() once at
- * the end instead (bottle documents denormalize taxonomy names too, so bulk
- * callers should also fullSyncBottles()).
+ * the end instead.
  */
 
 const WineDefinition = require('../models/WineDefinition');

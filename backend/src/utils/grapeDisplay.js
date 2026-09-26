@@ -140,4 +140,27 @@ function decorateGrapes(wine) {
   return out;
 }
 
-module.exports = { resolveGrapeDisplayName, decorateGrapes };
+/**
+ * The grape names a search should match for one wine: each canonical name,
+ * plus the regional display name when one applies to THIS wine ("Tinta
+ * Roriz" beside "Tempranillo" on a Douro row) — additive recall, so the
+ * label-true spelling finds the wine too while filters stay on the single
+ * canonical vocabulary. Shared by the registry index (services/search) and
+ * cellar search (services/bottleSearch): bottle cards show the regional
+ * label, so cellar search must match on it (audit 2026-08-11).
+ *
+ * @param {object} wine – lean wine with populated `grapes` ({ name, regionalNames? })
+ * @returns {string[]}
+ */
+function grapeSearchNames(wine) {
+  const names = [];
+  for (const g of (wine && wine.grapes) || []) {
+    if (!g || !g.name) continue;
+    names.push(g.name);
+    const display = resolveGrapeDisplayName(g, { countryId: wine.country, regionId: wine.region, wineName: wine.name });
+    if (display && display !== g.name) names.push(display);
+  }
+  return names;
+}
+
+module.exports = { resolveGrapeDisplayName, decorateGrapes, grapeSearchNames };

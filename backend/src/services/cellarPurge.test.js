@@ -27,7 +27,6 @@ jest.mock('../models/Cellar', () => ({ deleteOne: jest.fn() }));
 jest.mock('../models/WineRequest', () => ({ deleteMany: jest.fn() }));
 jest.mock('./wineListLogos', () => ({ deleteLogoFilesFor: jest.fn() }));
 jest.mock('./imageProcessor', () => ({ unlinkImageFiles: jest.fn() }));
-jest.mock('./search', () => ({ removeBottles: jest.fn() }));
 
 const Bottle = require('../models/Bottle');
 const BottleImage = require('../models/BottleImage');
@@ -43,7 +42,6 @@ const Cellar = require('../models/Cellar');
 const WineRequest = require('../models/WineRequest');
 const { deleteLogoFilesFor } = require('./wineListLogos');
 const { unlinkImageFiles } = require('./imageProcessor');
-const searchService = require('./search');
 const { purgeCellarPermanently } = require('./cellarPurge');
 
 const CELLAR_ID = '64c000000000000000000001';
@@ -73,7 +71,6 @@ function setupMocks({ bottleIds = BOTTLE_IDS, ownImages = OWN_IMAGES } = {}) {
   WineList.deleteMany.mockResolvedValue({ deletedCount: 1 });
   deleteLogoFilesFor.mockResolvedValue();
   unlinkImageFiles.mockResolvedValue();
-  searchService.removeBottles.mockResolvedValue();
   Cellar.deleteOne.mockResolvedValue({ deletedCount: 1 });
 }
 
@@ -101,18 +98,16 @@ describe('purgeCellarPermanently', () => {
     expect(Cellar.deleteOne).toHaveBeenCalledWith({ _id: CELLAR_ID });
   });
 
-  test('collects bottle ids BEFORE Bottle.deleteMany and passes them to the search cleanup', async () => {
+  test('collects bottle ids BEFORE Bottle.deleteMany — the image cleanup needs them', async () => {
     await purgeCellarPermanently(CELLAR_ID);
 
     // Ordering invariant: the id collection query must run before deleteMany,
-    // otherwise the search cleanup would receive an empty list and leave
-    // ghost bottles in Meilisearch forever.
+    // otherwise the image cleanup would receive an empty list and leave the
+    // bottles' photos behind.
     expect(Bottle.find).toHaveBeenCalledWith({ cellar: CELLAR_ID });
     const findOrder = Bottle.find.mock.invocationCallOrder[0];
     const deleteOrder = Bottle.deleteMany.mock.invocationCallOrder[0];
     expect(findOrder).toBeLessThan(deleteOrder);
-
-    expect(searchService.removeBottles).toHaveBeenCalledWith(BOTTLE_IDS);
   });
 
   test('unlinks image files for user-owned images only', async () => {
@@ -165,7 +160,7 @@ describe('purgeCellarPermanently', () => {
     });
   });
 
-  test('empty cellar: skips image handling entirely, still cleans search and deletes the cellar doc', async () => {
+  test('empty cellar: skips image handling entirely and deletes the cellar doc', async () => {
     setupMocks({ bottleIds: [], ownImages: [] });
 
     const result = await purgeCellarPermanently(CELLAR_ID);
@@ -174,7 +169,6 @@ describe('purgeCellarPermanently', () => {
     expect(BottleImage.deleteMany).not.toHaveBeenCalled();
     expect(BottleImage.updateMany).not.toHaveBeenCalled();
     expect(unlinkImageFiles).not.toHaveBeenCalled();
-    expect(searchService.removeBottles).toHaveBeenCalledWith([]);
     expect(Cellar.deleteOne).toHaveBeenCalledWith({ _id: CELLAR_ID });
     expect(result).toEqual({ racksDeleted: 2, bottlesDeleted: 0, imagesDeleted: 0 });
   });

@@ -21,9 +21,7 @@ jest.mock('../../services/search', () => ({
   indexWine: jest.fn(),
   removeWine: jest.fn(),
   bulkIndexWines: jest.fn(),
-  bulkIndexBottles: jest.fn(),
   fullSync: jest.fn(),
-  fullSyncBottles: jest.fn(),
   waitForTasks: jest.fn(),
 }));
 jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
@@ -245,7 +243,7 @@ describe('PUT /grapes/:id regionalNames wiring', () => {
     expect(grape.regionalNames).toEqual([]);
   });
 
-  test('a valid set saves and resyncs BOTH indexes — bottle documents carry regional grape names too', async () => {
+  test('a valid set saves and resyncs the registry index — its grape names carry the regional label', async () => {
     const grape = grapeDoc();
     Grape.findById.mockResolvedValue(grape);
     const res = await put(`/grapes/${GRAPE_ID}`, {
@@ -255,9 +253,8 @@ describe('PUT /grapes/:id regionalNames wiring', () => {
     expect(grape.regionalNames).toEqual([{ country: PORTUGAL, region: DOURO, name: 'Tinta Roriz' }]);
     expect(grape.save).toHaveBeenCalled();
     expect(searchService.fullSync).toHaveBeenCalled();
-    // Audit 2026-08-11: buildBottleDocument shares wineGrapeSearchNames, so a
-    // mapping change without this resync left cellar search missing the label.
-    expect(searchService.fullSyncBottles).toHaveBeenCalled();
+    // Cellar search needs no resync: services/bottleSearch reads the grapes'
+    // regional names live from MongoDB on every search.
   });
 
   test('an update that does not touch regionalNames triggers no resync at all', async () => {
@@ -266,7 +263,6 @@ describe('PUT /grapes/:id regionalNames wiring', () => {
     const res = await put(`/grapes/${GRAPE_ID}`, { origin: 'Rioja, Spain' });
     expect(res.status).toBe(200);
     expect(searchService.fullSync).not.toHaveBeenCalled();
-    expect(searchService.fullSyncBottles).not.toHaveBeenCalled();
   });
 
   test('a non-synonym regional name → 200 with regionalNameWarnings (flag, never block)', async () => {

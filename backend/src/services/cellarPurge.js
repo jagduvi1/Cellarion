@@ -4,10 +4,6 @@
  * never diverge.
  *
  * Cascade order matters:
- *  - bottle ids are collected BEFORE deleteMany so their Meilisearch documents
- *    (which carry the owner's free-text notes/location) can be removed — there
- *    is no scheduled resync, so skipping this leaves ghost bottles in search
- *    indefinitely (full-sync only runs against an empty index).
  *  - image files are unlinked BEFORE their BottleImage docs are deleted (the
  *    docs hold the only reference to the files on disk). Shared registry
  *    images (assignedToWine) are kept — only their dead bottle ref is
@@ -30,7 +26,6 @@ const Cellar = require('../models/Cellar');
 const WineRequest = require('../models/WineRequest');
 const { deleteLogoFilesFor } = require('./wineListLogos');
 const { unlinkImageFiles } = require('./imageProcessor');
-const searchService = require('./search');
 
 /**
  * Hard-delete a cellar and everything that only exists because of it.
@@ -98,8 +93,6 @@ async function purgeCellarPermanently(cellarId) {
     // member-remove/downgrade detach paths in routes/cellars.js.
     ClimateDevice.updateMany({ cellar: cellarId }, { $set: { cellar: null } }),
   ]);
-
-  await searchService.removeBottles(bottleIds);
 
   await Cellar.deleteOne({ _id: cellarId });
 

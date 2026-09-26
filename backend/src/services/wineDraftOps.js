@@ -519,12 +519,6 @@ async function attachDraftBottles(wine, targetWineId, { userId, roles = [], req 
   }
   await removeDraftRow(wine, req, auto ? 'wine.draft_auto_attach' : 'wine.draft_attach',
     { targetId: target._id, target: `${target.producer || '?'} — ${target.name}`, bottlesMoved: bottleIds.length, ...(reason ? { reason } : {}) });
-  if (bottleIds.length) {
-    try {
-      const p = require('./search').bulkIndexBottles(bottleIds);
-      if (p && typeof p.catch === 'function') p.catch(() => {});
-    } catch { /* best-effort */ }
-  }
   return { ok: true, wine: target, bottlesMoved: bottleIds.length };
 }
 

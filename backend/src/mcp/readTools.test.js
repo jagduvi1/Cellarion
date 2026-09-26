@@ -44,8 +44,9 @@ jest.mock('../models/WineOwnerInquiry', () => ({
 jest.mock('../utils/rackGeometry', () => ({ getMaxPosition: jest.fn(() => 12) }));
 // Lazy-required inside handlers; jest still intercepts by resolved path.
 jest.mock('../services/search', () => ({
-  getIsAvailable: jest.fn(() => false), search: jest.fn(), searchBottles: jest.fn(),
+  getIsAvailable: jest.fn(() => false), search: jest.fn(),
 }));
+jest.mock('../services/bottleSearch', () => ({ searchBottles: jest.fn(), bottleFacets: jest.fn() }));
 jest.mock('../services/statsService', () => ({
   computeOverview: jest.fn(async () => ({
     overview: { totalBottles: 1 }, byType: [], byCountry: [], byGrape: [],
@@ -62,6 +63,7 @@ const WishlistItem = require('../models/WishlistItem');
 const JournalEntry = require('../models/JournalEntry');
 const WineDefinition = require('../models/WineDefinition');
 const searchService = require('../services/search');
+const bottleSearch = require('../services/bottleSearch');
 const { allTools } = require('./registry');
 const { budgetedHandler, MAX_CALLS_PER_REQUEST } = require('./server');
 require('./tools');
@@ -106,29 +108,27 @@ describe('registration invariants', () => {
 describe('ownership scoping', () => {
   test('search_bottles for a user with NO owned cellar returns an empty page and never queries the search index (audit 2026-09-02 D10-5)', async () => {
     // Registration creates no cellar, so this is every fresh account. Before
-    // the fix the empty scope reached Meilisearch with no cellar filter at all
-    // and hydration returned every tenant's bottles.
+    // the fix the empty scope reached the (then Meilisearch) search with no
+    // cellar filter at all and hydration returned every tenant's bottles.
     Cellar.find.mockReturnValue(chain([]));
-    searchService.getIsAvailable.mockReturnValue(true);
-    searchService.searchBottles.mockResolvedValue({ ids: [oid('d')], estimatedTotalHits: 9999 });
+    bottleSearch.searchBottles.mockResolvedValue({ ids: [oid('d')], total: 9999 });
 
     const body = parse(await tool('search_bottles').handler({ query: 'wine' }, CTX));
 
-    expect(searchService.searchBottles).not.toHaveBeenCalled();
+    expect(bottleSearch.searchBottles).not.toHaveBeenCalled();
     expect(Bottle.find).not.toHaveBeenCalled();
     expect(body.data).toEqual([]);
     expect(body.page.total).toBe(0);
   });
 
-  test('search_bottles Meili hydration is bound to the same cellar scope as the query', async () => {
+  test('search_bottles hydration is bound to the same cellar scope as the query', async () => {
     Cellar.find.mockReturnValue(chain([oid('c')]));
-    searchService.getIsAvailable.mockReturnValue(true);
-    searchService.searchBottles.mockResolvedValue({ ids: [oid('d')], estimatedTotalHits: 1 });
+    bottleSearch.searchBottles.mockResolvedValue({ ids: [oid('d')], total: 1 });
     Bottle.find.mockReturnValue(chain([]));
 
     await tool('search_bottles').handler({ query: 'barolo' }, CTX);
 
-    expect(searchService.searchBottles.mock.calls[0][1].cellarIds).toEqual([oid('c')]);
+    expect(bottleSearch.searchBottles.mock.calls[0][1].cellarIds).toEqual([oid('c')]);
     expect(Bottle.find.mock.calls[0][0]).toEqual({ _id: { $in: [oid('d')] }, cellar: { $in: [oid('c')] } });
   });
 
@@ -381,22 +381,30 @@ describe('privilege parity & bounds', () => {
     expect(filter.consumedAt.$lt.toISOString()).toBe('2026-01-01T00:00:00.000Z');
   });
 
-  test('search_bottles degrades gracefully when the search engine is down (warning, no text match)', async () => {
+  test('search_bottles takes a type filter without a query through the search, newest first — no warning', async () => {
+    Cellar.find.mockReturnValue(chain([oid('c')]));
+    bottleSearch.searchBottles.mockResolvedValue({ ids: [], total: 0 });
+    Bottle.find.mockReturnValue(chain([]));
+    const body = parse(await tool('search_bottles').handler({ type: 'red' }, CTX));
+    expect(bottleSearch.searchBottles).toHaveBeenCalledWith('', expect.objectContaining({ type: 'red', sort: '-createdAt' }));
+    expect(body.warnings).toBeUndefined();
+  });
+
+  test('search_bottles type + reserved takes the list path and says type was ignored', async () => {
     Cellar.find.mockReturnValue(chain([oid('c')]));
     Bottle.countDocuments.mockResolvedValue(0);
     Bottle.find.mockReturnValue(chain([]));
-    const res = await tool('search_bottles').handler({ query: 'barolo' }, CTX);
-    const body = parse(res);
-    expect(body.warnings.join(' ')).toMatch(/search engine unavailable/i);
+    const body = parse(await tool('search_bottles').handler({ type: 'red', reserved: 'only' }, CTX));
+    expect(bottleSearch.searchBottles).not.toHaveBeenCalled();
+    expect(body.warnings.join(' ')).toMatch(/type filter cannot be combined with reserved/i);
   });
 
-  test('search_bottles Meili path hydrates by id + the SAME cellar scope — no other post-pagination filters', async () => {
-    searchService.getIsAvailable.mockReturnValue(true);
-    searchService.searchBottles.mockResolvedValue({ ids: [oid('d')], estimatedTotalHits: 1 });
+  test('search_bottles search path hydrates by id + the SAME cellar scope — no other post-pagination filters', async () => {
+    bottleSearch.searchBottles.mockResolvedValue({ ids: [oid('d')], total: 1 });
     Cellar.find.mockReturnValue(chain([oid('c')]));
     Bottle.find.mockReturnValue(chain([]));
     await tool('search_bottles').handler({ query: 'barolo', status: 'all', vintage: '2015' }, CTX);
-    // Scope lives INSIDE the Meili query (owned cellarIds) and hydration
+    // Scope lives INSIDE the search (owned cellarIds) and hydration
     // re-asserts exactly that scope (defence in depth, audit 2026-09-02 D10-5).
     // Nothing ELSE may be re-filtered here — status/vintage/type after
     // pagination would put holes in pages and make totals lie.
@@ -404,7 +412,7 @@ describe('privilege parity & bounds', () => {
     expect(hydrate).toEqual({ _id: { $in: [oid('d')] }, cellar: { $in: [oid('c')] } });
     expect(hydrate.status).toBeUndefined();
     expect(hydrate.vintage).toBeUndefined();
-    expect(searchService.searchBottles.mock.calls[0][1]).toMatchObject({ cellarIds: [oid('c')] });
+    expect(bottleSearch.searchBottles.mock.calls[0][1]).toMatchObject({ cellarIds: [oid('c')] });
   });
 
   test('search_bottles reserved filter: "only" and "exclude" translate to Mongo shapes that treat missing fields as unreserved', async () => {
@@ -427,13 +435,12 @@ describe('privilege parity & bounds', () => {
     expect(filter.reservedUntil).toBeNull();
   });
 
-  test('search_bottles reserved + query forces the DB path (index has no reservation) and says so', async () => {
-    searchService.getIsAvailable.mockReturnValue(true); // engine up — must still be skipped
+  test('search_bottles reserved + query forces the DB path (the search has no reservation filter) and says so', async () => {
     Cellar.find.mockReturnValue(chain([oid('c')]));
     Bottle.countDocuments.mockResolvedValue(0);
     Bottle.find.mockReturnValue(chain([]));
     const res = await tool('search_bottles').handler({ query: 'barolo', reserved: 'only' }, CTX);
-    expect(searchService.searchBottles).not.toHaveBeenCalled();
+    expect(bottleSearch.searchBottles).not.toHaveBeenCalled();
     expect(parse(res).warnings.join(' ')).toMatch(/reserved filter .*database path/i);
   });
 

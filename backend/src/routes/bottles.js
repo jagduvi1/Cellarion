@@ -37,7 +37,6 @@ const personalData = require('../services/personalData');
 // the card displays must be what search matches.
 const { decorateGrapes, resolveGrapeDisplayName } = require('../utils/grapeDisplay');
 const mongoose = require('mongoose');
-const searchService = require('../services/search');
 // add/update/consume/restore/remove logic + rack-slot freeing live in the
 // shared service so the REST routes and the MCP tools can never drift (§7).
 const {
@@ -1316,9 +1315,6 @@ router.delete('/:id', requireBottleAccess('editor'), async (req, res) => {
 
     // Remove bottle from any rack slot that references it
     await removeFromRacks(bottle._id);
-
-    // Remove from Meilisearch before deleting
-    searchService.removeBottle(bottle._id);
 
     const ownImages = await BottleImage.find({ bottle: bottle._id, assignedToWine: false })
       .select('originalUrl processedUrl').lean();

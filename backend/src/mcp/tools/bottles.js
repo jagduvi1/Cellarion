@@ -1,17 +1,12 @@
 // Bottle read tools: search/list, one-bottle detail, and the drinking log.
 //
-// Scoping contract — IDENTICAL on the Meili and Mongo paths (the search index
-// has no per-user field, so a user filter there could only run AFTER
-// pagination, silently shortening pages and inflating totals):
+// Scoping contract — IDENTICAL on the search and list paths (a scope applied
+// AFTER pagination would silently shorten pages and inflate totals):
 //  - without cellar_id → ALL bottles in cellars the user OWNS — the cellar-view
 //    semantics of the UI, including bottles shared-cellar editors added into
 //    the user's own cellars;
 //  - with cellar_id    → all bottles of that cellar after a member/owner
 //    access check (same as the per-cellar routes).
-//
-// services/search (Meilisearch) is required LAZILY inside the handler — the
-// meilisearch package is ESM-only and a top-level require would drag it into
-// every jest suite that loads the tool registry (the #702 failure mode).
 const { z } = require('zod');
 const Bottle = require('../../models/Bottle');
 const Cellar = require('../../models/Cellar');
@@ -25,6 +20,7 @@ const {
 } = require('../toolUtil');
 const { photosForBottle, photoPresence } = require('../../services/photoState');
 const { openQuestionForRecipient } = require('../../services/ownerInquiryOps');
+const bottleSearch = require('../../services/bottleSearch');
 
 function statusToMongo(status) {
   if (status === 'all') return {};
@@ -93,50 +89,42 @@ registerTool({
       });
     }
 
-    // Meilisearch path — handles text + all filters with correct pagination.
-    // The reserved filter lives only on the bottle document (not in the search
-    // index), and filtering after pagination would shorten pages and inflate
-    // totals — so a reserved filter forces the Mongo path, dropping free-text
-    // matching with an explicit warning (same degradation style as below).
-    const searchService = require('../../services/search');
+    // Search path — services/bottleSearch handles the text and the status /
+    // type / vintage filters with correct pagination (newest first when there
+    // is no text to rank by). The reserved filter lives only on the bottle
+    // document and filtering after pagination would shorten pages and inflate
+    // totals — so a reserved filter takes the list path below, dropping
+    // free-text matching with an explicit warning.
     if (args.query && args.reserved) {
       warnings.push('reserved filter runs on the database path — free-text matching was skipped for this query.');
     }
-    if (args.query && !args.reserved && searchService.getIsAvailable()) {
-      try {
-        const res = await searchService.searchBottles(args.query, {
-          cellarIds: cellarIds.map(String),
-          statusFilter: args.status || 'active',
-          type: args.type,
-          vintage: args.vintage,
-          limit,
-          offset,
-        });
-        // Hydration re-asserts the SAME cellar scope the Meili query carried.
-        // That cannot shorten a page or inflate a total in normal operation
-        // (the ids already satisfy it) — it only drops a hit whose index
-        // document is stale, i.e. a bottle that has since moved out of scope,
-        // which is exactly what must never be shown. No OTHER filter belongs
-        // here: anything not in the Meili query would be filter-after-paginate.
-        const docs = await Bottle.find({ _id: { $in: res.ids }, cellar: { $in: cellarIds } })
-          .populate(WINE_POPULATE_LIST).lean();
-        const byId = new Map(docs.map((d) => [String(d._id), d]));
-        const ordered = res.ids.map((id) => byId.get(String(id))).filter(Boolean);
-        const items = await withPhotoFlag(ctx.user.id, ordered, warnings);
-        return ok(`${items.length} of ${res.estimatedTotalHits} matching bottle(s)`, items, {
-          page: { limit, offset, total: res.estimatedTotalHits },
-          ...(warnings.length ? { warnings } : {}),
-        });
-      } catch (err) {
-        warnings.push('Text search engine unavailable — fell back to basic filters without free-text matching.');
-      }
-    } else if (args.query && !args.reserved) {
-      warnings.push('Text search engine unavailable — fell back to basic filters without free-text matching.');
+    if ((args.query || args.type) && !args.reserved) {
+      const res = await bottleSearch.searchBottles(args.query || '', {
+        cellarIds: cellarIds.map(String),
+        statusFilter: args.status || 'active',
+        type: args.type,
+        vintage: args.vintage,
+        sort: args.query ? undefined : '-createdAt',
+        limit,
+        offset,
+      });
+      // Hydration re-asserts the SAME cellar scope the search ran on, so a
+      // bottle moved out of scope in between is never shown. No OTHER filter
+      // belongs here: anything not in the search would be filter-after-paginate.
+      const docs = await Bottle.find({ _id: { $in: res.ids }, cellar: { $in: cellarIds } })
+        .populate(WINE_POPULATE_LIST).lean();
+      const byId = new Map(docs.map((d) => [String(d._id), d]));
+      const ordered = res.ids.map((id) => byId.get(String(id))).filter(Boolean);
+      const items = await withPhotoFlag(ctx.user.id, ordered, warnings);
+      return ok(`${items.length} of ${res.total} matching bottle(s)`, items, {
+        page: { limit, offset, total: res.total },
+        ...(warnings.length ? { warnings } : {}),
+      });
     }
 
-    // Mongo fallback: cellar/status/vintage are DB-filterable; type lives on
-    // the populated wine, so it is dropped with an explicit warning rather
-    // than half-applied.
+    // List path: cellar/status/vintage/reserved are DB-filterable; type lives
+    // on the populated wine and the search cannot take the reserved filter, so
+    // type is dropped here with an explicit warning rather than half-applied.
     const filter = {
       cellar: { $in: cellarIds },
       ...statusToMongo(args.status),
@@ -155,7 +143,7 @@ registerTool({
       filter.reservedFor = { $in: [null, ''] };
       filter.reservedUntil = null;
     }
-    if (args.type) warnings.push('type filter requires the search engine — ignored in this response.');
+    if (args.type) warnings.push('type filter cannot be combined with reserved — ignored in this response.');
     const [total, docs] = await Promise.all([
       Bottle.countDocuments(filter),
       Bottle.find(filter).populate(WINE_POPULATE_LIST)

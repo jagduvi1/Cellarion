@@ -1,10 +1,12 @@
 /**
  * Search-index reconciliation — runs nightly via the scheduler.
  *
- * PROD 2026-08-13: 567 of the 9,918 documents in the `bottles` index named
- * bottles that no longer existed in Mongo. Over MCP that read as "0 of 14";
- * across the ~9 callers in routes/cellars.js it produced phantom counts and
- * short pages.
+ * PROD 2026-08-13: 567 of the 9,918 documents in the (since retired) `bottles`
+ * index named bottles that no longer existed in Mongo. Over MCP that read as
+ * "0 of 14"; across the ~9 callers in routes/cellars.js it produced phantom
+ * counts and short pages. Cellar search now runs on MongoDB itself
+ * (services/bottleSearch), so that index is gone — the lesson stands for the
+ * indexes that remain.
  *
  * The cause was NOT a missing unindex call — every delete path already removes
  * its document. The debris was OPERATIONAL: a restore from backup rewound Mongo
@@ -13,12 +15,8 @@
  * something an application code path can be taught to prevent.
  *
  * So this job treats index membership as something to be RECONCILED rather than
- * assumed. It is the slow half of a two-part fix; the fast half is in
- * services/search.searchBottles, which verifies each page of hits against Mongo
- * and self-heals what it sees. That one keeps users honest results TODAY; this
- * one empties the index of everything nobody happened to search for, which is
- * also what makes the facet counts (an index-wide aggregation no per-page check
- * can correct) right again.
+ * assumed: it empties an index of everything whose Mongo row is gone, including
+ * documents nobody happened to search for.
  *
  * DELETE-ONLY, deliberately: a document in the index whose Mongo row is gone is
  * unambiguous debris. The reverse — a Mongo row missing FROM the index — is
@@ -26,9 +24,8 @@
  * and re-adding them from here would fight indexWine for ownership of index
  * membership. A missing document is what the admin force-reindex is for.
  *
- * BOTH INDEXES: `bottles` is where the prod damage was, but a restore rewinds
- * every collection, and a stale `wines` document is a registry row strangers can
- * find and open to a 404.
+ * THE WINES INDEX: a restore rewinds every collection, and a stale `wines`
+ * document is a registry row strangers can find and open to a 404.
  *
  * The Meilisearch client lives in services/search — this module never requires
  * `meilisearch` itself (ESM-only; a second require is the #702 jest failure mode
@@ -53,7 +50,6 @@ const MAX_DELETES_PER_INDEX = 5000;
 // there plus a model mapping here — and a missing mapping fails loudly below
 // rather than silently skipping (release-audit INFO-1: two independent lists).
 const INDEX_MODELS = {
-  bottles: '../models/Bottle',
   wines: '../models/WineDefinition',
 };
 // `|| Object.keys(...)`: suites mock services/search without the constant,

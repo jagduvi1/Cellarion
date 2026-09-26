@@ -2,7 +2,7 @@
 // caps non-admin searches at 10 results (USER_SEARCH_LIMIT) — the MCP tool
 // enforces the same cap, so a token never out-privileges the web UI.
 //
-// services/search is required lazily (ESM meilisearch — see tools/bottles.js).
+// services/search is required lazily (ESM meilisearch — see tools/index.js).
 const { z } = require('zod');
 const WineDefinition = require('../../models/WineDefinition');
 const { registerTool } = require('../registry');

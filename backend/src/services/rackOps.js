@@ -211,7 +211,6 @@ async function moveBottleToCellar(bottle, sourceCellar, destCellar, req) {
     throw err;
   }
   await removeFromRacks(bottle._id);
-  require('./search').indexBottle(bottle._id);
 
   // Resolve the wine name for the move audit trail (REST parity — the pre-
   // refactor route populated before auditing). Tolerant of an unpopulated ref.

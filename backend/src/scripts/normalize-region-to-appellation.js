@@ -38,7 +38,6 @@
 const mongoose = require('mongoose');
 const WineDefinition = require('../models/WineDefinition');
 const Region = require('../models/Region');
-const Bottle = require('../models/Bottle');
 require('../models/Country');
 require('../models/Grape');
 const { regionForAppellation } = require('../services/findOrCreateWine');
@@ -132,13 +131,7 @@ const { logAudit } = require('../services/audit');
     written++;
   }
 
-  // Bottle search docs denormalize regionName — one bulk pass at the end.
-  const wineIds = changes.map((c) => c.id);
-  if (wineIds.length) {
-    const bottleIds = await Bottle.distinct('_id', { wineDefinition: { $in: wineIds } });
-    if (bottleIds.length) await searchService.bulkIndexBottles(bottleIds);
-    console.log(`\nReindexed ${wineIds.length} wines and ${bottleIds.length} bottles.`);
-  }
+  if (written) console.log(`\nReindexed ${written} wines.`);
   console.log(`Applied ${written} region rewrites.`);
   console.log('Region is part of the embedding text — start an incremental embed job to refresh Qdrant.');
 

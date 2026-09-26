@@ -558,12 +558,6 @@ async function runPromotionFollowThrough(wine) {
   // indexWine owns index membership in BOTH directions — this is the call that
   // ADDS the promoted row (it removed it while pending).
   searchService.indexWine(wine._id).catch?.(() => {});
-  // Bottles carry a denormalized copy of the wine's identity in their own
-  // index; a producer that just appeared has to reach them too (no scheduled
-  // resync exists — same reasoning as the proposal-approve path).
-  Bottle.distinct('_id', { wineDefinition: wine._id })
-    .then((ids) => searchService.bulkIndexBottles(ids))
-    .catch((err) => console.error('Bottle re-index after pending promotion failed:', err.message));
   // Never embedded while pending — embed now, for the vintages that exist.
   require('./embeddingJob').reembedActiveVintages(wine._id).catch(() => {});
   // Never enriched while pending either (services/enrichmentJob) — the wine now
