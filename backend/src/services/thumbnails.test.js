@@ -156,6 +156,78 @@ describe('thumbnail handler', () => {
   });
 });
 
+describe('photos converted to WebP (scripts/convert-photos-webp.js)', () => {
+  const STEM = '1a2b3c4d-1111-4222-8333-944445555666';
+
+  async function convertedSource() {
+    // Only the converted file exists — the .png it came from is gone.
+    await sharp({ create: { width: 330, height: 1280, channels: 4, background: { r: 120, g: 20, b: 40, alpha: 0.9 } } })
+      .webp()
+      .toFile(path.join(root, 'processed', `${STEM}.webp`));
+  }
+
+  test('the old thumbnail address is answered with the thumbnail of the new file', async () => {
+    await convertedSource();
+    const { handler } = createThumbnailService({ uploadsRoot: root });
+
+    const r = await call(handler, `/processed/${STEM}.png.webp`);
+    expect(r.status).toBe(200);
+    expect(r.file).toBe(path.join(root, 'thumbs', 'processed', `${STEM}.webp.webp`));
+    expect(r.headers['Cache-Control']).toBe(IMMUTABLE_CACHE);
+    expect((await sharp(r.file).metadata()).height).toBe(THUMB_MAX_HEIGHT);
+
+    // Rendered once: the next old-name request is a plain read of the same file.
+    const mtime = (await fs.promises.stat(r.file)).mtimeMs;
+    const again = await call(handler, `/processed/${STEM}.png.webp`);
+    expect(again.file).toBe(r.file);
+    expect((await fs.promises.stat(again.file)).mtimeMs).toBe(mtime);
+    // And the new address serves that same thumbnail.
+    expect((await call(handler, `/processed/${STEM}.webp.webp`)).file).toBe(r.file);
+  });
+
+  test('an old address with no converted file is still a no-store 404', async () => {
+    const { handler } = createThumbnailService({ uploadsRoot: root });
+    const r = await call(handler, `/processed/${STEM}.png.webp`);
+    expect(r.status).toBe(404);
+    expect(r.headers['Cache-Control']).toBe('no-store');
+    expect(fs.existsSync(path.join(root, 'thumbs'))).toBe(false);
+  });
+
+  test('a source that still exists under its old name wins over a WebP sibling', async () => {
+    await convertedSource();
+    const { handler } = createThumbnailService({ uploadsRoot: root });
+    const r = await call(handler, `/processed/${SOURCE}.webp`); // SOURCE is a .png that exists
+    expect(r.file).toBe(path.join(root, 'thumbs', 'processed', `${SOURCE}.webp`));
+  });
+});
+
+describe('warmThumbFor', () => {
+  test('renders the thumbnail of a processed upload once, ahead of any request', async () => {
+    const { warmThumbFor, handler } = createThumbnailService({ uploadsRoot: root });
+    const thumb = path.join(root, 'thumbs', 'processed', `${SOURCE}.webp`);
+
+    expect(await warmThumbFor(`/api/uploads/processed/${SOURCE}`)).toBe(true);
+    expect(fs.existsSync(thumb)).toBe(true);
+    const mtime = (await fs.promises.stat(thumb)).mtimeMs;
+
+    expect(await warmThumbFor(`/api/uploads/processed/${SOURCE}`)).toBe(true);
+    expect((await fs.promises.stat(thumb)).mtimeMs).toBe(mtime);
+    expect((await call(handler, `/processed/${SOURCE}.webp`)).file).toBe(thumb);
+  });
+
+  test('is a no-op for anything without a thumbnail, and never throws', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const { warmThumbFor } = createThumbnailService({ uploadsRoot: root });
+    expect(await warmThumbFor(`/api/uploads/originals/${SOURCE}`)).toBe(false);
+    expect(await warmThumbFor('https://example.com/x.png')).toBe(false);
+    expect(await warmThumbFor(null)).toBe(false);
+    // A processed name with no file behind it: logged, not thrown.
+    expect(await warmThumbFor('/api/uploads/processed/dddddddd-0000-4000-8000-000000000000.webp')).toBe(false);
+    expect(fs.existsSync(path.join(root, 'thumbs', 'processed', 'dddddddd-0000-4000-8000-000000000000.webp.webp'))).toBe(false);
+    warn.mockRestore();
+  });
+});
+
 describe('unlinkThumbFor / sweepOrphanThumbs', () => {
   test('unlinkThumbFor removes the thumbnail and tolerates a missing one', async () => {
     const { handler, unlinkThumbFor } = createThumbnailService({ uploadsRoot: root });
@@ -175,6 +247,20 @@ describe('unlinkThumbFor / sweepOrphanThumbs', () => {
     expect(await sweepOrphanThumbs()).toBe(1);
     expect(fs.existsSync(orphan)).toBe(false);
     expect(fs.existsSync(kept.file)).toBe(true);
+  });
+
+  test('after a conversion the old name\'s thumbnail is swept and the new one kept', async () => {
+    const { handler, sweepOrphanThumbs } = createThumbnailService({ uploadsRoot: root });
+    const old = await call(handler, `/processed/${SOURCE}.webp`);
+    // Convert: the .webp appears, the .png goes.
+    const stem = SOURCE.replace(/\.png$/, '');
+    await sharp(path.join(root, 'processed', SOURCE)).webp().toFile(path.join(root, 'processed', `${stem}.webp`));
+    await fs.promises.unlink(path.join(root, 'processed', SOURCE));
+    const fresh = await call(handler, `/processed/${stem}.webp.webp`);
+
+    expect(await sweepOrphanThumbs()).toBe(1);
+    expect(fs.existsSync(old.file)).toBe(false);
+    expect(fs.existsSync(fresh.file)).toBe(true);
   });
 
   test('sweep is a no-op before any thumbnail exists', async () => {

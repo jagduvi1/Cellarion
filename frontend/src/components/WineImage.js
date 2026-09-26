@@ -9,8 +9,8 @@ import { thumbUrl } from '../utils/thumbUrl';
  * and optionally renders a coloured placeholder when there is no image.
  *
  * Every use but the large ones is a small card or list row, so an uploaded
- * photo is shown as its card-size thumbnail (utils/thumbUrl) by default — about
- * 40× smaller than the full PNG. If the thumbnail fails to load, the full image
+ * photo is shown as its card-size thumbnail (utils/thumbUrl) by default — a
+ * fraction of the full photo. If the thumbnail fails to load, the full image
  * is tried once before the <img> is hidden. Pass `full` where the image is
  * shown large.
  *

@@ -476,7 +476,7 @@ reads JSON — Cellarion never locks your data in.
   The pre-crop originals are not included — only the finished image you kept.
   Images other people contributed (for example a shared wine's label) are not
   included either. Each bottle in \`data.json\` lists its images by their path
-  inside this folder, e.g. \`images/processed/<id>.png\`.
+  inside this folder, e.g. \`images/processed/<id>.webp\`.
 - Label frames you scanned that Cellarion kept so a sommelier could finish
   identifying the wine are listed under \`labelScans\` in \`data.json\`, with
   their file in the same \`images/\` folder. They are private — only you and
@@ -499,7 +499,7 @@ reads JSON — Cellarion never locks your data in.
           "wineName": "...", "producer": "...", "vintage": "...",
           "rackName": "...", "rackPosition": 1, "rackRow": 1, "rackCol": 1,
           "maturity": { "peakFrom": 2026, "peakUntil": 2032, "lateUntil": 2038 },
-          "images": [{ "processed": "images/processed/<id>.png" }]
+          "images": [{ "processed": "images/processed/<id>.webp" }]
         }
       ]
     }
