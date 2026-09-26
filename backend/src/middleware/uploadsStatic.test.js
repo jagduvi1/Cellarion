@@ -111,6 +111,7 @@ describe('convertedPhotoFallback — a converted photo keeps its old address', (
   const path = require('path');
   const http = require('http');
   const express = require('express');
+  const rateLimit = require('express-rate-limit');
   const { createConvertedPhotoFallback } = require('../middleware/uploadsStatic');
 
   const STEM = '0f3b2a1c-1111-4222-8333-944445555666';
@@ -129,6 +130,9 @@ describe('convertedPhotoFallback — a converted photo keeps its old address', (
     await fs.promises.writeFile(path.join(root, 'processed', 'still-a.webp'), WEBP);
 
     const app = express();
+    // Like the real app (app.js mounts its API rate limiter ahead of
+    // /api/uploads); generous enough never to trip in these tests.
+    app.use(rateLimit({ windowMs: 60 * 1000, max: 10000, standardHeaders: false, legacyHeaders: false }));
     app.use('/api/uploads', uploadsGuard, express.static(root, { setHeaders: uploadsCacheHeaders }), createConvertedPhotoFallback({ uploadsRoot: root }));
     app.use((req, res) => res.status(404).json({ error: 'Not found' }));
     server = http.createServer(app);
