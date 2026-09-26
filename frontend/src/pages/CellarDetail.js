@@ -356,7 +356,7 @@ function CellarDetail() {
     setHasRacks(null);
     try {
       const [racksRes, layoutRes] = await Promise.all([
-        getRacks(apiFetch, id),
+        getRacks(apiFetch, id, { summary: true }),
         getCellarLayout(apiFetch, id),
       ]);
       const racksData = await racksRes.json();

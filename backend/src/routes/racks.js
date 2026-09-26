@@ -18,8 +18,35 @@ const { ARRANGE_STRATEGIES, buildArrangePlan } = require('../utils/rackArrange')
 const { isValidId } = require('../utils/validation');
 const { logAudit } = require('../services/audit');
 const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
+const { WINE_LIST_SELECT } = require('../config/constants');
 
 const router = express.Router();
+
+// What a rack view needs of each placed bottle: the bottle, and its wine as
+// the cellar list sends it (WINE_LIST_SELECT — never the AI profile, internal
+// keys, the wine's creator or another user's label-scan evidence) with only the
+// NAMES of its country, region and grapes. Until 2026-09 every rack response
+// populated whole documents: a large cellar came to about 5 MB, most of it
+// taxonomy descriptions, and every shared wine's scan evidence rode along
+// (scaling audit 2026-09-25). Lean: thousands of bottles as plain objects,
+// while the rack itself stays a document, so schema defaults (zones,
+// disabledPositions, …) still fill racks saved before those fields existed.
+const SLOT_BOTTLES = {
+  path: 'slots.bottle',
+  options: { lean: true },
+  populate: [
+    {
+      path: 'wineDefinition',
+      select: WINE_LIST_SELECT,
+      populate: [
+        { path: 'country', select: 'name' },
+        { path: 'region', select: 'name' },
+        { path: 'grapes', select: 'name' },
+      ],
+    },
+    { path: 'pendingWineRequest', select: 'wineName producer' },
+  ],
+};
 
 const MAX_MODULES = 50;
 // Mirrors the Rack schema's rows/cols bounds (models/Rack.js). Checked at the
@@ -86,13 +113,17 @@ router.use(requireAuth);
 router.use(idempotency);
 
 // GET /api/racks?cellar=:id  — list racks for a cellar (owner, editor, viewer)
+// ?summary=1: each slot carries only its bottle id — the racks' names, shapes
+// and what sits where, which is all the cellar page, the add-bottle "place
+// them now?" offer and the import picker read. No bottles, wines or maturity.
 router.get('/', requireCellarAccess('viewer'), async (req, res) => {
   try {
-    const racks = await Rack.find({ cellar: req.cellar._id, deletedAt: null })
-      .populate({
-        path: 'slots.bottle',
-        populate: { path: 'wineDefinition', populate: ['country', 'region', 'grapes'] }
-      });
+    if (req.query.summary === '1') {
+      const racks = await Rack.find({ cellar: req.cellar._id, deletedAt: null });
+      return res.json({ racks: racks.map((r) => r.toObject()) });
+    }
+
+    const racks = await Rack.find({ cellar: req.cellar._id, deletedAt: null }).populate(SLOT_BOTTLES);
 
     res.json({ racks: await withMaturity(racks) });
   } catch (err) {
@@ -327,10 +358,7 @@ router.put('/:id', async (req, res) => {
     }
 
     await rack.save();
-    await rack.populate({
-      path: 'slots.bottle',
-      populate: { path: 'wineDefinition', populate: ['country', 'region', 'grapes'] }
-    });
+    await rack.populate(SLOT_BOTTLES);
 
     // cellarId so the update shows on the cellar's audit page like rack.create.
     const shapeAfter = shapeOf(rack);
@@ -438,10 +466,7 @@ router.put('/:id/slots/:position', async (req, res) => {
     const result = await placeBottleInRack(rack, position, bottleId, req);
     if (result.error) return res.status(result.error.status).json({ error: result.error.message });
 
-    await rack.populate({
-      path: 'slots.bottle',
-      populate: { path: 'wineDefinition', populate: ['country', 'region', 'grapes'] }
-    });
+    await rack.populate(SLOT_BOTTLES);
     res.json({ rack: await withMaturity(rack) });
   } catch (err) {
     console.error('Assign slot error:', err);
@@ -491,10 +516,7 @@ router.post('/:id/slots/:position/move', async (req, res) => {
     if (toSlot) toSlot.position = from; // occupied target → swap
     await rack.save();
 
-    await rack.populate({
-      path: 'slots.bottle',
-      populate: { path: 'wineDefinition', populate: ['country', 'region', 'grapes'] }
-    });
+    await rack.populate(SLOT_BOTTLES);
 
     logAudit(req, 'rack.slot_move', { type: 'rack', id: rack._id }, { from, to, swapped: !!toSlot });
     res.json({ rack: await withMaturity(rack) });
@@ -630,10 +652,7 @@ router.post('/:id/arrange/apply', async (req, res) => {
     const applied = await applyArrangement(rack, target, req, { via: 'web', moved: target.length });
     if (applied.error) return res.status(applied.error.status).json({ error: applied.error.message });
 
-    await rack.populate({
-      path: 'slots.bottle',
-      populate: { path: 'wineDefinition', populate: ['country', 'region', 'grapes'] }
-    });
+    await rack.populate(SLOT_BOTTLES);
     res.json({ rack: await withMaturity(rack) });
   } catch (err) {
     console.error('Arrange apply error:', err);
@@ -664,10 +683,7 @@ router.delete('/:id/slots/:position', async (req, res) => {
     const result = await clearRackSlot(rack, position, req);
     if (result.error) return res.status(result.error.status).json({ error: result.error.message });
 
-    await rack.populate({
-      path: 'slots.bottle',
-      populate: { path: 'wineDefinition', populate: ['country', 'region', 'grapes'] }
-    });
+    await rack.populate(SLOT_BOTTLES);
     res.json({ rack: await withMaturity(rack) });
   } catch (err) {
     console.error('Clear slot error:', err);
@@ -706,10 +722,7 @@ router.post('/:id/slots/:position/disable', async (req, res) => {
       await rack.save();
     }
 
-    await rack.populate({
-      path: 'slots.bottle',
-      populate: { path: 'wineDefinition', populate: ['country', 'region', 'grapes'] }
-    });
+    await rack.populate(SLOT_BOTTLES);
 
     logAudit(req, 'rack.slot_disable', { type: 'rack', id: rack._id });
     res.json({ rack: await withMaturity(rack) });
@@ -743,10 +756,7 @@ router.delete('/:id/slots/:position/disable', async (req, res) => {
       await rack.save();
     }
 
-    await rack.populate({
-      path: 'slots.bottle',
-      populate: { path: 'wineDefinition', populate: ['country', 'region', 'grapes'] }
-    });
+    await rack.populate(SLOT_BOTTLES);
 
     logAudit(req, 'rack.slot_enable', { type: 'rack', id: rack._id });
     res.json({ rack: await withMaturity(rack) });
