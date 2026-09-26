@@ -19,6 +19,10 @@ const WineRequest = require('../models/WineRequest');
 const JournalEntry = require('../models/JournalEntry');
 const { convertPhoto, candidateUrls, leftovers, webpUrlFor, makeContext } = require('./convert-photos-webp');
 
+// Real encodes of camera-sized frames: well under a second alone, but past
+// the 5 s default when every Jest worker is encoding at once.
+jest.setTimeout(30000);
+
 const STEM = '0f3b2a1c-1111-4222-8333-944445555666';
 const OLD = `/api/uploads/processed/${STEM}.png`;
 const NEW = `/api/uploads/processed/${STEM}.webp`;
