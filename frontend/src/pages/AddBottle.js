@@ -731,7 +731,7 @@ function AddBottle() {
     // consumed bottle has no place in a rack (audit 2026-09-14 M).
     if (newIds.length > 0 && !addToHistory) {
       try {
-        const rr = await getRacks(apiFetch, cellarId);
+        const rr = await getRacks(apiFetch, cellarId, { summary: true });
         const rd = rr.ok ? await rr.json() : null;
         hasRacks = Array.isArray(rd?.racks) ? rd.racks.length > 0 : Array.isArray(rd) && rd.length > 0;
       } catch { /* no offer */ }

@@ -240,7 +240,7 @@ function ImportBottles() {
   // rack names collide with already-created racks (we can't reshape those
   // mid-import without risking the bottles already in them).
   useEffect(() => {
-    getRacks(apiFetch, cellarId)
+    getRacks(apiFetch, cellarId, { summary: true })
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         if (!d?.racks) return;

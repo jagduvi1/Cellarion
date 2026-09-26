@@ -29,10 +29,11 @@ const WINE_POPULATE = [
 // of 30 bottles ships the same card data at a fraction of the payload. Detail
 // routes (GET /api/bottles/:id etc.) keep the full WINE_POPULATE — the bottle
 // page renders aiProfile.
+const WINE_LIST_SELECT = `-aiProfile -normalizedKey -lwin -productNumber -productNumberShort -createdBy ${SCAN_EVIDENCE_EXCLUDE}`;
 const WINE_POPULATE_LIST = [
   {
     path: 'wineDefinition',
-    select: `-aiProfile -normalizedKey -lwin -productNumber -productNumberShort -createdBy ${SCAN_EVIDENCE_EXCLUDE}`,
+    select: WINE_LIST_SELECT,
     populate: ['country', 'region', 'grapes']
   },
   { path: 'pendingWineRequest', select: 'wineName producer' }
@@ -106,6 +107,7 @@ module.exports = {
   MS_PER_DAY,
   WINE_POPULATE,
   WINE_POPULATE_LIST,
+  WINE_LIST_SELECT,
   IMPORT_EXACT_THRESHOLD,
   IMPORT_FUZZY_THRESHOLD,
   MAX_IMPORT_SIZE,

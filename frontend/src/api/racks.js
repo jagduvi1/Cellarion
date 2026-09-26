@@ -1,7 +1,9 @@
 import { JSON_HEADERS } from './apiConstants';
 
-export const getRacks = (apiFetch, cellarId) =>
-  apiFetch(`/api/racks?cellar=${cellarId}`);
+// summary: each slot carries only its bottle id — enough for rack names,
+// shapes and what sits where, without every bottle and wine.
+export const getRacks = (apiFetch, cellarId, { summary = false } = {}) =>
+  apiFetch(`/api/racks?cellar=${cellarId}${summary ? '&summary=1' : ''}`);
 
 export const deleteRack = (apiFetch, rackId) =>
   apiFetch(`/api/racks/${rackId}`, { method: 'DELETE' });
