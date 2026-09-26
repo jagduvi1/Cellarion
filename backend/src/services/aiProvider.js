@@ -386,20 +386,26 @@ const _ledgerClients = new Map();
 function withUsageLedger(client, feature) {
   const { recordAiUsage } = require('./aiCostLedger');
   const label = feature || 'other';
+  // Recording must never break the call it measures: a throw here would turn a
+  // completed, billed answer into a refundable "exception" in labelScan, or an
+  // unhandled rejection inside the SDK's stream emitter.
+  const record = (model, usage) => {
+    try {
+      recordAiUsage({ feature: label, model, usage });
+    } catch (err) {
+      console.warn('[aiProvider] AI usage not recorded (non-fatal):', err.message);
+    }
+  };
   return {
     messages: {
       create: async (params, ...rest) => {
         const response = await client.messages.create(params, ...rest);
-        recordAiUsage({ feature: label, model: params?.model || response?.model, usage: response?.usage });
+        record(params?.model || response?.model, response?.usage);
         return response;
       },
       stream: (params, ...rest) => {
         const stream = client.messages.stream(params, ...rest);
-        if (stream && typeof stream.on === 'function') {
-          stream.on('finalMessage', (message) => {
-            recordAiUsage({ feature: label, model: params?.model || message?.model, usage: message?.usage });
-          });
-        }
+        stream.on('finalMessage', (message) => record(params?.model || message?.model, message?.usage));
         return stream;
       },
     },

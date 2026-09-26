@@ -431,11 +431,10 @@ const defaults = {
   sommMaturitySuggestEnabled: true,
   sommPriceSuggestEnabled: true,
   // Prompt caching (2026-09-25): the label-scan instructions and the import
-  // lookup's fixed rules are sent as a cached system block, so a repeat call
-  // within the cache lifetime pays 10% for that part. The model reads the same
-  // words; only where they sit in the request changes. Anthropic provider only.
-  // This is the instant way back (SuperAdmin → AI) should identification ever
-  // look different — no deploy needed. See services/labelScan.cachedSystemBlock.
+  // lookup's fixed rules carry Anthropic's cache marker, so a repeat call
+  // within the cache lifetime pays 10% for that part. A pure cost switch: the
+  // prompt the model reads is the same whether it is on or off (SuperAdmin →
+  // AI, no deploy needed). See services/labelScan.systemBlock.
   promptCaching: true,
 };
 

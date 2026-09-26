@@ -14,6 +14,9 @@
 jest.mock('./aiProvider', () => ({
   getChatClient: jest.fn(),
   effectiveModels: jest.fn(() => null),
+  // The single-message layout these tests were written against (the
+  // Anthropic system-block layout has its own suite, labelScan.promptCache).
+  providerName: jest.fn(() => 'openai'),
 }));
 jest.mock('./embedding', () => ({
   embeddingProviderName: () => 'voyage',

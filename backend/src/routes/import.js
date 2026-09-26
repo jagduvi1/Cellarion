@@ -25,7 +25,6 @@ const { wineVisibilityFilter, findVisibleWine } = require('../services/wineVisib
 // Audit 2026-09 D13-12: parse-time warnings are bounded before they are stored.
 const { sanitizeImportWarnings } = require('../utils/importWarnings');
 const { tryDebitAi, isRefundableFailure } = require('../services/aiBudget');
-const { lookupIdentification, rememberIdentification } = require('../services/aiIdentificationCache');
 const rateLimitsConfig = require('../config/rateLimits');
 const { generateWineKey } = require('../utils/normalize');
 const {
@@ -869,33 +868,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     const aiSettled = await runConcurrent(
       aiRun.map(pr => async () => {
         // Checked at launch time: in-flight calls finish, new ones stop.
-        if (clientDisconnected) {
-          pr.aiSkipped = true;
-          return AI_SKIPPED;
-        }
-        const identifyInput = {
-          name: pr.item.wineName,
-          producer: pr.item.producer,
-          vintage: pr.item.vintage,
-          country: pr.item.country,
-          // The file's own geography, as hints. Asking the model to place a
-          // wine while withholding the appellation the user's export states
-          // was making it infer what we had already been handed — and the
-          // confidence floor then deleted the inference. Precedence still
-          // lives in buildProposedWine; this only stops the blind guess.
-          appellation: pr.item.appellation,
-          region: pr.item.region,
-        };
-        // The answer memory (services/aiIdentificationCache): the same question
-        // asked before — a re-run import, a retried batch, another user's file —
-        // is answered for free, with no call and no debit, so it is served even
-        // once the budget is spent. The user's explicit "Look up" (forceAi)
-        // always asks afresh.
-        if (!pr.forceAi) {
-          const remembered = await lookupIdentification(identifyInput);
-          if (remembered) return remembered;
-        }
-        if (aiBudgetExhausted) {
+        if (clientDisconnected || aiBudgetExhausted) {
           pr.aiSkipped = true;
           return AI_SKIPPED;
         }
@@ -906,11 +879,22 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
           return AI_SKIPPED;
         }
         try {
-          const result = await identifyWineFromText(identifyInput);
+          const result = await identifyWineFromText({
+            name: pr.item.wineName,
+            producer: pr.item.producer,
+            vintage: pr.item.vintage,
+            country: pr.item.country,
+            // The file's own geography, as hints. Asking the model to place a
+            // wine while withholding the appellation the user's export states
+            // was making it infer what we had already been handed — and the
+            // confidence floor then deleted the inference. Precedence still
+            // lives in buildProposedWine; this only stops the blind guess.
+            appellation: pr.item.appellation,
+            region: pr.item.region,
+          });
           // A transport-level failure never produced a billable completion —
           // give the debit back so failed calls don't burn the user's budget.
           if (!result.data && isRefundableFailure(result.debugReason)) await debit.refund();
-          else rememberIdentification(identifyInput, result);
           return result;
         } catch (err) {
           await debit.refund();

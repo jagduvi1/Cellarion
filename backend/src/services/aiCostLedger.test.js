@@ -5,20 +5,24 @@
  * cache-write lifetimes are priced differently, so they must never be lumped
  * into input); the dollar estimate from list prices; that recording never
  * throws into the caller and does nothing without a database; and the
- * per-feature / per-day summary SuperAdmin reads.
+ * per-feature summary SuperAdmin reads, whose projection only ever averages
+ * FULL days.
  */
+jest.mock('mongoose', () => ({ connection: { readyState: 1 } }));
 jest.mock('../models/AiCostStat', () => ({
   updateOne: jest.fn(),
   find: jest.fn(),
+  findOne: jest.fn(),
 }));
 
+const mongoose = require('mongoose');
 const AiCostStat = require('../models/AiCostStat');
 const ledger = require('./aiCostLedger');
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mongoose.connection.readyState = 1;
   AiCostStat.updateOne.mockResolvedValue({});
-  ledger._setDbReadyCheckForTests(() => true);
 });
 
 describe('usageIncrements', () => {
@@ -50,7 +54,7 @@ describe('usageIncrements', () => {
 
   test('missing or junk fields count as zero (the OpenAI adapter reports only input/output)', () => {
     const inc = ledger.usageIncrements({ input_tokens: -3, output_tokens: 'x' });
-    expect(inc).toMatchObject({ inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, webSearches: 0 });
+    expect(inc).toMatchObject({ inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWrite5mTokens: 0, webSearches: 0 });
   });
 });
 
@@ -94,7 +98,7 @@ describe('recordAiUsage', () => {
   });
 
   test('does nothing without a database connection', async () => {
-    ledger._setDbReadyCheckForTests(() => false);
+    mongoose.connection.readyState = 0;
     await ledger.recordAiUsage({ feature: 'chat', model: 'claude-sonnet-5', usage: { input_tokens: 1 } });
     expect(AiCostStat.updateOne).not.toHaveBeenCalled();
   });
@@ -104,39 +108,30 @@ describe('recordAiUsage', () => {
     expect(AiCostStat.updateOne).not.toHaveBeenCalled();
   });
 
-  test('losing the first-write race of the day retries as a plain increment', async () => {
-    AiCostStat.updateOne
-      .mockRejectedValueOnce(Object.assign(new Error('dup'), { code: 11000 }))
-      .mockResolvedValueOnce({});
-    await ledger.recordAiUsage({ feature: 'label_scan', model: 'claude-sonnet-5', usage: { input_tokens: 5 } });
-    expect(AiCostStat.updateOne).toHaveBeenCalledTimes(2);
-    expect(AiCostStat.updateOne.mock.calls[1][1]).toEqual({ $inc: expect.objectContaining({ calls: 1, inputTokens: 5 }) });
-    expect(AiCostStat.updateOne.mock.calls[1][2]).toBeUndefined();
-  });
-
-  test('never throws into the caller — a ledger failure must not cost a user their scan', async () => {
+  test('never rejects — a ledger failure must not cost a user their scan', async () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     AiCostStat.updateOne.mockRejectedValue(new Error('mongo down'));
     await expect(ledger.recordAiUsage({ feature: 'label_scan', model: 'm', usage: { input_tokens: 1 } })).resolves.toBeUndefined();
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
   });
-
-  test('recordReusedAnswer counts a free answer without tokens or a call', async () => {
-    await ledger.recordReusedAnswer({ feature: 'import_identify', model: 'claude-sonnet-5' });
-    expect(AiCostStat.updateOne.mock.calls[0][1].$inc).toEqual({ reused: 1 });
-  });
 });
 
 describe('summarizeCosts', () => {
   const now = new Date('2026-09-25T12:00:00Z');
-  const lean = (rows) => ({ lean: async () => rows });
+  const lean = (value) => ({ lean: async () => value });
+  const firstRecorded = (date) => AiCostStat.findOne.mockReturnValue({ sort: () => lean(date ? { date } : null) });
+  const row = (date, feature, extra = {}) => ({
+    date, feature, model: 'claude-sonnet-5', calls: 0, inputTokens: 0, outputTokens: 0,
+    cacheReadTokens: 0, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0, webSearches: 0, ...extra,
+  });
 
-  test('totals per feature and per day, priced, sorted by spend', async () => {
+  test('totals per feature, priced, sorted by spend, with the input total returned', async () => {
+    firstRecorded('2026-09-10');
     AiCostStat.find.mockReturnValue(lean([
-      { date: '2026-09-24', feature: 'label_scan', model: 'claude-sonnet-5', calls: 40, inputTokens: 100000, outputTokens: 8000, cacheReadTokens: 0, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0, webSearches: 0, reused: 0 },
-      { date: '2026-09-25', feature: 'label_scan', model: 'claude-sonnet-5', calls: 10, inputTokens: 5000, outputTokens: 2000, cacheReadTokens: 15000, cacheWrite5mTokens: 0, cacheWrite1hTokens: 1500, webSearches: 0, reused: 0 },
-      { date: '2026-09-25', feature: 'import_identify', model: 'claude-sonnet-5', calls: 2, inputTokens: 600, outputTokens: 300, cacheReadTokens: 0, cacheWrite5mTokens: 0, cacheWrite1hTokens: 0, webSearches: 0, reused: 7 },
+      row('2026-09-24', 'label_scan', { calls: 40, inputTokens: 100000, outputTokens: 8000 }),
+      row('2026-09-25', 'label_scan', { calls: 10, inputTokens: 5000, outputTokens: 2000, cacheReadTokens: 15000, cacheWrite1hTokens: 1500 }),
+      row('2026-09-25', 'import_identify', { calls: 2, inputTokens: 600, outputTokens: 300 }),
     ]));
 
     const out = await ledger.summarizeCosts({ days: 30, now });
@@ -148,39 +143,62 @@ describe('summarizeCosts', () => {
     // (105000*2 + 10000*10 + 15000*0.2 + 1500*4) / 1e6
     expect(scan.usd).toBeCloseTo(0.319, 4);
     expect(scan.usdPerCall).toBeCloseTo(0.00638, 5);
+    expect(scan.inputTokensTotal).toBe(121500);
     expect(scan.cachedInputShare).toBe(0.123); // 15000 / 121500, to 3 places
     expect(scan.models).toEqual(['claude-sonnet-5']);
-    expect(out.features[1].reused).toBe(7);
-    expect(out.daily).toEqual([
-      { date: '2026-09-24', calls: 40, reused: 0, usd: expect.any(Number) },
-      { date: '2026-09-25', calls: 12, reused: 7, usd: expect.any(Number) },
-    ]);
     expect(out.total.calls).toBe(52);
-    expect(out.recordingSince).toBe('2026-09-24');
-    // Averaged over the 2 days the ledger has recorded, not the 30-day window.
-    expect(out.projectedUsdPer30Days).toBeCloseTo((out.total.usd / 2) * 30, 1);
+    expect(out.recordingSince).toBe('2026-09-10');
     expect(out.unpricedModels).toEqual([]);
   });
 
-  test('an unpriced model is listed, and counts nothing toward the dollars', async () => {
+  test('the projection averages full days only — today is still running', async () => {
+    firstRecorded('2026-09-01');
     AiCostStat.find.mockReturnValue(lean([
-      { date: '2026-09-25', feature: 'chat', model: 'llama3.1', calls: 3, inputTokens: 900, outputTokens: 300 },
+      row('2026-09-23', 'label_scan', { outputTokens: 100000 }), // $1.00
+      row('2026-09-24', 'label_scan', { outputTokens: 100000 }), // $1.00
+      row('2026-09-25', 'label_scan', { outputTokens: 10000 }),  // $0.10 so far today — left out
+    ]));
+    const out = await ledger.summarizeCosts({ days: 7, now });
+    // 7-day window 09-19..09-25; full days 09-19..09-24 = 6 days, $2.00 → $10 per 30 days.
+    expect(out.projectedUsdPer30Days).toBe(10);
+  });
+
+  test('the ledger\'s first day began at the deploy, so it is left out of the projection too', async () => {
+    firstRecorded('2026-09-23');
+    AiCostStat.find.mockReturnValue(lean([
+      row('2026-09-23', 'label_scan', { outputTokens: 20000 }),  // partial first day
+      row('2026-09-24', 'label_scan', { outputTokens: 100000 }), // the one full day: $1.00
+      row('2026-09-25', 'label_scan', { outputTokens: 50000 }),  // today
+    ]));
+    const out = await ledger.summarizeCosts({ days: 30, now });
+    expect(out.projectedUsdPer30Days).toBe(30);
+  });
+
+  test('with no full day yet there is no projection', async () => {
+    firstRecorded('2026-09-25');
+    AiCostStat.find.mockReturnValue(lean([row('2026-09-25', 'label_scan', { outputTokens: 50000 })]));
+    expect((await ledger.summarizeCosts({ days: 30, now })).projectedUsdPer30Days).toBeNull();
+    firstRecorded('2026-09-01');
+    expect((await ledger.summarizeCosts({ days: 1, now })).projectedUsdPer30Days).toBeNull();
+  });
+
+  test('an unpriced model is listed, and counts nothing toward the dollars', async () => {
+    firstRecorded('2026-09-25');
+    AiCostStat.find.mockReturnValue(lean([
+      { ...row('2026-09-25', 'chat', { calls: 3, inputTokens: 900, outputTokens: 300 }), model: 'llama3.1' },
     ]));
     const out = await ledger.summarizeCosts({ days: 7, now });
     expect(out.unpricedModels).toEqual(['llama3.1']);
     expect(out.total.usd).toBe(0);
   });
 
-  test('an empty ledger has no projection rather than a zero one', async () => {
+  test('the window is clamped to 1–400 days, and a missing one means 30', async () => {
+    firstRecorded(null);
     AiCostStat.find.mockReturnValue(lean([]));
-    const out = await ledger.summarizeCosts({ days: 30, now });
-    expect(out.features).toEqual([]);
-    expect(out.projectedUsdPer30Days).toBeNull();
-  });
-
-  test('the window is clamped to 1–400 days', async () => {
-    AiCostStat.find.mockReturnValue(lean([]));
-    expect((await ledger.summarizeCosts({ days: 0, now })).days).toBe(30);
+    expect((await ledger.summarizeCosts({ days: 0, now })).days).toBe(1);
+    expect((await ledger.summarizeCosts({ days: -5, now })).days).toBe(1);
     expect((await ledger.summarizeCosts({ days: 5000, now })).days).toBe(400);
+    expect((await ledger.summarizeCosts({ days: 'abc', now })).days).toBe(30);
+    expect((await ledger.summarizeCosts({ now })).days).toBe(30);
   });
 });

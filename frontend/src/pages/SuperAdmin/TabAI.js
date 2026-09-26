@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { num, ago, StatusDot, PlanBadge, useApi } from './helpers';
+import { superadminAiCostsPath, superadminSetPromptCaching } from '../../api/admin';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -626,7 +627,7 @@ function EnrichmentSearchPanel({ enabled, dailyCap, apiFetch }) {
   );
 }
 
-function PromptCachingPanel({ enabled, apiFetch }) {
+export function PromptCachingPanel({ enabled, apiFetch }) {
   const [on, setOn] = useState(enabled ?? true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
@@ -635,14 +636,10 @@ function PromptCachingPanel({ enabled, apiFetch }) {
     setSaving(true);
     setMsg(null);
     try {
-      const res = await apiFetch('/api/superadmin/ai/prompt-caching', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: !!on }),
-      });
+      const res = await superadminSetPromptCaching(apiFetch, on);
       if (!res.ok) {
-        const d = await res.json();
-        setMsg({ ok: false, text: d.error || 'Save failed' });
+        const d = await res.json().catch(() => ({}));
+        setMsg({ ok: false, text: d.error || `Save failed (HTTP ${res.status})` });
       } else {
         setMsg({ ok: true, text: 'Saved — applies to the next scan and import' });
       }
@@ -661,10 +658,10 @@ function PromptCachingPanel({ enabled, apiFetch }) {
       </div>
       <div className="sa-panel-body">
         <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 12 }}>
-          The label-scan instructions and the import lookup&rsquo;s fixed rules are sent as a cached block, so a repeat call within the
-          cache lifetime (1 hour for scans, 5 minutes for imports) pays 10% for them. The model reads the same words — only where
-          they sit in the request changes. Turning this off returns to the previous layout on the very next call. Anthropic provider
-          only; instructions shorter than about 1,024 tokens are never cached.
+          The label-scan instructions and the import lookup&rsquo;s fixed rules are marked for Anthropic&rsquo;s prompt cache, so a
+          repeat call within the cache lifetime (1 hour for scans, 5 minutes for imports) pays 10% for them. This is a pure cost
+          switch: the prompt the model reads is exactly the same with it on or off. Models only cache instructions above a
+          minimum size (1,024 tokens on Sonnet 5, 4,096 on Haiku 4.5) — below it the switch has no effect.
         </div>
         <div className="sa-kv">
           <div className="sa-kv-row">
@@ -699,33 +696,11 @@ const usd = (v) => {
 const pct = (v) => (v === null || v === undefined ? '—' : `${Math.round(v * 100)}%`);
 
 export function AiCostPanel() {
-  const { apiFetch } = useAuth();
   const [days, setDays] = useState(30);
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  const load = useCallback(async (d) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await apiFetch(`/api/superadmin/ai/costs?days=${d}`);
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || `HTTP ${res.status}`);
-      }
-      setData(await res.json());
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [apiFetch]);
-
-  useEffect(() => { load(days); }, [load, days]);
-
+  // useApi: follows the shell's Refresh / auto-refresh, and a slower answer
+  // for a previously selected period never lands on top of the current one.
+  const { data, loading, error, reload } = useApi(superadminAiCostsPath(days));
   const features = data?.features || [];
-  const inputOf = (f) => f.inputTokens + f.cacheReadTokens + f.cacheWrite5mTokens + f.cacheWrite1hTokens;
 
   return (
     <div className="sa-panel" style={{ marginBottom: 16 }}>
@@ -738,18 +713,18 @@ export function AiCostPanel() {
             <option value={30}>Last 30 days</option>
             <option value={90}>Last 90 days</option>
           </select>
-          <button className="sa-btn" onClick={() => load(days)}>Refresh</button>
+          <button className="sa-btn" onClick={reload}>Refresh</button>
         </div>
       </div>
       <div className="sa-panel-body">
         <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 12 }}>
           Every Claude call records its tokens per feature (no user data). Dollars are estimated from list prices
           {data?.pricesCheckedAt ? ` (checked ${data.pricesCheckedAt})` : ''} — the Anthropic console is the bill.
-          <em> Cached</em> is the share of input read from the prompt cache at 10% of the price; <em>reused</em> are import
-          answers served from memory, which cost nothing.
+          <em> Cached</em> is the share of input read from the prompt cache at 10% of the price.
         </div>
-        {error && <div className="sa-error">{error}</div>}
-        {loading ? (
+        {error ? (
+          <div className="sa-error">{error}</div>
+        ) : loading ? (
           <div className="sa-loading">Loading AI costs...</div>
         ) : features.length === 0 ? (
           <div style={{ color: 'var(--sa-text-dim)', fontSize: 12, padding: '8px 0' }}>
@@ -759,13 +734,12 @@ export function AiCostPanel() {
           <>
             <div style={{ marginBottom: 12, display: 'flex', gap: 24, flexWrap: 'wrap', fontSize: 12, color: 'var(--sa-text-dim)' }}>
               <span><strong style={{ color: 'var(--sa-accent)' }}>{usd(data.total.usd)}</strong> in this period</span>
-              {data.projectedUsdPer30Days !== null && (
-                <span><strong style={{ color: 'var(--sa-text)' }}>{usd(data.projectedUsdPer30Days)}</strong> per 30 days at this rate</span>
-              )}
+              <span>
+                {data.projectedUsdPer30Days !== null
+                  ? <><strong style={{ color: 'var(--sa-text)' }}>{usd(data.projectedUsdPer30Days)}</strong> per 30 days at the rate of the last full days</>
+                  : 'no full day in this period to project from yet'}
+              </span>
               <span><strong style={{ color: 'var(--sa-text)' }}>{num(data.total.calls)}</strong> calls</span>
-              {data.total.reused > 0 && (
-                <span><strong style={{ color: 'var(--sa-text)' }}>{num(data.total.reused)}</strong> answers reused</span>
-              )}
               {data.recordingSince && <span>recording since {data.recordingSince}</span>}
             </div>
             <div className="sa-table-wrap">
@@ -774,7 +748,6 @@ export function AiCostPanel() {
                   <tr>
                     <th>Feature</th>
                     <th>Calls</th>
-                    <th>Reused</th>
                     <th>Input tokens</th>
                     <th>Cached</th>
                     <th>Output tokens</th>
@@ -790,8 +763,7 @@ export function AiCostPanel() {
                         {f.models.length > 0 && <div style={{ fontSize: 10, color: 'var(--sa-text-dim)' }}>{f.models.join(', ')}</div>}
                       </td>
                       <td>{num(f.calls)}</td>
-                      <td>{f.reused ? num(f.reused) : '—'}</td>
-                      <td>{num(inputOf(f))}</td>
+                      <td>{num(f.inputTokensTotal)}</td>
                       <td>{pct(f.cachedInputShare)}</td>
                       <td>{num(f.outputTokens)}</td>
                       <td style={{ fontWeight: 600 }}>{usd(f.usd)}</td>

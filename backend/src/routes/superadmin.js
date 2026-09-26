@@ -554,9 +554,9 @@ router.patch('/ai/enrichment-search', async (req, res) => {
 // ---------------------------------------------------------------------------
 // PATCH /api/superadmin/ai/prompt-caching
 // The prompt-caching switch (2026-09-25): on, the label-scan instructions and
-// the import lookup's fixed rules ride as a cached system block (see
-// services/labelScan.cachedSystemBlock). Off restores the single-message layout
-// on the very next call — the instant way back, with no deploy.
+// the import lookup's fixed rules carry Anthropic's cache marker (see
+// services/labelScan.systemBlock); off, they are billed at the full price. A
+// pure cost switch — the prompt the model reads is the same either way.
 // ---------------------------------------------------------------------------
 router.patch('/ai/prompt-caching', async (req, res) => {
   const { enabled } = req.body;

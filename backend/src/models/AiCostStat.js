@@ -11,8 +11,7 @@ const mongoose = require('mongoose');
  *
  * `inputTokens` is the UNCACHED input only — the API reports cache reads and
  * cache writes separately, and each is priced differently (read 0.1×, 5-minute
- * write 1.25×, 1-hour write 2× the input price). `reused` counts answers served
- * from services/aiIdentificationCache instead of a call: free, so no tokens.
+ * write 1.25×, 1-hour write 2× the input price).
  *
  * GDPR: aggregate counters only — no user reference, no prompt or answer text —
  * so there is nothing personal to export or erase, and the model is not in
@@ -31,7 +30,6 @@ const aiCostStatSchema = new mongoose.Schema({
   cacheWrite5mTokens: { type: Number, default: 0 },
   cacheWrite1hTokens: { type: Number, default: 0 },
   webSearches:        { type: Number, default: 0 },
-  reused:             { type: Number, default: 0 },
   expiresAt:          { type: Date, required: true }, // TTL field — purged automatically
 }, { versionKey: false });
 

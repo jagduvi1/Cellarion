@@ -21,37 +21,34 @@ function getClient(feature) {
 /**
  * Prompt caching (2026-09-25).
  *
- * A label scan and an import lookup each resend ~1,500–1,900 tokens of fixed
+ * A label scan and an import lookup each resend ~1,500–2,000 tokens of fixed
  * instructions on every call — about two thirds of what a scan costs. Anthropic
- * caches a stable request PREFIX: sent as a cached system block, a repeat within
- * the cache lifetime pays 10% for that part (the first write pays 125% for a
+ * caches a stable request PREFIX: marked for the cache, a repeat within the
+ * cache lifetime pays 10% for that part (the first write pays 125% for a
  * 5-minute lifetime, 200% for an hour). Measured on prod 2026-09-25: 68% of
  * label scans follow another scan within 5 minutes and 85% within an hour, and
  * import rows arrive 25 per request, five at a time.
  *
- * The model reads the same words as before — the fixed instructions as the
- * system prompt instead of inside the message. The cached layout is used only
- * when all three hold; otherwise the caller keeps its original single-message
- * layout, unchanged:
- *   - the text is long enough to be cached at all (Sonnet 5 caches nothing under
- *     1,024 tokens — restructuring a prompt for no saving is change for nothing);
- *   - the provider is Anthropic (OpenAI-compatible servers keep their layout);
- *   - the SuperAdmin switch aiConfig.promptCaching is on (the instant way back).
+ * ONE layout on the Anthropic provider: the fixed instructions ride as the
+ * system block, the per-call part (the photo, or the import row closed by
+ * IMPORT_ROW_REMINDER) as the message. The SuperAdmin switch
+ * aiConfig.promptCaching only decides whether that block carries the cache
+ * marker — a pure cost switch that can never change what the model reads. A
+ * block under the model's cache minimum (1,024 tokens on Sonnet 5, 4,096 on
+ * Haiku 4.5) is simply not cached; the marker costs nothing then. An
+ * OpenAI-compatible provider keeps the original single-message layout.
  */
-const MIN_CACHEABLE_CHARS = 3500; // ≈1,024 tokens of English prose on Sonnet 5's tokenizer
-
-function promptCachingActive() {
-  if (aiConfig.get().promptCaching === false) return false;
-  // A test double of aiProvider may not define providerName — no caching then.
-  return typeof aiProvider.providerName === 'function' && aiProvider.providerName() === 'anthropic';
+function instructionsAsSystem() {
+  return aiProvider.providerName() === 'anthropic';
 }
 
-/** The system param for a cached instruction block, or null (keep the old layout). */
-function cachedSystemBlock(text, ttl) {
-  if (typeof text !== 'string' || text.length < MIN_CACHEABLE_CHARS) return null;
-  if (!promptCachingActive()) return null;
-  const cacheControl = ttl === '1h' ? { type: 'ephemeral', ttl: '1h' } : { type: 'ephemeral' };
-  return [{ type: 'text', text, cache_control: cacheControl }];
+/** The system param for fixed instructions — cache-marked while the switch is on. */
+function systemBlock(text, ttl) {
+  const block = { type: 'text', text };
+  if (aiConfig.get().promptCaching !== false) {
+    block.cache_control = ttl === '1h' ? { type: 'ephemeral', ttl: '1h' } : { type: 'ephemeral' };
+  }
+  return [block];
 }
 
 /**
@@ -74,16 +71,16 @@ function splitTemplateForCache(template) {
 }
 
 // The message that rides with the photo when the scan instructions are the
-// cached system prompt.
+// system block.
 const SCAN_LABEL_REQUEST = 'Identify the wine in this photo, following your instructions exactly.';
 
-// Closes the import row's message in the cached layout. The single-message
-// layout put the rules AFTER the row, and instructions read last are followed
-// most closely; with the rules moved up into the cached system block, this line
-// keeps the one rule that protects the shared registry at the end. Measured on
-// 50 curated registry wines (2026-09-25), confidently WRONG type/region/grape
-// answers: single message 10, cached layout 7, cached layout + this line 5 —
-// at 65% lower cost per call than the single message.
+// Closes the import row's message in the system-block layout. The
+// single-message layout put the rules AFTER the row, and instructions read last
+// are followed most closely; with the rules moved up into the system block, this
+// line keeps the one rule that protects the shared registry at the end.
+// Measured on 50 curated registry wines (2026-09-25), confidently WRONG
+// type/region/grape answers: single message 10, system block 7, system block +
+// this line 5 — at 65% lower cost per call once cached.
 const IMPORT_ROW_REMINDER = 'Return the JSON object exactly as your instructions specify. Give region, appellation, type and grapes only where you actually know them for THIS wine — otherwise null (and [] for grapes).';
 
 /**
@@ -184,11 +181,11 @@ async function scanLabelFull(image, mediaType = 'image/jpeg', { allowPartial = f
   const client = getClient('label_scan');
   const { labelScanModel, labelScanPrompt } = aiConfig.get();
 
-  // The instructions as a cached system block when caching applies (see
-  // cachedSystemBlock). One-hour lifetime: scans come in bursts, but a user
-  // can pause between bottles — on prod 85% of scans land within the hour
-  // after the previous one, 68% within five minutes.
-  const system = cachedSystemBlock(labelScanPrompt, '1h');
+  // The instructions as the system block on Anthropic (see systemBlock).
+  // One-hour cache lifetime: scans come in bursts, but a user can pause
+  // between bottles — on prod 85% of scans land within the hour after the
+  // previous one, 68% within five minutes.
+  const system = instructionsAsSystem() && labelScanPrompt ? systemBlock(labelScanPrompt, '1h') : null;
 
   const response = await client.messages.create({
     model: labelScanModel,
@@ -302,8 +299,8 @@ async function scanLabelFull(image, mediaType = 'image/jpeg', { allowPartial = f
 async function scanLabelBack({ backImage, backMediaType = 'image/jpeg', frontImage, frontMediaType = 'image/jpeg', frontExtracted = {} } = {}) {
   validateMediaType(backMediaType);
   if (frontImage) validateMediaType(frontMediaType);
-  // No cached layout here: the back-label prompt's fixed part is ~500 tokens,
-  // under the size the API caches at all.
+  // Single-message layout, unchanged: the back-label prompt's fixed part is
+  // ~500 tokens, under the size the API caches at all.
   const client = getClient('label_scan_back');
 
   // EVERY value below is client-supplied text on its way into a prompt — the
@@ -482,7 +479,7 @@ function mergeBackScan(front = {}, back = {}, { suspectProducer = false } = {}) 
  * suggestPrice / suggestProfile).
  *
  * Sends `prompt` as a single user message — after `system` when the caller
- * passes one (a cached instruction block, see cachedSystemBlock) — and returns
+ * passes one (fixed instructions, see systemBlock) — and returns
  * { data, debugRaw, debugReason }:
  *   data        – parsed object, or null if not usable
  *   debugRaw    – raw string from the model (or error message)
@@ -652,14 +649,15 @@ async function identifyWineFromText({ name, producer, vintage, country, appellat
   ];
   const { importLookupPrompt: template, importLookupModel: model } = aiConfig.get();
 
-  // Cached layout when it applies (see cachedSystemBlock): the rules after the
-  // template's last placeholder line become the cached system block, and the
-  // filled head — intro plus this row's values — is the message, closed by
-  // IMPORT_ROW_REMINDER. Five-minute lifetime: rows arrive 25 per request, five
-  // at a time, so one write serves the whole run. A template whose values sit
-  // at the very end has no fixed tail and keeps the single-message layout.
-  const split = splitTemplateForCache(template);
-  const system = split && split.head ? cachedSystemBlock(split.tail, '5m') : null;
+  // On Anthropic (see systemBlock): the rules after the template's last
+  // placeholder line become the system block, and the filled head — intro plus
+  // this row's values — is the message, closed by IMPORT_ROW_REMINDER.
+  // Five-minute cache lifetime: rows arrive 25 per request, five at a time, so
+  // after the first wave the rest of the run reads the cache. A template whose
+  // values sit at the very end has no fixed tail and keeps the single-message
+  // layout.
+  const split = instructionsAsSystem() ? splitTemplateForCache(template) : null;
+  const system = split && split.head ? systemBlock(split.tail, '5m') : null;
 
   return callClaudeJson({
     client,

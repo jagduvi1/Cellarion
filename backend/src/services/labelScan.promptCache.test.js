@@ -1,13 +1,14 @@
 /**
  * Prompt caching for the label scan and the import lookup (2026-09-25).
  *
- * The instructions ride as a cached system block so repeat calls pay 10% for
- * them. What must hold:
- *   - the model reads the SAME words — the cached layout only moves the fixed
- *     instructions from the message into the system prompt;
- *   - the switch (aiConfig.promptCaching), a non-Anthropic provider, or a prompt
- *     too short to cache all fall back to the original single-message layout,
- *     byte for byte;
+ * On the Anthropic provider the fixed instructions always ride as the system
+ * block; the caching switch only adds or drops Anthropic's cache marker. What
+ * must hold:
+ *   - the switch is a pure cost switch — on or off, the model reads exactly the
+ *     same request apart from the marker;
+ *   - the words are the old prompt's words, moved (plus the one-line import
+ *     reminder);
+ *   - an OpenAI-compatible provider keeps the original single-message layout;
  *   - every call carries its feature label for the spend ledger.
  */
 jest.mock('./aiProvider', () => ({
@@ -23,6 +24,7 @@ const { scanLabelFull, identifyWineFromText, identifyWineFromQuery } = require('
 
 let create;
 const IDENTITY = '{"name":"Pingus","producer":"Dominio de Pingus","country":"Spain","grapes":["Tempranillo"],"confidence":0.9}';
+const IMAGE = { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'AAAA' } };
 
 function config(overrides = {}) {
   aiConfig.get.mockReturnValue({
@@ -42,11 +44,12 @@ beforeEach(() => {
   config();
 });
 
-const sent = () => create.mock.calls[0][0];
+const sent = () => create.mock.calls[create.mock.calls.length - 1][0];
 const squash = (s) => s.replace(/\s+/g, ' ').trim();
+const withoutMarker = (params) => ({ ...params, system: params.system.map(({ cache_control: _marker, ...block }) => block) });
 
 describe('label scan', () => {
-  test('cached layout: instructions as a 1-hour cached system block, the photo plus a one-line request as the message', async () => {
+  test('instructions as a 1-hour cache-marked system block; the photo plus a one-line request as the message', async () => {
     await scanLabelFull('AAAA', 'image/jpeg');
     const params = sent();
     expect(params.system).toEqual([
@@ -54,38 +57,35 @@ describe('label scan', () => {
     ]);
     expect(params.messages).toEqual([{
       role: 'user',
-      content: [
-        { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'AAAA' } },
-        { type: 'text', text: 'Identify the wine in this photo, following your instructions exactly.' },
-      ],
+      content: [IMAGE, { type: 'text', text: 'Identify the wine in this photo, following your instructions exactly.' }],
     }]);
     expect(params.model).toBe('claude-sonnet-5');
     expect(params.max_tokens).toBe(600);
   });
 
-  test('switch off: the original layout, the instructions after the photo in the message', async () => {
+  test('switch off: the same request, only without the cache marker', async () => {
+    await scanLabelFull('AAAA', 'image/jpeg');
+    const on = sent();
     config({ promptCaching: false });
     await scanLabelFull('AAAA', 'image/jpeg');
-    const params = sent();
-    expect(params).not.toHaveProperty('system');
-    expect(params.messages[0].content).toEqual([
-      { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'AAAA' } },
-      { type: 'text', text: DEFAULT_LABEL_SCAN_PROMPT },
-    ]);
+    const off = sent();
+    expect(off.system[0]).not.toHaveProperty('cache_control');
+    expect(off).toEqual(withoutMarker(on));
   });
 
-  test('an OpenAI-compatible provider keeps the original layout', async () => {
+  test('an OpenAI-compatible provider keeps the original layout: the photo, then the instructions', async () => {
     aiProvider.providerName.mockReturnValue('openai');
     await scanLabelFull('AAAA', 'image/jpeg');
     expect(sent()).not.toHaveProperty('system');
-    expect(sent().messages[0].content[1].text).toBe(DEFAULT_LABEL_SCAN_PROMPT);
+    expect(sent().messages[0].content).toEqual([IMAGE, { type: 'text', text: DEFAULT_LABEL_SCAN_PROMPT }]);
   });
 
-  test('a custom prompt too short to cache keeps the original layout', async () => {
+  test('a short custom prompt keeps the same layout — below the model\'s cache minimum the marker is simply ignored', async () => {
     config({ labelScanPrompt: 'Read the label. Return JSON.' });
     await scanLabelFull('AAAA', 'image/jpeg');
-    expect(sent()).not.toHaveProperty('system');
-    expect(sent().messages[0].content[1].text).toBe('Read the label. Return JSON.');
+    expect(sent().system).toEqual([
+      { type: 'text', text: 'Read the label. Return JSON.', cache_control: { type: 'ephemeral', ttl: '1h' } },
+    ]);
   });
 
   test('the scan is labelled for the spend ledger', async () => {
@@ -96,8 +96,9 @@ describe('label scan', () => {
 
 describe('import lookup', () => {
   const row = { name: 'Pingus', producer: 'Dominio de Pingus', vintage: '2015', country: 'Spain' };
+  const REMINDER = 'only where you actually know them for THIS wine';
 
-  test('cached layout: the rules after the last placeholder line are the cached system block, the row is the message', async () => {
+  test('the rules after the last placeholder line are the 5-minute system block; the row is the message', async () => {
     const res = await identifyWineFromText(row);
     expect(res.data).toMatchObject({ name: 'Pingus', producer: 'Dominio de Pingus' });
 
@@ -117,30 +118,40 @@ describe('import lookup', () => {
     expect(message).not.toContain('Rules:');
   });
 
-  test('the row is closed by the reminder that keeps "only what you know" last', async () => {
-    await identifyWineFromText(row);
-    const message = sent().messages[0].content;
-    const lastParagraph = message.slice(message.lastIndexOf('\n\n') + 2);
-    expect(lastParagraph).toMatch(/^Return the JSON object exactly as your instructions specify\./);
-    expect(lastParagraph).toContain('only where you actually know them for THIS wine');
+  test('the row is closed by the reminder that keeps "only what you know" last — with the switch on or off', async () => {
+    for (const promptCaching of [true, false]) {
+      config({ promptCaching });
+      await identifyWineFromText(row);
+      const message = sent().messages[0].content;
+      const lastParagraph = message.slice(message.lastIndexOf('\n\n') + 2);
+      expect(lastParagraph).toMatch(/^Return the JSON object exactly as your instructions specify\./);
+      expect(lastParagraph).toContain(REMINDER);
+    }
   });
 
-  test('the model reads the same words: system + message (less the reminder) reproduce the single-message prompt', async () => {
+  test('switch off: the same request, only without the cache marker', async () => {
     await identifyWineFromText(row);
-    const cached = sent();
+    const on = sent();
     config({ promptCaching: false });
-    create.mockClear();
+    await identifyWineFromText(row);
+    expect(sent()).toEqual(withoutMarker(on));
+  });
+
+  test('the words are the single-message prompt\'s words: system + message (less the reminder) reproduce it', async () => {
+    await identifyWineFromText(row);
+    const split = sent();
+    aiProvider.providerName.mockReturnValue('openai');
     await identifyWineFromText(row);
     const original = sent();
 
     expect(original).not.toHaveProperty('system');
-    expect(original.messages[0].content).not.toContain('only where you actually know them for THIS wine');
-    const message = cached.messages[0].content;
+    expect(original.messages[0].content).not.toContain(REMINDER);
+    const message = split.messages[0].content;
     const withoutReminder = message.slice(0, message.lastIndexOf('\n\n'));
-    expect(squash(`${withoutReminder}\n${cached.system[0].text}`)).toBe(squash(original.messages[0].content));
+    expect(squash(`${withoutReminder}\n${split.system[0].text}`)).toBe(squash(original.messages[0].content));
   });
 
-  test('a template whose values sit at the very end has no fixed tail and keeps the original layout', async () => {
+  test('a template whose values sit at the very end has no fixed tail and keeps the single-message layout', async () => {
     const template = `${'Rules. '.repeat(700)}\nWine: {{name}}\nProducer: {{producer}}\n{{vintage}}{{country}}`;
     config({ importLookupPrompt: template });
     await identifyWineFromText(row);
