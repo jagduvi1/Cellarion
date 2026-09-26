@@ -48,6 +48,7 @@ jest.mock('../services/accountOps', () => ({
   ALLOWED_RATING_SCALES: ['5', '20', '100'],
   ALLOWED_RACK_NAV: ['auto', 'room', 'rack'],
   ALLOWED_RESTOCK_SCOPE: ['all', 'cellar'],
+  ALLOWED_CELLAR_SORTS: ['-createdAt', 'createdAt', 'name', '-name', 'vintage', '-vintage', 'price', '-price', 'maturity'],
   ALLOWED_VISIBILITY: ['public', 'private'],
   SUPPORT_CATEGORIES: ['bug', 'help', 'feature', 'other'],
   TICKET_REPLY_CAP: 30,
@@ -102,6 +103,14 @@ describe('get_preferences / get_profile', () => {
     expect(body.data.language).toBe('en'); // default filled
     expect(body.data.notifications.drink_window.enabled).toBe(false);
     expect(body.data.notifications.community_reply.push).toBe(true); // default
+    expect(body.data.cellar_sort).toBe('-createdAt'); // never picked: newest first
+  });
+
+  test('get_preferences shows the remembered cellar sort, and newest first for a value no longer offered', async () => {
+    User.findById.mockReturnValue({ lean: () => Promise.resolve({ preferences: { cellarSort: 'maturity' } }) });
+    expect(parse(await tool('get_preferences').handler({}, CTX)).data.cellar_sort).toBe('maturity');
+    User.findById.mockReturnValue({ lean: () => Promise.resolve({ preferences: { cellarSort: 'retired' } }) });
+    expect(parse(await tool('get_preferences').handler({}, CTX)).data.cellar_sort).toBe('-createdAt');
   });
 
   test('get_profile omits email and other PII', async () => {
@@ -128,9 +137,9 @@ describe('update_preferences', () => {
   test('maps snake_case params to the camelCase accountOps body and echoes the result', async () => {
     accountOps.updatePreferences.mockResolvedValue({ user: { preferences: { currency: 'EUR' } }, changed: ['preferences.currency'] });
     const body = parse(await tool('update_preferences').handler(
-      { currency: 'EUR', rating_scale: '100', default_cellar_id: null, notifications: { drinkWindow: { push: true } } }, CTX));
+      { currency: 'EUR', rating_scale: '100', cellar_sort: 'maturity', default_cellar_id: null, notifications: { drinkWindow: { push: true } } }, CTX));
     expect(accountOps.updatePreferences).toHaveBeenCalledWith(ME, {
-      currency: 'EUR', ratingScale: '100', defaultCellarId: null, notifications: { drinkWindow: { push: true } },
+      currency: 'EUR', ratingScale: '100', cellarSort: 'maturity', defaultCellarId: null, notifications: { drinkWindow: { push: true } },
     });
     expect(body.data.currency).toBe('EUR');
   });

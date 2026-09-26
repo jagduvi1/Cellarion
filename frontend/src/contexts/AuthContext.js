@@ -568,6 +568,16 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Only GET /api/auth/me stamps isSuperAdmin (it checks the request's address
+  // as well as the email); the other endpoints that echo the user don't. Keep
+  // the stamp when one of those replaces the user, or the SuperAdmin link and
+  // page would vanish after every preference save until the next reload.
+  const replaceUser = (next) => setUser((prev) => (
+    prev?.isSuperAdmin !== undefined && next?.isSuperAdmin === undefined
+      ? { ...next, isSuperAdmin: prev.isSuperAdmin }
+      : next
+  ));
+
   // ------------------------------------------------------------------
   // updatePreferences (uses apiFetch for auto-refresh)
   // ------------------------------------------------------------------
@@ -581,7 +591,7 @@ export const AuthProvider = ({ children }) => {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to update preferences');
-      setUser(data.user);
+      replaceUser(data.user);
       return { success: true };
     } catch (error) {
       return { success: false, error: error.message };
@@ -601,7 +611,7 @@ export const AuthProvider = ({ children }) => {
         throw new Error((data && data.error) || "Couldn't save your acknowledgement. Please try again.");
       }
       // Refreshed user has requiresPolicyReconsent === false → modal unmounts.
-      if (data?.user) setUser(data.user);
+      if (data?.user) replaceUser(data.user);
       return { success: true };
     } catch (error) {
       return { success: false, error: error.message };

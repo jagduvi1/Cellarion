@@ -57,6 +57,14 @@ describe('buildPreferencesUpdate', () => {
     expect((await buildPreferencesUpdate(UID, { rackNavigation: 'nope' })).error.status).toBe(400);
     expect((await buildPreferencesUpdate(UID, { restockScope: 'cellar' })).update).toEqual({ 'preferences.restockScope': 'cellar' });
     expect((await buildPreferencesUpdate(UID, { restockScope: 'some' })).error.status).toBe(400);
+    // The cellar page's sort select, remembered on the account.
+    expect((await buildPreferencesUpdate(UID, { cellarSort: 'maturity' })).update).toEqual({ 'preferences.cellarSort': 'maturity' });
+    expect((await buildPreferencesUpdate(UID, { cellarSort: '-price' })).update).toEqual({ 'preferences.cellarSort': '-price' });
+    // Only what the page offers: the search can order by rating, the select can't.
+    expect((await buildPreferencesUpdate(UID, { cellarSort: 'rating' })).error.status).toBe(400);
+    expect((await buildPreferencesUpdate(UID, { cellarSort: 'nope' })).error.status).toBe(400);
+    expect((await buildPreferencesUpdate(UID, { cellarSort: null })).error.status).toBe(400);
+    expect((await buildPreferencesUpdate(UID, { cellarSort: { $ne: '' } })).error.status).toBe(400);
   });
 
   test('only the allow-listed notification leaves are set — arbitrary keys are ignored', async () => {

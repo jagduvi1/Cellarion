@@ -160,3 +160,22 @@ describe('normalizeLegacyNotifications', () => {
     expect(notif.communityFollow).toEqual({ push: false });
   });
 });
+
+describe('preferences.cellarSort', () => {
+  // Validated where it is written (services/accountOps), not by a schema enum:
+  // every sign-in saves the user document, so a sort option retired later must
+  // never make an account with the old value fail validation.
+  it('a stored value that is no longer offered still validates', () => {
+    const user = new User({
+      username: 'alice', email: 'alice@cellarion.app', password: 'x',
+      preferences: { cellarSort: 'a-retired-order' },
+    });
+    // Other required fields are missing here; only this path matters.
+    expect(user.validateSync()?.errors?.['preferences.cellarSort']).toBeUndefined();
+  });
+
+  it('is absent until the user picks a sort (newest first)', () => {
+    const user = new User({ username: 'alice', email: 'alice@cellarion.app', password: 'x' });
+    expect(user.toJSON().preferences.cellarSort).toBeUndefined();
+  });
+});
