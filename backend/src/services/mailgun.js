@@ -570,4 +570,73 @@ async function sendSupporterThankYou(toEmail, username, tier) {
   });
 }
 
-module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendDrinkWindowDigest, sendRecommendationEmail, sendCellarInviteEmail, sendDiscussionReplyEmail, sendAccountLockoutAlert, sendSecurityAlertEmail, sendSupporterThankYou, EMAIL_VERIFICATION_ENABLED };
+/**
+ * Send a user support's answer to their ticket (2026-09-26). Until now the
+ * answer only reached the in-app bell, so someone who asked a question and
+ * left never saw it. This is a service email about the user's own request,
+ * sent unless they turned it off (preferences.notifications.supportReply) or
+ * unsubscribed; the caller checks both.
+ *
+ * The answer is in the email itself. The link leads to the ticket, where the
+ * conversation continues; Reply-To still reaches a person for anyone who
+ * answers the email instead.
+ *
+ * @param {string} toEmail
+ * @param {string} recipientName  display/username of the recipient (greeting)
+ * @param {string} recipientId    user ObjectId (for the unsubscribe token)
+ * @param {string} ticketSubject  the ticket's subject, as the user wrote it
+ * @param {string} replyText      the admin's answer (plain text, already stripped of HTML)
+ */
+async function sendSupportReplyEmail(toEmail, recipientName, recipientId, ticketSubject, replyText) {
+  if (!EMAIL_VERIFICATION_ENABLED) return;
+
+  const { createUnsubscribeToken } = require('../utils/unsubscribe');
+  // See sendDrinkWindowDigest for why this uses FRONTEND_URL not BACKEND_URL.
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  const unsubLink = `${frontendUrl}/api/users/unsubscribe?token=${createUnsubscribeToken(recipientId)}`;
+  const ticketUrl = `${frontendUrl}/support`;
+  // The subject is user text: one line, bounded, before it becomes a header.
+  const topic = String(ticketSubject || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 120);
+  const answer = String(replyText || '').trim();
+
+  await mg.messages.create(DOMAIN, {
+    from: FROM,
+    to: [toEmail],
+    'h:Reply-To': process.env.SUPPORT_REPLY_TO || 'info@cellarion.app',
+    subject: `Reply to your support ticket: ${topic}`,
+    text: [
+      `Hello ${recipientName},`,
+      '',
+      `We have replied to your support ticket "${topic}":`,
+      '',
+      answer,
+      '',
+      `See the whole conversation and reply: ${ticketUrl}`,
+      '',
+      'You get this email because you asked us a question. Turn these emails off in Settings → Notifications,',
+      `or unsubscribe from all Cellarion emails: ${unsubLink}`
+    ].join('\n'),
+    html: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#2a2a2a;line-height:1.5;">
+        <p>Hello <strong>${escapeHtml(recipientName)}</strong>,</p>
+        <p>We have replied to your support ticket <em>${escapeHtml(topic)}</em>:</p>
+        <blockquote style="border-left:3px solid #D4A373;margin:1rem 0;padding:0.25rem 0.75rem;color:#333;">${escapeHtml(answer).replace(/\n/g, '<br>')}</blockquote>
+        <p style="margin:1.5rem 0;">
+          <a href="${ticketUrl}"
+             style="background:#7B9E88;color:#0d0d0d;padding:10px 22px;
+                    border-radius:4px;text-decoration:none;font-weight:600;
+                    display:inline-block;">
+            See the conversation and reply
+          </a>
+        </p>
+        <hr style="border:none;border-top:1px solid #ddd;margin:2rem 0;" />
+        <p style="color:#9A9484;font-size:0.85em;">
+          You get this email because you asked us a question. Turn these emails off in
+          Settings → Notifications, or <a href="${unsubLink}" style="color:#9A9484;">unsubscribe from all Cellarion emails</a>.
+        </p>
+      </div>
+    `
+  });
+}
+
+module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendDrinkWindowDigest, sendRecommendationEmail, sendCellarInviteEmail, sendDiscussionReplyEmail, sendAccountLockoutAlert, sendSecurityAlertEmail, sendSupporterThankYou, sendSupportReplyEmail, EMAIL_VERIFICATION_ENABLED };

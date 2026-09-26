@@ -51,6 +51,7 @@ function prefsView(user) {
       community_reply: { email: !!n.communityReply?.email, push: n.communityReply?.push ?? true },
       community_mention: { email: !!n.communityMention?.email, push: n.communityMention?.push ?? true },
       community_follow: { push: n.communityFollow?.push ?? true },
+      support_reply: { email: n.supportReply?.email ?? true },
     },
   };
 }
@@ -81,6 +82,7 @@ const NOTIFICATION_SHAPE = z.object({
   communityReply: z.object({ email: z.boolean().optional(), push: z.boolean().optional() }).optional(),
   communityMention: z.object({ email: z.boolean().optional(), push: z.boolean().optional() }).optional(),
   communityFollow: z.object({ push: z.boolean().optional() }).optional(),
+  supportReply: z.object({ email: z.boolean().optional() }).optional(),
 }).optional();
 
 registerTool({
@@ -219,7 +221,7 @@ registerTool({
       ticket_id: ticket._id,
       category: ticket.category,
       status: ticket.status,
-      note: 'A Cellarion admin will respond — check back with list_my_tickets (replies also arrive as a notification and in the web app under Settings → Support).',
+      note: 'A Cellarion admin will respond — check back with list_my_tickets (replies also arrive as a notification, by email unless the user turned support-reply emails off, and in the web app under Settings → Support).',
     });
     await logAction(ctx, {
       tool: 'create_support_ticket', action: 'support_ticket',

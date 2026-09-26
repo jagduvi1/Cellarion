@@ -299,6 +299,7 @@
       "communityReply": "Replies, quotes",
       "communityMention": "@mentions",
       "communityFollow": "Followed thread activity",
+      "supportReply": "Answers to your support tickets",
       "pushUnsupported": "Push notifications are not supported in this browser.",
       "pushBlocked": "Push notifications are blocked. Enable them in your browser settings.",
       "pushNotConfigured": "Push notifications are not configured on this server.",
@@ -4833,6 +4834,8 @@
     "messagePlaceholder": "Describe your issue or question in detail...",
     "sending": "Sending…",
     "sendTicket": "Send Ticket",
+    "emailNotice": "We'll email you our answer as well. You can turn this off in <settings>Settings</settings>.",
+    "emailNoticeOff": "Answer emails are off, so our answer will be here under Support and in the notification bell. You can turn them back on in <settings>Settings</settings>.",
     "subjectRequired": "Subject is required",
     "messageRequired": "Message is required",
     "submitFailed": "Failed to submit ticket"

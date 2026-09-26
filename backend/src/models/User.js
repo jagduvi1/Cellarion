@@ -174,6 +174,15 @@ const userSchema = new mongoose.Schema({
         // New reply on a thread you're following (and didn't author).
         // Email skipped — would be too noisy.
         push:  { type: Boolean, default: true }
+      },
+      supportReply: {
+        // Support answered your ticket (2026-09-26). A service email about
+        // something you asked us, not a notification you opt into, so it is
+        // on by default: until now the answer only reached the in-app bell,
+        // and someone who asked and left never saw it. Settings turns it off,
+        // and so does the one-click unsubscribe (utils/notifications.js).
+        // No push: the bell already carries it inside the app.
+        email: { type: Boolean, default: true }
       }
     },
     restockScope: {

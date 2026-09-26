@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation, Trans } from 'react-i18next';
 import Modal from './Modal';
 import { submitSupportTicket } from '../api/support';
@@ -9,7 +10,11 @@ const CATEGORY_VALUES = ['bug', 'help', 'feature', 'other'];
 
 function SupportModal({ onClose }) {
   const { t } = useTranslation();
-  const { apiFetch } = useAuth();
+  const { apiFetch, user } = useAuth();
+  // The answer is emailed as well unless the user turned that off
+  // (preferences.notifications.supportReply; missing means on). Saying so here
+  // tells people why we would email them, at the moment they give us a reason.
+  const answerByEmail = user?.preferences?.notifications?.supportReply?.email !== false;
   const [form, setForm] = useState({ category: 'bug', subject: '', message: '' });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -93,6 +98,13 @@ function SupportModal({ onClose }) {
         </label>
 
         {error && <p className="support-modal-error">{error}</p>}
+
+        <p className="support-modal-email-notice">
+          <Trans
+            i18nKey={answerByEmail ? 'support.emailNotice' : 'support.emailNoticeOff'}
+            components={{ settings: <Link to="/settings#preferences" onClick={onClose} /> }}
+          />
+        </p>
 
         <div className="modal-actions">
           <button type="button" className="btn btn-secondary" onClick={onClose} disabled={submitting}>
