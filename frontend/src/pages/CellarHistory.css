@@ -205,6 +205,11 @@
   gap: 0.5rem;
 }
 
+/* A section's own "Load more", under its last bottle. */
+.history-section .load-more-wrap {
+  padding: 1rem 0 0;
+}
+
 .history-bottle-card {
   position: relative;
   display: block;
