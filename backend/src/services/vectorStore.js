@@ -19,19 +19,25 @@
  * dimensions agreed on only 72% of free-text results, so the full dimension
  * stays.
  *
- * Two kinds of search:
- *  - scoped (`wineIds`): cellar chat, restock, MCP "mine" — reads just those
- *    wines' rows (a very big cellar: a few thousand rows, a few MB);
- *  - registry-wide: MCP "find similar" / "semantic search", restock
- *    suggestions — scans an in-memory copy of every row. The copy is built on
- *    first use, rebuilt when the rows change (their count or newest
- *    embeddedAt, both read from an index, so any process's writes count),
- *    and dropped after 15 idle minutes. ~28 MB for today's 14k rows.
+ * Every search scans ONE in-memory copy of all rows — registry-wide (MCP
+ * "find similar" / "semantic search", restock suggestions) or scoped to some
+ * wines (`wineIds`: cellar chat, restock, MCP "mine"), which only scores the
+ * rows of those wines. One shared copy, not a read per search: a bulk "mark
+ * as drunk" of 60 wines once read a big cellar's vectors 60 times at once
+ * and ran the process out of memory (review 2026-09-27).
+ *
+ * The copy (~28 MB for today's 14k rows) is built on first use by streaming
+ * the rows, one build at a time. It is checked against the rows at most
+ * every FRESH_MS — their count and newest embeddedAt, read from an index, so
+ * any process's writes count — and rebuilt when they changed: a search may
+ * miss a vector written in the last half minute, and a busy embedding job
+ * can't trigger a rebuild per search. Dropped after 15 idle minutes.
  */
 
 const WineEmbedding = require('../models/WineEmbedding');
 
 const IDLE_MS = 15 * 60 * 1000;
+const FRESH_MS = 30 * 1000;
 
 // ── Encoding ────────────────────────────────────────────────────────────────
 
@@ -79,42 +85,13 @@ function unit(values) {
   return out;
 }
 
-// ── Tables: rows packed for scanning ───────────────────────────────────────
+// ── The in-memory copy ─────────────────────────────────────────────────────
 
 const ROW_FIELDS = 'wineDefinition vintage norm dim +vector';
 
-function rowFilter({ model, indexVersion, dim }) {
-  return { model, indexVersion, dim };
-}
-
-// Packs lean rows (all of dimension `dim`) into one Int8Array.
-function pack(rows, dim) {
-  const kept = rows.filter((r) => r.dim === dim && r.norm > 0);
-  const data = new Int8Array(kept.length * dim);
-  const norms = new Float32Array(kept.length);
-  const wine = new Array(kept.length);
-  const vintage = new Array(kept.length);
-  kept.forEach((r, i) => {
-    const v = int8Of(r.vector);
-    if (v && v.length === dim) data.set(v, i * dim);
-    norms[i] = r.norm;
-    wine[i] = String(r.wineDefinition);
-    vintage[i] = r.vintage;
-  });
-  return { dim, n: kept.length, data, norms, wine, vintage };
-}
-
-async function scopedTable({ model, indexVersion, dim, wineIds }) {
-  if (!wineIds.length) return pack([], dim);
-  const rows = await WineEmbedding.find({ ...rowFilter({ model, indexVersion, dim }), wineDefinition: { $in: wineIds } })
-    .select(ROW_FIELDS)
-    .lean();
-  return pack(rows, dim);
-}
-
-// The registry-wide copy: one per (model, index version, dimension).
-let registry = null;   // { key, signature, table, bytes, builtAt }
-let building = null;   // { key, promise }
+// One copy per (model, index version, dimension) — in practice one.
+let registry = null;   // { key, signature, table, bytes, builtAt, checkedAt }
+let building = null;   // the build in progress (one at a time)
 let idleTimer = null;
 
 async function signatureOf(filter) {
@@ -122,7 +99,7 @@ async function signatureOf(filter) {
     WineEmbedding.countDocuments(filter),
     WineEmbedding.findOne(filter).sort({ embeddedAt: -1 }).select('embeddedAt').lean(),
   ]);
-  return `${count}:${newest && newest.embeddedAt ? new Date(newest.embeddedAt).getTime() : 0}`;
+  return { count, key: `${count}:${newest && newest.embeddedAt ? new Date(newest.embeddedAt).getTime() : 0}` };
 }
 
 function touch() {
@@ -131,27 +108,62 @@ function touch() {
   if (idleTimer.unref) idleTimer.unref();
 }
 
-async function registryTable({ model, indexVersion, dim }) {
-  const filter = rowFilter({ model, indexVersion, dim });
-  const key = `${model}|${indexVersion}|${dim}`;
-  const signature = await signatureOf(filter);
-  if (registry && registry.key === key && registry.signature === signature) {
-    touch();
-    return registry.table;
+// Streams the rows straight into one packed Int8Array: the peak is the copy
+// itself plus one cursor batch, not every row decoded at once.
+async function build(filter, key, signature) {
+  const { dim } = filter;
+  let cap = signature.count + 64;
+  let data = new Int8Array(cap * dim);
+  let norms = new Float32Array(cap);
+  const wine = [];
+  const vintage = [];
+  let n = 0;
+  const cursor = WineEmbedding.find(filter).select(ROW_FIELDS).lean().cursor({ batchSize: 500 });
+  for await (const r of cursor) {
+    const v = int8Of(r.vector);
+    if (!v || v.length !== dim || !(r.norm > 0)) continue;
+    if (n === cap) { // rows written since the count: grow
+      cap = Math.ceil(cap * 1.25) + 64;
+      const d2 = new Int8Array(cap * dim); d2.set(data); data = d2;
+      const n2 = new Float32Array(cap); n2.set(norms); norms = n2;
+    }
+    data.set(v, n * dim);
+    norms[n] = r.norm;
+    wine[n] = String(r.wineDefinition);
+    vintage[n] = r.vintage;
+    n += 1;
   }
-  if (building && building.key === key && building.signature === signature) return building.promise;
-  const promise = (async () => {
-    const rows = await WineEmbedding.find(filter).select(ROW_FIELDS).lean();
-    const table = pack(rows, dim);
-    registry = { key, signature, table, bytes: table.data.byteLength, builtAt: new Date() };
-    touch();
-    return table;
-  })();
-  building = { key, signature, promise };
-  try {
-    return await promise;
-  } finally {
-    if (building && building.promise === promise) building = null;
+  const table = { dim, n, data, norms, wine, vintage };
+  const now = Date.now();
+  registry = { key, signature: signature.key, table, bytes: n * dim, builtAt: new Date(now), checkedAt: now };
+  touch();
+}
+
+async function registryTable({ model, indexVersion, dim }) {
+  const filter = { model, indexVersion, dim };
+  const key = `${model}|${indexVersion}|${dim}`;
+  for (;;) {
+    if (registry && registry.key === key && Date.now() - registry.checkedAt < FRESH_MS) {
+      touch();
+      return registry.table;
+    }
+    if (building) { // one build at a time — wait for it, then look again
+      await building.catch(() => {});
+      continue;
+    }
+    const signature = await signatureOf(filter);
+    if (registry && registry.key === key && registry.signature === signature.key) {
+      registry.checkedAt = Date.now();
+      touch();
+      return registry.table;
+    }
+    if (building) continue; // another search started one meanwhile
+    building = build(filter, key, signature);
+    try {
+      await building;
+    } finally {
+      building = null;
+    }
   }
 }
 
@@ -175,34 +187,35 @@ async function search(queryValues, {
   model, indexVersion, wineIds = null, limit = 10, excludeWineId = null, distinctWines = false, minScore = -Infinity,
 } = {}) {
   if (!queryValues || !queryValues.length) return [];
+  if (Array.isArray(wineIds) && wineIds.length === 0) return [];
   const query = unit(queryValues);
   const dim = query.length;
-  const table = Array.isArray(wineIds)
-    ? await scopedTable({ model, indexVersion, dim, wineIds })
-    : await registryTable({ model, indexVersion, dim });
-
+  const table = await registryTable({ model, indexVersion, dim });
+  const only = Array.isArray(wineIds) ? new Set(wineIds.map(String)) : null;
   const exclude = excludeWineId ? String(excludeWineId) : null;
+
+  // Score only the rows in scope.
   const scores = new Float32Array(table.n);
+  let candidates = [];
   for (let r = 0; r < table.n; r++) {
+    const w = table.wine[r];
+    if ((only && !only.has(w)) || w === exclude) continue;
     const off = r * dim;
     let s = 0;
     for (let d = 0; d < dim; d++) s += table.data[off + d] * query[d];
-    scores[r] = s / table.norms[r];
+    const score = s / table.norms[r];
+    if (score < minScore) continue;
+    scores[r] = score;
+    candidates.push(r);
   }
-
-  let candidates;
   if (distinctWines) {
     const best = new Map(); // wine -> row
-    for (let r = 0; r < table.n; r++) {
-      const w = table.wine[r];
-      const cur = best.get(w);
-      if (cur === undefined || scores[r] > scores[cur]) best.set(w, r);
+    for (const r of candidates) {
+      const cur = best.get(table.wine[r]);
+      if (cur === undefined || scores[r] > scores[cur]) best.set(table.wine[r], r);
     }
     candidates = [...best.values()];
-  } else {
-    candidates = Array.from({ length: table.n }, (_, r) => r);
   }
-  candidates = candidates.filter((r) => scores[r] >= minScore && table.wine[r] !== exclude);
   candidates.sort((a, b) => scores[b] - scores[a]);
   return candidates.slice(0, Math.max(0, limit)).map((r) => ({
     wineDefinitionId: table.wine[r],
@@ -250,4 +263,4 @@ function forget() {
   if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
 }
 
-module.exports = { encodeVector, search, getVector, stats, forget, _internal: { int8Of, unit, pack } };
+module.exports = { encodeVector, search, getVector, stats, forget, _internal: { int8Of, unit, FRESH_MS } };

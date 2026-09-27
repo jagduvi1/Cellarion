@@ -24,7 +24,7 @@ const TOP_K = 10;
  *
  * Fire-and-forget — errors are caught and logged, never thrown.
  */
-async function checkRestockGap(userId, bottleId, cellarId) {
+async function runCheck(userId, bottleId, cellarId) {
   try {
     // Check if embedding infra is available
     if (!embedding || !vectorStore) return;
@@ -154,6 +154,23 @@ async function resolveRestockAlerts(userId, wineDefinitionId, bottleId) {
   } catch (err) {
     console.error('[restockChecker] resolveRestockAlerts error:', err.message);
   }
+}
+
+// Checks run one at a time, in order. Each one compares vectors, and a bulk
+// "mark as drunk" (the REST bulk route, or an agent consuming bottle after
+// bottle) must not start dozens at once — 60 in parallel once ran the
+// process out of memory (review 2026-09-27). A best-effort notification, so
+// a runaway queue sheds new checks instead of growing without bound.
+const MAX_QUEUED = 500;
+let queue = Promise.resolve();
+let queued = 0;
+
+function checkRestockGap(userId, bottleId, cellarId) {
+  if (queued >= MAX_QUEUED) return Promise.resolve();
+  queued += 1;
+  const run = queue.then(() => runCheck(userId, bottleId, cellarId)).finally(() => { queued -= 1; });
+  queue = run.catch(() => {});
+  return run;
 }
 
 module.exports = { checkRestockGap, resolveRestockAlerts };

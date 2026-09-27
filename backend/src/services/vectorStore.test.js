@@ -6,9 +6,12 @@
  * Qdrant was retired; this module now answers the cellar chat, restock
  * alerts and the MCP similarity tools. Pinned here: the int8 encoding keeps
  * the cosine (on production data it agreed with Qdrant on 97–99.6% of top-10
- * results), scoped and registry-wide searches rank, collapse to one hit per
- * wine, exclude and threshold correctly, and the registry-wide copy is built
- * once and rebuilt only when the rows change.
+ * results); searches rank, scope to some wines, collapse to one hit per
+ * wine, exclude and threshold correctly; and every search shares ONE
+ * in-memory copy — built once (one build even under concurrent searches),
+ * checked against the rows at most every FRESH_MS and rebuilt only when they
+ * changed. A per-search read of a big cellar's vectors, run 60 times at once
+ * by a bulk "mark as drunk", once ran the process out of memory.
  */
 jest.mock('../models/WineEmbedding', () => ({
   find: jest.fn(),
@@ -20,6 +23,7 @@ jest.mock('../models/WineEmbedding', () => ({
 const WineEmbedding = require('../models/WineEmbedding');
 const vectorStore = require('./vectorStore');
 
+const { FRESH_MS } = vectorStore._internal;
 const DIM = 64;
 const MODEL = 'voyage-4-large';
 const INDEX = 'v1';
@@ -39,12 +43,20 @@ function row(wine, vintage, values, { binary = false, embeddedAt = new Date('202
 }
 
 let ROWS;
+let now;
 function install() {
   const matches = (q, r) => (q.dim === undefined || (typeof q.dim === 'number' ? r.dim === q.dim : r.dim > 0))
-    && (!q.wineDefinition || (q.wineDefinition.$in ? q.wineDefinition.$in.map(String).includes(String(r.wineDefinition)) : String(q.wineDefinition) === String(r.wineDefinition)))
+    && (!q.wineDefinition || String(q.wineDefinition) === String(r.wineDefinition))
     && (!q.vintage || r.vintage === q.vintage);
   WineEmbedding.find.mockImplementation((q) => {
-    const chain = { select: () => chain, lean: async () => ROWS.filter((r) => matches(q, r)) };
+    const chain = {
+      select: () => chain,
+      lean: () => ({
+        cursor: () => ({
+          async* [Symbol.asyncIterator]() { for (const r of ROWS.filter((x) => matches(q, x))) yield r; },
+        }),
+      }),
+    };
     return chain;
   });
   WineEmbedding.findOne.mockImplementation((q) => {
@@ -67,7 +79,10 @@ function install() {
 const A = vec(1); const B = vec(2); const C = vec(3);
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.restoreAllMocks();
   vectorStore.forget();
+  now = Date.parse('2026-09-27T12:00:00Z');
+  jest.spyOn(Date, 'now').mockImplementation(() => now);
   ROWS = [
     row('wineA', '2015', A), row('wineA', '2016', near(A, 11, 0.05)),
     row('wineB', '2019', B, { binary: true }),
@@ -93,14 +108,13 @@ describe('encodeVector', () => {
 });
 
 describe('search', () => {
-  test('scoped to some wines: ranks by cosine, one hit per vintage row', async () => {
+  test('scoped to some wines: ranks by cosine over those wines\' rows only', async () => {
     const hits = await vectorStore.search(near(B, 7, 0.02), { ...scope, wineIds: ['wineA', 'wineB'], limit: 10 });
     expect(hits[0]).toMatchObject({ wineDefinitionId: 'wineB', vintage: '2019' });
     expect(hits[0].score).toBeGreaterThan(0.98);
     expect(hits.map((h) => h.wineDefinitionId)).toEqual(['wineB', 'wineA', 'wineA']);
-    // Only the given wines' rows were read, with the model/index/dimension filter.
-    expect(WineEmbedding.find.mock.calls[0][0]).toMatchObject({ model: MODEL, indexVersion: INDEX, dim: DIM });
-    expect(WineEmbedding.countDocuments).not.toHaveBeenCalled();
+    // Read once, through the model/index/dimension filter.
+    expect(WineEmbedding.find.mock.calls[0][0]).toEqual({ model: MODEL, indexVersion: INDEX, dim: DIM });
   });
 
   test('distinct wines, a reference left out, a threshold, a limit', async () => {
@@ -111,30 +125,49 @@ describe('search', () => {
     expect(others.map((h) => h.wineDefinitionId)).not.toContain('wineA');
     const close = await vectorStore.search(A, { ...scope, minScore: 0.9 });
     expect(close.map((h) => h.wineDefinitionId)).toEqual(['wineA', 'wineA']);
-    const one = await vectorStore.search(A, { ...scope, limit: 1 });
-    expect(one).toHaveLength(1);
+    expect(await vectorStore.search(A, { ...scope, limit: 1 })).toHaveLength(1);
   });
 
-  test('the registry-wide copy is built once and reused while the rows are unchanged', async () => {
+  test('every search — scoped or not — shares one copy; within FRESH_MS the rows are not even checked', async () => {
     await vectorStore.search(A, scope);
-    await vectorStore.search(B, scope);
+    await vectorStore.search(B, { ...scope, wineIds: ['wineB'] });
+    await vectorStore.search(C, { ...scope, wineIds: ['wineC', 'wineA'] });
     expect(WineEmbedding.find).toHaveBeenCalledTimes(1);
-    expect(WineEmbedding.countDocuments).toHaveBeenCalledTimes(2);
-    const stats = await (async () => { WineEmbedding.aggregate.mockResolvedValue([{ _id: DIM, rows: 4 }]); return vectorStore.stats(scope); })();
+    expect(WineEmbedding.countDocuments).toHaveBeenCalledTimes(1); // the first build only
+    WineEmbedding.aggregate.mockResolvedValue([{ _id: DIM, rows: 4 }]);
+    const stats = await vectorStore.stats(scope);
     expect(stats).toMatchObject({ rows: 4, dims: [DIM], bytes: 4 * DIM, memory: { rows: 4, bytes: 4 * DIM } });
   });
 
-  test('a new or re-embedded row rebuilds the copy', async () => {
+  test('checked again after FRESH_MS: unchanged rows keep the copy, a new or re-embedded row rebuilds it', async () => {
     await vectorStore.search(A, scope);
+    now += FRESH_MS + 1;
+    await vectorStore.search(A, scope);
+    expect(WineEmbedding.countDocuments).toHaveBeenCalledTimes(2);
+    expect(WineEmbedding.find).toHaveBeenCalledTimes(1); // unchanged — no rebuild
+
+    // A new row is not seen before the next check…
     ROWS.push(row('wineD', '2020', vec(4), { embeddedAt: new Date('2026-09-02') }));
-    const hits = await vectorStore.search(vec(4), { ...scope, limit: 1 });
+    let hits = await vectorStore.search(vec(4), { ...scope, limit: 1 });
+    expect(hits[0].wineDefinitionId).not.toBe('wineD');
+    // …and is, after it.
+    now += FRESH_MS + 1;
+    hits = await vectorStore.search(vec(4), { ...scope, limit: 1 });
     expect(hits[0].wineDefinitionId).toBe('wineD');
     expect(WineEmbedding.find).toHaveBeenCalledTimes(2);
+
     // Same count, newer embeddedAt (a re-embed) — rebuilt too.
     ROWS[0] = row('wineA', '2015', vec(5), { embeddedAt: new Date('2026-09-03') });
+    now += FRESH_MS + 1;
     const again = await vectorStore.search(vec(5), { ...scope, limit: 1 });
     expect(again[0]).toMatchObject({ wineDefinitionId: 'wineA', vintage: '2015' });
     expect(WineEmbedding.find).toHaveBeenCalledTimes(3);
+  });
+
+  test('concurrent searches share one build', async () => {
+    const all = await Promise.all(Array.from({ length: 20 }, (_, i) => vectorStore.search(i % 2 ? A : B, { ...scope, wineIds: i % 3 ? null : ['wineA'] })));
+    expect(all.every((h) => h.length > 0)).toBe(true);
+    expect(WineEmbedding.find).toHaveBeenCalledTimes(1);
   });
 
   test('rows of another dimension are never compared; an empty scope finds nothing', async () => {

@@ -158,6 +158,7 @@ async function runJob(cfg) {
     // longer in any cellar. Until then every row keeps its old vector, so
     // search never goes empty mid-rebuild.
     const runStartedAt = new Date();
+    const neverEmbedded = new Set(); // wines skipped as pending/canary/gone
 
     const pairs = await collectPairs();
     job.total = pairs.length;
@@ -188,6 +189,7 @@ async function runJob(cfg) {
         // A canary (registry lockdown L4) is never embedded either: it must
         // not become anyone's "similar wine".
         if (!wine || wine.pendingIdentity === true || wine.canary === true) {
+          neverEmbedded.add(String(wineDefId));
           job.skipped++;
           job.done++;
           continue;
@@ -252,11 +254,24 @@ async function runJob(cfg) {
     }
 
     // A completed full run: the rows it didn't write are stale (another
-    // model, or a pair no longer in any cellar) — this is what dropping the
-    // whole index used to achieve, minus the outage.
+    // model, a pair no longer in any cellar, a wine that must not be
+    // embedded) — what dropping the whole index used to achieve, minus the
+    // outage. Except a pair that became active DURING the run, after the
+    // snapshot above: its vector was already current, so embedSinglePair left
+    // the row as it was (review 2026-09-27).
     if (job.mode === 'full') {
-      const { deletedCount } = await WineEmbedding.deleteMany({ indexVersion: vectorIndex, embeddedAt: { $lt: runStartedAt } });
-      if (deletedCount) console.log(`[embeddingJob] Full mode — removed ${deletedCount} rows this run did not rewrite`);
+      const activeNow = new Set((await collectPairs()).map((p) => `${p.wineDefinition}|${p.vintage}`));
+      const unwritten = await WineEmbedding.find({ indexVersion: vectorIndex, embeddedAt: { $lt: runStartedAt } })
+        .select('_id wineDefinition vintage model').lean();
+      const stale = unwritten
+        .filter((r) => !(r.model === model
+          && activeNow.has(`${r.wineDefinition}|${r.vintage}`)
+          && !neverEmbedded.has(String(r.wineDefinition))))
+        .map((r) => r._id);
+      for (let i = 0; i < stale.length; i += 1000) {
+        await WineEmbedding.deleteMany({ _id: { $in: stale.slice(i, i + 1000) } });
+      }
+      if (stale.length) console.log(`[embeddingJob] Full mode — removed ${stale.length} rows this run did not rewrite`);
     }
 
     job.status = 'done';

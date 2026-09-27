@@ -60,7 +60,7 @@ This is the primary way to use Cellarion. Create an account and start using the 
 - **React 19** — Frontend (React Router 6, built with **Vite 7**)
 - **Node.js 24** — Runtime
 - **Meilisearch** — Fuzzy search engine
-- **Voyage AI** — Wine embedding generation (swappable for any OpenAI-compatible endpoint)
+- **Voyage AI** — Wine embedding generation (swappable for any OpenAI-compatible endpoint); the vectors are stored in MongoDB and compared by the backend — no vector database
 - **Anthropic Claude** — Label scanning + AI chat (swappable, same mechanism)
 - **MCP** — Model Context Protocol server (`/api/mcp`) with OAuth, for AI assistants
 - **Stripe** — Optional supporter payments (hosted Checkout + Portal)
@@ -122,6 +122,29 @@ docker-compose down          # keep data
 docker-compose down -v       # also remove all volumes (wipes database)
 ```
 
+### Upgrade
+
+```bash
+git pull
+docker-compose up -d --build
+```
+
+**Upgrading from v1.241.0 or earlier: Qdrant is retired.** The wine vectors behind the AI cellar chat, restock suggestions and the MCP similarity tools now live in MongoDB, and the backend compares them itself — there is no vector database to run any more. After the upgrade the old `qdrant` container keeps running as an orphan, so its vectors can be copied over once, with no re-embedding and no embedding cost:
+
+```bash
+# dry run (counts only), then the real copy
+docker-compose exec -e QDRANT_URL=http://qdrant:6333 backend node src/scripts/migrate-vectors-from-qdrant.js
+docker-compose exec -e QDRANT_URL=http://qdrant:6333 backend node src/scripts/migrate-vectors-from-qdrant.js --apply
+# then remove the old container, and later its volume
+docker-compose up -d --remove-orphans
+docker volume ls | grep qdrant      # e.g. cellarion_qdrant-data → docker volume rm cellarion_qdrant-data
+```
+
+- If you had set `QDRANT_API_KEY`, add `-e QDRANT_API_KEY=<your key>` to both commands (the new compose no longer passes it).
+- Instead of copying, you can run a **full** embedding job in SuperAdmin → AI, which re-embeds every wine through your embedding provider.
+- If embeddings were never configured (no `VOYAGE_API_KEY` / `EMBEDDING_PROVIDER`), there is nothing to copy — just remove the old container.
+- Going back to v1.241.0 afterwards works, but run a full embedding job after that downgrade, and again after upgrading once more.
+
 ---
 
 ## Architecture
@@ -160,6 +183,7 @@ Cellarion/
 │       ├── mcp/                    # MCP server: registry, tools (read/write/somm/admin),
 │       │                           #   OAuth, action ledger with undo
 │       ├── services/               # search (Meili), embedding (Voyage/OpenAI-compatible),
+│       │                           #   vectorStore (wine vectors in MongoDB, compared in memory),
 │       │                           #   aiChat (RAG), labelScan, enrichmentJob, audit,
 │       │                           #   findOrCreateWine, imageProcessor, taxonomyMerge,
 │       │                           #   registryHealthJob, crossFieldScan, statsService, …
@@ -410,7 +434,7 @@ The AI chat feature needs two services:
 
 1. **Anthropic Claude** (`ANTHROPIC_API_KEY`) — generates conversational responses grounded in your cellar
 2. **Voyage AI** (`VOYAGE_API_KEY`) — creates wine embeddings for semantic search
-The wine vectors are stored in MongoDB and compared by the backend itself — there is no separate vector database to run. (Up to v1.241 Cellarion used Qdrant; after upgrading, `src/scripts/migrate-vectors-from-qdrant.js` copies the existing vectors over once — see the release notes.)
+The wine vectors are stored in MongoDB and compared by the backend itself — there is no separate vector database to run. (Up to v1.241 Cellarion used Qdrant; see [Upgrade](#upgrade) for the one-off copy of existing vectors.)
 
 When both are configured, users can ask natural-language questions about their collection (food pairings, occasion picks, cellar insights). The system only surfaces wines the user actually owns — no hallucinated recommendations.
 

@@ -105,3 +105,19 @@ test('an active alert for the same wine is not duplicated', async () => {
   await checkRestockGap('u1', 'b1', 'c1');
   expect(RestockAlert.create).not.toHaveBeenCalled();
 });
+
+test('checks run one at a time, however many are started at once (a bulk "mark as drunk")', async () => {
+  let running = 0;
+  let most = 0;
+  vectorStore.getVector.mockImplementation(async () => {
+    running += 1;
+    most = Math.max(most, running);
+    await new Promise((r) => setTimeout(r, 5));
+    running -= 1;
+    return VECTOR;
+  });
+  vectorStore.search.mockResolvedValue([{ wineDefinitionId: 'wOther1', vintage: 'NV', score: 0.9 }]);
+  await Promise.all(Array.from({ length: 12 }, (_, i) => checkRestockGap('u1', `b${i}`, 'c1')));
+  expect(vectorStore.getVector).toHaveBeenCalledTimes(12);
+  expect(most).toBe(1);
+});

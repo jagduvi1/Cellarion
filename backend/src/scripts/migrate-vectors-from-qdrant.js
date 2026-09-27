@@ -5,8 +5,11 @@
  * Run it after upgrading, while the old Qdrant container is still running:
  *   docker compose exec -e QDRANT_URL=http://qdrant:6333 backend node src/scripts/migrate-vectors-from-qdrant.js
  *   docker compose exec -e QDRANT_URL=http://qdrant:6333 backend node src/scripts/migrate-vectors-from-qdrant.js --apply
- * The first is a dry run (counts only); --apply writes. Then remove the old
- * container: docker compose up -d --remove-orphans (its volume can go too).
+ * The first is a dry run (counts only); --apply writes. If the old container
+ * required an API key (QDRANT_API_KEY), pass it as well:
+ * `-e QDRANT_API_KEY=<the key>` (the new compose no longer hands it to the
+ * backend). Then remove the old container:
+ * docker compose up -d --remove-orphans (its volume can go too).
  *
  * Or skip it: a FULL embedding job (SuperAdmin → AI) re-embeds every wine
  * through the provider instead — slower, and one embedding call per pair.

@@ -19,7 +19,7 @@ jest.mock('./embedding', () => ({
   isEmbeddingConfigured: () => true,
   getEmbeddingDimension: () => 8,
 }));
-jest.mock('../models/WineEmbedding', () => ({ findOne: jest.fn(), findOneAndUpdate: jest.fn(), deleteMany: jest.fn() }));
+jest.mock('../models/WineEmbedding', () => ({ find: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn(), deleteMany: jest.fn() }));
 jest.mock('../models/Bottle', () => ({ aggregate: jest.fn(), distinct: jest.fn() }));
 jest.mock('../models/WineDefinition', () => ({ findById: jest.fn() }));
 
@@ -109,12 +109,34 @@ describe('the batch job', () => {
 
   test('full: re-embeds every pair in place, THEN removes the rows it did not write', async () => {
     WineEmbedding.findOne.mockReturnValue(rowChain({ textHash: hash('Wine w1', '2015'), status: 'ok', dim: 8 }));
+    // The rows the run did not rewrite (older than its start):
+    WineEmbedding.find.mockReturnValue({ select: () => ({ lean: async () => [
+      { _id: 'oldModel', wineDefinition: 'w1', vintage: '2015', model: 'voyage-4-lite' }, // a previous model
+      { _id: 'gone', wineDefinition: 'w9', vintage: '2001', model: 'voyage-4-large' },    // no longer in any cellar
+      { _id: 'lateAdd', wineDefinition: 'w3', vintage: '2019', model: 'voyage-4-large' }, // became active mid-run
+      { _id: 'pending', wineDefinition: 'wP', vintage: 'NV', model: 'voyage-4-large' },   // a wine never embedded
+    ] }) });
+    // The snapshot at the start, then the pairs active when the run ends.
+    Bottle.aggregate
+      .mockResolvedValueOnce([
+        { wineDefinition: 'w1', vintage: '2015' },
+        { wineDefinition: 'w2', vintage: 'NV' },
+        { wineDefinition: 'wP', vintage: 'NV' },
+      ])
+      .mockResolvedValueOnce([
+        { wineDefinition: 'w1', vintage: '2015' },
+        { wineDefinition: 'w2', vintage: 'NV' },
+        { wineDefinition: 'w3', vintage: '2019' },
+        { wineDefinition: 'wP', vintage: 'NV' },
+      ]);
+    WineDefinition.findById.mockImplementation((id) => wineChain(id === 'wP' ? { _id: id, name: 'p', pendingIdentity: true } : { _id: id, name: `Wine ${id}` }));
+
     const status = await runToEnd('full');
-    expect(status).toMatchObject({ status: 'done', done: 2, skipped: 0 });
+    expect(status).toMatchObject({ status: 'done', done: 3, skipped: 1 });
     expect(embedSingle).toHaveBeenCalledTimes(2);
-    expect(WineEmbedding.deleteMany).toHaveBeenCalledTimes(1);
-    const [filter] = WineEmbedding.deleteMany.mock.calls[0];
-    expect(filter).toMatchObject({ indexVersion: 'v1', embeddedAt: { $lt: expect.any(Date) } });
+    expect(WineEmbedding.find.mock.calls[0][0]).toMatchObject({ indexVersion: 'v1', embeddedAt: { $lt: expect.any(Date) } });
+    const deleted = WineEmbedding.deleteMany.mock.calls.flatMap(([f]) => f._id.$in);
+    expect(deleted.sort()).toEqual(['gone', 'oldModel', 'pending']);
     // Nothing was deleted before the rows were rewritten.
     const lastWrite = Math.max(...WineEmbedding.findOneAndUpdate.mock.invocationCallOrder);
     expect(WineEmbedding.deleteMany.mock.invocationCallOrder[0]).toBeGreaterThan(lastWrite);
