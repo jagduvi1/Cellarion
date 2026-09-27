@@ -141,4 +141,19 @@ async function hasStrippableMetadata(filePath) {
   return !!(meta.exif || meta.xmp || meta.iptc || (meta.orientation && meta.orientation !== 1));
 }
 
-module.exports = { stripImageMetadata, sanitizeImageBuffer, detectImageFormat, hasStrippableMetadata, MAX_PIXELS };
+/**
+ * True when the image has transparent pixels: its background is already
+ * removed (the wine-request form sends its background-removal preview, a
+ * cut-out). An opaque image — any JPEG, or a PNG with no transparency — is a
+ * photo that still has its background. Unreadable counts as opaque.
+ */
+async function hasTransparency(buf) {
+  try {
+    const { isOpaque } = await sharp(buf, { limitInputPixels: MAX_PIXELS }).stats();
+    return !isOpaque;
+  } catch {
+    return false;
+  }
+}
+
+module.exports = { stripImageMetadata, sanitizeImageBuffer, detectImageFormat, hasStrippableMetadata, hasTransparency, MAX_PIXELS };

@@ -249,9 +249,14 @@ async function runProcessImage(imageId) {
     console.error(`Image processing failed for ${imageId}:`, error.message);
     // Revert to the prior status so it can be retried (POST /api/images/:id/
     // retry accepts 'uploaded', and 'approved' with no processed file) — and
-    // never demote an official (assignedToWine) image's approval. The
-    // original stays on disk: it is the retry's source.
-    image.status = image.assignedToWine ? 'approved' : priorStatus;
+    // never demote an approval: an official (assignedToWine) image, or one
+    // approved while this job ran. Re-read, as the success path does: this
+    // job's doc snapshot can predate it (attachOfficialWineImage makes the row
+    // official right after starting this job). The original stays on disk:
+    // it is the retry's source.
+    const current = await BottleImage.findById(imageId).select('assignedToWine status').catch(() => null);
+    const keepApproved = image.assignedToWine || current?.assignedToWine || current?.status === 'approved';
+    image.status = keepApproved ? 'approved' : priorStatus;
     await image.save();
   }
 }

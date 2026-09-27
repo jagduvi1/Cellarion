@@ -146,7 +146,7 @@ router.put('/:id/resolve', async (req, res) => {
       // as a file, once the wine exists — when the admin keeps it
       // (useRequestPhoto), or when an API caller leaves the image out.
       const { decodeInlineImage, attachOfficialWineImage } = require('../../services/imageOps');
-      const { sanitizeImageBuffer, detectImageFormat } = require('../../services/imageSanitizer');
+      const { sanitizeImageBuffer, hasTransparency } = require('../../services/imageSanitizer');
       const requestPhoto = decodeInlineImage(wineRequest.image);
       const blankImage = image === '' || image === null;
       const imageToStore = blankImage ? null : (image ?? (requestPhoto ? null : (wineRequest.image ?? null)));
@@ -154,7 +154,8 @@ router.put('/:id/resolve', async (req, res) => {
       if (imageErr) {
         return res.status(400).json({ error: `Wine image: ${imageErr}` });
       }
-      const usePhoto = !!requestPhoto && !imageToStore && (useRequestPhoto === true || image === undefined);
+      const usePhoto = !!requestPhoto && !imageToStore
+        && (useRequestPhoto === true || (useRequestPhoto === undefined && image === undefined));
       if (usePhoto) {
         // Refuse before anything is created, not after.
         try {
@@ -277,12 +278,13 @@ router.put('/:id/resolve', async (req, res) => {
       // The requester's photo becomes the new wine's official picture, stored
       // as a file like any admin upload (approved, public). Only for a wine
       // created here: a wine that already existed keeps its own picture. A
-      // background-removed photo (the request form sends that as PNG) is kept
-      // as it is; any other goes through background removal. Best-effort —
-      // the approval stands without it, and a picture can be added later.
+      // cut-out (transparent pixels: the request form sends its background-
+      // removal preview) is kept as it is; an opaque photo goes through
+      // background removal. Best-effort — the approval stands without it, and
+      // a picture can be added later.
       if (usePhoto && createdHere) {
         try {
-          const keepBackground = detectImageFormat(requestPhoto) === 'png';
+          const keepBackground = await hasTransparency(requestPhoto);
           const attached = await attachOfficialWineImage(
             { buffer: requestPhoto, wineDefinitionId: linkedWine._id, userId: req.user.id, userRoles: req.user.roles, keepBackground },
             req

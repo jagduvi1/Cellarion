@@ -39,6 +39,8 @@ jest.mock('../../services/imageOps', () => ({
 jest.mock('../../services/imageSanitizer', () => ({
   ...jest.requireActual('../../services/imageSanitizer'),
   sanitizeImageBuffer: jest.fn(async (b) => b),
+  // A cut-out unless a test says otherwise (the real check reads the pixels).
+  hasTransparency: jest.fn(async () => true),
 }));
 
 const express = require('express');
@@ -159,7 +161,7 @@ const JPEG_BYTES = Buffer.from('ffd8ffe000104a46494600010100', 'hex').toString('
 
 describe('the photo attached to the request', () => {
   const { attachOfficialWineImage } = require('../../services/imageOps');
-  const { sanitizeImageBuffer } = require('../../services/imageSanitizer');
+  const { sanitizeImageBuffer, hasTransparency } = require('../../services/imageSanitizer');
   const { logAudit } = require('../../services/audit');
 
   test('kept by the admin: the wine is created without it, then gets it as its official picture file', async () => {
@@ -175,8 +177,9 @@ describe('the photo attached to the request', () => {
       { imageId: 'img-1', fromRequest: REQUEST_ID });
   });
 
-  test('a photo that is not background-removed (JPEG) goes through background removal', async () => {
+  test('an opaque photo (not a cut-out) goes through background removal', async () => {
     requestDoc.image = `data:image/jpeg;base64,${JPEG_BYTES}`;
+    hasTransparency.mockResolvedValueOnce(false);
     await resolve({ image: '', useRequestPhoto: true });
     expect(attachOfficialWineImage.mock.calls[0][0].keepBackground).toBe(false);
   });
@@ -195,6 +198,14 @@ describe('the photo attached to the request', () => {
     expect(res.status).toBe(200);
     expect(WineDefinition.mock.calls[0][0].image).toBeNull();
     expect(attachOfficialWineImage).toHaveBeenCalledTimes(1);
+  });
+
+  test('an API caller that leaves the image out but says useRequestPhoto: false gets no photo', async () => {
+    requestDoc.image = `data:image/png;base64,${PNG_1PX}`;
+    const res = await resolve({ useRequestPhoto: false });
+    expect(res.status).toBe(200);
+    expect(WineDefinition.mock.calls[0][0].image).toBeNull();
+    expect(attachOfficialWineImage).not.toHaveBeenCalled();
   });
 
   test('a link typed by the admin wins over the photo', async () => {

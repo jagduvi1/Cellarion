@@ -12,10 +12,13 @@
  * This moves the ones stored before that into files the same way, through
  * attachOfficialWineImage: a BottleImage row (approved, public, the wine's
  * official picture, the credit kept), the file stored as a kept WebP photo, and
- * wine.image pointing at it. A background-removed photo (PNG, what the request
- * form sent) is kept as it is; anything else goes through background removal,
- * like any admin upload. updatedAt moves, so an install holding the wine over
- * the Bridge picks up the picture: an inline one was never sent to it.
+ * wine.image pointing at it. A cut-out (transparent pixels: what the request
+ * form sent after background removal) is kept as it is; an opaque picture goes
+ * through background removal, like any admin upload.
+ *
+ * Once that processing has finished, each converted wine's updatedAt moves, so
+ * an install holding it over the Bridge picks up the picture (an inline one was
+ * never sent to it) at its final address; then the audit row and the re-index.
  *
  * The photo was approved when its request was, so it is recorded as uploaded
  * and reviewed by the admin who approved it: the wine's createdBy, which an
@@ -29,6 +32,7 @@
  */
 const mongoose = require('mongoose');
 const WineDefinition = require('../models/WineDefinition');
+const BottleImage = require('../models/BottleImage');
 const Bottle = require('../models/Bottle');
 // Re-indexing a wine populates its country, region and grapes: those models
 // must be registered in this process too.
@@ -36,21 +40,27 @@ require('../models/Country');
 require('../models/Region');
 require('../models/Grape');
 const { attachOfficialWineImage, decodeInlineImage } = require('../services/imageOps');
-const { detectImageFormat } = require('../services/imageSanitizer');
+const { detectImageFormat, hasTransparency } = require('../services/imageSanitizer');
 const { logAudit } = require('../services/audit');
 
 const INLINE = { image: { $regex: '^data:' } };
 
-async function convertInlineWineImages({ apply = false, log = console.log, reindex = async () => {} } = {}) {
+/**
+ * `settle` waits for background removal started in this process (main passes
+ * imageProcessor.whenProcessingIdle); `reindex` re-indexes one wine for search.
+ */
+async function convertInlineWineImages({ apply = false, log = console.log, reindex = async () => {}, settle = async () => {} } = {}) {
   const wines = await WineDefinition.find(INLINE).select('_id name producer image imageCredit createdBy').lean();
-  const summary = { found: wines.length, converted: 0, skipped: 0, failed: 0 };
+  const summary = { found: wines.length, converted: 0, skipped: 0, failed: 0, removalFailed: 0 };
   log(`${wines.length} wine(s) with an inline picture${apply ? '' : ' (dry-run: nothing changes; pass --apply to convert)'}`);
 
+  const attached = [];
   for (const wine of wines) {
     const buffer = decodeInlineImage(wine.image);
     const format = buffer ? detectImageFormat(buffer) : null;
+    const cutOut = format ? await hasTransparency(buffer) : false;
     const bottles = await Bottle.countDocuments({ wineDefinition: wine._id });
-    const label = `${wine._id} "${wine.name}" (${wine.producer || 'no producer'}): ${Math.round(wine.image.length / 1024)} kB inline, ${format || 'unreadable'}, ${bottles} bottle(s)`;
+    const label = `${wine._id} "${wine.name}" (${wine.producer || 'no producer'}): ${Math.round(wine.image.length / 1024)} kB inline, ${format || 'unreadable'}${format ? (cutOut ? ', cut-out (kept as is)' : ', opaque (background removal runs)') : ''}, ${bottles} bottle(s)`;
     if (!buffer || !format) {
       summary.skipped++;
       log(`  SKIP ${label}: not a readable inline image, left as it is`);
@@ -74,7 +84,7 @@ async function convertInlineWineImages({ apply = false, log = console.log, reind
         credit: wine.imageCredit || null,
         userId: wine.createdBy,
         userRoles: ['admin'],
-        keepBackground: format === 'png',
+        keepBackground: cutOut,
       }, null);
     } catch (err) {
       result = { error: { message: err.message } };
@@ -84,27 +94,42 @@ async function convertInlineWineImages({ apply = false, log = console.log, reind
       log(`  FAILED ${label}: ${result.error.message} (left as it is)`);
       continue;
     }
+    attached.push({ wine, label, imageId: result.image._id });
+  }
 
+  // Background removal of an opaque picture runs in this process and moves
+  // the wine to the processed file when it is done: only then is the address
+  // final, for the Bridge, the audit row and search.
+  if (attached.length) await settle();
+
+  for (const { wine, label, imageId } of attached) {
+    const [now, image] = await Promise.all([
+      WineDefinition.findById(wine._id).select('image').lean(),
+      BottleImage.findById(imageId).select('status keepBackground processedUrl').lean(),
+    ]);
     await WineDefinition.updateOne({ _id: wine._id }, { $set: { updatedAt: new Date() } });
-    const url = result.image.processedUrl || result.image.originalUrl;
     logAudit(null, 'admin.wine.image.convert_inline',
       { type: 'wine', id: wine._id },
-      { imageId: String(result.image._id), inlineBytes: wine.image.length, url });
+      { imageId: String(imageId), inlineBytes: wine.image.length, url: now?.image || null });
     // Awaited here: the re-index attachOfficialWineImage starts is fire-and-forget.
     await reindex(wine._id);
     summary.converted++;
-    log(`  converted ${label} → ${url}`);
+    // A failed removal leaves the picture as a file with its background: still
+    // not inline, and retryable from the admin image queue.
+    const removalFailed = image && !image.keepBackground && !image.processedUrl;
+    if (removalFailed) summary.removalFailed++;
+    log(`  converted ${label} → ${now?.image}${removalFailed ? ' (background removal failed: kept with its background; retry it from the admin image queue)' : ''}`);
   }
 
-  log(`found ${summary.found}, converted ${summary.converted}, skipped ${summary.skipped}, failed ${summary.failed}`);
+  log(`found ${summary.found}, converted ${summary.converted}, skipped ${summary.skipped}, failed ${summary.failed}${summary.removalFailed ? `, background removal failed on ${summary.removalFailed}` : ''}`);
   return summary;
 }
 
 async function main() {
   const apply = process.argv.includes('--apply');
   await mongoose.connect(process.env.MONGO_URI || 'mongodb://mongo:27017/winecellar');
-  // Without initialize() the re-index in attachOfficialWineImage is a silent
-  // no-op, and wine search keeps the inline picture until the next reindex.
+  // Without initialize() every re-index is a silent no-op, and wine search
+  // keeps the inline picture until the next reindex.
   const searchService = require('../services/search');
   if (apply) {
     await searchService.initialize();
@@ -112,10 +137,11 @@ async function main() {
       console.warn('Meilisearch unavailable: wine search keeps the old picture until the next reindex.');
     }
   }
-  const summary = await convertInlineWineImages({ apply, reindex: (id) => searchService.indexWine(id) });
-  // Background removal (for a non-PNG picture) runs in this process: let it
-  // finish before disconnecting.
-  if (apply) await require('../services/imageProcessor').whenProcessingIdle();
+  const summary = await convertInlineWineImages({
+    apply,
+    reindex: (id) => searchService.indexWine(id),
+    settle: () => require('../services/imageProcessor').whenProcessingIdle(),
+  });
   // logAudit persists fire-and-forget: give the last writes a moment before the
   // connection goes (same as scripts/send-supporter-thank-you.js).
   await new Promise((resolve) => setTimeout(resolve, 1000));

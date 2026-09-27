@@ -343,7 +343,7 @@ registerTool({
   inputSchema: {
     wine_name: z.string().min(1).max(300).describe('The wine name as printed on the label / source'),
     source_url: z.string().min(1).max(2048).describe('An http(s) link to a page describing the wine (required)'),
-    image_url: z.string().max(500000).optional().describe('Optional image URL or data reference for the wine'),
+    image_url: z.string().max(500000).optional().describe('Optional picture of the wine: an http(s) link or an inline data:image. An admin reviews it; on approval it may become the picture of the wine in the shared registry, visible to all Cellarion users'),
     idempotency_key: IDEMPOTENCY_KEY,
   },
   handler: async (args, ctx) => {

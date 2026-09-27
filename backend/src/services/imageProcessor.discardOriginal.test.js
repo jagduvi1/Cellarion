@@ -260,6 +260,21 @@ describe('processImage gates (post-ship audit 2026-09-03)', () => {
     error.mockRestore();
   });
 
+  // attachOfficialWineImage (an admin's official picture, an approved wine
+  // request's photo) marks the row official right after starting this job,
+  // so the job's own snapshot still says uploaded / not official.
+  test('a failed run on an image made official while it ran keeps it approved', async () => {
+    const doc = makeDoc();
+    loadDoc(doc);
+    BottleImage.findById.mockImplementation(() => ({ select: jest.fn().mockResolvedValue({ assignedToWine: true, status: 'approved' }) }));
+    rembg({ ok: false, status: 500 });
+    const error = jest.spyOn(console, 'error').mockImplementation(() => {});
+    await processImage('img1');
+    expect(doc.status).toBe('approved');
+    expect(doc.originalUrl).toBe(ORIG);
+    error.mockRestore();
+  });
+
   test('an approved image that already has a processed file is left alone', async () => {
     const doc = makeDoc({ status: 'approved', processedUrl: PROC });
     loadDoc(doc);

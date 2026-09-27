@@ -2,7 +2,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const sharp = require('sharp');
-const { stripImageMetadata, hasStrippableMetadata, sanitizeImageBuffer, detectImageFormat } = require('./imageSanitizer');
+const { stripImageMetadata, hasStrippableMetadata, sanitizeImageBuffer, detectImageFormat, hasTransparency } = require('./imageSanitizer');
 
 // sharp caches open file descriptors, which blocks the temp-dir cleanup on
 // Windows (EBUSY on unlink). The cache is irrelevant for these tests.
@@ -153,5 +153,22 @@ describe('detectImageFormat', () => {
       const out = await sanitizeImageBuffer(await make(format));
       expect(detectImageFormat(out)).toBe(format);
     }
+  });
+});
+
+// A wine-request photo that is a cut-out (the form sends its background-
+// removal preview) keeps its background-free look; an opaque one goes through
+// background removal. Decided by the pixels, not by the file type.
+describe('hasTransparency', () => {
+  const make = (alpha, format) => sharp({ create: { width: 4, height: 4, channels: 4, background: { r: 120, g: 20, b: 40, alpha } } })[format]().toBuffer();
+
+  test('a PNG with transparent pixels is a cut-out', async () => {
+    expect(await hasTransparency(await make(0, 'png'))).toBe(true);
+  });
+
+  test('an opaque PNG, a JPEG and unreadable bytes are not', async () => {
+    expect(await hasTransparency(await make(1, 'png'))).toBe(false);
+    expect(await hasTransparency(await make(1, 'jpeg'))).toBe(false);
+    expect(await hasTransparency(Buffer.from('not an image'))).toBe(false);
   });
 });
