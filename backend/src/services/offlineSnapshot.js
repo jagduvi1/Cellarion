@@ -21,7 +21,7 @@ const Bottle = require('../models/Bottle');
 const Rack = require('../models/Rack');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
-const { CONSUMED_STATUSES, WINE_POPULATE_LIST } = require('../config/constants');
+const { CONSUMED_STATUSES, WINE_LIST_SELECT } = require('../config/constants');
 const { getDataVersion } = require('./dataVersion');
 
 const SNAPSHOT_SCHEMA = 1;
@@ -56,6 +56,32 @@ async function snapshotTag(userId, now = Date.now()) {
   return `W/"${crypto.createHash('sha256').update(parts.join('|')).digest('base64url').slice(0, 27)}"`;
 }
 
+// The cellar list's wine populate (WINE_POPULATE_LIST), with each country,
+// region and grape cut to what the offline screens show: the cellar list,
+// cellar page, racks and bottle page read their name (and the filters their
+// id); slug and code are kept for links and flags. The full rows carried
+// long descriptions, copied onto every wine: for the largest cellar 637 kB,
+// 41% of the whole copy (scaling audit 2026-09-25, item 11).
+const SNAPSHOT_WINE_POPULATE = [
+  {
+    path: 'wineDefinition',
+    select: WINE_LIST_SELECT,
+    populate: [
+      { path: 'country', select: 'name slug code' },
+      { path: 'region', select: 'name slug country' },
+      { path: 'grapes', select: 'name slug color' },
+    ],
+  },
+  { path: 'pendingWineRequest', select: 'wineName producer' },
+];
+
+// A handful of registry records store their image inline (a data: URI of up
+// to ~180 kB) instead of as a file. The device copy leaves those out; the
+// wine simply shows no registry image offline.
+const withoutInlineImage = (wine) => (
+  typeof wine.image === 'string' && wine.image.startsWith('data:') ? { ...wine, image: null } : wine
+);
+
 const idOf = (v) => (v && v._id ? String(v._id) : v ? String(v) : null);
 
 function userColorOf(cellar, userId) {
@@ -75,7 +101,7 @@ function assembleSnapshot({ userId, cellars, bottles, racks, maturity = new Map(
   for (const b of bottles) {
     if (!cellarIds.has(idOf(b.cellar))) continue; // e.g. left behind by a soft-deleted cellar
     const wine = b.wineDefinition && typeof b.wineDefinition === 'object' ? b.wineDefinition : null;
-    if (wine && wine._id) wines[String(wine._id)] = wine;
+    if (wine && wine._id) wines[String(wine._id)] = withoutInlineImage(wine);
     outBottles.push({
       ...b,
       wineDefinition: wine ? String(wine._id) : idOf(b.wineDefinition),
@@ -122,7 +148,7 @@ async function buildOfflineSnapshot(userId, { attachBottleImageUrls }) {
 
   const bottles = ids.length
     ? await Bottle.find({ cellar: { $in: ids }, status: { $nin: CONSUMED_STATUSES } })
-      .populate(WINE_POPULATE_LIST)
+      .populate(SNAPSHOT_WINE_POPULATE)
       .lean()
     : [];
   const racks = ids.length
@@ -136,4 +162,4 @@ async function buildOfflineSnapshot(userId, { attachBottleImageUrls }) {
   return assembleSnapshot({ userId, cellars, bottles: withImages, racks, maturity });
 }
 
-module.exports = { buildOfflineSnapshot, assembleSnapshot, snapshotTag, SNAPSHOT_SCHEMA, TAG_MAX_AGE_MS };
+module.exports = { buildOfflineSnapshot, assembleSnapshot, snapshotTag, SNAPSHOT_SCHEMA, SNAPSHOT_WINE_POPULATE, TAG_MAX_AGE_MS };

@@ -163,3 +163,48 @@ describe('snapshotTag', () => {
     expect(await snapshotTag('tag-me', T + TAG_MAX_AGE_MS)).not.toBe(a);
   });
 });
+
+// The copy's size (scaling audit 2026-09-25, item 11): taxonomy rows cut to
+// what the offline screens show, and inline data: images left out.
+describe('a slim copy', () => {
+  const { SNAPSHOT_WINE_POPULATE } = require('./offlineSnapshot');
+
+  test('countries, regions and grapes carry only name, slug and code / country / color', () => {
+    const wine = SNAPSHOT_WINE_POPULATE.find((p) => p.path === 'wineDefinition');
+    expect(wine.populate).toEqual([
+      { path: 'country', select: 'name slug code' },
+      { path: 'region', select: 'name slug country' },
+      { path: 'grapes', select: 'name slug color' },
+    ]);
+    // Everything the cellar list excludes from a wine stays excluded.
+    expect(wine.select).toMatch(/-aiProfile/);
+  });
+
+  test('buildOfflineSnapshot loads bottles with that populate', async () => {
+    const populated = [];
+    const q = { populate: (spec) => { populated.push(spec); return q; }, sort: () => q, lean: async () => [] };
+    Cellar.find.mockReturnValue(q);
+    Bottle.find.mockReturnValue(q);
+    Rack.find.mockReturnValue(q);
+    Cellar.find.mockReturnValueOnce({ populate: () => ({ sort: () => ({ lean: async () => [OWN] }) }) });
+
+    await buildOfflineSnapshot(ME, { attachBottleImageUrls: async (b) => b });
+
+    expect(populated).toContain(SNAPSHOT_WINE_POPULATE);
+  });
+
+  test('an inline data: image is left out; a normal image URL stays', () => {
+    const s = assembleSnapshot({
+      userId: ME,
+      cellars: [OWN],
+      bottles: [
+        { _id: 'b1', cellar: 'c1', wineDefinition: { _id: 'w1', name: 'Inline', image: `data:image/png;base64,${'A'.repeat(5000)}` } },
+        { _id: 'b2', cellar: 'c1', wineDefinition: { _id: 'w2', name: 'Linked', image: '/api/uploads/wines/w2.webp' } },
+      ],
+      racks: [],
+    });
+    expect(s.wines.w1.image).toBeNull();
+    expect(s.wines.w1.name).toBe('Inline');
+    expect(s.wines.w2.image).toBe('/api/uploads/wines/w2.webp');
+  });
+});
