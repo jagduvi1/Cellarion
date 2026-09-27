@@ -45,7 +45,9 @@ async function topUsers(Model, date) {
  */
 async function runAiCapAlertCheck(now = new Date()) {
   const cfg = rateLimitsConfig.get();
-  const cap = cfg.aiGlobalDailyCap?.max ?? rateLimitsConfig.defaults.aiGlobalDailyCap.max;
+  // An integer by the settings route's validation; forced to a number anyway,
+  // since it reaches the filters below (and $eq there keeps it a literal).
+  const cap = Number(cfg.aiGlobalDailyCap?.max ?? rateLimitsConfig.defaults.aiGlobalDailyCap.max);
   if (!(cap > 0)) return { sent: 0, reason: 'cap_disabled' };
   if (!mailgun.EMAIL_VERIFICATION_ENABLED) return { sent: 0, reason: 'email_disabled' };
 
@@ -85,7 +87,7 @@ async function runAiCapAlertCheck(now = new Date()) {
     const restore = row?.alertedPct != null && row.alertedCap != null
       ? { $set: { alertedPct: row.alertedPct, alertedCap: row.alertedCap } }
       : { $unset: { alertedPct: 1, alertedCap: 1 } };
-    await AiUsage.updateOne({ userId: null, date, alertedPct: pct, alertedCap: cap }, restore).catch(() => {});
+    await AiUsage.updateOne({ userId: null, date, alertedPct: pct, alertedCap: { $eq: cap } }, restore).catch(() => {});
     console.error('[aiCapAlert] send failed:', err.message);
     return { sent: 0, reason: 'send_failed' };
   }

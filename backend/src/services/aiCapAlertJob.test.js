@@ -18,6 +18,7 @@ jest.mock('../models/AiUsage', () => {
     if (key === '$or') return cond.some((c) => matches(row, c));
     const value = row[key];
     if (cond && typeof cond === 'object' && !Array.isArray(cond)) {
+      if ('$eq' in cond) return value === cond.$eq;
       if ('$ne' in cond) return value !== cond.$ne;
       if ('$gt' in cond) return value > cond.$gt;
       if ('$not' in cond) return !(value !== undefined && value >= cond.$not.$gte);
