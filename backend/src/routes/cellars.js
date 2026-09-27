@@ -583,8 +583,10 @@ router.get('/:id/statistics', async (req, res) => {
     // currency and price day count the same way in every figure below, so
     // each group is weighed by its size. A group's price sum converts like
     // its bottles one by one — the conversion is linear and prices are never
-    // negative. Groups come in the order of their first bottle, so the maps
-    // list their keys as the per-bottle loop did.
+    // negative — up to how the sums round: MongoDB adds more precisely than
+    // JavaScript, so a total or average that falls on half a cent can round
+    // one cent the other way. Groups come in the order of their first bottle,
+    // so the maps list their keys in a stable order.
     const priced = { $ne: [{ $ifNull: ['$price', 0] }, 0] };
     const groups = await Bottle.aggregate([
       { $match: { cellar: cellar._id, status: { $nin: CONSUMED_STATUSES } } },

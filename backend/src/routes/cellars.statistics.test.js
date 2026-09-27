@@ -8,8 +8,10 @@
  * that share wine, vintage, rating and scale, price currency and price day
  * count the same way, so every figure is computed per group and weighed by
  * its size. On a copy of real data all 436 answers (218 cellars, 2
- * currencies) matched the per-bottle version exactly. Pinned here: what the
- * query asks, and how groups become the same numbers as bottles did.
+ * currencies) matched the per-bottle version. (MongoDB adds more precisely
+ * than JavaScript, so a figure that falls on half a cent can round one cent
+ * the other way.) Pinned here: what the query asks, and how groups become the
+ * same numbers as bottles did.
  *
  * Real router + real requireAuth (HS256 test token); models are mocked.
  */
@@ -44,6 +46,7 @@ jest.mock('../models/Grape', () => ({}));
 const express = require('express');
 const http = require('http');
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const WineDefinition = require('../models/WineDefinition');
@@ -85,7 +88,9 @@ const group = (id, count, { priceCount = 0, priceSum = 0 } = {}) => ({ _id: { pr
 let pipeline;
 beforeEach(() => {
   jest.clearAllMocks();
-  const cellar = { _id: CELLAR_ID, name: 'Home', user: USER_ID, members: [], deletedAt: null };
+  // An ObjectId, as a loaded cellar has: an aggregation doesn't cast a string
+  // id the way find() does, so matching on the URL's string would count nothing.
+  const cellar = { _id: new mongoose.Types.ObjectId(CELLAR_ID), name: 'Home', user: USER_ID, members: [], deletedAt: null };
   Cellar.findById.mockResolvedValue(cellar);
   WineDefinition.find.mockImplementation((q) => {
     const wanted = new Set(q._id.$in.map(String));
@@ -112,7 +117,10 @@ test('one grouping query over this cellar\'s active bottles, by what the figures
   const { status, body } = await request(`/api/cellars/${CELLAR_ID}/statistics`);
   expect(status).toBe(200);
   expect(Bottle.find).not.toHaveBeenCalled();
-  expect(pipeline[0]).toEqual({ $match: { cellar: CELLAR_ID, status: { $nin: ['drank', 'gifted', 'sold', 'other'] } } });
+  const { cellar, ...rest } = pipeline[0].$match;
+  expect(cellar).toBeInstanceOf(mongoose.Types.ObjectId);
+  expect(String(cellar)).toBe(CELLAR_ID);
+  expect(rest).toEqual({ status: { $nin: ['drank', 'gifted', 'sold', 'other'] } });
   expect(Object.keys(pipeline[1].$group._id)).toEqual(['wine', 'vintage', 'rating', 'ratingScale', 'currency', 'priceDay']);
   expect(pipeline[2]).toEqual({ $sort: { first: 1 } });
   expect(body.statistics).toMatchObject({ totalBottles: 0, uniqueWines: 0, totalValue: 0, oldestVintage: null, newestVintage: null });
