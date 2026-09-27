@@ -21,7 +21,7 @@ const Bottle = require('../models/Bottle');
 const Rack = require('../models/Rack');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
-const { CONSUMED_STATUSES, WINE_LIST_SELECT } = require('../config/constants');
+const { CONSUMED_STATUSES, WINE_POPULATE_CARDS } = require('../config/constants');
 const { getDataVersion } = require('./dataVersion');
 
 const SNAPSHOT_SCHEMA = 1;
@@ -56,24 +56,13 @@ async function snapshotTag(userId, now = Date.now()) {
   return `W/"${crypto.createHash('sha256').update(parts.join('|')).digest('base64url').slice(0, 27)}"`;
 }
 
-// The cellar list's wine populate (WINE_POPULATE_LIST), with each country,
-// region and grape cut to what the offline screens show: the cellar list,
-// cellar page, racks and bottle page read their name (and the filters their
-// id); slug and code are kept for links and flags. The full rows carried
-// long descriptions, copied onto every wine: for the largest cellar 637 kB,
-// 41% of the whole copy (scaling audit 2026-09-25, item 11).
-const SNAPSHOT_WINE_POPULATE = [
-  {
-    path: 'wineDefinition',
-    select: WINE_LIST_SELECT,
-    populate: [
-      { path: 'country', select: 'name slug code' },
-      { path: 'region', select: 'name slug country' },
-      { path: 'grapes', select: 'name slug color' },
-    ],
-  },
-  { path: 'pendingWineRequest', select: 'wineName producer' },
-];
+// The bottle cards' wine populate (config/constants WINE_POPULATE_CARDS): each
+// country, region and grape cut to what the offline screens show — the cellar
+// list, cellar page, racks and bottle page read their name (and the filters
+// their id). The full rows carried long descriptions, copied onto every wine:
+// for the largest cellar 637 kB, 41% of the whole copy (scaling audit
+// 2026-09-25, item 11). The cellar page online uses the same populate.
+const SNAPSHOT_WINE_POPULATE = WINE_POPULATE_CARDS;
 
 // A handful of registry records store their image inline (a data: URI of up
 // to ~180 kB) instead of as a file. The device copy leaves those out; the

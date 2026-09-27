@@ -292,6 +292,24 @@ describe('results, pages and facets', () => {
     expect(f.vintage).toEqual({ 2010: 1, 2015: 2, 2016: 1, 2019: 1, 2020: 1, NV: 3 });
   });
 
+  // routes/cellars pages over these without loading the hits (ids first).
+  test('withHits: every hit in rank order with what grouping needs; a wine that no longer exists reads as none', async () => {
+    load([...BOTTLES, bottle(210, { _id: oid(199) }, { vintage: '2001', bottleSize: '1500ml' })]);
+    const res = await search('', { sort: 'createdAt', limit: 2, withHits: true });
+    expect(lastSelect).toContain('bottleSize');
+    expect(idsOf(res)).toEqual([201, 202]); // the page, as before
+    expect(res.hits.map((h) => Number(h.id))).toEqual([201, 202, 203, 204, 205, 206, 207, 208, 209, 210]);
+    expect(res.hits[0]).toEqual({ id: oid(201), wineDefinition: MARGAUX._id, vintage: '2015', bottleSize: undefined });
+    expect(res.hits[8]).toMatchObject({ id: oid(209), wineDefinition: null });
+    expect(res.hits[9]).toEqual({ id: oid(210), wineDefinition: null, vintage: '2001', bottleSize: '1500ml' });
+
+    const ranked = await search('margaux', { withHits: true });
+    expect(ranked.hits.map((h) => h.id)).toEqual(ranked.ids);
+
+    const without = await search('', {});
+    expect(without).not.toHaveProperty('hits');
+  });
+
   test('facetMeta maps the names the modal shows to the ids it filters by', async () => {
     const { facetMeta } = await search('');
     expect(facetMeta.countries.Portugal).toBe(PORTUGAL._id);
@@ -341,5 +359,83 @@ describe('text helpers', () => {
     expect(_internal.editDistance(chars('chardonany'), chars('chardonnay'), 2, false)).toBe(1);
     expect(_internal.editDistance(chars('margo'), chars('margaux'), 1, true)).toBe(1);
     expect(_internal.editDistance(chars('margo'), chars('margaux'), 1, false)).toBe(2);
+  });
+});
+
+// ── Kept documents (typing and paging load the cellar once) ─────────────────
+// Loading a big cellar's bottles and wines and splitting every field into
+// words was most of each search request. With the scope's data version
+// (routes/cellars passes its owners'), the built documents are kept while it
+// matches, for at most DOCS_TTL_MS.
+
+describe('kept documents', () => {
+  afterEach(() => {
+    _internal.forgetAllDocs();
+    _internal.setDocsMax(8000);
+    jest.restoreAllMocks();
+  });
+
+  test('with a version: loaded once, then reused while it matches, for text and filters alike', async () => {
+    const first = await search('', { type: 'red', version: 'u1:5' });
+    // Kept documents carry notes and location, so a text search can reuse them.
+    expect(lastSelect).toContain('notes location');
+    const anna = await search('anna', { version: 'u1:5' });
+    const again = await search('margaux', { version: 'u1:5', offset: 1 });
+    expect(Bottle.find).toHaveBeenCalledTimes(1);
+    expect(WineDefinition.find).toHaveBeenCalledTimes(1);
+    expect(first.total).toBe(6);
+    expect(idsOf(anna)).toEqual([209]);
+    expect(again.total).toBe(3);
+  });
+
+  test('a new version, another scope or the other status loads again', async () => {
+    await search('a', { version: 'u1:5' });
+    await search('a', { version: 'u1:6' });
+    await search('a', { version: 'u1:6', cellarId: oid(2) });
+    await search('a', { version: 'u1:6', statusFilter: 'consumed' });
+    expect(Bottle.find).toHaveBeenCalledTimes(4);
+  });
+
+  test('kept at most DOCS_TTL_MS, whatever the version says', async () => {
+    const now = Date.now();
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(now);
+    await search('a', { version: 'u1:5' });
+    clock.mockReturnValue(now + _internal.DOCS_TTL_MS - 1);
+    await search('a', { version: 'u1:5' });
+    expect(Bottle.find).toHaveBeenCalledTimes(1);
+    clock.mockReturnValue(now + _internal.DOCS_TTL_MS);
+    await search('a', { version: 'u1:5' });
+    expect(Bottle.find).toHaveBeenCalledTimes(2);
+    // An expired scope is dropped on the next call, not only when pushed out.
+    clock.mockReturnValue(now + 3 * _internal.DOCS_TTL_MS);
+    await search('a', { version: 'u1:5', cellarId: oid(2) });
+    expect(_internal.keptScopes()).toBe(1);
+  });
+
+  test('without a version nothing is kept, and a filter-only request leaves notes out', async () => {
+    await search('', { type: 'red' });
+    expect(lastSelect).not.toContain('notes');
+    await search('', { type: 'red' });
+    expect(Bottle.find).toHaveBeenCalledTimes(2);
+    expect(_internal.keptScopes()).toBe(0);
+  });
+
+  test('bounded: the least recently used scope goes first; a scope larger than the bound is never kept', async () => {
+    _internal.setDocsMax(BOTTLES.length * 2); // room for two scopes
+    await search('a', { version: 'v', cellarId: oid(11) });
+    await search('a', { version: 'v', cellarId: oid(12) });
+    await search('a', { version: 'v', cellarId: oid(11) }); // 11 is now the most recent
+    await search('a', { version: 'v', cellarId: oid(13) }); // 12 goes
+    expect(_internal.keptScopes()).toBe(2);
+    Bottle.find.mockClear();
+    await search('a', { version: 'v', cellarId: oid(11) });
+    expect(Bottle.find).not.toHaveBeenCalled();
+    await search('a', { version: 'v', cellarId: oid(12) });
+    expect(Bottle.find).toHaveBeenCalledTimes(1);
+
+    _internal.forgetAllDocs();
+    _internal.setDocsMax(BOTTLES.length - 1);
+    await search('a', { version: 'v' });
+    expect(_internal.keptScopes()).toBe(0);
   });
 });
