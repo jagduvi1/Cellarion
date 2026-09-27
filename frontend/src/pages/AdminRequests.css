@@ -120,6 +120,22 @@
   border-radius: var(--radius-sm);
 }
 
+.request-photo-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  font-weight: normal;
+  cursor: pointer;
+}
+
+.request-photo-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
 .mode-tabs {
   display: flex;
   gap: 0.5rem;

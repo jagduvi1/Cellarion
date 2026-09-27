@@ -326,17 +326,24 @@ function isOwnUploadUrl(value) {
   }
 }
 
-function validateImageRef(image) {
+// A wine record never stores its picture inline (allowInline: false): a
+// data: URI of up to half a megabyte rode along in every list and page that
+// showed the wine. A photo attached to a request becomes a file at approval
+// (routes/admin/wineRequests.js).
+function validateImageRef(image, { allowInline = true } = {}) {
+  const shapes = allowInline ? 'an http(s) link or an inline image' : 'an http(s) link or an uploaded file';
   if (image == null || image === '') return null;
-  if (typeof image !== 'string') return 'Image must be an http(s) link or an inline image';
+  if (typeof image !== 'string') return `Image must be ${shapes}`;
   if (image.length > MAX_IMAGE_REF_LENGTH) return 'Image reference is too large';
-  if (INLINE_IMAGE.test(image)) return null;
+  if (INLINE_IMAGE.test(image)) {
+    return allowInline ? null : 'A wine picture cannot be stored inline; upload it or use a link';
+  }
   if (image.startsWith('/')) {
-    return isOwnUploadPath(image) ? null : 'Image must be an http(s) link or an inline image';
+    return isOwnUploadPath(image) ? null : `Image must be ${shapes}`;
   }
   if (isOwnUploadUrl(image)) return null;
   const urlErr = validateSourceUrl(image);
-  if (urlErr) return `Image must be an http(s) link or an inline image (${urlErr})`;
+  if (urlErr) return `Image must be ${shapes} (${urlErr})`;
   return null;
 }
 

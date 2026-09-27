@@ -261,9 +261,10 @@ router.post('/', async (req, res) => {
     const normalizedKey = generateWineKey(cleanName, producerToStore, cleanAppellation);
 
     // The image lands on a public page and in every viewer's AuthImage, so it
-    // has to be a real http(s) link, an inline image or one of our own upload
-    // paths (audit 2026-09 S7-1 / F06-1).
-    const imageErr = validateImageRef(image);
+    // has to be a real http(s) link or one of our own upload paths (audit
+    // 2026-09 S7-1 / F06-1) — never an inline image (a picture is a file;
+    // POST /:id/image uploads one).
+    const imageErr = validateImageRef(image, { allowInline: false });
     if (imageErr) return res.status(400).json({ error: `Wine image: ${imageErr}` });
 
     const wine = new WineDefinition({
@@ -1504,7 +1505,10 @@ router.put('/:id', async (req, res) => {
     // label-scan URL bug left wines in this state after Remove default image).
     if (image !== undefined) {
       if (image) {
-        const imageErr = validateImageRef(image);
+        // A new picture is never stored inline. An unchanged one passes, so an
+        // unrelated edit of a wine still holding an inline picture from before
+        // works (scripts/convert-inline-wine-images.js converts those).
+        const imageErr = validateImageRef(image, { allowInline: image === wine.image });
         if (imageErr) return res.status(400).json({ error: `Wine image: ${imageErr}` });
         wine.image = image;
       } else {

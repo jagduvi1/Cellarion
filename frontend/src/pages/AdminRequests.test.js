@@ -1,5 +1,6 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import AdminRequests from './AdminRequests';
+import { adminResolveWineRequest } from '../api/admin';
 
 // Audit 2026-08-03 H5: the admin wine-request queue sent no page/limit params
 // and dropped the server's `total`, so anything beyond the oldest 50 requests
@@ -125,4 +126,42 @@ test('snaps back to the last page when the current page falls off the end', asyn
   );
   await waitFor(() => expect(screen.getByText('admin.requests.totalCount:30')).toBeInTheDocument());
   expect(screen.getByText('Wine 0')).toBeInTheDocument();
+});
+
+// A photo attached to a request is stored inline on it. The approval form offers
+// it as a checkbox (on by default) and sends useRequestPhoto; the server stores
+// it as the wine's picture FILE. It never goes into the image field (2026-09-27).
+test('a photo attached to the request is offered as a checkbox and sent as useRequestPhoto, not as the image', async () => {
+  adminResolveWineRequest.mockResolvedValue(jsonRes({ wineRequest: {} }));
+  getWineRequests.mockResolvedValue(jsonRes({
+    count: 1, total: 1,
+    requests: [{ ...makeRequests(1)[0], image: 'data:image/png;base64,iVBORw0KGgo=' }],
+  }));
+  render(<AdminRequests />);
+  fireEvent.click(await screen.findByText('Wine 0'));
+
+  const box = await screen.findByTestId('use-request-photo');
+  expect(box).toBeChecked();
+  expect(screen.getByPlaceholderText('https://...')).toHaveValue('');
+
+  fireEvent.click(box);
+  expect(box).not.toBeChecked();
+  fireEvent.click(screen.getByRole('button', { name: 'admin.requests.resolve' }));
+  await waitFor(() => expect(adminResolveWineRequest).toHaveBeenCalledTimes(1));
+  expect(adminResolveWineRequest.mock.calls[0][2].wineData).toMatchObject({ image: '', useRequestPhoto: false });
+});
+
+test('no checkbox for a request without a photo, or once a link is typed', async () => {
+  const [withPhoto, withoutPhoto] = makeRequests(2);
+  getWineRequests.mockResolvedValue(jsonRes({ count: 2, total: 2, requests: [{ ...withPhoto, image: 'data:image/png;base64,iVBORw0KGgo=' }, withoutPhoto] }));
+  render(<AdminRequests />);
+
+  fireEvent.click(await screen.findByText('Wine 1'));
+  await screen.findByPlaceholderText('https://...');
+  expect(screen.queryByTestId('use-request-photo')).toBeNull();
+
+  fireEvent.click(screen.getByText('Wine 0'));
+  await screen.findByTestId('use-request-photo');
+  fireEvent.change(screen.getByPlaceholderText('https://...'), { target: { value: 'https://cdn.example.com/b.png' } });
+  expect(screen.queryByTestId('use-request-photo')).toBeNull();
 });

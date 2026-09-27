@@ -116,7 +116,7 @@ router.put('/:id/resolve', async (req, res) => {
       // 2026-07-22 RC4). A likely duplicate returns 409 with candidates so the
       // admin links the request to the existing wine instead — or resubmits
       // with confirmCreate:true after an explicit "create anyway".
-      const { name, producer, country, region, appellation, grapes, type, colour, image } = wineData;
+      const { name, producer, country, region, appellation, grapes, type, colour, image, useRequestPhoto } = wineData;
 
       if (!name || !producer || !country) {
         return res.status(400).json({ error: 'Name, producer, and country are required to create wine' });
@@ -136,13 +136,32 @@ router.put('/:id/resolve', async (req, res) => {
 
       // Image: an explicitly blank field means "no image" — it must NOT fall
       // back to the requester's value (audit 2026-09 F06-1). Whatever is
-      // stored has to pass the same http(s) / inline-image / own-upload check
-      // as intake, so a protocol-relative or javascript: reference can never
-      // reach WineDefinition.image through an approval.
-      const imageToStore = (image === '' || image === null) ? null : (image ?? wineRequest.image ?? null);
-      const imageErr = validateImageRef(imageToStore);
+      // stored has to pass the http(s) / own-upload check, so a
+      // protocol-relative or javascript: reference can never reach
+      // WineDefinition.image through an approval.
+      //
+      // A photo the requester attached is stored inline on the request. It is
+      // never copied into the wine record (half a megabyte of text in every
+      // list that shows the wine): it becomes the new wine's official picture
+      // as a file, once the wine exists — when the admin keeps it
+      // (useRequestPhoto), or when an API caller leaves the image out.
+      const { decodeInlineImage, attachOfficialWineImage } = require('../../services/imageOps');
+      const { sanitizeImageBuffer, detectImageFormat } = require('../../services/imageSanitizer');
+      const requestPhoto = decodeInlineImage(wineRequest.image);
+      const blankImage = image === '' || image === null;
+      const imageToStore = blankImage ? null : (image ?? (requestPhoto ? null : (wineRequest.image ?? null)));
+      const imageErr = validateImageRef(imageToStore, { allowInline: false });
       if (imageErr) {
         return res.status(400).json({ error: `Wine image: ${imageErr}` });
+      }
+      const usePhoto = !!requestPhoto && !imageToStore && (useRequestPhoto === true || image === undefined);
+      if (usePhoto) {
+        // Refuse before anything is created, not after.
+        try {
+          await sanitizeImageBuffer(requestPhoto);
+        } catch {
+          return res.status(400).json({ error: 'The photo on the request could not be read. Approve without it, or give a picture link.' });
+        }
       }
 
       const cleanProducer = producer.trim();
@@ -237,8 +256,10 @@ router.put('/:id/resolve', async (req, res) => {
         },
       });
 
+      let createdHere = false;
       try {
         await linkedWine.save();
+        createdHere = true;
       } catch (err) {
         if (err.code === 11000) {
           // Identical normalizedKey already exists (race or a probe edge) —
@@ -252,6 +273,31 @@ router.put('/:id/resolve', async (req, res) => {
 
       // Sync to search index (fire-and-forget)
       searchService.indexWine(linkedWine._id);
+
+      // The requester's photo becomes the new wine's official picture, stored
+      // as a file like any admin upload (approved, public). Only for a wine
+      // created here: a wine that already existed keeps its own picture. A
+      // background-removed photo (the request form sends that as PNG) is kept
+      // as it is; any other goes through background removal. Best-effort —
+      // the approval stands without it, and a picture can be added later.
+      if (usePhoto && createdHere) {
+        try {
+          const keepBackground = detectImageFormat(requestPhoto) === 'png';
+          const attached = await attachOfficialWineImage(
+            { buffer: requestPhoto, wineDefinitionId: linkedWine._id, userId: req.user.id, userRoles: req.user.roles, keepBackground },
+            req
+          );
+          if (attached.error) {
+            console.error('[wine-requests] request photo not attached:', attached.error.message);
+          } else {
+            logAudit(req, 'admin.wine.image.set',
+              { type: 'wine', id: linkedWine._id },
+              { imageId: String(attached.image._id), fromRequest: String(wineRequest._id) });
+          }
+        } catch (err) {
+          console.error('[wine-requests] request photo not attached:', err.message);
+        }
+      }
     } else if (wineDefinitionId) {
       // Link to existing wine
       linkedWine = await WineDefinition.findById(wineDefinitionId);

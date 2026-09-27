@@ -181,6 +181,9 @@ function AdminRequests() {
     // for the field) and never an unrecognised shape (audit 2026-09 F06-1).
     const requestImage = displayableImage(request.image);
     const prefillImage = requestImage && !requestImage.startsWith('data:') ? requestImage : '';
+    // A photo attached to the request (inline) is offered as a checkbox
+    // instead: kept, the server stores it as the new wine's picture file.
+    const hasRequestPhoto = !!requestImage && requestImage.startsWith('data:');
     setResolveData({
       mode: request.requestType === 'grape_suggestion' ? 'apply_grapes' : 'create',
       adminNotes: '',
@@ -194,7 +197,8 @@ function AdminRequests() {
         type: 'red',
         appellation: '',
         grapes: [],
-        image: prefillImage
+        image: prefillImage,
+        useRequestPhoto: hasRequestPhoto
       }
     });
     // Cancel any pending/in-flight duplicate check from the previous request
@@ -726,6 +730,20 @@ function AdminRequests() {
                             }}
                             placeholder="https://..."
                           />
+                          {displayableImage(selected.image)?.startsWith('data:') && !resolveData.wineData.image && (
+                            <label className="request-photo-toggle">
+                              <input
+                                type="checkbox"
+                                data-testid="use-request-photo"
+                                checked={!!resolveData.wineData.useRequestPhoto}
+                                onChange={(e) => {
+                                  const wineData = { ...resolveData.wineData, useRequestPhoto: e.target.checked };
+                                  setResolveData({ ...resolveData, wineData });
+                                }}
+                              />
+                              <span>{t('admin.requests.useRequestPhoto', "Use the photo from the request as the wine's picture")}</span>
+                            </label>
+                          )}
                         </div>
                       </div>
 

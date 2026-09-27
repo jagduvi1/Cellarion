@@ -30,6 +30,16 @@ jest.mock('../../utils/cellarCred', () => ({ incrementCred: jest.fn().mockResolv
 jest.mock('../../utils/vintageProfile', () => ({ ensurePendingVintageProfile: jest.fn() }));
 jest.mock('../../services/crossFieldScan', () => ({ detectBlockingProducerIssue: jest.fn(async () => null) }));
 jest.mock('../../services/producerSpelling', () => ({ resolveCanonicalProducerSpelling: jest.fn(async (p) => p) }));
+// The request's photo: decoded for real, stored through the official-picture
+// path (mocked here; services/imageOps is tested on its own).
+jest.mock('../../services/imageOps', () => ({
+  ...jest.requireActual('../../services/imageOps'),
+  attachOfficialWineImage: jest.fn(async () => ({ image: { _id: 'img-1', processedUrl: '/api/uploads/originals/img-1.webp' } })),
+}));
+jest.mock('../../services/imageSanitizer', () => ({
+  ...jest.requireActual('../../services/imageSanitizer'),
+  sanitizeImageBuffer: jest.fn(async (b) => b),
+}));
 
 const express = require('express');
 const http = require('http');
@@ -140,4 +150,96 @@ test('approving moves the data version of every owner of a pending bottle — th
   expect(res.status).toBe(200);
   expect(getDataVersion('owner-a')).not.toBe(before[0]);
   expect(getDataVersion('owner-b')).not.toBe(before[1]);
+});
+
+// ── A photo attached to the request (inline) — never stored in the wine record ──
+
+const PNG_1PX = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+const JPEG_BYTES = Buffer.from('ffd8ffe000104a46494600010100', 'hex').toString('base64');
+
+describe('the photo attached to the request', () => {
+  const { attachOfficialWineImage } = require('../../services/imageOps');
+  const { sanitizeImageBuffer } = require('../../services/imageSanitizer');
+  const { logAudit } = require('../../services/audit');
+
+  test('kept by the admin: the wine is created without it, then gets it as its official picture file', async () => {
+    requestDoc.image = `data:image/png;base64,${PNG_1PX}`;
+    const res = await resolve({ image: '', useRequestPhoto: true });
+    expect(res.status).toBe(200);
+    expect(WineDefinition.mock.calls[0][0].image).toBeNull();
+    expect(attachOfficialWineImage).toHaveBeenCalledTimes(1);
+    const [opts] = attachOfficialWineImage.mock.calls[0];
+    expect(opts).toMatchObject({ wineDefinitionId: 'wine-new', userId: ADMIN_ID, userRoles: ['admin'], keepBackground: true });
+    expect(opts.buffer.equals(Buffer.from(PNG_1PX, 'base64'))).toBe(true);
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'admin.wine.image.set', { type: 'wine', id: 'wine-new' },
+      { imageId: 'img-1', fromRequest: REQUEST_ID });
+  });
+
+  test('a photo that is not background-removed (JPEG) goes through background removal', async () => {
+    requestDoc.image = `data:image/jpeg;base64,${JPEG_BYTES}`;
+    await resolve({ image: '', useRequestPhoto: true });
+    expect(attachOfficialWineImage.mock.calls[0][0].keepBackground).toBe(false);
+  });
+
+  test('unticked: approved without it', async () => {
+    requestDoc.image = `data:image/png;base64,${PNG_1PX}`;
+    const res = await resolve({ image: '', useRequestPhoto: false });
+    expect(res.status).toBe(200);
+    expect(WineDefinition.mock.calls[0][0].image).toBeNull();
+    expect(attachOfficialWineImage).not.toHaveBeenCalled();
+  });
+
+  test('an API caller that leaves the image out gets the photo as a file too, never inline', async () => {
+    requestDoc.image = `data:image/png;base64,${PNG_1PX}`;
+    const res = await resolve({});
+    expect(res.status).toBe(200);
+    expect(WineDefinition.mock.calls[0][0].image).toBeNull();
+    expect(attachOfficialWineImage).toHaveBeenCalledTimes(1);
+  });
+
+  test('a link typed by the admin wins over the photo', async () => {
+    requestDoc.image = `data:image/png;base64,${PNG_1PX}`;
+    const res = await resolve({ image: 'https://cdn.example.com/bottle.png', useRequestPhoto: true });
+    expect(res.status).toBe(200);
+    expect(WineDefinition.mock.calls[0][0].image).toBe('https://cdn.example.com/bottle.png');
+    expect(attachOfficialWineImage).not.toHaveBeenCalled();
+  });
+
+  test('an inline image sent as the wine picture is refused, nothing minted', async () => {
+    const res = await resolve({ image: `data:image/png;base64,${PNG_1PX}` });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/Wine image: .*cannot be stored inline/);
+    expect(WineDefinition).not.toHaveBeenCalled();
+  });
+
+  test('an unreadable photo is refused before anything is created', async () => {
+    requestDoc.image = `data:image/png;base64,${PNG_1PX}`;
+    sanitizeImageBuffer.mockRejectedValueOnce(new Error('not an image'));
+    const res = await resolve({ image: '', useRequestPhoto: true });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/photo on the request could not be read/);
+    expect(WineDefinition).not.toHaveBeenCalled();
+    expect(requestDoc.save).not.toHaveBeenCalled();
+  });
+
+  test('when the wine turns out to exist already (same key), its own picture is left alone', async () => {
+    requestDoc.image = `data:image/png;base64,${PNG_1PX}`;
+    WineDefinition.mockImplementation(function (doc) {
+      Object.assign(this, doc);
+      this.save = jest.fn().mockRejectedValue(Object.assign(new Error('dup'), { code: 11000 }));
+    });
+    WineDefinition.findOne.mockResolvedValue({ _id: 'wine-existing', image: '/api/uploads/processed/own.webp' });
+    const res = await resolve({ image: '', useRequestPhoto: true });
+    expect(res.status).toBe(200);
+    expect(attachOfficialWineImage).not.toHaveBeenCalled();
+  });
+
+  test('a failed attach does not undo the approval', async () => {
+    requestDoc.image = `data:image/png;base64,${PNG_1PX}`;
+    attachOfficialWineImage.mockResolvedValueOnce({ error: { status: 500, message: 'disk full' } });
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    const res = await resolve({ image: '', useRequestPhoto: true });
+    expect(res.status).toBe(200);
+    expect(requestDoc.save).toHaveBeenCalled();
+  });
 });

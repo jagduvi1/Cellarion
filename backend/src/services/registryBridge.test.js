@@ -115,6 +115,17 @@ describe('adoptWine', () => {
     expect(require('./search').indexWine).toHaveBeenCalledWith('new1');
   });
 
+  test('a picture sent inline, or as anything but an http(s) link, is left out: a wine record never stores one', async () => {
+    client.fetchWine.mockResolvedValue(registryWine({ image: 'data:image/png;base64,iVBORw0KGgo=', imageCredit: 'Estate' }));
+    await bridge.adoptWine(RID, USER);
+    expect(WineDefinition.mock.calls[0][0]).toMatchObject({ image: null, imageCredit: null });
+
+    WineDefinition.mockClear();
+    client.fetchWine.mockResolvedValue(registryWine({ image: '/api/uploads/processed/x.png' }));
+    await bridge.adoptWine(RID, USER);
+    expect(WineDefinition.mock.calls[0][0]).toMatchObject({ image: null });
+  });
+
   test('a wine this install already holds is returned as is, without a fetch', async () => {
     const held = { _id: 'local9', registryId: RID };
     WineDefinition.findOne.mockReturnValueOnce(lookup(held));

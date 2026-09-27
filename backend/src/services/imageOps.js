@@ -26,6 +26,20 @@ const { stripHtml } = require('../utils/sanitize');
 
 const MAX_IMAGES_PER_BOTTLE = 20;
 const EXT_FOR = { jpeg: 'jpg', png: 'png', webp: 'webp' };
+const INLINE_IMAGE = /^data:image\/(?:png|jpe?g|webp|gif);base64,([A-Za-z0-9+/=]+)$/;
+
+/**
+ * The bytes of an inline `data:image/…;base64,` reference (a photo attached to
+ * a wine request, or a wine picture stored inline before pictures became
+ * files), or null for anything else. Not validated here: they go through
+ * ingestBottleImage like any upload.
+ */
+function decodeInlineImage(value) {
+  const m = typeof value === 'string' ? value.match(INLINE_IMAGE) : null;
+  if (!m) return null;
+  const buffer = Buffer.from(m[1], 'base64');
+  return buffer.length ? buffer : null;
+}
 
 /**
  * Image credits (attribution on wine-library photos) are ADMIN-only, on every
@@ -232,4 +246,4 @@ async function persistLabelScan({ buffer, userId, side = 'front' }) {
   }
 }
 
-module.exports = { ingestBottleImage, attachOfficialWineImage, persistLabelScan, MAX_IMAGES_PER_BOTTLE };
+module.exports = { ingestBottleImage, attachOfficialWineImage, persistLabelScan, decodeInlineImage, MAX_IMAGES_PER_BOTTLE };

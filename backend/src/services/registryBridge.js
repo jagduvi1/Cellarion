@@ -187,6 +187,11 @@ async function resolveTaxonomy(w, userId) {
   return { country, region, grapes };
 }
 
+// A picture from the registry is a URL into the hosted site, never bytes: an
+// inline data: image, or anything else that is not an http(s) link, is left
+// out (a wine record never stores its picture inline).
+const remoteImage = (v) => (typeof v === 'string' && /^https?:\/\//i.test(v) ? v : null);
+
 function identityFields(w, tax) {
   return {
     name: w.name,
@@ -203,8 +208,8 @@ function identityFields(w, tax) {
     region: tax.region ? tax.region._id : null,
     grapes: tax.grapes,
     // A URL into the hosted site, never bytes; the card renderer accepts it.
-    image: w.image || null,
-    imageCredit: w.imageCredit || null,
+    image: remoteImage(w.image),
+    imageCredit: remoteImage(w.image) ? (w.imageCredit || null) : null,
     lwin: w.lwin || null,
   };
 }
@@ -298,7 +303,7 @@ async function adoptWine(registryId, userId) {
   if (wine) {
     wine.registryId = String(w.id);
     wine.registrySyncedAt = now;
-    if (!wine.image && w.image) { wine.image = w.image; wine.imageCredit = w.imageCredit || null; }
+    if (!wine.image && remoteImage(w.image)) { wine.image = remoteImage(w.image); wine.imageCredit = w.imageCredit || null; }
     const locallyCurated = wine.aiProfile && wine.aiProfile.source === 'curator' && wine.aiProfile.description;
     if (profile && !locallyCurated) wine.aiProfile = profile;
     await wine.save();
@@ -371,8 +376,8 @@ async function applyRegistryUpdate(local, w) {
     // Same as adopt: a colour the registry states is stored as stated.
     if (Object.prototype.hasOwnProperty.call(fields, 'colour')) stateColour(wine, fields.colour);
     wine.normalizedKey = generateWineKey(w.name, w.producer || '', w.appellation || '');
-  } else if (!wine.image && w.image) {
-    wine.image = w.image; wine.imageCredit = w.imageCredit || null;
+  } else if (!wine.image && remoteImage(w.image)) {
+    wine.image = remoteImage(w.image); wine.imageCredit = w.imageCredit || null;
   }
   if (profile && !curatedHere) wine.aiProfile = profile;
   // The stamp is taken HERE, immediately before the save, and reused for the

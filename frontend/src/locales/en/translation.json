@@ -1688,6 +1688,7 @@
       "selectAppellation": "Select appellation",
       "grapesLabel": "Grapes",
       "imageUrlLabel": "Image URL",
+      "useRequestPhoto": "Use the photo from the request as the wine's picture",
       "adminNotesLabel": "Admin Notes",
       "dupTitle": "Possible duplicates found",
       "dupHint": "Link the request to one of these instead — or create anyway if it is genuinely different.",
