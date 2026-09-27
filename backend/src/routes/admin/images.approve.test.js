@@ -20,7 +20,7 @@ jest.mock('../../models/BottleImage', () => ({
   updateOne: jest.fn(),
 }));
 jest.mock('../../models/WineDefinition', () => ({ findById: jest.fn(), findByIdAndUpdate: jest.fn() }));
-jest.mock('../../models/Bottle', () => ({}));
+jest.mock('../../models/Bottle', () => ({ findById: jest.fn() }));
 jest.mock('../../services/search', () => ({ indexWine: jest.fn() }));
 jest.mock('../../services/imageProcessor', () => {
   const actual = jest.requireActual('../../services/imageProcessor');
@@ -50,9 +50,14 @@ const http = require('http');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const BottleImage = require('../../models/BottleImage');
+const Bottle = require('../../models/Bottle');
+const WineDefinition = require('../../models/WineDefinition');
 const imagesRouter = require('./images');
 
 const IMAGE_ID = '64b0000000000000000000e1';
+const BOTTLE_ID = '64b0000000000000000000b1';
+const WINE_ID = '64b0000000000000000000f1';
+const OTHER_WINE_ID = '64b0000000000000000000f2';
 const ORIG = '/api/uploads/originals/abc.jpg';
 const PROC = '/api/uploads/processed/abc.png';
 
@@ -63,12 +68,17 @@ function buildApp() {
   return app;
 }
 
-function put(app, url) {
+function put(app, url, body) {
   const token = jwt.sign({ id: '64b000000000000000000001', roles: ['admin'] }, 'test-secret', { expiresIn: '1h' });
+  const payload = body === undefined ? null : JSON.stringify(body);
   return new Promise((resolve) => {
     const server = http.createServer(app);
     server.listen(0, () => {
-      const req = http.request({ port: server.address().port, path: url, method: 'PUT', headers: { authorization: `Bearer ${token}` } }, (res) => {
+      const headers = {
+        authorization: `Bearer ${token}`,
+        ...(payload ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload) } : {}),
+      };
+      const req = http.request({ port: server.address().port, path: url, method: 'PUT', headers }, (res) => {
         const chunks = [];
         res.on('data', c => chunks.push(c));
         res.on('end', () => {
@@ -78,7 +88,7 @@ function put(app, url) {
         });
       });
       req.on('error', () => { server.close(); resolve({ status: 0 }); });
-      req.end();
+      req.end(payload || undefined);
     });
   });
 }
@@ -137,5 +147,85 @@ describe('PUT /api/admin/images/:id/approve and the original file', () => {
     const { status } = await put(buildApp(), `/api/admin/images/${IMAGE_ID}/approve`);
     expect(status).toBe(400);
     expect(fs.promises.unlink).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A photo uploaded on a bottle carries no wine of its own — the bottle does.
+ * Publishing it must make it a photo of the wine (every owner of the wine sees
+ * it, it can be the wine's picture); until 2026-09-27 the wine reference stayed
+ * empty, so a published bottle photo never left its bottle.
+ */
+describe('a published bottle photo belongs to the wine', () => {
+  const bottleWithWine = () => Bottle.findById.mockReturnValue({
+    select: () => ({ lean: () => Promise.resolve({ _id: BOTTLE_ID, wineDefinition: WINE_ID }) }),
+  });
+
+  test('approved public, it is linked to its bottle\'s wine — and, the wine having no picture, becomes the registry image', async () => {
+    const image = makeImage({ bottle: BOTTLE_ID, processedUrl: PROC, originalUrl: null });
+    BottleImage.findById.mockResolvedValue(image);
+    bottleWithWine();
+    WineDefinition.findById.mockResolvedValue({ _id: WINE_ID, name: 'Wolfie', producer: 'Piggs Peake', image: null });
+    WineDefinition.findByIdAndUpdate.mockResolvedValue({});
+
+    const { status } = await put(buildApp(), `/api/admin/images/${IMAGE_ID}/approve`, { visibility: 'public' });
+
+    expect(status).toBe(200);
+    expect(Bottle.findById).toHaveBeenCalledWith(BOTTLE_ID);
+    expect(image.wineDefinition).toBe(WINE_ID);
+    expect(image.assignedToWine).toBe(true);
+    expect(WineDefinition.findByIdAndUpdate).toHaveBeenCalledWith(WINE_ID, { image: PROC, imageCredit: null });
+  });
+
+  test('approved public when the wine already has a picture: linked to the wine, not made its picture', async () => {
+    const image = makeImage({ bottle: BOTTLE_ID, processedUrl: PROC, originalUrl: null });
+    BottleImage.findById.mockResolvedValue(image);
+    bottleWithWine();
+    WineDefinition.findById.mockResolvedValue({ _id: WINE_ID, name: 'Wolfie', producer: 'Piggs Peake', image: '/api/uploads/processed/other.webp' });
+
+    const { status } = await put(buildApp(), `/api/admin/images/${IMAGE_ID}/approve`);
+
+    expect(status).toBe(200);
+    expect(image.wineDefinition).toBe(WINE_ID);
+    expect(image.assignedToWine).toBe(false);
+    expect(WineDefinition.findByIdAndUpdate).not.toHaveBeenCalled();
+  });
+
+  test('approved PRIVATE, it stays the uploader\'s own bottle photo: the wine is not even looked up', async () => {
+    const image = makeImage({ bottle: BOTTLE_ID, processedUrl: PROC, originalUrl: null });
+    BottleImage.findById.mockResolvedValue(image);
+    bottleWithWine();
+
+    const { status } = await put(buildApp(), `/api/admin/images/${IMAGE_ID}/approve`, { visibility: 'private' });
+
+    expect(status).toBe(200);
+    expect(Bottle.findById).not.toHaveBeenCalled();
+    expect(image.wineDefinition).toBeNull();
+    expect(image.assignedToWine).toBe(false);
+  });
+
+  test('a photo that already carries a wine (a wine-level upload) keeps it', async () => {
+    const image = makeImage({ bottle: BOTTLE_ID, wineDefinition: OTHER_WINE_ID, processedUrl: PROC, originalUrl: null });
+    BottleImage.findById.mockResolvedValue(image);
+    bottleWithWine();
+    WineDefinition.findById.mockResolvedValue({ _id: OTHER_WINE_ID, name: 'x', producer: 'y', image: '/api/uploads/processed/o.webp' });
+
+    const { status } = await put(buildApp(), `/api/admin/images/${IMAGE_ID}/approve`, { visibility: 'public' });
+
+    expect(status).toBe(200);
+    expect(Bottle.findById).not.toHaveBeenCalled();
+    expect(image.wineDefinition).toBe(OTHER_WINE_ID);
+  });
+
+  test('an approved-private bottle photo made public later is linked to the wine then', async () => {
+    const image = makeImage({ status: 'approved', visibility: 'private', bottle: BOTTLE_ID, processedUrl: PROC, originalUrl: null });
+    BottleImage.findById.mockResolvedValue(image);
+    bottleWithWine();
+
+    const { status } = await put(buildApp(), `/api/admin/images/${IMAGE_ID}/visibility`, { visibility: 'public' });
+
+    expect(status).toBe(200);
+    expect(image.visibility).toBe('public');
+    expect(image.wineDefinition).toBe(WINE_ID);
   });
 });

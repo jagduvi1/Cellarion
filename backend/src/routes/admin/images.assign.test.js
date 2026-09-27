@@ -22,7 +22,7 @@ jest.mock('../../models/BottleImage', () => ({
   updateMany: jest.fn(),
 }));
 jest.mock('../../models/WineDefinition', () => ({ findByIdAndUpdate: jest.fn() }));
-jest.mock('../../models/Bottle', () => ({}));
+jest.mock('../../models/Bottle', () => ({ findById: jest.fn() }));
 jest.mock('../../services/search', () => ({ indexWine: jest.fn() }));
 jest.mock('../../services/imageProcessor', () => ({
   unlinkImageFiles: jest.fn(),
@@ -36,6 +36,7 @@ const express = require('express');
 const http = require('http');
 const jwt = require('jsonwebtoken');
 const BottleImage = require('../../models/BottleImage');
+const Bottle = require('../../models/Bottle');
 const WineDefinition = require('../../models/WineDefinition');
 const imagesRouter = require('./images');
 
@@ -94,6 +95,40 @@ beforeEach(() => {
   jest.clearAllMocks();
   BottleImage.updateMany.mockResolvedValue({});
   WineDefinition.findByIdAndUpdate.mockResolvedValue({});
+});
+
+// A bottle photo carries no wine of its own — the bottle does (2026-09-27).
+describe('PUT /api/admin/images/:id/assign-to-wine on a bottle photo with no wine of its own', () => {
+  const BOTTLE_ID = '64b0000000000000000000b1';
+
+  test('is assigned to its bottle\'s wine when the body names none', async () => {
+    const image = makeImage({ wineDefinition: null, bottle: BOTTLE_ID });
+    BottleImage.findById.mockResolvedValue(image);
+    Bottle.findById.mockReturnValue({ select: () => ({ lean: () => Promise.resolve({ _id: BOTTLE_ID, wineDefinition: WINE_ID }) }) });
+
+    const { status } = await makeReq(buildApp(), 'PUT', `/api/admin/images/${IMAGE_ID}/assign-to-wine`, {
+      authorization: `Bearer ${adminToken()}`,
+    });
+
+    expect(status).toBe(200);
+    expect(Bottle.findById).toHaveBeenCalledWith(BOTTLE_ID);
+    expect(image.wineDefinition).toBe(WINE_ID);
+    expect(image.assignedToWine).toBe(true);
+    expect(WineDefinition.findByIdAndUpdate).toHaveBeenCalledWith(WINE_ID, { image: '/api/uploads/abc.png', imageCredit: null });
+  });
+
+  test('with neither a wine nor a bottle it is still a 400', async () => {
+    const image = makeImage({ wineDefinition: null, bottle: null });
+    BottleImage.findById.mockResolvedValue(image);
+
+    const { status } = await makeReq(buildApp(), 'PUT', `/api/admin/images/${IMAGE_ID}/assign-to-wine`, {
+      authorization: `Bearer ${adminToken()}`,
+    });
+
+    expect(status).toBe(400);
+    expect(Bottle.findById).not.toHaveBeenCalled();
+    expect(image.assignedToWine).toBe(false);
+  });
 });
 
 describe('PUT /api/admin/images/:id/assign-to-wine visibility (L-7)', () => {

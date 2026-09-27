@@ -106,3 +106,17 @@ describe('the uploader branch', () => {
     expect(body.defaultImageId).toBeNull();
   });
 });
+
+describe('a photo published on another owner\'s bottle of the same wine', () => {
+  test('is listed here too, as not mine — approval links it to the wine (2026-09-27)', async () => {
+    const theirs = { _id: oid('9'), processedUrl: '/api/uploads/processed/theirs.webp', originalUrl: null, status: 'approved', visibility: 'public', assignedToWine: false };
+    BottleImage.find
+      .mockReturnValueOnce(makeQuery([]))                                   // nothing on THIS bottle
+      .mockReturnValueOnce(makeQuery([{ ...theirs, uploadedBy: oid('2') }])); // the wine-level branch
+
+    const res = await get(`/api/images/bottle/${BOTTLE}`, tokenFor(USER, ['user']));
+    const body = await res.json();
+
+    expect(body.images).toEqual([{ ...theirs, mine: false }]);
+  });
+});

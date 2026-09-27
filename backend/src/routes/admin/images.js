@@ -169,6 +169,22 @@ router.get('/by-wine', async (req, res) => {
 // both URLs were set — including a keepBackground row, whose "original" IS the
 // kept file — and left processedUrl pointing at nothing.
 
+// A photo uploaded on a bottle carries no wine of its own — the bottle does.
+// Publishing it (approved + public) makes it a photo OF THE WINE: every owner
+// of that wine sees it in their gallery and can pick it as their bottle's
+// picture, and it can become the wine's registry image. Until 2026-09-27 the
+// approve and visibility routes left the wine reference empty, so a published
+// bottle photo was visible on that one bottle only, never reached the wine,
+// and approving from the queue needed a second "assign to wine" click.
+// Resolves the wine through the bottle when the row has none; a photo that
+// already carries a wine (a wine-level upload) keeps it. Returns the wine id.
+async function linkWineViaBottle(image) {
+  if (image.wineDefinition || !image.bottle) return image.wineDefinition || null;
+  const bottle = await Bottle.findById(image.bottle).select('wineDefinition').lean();
+  if (bottle && bottle.wineDefinition) image.wineDefinition = bottle.wineDefinition;
+  return image.wineDefinition || null;
+}
+
 // PUT /api/admin/images/:id/approve
 // Body: { visibility: 'private' | 'public' } — defaults to 'public'
 router.put('/:id/approve', async (req, res) => {
@@ -203,6 +219,9 @@ router.put('/:id/approve', async (req, res) => {
     // the needs-a-look flag, but keep the reports themselves so a photo raised
     // repeatedly still shows its history (ticket 6a865f60).
     image.reportedAt = null;
+    // Published: the photo belongs to the wine from here on (linkWineViaBottle).
+    // A private approval stays the uploader's own bottle photo.
+    if (visibility === 'public') await linkWineViaBottle(image);
     await discardOriginal(image);
     await image.save();
 
@@ -218,6 +237,7 @@ router.put('/:id/approve', async (req, res) => {
 
     // Resolve the wine for the notification label regardless of visibility —
     // private approvals should still name the wine (the reject path does).
+    // For a published bottle photo this is the wine linked above.
     const wineDefId = image.wineDefinition;
     const approvedWine = wineDefId ? await WineDefinition.findById(wineDefId) : null;
 
@@ -509,6 +529,8 @@ router.put('/:id/assign-to-wine', async (req, res) => {
       }
       wineDefId = req.body.wineDefinitionId;
     }
+    // A bottle photo carries no wine of its own — the bottle does.
+    if (!wineDefId) wineDefId = await linkWineViaBottle(image);
     if (!wineDefId) {
       return res.status(400).json({ error: 'No wine definition to assign to' });
     }
@@ -638,6 +660,9 @@ router.put('/:id/visibility', async (req, res) => {
     if (!['private', 'public'].includes(visibility)) {
       return res.status(400).json({ error: 'visibility must be "private" or "public"' });
     }
+
+    // Made public: the photo belongs to the wine from here on (linkWineViaBottle).
+    if (visibility === 'public') await linkWineViaBottle(image);
 
     // If changing to private, unassign from wine
     if (visibility === 'private' && image.assignedToWine && image.wineDefinition) {
