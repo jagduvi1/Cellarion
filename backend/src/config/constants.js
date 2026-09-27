@@ -39,6 +39,25 @@ const WINE_POPULATE_LIST = [
   { path: 'pendingWineRequest', select: 'wineName producer' }
 ];
 
+// The same, with each country, region and grape cut to what a bottle card and
+// the cellar page's filters show: the name (the filters use the id); slug and
+// code kept for links and flags, colour for grape dots. The full rows carry
+// long descriptions, copied onto every bottle — most of a big grouped cellar
+// page (scaling audit 2026-09-25, item 11). The cellar page and the offline
+// copy use it: the offline screens render the very same components from it.
+const WINE_POPULATE_CARDS = [
+  {
+    path: 'wineDefinition',
+    select: WINE_LIST_SELECT,
+    populate: [
+      { path: 'country', select: 'name slug code' },
+      { path: 'region', select: 'name slug country' },
+      { path: 'grapes', select: 'name slug color' },
+    ],
+  },
+  { path: 'pendingWineRequest', select: 'wineName producer' },
+];
+
 // ─── Import thresholds ───────────────────────────────────────────────────────
 
 // Composite similarity score at or above which a match is considered exact
@@ -114,6 +133,7 @@ module.exports = {
   MS_PER_DAY,
   WINE_POPULATE,
   WINE_POPULATE_LIST,
+  WINE_POPULATE_CARDS,
   WINE_LIST_SELECT,
   IMPORT_EXACT_THRESHOLD,
   IMPORT_FUZZY_THRESHOLD,

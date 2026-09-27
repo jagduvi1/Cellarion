@@ -1358,12 +1358,15 @@ router.delete('/:id', requireBottleAccess('editor'), async (req, res) => {
       { bottle: bottle._id, assignedToWine: true },
       { $set: { bottle: null } }
     );
+    await bottle.deleteOne();
+
+    // After the delete, as every other writer audits: the audit moves the
+    // data version, and a search reading the new version before the bottle
+    // is gone would keep it for its whole cache window.
     logAudit(req, 'bottle.delete',
       { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
       {}
     );
-
-    await bottle.deleteOne();
 
     // Only when THIS was the last bottle waiting on the request — see the
     // same guard in services/bottleOps.removeBottleCascade for the full

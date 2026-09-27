@@ -2,6 +2,7 @@ const express = require('express');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
+const WineDefinition = require('../models/WineDefinition');
 const Rack = require('../models/Rack');
 const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
@@ -22,10 +23,19 @@ const { isReserved } = require('../utils/reservationUtils');
 const {
   normalizeTaxonomyQuery, parseExtraBottleFilters, applyExtraBottleFilters, groupIdenticalBottles,
 } = require('../utils/bottleListFilters');
-const { CONSUMED_STATUSES, WINE_POPULATE_LIST } = require('../config/constants');
+const { CONSUMED_STATUSES, WINE_POPULATE_LIST, WINE_POPULATE_CARDS } = require('../config/constants');
 const mongoose = require('mongoose');
 const { parsePagination } = require('../utils/pagination');
 const bottleSearch = require('../services/bottleSearch');
+const { getDataVersion } = require('../services/dataVersion');
+
+// The data version of a search scope's owners (services/dataVersion): the
+// search keeps the scope's documents while it holds (services/bottleSearch),
+// so typing and paging through one search load the cellar once.
+const scopeVersion = (ownerIds) => [...new Set(ownerIds.map((id) => String(id && id._id ? id._id : id)))]
+  .sort()
+  .map((id) => `${id}:${getDataVersion(id)}`)
+  .join(',');
 const { isValidId, coerceStringQuery } = require('../utils/validation');
 
 const router = express.Router();
@@ -57,7 +67,7 @@ function groupPartExpr(field, fallback) {
  *
  * Aggregation pipelines bypass Mongoose casting, so ids are cast explicitly.
  */
-async function loadGroupedBottlePage({ cellarId, excludeSet, onlyIds = null, sortField, sortDir, skip, limit }) {
+async function loadGroupedBottlePage({ cellarId, excludeSet, onlyIds = null, sortField, sortDir, skip, limit, populate = WINE_POPULATE_LIST }) {
   const { ObjectId } = mongoose.Types;
   const match = {
     cellar: new ObjectId(String(cellarId)),
@@ -108,7 +118,7 @@ async function loadGroupedBottlePage({ cellarId, excludeSet, onlyIds = null, sor
 
   const memberIds = pageGroups.flatMap(g => g.memberIds);
   const docs = await Bottle.find({ _id: { $in: memberIds } })
-    .populate(WINE_POPULATE_LIST)
+    .populate(populate)
     .lean();
   const byId = new Map(docs.map(d => [d._id.toString(), d]));
 
@@ -142,9 +152,9 @@ async function loadGroupedBottlePage({ cellarId, excludeSet, onlyIds = null, sor
 // caller tags each bottle with which cellar it lives in.
 
 // Populate bottles by id, in the given (ranked) order.
-async function loadBottlesInOrder(ids) {
+async function loadBottlesInOrder(ids, populate = WINE_POPULATE_LIST) {
   if (ids.length === 0) return [];
-  const docs = await Bottle.find({ _id: { $in: ids } }).populate(WINE_POPULATE_LIST).lean();
+  const docs = await Bottle.find({ _id: { $in: ids } }).populate(populate).lean();
   const order = new Map(ids.map((id, i) => [String(id), i]));
   return docs.sort((a, b) => order.get(a._id.toString()) - order.get(b._id.toString()));
 }
@@ -245,7 +255,7 @@ async function resolveAccessibleCellars(userId) {
 const MATURITY_RANK_MULTI = { declining: 0, late: 1, peak: 2, early: 3, 'not-ready': 4 };
 
 // `history` (historyPaging's answer) pages a history instead of `paginate`.
-async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginate = true, history = null }) {
+async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginate = true, history = null, version }) {
   // Coerce every query param to a string up front: Express turns repeated
   // (?sort=a&sort=b) or bracketed (?search[$gt]=x) params into arrays/objects,
   // which would blow up sort.startsWith / search.toLowerCase with a 500.
@@ -311,7 +321,17 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
       sort,
       limit: 10000,
       offset: 0,
+      version,
     });
+    // The search has ranked and sorted every hit. With nothing left to filter
+    // or re-sort in memory, load only the page instead of every hit.
+    const pageOnly = paginate && statusFilter !== 'consumed'
+      && !minRating && !maxRating && !maturityFilter && !extraFilters
+      && sortField !== 'name' && sortField !== 'maturity';
+    if (pageOnly) {
+      const items = await loadBottlesInOrder(found.ids.slice(skip, skip + limit));
+      return { items, total: found.ids.length, limit, skip, maturityStatusMap: null, found };
+    }
   }
 
   // ── HISTORY PAGE: as the single-cellar history pages — every match's order
@@ -584,7 +604,10 @@ router.get('/multi/bottles', async (req, res) => {
     // listed sequentially"). Paginates over groups, so it takes the whole
     // filtered set (the query's own 10k cap still bounds it).
     const grouped = req.query.group === '1' || req.query.group === 'true';
-    const result = await queryBottlesAcrossCellars(req, { cellarIds, statusFilter: 'active', paginate: !grouped });
+    const result = await queryBottlesAcrossCellars(req, {
+      cellarIds, statusFilter: 'active', paginate: !grouped,
+      version: scopeVersion(cellarIds.map(id => accessibleMap.get(id).user)),
+    });
     const { limit, skip, maturityStatusMap, found } = result;
     let { total } = result;
     let items = result.items;
@@ -651,6 +674,7 @@ router.get('/multi/history', async (req, res) => {
     const history = historyPaging(req.query);
     const { items, found, total, reasonCounts, remaining } = await queryBottlesAcrossCellars(req, {
       cellarIds, statusFilter: 'consumed', paginate: false, history,
+      version: scopeVersion(cellarIds.map(id => accessibleMap.get(id).user)),
     });
     const { facets, baseFacets, facetMeta } = history && history.continuing
       ? {}
@@ -689,22 +713,48 @@ router.get('/:id/statistics', async (req, res) => {
       return res.status(404).json({ error: 'Cellar not found' });
     }
 
-    // Only count active bottles in statistics. This handler reads only scalar
-    // bottle fields plus wineDefinition.type and wineDefinition.country.name, so
-    // populate just those — the full WINE_POPULATE_LIST also joins region + the
-    // grapes array (never read here), pure waste on large cellars. Capped at 10k
-    // to match the sibling list/history routes.
-    const bottles = await Bottle.find({
-      cellar: req.params.id,
-      status: { $nin: CONSUMED_STATUSES }
-    })
-      .populate({
-        path: 'wineDefinition',
-        select: 'type country',
-        populate: { path: 'country', select: 'name' },
-      })
-      .limit(10000)
-      .lean();
+    // Only active bottles count. One grouping query instead of loading every
+    // bottle (the cellar page asks on every visit; a 2,800-bottle cellar took
+    // ~100–140 ms): bottles that share wine, vintage, rating and scale, price
+    // currency and price day count the same way in every figure below, so
+    // each group is weighed by its size. A group's price sum converts like
+    // its bottles one by one — the conversion is linear and prices are never
+    // negative — up to how the sums round: MongoDB adds more precisely than
+    // JavaScript, so a total or average that falls on half a cent can round
+    // one cent the other way. Groups come in the order of their first bottle,
+    // so the maps list their keys in a stable order.
+    const priced = { $ne: [{ $ifNull: ['$price', 0] }, 0] };
+    const groups = await Bottle.aggregate([
+      { $match: { cellar: cellar._id, status: { $nin: CONSUMED_STATUSES } } },
+      {
+        $group: {
+          _id: {
+            wine: '$wineDefinition',
+            vintage: '$vintage',
+            rating: '$rating',
+            ratingScale: '$ratingScale',
+            currency: '$currency',
+            // UTC day, as toISOString() gave it; null without a date.
+            priceDay: { $dateToString: { format: '%Y-%m-%d', date: '$priceSetAt' } },
+          },
+          count: { $sum: 1 },
+          priceCount: { $sum: { $cond: [priced, 1, 0] } },
+          priceSum: { $sum: { $cond: [priced, '$price', 0] } },
+          first: { $min: '$_id' },
+        },
+      },
+      { $sort: { first: 1 } },
+    ]).allowDiskUse(true);
+
+    // The wines' type and country name, once per wine. A reference to a wine
+    // that no longer exists resolves to nothing, as a populate did.
+    const wineIds = [...new Set(groups.map(g => g._id.wine).filter(Boolean).map(String))];
+    const wineById = new Map((wineIds.length
+      ? await WineDefinition.find({ _id: { $in: wineIds } })
+        .select('type country')
+        .populate('country', 'name')
+        .lean()
+      : []).map(w => [String(w._id), w]));
 
     // Batch-load historical rate snapshots for all priceSetAt dates (one DB query)
     const targetCurrency = req.query.currency || null;
@@ -712,9 +762,7 @@ router.get('/:id/statistics', async (req, res) => {
     let todaySnapshot = null;
     if (targetCurrency) {
       const priceDates = [...new Set(
-        bottles
-          .filter(b => b.price && b.priceSetAt)
-          .map(b => b.priceSetAt.toISOString().slice(0, 10))
+        groups.filter(g => g.priceCount > 0 && g._id.priceDay).map(g => g._id.priceDay)
       )];
       if (priceDates.length > 0) {
         snapshotMap = await getSnapshotsForDates(priceDates);
@@ -725,11 +773,11 @@ router.get('/:id/statistics', async (req, res) => {
 
     // Calculate statistics
     const stats = {
-      totalBottles: bottles.length,
+      totalBottles: groups.reduce((n, g) => n + g.count, 0),
       // Bottles awaiting a wine request have no wineDefinition — exclude them
       // rather than letting `undefined` count as one extra "unique wine".
       uniqueWines: new Set(
-        bottles.filter(b => b.wineDefinition?._id).map(b => b.wineDefinition._id.toString())
+        groups.filter(g => g._id.wine && wineById.has(String(g._id.wine))).map(g => String(g._id.wine))
       ).size,
       totalValue: 0,
       averagePrice: 0,
@@ -751,47 +799,47 @@ router.get('/:id/statistics', async (req, res) => {
     let oldestYear = Infinity;
     let newestYear = -Infinity;
 
-    bottles.forEach(bottle => {
+    for (const g of groups) {
+      const wine = g._id.wine ? wineById.get(String(g._id.wine)) : null;
+
       // Total value calculation
-      if (bottle.price) {
-        const currency = bottle.currency || 'USD';
-        stats.totalValue += bottle.price;
-        priceSum += bottle.price;
-        priceCount++;
+      if (g.priceCount > 0) {
+        const currency = g._id.currency || 'USD';
+        stats.totalValue += g.priceSum;
+        priceSum += g.priceSum;
+        priceCount += g.priceCount;
 
         // Currency-converted total: bottles already in the target currency are
         // used as-is; others are converted using the historical rate from the
         // day the price was entered, falling back to today's rates.
         if (targetCurrency) {
           if (currency === targetCurrency) {
-            convertedSum += bottle.price;
-            convertedCount++;
+            convertedSum += g.priceSum;
+            convertedCount += g.priceCount;
           } else {
-            const dateKey = bottle.priceSetAt
-              ? bottle.priceSetAt.toISOString().slice(0, 10)
-              : null;
+            const dateKey = g._id.priceDay || null;
             const rates = (dateKey && snapshotMap.get(dateKey))
               || (todaySnapshot ? todaySnapshot.rates : null);
-            const converted = convertCurrency(bottle.price, currency, targetCurrency, rates);
+            const converted = convertCurrency(g.priceSum, currency, targetCurrency, rates);
             if (converted !== null) {
               convertedSum += converted;
-              convertedCount++;
+              convertedCount += g.priceCount;
             }
           }
         }
       }
 
       // By country
-      const countryName = bottle.wineDefinition?.country?.name || 'Unknown';
-      stats.byCountry[countryName] = (stats.byCountry[countryName] || 0) + 1;
+      const countryName = wine?.country?.name || 'Unknown';
+      stats.byCountry[countryName] = (stats.byCountry[countryName] || 0) + g.count;
 
       // By type
-      const type = bottle.wineDefinition?.type || 'Unknown';
-      stats.byType[type] = (stats.byType[type] || 0) + 1;
+      const type = wine?.type || 'Unknown';
+      stats.byType[type] = (stats.byType[type] || 0) + g.count;
 
       // By vintage
-      const vintage = bottle.vintage || 'NV';
-      stats.byVintage[vintage] = (stats.byVintage[vintage] || 0) + 1;
+      const vintage = g._id.vintage || 'NV';
+      stats.byVintage[vintage] = (stats.byVintage[vintage] || 0) + g.count;
 
       // Track oldest/newest vintage
       if (vintage !== 'NV') {
@@ -803,12 +851,12 @@ router.get('/:id/statistics', async (req, res) => {
       }
 
       // By rating — normalize to 0-100 and bucket into 5 bands
-      if (bottle.rating) {
-        const norm = toNormalized(bottle.rating, bottle.ratingScale || '5');
+      if (g._id.rating) {
+        const norm = toNormalized(g._id.rating, g._id.ratingScale || '5');
         const band = norm <= 20 ? '0-20' : norm <= 40 ? '21-40' : norm <= 60 ? '41-60' : norm <= 80 ? '61-80' : '81-100';
-        stats.byRating[band] = (stats.byRating[band] || 0) + 1;
+        stats.byRating[band] = (stats.byRating[band] || 0) + g.count;
       }
-    });
+    }
 
     stats.averagePrice = priceCount > 0 ? priceSum / priceCount : 0;
     stats.convertedTotal = convertedSum;
@@ -868,6 +916,7 @@ router.get('/:id/history', async (req, res) => {
         vintage,
         limit: 10000,
         offset: 0,
+        version: scopeVersion([cellar.user]),
       });
     }
     if (paging) {
@@ -1052,12 +1101,23 @@ router.get('/:id', async (req, res) => {
     if (groupedInDb) {
       ({ groupsForPage, bottles, totalCount } = await loadGroupedBottlePage({
         cellarId: req.params.id, excludeSet, onlyIds, sortField, sortDir, skip, limit,
+        populate: WINE_POPULATE_CARDS,
       }));
       canPaginateInDb = false;
     }
 
+    // Set when the page is already cut out (and totalCount known), so the
+    // shared grouping / pagination below leaves it as it is.
+    let pageReady = false;
+
     if (!groupedInDb && hasSearchFilters) {
       // ── SEARCH PATH: services/bottleSearch finds and ranks the bottles ──
+      // With nothing to filter or sort in memory afterwards (rating, maturity,
+      // reserved, chart filters), the ranked hits are the final order: page
+      // over them, grouped or not, and load only the page's bottles. Loading
+      // every hit to show 30 cost a big cellar ~4 MB and most of the request.
+      const pageOnly = !minRating && !maxRating && !maturityFilter && !reservedOnly && !extraFilters
+        && sortField !== 'maturity';
       found = await bottleSearch.searchBottles(search || '', {
         cellarId: req.params.id,
         type,
@@ -1068,13 +1128,41 @@ router.get('/:id', async (req, res) => {
         vintage,
         sort,
         limit: 10000,  // Every match — we paginate after the in-memory filters
-        offset: 0
+        offset: 0,
+        withHits: pageOnly,
+        version: scopeVersion([cellar.user]),
       });
 
-      let idsToFetch = found.ids;
-      if (excludeSet.size > 0) idsToFetch = idsToFetch.filter(id => !excludeSet.has(id));
-      if (onlyIds) idsToFetch = idsToFetch.filter(id => onlyIds.has(String(id)));
-      bottles = await loadBottlesInOrder(idsToFetch);
+      if (pageOnly) {
+        let hits = found.hits;
+        if (excludeSet.size > 0) hits = hits.filter(h => !excludeSet.has(h.id));
+        if (onlyIds) hits = hits.filter(h => onlyIds.has(h.id));
+        if (grouped) {
+          // The same grouping as the in-memory path, from the hits' wine /
+          // vintage / size alone: same keys, same order.
+          const allGroups = groupIdenticalBottles(hits.map(h => ({
+            _id: h.id, wineDefinition: h.wineDefinition, vintage: h.vintage, bottleSize: h.bottleSize,
+          })));
+          totalCount = allGroups.length;
+          const pageGroups = allGroups.slice(skip, skip + limit);
+          const docs = await loadBottlesInOrder(pageGroups.flatMap(g => g.bottles.map(b => b._id)), WINE_POPULATE_CARDS);
+          const byId = new Map(docs.map(d => [d._id.toString(), d]));
+          groupsForPage = pageGroups
+            .map(g => ({ key: g.key, bottles: g.bottles.map(b => byId.get(b._id)).filter(Boolean) }))
+            // A bottle deleted between the search and the load leaves no card.
+            .filter(g => g.bottles.length > 0);
+          bottles = groupsForPage.flatMap(g => g.bottles);
+        } else {
+          totalCount = hits.length;
+          bottles = await loadBottlesInOrder(hits.slice(skip, skip + limit).map(h => h.id), WINE_POPULATE_CARDS);
+        }
+        pageReady = true;
+      } else {
+        let idsToFetch = found.ids;
+        if (excludeSet.size > 0) idsToFetch = idsToFetch.filter(id => !excludeSet.has(id));
+        if (onlyIds) idsToFetch = idsToFetch.filter(id => onlyIds.has(String(id)));
+        bottles = await loadBottlesInOrder(idsToFetch, WINE_POPULATE_CARDS);
+      }
       canPaginateInDb = false; // We paginate after in-memory filters below
     }
 
@@ -1098,7 +1186,7 @@ router.get('/:id', async (req, res) => {
       // duplicates, so it disables DB-level pagination.
       canPaginateInDb = !needsInMemoryFilter && !needsInMemorySort && !grouped;
 
-      let query = Bottle.find(filter).populate(WINE_POPULATE_LIST);
+      let query = Bottle.find(filter).populate(WINE_POPULATE_CARDS);
       if (canSortInDb_) query = query.sort({ [sortField]: sortDir });
       if (canPaginateInDb) {
         query = query.skip(skip).limit(limit);
@@ -1199,13 +1287,13 @@ router.get('/:id', async (req, res) => {
     // Group identical bottles (same wine + vintage), or paginate normally.
     // `bottles` is fully filtered + sorted here; grouping preserves that order.
     // (Skipped when the DB-grouped hot path already produced groupsForPage.)
-    if (grouped && !groupsForPage) {
+    if (grouped && !groupsForPage && !pageReady) {
       // Wine + vintage + bottle size, so a magnum and a 750ml stay apart.
       const allGroups = groupIdenticalBottles(bottles);
       totalCount = allGroups.length;                  // total = number of groups
       groupsForPage = allGroups.slice(skip, skip + limit);
       bottles = groupsForPage.flatMap(g => g.bottles); // flatten so image attach below works
-    } else if (!canPaginateInDb && !groupsForPage) {
+    } else if (!canPaginateInDb && !groupsForPage && !pageReady) {
       totalCount = bottles.length;
       bottles = bottles.slice(skip, skip + limit);
     }

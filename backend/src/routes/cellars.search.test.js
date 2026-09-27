@@ -91,8 +91,12 @@ const LIST = [ROWS[B3]];
 
 // One query chain for every Bottle.find shape the routes use. Hydration by id
 // answers in REVERSE, so a test can see the route restore the ranked order.
+// Every hydration by id is recorded (ids asked for, populate used).
+let loads = [];
 function bottleQuery(filter) {
   let rows;
+  const load = filter && filter._id && filter._id.$in ? { ids: filter._id.$in.map(String), populate: null } : null;
+  if (load) loads.push(load);
   if (filter && filter._id && filter._id.$in) {
     rows = filter._id.$in.map((id) => ROWS[String(id)]).filter(Boolean).reverse();
   } else if (filter && filter.user) {
@@ -101,14 +105,17 @@ function bottleQuery(filter) {
     rows = LIST;
   }
   const q = {
-    populate: () => q, sort: () => q, skip: () => q, limit: () => q, select: () => q,
+    populate: (spec) => { if (load) load.populate = spec; return q; }, sort: () => q, skip: () => q, limit: () => q, select: () => q,
     lean: async () => rows.map((r) => ({ ...r })),
   };
   return q;
 }
 
-const FOUND = (ids) => ({
+// hits: what the search returns with withHits (routes page over them). By
+// default every bottle is a wine of its own; pass wines to share one.
+const FOUND = (ids, wines = {}) => ({
   ids,
+  hits: ids.map((id) => ({ id, wineDefinition: wines[id] || null, vintage: '2015', bottleSize: undefined })),
   total: ids.length,
   facetDistribution: { type: { red: ids.length } },
   baseFacetDistribution: { type: { red: 3, white: 1 } },
@@ -122,6 +129,7 @@ const PLAIN_FACETS = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  loads = [];
   const cellar = { _id: CELLAR_ID, name: 'Home', user: { _id: USER_ID, username: 'me' }, members: [], deletedAt: null, userColors: [] };
   Cellar.findById.mockImplementation(() => ({
     populate: () => {
@@ -254,5 +262,82 @@ describe('GET /api/cellars/multi/bottles', () => {
 
     expect(body.facets).toBeNull();
     expect(bottleSearch.bottleFacets).not.toHaveBeenCalled();
+  });
+});
+
+// ── Only the page is loaded (scaling audit 2026-09-25, item 10) ──────────────
+// A search used to load and populate every hit (a big cellar: ~800 bottles,
+// ~4 MB) to show 30. With nothing left to filter in memory, the route pages
+// over the search's hits and loads just the page's bottles.
+
+describe('GET /api/cellars/:id — only the page is loaded', () => {
+  const { WINE_POPULATE_CARDS } = require('../config/constants');
+  const W1 = '64b0000000000000000000f1';
+
+  test('grouped: groups in rank order from the hits; only the page\'s members are loaded, with the card populate', async () => {
+    // B2 and B1 are one wine and vintage (one group), B3 its own.
+    bottleSearch.searchBottles.mockResolvedValue(FOUND([B2, B3, B1], { [B2]: W1, [B1]: W1 }));
+
+    const first = await request(`/api/cellars/${CELLAR_ID}?search=x&group=1&limit=1`);
+    expect(bottleSearch.searchBottles).toHaveBeenCalledWith('x', expect.objectContaining({ withHits: true }));
+    expect(first.body.bottles.total).toBe(2); // groups
+    expect(first.body.bottles.items).toHaveLength(1);
+    expect(first.body.bottles.items[0]).toMatchObject({ key: `${W1}::2015::750ml`, count: 2 });
+    expect(idsOf(first.body.bottles.items[0].bottles)).toEqual([B2, B1]);
+    expect(loads[0].ids).toEqual([B2, B1]); // not B3
+    expect(loads[0].populate).toBe(WINE_POPULATE_CARDS);
+
+    loads = [];
+    const second = await request(`/api/cellars/${CELLAR_ID}?search=x&group=1&limit=1&skip=1`);
+    expect(second.body.bottles.items[0]).toMatchObject({ key: `none:${B3}::2015::750ml`, count: 1 });
+    expect(loads[0].ids).toEqual([B3]);
+  });
+
+  test('flat: only the page\'s ids are loaded, in rank order; total counts every hit', async () => {
+    bottleSearch.searchBottles.mockResolvedValue(FOUND([B2, B3, B1]));
+
+    const { body } = await request(`/api/cellars/${CELLAR_ID}?search=x&limit=2&skip=1`);
+
+    expect(body.bottles.total).toBe(3);
+    expect(idsOf(body.bottles.items)).toEqual([B3, B1]);
+    expect(loads[0].ids).toEqual([B3, B1]);
+  });
+
+  test('a filter applied in memory (rating) still loads every hit first', async () => {
+    bottleSearch.searchBottles.mockResolvedValue(FOUND([B2, B3, B1]));
+
+    await request(`/api/cellars/${CELLAR_ID}?search=x&minRating=4`);
+
+    expect(bottleSearch.searchBottles).toHaveBeenCalledWith('x', expect.objectContaining({ withHits: false }));
+    expect(loads[0].ids).toEqual([B2, B3, B1]);
+  });
+
+  test('bottles excluded by the caller never reach the page', async () => {
+    bottleSearch.searchBottles.mockResolvedValue(FOUND([B2, B3, B1]));
+
+    const { body } = await request(`/api/cellars/${CELLAR_ID}?search=x&exclude=${B3}`);
+
+    expect(idsOf(body.bottles.items)).toEqual([B2, B1]);
+    expect(body.bottles.total).toBe(2);
+  });
+});
+
+describe('GET /api/cellars/multi/bottles — only the page is loaded', () => {
+  test('a search page loads only its own bottles; total counts every hit', async () => {
+    bottleSearch.searchBottles.mockResolvedValue(FOUND([B2, B3, B1]));
+
+    const { body } = await request(`/api/cellars/multi/bottles?cellars=${CELLAR_ID}&search=m&limit=1&skip=1`);
+
+    expect(body.bottles.total).toBe(3);
+    expect(idsOf(body.bottles.items)).toEqual([B3]);
+    expect(loads[0].ids).toEqual([B3]);
+  });
+
+  test('a sort the route applies itself (name) still loads every hit', async () => {
+    bottleSearch.searchBottles.mockResolvedValue(FOUND([B2, B3, B1]));
+
+    await request(`/api/cellars/multi/bottles?cellars=${CELLAR_ID}&search=m&sort=name`);
+
+    expect(loads[0].ids).toEqual([B2, B3, B1]);
   });
 });

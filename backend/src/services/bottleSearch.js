@@ -75,15 +75,25 @@ function toWords(value) {
   return fold(value).match(WORD) || [];
 }
 
+// Folding can turn one character into several words (U+FDFA becomes four).
+// Real text has at most one word per two characters ("a b c"), so a field
+// keeps no more than that: what a kept document weighs stays within what it
+// is charged for by its length (docBytes), and so does what a search
+// allocates while it runs.
+const wordLimit = (length) => Math.max(16, Math.ceil(length / 2));
+
 /** Words with the positions the index gave them. */
 function tokenize(value) {
   const words = [];
   const positions = [];
   if (value === undefined || value === null || value === '') return { words, positions };
-  const text = fold(value);
+  const raw = String(value);
+  const text = fold(raw);
+  const limit = wordLimit(raw.length);
   let end = null;
   let pos = 0;
   for (const m of text.matchAll(WORD)) {
+    if (words.length === limit) break;
     if (end !== null) pos += HARD_SEPARATOR.test(text.slice(end, m.index)) ? 8 : 1;
     words.push(m[0]);
     positions.push(pos);
@@ -525,6 +535,91 @@ async function loadWines(ids) {
   return new Map(wines.map((w) => [String(w._id), w]));
 }
 
+// ── The scope's documents, kept between requests ────────────────────────────
+// Typing a search and scrolling through its hits ask about the same cellar
+// several times a minute, and loading its bottles and wines and splitting
+// every field into words was most of each request (a 2,800-bottle cellar:
+// ~120 ms of ~170). A caller that knows the scope's data version passes it as
+// `version` — routes/cellars: its owners', which every audited bottle, cellar
+// and rack write moves (services/dataVersion), read BEFORE this load — and the
+// built documents are reused while it still matches, for at most DOCS_TTL_MS:
+// changes that bypass the audit (a registry wine renamed) wait that long. One
+// Node process, like the other read caches.
+const DOCS_TTL_MS = 60 * 1000;
+// Kept across scopes up to DOCS_MAX_BYTES, least recently used going first.
+// A document is charged for its text, which is what its split words weigh:
+// measured ~5 KB for a bottle without notes, ~46 KB with the longest notes
+// and location in ordinary words, and up to ~100 KB when they are all short
+// words (an import copies its comment onto every row). The charge — 4 KB plus
+// 16 bytes a character — covers that; 40 MB holds two of the largest cellars.
+const DOC_BYTES_BASE = 4096;
+const DOC_BYTES_PER_CHAR = 16;
+const DEFAULT_DOCS_MAX_BYTES = 40 * 1024 * 1024;
+let DOCS_MAX_BYTES = DEFAULT_DOCS_MAX_BYTES;
+const docsCache = new Map(); // key -> { version, at, docs, wines, bytes }
+let bytesKept = 0;
+
+function docBytes(doc) {
+  let chars = 0;
+  for (const name of FIELDS) chars += doc.values[name].length;
+  return DOC_BYTES_BASE + DOC_BYTES_PER_CHAR * chars;
+}
+
+function forget(key) {
+  const entry = docsCache.get(key);
+  if (!entry) return;
+  docsCache.delete(key);
+  bytesKept -= entry.bytes;
+}
+
+/**
+ * The scope's search documents and wines. Without a `version`: loaded for
+ * this request only — notes and location only when there is text to match.
+ * With one: everything, kept for the next request with the same version.
+ */
+async function loadScope(scope, statusFilter, { withText, version }) {
+  const key = version === undefined ? null : `${statusFilter}|${[...scope].sort().join(',')}`;
+  if (key) {
+    // Expired entries go on every call, so a cellar searched once does not
+    // hold its documents until something else pushes them out.
+    const now = Date.now();
+    for (const [k, e] of docsCache) if (now - e.at >= DOCS_TTL_MS) forget(k);
+    const kept = docsCache.get(key);
+    if (kept && kept.version === version && Date.now() - kept.at < DOCS_TTL_MS) {
+      docsCache.delete(key); // most recently used goes last
+      docsCache.set(key, kept);
+      return kept;
+    }
+  }
+  const full = !!key || withText;
+  const bottles = await Bottle.find({ cellar: { $in: scope }, ...statusMatch(statusFilter) })
+    .select(`_id wineDefinition vintage price rating createdAt bottleSize${full ? ' notes location' : ''}`)
+    .lean();
+  const wines = await loadWines(bottles.map((b) => b.wineDefinition));
+  const docs = bottles.map((b) => {
+    const wine = b.wineDefinition ? wines.get(String(b.wineDefinition)) : null;
+    const doc = buildSearchDoc(b, wine);
+    // What paging and grouping need, per hit (withHits). The wine as a
+    // populate would resolve it: a dangling reference is none.
+    doc.hit = { id: doc.id, wineDefinition: wine ? String(wine._id) : null, vintage: b.vintage, bottleSize: b.bottleSize };
+    return doc;
+  });
+  const entry = { version, at: Date.now(), docs, wines };
+  if (key) {
+    entry.bytes = docs.reduce((sum, doc) => sum + docBytes(doc), 0);
+    if (entry.bytes <= DOCS_MAX_BYTES) {
+      forget(key);
+      docsCache.set(key, entry);
+      bytesKept += entry.bytes;
+      for (const oldest of docsCache.keys()) {
+        if (bytesKept <= DOCS_MAX_BYTES) break;
+        forget(oldest);
+      }
+    }
+  }
+  return entry;
+}
+
 const EMPTY_FACETS = () => countFacets([]);
 
 function emptyResult() {
@@ -558,10 +653,13 @@ function emptyResult() {
  * @param {string} [opts.sort] name | createdAt | vintage | price | rating, '-' for descending
  * @param {number} [opts.limit=30]
  * @param {number} [opts.offset=0]
+ * @param {boolean} [opts.withHits=false] also return `hits`: every hit in rank
+ *   order as { id, wineDefinition, vintage, bottleSize } — enough to group and
+ *   page the hits without loading them (routes/cellars loads only the page)
  * @returns {Promise<{ ids: string[], total: number, facetDistribution: object,
- *   baseFacetDistribution: object, facetMeta: object }>} `ids` is the ranked
- *   page; `total` counts every hit; facetDistribution counts the hits,
- *   baseFacetDistribution the whole scope (what the filter modal lists).
+ *   baseFacetDistribution: object, facetMeta: object, hits?: object[] }>} `ids` is
+ *   the ranked page; `total` counts every hit; facetDistribution counts the
+ *   hits, baseFacetDistribution the whole scope (what the filter modal lists).
  */
 async function searchBottles(query, {
   cellarId,
@@ -576,16 +674,14 @@ async function searchBottles(query, {
   sort,
   limit = 30,
   offset = 0,
+  withHits = false,
+  version,
 } = {}) {
   const scope = scopeOf({ cellarId, cellarIds });
   if (scope.length === 0) return emptyResult();
 
   const parsed = parseQuery(query);
-  const bottles = await Bottle.find({ cellar: { $in: scope }, ...statusMatch(statusFilter) })
-    .select(`_id wineDefinition vintage price rating createdAt${parsed ? ' notes location' : ''}`)
-    .lean();
-  const wines = await loadWines(bottles.map((b) => b.wineDefinition));
-  const docs = bottles.map((b) => buildSearchDoc(b, b.wineDefinition ? wines.get(String(b.wineDefinition)) : null));
+  const { docs, wines } = await loadScope(scope, statusFilter, { withText: !!parsed, version });
 
   const filter = buildFilter({ type, countryId, regionId, appellation, grapeIds, vintage });
   const candidates = filter ? docs.filter((d) => filter(d.facets)) : docs;
@@ -595,7 +691,8 @@ async function searchBottles(query, {
     const memo = new Map();
     hits = [];
     for (const doc of candidates) {
-      doc.fields = FIELDS.map((name) => tokenize(doc.values[name]));
+      // Split into words once per document: kept documents keep them.
+      if (!doc.fields) doc.fields = FIELDS.map((name) => tokenize(doc.values[name]));
       const rank = rankDocument(doc, parsed, memo);
       if (rank) hits.push({ doc, rank });
     }
@@ -615,6 +712,7 @@ async function searchBottles(query, {
     facetDistribution: countFacets(keyed.map((h) => ({ facets: h.doc.facets, count: 1 }))),
     baseFacetDistribution: countFacets(docs.map((d) => ({ facets: d.facets, count: 1 }))),
     facetMeta: facetMetaOf(wines),
+    ...(withHits ? { hits: keyed.map((h) => h.doc.hit) } : {}),
   };
 }
 
@@ -649,6 +747,11 @@ module.exports = {
   // Exported for unit tests.
   _internal: {
     fold, toWords, tokenize, editDistance, matchWord, parseQuery, rankDocument, buildSearchDoc, countFacets,
-    sortKey, parseSort, compareHits, FIELDS,
+    sortKey, parseSort, compareHits, FIELDS, DOCS_TTL_MS,
+    docBytes,
+    forgetAllDocs: () => { docsCache.clear(); bytesKept = 0; },
+    setDocsMaxBytes: (n = DEFAULT_DOCS_MAX_BYTES) => { DOCS_MAX_BYTES = n; },
+    keptScopes: () => docsCache.size,
+    keptBytes: () => bytesKept,
   },
 };

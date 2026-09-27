@@ -292,6 +292,24 @@ describe('results, pages and facets', () => {
     expect(f.vintage).toEqual({ 2010: 1, 2015: 2, 2016: 1, 2019: 1, 2020: 1, NV: 3 });
   });
 
+  // routes/cellars pages over these without loading the hits (ids first).
+  test('withHits: every hit in rank order with what grouping needs; a wine that no longer exists reads as none', async () => {
+    load([...BOTTLES, bottle(210, { _id: oid(199) }, { vintage: '2001', bottleSize: '1500ml' })]);
+    const res = await search('', { sort: 'createdAt', limit: 2, withHits: true });
+    expect(lastSelect).toContain('bottleSize');
+    expect(idsOf(res)).toEqual([201, 202]); // the page, as before
+    expect(res.hits.map((h) => Number(h.id))).toEqual([201, 202, 203, 204, 205, 206, 207, 208, 209, 210]);
+    expect(res.hits[0]).toEqual({ id: oid(201), wineDefinition: MARGAUX._id, vintage: '2015', bottleSize: undefined });
+    expect(res.hits[8]).toMatchObject({ id: oid(209), wineDefinition: null });
+    expect(res.hits[9]).toEqual({ id: oid(210), wineDefinition: null, vintage: '2001', bottleSize: '1500ml' });
+
+    const ranked = await search('margaux', { withHits: true });
+    expect(ranked.hits.map((h) => h.id)).toEqual(ranked.ids);
+
+    const without = await search('', {});
+    expect(without).not.toHaveProperty('hits');
+  });
+
   test('facetMeta maps the names the modal shows to the ids it filters by', async () => {
     const { facetMeta } = await search('');
     expect(facetMeta.countries.Portugal).toBe(PORTUGAL._id);
@@ -336,10 +354,119 @@ describe('text helpers', () => {
     expect(_internal.tokenize('a,b; c. d').positions).toEqual([0, 1, 9, 17]);
   });
 
+  // Review 2026-09-27: U+FDFA folds into four words, so 5,000 of them (a note
+  // at its length limit) became 20,000 words, weighing ~7× what the kept
+  // document is charged for.
+  test('a field keeps at most one word per two characters, as real text has', () => {
+    const dense = 'a b '.repeat(1250); // 5,000 characters, 2,500 words
+    expect(_internal.tokenize(dense).words).toHaveLength(2500);
+    expect(_internal.tokenize('ﷺ').words).toEqual(['صلى', 'الله', 'عليه', 'وسلم']);
+    expect(_internal.tokenize('ﷺ'.repeat(5000)).words).toHaveLength(2500);
+    expect(_internal.tokenize('½ bottle, 1st growth').words).toEqual(['1', '2', 'bottle', '1st', 'growth']);
+  });
+
   test('edit distance counts a swap as one, and measures a prefix for the last word', () => {
     const chars = (s) => Array.from(s);
     expect(_internal.editDistance(chars('chardonany'), chars('chardonnay'), 2, false)).toBe(1);
     expect(_internal.editDistance(chars('margo'), chars('margaux'), 1, true)).toBe(1);
     expect(_internal.editDistance(chars('margo'), chars('margaux'), 1, false)).toBe(2);
+  });
+});
+
+// ── Kept documents (typing and paging load the cellar once) ─────────────────
+// Loading a big cellar's bottles and wines and splitting every field into
+// words was most of each search request. With the scope's data version
+// (routes/cellars passes its owners'), the built documents are kept while it
+// matches, for at most DOCS_TTL_MS.
+
+describe('kept documents', () => {
+  afterEach(() => {
+    _internal.forgetAllDocs();
+    _internal.setDocsMaxBytes();
+    jest.restoreAllMocks();
+  });
+
+  test('with a version: loaded once, then reused while it matches, for text and filters alike', async () => {
+    const first = await search('', { type: 'red', version: 'u1:5' });
+    // Kept documents carry notes and location, so a text search can reuse them.
+    expect(lastSelect).toContain('notes location');
+    const anna = await search('anna', { version: 'u1:5' });
+    const again = await search('margaux', { version: 'u1:5', offset: 1 });
+    expect(Bottle.find).toHaveBeenCalledTimes(1);
+    expect(WineDefinition.find).toHaveBeenCalledTimes(1);
+    expect(first.total).toBe(6);
+    expect(idsOf(anna)).toEqual([209]);
+    expect(again.total).toBe(3);
+  });
+
+  test('a new version, another scope or the other status loads again', async () => {
+    await search('a', { version: 'u1:5' });
+    await search('a', { version: 'u1:6' });
+    await search('a', { version: 'u1:6', cellarId: oid(2) });
+    await search('a', { version: 'u1:6', statusFilter: 'consumed' });
+    expect(Bottle.find).toHaveBeenCalledTimes(4);
+  });
+
+  test('kept at most DOCS_TTL_MS, whatever the version says', async () => {
+    const now = Date.now();
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(now);
+    await search('a', { version: 'u1:5' });
+    clock.mockReturnValue(now + _internal.DOCS_TTL_MS - 1);
+    await search('a', { version: 'u1:5' });
+    expect(Bottle.find).toHaveBeenCalledTimes(1);
+    clock.mockReturnValue(now + _internal.DOCS_TTL_MS);
+    await search('a', { version: 'u1:5' });
+    expect(Bottle.find).toHaveBeenCalledTimes(2);
+    // An expired scope is dropped on the next call, not only when pushed out.
+    clock.mockReturnValue(now + 3 * _internal.DOCS_TTL_MS);
+    await search('a', { version: 'u1:5', cellarId: oid(2) });
+    expect(_internal.keptScopes()).toBe(1);
+  });
+
+  test('without a version nothing is kept, and a filter-only request leaves notes out', async () => {
+    await search('', { type: 'red' });
+    expect(lastSelect).not.toContain('notes');
+    await search('', { type: 'red' });
+    expect(Bottle.find).toHaveBeenCalledTimes(2);
+    expect(_internal.keptScopes()).toBe(0);
+  });
+
+  test('bounded: the least recently used scope goes first; a scope larger than the bound is never kept', async () => {
+    await search('a', { version: 'v', cellarId: oid(10) });
+    const oneScope = _internal.keptBytes();
+    _internal.forgetAllDocs();
+    _internal.setDocsMaxBytes(oneScope * 2); // room for two scopes
+    await search('a', { version: 'v', cellarId: oid(11) });
+    await search('a', { version: 'v', cellarId: oid(12) });
+    await search('a', { version: 'v', cellarId: oid(11) }); // 11 is now the most recent
+    await search('a', { version: 'v', cellarId: oid(13) }); // 12 goes
+    expect(_internal.keptScopes()).toBe(2);
+    Bottle.find.mockClear();
+    await search('a', { version: 'v', cellarId: oid(11) });
+    expect(Bottle.find).not.toHaveBeenCalled();
+    await search('a', { version: 'v', cellarId: oid(12) });
+    expect(Bottle.find).toHaveBeenCalledTimes(1);
+
+    _internal.forgetAllDocs();
+    _internal.setDocsMaxBytes(oneScope - 1);
+    await search('a', { version: 'v' });
+    expect(_internal.keptScopes()).toBe(0);
+  });
+
+  // Review 2026-09-27: the bound counted documents, and a document with the
+  // longest notes weighs up to ~20× an ordinary one — 8,000 of them would
+  // have held several hundred MB.
+  test('a document is charged for its text, so long notes fill the bound sooner', async () => {
+    const plain = _internal.docBytes(_internal.buildSearchDoc(BOTTLES[0], MARGAUX));
+    const long = _internal.docBytes(_internal.buildSearchDoc(
+      { ...BOTTLES[0], notes: 'a b '.repeat(1250), location: 'x'.repeat(500) }, MARGAUX,
+    ));
+    expect(plain).toBeGreaterThan(4 * 1024);
+    expect(plain).toBeLessThan(6 * 1024);
+    expect(long).toBeGreaterThan(90 * 1024);
+
+    load([bottle(301, MARGAUX, { notes: 'a b '.repeat(1250), location: 'x'.repeat(500) })]);
+    await search('a', { version: 'v', cellarId: oid(21) });
+    expect(_internal.keptBytes()).toBe(long);
   });
 });

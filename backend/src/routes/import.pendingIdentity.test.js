@@ -148,8 +148,9 @@ test('the count is reported to the client and folded into the EXISTING import au
   ]);
 
   expect(body.pendingIdentityCount).toBe(1);
+  // cellarId too: it is what moves the owner's caches when an editor imports.
   expect(logAudit).toHaveBeenCalledWith(
-    expect.anything(), 'bottle.import', { type: 'cellar', id: CELLAR_ID },
+    expect.anything(), 'bottle.import', { type: 'cellar', id: CELLAR_ID, cellarId: CELLAR_ID },
     expect.objectContaining({ created: 1, pendingIdentity: 1 }),
   );
 });
