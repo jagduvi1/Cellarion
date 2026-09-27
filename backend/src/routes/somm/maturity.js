@@ -5,6 +5,7 @@ const WineVintageProfile = require('../../models/WineVintageProfile');
 const { isValidId } = require('../../utils/validation');
 const { parsePagination } = require('../../utils/pagination');
 const { logAudit } = require('../../services/audit');
+const { bumpWineOwners } = require('../../services/dataVersion');
 
 const aiConfig = require('../../config/aiConfig');
 const { suggestDrinkWindow } = require('../../services/labelScan');
@@ -166,6 +167,9 @@ router.put('/:id', requireSommOrAdmin, async (req, res) => {
     profile.setAt  = new Date();
 
     await profile.save();
+    // The owners' maturity statistics change with the window: move their data
+    // version so no read cache keeps the old one (audit 2026-09-27 M6).
+    bumpWineOwners([profile.wineDefinition?._id || profile.wineDefinition]);
     await profile.populate([
       {
         path: 'wineDefinition',

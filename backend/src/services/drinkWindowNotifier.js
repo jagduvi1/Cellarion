@@ -27,13 +27,17 @@ const { sendDrinkWindowDigest, EMAIL_VERIFICATION_ENABLED } = require('./mailgun
  * disabled the entire digest. Extracted as a pure, testable predicate so that
  * regression is caught by a unit test rather than only in production.
  *
- * @param {object} user  Lean user doc with preferences.notifications + emailVerified
+ * An objection to all Cellarion email (emailOptOutAt, the one-click
+ * unsubscribe) wins over the per-category opt-in (audit 2026-09-27 M7).
+ *
+ * @param {object} user  Lean user doc with preferences.notifications + emailVerified + emailOptOutAt
  * @param {boolean} emailVerificationEnabled  Whether the email channel is configured
  * @returns {boolean}
  */
 function shouldSendDigestEmail(user, emailVerificationEnabled = EMAIL_VERIFICATION_ENABLED) {
   return Boolean(
     user?.preferences?.notifications?.drinkWindow?.email &&
+    !user?.emailOptOutAt &&
     emailVerificationEnabled &&
     user?.emailVerified
   );
@@ -58,7 +62,7 @@ async function runDrinkWindowCheck() {
       { 'preferences.notifications.drinkWindow.enabled': { $ne: false } },
       { 'preferences.notifications.drinkWindow': { $ne: false } }
     ]
-  }).select('_id email username displayName preferences.notifications emailVerified').lean();
+  }).select('_id email username displayName preferences.notifications emailVerified emailOptOutAt').lean();
 
   let totalNotified = 0;
   let failedUsers = 0;

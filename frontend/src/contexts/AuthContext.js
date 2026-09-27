@@ -2,7 +2,10 @@ import React, { createContext, useState, useContext, useEffect, useRef, useCallb
 import { findLanguage } from '../config/locales';
 import { createApiFetch } from '../utils/apiFetch';
 import { clearApiCaches } from '../serviceWorkerRegistration';
-import { saveOfflineUser, loadOfflineUser, clearOfflineUser, markPendingLogout, hasPendingLogout } from '../utils/offlineMode';
+import {
+  saveOfflineUser, loadOfflineUser, clearOfflineUser, markPendingLogout, hasPendingLogout,
+  adoptOfflineChoice, OFFLINE_MODE_EVENT,
+} from '../utils/offlineMode';
 import { offlineAnswer, markLive, clearOfflineData } from '../utils/offlineSnapshot';
 import { writeKeyFor, queueWrite } from '../utils/offlineQueue';
 
@@ -140,6 +143,10 @@ export const AuthProvider = ({ children }) => {
   // ------------------------------------------------------------------
 
   const applySession = (token, userData) => {
+    // Offline mode is one account's choice: another account signing in on this
+    // device drops it and is asked itself — before anything of theirs could be
+    // stored (the save effect below runs after this render).
+    adoptOfflineChoice(userData?.id || userData?._id);
     storeToken(token);
     setUser(userData);
     setOfflineSession(false); // a session applied from the server is a live one
@@ -368,6 +375,23 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const fetchUserProfile = async (authToken) => {
+    // The session was just refreshed, so a profile request that still fails —
+    // the server can't answer, the signal dropped — is not a dead session.
+    // With a kept profile, carry on offline (as the start would have) instead
+    // of showing the login page; only a real rejection signs out.
+    const stayOffline = () => {
+      if (refreshOutcomeRef.current === 'rejected') return false;
+      const kept = loadOfflineUser();
+      if (!kept) return false;
+      setOfflineSession(true);
+      setUser(kept);
+      return true;
+    };
+    const endSession = () => {
+      if (stayOffline()) return;
+      clearToken();
+      setUser(null);
+    };
     try {
       const getMe = () => fetch('/api/auth/me', {
         headers: { 'Authorization': `Bearer ${authToken}` },
@@ -399,16 +423,13 @@ export const AuthProvider = ({ children }) => {
             return;
           }
         }
-        clearToken();
-        setUser(null);
+        endSession();
       } else {
-        clearToken();
-        setUser(null);
+        endSession();
       }
     } catch (error) {
       console.error('Failed to fetch user profile:', error);
-      clearToken();
-      setUser(null);
+      endSession();
     } finally {
       setLoading(false);
     }
@@ -421,7 +442,15 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     // No-op unless offline mode is on; a non-"remember me" session is not kept.
-    if (user && !offlineSession) saveOfflineUser(user, { persistent: sessionPersistentRef.current });
+    const keep = () => {
+      if (user && !offlineSession) saveOfflineUser(user, { persistent: sessionPersistentRef.current });
+    };
+    keep();
+    // …and again when the switch is turned on mid-session (the prompt's yes,
+    // Settings): the first start without network needs the profile, not only
+    // the cellar copy — without it that start showed the login page.
+    window.addEventListener(OFFLINE_MODE_EVENT, keep);
+    return () => window.removeEventListener(OFFLINE_MODE_EVENT, keep);
   }, [user, offlineSession]);
 
   useEffect(() => {

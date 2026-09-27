@@ -143,6 +143,25 @@ describe('starting the app during a deploy', () => {
     expect(localStorage.getItem('cellarion-offline-user')).not.toBeNull();
   });
 
+  // Audit 2026-09-27 M4: after a successful refresh, a profile request that
+  // still failed after the retries cleared the session — even when the start
+  // had already opened the device copy — and bounced the user to the login page.
+  it('with offline mode: a profile request that keeps failing after the refresh opens the device copy, not the login page', async () => {
+    vi.useFakeTimers();
+    localStorage.setItem('cellarion-offline', 'on');
+    localStorage.setItem('cellarion-offline-user', JSON.stringify({ ...KEPT_USER, _verifiedAt: Date.now() }));
+    const fetchFn = stubFetch({
+      '/api/auth/refresh': answer(200, { token: 'T1', persistent: true }),
+      '/api/auth/me': answer(503),
+    });
+    renderAuth();
+    const total = START_RETRY_DELAYS_MS.reduce((a, b) => a + b, 0);
+    await act(async () => { await vi.advanceTimersByTimeAsync(total + 6000); });
+    expect(callsTo(fetchFn, '/api/auth/me')).toBe(1 + START_RETRY_DELAYS_MS.length); // it did give up on the server
+    expect(screen.getByText('user:anna (offline)')).toBeInTheDocument();
+    expect(localStorage.getItem('cellarion-offline-user')).not.toBeNull();
+  });
+
   it('a profile request the server cannot answer yet is retried with the fresh token', async () => {
     let meCalls = 0;
     stubFetch({

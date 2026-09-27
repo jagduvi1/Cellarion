@@ -508,6 +508,12 @@ async function applyPendingFix(wine, clean, userId) {
     throw err;
   }
 
+  // The bottles' owners see this wine's new identity in their statistics and
+  // bottle lists: move their data version so no read cache keeps the old one
+  // (services/dataVersion; audit 2026-09-27 M6). Lazy so the tests that mock
+  // Bottle without `distinct` are unaffected — the helper never throws.
+  require('./dataVersion').bumpWineOwners([wine._id]);
+
   const promoted = wine.pendingIdentity !== true;
   if (promoted) {
     await runPromotionFollowThrough(wine);

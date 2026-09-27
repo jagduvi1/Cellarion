@@ -23,6 +23,7 @@ const WineCorrectionProposal = require('../../models/WineCorrectionProposal');
 const WineOwnerInquiry = require('../../models/WineOwnerInquiry');
 const { registerTool } = require('../registry');
 const { logAudit } = require('../../services/audit');
+const { bumpWineOwners } = require('../../services/dataVersion');
 const { SUPPORTED_CURRENCIES } = require('../../config/currencies');
 const { isValidId } = require('../../utils/validation');
 const { stripHtml } = require('../../utils/sanitize');
@@ -471,6 +472,9 @@ registerTool({
     profile.setBy = ctx.user.id;
     profile.setAt = new Date();
     await profile.save();
+    // Same as the REST route: the owners' maturity statistics change with the
+    // window — move their data version (audit 2026-09-27 M6).
+    bumpWineOwners([profile.wineDefinition?._id || profile.wineDefinition]);
 
     logAudit(ctx.req, 'somm.maturity.review',
       { type: 'wine', id: profile.wineDefinition?._id || profile.wineDefinition },

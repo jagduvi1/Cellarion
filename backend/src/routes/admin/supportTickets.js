@@ -16,18 +16,21 @@ const REPLY_EMAIL_TIMEOUT_MS = 10000;
 /**
  * Email the answer to the ticket's author too (2026-09-26): the in-app bell
  * alone never reached someone who asked and left. Only to a verified address,
- * and not when they turned support-reply emails off or unsubscribed (a missing
- * setting means on). Best-effort and bounded: a mail outage must never fail
- * or stall the reply itself. Resolves to whether the email went out.
+ * and not when they turned support-reply emails off (a missing setting means
+ * on) or objected to all Cellarion email (emailOptOutAt — an unsubscribe made
+ * before this category existed covers it too; audit 2026-09-27 M7).
+ * Best-effort and bounded: a mail outage must never fail or stall the reply
+ * itself. Resolves to whether the email went out.
  */
 async function emailSupportReply(ticket, replyText) {
   if (!EMAIL_VERIFICATION_ENABLED) return false;
   let timer;
   try {
     const user = await User.findById(ticket.user)
-      .select('email emailVerified username displayName preferences.notifications.supportReply')
+      .select('email emailVerified emailOptOutAt username displayName preferences.notifications.supportReply')
       .lean();
     if (!user || !user.email || !user.emailVerified) return false;
+    if (user.emailOptOutAt) return false;
     if (user.preferences?.notifications?.supportReply?.email === false) return false;
     const timeout = new Promise((_, reject) => {
       timer = setTimeout(() => reject(new Error('timed out')), REPLY_EMAIL_TIMEOUT_MS);

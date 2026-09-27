@@ -1,5 +1,6 @@
 import { render, screen, waitFor, act } from '@testing-library/react';
 import { AuthProvider, useAuth } from './AuthContext';
+import { setOfflineModePreference } from '../utils/offlineMode';
 
 // Offline start (#1355): a refresh that gets NO answer is not a dead session.
 vi.mock('../i18n', () => ({ default: { changeLanguage: vi.fn() }, hasLanguagePreview: () => false }));
@@ -231,4 +232,52 @@ describe('audit fixes', () => {
     renderAuth();
     expect(await screen.findByText('user:anna (offline)', {}, { timeout: 7000 })).toBeInTheDocument();
   }, 10000);
+});
+
+describe('audit 2026-09-27', () => {
+  const signedInOnline = () => stubFetch({
+    '/api/auth/refresh': () => Promise.resolve(json(200, { token: 'T1', persistent: true })),
+    '/api/auth/me': () => Promise.resolve(json(200, { user: SERVER_USER })),
+  });
+
+  // M2: the profile was saved only when the user changed, so the prompt's yes
+  // (or Settings) mid-session stored the cellar copy but never the profile —
+  // and the first start without network showed the login page.
+  it('turning offline mode on mid-session keeps the profile for the next start', async () => {
+    signedInOnline();
+    renderAuth();
+    expect(await screen.findByText('user:anna')).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(localStorage.getItem('cellarion-offline-user')).toBeNull(); // off: nothing stored
+
+    await act(async () => { setOfflineModePreference('on', 'u1'); });
+
+    const kept = JSON.parse(localStorage.getItem('cellarion-offline-user'));
+    expect(kept.username).toBe('anna');
+    expect(kept.email).toBeUndefined();
+  });
+
+  // M3: the choice is one account's. Another account signing in on the device
+  // is asked itself — before anything of theirs is stored.
+  it('another account\'s choice does not carry over: the sign-in drops it and stores nothing', async () => {
+    localStorage.setItem('cellarion-offline', 'on');
+    localStorage.setItem('cellarion-offline-owner', 'someone-else');
+    signedInOnline();
+    renderAuth();
+    expect(await screen.findByText('user:anna')).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(localStorage.getItem('cellarion-offline')).toBeNull();
+    expect(localStorage.getItem('cellarion-offline-owner')).toBeNull();
+    expect(localStorage.getItem('cellarion-offline-user')).toBeNull();
+  });
+
+  it('a choice made before owners were recorded is kept for the account signing in', async () => {
+    localStorage.setItem('cellarion-offline', 'on');
+    signedInOnline();
+    renderAuth();
+    expect(await screen.findByText('user:anna')).toBeInTheDocument();
+    expect(localStorage.getItem('cellarion-offline')).toBe('on');
+    expect(localStorage.getItem('cellarion-offline-owner')).toBe('u1');
+    await waitFor(() => expect(localStorage.getItem('cellarion-offline-user')).not.toBeNull());
+  });
 });

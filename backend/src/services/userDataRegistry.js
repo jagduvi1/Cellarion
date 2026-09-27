@@ -155,6 +155,9 @@ const REGISTRY = [
           preferences: u.preferences,
           profileVisibility: u.profileVisibility,
           emailVerified: u.emailVerified,
+          // When they objected to all Cellarion email (the unsubscribe link) —
+          // processing history, like supporterThankYouSentAt above.
+          emailOptOutAt: u.emailOptOutAt || null,
           gdprConsent: u.gdprConsent,
           createdAt: u.createdAt,
           contribution: u.contribution || { totalScore: 0, categories: {}, tier: 'newcomer', specialty: null },

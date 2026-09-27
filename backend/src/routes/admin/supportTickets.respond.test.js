@@ -97,6 +97,22 @@ test('not emailed when the user turned support-reply emails off', async () => {
   expect(Notification.create).toHaveBeenCalled(); // the bell still gets it
 });
 
+// Audit 2026-09-27 M7: someone who clicked "unsubscribe from all" before this
+// category existed has no supportReply flag stored — the objection itself
+// (emailOptOutAt) must stop the mail. The bell still carries the answer.
+test('not emailed to someone who unsubscribed from all Cellarion email, even with no support-reply flag stored', async () => {
+  let selected;
+  User.findById.mockReturnValue({
+    select: (fields) => { selected = fields; return { lean: async () => author({ emailOptOutAt: new Date('2026-08-01') }) }; },
+  });
+  const res = await respond({ adminResponse: 'Answer', status: 'closed' });
+
+  expect((await res.json()).emailed).toBe(false);
+  expect(sendSupportReplyEmail).not.toHaveBeenCalled();
+  expect(Notification.create).toHaveBeenCalled();
+  expect(selected.split(/\s+/)).toContain('emailOptOutAt'); // the lean read must load it
+});
+
 test('not emailed to an address that was never verified', async () => {
   withAuthor(author({ emailVerified: false }));
   const res = await respond({ adminResponse: 'Answer', status: 'closed' });

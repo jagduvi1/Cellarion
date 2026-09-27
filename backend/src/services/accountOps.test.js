@@ -82,8 +82,25 @@ describe('buildPreferencesUpdate', () => {
       'preferences.notifications.drinkWindow.push': true,
       'preferences.notifications.communityReply.email': true,
       'preferences.notifications.supportReply.email': false,
+      emailOptOutAt: null, // an email turned on withdraws the unsubscribe-all objection
     });
     expect(Object.keys(update).some((k) => k.includes('evil') || k.includes('hacked'))).toBe(false);
+  });
+
+  // Audit 2026-09-27 M7: the one-click unsubscribe records an objection to all
+  // email (User.emailOptOutAt). Turning any email back on in Settings withdraws
+  // it — the per-category switches decide from then on. Turning one off, or
+  // touching push only, never records one: the link is the objection.
+  test('turning an email on clears emailOptOutAt; turning one off or changing push does not touch it', async () => {
+    const on = (await buildPreferencesUpdate(UID, { notifications: { supportReply: { email: true } } })).update;
+    expect(on).toEqual({ 'preferences.notifications.supportReply.email': true, emailOptOutAt: null });
+
+    const off = (await buildPreferencesUpdate(UID, { notifications: { communityReply: { email: false }, drinkWindow: { push: true } } })).update;
+    expect(off).toEqual({
+      'preferences.notifications.communityReply.email': false,
+      'preferences.notifications.drinkWindow.push': true,
+    });
+    expect((await buildPreferencesUpdate(UID, { currency: 'EUR' })).update).not.toHaveProperty('emailOptOutAt');
   });
 
   test('defaultCellarId: null clears, bad id rejected, foreign cellar rejected, owned cellar accepted', async () => {

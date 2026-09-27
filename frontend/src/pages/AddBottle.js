@@ -895,6 +895,11 @@ function AddBottle() {
       // the bottles ARE added, so this is a notice, not a failure, and the
       // normal after-add flow resumes when it is dismissed.
       if (fieldWarnings.length > 0) {
+        // The photos belong to bottles that now exist: link them before the
+        // dialog, not on its Close button — leaving the page any other way
+        // stranded them without a bottle (the orphan rows in the admin queue;
+        // audit 2026-09-27 M1). Idempotent, so finishAdd's call is a no-op.
+        linkUploadedImages();
         setCustomFieldNotice(fieldWarnings);
         return;
       }

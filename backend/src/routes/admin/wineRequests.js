@@ -436,11 +436,15 @@ router.put('/:id/reject', async (req, res) => {
     // the exact condition this detach exists to fix.
     let bottlesDetached = 0;
     if (wineRequest.requestType === 'new_wine') {
+      const pendingOwners = await Bottle.distinct('user', { pendingWineRequest: wineRequest._id });
       const result = await Bottle.updateMany(
         { pendingWineRequest: wineRequest._id },
         { $unset: { pendingWineRequest: '' } }
       );
       bottlesDetached = result.modifiedCount || 0;
+      // Their owners' statistics and bottle lists change with it — the same
+      // bump resolve makes (services/dataVersion; audit 2026-09-27 M6).
+      pendingOwners.forEach(bumpDataVersion);
     }
 
     wineRequest.status = 'rejected';

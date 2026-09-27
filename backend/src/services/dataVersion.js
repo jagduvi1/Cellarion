@@ -14,8 +14,11 @@
  *
  * In memory, like the MCP caches and the event bus: one Node process. A second
  * API process (scaling plan Phase C) moves this to MongoDB with the rest.
- * Changes that bypass logAudit — registry edits, curated drink windows, jobs,
- * scripts — are not seen here; every cache also caps its age.
+ * Changes that bypass logAudit — registry edits, jobs, scripts — are not seen
+ * here; every cache also caps its age. A curator's or admin's write that
+ * changes what a user's statistics say (a wine request resolved or rejected, a
+ * pending wine's identity completed, a drink window reviewed) bumps that
+ * wine's owners explicitly, through bumpWineOwners (audit 2026-09-27 M6).
  */
 
 // One global clock: every bump takes the next tick. A user never bumped reads
@@ -42,4 +45,21 @@ function getDataVersion(userId) {
   return versions.get(String(userId)) ?? floor;
 }
 
-module.exports = { bumpDataVersion, getDataVersion };
+/**
+ * Move the version of every user who owns a bottle of these wines — for a
+ * write to shared wine data that changes what their statistics and bottle
+ * lists say. Never throws: a cache that stays warm a little longer must not
+ * fail the write. The model is required lazily so this module stays free of
+ * models for the callers that only bump.
+ */
+async function bumpWineOwners(wineIds) {
+  const ids = (Array.isArray(wineIds) ? wineIds : [wineIds]).filter(Boolean);
+  if (ids.length === 0) return;
+  try {
+    const Bottle = require('../models/Bottle');
+    const owners = await Bottle.distinct('user', { wineDefinition: { $in: ids } });
+    for (const owner of owners) bumpDataVersion(owner);
+  } catch { /* the caches cap their age; a missed bump is a slower refresh, not an error */ }
+}
+
+module.exports = { bumpDataVersion, getDataVersion, bumpWineOwners };

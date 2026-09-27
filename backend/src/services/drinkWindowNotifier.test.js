@@ -48,6 +48,13 @@ describe('shouldSendDigestEmail', () => {
     expect(shouldSendDigestEmail(user, true)).toBe(false);
   });
 
+  // Audit 2026-09-27 M7: "unsubscribe from all Cellarion email" is an objection
+  // to email as such — it wins over a per-category opt-in left (or set) on.
+  it('returns false when the user objected to all email (emailOptOutAt), even with drinkWindow.email on', () => {
+    expect(shouldSendDigestEmail({ ...verified(true), emailOptOutAt: new Date('2026-08-01') }, true)).toBe(false);
+    expect(shouldSendDigestEmail({ ...verified(true), emailOptOutAt: null }, true)).toBe(true);
+  });
+
   it('is null-safe for missing preferences / user', () => {
     expect(shouldSendDigestEmail(undefined, true)).toBe(false);
     expect(shouldSendDigestEmail({}, true)).toBe(false);

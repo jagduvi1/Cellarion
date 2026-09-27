@@ -373,6 +373,59 @@ describe('text helpers', () => {
   });
 });
 
+// ── Bounds on the work one request can ask for (audit 2026-09-27 H1) ────────
+// The edit distance is quadratic in word length, and a search runs on the one
+// Node process every user shares. Before these bounds, one 4,999-character
+// query word against 50 bottles each carrying a distinct 4,999-character word
+// in its notes cost ~10 s of CPU in a single request.
+describe('long words and long queries', () => {
+  test('a word is read up to 32 characters, in a query and in a bottle alike — so the two still compare equal', () => {
+    const long = 'x'.repeat(4999);
+    expect(_internal.MAX_WORD_CHARS).toBe(32);
+    expect(_internal.toWords(long)).toEqual(['x'.repeat(32)]);
+    expect(_internal.tokenize(`${long} merlot`).words).toEqual(['x'.repeat(32), 'merlot']);
+    const parsed = _internal.parseQuery(long);
+    expect(parsed.words).toEqual(['x'.repeat(32)]);
+    expect(_internal.matchWord(parsed.elements[0], _internal.toWords(long)[0])).toEqual({ typos: 0, exact: true });
+  });
+
+  test('no typo tolerance beyond 24 characters — such words match exactly or as a prefix only', () => {
+    expect(_internal.MAX_TYPO_WORD_CHARS).toBe(24);
+    expect(_internal.typoBudget(24)).toBe(2);
+    expect(_internal.typoBudget(25)).toBe(0);
+    const element = _internal.parseQuery('y'.repeat(25)).elements[0];
+    expect(element.budget).toBe(0);
+    expect(_internal.matchWord(element, 'y'.repeat(25))).toEqual({ typos: 0, exact: true });
+    expect(_internal.matchWord(element, 'y'.repeat(30))).toEqual({ typos: 0, exact: false }); // still being typed
+    expect(_internal.matchWord(element, `${'y'.repeat(24)}z`)).toBeNull();
+    // Up to the bound, typos are read as before.
+    const shorter = _internal.parseQuery('y'.repeat(24)).elements[0];
+    expect(_internal.matchWord(shorter, `${'y'.repeat(23)}z`)).toEqual({ typos: 1, exact: false });
+  });
+
+  test('the query is read up to 200 characters', () => {
+    expect(_internal.MAX_QUERY_CHARS).toBe(200);
+    const parsed = _internal.parseQuery(`${'a'.repeat(198)} merlot`); // 198 + space + 'm' = 200
+    expect(parsed.words).toEqual(['a'.repeat(32), 'm']);
+    expect(parsed.elements.find((e) => e.text === 'm').prefix).toBe(true);
+  });
+
+  test('the case measured before the fix (50 bottles × 4,999-character words) now costs milliseconds', () => {
+    const query = _internal.parseQuery('q'.repeat(4999));
+    const docs = Array.from({ length: 50 }, (_, i) => {
+      const w = wine(600 + i, { name: 'Cuvée', producer: 'P', type: 'red' });
+      const doc = _internal.buildSearchDoc({ _id: oid(700 + i), vintage: '', notes: `k${i}${'q'.repeat(4998)}` }, w);
+      doc.fields = _internal.FIELDS.map((n) => _internal.tokenize(doc.values[n]));
+      return doc;
+    });
+    const started = process.hrtime.bigint();
+    const memo = new Map();
+    for (const doc of docs) _internal.rankDocument(doc, query, memo);
+    const ms = Number(process.hrtime.bigint() - started) / 1e6;
+    expect(ms).toBeLessThan(1000); // was ~10,000 ms
+  });
+});
+
 // ── Kept documents (typing and paging load the cellar once) ─────────────────
 // Loading a big cellar's bottles and wines and splitting every field into
 // words was most of each search request. With the scope's data version

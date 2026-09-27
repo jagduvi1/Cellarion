@@ -258,6 +258,17 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // When the user objected to ALL Cellarion email (the one-click unsubscribe
+  // link in every mail — utils/notifications.js). Every sender honours it on
+  // top of the per-category switches, so a category added after they clicked
+  // (support replies, 2026-09-26) is off for them too — the objection covers
+  // email as such, not the categories that existed that day (audit
+  // 2026-09-27 M7). Cleared when they turn any email back on in Settings
+  // (services/accountOps): from then on the per-category switches decide.
+  emailOptOutAt: {
+    type: Date,
+    default: null
+  },
   emailVerificationTokenHash: {
     type: String,
     default: null

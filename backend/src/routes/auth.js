@@ -1,4 +1,4 @@
-const express = require('express');
+const express = require('express');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
@@ -667,7 +667,13 @@ router.post('/logout', async (req, res) => {
       // simply reconnects.
       if ((user.sessions || []).length === 0 && !user.refreshTokenHash) eventBus.dropUser(user._id);
     }
-    clearRefreshCookie(res);
+    // Clear the cookie only when one was presented. This route needs no token,
+    // so another site can make a browser POST here top-level; SameSite=Lax
+    // keeps the cookie out of that request — but the browser would still honour
+    // a deletion header in the response, signing the user out at their next
+    // refresh (and, read as a rejection, wiping their offline copy). With no
+    // cookie there is nothing to clear (audit 2026-09-27 M5).
+    if (hash) clearRefreshCookie(res);
     res.json({ message: 'Logged out' });
   } catch (error) {
     console.error('Logout error:', error);

@@ -2,6 +2,9 @@ import {
   OFFLINE_MODE_RELEASED,
   needsOfflineChoice,
   isOfflineModeEnabled,
+  setOfflineModePreference,
+  adoptOfflineChoice,
+  offlineChoiceOwner,
   saveOfflineUser,
   loadOfflineUser,
   clearOfflineUser,
@@ -66,6 +69,54 @@ describe('offline mode switch', () => {
     expect(isOfflineModeEnabled()).toBe(true);
     localStorage.setItem('cellarion-offline', 'off');
     expect(isOfflineModeEnabled()).toBe(false);
+  });
+});
+
+// Audit 2026-09-27 M3: the choice used to be the browser's, so on a shared
+// device the next account to sign in was copied to the device without ever
+// being asked — "nothing stored before a yes" held for the first account only.
+describe('one account\'s choice', () => {
+  it('the choice records who made it; the default forgets it', () => {
+    setOfflineModePreference('on', 'u1');
+    expect(localStorage.getItem('cellarion-offline')).toBe('on');
+    expect(offlineChoiceOwner()).toBe('u1');
+    setOfflineModePreference(null);
+    expect(localStorage.getItem('cellarion-offline')).toBeNull();
+    expect(offlineChoiceOwner()).toBeNull();
+  });
+
+  it('the same account signing in keeps it; another account drops it and is asked again', () => {
+    setOfflineModePreference('on', 'u1');
+    expect(adoptOfflineChoice('u1')).toBe(true);
+    expect(isOfflineModeEnabled()).toBe(true);
+
+    expect(adoptOfflineChoice('u2')).toBe(false);
+    expect(isOfflineModeEnabled()).toBe(false);
+    expect(localStorage.getItem('cellarion-offline')).toBeNull();
+    expect(offlineChoiceOwner()).toBeNull();
+  });
+
+  it('"off" is a choice too — another account is asked, not silently kept off', () => {
+    setOfflineModePreference('off', 'u1');
+    expect(adoptOfflineChoice('u2')).toBe(false);
+    expect(localStorage.getItem('cellarion-offline')).toBeNull();
+  });
+
+  it('a choice stored before owners were recorded is taken to be the signing-in account\'s, once', () => {
+    localStorage.setItem('cellarion-offline', 'on');
+    expect(adoptOfflineChoice('u1')).toBe(true);
+    expect(offlineChoiceOwner()).toBe('u1');
+    expect(isOfflineModeEnabled()).toBe(true);
+    expect(adoptOfflineChoice('u2')).toBe(false);
+  });
+
+  it('no choice, or no account id: nothing to adopt, nothing changed', () => {
+    expect(adoptOfflineChoice('u1')).toBe(true);
+    expect(offlineChoiceOwner()).toBeNull();
+    setOfflineModePreference('on', 'u1');
+    expect(adoptOfflineChoice(null)).toBe(true);
+    expect(isOfflineModeEnabled()).toBe(true);
+    expect(offlineChoiceOwner()).toBe('u1');
   });
 });
 

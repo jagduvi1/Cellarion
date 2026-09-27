@@ -44,6 +44,13 @@ const VALID_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified
 const SORT_FIELDS = { name: 'wineName', createdAt: 'createdAt', vintage: 'vintage', price: 'price', rating: 'rating' };
 
 const MAX_QUERY_WORDS = 10;      // Meilisearch read at most ten query words too
+// Bounds on the matching work one request can ask for (audit 2026-09-27 H1):
+// the edit distance is quadratic in word length, and a search runs on the one
+// Node process every user shares. Without these, ten 5,000-character query
+// words against notes carrying 5,000-character words cost seconds of CPU.
+const MAX_QUERY_CHARS = 200;     // the query is read up to here — the MCP tool's cap, far more than anyone types
+const MAX_WORD_CHARS = 32;       // a longer word, in the query or in a bottle, is read up to here
+const MAX_TYPO_WORD_CHARS = 24;  // longer words match exactly or as a prefix only — no typo tolerance
 const NEAR = 3;                  // words further apart than this count as not near
 const FAR = NEAR + 1;            // proximity cost of words not near, or in different fields
 const MAX_OCCURRENCES = 16;      // per query word per bottle — enough to rank, bounded on long notes
@@ -70,9 +77,13 @@ const ENDS_WITH_SEPARATOR = /[^\p{L}\p{N}]$/u;
 // side are never near each other ("Syrah, Merlot" in the grape list).
 const HARD_SEPARATOR = /[,.!?]\s|;/;
 
+// Words are read up to MAX_WORD_CHARS, in a query and in a bottle alike, so
+// the two still compare equal.
+const cut = (word) => (word.length > MAX_WORD_CHARS ? word.slice(0, MAX_WORD_CHARS) : word);
+
 function toWords(value) {
   if (value === undefined || value === null || value === '') return [];
-  return fold(value).match(WORD) || [];
+  return (fold(value).match(WORD) || []).map(cut);
 }
 
 // Folding can turn one character into several words (U+FDFA becomes four).
@@ -95,7 +106,7 @@ function tokenize(value) {
   for (const m of text.matchAll(WORD)) {
     if (words.length === limit) break;
     if (end !== null) pos += HARD_SEPARATOR.test(text.slice(end, m.index)) ? 8 : 1;
-    words.push(m[0]);
+    words.push(cut(m[0]));
     positions.push(pos);
     end = m.index + m[0].length;
   }
@@ -108,7 +119,7 @@ const facetKey = (value) => String(value).trim().normalize('NFKD').toLowerCase()
 
 // ── Matching ────────────────────────────────────────────────────────────────
 
-const typoBudget = (length) => (length >= 9 ? 2 : length >= 5 ? 1 : 0);
+const typoBudget = (length) => (length > MAX_TYPO_WORD_CHARS ? 0 : length >= 9 ? 2 : length >= 5 ? 1 : 0);
 
 /**
  * Optimal-string-alignment distance (swapping two neighbours is one edit)
@@ -165,7 +176,7 @@ function matchWord(element, word) {
  * (it ends with the last word, and the query does not end in a separator).
  */
 function parseQuery(query) {
-  const raw = String(query || '');
+  const raw = Array.from(String(query || '')).slice(0, MAX_QUERY_CHARS).join('');
   const words = toWords(raw).slice(0, MAX_QUERY_WORDS);
   if (words.length === 0) return null;
   const open = !ENDS_WITH_SEPARATOR.test(fold(raw));
@@ -747,7 +758,8 @@ module.exports = {
   // Exported for unit tests.
   _internal: {
     fold, toWords, tokenize, editDistance, matchWord, parseQuery, rankDocument, buildSearchDoc, countFacets,
-    sortKey, parseSort, compareHits, FIELDS, DOCS_TTL_MS,
+    sortKey, parseSort, compareHits, typoBudget, FIELDS, DOCS_TTL_MS,
+    MAX_QUERY_CHARS, MAX_WORD_CHARS, MAX_TYPO_WORD_CHARS,
     docBytes,
     forgetAllDocs: () => { docsCache.clear(); bytesKept = 0; },
     setDocsMaxBytes: (n = DEFAULT_DOCS_MAX_BYTES) => { DOCS_MAX_BYTES = n; },

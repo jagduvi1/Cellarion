@@ -6,7 +6,10 @@
  * say yes (storage on a user's device needs their request: ePrivacy art. 5(3)).
  * The installed app (standalone / the Android TWA) asks once, after sign-in
  * (components/OfflinePrompt); anywhere, Settings → Offline mode switches it
- * (components/OfflineSettings). The choice is stored per browser.
+ * (components/OfflineSettings). The choice is stored per browser, as one
+ * account's: when another account signs in on the device the choice is
+ * dropped, and that account is asked (or switches it on) itself — nothing of
+ * theirs is stored before that (audit 2026-09-27 M3; adoptOfflineChoice).
  *
  * What it switches on (this module is the only switch):
  *  - the service worker keeps the whole app for offline use (public/service-worker.js)
@@ -16,6 +19,7 @@
 export const OFFLINE_MODE_RELEASED = true;
 
 const PREF_KEY = 'cellarion-offline';          // 'on' | 'off' | absent (default)
+const OWNER_KEY = 'cellarion-offline-owner';   // the account id the choice belongs to
 const USER_KEY = 'cellarion-offline-user';
 // The Android app is only recognisable on its first page load (the
 // android-app:// referrer; a reload loses it), so once seen it is remembered.
@@ -50,11 +54,20 @@ export function needsOfflineChoice() {
   return OFFLINE_MODE_RELEASED && pref !== 'on' && pref !== 'off' && isStandaloneApp();
 }
 
-/** 'on' / 'off' for this browser; null returns to the default. */
-export function setOfflineModePreference(value) {
+/**
+ * 'on' / 'off' for this browser, as the choice of `userId` (the signed-in
+ * account making it); null returns to the default.
+ */
+export function setOfflineModePreference(value, userId) {
   try {
-    if (value === 'on' || value === 'off') localStorage.setItem(PREF_KEY, value);
-    else localStorage.removeItem(PREF_KEY);
+    if (value === 'on' || value === 'off') {
+      localStorage.setItem(PREF_KEY, value);
+      if (userId) localStorage.setItem(OWNER_KEY, String(userId));
+      else localStorage.removeItem(OWNER_KEY);
+    } else {
+      localStorage.removeItem(PREF_KEY);
+      localStorage.removeItem(OWNER_KEY);
+    }
   } catch { /* storage blocked — the default applies */ }
   if (!isOfflineModeEnabled()) {
     clearOfflineUser();
@@ -68,6 +81,33 @@ export function setOfflineModePreference(value) {
 
 /** Fired when the switch changes (setOfflineModePreference). */
 export const OFFLINE_MODE_EVENT = 'cellarion-offline-mode';
+
+/** The account id the stored choice belongs to, or null. */
+export function offlineChoiceOwner() {
+  try { return localStorage.getItem(OWNER_KEY); } catch { return null; }
+}
+
+/**
+ * Called when an account signs in (AuthContext.applySession). The stored
+ * choice — on or off — is one account's: another account's sign-in drops it,
+ * so the prompt asks them (or Settings lets them switch it on) and nothing of
+ * theirs is stored before that. A choice stored before owners were recorded
+ * (up to v1.242.0) is taken to be the signing-in account's, once. Returns
+ * whether the choice still stands.
+ */
+export function adoptOfflineChoice(userId) {
+  const id = userId ? String(userId) : '';
+  const pref = readPref();
+  if (!id || (pref !== 'on' && pref !== 'off')) return true;
+  const owner = offlineChoiceOwner();
+  if (owner === id) return true;
+  if (!owner) {
+    try { localStorage.setItem(OWNER_KEY, id); } catch { /* noop */ }
+    return true;
+  }
+  setOfflineModePreference(null);
+  return false;
+}
 
 /**
  * Tell the service worker to keep (or drop) the offline copy of the app.

@@ -1,4 +1,5 @@
 const {
+  CATEGORY_CHANNELS,
   NOTIFICATION_CATEGORIES,
   OUTBOUND_CHANNELS,
   unsubscribeAllNotifications,
@@ -30,6 +31,17 @@ describe('NOTIFICATION_CATEGORIES', () => {
 
   it('treats email and push as the only outbound channels', () => {
     expect(OUTBOUND_CHANNELS).toEqual(['email', 'push']);
+  });
+
+  // The unsubscribe writes every channel a category defines, present in the
+  // stored record or not — so the map must say exactly what the schema says.
+  it('CATEGORY_CHANNELS names exactly the outbound leaves the User schema defines', () => {
+    const User = require('../models/User');
+    for (const [category, channels] of Object.entries(CATEGORY_CHANNELS)) {
+      for (const channel of OUTBOUND_CHANNELS) {
+        expect(!!User.schema.path(`preferences.notifications.${category}.${channel}`)).toBe(channels.includes(channel));
+      }
+    }
   });
 });
 
@@ -97,7 +109,8 @@ describe('unsubscribeAllNotifications', () => {
       communityReply:   { email: false, push: false },
       communityMention: { email: false, push: false },
       communityFollow:  { push: false },
-    });
+      supportReply:     { email: false },
+    }, { emailOptOutAt: new Date('2026-08-01') });
 
     const changed = unsubscribeAllNotifications(user);
 
@@ -146,19 +159,65 @@ describe('unsubscribeAllNotifications', () => {
     expect(unsubscribeAllNotifications(undefined)).toBe(false);
   });
 
-  it('skips categories that are missing entirely (partially-populated user)', () => {
+  // Audit 2026-09-27 M7: a category missing from the stored record used to be
+  // skipped — an account whose settings were saved before support replies
+  // existed kept receiving them after "unsubscribe from all". Every channel
+  // the schema defines is written, and only those (no email on follows).
+  it('writes a category missing from the stored record off, rather than skipping it', () => {
     const user = makeUser({
       drinkWindow: { enabled: true, email: true, push: true },
-      // communityReply, communityMention, communityFollow all absent
+      // communityReply, communityMention, communityFollow, supportReply all absent
     });
 
     const changed = unsubscribeAllNotifications(user);
 
     expect(changed).toBe(true);
-    expect(user.preferences.notifications.drinkWindow.email).toBe(false);
-    expect(user.preferences.notifications.drinkWindow.push).toBe(false);
-    expect(user.markModified).toHaveBeenCalledTimes(1);
-    expect(user.markModified).toHaveBeenCalledWith('preferences.notifications.drinkWindow');
+    expect(user.preferences.notifications).toEqual({
+      drinkWindow:      { enabled: true, email: false, push: false },
+      communityReply:   { email: false, push: false },
+      communityMention: { email: false, push: false },
+      communityFollow:  { push: false },
+      supportReply:     { email: false },
+    });
+    expect(user.markModified).toHaveBeenCalledTimes(5);
+    for (const category of NOTIFICATION_CATEGORIES) {
+      expect(user.markModified).toHaveBeenCalledWith(`preferences.notifications.${category}`);
+    }
+  });
+});
+
+// Audit 2026-09-27 M7: the click is an objection to email as such, not to the
+// categories that existed that day. It is recorded on the account
+// (emailOptOutAt) and every sender honours it on top of the per-category flags.
+describe('the objection itself — emailOptOutAt', () => {
+  const allOff = () => ({
+    drinkWindow:      { enabled: true, email: false, push: false },
+    communityReply:   { email: false, push: false },
+    communityMention: { email: false, push: false },
+    communityFollow:  { push: false },
+    supportReply:     { email: false },
+  });
+
+  it('is stamped with the time of the click', () => {
+    const user = makeUser({ drinkWindow: { enabled: true, email: true, push: true } });
+    const before = Date.now();
+    unsubscribeAllNotifications(user);
+    expect(user.emailOptOutAt).toBeInstanceOf(Date);
+    expect(user.emailOptOutAt.getTime()).toBeGreaterThanOrEqual(before);
+  });
+
+  it('counts as a change on its own — an all-off account without a stamp is saved and audited', () => {
+    const user = makeUser(allOff());
+    expect(unsubscribeAllNotifications(user)).toBe(true);
+    expect(user.emailOptOutAt).toBeInstanceOf(Date);
+    expect(user.markModified).not.toHaveBeenCalled(); // no flag moved
+  });
+
+  it('an earlier stamp is kept — the first objection is the one that counts', () => {
+    const first = new Date('2026-08-01T10:00:00Z');
+    const user = makeUser(allOff(), { emailOptOutAt: first });
+    expect(unsubscribeAllNotifications(user)).toBe(false);
+    expect(user.emailOptOutAt).toBe(first);
   });
 });
 
@@ -190,5 +249,8 @@ describe('support-reply emails and the one-click unsubscribe', () => {
     expect(unsubscribeAllNotifications(user)).toBe(true);
     expect(user.preferences.notifications.supportReply.email).toBe(false);
     expect(user.isModified('preferences.notifications.supportReply')).toBe(true);
+    // …and the objection is recorded on the real document too.
+    expect(user.emailOptOutAt).toBeInstanceOf(Date);
+    expect(user.isModified('emailOptOutAt')).toBe(true);
   });
 });

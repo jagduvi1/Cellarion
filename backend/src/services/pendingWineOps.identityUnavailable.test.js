@@ -26,6 +26,7 @@ jest.mock('./enrichmentJob', () => ({ enrichWineById: jest.fn().mockResolvedValu
 jest.mock('./indexNow', () => ({ submitUrls: jest.fn() }));
 jest.mock('../utils/vintageProfile', () => ({ ensurePendingVintageProfile: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('./findOrCreateWine', () => ({ findOrCreateRegion: jest.fn() }));
+jest.mock('./dataVersion', () => ({ bumpWineOwners: jest.fn() }));
 jest.mock('./wineProfileOps', () => ({
   resolveGrapeIdsStrict: jest.fn(),
   GRAPES_MAX: 20, GRAPE_NAME_MAX: 200,
@@ -109,6 +110,17 @@ describe('applying it', () => {
     expect(searchService.indexWine).not.toHaveBeenCalled();
     expect(reembedActiveVintages).not.toHaveBeenCalled();
     expect(ensurePendingVintageProfile).not.toHaveBeenCalled();
+  });
+
+  // Audit 2026-09-27 M6: every fix changes what the bottles' owners see in
+  // their statistics and bottle lists — promoted or not — so their data
+  // version moves (the read caches otherwise keep the old answer for up to
+  // 30 minutes). Fire-and-forget: the fix never waits on it.
+  test('every applied fix moves the data version of the wine\'s bottle owners', async () => {
+    const { bumpWineOwners } = require('./dataVersion');
+    const wine = pendingWine();
+    await applyPendingFix(wine, { identityUnavailable: true }, CURATOR);
+    expect(bumpWineOwners).toHaveBeenCalledWith(['wine-1']);
   });
 
   test('it keeps its per-creator pending key — the namespace invariant is untouched', async () => {

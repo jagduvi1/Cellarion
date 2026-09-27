@@ -47,7 +47,7 @@ export default function OfflineSettings() {
     try {
       // The app download (service worker) runs in the background; the cellar
       // copy doesn't wait for it.
-      setOfflineModePreference('on');
+      setOfflineModePreference('on', userId);
       setEnabled(true);
       try { await navigator.storage?.persist?.(); } catch { /* best effort */ }
       const ok = await refreshSnapshot(apiFetch, userId);
@@ -63,7 +63,7 @@ export default function OfflineSettings() {
     if (waiting > 0 && !window.confirm(t('offline.logoutConfirm', { count: waiting }))) return;
     setBusy('clearing');
     try {
-      await setOfflineModePreference('off');
+      await setOfflineModePreference('off', userId);
       await clearOfflineData();
       setEnabled(false);
       setMessage(t('offline.settings.cleared', 'Turned off. The offline copy has been deleted from this device.'));

@@ -25,6 +25,7 @@ jest.mock('../../models/Country', () => ({ findById: jest.fn() }));
 jest.mock('../../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn() }));
 jest.mock('../../services/search', () => ({ indexWine: jest.fn() }));
 jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
+jest.mock('../../services/dataVersion', () => ({ bumpDataVersion: jest.fn(), bumpWineOwners: jest.fn() }));
 jest.mock('../../services/notifications', () => ({ createNotification: jest.fn() }));
 jest.mock('../../utils/cellarCred', () => ({ incrementCred: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../../utils/vintageProfile', () => ({ ensurePendingVintageProfile: jest.fn() }));
@@ -35,6 +36,7 @@ const jwt = require('jsonwebtoken');
 const WineRequest = require('../../models/WineRequest');
 const Bottle = require('../../models/Bottle');
 const { logAudit } = require('../../services/audit');
+const { bumpDataVersion } = require('../../services/dataVersion');
 const { createNotification } = require('../../services/notifications');
 const wineRequestsRouter = require('./wineRequests');
 
@@ -66,6 +68,24 @@ beforeEach(() => {
   };
   WineRequest.findById.mockResolvedValue(requestDoc);
   Bottle.updateMany.mockResolvedValue({ modifiedCount: 0 });
+  Bottle.distinct.mockResolvedValue([]);
+});
+
+// Audit 2026-09-27 M6: the detached bottles' owners see different statistics
+// and bottle lists — their data version must move, as it does on resolve, or
+// the read caches keep the old answer for up to 30 minutes.
+test('reject moves the data version of every owner of a detached bottle', async () => {
+  Bottle.distinct.mockResolvedValue(['64b000000000000000000003', '64b000000000000000000004']);
+  Bottle.updateMany.mockResolvedValue({ modifiedCount: 2 });
+
+  const res = await reject();
+
+  expect(res.status).toBe(200);
+  // Owners are read BEFORE the detach — afterwards nothing references the request.
+  expect(Bottle.distinct).toHaveBeenCalledWith('user', { pendingWineRequest: REQUEST_ID });
+  expect(Bottle.distinct.mock.invocationCallOrder[0]).toBeLessThan(Bottle.updateMany.mock.invocationCallOrder[0]);
+  expect(bumpDataVersion).toHaveBeenCalledTimes(2);
+  expect(bumpDataVersion.mock.calls.map((c) => c[0])).toEqual(['64b000000000000000000003', '64b000000000000000000004']);
 });
 
 const reject = (body = { adminNotes: 'Not a real wine' }) =>

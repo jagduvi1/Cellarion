@@ -82,6 +82,13 @@ async function buildPreferencesUpdate(userId, body = {}) {
     if (sr && typeof sr === 'object') {
       if (sr.email !== undefined) setLeaf('supportReply.email', sr.email);
     }
+    // Turning any email back on withdraws the blanket objection the one-click
+    // unsubscribe recorded (User.emailOptOutAt): from here on the per-category
+    // switches decide. Turning one off never sets it — that is a per-category
+    // choice, the unsubscribe link is the objection (audit 2026-09-27 M7).
+    if (Object.entries(update).some(([k, v]) => k.endsWith('.email') && v === true)) {
+      update.emailOptOutAt = null;
+    }
   }
 
   if (currency !== undefined) {

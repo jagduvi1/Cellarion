@@ -30,7 +30,7 @@ export default function OfflinePrompt() {
   const choose = async (on) => {
     setBusy(true);
     try {
-      setOfflineModePreference(on ? 'on' : 'off');
+      setOfflineModePreference(on ? 'on' : 'off', String(user.id || user._id));
       if (on) {
         try { await navigator.storage?.persist?.(); } catch { /* best effort */ }
         refreshSnapshot(apiFetch, String(user.id || user._id)).catch(() => {});

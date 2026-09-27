@@ -619,7 +619,7 @@ describe('POST /api/auth/logout', () => {
     expect(user.refreshTokenExpiresAt).toBeNull();
   });
 
-  test('without a cookie nothing can be identified server-side: sessions untouched, cookie still cleared', async () => {
+  test('without a cookie nothing can be identified server-side: sessions untouched, and no cookie is cleared', async () => {
     const user = makeUserDoc();
     plantRefreshToken(user);
 
@@ -627,7 +627,7 @@ describe('POST /api/auth/logout', () => {
 
     expect(res.status).toBe(200);
     expect(user.sessions).toHaveLength(1);
-    expectClearedCookies(res);
+    expect(refreshCookies(res)).toHaveLength(0);
   });
 
   // Offline mode (#1355): an offline session has no access token. A logout
@@ -658,11 +658,27 @@ describe('POST /api/auth/logout', () => {
     expect(user.sessions).toHaveLength(0);
   });
 
-  test('neither token nor cookie → nothing to end, cookie still cleared', async () => {
+  // Audit 2026-09-27 M5: the route needs no token, so another site can make a
+  // browser POST here top-level. SameSite=Lax keeps the cookie out of that
+  // request — but a deletion header in the response would still be honoured,
+  // signing the victim out at their next refresh (and wiping their offline
+  // copy, since that reads as a rejection). No cookie presented → none cleared.
+  test('neither token nor cookie → nothing to end, and NO cookie deletion is sent (cross-site sign-out)', async () => {
     const user = makeUserDoc();
     plantRefreshToken(user);
 
     const res = await request({ path: '/api/auth/logout' });
+
+    expect(res.status).toBe(200);
+    expect(user.sessions).toHaveLength(1);
+    expect(refreshCookies(res)).toHaveLength(0);
+  });
+
+  test('a cookie that matches no session is still cleared — it was presented by this browser', async () => {
+    const user = makeUserDoc();
+    plantRefreshToken(user);
+
+    const res = await request({ path: '/api/auth/logout', cookie: 'refreshToken=stale-token-of-a-revoked-session' });
 
     expect(res.status).toBe(200);
     expect(user.sessions).toHaveLength(1);
