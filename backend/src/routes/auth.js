@@ -12,7 +12,7 @@ const { revokeOAuthConnectionsForUser } = require('../services/mcpOAuth');
 const { CURRENT_PRIVACY_POLICY_VERSION } = require('../config/legal');
 const rateLimitsConfig = require('../config/rateLimits');
 const { sendVerificationEmail, sendPasswordResetEmail, sendAccountLockoutAlert, EMAIL_VERIFICATION_ENABLED } = require('../services/mailgun');
-const { isAccountLocked, recordLoginFailure, resetLoginAttempts } = require('../utils/loginAttempts');
+const { isAccountLocked, isAccountLockedNow, recordLoginFailure, resetLoginAttempts } = require('../utils/loginAttempts');
 const { rateLimitKey } = require('../utils/clientIp');
 // Token issuance + refresh-cookie handling and pending-share resolution are
 // extracted to services so the password flow (here) and the SSO flow
@@ -263,7 +263,10 @@ router.post('/login', authLimiter, async (req, res) => {
     // to a wrong-password response — same 401, same generic message, same
     // latency (bcrypt already ran above). This deprives a credential-stuffing
     // attacker of any feedback signal about whether they've tripped the lock.
-    if (user && isAccountLocked(user)) {
+    // A correct password is checked against the lock as it stands NOW: guesses
+    // sent at the same moment all loaded the account before any of them locked
+    // it, and one finishing after the lock took effect must not get in.
+    if (user && (isAccountLocked(user) || (isMatch && await isAccountLockedNow(user._id)))) {
       logAudit(req, 'auth.login.locked',
         { type: 'user', id: user._id },
         { username: user.username }
@@ -285,11 +288,15 @@ router.post('/login', authLimiter, async (req, res) => {
     }
 
     if (!isMatch) {
-      // Record failure, check if it crossed the lockout threshold, fire alert
-      // email (deduped) if this is a new lockout event. Non-blocking: any
-      // failure in the email path is logged but doesn't affect the response.
-      const { lockedNow, shouldSendEmail } = recordLoginFailure(user);
-      try { await user.save(); } catch (err) { console.warn('Failed to persist login-failure counter:', err.message); }
+      // Record failure (one atomic update, so simultaneous guesses each
+      // count), check if it crossed the lockout threshold, fire alert email
+      // (deduped) if this is a new lockout event. Non-blocking: any failure in
+      // the counter or email path is logged but doesn't affect the response.
+      let lockedNow = false;
+      let shouldSendEmail = false;
+      try {
+        ({ lockedNow, shouldSendEmail } = await recordLoginFailure(user._id));
+      } catch (err) { console.warn('Failed to persist login-failure counter:', err.message); }
       if (lockedNow) {
         logAudit(req, 'auth.account_locked',
           { type: 'user', id: user._id },
