@@ -20,6 +20,9 @@ const aiUsageSchema = new mongoose.Schema({
   date:      { type: String, required: true }, // 'YYYY-MM-DD' UTC
   count:     { type: Number, default: 0 },
   expiresAt: { type: Date, required: true },   // TTL field — purged automatically
+  // Global row only: the highest share of the site-wide cap (50/80/100) the
+  // contact address has already been warned about this day (aiCapAlertJob).
+  alertedPct: { type: Number },
 }, { versionKey: false });
 
 aiUsageSchema.index({ userId: 1, date: 1 }, { unique: true });

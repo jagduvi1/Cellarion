@@ -9,6 +9,7 @@ const { runScanImageRetentionSweep } = require('./scanImageRetentionJob');
 const { runWineDraftExpirySweep } = require('./wineDraftExpiryJob');
 const { runSearchIndexReconcile } = require('./searchReconcileJob');
 const { runSecurityAlertCheck } = require('./securityAlertJob');
+const { runAiCapAlertCheck } = require('./aiCapAlertJob');
 const { runClimateOfflineCheck } = require('./climateOfflineJob');
 const { runDemoSweep } = require('./demoSweepJob');
 const { runRegistryHealthCheck } = require('./registryHealthJob');
@@ -146,6 +147,18 @@ function startScheduler() {
     }
   });
 
+  // Site-wide AI cap early warning: every 15 minutes, offset (7,22,37,52) from
+  // the jobs around it. One small read; emails the contact address once per
+  // threshold (50%, 80%, 100% of the daily cap) per UTC day.
+  cron.schedule('7,22,37,52 * * * *', async () => {
+    try {
+      const result = await runAiCapAlertCheck();
+      if (result?.sent) console.log('[scheduler] AI cap alert sent:', result.pct + '%');
+    } catch (err) {
+      console.error('[scheduler] AI cap alert check failed:', err);
+    }
+  });
+
   // Ephemeral demo sweep: every 15 minutes, offset (5,20,35,50) so it doesn't
   // pile onto the two */15 jobs above. Fully erases expired demo accounts + all
   // cloned data via the purgeUserData cascade. A short cadence keeps dead demo
@@ -233,7 +246,7 @@ function startScheduler() {
     }
   });
 
-  console.log('[scheduler] Cron jobs registered (wine-draft-expiry hourly :23, drink-window daily 06:00 UTC, value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, search-reconcile daily 02:37, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, recommendation-email-scrub daily 04:30 UTC, label-scan-retention daily 04:45 UTC, security-spike every 15 min, climate-offline every 15 min, demo-sweep every 15 min offset, registry-health weekly Mon 05:00 UTC, embed-sweep weekly Mon 05:30 UTC, bridge-refresh weekly Mon 06:30 UTC)');
+  console.log('[scheduler] Cron jobs registered (wine-draft-expiry hourly :23, drink-window daily 06:00 UTC, value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, search-reconcile daily 02:37, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, recommendation-email-scrub daily 04:30 UTC, label-scan-retention daily 04:45 UTC, security-spike every 15 min, climate-offline every 15 min, ai-cap-alert every 15 min offset, demo-sweep every 15 min offset, registry-health weekly Mon 05:00 UTC, embed-sweep weekly Mon 05:30 UTC, bridge-refresh weekly Mon 06:30 UTC)');
 }
 
 /**

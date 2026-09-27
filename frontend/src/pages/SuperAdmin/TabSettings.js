@@ -553,7 +553,7 @@ function AiBudgetPanel({ apiFetch, config, defaults, error }) {
       <NumberField
         label="Site-wide daily kill-switch"
         unit="calls / day"
-        hint="total across all users; 0 = disabled"
+        hint="total across all users; 0 = disabled; the contact email gets a warning at 50%, 80% and 100%"
         value={form.globalCap}
         defaultValue={defaults?.aiGlobalDailyCap?.max}
         onChange={v => setForm(f => ({ ...f, globalCap: v }))}
