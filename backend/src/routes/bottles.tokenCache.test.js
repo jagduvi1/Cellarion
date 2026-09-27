@@ -118,6 +118,20 @@ test('another query is another answer; another user never shares one', async () 
   expect(nameOf(await get(POLL, { user: 'user-d', token: true }))).toBe('load 3');
 });
 
+// Release audit 2026-09-27 (L): the key joined `k=v` unescaped and dropped
+// repeated params, so two different queries could read as one.
+test('a value that looks like more params is not the same query as those params', async () => {
+  const u = 'user-g';
+  await get('/api/bottles?vintage=2015%26limit%3D5', { user: u, token: true }); // one param: vintage = "2015&limit=5"
+  expect(nameOf(await get('/api/bottles?vintage=2015&limit=5', { user: u, token: true }))).toBe('load 2');
+});
+
+test('a repeated param is part of the key', async () => {
+  const u = 'user-h';
+  await get('/api/bottles?maturity=peak&limit=20', { user: u, token: true });
+  expect(nameOf(await get('/api/bottles?maturity=peak&limit=20&limit=50', { user: u, token: true }))).toBe('load 2');
+});
+
 test('browser requests (no API token) are never cached', async () => {
   await get(POLL, { user: 'user-e', token: false });
   expect(nameOf(await get(POLL, { user: 'user-e', token: false }))).toBe('load 2');

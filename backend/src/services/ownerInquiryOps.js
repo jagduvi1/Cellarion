@@ -45,11 +45,14 @@ const EXPIRY_NOTE = 'Closed automatically: the inquiry expired after 60 days wit
 
 const wineLabel = (wine) => [wine?.producer, wine?.name].filter(Boolean).join(' — ') || 'this wine';
 
-// An inquiry a recipient may still see/answer: answered, or open and not
-// expired. Expired-open rows are excluded query-time on the owner paths (they
-// run no global writes); the curator queue reads run the closing sweep.
+// An inquiry a recipient may still see/answer: open or answered, and not
+// expired. Expired rows are excluded query-time on the owner paths (they run
+// no global writes); the curator queue reads run the closing sweep for the
+// open ones, and keeps the answered ones until a curator resolves them. Until
+// 2026-09-27 an answered inquiry had no expiry here, so other recipients could
+// keep adding answers to a months-old question (release audit, L).
 const activeFor = (now) => ([
-  { status: 'answered' },
+  { status: 'answered', expiresAt: { $gt: now } },
   { status: 'open', expiresAt: { $gt: now } },
 ]);
 

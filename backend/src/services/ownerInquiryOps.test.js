@@ -536,7 +536,9 @@ describe('owner side', () => {
       // Addressed to me; answered, or open-and-not-expired, or recently resolved.
       const filter = WineOwnerInquiry.find.mock.calls[0][0];
       expect(filter['recipients.user']).toBe(ME);
-      expect(filter.$or[0]).toEqual({ status: 'answered' });
+      // An answered inquiry expires like an open one (release audit 2026-09-27, L).
+      expect(filter.$or[0]).toMatchObject({ status: 'answered' });
+      expect(filter.$or[0].expiresAt.$gt).toBeInstanceOf(Date);
       expect(filter.$or[1].status).toBe('open');
       expect(filter.$or[1].expiresAt.$gt).toBeInstanceOf(Date);
       expect(filter.$or[2].status).toBe('resolved');
@@ -584,7 +586,9 @@ describe('owner side', () => {
       const filter = WineOwnerInquiry.findOne.mock.calls[0][0];
       expect(filter.wineDefinition).toBe(WINE);
       expect(filter.recipients.$elemMatch).toEqual({ user: ME, response: null });
-      expect(filter.$or[0]).toEqual({ status: 'answered' });
+      // An answered inquiry expires like an open one (release audit 2026-09-27, L).
+      expect(filter.$or[0]).toMatchObject({ status: 'answered' });
+      expect(filter.$or[0].expiresAt.$gt).toBeInstanceOf(Date);
       expect(filter.$or[1].expiresAt.$gt).toBeInstanceOf(Date);
     });
 
@@ -617,7 +621,9 @@ describe('owner side', () => {
       const [filter, update] = WineOwnerInquiry.findOneAndUpdate.mock.calls[0];
       expect(filter._id).toBe(I1);
       expect(filter.recipients.$elemMatch).toEqual({ user: ME, response: null });
-      expect(filter.$or[0]).toEqual({ status: 'answered' });
+      // An answered inquiry expires like an open one (release audit 2026-09-27, L).
+      expect(filter.$or[0]).toMatchObject({ status: 'answered' });
+      expect(filter.$or[0].expiresAt.$gt).toBeInstanceOf(Date);
       expect(update.$set['recipients.$.response']).toBe('The label says E. Pira e Figli.');
       expect(update.$set['recipients.$.respondedAt']).toBeInstanceOf(Date);
       expect(update.$set.status).toBe('answered');

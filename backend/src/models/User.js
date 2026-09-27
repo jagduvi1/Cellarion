@@ -584,6 +584,12 @@ userSchema.methods.toJSON = function() {
   // True when the user hasn't accepted the current privacy-policy version (older
   // version, never recorded, or not accepted at all) — the client prompts them to
   // review and acknowledge the update. Derived, never stored.
+  //
+  // Only the web app acts on it. An account used ONLY through an API token or
+  // an MCP connector never sees the prompt: those surfaces keep working after a
+  // policy bump, and the account's consent record stays on the old version
+  // until they next open the app (release audit 2026-09-27, L — recorded, not
+  // changed: blocking integrations on a re-acknowledgement is a product call).
   const pp = obj.gdprConsent?.privacyPolicy;
   obj.requiresPolicyReconsent = !pp?.accepted || (pp?.version || null) !== CURRENT_PRIVACY_POLICY_VERSION;
   // Surface the demo flag as a clean boolean so the frontend can show the

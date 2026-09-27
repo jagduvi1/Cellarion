@@ -105,8 +105,12 @@ async function dropRetiredIndexes() {
   for (const uid of RETIRED_INDEXES) {
     try {
       await client.getRawIndex(uid);
-    } catch {
-      continue; // already gone
+    } catch (err) {
+      if (err?.code === 'index_not_found') continue; // already gone
+      // Anything else (Meilisearch unreachable, a permission error) is not
+      // "gone": say so, and let the next boot try again.
+      console.warn(`Meilisearch: could not check the retired '${uid}' index: ${err?.message || err}`);
+      continue;
     }
     try {
       await client.deleteIndex(uid);

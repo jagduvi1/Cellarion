@@ -266,15 +266,18 @@ const NEW_SESSION_ATTEMPTS = 5;
  * logins on the event loop; the native one lets them overlap.
  *
  * When the new session is the ONLY unsaved change, it is re-applied to a
- * fresh copy and saved again. A doc carrying other unsaved changes — a
- * password change persists through here, with every old session revoked —
- * is never replayed from a fresh copy, which would silently drop them; its
- * conflict is thrown, as before.
+ * fresh copy and saved again. A doc carrying ANY other unsaved change — a
+ * password change persists through here, with every old session revoked;
+ * so would a revocation that touched only `sessions` — is never replayed
+ * from a fresh copy, which would silently drop it; its conflict is thrown,
+ * as before. (Until 2026-09-27 a sessions-only change counted as replayable
+ * — no caller made one, but the guard now says what it means; release
+ * audit, L.)
  */
 async function saveWithNewSession(user, entry, now) {
   const replayable = !user.isNew
     && typeof user.modifiedPaths === 'function'
-    && user.modifiedPaths().every((p) => p === 'sessions' || p.startsWith('sessions.'));
+    && user.modifiedPaths().length === 0;
   addSession(user, entry, now);
   let doc = user;
   for (let attempt = 1; ; attempt++) {

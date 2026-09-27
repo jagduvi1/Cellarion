@@ -19,9 +19,11 @@
  * All within the budget (8 s, under Docker's 10 s stop timeout); whatever is
  * still running then is cut, as it always was. A second signal exits at once.
  *
- * No init process is needed: the backend starts no child processes (nothing
- * to reap), and with a handler installed PID 1 receives the signal like any
- * other process.
+ * Compose runs the container with `init: true` (a small PID 1 that forwards
+ * signals and reaps children), so Node is not PID 1 there. This handler does
+ * not depend on that: without an init, PID 1 receives the signal like any
+ * other process once a handler is installed, and the backend starts no child
+ * processes, so there is nothing to reap either way.
  */
 const DEFAULT_BUDGET_MS = 8000;
 const DB_CLOSE_MAX_MS = 1000;

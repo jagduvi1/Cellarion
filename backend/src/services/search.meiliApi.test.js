@@ -81,6 +81,17 @@ describe('the retired bottles index', () => {
     expect(client.index.mock.calls.map((c) => c[0])).not.toContain('bottles');
   });
 
+  // Release audit 2026-09-27 (L): any error while checking read as "already
+  // gone" and was silent — Meilisearch being down looked like a finished cleanup.
+  test('an error other than "not found" while checking is a warning, and nothing is deleted', async () => {
+    client.getRawIndex.mockRejectedValue(new Error('connect ECONNREFUSED'));
+
+    await boot();
+
+    expect(client.deleteIndex).not.toHaveBeenCalled();
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("could not check the retired 'bottles' index"));
+  });
+
   test('a failed delete is a warning — the other indexes still sync', async () => {
     client.getRawIndex.mockResolvedValue({ uid: 'bottles' });
     client.deleteIndex.mockRejectedValue(new Error('meili down'));

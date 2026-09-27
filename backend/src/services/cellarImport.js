@@ -27,6 +27,7 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { writeFileAtomicSync } = require('../utils/atomicWrite');
 
 const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
@@ -572,6 +573,7 @@ async function attachImages(bottle, images, userId, getFileBuffer, result, dedup
     let originalUrl = null;
     let processedUrl = null;
     let deduped = false;
+    let storedHash = null; // of the bytes written (or matched) below; the archive hash until then
 
     // Dedup: does this user already have a byte-identical image still on disk?
     const existing = await BottleImage.findOne({ uploadedBy: userId, contentHash: hash })
@@ -600,28 +602,54 @@ async function attachImages(bottle, images, userId, getFileBuffer, result, dedup
       }
       const uuid = crypto.randomUUID();
       const ext = { jpeg: '.jpg', png: '.png', webp: '.webp' }[detectImageFormat(safeBuf)] || '.jpg';
+      // The bytes that will be on disk, and the address they get.
+      let stored;
+      let storedDir;
+      let storedName;
+      let storedUrl;
       if (procBuf) {
         // Stored the way every kept photo is (services/photoFormat: WebP, at
         // most 2048 px) — an older export carries the full-size PNG. Encoded
         // from the archive bytes the sanitizer has just accepted, not from its
         // re-encode: one lossy step, not two, for a re-imported export. The
         // encode drops EXIF/GPS the same way.
-        let keptBuf;
         try {
-          keptBuf = await encodeKeptPhoto(primaryBuf);
+          stored = await encodeKeptPhoto(primaryBuf);
         } catch {
           result.imagesSkipped++;
           result.errors.push({ index: sourceIndex, reason: `Image "${procArchive}" skipped: it could not be converted` });
           continue;
         }
-        const procName = `${uuid}.${KEPT_EXTENSION}`;
-        fs.writeFileSync(path.join(PROCESSED_DIR, procName), keptBuf);
-        processedUrl = `/api/uploads/processed/${procName}`;
+        storedDir = PROCESSED_DIR;
+        storedName = `${uuid}.${KEPT_EXTENSION}`;
+        storedUrl = `/api/uploads/processed/${storedName}`;
       } else {
         // Original-only image (never cropped) — keep it so the photo isn't lost.
-        const origName = `${uuid}${ext}`;
-        fs.writeFileSync(path.join(ORIGINALS_DIR, origName), safeBuf);
-        originalUrl = `/api/uploads/originals/${origName}`;
+        stored = safeBuf;
+        storedDir = ORIGINALS_DIR;
+        storedName = `${uuid}${ext}`;
+        storedUrl = `/api/uploads/originals/${storedName}`;
+      }
+
+      // The record's hash is that of the STORED bytes, as the live upload path
+      // stamps it: an export of this cellar carries exactly those bytes, so a
+      // re-import of it matches on the first try instead of adding a copy
+      // (release audit 2026-09-27, L — hashing the archive bytes while storing
+      // a re-encode meant every export→import round wrote a new file). A
+      // repeat import of the SAME archive still dedupes: the encode is
+      // deterministic, so its stored bytes hash to the record's hash again.
+      storedHash = crypto.createHash('sha256').update(stored).digest('hex');
+      const twin = storedHash !== hash
+        ? await BottleImage.findOne({ uploadedBy: userId, contentHash: storedHash }).select('originalUrl processedUrl').lean()
+        : null;
+      if (twin && (fileOnDisk(twin.processedUrl) || fileOnDisk(twin.originalUrl))) {
+        processedUrl = fileOnDisk(twin.processedUrl) ? twin.processedUrl : null;
+        originalUrl = fileOnDisk(twin.originalUrl) ? twin.originalUrl : null;
+        deduped = true;
+      } else {
+        // Into a publicly served, immutably cached folder: never half-written.
+        writeFileAtomicSync(path.join(storedDir, storedName), stored);
+        if (procBuf) processedUrl = storedUrl; else originalUrl = storedUrl;
       }
     }
 
@@ -633,7 +661,7 @@ async function attachImages(bottle, images, userId, getFileBuffer, result, dedup
       status: 'approved',   // already-processed export image → skip rembg
       visibility: 'private',
       credit: (img && img.credit) || null,
-      contentHash: hash,
+      contentHash: storedHash || hash,
     });
     if (deduped) result.imagesDeduped++; else result.imagesAttached++;
     if (cacheKey) dedupCache.set(cacheKey, doc._id);

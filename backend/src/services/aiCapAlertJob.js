@@ -23,6 +23,7 @@ const mailgun = require('./mailgun');
 // Highest first: when several are crossed between two runs, one email names
 // the highest share reached.
 const THRESHOLDS = [100, 80, 50];
+const SEND_TIMEOUT_MS = 10000; // like the support-reply mail (routes/admin/supportTickets)
 
 async function getContactEmail() {
   const doc = await SiteConfig.findOne({ key: 'contactEmail' }).lean();
@@ -71,6 +72,7 @@ async function runAiCapAlertCheck(now = new Date()) {
   );
   if (claim.modifiedCount !== 1) return { sent: 0 };
 
+  let timer;
   try {
     // Per-user rows exist only while the per-user budget is on (aiBudget).
     const budget = cfg.aiDailyBudget?.max ?? rateLimitsConfig.defaults.aiDailyBudget.max;
@@ -78,9 +80,17 @@ async function runAiCapAlertCheck(now = new Date()) {
       budget > 0 ? topUsers(AiUsage, date) : null,
       topUsers(ChatUsage, date),
     ]);
-    await mailgun.sendAiCapAlertEmail(contactEmail, {
-      pct, count, cap, resetsInSeconds: secondsUntilMidnightUTC(now), topAi, topChat,
+    // Bounded like the support-reply mail: a hung Mailgun call must not hold
+    // the threshold claim for the rest of the day (release audit 2026-09-27, L).
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('timed out')), SEND_TIMEOUT_MS);
     });
+    await Promise.race([
+      mailgun.sendAiCapAlertEmail(contactEmail, {
+        pct, count, cap, resetsInSeconds: secondsUntilMidnightUTC(now), topAi, topChat,
+      }),
+      timeout,
+    ]);
     return { sent: 1, pct };
   } catch (err) {
     // Give the claim back so the next run tries again.
@@ -90,6 +100,8 @@ async function runAiCapAlertCheck(now = new Date()) {
     await AiUsage.updateOne({ userId: null, date, alertedPct: pct, alertedCap: { $eq: cap } }, restore).catch(() => {});
     console.error('[aiCapAlert] send failed:', err.message);
     return { sent: 0, reason: 'send_failed' };
+  } finally {
+    clearTimeout(timer);
   }
 }
 

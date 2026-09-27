@@ -102,6 +102,9 @@ test("the probe's newest id comes from the same filter and sort as the list's fi
 
   expect(Notification.findOne.mock.calls[0]).toEqual(Notification.find.mock.calls[0]);
   expect(probe.sort.mock.calls[0]).toEqual(list.sort.mock.calls[0]);
+  // _id breaks ties between rows created in the same millisecond, so the
+  // newest is stable between reads (release audit 2026-09-27, L).
+  expect(probe.sort.mock.calls[0][0]).toEqual({ createdAt: -1, _id: -1 });
   expect((await listRes.json()).notifications[0]._id).toBe((await probeRes.json()).newestId);
 });
 

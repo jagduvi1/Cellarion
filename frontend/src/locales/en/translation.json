@@ -2466,6 +2466,7 @@
     "unit": "Unit (optional)",
     "unitPlaceholder": "e.g. %, °C, kr",
     "enumOptions": "Allowed values (comma-separated)",
+    "enumOptionsRule": "Between 2 and 20 options, each up to 40 characters",
     "enumPlaceholder": "e.g. cork, screwcap, crown",
     "value": "Value",
     "choose": "Choose…",

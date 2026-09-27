@@ -200,11 +200,16 @@ async function authenticateApiToken(req, res, next, rawToken) {
     req.apiToken = { id: token._id.toString(), scopes: token.scopes };
 
     // Throttled usage bookkeeping — fire-and-forget, never blocks the request.
-    if (!token.lastUsedAt || Date.now() - token.lastUsedAt.getTime() > LAST_USED_THROTTLE_MS) {
-      const now = new Date();
+    // The daily audit is checked on its own, not only when the hour is up: a
+    // token used at 23:50 and again at 00:20 used to miss the new day's entry
+    // when that was its only use that day (release audit 2026-09-27, L).
+    const now = new Date();
+    const hourUp = !token.lastUsedAt || now.getTime() - token.lastUsedAt.getTime() > LAST_USED_THROTTLE_MS;
+    const newDay = !token.lastUsedAt || utcDay(token.lastUsedAt) !== utcDay(now);
+    if (hourUp || newDay) {
       ApiToken.updateOne({ _id: token._id }, { $set: { lastUsedAt: now } }).catch(() => {});
       // Audit the token id, never the token itself — once a day (see utcDay).
-      if (!token.lastUsedAt || utcDay(token.lastUsedAt) !== utcDay(now)) {
+      if (newDay) {
         logAudit(req, 'token.used', { type: 'apiToken', id: token._id }, {});
       }
     }

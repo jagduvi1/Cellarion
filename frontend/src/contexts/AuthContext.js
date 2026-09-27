@@ -7,7 +7,7 @@ import {
   adoptOfflineChoice, OFFLINE_MODE_EVENT,
 } from '../utils/offlineMode';
 import { offlineAnswer, markLive, clearOfflineData } from '../utils/offlineSnapshot';
-import { writeKeyFor, queueWrite } from '../utils/offlineQueue';
+import { writeKeyFor, queueWrite, sweepAbandonedQueue } from '../utils/offlineQueue';
 
 // A write succeeded somewhere in the app: OfflineSync refreshes the device's
 // copy shortly after, when the write could have changed it; `detail.url` says
@@ -147,6 +147,11 @@ export const AuthProvider = ({ children }) => {
     // device drops it and is asked itself — before anything of theirs could be
     // stored (the save effect below runs after this render).
     adoptOfflineChoice(userData?.id || userData?._id);
+    // A logout made with no network is finished at the next start
+    // (restoreSession) — but a sign-in in between makes it moot: the old
+    // cookie is gone, and the next start would post that logout with THIS
+    // account's cookie, ending the new session (release audit 2026-09-27, L).
+    markPendingLogout(false);
     storeToken(token);
     setUser(userData);
     setOfflineSession(false); // a session applied from the server is a live one
@@ -358,9 +363,12 @@ export const AuthProvider = ({ children }) => {
       }
       if (refreshOutcomeRef.current === 'rejected') {
         // The server ended this session (signed out elsewhere, expired,
-        // account deleted): nothing of it may stay on this device.
+        // account deleted): nothing of it may stay on this device. The queue
+        // is kept for the same user's next sign-in — and swept of what nobody
+        // will send any more (an account that never comes back).
         clearOfflineUser();
         await clearOfflineData({ keepQueue: true });
+        sweepAbandonedQueue().catch(() => {});
       } else if (kept) {
         // Offline start — no network, or a server that can't answer right
         // now: carry on as the last signed-in user, with no token, until it
@@ -515,7 +523,10 @@ export const AuthProvider = ({ children }) => {
       if (!response.ok) throw new Error(data.error || 'Registration failed');
 
       if (data.token) {
-        // Verification disabled — logged in immediately
+        // Verification disabled — logged in immediately. A "remember me"
+        // session, as the server says: read it like login does, or the offline
+        // profile of a new account is discarded at once.
+        sessionPersistentRef.current = data.persistent === true;
         applySession(data.token, data.user);
         return { success: true };
       }
@@ -572,6 +583,7 @@ export const AuthProvider = ({ children }) => {
       if (!response.ok) {
         return { success: false, error: data?.error, code: data?.code, serverIssued: !!data?.error };
       }
+      sessionPersistentRef.current = data.persistent === true; // a demo session is never kept offline
       applySession(data.token, data.user);
       return { success: true };
     } catch {

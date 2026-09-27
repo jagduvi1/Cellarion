@@ -32,6 +32,24 @@ import './AddBottleCustomFields.css';
  * mint-at-commit discipline the wine itself follows.
  */
 
+// The server's rule for an enum key's options (utils/personalDataTypes:
+// 2–20 options, each at most 40 characters), mirrored so the row says what is
+// wrong while it is typed rather than after the add (release audit 2026-09-27, L).
+export const ENUM_OPTIONS_MIN = 2;
+export const ENUM_OPTIONS_MAX = 20;
+export const ENUM_OPTION_MAX_CHARS = 40;
+export const ENUM_OPTIONS_MAX_CHARS = ENUM_OPTIONS_MAX * (ENUM_OPTION_MAX_CHARS + 2);
+
+/** Why a typed options list would be refused, or null. Empty is not a problem yet. */
+export function enumOptionsProblem(text) {
+  const options = String(text || '').split(',').map((o) => o.trim()).filter(Boolean);
+  if (options.length === 0) return null;
+  if (options.length < ENUM_OPTIONS_MIN) return 'too_few';
+  if (options.length > ENUM_OPTIONS_MAX) return 'too_many';
+  if (options.some((o) => o.length > ENUM_OPTION_MAX_CHARS)) return 'too_long';
+  return null;
+}
+
 const NEW_ROW = {
   keyName: '',
   keyType: 'text',
@@ -317,14 +335,23 @@ function AddBottleCustomFields({ apiFetch, wineId, vintage, rows, onChange, onKe
                     />
                   )}
                   {row.keyType === 'enum' && (
-                    <input
-                      type="text"
-                      className="abcf-unit"
-                      value={row.enumOptions}
-                      onChange={(e) => update(i, { enumOptions: e.target.value })}
-                      placeholder={t('personalData.enumOptions', 'Options, comma separated')}
-                      aria-label={t('personalData.enumOptions', 'Options, comma separated')}
-                    />
+                    <>
+                      <input
+                        type="text"
+                        className="abcf-unit"
+                        value={row.enumOptions}
+                        onChange={(e) => update(i, { enumOptions: e.target.value })}
+                        placeholder={t('personalData.enumOptions', 'Options, comma separated')}
+                        aria-label={t('personalData.enumOptions', 'Options, comma separated')}
+                        maxLength={ENUM_OPTIONS_MAX_CHARS}
+                        aria-invalid={enumOptionsProblem(row.enumOptions) ? true : undefined}
+                      />
+                      {enumOptionsProblem(row.enumOptions) && (
+                        <span className="abcf-hint" role="note">
+                          {t('personalData.enumOptionsRule', 'Between 2 and 20 options, each up to 40 characters')}
+                        </span>
+                      )}
+                    </>
                   )}
                 </>
               )}

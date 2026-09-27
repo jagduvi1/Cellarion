@@ -24,6 +24,9 @@ jest.mock('fs', () => ({
     unlink: jest.fn().mockResolvedValue(undefined),
     readdir: jest.fn().mockResolvedValue([]),
     stat: jest.fn(),
+    // The kept file is written to a temp name and renamed into place (utils/atomicWrite).
+    writeFile: jest.fn().mockResolvedValue(undefined),
+    rename: jest.fn().mockResolvedValue(undefined),
   },
 }));
 // The sizes and the WebP encode have their own suite (photoFormat.test.js).
@@ -91,7 +94,11 @@ describe('processImage', () => {
 
     expect(doc.status).toBe('processed');
     expect(doc.processedUrl).toBe(PROC);
-    expect(fs.writeFileSync).toHaveBeenCalledWith('/app/uploads/processed/abc.webp', expect.any(Buffer));
+    // Never half-written into the public folder: temp name, then renamed.
+    const [tmpPath, bytes] = fs.promises.writeFile.mock.calls[0];
+    expect(tmpPath).toMatch(/^\/app\/uploads\/processed\/abc\.webp\..+\.tmp$/);
+    expect(bytes).toEqual(expect.any(Buffer));
+    expect(fs.promises.rename).toHaveBeenCalledWith(tmpPath, '/app/uploads/processed/abc.webp');
     expect(fs.promises.unlink).toHaveBeenCalledWith('/app/uploads/originals/abc.jpg');
     expect(BottleImage.updateOne).toHaveBeenCalledWith(
       { _id: 'img1', originalUrl: ORIG },
@@ -113,7 +120,7 @@ describe('processImage', () => {
     expect(Buffer.from(await sent.arrayBuffer()).toString()).toBe('small:raw-upload-bytes');
     // The PNG rembg answered with is encoded, and only the encoded bytes are kept.
     expect(Buffer.from(encodeKeptPhoto.mock.calls[0][0])).toEqual(Buffer.from([137, 80, 78, 71]));
-    expect(fs.writeFileSync.mock.calls[0][1].toString()).toBe('kept-webp-bytes');
+    expect(fs.promises.writeFile.mock.calls[0][1].toString()).toBe('kept-webp-bytes');
     expect(doc.contentHash).toBe(crypto.createHash('sha256').update('kept-webp-bytes').digest('hex'));
     expect(warmThumbFor).toHaveBeenCalledWith(PROC);
   });
@@ -130,9 +137,27 @@ describe('processImage', () => {
     expect(doc.status).toBe('uploaded');
     expect(doc.processedUrl).toBeNull();
     expect(doc.originalUrl).toBe(ORIG);
-    expect(fs.writeFileSync).not.toHaveBeenCalled();
+    expect(fs.promises.writeFile).not.toHaveBeenCalled();
     expect(fs.promises.unlink).not.toHaveBeenCalled();
     error.mockRestore();
+  });
+
+  // Release audit 2026-09-27 (L): the settled status was computed when the job
+  // started, so an admin approving the photo while rembg ran had the approval
+  // overwritten with 'processed' a moment later.
+  test('an approval that lands while rembg runs is kept, not overwritten with processed', async () => {
+    const doc = makeDoc();
+    BottleImage.findById.mockReset();
+    BottleImage.findById
+      .mockResolvedValueOnce(doc)
+      .mockImplementation(() => ({ select: jest.fn().mockResolvedValue({ assignedToWine: false, status: 'approved' }) }));
+    rembg();
+
+    await processImage('img1');
+
+    expect(doc.status).toBe('approved');
+    expect(doc.processedUrl).toBe(PROC);
+    expect(fs.promises.rename).toHaveBeenCalled();
   });
 
   test('a FAILED rembg run keeps the original — the retry needs its source', async () => {
@@ -170,7 +195,9 @@ describe('discardOriginal', () => {
 
     await discardOriginal(doc);
 
-    expect(fs.promises.unlink).not.toHaveBeenCalled();
+    // The shared file stays; only its thumbnail (this record's card view) goes.
+    expect(fs.promises.unlink).not.toHaveBeenCalledWith('/app/uploads/originals/abc.jpg');
+    expect(fs.promises.unlink).toHaveBeenCalledWith('/app/uploads/thumbs/originals/abc.jpg.webp');
     expect(BottleImage.updateOne).toHaveBeenCalledWith({ _id: 'img1', originalUrl: ORIG }, { $set: { originalUrl: null } });
     expect(doc.originalUrl).toBeNull();
   });
@@ -208,11 +235,12 @@ describe('discardOriginal', () => {
 describe('unlinkImageFiles (same contract after the refactor)', () => {
   test('unlinks both files of an unreferenced record, and the processed file\'s thumbnail', async () => {
     await unlinkImageFiles(makeDoc({ processedUrl: PROC }));
-    expect(fs.promises.unlink).toHaveBeenCalledTimes(3);
+    expect(fs.promises.unlink).toHaveBeenCalledTimes(4);
     expect(fs.promises.unlink).toHaveBeenCalledWith('/app/uploads/originals/abc.jpg');
     expect(fs.promises.unlink).toHaveBeenCalledWith('/app/uploads/processed/abc.webp');
-    // services/thumbnails — only processed/ files have one.
+    // services/thumbnails — both folders have thumbnails since 2026-09-27.
     expect(fs.promises.unlink).toHaveBeenCalledWith('/app/uploads/thumbs/processed/abc.webp.webp');
+    expect(fs.promises.unlink).toHaveBeenCalledWith('/app/uploads/thumbs/originals/abc.jpg.webp');
   });
 
   test('a photo processed before WebP (a .png) is deleted the same way', async () => {

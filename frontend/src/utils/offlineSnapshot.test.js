@@ -51,6 +51,31 @@ describe('with offline mode off', () => {
 describe('with offline mode on', () => {
   beforeEach(() => localStorage.setItem('cellarion-offline', 'on'));
 
+  // Release audit 2026-09-27 (L): a burst of changes used up the server's
+  // refresh allowance and the copy went silently stale until the 15-min timer.
+  it('a 429 schedules one retry for when the server says the window reopens', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('caches', undefined);
+    try {
+      let calls = 0;
+      const apiFetch = vi.fn(async () => {
+        calls += 1;
+        if (calls === 1) return { ok: false, status: 429, headers: new Headers({ 'Retry-After': '30' }), json: async () => ({}) };
+        return jsonRes(SNAP);
+      });
+      expect(await refreshSnapshot(apiFetch, 'u1')).toBe(false);
+      expect(apiFetch).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(29_000);
+      expect(apiFetch).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1_500);
+      expect(apiFetch).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(10);
+      expect(getOfflineStatus().savedAt).toBe(SNAP.generatedAt);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('stores a fresh snapshot and answers from it, marked as the saved copy', async () => {
     vi.stubGlobal('caches', undefined); // no photo sync in this test
     expect(await refreshSnapshot(vi.fn(async () => jsonRes(SNAP)), 'u1')).toBe(true);

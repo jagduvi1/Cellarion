@@ -16,6 +16,7 @@
  */
 const path = require('path');
 const fs = require('fs');
+const { writeFileAtomic } = require('../utils/atomicWrite');
 const crypto = require('crypto');
 const BottleImage = require('../models/BottleImage');
 const { ORIGINALS_DIR } = require('../config/upload');
@@ -119,7 +120,8 @@ async function ingestBottleImage({ buffer, userId, userRoles = [], bottle = null
   // an INFRA fault, not the caller's — surface a clean 500 rather than letting
   // it throw out of the tool as a non-JSON crash.
   try {
-    await fs.promises.writeFile(path.join(ORIGINALS_DIR, filename), stored);
+    // Into a publicly served, immutably cached folder: never half-written.
+    await writeFileAtomic(path.join(ORIGINALS_DIR, filename), stored);
   } catch (err) {
     console.error('[imageOps] failed to persist image:', err.message);
     return { error: { status: 500, message: 'Could not save the image right now — please try again later' } };
@@ -224,7 +226,7 @@ async function persistLabelScan({ buffer, userId, side = 'front' }) {
     const format = detectImageFormat(buffer);
     if (!format) return null;
     const filename = `${crypto.randomUUID()}.${EXT_FOR[format]}`;
-    await fs.promises.writeFile(path.join(ORIGINALS_DIR, filename), buffer);
+    await writeFileAtomic(path.join(ORIGINALS_DIR, filename), buffer);
     let contentHash = null;
     try { contentHash = hashImageBytes(buffer); } catch { /* non-fatal */ }
     const image = new BottleImage({

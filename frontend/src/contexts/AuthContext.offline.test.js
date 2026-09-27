@@ -280,4 +280,42 @@ describe('audit 2026-09-27', () => {
     expect(localStorage.getItem('cellarion-offline-owner')).toBe('u1');
     await waitFor(() => expect(localStorage.getItem('cellarion-offline-user')).not.toBeNull());
   });
+
+  // Lows. A logout made with no network is finished at the next start — but a
+  // sign-in in between makes it moot, and the next start would have posted it
+  // with the NEW account's cookie, ending that session.
+  it('signing in clears a logout still pending from an offline session', async () => {
+    localStorage.setItem('cellarion-pending-logout', '1');
+    const routes = { '/api/auth/logout': offline, '/api/auth/refresh': offline };
+    stubFetch(routes);
+    renderAuth();
+    expect(await screen.findByText('no user')).toBeInTheDocument();
+    expect(localStorage.getItem('cellarion-pending-logout')).toBe('1');
+
+    routes['/api/auth/login'] = () => Promise.resolve(json(200, { token: 'T1', persistent: true, user: SERVER_USER }));
+    await act(async () => { await ctx.login('anna', 'pw'); });
+    expect(await screen.findByText('user:anna')).toBeInTheDocument();
+    expect(localStorage.getItem('cellarion-pending-logout')).toBeNull();
+  });
+
+  // Register (and the demo) said nothing about the session's kind, so a new
+  // account's offline profile was read as browser-only and discarded at once.
+  it('a new account\'s "remember me" session keeps the profile for an offline start; a demo never does', async () => {
+    localStorage.setItem('cellarion-offline', 'on');
+    stubFetch({
+      '/api/auth/refresh': offline,
+      '/api/auth/register': () => Promise.resolve(json(201, { token: 'T1', persistent: true, user: SERVER_USER })),
+      '/api/auth/demo-login': () => Promise.resolve(json(201, { token: 'T2', persistent: false, user: { ...SERVER_USER, isDemo: true } })),
+    });
+    renderAuth();
+    expect(await screen.findByText('no user')).toBeInTheDocument();
+
+    await act(async () => { await ctx.register('anna', 'anna@example.com', 'pw', true); });
+    expect(await screen.findByText('user:anna')).toBeInTheDocument();
+    await waitFor(() => expect(localStorage.getItem('cellarion-offline-user')).not.toBeNull());
+
+    await act(async () => { await ctx.demoLogin(); });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(localStorage.getItem('cellarion-offline-user')).toBeNull();
+  });
 });

@@ -70,6 +70,18 @@ function splitTemplateForCache(template) {
   return tail ? { head: text.slice(0, cut), tail } : null;
 }
 
+// Anthropic caches a prefix only from 1,024 tokens on (2,048 on Haiku). The
+// import rules tail is ~1,200–1,400 tokens — near the line: a trimmed template
+// silently loses caching, visible only as "Cached 0 %" in the cost panel
+// (release audit 2026-09-27, L). Say so in the log, once per template.
+const CACHE_MIN_TAIL_CHARS = 4800; // ≈ 1,200 tokens at ~4 characters per token
+let shortTailWarnedFor = null;
+function warnIfTailTooShortToCache(tail, what) {
+  if (!tail || tail.length >= CACHE_MIN_TAIL_CHARS || shortTailWarnedFor === tail) return;
+  shortTailWarnedFor = tail;
+  console.warn(`[ai] the ${what} rules are ${tail.length} characters — below the ~${CACHE_MIN_TAIL_CHARS} the prompt cache needs; each call will be billed in full`);
+}
+
 // The message that rides with the photo when the scan instructions are the
 // system block.
 const SCAN_LABEL_REQUEST = 'Identify the wine in this photo, following your instructions exactly.';
@@ -657,6 +669,7 @@ async function identifyWineFromText({ name, producer, vintage, country, appellat
   // values sit at the very end has no fixed tail and keeps the single-message
   // layout.
   const split = instructionsAsSystem() ? splitTemplateForCache(template) : null;
+  if (split && split.head) warnIfTailTooShortToCache(split.tail, 'import lookup');
   const system = split && split.head ? systemBlock(split.tail, '5m') : null;
 
   return callClaudeJson({

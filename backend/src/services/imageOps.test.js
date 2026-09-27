@@ -26,7 +26,9 @@ jest.mock('../services/photoFormat', () => ({
 jest.mock('../services/search', () => ({ indexWine: jest.fn(), indexBottle: jest.fn() }));
 
 const fs = require('fs');
+// Kept files are written to a temp name and renamed into place (utils/atomicWrite).
 jest.spyOn(fs.promises, 'writeFile').mockResolvedValue();
+jest.spyOn(fs.promises, 'rename').mockResolvedValue();
 
 const BottleImage = require('../models/BottleImage');
 jest.mock('../models/BottleImage');
@@ -41,6 +43,7 @@ const REQ = { user: { id: 'u1' } };
 beforeEach(() => {
   jest.clearAllMocks();
   fs.promises.writeFile.mockResolvedValue();
+  fs.promises.rename.mockResolvedValue();
   sanitizeImageBuffer.mockResolvedValue(Buffer.from('CLEAN-BYTES'));
   detectImageFormat.mockReturnValue('jpeg');
   BottleImage.countDocuments = jest.fn().mockResolvedValue(0);
@@ -55,10 +58,11 @@ test('happy path: sanitises, writes a sniffed-extension file, saves the row, kic
   expect(res.error).toBeUndefined();
   expect(sanitizeImageBuffer).toHaveBeenCalledWith(Buffer.from('RAW'));
   // The CLEAN (re-encoded) bytes are persisted, never the caller's raw input.
-  const [, written] = fs.promises.writeFile.mock.calls[0];
+  const [tmpPath, written] = fs.promises.writeFile.mock.calls[0];
   expect(written.toString()).toBe('CLEAN-BYTES');
-  // Extension comes from the sniffed format.
-  const [writtenPath] = fs.promises.writeFile.mock.calls[0];
+  // Written to a temp name, renamed into place; the extension comes from the sniffed format.
+  const [renamedFrom, writtenPath] = fs.promises.rename.mock.calls[0];
+  expect(renamedFrom).toBe(tmpPath);
   expect(writtenPath).toMatch(/\.jpg$/);
   expect(res.image.originalUrl).toMatch(/^\/api\/uploads\/originals\/.*\.jpg$/);
   expect(res.image.bottle).toBe('b1');
@@ -84,7 +88,8 @@ test('keepBackground: no bg-removal hand-off, the original is the kept image and
 test('keepBackground: the kept photo is stored like every kept photo — the WebP of the clean bytes', async () => {
   const res = await ingestBottleImage({ buffer: Buffer.from('RAW'), userId: 'u1', bottle: { _id: 'b1' }, keepBackground: true }, REQ);
   expect(encodeKeptPhoto).toHaveBeenCalledWith(Buffer.from('CLEAN-BYTES'));
-  const [writtenPath, written] = fs.promises.writeFile.mock.calls[0];
+  const [, written] = fs.promises.writeFile.mock.calls[0];
+  const [, writtenPath] = fs.promises.rename.mock.calls[0];
   expect(String(writtenPath)).toMatch(/\.webp$/);
   expect(written.toString()).toBe('KEPT-WEBP');
   expect(res.image.originalUrl).toMatch(/^\/api\/uploads\/originals\/.+\.webp$/);

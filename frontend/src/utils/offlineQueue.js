@@ -22,6 +22,11 @@ import { getWorkingIndex, rebuildWorking } from './offlineSnapshot';
 import { isOfflineModeEnabled } from './offlineMode';
 
 const OTHER_ACCOUNT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+// Any op, anyone's, after three months: a change queued by an account that
+// ended (signed out elsewhere, deleted) with nobody signing in here since would
+// otherwise sit in the device's storage indefinitely (release audit
+// 2026-09-27, L). The user's own op has shown in the banner for 90 days by then.
+const ABANDONED_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
 const SENT_KEEP_MS = 60 * 60 * 1000;
 export const QUEUE_CHANGED_EVENT = 'cellarion-offline-queue';
 
@@ -34,17 +39,37 @@ function notify() {
 export function getQueueStatus() { return status; }
 export function subscribeQueueStatus(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 
-/** Recount this user's queue (and drop ops older than a week). */
-export async function refreshQueueStatus(userId) {
+/**
+ * Drop what no account will ever send: another account's ops after a month
+ * (while someone else is signed in), anyone's after three. Runs from
+ * refreshQueueStatus while signed in, and — with no user — on a start that
+ * ends signed out (AuthContext), so an ended account's queue does not outlive
+ * it on the device. Returns the ops that remain.
+ */
+export async function sweepAbandonedQueue(userId = null) {
   const all = await readQueue();
+  const now = Date.now();
+  const kept = [];
+  for (const op of all) {
+    const age = now - Date.parse(op.createdAt);
+    const foreign = userId !== null && String(op.userId) !== String(userId);
+    if (age > ABANDONED_MAX_AGE_MS || (foreign && age > OTHER_ACCOUNT_MAX_AGE_MS)) {
+      await deleteQueued(op.id); continue;
+    }
+    kept.push(op);
+  }
+  return kept;
+}
+
+/** Recount this user's queue (and drop what nobody will send any more). */
+export async function refreshQueueStatus(userId) {
+  // Another account's ops (it hasn't signed in here for a month): dropped.
+  // The user's own pending / needs-attention ops are never dropped unseen
+  // (short of the three-month bound above).
+  const all = await sweepAbandonedQueue(userId);
   const now = Date.now();
   const mine = [];
   for (const op of all) {
-    // Another account's ops (it hasn't signed in here for a month): dropped.
-    // The user's own pending / needs-attention ops are never dropped unseen.
-    if (String(op.userId) !== String(userId) && now - Date.parse(op.createdAt) > OTHER_ACCOUNT_MAX_AGE_MS) {
-      await deleteQueued(op.id); continue;
-    }
     // A sent op whose confirming refresh never came (offline mode switched
     // off meanwhile, …): the server has it; stop laying it over the copy.
     if (op.status === 'sent' && now - Date.parse(op.sentAt) > SENT_KEEP_MS) { await deleteQueued(op.id); continue; }

@@ -61,14 +61,21 @@ const router = express.Router();
 // one the answer was computed at; the max age bounds registry edits, curated
 // drink windows, photos and anything else the version cannot see. Browser
 // lists are never cached — they show fresh photos.
-const tokenListCache = new Map(); // `${userId}|${query}` -> { at, version, body }
+const tokenListCache = new Map(); // `${userId}|${query}` -> { at, version, body, bytes }
 const TOKEN_LIST_MAX_AGE_MS = 30 * 60 * 1000;
 const TOKEN_LIST_CACHE_MAX_ENTRIES = 2000;
-// The string params in a stable order — the handler ignores everything else.
-const canonicalQuery = (query) => Object.keys(query).sort()
-  .filter((k) => typeof query[k] === 'string')
-  .map((k) => `${k}=${query[k]}`)
-  .join('&');
+// Bounded in bytes as well as entries: a big cellar's page is hundreds of KB,
+// and 2,000 of those would be most of the process's memory (release audit
+// 2026-09-27, L). One answer larger than the whole bound is not kept.
+const TOKEN_LIST_CACHE_MAX_BYTES = 32 * 1024 * 1024;
+let tokenListCacheBytes = 0;
+// The params in a stable order, encoded so that no value can look like another
+// key (`a=1&b=2` typed as one value used to read like two params) and so that a
+// repeated param (?limit=10&limit=20 — parsePagination reads it) is part of the
+// key instead of dropped. The handler ignores everything else.
+const canonicalQuery = (query) => JSON.stringify(Object.keys(query).sort()
+  .filter((k) => typeof query[k] === 'string' || Array.isArray(query[k]))
+  .map((k) => [k, query[k]]));
 
 // Custom fields accepted on one bottle create. The service enforces the real
 // cap per target (personalData.ENTRIES_PER_TARGET); this only bounds the loop
@@ -423,8 +430,17 @@ router.get('/', async (req, res) => {
       },
     };
     if (listCacheKey) {
-      if (tokenListCache.size >= TOKEN_LIST_CACHE_MAX_ENTRIES) tokenListCache.clear();
-      tokenListCache.set(listCacheKey, { at: Date.now(), version: listVersion, body });
+      const bytes = JSON.stringify(body).length;
+      if (bytes <= TOKEN_LIST_CACHE_MAX_BYTES) {
+        const previous = tokenListCache.get(listCacheKey);
+        if (previous) tokenListCacheBytes -= previous.bytes;
+        if (tokenListCache.size >= TOKEN_LIST_CACHE_MAX_ENTRIES || tokenListCacheBytes + bytes > TOKEN_LIST_CACHE_MAX_BYTES) {
+          tokenListCache.clear();
+          tokenListCacheBytes = 0;
+        }
+        tokenListCache.set(listCacheKey, { at: Date.now(), version: listVersion, body, bytes });
+        tokenListCacheBytes += bytes;
+      }
     }
     res.json(body);
   } catch (err) {
@@ -550,10 +566,13 @@ router.post('/', requireNonDemo, async (req, res) => {
     if (Array.isArray(customFields) && customFields.length > 0) {
       // Say what was dropped. A silent truncation is the one failure mode the
       // caller cannot see: the bottle is 201 and the field simply is not there.
-      for (const field of customFields.slice(MAX_CUSTOM_FIELDS)) {
+      // One line for all of them: echoing one per dropped element let a 64 kB
+      // body come back as ~1.5 MB of repeats (release audit 2026-09-27, L).
+      if (customFields.length > MAX_CUSTOM_FIELDS) {
+        const dropped = customFields.length - MAX_CUSTOM_FIELDS;
         customFieldErrors.push({
-          key: field?.newKey?.name || null,
-          error: `Too many custom fields in one add (max ${MAX_CUSTOM_FIELDS})`,
+          key: null,
+          error: `Too many custom fields in one add (max ${MAX_CUSTOM_FIELDS}) — ${dropped} not saved`,
         });
       }
       for (const field of customFields.slice(0, MAX_CUSTOM_FIELDS)) {

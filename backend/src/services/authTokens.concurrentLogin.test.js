@@ -55,6 +55,14 @@ test('a doc with other unsaved changes is never replayed (a password change must
   expect(User.findById).not.toHaveBeenCalled();
 });
 
+// Release audit 2026-09-27 (L): a change that touched only `sessions` (a
+// revocation) counted as replayable — a fresh copy would have undone it.
+test('a revocation that touched only the sessions is not replayed either', async () => {
+  const revoking = doc({ modified: ['sessions'], save: jest.fn().mockRejectedValue(versionError()) });
+  await expect(issueTokens(revoking, res(), {})).rejects.toThrow(/No matching document/);
+  expect(User.findById).not.toHaveBeenCalled();
+});
+
 test('other errors are thrown as they are', async () => {
   const failing = doc({ save: jest.fn().mockRejectedValue(new Error('connection closed')) });
   await expect(issueTokens(failing, res(), {})).rejects.toThrow('connection closed');

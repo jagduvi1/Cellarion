@@ -104,11 +104,12 @@ describe('GET /mine', () => {
     expect(raw).not.toContain(OTHER);
     expect(raw).not.toContain('Secret answer from another owner');
 
-    // Query scope: addressed to me, and only answerable rows (answered, or
-    // open-and-not-expired — the query-time half of the expiry design).
+    // Query scope: addressed to me, and only answerable rows (answered or
+    // open, and not expired — the query-time half of the expiry design).
     const filter = WineOwnerInquiry.find.mock.calls[0][0];
     expect(filter['recipients.user']).toBe(ME);
-    expect(filter.$or[0]).toEqual({ status: 'answered' });
+    expect(filter.$or[0]).toMatchObject({ status: 'answered' });
+    expect(filter.$or[0].expiresAt.$gt).toBeInstanceOf(Date);
     expect(filter.$or[1].status).toBe('open');
     expect(filter.$or[1].expiresAt.$gt).toBeInstanceOf(Date);
   });
@@ -196,7 +197,8 @@ describe('POST /:id/respond', () => {
     // that is what makes the second submit lose atomically.
     expect(filter._id).toBe(I1);
     expect(filter.recipients.$elemMatch).toEqual({ user: ME, response: null });
-    expect(filter.$or[0]).toEqual({ status: 'answered' });
+    expect(filter.$or[0]).toMatchObject({ status: 'answered' });
+    expect(filter.$or[0].expiresAt.$gt).toBeInstanceOf(Date);
     expect(update.$set['recipients.$.response']).toBe('The label says E. Pira e Figli.');
     expect(update.$set['recipients.$.respondedAt']).toBeInstanceOf(Date);
     expect(update.$set.status).toBe('answered');
@@ -242,16 +244,21 @@ describe('POST /:id/respond', () => {
     select: () => ({ lean: async () => doc }),
   });
 
-  test('failed claim diagnoses: 404 gone, 403 non-recipient, 409 second attempt, 409 no longer open', async () => {
+  test('failed claim diagnoses: 404 gone, 404 non-recipient (no existence oracle), 409 second attempt, 409 no longer open', async () => {
     failClaim();
 
     diagnose(null);
     let res = await respond(I1, { response: 'answer' });
     expect(res.status).toBe(404);
+    expect((await res.json()).error).toBe('Inquiry not found');
 
+    // Addressed to someone else: reported exactly like one that does not exist,
+    // as the MCP tool does — this surface never confirms what other owners were
+    // asked (release audit 2026-09-27, L: it answered 403).
     diagnose({ status: 'open', expiresAt: new Date(Date.now() + 1000), recipients: [{ user: OTHER, response: null }] });
     res = await respond(I1, { response: 'answer' });
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
+    expect((await res.json()).error).toBe('Inquiry not found');
 
     diagnose({ status: 'answered', recipients: [{ user: ME, response: 'already said so' }] });
     res = await respond(I1, { response: 'answer' });

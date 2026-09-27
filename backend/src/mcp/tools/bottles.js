@@ -45,17 +45,17 @@ registerTool({
   scope: 'read',
   annotations: { readOnlyHint: true, openWorldHint: false },
   // No min_rating filter on purpose: stored ratings are on per-bottle scales
-  // (5/20/100) and the search index holds the RAW value, so a server-side
-  // threshold compares across scales incorrectly (REST normalizes in memory).
-  // Ratings ship in every result; the calling model filters better than a
-  // wrong index query would. A normalized filter can come with Phase 3.
+  // (5/20/100) and the bottle carries the RAW value, so a server-side
+  // threshold would compare across scales incorrectly (REST normalizes in
+  // memory). Ratings ship in every result; the calling model filters better
+  // than a wrong query would. A normalized filter can come with Phase 3.
   inputSchema: {
     query: z.string().max(200).optional().describe('Free-text search (name, producer, region, grape…)'),
     cellar_id: objectId.optional().describe('Restrict to one cellar (any cellar you own or are a member of)'),
     status: z.enum(['active', 'consumed', 'all']).default('active'),
-    // Alphanumeric only: the search index silently DROPS non-alphanumeric
-    // vintage filters while Mongo would exact-match them — rejecting here
-    // keeps the two paths agreeing instead of quietly diverging.
+    // Alphanumeric only — a vintage is a year or "NV". The search path and
+    // the list path below both exact-match it; rejecting anything else here
+    // keeps a stray punctuation mark from reading as "no vintage matches".
     vintage: z.string().regex(/^[A-Za-z0-9]{1,10}$/, 'alphanumeric, e.g. "2015" or "NV"').optional()
       .describe('e.g. "2015" or "NV"'),
     type: z.enum(['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified']).optional(),
@@ -67,6 +67,10 @@ registerTool({
   handler: async (args, ctx) => {
     const { limit, offset } = pageParams(args, 20, 50);
     const warnings = [];
+    // Trimmed once, here: a whitespace-only query is no query — it must take
+    // the "newest first" default, not the ranked path with nothing to rank by
+    // (release audit 2026-09-27, L: it returned oldest-first).
+    const query = String(args.query || '').trim();
 
     // Resolve the cellar scope first (access model in the header comment).
     let cellarIds;
@@ -95,16 +99,16 @@ registerTool({
     // document and filtering after pagination would shorten pages and inflate
     // totals — so a reserved filter takes the list path below, dropping
     // free-text matching with an explicit warning.
-    if (args.query && args.reserved) {
+    if (query && args.reserved) {
       warnings.push('reserved filter runs on the database path — free-text matching was skipped for this query.');
     }
-    if ((args.query || args.type) && !args.reserved) {
-      const res = await bottleSearch.searchBottles(args.query || '', {
+    if ((query || args.type) && !args.reserved) {
+      const res = await bottleSearch.searchBottles(query, {
         cellarIds: cellarIds.map(String),
         statusFilter: args.status || 'active',
         type: args.type,
         vintage: args.vintage,
-        sort: args.query ? undefined : '-createdAt',
+        sort: query ? undefined : '-createdAt',
         limit,
         offset,
       });

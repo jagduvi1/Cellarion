@@ -157,7 +157,8 @@ async function offlineShell() {
 // a full-size photo can't be fetched offline its thumbnail stands in — so the
 // bottle page still shows the bottle without ever storing full-size photos.
 const PHOTO_CACHE = 'cellarion-photos';
-const PROCESSED_PHOTO = /^\/api\/uploads\/processed\/([A-Za-z0-9_-]+\.(?:png|jpe?g|webp))$/i;
+// Both folders photos are served from have thumbnails (services/thumbnails.js).
+const UPLOADED_PHOTO = /^\/api\/uploads\/(processed|originals)\/([A-Za-z0-9_-]+\.(?:png|jpe?g|webp))$/i;
 
 async function servePhoto(request, url) {
   if (url.pathname.startsWith('/api/uploads/thumbs/')) {
@@ -167,8 +168,8 @@ async function servePhoto(request, url) {
   try {
     return await fetch(request);
   } catch (err) {
-    const m = PROCESSED_PHOTO.exec(url.pathname);
-    const thumb = m && await caches.match(`/api/uploads/thumbs/processed/${m[1]}.webp`, { cacheName: PHOTO_CACHE });
+    const m = UPLOADED_PHOTO.exec(url.pathname);
+    const thumb = m && await caches.match(`/api/uploads/thumbs/${m[1]}/${m[2]}.webp`, { cacheName: PHOTO_CACHE });
     if (thumb) return thumb;
     throw err;
   }

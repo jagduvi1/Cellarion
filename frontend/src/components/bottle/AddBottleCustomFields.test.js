@@ -309,3 +309,28 @@ describe('AddBottleCustomFields', () => {
     expect(screen.getByLabelText('Field name')).toHaveValue('ABV');
   });
 });
+
+// Release audit 2026-09-27 (L): the server refuses an enum key with fewer than
+// 2 or more than 20 options, or an option over 40 characters — the row now
+// says so while it is typed instead of after the add.
+const { enumOptionsProblem, ENUM_OPTIONS_MAX_CHARS } = await import('./AddBottleCustomFields');
+
+describe('enumOptionsProblem — the server rule, mirrored', () => {
+  test('nothing typed yet is not a problem', () => {
+    expect(enumOptionsProblem('')).toBeNull();
+    expect(enumOptionsProblem(undefined)).toBeNull();
+  });
+  test('one option is too few; two are fine', () => {
+    expect(enumOptionsProblem('Cork')).toBe('too_few');
+    expect(enumOptionsProblem('Cork, Screwcap')).toBeNull();
+    expect(enumOptionsProblem('Cork,,  , Screwcap')).toBeNull(); // blanks are not options
+  });
+  test('more than 20 is too many; an option over 40 characters too long', () => {
+    expect(enumOptionsProblem(Array.from({ length: 21 }, (_, i) => `o${i}`).join(','))).toBe('too_many');
+    expect(enumOptionsProblem(`ok, ${'x'.repeat(41)}`)).toBe('too_long');
+    expect(enumOptionsProblem(`ok, ${'x'.repeat(40)}`)).toBeNull();
+  });
+  test('the input cannot take more than the rule allows', () => {
+    expect(ENUM_OPTIONS_MAX_CHARS).toBe(20 * 42);
+  });
+});

@@ -172,6 +172,15 @@ describe('wine parts', () => {
     expect(r.status).toBe(404);
     expect(r.cache).toBe('no-store');
   });
+
+  test('…and is remembered for the cache lifetime: asking again runs no query (release audit 2026-09-27, L)', async () => {
+    await get('?part=wines-4');
+    const queries = WineDefinition.find.mock.calls.length;
+    const again = await get('?part=wines-4');
+    expect(again.status).toBe(404);
+    expect(again.cache).toBe('no-store');
+    expect(WineDefinition.find.mock.calls.length).toBe(queries);
+  });
 });
 
 describe('the pages part', () => {

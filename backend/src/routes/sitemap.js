@@ -217,6 +217,10 @@ function createSitemapRouter({
   };
 
   const notFound = (res) => res.status(404).set({ 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' }).send('Not found');
+  // A part past the last file is remembered too, for the cache's lifetime:
+  // a crawler that keeps asking for ?part=wines-9 after the catalogue shrank
+  // used to run the filtered scan on every hit (release audit 2026-09-27, L).
+  const NO_SUCH_PART = '<!-- no such part -->';
 
   // GET /sitemap.xml[?part=…]
   router.get('/', limiter, async (req, res) => {
@@ -229,9 +233,13 @@ function createSitemapRouter({
           inFlight.set(part, build(part).finally(() => inFlight.delete(part)));
         }
         xml = await inFlight.get(part);
-        if (xml === null) return notFound(res); // past the last file
+        if (xml === null) { // past the last file
+          cache.set(part, NO_SUCH_PART);
+          return notFound(res);
+        }
         cache.set(part, xml);
       }
+      if (xml === NO_SUCH_PART) return notFound(res);
       res.set('Content-Type', 'application/xml');
       res.set('Cache-Control', 'public, max-age=3600');
       return res.send(xml);

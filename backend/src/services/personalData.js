@@ -171,14 +171,21 @@ async function resolveKey(userId, { keyId, newKey }) {
   // where the key is genuinely new — and not on a value error for an
   // existing key (audit 2026-09-14 L2).
   if (!checked.ok) return { ...fail('invalid', checked.error), needsType: !(newKey && newKey.type) };
-  const { def } = checked;
+  // A genuinely new key is NOT written here: the caller validates the value
+  // against the definition and checks the room on the target first, then
+  // creates it (createKey) — so a refused value never leaves a typed key
+  // behind with no entry (release audit 2026-09-27, L).
+  return { ok: true, key: null, def: checked.def };
+}
 
+/** Write the key resolveKey deferred, within the per-user cap. */
+async function createKey(userId, def) {
   const count = await PersonalDataKey.countDocuments({ user: userId });
   if (count >= KEYS_PER_USER) {
     return fail('limit', `Key limit reached (max ${KEYS_PER_USER})`);
   }
   const key = await PersonalDataKey.create({ user: userId, ...def });
-  return { ok: true, key, created: true };
+  return { ok: true, key };
 }
 
 /**
@@ -212,16 +219,20 @@ async function createEntry(userId, bottle, { level, keyId, newKey, value, vintag
 
   const keyRes = await resolveKey(userId, { keyId, newKey });
   if (!keyRes.ok) return keyRes;
-  const { key } = keyRes;
+  // An existing key, or the definition of a new one not written yet (see
+  // resolveKey) — the same shape for validation either way.
+  let key = keyRes.key;
+  const keyDef = key || keyRes.def;
 
-  const checked = validateValue(key, value);
+  const checked = validateValue(keyDef, value);
   if (!checked.ok) return fail('invalid', checked.error);
 
   const target =
     level === 'wine' ? { wineDefinition: bottle.wineDefinition } : { bottle: bottle._id };
   const slotVintage = vintageScoped ? bottle.vintage.trim() : null;
 
-  if (dedupe) {
+  // A key that does not exist yet can have no earlier entry to dedupe against.
+  if (dedupe && key) {
     // Rows written before the vintage field existed have no `vintage` at all,
     // and Mongo matches a missing field against null — so the default slot
     // finds them, exactly as the RegistryDataValue index does.
@@ -253,6 +264,15 @@ async function createEntry(userId, bottle, { level, keyId, newKey, value, vintag
     return fail('limit', `Entry limit reached for this ${level} (max ${ENTRIES_PER_TARGET})`);
   }
 
+  // Everything that could refuse has passed: now the new key is written.
+  let keyCreated = false;
+  if (!key) {
+    const made = await createKey(userId, keyRes.def);
+    if (!made.ok) return made;
+    key = made.key;
+    keyCreated = true;
+  }
+
   const entry = await PersonalDataEntry.create({
     author: userId,
     key: key._id,
@@ -262,7 +282,7 @@ async function createEntry(userId, bottle, { level, keyId, newKey, value, vintag
     value: checked.value,
   });
   await entry.populate([{ path: 'key' }, { path: 'author', select: AUTHOR_SELECT }]);
-  return { ok: true, entry: serializeEntry(entry), keyCreated: !!keyRes.created };
+  return { ok: true, entry: serializeEntry(entry), keyCreated };
 }
 
 /** Author-only. Not-found for anyone else — no existence oracle. */

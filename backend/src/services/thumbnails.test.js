@@ -42,14 +42,60 @@ describe('thumbUrlFor', () => {
   test('maps a processed upload to its thumbnail URL', () => {
     expect(thumbUrlFor(`/api/uploads/processed/${SOURCE}`)).toBe(`/api/uploads/thumbs/processed/${SOURCE}.webp`);
   });
+  // Release audit 2026-09-27 (L): keep-background and imported never-cropped
+  // photos live under originals/ and shipped full size to every card.
+  test('maps an original (kept with its background) to its thumbnail too', () => {
+    expect(thumbUrlFor(`/api/uploads/originals/${SOURCE}`)).toBe(`/api/uploads/thumbs/originals/${SOURCE}.webp`);
+  });
   test.each([
     null,
     'https://example.com/x.png',
-    `/api/uploads/originals/${SOURCE}`,
+    `/api/uploads/thumbs/processed/${SOURCE}.webp`,
     '/api/uploads/processed/../secret.png',
     '/api/uploads/processed/x.svg',
+    `/api/uploads/other/${SOURCE}`,
   ])('returns null for %s', (url) => {
     expect(thumbUrlFor(url)).toBeNull();
+  });
+});
+
+describe('originals', () => {
+  test('a photo kept with its background gets a thumbnail under thumbs/originals', async () => {
+    await fs.promises.mkdir(path.join(root, 'originals'), { recursive: true });
+    await sharp({ create: { width: 800, height: 1200, channels: 3, background: { r: 200, g: 200, b: 190 } } })
+      .jpeg()
+      .toFile(path.join(root, 'originals', 'aaaaaaaa-1111-4222-8333-944445555666.jpg'));
+    const { handler, unlinkThumbFor } = createThumbnailService({ uploadsRoot: root });
+
+    const r = await call(handler, '/originals/aaaaaaaa-1111-4222-8333-944445555666.jpg.webp');
+
+    expect(r.status).toBe(200);
+    expect(r.file).toBe(path.join(root, 'thumbs', 'originals', 'aaaaaaaa-1111-4222-8333-944445555666.jpg.webp'));
+    const meta = await sharp(r.file).metadata();
+    expect(meta.format).toBe('webp');
+    expect(meta.height).toBeLessThanOrEqual(THUMB_MAX_HEIGHT);
+    // …and is removed with its source's URL, like a processed one.
+    await unlinkThumbFor('/api/uploads/originals/aaaaaaaa-1111-4222-8333-944445555666.jpg');
+    expect(fs.existsSync(r.file)).toBe(false);
+  });
+});
+
+describe('a source that fails to render', () => {
+  test('is not decoded again for a while — one attempt, then a quick 500', async () => {
+    const chain = { rotate: () => chain, resize: () => chain, webp: () => chain, toBuffer: () => Promise.reject(new Error('corrupt')) };
+    const fakeSharp = jest.fn(() => chain);
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const { handler } = createThumbnailService({ uploadsRoot: root, sharp: fakeSharp });
+
+    expect((await call(handler, `/processed/${SOURCE}.webp`)).status).toBe(500);
+    expect((await call(handler, `/processed/${SOURCE}.webp`)).status).toBe(500);
+    expect((await call(handler, `/processed/${SOURCE}.webp`)).headers['Cache-Control']).toBe('no-store');
+
+    expect(fakeSharp).toHaveBeenCalledTimes(1);
+    // The decode is bounded like the sanitizer's.
+    expect(fakeSharp.mock.calls[0][1]).toEqual({ limitInputPixels: 8000 * 8000 });
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
   });
 });
 
@@ -86,7 +132,7 @@ describe('thumbnail handler', () => {
 
   test.each([
     `/processed/${SOURCE}`,                 // no .webp suffix
-    `/originals/${SOURCE}.webp`,            // only processed/ has thumbnails
+    `/originals/${SOURCE}.webp`,            // no such file under originals/
     '/processed/..%2F..%2Fetc%2Fpasswd.png.webp',
     '/processed/../processed/x.png.webp',
     '/processed/evil.svg.webp',

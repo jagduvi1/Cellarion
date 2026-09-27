@@ -403,6 +403,16 @@ describe('authenticateApiToken', () => {
       expect(logAudit).toHaveBeenCalledTimes(1);
     });
 
+    // Release audit 2026-09-27 (L): the daily entry sat inside the hourly
+    // throttle — a token used at 23:50 and again at 00:20, its only use that
+    // day, had no token.used for the new day.
+    test('a use within the hour but on a new UTC day is still audited, and lastUsedAt written', async () => {
+      jest.setSystemTime(new Date('2026-09-26T00:20:00Z'));
+      await use(new Date('2026-09-25T23:50:00Z'));
+      expect(ApiToken.updateOne).toHaveBeenCalledTimes(1);
+      expect(logAudit).toHaveBeenCalledTimes(1);
+    });
+
     test('a token polling all day long writes lastUsedAt every time the hour is up, token.used once', async () => {
       let lastUsedAt = new Date('2026-09-25T23:10:00Z');
       ApiToken.updateOne.mockImplementation((q, u) => { lastUsedAt = u.$set.lastUsedAt; return Promise.resolve({}); });

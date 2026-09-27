@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { writeFileAtomic } = require('../utils/atomicWrite');
 const crypto = require('crypto');
 const { PROCESSED_DIR } = require('../config/upload');
 const BottleImage = require('../models/BottleImage');
@@ -113,6 +114,9 @@ async function discardOriginal(image) {
   if (image.originalUrl === image.processedUrl) return;
   const url = image.originalUrl;
   await unlinkIfUnreferenced(image._id, url);
+  // An original can have a thumbnail too (a card showed it while the photo
+  // was still 'uploaded'); it goes with the file.
+  await unlinkThumbFor(url);
   try {
     await BottleImage.updateOne({ _id: image._id, originalUrl: url }, { $set: { originalUrl: null } });
   } catch (err) {
@@ -204,27 +208,31 @@ async function runProcessImage(imageId) {
     const processedFilename = `${basename}.${KEPT_EXTENSION}`;
     const processedPath = path.join(PROCESSED_DIR, processedFilename);
 
-    fs.writeFileSync(processedPath, keptBuffer);
+    // Into a publicly served, immutably cached folder: never half-written.
+    await writeFileAtomic(processedPath, keptBuffer);
     // A re-run (retry / admin reprocess) rewrites the same filename: drop the
     // thumbnail rendered from the previous bytes so the next request re-renders.
     await unlinkThumbFor(`/api/uploads/processed/${processedFilename}`);
+
+    // Official wine images (assignedToWine) may have been APPROVED before (or
+    // while) this job ran — admin-direct uploads are, and a web approval of an
+    // 'uploaded' image races it. Re-read the flag and the status (this job's
+    // doc snapshot predates the approval) BEFORE writing the settled status, so
+    // an approval that landed mid-run is kept rather than overwritten with
+    // 'processed' (release audit 2026-09-27, L); then upgrade the WINE's
+    // display image from the original to the clean processed version —
+    // previously an early approval pinned originalUrl on the wine forever.
+    const official = await BottleImage.findById(imageId).select('assignedToWine wineDefinition status');
 
     // Update document. The processed (cropped) image is now the version we keep
     // and export, so the dedup hash is computed from it (overriding the
     // original-bytes hash stamped at upload) — keeping it consistent with what a
     // cellar export carries and re-imports.
     image.processedUrl = `/api/uploads/processed/${processedFilename}`;
-    image.status = settledStatus;
+    image.status = official?.status === 'approved' ? 'approved' : settledStatus;
     image.contentHash = hashImageBytes(keptBuffer);
     await image.save();
 
-    // Official wine images (assignedToWine) may have been APPROVED before (or
-    // while) this job ran — admin-direct uploads are, and a web approval of an
-    // 'uploaded' image races it. Re-read the flag (this job's doc snapshot
-    // predates the approval), keep the approval, and upgrade the WINE's display
-    // image from the original to the clean processed version — previously an
-    // early approval pinned originalUrl on the wine forever.
-    const official = await BottleImage.findById(imageId).select('assignedToWine wineDefinition status');
     if (official?.assignedToWine && official.wineDefinition) {
       if (official.status !== 'approved') {
         await BottleImage.updateOne({ _id: imageId }, { status: 'approved' });

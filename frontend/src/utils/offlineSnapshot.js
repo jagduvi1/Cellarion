@@ -106,6 +106,23 @@ export async function offlineAnswer(url, userId) {
  * anything, and the copy is kept, now confirmed current (its time moves on, so
  * the banner and the refresh timing see a fresh copy).
  */
+// The server allows 30 refreshes per 10 minutes (routes/offline). A burst of
+// changes can use them up; the copy then went silently stale until the 15-min
+// timer (release audit 2026-09-27, L). One retry is scheduled for when the
+// server says the window reopens — a later 429 replaces it, never stacks.
+const RETRY_DEFAULT_MS = 60 * 1000;
+const RETRY_MAX_MS = 10 * 60 * 1000;
+let retryTimer = null;
+function scheduleRetry(apiFetch, uid, retryAfterHeader) {
+  const seconds = Number(retryAfterHeader);
+  const delay = Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds * 1000, RETRY_MAX_MS) : RETRY_DEFAULT_MS;
+  clearTimeout(retryTimer);
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    refreshSnapshot(apiFetch, uid).catch(() => {});
+  }, delay);
+}
+
 export async function refreshSnapshot(apiFetch, userId) {
   if (!userId || !isOfflineModeEnabled()) return false;
   const uid = String(userId);
@@ -116,6 +133,10 @@ export async function refreshSnapshot(apiFetch, userId) {
   try {
     res = await apiFetch('/api/offline/snapshot', known ? { headers: { 'If-None-Match': known } } : {});
   } catch { return false; }
+  if (res.status === 429) {
+    scheduleRetry(apiFetch, uid, res.headers?.get?.('Retry-After'));
+    return false;
+  }
   if (res.status === 304) {
     if (!known || current?.userId !== uid) return false;
     const confirmed = { ...current.base, generatedAt: new Date().toISOString() };

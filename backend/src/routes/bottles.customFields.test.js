@@ -250,11 +250,11 @@ describe('POST /api/bottles — custom fields', () => {
 
     expect(personalData.createEntry).toHaveBeenCalledTimes(20);
     // A silent truncation is the one failure the caller cannot see: the add
-    // is 201 and the field simply is not there.
+    // is 201 and the field simply is not there. One line for all of them —
+    // one per dropped element let a 64 kB body come back as ~1.5 MB of
+    // repeats (release audit 2026-09-27, L).
     expect(body.customFieldErrors).toEqual([
-      { key: 'k20', error: 'Too many custom fields in one add (max 20)' },
-      { key: 'k21', error: 'Too many custom fields in one add (max 20)' },
-      { key: 'k22', error: 'Too many custom fields in one add (max 20)' },
+      { key: null, error: 'Too many custom fields in one add (max 20) — 3 not saved' },
     ]);
   });
 

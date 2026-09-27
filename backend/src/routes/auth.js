@@ -186,9 +186,14 @@ router.post('/register', authLimiter, async (req, res) => {
     // Resolve any pending cellar shares for this email
     resolvePendingShares(user).catch(() => {});
 
+    // persistent, as /login and /refresh answer it: without it the app read the
+    // new account's session as browser-only and discarded the profile kept for
+    // an offline start (release audit 2026-09-27, L). Registration issues a
+    // "remember me" session (issueTokens' default).
     res.status(201).json({
       token: accessToken,
-      user: user.toJSON()
+      user: user.toJSON(),
+      persistent: true,
     });
   } catch (error) {
     if (error.name === 'ValidationError') {
@@ -227,7 +232,8 @@ router.post('/demo-login', demoLimiter, async (req, res) => {
 
     logAudit(req, 'auth.demo_login', { type: 'user', id: user._id }, { expiresAt: user.demoExpiresAt });
 
-    res.status(201).json({ token: accessToken, user: user.toJSON() });
+    // A session cookie (rememberMe: false above): never kept for an offline start.
+    res.status(201).json({ token: accessToken, user: user.toJSON(), persistent: false });
   } catch (error) {
     console.error('Demo login error:', error);
     res.status(500).json({ error: 'Could not start a demo session. Please try again.' });

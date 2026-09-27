@@ -49,8 +49,12 @@ router.get('/mine', async (req, res) => {
   }
 });
 
-// The service's transport-neutral refusal codes → HTTP statuses.
-const RESPOND_STATUS = { invalid_input: 400, not_found: 404, forbidden: 403, conflict: 409 };
+// The service's transport-neutral refusal codes → HTTP statuses. An inquiry
+// addressed to someone else is reported exactly like one that does not exist,
+// as the MCP tool does: this surface never confirms what other owners were
+// asked (release audit 2026-09-27, L — it answered 403).
+const RESPOND_STATUS = { invalid_input: 400, not_found: 404, forbidden: 404, conflict: 409 };
+const NOT_FOUND_MESSAGE = 'Inquiry not found';
 
 // POST /api/owner-inquiries/:id/respond — one immutable answer per recipient
 router.post('/:id/respond', requireNonDemo, async (req, res) => {
@@ -63,7 +67,8 @@ router.post('/:id/respond', requireNonDemo, async (req, res) => {
       req,
     });
     if (!result.ok) {
-      return res.status(RESPOND_STATUS[result.code] || 400).json({ error: result.message });
+      const status = RESPOND_STATUS[result.code] || 400;
+      return res.status(status).json({ error: status === 404 ? NOT_FOUND_MESSAGE : result.message });
     }
     res.json({ message: 'Answer sent — thank you', status: result.status });
   } catch (err) {

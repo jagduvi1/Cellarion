@@ -177,6 +177,29 @@ describe('AddBottle — custom fields on the bottle POSTs', () => {
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/cellars/cellar1'));
   });
 
+  // Release audit 2026-09-27 (L): a refusal already received was lost when a
+  // later create threw — the error named the network failure only.
+  test('a refusal already received survives a network failure on a later bottle', async () => {
+    let n = 0;
+    apiFetchMock.mockImplementation(async (url) => {
+      if (url.startsWith('/api/racks?cellar=')) return jsonRes({ racks: [] });
+      n += 1;
+      if (n === 2) throw new TypeError('Failed to fetch');
+      return jsonRes({
+        bottle: { _id: `b${n}`, wineDefinition: { _id: 'w-new' }, vintage: '2019' },
+        priceWarnings: [],
+        customFieldErrors: [{ key: 'ABV', error: 'You already use "ABV" as a text key' }],
+      }, true, 201);
+    });
+    await submitTwoWithFields();
+
+    await waitFor(() => expect(document.querySelector('.alert-error')).not.toBeNull());
+    const alert = document.querySelector('.alert-error');
+    expect(alert.textContent).toContain('addBottle.partialAdded');
+    expect(alert.textContent).toContain('ABV: You already use "ABV" as a text key');
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
   test('fields added AFTER a partial failure still reach the wine on the retry', async () => {
     // Bottle 1 lands, bottle 2 fails. The user then adds ABV on the error
     // screen and submits again — and the retry resumes at index 1. Keying the

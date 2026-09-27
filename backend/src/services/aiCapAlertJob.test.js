@@ -139,6 +139,22 @@ test('a failed send gives the claim back, so the next run tries again', async ()
   expect(await runAiCapAlertCheck(NOW)).toEqual({ sent: 1, pct: 50 });
 });
 
+// Release audit 2026-09-27 (L): a Mailgun call that never answered held the
+// threshold claim for the rest of the day — bounded now, like the support mail.
+test('a send that never answers is given up after the timeout, and the claim given back', async () => {
+  jest.useFakeTimers({ now: NOW });
+  try {
+    setToday(500);
+    sendAiCapAlertEmail.mockImplementationOnce(() => new Promise(() => {}));
+    const run = runAiCapAlertCheck(NOW);
+    await jest.advanceTimersByTimeAsync(10001);
+    expect(await run).toEqual({ sent: 0, reason: 'send_failed' });
+    expect(globalRow().alertedPct).toBeUndefined();
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
 test('a failed 80% send falls back to the 50% already sent, not to nothing', async () => {
   setToday(500);
   await runAiCapAlertCheck(NOW);

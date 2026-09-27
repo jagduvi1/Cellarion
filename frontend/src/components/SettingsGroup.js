@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 
 /**
  * One collapsible group on the Settings page (Account, Preferences, AI &
@@ -9,6 +10,9 @@ import { useEffect, useRef, useState } from 'react';
  * - Which groups are open is remembered per browser (a convenience only).
  * - A link to /settings#<id> — or to one of the aliases below, e.g.
  *   #notifications, #mcp, #api-tokens — opens that group and scrolls to it.
+ *   The hash is read from the router's location, so a link followed inside
+ *   the app (React Router's navigation fires no `hashchange`) opens the group
+ *   like a fresh page load does (release audit 2026-09-27, L).
  */
 const STORE_KEY = 'cellarion-settings-open';
 
@@ -22,9 +26,9 @@ export const SETTINGS_HASH_GROUP = {
   danger: 'danger', 'delete-account': 'danger',
 };
 
-function hashGroup() {
+export function groupForHash(hash) {
   try {
-    const h = decodeURIComponent((window.location.hash || '').slice(1)).toLowerCase();
+    const h = decodeURIComponent((hash || '').slice(1)).toLowerCase();
     return SETTINGS_HASH_GROUP[h] || null;
   } catch {
     return null;
@@ -41,8 +45,10 @@ function store(id, open) {
 
 export default function SettingsGroup({ id, title, summary, defaultOpen = false, forceOpen = false, danger = false, children }) {
   const ref = useRef(null);
+  const { hash } = useLocation();
+  const linked = groupForHash(hash) === id;
   const [open, setOpen] = useState(() => {
-    if (forceOpen || hashGroup() === id) return true;
+    if (forceOpen || linked) return true;
     const stored = readStored()[id];
     return typeof stored === 'boolean' ? stored : defaultOpen;
   });
@@ -50,29 +56,25 @@ export default function SettingsGroup({ id, title, summary, defaultOpen = false,
   // Something needs attention inside (e.g. an account deletion is scheduled).
   useEffect(() => { if (forceOpen) setOpen(true); }, [forceOpen]);
 
-  // /settings#notifications etc.: open this group and bring it into view.
+  // /settings#notifications etc.: open this group and bring it into view —
+  // on arrival, and again whenever the hash changes to one of its aliases.
   useEffect(() => {
-    const go = () => {
-      if (hashGroup() !== id) return;
-      setOpen(true);
-      requestAnimationFrame(() => {
-        const el = ref.current;
-        if (!el) return;
-        // Clear the sticky top bar, whose height varies (the admin menu wraps
-        // onto several rows), so the group's heading is never hidden under it.
-        const bar = document.querySelector('.navbar');
-        const barBottom = bar && getComputedStyle(bar).position === 'sticky' ? bar.getBoundingClientRect().bottom : 0;
-        if (typeof window.scrollTo === 'function' && barBottom > 0) {
-          window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - barBottom - 12, behavior: 'smooth' });
-        } else {
-          el.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
-        }
-      });
-    };
-    go();
-    window.addEventListener('hashchange', go);
-    return () => window.removeEventListener('hashchange', go);
-  }, [id]);
+    if (!linked) return;
+    setOpen(true);
+    requestAnimationFrame(() => {
+      const el = ref.current;
+      if (!el) return;
+      // Clear the sticky top bar, whose height varies (the admin menu wraps
+      // onto several rows), so the group's heading is never hidden under it.
+      const bar = document.querySelector('.navbar');
+      const barBottom = bar && getComputedStyle(bar).position === 'sticky' ? bar.getBoundingClientRect().bottom : 0;
+      if (typeof window.scrollTo === 'function' && barBottom > 0) {
+        window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - barBottom - 12, behavior: 'smooth' });
+      } else {
+        el.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+      }
+    });
+  }, [id, hash, linked]);
 
   return (
     <section id={id} ref={ref} className={`settings-group${danger ? ' settings-group--danger' : ''}`}>

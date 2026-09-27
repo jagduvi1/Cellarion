@@ -182,6 +182,29 @@ describe('createEntry', () => {
     expect(PersonalDataEntry.create).not.toHaveBeenCalled();
   });
 
+  // Release audit 2026-09-27 (L): the key used to be minted before the value
+  // and the target's room were checked — a refused value left an orphan typed
+  // key with no entry, which then blocked the same name under another type.
+  test('a value the NEW key would refuse leaves no key behind', async () => {
+    PersonalDataKey.findOne.mockResolvedValue(null);
+    const res = await svc.createEntry(ME, bottle, {
+      level: 'wine', newKey: { name: 'ABV', type: 'decimal' }, value: 'strong',
+    });
+    expect(res).toMatchObject({ ok: false, code: 'invalid' });
+    expect(PersonalDataKey.create).not.toHaveBeenCalled();
+    expect(PersonalDataEntry.create).not.toHaveBeenCalled();
+  });
+
+  test('a full target refuses before a new key is minted', async () => {
+    PersonalDataKey.findOne.mockResolvedValue(null);
+    PersonalDataEntry.countDocuments.mockResolvedValue(svc.ENTRIES_PER_TARGET);
+    const res = await svc.createEntry(ME, bottle, {
+      level: 'wine', newKey: { name: 'ABV', type: 'decimal' }, value: 13.5,
+    });
+    expect(res).toMatchObject({ ok: false, code: 'limit' });
+    expect(PersonalDataKey.create).not.toHaveBeenCalled();
+  });
+
   test('per-target entry cap enforced', async () => {
     PersonalDataKey.findOne.mockResolvedValue(abvKey);
     PersonalDataEntry.countDocuments.mockResolvedValue(svc.ENTRIES_PER_TARGET);

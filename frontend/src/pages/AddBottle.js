@@ -764,6 +764,11 @@ function AddBottle() {
     const partialError = (msg, done) => done > 0
       ? t('addBottle.partialAdded', { msg, count: done, total: numBottles, remaining: numBottles - done })
       : msg;
+    // Custom fields the server refused on bottles that DID land. Declared
+    // outside the try so the network-failure path below can report them too:
+    // a later create that throws used to lose them with the attempt (release
+    // audit 2026-09-27, L).
+    const fieldWarnings = [];
 
     try {
       const base = {
@@ -799,7 +804,6 @@ function AddBottle() {
       });
       const bottleLevelFields = customFieldRows.filter(f => f.level === 'bottle');
       const wineLevelFields = customFieldRows.filter(f => f.level === 'wine');
-      const fieldWarnings = [];
 
       // createdBottlesRef carries the bottles a previous, partially-failed
       // attempt already created, so a retry never duplicates them — and if
@@ -905,7 +909,10 @@ function AddBottle() {
       }
       await finishAdd();
     } catch (err) {
-      setError(partialError(t('common.networkError'), createdBottlesRef.current.length));
+      setError([
+        partialError(t('common.networkError'), createdBottlesRef.current.length),
+        ...fieldWarnings,
+      ].join(' — '));
       linkUploadedImages();
     } finally {
       setSaving(false);

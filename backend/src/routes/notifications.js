@@ -11,8 +11,11 @@ router.use(requireAuth);
 router.get('/', async (req, res) => {
   try {
     const [notifications, unreadCount] = await Promise.all([
+      // _id breaks ties between rows created in the same millisecond (a burst
+      // of notifications), so the order — and the probe's newestId below — is
+      // stable between reads (release audit 2026-09-27, L).
       Notification.find({ user: req.user.id })
-        .sort({ createdAt: -1 })
+        .sort({ createdAt: -1, _id: -1 })
         .limit(30)
         .lean(),
       // Count across ALL rows, not just the returned page — older unread
@@ -39,7 +42,7 @@ router.get('/unread-count', async (req, res) => {
     const [unreadCount, newest] = await Promise.all([
       Notification.countDocuments({ user: req.user.id, read: false }),
       Notification.findOne({ user: req.user.id })
-        .sort({ createdAt: -1 })
+        .sort({ createdAt: -1, _id: -1 })
         .select('_id')
         .lean(),
     ]);

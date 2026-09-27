@@ -12,7 +12,7 @@ vi.mock('./offlineSnapshot', () => ({
   rebuildWorking: vi.fn(async () => mem.idx),
 }));
 
-import { writeKeyFor, queueWrite, flushQueue, resolveAttention, getQueueStatus, listAttention } from './offlineQueue';
+import { writeKeyFor, queueWrite, flushQueue, resolveAttention, getQueueStatus, listAttention, sweepAbandonedQueue } from './offlineQueue';
 
 function memoryStorage() {
   const m = new Map();
@@ -197,10 +197,30 @@ describe('audit fixes', () => {
 
   it('the user\'s own changes are never dropped unseen; another account\'s after 30 days', async () => {
     const { key } = await queue(`/api/bottles/${b1}/consume`, 'POST', {});
-    mem.queue.set(key, { ...mem.queue.get(key), createdAt: '2020-01-01T00:00:00Z' });
-    mem.queue.set('other', { id: 'other', userId: 'u9', status: 'pending', createdAt: '2020-01-01T00:00:00Z' });
+    const eightyDays = new Date(Date.now() - 80 * 24 * 60 * 60 * 1000).toISOString();
+    mem.queue.set(key, { ...mem.queue.get(key), createdAt: eightyDays });
+    mem.queue.set('other', { id: 'other', userId: 'u9', status: 'pending', createdAt: eightyDays });
     await flushQueue(vi.fn(async () => { throw new TypeError('offline'); }), 'u1');
     expect(mem.queue.has(key)).toBe(true);
     expect(mem.queue.has('other')).toBe(false);
+  });
+
+  // Release audit 2026-09-27 (L): a change queued by an account that ended
+  // (signed out elsewhere, deleted) with nobody signing in here since stayed
+  // in the device's storage indefinitely.
+  it('anyone\'s change is dropped after three months — the user\'s own too, having shown in the banner that long', async () => {
+    const { key } = await queue(`/api/bottles/${b1}/consume`, 'POST', {});
+    mem.queue.set(key, { ...mem.queue.get(key), createdAt: '2020-01-01T00:00:00Z' });
+    await flushQueue(vi.fn(async () => { throw new TypeError('offline'); }), 'u1');
+    expect(mem.queue.has(key)).toBe(false);
+  });
+
+  it('a start that ends signed out sweeps only the three-month-old changes — a month-old one waits for its account', async () => {
+    const days = (n) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
+    mem.queue.set('old', { id: 'old', userId: 'u1', status: 'pending', createdAt: days(100) });
+    mem.queue.set('recent', { id: 'recent', userId: 'u9', status: 'pending', createdAt: days(40) });
+    const kept = await sweepAbandonedQueue();
+    expect(kept.map((o) => o.id)).toEqual(['recent']);
+    expect(mem.queue.has('old')).toBe(false);
   });
 });

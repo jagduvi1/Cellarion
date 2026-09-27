@@ -29,7 +29,13 @@ const WINE_POPULATE = [
 // of 30 bottles ships the same card data at a fraction of the payload. Detail
 // routes (GET /api/bottles/:id etc.) keep the full WINE_POPULATE — the bottle
 // page renders aiProfile.
-const WINE_LIST_SELECT = `-aiProfile -normalizedKey -lwin -productNumber -productNumberShort -createdBy ${SCAN_EVIDENCE_EXCLUDE}`;
+//
+// Also left out: the registry's internal bookkeeping no card reads and no
+// cellar member — a viewer included — has any business with: who contributed
+// the wine and from which instance (contribution), how it was created
+// (createdVia), the canary flag and the identity provenance (release audit
+// 2026-09-27, L; the registry-UI rule: never show who contributed).
+const WINE_LIST_SELECT = `-aiProfile -normalizedKey -lwin -productNumber -productNumberShort -createdBy -contribution -createdVia -canary -identityProvenance ${SCAN_EVIDENCE_EXCLUDE}`;
 const WINE_POPULATE_LIST = [
   {
     path: 'wineDefinition',
