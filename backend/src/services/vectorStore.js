@@ -29,9 +29,11 @@
  * The copy (~28 MB for today's 14k rows) is built on first use by streaming
  * the rows, one build at a time. It is checked against the rows at most
  * every FRESH_MS — their count and newest embeddedAt, read from an index, so
- * any process's writes count — and rebuilt when they changed: a search may
- * miss a vector written in the last half minute, and a busy embedding job
- * can't trigger a rebuild per search. Dropped after 15 idle minutes.
+ * any process's writes count — and rebuilt when they changed, so a busy
+ * embedding job can't trigger a rebuild per search. A registry-wide search
+ * may miss a vector written in the last half minute; a scoped one also reads
+ * its wines' rows written since the copy was built, so a wine just added
+ * counts at once. Dropped after 15 idle minutes.
  */
 
 const WineEmbedding = require('../models/WineEmbedding');
@@ -99,7 +101,8 @@ async function signatureOf(filter) {
     WineEmbedding.countDocuments(filter),
     WineEmbedding.findOne(filter).sort({ embeddedAt: -1 }).select('embeddedAt').lean(),
   ]);
-  return { count, key: `${count}:${newest && newest.embeddedAt ? new Date(newest.embeddedAt).getTime() : 0}` };
+  const newestMs = newest && newest.embeddedAt ? new Date(newest.embeddedAt).getTime() : 0;
+  return { count, newest: newestMs, key: `${count}:${newestMs}` };
 }
 
 function touch() {
@@ -133,7 +136,9 @@ async function build(filter, key, signature) {
     vintage[n] = r.vintage;
     n += 1;
   }
-  const table = { dim, n, data, norms, wine, vintage };
+  // `newest`: the newest embeddedAt when the build started. A scoped search
+  // reads its wines' rows written after it straight from MongoDB (search).
+  const table = { dim, n, data, norms, wine, vintage, newest: signature.newest };
   const now = Date.now();
   registry = { key, signature: signature.key, table, bytes: n * dim, builtAt: new Date(now), checkedAt: now };
   touch();
@@ -195,32 +200,55 @@ async function search(queryValues, {
   const exclude = excludeWineId ? String(excludeWineId) : null;
 
   // Score only the rows in scope.
-  const scores = new Float32Array(table.n);
-  let candidates = [];
+  let cands = [];
   for (let r = 0; r < table.n; r++) {
     const w = table.wine[r];
     if ((only && !only.has(w)) || w === exclude) continue;
     const off = r * dim;
     let s = 0;
     for (let d = 0; d < dim; d++) s += table.data[off + d] * query[d];
-    const score = s / table.norms[r];
-    if (score < minScore) continue;
-    scores[r] = score;
-    candidates.push(r);
+    cands.push({ wine: w, vintage: table.vintage[r], score: s / table.norms[r] });
   }
-  if (distinctWines) {
-    const best = new Map(); // wine -> row
-    for (const r of candidates) {
-      const cur = best.get(table.wine[r]);
-      if (cur === undefined || scores[r] > scores[cur]) best.set(table.wine[r], r);
+
+  // A scoped search also reads its wines' rows written after the copy was
+  // built, straight from MongoDB — usually none (an indexed range on
+  // embeddedAt). A wine added a moment ago must count at once for its
+  // owner's chat and restock check, not after the copy's next check: missing
+  // it sent a false "time to restock?" (review 2026-09-27). A re-embedded row
+  // replaces its stale score.
+  if (only) {
+    const recent = await WineEmbedding.find({
+      model, indexVersion, dim, embeddedAt: { $gt: new Date(table.newest) }, wineDefinition: { $in: wineIds },
+    }).select(ROW_FIELDS).lean();
+    if (recent.length) {
+      const at = new Map(cands.map((c, i) => [`${c.wine}|${c.vintage}`, i]));
+      for (const row of recent) {
+        const w = String(row.wineDefinition);
+        const v = int8Of(row.vector);
+        if (w === exclude || !v || v.length !== dim || !(row.norm > 0)) continue;
+        let s = 0;
+        for (let d = 0; d < dim; d++) s += v[d] * query[d];
+        const c = { wine: w, vintage: row.vintage, score: s / row.norm };
+        const i = at.get(`${w}|${row.vintage}`);
+        if (i === undefined) { at.set(`${w}|${row.vintage}`, cands.length); cands.push(c); } else cands[i] = c;
+      }
     }
-    candidates = [...best.values()];
   }
-  candidates.sort((a, b) => scores[b] - scores[a]);
-  return candidates.slice(0, Math.max(0, limit)).map((r) => ({
-    wineDefinitionId: table.wine[r],
-    vintage: table.vintage[r],
-    score: scores[r],
+
+  cands = cands.filter((c) => c.score >= minScore);
+  if (distinctWines) {
+    const best = new Map(); // wine -> its best candidate
+    for (const c of cands) {
+      const cur = best.get(c.wine);
+      if (!cur || c.score > cur.score) best.set(c.wine, c);
+    }
+    cands = [...best.values()];
+  }
+  cands.sort((a, b) => b.score - a.score);
+  return cands.slice(0, Math.max(0, limit)).map((c) => ({
+    wineDefinitionId: c.wine,
+    vintage: c.vintage,
+    score: c.score,
   }));
 }
 
