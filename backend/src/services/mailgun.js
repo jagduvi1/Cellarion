@@ -645,7 +645,8 @@ async function sendSupportReplyEmail(toEmail, recipientName, recipientId, ticket
  * everyone until 00:00 UTC, so the early warnings leave time to look first.
  *
  * alert: { pct, count, cap, resetsInSeconds,
- *          topAi: [{ userId, count }], topChat: [{ userId, count }] }
+ *          topAi: [{ userId, count }] | null (not tracked: the per-user budget
+ *          is unlimited), topChat: [{ userId, count }] }
  */
 async function sendAiCapAlertEmail(toEmail, alert) {
   if (!EMAIL_VERIFICATION_ENABLED) return;
@@ -664,7 +665,10 @@ async function sendAiCapAlertEmail(toEmail, alert) {
     ? `Today's AI calls reached the site-wide cap (${count} of ${cap}). Label scans, import identification, wine info and cellar chat are off for everyone until the count resets at 00:00 UTC, in ${resets}.`
     : `Today's AI calls reached ${pct}% of the site-wide cap: ${count} of ${cap}. At the cap every AI feature (label scans, import identification, wine info, cellar chat) switches off for everyone until 00:00 UTC. The count resets in ${resets}.`;
   const advice = 'If this is real use, raise the cap in SuperAdmin → Settings → AI daily budget (spend cap) → Site-wide daily kill-switch. If one account stands out below, look at that account first.';
-  const listLines = (rows) => (rows && rows.length ? rows.map((r) => `user ${r.userId}: ${r.count}`) : ['none']);
+  const listLines = (rows) => {
+    if (rows === null) return ['not tracked (the per-user AI budget is unlimited)'];
+    return rows && rows.length ? rows.map((r) => `user ${r.userId}: ${r.count}`) : ['none'];
+  };
   const topAi = listLines(alert.topAi);
   const topChat = listLines(alert.topChat);
 

@@ -50,34 +50,42 @@ async function runAiCapAlertCheck(now = new Date()) {
   if (!mailgun.EMAIL_VERIFICATION_ENABLED) return { sent: 0, reason: 'email_disabled' };
 
   const date = now.toISOString().slice(0, 10);
-  const row = await AiUsage.findOne({ userId: null, date }).select('count alertedPct').lean();
+  const row = await AiUsage.findOne({ userId: null, date }).select('count alertedPct alertedCap').lean();
   const count = row?.count || 0;
   const pct = THRESHOLDS.find((p) => count >= Math.ceil((cap * p) / 100));
-  if (!pct || (row.alertedPct || 0) >= pct) return { sent: 0 };
+  // A warning counts for the cap it was sent under only: once the cap is
+  // changed (raising it is what the email suggests), the new cap's thresholds
+  // warn again.
+  const alreadySent = row && row.alertedCap === cap ? (row.alertedPct || 0) : 0;
+  if (!pct || alreadySent >= pct) return { sent: 0 };
 
   const contactEmail = await getContactEmail();
   if (!contactEmail) return { sent: 0, reason: 'no_contact_email' };
 
   // Claim the threshold before sending: only one run gets to send it.
   const claim = await AiUsage.updateOne(
-    { userId: null, date, alertedPct: { $not: { $gte: pct } } },
-    { $set: { alertedPct: pct } },
+    { userId: null, date, $or: [{ alertedCap: { $ne: cap } }, { alertedPct: { $not: { $gte: pct } } }] },
+    { $set: { alertedPct: pct, alertedCap: cap } },
   );
   if (claim.modifiedCount !== 1) return { sent: 0 };
 
   try {
-    const [topAi, topChat] = await Promise.all([topUsers(AiUsage, date), topUsers(ChatUsage, date)]);
+    // Per-user rows exist only while the per-user budget is on (aiBudget).
+    const budget = cfg.aiDailyBudget?.max ?? rateLimitsConfig.defaults.aiDailyBudget.max;
+    const [topAi, topChat] = await Promise.all([
+      budget > 0 ? topUsers(AiUsage, date) : null,
+      topUsers(ChatUsage, date),
+    ]);
     await mailgun.sendAiCapAlertEmail(contactEmail, {
       pct, count, cap, resetsInSeconds: secondsUntilMidnightUTC(now), topAi, topChat,
     });
     return { sent: 1, pct };
   } catch (err) {
     // Give the claim back so the next run tries again.
-    const previous = row.alertedPct;
-    await AiUsage.updateOne(
-      { userId: null, date, alertedPct: pct },
-      previous ? { $set: { alertedPct: previous } } : { $unset: { alertedPct: 1 } },
-    ).catch(() => {});
+    const restore = row?.alertedPct != null && row.alertedCap != null
+      ? { $set: { alertedPct: row.alertedPct, alertedCap: row.alertedCap } }
+      : { $unset: { alertedPct: 1, alertedCap: 1 } };
+    await AiUsage.updateOne({ userId: null, date, alertedPct: pct, alertedCap: cap }, restore).catch(() => {});
     console.error('[aiCapAlert] send failed:', err.message);
     return { sent: 0, reason: 'send_failed' };
   }

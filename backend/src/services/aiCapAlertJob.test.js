@@ -15,6 +15,7 @@ const mockState = { emailEnabled: true };
 jest.mock('../models/AiUsage', () => {
   const rows = []; // { userId, date, count, alertedPct? }
   const matches = (row, filter) => Object.entries(filter).every(([key, cond]) => {
+    if (key === '$or') return cond.some((c) => matches(row, c));
     const value = row[key];
     if (cond && typeof cond === 'object' && !Array.isArray(cond)) {
       if ('$ne' in cond) return value !== cond.$ne;
@@ -96,7 +97,7 @@ test('50%: one email with the count, the cap, the reset time and the top account
   expect(alert).toMatchObject({ pct: 50, count: 500, cap: 1000, resetsInSeconds: 12 * 3600 });
   expect(alert.topAi).toEqual([{ userId: 'u1', count: 300 }, { userId: 'u2', count: 12 }]);
   expect(alert.topChat).toEqual([{ userId: 'c1', count: 40 }]);
-  expect(globalRow().alertedPct).toBe(50);
+  expect(globalRow()).toMatchObject({ alertedPct: 50, alertedCap: 1000 });
 
   setToday(600);
   expect(await runAiCapAlertCheck(NOW)).toEqual({ sent: 0 });
@@ -133,6 +134,7 @@ test('a failed send gives the claim back, so the next run tries again', async ()
   sendAiCapAlertEmail.mockRejectedValueOnce(new Error('mailgun down'));
   expect(await runAiCapAlertCheck(NOW)).toEqual({ sent: 0, reason: 'send_failed' });
   expect(globalRow().alertedPct).toBeUndefined();
+  expect(globalRow().alertedCap).toBeUndefined();
   expect(await runAiCapAlertCheck(NOW)).toEqual({ sent: 1, pct: 50 });
 });
 
@@ -142,7 +144,30 @@ test('a failed 80% send falls back to the 50% already sent, not to nothing', asy
   setToday(800);
   sendAiCapAlertEmail.mockRejectedValueOnce(new Error('mailgun down'));
   await runAiCapAlertCheck(NOW);
-  expect(globalRow().alertedPct).toBe(50);
+  expect(globalRow()).toMatchObject({ alertedPct: 50, alertedCap: 1000 });
+});
+
+// Raising the cap is what the email suggests: the new cap's thresholds must
+// warn again, not stay silenced by the warnings sent under the old one.
+test('after the cap is changed, its thresholds warn again', async () => {
+  setToday(1000);
+  expect(await runAiCapAlertCheck(NOW)).toEqual({ sent: 1, pct: 100 });
+  setCap(2000);
+  expect(await runAiCapAlertCheck(NOW)).toEqual({ sent: 1, pct: 50 });
+  expect(await runAiCapAlertCheck(NOW)).toEqual({ sent: 0 });
+  setToday(1600);
+  expect(await runAiCapAlertCheck(NOW)).toEqual({ sent: 1, pct: 80 });
+  setToday(2000);
+  expect(await runAiCapAlertCheck(NOW)).toEqual({ sent: 1, pct: 100 });
+  expect(sendAiCapAlertEmail.mock.calls.map((c) => [c[1].pct, c[1].cap])).toEqual([[100, 1000], [50, 2000], [80, 2000], [100, 2000]]);
+});
+
+test('with the per-user budget unlimited, the top AI accounts are reported as not tracked', async () => {
+  rateLimitsConfig.set({ ...JSON.parse(JSON.stringify(rateLimitsConfig.defaults)), aiGlobalDailyCap: { max: 1000 }, aiDailyBudget: { max: 0 } });
+  setToday(500);
+  await runAiCapAlertCheck(NOW);
+  expect(sendAiCapAlertEmail.mock.calls[0][1].topAi).toBeNull();
+  expect(sendAiCapAlertEmail.mock.calls[0][1].topChat).toEqual([{ userId: 'c1', count: 40 }]);
 });
 
 test('nothing is claimed or sent when the cap is off, email is not set up, or no contact address is set', async () => {

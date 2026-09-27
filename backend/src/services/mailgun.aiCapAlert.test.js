@@ -47,3 +47,8 @@ test('100%: says AI is off now', async () => {
   expect(sent().subject).toBe("Cellarion AI: today's cap is reached, AI is off for everyone until 00:00 UTC");
   expect(sent().text).toContain('are off for everyone until the count resets at 00:00 UTC, in 0 h 1 min');
 });
+
+test('top AI accounts not tracked (per-user budget unlimited) says so', async () => {
+  await sendAiCapAlertEmail('admin@example.com', { pct: 50, count: 10000, cap: 20000, resetsInSeconds: 3600, topAi: null, topChat: [] });
+  expect(sent().text).toContain('Most AI calls today (scans, imports, wine info):\nnot tracked (the per-user AI budget is unlimited)');
+});

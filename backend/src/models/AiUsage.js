@@ -21,8 +21,10 @@ const aiUsageSchema = new mongoose.Schema({
   count:     { type: Number, default: 0 },
   expiresAt: { type: Date, required: true },   // TTL field — purged automatically
   // Global row only: the highest share of the site-wide cap (50/80/100) the
-  // contact address has already been warned about this day (aiCapAlertJob).
+  // contact address has already been warned about this day, and the cap it
+  // was measured against (aiCapAlertJob; a changed cap warns afresh).
   alertedPct: { type: Number },
+  alertedCap: { type: Number },
 }, { versionKey: false });
 
 aiUsageSchema.index({ userId: 1, date: 1 }, { unique: true });
