@@ -176,7 +176,8 @@ function CellarHistory() {
       if (cursor) params.append('before', cursor);
       const res = await requestHistory(query, params);
       const data = await res.json();
-      if (seq !== fetchSeq.current) return;
+      // Dropped if a new list was asked for meanwhile, or is already on screen.
+      if (seq !== fetchSeq.current || listQuery.current !== query) return;
       if (!res.ok) { setError(data.error || 'Failed to load history'); return; }
 
       const page = data.bottles || [];

@@ -122,6 +122,26 @@ describe('service worker API cache', () => {
     expect(res.body).toBe('cached');
   });
 
+  // Review 2026-09-27: a "Load more" answer kept from an earlier visit could
+  // say nothing is left after a bottle when bottles were logged elsewhere since.
+  it('asks the server for a history section\'s next page, never the cache; the first page stays cached', async () => {
+    const next = '/api/cellars/c1/history?limit=50&reason=drank&before=2026-01-05T00%3A00%3A00.000Z%7Cb9';
+    const caches = makeCaches({
+      [`cellarion-api-v2-${ALICE}`]: [[`https://cellarion.test${next}`, fakeResponse(200, 'old')]],
+    });
+    const network = vi.fn(async () => fakeResponse(200, 'fresh'));
+    const handlers = loadWorker({ caches, network });
+
+    expect(await dispatchFetch(handlers, request(next, { token: tokenFor(ALICE) }))).toBeNull();
+    expect(await dispatchFetch(handlers, request('/api/cellars/multi/history?cellars=c1,c2&limit=50&reason=gifted', { token: tokenFor(ALICE) }))).toBeNull();
+    const first = await dispatchFetch(handlers, request('/api/cellars/c1/history?limit=50', { token: tokenFor(ALICE) }));
+    expect(first.body).toBe('fresh');
+    await flush();
+    expect([...caches.store.get(`cellarion-api-v2-${ALICE}`).keys()]).toEqual([
+      `https://cellarion.test${next}`, 'https://cellarion.test/api/cellars/c1/history?limit=50',
+    ]);
+  });
+
   it('does not cache requests without a readable bearer token', async () => {
     const caches = makeCaches();
     const network = vi.fn(async () => fakeResponse(200, 'fresh'));

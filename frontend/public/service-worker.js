@@ -191,6 +191,15 @@ const CACHEABLE_API_PATTERNS = [
   '/api/bottles/',   // bottle detail
 ];
 
+// Except a history section's next page ("Load more": ?reason / ?before). It
+// always asks the server: a copy kept from an earlier visit could say nothing
+// is left after that bottle when bottles were logged elsewhere since, and every
+// position would add one more entry to the cache. The person just asked for
+// more, so there is nothing to gain from an instant stale answer.
+function isHistoryNextPage(url) {
+  return /\/history$/.test(url.pathname) && (url.searchParams.has('reason') || url.searchParams.has('before'));
+}
+
 // Install: pre-cache app shell
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
@@ -311,6 +320,7 @@ self.addEventListener('fetch', (event) => {
   // Serve the cached response instantly (eliminates the API wait on repeat visits),
   // then update the cache in the background so the next load is fresh.
   const apiCacheName = url.pathname.startsWith('/api/') && CACHEABLE_API_PATTERNS.some((p) => url.pathname.startsWith(p))
+    && !isHistoryNextPage(url)
     ? apiCacheNameFor(request)
     : null;
   if (apiCacheName) {
