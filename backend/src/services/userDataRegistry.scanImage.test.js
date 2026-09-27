@@ -101,7 +101,8 @@ test('erasure unlinks the files, deletes the docs, and NULLS every wine pointing
   await entry.purge({ userId: USER, deletedUserId: DELETED });
 
   expect(unlinkImageFiles).toHaveBeenCalledWith(own[0]);
-  expect(BottleImage.deleteMany).toHaveBeenCalledWith({ uploadedBy: USER, assignedToWine: { $ne: true } });
+  const { OWN_PHOTO } = require('./photoRetention');
+  expect(BottleImage.deleteMany).toHaveBeenCalledWith({ uploadedBy: USER, ...OWN_PHOTO });
   // The dangling-pointer fix: keyed on the DELETED IDS, not the user, because a
   // wine created by someone else can legitimately carry this user's scan.
   // scanFieldConflicts goes with the pointer (release-audit L-4): the
@@ -132,14 +133,37 @@ test('export and erasure never consult the wine — they key on the uploader', a
   await entry.purge({ userId: USER, deletedUserId: DELETED });
 
   // The selection carries no pendingIdentity / retainUntil term of any kind.
+  const { OWN_PHOTO } = require('./photoRetention');
   const selection = BottleImage.find.mock.calls[0][0];
-  expect(selection).toEqual({ uploadedBy: USER, assignedToWine: { $ne: true } });
-  expect(BottleImage.deleteMany.mock.calls[0][0]).toEqual({ uploadedBy: USER, assignedToWine: { $ne: true } });
+  expect(selection).toEqual({ uploadedBy: USER, ...OWN_PHOTO });
+  expect(BottleImage.deleteMany.mock.calls[0][0]).toEqual({ uploadedBy: USER, ...OWN_PHOTO });
   // …and the published wine's pointer is nulled like any other.
   expect(WineDefinition.updateMany).toHaveBeenCalledWith(
     { scanImage: { $in: ['born-1'] } },
     { $set: { scanImage: null, scanFieldConflicts: [] } },
   );
+});
+
+/**
+ * Policy 2026-09-27: a photo an admin approved as PUBLIC is registry content
+ * other people see, so it outlives the uploader's account — anonymised (the
+ * [deleted] sentinel as uploader) and detached from the bottle that is going —
+ * exactly as the wine's chosen picture already did. Before, only the chosen
+ * picture survived; every other approved photo was deleted with the account.
+ */
+test('erasure keeps every photo approved as public: anonymised and detached, never unlinked', async () => {
+  BottleImage.find.mockReturnValue(leanFind([]));
+  const { REGISTRY_PHOTO } = require('./photoRetention');
+
+  await entry.purge({ userId: USER, deletedUserId: DELETED });
+
+  expect(BottleImage.updateMany).toHaveBeenCalledWith(
+    { uploadedBy: USER, ...REGISTRY_PHOTO },
+    { $set: { uploadedBy: DELETED }, $unset: { bottle: '' } },
+  );
+  expect(unlinkImageFiles).not.toHaveBeenCalled();
+  // The kept set is the exact complement of the deleted set (see photoRetention.test).
+  expect(REGISTRY_PHOTO.$or).toEqual([{ assignedToWine: true }, { status: 'approved', visibility: 'public' }]);
 });
 
 test('with nothing to delete, no pointer update is issued', async () => {

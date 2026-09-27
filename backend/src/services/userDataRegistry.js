@@ -193,21 +193,23 @@ const REGISTRY = [
   },
   {
     model: BottleImage, category: 'personal-data', userFields: ['uploadedBy', 'reviewedBy'],
-    // An image the user promoted to a SHARED wine (assignedToWine) backs the
-    // WineDefinition.image that OTHER users see, so it must NOT be deleted on
-    // the uploader's account deletion — anonymise it (re-point uploadedBy to the
-    // [deleted] sentinel, like forum content) so the shared wine image survives
-    // and stays managed. Only the user's own non-shared images are hard-deleted.
-    // Also clear this user's reviewedBy ref off OTHER users' images.
-    // Unlink the on-disk files (originals + processed PNGs) for the user's own
-    // non-shared images BEFORE deleting the docs — those docs are the only
-    // reference to the files, so deleting them first would orphan the files on
-    // disk forever. Shared (assignedToWine) images are anonymised, not deleted,
-    // so their files are kept. Returned as a single self-contained promise so
-    // the inner DB ops are awaited (an async fn returning an *array* would not
-    // await the queries inside it).
+    // A photo the registry keeps (services/photoRetention: the wine's chosen
+    // picture, or any photo an admin approved as PUBLIC — policy 2026-09-27)
+    // is seen by OTHER users, so it must NOT be deleted on the uploader's
+    // account deletion — anonymise it (re-point uploadedBy to the [deleted]
+    // sentinel, like forum content) and detach it from the bottle that is
+    // going, so the shared photo survives and stays managed. Only the user's
+    // own photos (pending, private, rejected, every label scan) are
+    // hard-deleted. Also clear this user's reviewedBy ref off OTHER users'
+    // images. Unlink the on-disk files for the user's own photos BEFORE
+    // deleting the docs — those docs are the only reference to the files, so
+    // deleting them first would orphan the files on disk forever. Kept photos
+    // are anonymised, not deleted, so their files stay. Returned as a single
+    // self-contained promise so the inner DB ops are awaited (an async fn
+    // returning an *array* would not await the queries inside it).
     purge: async (ctx) => {
-      const own = await BottleImage.find({ uploadedBy: ctx.userId, assignedToWine: { $ne: true } })
+      const { OWN_PHOTO, REGISTRY_PHOTO } = require('./photoRetention');
+      const own = await BottleImage.find({ uploadedBy: ctx.userId, ...OWN_PHOTO })
         .select('originalUrl processedUrl').lean();
       for (const img of own) await unlinkImageFiles(img);
       // Label-scan images (kind:'label-scan') are in that hard-delete set —
@@ -224,8 +226,8 @@ const REGISTRY = [
       // each pointer is nulled only where it names a deleted image.
       const ownIds = own.map((i) => i._id);
       await Promise.all([
-        BottleImage.deleteMany({ uploadedBy: ctx.userId, assignedToWine: { $ne: true } }),
-        BottleImage.updateMany({ uploadedBy: ctx.userId, assignedToWine: true }, { $set: { uploadedBy: ctx.deletedUserId } }),
+        BottleImage.deleteMany({ uploadedBy: ctx.userId, ...OWN_PHOTO }),
+        BottleImage.updateMany({ uploadedBy: ctx.userId, ...REGISTRY_PHOTO }, { $set: { uploadedBy: ctx.deletedUserId }, $unset: { bottle: '' } }),
         BottleImage.updateMany({ reviewedBy: ctx.userId }, { $unset: { reviewedBy: '' } }),
         // Reports this user filed on OTHER people's photos (ticket 6a865f60).
         // The report is the user's own statement, so it leaves with them — but
@@ -280,15 +282,17 @@ const REGISTRY = [
       // cellar. Delete them too, cleaning their images the same
       // reference-safe way as the Bottle/BottleImage entries: ids collected
       // before deleteMany, files unlinked before their only referencing docs
-      // go, shared (assignedToWine) images kept with the bottle ref detached.
+      // go, registry photos (services/photoRetention) kept with the bottle
+      // ref detached.
       const orphanIds = await Bottle.find({ cellar: { $in: ctx.cellarIds }, user: { $ne: ctx.userId } }).distinct('_id');
       if (orphanIds.length > 0) {
-        const imgs = await BottleImage.find({ bottle: { $in: orphanIds }, assignedToWine: { $ne: true } })
+        const { OWN_PHOTO, REGISTRY_PHOTO } = require('./photoRetention');
+        const imgs = await BottleImage.find({ bottle: { $in: orphanIds }, ...OWN_PHOTO })
           .select('originalUrl processedUrl').lean();
         for (const img of imgs) await unlinkImageFiles(img);
         await Promise.all([
-          BottleImage.deleteMany({ bottle: { $in: orphanIds }, assignedToWine: { $ne: true } }),
-          BottleImage.updateMany({ bottle: { $in: orphanIds }, assignedToWine: true }, { $unset: { bottle: '' } }),
+          BottleImage.deleteMany({ bottle: { $in: orphanIds }, ...OWN_PHOTO }),
+          BottleImage.updateMany({ bottle: { $in: orphanIds }, ...REGISTRY_PHOTO }, { $unset: { bottle: '' } }),
           Bottle.deleteMany({ _id: { $in: orphanIds } }),
         ]);
       }

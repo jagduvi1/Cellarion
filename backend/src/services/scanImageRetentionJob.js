@@ -276,6 +276,9 @@ async function unattachedBottleImageBatch() {
     wineDefinition: null,
     bottle: null,
     assignedToWine: { $ne: true },
+    // A photo approved as public is registry content (services/photoRetention)
+    // and is never an orphan, whatever else its fields say.
+    $nor: [{ status: 'approved', visibility: 'public' }],
     createdAt: { $lt: cutoff },
   };
   const stale = await BottleImage.find(selector)

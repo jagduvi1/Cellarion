@@ -796,11 +796,15 @@ async function removeBottleCascade(bottle, req, auditAction) {
   await removeFromRacks(bottleId);
 
   const { unlinkImageFiles } = require('./imageProcessor');
-  const ownImages = await BottleImage.find({ bottle: bottleId, assignedToWine: false });
+  // The user's own photos go with the bottle; registry photos (the wine's
+  // picture, or any photo approved as public — services/photoRetention) are
+  // kept and detached, other people see them.
+  const { REGISTRY_PHOTO, OWN_PHOTO } = require('./photoRetention');
+  const ownImages = await BottleImage.find({ bottle: bottleId, ...OWN_PHOTO });
   for (const img of ownImages) await unlinkImageFiles(img);
-  await BottleImage.deleteMany({ bottle: bottleId, assignedToWine: false });
+  await BottleImage.deleteMany({ bottle: bottleId, ...OWN_PHOTO });
   await BottleImage.updateMany(
-    { bottle: bottleId, assignedToWine: true },
+    { bottle: bottleId, ...REGISTRY_PHOTO },
     { $set: { bottle: null } }
   );
 

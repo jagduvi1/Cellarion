@@ -42,6 +42,7 @@ const WineVintageProfile = require('../models/WineVintageProfile');
 const { findOrCreateWine } = require('./findOrCreateWine');
 const { logAudit } = require('./audit');
 const { unlinkImageFiles, safeUploadPath } = require('./imageProcessor');
+const { REGISTRY_PHOTO, OWN_PHOTO } = require('./photoRetention');
 const { sanitizeImageBuffer, detectImageFormat } = require('./imageSanitizer');
 const { encodeKeptPhoto, KEPT_EXTENSION } = require('./photoFormat');
 const { ORIGINALS_DIR, PROCESSED_DIR } = require('../config/upload');
@@ -237,9 +238,14 @@ async function clearCellarContents(cellarId) {
   if (bottleIds.length) {
     // Bottle deletion does NOT cascade images/reviews — clean those up ourselves
     // before deleting the bottles (else they dangle pointing at deleted bottles).
-    const images = await BottleImage.find({ bottle: { $in: bottleIds } });
+    // Registry photos (services/photoRetention: the wine's picture, or any
+    // photo approved as public) are seen by other people: kept and detached,
+    // as every other cascade does. Until 2026-09-27 an overwrite import
+    // deleted even the wine's chosen picture.
+    const images = await BottleImage.find({ bottle: { $in: bottleIds }, ...OWN_PHOTO });
     for (const img of images) await unlinkImageFiles(img); // reference-safe (dedup-shared files survive)
-    await BottleImage.deleteMany({ bottle: { $in: bottleIds } });
+    await BottleImage.deleteMany({ bottle: { $in: bottleIds }, ...OWN_PHOTO });
+    await BottleImage.updateMany({ bottle: { $in: bottleIds }, ...REGISTRY_PHOTO }, { $unset: { bottle: '' } });
     await Review.deleteMany({ bottle: { $in: bottleIds } });
     await Bottle.deleteMany({ cellar: cellarId });
   }

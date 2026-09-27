@@ -5,9 +5,10 @@
  *
  * Cascade order matters:
  *  - image files are unlinked BEFORE their BottleImage docs are deleted (the
- *    docs hold the only reference to the files on disk). Shared registry
- *    images (assignedToWine) are kept — only their dead bottle ref is
- *    detached — matching the userDataRegistry pattern.
+ *    docs hold the only reference to the files on disk). Registry photos
+ *    (services/photoRetention: the wine's picture, or any photo approved as
+ *    public) are kept — only their dead bottle ref is detached — matching
+ *    the userDataRegistry pattern.
  *  - wine lists are deleted HERE, not on soft-delete: the soft delete is
  *    reversible, so curated lists (and their uploaded logo files) must
  *    survive until the retention window closes.
@@ -26,6 +27,7 @@ const Cellar = require('../models/Cellar');
 const WineRequest = require('../models/WineRequest');
 const { deleteLogoFilesFor } = require('./wineListLogos');
 const { unlinkImageFiles } = require('./imageProcessor');
+const { REGISTRY_PHOTO, OWN_PHOTO } = require('./photoRetention');
 
 /**
  * Hard-delete a cellar and everything that only exists because of it.
@@ -64,12 +66,12 @@ async function purgeCellarPermanently(cellarId) {
 
   let imagesDeleted = 0;
   if (bottleIds.length > 0) {
-    const own = await BottleImage.find({ bottle: { $in: bottleIds }, assignedToWine: { $ne: true } })
+    const own = await BottleImage.find({ bottle: { $in: bottleIds }, ...OWN_PHOTO })
       .select('originalUrl processedUrl').lean();
     for (const img of own) await unlinkImageFiles(img);
     const [delResult] = await Promise.all([
-      BottleImage.deleteMany({ bottle: { $in: bottleIds }, assignedToWine: { $ne: true } }),
-      BottleImage.updateMany({ bottle: { $in: bottleIds }, assignedToWine: true }, { $unset: { bottle: '' } }),
+      BottleImage.deleteMany({ bottle: { $in: bottleIds }, ...OWN_PHOTO }),
+      BottleImage.updateMany({ bottle: { $in: bottleIds }, ...REGISTRY_PHOTO }, { $unset: { bottle: '' } }),
     ]);
     imagesDeleted = delResult.deletedCount;
   }

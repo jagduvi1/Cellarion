@@ -447,7 +447,11 @@ describe('removeBottleCascade (real execution)', () => {
     const res = await removeBottleCascade(b, REQ, 'bottle.undo');
     expect(res.removed).toBe(true);
     expect(Rack.updateMany).toHaveBeenCalled();          // slot freed
-    expect(BottleImage.deleteMany).toHaveBeenCalledWith({ bottle: 'new-bottle', assignedToWine: false });
+    // Only the user's own photos go with the bottle; registry photos (the
+    // wine's picture, or any photo approved as public) are detached instead.
+    const { OWN_PHOTO, REGISTRY_PHOTO } = require('./photoRetention');
+    expect(BottleImage.deleteMany).toHaveBeenCalledWith({ bottle: 'new-bottle', ...OWN_PHOTO });
+    expect(BottleImage.updateMany).toHaveBeenCalledWith({ bottle: 'new-bottle', ...REGISTRY_PHOTO }, { $set: { bottle: null } });
     expect(b.deleteOne).toHaveBeenCalled();
     expect(logAudit).toHaveBeenCalledWith(REQ, 'bottle.undo', expect.anything(), { reason: 'mistake' });
   });

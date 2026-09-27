@@ -2,7 +2,9 @@
  * Guards the permanent-cellar-deletion cascade invariants:
  *  - bottle ids are collected BEFORE Bottle.deleteMany so the Meilisearch
  *    cleanup receives them (there is no scheduled resync);
- *  - registry-assigned images (assignedToWine) are detached, never unlinked;
+ *  - registry photos (services/photoRetention: the wine's picture, or any
+ *    photo approved as public — policy 2026-09-27) are detached, never
+ *    unlinked;
  *  - user-owned image files are unlinked before their docs are deleted.
  */
 jest.mock('../models/Bottle', () => ({
@@ -43,6 +45,7 @@ const WineRequest = require('../models/WineRequest');
 const { deleteLogoFilesFor } = require('./wineListLogos');
 const { unlinkImageFiles } = require('./imageProcessor');
 const { purgeCellarPermanently } = require('./cellarPurge');
+const { REGISTRY_PHOTO, OWN_PHOTO } = require('./photoRetention');
 
 const CELLAR_ID = '64c000000000000000000001';
 const BOTTLE_IDS = ['b1', 'b2', 'b3'];
@@ -113,10 +116,10 @@ describe('purgeCellarPermanently', () => {
   test('unlinks image files for user-owned images only', async () => {
     await purgeCellarPermanently(CELLAR_ID);
 
-    // Only non-registry images are loaded for unlinking
+    // Only the user's own photos are loaded for unlinking
     expect(BottleImage.find).toHaveBeenCalledWith({
       bottle: { $in: BOTTLE_IDS },
-      assignedToWine: { $ne: true },
+      ...OWN_PHOTO,
     });
     expect(unlinkImageFiles).toHaveBeenCalledTimes(OWN_IMAGES.length);
     expect(unlinkImageFiles).toHaveBeenCalledWith(OWN_IMAGES[0]);
@@ -129,11 +132,12 @@ describe('purgeCellarPermanently', () => {
     // Docs deleted: only the user-owned ones
     expect(BottleImage.deleteMany).toHaveBeenCalledWith({
       bottle: { $in: BOTTLE_IDS },
-      assignedToWine: { $ne: true },
+      ...OWN_PHOTO,
     });
-    // Registry images survive with their dead bottle ref detached
+    // Registry photos (the wine's picture, or any photo approved as public)
+    // survive with their dead bottle ref detached
     expect(BottleImage.updateMany).toHaveBeenCalledWith(
-      { bottle: { $in: BOTTLE_IDS }, assignedToWine: true },
+      { bottle: { $in: BOTTLE_IDS }, ...REGISTRY_PHOTO },
       { $unset: { bottle: '' } }
     );
   });

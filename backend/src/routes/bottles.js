@@ -49,6 +49,7 @@ const {
 const { resolveOrMintWine } = require('../services/wineCommit');
 const { moveBottleToCellar } = require('../services/rackOps');
 const { getDataVersion } = require('../services/dataVersion');
+const { REGISTRY_PHOTO, OWN_PHOTO } = require('../services/photoRetention');
 
 const router = express.Router();
 
@@ -1350,12 +1351,15 @@ router.delete('/:id', requireBottleAccess('editor'), async (req, res) => {
     // Remove bottle from any rack slot that references it
     await removeFromRacks(bottle._id);
 
-    const ownImages = await BottleImage.find({ bottle: bottle._id, assignedToWine: false })
+    // The user's own photos go with the bottle; registry photos (the wine's
+    // picture, or any photo approved as public — services/photoRetention)
+    // are kept and detached, other people see them.
+    const ownImages = await BottleImage.find({ bottle: bottle._id, ...OWN_PHOTO })
       .select('originalUrl processedUrl').lean();
     for (const img of ownImages) await unlinkImageFiles(img);
-    await BottleImage.deleteMany({ bottle: bottle._id, assignedToWine: false });
+    await BottleImage.deleteMany({ bottle: bottle._id, ...OWN_PHOTO });
     await BottleImage.updateMany(
-      { bottle: bottle._id, assignedToWine: true },
+      { bottle: bottle._id, ...REGISTRY_PHOTO },
       { $set: { bottle: null } }
     );
     await bottle.deleteOne();
