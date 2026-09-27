@@ -166,7 +166,8 @@ function createThumbnailService({ uploadsRoot = '/app/uploads', sharp: sharpImpl
             res.setHeader('Retry-After', '5');
             return res.status(503).json({ error: 'Thumbnail busy' });
           }
-          if (err.code !== 'FAILED_RECENTLY') console.warn(`[thumbs] could not render ${dir}/${sourceName}:`, err.message);
+          // The name comes from the request: never part of the format string (CodeQL js/tainted-format-string).
+          if (err.code !== 'FAILED_RECENTLY') console.warn('[thumbs] could not render %s/%s: %s', dir, sourceName, err.message);
           return res.status(500).json({ error: 'Thumbnail failed' });
         }
       }
