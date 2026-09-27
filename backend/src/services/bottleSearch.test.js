@@ -354,6 +354,17 @@ describe('text helpers', () => {
     expect(_internal.tokenize('a,b; c. d').positions).toEqual([0, 1, 9, 17]);
   });
 
+  // Review 2026-09-27: U+FDFA folds into four words, so 5,000 of them (a note
+  // at its length limit) became 20,000 words, weighing ~7× what the kept
+  // document is charged for.
+  test('a field keeps at most one word per two characters, as real text has', () => {
+    const dense = 'a b '.repeat(1250); // 5,000 characters, 2,500 words
+    expect(_internal.tokenize(dense).words).toHaveLength(2500);
+    expect(_internal.tokenize('ﷺ').words).toEqual(['صلى', 'الله', 'عليه', 'وسلم']);
+    expect(_internal.tokenize('ﷺ'.repeat(5000)).words).toHaveLength(2500);
+    expect(_internal.tokenize('½ bottle, 1st growth').words).toEqual(['1', '2', 'bottle', '1st', 'growth']);
+  });
+
   test('edit distance counts a swap as one, and measures a prefix for the last word', () => {
     const chars = (s) => Array.from(s);
     expect(_internal.editDistance(chars('chardonany'), chars('chardonnay'), 2, false)).toBe(1);

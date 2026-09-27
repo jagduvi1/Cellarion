@@ -75,15 +75,25 @@ function toWords(value) {
   return fold(value).match(WORD) || [];
 }
 
+// Folding can turn one character into several words (U+FDFA becomes four).
+// Real text has at most one word per two characters ("a b c"), so a field
+// keeps no more than that: what a kept document weighs stays within what it
+// is charged for by its length (docBytes), and so does what a search
+// allocates while it runs.
+const wordLimit = (length) => Math.max(16, Math.ceil(length / 2));
+
 /** Words with the positions the index gave them. */
 function tokenize(value) {
   const words = [];
   const positions = [];
   if (value === undefined || value === null || value === '') return { words, positions };
-  const text = fold(value);
+  const raw = String(value);
+  const text = fold(raw);
+  const limit = wordLimit(raw.length);
   let end = null;
   let pos = 0;
   for (const m of text.matchAll(WORD)) {
+    if (words.length === limit) break;
     if (end !== null) pos += HARD_SEPARATOR.test(text.slice(end, m.index)) ? 8 : 1;
     words.push(m[0]);
     positions.push(pos);
