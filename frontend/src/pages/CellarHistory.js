@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
@@ -13,6 +13,9 @@ import CellarPageHeader from '../components/CellarPageHeader';
 import './CellarDetail.css';
 import './CellarHistory.css';
 
+// Bottles per page: the history is paged (?limit/?skip), newest-consumed first.
+const PAGE_SIZE = 50;
+
 const REASON_CONFIG = {
   drank:  { icon: '🍷', className: 'drank' },
   gifted: { icon: '🎁', className: 'gifted' },
@@ -25,10 +28,14 @@ function CellarHistory() {
   const { id } = useParams();
   const { apiFetch } = useAuth();
   const [cellar, setCellar] = useState(null);
-  const [grouped, setGrouped] = useState({});
+  // The pages loaded so far, and the server's totals for the whole history.
+  const [bottles, setBottles] = useState([]);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
   const [total, setTotal] = useState(0);
+  const [reasonCounts, setReasonCounts] = useState(null);
   const [filters, setFilters] = useState({
     search: '',
     type: [], country: [], region: [], grapes: [], vintage: [],
@@ -83,11 +90,14 @@ function CellarHistory() {
     fetchHistory();
   }, [id, filterKey, scopeKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const fetchHistory = async () => {
+  const fetchHistory = async (skip = 0) => {
     const seq = ++fetchSeq.current;
     setError(null);
+    if (skip > 0) setLoadingMore(true);
     try {
       const params = new URLSearchParams();
+      params.append('limit', String(PAGE_SIZE));
+      params.append('skip', String(skip));
       if (debouncedSearch) params.append('search', debouncedSearch);
       Object.entries(filters).forEach(([key, val]) => {
         if (key === 'search') return;
@@ -107,29 +117,43 @@ function CellarHistory() {
       if (!res.ok) { setError(data.error || 'Failed to load history'); return; }
 
       if (data.cellar) setCellar(data.cellar);
-      setTotal(data.bottles.length);
+      const page = data.bottles || [];
+      // A server from before paging sends the whole history and no total.
+      setTotal(typeof data.total === 'number' ? data.total : page.length);
+      setReasonCounts(data.reasonCounts || null);
+      setBottles(prev => (skip > 0 ? [...prev, ...page] : page));
+      setHasLoaded(true);
       if (data.facets) setFacets(data.facets);
       if (data.baseFacets) setBaseFacets(data.baseFacets);
       if (data.facetMeta) setFacetMeta(data.facetMeta);
-
-      // Group by reason
-      const groups = { drank: [], gifted: [], sold: [], other: [] };
-      (data.bottles || []).forEach(bottle => {
-        const reason = bottle.consumedReason || bottle.status;
-        if (groups[reason]) groups[reason].push(bottle);
-        else groups.other.push(bottle);
-      });
-      setGrouped(groups);
     } catch {
       if (seq === fetchSeq.current) setError('Network error');
     } finally {
-      if (seq === fetchSeq.current) setLoading(false);
+      if (seq === fetchSeq.current) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
   };
 
+  const loadMore = () => fetchHistory(bottles.length);
+
+  // Group the loaded bottles by reason.
+  const grouped = useMemo(() => {
+    const groups = { drank: [], gifted: [], sold: [], other: [] };
+    bottles.forEach(bottle => {
+      const reason = bottle.consumedReason || bottle.status;
+      if (groups[reason]) groups[reason].push(bottle);
+      else groups.other.push(bottle);
+    });
+    return groups;
+  }, [bottles]);
+  // Per-reason counts for the whole history (the server's), else what is loaded.
+  const countOf = (key) => (reasonCounts ? reasonCounts[key] || 0 : grouped[key].length);
+
   // Only replace the whole page when nothing has loaded yet; after a successful
   // load, transient fetch failures render as an inline banner instead.
-  const hasLoadedContent = Object.keys(grouped).length > 0;
+  const hasLoadedContent = hasLoaded;
   if (error && !hasLoadedContent) return <div className="alert alert-error">{error}</div>;
 
   const REASON_LABEL_KEYS = {
@@ -203,7 +227,7 @@ function CellarHistory() {
       {total > 0 && !activeChips.length && (
         <div className="history-summary-row">
           {Object.entries(REASON_CONFIG).map(([key, cfg]) => {
-            const count = grouped[key]?.length || 0;
+            const count = countOf(key);
             return (
               <div key={key} className={`history-summary-pill ${cfg.className} ${count === 0 ? 'empty' : ''}`}>
                 <span>{cfg.icon}</span>
@@ -299,7 +323,7 @@ function CellarHistory() {
             <section key={key} className={`history-section ${cfg.className}`}>
               <div className="history-section-header">
                 <span className="history-section-icon">{cfg.icon}</span>
-                <h2>{t(REASON_LABEL_KEYS[key])} <span className="section-count">({items.length})</span></h2>
+                <h2>{t(REASON_LABEL_KEYS[key])} <span className="section-count">({countOf(key)})</span></h2>
               </div>
               <div className="history-bottles">
                 {items.map(bottle => (
@@ -315,6 +339,14 @@ function CellarHistory() {
         }
         return sections;
       })()}
+
+      {bottles.length < total && (
+        <div className="load-more-wrap">
+          <button className="btn btn-secondary" onClick={loadMore} disabled={loadingMore}>
+            {loadingMore ? t('common.loading') : t('cellarDetail.loadMore')}
+          </button>
+        </div>
+      )}
 
       </>}
     </div>
