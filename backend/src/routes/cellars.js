@@ -2,6 +2,7 @@ const express = require('express');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
+const WineDefinition = require('../models/WineDefinition');
 const Rack = require('../models/Rack');
 const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
@@ -576,22 +577,46 @@ router.get('/:id/statistics', async (req, res) => {
       return res.status(404).json({ error: 'Cellar not found' });
     }
 
-    // Only count active bottles in statistics. This handler reads only scalar
-    // bottle fields plus wineDefinition.type and wineDefinition.country.name, so
-    // populate just those — the full WINE_POPULATE_LIST also joins region + the
-    // grapes array (never read here), pure waste on large cellars. Capped at 10k
-    // to match the sibling list/history routes.
-    const bottles = await Bottle.find({
-      cellar: req.params.id,
-      status: { $nin: CONSUMED_STATUSES }
-    })
-      .populate({
-        path: 'wineDefinition',
-        select: 'type country',
-        populate: { path: 'country', select: 'name' },
-      })
-      .limit(10000)
-      .lean();
+    // Only active bottles count. One grouping query instead of loading every
+    // bottle (the cellar page asks on every visit; a 2,800-bottle cellar took
+    // ~100–140 ms): bottles that share wine, vintage, rating and scale, price
+    // currency and price day count the same way in every figure below, so
+    // each group is weighed by its size. A group's price sum converts like
+    // its bottles one by one — the conversion is linear and prices are never
+    // negative. Groups come in the order of their first bottle, so the maps
+    // list their keys as the per-bottle loop did.
+    const priced = { $ne: [{ $ifNull: ['$price', 0] }, 0] };
+    const groups = await Bottle.aggregate([
+      { $match: { cellar: cellar._id, status: { $nin: CONSUMED_STATUSES } } },
+      {
+        $group: {
+          _id: {
+            wine: '$wineDefinition',
+            vintage: '$vintage',
+            rating: '$rating',
+            ratingScale: '$ratingScale',
+            currency: '$currency',
+            // UTC day, as toISOString() gave it; null without a date.
+            priceDay: { $dateToString: { format: '%Y-%m-%d', date: '$priceSetAt' } },
+          },
+          count: { $sum: 1 },
+          priceCount: { $sum: { $cond: [priced, 1, 0] } },
+          priceSum: { $sum: { $cond: [priced, '$price', 0] } },
+          first: { $min: '$_id' },
+        },
+      },
+      { $sort: { first: 1 } },
+    ]).allowDiskUse(true);
+
+    // The wines' type and country name, once per wine. A reference to a wine
+    // that no longer exists resolves to nothing, as a populate did.
+    const wineIds = [...new Set(groups.map(g => g._id.wine).filter(Boolean).map(String))];
+    const wineById = new Map((wineIds.length
+      ? await WineDefinition.find({ _id: { $in: wineIds } })
+        .select('type country')
+        .populate('country', 'name')
+        .lean()
+      : []).map(w => [String(w._id), w]));
 
     // Batch-load historical rate snapshots for all priceSetAt dates (one DB query)
     const targetCurrency = req.query.currency || null;
@@ -599,9 +624,7 @@ router.get('/:id/statistics', async (req, res) => {
     let todaySnapshot = null;
     if (targetCurrency) {
       const priceDates = [...new Set(
-        bottles
-          .filter(b => b.price && b.priceSetAt)
-          .map(b => b.priceSetAt.toISOString().slice(0, 10))
+        groups.filter(g => g.priceCount > 0 && g._id.priceDay).map(g => g._id.priceDay)
       )];
       if (priceDates.length > 0) {
         snapshotMap = await getSnapshotsForDates(priceDates);
@@ -612,11 +635,11 @@ router.get('/:id/statistics', async (req, res) => {
 
     // Calculate statistics
     const stats = {
-      totalBottles: bottles.length,
+      totalBottles: groups.reduce((n, g) => n + g.count, 0),
       // Bottles awaiting a wine request have no wineDefinition — exclude them
       // rather than letting `undefined` count as one extra "unique wine".
       uniqueWines: new Set(
-        bottles.filter(b => b.wineDefinition?._id).map(b => b.wineDefinition._id.toString())
+        groups.filter(g => g._id.wine && wineById.has(String(g._id.wine))).map(g => String(g._id.wine))
       ).size,
       totalValue: 0,
       averagePrice: 0,
@@ -638,47 +661,47 @@ router.get('/:id/statistics', async (req, res) => {
     let oldestYear = Infinity;
     let newestYear = -Infinity;
 
-    bottles.forEach(bottle => {
+    for (const g of groups) {
+      const wine = g._id.wine ? wineById.get(String(g._id.wine)) : null;
+
       // Total value calculation
-      if (bottle.price) {
-        const currency = bottle.currency || 'USD';
-        stats.totalValue += bottle.price;
-        priceSum += bottle.price;
-        priceCount++;
+      if (g.priceCount > 0) {
+        const currency = g._id.currency || 'USD';
+        stats.totalValue += g.priceSum;
+        priceSum += g.priceSum;
+        priceCount += g.priceCount;
 
         // Currency-converted total: bottles already in the target currency are
         // used as-is; others are converted using the historical rate from the
         // day the price was entered, falling back to today's rates.
         if (targetCurrency) {
           if (currency === targetCurrency) {
-            convertedSum += bottle.price;
-            convertedCount++;
+            convertedSum += g.priceSum;
+            convertedCount += g.priceCount;
           } else {
-            const dateKey = bottle.priceSetAt
-              ? bottle.priceSetAt.toISOString().slice(0, 10)
-              : null;
+            const dateKey = g._id.priceDay || null;
             const rates = (dateKey && snapshotMap.get(dateKey))
               || (todaySnapshot ? todaySnapshot.rates : null);
-            const converted = convertCurrency(bottle.price, currency, targetCurrency, rates);
+            const converted = convertCurrency(g.priceSum, currency, targetCurrency, rates);
             if (converted !== null) {
               convertedSum += converted;
-              convertedCount++;
+              convertedCount += g.priceCount;
             }
           }
         }
       }
 
       // By country
-      const countryName = bottle.wineDefinition?.country?.name || 'Unknown';
-      stats.byCountry[countryName] = (stats.byCountry[countryName] || 0) + 1;
+      const countryName = wine?.country?.name || 'Unknown';
+      stats.byCountry[countryName] = (stats.byCountry[countryName] || 0) + g.count;
 
       // By type
-      const type = bottle.wineDefinition?.type || 'Unknown';
-      stats.byType[type] = (stats.byType[type] || 0) + 1;
+      const type = wine?.type || 'Unknown';
+      stats.byType[type] = (stats.byType[type] || 0) + g.count;
 
       // By vintage
-      const vintage = bottle.vintage || 'NV';
-      stats.byVintage[vintage] = (stats.byVintage[vintage] || 0) + 1;
+      const vintage = g._id.vintage || 'NV';
+      stats.byVintage[vintage] = (stats.byVintage[vintage] || 0) + g.count;
 
       // Track oldest/newest vintage
       if (vintage !== 'NV') {
@@ -690,12 +713,12 @@ router.get('/:id/statistics', async (req, res) => {
       }
 
       // By rating — normalize to 0-100 and bucket into 5 bands
-      if (bottle.rating) {
-        const norm = toNormalized(bottle.rating, bottle.ratingScale || '5');
+      if (g._id.rating) {
+        const norm = toNormalized(g._id.rating, g._id.ratingScale || '5');
         const band = norm <= 20 ? '0-20' : norm <= 40 ? '21-40' : norm <= 60 ? '41-60' : norm <= 80 ? '61-80' : '81-100';
-        stats.byRating[band] = (stats.byRating[band] || 0) + 1;
+        stats.byRating[band] = (stats.byRating[band] || 0) + g.count;
       }
-    });
+    }
 
     stats.averagePrice = priceCount > 0 ? priceSum / priceCount : 0;
     stats.convertedTotal = convertedSum;
