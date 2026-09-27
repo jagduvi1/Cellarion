@@ -34,6 +34,8 @@ RUN npm run build
 FROM nginxinc/nginx-unprivileged:alpine@sha256:6a23acdfca2b9cfbcec61419e3f1426bcbedb91362f2f19306a8567423bb4612
 
 COPY --from=builder /app/dist /usr/share/nginx/html
+# The stock main config with more connections per worker (see its header).
+COPY nginx-main.conf /etc/nginx/nginx.conf
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 # Shared security-header snippet, include'd by every HTML-serving location.
 # Lives outside conf.d/ so nginx does not auto-load it a second time at the

@@ -35,7 +35,10 @@ services:
         limits:
           memory: 512M
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      # A TCP check, not mongosh: mongosh is a whole Node program, and starting
+      # one every few seconds was a large share of Mongo's CPU (scaling audit
+      # 2026-09-25). mongod listens only once it can serve.
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/27017' 2>/dev/null"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -106,6 +109,10 @@ services:
     # SIGKILL: the engine default is 10 s, and some installs (Docker Desktop)
     # default to 1 s.
     stop_grace_period: 15s
+    # A tiny init (tini) as PID 1 in front of Node: it forwards the stop signal
+    # to the graceful shutdown and reaps any child process that exits, which a
+    # bare Node PID 1 does not (scaling audit 2026-09-25, item 13).
+    init: true
     security_opt:
       - no-new-privileges:true
     cap_drop:
