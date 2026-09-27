@@ -1,5 +1,4 @@
 const Bottle = require('../models/Bottle');
-const WineEmbedding = require('../models/WineEmbedding');
 const RestockAlert = require('../models/RestockAlert');
 const User = require('../models/User');
 const { createNotification } = require('./notifications');
@@ -19,9 +18,9 @@ const TOP_K = 10;
 /**
  * Background check after a bottle is consumed.
  *  1. Get the consumed wine's embedding
- *  2. Search for similar wines in Qdrant
- *  3. Check if the user still has any similar bottles in their cellar
- *  4. If not, send a notification suggesting they restock
+ *  2. Check whether the user still has a similar wine in their cellar
+ *  3. If not, find the registry's closest wines (they resolve the alert later)
+ *  4. Save the alert and send a notification suggesting they restock
  *
  * Fire-and-forget — errors are caught and logged, never thrown.
  */
@@ -46,64 +45,48 @@ async function checkRestockGap(userId, bottleId, cellarId) {
 
     const aiConfig = require('../config/aiConfig');
     const cfg = aiConfig.get();
+    const model = cfg.embeddingModel;
     const indexVersion = cfg.vectorIndex || 'v1';
 
-    // Try to reuse existing embedding vector from Qdrant (no API call needed)
-    const existingEmb = await WineEmbedding.findOne({
-      wineDefinition: wine._id,
-      vintage,
-      status: 'ok'
-    }).lean();
-
-    let queryVector;
-
-    if (existingEmb?.qdrantPointId) {
-      // Retrieve stored vector from Qdrant — free, no Voyage AI call
-      try {
-        const points = await vectorStore.getPoints(indexVersion, [existingEmb.qdrantPointId]);
-        if (points.length > 0 && points[0].vector) {
-          queryVector = points[0].vector;
-        }
-      } catch {
-        // Qdrant retrieval failed — fall through to Voyage AI
-      }
-    }
-
+    // The drunk wine's stored vector (free), else embed it (one Voyage call).
+    let queryVector = await vectorStore.getVector(wine._id, vintage, { model, indexVersion });
     if (!queryVector) {
-      // No cached vector — call Voyage AI to create one
       const searchText = embedding.buildEmbeddingText(wine, vintage);
-      queryVector = await embedding.embedSingle(searchText);
+      queryVector = await embedding.embedSingle(searchText, { model });
     }
-
     if (!queryVector) return;
 
-    const hits = await vectorStore.searchSimilar(indexVersion, queryVector, TOP_K);
-    if (!hits || hits.length === 0) return;
-
-    // Get wine definition IDs from similar results (above threshold)
-    const similarWineIds = hits
-      .filter(h => h.score >= SIMILARITY_THRESHOLD)
-      .map(h => h.payload?.wineDefinitionId)
-      .filter(Boolean);
-
-    if (similarWineIds.length === 0) return;
-
-    // Check if user still has active bottles of any similar wine.
+    // 1. Does the user still have something similar? Compare with every wine
+    //    left in their cellar(s) — not only the registry's ten closest, which
+    //    are mostly this wine's other vintages, so a similar bottle the user
+    //    did own could be missed and the alert fired anyway.
     // Scope: 'cellar' = only check the cellar the bottle came from;
     //        'all' (default) = check across all user's cellars.
     const scope = user.preferences?.restockScope || 'all';
     const activeQuery = {
       user: userId,
-      wineDefinition: { $in: similarWineIds },
+      wineDefinition: { $ne: null },
       status: { $nin: CONSUMED_STATUSES }
     };
     if (scope === 'cellar' && cellarId) {
       activeQuery.cellar = cellarId;
     }
+    const ownedWineIds = await Bottle.distinct('wineDefinition', activeQuery);
+    if (ownedWineIds.length) {
+      const owned = await vectorStore.search(queryVector, {
+        model, indexVersion, wineIds: ownedWineIds, limit: 1, minScore: SIMILARITY_THRESHOLD,
+      });
+      if (owned.length) return; // User still has a similar wine — no alert needed
+    }
 
-    const activeCount = await Bottle.countDocuments(activeQuery);
-
-    if (activeCount > 0) return; // User still has similar wines — no alert needed
+    // 2. The registry's closest wines (one per wine): what resolves the alert
+    //    again when the user adds one of them. None above the threshold means
+    //    nothing is really like it — no alert, as before.
+    const hits = await vectorStore.search(queryVector, {
+      model, indexVersion, limit: TOP_K, minScore: SIMILARITY_THRESHOLD, distinctWines: true,
+    });
+    const similarWineIds = hits.map(h => h.wineDefinitionId);
+    if (similarWineIds.length === 0) return;
 
     // Check if there's already an active alert for this wine
     const existingAlert = await RestockAlert.findOne({

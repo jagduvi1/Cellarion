@@ -33,7 +33,7 @@ This is the primary way to use Cellarion. Create an account and start using the 
 - **Registry quality tooling** — Duplicate/fragmentation queues, cross-field domain checks, name checks, and a sommelier correction-proposal workflow keep the shared data clean
 
 **AI**
-- **AI cellar chat** — Ask questions about your collection — food pairings, occasion picks, cellar health (Claude + Voyage embeddings + Qdrant; only ever answers from wines you actually own)
+- **AI cellar chat** — Ask questions about your collection — food pairings, occasion picks, cellar health (Claude + Voyage embeddings, searched in MongoDB; only ever answers from wines you actually own)
 - **Connect your own AI** — A built-in [MCP server](#connect-your-ai-mcp) lets Claude, and any MCP-capable client, read and manage your cellar conversationally
 - **Bring your own models** — Self-hosters can point every AI feature at any OpenAI-compatible endpoint (Ollama, vLLM, LM Studio) instead of Anthropic/Voyage
 
@@ -60,7 +60,6 @@ This is the primary way to use Cellarion. Create an account and start using the 
 - **React 19** — Frontend (React Router 6, built with **Vite 7**)
 - **Node.js 24** — Runtime
 - **Meilisearch** — Fuzzy search engine
-- **Qdrant** — Vector database for AI cellar chat
 - **Voyage AI** — Wine embedding generation (swappable for any OpenAI-compatible endpoint)
 - **Anthropic Claude** — Label scanning + AI chat (swappable, same mechanism)
 - **MCP** — Model Context Protocol server (`/api/mcp`) with OAuth, for AI assistants
@@ -194,7 +193,6 @@ All external traffic enters through Traefik (runs on the shared `web` Docker net
 | Backend      | internal  | Express REST API (port 5000)       |
 | MongoDB      | internal  | Database (port 27017)              |
 | Meilisearch  | internal  | Fuzzy search engine (port 7700)    |
-| Qdrant       | internal  | Vector database (port 6333)        |
 | rembg        | internal  | Background removal (port 5000)     |
 | Umami (+db)  | internal  | Optional analytics — `--profile analytics` |
 
@@ -389,7 +387,6 @@ Copy `.env.example` to `.env` — **it is fully commented and is the authoritati
 | `REMBG_URL` | No | `http://rembg:5000` | Background removal service |
 | `ANTHROPIC_API_KEY` | No | — | Enables label scanning and AI cellar chat ([get a key](https://console.anthropic.com/)) |
 | `VOYAGE_API_KEY` | No | — | Required for AI cellar chat embeddings ([get a key](https://dash.voyageai.com/)) |
-| `QDRANT_URL` | No | `http://qdrant:6333` | Vector database URL (auto-set in Docker Compose) |
 | `SUPER_ADMIN_EMAIL` | No | — | Email of the super admin account |
 | `MAILGUN_API_KEY` / `MAILGUN_DOMAIN` | No | — | Enable email verification + transactional email |
 
@@ -405,17 +402,17 @@ Copy `.env.example` to `.env` — **it is fully commented and is the authoritati
 | Push notifications | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_EMAIL` | Web-push for drink alerts and events |
 | Climate monitoring | `CLIMATE_RETENTION_DAYS`, `CLIMATE_MAX_DEVICES_PER_USER`, `CLIMATE_MAX_READINGS_PER_DAY`, … | Sensor ingest limits + GDPR retention |
 | Analytics | `UMAMI_DB_PASSWORD`, `UMAMI_APP_SECRET`, `VITE_UMAMI_URL`, `VITE_UMAMI_WEBSITE_ID` | Self-hosted cookie-free Umami (`--profile analytics`; `VITE_*` are build-time) |
-| Ops | `TRUST_PROXY_HOPS`, `COOKIE_SECURE`, `BACKEND_URL`, `MEILI_SEARCH_KEY`, `LOG_LEVEL`, `AUDIT_TTL_DAYS`, `VITE_SITE_URL`, `INDEXNOW_KEY`, `SUPER_ADMIN_IPS`, `QDRANT_API_KEY` | Proxy trust, cookies, logging, SEO, audit retention |
+| Ops | `TRUST_PROXY_HOPS`, `COOKIE_SECURE`, `BACKEND_URL`, `MEILI_SEARCH_KEY`, `LOG_LEVEL`, `AUDIT_TTL_DAYS`, `VITE_SITE_URL`, `INDEXNOW_KEY`, `SUPER_ADMIN_IPS` | Proxy trust, cookies, logging, SEO, audit retention |
 
 ### AI Cellar Chat
 
-The AI chat feature requires three services working together:
+The AI chat feature needs two services:
 
 1. **Anthropic Claude** (`ANTHROPIC_API_KEY`) — generates conversational responses grounded in your cellar
 2. **Voyage AI** (`VOYAGE_API_KEY`) — creates wine embeddings for semantic search
-3. **Qdrant** (`QDRANT_URL`) — vector database for fast similarity search
+The wine vectors are stored in MongoDB and compared by the backend itself — there is no separate vector database to run. (Up to v1.241 Cellarion used Qdrant; after upgrading, `src/scripts/migrate-vectors-from-qdrant.js` copies the existing vectors over once — see the release notes.)
 
-When all three are configured, users can ask natural-language questions about their collection (food pairings, occasion picks, cellar insights). The system only surfaces wines the user actually owns — no hallucinated recommendations.
+When both are configured, users can ask natural-language questions about their collection (food pairings, occasion picks, cellar insights). The system only surfaces wines the user actually owns — no hallucinated recommendations.
 
 A single daily usage quota — the same for every user, regardless of supporter tier — is configurable by SuperAdmins (default 50 questions/day).
 
@@ -446,8 +443,7 @@ Notes:
 - The AI usage budgets (per-user/global daily caps, import per-request cap, chat daily limit) were tuned to bound paid Anthropic spend. Against your own hardware they still apply — raise or disable them in SuperAdmin → Rate limits (`0`/`-1` = unlimited) if you don't want your local endpoint metered.
 - The admin panel's Claude model settings are ignored in openai mode (the model comes from `AI_MODEL`); the configurable AI **prompts** still apply.
 - Label scanning needs a vision-capable model. Extraction quality depends heavily on the model you host — smaller local models will misread more labels than Claude does.
-- The Qdrant collection is sized to the embedding dimension. After changing `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, or `EMBEDDING_DIMENSION`, run a **full** embedding job (SuperAdmin → AI) — it drops and rebuilds the collection at the new size. Every returned vector is validated against `EMBEDDING_DIMENSION`, so a wrong value fails loudly instead of corrupting search.
-- Qdrant itself is always required for cellar chat (it ships in docker-compose).
+- The stored vectors have the embedding dimension. After changing `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, or `EMBEDDING_DIMENSION`, run a **full** embedding job (SuperAdmin → AI) — it re-embeds every wine in place (search keeps working meanwhile) and then removes the old vectors. Every returned vector is validated against `EMBEDDING_DIMENSION`, so a wrong value fails loudly instead of corrupting search.
 - **Privacy note for multi-user instances:** the bundled Privacy Policy names Anthropic and Voyage AI as the AI sub-processors. Pointing these vars at your own local endpoint (Ollama/vLLM on your hardware) removes third-party AI processing entirely — but if you point them at a remote third-party service (e.g. OpenAI or a hosted proxy), you are responsible for updating your instance's privacy policy and user consent accordingly.
 
 ### Email Verification

@@ -92,7 +92,7 @@ router.put('/:wineId', requireSommOrAdmin, async (req, res) => {
     await wine.save();
 
     // The structured descriptors feed buildEmbeddingText, so both indexes are
-    // now stale. Meili is nudged directly; Qdrant is re-embedded inline —
+    // now stale. Meili is nudged directly; the vectors are re-embedded inline —
     // relying on "the next incremental run" was wrong because NO run is
     // scheduled, so a correction stayed invisible to semantic search until a
     // manual job (mirrors enrichmentJob's own post-write re-embed).

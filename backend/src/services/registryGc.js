@@ -15,7 +15,7 @@
  * already complete and correct.
  *
  * Cleanup on success: pending profiles, the wine's un-approved images (rows +
- * files), embedding rows + their Qdrant points (best-effort), the Meilisearch
+ * files), embedding rows with their vectors (best-effort), the Meilisearch
  * document, the WineDefinition itself, and a wine.undo_create audit entry.
  *
  * Callers pass wine ids their OWN ledger row recorded as created (add_bottle
@@ -67,24 +67,11 @@ async function gcOrphanMintedWine(wineId, req) {
       await BottleImage.deleteMany({ wineDefinition: wineId });
     }
 
-    // Embeddings: rows + Qdrant points, best-effort (the vector store may be
-    // down; a stale point is harmless — searches dedupe against Mongo).
+    // Embeddings: the rows hold the vectors, so deleting them is the whole
+    // cleanup. Best-effort, as before.
     try {
       const WineEmbedding = require('../models/WineEmbedding');
-      const rows = await WineEmbedding.find({ wineDefinition: wineId }).select('qdrantPointId indexVersion').lean();
-      if (rows.length) {
-        const vectorStore = require('./vectorStore');
-        const byIndex = new Map();
-        for (const r of rows) {
-          if (!r.qdrantPointId) continue;
-          if (!byIndex.has(r.indexVersion)) byIndex.set(r.indexVersion, []);
-          byIndex.get(r.indexVersion).push(r.qdrantPointId);
-        }
-        for (const [indexVersion, ids] of byIndex) {
-          await vectorStore.deletePoints(indexVersion, ids).catch(() => {});
-        }
-        await WineEmbedding.deleteMany({ wineDefinition: wineId });
-      }
+      await WineEmbedding.deleteMany({ wineDefinition: wineId });
     } catch { /* embedding cleanup is best-effort */ }
 
     require('./search').removeWine(wineId);

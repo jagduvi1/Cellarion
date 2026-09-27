@@ -13,7 +13,7 @@
  *
  * For genuinely unused wines, also cascades:
  *   - WineVintageProfile / WineVintagePrice records
- *   - WineEmbedding rows (vector search)
+ *   - WineEmbedding rows (they hold the vectors for similarity search)
  *   - CommunityWinePrice rows
  *   - WineNotDuplicate pairs involving the wine
  *   - Meilisearch index entries
@@ -50,7 +50,6 @@ const Appellation = require('../models/Appellation');
 // Register remaining schemas so Mongoose doesn't complain about unknown refs
 require('../models/Country');
 const searchService = require('../services/search');
-const vectorStore = require('../services/vectorStore');
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://mongo:27017/winecellar';
 const APPLY = process.argv.includes('--apply');
@@ -75,31 +74,6 @@ const WINE_REF_SOURCES = [
   [PriceTrackingRequest, 'wineDefinition'],
 ];
 
-/**
- * Delete the unused wines' Qdrant points BEFORE the WineEmbedding rows go —
- * the rows hold the only qdrantPointIds, so deleting them first would orphan
- * the live vectors and the deleted wines would keep surfacing in AI
- * similarity search forever (same pattern as admin merge's purgeSourceVectors).
- */
-async function purgeQdrantPoints(wineIds) {
-  try {
-    const embs = await WineEmbedding.find({ wineDefinition: { $in: wineIds } })
-      .select('qdrantPointId indexVersion').lean();
-    const byIndex = new Map();
-    for (const e of embs) {
-      if (!e.qdrantPointId) continue;
-      if (!byIndex.has(e.indexVersion)) byIndex.set(e.indexVersion, []);
-      byIndex.get(e.indexVersion).push(e.qdrantPointId);
-    }
-    for (const [indexVersion, ids] of byIndex) {
-      await vectorStore.deletePoints(indexVersion, ids).catch(() => {});
-    }
-    console.log(`Purged Qdrant points: ${[...byIndex.values()].reduce((n, a) => n + a.length, 0)}`);
-  } catch (err) {
-    console.warn('Qdrant point purge failed (embedding rows will still be deleted):', err.message);
-  }
-}
-
 async function run() {
   console.log('Connecting to MongoDB…');
   await mongoose.connect(MONGO_URI);
@@ -122,8 +96,6 @@ async function run() {
   console.log(`Unreferenced wines:      ${unusedIds.length}`);
 
   if (unusedIds.length > 0 && APPLY) {
-    await purgeQdrantPoints(unusedIds);
-
     const cascade = [
       [WineVintageProfile, { wineDefinition: { $in: unusedIds } }, 'vintage profiles'],
       [WineVintagePrice, { wineDefinition: { $in: unusedIds } }, 'vintage prices'],

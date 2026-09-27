@@ -1,7 +1,7 @@
 /**
  * SSRF guard for server-side image download (attach_bottle_image image_url).
  *
- * WHY THIS TEST EXISTS: the backend can reach internal services (mongo, qdrant,
+ * WHY THIS TEST EXISTS: the backend can reach internal services (mongo,
  * rembg) and the VM's cloud-metadata endpoint. A caller-supplied URL that
  * resolves — now or after a DNS rebind — to any of those must never be fetched.
  * The address classifier is the load-bearing gate; these pin every private /

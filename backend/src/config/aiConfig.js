@@ -9,8 +9,8 @@
  * -------
  * chatEnabled          – master switch; false blocks POST /api/chat
  * embeddingModel       – Voyage AI model name used for new embeddings
- * vectorIndex          – active Qdrant collection version suffix ('v1', 'v2', …)
- * chatTopK             – how many Qdrant results to retrieve before filtering to user's cellar
+ * vectorIndex          – index version the vectors are stored under ('v1', 'v2', …)
+ * chatTopK             – how many vector hits to retrieve before filtering to user's cellar
  * chatMaxResults       – max wines shown in the final AI answer
  * embeddingBatchDelayMs– ms to sleep between embedding calls during batch jobs
  *                        (helps stay within Voyage free-tier 3 RPM)

@@ -20,7 +20,7 @@
  * taxonomy; an unknown country skips the row, an unknown region or grape is
  * left empty. Idempotent: upserts by producer + name. Canaries are excluded
  * from search membership, embedding and enrichment by their flag, so seeding
- * never touches Meilisearch, Qdrant or the AI budget.
+ * never touches Meilisearch, the vector store or the AI budget.
  *
  * Usage (container running; copy the file in first, remove it after):
  *   docker exec cellarion-backend node src/scripts/seed-canary-wines.js --file /tmp/canaries.json --dry-run

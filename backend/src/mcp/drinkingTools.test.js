@@ -30,7 +30,7 @@ jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn() }));
 jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
 jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false), search: jest.fn(), searchBottles: jest.fn() }));
 jest.mock('../services/statsService', () => ({ computeOverview: jest.fn(), buildEmptyStats: jest.fn() }));
-jest.mock('../services/vectorStore', () => ({ getPoints: jest.fn(), searchSimilar: jest.fn() }));
+jest.mock('../services/vectorStore', () => ({ getVector: jest.fn(), search: jest.fn() }));
 jest.mock('../config/aiConfig', () => ({ get: jest.fn(() => ({ vectorIndex: 'v1', embeddingModel: 'voyage-4-large' })) }));
 jest.mock('../services/aiBudget', () => ({ tryDebitAi: jest.fn() }));
 jest.mock('../services/embedding', () => ({ embedSingle: jest.fn() }));
@@ -419,9 +419,9 @@ describe('pair_with_dish', () => {
 });
 
 describe('semantic_search_wines', () => {
+  // The store returns one hit per wine (its best vintage) — see vectorStore.test.js.
   const HITS = (wineId) => [
-    { score: 0.91, payload: { wineDefinitionId: wineId, vintage: '2019' } },
-    { score: 0.88, payload: { wineDefinitionId: wineId, vintage: '2020' } }, // same wine — deduped
+    { score: 0.91, wineDefinitionId: wineId, vintage: '2019' },
   ];
 
   test('budget exhausted → budget_exhausted with recovery guidance, no embed call', async () => {
@@ -433,11 +433,11 @@ describe('semantic_search_wines', () => {
     expect(embedSingle).not.toHaveBeenCalled();
   });
 
-  test('happy path: debits once, embeds, dedups vintages to one wine; repeat query hits the cache (no second debit)', async () => {
+  test('happy path: debits once, embeds, asks for one hit per wine; repeat query hits the cache (no second debit)', async () => {
     const wineId = String(new mongoose.Types.ObjectId());
     tryDebitAi.mockResolvedValue({ ok: true, refund: jest.fn() });
     embedSingle.mockResolvedValue([0.1, 0.2]);
-    vectorStore.searchSimilar.mockResolvedValue(HITS(wineId));
+    vectorStore.search.mockResolvedValue(HITS(wineId));
     WineDefinition.find.mockReturnValue(chain([
       { _id: wineId, name: 'Barbaresco', producer: 'G', type: 'red', grapes: [] },
     ]));
@@ -447,6 +447,7 @@ describe('semantic_search_wines', () => {
     const body = parse(res);
     expect(body.data).toHaveLength(1);
     expect(body.data[0]).toMatchObject({ name: 'Barbaresco', similarity: 0.91, embedded_vintage: '2019' });
+    expect(vectorStore.search.mock.calls[0][1]).toMatchObject({ distinctWines: true, limit: 8, wineIds: null });
     expect(tryDebitAi).toHaveBeenCalledTimes(1);
     expect(embedSingle).toHaveBeenCalledTimes(1);
 
@@ -470,10 +471,9 @@ describe('semantic_search_wines', () => {
     Cellar.find.mockReturnValue(chain([{ _id: CELLAR_ID }]));
     const myWine = String(new mongoose.Types.ObjectId());
     Bottle.distinct.mockResolvedValue([myWine]);
-    vectorStore.searchSimilar.mockResolvedValue([]);
+    vectorStore.search.mockResolvedValue([]);
     await tool('semantic_search_wines').handler({ query: 'silky and light', search_scope: 'mine' }, ctxFor(oid('4')));
-    const filterArg = vectorStore.searchSimilar.mock.calls[0][3];
-    expect(filterArg.filter.must[0].match.any).toEqual([myWine]);
+    expect(vectorStore.search.mock.calls[0][1].wineIds).toEqual([myWine]);
 
     Bottle.distinct.mockResolvedValue([]);
     const res = await tool('semantic_search_wines').handler({ query: 'another silky query', search_scope: 'mine' }, ctxFor(oid('5')));
@@ -483,7 +483,7 @@ describe('semantic_search_wines', () => {
   test('per-user embed window: the 11th new query in a minute is rate_limited before any debit', async () => {
     tryDebitAi.mockResolvedValue({ ok: true, refund: jest.fn() });
     embedSingle.mockResolvedValue([0.5]);
-    vectorStore.searchSimilar.mockResolvedValue([]);
+    vectorStore.search.mockResolvedValue([]);
     const ctx = ctxFor(oid('6'));
     for (let i = 0; i < 10; i++) {
       const r = await tool('semantic_search_wines').handler({ query: `distinct query number ${i}` }, ctx);

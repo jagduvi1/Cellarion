@@ -231,7 +231,7 @@ router.delete('/', requireMcpEnabled, mcpIpLimiter, requireAuth, requireNonDemo,
 // user null, so the registry's structural filter exposes ONLY 'public'-scoped
 // tools/resources (registry lookups, drink windows, guides, about) — personal
 // tools are not hidden, they are UNREGISTERED. Zero Cellarion AI spend by
-// design: every public tool is a DB/Meili/Qdrant read of public-site content.
+// design: every public tool is a DB/Meili/vector read of public-site content.
 // Stateless only (no sessions, no SSE — nothing to subscribe to without a
 // user), behind a strict dedicated per-IP limiter on top of the global
 // apiLimiter. requireNonDemo is irrelevant here (no auth at all).

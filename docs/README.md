@@ -6,7 +6,7 @@ For top-level project orientation (setup, stack, ports, demo data, GDPR), see [`
 
 ## Docs
 
-- **[Cellar Chat Architecture](./cellar-chat-architecture.md)** — RAG pipeline (query expansion → embedding → Qdrant → cellar filter → enrichment → streaming Claude). Covers wine-context round-tripping, SSE event shapes, rate limiting, and session persistence.
+- **[Cellar Chat Architecture](./cellar-chat-architecture.md)** — RAG pipeline (query expansion → embedding → vector search over your own wines → cellar filter → enrichment → streaming Claude). Covers wine-context round-tripping, SSE event shapes, rate limiting, and session persistence.
 - **[Admin Global Stats](./admin-global-stats-architecture.md)** — How `/admin/stats` builds 14 sections from ~20 Mongo aggregations. Covers the `excludeAdmins` filter chain, 5-minute in-memory caching, the maturity `$switch` pipeline, the `$bucket` empty-row trap, and privacy guards (redaction on small platforms, inline NoSQL-injection sanitisation).
 - **[Data Quality Guards](./data-quality-guards.md)** — The two boundary defences against bad data entry: `parseLocaleNumber` (locale-aware replacement for `parseFloat`, fixes EU/Swedish CSV imports) and the four price-sanity rules (absolute cap, user-median outlier, market-median outlier, possibly-cents heuristic).
 

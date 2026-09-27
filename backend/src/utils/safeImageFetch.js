@@ -1,7 +1,7 @@
 /**
  * SSRF-guarded image download for server-side "attach image by URL" (the MCP
  * attach_bottle_image tool). The backend lives on a Docker network with
- * internal services (mongo, meilisearch, qdrant, rembg) and on a VM with
+ * internal services (mongo, meilisearch, rembg) and on a VM with
  * cloud metadata endpoints — a naive fetch(url) would let a caller aim
  * requests at any of them. Guards, in order:
  *

@@ -4,7 +4,8 @@
  * Flow
  * ----
  * 1. Embed the user's question with Voyage AI.
- * 2. Query Qdrant for the most similar wine vectors (active index version).
+ * 2. Find the most similar wine vectors among the user's own wines
+ *    (services/vectorStore — stored in MongoDB, compared in memory).
  * 3. Cross-reference with the user's active Bottle collection to keep only
  *    wines they actually own, and enrich with bottle metadata (vintage, notes).
  * 4. Build a grounded prompt and call Claude to generate the recommendation.
@@ -54,12 +55,12 @@ function getEventLog() {
 // ── Wine matching ──────────────────────────────────────────────────────────
 
 /**
- * Given Qdrant hits (each carrying wineDefinitionId + vintage in payload),
+ * Given vector hits (each carrying wineDefinitionId + vintage),
  * return the subset that the user actually owns as active bottles.
- * Preserves Qdrant score ordering.
+ * Preserves score ordering.
  *
  * @param {string} userId
- * @param {Array<{ id, score, payload }>} hits
+ * @param {Array<{ wineDefinitionId, vintage, score }>} hits
  * @param {number} maxResults
  * @returns {Promise<Array>}
  */
@@ -95,14 +96,14 @@ async function liveCellarIds(userId, requested) {
 async function filterToUserCellar(userId, hits, maxResults, { cellarIds } = {}) {
   if (!hits.length) return [];
 
-  // Build lookup: "wineDefinitionId|vintage" → qdrant score
+  // Build lookup: "wineDefinitionId|vintage" → similarity score
   const scoreMap = new Map();
   const wineDefIds = [];
   for (const hit of hits) {
-    const key = `${hit.payload.wineDefinitionId}|${hit.payload.vintage}`;
+    const key = `${hit.wineDefinitionId}|${hit.vintage}`;
     if (!scoreMap.has(key)) {
       scoreMap.set(key, hit.score);
-      wineDefIds.push(hit.payload.wineDefinitionId);
+      wineDefIds.push(hit.wineDefinitionId);
     }
   }
 
@@ -135,7 +136,7 @@ async function filterToUserCellar(userId, hits, maxResults, { cellarIds } = {}) 
 
   if (!bottles.length) return [];
 
-  // Attach Qdrant score and sort by score descending
+  // Attach the similarity score and sort by score descending
   const scored = bottles.map(b => {
     const key = `${b.wineDefinition._id}|${b.vintage}`;
     return { bottle: b, score: scoreMap.get(key) ?? 0 };
@@ -268,7 +269,7 @@ async function fetchEnrichmentData(userId, matches, scopedCellarIds = null) {
 
 /**
  * Rewrites the user's question into rich wine-search terminology using Claude
- * Haiku. This dramatically improves Qdrant embedding matches for vague or
+ * Haiku. This dramatically improves embedding matches for vague or
  * food-focused questions.
  *
  * When `hasHistory` is true, also classifies whether the follow-up message
@@ -395,7 +396,7 @@ async function _prepareChatContext(userId, message, { useQueryExpansion = true, 
       throw Object.assign(new Error('Embeddings are not configured on this server'), { status: 503 });
     }
 
-    // Restrict Qdrant search to wines the user actually owns. Without this,
+    // Restrict the vector search to wines the user actually owns. Without this,
     // top-K is pulled from the global catalogue and small cellars get filtered
     // out entirely (see issue #386).
     // Resolved ONCE and threaded through everything below, so the count, the
@@ -410,13 +411,11 @@ async function _prepareChatContext(userId, message, { useQueryExpansion = true, 
     let hits = [];
     if (userWineDefIds.length) {
       const queryVector = await embedSingle(searchQuery, { model: cfg.embeddingModel });
-      hits = await vectorStore.searchSimilar(cfg.vectorIndex, queryVector, cfg.chatTopK, {
-        filter: {
-          must: [{
-            key: 'wineDefinitionId',
-            match: { any: userWineDefIds.map(id => id.toString()) }
-          }]
-        }
+      hits = await vectorStore.search(queryVector, {
+        model: cfg.embeddingModel,
+        indexVersion: cfg.vectorIndex,
+        wineIds: userWineDefIds,
+        limit: cfg.chatTopK,
       });
     }
     matches = await filterToUserCellar(userId, hits, cfg.chatMaxResults, { cellarIds: scopedCellarIds });

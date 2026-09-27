@@ -2,16 +2,21 @@
  * Background batch embedding job.
  *
  * Scans every unique (WineDefinition, vintage) pair that exists in the Bottle
- * collection and creates / refreshes its embedding in Qdrant + WineEmbedding.
+ * collection and creates / refreshes its vector on its WineEmbedding row
+ * (services/vectorStore searches them).
  *
  * Only one job can run at a time. The job state is kept in memory and exposed
  * via getStatus() for the admin dashboard.
  *
  * Modes
  * ------
- * incremental (default) – skip pairs that already have an up-to-date embedding
- *                         (same model, indexVersion, and textHash)
- * full                  – wipe the target Qdrant collection and re-embed everything
+ * incremental (default) – skip pairs that already have an up-to-date vector
+ *                         (same model, indexVersion, textHash and dimension)
+ * full                  – re-embed everything in place, then delete the rows
+ *                         this run didn't write (old models, pairs no longer
+ *                         in any cellar). Search keeps working throughout:
+ *                         each row keeps its old vector until its new one
+ *                         is written.
  *
  * Throttle
  * ---------
@@ -21,10 +26,9 @@
  */
 
 const crypto = require('crypto');
-const { randomUUID } = require('crypto');
 const aiConfig = require('../config/aiConfig');
 const { embedSingle, buildEmbeddingText, isEmbeddingConfigured, getEmbeddingDimension } = require('./embedding');
-const vectorStore = require('./vectorStore');
+const { encodeVector } = require('./vectorStore');
 const WineEmbedding = require('../models/WineEmbedding');
 const Bottle = require('../models/Bottle');
 const WineDefinition = require('../models/WineDefinition');
@@ -68,6 +72,24 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// A row is current when its text, status and vector all match what the
+// active provider would produce now. A row without a vector (not migrated, or
+// written by an old version) or of another dimension (provider/model switch)
+// is stale.
+function isCurrent(row, textHash) {
+  return !!row && row.textHash === textHash && row.status === 'ok' && row.dim === getEmbeddingDimension();
+}
+
+// Write a pair's fresh vector onto its row (upsert).
+async function storeVector({ wineDefId, vintage, model, indexVersion, textHash, values }) {
+  const { vector, norm, dim } = encodeVector(values);
+  await WineEmbedding.findOneAndUpdate(
+    { wineDefinition: wineDefId, vintage, model, indexVersion },
+    { $set: { vector, norm, dim, textHash, embeddedAt: new Date(), status: 'ok', errorMessage: null } },
+    { upsert: true }
+  );
+}
+
 /**
  * Gather every unique (wineDefinitionId, vintage) pair from active Bottle docs.
  */
@@ -92,26 +114,13 @@ async function start({ mode = 'incremental' } = {}) {
   if (job.status === 'running' || job.status === 'stopping') {
     throw new Error('A job is already running');
   }
-  // Guard BEFORE any destructive step: a full job drops the collection first,
-  // so starting with a broken embedding config (e.g. EMBEDDING_PROVIDER=openai
-  // without EMBEDDING_DIMENSION) would destroy the existing vectors and then
-  // fail to recreate the collection.
+  // A broken embedding config (e.g. EMBEDDING_PROVIDER=openai without
+  // EMBEDDING_DIMENSION) would fail every pair — say so up front.
   if (!isEmbeddingConfigured()) {
     throw new Error('Embedding provider is not configured — set VOYAGE_API_KEY, or EMBEDDING_BASE_URL/EMBEDDING_MODEL/EMBEDDING_DIMENSION for EMBEDDING_PROVIDER=openai');
   }
 
   const cfg = aiConfig.get();
-
-  // An incremental job into a collection built at a different dimension would
-  // embed every pair and then fail every upsert (Qdrant 400) — fail fast and
-  // name the fix instead.
-  if (mode !== 'full') {
-    const existingSize = await vectorStore.collectionVectorSize(cfg.vectorIndex).catch(() => null);
-    const wantedSize = getEmbeddingDimension();
-    if (existingSize && existingSize !== wantedSize) {
-      throw new Error(`Collection wines_${cfg.vectorIndex} was built for ${existingSize}-dim vectors but the active embedding provider produces ${wantedSize}-dim — run a FULL embedding job to rebuild it`);
-    }
-  }
 
   stopRequested = false;
   job = {
@@ -143,20 +152,12 @@ async function runJob(cfg) {
   const { embeddingModel: model, vectorIndex, embeddingBatchDelayMs } = cfg;
 
   try {
-    // Ensure the Qdrant collection exists before we start
-    await vectorStore.ensureCollection(vectorIndex);
-
-    // Full mode: drop + recreate the Qdrant collection (this also resizes it to
-    // the current VOYAGE_DIMENSION if the embedding model changed), and wipe ALL
-    // WineEmbedding bookkeeping for this index version — across every model, not
-    // just the current one — so stale records from a previous model (e.g. after
-    // switching voyage-4-lite -> voyage-4-large) don't linger as orphans.
-    if (job.mode === 'full') {
-      await vectorStore.dropCollection(vectorIndex);
-      await vectorStore.ensureCollection(vectorIndex);
-      await WineEmbedding.deleteMany({ indexVersion: vectorIndex });
-      console.log(`[embeddingJob] Full mode — cleared collection wines_${vectorIndex} and all its embedding records`);
-    }
+    // Full mode re-embeds every row in place; the rows it didn't write are
+    // deleted once it completes (below) — stale records from a previous model
+    // (e.g. after switching voyage-4-lite -> voyage-4-large) and pairs no
+    // longer in any cellar. Until then every row keeps its old vector, so
+    // search never goes empty mid-rebuild.
+    const runStartedAt = new Date();
 
     const pairs = await collectPairs();
     job.total = pairs.length;
@@ -195,60 +196,24 @@ async function runJob(cfg) {
         const text = buildEmbeddingText(wine, vintage);
         const textHash = sha256(text);
 
-        // In incremental mode, skip if embedding is already current
+        // In incremental mode, skip if the vector is already current
         if (job.mode === 'incremental') {
           const existing = await WineEmbedding.findOne({
             wineDefinition: wineDefId,
             vintage,
             model,
             indexVersion: vectorIndex
-          });
-          if (existing && existing.textHash === textHash && existing.status === 'ok') {
+          }).select('textHash status dim').lean();
+          if (isCurrent(existing, textHash)) {
             job.skipped++;
             job.done++;
             continue;
           }
         }
 
-        // Embed
-        const vector = await embedSingle(text, { model });
-
-        // Before creating new point, delete old one if it exists
-        const existingEmb = await WineEmbedding.findOne({ wineDefinition: wineDefId, vintage, model, indexVersion: vectorIndex });
-        if (existingEmb?.qdrantPointId) {
-          await vectorStore.deletePoints(vectorIndex, [existingEmb.qdrantPointId]).catch(() => {});
-        }
-
-        // Upsert into Qdrant
-        const pointId = randomUUID();
-        await vectorStore.upsertPoints(vectorIndex, [{
-          id: pointId,
-          vector,
-          payload: {
-            wineDefinitionId: wineDefId.toString(),
-            vintage,
-            name: wine.name,
-            producer: wine.producer,
-            type: wine.type || 'unknown'
-          }
-        }]);
-
-        // Save / update WineEmbedding record
-        await WineEmbedding.findOneAndUpdate(
-          { wineDefinition: wineDefId, vintage, model, indexVersion: vectorIndex },
-          {
-            wineDefinition: wineDefId,
-            vintage,
-            model,
-            indexVersion: vectorIndex,
-            qdrantPointId: pointId,
-            textHash,
-            embeddedAt: new Date(),
-            status: 'ok',
-            errorMessage: null
-          },
-          { upsert: true, new: true }
-        );
+        // Embed, then write the vector onto the row
+        const values = await embedSingle(text, { model });
+        await storeVector({ wineDefId, vintage, model, indexVersion: vectorIndex, textHash, values });
 
         job.done++;
       } catch (err) {
@@ -257,11 +222,9 @@ async function runJob(cfg) {
         job.lastError = err.message;
         console.error(`[embeddingJob] Error embedding (${wineDefId}, ${vintage}):`, err.message);
 
-        // Mark as error in DB so admins can see which ones failed. Preserve any
-        // EXISTING qdrantPointId — overwriting it with a fresh UUID (as before)
-        // orphaned the previously-embedded point in Qdrant, because the next
-        // successful re-embed would then delete the bogus new UUID (a no-op)
-        // instead of the real prior point. Only mint a UUID for a brand-new row.
+        // Mark as error in DB so admins can see which ones failed. A row that
+        // already has a vector keeps it — searchable as before, and re-embedded
+        // by the next run (the emptied textHash makes it stale).
         try {
           await WineEmbedding.findOneAndUpdate(
             { wineDefinition: wineDefId, vintage, model, indexVersion: vectorIndex },
@@ -277,7 +240,6 @@ async function runJob(cfg) {
                 vintage,
                 model,
                 indexVersion: vectorIndex,
-                qdrantPointId: randomUUID(),
               },
             },
             { upsert: true }
@@ -287,6 +249,14 @@ async function runJob(cfg) {
 
       // Throttle between calls to respect Voyage free-tier RPM
       await sleep(embeddingBatchDelayMs);
+    }
+
+    // A completed full run: the rows it didn't write are stale (another
+    // model, or a pair no longer in any cellar) — this is what dropping the
+    // whole index used to achieve, minus the outage.
+    if (job.mode === 'full') {
+      const { deletedCount } = await WineEmbedding.deleteMany({ indexVersion: vectorIndex, embeddedAt: { $lt: runStartedAt } });
+      if (deletedCount) console.log(`[embeddingJob] Full mode — removed ${deletedCount} rows this run did not rewrite`);
     }
 
     job.status = 'done';
@@ -348,49 +318,13 @@ async function embedSinglePair(wineDefId, vintage) {
       vintage,
       model,
       indexVersion: vectorIndex
-    });
-    if (existing && existing.textHash === textHash && existing.status === 'ok') return;
+    }).select('textHash status dim').lean();
+    if (isCurrent(existing, textHash)) return;
 
-    await vectorStore.ensureCollection(vectorIndex);
-
-    // Embed FIRST, then delete the stale point (same order as the batch job).
-    // Deleting before the embed exists would leave the wine missing from
-    // vector search if the Voyage call below throws.
-    const vector = await embedSingle(text, { model });
-
-    if (existing?.qdrantPointId) {
-      await vectorStore.deletePoints(vectorIndex, [existing.qdrantPointId]).catch(() => {});
-    }
-
-    const pointId = randomUUID();
-
-    await vectorStore.upsertPoints(vectorIndex, [{
-      id: pointId,
-      vector,
-      payload: {
-        wineDefinitionId: wineDefId.toString(),
-        vintage,
-        name: wine.name,
-        producer: wine.producer,
-        type: wine.type || 'unknown'
-      }
-    }]);
-
-    await WineEmbedding.findOneAndUpdate(
-      { wineDefinition: wineDefId, vintage, model, indexVersion: vectorIndex },
-      {
-        wineDefinition: wineDefId,
-        vintage,
-        model,
-        indexVersion: vectorIndex,
-        qdrantPointId: pointId,
-        textHash,
-        embeddedAt: new Date(),
-        status: 'ok',
-        errorMessage: null
-      },
-      { upsert: true, new: true }
-    );
+    // The row keeps its old vector until the new one is written, so a failed
+    // Voyage call below never leaves the wine missing from search.
+    const values = await embedSingle(text, { model });
+    await storeVector({ wineDefId, vintage, model, indexVersion: vectorIndex, textHash, values });
 
     console.log(`[embeddingJob] Real-time embedded: ${wine.name} ${vintage}`);
   } catch (err) {
@@ -405,7 +339,7 @@ async function embedSinglePair(wineDefId, vintage) {
  * Re-embed every ACTIVE vintage of one wine — the follow-through for any
  * write that changes what buildEmbeddingText produces (curator profile
  * corrections; enrichment already inlines the same loop). Without it the
- * Qdrant vector keeps matching on the OLD profile until someone manually
+ * stored vector keeps matching on the OLD profile until someone manually
  * runs the batch job — for the Sandeman case that motivated #853, the wrong
  * character would live on in semantic search after the curator fixed it.
  * Best-effort by design: embedding lag must never fail a curation write.

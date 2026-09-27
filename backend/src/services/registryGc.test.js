@@ -9,7 +9,6 @@ jest.mock('../models/WineVintageProfile', () => ({ countDocuments: jest.fn(), de
 jest.mock('../models/Bottle', () => ({ countDocuments: jest.fn() }));
 jest.mock('../models/BottleImage', () => ({ countDocuments: jest.fn(), find: jest.fn(), deleteMany: jest.fn().mockResolvedValue({}) }));
 jest.mock('../models/WineEmbedding', () => ({ find: jest.fn(), deleteMany: jest.fn().mockResolvedValue({}) }));
-jest.mock('./vectorStore', () => ({ deletePoints: jest.fn().mockResolvedValue({}) }));
 jest.mock('./search', () => ({ removeWine: jest.fn() }));
 jest.mock('./imageProcessor', () => ({ unlinkImageFiles: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('./audit', () => ({ logAudit: jest.fn() }));
@@ -19,7 +18,6 @@ const WineVintageProfile = require('../models/WineVintageProfile');
 const Bottle = require('../models/Bottle');
 const BottleImage = require('../models/BottleImage');
 const WineEmbedding = require('../models/WineEmbedding');
-const vectorStore = require('./vectorStore');
 const searchService = require('./search');
 const { logAudit } = require('./audit');
 const { gcOrphanMintedWine } = require('./registryGc');
@@ -86,16 +84,10 @@ describe('gcOrphanMintedWine guards', () => {
 });
 
 describe('gcOrphanMintedWine happy path', () => {
-  test('removes pending profiles, embeddings + Qdrant points, search doc, wine — and audits', async () => {
-    WineEmbedding.find.mockReturnValue({ select: () => ({ lean: () => Promise.resolve([
-      { qdrantPointId: 'p1', indexVersion: 'v1' },
-      { qdrantPointId: 'p2', indexVersion: 'v1' },
-    ]) }) });
-
+  test('removes pending profiles, embeddings (the rows hold the vectors), search doc, wine — and audits', async () => {
     const res = await gcOrphanMintedWine(WINE_ID, REQ);
     expect(res.removed).toBe(true);
     expect(WineVintageProfile.deleteMany).toHaveBeenCalledWith({ wineDefinition: WINE_ID, status: 'pending' });
-    expect(vectorStore.deletePoints).toHaveBeenCalledWith('v1', ['p1', 'p2']);
     expect(WineEmbedding.deleteMany).toHaveBeenCalledWith({ wineDefinition: WINE_ID });
     expect(searchService.removeWine).toHaveBeenCalledWith(WINE_ID);
     expect(WineDefinition.deleteOne).toHaveBeenCalledWith({ _id: WINE_ID });
@@ -104,11 +96,8 @@ describe('gcOrphanMintedWine happy path', () => {
       { name: 'Barolo', producer: 'Cantina Bartolo Mascarello', via: 'undo' });
   });
 
-  test('a Qdrant outage does not stop the Mongo cleanup (best-effort vectors)', async () => {
-    WineEmbedding.find.mockReturnValue({ select: () => ({ lean: () => Promise.resolve([
-      { qdrantPointId: 'p1', indexVersion: 'v1' },
-    ]) }) });
-    vectorStore.deletePoints.mockRejectedValue(new Error('qdrant down'));
+  test('a failed embedding cleanup does not stop the rest (best-effort vectors)', async () => {
+    WineEmbedding.deleteMany.mockRejectedValueOnce(new Error('embeddings hiccup'));
     const res = await gcOrphanMintedWine(WINE_ID, REQ);
     expect(res.removed).toBe(true);
     expect(WineDefinition.deleteOne).toHaveBeenCalled();

@@ -29,14 +29,6 @@ export default function TabServices() {
       status: data.rembg?.status,
       detail: data.rembg?.latencyMs != null ? `${data.rembg.latencyMs}ms` : data.rembg?.error,
     },
-    {
-      key: 'qdrant',
-      name: 'Qdrant',
-      status: data.qdrant?.status,
-      detail: data.qdrant?.status === 'not_configured'
-        ? 'QDRANT_URL not set'
-        : data.qdrant?.latencyMs != null ? `${data.qdrant.latencyMs}ms` : data.qdrant?.error,
-    },
   ];
 
   const meiliStats = data.meilisearchStats;

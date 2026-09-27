@@ -27,7 +27,7 @@ User message
            │
            ▼
 ┌──────────────────────┐
-│   Qdrant Search      │  Top-K similar wine vectors
+│   Vector Search      │  Top-K similar wine vectors (your own wines)
 └──────────┬───────────┘
            │
            ▼
@@ -65,7 +65,7 @@ The user's message is rewritten into wine-search terminology. For example:
 > **User:** "I'm making lamb with rosemary tonight"
 > **Expanded:** "full-bodied red wine, Cabernet Sauvignon, Syrah, Grenache, Southern Rhône, Bordeaux, structured tannins, herbal notes, food pairing with roasted lamb, rosemary"
 
-This dramatically improves Qdrant embedding matches for vague or food-focused questions compared to embedding the raw user message.
+This dramatically improves embedding matches for vague or food-focused questions compared to embedding the raw user message.
 
 ### Follow-up messages (with history)
 
@@ -75,14 +75,14 @@ The same Haiku call also classifies whether a new vector search is needed:
 |---|---|---|
 | "Make it cheaper" | `SEARCH: no` | Reuse existing wine context |
 | "Tell me more about the second one" | `SEARCH: no` | Reuse existing wine context |
-| "What about a white wine instead?" | `SEARCH: yes` | New embedding + Qdrant search |
-| "Actually, we're having fish" | `SEARCH: yes` | New embedding + Qdrant search |
+| "What about a white wine instead?" | `SEARCH: yes` | New embedding + vector search |
+| "Actually, we're having fish" | `SEARCH: yes` | New embedding + vector search |
 
-**Why this matters:** Embedding + Qdrant search is the most expensive part of the pipeline. For refinement follow-ups ("cheaper", "for more people", "tell me more"), we skip it entirely and let Claude work with the same wine list — saving cost and latency.
+**Why this matters:** Embedding + vector search is the most expensive part of the pipeline. For refinement follow-ups ("cheaper", "for more people", "tell me more"), we skip it entirely and let Claude work with the same wine list — saving cost and latency.
 
 ### Edge cases
 
-- **"Hi, I like wine!"** → `SEARCH: yes`, but no wine-related terms to match → Qdrant returns low-relevance results → Claude responds conversationally without inventing wines
+- **"Hi, I like wine!"** → `SEARCH: yes`, but no wine-related terms to match → the vector search returns low-relevance results → Claude responds conversationally without inventing wines
 - **No previous context but classified as REUSE** → Forced to `SEARCH: yes` (safety fallback)
 - **Expansion fails** (API error) → Falls back to original message, always searches
 
@@ -94,7 +94,7 @@ The backend returns an opaque `wineContext` string — the full formatted wine l
 
 1. Caches `wineContext` in React state (and sessionStorage)
 2. Sends it back as `previousWines` on the next request
-3. When `SEARCH: no`, the backend skips embedding/Qdrant entirely and uses `previousWines` as the wine section in the Claude prompt
+3. When `SEARCH: no`, the backend skips embedding and vector search entirely and uses `previousWines` as the wine section in the Claude prompt
 
 This means Claude always has the full wine context even on follow-ups, without any extra database or API calls.
 
@@ -144,7 +144,7 @@ Each wine in the prompt includes:
 | Market value | WineVintagePrice | "Market value: USD 450" |
 | User rating | Bottle | "Your rating: 4.5/5" |
 | User notes | Bottle | "Notes: \"Incredible nose, decant 2h\"" |
-| Relevance score | Qdrant | "(relevance: 87%)" |
+| Relevance score | Vector search | "(relevance: 87%)" |
 
 This enables Claude to make nuanced recommendations: prioritizing peak-maturity wines, suggesting everyday bottles vs. special occasions based on price, and referencing the user's own tasting notes.
 
@@ -188,6 +188,6 @@ Cleared on tab close (sessionStorage behavior) or when the user clicks "New chat
 | `backend/src/config/aiConfig.js` | System prompt, model config, feature flags |
 | `backend/src/utils/maturityUtils.js` | Drink window classification + labels |
 | `backend/src/services/embedding.js` | Voyage AI embedding calls |
-| `backend/src/services/vectorStore.js` | Qdrant vector search |
+| `backend/src/services/vectorStore.js` | Vector search: vectors stored on WineEmbedding rows in MongoDB, compared in memory |
 | `frontend/src/pages/CellarChat.js` | Chat UI, SSE client, session persistence |
 | `frontend/src/pages/CellarChat.css` | Chat styles, markdown rendering |

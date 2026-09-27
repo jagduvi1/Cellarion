@@ -73,33 +73,6 @@ services:
       timeout: 5s
       retries: 5
 
-  qdrant:
-    image: qdrant/qdrant:v1.18.1
-    container_name: cellarion-qdrant
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    # Optional API-key auth (security audit L-5). Qdrant is internal-only and not
-    # host-published, so this defaults OFF (empty = no auth, unchanged behaviour).
-    # Set QDRANT_API_KEY in .env to require the key here AND on the backend below;
-    # the readiness endpoints used by the healthcheck stay key-exempt.
-    environment:
-      - QDRANT__SERVICE__API_KEY=${QDRANT_API_KEY:-}
-    volumes:
-      - qdrant-data:/qdrant/storage
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-    healthcheck:
-      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/6333' 2>/dev/null"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 15s
-
   backend:
     build: ./backend
     container_name: cellarion-backend
@@ -181,10 +154,6 @@ services:
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-}
       - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-}
       - EMBEDDING_TIMEOUT_MS=${EMBEDDING_TIMEOUT_MS:-}
-      - QDRANT_URL=http://qdrant:6333
-      # Optional Qdrant API key (security audit L-5) — must match the qdrant
-      # service's QDRANT__SERVICE__API_KEY above. Empty = no auth (default).
-      - QDRANT_API_KEY=${QDRANT_API_KEY:-}
       - SUPER_ADMIN_EMAIL=${SUPER_ADMIN_EMAIL:-}
       - SUPER_ADMIN_IPS=${SUPER_ADMIN_IPS:-}
       - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
@@ -232,8 +201,6 @@ services:
       mongo:
         condition: service_healthy
       meilisearch:
-        condition: service_healthy
-      qdrant:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/api/health"]
@@ -375,7 +342,6 @@ services:
 volumes:
   mongo-data:
   meili-data:
-  qdrant-data:
   image-data:
   umami-db-data:
 

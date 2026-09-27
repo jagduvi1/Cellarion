@@ -1,11 +1,14 @@
 const mongoose = require('mongoose');
 
 /**
- * Tracks which (WineDefinition, vintage) pairs have been embedded and where
- * the vectors live in Qdrant. One document per unique combination of
- * (wineDefinition, vintage, model, indexVersion).
+ * One wine vector per (WineDefinition, vintage, model, indexVersion): the
+ * embedding of the wine's identity and taste profile (services/embedding
+ * buildEmbeddingText), searched by services/vectorStore.
  *
- * The qdrantPointId is the UUID used as the Qdrant point ID.
+ * The vector is stored here, as int8 at the provider's full dimension
+ * (services/vectorStore encodeVector): `vector` holds the bytes, `norm` the
+ * int8 vector's length (for the cosine) and `dim` its dimension. `vector` is
+ * select:false — only the vector store reads it.
  * textHash is SHA-256 of the text that was embedded — used to detect when a
  * wine's metadata changed so the vector can be refreshed.
  */
@@ -22,23 +25,34 @@ const wineEmbeddingSchema = new mongoose.Schema({
     trim: true,
     default: 'NV'
   },
-  // Which embedding model produced this vector (e.g. 'voyage-4-lite')
+  // Which embedding model produced this vector (e.g. 'voyage-4-large')
   model: {
     type: String,
     required: true,
     trim: true
   },
-  // Active index version at embedding time (e.g. 'v1', 'v2')
+  // Index version at embedding time (aiConfig.vectorIndex, e.g. 'v1')
   indexVersion: {
     type: String,
     required: true,
     trim: true
   },
-  // UUID used as the point ID in Qdrant
+  vector: {
+    type: Buffer,
+    select: false
+  },
+  norm: {
+    type: Number
+  },
+  dim: {
+    type: Number
+  },
+  // Legacy: the point id in the retired Qdrant collection. The one-off
+  // migration (scripts/migrate-vectors-from-qdrant.js) matches a point to its
+  // row by it. Left in place, so a rollback to a Qdrant-based release still
+  // finds its points. No longer unique or indexed: new rows have none.
   qdrantPointId: {
-    type: String,
-    required: true,
-    unique: true
+    type: String
   },
   // SHA-256 of the embedded text — for staleness detection
   textHash: {
@@ -65,5 +79,8 @@ wineEmbeddingSchema.index(
   { wineDefinition: 1, vintage: 1, model: 1, indexVersion: 1 },
   { unique: true }
 );
+// The registry-wide search: its rows (model + index + dimension) and their
+// newest embeddedAt — the in-memory copy's freshness check reads only this.
+wineEmbeddingSchema.index({ model: 1, indexVersion: 1, dim: 1, embeddedAt: -1 });
 
 module.exports = mongoose.model('WineEmbedding', wineEmbeddingSchema);

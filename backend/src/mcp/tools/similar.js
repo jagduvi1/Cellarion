@@ -1,11 +1,11 @@
-// Semantic similarity via the EXISTING Qdrant wine embeddings (plan §3.17).
+// Semantic similarity via the EXISTING wine embeddings (plan §3.17).
 // find_similar_wines costs Cellarion $0 per call: the reference wine is already
-// embedded (on add / by the batch job), so this is a point lookup + one vector
-// search — no Voyage call, no LLM call. Free-text semantic_search_wines (which
-// DOES embed the query) is deliberately Phase 3, not here.
+// embedded (on add / by the batch job), so this is a stored-vector lookup + one
+// in-memory vector search (services/vectorStore) — no Voyage call, no LLM call.
+// Free-text semantic_search_wines (which DOES embed the query) is
+// deliberately Phase 3, not here.
 //
-// vectorStore + WineEmbedding are lazy-required: vectorStore reads embedding
-// config at require time and this keeps the tool registry's load path lean.
+// vectorStore is lazy-required to keep the tool registry's load path lean.
 const { z } = require('zod');
 const WineDefinition = require('../../models/WineDefinition');
 const { registerTool } = require('../registry');
@@ -24,7 +24,7 @@ registerTool({
     'Only wines that have been embedded are searchable — an empty result does not mean nothing similar exists. ' +
     `Ids must be 24-hex Mongo ids from search_registry or search_bottles — a name or slug is not an id. Returns at most ${MAX_SIMILAR}.`,
   // 'public' (plan §3.17): the reference wine is already embedded, so this is
-  // a stored-vector Qdrant lookup — $0 per call and safe on the anonymous
+  // a stored-vector lookup — $0 per call and safe on the anonymous
   // /api/mcp/public surface. The bottle_id input is guarded below (anonymous
   // callers have no bottles).
   scope: 'public',
@@ -44,7 +44,6 @@ registerTool({
     limit: z.coerce.number().int().optional().describe(`How many to return (1-${MAX_SIMILAR}, default 8; larger values are capped, not rejected)`),
   },
   handler: async (args, ctx) => {
-    const WineEmbedding = require('../../models/WineEmbedding');
     const vectorStore = require('../../services/vectorStore');
     const aiConfig = require('../../config/aiConfig');
 
@@ -69,57 +68,34 @@ registerTool({
       return fail('invalid_input', 'Provide wine_id or bottle_id.');
     }
 
-    const indexVersion = aiConfig.get().vectorIndex;
-    // Prefer the embedding of the same vintage; fall back to any 'ok' one.
-    const embQuery = { wineDefinition: wineId, indexVersion, status: 'ok' };
-    let emb = preferVintage
-      ? await WineEmbedding.findOne({ ...embQuery, vintage: preferVintage }).lean()
-      : null;
-    // Deterministic fallback pick (newest vintage) — an unsorted findOne is
-    // natural-order and can flip between identical calls.
-    if (!emb) emb = await WineEmbedding.findOne(embQuery).sort({ vintage: -1 }).lean();
-    if (!emb || !emb.qdrantPointId) {
-      return ok('Reference wine has no embedding yet', [], {
-        warnings: ['This wine has not been embedded yet (embeddings are created when bottles are added). Try search_registry for keyword matches instead.'],
-      });
-    }
+    const cfg = aiConfig.get();
+    const scope = { model: cfg.embeddingModel, indexVersion: cfg.vectorIndex };
 
     // Registry lockdown (2026-09-06, L3): the anonymous surface walks the
     // neighbour graph five wines at a time — enough for "more like this",
     // too slow to map the registry by adjacency.
     const maxHere = ctx?.anonymous || !ctx?.user ? 5 : MAX_SIMILAR;
     const limit = Math.min(Math.max(parseInt(args.limit, 10) || 8, 1), maxHere);
-    // Over-fetch: hits include the reference wine itself and one hit per
-    // embedded vintage of the same wine — dedup to distinct wines below.
-    const FETCH = (limit + 1) * 5;
-    let vector;
-    let hits;
-    // One guard for BOTH Qdrant calls — a failure between them must not escape
-    // as a raw transport error. `unavailable` is the honest code for a backend
-    // outage (MCP-audit M3): an agent must NOT self-throttle as if rate_limited.
+    let ranked;
+    // One guard for the whole lookup — a failure must not escape as a raw
+    // error. `unavailable` is the honest code for a backend outage
+    // (MCP-audit M3): an agent must NOT self-throttle as if rate_limited.
     try {
-      const points = await vectorStore.getPoints(indexVersion, [emb.qdrantPointId]);
-      vector = points?.[0]?.vector;
-      if (!Array.isArray(vector)) {
-        return ok('Reference embedding unavailable', [], {
-          warnings: ['The stored embedding could not be loaded. Use search_registry for keyword matches.'],
+      // The reference's stored vector: the same vintage when given, else the
+      // newest vintage with one (a deterministic pick).
+      const vector = await vectorStore.getVector(wineId, preferVintage, scope);
+      if (!vector) {
+        return ok('Reference wine has no embedding yet', [], {
+          warnings: ['This wine has not been embedded yet (embeddings are created when bottles are added). Try search_registry for keyword matches instead.'],
         });
       }
-      hits = await vectorStore.searchSimilar(indexVersion, vector, FETCH);
+      // One hit per wine (its best vintage), the reference itself left out.
+      const hits = await vectorStore.search(vector, { ...scope, limit, excludeWineId: wineId, distinctWines: true });
+      ranked = hits.map((h) => [h.wineDefinitionId, { score: h.score, vintage: h.vintage || null }]);
     } catch {
-      return fail('unavailable', 'The similarity index is unavailable (it may be down or rebuilding). Use search_registry for keyword matches; retrying later may help.');
+      return fail('unavailable', 'The similarity search is unavailable right now. Use search_registry for keyword matches; retrying later may help.');
     }
-    const best = new Map(); // wineDefinitionId -> { score, vintage }
-    for (const h of hits) {
-      const id = h.payload?.wineDefinitionId ? String(h.payload.wineDefinitionId) : null;
-      if (!id || id === String(wineId)) continue;
-      if (!best.has(id)) best.set(id, { score: h.score, vintage: h.payload.vintage || null });
-    }
-    const ranked = [...best.entries()].slice(0, limit);
     if (ranked.length === 0) return ok('No similar wines found', []);
-    // If dedup consumed the whole fetch window, more distinct wines may exist
-    // beyond it — say so instead of implying an exhaustive ranking.
-    const possiblyMore = ranked.length < limit && hits.length >= FETCH;
 
     const docs = await WineDefinition.find({ _id: { $in: ranked.map(([id]) => id) }, pendingIdentity: { $ne: true }, canary: { $ne: true } })
       .select('name producer slug country region appellation classification grapes type colour communityRating')
@@ -133,7 +109,6 @@ registerTool({
         similarity: Math.round(m.score * 1000) / 1000,
         embedded_vintage: m.vintage,
       }));
-    return ok(`${data.length} similar wine(s)`, data,
-      possiblyMore ? { warnings: ['Result window was dominated by multi-vintage duplicates; more distinct similar wines may exist.'] } : {});
+    return ok(`${data.length} similar wine(s)`, data);
   },
 });

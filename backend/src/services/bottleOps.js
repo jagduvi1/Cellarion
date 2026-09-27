@@ -752,7 +752,7 @@ async function updateBottleFields(bottle, fields, req) {
     if (err?.name === 'VersionError') return { error: { status: 409, message: 'This bottle was modified by another request. Please refresh and try again.' } };
     throw err;
   }
-  // Vintage changed: the old (wine, oldVintage) embedding is still in Qdrant
+  // Vintage changed: the old (wine, oldVintage) embedding is still stored
   // but no longer matches this bottle — embed the new pair. Skipped for demo
   // accounts (a novel year misses the cache and would fire a paid Voyage call).
   if ('vintage' in changes && !req?.user?.isDemo) {

@@ -39,7 +39,7 @@ jest.mock('../models/ClimateDevice', () => ({ find: jest.fn() }));
 jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
 jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false), search: jest.fn(), searchBottles: jest.fn() }));
 jest.mock('../services/statsService', () => ({ computeOverview: jest.fn(), buildEmptyStats: jest.fn() }));
-jest.mock('../services/vectorStore', () => ({ getPoints: jest.fn(), searchSimilar: jest.fn() }));
+jest.mock('../services/vectorStore', () => ({ getVector: jest.fn(), search: jest.fn() }));
 jest.mock('../config/aiConfig', () => ({ get: jest.fn(() => ({ vectorIndex: 'v1' })) }));
 // The zero-AI invariant pinned at the RUNTIME boundary (audit P6-L1): if any
 // public tool ever reaches the embedding layer, these throw and the happy-path
@@ -186,13 +186,11 @@ describe('zero-AI guarantee', () => {
     // The throwing embedding/aiBudget mocks above are the assertion: if the
     // similarity flow (or anything it calls, e.g. vectorStore) laundered an
     // embed call, this run would throw instead of returning results.
-    const WineEmbedding = require('../models/WineEmbedding');
     const vectorStore = require('../services/vectorStore');
-    WineEmbedding.findOne.mockReturnValue(chain({ qdrantPointId: 'uuid-1' }));
-    vectorStore.getPoints.mockResolvedValue([{ id: 'uuid-1', vector: [0.1, 0.2] }]);
+    vectorStore.getVector.mockResolvedValue(Float32Array.from([0.1, 0.2]));
     const other = new mongoose.Types.ObjectId();
-    vectorStore.searchSimilar.mockResolvedValue([
-      { score: 0.9, payload: { wineDefinitionId: String(other), vintage: '2019' } },
+    vectorStore.search.mockResolvedValue([
+      { score: 0.9, wineDefinitionId: String(other), vintage: '2019' },
     ]);
     WineDefinition.find.mockReturnValue(chain([{ _id: other, name: 'Similar', producer: 'P', grapes: [] }]));
 

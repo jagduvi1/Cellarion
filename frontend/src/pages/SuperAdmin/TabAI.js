@@ -695,6 +695,43 @@ const usd = (v) => {
 };
 const pct = (v) => (v === null || v === undefined ? '—' : `${Math.round(v * 100)}%`);
 
+// Vector search (2026-09): the wine vectors live on the WineEmbedding rows in
+// MongoDB and are compared in memory — no vector database. Shows what is
+// stored and whether the registry-wide copy is loaded right now.
+export function VectorSearchPanel({ vectors, onRefresh }) {
+  const mb = (bytes) => `${(bytes / 1048576).toFixed(1)} MB`;
+  return (
+    <div className="sa-panel">
+      <div className="sa-panel-header">
+        <span className="sa-panel-title">Vector Search</span>
+        <button className="sa-btn" onClick={onRefresh}>Refresh</button>
+      </div>
+      <div className="sa-panel-body">
+        <div className="sa-kv">
+          <div className="sa-kv-row">
+            <span className="sa-kv-key">Vectors stored</span>
+            <span className={`sa-kv-val ${vectors?.rows ? 'accent' : 'danger'}`}>{num(vectors?.rows)}</span>
+          </div>
+          <div className="sa-kv-row">
+            <span className="sa-kv-key">Dimensions</span>
+            <span className="sa-kv-val">{vectors?.dims?.length ? vectors.dims.join(', ') : '—'}</span>
+          </div>
+          <div className="sa-kv-row">
+            <span className="sa-kv-key">Size in MongoDB</span>
+            <span className="sa-kv-val">{vectors ? mb(vectors.bytes) : '—'}</span>
+          </div>
+          <div className="sa-kv-row">
+            <span className="sa-kv-key">In-memory copy (registry search)</span>
+            <span className="sa-kv-val">
+              {vectors?.memory ? `${num(vectors.memory.rows)} vectors, ${mb(vectors.memory.bytes)}` : 'not loaded'}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function AiCostPanel() {
   const [days, setDays] = useState(30);
   // useApi: follows the shell's Refresh / auto-refresh, and a slower answer
@@ -1034,7 +1071,7 @@ export default function TabAI() {
   if (error && !data) return <div className="sa-error">Error: {error}</div>;
   if (!data)   return null;
 
-  const { configured, config, job, collection, embeddings } = data;
+  const { configured, config, job, vectors, embeddings } = data;
   const providers = data.providers || {};
   const openAiMode = providers.llm === 'openai' || providers.embedding === 'openai';
   const enrichJob = data.enrichmentJob || {};
@@ -1063,7 +1100,6 @@ export default function TabAI() {
       <div className="sa-services-grid" style={{ marginBottom: 16 }}>
         {[
           { name: 'Embeddings', ok: configured.voyageAI },
-          { name: 'Qdrant (Vector DB)', ok: configured.qdrant },
           { name: 'LLM (AI Chat)', ok: configured.anthropic },
         ].map(s => (
           <div key={s.name} className="sa-service">
@@ -1106,10 +1142,10 @@ export default function TabAI() {
               </div>
               <div className="sa-kv-row">
                 <span className="sa-kv-key">Active vector index</span>
-                <span className="sa-kv-val accent">wines_{config.vectorIndex}</span>
+                <span className="sa-kv-val accent">{config.vectorIndex}</span>
               </div>
               <div className="sa-kv-row">
-                <span className="sa-kv-key">Chat top-K (Qdrant)</span>
+                <span className="sa-kv-key">Chat top-K (vectors)</span>
                 <span className="sa-kv-val">{config.chatTopK}</span>
               </div>
               <div className="sa-kv-row">
@@ -1148,31 +1184,7 @@ export default function TabAI() {
           </div>
         </div>
 
-        {/* Qdrant collection */}
-        <div className="sa-panel">
-          <div className="sa-panel-header">
-            <span className="sa-panel-title">Qdrant Collection</span>
-            <button className="sa-btn" onClick={reload}>Refresh</button>
-          </div>
-          <div className="sa-panel-body">
-            <div className="sa-kv">
-              <div className="sa-kv-row">
-                <span className="sa-kv-key">Collection</span>
-                <span className="sa-kv-val accent">{collection?.name || '—'}</span>
-              </div>
-              <div className="sa-kv-row">
-                <span className="sa-kv-key">Exists</span>
-                <span className={`sa-kv-val ${collection?.exists ? 'accent' : 'danger'}`}>
-                  {collection?.exists ? 'YES' : 'NO'}
-                </span>
-              </div>
-              <div className="sa-kv-row">
-                <span className="sa-kv-key">Vectors stored</span>
-                <span className="sa-kv-val">{num(collection?.vectorCount)}</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        <VectorSearchPanel vectors={vectors} onRefresh={reload} />
       </div>
 
       <div className="sa-grid-2">

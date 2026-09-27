@@ -47,7 +47,7 @@ jest.mock('../services/statsService', () => ({
   })),
   buildEmptyStats: jest.fn(() => ({ overview: { totalBottles: 0 } })),
 }));
-jest.mock('../services/vectorStore', () => ({ getPoints: jest.fn(), searchSimilar: jest.fn() }));
+jest.mock('../services/vectorStore', () => ({ getVector: jest.fn(), search: jest.fn() }));
 jest.mock('../config/aiConfig', () => ({ get: jest.fn(() => ({ vectorIndex: 'v1' })) }));
 
 const Cellar = require('../models/Cellar');
@@ -133,29 +133,28 @@ describe('find_similar_wines', () => {
     Cellar.findById.mockReturnValue(chain({ _id: oid('c'), user: STRANGER, members: [], deletedAt: null }));
     const res = await tool('find_similar_wines').handler({ bottle_id: oid('d') }, CTX);
     expect(res.isError).toBe(true);
-    expect(vectorStore.getPoints).not.toHaveBeenCalled();
+    expect(vectorStore.getVector).not.toHaveBeenCalled();
   });
 
-  test('un-embedded wine → graceful empty with guidance, no vector calls', async () => {
-    WineEmbedding.findOne.mockReturnValue(chain(null));
+  test('un-embedded wine → graceful empty with guidance, no search', async () => {
+    vectorStore.getVector.mockResolvedValue(null);
     const res = await tool('find_similar_wines').handler({ wine_id: oid('f') }, CTX);
     const body = parseTool(res);
     expect(body.data).toEqual([]);
     expect(body.warnings.join(' ')).toMatch(/not been embedded/i);
-    expect(vectorStore.getPoints).not.toHaveBeenCalled();
+    expect(vectorStore.search).not.toHaveBeenCalled();
   });
 
-  test('excludes the reference wine, dedups vintages keeping best score, hydrates in rank order', async () => {
+  test('asks for other wines, one hit each, and hydrates them in rank order', async () => {
     const REF = oid('f');
     const W2 = oid('1');
     const W3 = oid('2');
-    WineEmbedding.findOne.mockReturnValue(chain({ qdrantPointId: 'uuid-1' }));
-    vectorStore.getPoints.mockResolvedValue([{ id: 'uuid-1', vector: [0.1, 0.2] }]);
-    vectorStore.searchSimilar.mockResolvedValue([
-      { score: 0.99, payload: { wineDefinitionId: REF, vintage: '2015' } }, // self — dropped
-      { score: 0.95, payload: { wineDefinitionId: W2, vintage: '2016' } },
-      { score: 0.93, payload: { wineDefinitionId: W2, vintage: '2018' } }, // dup wine — dropped
-      { score: 0.90, payload: { wineDefinitionId: W3, vintage: 'NV' } },
+    vectorStore.getVector.mockResolvedValue(Float32Array.from([0.1, 0.2]));
+    // The store leaves the reference out and keeps each wine's best vintage
+    // (vectorStore.test.js) — the tool must ask it to.
+    vectorStore.search.mockResolvedValue([
+      { score: 0.95, wineDefinitionId: W2, vintage: '2016' },
+      { score: 0.90, wineDefinitionId: W3, vintage: 'NV' },
     ]);
     WineDefinition.find.mockReturnValue(chain([
       { _id: W2, name: 'Wine Two', producer: 'P2', grapes: [], normalizedKey: 'INTERNAL' },
@@ -163,6 +162,7 @@ describe('find_similar_wines', () => {
     ]));
     const res = await tool('find_similar_wines').handler({ wine_id: REF }, CTX);
     const body = parseTool(res);
+    expect(vectorStore.search.mock.calls[0][1]).toMatchObject({ excludeWineId: REF, distinctWines: true, limit: 8 });
     expect(body.data.map((w) => w.name)).toEqual(['Wine Two', 'Wine Three']);
     expect(body.data[0].similarity).toBe(0.95);
     expect(res.content[0].text).not.toContain(REF);       // reference excluded
@@ -173,12 +173,10 @@ describe('find_similar_wines', () => {
     const t = tool('find_similar_wines');
     expect(t.scope).toBe('public');
     expect(t.annotations.readOnlyHint).toBe(true);
-    WineEmbedding.findOne.mockReturnValue(chain({ qdrantPointId: 'uuid-1' }));
-    vectorStore.getPoints.mockResolvedValue([{ id: 'uuid-1', vector: [0.1] }]);
-    vectorStore.searchSimilar.mockResolvedValue([]);
+    vectorStore.getVector.mockResolvedValue(Float32Array.from([0.1]));
+    vectorStore.search.mockResolvedValue([]);
     await t.handler({ wine_id: oid('f'), limit: 500 }, CTX);
-    // over-fetch is (limit+1)*5 with limit clamped to 10 → 55
-    expect(vectorStore.searchSimilar).toHaveBeenCalledWith('v1', [0.1], 55);
+    expect(vectorStore.search.mock.calls[0][1]).toMatchObject({ limit: 10, distinctWines: true });
   });
 
   // The clamp above is only REACHED if the registered schema lets the call

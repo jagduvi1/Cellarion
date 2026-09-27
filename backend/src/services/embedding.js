@@ -9,11 +9,11 @@
  *     EMBEDDING_MODEL. Self-hosted embedding models have fixed, per-model
  *     vector sizes, so EMBEDDING_DIMENSION is required and every returned
  *     vector is validated against it (a mismatch would silently corrupt the
- *     Qdrant collection).
+ *     stored vectors).
  *
- * The active dimension (getEmbeddingDimension) sizes the Qdrant collection in
- * vectorStore.js. Changing provider, model, or dimension therefore requires a
- * FULL embedding job (drops + recreates the collection) — same procedure as a
+ * The active dimension (getEmbeddingDimension) is the size vectorStore.js
+ * stores and compares. Changing provider, model, or dimension therefore requires a
+ * FULL embedding job (rewrites every stored vector) — same procedure as a
  * Voyage model upgrade.
  *
  * Env (openai mode)
@@ -81,7 +81,7 @@ function isEmbeddingConfigured() {
   return !!process.env.VOYAGE_API_KEY;
 }
 
-/** Vector size of the active provider — sizes the Qdrant collection. */
+/** Vector size of the active provider — what the stored vectors must have. */
 function getEmbeddingDimension() {
   return embeddingProviderName() === 'openai' ? openAiEmbEnv().dimension : VOYAGE_DIMENSION;
 }

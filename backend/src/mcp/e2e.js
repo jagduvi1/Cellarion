@@ -1,4 +1,4 @@
-/* Full-stack MCP e2e — drives the RUNNING backend (real Mongo/Meili/Qdrant)
+/* Full-stack MCP e2e — drives the RUNNING backend (real Mongo/Meili)
  * with the real SDK client. The Docker smoke for the MCP surface:
  *
  *   docker-compose up -d           # then, if the DB is fresh:

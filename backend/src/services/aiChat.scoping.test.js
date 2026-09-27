@@ -44,7 +44,7 @@ jest.mock('./embedding', () => ({
   isEmbeddingConfigured: jest.fn(() => true),
   embedSingle: jest.fn(async () => [0.1, 0.2]),
 }));
-jest.mock('./vectorStore', () => ({ searchSimilar: jest.fn(async () => []) }));
+jest.mock('./vectorStore', () => ({ search: jest.fn(async () => []) }));
 jest.mock('../models/Bottle', () => ({
   distinct: jest.fn(), countDocuments: jest.fn(), find: jest.fn(), aggregate: jest.fn(async () => []),
 }));
@@ -94,8 +94,8 @@ describe('chat context honest scoping', () => {
     const sent = wireClient();
     Bottle.distinct.mockResolvedValue([String(WD)]);
     Bottle.countDocuments.mockResolvedValue(71);
-    vectorStore.searchSimilar.mockResolvedValue([
-      { score: 0.9, payload: { wineDefinitionId: String(WD), vintage: '2015' } },
+    vectorStore.search.mockResolvedValue([
+      { score: 0.9, wineDefinitionId: String(WD), vintage: '2015' },
     ]);
     Bottle.find.mockReturnValue(chain([{
       _id: new mongoose.Types.ObjectId(),
@@ -114,7 +114,7 @@ describe('chat context honest scoping', () => {
     const sent = wireClient();
     Bottle.distinct.mockResolvedValue([String(WD)]);
     Bottle.countDocuments.mockResolvedValue(71);
-    vectorStore.searchSimilar.mockResolvedValue([]);
+    vectorStore.search.mockResolvedValue([]);
 
     await chat(USER, 'wines from the moon?', { useQueryExpansion: false });
     const content = sent();
@@ -129,7 +129,7 @@ describe('chat context honest scoping', () => {
 
     await chat(USER, 'what do I own?', { useQueryExpansion: false });
     expect(sent()).toMatch(/no active bottles in their cellar/);
-    expect(vectorStore.searchSimilar).not.toHaveBeenCalled();
+    expect(vectorStore.search).not.toHaveBeenCalled();
   });
 });
 
@@ -146,8 +146,8 @@ describe('deleted cellars are not the cellar', () => {
     wireClient();
     Bottle.distinct.mockResolvedValue([String(WD)]);
     Bottle.countDocuments.mockResolvedValue(71);
-    vectorStore.searchSimilar.mockResolvedValue([
-      { score: 0.9, payload: { wineDefinitionId: String(WD), vintage: '2015' } },
+    vectorStore.search.mockResolvedValue([
+      { score: 0.9, wineDefinitionId: String(WD), vintage: '2015' },
     ]);
     Bottle.find.mockReturnValue(chain([{
       _id: new mongoose.Types.ObjectId(), vintage: '2015',
@@ -164,14 +164,16 @@ describe('deleted cellars are not the cellar', () => {
     expect(Bottle.distinct.mock.calls[0][1]).toMatchObject({ cellar: { $in: [LIVE_CELLAR] } });
     expect(Bottle.countDocuments.mock.calls[0][0]).toMatchObject({ cellar: { $in: [LIVE_CELLAR] } });
     expect(Bottle.find.mock.calls[0][0]).toMatchObject({ cellar: { $in: [LIVE_CELLAR] } });
+    // The vector search itself only ever compares the user's own wines.
+    expect(vectorStore.search.mock.calls[0][1]).toMatchObject({ wineIds: [String(WD)] });
   });
 
   test('per-wine bottle counts are scoped too, so "you have N" cannot overstate', async () => {
     wireClient();
     Bottle.distinct.mockResolvedValue([String(WD)]);
     Bottle.countDocuments.mockResolvedValue(71);
-    vectorStore.searchSimilar.mockResolvedValue([
-      { score: 0.9, payload: { wineDefinitionId: String(WD), vintage: '2015' } },
+    vectorStore.search.mockResolvedValue([
+      { score: 0.9, wineDefinitionId: String(WD), vintage: '2015' },
     ]);
     Bottle.find.mockReturnValue(chain([{
       _id: new mongoose.Types.ObjectId(), vintage: '2015',

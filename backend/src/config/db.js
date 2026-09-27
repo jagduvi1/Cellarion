@@ -42,6 +42,14 @@ const connectDB = async () => {
     RegistryDataValue.syncIndexes().catch(err =>
       console.warn('[db] RegistryDataValue.syncIndexes failed:', err.message)
     );
+    // WineEmbedding: the vectors moved from Qdrant into the rows (2026-09).
+    // The sync drops the old unique { qdrantPointId } index (new rows have no
+    // point id, so it would reject the second one) and creates the
+    // { model, indexVersion, dim, embeddedAt } index the search reads.
+    const WineEmbedding = require('../models/WineEmbedding');
+    WineEmbedding.syncIndexes().catch(err =>
+      console.warn('[db] WineEmbedding.syncIndexes failed:', err.message)
+    );
   } catch (error) {
     // Log the reason (DNS, auth, TLS, bad URI) but mask any credentials
     // embedded in a mongodb:// URI that error messages may echo back.

@@ -234,23 +234,6 @@ router.get('/services', async (req, res) => {
     provider: embeddingProviderName(),
   };
 
-  // Qdrant (optional)
-  if (process.env.QDRANT_URL) {
-    try {
-      const t0 = Date.now();
-      const qdrantRes = await fetch(`${process.env.QDRANT_URL}/healthz`, {
-        signal: AbortSignal.timeout(5000),
-      });
-      const latencyMs = Date.now() - t0;
-      results.qdrant = { status: qdrantRes.ok ? 'ok' : 'error', latencyMs };
-    } catch (e) {
-      console.error('[superadmin] Qdrant health check failed:', e.message);
-      results.qdrant = { status: 'error', error: 'Service unavailable' };
-    }
-  } else {
-    results.qdrant = { status: 'not_configured' };
-  }
-
   // Mailgun (configured?)
   results.mailgun = {
     configured: !!(process.env.MAILGUN_API_KEY && process.env.MAILGUN_DOMAIN),
@@ -359,7 +342,7 @@ router.get('/backups', async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // GET /api/superadmin/ai
-// AI pipeline status: config, embedding job, Qdrant collection, WineEmbedding stats
+// AI pipeline status: config, embedding job, stored vectors, WineEmbedding stats
 // ---------------------------------------------------------------------------
 router.get('/ai', async (req, res) => {
   try {
@@ -384,18 +367,19 @@ router.get('/ai', async (req, res) => {
       WineEmbedding.findOne().sort({ embeddedAt: -1 }).select('embeddedAt model indexVersion').lean(),
     ]);
 
-    // Qdrant collection info for the active index
-    let collectionInfo = null;
+    // The stored vectors (on the WineEmbedding rows) and the in-memory copy
+    // the registry-wide search keeps while it is in use.
+    let vectors = null;
     try {
-      collectionInfo = await vectorStore.collectionInfo(cfg.vectorIndex);
-    } catch {
-      collectionInfo = { exists: false, vectorCount: 0, name: `wines_${cfg.vectorIndex}` };
+      const active = aiConfig.get();
+      vectors = await vectorStore.stats({ model: active.embeddingModel, indexVersion: active.vectorIndex });
+    } catch (err) {
+      console.error('[superadmin] vector stats failed:', err.message);
     }
 
     res.json({
       configured: {
         voyageAI:  isEmbeddingConfigured(),
-        qdrant:    !!process.env.QDRANT_URL,
         anthropic: aiProvider.isConfigured(),
       },
       // Lets the UI flag that model settings below are env-governed and inert
@@ -408,7 +392,7 @@ router.get('/ai', async (req, res) => {
       job: jobStatus,
       enrichmentJob: enrichStatus,
       enrichment: { totalWines, enrichedWines },
-      collection: collectionInfo,
+      vectors,
       embeddings: {
         total: totalEmbeddings,
         byStatus: Object.fromEntries(byStatusRaw.map(d => [d._id || 'unknown', d.count])),

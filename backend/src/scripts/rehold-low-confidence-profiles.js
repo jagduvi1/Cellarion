@@ -21,7 +21,7 @@
  * generatedAt) and loses only the published fields, exactly like a
  * generation-time hold; heldAt/heldReason route it into the admin
  * low-confidence queue for release. Each re-held wine's active (wine,
- * vintage) pairs are re-embedded so Qdrant stops retrieving it by the prose
+ * vintage) pairs are re-embedded so vector search stops retrieving it by the prose
  * the hold silenced (the audit-2026-08-16 rule; textHash makes it cheap).
  *
  * Owners see "Not yet assessed" on these bottles (v1.124.0), never a blank.

@@ -1,5 +1,5 @@
 // semantic_search_wines (plan §3.17, the Phase-3 half of the RAG split):
-// free-text meaning search over the EXISTING Qdrant wine embeddings. Unlike
+// free-text meaning search over the EXISTING wine embeddings. Unlike
 // find_similar_wines ($0 — reuses a stored vector), a free-text query needs ONE
 // Voyage query-embed, so this is the only MCP read with a real (fractional-cent)
 // cost — defended in layers:
@@ -116,11 +116,11 @@ registerTool({
       vectorCache.set(cacheKey, { at: Date.now(), vector });
     }
 
-    // 2. Optional "mine" filter: restrict hits to wines in the user's cellars.
-    let filter;
+    // 2. Optional "mine" scope: only wines in the user's cellars.
+    let wineIds = null;
     if (searchScope === 'mine') {
       const cellars = await Cellar.find({ user: ctx.user.id, deletedAt: null }).select('_id').lean();
-      const wineIds = cellars.length
+      wineIds = cellars.length
         ? await Bottle.distinct('wineDefinition', {
             cellar: { $in: cellars.map((c) => c._id) },
             status: { $nin: CONSUMED_STATUSES },
@@ -132,26 +132,18 @@ registerTool({
           warnings: ['The user owns no active bottles with registry wines — search scope "registry" still works.'],
         });
       }
-      filter = { must: [{ key: 'wineDefinitionId', match: { any: wineIds.map((id) => String(id)) } }] };
     }
 
-    // 3. Vector search + dedup to distinct wines (multiple vintages of one wine
-    //    are separate points — keep the best-scoring one).
-    const indexVersion = aiConfig.get().vectorIndex;
-    const FETCH = (limit + 1) * 5;
+    // 3. Vector search, one hit per wine (its best-scoring vintage).
     let hits;
     try {
-      hits = await vectorStore.searchSimilar(indexVersion, vector, FETCH, filter ? { filter } : {});
+      hits = await vectorStore.search(vector, {
+        model: cfg.embeddingModel, indexVersion: cfg.vectorIndex, wineIds, limit, distinctWines: true,
+      });
     } catch {
-      return fail('unavailable', 'The similarity index is unavailable (it may be down or rebuilding). Use search_registry for keyword matches; retrying later may help.');
+      return fail('unavailable', 'The similarity search is unavailable right now. Use search_registry for keyword matches; retrying later may help.');
     }
-    const best = new Map(); // wineDefinitionId -> { score, vintage }
-    for (const h of hits || []) {
-      const id = h.payload?.wineDefinitionId ? String(h.payload.wineDefinitionId) : null;
-      if (!id) continue;
-      if (!best.has(id)) best.set(id, { score: h.score, vintage: h.payload.vintage || null });
-    }
-    const ranked = [...best.entries()].slice(0, limit);
+    const ranked = hits.map((h) => [h.wineDefinitionId, { score: h.score, vintage: h.vintage || null }]);
     if (ranked.length === 0) {
       return ok('No semantic matches', [], {
         warnings: ['Only wines with embeddings are searchable (created when bottles are added/enriched) — try different wording or search_registry keywords.'],

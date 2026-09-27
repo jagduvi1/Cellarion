@@ -730,7 +730,7 @@ registerTool({
     }
     require('../../services/search').indexWine(wine._id).catch(() => {});
     // Same follow-through as the REST route: the corrected profile must reach
-    // Qdrant now, not at the next manual batch run (none is scheduled).
+    // the vectors now, not at the next manual batch run (none is scheduled).
     require('../../services/embeddingJob').reembedActiveVintages(wine._id).catch(() => {});
 
     // Same audit action string as the REST route — REST and MCP curation must

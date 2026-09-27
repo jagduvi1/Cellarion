@@ -46,7 +46,6 @@ const JournalEntry = require('../../models/JournalEntry');
 const Recommendation = require('../../models/Recommendation');
 const RestockAlert = require('../../models/RestockAlert');
 const WineRequest = require('../../models/WineRequest');
-const vectorStore = require('../../services/vectorStore');
 const { unlinkImageFiles } = require('../../services/imageProcessor');
 const { embedSinglePair } = require('../../services/embeddingJob');
 const searchService = require('../../services/search');
@@ -1593,7 +1592,7 @@ router.put('/:id', async (req, res) => {
 // recommendations) — deleting under those would orphan or silently vanish
 // other people's data; merge re-points references and is the right tool.
 // Registry-side/derived data that only exists FOR the wine (maturity
-// profiles, price snapshots/opt-ins, community prices, embeddings + Qdrant
+// profiles, price snapshots/opt-ins, community prices, embeddings with their
 // vectors, restock alerts, reports) is cascade-deleted with it.
 router.delete('/:id', async (req, res) => {
   try {
@@ -1648,7 +1647,7 @@ router.delete('/:id', async (req, res) => {
         { wine, actorId: req.user?.id }),
       // Active owner inquiries have nothing left to verify — same closure.
       closeInquiriesForWineDelete(id, req),
-      // Qdrant points + WineEmbedding bookkeeping rows (same helper as merge).
+      // WineEmbedding rows, which hold the vectors (same helper as merge).
       purgeSourceVectors(id),
     ]);
 
@@ -1897,27 +1896,9 @@ async function performWineMerge(sourceId, targetId, req) {
 
 // ── Merge embedding / enrichment consistency helpers ─────────────────────────
 
-// Delete a merged-away source's vectors from BOTH Qdrant and the WineEmbedding
-// bookkeeping. Deleting the rows alone would orphan the real vectors in Qdrant
-// (and discard the point ids needed to ever target them), so we delete the
-// Qdrant points first — grouped by the index version (collection) they live in —
-// then drop the rows. Best-effort: a Qdrant hiccup must not fail the merge.
+// Delete a merged-away (or deleted) wine's vectors: they live on its
+// WineEmbedding rows, so dropping the rows is the whole job.
 async function purgeSourceVectors(sourceId) {
-  try {
-    const embs = await WineEmbedding.find({ wineDefinition: sourceId })
-      .select('qdrantPointId indexVersion').lean();
-    const byIndex = new Map();
-    for (const e of embs) {
-      if (!e.qdrantPointId) continue;
-      if (!byIndex.has(e.indexVersion)) byIndex.set(e.indexVersion, []);
-      byIndex.get(e.indexVersion).push(e.qdrantPointId);
-    }
-    for (const [indexVersion, ids] of byIndex) {
-      await vectorStore.deletePoints(indexVersion, ids).catch(() => {});
-    }
-  } catch (err) {
-    console.warn('[merge] purge source vectors failed (%s):', sourceId, err.message);
-  }
   await WineEmbedding.deleteMany({ wineDefinition: sourceId });
 }
 
@@ -2084,7 +2065,7 @@ async function reassignWineRefs(sourceId, keeperId) {
     WineReport.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } }),
     Discussion.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } }),
     DiscussionReply.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } }),
-    // Delete the source's vectors from Qdrant too, not just the bookkeeping rows.
+    // Delete the source's vectors (its WineEmbedding rows).
     purgeSourceVectors(sourceId),
     // Drop any "not duplicate" decisions referencing the disappearing source.
     WineNotDuplicate.deleteMany({ $or: [{ wineA: sourceId }, { wineB: sourceId }] }),

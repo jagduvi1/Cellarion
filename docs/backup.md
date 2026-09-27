@@ -7,7 +7,7 @@ Cellarion keeps **two** stores of irreplaceable data, and a good backup must cov
 | **MongoDB** (users, cellars, bottles, wines) | `mongo-data` volume | ✅ yes — `mongodump` |
 | **Uploaded images** (bottle/label photos) | `image-data` volume → `/app/uploads` | ✅ yes — **these are on disk, NOT in Mongo** |
 | Meilisearch index | `meili-data` | ❌ skipped — rebuilt from Mongo |
-| Qdrant vectors (AI) | `qdrant-data` | ❌ skipped — rebuilt from Mongo |
+| Wine vectors (AI) | in Mongo (`wineembeddings`) | ✅ with the database |
 | Umami analytics | `umami-db-data` | ❌ optional — analytics only |
 
 The tooling (`scripts/backup/`) uses [**restic**](https://restic.net): **encrypted, deduplicated, incremental** snapshots with retention, pushed to a **Hetzner Storage Box** over SFTP (and, optionally, a second off-provider copy).
@@ -123,7 +123,7 @@ A silently-broken backup is how people discover they had none. Create a free che
 ```bash
 cd scripts/backup
 ./restore.sh latest        # or ./restore.sh <snapshotID>
-docker compose restart backend   # so Meili/Qdrant re-index from the restored Mongo
+docker compose restart backend   # so Meili re-indexes from the restored Mongo
 ```
 `restore.sh` drops + reloads the database and copies the images back. **Run a real restore drill monthly** (ideally onto a throwaway VM) — an untested backup is not a backup.
 
@@ -208,9 +208,9 @@ unreachable; with them, this is the order:
    cd scripts/backup && ./restore.sh latest            # Mongo + images
    RESTORE_UMAMI=1 ./restore.sh latest                 # add analytics history
    ```
-7. **Rebuild the derived indexes** — restart the backend; Meilisearch
-   re-indexes from Mongo and the embedding job repopulates Qdrant (the AI chat
-   is degraded until it finishes, nothing is lost).
+7. **Rebuild the derived index** — restart the backend; Meilisearch
+   re-indexes from Mongo. The wine vectors for the AI chat come back with the
+   database itself.
 8. **Point DNS at the new address** (Cloudflare), and move the firewall rule
    that limits SSH to your own address.
 9. **Re-enable the backup timers** (`systemctl enable --now cellarion-backup.timer

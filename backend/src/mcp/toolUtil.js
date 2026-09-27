@@ -33,7 +33,7 @@ function ok(summary, data, extra = {}) {
  * not for humans.
  * `busy` (MCP-audit M1) = an identical idempotency_key request is mid-flight;
  * retry the SAME key shortly (distinct from `conflict`, which is not retryable).
- * `unavailable` (MCP-audit M3-low) = a backend dependency (Qdrant/embeddings/
+ * `unavailable` (MCP-audit M3-low) = a backend dependency (vector search/embeddings/
  * image service) is temporarily down or rebuilding — retry later; slowing the
  * call cadence does NOT help (distinct from `rate_limited`, which it is not).
  */

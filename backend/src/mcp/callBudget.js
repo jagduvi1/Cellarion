@@ -3,8 +3,8 @@
 // The per-request cap (MAX_CALLS_PER_REQUEST) and the per-IP HTTP limiters
 // count REQUESTS, not tool calls — one request fans out to up to 20 calls
 // (10 anonymous), and authenticated read tools otherwise have no cumulative
-// budget at all, so a caller can drive thousands of full-portfolio / Qdrant
-// reads per window (read amplification onto the 256 MB Qdrant shared with
+// budget at all, so a caller can drive thousands of full-portfolio / vector
+// reads per window (read amplification onto the one API process shared with
 // cellar chat). This is a rolling-window counter keyed by CALLER identity —
 // the user id for authenticated connections, the client IP for the anonymous
 // public surface — charged for every tool/resource/prompt call. Reads and

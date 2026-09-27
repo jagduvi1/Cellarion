@@ -133,7 +133,7 @@ const { logAudit } = require('../services/audit');
 
   if (written) console.log(`\nReindexed ${written} wines.`);
   console.log(`Applied ${written} region rewrites.`);
-  console.log('Region is part of the embedding text — start an incremental embed job to refresh Qdrant.');
+  console.log('Region is part of the embedding text — start an incremental embed job to refresh the stored vectors.');
 
   // logAudit persists fire-and-forget, which suits a long-lived server and not
   // a script that exits: disconnecting immediately races the last writes and
