@@ -148,7 +148,7 @@ describe('convertPhoto', () => {
     for (const M of [BottleImage, WineDefinition, WineRequest, JournalEntry]) expect(M.updateMany).not.toHaveBeenCalled();
   });
 
-  test('a keep-background original (the kept file lives in originals/) is converted in place, without a thumbnail', async () => {
+  test('a keep-background original (the kept file lives in originals/) is converted in place, with its thumbnail rendered', async () => {
     const jpeg = await sharp({ create: { width: 3000, height: 4000, channels: 3, background: { r: 200, g: 180, b: 150 } } }).jpeg().toBuffer();
     await fs.promises.writeFile(at('originals', `${STEM}.jpg`), jpeg);
     const oldUrl = `/api/uploads/originals/${STEM}.jpg`;
@@ -163,7 +163,9 @@ describe('convertPhoto', () => {
     expect(BottleImage.updateMany).toHaveBeenCalledWith({ processedUrl: oldUrl }, expect.objectContaining({ $set: expect.objectContaining({ processedUrl: newUrl }) }));
     expect(BottleImage.updateMany).toHaveBeenCalledWith({ originalUrl: oldUrl }, { $set: { originalUrl: newUrl } });
     expect(fs.existsSync(at('originals', `${STEM}.jpg`))).toBe(false);
-    expect(fs.existsSync(at('thumbs'))).toBe(false);
+    // Since 2026-09-27 originals/ photos have thumbnails too (services/thumbnails):
+    // the new file's is rendered on the way, like a processed one's.
+    expect(fs.existsSync(at('thumbs', 'originals', `${STEM}.webp.webp`))).toBe(true);
   });
 });
 

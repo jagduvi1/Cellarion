@@ -18,7 +18,7 @@ async function writeFileAtomic(filePath, data) {
     await fs.promises.writeFile(tmp, data);
     await fs.promises.rename(tmp, filePath);
   } catch (err) {
-    await fs.promises.unlink(tmp).catch(() => {});
+    try { await fs.promises.unlink(tmp); } catch { /* never written */ }
     throw err;
   }
 }

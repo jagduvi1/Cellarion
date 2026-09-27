@@ -38,7 +38,12 @@ jest.mock('./imageSanitizer', () => ({
   detectImageFormat: jest.fn(() => 'jpeg'),
 }));
 jest.mock('fs', () => ({
-  promises: { writeFile: jest.fn().mockResolvedValue(undefined) },
+  // The frame is written to a temp name and renamed into place (utils/atomicWrite).
+  promises: {
+    writeFile: jest.fn().mockResolvedValue(undefined),
+    rename: jest.fn().mockResolvedValue(undefined),
+    unlink: jest.fn().mockResolvedValue(undefined),
+  },
 }));
 jest.mock('../config/upload', () => ({ ORIGINALS_DIR: '/app/uploads/originals' }));
 
