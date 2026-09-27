@@ -15,14 +15,46 @@
  * them: the list-weight wine populate, their resolved card image, and their
  * maturity status.
  */
+const crypto = require('crypto');
 const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const Rack = require('../models/Rack');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
 const { CONSUMED_STATUSES, WINE_POPULATE_LIST } = require('../config/constants');
+const { getDataVersion } = require('./dataVersion');
 
 const SNAPSHOT_SCHEMA = 1;
+
+// The data version lives in memory and starts again at zero with the process,
+// so a tag from before a restart must never match one issued after it.
+const BOOT_ID = crypto.randomBytes(8).toString('hex');
+// Changes the data version doesn't see (registry edits, curated drink windows,
+// a photo finishing processing) still reach the device within this.
+const TAG_MAX_AGE_MS = 30 * 60 * 1000;
+
+/**
+ * The snapshot's validator (ETag): it changes whenever anything the snapshot
+ * holds may have changed — the user's own data version (their cellars, bottles
+ * and racks, members' changes in them included), the version of every owner
+ * whose cellar is shared with the user, which cellars those are — and at least
+ * every TAG_MAX_AGE_MS. One small query instead of the ~13 a snapshot takes.
+ * Read BEFORE building the snapshot: a change landing mid-build moves it on,
+ * so the next check rebuilds instead of keeping a copy that misses it.
+ */
+async function snapshotTag(userId, now = Date.now()) {
+  const shared = await Cellar.find({ 'members.user': userId, deletedAt: null }).select('user').lean();
+  const owners = [...new Set(shared.map((c) => String(c.user)))].sort();
+  const parts = [
+    SNAPSHOT_SCHEMA,
+    BOOT_ID,
+    Math.floor(now / TAG_MAX_AGE_MS),
+    `${userId}:${getDataVersion(userId)}`,
+    ...owners.map((owner) => `${owner}:${getDataVersion(owner)}`),
+    shared.map((c) => String(c._id)).sort().join(','),
+  ];
+  return `W/"${crypto.createHash('sha256').update(parts.join('|')).digest('base64url').slice(0, 27)}"`;
+}
 
 const idOf = (v) => (v && v._id ? String(v._id) : v ? String(v) : null);
 
@@ -104,4 +136,4 @@ async function buildOfflineSnapshot(userId, { attachBottleImageUrls }) {
   return assembleSnapshot({ userId, cellars, bottles: withImages, racks, maturity });
 }
 
-module.exports = { buildOfflineSnapshot, assembleSnapshot, SNAPSHOT_SCHEMA };
+module.exports = { buildOfflineSnapshot, assembleSnapshot, snapshotTag, SNAPSHOT_SCHEMA, TAG_MAX_AGE_MS };

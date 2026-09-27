@@ -126,3 +126,52 @@ describe('pending offline changes over the saved copy', () => {
     expect(store.queue).toHaveLength(0);
   });
 });
+
+// Asking whether anything changed (scaling audit 2026-09-25, item 11): the copy
+// keeps the server's ETag and sends it back; a 304 keeps the copy without the
+// server building a new one, and counts as confirmed current.
+describe('the 304 check', () => {
+  beforeEach(() => {
+    localStorage.setItem('cellarion-offline', 'on');
+    vi.stubGlobal('caches', undefined); // no photo sync in these tests
+  });
+  const tagged = (tag) => jsonRes({ ...SNAP }, { ETag: tag });
+  const notModified = () => ({ ok: false, status: 304, headers: new Headers(), json: async () => { throw new Error('a 304 has no body'); } });
+
+  it('keeps the tag with the copy and sends it back on the next check', async () => {
+    await refreshSnapshot(vi.fn(async () => tagged('W/"t1"')), 'u1');
+    expect(store.data.get('u1').etag).toBe('W/"t1"');
+
+    const apiFetch = vi.fn(async () => tagged('W/"t2"'));
+    await refreshSnapshot(apiFetch, 'u1');
+    expect(apiFetch).toHaveBeenCalledWith('/api/offline/snapshot', { headers: { 'If-None-Match': 'W/"t1"' } });
+    expect(store.data.get('u1').etag).toBe('W/"t2"');
+  });
+
+  it('a 304 keeps the same copy, now confirmed current', async () => {
+    await refreshSnapshot(vi.fn(async () => tagged('W/"t1"')), 'u1');
+    const before = Date.now();
+
+    expect(await refreshSnapshot(vi.fn(async () => notModified()), 'u1')).toBe(true);
+
+    const kept = store.data.get('u1');
+    expect(kept.bottles).toEqual(SNAP.bottles);
+    expect(kept.etag).toBe('W/"t1"');
+    expect(Date.parse(getOfflineStatus().savedAt)).toBeGreaterThanOrEqual(before);
+    expect((await (await offlineAnswer('/api/cellars', 'u1')).json()).count).toBe(1);
+  });
+
+  it('a copy saved before tags existed asks without one and takes the full answer', async () => {
+    store.data.set('u1', { ...SNAP });
+    const apiFetch = vi.fn(async () => tagged('W/"t3"'));
+
+    expect(await refreshSnapshot(apiFetch, 'u1')).toBe(true);
+    expect(apiFetch).toHaveBeenCalledWith('/api/offline/snapshot', {});
+    expect(store.data.get('u1').etag).toBe('W/"t3"');
+  });
+
+  it('a 304 with no copy on the device is not taken as fresh', async () => {
+    expect(await refreshSnapshot(vi.fn(async () => notModified()), 'u1')).toBe(false);
+    expect(store.data.has('u1')).toBe(false);
+  });
+});

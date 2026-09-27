@@ -110,3 +110,56 @@ describe('buildOfflineSnapshot', () => {
     expect(Rack.find).not.toHaveBeenCalled();
   });
 });
+
+// The 304 check (routes/offline): one small query decides whether anything the
+// device's copy holds may have changed. It must move for every change the copy
+// shows, and only then, so an unchanged check answers 304 and a changed one
+// rebuilds.
+describe('snapshotTag', () => {
+  const { snapshotTag, TAG_MAX_AGE_MS } = require('./offlineSnapshot');
+  const { bumpDataVersion } = require('./dataVersion');
+  const sharedWith = (rows) => {
+    const q = { select: () => q, lean: async () => rows };
+    Cellar.find.mockReturnValue(q);
+  };
+  // Mid-bucket, so a minute either way stays inside the same 30-minute window.
+  const T = 1000 * TAG_MAX_AGE_MS + TAG_MAX_AGE_MS / 2;
+
+  beforeEach(() => sharedWith([{ _id: 'c2', user: 'tag-friend' }]));
+
+  test('the same state gives the same tag, as a weak ETag', async () => {
+    const a = await snapshotTag('tag-me', T);
+    expect(a).toMatch(/^W\/"[A-Za-z0-9_-]{27}"$/);
+    expect(await snapshotTag('tag-me', T + 60 * 1000)).toBe(a);
+    expect(Cellar.find).toHaveBeenCalledWith({ 'members.user': 'tag-me', deletedAt: null });
+  });
+
+  test('a change in the user\'s own cellars moves it', async () => {
+    const a = await snapshotTag('tag-me', T);
+    bumpDataVersion('tag-me');
+    expect(await snapshotTag('tag-me', T)).not.toBe(a);
+  });
+
+  test('a change by the owner of a cellar shared with the user moves it', async () => {
+    const a = await snapshotTag('tag-me', T);
+    bumpDataVersion('tag-friend');
+    expect(await snapshotTag('tag-me', T)).not.toBe(a);
+  });
+
+  test('a change by someone unrelated does not', async () => {
+    const a = await snapshotTag('tag-me', T);
+    bumpDataVersion('tag-stranger');
+    expect(await snapshotTag('tag-me', T)).toBe(a);
+  });
+
+  test('being added to (or removed from) a shared cellar moves it', async () => {
+    const a = await snapshotTag('tag-me', T);
+    sharedWith([{ _id: 'c2', user: 'tag-friend' }, { _id: 'c3', user: 'tag-friend' }]);
+    expect(await snapshotTag('tag-me', T)).not.toBe(a);
+  });
+
+  test('it moves on at least every 30 minutes, for changes the data version cannot see', async () => {
+    const a = await snapshotTag('tag-me', T);
+    expect(await snapshotTag('tag-me', T + TAG_MAX_AGE_MS)).not.toBe(a);
+  });
+});

@@ -100,22 +100,40 @@ export async function offlineAnswer(url, userId) {
 /**
  * Fetch a fresh snapshot through the app's apiFetch and keep it. Returns true
  * when stored. Photos follow in the background.
+ *
+ * The stored copy carries the server's ETag, sent back as If-None-Match: when
+ * nothing it holds has changed the server answers 304 without building
+ * anything, and the copy is kept, now confirmed current (its time moves on, so
+ * the banner and the refresh timing see a fresh copy).
  */
 export async function refreshSnapshot(apiFetch, userId) {
   if (!userId || !isOfflineModeEnabled()) return false;
+  const uid = String(userId);
   const requestedAt = Date.now(); // device clock, like an op's sentAt
+  await loadIndex(uid);
+  const known = current?.userId === uid ? current.base?.etag : null;
   let res;
-  try { res = await apiFetch('/api/offline/snapshot'); } catch { return false; }
+  try {
+    res = await apiFetch('/api/offline/snapshot', known ? { headers: { 'If-None-Match': known } } : {});
+  } catch { return false; }
+  if (res.status === 304) {
+    if (!known || current?.userId !== uid) return false;
+    const confirmed = { ...current.base, generatedAt: new Date().toISOString() };
+    if (!(await writeSnapshot(confirmed))) return false;
+    await setCurrent(uid, confirmed);
+    return true;
+  }
   if (!res.ok || res.headers?.get?.('X-Cellarion-Offline')) return false;
-  let snap;
-  try { snap = await res.json(); } catch { return false; }
-  if (!snap || snap.schema !== SNAPSHOT_SCHEMA || String(snap.userId) !== String(userId)) return false;
+  let body;
+  try { body = await res.json(); } catch { return false; }
+  if (!body || body.schema !== SNAPSHOT_SCHEMA || String(body.userId) !== uid) return false;
+  const snap = { ...body, etag: res.headers?.get?.('ETag') || null };
   if (!(await writeSnapshot(snap))) return false;
   // Writes sent before this copy was requested are in it now.
   for (const op of await readQueue()) {
     if (op.status === 'sent' && Date.parse(op.sentAt) < requestedAt) await deleteQueued(op.id);
   }
-  await setCurrent(String(userId), snap);
+  await setCurrent(uid, snap);
   syncPhotos(snap).catch(() => {});
   return true;
 }

@@ -4,6 +4,13 @@ import react from '@vitejs/plugin-react';
 import localeCoverage from './vite-plugins/localeCoverage.js';
 import swPrecache from './vite-plugins/swPrecache.js';
 
+// React, the router and i18next change a few times a year; the app changes with
+// every release. Bundled into the entry with the app, every release renamed
+// nearly every file (the other chunks import the entry by its hashed name), so
+// installed and offline devices downloaded ~1.2 MB again each time. In a chunk
+// of their own, those names stay put (scaling audit 2026-09-25, item 16).
+const VENDOR = /node_modules[\\/](react|react-dom|scheduler|react-router|react-router-dom|i18next|react-i18next|i18next-browser-languagedetector|react-helmet-async|react-fast-compare|invariant|shallowequal|use-sync-external-store|cookie|set-cookie-parser)[\\/]/;
+
 export default defineConfig({
   plugins: [
     react({
@@ -34,6 +41,14 @@ export default defineConfig({
     // no 'unsafe-inline'/hash/nonce) would block. All target browsers support
     // <link rel="modulepreload"> natively, so the polyfill is unnecessary.
     modulePreload: { polyfill: false },
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (VENDOR.test(id)) return 'vendor';
+          return undefined;
+        },
+      },
+    },
   },
   esbuild: {
     loader: 'jsx',

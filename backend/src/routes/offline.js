@@ -10,7 +10,7 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { requireAuth } = require('../middleware/auth');
-const { buildOfflineSnapshot } = require('../services/offlineSnapshot');
+const { buildOfflineSnapshot, snapshotTag } = require('../services/offlineSnapshot');
 const { attachBottleImageUrls } = require('./cellars');
 
 const router = express.Router();
@@ -28,10 +28,15 @@ const snapshotLimiter = rateLimit({
 
 router.get('/snapshot', requireAuth, snapshotLimiter, async (req, res) => {
   try {
-    const snapshot = await buildOfflineSnapshot(req.user.id, { attachBottleImageUrls });
     // Personal data: never stored by a proxy or the browser's HTTP cache — the
     // app keeps its own copy, and only when offline mode is on.
     res.setHeader('Cache-Control', 'no-store');
+    // The app sends back the tag of the copy it holds: when nothing in it has
+    // changed, 304 without building anything (scaling audit 2026-09-25, item 11).
+    const tag = await snapshotTag(req.user.id);
+    res.setHeader('ETag', tag);
+    if (req.get('If-None-Match') === tag) return res.status(304).end();
+    const snapshot = await buildOfflineSnapshot(req.user.id, { attachBottleImageUrls });
     res.json(snapshot);
   } catch (err) {
     console.error('Offline snapshot error:', err);

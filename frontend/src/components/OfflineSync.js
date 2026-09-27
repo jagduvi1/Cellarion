@@ -9,6 +9,21 @@ const STALE_ON_START_MS = 2 * 60 * 1000;
 const AFTER_CHANGE_MS = 4000;
 const RESEND_EVERY_MS = 30 * 1000;
 
+// Writes that change what the offline copy holds: cellars, bottles, racks and
+// bottle photos. Marking a notification read, saving a setting or posting in
+// the forum does not, and used to rebuild the whole copy anyway (scaling audit
+// 2026-09-25, item 11). A write the event doesn't name (the offline queue's own
+// sends) counts as a change.
+const COPY_PATHS = /^\/api\/(bottles|cellars|racks|images)(\/|$)/;
+export function changesOfflineCopy(url) {
+  if (!url) return true;
+  try {
+    return COPY_PATHS.test(new URL(String(url), 'http://offline.invalid').pathname);
+  } catch {
+    return true;
+  }
+}
+
 const ageOf = () => {
   const { savedAt } = getOfflineStatus();
   return savedAt ? Date.now() - Date.parse(savedAt) : Infinity;
@@ -77,7 +92,11 @@ export default function OfflineSync() {
 
     const timer = setInterval(refresh, REFRESH_EVERY_MS);
     const onVisible = () => { if (document.visibilityState === 'visible' && ageOf() > REFRESH_EVERY_MS) refresh(); };
-    const onMutation = () => { clearTimeout(debounce); debounce = setTimeout(refresh, AFTER_CHANGE_MS); };
+    const onMutation = (e) => {
+      if (!changesOfflineCopy(e?.detail?.url)) return;
+      clearTimeout(debounce);
+      debounce = setTimeout(refresh, AFTER_CHANGE_MS);
+    };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener(API_MUTATION_EVENT, onMutation);
     return () => {

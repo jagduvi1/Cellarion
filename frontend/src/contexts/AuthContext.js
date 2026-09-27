@@ -7,10 +7,11 @@ import { offlineAnswer, markLive, clearOfflineData } from '../utils/offlineSnaps
 import { writeKeyFor, queueWrite } from '../utils/offlineQueue';
 
 // A write succeeded somewhere in the app: OfflineSync refreshes the device's
-// copy shortly after (components/OfflineSync.js).
+// copy shortly after, when the write could have changed it; `detail.url` says
+// which one it was (components/OfflineSync.js).
 export const API_MUTATION_EVENT = 'cellarion-api-mutation';
-const notifyApiMutation = () => {
-  try { window.dispatchEvent(new Event(API_MUTATION_EVENT)); } catch { /* noop */ }
+const notifyApiMutation = (url) => {
+  try { window.dispatchEvent(new CustomEvent(API_MUTATION_EVENT, { detail: { url: String(url || '') } })); } catch { /* noop */ }
 };
 import i18n, { hasLanguagePreview } from '../i18n';
 

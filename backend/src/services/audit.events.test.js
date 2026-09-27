@@ -105,4 +105,22 @@ describe('logAudit → data version (services/dataVersion, the REST read caches)
     expect(getDataVersion('dv-member')).not.toBe(member);
     expect(getDataVersion('dv-owner')).not.toBe(owner);
   });
+
+  // The offline copy holds the racks, and its 304 check reads this version
+  // (routes/offline): a placement it can't see would keep a device's rack
+  // view stale. Racks don't change statistics, so no stats_changed push.
+  test.each(['rack.slot_assign', 'rack.slot_move', 'rack.slot_clear', 'rack.create', 'rack.delete'])(
+    '%s moves the version of the actor and the cellar owner, without a stats push',
+    async (action) => {
+      const cellarId = 'b'.repeat(24);
+      Cellar.findById.mockReturnValue({ select: () => ({ lean: () => Promise.resolve({ user: 'dv-rack-owner' }) }) });
+      const actor = getDataVersion('dv-rack-member');
+      const owner = getDataVersion('dv-rack-owner');
+      logAudit(reqFor('dv-rack-member'), action, { type: 'rack', id: 'r1', cellarId }, {});
+      await new Promise(r => setImmediate(r)); // the owner lookup is fire-and-forget
+      expect(getDataVersion('dv-rack-member')).not.toBe(actor);
+      expect(getDataVersion('dv-rack-owner')).not.toBe(owner);
+      expect(eventBus.emit).not.toHaveBeenCalled();
+    },
+  );
 });

@@ -11,6 +11,11 @@ const { bumpDataVersion } = require('./dataVersion');
 // forget. Only actions in these categories are user-visible wine-data changes;
 // the emit targets the acting user (each account watches its own stream).
 const STATS_CHANGED_PREFIXES = ['bottle.', 'cellar.'];
+// Rack changes leave the statistics alone but change what a cellar looks like:
+// the rack layout in the offline copy (its 304 check in routes/offline reads
+// the data version), MCP rack reads, the token bottle list. They move the data
+// version and the MCP caches like wine-data changes, without the stats push.
+const DATA_CHANGED_PREFIXES = [...STATS_CHANGED_PREFIXES, 'rack.'];
 
 // Invalidate a user's MCP read caches on any wine-data mutation (grand-audit
 // M3). Lazy-required so these MCP modules stay off audit's load path (they pull
@@ -99,15 +104,19 @@ function logAudit(req, action, resource = {}, detail = {}) {
   // SSE push nudge — debounced in the bus, no-op when the user has no open
   // stream. System-actor events (req = null, e.g. retention jobs) are skipped:
   // there is no acting user to notify.
-  if (entry.actor.userId && STATS_CHANGED_PREFIXES.some(p => action.startsWith(p))) {
+  if (entry.actor.userId && DATA_CHANGED_PREFIXES.some(p => action.startsWith(p))) {
     // Bust the MCP read caches and move the data version (services/dataVersion
     // — the REST stats and polling caches) for the affected user BEFORE the
     // push, so a client that re-reads on the nudge recomputes instead of being
     // served the old answer (grand-audit M3). Lazy-require keeps the MCP
     // modules off audit's load path. Same owner-resolution as the push below.
-    bumpDataVersion(entry.actor.userId);
-    bustMcpCaches(entry.actor.userId);
-    eventBus.emit(entry.actor.userId, 'stats_changed', { reason: action });
+    const statsChanged = STATS_CHANGED_PREFIXES.some(p => action.startsWith(p));
+    const touch = (userId) => {
+      bumpDataVersion(userId);
+      bustMcpCaches(userId);
+      if (statsChanged) eventBus.emit(userId, 'stats_changed', { reason: action });
+    };
+    touch(entry.actor.userId);
 
     // Shared cellars: /api/stats aggregates the OWNER's bottles, so when a
     // member (or an admin) mutates a bottle, it is the owner's stats that
@@ -119,11 +128,7 @@ function logAudit(req, action, resource = {}, detail = {}) {
     // stale for their 60 s window).
     const ownerFromReq = req?.cellar?.user;
     if (ownerFromReq) {
-      if (String(ownerFromReq) !== String(entry.actor.userId)) {
-        bumpDataVersion(ownerFromReq);
-        bustMcpCaches(ownerFromReq);
-        eventBus.emit(ownerFromReq, 'stats_changed', { reason: action });
-      }
+      if (String(ownerFromReq) !== String(entry.actor.userId)) touch(ownerFromReq);
     } else if (resource.cellarId) {
       // Cast-guard before querying: every caller passes a document ObjectId
       // today, but logAudit is a generic funnel — accept only a plain 24-hex
@@ -133,11 +138,7 @@ function logAudit(req, action, resource = {}, detail = {}) {
         const Cellar = require('../models/Cellar');
         Cellar.findById(cellarId).select('user').lean()
           .then(cellar => {
-            if (cellar && String(cellar.user) !== String(entry.actor.userId)) {
-              bumpDataVersion(cellar.user);
-              bustMcpCaches(cellar.user);
-              eventBus.emit(cellar.user, 'stats_changed', { reason: action });
-            }
+            if (cellar && String(cellar.user) !== String(entry.actor.userId)) touch(cellar.user);
           })
           .catch(() => {});
       }

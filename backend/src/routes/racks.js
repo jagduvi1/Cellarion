@@ -421,7 +421,7 @@ router.delete('/:id', async (req, res) => {
       { $pull: { rackPlacements: { rack: rack._id } } }
     );
 
-    logAudit(req, 'rack.delete', { type: 'rack', id: rack._id });
+    logAudit(req, 'rack.delete', { type: 'rack', id: rack._id, cellarId: rack.cellar });
     res.json({ message: 'Rack deleted' });
   } catch (err) {
     console.error('Delete rack error:', err);
@@ -518,7 +518,7 @@ router.post('/:id/slots/:position/move', async (req, res) => {
 
     await rack.populate(SLOT_BOTTLES);
 
-    logAudit(req, 'rack.slot_move', { type: 'rack', id: rack._id }, { from, to, swapped: !!toSlot });
+    logAudit(req, 'rack.slot_move', { type: 'rack', id: rack._id, cellarId: rack.cellar }, { from, to, swapped: !!toSlot });
     res.json({ rack: await withMaturity(rack) });
   } catch (err) {
     if (err.name === 'VersionError') {
@@ -724,7 +724,7 @@ router.post('/:id/slots/:position/disable', async (req, res) => {
 
     await rack.populate(SLOT_BOTTLES);
 
-    logAudit(req, 'rack.slot_disable', { type: 'rack', id: rack._id });
+    logAudit(req, 'rack.slot_disable', { type: 'rack', id: rack._id, cellarId: rack.cellar });
     res.json({ rack: await withMaturity(rack) });
   } catch (err) {
     if (err.name === 'VersionError') {
@@ -758,7 +758,7 @@ router.delete('/:id/slots/:position/disable', async (req, res) => {
 
     await rack.populate(SLOT_BOTTLES);
 
-    logAudit(req, 'rack.slot_enable', { type: 'rack', id: rack._id });
+    logAudit(req, 'rack.slot_enable', { type: 'rack', id: rack._id, cellarId: rack.cellar });
     res.json({ rack: await withMaturity(rack) });
   } catch (err) {
     if (err.name === 'VersionError') {
