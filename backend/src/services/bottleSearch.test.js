@@ -371,7 +371,7 @@ describe('text helpers', () => {
 describe('kept documents', () => {
   afterEach(() => {
     _internal.forgetAllDocs();
-    _internal.setDocsMax(8000);
+    _internal.setDocsMaxBytes();
     jest.restoreAllMocks();
   });
 
@@ -421,7 +421,10 @@ describe('kept documents', () => {
   });
 
   test('bounded: the least recently used scope goes first; a scope larger than the bound is never kept', async () => {
-    _internal.setDocsMax(BOTTLES.length * 2); // room for two scopes
+    await search('a', { version: 'v', cellarId: oid(10) });
+    const oneScope = _internal.keptBytes();
+    _internal.forgetAllDocs();
+    _internal.setDocsMaxBytes(oneScope * 2); // room for two scopes
     await search('a', { version: 'v', cellarId: oid(11) });
     await search('a', { version: 'v', cellarId: oid(12) });
     await search('a', { version: 'v', cellarId: oid(11) }); // 11 is now the most recent
@@ -434,8 +437,25 @@ describe('kept documents', () => {
     expect(Bottle.find).toHaveBeenCalledTimes(1);
 
     _internal.forgetAllDocs();
-    _internal.setDocsMax(BOTTLES.length - 1);
+    _internal.setDocsMaxBytes(oneScope - 1);
     await search('a', { version: 'v' });
     expect(_internal.keptScopes()).toBe(0);
+  });
+
+  // Review 2026-09-27: the bound counted documents, and a document with the
+  // longest notes weighs up to ~20× an ordinary one — 8,000 of them would
+  // have held several hundred MB.
+  test('a document is charged for its text, so long notes fill the bound sooner', async () => {
+    const plain = _internal.docBytes(_internal.buildSearchDoc(BOTTLES[0], MARGAUX));
+    const long = _internal.docBytes(_internal.buildSearchDoc(
+      { ...BOTTLES[0], notes: 'a b '.repeat(1250), location: 'x'.repeat(500) }, MARGAUX,
+    ));
+    expect(plain).toBeGreaterThan(4 * 1024);
+    expect(plain).toBeLessThan(6 * 1024);
+    expect(long).toBeGreaterThan(90 * 1024);
+
+    load([bottle(301, MARGAUX, { notes: 'a b '.repeat(1250), location: 'x'.repeat(500) })]);
+    await search('a', { version: 'v', cellarId: oid(21) });
+    expect(_internal.keptBytes()).toBe(long);
   });
 });

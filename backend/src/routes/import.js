@@ -1497,7 +1497,9 @@ router.post('/confirm', async (req, res) => {
           }
           await rack.save();
           createdRacks.push({ name, type: safeType, rows, cols, typeConfig: override?.typeConfig });
-          logAudit(req, 'rack.create', { type: 'rack', id: rack._id }, { source: 'import', name });
+          // cellarId: an editor's import changes the OWNER's cellar, so the
+          // owner's caches (offline copy, search, stats) must move too.
+          logAudit(req, 'rack.create', { type: 'rack', id: rack._id, cellarId: cellar._id }, { source: 'import', name });
         }
       }
     } catch (err) {
@@ -1983,7 +1985,9 @@ router.post('/confirm', async (req, res) => {
       }
     }
 
-    logAudit(req, 'bottle.import', { type: 'cellar', id: cellarId }, {
+    // cellarId as well as id: that is what moves the owner's data version
+    // when an editor of a shared cellar imports (services/audit).
+    logAudit(req, 'bottle.import', { type: 'cellar', id: cellarId, cellarId: cellar._id }, {
       created,
       createdActive,
       createdHistory,

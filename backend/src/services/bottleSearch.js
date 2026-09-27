@@ -536,18 +536,30 @@ async function loadWines(ids) {
 // changes that bypass the audit (a registry wine renamed) wait that long. One
 // Node process, like the other read caches.
 const DOCS_TTL_MS = 60 * 1000;
-// Documents kept across scopes, least recently used going first: a document
-// with its words split is ~5 KB (measured on a 2,776-bottle cellar), so this
-// is ~40 MB at most — about three of the largest cellars at once.
-let DOCS_MAX = 8000;
-const docsCache = new Map(); // key -> { version, at, docs, wines }
-let docsKept = 0;
+// Kept across scopes up to DOCS_MAX_BYTES, least recently used going first.
+// A document is charged for its text, which is what its split words weigh:
+// measured ~5 KB for a bottle without notes, ~46 KB with the longest notes
+// and location in ordinary words, and up to ~100 KB when they are all short
+// words (an import copies its comment onto every row). The charge — 4 KB plus
+// 16 bytes a character — covers that; 40 MB holds two of the largest cellars.
+const DOC_BYTES_BASE = 4096;
+const DOC_BYTES_PER_CHAR = 16;
+const DEFAULT_DOCS_MAX_BYTES = 40 * 1024 * 1024;
+let DOCS_MAX_BYTES = DEFAULT_DOCS_MAX_BYTES;
+const docsCache = new Map(); // key -> { version, at, docs, wines, bytes }
+let bytesKept = 0;
+
+function docBytes(doc) {
+  let chars = 0;
+  for (const name of FIELDS) chars += doc.values[name].length;
+  return DOC_BYTES_BASE + DOC_BYTES_PER_CHAR * chars;
+}
 
 function forget(key) {
   const entry = docsCache.get(key);
   if (!entry) return;
   docsCache.delete(key);
-  docsKept -= entry.docs.length;
+  bytesKept -= entry.bytes;
 }
 
 /**
@@ -583,13 +595,16 @@ async function loadScope(scope, statusFilter, { withText, version }) {
     return doc;
   });
   const entry = { version, at: Date.now(), docs, wines };
-  if (key && docs.length <= DOCS_MAX) {
-    forget(key);
-    docsCache.set(key, entry);
-    docsKept += docs.length;
-    for (const oldest of docsCache.keys()) {
-      if (docsKept <= DOCS_MAX) break;
-      forget(oldest);
+  if (key) {
+    entry.bytes = docs.reduce((sum, doc) => sum + docBytes(doc), 0);
+    if (entry.bytes <= DOCS_MAX_BYTES) {
+      forget(key);
+      docsCache.set(key, entry);
+      bytesKept += entry.bytes;
+      for (const oldest of docsCache.keys()) {
+        if (bytesKept <= DOCS_MAX_BYTES) break;
+        forget(oldest);
+      }
     }
   }
   return entry;
@@ -723,8 +738,10 @@ module.exports = {
   _internal: {
     fold, toWords, tokenize, editDistance, matchWord, parseQuery, rankDocument, buildSearchDoc, countFacets,
     sortKey, parseSort, compareHits, FIELDS, DOCS_TTL_MS,
-    forgetAllDocs: () => { docsCache.clear(); docsKept = 0; },
-    setDocsMax: (n) => { DOCS_MAX = n; },
+    docBytes,
+    forgetAllDocs: () => { docsCache.clear(); bytesKept = 0; },
+    setDocsMaxBytes: (n = DEFAULT_DOCS_MAX_BYTES) => { DOCS_MAX_BYTES = n; },
     keptScopes: () => docsCache.size,
+    keptBytes: () => bytesKept,
   },
 };
