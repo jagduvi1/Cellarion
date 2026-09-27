@@ -58,13 +58,21 @@ jest.mock('../models/User', () => {
 });
 
 // Slow compares: every request of a burst loads the account before the first
-// one finishes. The right password can be made to finish last.
-const mockRightPasswordDelayMs = { value: 5 };
+// one finishes. The right password can be made to finish only once the burst
+// has locked the account (ordered by the lock itself, not by timers, so a busy
+// machine cannot reorder it; capped at 5 s so a regression fails, not hangs).
+const mockRightWaitsForLock = { value: false };
 jest.mock('bcrypt', () => ({
   getRounds: () => 12,
   compare: jest.fn((password) => new Promise((resolve) => {
-    const right = password === 'right-password';
-    setTimeout(() => resolve(right), right ? mockRightPasswordDelayMs.value : 5);
+    if (password !== 'right-password') { setTimeout(() => resolve(false), 5); return; }
+    if (!mockRightWaitsForLock.value) { setTimeout(() => resolve(true), 5); return; }
+    const until = Date.now() + 5000;
+    const poll = () => {
+      if (mockDb.user?.failedLoginAttempts?.lockedUntil || Date.now() > until) resolve(true);
+      else setTimeout(poll, 2);
+    };
+    setTimeout(poll, 5);
   })),
 }));
 
@@ -141,7 +149,7 @@ afterAll((done) => {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockRightPasswordDelayMs.value = 5;
+  mockRightWaitsForLock.value = false;
   rateLimitsConfig.set({
     ...JSON.parse(JSON.stringify(rateLimitsConfig.defaults)),
     accountLockout: { threshold: 10, windowMs: 15 * 60 * 1000, durationMs: 60 * 60 * 1000, emailDedupMs: 60 * 60 * 1000 },
@@ -186,13 +194,16 @@ test('40 wrong passwords at the same moment lock the account, once, with one ema
 });
 
 test('a right guess finishing after the lock took effect is refused, though it loaded the account unlocked', async () => {
-  mockRightPasswordDelayMs.value = 60; // finishes after the 12 wrong ones
+  mockRightWaitsForLock.value = true; // finishes only once the burst has locked the account
+  const User = require('../models/User');
   const results = await Promise.all([
     login('right-password'),
     ...Array.from({ length: 12 }, (_, i) => login(`guess-${i}`)),
   ]);
 
   expect(results[0].status).toBe(401);
+  // Refused by the live check (its own copy said unlocked), not by that copy.
+  expect(User.findById).toHaveBeenCalled();
   expect(auditCount('auth.login.locked')).toBe(1);
   expect(auditCount('auth.login.success')).toBe(0);
 });

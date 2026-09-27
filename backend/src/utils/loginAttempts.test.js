@@ -231,6 +231,15 @@ describe('recordLoginFailure', () => {
     expect((await fail(id, 1_001_010)).shouldSendEmail).toBe(true);
   });
 
+  it('the lock is still reported when claiming the email fails, just without the email', async () => {
+    setLockoutConfig({ threshold: 1 });
+    const id = storeUser({ count: 0, firstFailedAt: null, lockedUntil: null, lockoutEmailSentAt: null });
+    User.updateOne.mockRejectedValueOnce(new Error('write conflict'));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(await fail(id, 1_000_000)).toEqual({ lockedNow: true, alreadyLocked: false, shouldSendEmail: false });
+    warn.mockRestore();
+  });
+
   it('a user deleted meanwhile: nothing to count', async () => {
     expect(await fail('gone', 1_000_000)).toEqual({ lockedNow: false, alreadyLocked: false, shouldSendEmail: false });
   });

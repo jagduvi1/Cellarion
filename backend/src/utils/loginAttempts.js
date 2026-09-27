@@ -146,17 +146,24 @@ async function recordLoginFailure(userId, nowMs = Date.now()) {
   // flood the legitimate user's inbox.
   let shouldSendEmail = false;
   if (lockedNow) {
-    const claim = await User.updateOne(
-      {
-        _id: userId,
-        $or: [
-          { 'failedLoginAttempts.lockoutEmailSentAt': null },
-          { 'failedLoginAttempts.lockoutEmailSentAt': { $lt: new Date(nowMs - cfg.emailDedupMs) } },
-        ],
-      },
-      { $set: { 'failedLoginAttempts.lockoutEmailSentAt': new Date(nowMs) } },
-    );
-    shouldSendEmail = claim.modifiedCount === 1;
+    try {
+      const claim = await User.updateOne(
+        {
+          _id: userId,
+          $or: [
+            { 'failedLoginAttempts.lockoutEmailSentAt': null },
+            { 'failedLoginAttempts.lockoutEmailSentAt': { $lt: new Date(nowMs - cfg.emailDedupMs) } },
+          ],
+        },
+        { $set: { 'failedLoginAttempts.lockoutEmailSentAt': new Date(nowMs) } },
+      );
+      shouldSendEmail = claim.modifiedCount === 1;
+    } catch (err) {
+      // The lock is in place; only the email claim failed. Report the lock
+      // (the caller audits it) without an email, rather than lose both: every
+      // later guess sees alreadyLocked, so this was the lock's only report.
+      console.warn('[loginAttempts] lockout email claim failed:', err.message);
+    }
   }
   return { lockedNow, alreadyLocked, shouldSendEmail };
 }
