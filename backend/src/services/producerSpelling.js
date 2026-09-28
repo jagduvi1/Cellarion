@@ -46,11 +46,21 @@
  * Mint-time only, like the producer-is-a-place gate: existing rows are
  * unified by scripts/consolidate-producer-displays.js and stay consistent
  * from then on because this function prevents new divergence.
+ *
+ * ...except that a producer can also change on an EXISTING wine, and there
+ * the resolver never runs. otherProducerSpellings / planProducerRename below
+ * serve that path (approving a producer correction, routes/admin/
+ * wineProposals.js): 9 of the 51 producer corrections approved in the week
+ * to 2026-09-28 gave one wine a spelling the rest of its producer did not
+ * use, and each became a display split the weekly registry-health check
+ * rang for. They only REPORT and PLAN — which spelling wins stays a human's
+ * call, because the bucket deliberately over-folds (two real Bordeaux
+ * estates can share one).
  */
 const mongoose = require('mongoose');
 const WineDefinition = require('../models/WineDefinition');
 const { escapeRegex } = require('../utils/sanitize');
-const { normalizeString } = require('../utils/normalize');
+const { normalizeString, generateWineKey, isIdentitySentinel } = require('../utils/normalize');
 const { producerSegment } = require('../utils/wineIdentity');
 
 /** Do two normalized spellings differ only by decoration? (token subset,
@@ -144,4 +154,115 @@ async function resolveCanonicalProducerSpelling(rawProducer, producerNorm, opts 
   }
 }
 
-module.exports = { resolveCanonicalProducerSpelling };
+// The display form the registry-health metric groups spellings by
+// (services/registryHealthJob), so a spelling reported here is exactly one
+// that metric would count as a split.
+const displaySpelling = (s) => String(s || '').trim().replace(/\s+/g, ' ');
+
+const castId = (id) => (mongoose.isValidObjectId(id) ? new mongoose.Types.ObjectId(String(id)) : id);
+
+// The display-split bucket — same producer comparison key, same country,
+// quarantined and pending rows out — as a $match. canonicalKey's first
+// segment IS producerSegment (see stage 2 above), so the prefix is exact.
+function bucketMatch(seg, countryId, excludeWineId) {
+  const match = {
+    canonicalKey: new RegExp(`^${escapeRegex(seg)}:`),
+    country: castId(countryId),
+    nonWine: { $ne: true },
+    pendingIdentity: { $ne: true },
+  };
+  if (excludeWineId) match._id = { $ne: castId(excludeWineId) };
+  return match;
+}
+
+/**
+ * The OTHER spellings the registry already uses for this producer — the
+ * wines the weekly display-split metric would pair with `spelling`.
+ *
+ * @param {string} spelling  the producer about to be stored on a wine
+ * @param {*} countryId      that wine's Country _id after the write
+ * @param {object} [opts]
+ * @param {*} [opts.excludeWineId] the wine being corrected — its own current
+ *   spelling is about to change, so it is not "another" one
+ * @returns {Promise<Array<{spelling: string, count: number}>>} most wines
+ *   first; [] when there are none, for a sentinel producer, or on any lookup
+ *   failure (this only informs a decision — it must never block one)
+ */
+async function otherProducerSpellings(spelling, countryId, { excludeWineId = null } = {}) {
+  const display = displaySpelling(spelling);
+  if (!display || !countryId || isIdentitySentinel(display)) return [];
+  const seg = producerSegment(display);
+  if (!seg) return [];
+  try {
+    const rows = await WineDefinition.aggregate([
+      { $match: bucketMatch(seg, countryId, excludeWineId) },
+      { $group: { _id: '$producer', count: { $sum: 1 } } },
+    ]);
+    const counts = new Map();
+    for (const r of rows) {
+      const s = displaySpelling(r._id);
+      if (!s || s === display || isIdentitySentinel(s)) continue;
+      counts.set(s, (counts.get(s) || 0) + r.count);
+    }
+    return [...counts]
+      .map(([s, count]) => ({ spelling: s, count }))
+      .sort((a, b) => (b.count - a.count) || a.spelling.localeCompare(b.spelling));
+  } catch (err) {
+    console.warn('[producerSpelling] other-spellings lookup failed (non-fatal):', err.message);
+    return [];
+  }
+}
+
+/**
+ * Plan renaming every wine that stores one of `fromSpellings` (in the same
+ * bucket) to `to` — the "rename them all" answer to a spelling split. Reads
+ * only; the caller saves the returned docs (doc.save() so the model hooks
+ * own canonicalKey, the slug with its previousSlugs and the verifiedChecks
+ * invalidation — the scripts/consolidate-producer-displays.js write path).
+ *
+ * normalizedKey is UNIQUE and not hook-maintained, so every new key is
+ * checked first: against the rest of the registry, against the other wines
+ * in the plan, and against `reservedKeys` (the corrected wine's own new key).
+ * Any clash means two wines would become one — that is a merge, not a
+ * rename, so the plan reports it and the caller writes nothing.
+ *
+ * @returns {Promise<{wines: Array<{doc, from: string, newKey: string}>,
+ *   clashes: Array<{wineId: string, name: string, from: string}>, tooMany: number}>}
+ *   tooMany is the wine count when it exceeds `max` (then wines is empty).
+ */
+async function planProducerRename(fromSpellings, to, countryId, { excludeWineId = null, reservedKeys = [], max = 200 } = {}) {
+  const target = displaySpelling(to);
+  const from = new Set((fromSpellings || []).map(displaySpelling).filter((s) => s && s !== target));
+  const empty = { wines: [], clashes: [], tooMany: 0 };
+  const seg = producerSegment(target);
+  if (!from.size || !seg || !countryId) return empty;
+
+  const docs = (await WineDefinition.find(bucketMatch(seg, countryId, excludeWineId)))
+    .filter((d) => from.has(displaySpelling(d.producer)));
+  if (docs.length > max) return { ...empty, tooMany: docs.length };
+
+  const wines = docs.map((doc) => ({
+    doc, from: displaySpelling(doc.producer), newKey: generateWineKey(doc.name, target, doc.appellation),
+  }));
+  const taken = new Set(reservedKeys.filter(Boolean));
+  const clashes = [];
+  const clash = (w) => clashes.push({ wineId: String(w.doc._id), name: w.doc.name, from: w.from });
+  const planned = new Set();
+  for (const w of wines) {
+    if (taken.has(w.newKey) || planned.has(w.newKey)) clash(w);
+    planned.add(w.newKey);
+  }
+  if (wines.length) {
+    const existing = await WineDefinition.find({
+      normalizedKey: { $in: [...planned] },
+      _id: { $nin: wines.map((w) => w.doc._id).concat(excludeWineId ? [castId(excludeWineId)] : []) },
+    }).select('normalizedKey').lean();
+    const existingKeys = new Set(existing.map((e) => e.normalizedKey));
+    for (const w of wines) {
+      if (existingKeys.has(w.newKey) && !clashes.some((c) => c.wineId === String(w.doc._id))) clash(w);
+    }
+  }
+  return { wines, clashes, tooMany: 0 };
+}
+
+module.exports = { resolveCanonicalProducerSpelling, otherProducerSpellings, planProducerRename, displaySpelling };

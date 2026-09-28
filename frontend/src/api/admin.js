@@ -90,8 +90,13 @@ export const adminUnclearIncompleteGeography = (apiFetch, wineIds) =>
 export const adminGetWineProposals = (apiFetch, params) =>
   apiFetch(`/api/admin/wine-proposals?${params}`);
 
-export const adminApproveWineProposal = (apiFetch, id) =>
-  apiFetch(`/api/admin/wine-proposals/${id}/approve`, { method: 'POST' });
+// `spelling` answers a producer-spelling split (409 code
+// 'producer_spelling_split'): { producerSpelling: 'existing', existingSpelling }
+// | { producerSpelling: 'renameAll' } | { producerSpelling: 'proposed' }.
+export const adminApproveWineProposal = (apiFetch, id, spelling) =>
+  apiFetch(`/api/admin/wine-proposals/${id}/approve`, spelling
+    ? { method: 'POST', headers: J, body: JSON.stringify(spelling) }
+    : { method: 'POST' });
 
 export const adminRejectWineProposal = (apiFetch, id, reason) =>
   apiFetch(`/api/admin/wine-proposals/${id}/reject`, {

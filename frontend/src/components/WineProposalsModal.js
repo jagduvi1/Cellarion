@@ -72,6 +72,10 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
   const [bulkRejecting, setBulkRejecting] = useState(false); // shared-reason input visible
   const [bulkReason, setBulkReason] = useState('');
   const [rowErrors, setRowErrors] = useState({});
+  // Rows whose approve needs a producer-spelling pick, learned from a 409 or a
+  // bulk result: { [proposalId]: { proposed, spellings } }. The list sends the
+  // same up front on the producer diff row (diff.producer.otherSpellings).
+  const [spellingSplits, setSpellingSplits] = useState({});
   const fetchGen = useRef(0);
   // Rows this session decided leave the pending view — the set shrinks under a
   // fixed page*limit offset, so subtract what we removed (the fragmentation
@@ -102,6 +106,7 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
       // AFTER the bulk call returns and never triggers a refetch itself.
       setSelectedIds(new Set());
       setRowErrors({});
+      setSpellingSplits({});
     } catch {
       if (gen === fetchGen.current) setError(t('common.networkError'));
     } finally {
@@ -124,6 +129,7 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
     setBulkRejecting(false);
     setBulkReason('');
     setRowErrors({});
+    setSpellingSplits({});
     setPage(1);
   };
 
@@ -149,6 +155,11 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
       for (const id of gone) delete next[id];
       return next;
     });
+    setSpellingSplits(prev => {
+      const next = { ...prev };
+      for (const id of gone) delete next[id];
+      return next;
+    });
     setTotal(prev => Math.max(0, prev - gone.size));
     setPendingCount(prev => Math.max(0, prev - gone.size));
     // The drain check may use the closure: every interleaving path (second
@@ -161,23 +172,32 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
   };
   const removeDecidedRow = (id) => removeDecidedRows([id]);
 
-  const approve = async (proposal) => {
+  // `spelling` is the admin's pick for a producer-spelling split (see
+  // adminApproveWineProposal); absent for every other approve.
+  const approve = async (proposal, spelling) => {
     // Approving supersedes a half-typed reject on the same row — close the
     // input so the in-flight labels can't point at the wrong action.
     if (rejectingId === proposal._id) { setRejectingId(null); setRejectReason(''); }
     setPendingId(proposal._id);
     setError(null);
     try {
-      const res = await adminApproveWineProposal(apiFetch, proposal._id);
+      const res = await adminApproveWineProposal(apiFetch, proposal._id, spelling);
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         removeDecidedRow(proposal._id);
         onChanged?.();
       } else {
         setError(data.error || t('admin.wines.proposals.approveError'));
-        // A 409 means another admin decided it first — refresh so the stale
-        // row leaves the list instead of inviting a second click.
-        if (res.status === 409) fetchPage(page);
+        if (data.code === 'producer_spelling_split' && Array.isArray(data.spellings)) {
+          // Still pending — offer the pick right on the row.
+          setSpellingSplits(prev => ({ ...prev, [proposal._id]: { proposed: data.proposed, spellings: data.spellings } }));
+        } else if (res.status === 409 && !data.code) {
+          // Another admin decided it first — refresh so the stale row leaves
+          // the list instead of inviting a second click. (A 409 with a code
+          // is about THIS decision — a spelling or rename conflict — and the
+          // row stays for the admin to act on.)
+          fetchPage(page);
+        }
       }
     } catch {
       setError(t('common.networkError'));
@@ -239,6 +259,14 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
       onChanged?.();
     }
     setSelectedIds(new Set(failed.map(f => f.proposalId)));
+    // A batch cannot carry a spelling pick: those rows get the choice on the row.
+    const splits = failed.filter(f => f.code === 'producer_spelling_split' && Array.isArray(f.spellings));
+    if (splits.length) {
+      setSpellingSplits(prev => ({
+        ...prev,
+        ...Object.fromEntries(splits.map(f => [f.proposalId, { proposed: f.proposed, spellings: f.spellings }])),
+      }));
+    }
     if (failed.length) {
       setRowErrors(Object.fromEntries(failed.map(f => [f.proposalId, f.error])));
       setError(t('admin.wines.proposals.bulkPartial', { ok: okIds.length, failed: failed.length }));
@@ -308,6 +336,14 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
     padding: '0.15rem 0', fontSize: '0.85rem',
   };
   const mutedStyle = { color: 'var(--color-text-muted)' };
+
+  // A producer change the registry already spells differently: from a 409 or
+  // a bulk result, else from the list's own diff row.
+  const splitOf = (p) => spellingSplits[p._id]
+    || (p.status === 'pending' && p.diff?.producer?.otherSpellings?.length
+      ? { proposed: p.diff.producer.proposed, spellings: p.diff.producer.otherSpellings }
+      : null);
+  const spellingLabel = (s) => t('admin.wines.proposals.spellingCount', { spelling: s.spelling, count: s.count });
 
   return (
     <Modal title={t('admin.wines.proposals.title')} onClose={onClose} wide>
@@ -477,6 +513,13 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
                       {t('admin.wines.proposals.unknownGrapes', 'Not in the grape taxonomy yet: {{names}} — add it under Taxonomy first, then approve.', { names: d.unknown.join(', ') })}
                     </em>
                   )}
+                  {/* Approving would spell this producer two ways in the
+                      registry — say so here, the pick is on the buttons below. */}
+                  {field === 'producer' && splitOf(p) && (
+                    <em style={{ flexBasis: '100%', fontSize: '0.78rem', color: 'var(--color-warning)' }}>
+                      {t('admin.wines.proposals.otherSpellings', { spellings: splitOf(p).spellings.map(spellingLabel).join(', ') })}
+                    </em>
+                  )}
                 </div>
               ))}
 
@@ -554,17 +597,55 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
 
               {p.status === 'pending' && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-small"
-                    disabled={!!pendingId}
-                    onClick={() => approve(p)}
-                    title={t('admin.wines.proposals.approveTitle')}
-                  >
-                    {pendingId === p._id && rejectingId !== p._id
-                      ? t('admin.wines.proposals.approving')
-                      : t('admin.wines.proposals.approve')}
-                  </button>
+                  {splitOf(p) ? (
+                    <>
+                      {/* One spelling per producer: the registry's, the
+                          proposed one for all of them, or both when they are
+                          really two producers sharing a key. */}
+                      {splitOf(p).spellings.slice(0, 3).map(s => (
+                        <button
+                          key={s.spelling}
+                          type="button"
+                          className="btn btn-primary btn-small"
+                          disabled={!!pendingId}
+                          onClick={() => approve(p, { producerSpelling: 'existing', existingSpelling: s.spelling })}
+                          title={t('admin.wines.proposals.approveWithExistingTitle')}
+                        >
+                          {t('admin.wines.proposals.approveWithExisting', { spelling: s.spelling })}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
+                        disabled={!!pendingId}
+                        onClick={() => approve(p, { producerSpelling: 'renameAll' })}
+                        title={t('admin.wines.proposals.approveRenameAllTitle')}
+                      >
+                        {t('admin.wines.proposals.approveRenameAll', { spelling: splitOf(p).proposed })}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
+                        disabled={!!pendingId}
+                        onClick={() => approve(p, { producerSpelling: 'proposed' })}
+                        title={t('admin.wines.proposals.approveKeepBothTitle')}
+                      >
+                        {t('admin.wines.proposals.approveKeepBoth')}
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-small"
+                      disabled={!!pendingId}
+                      onClick={() => approve(p)}
+                      title={t('admin.wines.proposals.approveTitle')}
+                    >
+                      {pendingId === p._id && rejectingId !== p._id
+                        ? t('admin.wines.proposals.approving')
+                        : t('admin.wines.proposals.approve')}
+                    </button>
+                  )}
                   {rejectingId === p._id ? (
                     <>
                       <input

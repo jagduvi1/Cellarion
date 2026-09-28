@@ -94,6 +94,12 @@ jest.mock('./mutationBudget', () => ({ takeMutationSlot: jest.fn(() => true), WR
 // list_colour_conflicts reads the deterministic scan; the queue-gap tests
 // below exercise the caveat it adds around that scan, not the scan itself.
 jest.mock('../services/crossFieldScan', () => ({ scanCrossFieldChecks: jest.fn(async () => ({ rows: [] })) }));
+// propose_wine_correction names the registry's other spellings of a proposed
+// producer (2026-09-28); the lookup itself is unit-tested in its own suite.
+jest.mock('../services/producerSpelling', () => ({
+  ...jest.requireActual('../services/producerSpelling'),
+  otherProducerSpellings: jest.fn(async () => []),
+}));
 
 const WineVintageProfile = require('../models/WineVintageProfile');
 const WineVintagePrice = require('../models/WineVintagePrice');
@@ -1678,6 +1684,33 @@ describe('propose_wine_correction', () => {
     }, SOMM_CTX));
     expect(filed.error).toBeUndefined();
     expect(WineCorrectionProposal.create.mock.calls[0][0].proposedFields).toEqual({ type: 'sparkling', colour: 'rosé' });
+  });
+
+  // 2026-09-28: curator producer corrections split 9 producers in one week —
+  // the reply now names the registry's spelling while re-filing is still cheap.
+  test('a producer spelled unlike the rest of that producer comes back with the registry\'s spellings', async () => {
+    const { otherProducerSpellings } = require('../services/producerSpelling');
+    mkWine({ country: { _id: 'c-it', name: 'Italy' } });
+    WineCorrectionProposal.create.mockResolvedValue({ _id: 'prop-s' });
+    otherProducerSpellings.mockResolvedValueOnce([{ spelling: 'E. Pira & Figli', count: 4 }]);
+
+    const body = parse(await tool('propose_wine_correction').handler({
+      wine_id: WINE_ID, kind: 'field_correction', proposed_fields: { producer: 'E. Pira e Figli' }, reason: REASON,
+    }, SOMM_CTX));
+    expect(body.data.status).toBe('pending');
+    expect(body.data.registry_spellings).toEqual([{ spelling: 'E. Pira & Figli', count: 4 }]);
+    expect(body.data.spelling_note).toMatch(/"E\. Pira & Figli" \(4 wines\).*undo_last/);
+    expect(otherProducerSpellings).toHaveBeenCalledWith('E. Pira e Figli', 'c-it', { excludeWineId: WINE_ID });
+  });
+
+  test('no other spelling, no spelling note', async () => {
+    mkWine();
+    WineCorrectionProposal.create.mockResolvedValue({ _id: 'prop-t' });
+    const body = parse(await tool('propose_wine_correction').handler({
+      wine_id: WINE_ID, kind: 'field_correction', proposed_fields: { producer: 'E. Pira e Figli' }, reason: REASON,
+    }, SOMM_CTX));
+    expect(body.data.registry_spellings).toBeUndefined();
+    expect(body.data.spelling_note).toBeUndefined();
   });
 
   test('files a field_correction: snapshot captured, ledger row + audit written, nothing applied', async () => {

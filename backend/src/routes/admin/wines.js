@@ -1840,9 +1840,10 @@ async function performWineMerge(sourceId, targetId, req) {
     }
   }
 
-  // Carry the source's AI tasting profile to the keeper if the keeper has none,
-  // so the re-embed below encodes taste/style instead of losing it on merge.
-  await inheritAiProfileIfMissing(target, [source]);
+  // Carry the source's tasting profile to the keeper when the keeper has none,
+  // or when only the source's was reviewed by a curator — so the re-embed
+  // below encodes taste/style instead of losing it on merge.
+  await inheritAiProfile(target, [source]);
 
   logAudit(req, 'admin.wine.merge',
     { type: 'wine', id: source._id },
@@ -1906,17 +1907,38 @@ async function purgeSourceVectors(sourceId) {
 // confidence) from the wines being merged in, so the keeper's re-embedding still
 // encodes taste/style instead of dropping to identity-only text. Free — no AI
 // call. No-op when the keeper is already enriched or no source has a profile.
-async function inheritAiProfileIfMissing(keeper, sources) {
-  if (keeper.aiProfile?.description) return;
-  const donor = sources
-    .filter(w => w.aiProfile?.description)
-    .sort((a, b) => (b.aiProfile.confidence ?? 0) - (a.aiProfile.confidence ?? 0))[0];
+// A profile a curator wrote or reviewed: the curator source, or a review
+// stamp no older than the profile (the low-confidence queue's own test).
+function isCuratedProfile(w) {
+  const p = w.aiProfile;
+  if (!p?.description) return false;
+  if (p.source === 'curator') return true;
+  return Boolean(w.profileReviewedAt && (!p.generatedAt || w.profileReviewedAt >= p.generatedAt));
+}
+
+// Which tasting profile the keeper ends up with. A curated profile always
+// wins over an unreviewed one: before 2026-09-28 the keeper's own profile
+// was kept whenever it had one, so merging "Château Mouton-Rothschild" (a
+// curator-reviewed profile) into "Château Mouton Rothschild" (an old AI one)
+// threw the reviewed profile away with the deleted record. Among equals, the
+// keeper keeps its own; among donors, the highest model confidence wins.
+async function inheritAiProfile(keeper, sources) {
+  if (isCuratedProfile(keeper)) return;
+  const withProfile = sources.filter(w => w.aiProfile?.description);
+  const byConfidence = (a, b) => (b.aiProfile.confidence ?? 0) - (a.aiProfile.confidence ?? 0);
+  const donor = withProfile.filter(isCuratedProfile).sort(byConfidence)[0]
+    || (keeper.aiProfile?.description ? null : withProfile.sort(byConfidence)[0]);
   if (!donor) return;
   const profile = typeof donor.aiProfile.toObject === 'function'
     ? donor.aiProfile.toObject()
     : donor.aiProfile;
+  const set = { aiProfile: profile };
+  // The review travels with the profile it vouches for; otherwise the keeper
+  // would land in the low-confidence queue holding a profile already reviewed.
+  if (isCuratedProfile(donor) && donor.profileReviewedAt) set.profileReviewedAt = donor.profileReviewedAt;
   keeper.aiProfile = profile;
-  await WineDefinition.updateOne({ _id: keeper._id }, { $set: { aiProfile: profile } });
+  if (set.profileReviewedAt) keeper.profileReviewedAt = set.profileReviewedAt;
+  await WineDefinition.updateOne({ _id: keeper._id }, { $set: set });
 }
 
 // Re-embed every active vintage the keeper now owns so the vector store reflects
@@ -2190,9 +2212,10 @@ router.post('/merge', async (req, res) => {
       }
     }
 
-    // Carry the best source AI tasting profile to the keeper if it has none, so
-    // the re-embed below encodes taste/style instead of losing it on merge.
-    await inheritAiProfileIfMissing(keeper, sources);
+    // Carry the best source tasting profile to the keeper when it has none, or
+    // when only a source's was reviewed by a curator — so the re-embed below
+    // encodes taste/style instead of losing it on merge.
+    await inheritAiProfile(keeper, sources);
 
     // Delete sources LAST.
     for (const src of sources) {
@@ -2220,6 +2243,7 @@ module.exports = router;
 // The extracted single-pair merge, shared with the correction-proposal
 // approve route (wineProposals.js) so the two surfaces cannot drift.
 module.exports.performWineMerge = performWineMerge;
+module.exports.inheritAiProfile = inheritAiProfile;
 // The full reference re-pointer, reused when a private draft is ATTACHED to
 // an existing wine (services/wineDraftOps): a draft's bottle can acquire
 // price-tracking requests, personal data, restock alerts and journal
