@@ -89,11 +89,16 @@ describe('notifyProposer', () => {
 describe('closePendingForWine', () => {
   const REASON = 'Closed automatically: the wine was merged into "Pira — Barolo". Re-file against that wine if the issue still applies.';
 
-  test('closes EVERY pending proposal on or targeting the wine, decidedBy left alone', async () => {
+  // Status 'closed', not 'rejected' (2026-09-28): nobody judged these — the wine
+  // went away. Stored as rejections they read as disagreements with the
+  // sommelier (25 of 27 "rejections" in three weeks were merges into records
+  // that already carried the proposed producer).
+  test('CLOSES every pending proposal on or targeting the wine — status closed, decidedBy left alone', async () => {
     await closePendingForWine(SOURCE, REASON);
     const [filter, update] = WineCorrectionProposal.updateMany.mock.calls[0];
     expect(filter).toEqual({ status: 'pending', $or: [{ wineDefinition: SOURCE }, { mergeTargetId: SOURCE }] });
-    expect(update.$set).toMatchObject({ status: 'rejected', rejectReason: REASON });
+    expect(update.$set).toMatchObject({ status: 'closed', rejectReason: REASON });
+    expect(update.$set.status).not.toBe('rejected');
     expect(update.$set.decidedAt).toBeInstanceOf(Date);
     expect(update.$set).not.toHaveProperty('decidedBy');
   });

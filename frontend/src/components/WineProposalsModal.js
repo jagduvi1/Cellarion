@@ -450,7 +450,9 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
                   <span style={{ ...kindBadgeStyle, background: 'var(--color-surface, #f4f4f4)', border: '1px solid var(--color-border)' }}>
                     {p.status === 'approved'
                       ? t('admin.wines.proposals.statusApproved')
-                      : t('admin.wines.proposals.statusRejected')}
+                      : p.status === 'closed'
+                        ? t('admin.wines.proposals.statusClosed')
+                        : t('admin.wines.proposals.statusRejected')}
                   </span>
                 )}
               </div>
@@ -539,6 +541,9 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
                 {p.status === 'rejected' && p.rejectReason && (
                   <span>{t('admin.wines.proposals.rejectedWith', { reason: p.rejectReason })}</span>
                 )}
+                {/* Closed by a merge or a delete, not by a reviewer: the reason
+                    already reads "Closed automatically: …" and names the keeper. */}
+                {p.status === 'closed' && p.rejectReason && <span>{p.rejectReason}</span>}
               </div>
 
               {rowErrors[p._id] && (

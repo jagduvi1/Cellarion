@@ -154,6 +154,20 @@ describe('GET / (list)', () => {
     expect(pipeline.some(s => s.$sort && s.$sort._pendingFirst === 1)).toBe(true);
   });
 
+  // 2026-09-28: a proposal a merge or a delete closed is 'closed', not
+  // 'rejected'. The decided tab shows all three non-pending states, and the
+  // status filter accepts the new one.
+  test('the decided view spans approved, rejected and closed; ?status=closed filters to the lifecycle closures', async () => {
+    WineCorrectionProposal.aggregate.mockResolvedValue([]);
+    WineCorrectionProposal.countDocuments.mockResolvedValue(0);
+
+    expect((await get('?status=decided')).status).toBe(200);
+    expect(WineCorrectionProposal.aggregate.mock.calls[0][0][0]).toEqual({ $match: { status: { $in: ['approved', 'rejected', 'closed'] } } });
+
+    expect((await get('?status=closed')).status).toBe(200);
+    expect(WineCorrectionProposal.aggregate.mock.calls[1][0][0]).toEqual({ $match: { status: 'closed' } });
+  });
+
   // Support ticket 2026-09-12: later filings by the same proposer ride along
   // with their own reason/evidence; the original reason stays the original.
   test('amendments are projected with their own reason and evidence, fields defaulting to []', async () => {

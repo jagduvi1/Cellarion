@@ -66,12 +66,15 @@ function notifyProposer(proposal, wine, deciderId, approved, reason) {
 }
 
 /**
- * Lifecycle closure: reject every PENDING proposal on (or targeting) a wine
- * that is going away, and tell the user-pipeline submitters why. `decidedBy`
- * stays null — this is closure, not a reviewer's judgement.
+ * Lifecycle closure: close every PENDING proposal on (or targeting) a wine
+ * that is going away, and tell the user-pipeline submitters why. The rows
+ * become status 'closed', not 'rejected' — nobody judged them; the wine simply
+ * stopped existing under that id (a merge usually resolves the complaint) —
+ * and `decidedBy` stays null. Until 2026-09-28 they were stored as 'rejected'
+ * and counted as disagreements with the sommelier.
  *
  * The submitters are read BEFORE the update (afterwards the rows are just
- * rejected rows); a lookup failure costs the notifications, never the closure.
+ * closed rows); a lookup failure costs the notifications, never the closure.
  *
  * @param {*} wineId          the wine going away
  * @param {string} rejectReason
@@ -91,7 +94,7 @@ async function closePendingForWine(wineId, rejectReason, { wine = null, linkWine
   }
   const result = await WineCorrectionProposal.updateMany(
     filter,
-    { $set: { status: 'rejected', decidedAt: new Date(), rejectReason } }
+    { $set: { status: 'closed', decidedAt: new Date(), rejectReason } }
   );
   const labelled = { ...(linkWineId ? { _id: linkWineId } : {}), producer: wine?.producer || null, name: wine?.name || null };
   for (const p of toTell) notifyProposer(p, labelled, actorId, false, rejectReason);

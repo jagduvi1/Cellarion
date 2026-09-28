@@ -2091,6 +2091,7 @@
         "rejectedWith": "Rejected: {{reason}}",
         "statusApproved": "Approved",
         "statusRejected": "Rejected",
+        "statusClosed": "Closed",
         "loadError": "Failed to load proposals",
         "approveError": "Failed to approve the proposal",
         "rejectError": "Failed to reject the proposal",

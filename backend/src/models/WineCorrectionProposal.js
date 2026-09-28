@@ -109,9 +109,16 @@ const wineCorrectionProposalSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.Mixed,
     default: null,
   },
+  // 'rejected' is a reviewer's judgement (decidedBy set, rejectReason theirs).
+  // 'closed' is lifecycle closure: the wine was merged away or deleted while
+  // the proposal was pending, so nothing remained to decide — decidedBy stays
+  // null and rejectReason says what happened. Until 2026-09-28 those rows were
+  // stored as 'rejected' and read as disagreements: 25 of the 27 "rejections"
+  // of the sommelier's proposals in three weeks were merges into records that
+  // already carried the proposed producer (release audit follow-up).
   status: {
     type: String,
-    enum: ['pending', 'approved', 'rejected'],
+    enum: ['pending', 'approved', 'rejected', 'closed'],
     default: 'pending',
     index: true,
   },

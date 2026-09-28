@@ -1429,16 +1429,18 @@ registerTool({
   description:
     'Lists wine-correction proposals — default the PENDING ones awaiting an admin decision — so research is never ' +
     'repeated and the one-pending-per-(wine,kind) rule stops being discovered by collision. Filter by kind ' +
-    '(field_correction | merge | non_wine), wine_id, or status (pending | approved | rejected — decided rows carry ' +
-    'the decision and any reject reason). Note: MERGE proposals are filed over MCP but DECIDED in Admin → Wines on ' +
-    'the web — deliberate, a wine merge moves bottles and rewrites references (same stance as taxonomy merge).',
+    '(field_correction | merge | non_wine), wine_id, or status (pending | approved | rejected | closed — decided rows ' +
+    'carry the decision and any reject reason; "closed" means the wine was merged away or deleted while the proposal ' +
+    'waited, nobody judged it — the reason names the surviving record, re-file against it if the issue still applies). ' +
+    'Note: MERGE proposals are filed over MCP but DECIDED in Admin → Wines on the web — deliberate, a wine merge moves ' +
+    'bottles and rewrites references (same stance as taxonomy merge).',
   scope: 'read',
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {
     kind: z.enum(['field_correction', 'merge', 'non_wine']).optional(),
     wine_id: z.string().optional().describe('Only proposals for this registry wine'),
-    status: z.enum(['pending', 'approved', 'rejected']).default('pending'),
+    status: z.enum(['pending', 'approved', 'rejected', 'closed']).default('pending'),
     limit: z.number().int().min(1).max(100).default(30),
     offset: z.number().int().min(0).default(0),
   },
