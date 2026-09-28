@@ -30,6 +30,12 @@ test('a dry run counts the clicks whose account has no stamp yet, and writes not
   expect(User.updateOne).not.toHaveBeenCalled();
   // Only accounts without a stamp are candidates.
   expect(User.find.mock.calls[0][0]).toEqual({ _id: { $in: [oid('a'), oid('b')] }, emailOptOutAt: null });
+  // The user is the entry's RESOURCE: the unsubscribe route is unauthenticated
+  // (a token link), so the actor is null on every one of these rows — keyed
+  // on the actor, the first run on prod found nobody (2026-09-28).
+  const [match, group] = AuditLog.aggregate.mock.calls[0][0];
+  expect(match.$match).toEqual({ action: 'user.unsubscribe.all', 'resource.id': { $ne: null } });
+  expect(group.$group._id).toBe('$resource.id');
 });
 
 test('--apply stamps the FIRST click\'s time and turns the support-reply email off, guarded against a race', async () => {

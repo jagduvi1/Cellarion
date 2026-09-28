@@ -9,7 +9,9 @@
  * 2026-09-27 M7). utils/notifications.js now stamps emailOptOutAt and writes
  * every category; this does the same for the earlier clicks.
  *
- * Who: every actor of a `user.unsubscribe.all` audit entry (kept AUDIT_TTL_DAYS,
+ * Who: the user each `user.unsubscribe.all` audit entry is ABOUT (resource.id —
+ * the route is unauthenticated, a token link, so the entry's actor is null;
+ * the first run of this script keyed on the actor and found nobody) (kept AUDIT_TTL_DAYS,
  * 90 by default — clicks older than that are not recoverable from the log).
  * With --all-off, also every account whose stored flags are ALL off: email and
  * push of every category present, including push, which defaults to on — a
@@ -34,8 +36,8 @@ const AuditLog = require('../models/AuditLog');
  */
 async function unsubscribersFromAuditLog() {
   const rows = await AuditLog.aggregate([
-    { $match: { action: 'user.unsubscribe.all', 'actor.userId': { $ne: null } } },
-    { $group: { _id: '$actor.userId', clickedAt: { $min: '$timestamp' } } },
+    { $match: { action: 'user.unsubscribe.all', 'resource.id': { $ne: null } } },
+    { $group: { _id: '$resource.id', clickedAt: { $min: '$timestamp' } } },
   ]);
   if (rows.length === 0) return [];
   const pending = await User.find({ _id: { $in: rows.map((r) => r._id) }, emailOptOutAt: null }, '_id').lean();
