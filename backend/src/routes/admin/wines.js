@@ -1916,6 +1916,14 @@ function isCuratedProfile(w) {
   return Boolean(w.profileReviewedAt && (!p.generatedAt || w.profileReviewedAt >= p.generatedAt));
 }
 
+// The verdicts about a record's PRODUCER live on its profile but belong to the
+// record: in a merge the donor is usually the one with the wrong identity
+// ("Fabelhaft" merged into "Niepoort"), so its producer doubts must not land
+// on the keeper with the tasting text.
+const PRODUCER_VERDICT_FIELDS = ['producerSuspect', 'producerUnknown', 'producerNote', 'suspectDecision', 'suspectDecidedAt', 'suspectDowngradedBy'];
+
+const plainProfile = (p) => (p && typeof p.toObject === 'function' ? p.toObject() : { ...(p || {}) });
+
 // Which tasting profile the keeper ends up with. A curated profile always
 // wins over an unreviewed one: before 2026-09-28 the keeper's own profile
 // was kept whenever it had one, so merging "Château Mouton-Rothschild" (a
@@ -1929,15 +1937,28 @@ async function inheritAiProfile(keeper, sources) {
   const donor = withProfile.filter(isCuratedProfile).sort(byConfidence)[0]
     || (keeper.aiProfile?.description ? null : withProfile.sort(byConfidence)[0]);
   if (!donor) return;
-  const profile = typeof donor.aiProfile.toObject === 'function'
-    ? donor.aiProfile.toObject()
-    : donor.aiProfile;
+  const profile = plainProfile(donor.aiProfile);
   const set = { aiProfile: profile };
-  // The review travels with the profile it vouches for; otherwise the keeper
-  // would land in the low-confidence queue holding a profile already reviewed.
-  if (isCuratedProfile(donor) && donor.profileReviewedAt) set.profileReviewedAt = donor.profileReviewedAt;
+  if (isCuratedProfile(donor)) {
+    // The tasting text and its provenance travel; the producer verdicts stay
+    // the keeper's own. The donor's input snapshot describes the donor's
+    // identity — cleared rather than compared (a curated profile is never
+    // regenerated anyway).
+    const own = plainProfile(keeper.aiProfile);
+    for (const f of PRODUCER_VERDICT_FIELDS) {
+      if (own[f] === undefined) delete profile[f]; else profile[f] = own[f];
+    }
+    profile.inputsSnapshot = null;
+    // The review travels with the profile it vouches for; otherwise the keeper
+    // would land in the low-confidence queue holding a profile already reviewed.
+    if (donor.profileReviewedAt) set.profileReviewedAt = donor.profileReviewedAt;
+  } else if (keeper.profileReviewedAt) {
+    // An inherited UNREVIEWED profile must not look reviewed through the
+    // keeper's older stamp (it vouched for a profile the keeper no longer has).
+    set.profileReviewedAt = null;
+  }
   keeper.aiProfile = profile;
-  if (set.profileReviewedAt) keeper.profileReviewedAt = set.profileReviewedAt;
+  if ('profileReviewedAt' in set) keeper.profileReviewedAt = set.profileReviewedAt;
   await WineDefinition.updateOne({ _id: keeper._id }, { $set: set });
 }
 

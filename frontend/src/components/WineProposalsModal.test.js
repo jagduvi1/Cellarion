@@ -60,15 +60,25 @@ test('a split from the list names the registry spellings and replaces the plain 
     expect.anything(), 'p1', { producerSpelling: 'existing', existingSpelling: 'Chateau Lagrezette' }));
 });
 
-test('"rename all" and "keep both" send their own picks', async () => {
+test('a rename names the spelling it folds; "keep both" sends its own pick', async () => {
   adminGetWineProposals.mockResolvedValue(ok(payload([row('p1', OTHERS), row('p2', OTHERS)])));
   renderModal();
-  const renameAll = await screen.findAllByText(/approveRenameAll:.*Château Lagrézette/);
-  fireEvent.click(renameAll[0]);
-  await waitFor(() => expect(adminApproveWineProposal).toHaveBeenCalledWith(expect.anything(), 'p1', { producerSpelling: 'renameAll' }));
+  // Per spelling, never the whole bucket: two real estates can share one.
+  const rename = await screen.findAllByText(/approveRename:.*"from":"Chateau Lagrezette".*"to":"Château Lagrézette"/);
+  fireEvent.click(rename[0]);
+  await waitFor(() => expect(adminApproveWineProposal).toHaveBeenCalledWith(
+    expect.anything(), 'p1', { producerSpelling: 'renameAll', renameSpellings: ['Chateau Lagrezette'] }));
 
   fireEvent.click(await screen.findByText('admin.wines.proposals.approveKeepBoth'));
   await waitFor(() => expect(adminApproveWineProposal).toHaveBeenCalledWith(expect.anything(), 'p2', { producerSpelling: 'proposed' }));
+});
+
+test('every listed spelling gets its own picks — none hidden', async () => {
+  const many = ['A', 'B', 'C', 'D'].map((x) => ({ spelling: `Lagrezette ${x}`, count: 1 }));
+  adminGetWineProposals.mockResolvedValue(ok(payload([row('p1', many)])));
+  renderModal();
+  expect(await screen.findByText(/approveWithExisting:.*Lagrezette D/)).toBeInTheDocument();
+  expect(screen.getAllByText(/approveRename:/)).toHaveLength(4);
 });
 
 test('a split 409 on a plain approve turns that row into the picks instead of refreshing', async () => {
@@ -76,7 +86,7 @@ test('a split 409 on a plain approve turns that row into the picks instead of re
   adminApproveWineProposal.mockResolvedValueOnce(conflict(SPLIT_409));
   renderModal();
   fireEvent.click(await screen.findByText('admin.wines.proposals.approve'));
-  expect(await screen.findByText(/approveRenameAll:.*Château Lagrézette/)).toBeInTheDocument();
+  expect(await screen.findByText(/approveRename:.*Château Lagrézette/)).toBeInTheDocument();
   expect(screen.getByText(SPLIT_409.error)).toBeInTheDocument();
   // The row is still pending and still the admin's to decide — no reload.
   expect(adminGetWineProposals).toHaveBeenCalledTimes(1);
@@ -92,4 +102,15 @@ test('a bulk row that needs a pick keeps the choice on the row', async () => {
   fireEvent.click(screen.getByText(/admin\.wines\.proposals\.approveSelected/));
   expect(await screen.findByText('admin.wines.proposals.approveKeepBoth')).toBeInTheDocument();
   expect(screen.queryByText('admin.wines.proposals.approve')).toBeNull();
+});
+
+test('a coded 409 (the correction would duplicate a wine) keeps the row and shows why', async () => {
+  // Before, every 409 without a spelling code reloaded the page, and the
+  // reload cleared the "use a merge proposal instead" message unseen.
+  adminGetWineProposals.mockResolvedValue(ok(payload([row('p1')])));
+  adminApproveWineProposal.mockResolvedValueOnce(conflict({ error: 'would make the wine identical — use a merge proposal instead', code: 'identical_wine' }));
+  renderModal();
+  fireEvent.click(await screen.findByText('admin.wines.proposals.approve'));
+  expect(await screen.findByText(/use a merge proposal instead/)).toBeInTheDocument();
+  expect(adminGetWineProposals).toHaveBeenCalledTimes(1);
 });

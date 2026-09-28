@@ -207,10 +207,17 @@ const hasLegal = (s) => toks(s).some((t) => LEGAL.has(t));
   const searchService = require('../services/search');
   await searchService.initialize();
   let written = 0, failed = 0;
+  // A spelling is not a new identity: a profile that described the record
+  // still does, so its input snapshot follows the spelling — otherwise the
+  // next enrichment sweep regenerates it as stale (review 2026-09-28).
+  const { profileInputsSnapshot } = require('../services/enrichmentJob');
   for (const p of planned) {
     if (p.blocked) continue;
+    const snapshotWasCurrent = Boolean(p.doc.aiProfile?.inputsSnapshot)
+      && p.doc.aiProfile.inputsSnapshot === profileInputsSnapshot(p.doc);
     p.doc.producer = p.group.target;
     p.doc.normalizedKey = p.newKey;
+    if (snapshotWasCurrent) p.doc.aiProfile.inputsSnapshot = profileInputsSnapshot(p.doc);
     try {
       await p.doc.save();
       written += 1;

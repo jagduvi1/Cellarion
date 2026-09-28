@@ -1703,6 +1703,21 @@ describe('propose_wine_correction', () => {
     expect(otherProducerSpellings).toHaveBeenCalledWith('E. Pira e Figli', 'c-it', { excludeWineId: WINE_ID });
   });
 
+  test('the note looks where the proposal moves the wine: a proposed country is that country\'s spellings', async () => {
+    const { otherProducerSpellings } = require('../services/producerSpelling');
+    const Country = require('../models/Country');
+    mkWine({ producer: 'Philipp Kuhn', country: { _id: 'c-at', name: 'Austria' } });
+    WineCorrectionProposal.create.mockResolvedValue({ _id: 'prop-u' });
+    Country.findOne.mockResolvedValueOnce({ _id: 'c-de' });
+    otherProducerSpellings.mockResolvedValueOnce([{ spelling: 'Weingut Philipp Kuhn', count: 11 }]);
+
+    const body = parse(await tool('propose_wine_correction').handler({
+      wine_id: WINE_ID, kind: 'field_correction', proposed_fields: { country: 'Germany' }, reason: REASON,
+    }, SOMM_CTX));
+    expect(body.data.registry_spellings).toEqual([{ spelling: 'Weingut Philipp Kuhn', count: 11 }]);
+    expect(otherProducerSpellings).toHaveBeenCalledWith('Philipp Kuhn', 'c-de', { excludeWineId: WINE_ID });
+  });
+
   test('no other spelling, no spelling note', async () => {
     mkWine();
     WineCorrectionProposal.create.mockResolvedValue({ _id: 'prop-t' });

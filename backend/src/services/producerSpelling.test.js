@@ -191,6 +191,11 @@ describe('otherProducerSpellings', () => {
     expect(String(match._id.$ne)).toBe(WINE);
   });
 
+  test('strict (the approve itself) rethrows a failed lookup instead of reading it as "no split"', async () => {
+    WineDefinition.aggregate.mockRejectedValueOnce(new Error('db down'));
+    await expect(otherProducerSpellings('Château Lagrézette', COUNTRY, { strict: true })).rejects.toThrow('db down');
+  });
+
   test('a sentinel producer, no country, or a failed lookup answers [] — it informs, never blocks', async () => {
     expect(await otherProducerSpellings('Unknown', COUNTRY)).toEqual([]);
     expect(await otherProducerSpellings('Château Lagrézette', null)).toEqual([]);

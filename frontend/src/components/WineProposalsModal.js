@@ -597,32 +597,36 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
 
               {p.status === 'pending' && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-                  {splitOf(p) ? (
+                  {pendingId === p._id && rejectingId !== p._id && splitOf(p) ? (
+                    <span style={mutedStyle}>{t('admin.wines.proposals.approving')}</span>
+                  ) : splitOf(p) ? (
                     <>
-                      {/* One spelling per producer: the registry's, the
-                          proposed one for all of them, or both when they are
-                          really two producers sharing a key. */}
-                      {splitOf(p).spellings.slice(0, 3).map(s => (
-                        <button
-                          key={s.spelling}
-                          type="button"
-                          className="btn btn-primary btn-small"
-                          disabled={!!pendingId}
-                          onClick={() => approve(p, { producerSpelling: 'existing', existingSpelling: s.spelling })}
-                          title={t('admin.wines.proposals.approveWithExistingTitle')}
-                        >
-                          {t('admin.wines.proposals.approveWithExisting', { spelling: s.spelling })}
-                        </button>
+                      {/* One spelling per producer: the registry's, or the
+                          proposed one for the wines under a spelling the admin
+                          names — never "all of them" blind, because two real
+                          estates can share a key — or both kept apart. */}
+                      {splitOf(p).spellings.map(s => (
+                        <span key={s.spelling} style={{ display: 'contents' }}>
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-small"
+                            disabled={!!pendingId}
+                            onClick={() => approve(p, { producerSpelling: 'existing', existingSpelling: s.spelling })}
+                            title={t('admin.wines.proposals.approveWithExistingTitle')}
+                          >
+                            {t('admin.wines.proposals.approveWithExisting', { spelling: s.spelling })}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-small"
+                            disabled={!!pendingId}
+                            onClick={() => approve(p, { producerSpelling: 'renameAll', renameSpellings: [s.spelling] })}
+                            title={t('admin.wines.proposals.approveRenameTitle', { from: s.spelling })}
+                          >
+                            {t('admin.wines.proposals.approveRename', { from: s.spelling, to: splitOf(p).proposed })}
+                          </button>
+                        </span>
                       ))}
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-small"
-                        disabled={!!pendingId}
-                        onClick={() => approve(p, { producerSpelling: 'renameAll' })}
-                        title={t('admin.wines.proposals.approveRenameAllTitle')}
-                      >
-                        {t('admin.wines.proposals.approveRenameAll', { spelling: splitOf(p).proposed })}
-                      </button>
                       <button
                         type="button"
                         className="btn btn-secondary btn-small"

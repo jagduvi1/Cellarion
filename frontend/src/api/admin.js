@@ -92,7 +92,8 @@ export const adminGetWineProposals = (apiFetch, params) =>
 
 // `spelling` answers a producer-spelling split (409 code
 // 'producer_spelling_split'): { producerSpelling: 'existing', existingSpelling }
-// | { producerSpelling: 'renameAll' } | { producerSpelling: 'proposed' }.
+// | { producerSpelling: 'renameAll', renameSpellings: [...] } (the spellings
+// to fold into the proposed one) | { producerSpelling: 'proposed' }.
 export const adminApproveWineProposal = (apiFetch, id, spelling) =>
   apiFetch(`/api/admin/wine-proposals/${id}/approve`, spelling
     ? { method: 'POST', headers: J, body: JSON.stringify(spelling) }

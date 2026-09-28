@@ -19,6 +19,8 @@ jest.mock('../../models/WineCorrectionProposal', () => ({
   exists: jest.fn(),
   findOneAndUpdate: jest.fn(),
   updateOne: jest.fn(),
+  // The read-only spelling look before the claim (approveProposal).
+  findOne: jest.fn(),
 }));
 jest.mock('../../models/WineDefinition', () => ({ findById: jest.fn() }));
 jest.mock('../../models/WineVintageProfile', () => ({ deleteMany: jest.fn() }));
@@ -107,6 +109,7 @@ beforeEach(() => {
   });
   createNotification.mockResolvedValue(undefined);
   require('../../services/producerSpelling').otherProducerSpellings.mockResolvedValue([]);
+  WineCorrectionProposal.findOne.mockImplementation(() => ({ lean: async () => null }));
 });
 
 const get = (qs = '') => fetch(`${baseUrl}/api/admin/wine-proposals${qs}`, {
@@ -510,7 +513,9 @@ describe('POST /:id/approve', () => {
 
     const res = await post(`/${P1}/approve`);
     expect(res.status).toBe(409);
-    expect((await res.json()).error).toMatch(/merge proposal instead/);
+    const body409 = await res.json();
+    expect(body409.error).toMatch(/merge proposal instead/);
+    expect(body409.code).toBe('identical_wine');
     // Revert: the row goes back to pending with the decision fields cleared.
     const revert = WineCorrectionProposal.updateOne.mock.calls.find(c => c[1]?.$set?.status === 'pending');
     expect(revert).toBeTruthy();
@@ -626,14 +631,18 @@ describe('POST /:id/approve', () => {
 describe('producer spelling splits', () => {
   const { otherProducerSpellings, planProducerRename } = require('../../services/producerSpelling');
   const { logAudit } = require('../../services/audit');
+  const { findOrCreateRegion } = require('../../services/findOrCreateWine');
+  const { profileInputsSnapshot } = require('../../services/enrichmentJob');
   const claim = (p) => WineCorrectionProposal.findOneAndUpdate.mockResolvedValue(p);
-  const proposal = () => ({ _id: P1, kind: 'field_correction', wineDefinition: W1, proposedFields: { producer: 'Château Lagrézette' } });
+  // The read-only look before the claim sees the same pending row.
+  const pendingRow = (p) => WineCorrectionProposal.findOne.mockImplementation(() => ({ lean: async () => p }));
+  const proposal = (fields = { producer: 'Château Lagrézette' }) => ({ _id: P1, kind: 'field_correction', wineDefinition: W1, proposedFields: fields });
   const wineDoc = () => ({ _id: W1, name: 'Le Pigeonnier', producer: 'Lagrezette SA', appellation: 'Cahors', country: 'c1', save: jest.fn().mockResolvedValue(undefined) });
   const OTHERS = [{ spelling: 'Chateau Lagrezette', count: 3 }];
   const reverted = () => WineCorrectionProposal.updateOne.mock.calls.some((c) => c[1]?.$set?.status === 'pending');
 
-  test('without a pick: 409 with the registry spellings — nothing saved, the claim handed back', async () => {
-    claim(proposal());
+  test('without a pick: 409 with the registry spellings — answered before any claim, nothing written', async () => {
+    pendingRow(proposal({ producer: 'Château Lagrézette', region: 'Cahors' }));
     const wine = wineDoc();
     WineDefinition.findById.mockResolvedValue(wine);
     otherProducerSpellings.mockResolvedValue(OTHERS);
@@ -643,10 +652,41 @@ describe('producer spelling splits', () => {
     const data = await res.json();
     expect(data).toMatchObject({ code: 'producer_spelling_split', proposed: 'Château Lagrézette', spellings: OTHERS });
     expect(data.error).toMatch(/"Chateau Lagrezette" \(3 wines\)/);
+    // No claim, so no revert that could collide with a re-filed proposal (review
+    // 2026-09-28) — and no region minted for a refused approve.
+    expect(WineCorrectionProposal.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(findOrCreateRegion).not.toHaveBeenCalled();
     expect(wine.save).not.toHaveBeenCalled();
-    expect(reverted()).toBe(true);
-    // Looked up in the wine's own bucket, the wine itself excluded.
     expect(otherProducerSpellings).toHaveBeenCalledWith('Château Lagrézette', 'c1', { excludeWineId: W1 });
+  });
+
+  test('a split that appears between the look and the claim is still caught — reverted, no region minted', async () => {
+    pendingRow(proposal({ producer: 'Château Lagrézette', region: 'Cahors' }));
+    claim(proposal({ producer: 'Château Lagrézette', region: 'Cahors' }));
+    const wine = wineDoc();
+    WineDefinition.findById.mockResolvedValue(wine);
+    otherProducerSpellings.mockResolvedValueOnce([]).mockResolvedValueOnce(OTHERS);
+
+    const res = await post(`/${P1}/approve`);
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('producer_spelling_split');
+    expect(reverted()).toBe(true);
+    expect(findOrCreateRegion).not.toHaveBeenCalled();
+    expect(wine.save).not.toHaveBeenCalled();
+    // The authoritative re-check fails loudly rather than reading a failed lookup as "no split".
+    expect(otherProducerSpellings.mock.calls[1][2]).toEqual({ excludeWineId: W1, strict: true });
+  });
+
+  test('a country-only correction that moves the wine beside another spelling asks too', async () => {
+    const fields = { country: 'Germany' };
+    pendingRow(proposal(fields));
+    WineDefinition.findById.mockResolvedValue({ _id: W1, name: 'Riesling', producer: 'Philipp Kuhn', country: 'c-at', save: jest.fn() });
+    Country.findOne.mockResolvedValueOnce({ _id: 'c-de' });
+    otherProducerSpellings.mockResolvedValue([{ spelling: 'Weingut Philipp Kuhn', count: 11 }]);
+
+    const res = await post(`/${P1}/approve`);
+    expect(res.status).toBe(409);
+    expect(otherProducerSpellings).toHaveBeenCalledWith('Philipp Kuhn', 'c-de', { excludeWineId: W1 });
   });
 
   test('"existing" stores the registry\'s spelling instead of the proposed one', async () => {
@@ -674,16 +714,18 @@ describe('producer spelling splits', () => {
     expect(reverted()).toBe(true);
   });
 
-  test('"renameAll": the proposal applies, then the rest of the producer follows its spelling', async () => {
+  test('a rename folds only the spellings the admin names, then renames those wines — profiles kept current', async () => {
     claim(proposal());
     const wine = wineDoc();
     WineDefinition.findById.mockResolvedValue(wine);
-    otherProducerSpellings.mockResolvedValue(OTHERS);
-    const sibling = { _id: W2, name: 'Chevalier', producer: 'Chateau Lagrezette', save: jest.fn().mockResolvedValue(undefined) };
+    otherProducerSpellings.mockResolvedValue([...OTHERS, { spelling: 'Domaine de Lagrezette', count: 2 }]);
+    const sibling = { _id: W2, name: 'Chevalier', producer: 'Chateau Lagrezette', appellation: 'Cahors', country: 'c1', grapes: [], save: jest.fn().mockResolvedValue(undefined) };
+    sibling.aiProfile = { inputsSnapshot: profileInputsSnapshot(sibling) };
     planProducerRename.mockResolvedValue({ wines: [{ doc: sibling, from: 'Chateau Lagrezette', newKey: 'chateau lagrezette:chevalier:cahors' }], clashes: [], tooMany: 0 });
 
-    const res = await post(`/${P1}/approve`, { producerSpelling: 'renameAll' });
+    const res = await post(`/${P1}/approve`, { producerSpelling: 'renameAll', renameSpellings: ['Chateau Lagrezette'] });
     expect(res.status).toBe(200);
+    // Only the named spelling — never the whole bucket (another estate can share it).
     expect(planProducerRename).toHaveBeenCalledWith(['Chateau Lagrezette'], 'Château Lagrézette', 'c1', {
       excludeWineId: W1,
       reservedKeys: [generateWineKey('Le Pigeonnier', 'Château Lagrézette', 'Cahors')],
@@ -692,13 +734,32 @@ describe('producer spelling splits', () => {
     expect(sibling.producer).toBe('Château Lagrézette');
     expect(sibling.normalizedKey).toBe('chateau lagrezette:chevalier:cahors');
     expect(sibling.save).toHaveBeenCalled();
+    // A spelling is not a new identity: the profile still describes the record.
+    expect(sibling.aiProfile.inputsSnapshot).toBe(profileInputsSnapshot(sibling));
+    expect(sibling.aiProfile.inputsSnapshot).toMatch(/Château Lagrézette/);
     expect(searchService.indexWine).toHaveBeenCalledWith(W2);
     expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'admin.wine.producer_consolidate', { type: 'wine', id: W2 },
       expect.objectContaining({ from: 'Chateau Lagrezette', to: 'Château Lagrézette', via: 'wine-proposal' }));
     expect((await res.json()).appliedNote).toMatch(/1 other wine renamed to "Château Lagrézette"/);
   });
 
-  test('"renameAll" that would make two wines one is refused whole — merge first', async () => {
+  test('a rename has to name its spellings — and only listed ones', async () => {
+    let res = await post(`/${P1}/approve`, { producerSpelling: 'renameAll' });
+    expect(res.status).toBe(400);
+    expect(WineCorrectionProposal.findOneAndUpdate).not.toHaveBeenCalled();
+
+    claim(proposal());
+    const wine = wineDoc();
+    WineDefinition.findById.mockResolvedValue(wine);
+    otherProducerSpellings.mockResolvedValue(OTHERS);
+    res = await post(`/${P1}/approve`, { producerSpelling: 'renameAll', renameSpellings: ['Domaine de Bellevue'] });
+    expect(res.status).toBe(400);
+    expect(planProducerRename).not.toHaveBeenCalled();
+    expect(wine.save).not.toHaveBeenCalled();
+    expect(reverted()).toBe(true);
+  });
+
+  test('a rename that would make two wines one is refused whole — merge first', async () => {
     claim(proposal());
     const wine = wineDoc();
     WineDefinition.findById.mockResolvedValue(wine);
@@ -706,7 +767,7 @@ describe('producer spelling splits', () => {
     const sibling = { _id: W2, name: 'Le Pigeonnier', producer: 'Chateau Lagrezette', save: jest.fn() };
     planProducerRename.mockResolvedValue({ wines: [{ doc: sibling, from: 'Chateau Lagrezette', newKey: 'k' }], clashes: [{ wineId: W2, name: 'Le Pigeonnier', from: 'Chateau Lagrezette' }], tooMany: 0 });
 
-    const res = await post(`/${P1}/approve`, { producerSpelling: 'renameAll' });
+    const res = await post(`/${P1}/approve`, { producerSpelling: 'renameAll', renameSpellings: ['Chateau Lagrezette'] });
     expect(res.status).toBe(409);
     expect((await res.json()).code).toBe('producer_rename_clash');
     expect(wine.save).not.toHaveBeenCalled();
@@ -728,7 +789,8 @@ describe('producer spelling splits', () => {
   });
 
   test('a producer that does not change spelling is not asked about', async () => {
-    claim({ ...proposal(), proposedFields: { producer: ' Lagrezette  SA ', appellation: 'Cahors' } });
+    pendingRow(proposal({ producer: ' Lagrezette  SA ', appellation: 'Cahors' }));
+    claim(proposal({ producer: ' Lagrezette  SA ', appellation: 'Cahors' }));
     WineDefinition.findById.mockResolvedValue(wineDoc());
     expect((await post(`/${P1}/approve`)).status).toBe(200);
     expect(otherProducerSpellings).not.toHaveBeenCalled();
@@ -740,8 +802,8 @@ describe('producer spelling splits', () => {
     expect(WineCorrectionProposal.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
-  test('bulk: a split row stays pending and its result carries the spellings for the modal', async () => {
-    claim(proposal());
+  test('bulk: a split row stays pending, unclaimed, and its result carries the spellings for the modal', async () => {
+    pendingRow(proposal());
     WineDefinition.findById.mockResolvedValue(wineDoc());
     otherProducerSpellings.mockResolvedValue(OTHERS);
 
@@ -750,6 +812,7 @@ describe('producer spelling splits', () => {
     const data = await res.json();
     expect(data.approved).toBe(0);
     expect(data.results[0]).toMatchObject({ ok: false, status: 409, code: 'producer_spelling_split', proposed: 'Château Lagrézette', spellings: OTHERS });
+    expect(WineCorrectionProposal.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
   test('list: a pending producer change shows the registry spellings on its diff row', async () => {

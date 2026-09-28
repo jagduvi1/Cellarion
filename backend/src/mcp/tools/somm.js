@@ -27,7 +27,7 @@ const { bumpWineOwners } = require('../../services/dataVersion');
 const { SUPPORTED_CURRENCIES } = require('../../config/currencies');
 const { isValidId } = require('../../utils/validation');
 const { stripHtml } = require('../../utils/sanitize');
-const { normalizeString, sanitizeTaxonomyName } = require('../../utils/normalize');
+const { normalizeString, sanitizeTaxonomyName, resolveCountryName } = require('../../utils/normalize');
 const { otherProducerSpellings, displaySpelling } = require('../../services/producerSpelling');
 const { classifyProposal } = require('../../services/proposalDirectApply');
 const { WINE_COLOURS, colourTypeConflict } = require('../../utils/wineColour');
@@ -2352,10 +2352,21 @@ registerTool({
     // re-file with the registry's spelling; otherwise the admin has to pick
     // one at approval (routes/admin/wineProposals, 2026-09-28: curator
     // corrections split 9 producers in one week this way).
+    // Judged where the wine will BE: a proposed country moves it into that
+    // country's spellings (the same bucket the approve checks).
     let registrySpellings = [];
-    if (!applied && args.kind === 'field_correction' && proposedFields?.producer
-      && displaySpelling(proposedFields.producer) !== displaySpelling(wine.producer)) {
-      registrySpellings = await otherProducerSpellings(proposedFields.producer, wine.country?._id || wine.country, { excludeWineId: wine._id });
+    if (!applied && args.kind === 'field_correction' && (proposedFields?.producer || proposedFields?.country)) {
+      const producer = proposedFields.producer ? proposedFields.producer.trim() : wine.producer;
+      const currentCountry = wine.country?._id || wine.country;
+      let country = currentCountry;
+      if (proposedFields.country) {
+        const Country = require('../../models/Country');
+        const doc = await Country.findOne({ normalizedName: normalizeString(resolveCountryName(proposedFields.country)) });
+        if (doc) country = doc._id;
+      }
+      if (displaySpelling(producer) !== displaySpelling(wine.producer) || String(country) !== String(currentCountry)) {
+        registrySpellings = await otherProducerSpellings(producer, country, { excludeWineId: wine._id });
+      }
     }
 
     const kindLabel = args.kind === 'merge'

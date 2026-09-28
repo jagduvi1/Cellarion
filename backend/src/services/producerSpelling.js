@@ -184,11 +184,14 @@ function bucketMatch(seg, countryId, excludeWineId) {
  * @param {object} [opts]
  * @param {*} [opts.excludeWineId] the wine being corrected — its own current
  *   spelling is about to change, so it is not "another" one
+ * @param {boolean} [opts.strict] rethrow a lookup failure instead of
+ *   answering [] — for the approve itself, where "no other spelling" would
+ *   silently apply a split the admin never saw
  * @returns {Promise<Array<{spelling: string, count: number}>>} most wines
- *   first; [] when there are none, for a sentinel producer, or on any lookup
- *   failure (this only informs a decision — it must never block one)
+ *   first; [] when there are none, for a sentinel producer, or (not strict)
+ *   on a lookup failure — informing a list or a reply must never block it
  */
-async function otherProducerSpellings(spelling, countryId, { excludeWineId = null } = {}) {
+async function otherProducerSpellings(spelling, countryId, { excludeWineId = null, strict = false } = {}) {
   const display = displaySpelling(spelling);
   if (!display || !countryId || isIdentitySentinel(display)) return [];
   const seg = producerSegment(display);
@@ -208,6 +211,7 @@ async function otherProducerSpellings(spelling, countryId, { excludeWineId = nul
       .map(([s, count]) => ({ spelling: s, count }))
       .sort((a, b) => (b.count - a.count) || a.spelling.localeCompare(b.spelling));
   } catch (err) {
+    if (strict) throw err;
     console.warn('[producerSpelling] other-spellings lookup failed (non-fatal):', err.message);
     return [];
   }

@@ -102,15 +102,26 @@ async function countryAfter(pf, wine) {
 }
 
 // The admin's answer to a producer-spelling split (see approveProposal).
-// Absent = no answer yet; anything else malformed is a 400.
+// Absent = no answer yet; anything else malformed is a 400. A rename names
+// the spelling(s) to fold: the bucket over-folds (Domaine de Bellevue and
+// Château Bellevue share one), so "all of them" could re-attribute another
+// estate's wines (review 2026-09-28).
 function parseSpellingChoice(body) {
   const kind = body?.producerSpelling;
   if (kind === undefined || kind === null) return { choice: null };
-  if (kind === 'proposed' || kind === 'renameAll') return { choice: { kind } };
+  if (kind === 'proposed') return { choice: { kind } };
   if (kind === 'existing') {
     const spelling = typeof body.existingSpelling === 'string' ? displaySpelling(body.existingSpelling) : '';
     if (!spelling) return { error: 'existingSpelling is required with producerSpelling "existing"' };
     return { choice: { kind, spelling } };
+  }
+  if (kind === 'renameAll') {
+    const raw = body.renameSpellings;
+    const spellings = Array.isArray(raw) && raw.length <= 20 && raw.every((s) => typeof s === 'string')
+      ? [...new Set(raw.map(displaySpelling).filter(Boolean))]
+      : [];
+    if (!spellings.length) return { error: 'renameSpellings (the spellings to rename, 1–20) is required with producerSpelling "renameAll"' };
+    return { choice: { kind, spellings } };
   }
   return { error: 'producerSpelling must be "existing", "renameAll" or "proposed"' };
 }
@@ -118,6 +129,34 @@ function parseSpellingChoice(body) {
 const spellingList = (others) => others
   .map((o) => `"${o.spelling}" (${o.count} wine${o.count === 1 ? '' : 's'})`)
   .join(', ');
+
+const idString = (v) => String(v && v._id ? v._id : (v || ''));
+
+const splitBody = (proposed, spellings) => ({
+  error: `The registry already spells this producer ${spellingList(spellings)} — choose which spelling to keep before approving: the registry's, "${proposed}" for the spellings you name, or both if they are different producers`,
+  code: 'producer_spelling_split',
+  proposed,
+  spellings,
+});
+
+// A read-only first look at a pending producer change, BEFORE the claim (review
+// 2026-09-28). A split with no pick is the routine first answer for these rows
+// — every bulk batch gives one — so it must not cost a claim and a revert: the
+// revert can collide with a proposal re-filed in that window and strand this
+// one approved-but-unapplied. The check after the claim stays authoritative.
+async function splitBeforeClaim(proposalId) {
+  const pre = await WineCorrectionProposal.findOne({ _id: proposalId, status: 'pending' }).lean();
+  const pf = pre && pre.kind === 'field_correction' ? (pre.proposedFields || {}) : null;
+  if (!pf || !(pf.producer || pf.country)) return null;
+  const wine = await WineDefinition.findById(pre.wineDefinition);
+  if (!wine) return null;
+  const producer = pf.producer ? pf.producer.trim() : wine.producer;
+  const country = await countryAfter(pf, wine);
+  const moved = displaySpelling(producer) !== displaySpelling(wine.producer) || idString(country) !== idString(wine.country);
+  if (!moved) return null;
+  const spellings = await otherProducerSpellings(producer, country, { excludeWineId: wine._id });
+  return spellings.length ? { proposed: producer, spellings } : null;
+}
 
 // GET /api/admin/wine-proposals — list, pending first, newest first within status
 router.get('/', async (req, res) => {
@@ -292,6 +331,11 @@ router.post('/:id/approve', async (req, res) => {
  * thrown (after the claim revert) for the caller to map to its own 500.
  */
 async function approveProposal(proposalId, req, { deferFollowThrough = false, producerSpelling = null } = {}) {
+    if (!producerSpelling) {
+      const split = await splitBeforeClaim(proposalId);
+      if (split) return { status: 409, body: splitBody(split.proposed, split.spellings) };
+    }
+
     // Atomically CLAIM the pending row so only the first of two concurrent
     // decisions wins (the aiBudgetRequests check-then-act fix): a null result
     // means already-decided (409) or never-existed (404).
@@ -339,6 +383,7 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
         // semantics as the admin PUT.
         const beforeProfileInputs = profileInputsSnapshot(wine);
         const producerBefore = wine.producer;
+        const countryBefore = wine.country;
         const pf = proposal.proposedFields || {};
         const applied = [];
 
@@ -371,15 +416,9 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
           wine.country = countryDoc._id;
           applied.push('country');
         }
-        if (pf.region) {
-          // findOrCreateRegion carries the mint gates (comma hierarchies and
-          // country-name regions → null, new mints flagged pendingReview).
-          // A gated null is the helper's honest "no region" and is applied as
-          // such rather than failing the whole approve.
-          const regionDoc = await findOrCreateRegion(pf.region, countryDoc?._id || wine.country, req.user.id);
-          wine.region = regionDoc?._id || null;
-          applied.push(regionDoc ? 'region' : 'region (cleared — name failed the mint gates)');
-        }
+        // (The region is resolved last, after every check that can refuse:
+        // findOrCreateRegion may MINT one, and a refused approve must leave
+        // nothing behind.)
 
         // Type is re-validated here even though the MCP tool already refused a
         // bad one: this route is the only guarantee, and a proposal filed
@@ -435,26 +474,30 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
         // Producer SPELLING (2026-09-28). The mint-time resolver
         // (services/producerSpelling) never sees a producer changed on an
         // existing wine, and approving one that way split 9 producers in a
-        // single week ("Château Lagrézette" beside "Chateau Lagrezette").
-        // When the new producer is spelled unlike the rest of its producer
-        // (same key, same country), the admin picks: the registry's spelling,
-        // rename them all to the proposed one, or keep both — the bucket
-        // deliberately over-folds, so two real estates can share it. No pick
-        // yet (a stale page, a bulk batch) = 409 with the spellings.
+        // single week ("Château Lagrézette" beside "Chateau Lagrezette"). A
+        // new producer — or the same one moved to another country — spelled
+        // unlike the rest of its producer there (same key, same country)
+        // needs the admin's pick: the registry's spelling, rename the
+        // spellings they name to this one, or keep both (the bucket
+        // deliberately over-folds, so two real estates can share it). No pick
+        // (a stale page, a bulk batch) = 409 with the spellings. splitBeforeClaim
+        // answers the usual case before the claim; this is the authoritative
+        // re-check. Strict: a failed lookup must not read as "no split".
         let renamePlan = null;
-        if (pf.producer && displaySpelling(wine.producer) !== displaySpelling(producerBefore)) {
-          const others = await otherProducerSpellings(wine.producer, wine.country, { excludeWineId: wine._id });
+        const producerChanged = pf.producer && displaySpelling(wine.producer) !== displaySpelling(producerBefore);
+        const countryChanged = Boolean(countryDoc) && idString(countryDoc._id) !== idString(countryBefore);
+        if (producerChanged || countryChanged) {
+          const others = await otherProducerSpellings(wine.producer, wine.country, { excludeWineId: wine._id, strict: true });
           if (others.length) {
             const proposed = wine.producer;
-            const noteAt = applied.indexOf('producer');
+            // A country-only proposal has no 'producer' entry to annotate.
+            const note = (text) => {
+              const at = applied.indexOf('producer');
+              if (at === -1) applied.push(text); else applied[at] = text;
+            };
             if (!producerSpelling) {
               await revertClaim();
-              return { status: 409, body: {
-                error: `The registry already spells this producer ${spellingList(others)} — choose which spelling to keep before approving: the registry's, "${proposed}" for all of them, or both if they are different producers`,
-                code: 'producer_spelling_split',
-                proposed,
-                spellings: others,
-              } };
+              return { status: 409, body: splitBody(proposed, others) };
             }
             if (producerSpelling.kind === 'existing') {
               if (!others.some((o) => o.spelling === producerSpelling.spelling)) {
@@ -462,35 +505,51 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
                 return { status: 400, body: { error: `"${producerSpelling.spelling}" is not one of this producer's registry spellings (${spellingList(others)})` } };
               }
               wine.producer = producerSpelling.spelling;
-              applied[noteAt] = `producer (the registry's spelling "${producerSpelling.spelling}" rather than "${proposed}")`;
+              note(`producer (the registry's spelling "${producerSpelling.spelling}" rather than "${proposed}")`);
             } else if (producerSpelling.kind === 'renameAll') {
-              renamePlan = await planProducerRename(others.map((o) => o.spelling), proposed, wine.country, {
+              const unknown = producerSpelling.spellings.filter((s) => !others.some((o) => o.spelling === s));
+              if (unknown.length) {
+                await revertClaim();
+                return { status: 400, body: { error: `${unknown.map((s) => `"${s}"`).join(', ')} ${unknown.length === 1 ? 'is' : 'are'} not among this producer's registry spellings (${spellingList(others)})` } };
+              }
+              renamePlan = await planProducerRename(producerSpelling.spellings, proposed, wine.country, {
                 excludeWineId: wine._id,
                 reservedKeys: [generateWineKey(wine.name, proposed, wine.appellation)],
               });
               if (renamePlan.tooMany) {
                 await revertClaim();
                 return { status: 409, body: {
-                  error: `Renaming them all would change ${renamePlan.tooMany} wines — more than an approval should; use scripts/consolidate-producer-displays.js`,
+                  error: `Renaming them would change ${renamePlan.tooMany} wines — more than an approval should; use scripts/consolidate-producer-displays.js`,
                   code: 'producer_rename_too_large',
                 } };
               }
               if (renamePlan.clashes.length) {
                 await revertClaim();
                 return { status: 409, body: {
-                  error: `Renaming them all would make ${renamePlan.clashes.map((c) => `"${c.name}"`).join(', ')} identical to another registry wine — merge ${renamePlan.clashes.length === 1 ? 'it' : 'them'} first, then approve`,
+                  error: `Renaming them would make ${renamePlan.clashes.map((c) => `"${c.name}"`).join(', ')} identical to another registry wine — merge ${renamePlan.clashes.length === 1 ? 'it' : 'them'} first, then approve`,
                   code: 'producer_rename_clash',
                   clashes: renamePlan.clashes,
                 } };
               }
             } else {
-              applied[noteAt] = `producer (kept apart from ${others.map((o) => `"${o.spelling}"`).join(', ')} — a different producer)`;
+              note(`producer "${proposed}" (kept apart from ${others.map((o) => `"${o.spelling}"`).join(', ')} — a different producer)`);
             }
           }
         }
 
-        // Same rule as the PUT: the dedup key follows name/producer/appellation.
-        if (pf.name || pf.producer || pf.appellation) {
+        if (pf.region) {
+          // findOrCreateRegion carries the mint gates (comma hierarchies and
+          // country-name regions → null, new mints flagged pendingReview).
+          // A gated null is the helper's honest "no region" and is applied as
+          // such rather than failing the whole approve.
+          const regionDoc = await findOrCreateRegion(pf.region, countryDoc?._id || wine.country, req.user.id);
+          wine.region = regionDoc?._id || null;
+          applied.push(regionDoc ? 'region' : 'region (cleared — name failed the mint gates)');
+        }
+
+        // Same rule as the PUT: the dedup key follows name/producer/appellation
+        // (the producer can also change through a spelling pick above).
+        if (pf.name || pf.producer || pf.appellation || wine.producer !== producerBefore) {
           wine.normalizedKey = generateWineKey(wine.name, wine.producer, wine.appellation);
         }
 
@@ -501,6 +560,9 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
             await revertClaim();
             return { status: 409, body: {
               error: 'Applying this correction would make the wine identical to an existing registry wine — use a merge proposal instead',
+              // Coded, so the review modal keeps the row and shows this
+              // instead of reloading it away as "decided elsewhere".
+              code: 'identical_wine',
             } };
           }
           throw err;
@@ -523,20 +585,25 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
           reenrichAfterRecordEdit(wine, profileInputsChanged);
         }
 
-        // "Rename them all": the rest of the producer follows, through the
-        // consolidate-producer-displays write path (doc.save hooks, the
-        // pre-checked key, its audit action). The approval itself is already
-        // recorded — a row that fails here (a key taken since the plan) is
-        // named in the note for a manual fix, never a reason to undo it. A
-        // spelling change is not a new wine, so no re-enrich — just the
-        // index, the public URL and the embedding text.
+        // "Rename": the wines under the spellings the admin named follow,
+        // through the consolidate-producer-displays write path (doc.save
+        // hooks, the pre-checked key, its audit action). The approval itself
+        // is already recorded — a row that fails here (a key taken since the
+        // plan) is named in the note for a manual fix, never a reason to undo
+        // it. A spelling change is not a new wine, so no re-enrich — just the
+        // index, the public URL and the embedding text — and a profile that
+        // described the record still does: its input snapshot follows the
+        // spelling, or the next enrichment sweep would regenerate it as stale.
         let renamedNote = '';
         if (renamePlan && renamePlan.wines.length) {
           let renamed = 0;
           const failed = [];
           for (const { doc, from, newKey } of renamePlan.wines) {
+            const snapshotWasCurrent = Boolean(doc.aiProfile?.inputsSnapshot)
+              && doc.aiProfile.inputsSnapshot === profileInputsSnapshot(doc);
             doc.producer = wine.producer;
             doc.normalizedKey = newKey;
+            if (snapshotWasCurrent) doc.aiProfile.inputsSnapshot = profileInputsSnapshot(doc);
             try {
               await doc.save();
               renamed += 1;

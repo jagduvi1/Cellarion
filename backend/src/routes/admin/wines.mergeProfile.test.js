@@ -82,6 +82,33 @@ describe('inheritAiProfile', () => {
     });
   });
 
+  test('the tasting text travels, the donor\'s verdicts about ITS producer do not', async () => {
+    // In a merge the donor is usually the record with the wrong identity
+    // ("Fabelhaft" into "Niepoort") — its producer doubts are not the keeper's.
+    const keeper = { _id: 'k', aiProfile: { ...ai('Old AI text', 0.95), producerSuspect: false, producerNote: null } };
+    const donor = {
+      _id: 's', profileReviewedAt: d('2026-09-20'),
+      aiProfile: {
+        description: 'Curated text', source: 'curator', generatedAt: d('2026-08-01'), inputsSnapshot: '{"producer":"Fabelhaft"}',
+        producerSuspect: true, producerNote: 'Fabelhaft is a brand, not a producer', suspectDecision: 'upheld',
+      },
+    };
+    await inheritAiProfile(keeper, [donor]);
+    expect(keeper.aiProfile.description).toBe('Curated text');
+    expect(keeper.aiProfile.producerSuspect).toBe(false);
+    expect(keeper.aiProfile.producerNote).toBeNull();
+    expect(keeper.aiProfile).not.toHaveProperty('suspectDecision');
+    expect(keeper.aiProfile.inputsSnapshot).toBeNull();
+  });
+
+  test('an inherited UNREVIEWED profile does not look reviewed through the keeper\'s old stamp', async () => {
+    const keeper = { _id: 'k', profileReviewedAt: d('2026-09-01') };
+    await inheritAiProfile(keeper, [{ _id: 's', aiProfile: ai('Donor AI', 0.7, '2026-08-01') }]);
+    expect(keeper.aiProfile.description).toBe('Donor AI');
+    expect(keeper.profileReviewedAt).toBeNull();
+    expect(WineDefinition.updateOne).toHaveBeenCalledWith({ _id: 'k' }, { $set: expect.objectContaining({ profileReviewedAt: null }) });
+  });
+
   test('a review stamp newer than the AI profile counts as curated too', async () => {
     const keeper = { _id: 'k', aiProfile: ai('Old AI text', 0.95) };
     const donor = { _id: 's', aiProfile: ai('Reviewed AI text', 0.5, '2026-08-01'), profileReviewedAt: d('2026-08-02') };
