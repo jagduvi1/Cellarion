@@ -201,3 +201,68 @@ describe('deleted cellars are not the cellar', () => {
     expect(sent()).toMatch(/no active bottles in their cellar/);
   });
 });
+
+/**
+ * Issue #1421: a cellar shared with an editor was reported as EMPTY by Cellar
+ * Chat, although the editor could see, place, add and remove every bottle.
+ * The live-cellar list already included shared cellars (members.user), but
+ * every bottle query ALSO required `user: <asker>` — and in a shared cellar the
+ * owner added the bottles. The cellar list is the scope; the bottle's owner is
+ * not.
+ */
+describe('shared cellars', () => {
+  const SHARED_CELLAR = new mongoose.Types.ObjectId();
+  const EDITOR = 'b'.repeat(24);
+
+  test('an editor of a shared cellar gets the owner\'s bottles', async () => {
+    withLiveCellars([SHARED_CELLAR]);
+    const sent = wireClient();
+    Bottle.distinct.mockResolvedValue([String(WD)]);
+    Bottle.countDocuments.mockResolvedValue(12);
+    vectorStore.search.mockResolvedValue([
+      { score: 0.9, wineDefinitionId: String(WD), vintage: '2015' },
+    ]);
+    Bottle.find.mockReturnValue(chain([{
+      _id: new mongoose.Types.ObjectId(), vintage: '2015', user: 'c'.repeat(24), // added by the owner
+      wineDefinition: { _id: WD, name: 'Chablis', producer: 'P', type: 'white', grapes: [], region: null, country: null },
+    }]));
+
+    await chat(EDITOR, 'what pairs with grilled salmon?', { useQueryExpansion: false });
+
+    // Shared cellars are resolved through membership.
+    expect(Cellar.find).toHaveBeenCalledWith(expect.objectContaining({
+      $or: expect.arrayContaining([{ 'members.user': EDITOR }]),
+    }));
+    const content = sent();
+    expect(content).toMatch(/holds 12 active bottle\(s\)/);
+    expect(content).toMatch(/Chablis/);
+    expect(content).not.toMatch(/no active bottles/);
+  });
+
+  test('no bottle query filters on the bottle owner', async () => {
+    withLiveCellars([SHARED_CELLAR]);
+    wireClient();
+    Bottle.distinct.mockResolvedValue([String(WD)]);
+    Bottle.countDocuments.mockResolvedValue(12);
+    vectorStore.search.mockResolvedValue([
+      { score: 0.9, wineDefinitionId: String(WD), vintage: '2015' },
+    ]);
+    Bottle.find.mockReturnValue(chain([{
+      _id: new mongoose.Types.ObjectId(), vintage: '2015',
+      wineDefinition: { _id: WD, name: 'Chablis', producer: 'P', type: 'white', grapes: [], region: null, country: null },
+    }]));
+
+    await chat(EDITOR, 'something white?', { useQueryExpansion: false });
+
+    const filters = [
+      Bottle.distinct.mock.calls[0][1],
+      Bottle.countDocuments.mock.calls[0][0],
+      Bottle.find.mock.calls[0][0],
+      Bottle.aggregate.mock.calls[0][0][0].$match,
+    ];
+    for (const f of filters) {
+      expect(f).not.toHaveProperty('user');
+      expect(f.cellar.$in.map(String)).toEqual([String(SHARED_CELLAR)]);
+    }
+  });
+});
