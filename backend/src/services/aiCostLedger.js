@@ -19,12 +19,13 @@ const mongoose = require('mongoose');
 const AiCostStat = require('../models/AiCostStat');
 
 // Anthropic list prices, USD per million tokens — platform.claude.com pricing,
-// checked 2026-09-25 (Sonnet 5 kept its $2/$10 launch price; the increase
-// scheduled for 2026-09-01 was cancelled). One entry per model aiConfig can
-// select (VALID_CHAT_MODELS). A model missing here (a self-hosted
-// AI_PROVIDER=openai install) is recorded but not priced.
-const PRICES_CHECKED_AT = '2026-09-25';
+// checked 2026-09-29 (Sonnet 5.5, released 2026-09-28, has Sonnet 5's prices,
+// caching included; Sonnet 5 kept its $2/$10 launch price). One entry per
+// model aiConfig can select (VALID_CHAT_MODELS). A model missing here (a
+// self-hosted AI_PROVIDER=openai install) is recorded but not priced.
+const PRICES_CHECKED_AT = '2026-09-29';
 const PRICES_PER_MTOK = {
+  'claude-sonnet-5-5':         { input: 2, output: 10 },
   'claude-sonnet-5':           { input: 2, output: 10 },
   'claude-haiku-4-5-20251001': { input: 1, output: 5 },
   'claude-sonnet-4-6':         { input: 3, output: 15 },

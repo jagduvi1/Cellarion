@@ -25,8 +25,15 @@ describe('textFromResponse', () => {
 });
 
 describe('thinkingOff', () => {
-  it('disables thinking for the Sonnet 5 family', () => {
+  it('disables thinking on Sonnet 5', () => {
     expect(thinkingOff('claude-sonnet-5')).toEqual({ thinking: { type: 'disabled' } });
+  });
+
+  // Sonnet 5.5 (2026-09-28) rejects `disabled` with a 400; its lowest thinking
+  // setting is `between_tools`, which without tools means text only.
+  it('turns thinking off on Sonnet 5.5 with between_tools, the setting that model accepts', () => {
+    expect(thinkingOff('claude-sonnet-5-5')).toEqual({ thinking: { type: 'between_tools' } });
+    expect(thinkingOff('claude-sonnet-5-5')).not.toEqual({ thinking: { type: 'disabled' } });
   });
 
   it('sends nothing for models that do not think by default', () => {

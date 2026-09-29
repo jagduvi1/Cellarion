@@ -73,6 +73,12 @@ describe('estimateUsd', () => {
     expect(usd).toBeCloseTo(7.2, 6);
   });
 
+  test('Sonnet 5.5 is priced exactly like Sonnet 5 (same list price, same cache rates)', () => {
+    const row = { inputTokens: 1_000_000, outputTokens: 100_000, cacheReadTokens: 1_000_000, cacheWrite5mTokens: 0, cacheWrite1hTokens: 1_000_000, webSearches: 0 };
+    expect(ledger.estimateUsd({ ...row, model: 'claude-sonnet-5-5' })).toBeCloseTo(7.2, 6);
+    expect(ledger.estimateUsd({ ...row, model: 'claude-sonnet-5-5' })).toBe(ledger.estimateUsd({ ...row, model: 'claude-sonnet-5' }));
+  });
+
   test('web searches cost $10 per thousand on top of tokens', () => {
     expect(ledger.estimateUsd({ model: 'claude-haiku-4-5-20251001', webSearches: 3 })).toBeCloseTo(0.03, 6);
   });

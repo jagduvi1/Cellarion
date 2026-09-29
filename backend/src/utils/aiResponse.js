@@ -9,10 +9,20 @@
  * thinkingOff — Claude Sonnet 5 runs adaptive thinking BY DEFAULT when the
  * `thinking` parameter is omitted; thinking tokens are billed and count
  * against max_tokens (this truncated 17% of maturity suggestions in prod).
- * Our extraction and chat tasks don't need extended reasoning, so disable it
- * explicitly on the Sonnet 5 family. The other allowlisted models (Haiku 4.5,
- * Sonnet 4.6, Opus 4.x) don't think when the parameter is omitted — send
- * nothing for them rather than risk an explicit value they might reject.
+ * Our extraction and chat tasks don't need extended reasoning, so turn it off
+ * explicitly on the Sonnet 5 family — with the setting each model accepts:
+ *   - Sonnet 5:   `thinking: { type: 'disabled' }`.
+ *   - Sonnet 5.5: `thinking: { type: 'between_tools' }` — its lowest setting;
+ *     `disabled` is a 400 there (platform.claude.com, "What's new in Claude
+ *     Sonnet 5.5", 2026-09-28). Without tools the reply is text only, exactly
+ *     as `disabled` was; with a server tool (the enrichment web search) the
+ *     model's notes between calls come back as thinking blocks, which
+ *     textFromResponse already skips.
+ * The other allowlisted models (Haiku 4.5, Sonnet 4.6, Opus 4.x) don't think
+ * when the parameter is omitted — send nothing for them rather than risk an
+ * explicit value they might reject. (Opus 5.5 is not allowlisted: its thinking
+ * cannot be turned off and shares max_tokens with the answer, so our 600–800
+ * token limits would truncate; it needs an effort setting and bigger limits.)
  */
 function textFromResponse(response) {
   return (response?.content || [])
@@ -23,9 +33,11 @@ function textFromResponse(response) {
 }
 
 function thinkingOff(model) {
-  return typeof model === 'string' && model.startsWith('claude-sonnet-5')
-    ? { thinking: { type: 'disabled' } }
-    : {};
+  if (typeof model !== 'string') return {};
+  // 5.5 first: 'claude-sonnet-5-5' also starts with 'claude-sonnet-5'.
+  if (model.startsWith('claude-sonnet-5-5')) return { thinking: { type: 'between_tools' } };
+  if (model.startsWith('claude-sonnet-5')) return { thinking: { type: 'disabled' } };
+  return {};
 }
 
 module.exports = { textFromResponse, thinkingOff };

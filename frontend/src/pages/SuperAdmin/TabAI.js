@@ -29,7 +29,17 @@ const CHAT_MODELS = [
     name: 'Claude Sonnet 5',
     // The $2/$10 launch price became the standard price; the increase that was
     // scheduled for 2026-09-01 was cancelled (platform.claude.com pricing, 2026-09-25).
-    description: 'Near-Opus quality — recommended for wine identification & profiles',
+    description: 'Previous Sonnet — same price as 5.5; the model prod ran on until September 2026',
+    inputPrice: '$2.00',
+    outputPrice: '$10.00',
+    tier: 'standard',
+  },
+  {
+    id: 'claude-sonnet-5-5',
+    name: 'Claude Sonnet 5.5',
+    // Released 2026-09-28 at Sonnet 5's prices; June 2026 knowledge cutoff.
+    // The backend turns its thinking off the way it accepts (utils/aiResponse).
+    description: 'Newest Sonnet — same price, newer knowledge; recommended for wine identification & profiles',
     inputPrice: '$2.00',
     outputPrice: '$10.00',
     tier: 'standard',

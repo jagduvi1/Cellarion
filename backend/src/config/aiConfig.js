@@ -319,10 +319,14 @@ Rules:
 
 // Models that are known to work reliably for text chat.
 // Any value stored in DB that isn't in this list falls back to the default.
+// Adding a model: a price row in services/aiCostLedger, an option in
+// SuperAdmin/TabAI, and — for a model that thinks by default — the setting
+// utils/aiResponse.thinkingOff sends it.
 const VALID_CHAT_MODELS = [
   'claude-haiku-4-5-20251001',
   'claude-sonnet-4-6',
   'claude-sonnet-5',
+  'claude-sonnet-5-5',
   'claude-opus-4-6',
   'claude-opus-4-8',
 ];
