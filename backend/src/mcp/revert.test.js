@@ -24,6 +24,7 @@ jest.mock('./actionLedger', () => ({ logAction: jest.fn() }));
 jest.mock('./structuralUndo', () => ({ undoStructural: jest.fn() }));
 jest.mock('../models/WineVintageProfile', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineVintagePrice', () => ({ deleteOne: jest.fn() }));
+jest.mock('../models/WineCorrectionProposal', () => ({ findById: jest.fn(), deleteOne: jest.fn() }));
 jest.mock('../services/journalOps', () => ({ deleteEntry: jest.fn() }));
 jest.mock('../services/registryGc', () => ({ gcOrphanMintedWine: jest.fn().mockResolvedValue({ removed: false }) }));
 jest.mock('../models/BottleImage', () => ({ findOne: jest.fn(), deleteOne: jest.fn() }));
@@ -249,6 +250,26 @@ describe('revertLedgerRow dispatch', () => {
     expect(McpActionLog.findOneAndUpdate).toHaveBeenCalledWith({ _id: 'r', reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
     expect(logAction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ viaUndo: true, action: 'somm_maturity' }));
     expect(res.ok).toBe(true);
+  });
+
+  test('somm_proposal: a proposal closed by a merge or a delete is not "decided by an admin" — refused with the reason, no claim, no delete', async () => {
+    const WineCorrectionProposal = require('../models/WineCorrectionProposal');
+    WineCorrectionProposal.findById.mockReturnValue({ select: jest.fn().mockResolvedValue({ _id: 'p1', status: 'closed', kind: 'field' }) });
+    const res = await revertLedgerRow({ _id: 'r', action: 'somm_proposal', detail: { proposalId: 'p1' } }, ctx({ user: { id: 'u1', roles: ['somm'] } }), H);
+    expect(res).toMatchObject({ ok: false, code: 'conflict' });
+    expect(res.message).toMatch(/merged or deleted/);
+    expect(res.message).not.toMatch(/by an admin/);
+    expect(McpActionLog.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(WineCorrectionProposal.deleteOne).not.toHaveBeenCalled();
+  });
+
+  test('somm_proposal: a proposal an admin decided says so', async () => {
+    const WineCorrectionProposal = require('../models/WineCorrectionProposal');
+    WineCorrectionProposal.findById.mockReturnValue({ select: jest.fn().mockResolvedValue({ _id: 'p1', status: 'rejected', kind: 'field' }) });
+    const res = await revertLedgerRow({ _id: 'r', action: 'somm_proposal', detail: { proposalId: 'p1' } }, ctx({ user: { id: 'u1', roles: ['somm'] } }), H);
+    expect(res).toMatchObject({ ok: false, code: 'conflict' });
+    expect(res.message).toMatch(/already been rejected by an admin/);
+    expect(McpActionLog.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
   test('somm_price deletes the caller\'s price snapshot', async () => {

@@ -543,7 +543,12 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     const proposal = await WineCorrectionProposal.findById(row.detail?.proposalId).select('status kind');
     if (!proposal) return fail('conflict', 'That proposal no longer exists; nothing was changed.');
     if (proposal.status !== 'pending') {
-      return fail('conflict', `That proposal has already been ${proposal.status} by an admin — the decision stands; nothing was undone.`);
+      // 'closed' is not a decision: the wine was merged or deleted under the
+      // proposal, and the surviving record is where a fix belongs.
+      const why = proposal.status === 'closed'
+        ? 'That proposal was closed when its wine was merged or deleted — file again against the surviving record if the fix is still needed'
+        : `That proposal has already been ${proposal.status} by an admin — the decision stands`;
+      return fail('conflict', `${why}; nothing was undone.`);
     }
     // Claim before mutating, like every other branch here.
     const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });

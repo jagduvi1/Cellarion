@@ -26,7 +26,7 @@ test('a dry run counts the clicks whose account has no stamp yet, and writes not
 
   const r = await backfillEmailOptOut();
 
-  expect(r).toEqual({ fromAuditLog: 1, allOff: 0, applied: 0 });
+  expect(r).toEqual({ fromAuditLog: 1, reEnabled: 0, allOff: 0, applied: 0 });
   expect(User.updateOne).not.toHaveBeenCalled();
   // Only accounts without a stamp are candidates.
   expect(User.find.mock.calls[0][0]).toEqual({ _id: { $in: [oid('a'), oid('b')] }, emailOptOutAt: null });
@@ -60,7 +60,7 @@ test('--all-off adds accounts whose every stored flag is off, stamped now, witho
 
   const r = await backfillEmailOptOut({ apply: true, allOff: true, now: () => now });
 
-  expect(r).toEqual({ fromAuditLog: 1, allOff: 1, applied: 2 });
+  expect(r).toEqual({ fromAuditLog: 1, reEnabled: 0, allOff: 1, applied: 2 });
   expect(User.find.mock.calls[1][0]).toEqual(ALL_OFF);
   expect(User.updateOne).toHaveBeenCalledWith(
     { _id: oid('c'), emailOptOutAt: null },
@@ -82,10 +82,28 @@ test('the all-off selector requires every pre-existing outbound flag to be expli
   });
 });
 
+test('a clicker who turned a category\'s email back on since is a withdrawn objection: counted, never stamped', async () => {
+  AuditLog.aggregate.mockResolvedValue([{ _id: oid('a'), clickedAt: T1 }, { _id: oid('b'), clickedAt: T1 }, { _id: oid('c'), clickedAt: T2 }]);
+  User.find.mockReturnValueOnce(lean([
+    // a: drink-window email back on → re-enabled after the click (the click had written it false)
+    { _id: oid('a'), preferences: { notifications: { drinkWindow: { enabled: true, email: true, push: false }, communityReply: { email: false, push: false } } } },
+    // b: only supportReply.email is on — not evidence: it did not exist at the click and defaults on
+    { _id: oid('b'), preferences: { notifications: { drinkWindow: { enabled: true, email: false, push: false }, supportReply: { email: true } } } },
+    // c: no notification block stored at all
+    { _id: oid('c') },
+  ]));
+
+  const r = await backfillEmailOptOut({ apply: true });
+
+  expect(r).toEqual({ fromAuditLog: 2, reEnabled: 1, allOff: 0, applied: 2 });
+  const stamped = User.updateOne.mock.calls.map((c) => c[0]._id);
+  expect(stamped).toEqual([oid('b'), oid('c')]);
+});
+
 test('no clicks: nothing queried further, nothing written', async () => {
   AuditLog.aggregate.mockResolvedValue([]);
   const r = await backfillEmailOptOut({ apply: true });
-  expect(r).toEqual({ fromAuditLog: 0, allOff: 0, applied: 0 });
+  expect(r).toEqual({ fromAuditLog: 0, reEnabled: 0, allOff: 0, applied: 0 });
   expect(User.find).not.toHaveBeenCalled();
   expect(User.updateOne).not.toHaveBeenCalled();
 });

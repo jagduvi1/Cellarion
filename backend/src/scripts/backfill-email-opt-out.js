@@ -19,7 +19,9 @@
  *
  * What: emailOptOutAt = the click's time (audit) or now (--all-off), and
  * supportReply.email = false so the settings page shows it off. Never touches
- * an account that already has emailOptOutAt, and never any other flag.
+ * an account that already has emailOptOutAt, one that turned a category's
+ * email back on after its click (the objection was withdrawn — see
+ * RE_ENABLE_CATEGORIES), and never any other flag.
  *
  *   node src/scripts/backfill-email-opt-out.js                    # dry run: counts only
  *   node src/scripts/backfill-email-opt-out.js --apply            # audit-log clicks
@@ -29,22 +31,42 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
 
+// A click writes the email flag of every one of these categories false
+// (utils/notifications.js). One of them true today therefore proves the user
+// turned email back on AFTER the click: a withdrawn objection, which is also
+// what clears emailOptOutAt (services/accountOps.js) — so "no stamp" alone
+// cannot tell a never-withdrawn click from a withdrawn one. supportReply is
+// not evidence: it did not exist when these clicks happened and defaults on.
+const RE_ENABLE_CATEGORIES = ['drinkWindow', 'communityReply', 'communityMention'];
+
+function hasEmailBackOn(user) {
+  const notif = (user.preferences && user.preferences.notifications) || {};
+  return RE_ENABLE_CATEGORIES.some((c) => notif[c] && notif[c].email === true);
+}
+
 /**
  * Accounts with a recorded unsubscribe-all click and no emailOptOutAt yet,
- * with the time of their FIRST click.
- * @returns {Promise<Array<{ userId: string, clickedAt: Date }>>}
+ * with the time of their FIRST click — minus the accounts that turned email
+ * back on since (counted in `reEnabled`, never stamped).
+ * @returns {Promise<{ clicks: Array<{ userId: string, clickedAt: Date }>, reEnabled: number }>}
  */
 async function unsubscribersFromAuditLog() {
   const rows = await AuditLog.aggregate([
     { $match: { action: 'user.unsubscribe.all', 'resource.id': { $ne: null } } },
     { $group: { _id: '$resource.id', clickedAt: { $min: '$timestamp' } } },
   ]);
-  if (rows.length === 0) return [];
-  const pending = await User.find({ _id: { $in: rows.map((r) => r._id) }, emailOptOutAt: null }, '_id').lean();
-  const pendingIds = new Set(pending.map((u) => String(u._id)));
-  return rows
+  if (rows.length === 0) return { clicks: [], reEnabled: 0 };
+  const candidates = await User.find({ _id: { $in: rows.map((r) => r._id) }, emailOptOutAt: null }, '_id preferences.notifications').lean();
+  const pendingIds = new Set();
+  let reEnabled = 0;
+  for (const u of candidates) {
+    if (hasEmailBackOn(u)) reEnabled++;
+    else pendingIds.add(String(u._id));
+  }
+  const clicks = rows
     .filter((r) => pendingIds.has(String(r._id)))
     .map((r) => ({ userId: String(r._id), clickedAt: r.clickedAt }));
+  return { clicks, reEnabled };
 }
 
 // Every outbound flag the schema defined before support replies. All of them
@@ -72,11 +94,11 @@ const OPT_OUT_UPDATE = (at) => ({
 });
 
 /**
- * @returns {Promise<{ fromAuditLog: number, allOff: number, applied: number }>}
+ * @returns {Promise<{ fromAuditLog: number, reEnabled: number, allOff: number, applied: number }>}
  */
 async function backfillEmailOptOut({ apply = false, allOff = false, now = () => new Date() } = {}) {
-  const clicks = await unsubscribersFromAuditLog();
-  const result = { fromAuditLog: clicks.length, allOff: 0, applied: 0 };
+  const { clicks, reEnabled } = await unsubscribersFromAuditLog();
+  const result = { fromAuditLog: clicks.length, reEnabled, allOff: 0, applied: 0 };
   for (const { userId, clickedAt } of clicks) {
     // `emailOptOutAt: null` in the filter: never overwrite a stamp set since the read.
     if (apply) await User.updateOne({ _id: userId, emailOptOutAt: null }, OPT_OUT_UPDATE(clickedAt));
@@ -103,6 +125,7 @@ async function main() {
 
   const r = await backfillEmailOptOut({ apply, allOff });
   console.log(`Unsubscribe-all clicks in the audit log without emailOptOutAt: ${r.fromAuditLog}`);
+  console.log(`Clickers who turned email back on since, left alone: ${r.reEnabled}`);
   if (allOff) console.log(`Accounts with every stored flag off (not among those): ${r.allOff}`);
   console.log(`${apply ? 'Stamped' : 'Would stamp'}: ${apply ? r.applied : r.fromAuditLog + r.allOff}`);
 
