@@ -35,7 +35,14 @@ function textFromResponse(response) {
 function thinkingOff(model) {
   if (typeof model !== 'string') return {};
   // 5.5 first: 'claude-sonnet-5-5' also starts with 'claude-sonnet-5'.
-  if (model.startsWith('claude-sonnet-5-5')) return { thinking: { type: 'between_tools' } };
+  // Effort medium as well: 5.5's default is high, and the model's launch note
+  // (2026-09-28) puts its "up to 30% lower cost per task than Sonnet 5" at
+  // medium — between_tools is accepted at low, medium and high. The SDK
+  // (0.55.1) predates the parameter and forwards the body as given, exactly
+  // as it does for `thinking`.
+  if (model.startsWith('claude-sonnet-5-5')) {
+    return { thinking: { type: 'between_tools' }, output_config: { effort: 'medium' } };
+  }
   if (model.startsWith('claude-sonnet-5')) return { thinking: { type: 'disabled' } };
   return {};
 }
