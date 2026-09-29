@@ -42,9 +42,11 @@ const CELLAR_ID = '64b0000000000000000000bb';
 const RACK_ID = '64b0000000000000000000aa';
 const BOTTLE_ID = '64b0000000000000000000cc';
 
-function request(method, url) {
+function request(method, url, { apiToken = null } = {}) {
   const app = express();
   app.use(express.json());
+  // Stands in for authenticateApiToken's marker on a token-authenticated request.
+  if (apiToken) app.use((req, _res, next) => { req.apiToken = apiToken; next(); });
   app.use('/api/racks', racksRouter);
   return new Promise((resolve) => {
     const server = http.createServer(app);
@@ -132,6 +134,36 @@ describe('GET /api/racks', () => {
     expect(q.populate).not.toHaveBeenCalled();
     expect(res.body.racks[0]).toMatchObject({ name: 'Left', type: 'grid', zones: [] });
     expect(res.body.racks[0].slots).toEqual([{ position: 1, bottle: BOTTLE_ID }]);
+  });
+
+  // Home Assistant rack cards (community forum, 2026-09-29): a read token may
+  // list racks, in the light form only — an integration may poll.
+  test('an API token gets the summary form', async () => {
+    const q = findResult([rackDoc()]);
+    Rack.find.mockReturnValue(q);
+
+    const res = await request('GET', `/api/racks?cellar=${CELLAR_ID}&summary=1`, { apiToken: { id: 't1', scopes: ['read'] } });
+
+    expect(res.status).toBe(200);
+    expect(q.populate).not.toHaveBeenCalled();
+    expect(res.body.racks[0].slots).toEqual([{ position: 1, bottle: BOTTLE_ID }]);
+  });
+
+  test('an API token asking for the populated form is told to use summary=1, and nothing is loaded', async () => {
+    const res = await request('GET', `/api/racks?cellar=${CELLAR_ID}`, { apiToken: { id: 't1', scopes: ['read'] } });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/summary=1/);
+    expect(Rack.find).not.toHaveBeenCalled();
+  });
+
+  test('a token still needs access to the cellar', async () => {
+    Cellar.findById.mockResolvedValue({ _id: CELLAR_ID, user: '64b0000000000000000000ff', members: [], deletedAt: null });
+
+    const res = await request('GET', `/api/racks?cellar=${CELLAR_ID}&summary=1`, { apiToken: { id: 't1', scopes: ['read'] } });
+
+    expect([403, 404]).toContain(res.status);
+    expect(Rack.find).not.toHaveBeenCalled();
   });
 });
 

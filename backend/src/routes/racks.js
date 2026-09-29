@@ -118,6 +118,13 @@ router.use(idempotency);
 // them now?" offer and the import picker read. No bottles, wines or maturity.
 router.get('/', requireCellarAccess('viewer'), async (req, res) => {
   try {
+    // API tokens (Home Assistant and other integrations) read the summary
+    // form only: an integration may poll, and the populated form loads every
+    // placed bottle with its wine and drink window. The bottle details are one
+    // GET /api/bottles/:id away, and the event stream says when to refetch.
+    if (req.apiToken && req.query.summary !== '1') {
+      return res.status(400).json({ error: 'API tokens read racks in summary form: add summary=1 (slot bottle ids; GET /api/bottles/:id has the details)' });
+    }
     if (req.query.summary === '1') {
       const racks = await Rack.find({ cellar: req.cellar._id, deletedAt: null });
       return res.json({ racks: racks.map((r) => r.toObject()) });

@@ -31,7 +31,8 @@ const utcDay = (d) => d.toISOString().slice(0, 10);
  *
  * Scopes (docs/ha-push-events.md §3; climate: docs/climate-monitoring.md):
  *   read    — the GETs the Home Assistant integration uses: stats, cellars,
- *             bottles, notifications, the SSE event stream, and /auth/whoami
+ *             bottles, notifications, the rack list (summary form only),
+ *             the SSE event stream, and /auth/whoami
  *             (its own account id, for reauth same-account verification — id
  *             only, no PII, unlike /auth/me). Also POST /api/mcp: the Model
  *             Context Protocol endpoint, whose per-tool authorization is
@@ -46,6 +47,11 @@ const SCOPE_ALLOWLIST = {
     { method: 'GET', pattern: /^\/api\/cellars(\/|$)/ },
     { method: 'GET', pattern: /^\/api\/bottles(\/|$)/ },
     { method: 'GET', pattern: /^\/api\/notifications(\/|$)/ },
+    // The rack LIST only — exact-anchored, so no rack sub-route (edits, slot
+    // moves, arrange, the NFC lookup) is reachable. A token gets the light
+    // summary form (layout + slot bottle ids); routes/racks.js refuses the
+    // populated form to tokens, since an integration may poll it.
+    { method: 'GET', pattern: /^\/api\/racks$/ },
     { method: 'GET', pattern: /^\/api\/events\/stream$/ },
     // Exact match only — the caller's own account id (id, no PII). Anchored so
     // it can never widen to /api/auth/me or any other /api/auth/* route.

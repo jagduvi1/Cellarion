@@ -259,7 +259,7 @@ auth; JWT sessions implicitly have all scopes. Initial scopes:
 
 | Scope | Grants |
 |-------|--------|
-| `read` | all GETs the HA integration uses (stats, cellars, notifications, events stream) + `GET /api/auth/whoami` (own account id, no PII — for reauth same-account verification) |
+| `read` | all GETs the HA integration uses (stats, cellars, bottles, notifications, events stream, and the rack list `GET /api/racks?cellar=<id>&summary=1` — summary form only: slot bottle ids, details via `GET /api/bottles/:id`) + `GET /api/auth/whoami` (own account id, no PII — for reauth same-account verification) |
 | `consume` | `POST /api/bottles/:id/consume` only |
 
 **Management endpoints + settings UI**
