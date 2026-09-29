@@ -699,9 +699,9 @@ describe('producer spelling splits', () => {
     expect(res.status).toBe(409);
     expect((await res.json()).code).toBe('producer_spelling_gone');
     expect(reverted()).toBe(true);
+    // The proposed string the admin declined was never written: no save, no index.
     expect(wine.save).not.toHaveBeenCalled();
-    // The admin declined the proposed string; it was not written under their click.
-    expect(wine.producer).toBe('Lagrezette SA');
+    expect(require('../../services/search').indexWine).not.toHaveBeenCalled();
   });
 
   test('"proposed" on a split that vanished meanwhile simply applies — nothing left to keep apart from', async () => {
