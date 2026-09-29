@@ -56,10 +56,9 @@ function getEventLog() {
 
 /**
  * Given vector hits (each carrying wineDefinitionId + vintage),
- * return the subset that the user actually owns as active bottles.
+ * return the subset held as active bottles in the given (live) cellars.
  * Preserves score ordering.
  *
- * @param {string} userId
  * @param {Array<{ wineDefinitionId, vintage, score }>} hits
  * @param {number} maxResults
  * @returns {Promise<Array>}
@@ -93,7 +92,7 @@ async function liveCellarIds(userId, requested) {
   return requested.filter((id) => liveSet.has(String(id)));
 }
 
-async function filterToUserCellar(userId, hits, maxResults, { cellarIds } = {}) {
+async function filterToUserCellar(hits, maxResults, { cellarIds } = {}) {
   if (!hits.length) return [];
 
   // Build lookup: "wineDefinitionId|vintage" → similarity score
@@ -107,18 +106,17 @@ async function filterToUserCellar(userId, hits, maxResults, { cellarIds } = {}) 
     }
   }
 
-  // Fetch active bottles the user owns for those wine definitions
+  // Fetch active bottles in the user's live cellars for those wine definitions.
+  // Scoped by CELLAR, not by bottle owner: in a shared cellar the owner added
+  // the bottles, so `user: userId` hid every one of them from editors and
+  // viewers (issue #1421). The cellar list is therefore the ONLY scope and is
+  // mandatory — a missing or EMPTY list must match nothing, never every
+  // bottle in the database (and never deleted cellars, ticket 6a86268f).
   const bottleFilter = {
-    user: userId,
     status: 'active',
-    wineDefinition: { $in: wineDefIds }
+    wineDefinition: { $in: wineDefIds },
+    cellar: { $in: Array.isArray(cellarIds) ? cellarIds : [] },
   };
-  // Array.isArray, not truthiness: an EMPTY list means the user has no live
-  // cellars and must match nothing. Treating it as "no filter" would list
-  // bottles from cellars they deleted (ticket 6a86268f).
-  if (Array.isArray(cellarIds)) {
-    bottleFilter.cellar = { $in: cellarIds };
-  }
   // Region/country/grapes are refs on the wine definition, so they must be
   // populated through it — dotted top-level populate paths ('wineDefinition.
   // region') can't cross the ref boundary and silently assign nothing.
@@ -216,14 +214,16 @@ function formatWineList(matches, { profileMap, countMap, priceMap } = {}) {
  */
 // scopedCellarIds: the caller's live-cellar list. The per-wine "you have N
 // bottles" counts below must be scoped the same way as everything else, or a
-// wine shown once would report the total including deleted cellars.
-async function fetchEnrichmentData(userId, matches, scopedCellarIds = null) {
+// wine shown once would report the total including deleted cellars. Like the
+// wine list, it counts every bottle in those cellars whoever added it, so a
+// shared-cellar member sees the same counts as the owner (issue #1421).
+async function fetchEnrichmentData(matches, scopedCellarIds = []) {
   if (!matches.length) return { profileMap: new Map(), countMap: new Map(), priceMap: new Map() };
 
   const bottles = matches.map(m => m.bottle);
   const wineDefIds = [...new Set(bottles.map(b => b.wineDefinition._id?.toString()).filter(Boolean))];
-  // Aggregation pipelines are not casted by Mongoose — every id (including
-  // the JWT-string userId) must be an ObjectId or the $match finds nothing.
+  // Aggregation pipelines are not casted by Mongoose — every id must be an
+  // ObjectId or the $match finds nothing.
   const wineDefObjectIds = wineDefIds.map(id => mongoose.Types.ObjectId.createFromHexString(id));
 
   const [profileMap, countResults, priceResults] = await Promise.all([
@@ -233,10 +233,9 @@ async function fetchEnrichmentData(userId, matches, scopedCellarIds = null) {
     // Bottle counts per (wineDefinition, vintage)
     Bottle.aggregate([
       { $match: {
-        user: new mongoose.Types.ObjectId(String(userId)),
         status: 'active',
         wineDefinition: { $in: wineDefObjectIds },
-        ...(Array.isArray(scopedCellarIds) ? { cellar: { $in: scopedCellarIds } } : {}),
+        cellar: { $in: (Array.isArray(scopedCellarIds) ? scopedCellarIds : []).map(id => new mongoose.Types.ObjectId(String(id))) },
       } },
       { $group: { _id: { wineDefinition: '$wineDefinition', vintage: '$vintage' }, count: { $sum: 1 } } }
     ]),
@@ -405,7 +404,9 @@ async function _prepareChatContext(userId, message, { useQueryExpansion = true, 
     // about, just applied to which cellars exist rather than how many wines
     // are shown.
     const scopedCellarIds = await liveCellarIds(userId, cellarIds);
-    const bottleScope = { user: userId, status: 'active', cellar: { $in: scopedCellarIds } };
+    // No `user` here: the cellars ARE the scope, including ones shared with
+    // the user, whose bottles were added by the owner (issue #1421).
+    const bottleScope = { status: 'active', cellar: { $in: scopedCellarIds } };
     const userWineDefIds = await Bottle.distinct('wineDefinition', bottleScope);
 
     let hits = [];
@@ -418,10 +419,10 @@ async function _prepareChatContext(userId, message, { useQueryExpansion = true, 
         limit: cfg.chatTopK,
       });
     }
-    matches = await filterToUserCellar(userId, hits, cfg.chatMaxResults, { cellarIds: scopedCellarIds });
+    matches = await filterToUserCellar(hits, cfg.chatMaxResults, { cellarIds: scopedCellarIds });
 
     // Enrich matches with maturity, price, and count data
-    const enrichment = await fetchEnrichmentData(userId, matches, scopedCellarIds);
+    const enrichment = await fetchEnrichmentData(matches, scopedCellarIds);
 
     // HONEST SCOPING (support ticket 2026-08-12 "IA bottles known false"): the
     // model only ever sees the chatMaxResults most relevant bottles, and
