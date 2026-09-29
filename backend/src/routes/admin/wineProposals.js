@@ -488,6 +488,18 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
         const countryChanged = Boolean(countryDoc) && idString(countryDoc._id) !== idString(countryBefore);
         if (producerChanged || countryChanged) {
           const others = await otherProducerSpellings(wine.producer, wine.country, { excludeWineId: wine._id, strict: true });
+          if (!others.length && producerSpelling && producerSpelling.kind !== 'proposed') {
+            // The admin picked a registry spelling (or a rename) from a split
+            // that no longer exists — the other wines were merged, renamed or
+            // quarantined meanwhile. Writing the proposed string under a
+            // "keep the registry's spelling" click would apply what they
+            // declined; refuse so they see the current state and click again.
+            await revertClaim();
+            return { status: 409, body: {
+              error: 'The registry no longer spells this producer another way — the split was resolved meanwhile. Reload the list and approve again.',
+              code: 'producer_spelling_gone',
+            } };
+          }
           if (others.length) {
             const proposed = wine.producer;
             // A country-only proposal has no 'producer' entry to annotate.

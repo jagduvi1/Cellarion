@@ -82,10 +82,12 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
   // modal's drain pattern). The decided view is append-only here: no drain.
   const decidedDelta = useRef(0);
 
-  const fetchPage = useCallback(async (p) => {
+  // `keepError`: a reload that answers an error the admin should still read
+  // (the split they picked from was resolved meanwhile) leaves the banner up.
+  const fetchPage = useCallback(async (p, { keepError = false } = {}) => {
     const gen = ++fetchGen.current;
     setLoading(true);
-    setError(null);
+    if (!keepError) setError(null);
     try {
       const drained = statusView === 'pending' ? decidedDelta.current : 0;
       const offset = Math.max(0, (p - 1) * PAGE_SIZE - drained);
@@ -191,6 +193,11 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
         if (data.code === 'producer_spelling_split' && Array.isArray(data.spellings)) {
           // Still pending — offer the pick right on the row.
           setSpellingSplits(prev => ({ ...prev, [proposal._id]: { proposed: data.proposed, spellings: data.spellings } }));
+        } else if (data.code === 'producer_spelling_gone') {
+          // The split the picks were offered for was resolved meanwhile: drop
+          // the stale picks and reload so the row shows the plain Approve.
+          setSpellingSplits(prev => { const next = { ...prev }; delete next[proposal._id]; return next; });
+          fetchPage(page, { keepError: true });
         } else if (res.status === 409 && !data.code) {
           // Another admin decided it first — refresh so the stale row leaves
           // the list instead of inviting a second click. (A 409 with a code

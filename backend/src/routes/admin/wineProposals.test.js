@@ -689,6 +689,32 @@ describe('producer spelling splits', () => {
     expect(otherProducerSpellings).toHaveBeenCalledWith('Philipp Kuhn', 'c-de', { excludeWineId: W1 });
   });
 
+  test('a pick for a split that vanished meanwhile is refused (producer_spelling_gone) — reverted, nothing written', async () => {
+    claim(proposal());
+    const wine = wineDoc();
+    WineDefinition.findById.mockResolvedValue(wine);
+    otherProducerSpellings.mockResolvedValue([]);
+
+    const res = await post(`/${P1}/approve`, { producerSpelling: 'existing', existingSpelling: 'Chateau Lagrezette' });
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('producer_spelling_gone');
+    expect(reverted()).toBe(true);
+    expect(wine.save).not.toHaveBeenCalled();
+    // The admin declined the proposed string; it was not written under their click.
+    expect(wine.producer).toBe('Lagrezette SA');
+  });
+
+  test('"proposed" on a split that vanished meanwhile simply applies — nothing left to keep apart from', async () => {
+    claim(proposal());
+    const wine = wineDoc();
+    WineDefinition.findById.mockResolvedValue(wine);
+    otherProducerSpellings.mockResolvedValue([]);
+
+    const res = await post(`/${P1}/approve`, { producerSpelling: 'proposed' });
+    expect(res.status).toBe(200);
+    expect(wine.producer).toBe('Château Lagrézette');
+  });
+
   test('"existing" stores the registry\'s spelling instead of the proposed one', async () => {
     claim(proposal());
     const wine = wineDoc();

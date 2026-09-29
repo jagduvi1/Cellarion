@@ -104,6 +104,20 @@ test('a bulk row that needs a pick keeps the choice on the row', async () => {
   expect(screen.queryByText('admin.wines.proposals.approve')).toBeNull();
 });
 
+test('a pick for a split resolved meanwhile (producer_spelling_gone) drops the stale picks and reloads the row', async () => {
+  adminGetWineProposals
+    .mockResolvedValueOnce(ok(payload([row('p1', OTHERS)]))) // the list offered the picks
+    .mockResolvedValueOnce(ok(payload([row('p1')])));        // reloaded: the split is gone
+  adminApproveWineProposal.mockResolvedValueOnce(conflict({ error: 'The registry no longer spells this producer another way — reload and approve again.', code: 'producer_spelling_gone' }));
+  renderModal();
+  fireEvent.click(await screen.findByText(/approveWithExisting:.*Chateau Lagrezette/));
+  expect(await screen.findByText(/no longer spells this producer/)).toBeInTheDocument();
+  await waitFor(() => expect(adminGetWineProposals).toHaveBeenCalledTimes(2));
+  // The stale picks are gone and the plain Approve is back for the current state.
+  expect(await screen.findByText('admin.wines.proposals.approve')).toBeInTheDocument();
+  expect(screen.queryByText(/approveWithExisting/)).toBeNull();
+});
+
 test('a coded 409 (the correction would duplicate a wine) keeps the row and shows why', async () => {
   // Before, every 409 without a spelling code reloaded the page, and the
   // reload cleared the "use a merge proposal instead" message unseen.
