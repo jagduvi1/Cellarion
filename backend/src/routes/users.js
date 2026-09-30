@@ -595,4 +595,36 @@ router.get('/unsubscribe', async (req, res) => {
   }
 });
 
+// GET /api/users/unsubscribe/support-replies?token=:token — one click, no
+// login: stop emailing ME answers to my support tickets, and nothing else.
+// The support-reply email links it beside "unsubscribe from all". Its token
+// is scoped (utils/unsubscribe), so it can't turn off any other category.
+// The answer still reaches the in-app bell and the support page.
+router.get('/unsubscribe/support-replies', async (req, res) => {
+  const { token } = req.query;
+  if (!token || typeof token !== 'string') {
+    return res.status(400).json({ error: 'Unsubscribe token is required' });
+  }
+  try {
+    const { verifyScopedUnsubscribeToken } = require('../utils/unsubscribe');
+    const userId = verifyScopedUnsubscribeToken(token, 'supportReply');
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ error: 'Invalid unsubscribe link' });
+    }
+    // Filter on the cast id, and only write when the flag is not already off.
+    const result = await User.updateOne(
+      { _id: new mongoose.Types.ObjectId(userId), 'preferences.notifications.supportReply.email': { $ne: false } },
+      { $set: { 'preferences.notifications.supportReply.email': false } },
+    );
+    if (result.modifiedCount > 0) {
+      logAudit(req, 'user.unsubscribe.supportReply', { type: 'user', id: userId }, {});
+    }
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    res.redirect(`${frontendUrl}/unsubscribed?only=support`);
+  } catch (error) {
+    console.error('Support-reply unsubscribe error:', error);
+    res.status(500).json({ error: 'Failed to unsubscribe' });
+  }
+});
+
 module.exports = router;

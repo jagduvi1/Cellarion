@@ -4020,6 +4020,7 @@
   "unsubscribed": {
     "title": "Unsubscribed",
     "message": "You have been unsubscribed from every Cellarion email and push notification category.",
+    "messageSupport": "We won't email you answers to your support tickets any more. They still appear on the Support page and under the bell, and your other email settings are unchanged.",
     "reEnable": "You can re-enable individual categories at any time from <1>Settings</1>."
   },
   "wishlist": {

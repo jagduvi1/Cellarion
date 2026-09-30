@@ -64,4 +64,47 @@ function verifyUnsubscribeToken(token) {
   }
 }
 
-module.exports = { createUnsubscribeToken, verifyUnsubscribeToken };
+/**
+ * A SCOPED unsubscribe token turns off one category only (the support-reply
+ * email links "stop emailing me answers" next to "unsubscribe from all").
+ * base64url(userId:timestamp:scope:hmac), the HMAC over all three fields — so
+ * it is four parts where the all-categories token is three, and neither kind
+ * verifies as the other: an all-token can't be replayed on a scoped link, and
+ * a scoped token can't unsubscribe someone from everything.
+ */
+const UNSUBSCRIBE_SCOPES = ['supportReply'];
+
+function createScopedUnsubscribeToken(userId, scope) {
+  if (!UNSUBSCRIBE_SCOPES.includes(scope)) throw new Error(`Unknown unsubscribe scope: ${scope}`);
+  const payload = `${userId}:${Date.now()}:${scope}`;
+  const hmac = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
+  return Buffer.from(`${payload}:${hmac}`).toString('base64url');
+}
+
+/** userId when `token` is a valid, unexpired token for exactly `scope`; else null. */
+function verifyScopedUnsubscribeToken(token, scope) {
+  try {
+    if (typeof token !== 'string' || !UNSUBSCRIBE_SCOPES.includes(scope)) return null;
+    const parts = Buffer.from(token, 'base64url').toString().split(':');
+    if (parts.length !== 4) return null;
+    const [userId, timestamp, tokenScope, mac] = parts;
+    if (tokenScope !== scope) return null;
+    const issuedAt = Number(timestamp);
+    if (!Number.isFinite(issuedAt) || Date.now() - issuedAt > TOKEN_MAX_AGE_MS) return null;
+    const expected = crypto.createHmac('sha256', SECRET).update(`${userId}:${timestamp}:${tokenScope}`).digest('hex');
+    const macBuf = Buffer.from(mac);
+    const refBuf = Buffer.from(expected);
+    if (macBuf.length !== refBuf.length || !crypto.timingSafeEqual(macBuf, refBuf)) return null;
+    return userId;
+  } catch {
+    return null;
+  }
+}
+
+module.exports = {
+  createUnsubscribeToken,
+  verifyUnsubscribeToken,
+  createScopedUnsubscribeToken,
+  verifyScopedUnsubscribeToken,
+  UNSUBSCRIBE_SCOPES,
+};

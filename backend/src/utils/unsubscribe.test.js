@@ -120,3 +120,29 @@ describe('verifyUnsubscribeToken — legacy 16-hex MAC compatibility (L-2 transi
     expect(verifyUnsubscribeToken(buildToken(userId, ts, 'zzzzzzzzzzzzzzzz'))).toBeNull();
   });
 });
+
+describe('scoped unsubscribe tokens (support-reply only, 2026-09-30)', () => {
+  const { createScopedUnsubscribeToken, verifyScopedUnsubscribeToken } = require('./unsubscribe');
+  const UID = '507f1f77bcf86cd799439011';
+
+  it('round-trips for its own scope', () => {
+    expect(verifyScopedUnsubscribeToken(createScopedUnsubscribeToken(UID, 'supportReply'), 'supportReply')).toBe(UID);
+  });
+
+  it('never verifies as an all-categories token, and an all-categories token never verifies as scoped', () => {
+    expect(verifyUnsubscribeToken(createScopedUnsubscribeToken(UID, 'supportReply'))).toBeNull();
+    expect(verifyScopedUnsubscribeToken(createUnsubscribeToken(UID), 'supportReply')).toBeNull();
+  });
+
+  it('refuses a changed scope, a changed user, an unknown scope and an expired token', () => {
+    const token = createScopedUnsubscribeToken(UID, 'supportReply');
+    const [uid, ts, , mac] = Buffer.from(token, 'base64url').toString().split(':');
+    const rebuilt = (u, t, s, m) => Buffer.from(`${u}:${t}:${s}:${m}`).toString('base64url');
+    expect(verifyScopedUnsubscribeToken(rebuilt(uid, ts, 'all', mac), 'all')).toBeNull();
+    expect(verifyScopedUnsubscribeToken(rebuilt('507f1f77bcf86cd799439012', ts, 'supportReply', mac), 'supportReply')).toBeNull();
+    expect(() => createScopedUnsubscribeToken(UID, 'drinkWindow')).toThrow(/Unknown unsubscribe scope/);
+    const old = String(Date.now() - NINETY_DAYS_MS - 1000);
+    const oldMac = crypto.createHmac('sha256', process.env.JWT_SECRET).update(`${UID}:${old}:supportReply`).digest('hex');
+    expect(verifyScopedUnsubscribeToken(rebuilt(UID, old, 'supportReply', oldMac), 'supportReply')).toBeNull();
+  });
+});

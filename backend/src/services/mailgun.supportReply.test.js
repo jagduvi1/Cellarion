@@ -16,7 +16,10 @@ const mockCreate = jest.fn(async () => ({ id: 'msg-1' }));
 jest.mock('mailgun.js', () => jest.fn().mockImplementation(() => ({
   client: () => ({ messages: { create: (...args) => mockCreate(...args) } }),
 })));
-jest.mock('../utils/unsubscribe', () => ({ createUnsubscribeToken: (id) => `tok-${id}` }));
+jest.mock('../utils/unsubscribe', () => ({
+  createUnsubscribeToken: (id) => `tok-${id}`,
+  createScopedUnsubscribeToken: (id, scope) => `stok-${scope}-${id}`,
+}));
 
 const { sendSupportReplyEmail } = require('./mailgun');
 
@@ -39,6 +42,20 @@ test('sends the answer itself, a link back to the ticket, a Reply-To and the uns
   expect(msg.text).toContain('https://cellarion.test/support');
   expect(msg.text).toContain('https://cellarion.test/api/users/unsubscribe?token=tok-u1');
   expect(msg.html).toContain('Yes, it can.<br>1. Create a cellar.');
+  expect(msg.html).toContain('href="https://cellarion.test/api/users/unsubscribe?token=tok-u1"');
+});
+
+// 2026-09-30: the only LINK used to be "unsubscribe from all"; stopping just
+// these answers meant finding the setting by hand.
+test('offers a one-click stop for support answers only and a link to the email settings, beside unsubscribe-all', async () => {
+  await sendSupportReplyEmail('anna@example.com', 'Anna', 'u1', 'Question', 'Answer');
+  const [, msg] = sent();
+  const stop = 'https://cellarion.test/api/users/unsubscribe/support-replies?token=stok-supportReply-u1';
+  const settings = 'https://cellarion.test/settings#notifications';
+  expect(msg.text).toContain(stop);
+  expect(msg.text).toContain(settings);
+  expect(msg.html).toContain(`href="${stop}"`);
+  expect(msg.html).toContain(`href="${settings}"`);
   expect(msg.html).toContain('href="https://cellarion.test/api/users/unsubscribe?token=tok-u1"');
 });
 

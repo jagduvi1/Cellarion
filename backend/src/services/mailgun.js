@@ -590,10 +590,14 @@ async function sendSupporterThankYou(toEmail, username, tier) {
 async function sendSupportReplyEmail(toEmail, recipientName, recipientId, ticketSubject, replyText) {
   if (!EMAIL_VERIFICATION_ENABLED) return;
 
-  const { createUnsubscribeToken } = require('../utils/unsubscribe');
+  const { createUnsubscribeToken, createScopedUnsubscribeToken } = require('../utils/unsubscribe');
   // See sendDrinkWindowDigest for why this uses FRONTEND_URL not BACKEND_URL.
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
   const unsubLink = `${frontendUrl}/api/users/unsubscribe?token=${createUnsubscribeToken(recipientId)}`;
+  // One click, no login: stop only these answer emails (the rest stays on).
+  const stopRepliesLink = `${frontendUrl}/api/users/unsubscribe/support-replies?token=${createScopedUnsubscribeToken(recipientId, 'supportReply')}`;
+  // The notification settings card, opened and scrolled to (SettingsGroup hash).
+  const settingsLink = `${frontendUrl}/settings#notifications`;
   const ticketUrl = `${frontendUrl}/support`;
   // The subject is user text: one line, bounded, before it becomes a header.
   const topic = String(ticketSubject || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 120);
@@ -613,8 +617,10 @@ async function sendSupportReplyEmail(toEmail, recipientName, recipientId, ticket
       '',
       `See the whole conversation and reply: ${ticketUrl}`,
       '',
-      'You get this email because you asked us a question. Turn these emails off in Settings → Notifications,',
-      `or unsubscribe from all Cellarion emails: ${unsubLink}`
+      'You get this email because you asked us a question.',
+      `Stop emailing me answers to my support tickets: ${stopRepliesLink}`,
+      `Choose which emails you get: ${settingsLink}`,
+      `Unsubscribe from all Cellarion emails: ${unsubLink}`
     ].join('\n'),
     html: `
       <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#2a2a2a;line-height:1.5;">
@@ -631,8 +637,10 @@ async function sendSupportReplyEmail(toEmail, recipientName, recipientId, ticket
         </p>
         <hr style="border:none;border-top:1px solid #ddd;margin:2rem 0;" />
         <p style="color:#9A9484;font-size:0.85em;">
-          You get this email because you asked us a question. Turn these emails off in
-          Settings → Notifications, or <a href="${unsubLink}" style="color:#9A9484;">unsubscribe from all Cellarion emails</a>.
+          You get this email because you asked us a question.
+          <a href="${stopRepliesLink}" style="color:#9A9484;">Stop emailing me answers to my support tickets</a> ·
+          <a href="${settingsLink}" style="color:#9A9484;">Choose which emails you get</a> ·
+          <a href="${unsubLink}" style="color:#9A9484;">Unsubscribe from all Cellarion emails</a>
         </p>
       </div>
     `
