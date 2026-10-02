@@ -4674,7 +4674,7 @@
   },
   "reconsent": {
     "title": "We've updated our Privacy Policy",
-    "body": "We've updated our Privacy Policy, including the third-party services that help run Cellarion. Please review and acknowledge the update to continue.",
+    "body": "We've updated our Privacy Policy. Please review and acknowledge the update to continue.",
     "readPolicy": "Read the full policy:",
     "policyLink": "Privacy Policy",
     "logout": "Log out",

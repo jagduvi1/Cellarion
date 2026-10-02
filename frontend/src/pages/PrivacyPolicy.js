@@ -21,7 +21,7 @@ function PrivacyPolicy() {
       </Helmet>
       <div className="privacy-container">
         <h1>Privacy Policy</h1>
-        <p className="privacy-updated">Last updated: 25 September 2026 — Version 2026-09-25</p>
+        <p className="privacy-updated">Last updated: 2 October 2026 — Version 2026-10-02</p>
 
         <p>
           Cellarion ("we", "us", or "our") operates the Cellarion wine cellar management
@@ -62,6 +62,7 @@ function PrivacyPolicy() {
           <li>To provide and operate the Cellarion service, including authentication and cellar management.</li>
           <li>To send you notifications you have opted into (drink-window alerts, email digests, push notifications).</li>
           <li>To process bottle label images for wine identification (when you use the label scanning feature).</li>
+          <li>To answer support requests you send us, in the app and by email. Each emailed answer has a link that stops these emails, and you can also turn them off in Settings.</li>
           <li>To maintain security, prevent abuse, and investigate incidents via activity logs.</li>
           <li>To operate AI-assistant connections you set up yourself (see section 5), including the action trail that lets you review and undo changes a connected assistant made.</li>
         </ul>
@@ -199,7 +200,7 @@ function PrivacyPolicy() {
           <li><strong>Right to erasure (Art. 17):</strong> you can delete your account and all associated personal data from Settings. Deletion takes effect after a 7-day cooling-off period, and removes your data from the live service at once; encrypted backup copies then age out within six months (see Data retention). Forum posts are anonymised rather than hard-deleted (your authorship is severed) so other users' conversations stay intact; contact support if you need specific posts fully removed.</li>
           <li><strong>Right to data portability (Art. 20):</strong> you can export all your data as JSON from Settings at any time.</li>
           <li><strong>Right to restrict processing (Art. 18):</strong> you can disable all notifications and set your profile to private to restrict how your data is used.</li>
-          <li><strong>Right to object (Art. 21):</strong> you can opt out of all email and push notifications in Settings, or use the one-click unsubscribe link in any email.</li>
+          <li><strong>Right to object (Art. 21):</strong> you can opt out of all email and push notifications in Settings, or use the one-click unsubscribe link in any email. Emailed answers to your support requests also carry a link that stops only those emails.</li>
           <li><strong>Right to withdraw consent (Art. 7):</strong> you can withdraw consent for optional data processing at any time by disabling the relevant features, revoking a connected AI assistant in Settings, or deleting your account.</li>
         </ul>
         <p>
