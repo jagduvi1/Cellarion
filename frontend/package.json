@@ -20,7 +20,7 @@
     "@tiptap/extension-youtube": "^3.30.5",
     "@tiptap/react": "^3.30.5",
     "@tiptap/starter-kit": "^3.30.5",
-    "dompurify": "^3.4.12",
+    "dompurify": "^3.4.16",
     "html-to-image": "^1.11.13",
     "i18next": "^25.8.13",
     "i18next-browser-languagedetector": "^8.2.1",
