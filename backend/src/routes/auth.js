@@ -14,6 +14,7 @@ const rateLimitsConfig = require('../config/rateLimits');
 const { sendVerificationEmail, sendPasswordResetEmail, sendAccountLockoutAlert, EMAIL_VERIFICATION_ENABLED } = require('../services/mailgun');
 const { isAccountLocked, isAccountLockedNow, recordLoginFailure, resetLoginAttempts } = require('../utils/loginAttempts');
 const { rateLimitKey } = require('../utils/clientIp');
+const { sanitizeSignupSource } = require('../utils/signupSource');
 // Token issuance + refresh-cookie handling and pending-share resolution are
 // extracted to services so the password flow (here) and the SSO flow
 // (routes/oauth.js) share one implementation.
@@ -110,7 +111,7 @@ const demoLimiter = rateLimit({
 // POST /api/auth/register - Register new user
 router.post('/register', authLimiter, async (req, res) => {
   try {
-    const { username, email, password, consentPrivacyPolicy, consentDataProcessing } = req.body;
+    const { username, email, password, consentPrivacyPolicy, consentDataProcessing, signupSource } = req.body;
 
     // Validate input — require strings so a non-string email (number, object)
     // fails with a 400 instead of throwing on .toLowerCase() (same guard as login)
@@ -153,6 +154,12 @@ router.post('/register', authLimiter, async (req, res) => {
         dataProcessing: { accepted: true, acceptedAt: new Date() }
       }
     });
+
+    // Where the visitor came from (referrer domain / campaign tags / landing
+    // page), for the admin stats. Optional and best-effort: a missing or
+    // malformed payload never fails a registration.
+    const source = sanitizeSignupSource(signupSource);
+    if (source) user.signupSource = { ...source, method: 'password', recordedAt: new Date() };
 
     if (EMAIL_VERIFICATION_ENABLED) {
       // Generate verification token, save user, send email — no JWT issued yet

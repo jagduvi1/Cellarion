@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { PLANS, PAID_PLAN_NAMES } from '../config/plans';
 import { createCheckout, createPortal, getAvailability } from '../api/stripe';
+import { track } from '../utils/track';
 import './Plans.css';
 
 const GITHUB_URL = 'https://github.com/jagduvi1/Cellarion';
@@ -220,6 +221,7 @@ function Supporter() {
       const res = await createCheckout(apiFetch, plan, billingInterval);
       const data = await res.json();
       if (data.url) {
+        track('supporter-checkout-started', { plan, interval: billingInterval });
         window.location.href = data.url;
       } else if (data.code === 'subscription_exists') {
         // Already supporting — send them to the portal to change/cancel rather

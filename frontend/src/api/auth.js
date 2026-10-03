@@ -24,3 +24,15 @@ export const requestPasswordReset = (email) =>
     headers: JSON_HEADERS,
     body: JSON.stringify({ email })
   });
+
+// POST /api/users/me/signup-source — body: { signupSource }. Sent once when the
+// app returns from a single sign-on provider, carrying where the visit came
+// from (utils/signupSource). The server records it only on an account created
+// minutes ago with no source yet; { recorded: true } therefore also means
+// "this sign-on created the account".
+export const recordSignupSource = (apiFetch, signupSource) =>
+  apiFetch('/api/users/me/signup-source', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ signupSource })
+  });

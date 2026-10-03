@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { track } from '../utils/track';
 
 function InstallPrompt() {
   const { t } = useTranslation();
@@ -26,6 +27,9 @@ function InstallPrompt() {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
+    // How many want the app on their home screen — the cheap signal for
+    // whether a store app would be worth building.
+    track('install-prompt', { outcome });
     if (outcome === 'accepted') {
       setDeferredPrompt(null);
     }

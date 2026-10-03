@@ -5,6 +5,7 @@ const BridgeKey = require('../models/BridgeKey');
 const WineDefinition = require('../models/WineDefinition');
 const AuditLog = require('../models/AuditLog');
 const { PLAN_NAMES } = require('../config/plans');
+const { classifySignupSource } = require('../utils/signupSource');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -217,6 +218,59 @@ const buildSignupCohorts = (users, activeIds, now, changedIds = null) => {
     });
   }
   return out;
+};
+
+// Signups by source: "which channels bring people who stay?" Umami can say
+// Reddit sent 300 visitors; only the account record can say how many of them
+// signed up, added a bottle, and came back.
+const SOURCE_SPAN_DAYS = 90;
+const OTHER_SITES_MAX = 10;
+
+/**
+ * Group recent signups by channel (utils/signupSource classifySignupSource)
+ * and count, per channel, who added a bottle and who came back.
+ *
+ * "Came back" is the cohort table's measure (present in the last 7 days) and
+ * carries the same trap: someone who joined this week is present BECAUSE they
+ * joined. So it is asked only of accounts older than COHORT_WINDOW_DAYS
+ * (`mature`), and returnedPct is null when a channel has none yet.
+ *
+ * `other-site` rows hide which sites they were, so the most common of those
+ * referrer domains ship alongside — that is where a new channel shows up first.
+ * Accounts created before sources were recorded land in `unknown`.
+ */
+const buildSignupSources = (users, withBottleIds, presentIds, now) => {
+  const matureBefore = now - COHORT_WINDOW_DAYS * 86400000;
+  const rows = new Map();
+  const otherSites = new Map();
+  for (const u of users) {
+    const channel = classifySignupSource(u.signupSource || null);
+    const row = rows.get(channel) || { channel, signedUp: 0, addedBottle: 0, mature: 0, returned: 0 };
+    const id = String(u._id);
+    row.signedUp += 1;
+    if (withBottleIds.has(id)) row.addedBottle += 1;
+    if (u.createdAt < matureBefore) {
+      row.mature += 1;
+      if (presentIds.has(id)) row.returned += 1;
+    }
+    rows.set(channel, row);
+    const domain = u.signupSource?.referrerDomain;
+    if (channel === 'other-site' && domain) otherSites.set(domain, (otherSites.get(domain) || 0) + 1);
+  }
+  return {
+    spanDays: SOURCE_SPAN_DAYS,
+    rows: [...rows.values()]
+      .map((r) => ({
+        ...r,
+        addedBottlePct: pct(r.addedBottle, r.signedUp),
+        returnedPct: r.mature > 0 ? pct(r.returned, r.mature) : null,
+      }))
+      .sort((a, b) => b.signedUp - a.signedUp || a.channel.localeCompare(b.channel)),
+    otherSites: [...otherSites.entries()]
+      .map(([domain, count]) => ({ domain, count }))
+      .sort((a, b) => b.count - a.count || a.domain.localeCompare(b.domain))
+      .slice(0, OTHER_SITES_MAX),
+  };
 };
 
 const safeAggregate = async (model, pipeline) => {
@@ -538,6 +592,17 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
   ]);
 
   const signupCohorts = buildSignupCohorts(cohortUsers, presentIds, Date.now(), changedIds);
+
+  // ── Signups by source ───────────────────────────────────────────────────
+  // Same presence set as the cohorts above, so "came back" means one thing.
+  const sourceUsers = await User.find({
+    ...userMatch,
+    createdAt: { $gte: new Date(Date.now() - SOURCE_SPAN_DAYS * 86400000) },
+  }).select('_id createdAt signupSource').lean();
+  const sourceWithBottleIds = sourceUsers.length
+    ? new Set((await Bottle.distinct('user', { user: { $in: sourceUsers.map((u) => u._id) } })).map(String))
+    : new Set();
+  const signupSources = buildSignupSources(sourceUsers, sourceWithBottleIds, presentIds, Date.now());
   const mature = signupCohorts.filter((c) => !c.tooNew);
   const matureSignups = mature.reduce((s, c) => s + c.signedUp, 0);
   const matureReturned = mature.reduce((s, c) => s + c.returned, 0);
@@ -870,6 +935,8 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
         windowDays: AUDIT_TTL_DAYS,
       },
     },
+    // Signups of the last SOURCE_SPAN_DAYS grouped by where they came from.
+    signupSources,
     plans: {
       distribution: planDistribution,
       paidUsers,
@@ -914,6 +981,7 @@ module.exports = {
     DAY_TIERS, tierAccumulators, tierRows,
     buildPlanDistribution, buildSignupCohorts, COHORT_WINDOW_DAYS, COHORT_SPAN_DAYS,
     buildBridgeSummary, buildActivation,
+    buildSignupSources, SOURCE_SPAN_DAYS,
     buildPresencePipeline, buildPresenceWindowPipeline,
     SIGNIN_ACTIONS, MACHINE_ACTIONS, AUDIT_TTL_DAYS,
   },

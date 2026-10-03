@@ -160,6 +160,9 @@ const REGISTRY = [
           emailOptOutAt: u.emailOptOutAt || null,
           gdprConsent: u.gdprConsent,
           createdAt: u.createdAt,
+          // How the account found Cellarion, recorded at signup (referrer
+          // domain, campaign tags, landing page) — null when never recorded.
+          signupSource: u.signupSource || null,
           contribution: u.contribution || { totalScore: 0, categories: {}, tier: 'newcomer', specialty: null },
           // Admin-granted temporary AI budget override (rides on the User doc).
           aiBudgetOverride: u.aiBudgetOverride?.max

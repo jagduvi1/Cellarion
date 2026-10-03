@@ -35,6 +35,7 @@ const PriceTrackingSkip = require('../models/PriceTrackingSkip');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const { updatePreferences, updateProfile } = require('../services/accountOps');
 const { buildUserExport } = require('../services/userDataRegistry');
+const { sanitizeSignupSource } = require('../utils/signupSource');
 const { revokeAllSessions } = require('../services/authTokens');
 const {
   buildCellarDataExport,
@@ -141,6 +142,43 @@ router.post('/me/accept-policy', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Accept policy error:', error);
     res.status(500).json({ error: 'Failed to record consent' });
+  }
+});
+
+// POST /api/users/me/signup-source — record where a brand-new single sign-on
+// account came from. Password registration sends this with the register call;
+// an SSO signup cannot (the browser leaves for the provider and the account is
+// created on the callback), so the app sends it once on return instead.
+//
+// One-shot and narrow: accepted only for an account created in the last
+// SIGNUP_SOURCE_WINDOW_MS that has no source yet, so it can neither overwrite
+// a recorded source nor be back-filled onto an old account. The condition is
+// part of the update itself, so two racing calls cannot both write. Answers
+// { recorded } — the app uses it to tell a new account from a returning one.
+const SIGNUP_SOURCE_WINDOW_MS = 15 * 60 * 1000;
+router.post('/me/signup-source', requireAuth, async (req, res) => {
+  try {
+    const source = sanitizeSignupSource(req.body?.signupSource);
+    if (!source) return res.status(400).json({ error: 'signupSource must be an object' });
+
+    const user = await User.findById(req.user.id).select('authProviders').lean();
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const provider = user.authProviders?.[0]?.provider;
+    const method = ['google', 'oidc'].includes(provider) ? provider : 'password';
+
+    const updated = await User.updateOne(
+      {
+        _id: req.user.id,
+        signupSource: { $exists: false },
+        isDemo: { $ne: true },
+        createdAt: { $gte: new Date(Date.now() - SIGNUP_SOURCE_WINDOW_MS) },
+      },
+      { $set: { signupSource: { ...source, method, recordedAt: new Date() } } },
+    );
+    res.json({ recorded: updated.modifiedCount === 1 });
+  } catch (error) {
+    console.error('Record signup source error:', error);
+    res.status(500).json({ error: 'Failed to record signup source' });
   }
 });
 

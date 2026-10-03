@@ -17,6 +17,8 @@ const notifyApiMutation = (url) => {
   try { window.dispatchEvent(new CustomEvent(API_MUTATION_EVENT, { detail: { url: String(url || '') } })); } catch { /* noop */ }
 };
 import i18n, { hasLanguagePreview } from '../i18n';
+import { getSignupSource } from '../utils/signupSource';
+import { track } from '../utils/track';
 
 const AuthContext = createContext();
 
@@ -515,12 +517,15 @@ export const AuthProvider = ({ children }) => {
         body: JSON.stringify({
           username, email, password,
           consentPrivacyPolicy: consentAccepted,
-          consentDataProcessing: consentAccepted
+          consentDataProcessing: consentAccepted,
+          // Where this visit came from, for the admin "signups by source" stats.
+          signupSource: getSignupSource()
         })
       });
 
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Registration failed');
+      track('signup-completed', { method: 'password' });
 
       if (data.token) {
         // Verification disabled — logged in immediately. A "remember me"

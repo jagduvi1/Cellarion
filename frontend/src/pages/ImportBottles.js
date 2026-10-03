@@ -6,6 +6,7 @@ import { validateImport, confirmImport } from '../api/bottles';
 import { getAiBudgetStatus, requestAiBudgetIncrease } from '../api/aiBudget';
 import { searchWines } from '../api/wines';
 import { getRacks } from '../api/racks';
+import { track } from '../utils/track';
 import {
   parseAndMap, parseJSON, summariseRacks, getDefaultRackConfig, getDefaultAnchor, decodeImportBuffer,
   parseCSV, detectDelimiter, detectPlocFile, parsePlocFiles,
@@ -641,6 +642,7 @@ function ImportBottles() {
     // the remaining batches are new, so no user choice can be overwritten).
     let workingSelections = resuming ? { ...selections } : {};
 
+    if (!resuming) track('import-started', { format: detectedFormat || 'unknown', rows: total });
     setValidationProgress({ done: startOffset, total });
 
     try {
@@ -1012,6 +1014,7 @@ function ImportBottles() {
 
       setImportResult(data);
       setStep('done');
+      track('import-finished', { format: detectedFormat || 'unknown', rows: items.length });
       // Clean up the saved session after a successful import
       if (sessionId) {
         deleteImportSession(apiFetch, sessionId).catch(() => {});

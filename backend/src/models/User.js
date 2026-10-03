@@ -355,6 +355,24 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
+  // How the account found Cellarion (referrer domain, campaign tags, first
+  // path segment of the landing page), recorded once at signup for the admin
+  // stats "signups by source" table. Allow-listed and length-capped by
+  // utils/signupSource.js; never sent to the client (toJSON below), included
+  // in the GDPR export, and removed with the account row. Absent on accounts
+  // created before it was recorded.
+  signupSource: {
+    type: new mongoose.Schema({
+      referrerDomain: { type: String, maxlength: 100 },
+      utmSource:      { type: String, maxlength: 100 },
+      utmMedium:      { type: String, maxlength: 100 },
+      utmCampaign:    { type: String, maxlength: 100 },
+      landingPage:    { type: String, maxlength: 100 },
+      method:         { type: String, enum: ['password', 'google', 'oidc'] },
+      recordedAt:     { type: Date },
+    }, { _id: false }),
+    default: undefined
+  },
   // GDPR consent tracking
   gdprConsent: {
     privacyPolicy: {
@@ -575,6 +593,8 @@ userSchema.methods.toJSON = function() {
   delete obj.passwordResetTokenHash;
   delete obj.passwordResetExpiresAt;
   delete obj.stripeCustomerId;
+  // Admin-stats bookkeeping; the app never needs it (data minimisation).
+  delete obj.signupSource;
   // Data minimisation (I-1): internal lockout bookkeeping and the raw Stripe
   // subscription id are never needed client-side. The frontend only needs to
   // know WHETHER a subscription exists — expose that as a derived boolean.

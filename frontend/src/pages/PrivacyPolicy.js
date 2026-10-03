@@ -21,7 +21,7 @@ function PrivacyPolicy() {
       </Helmet>
       <div className="privacy-container">
         <h1>Privacy Policy</h1>
-        <p className="privacy-updated">Last updated: 2 October 2026 — Version 2026-10-02</p>
+        <p className="privacy-updated">Last updated: 3 October 2026 — Version 2026-10-03</p>
 
         <p>
           Cellarion ("we", "us", or "our") operates the Cellarion wine cellar management
@@ -54,6 +54,7 @@ function PrivacyPolicy() {
           <li><strong>Community / forum data:</strong> discussions and replies you post, reactions you add to other users' replies, threads you subscribe to ("watch"), and read-state markers tracking which threads you've opened (used to drive the unread indicator).</li>
           <li><strong>Activity logs:</strong> actions you take in the app (e.g. adding a bottle, logging in) are logged with your user ID, IP address, and browser user-agent for security and service maintenance purposes.</li>
           <li><strong>Consent records:</strong> timestamps of when you accepted this privacy policy and consented to data processing.</li>
+          <li><strong>How you found Cellarion:</strong> when you create an account we record, once, where your visit came from — the name of the referring website (for example reddit.com, never the full address), any campaign tags on the link you arrived through (such as <code>utm_source</code>), and which section of the site you landed on. It is used only to see which channels bring people who find Cellarion useful, is included in your data export, and is deleted with your account.</li>
           <li><strong>AI-connector records:</strong> if you connect an AI assistant (see section 5), we store the connection's metadata (name, permission scopes, a hashed credential — never the plain token — and last-used time) and an action log of what the assistant did in your account (which tool ran, what changed, and the undo snapshot).</li>
         </ul>
 
@@ -215,7 +216,12 @@ function PrivacyPolicy() {
           This cookie is strictly necessary for the service to function and does not require
           separate consent. On the hosted cellarion.app, Cloudflare may also set a strictly-necessary
           security cookie to distinguish humans from bots. No tracking, analytics, or advertising
-          cookies are used (our Umami analytics is cookieless).
+          cookies are used (our Umami analytics is cookieless). Besides page views, Umami counts a few
+          anonymous actions — for example that an account was created, a bottle added or an import
+          finished — as numbers and categories only, never your name, email or what is in your cellar.
+          If you sign up with Google or another single sign-on provider, where your visit came from (see
+          section 3) is kept in your browser's session storage for that one round trip to the provider
+          and removed when you return.
         </p>
         <h3>Offline mode (storage on your device)</h3>
         <p>

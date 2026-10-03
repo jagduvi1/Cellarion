@@ -355,6 +355,58 @@ function AdminStats() {
             </>
           )}
 
+          {/* Which channels bring people who stay. Umami counts visits per
+              referrer; only the account record can say who signed up from
+              where, added a bottle, and came back. */}
+          {stats.signupSources?.rows?.length > 0 && (
+            <>
+              <h3 className="admin-stats-subhead">
+                {t('adminStats.sourcesHead', 'Signups by source (last {{days}} days)', { days: stats.signupSources.spanDays })}
+              </h3>
+              <div className="admin-stats-panel">
+                <div className="admin-stats-scroll">
+                <table className="admin-stats-table admin-stats-cohorts">
+                  <thead>
+                    <tr>
+                      <th className="admin-stats-name">{t('adminStats.sourceColChannel', 'Source')}</th>
+                      <th className="admin-stats-count">{t('adminStats.cohortColCount', 'People')}</th>
+                      <th className="admin-stats-pct">{t('adminStats.sourceColBottle', 'Added a bottle')}</th>
+                      <th className="admin-stats-pct">{t('adminStats.cohortColPresent', 'Present')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stats.signupSources.rows.map((r) => (
+                      <tr key={r.channel}>
+                        <td className="admin-stats-name">
+                          {t(`adminStats.sourceChannel.${r.channel}`, r.channel)}
+                        </td>
+                        <td className="admin-stats-count">{fmt(r.signedUp)}</td>
+                        <td className="admin-stats-pct">{`${fmt(r.addedBottle)} · ${fmtPct(r.addedBottlePct)}`}</td>
+                        <td className="admin-stats-pct">
+                          {/* Same rule as the cohort table: only accounts older
+                              than a week can be asked whether they came back. */}
+                          {r.returnedPct == null
+                            ? t('adminStats.cohortTooNew')
+                            : `${fmt(r.returned)}/${fmt(r.mature)} · ${fmtPct(r.returnedPct)}`}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                </div>
+                {stats.signupSources.otherSites?.length > 0 && (
+                  <p className="admin-stats-section-note">
+                    {t('adminStats.sourceOtherSites', 'Other sites:')}{' '}
+                    {stats.signupSources.otherSites.map((o) => `${o.domain} (${fmt(o.count)})`).join(', ')}
+                  </p>
+                )}
+                <p className="admin-stats-section-note">
+                  {t('adminStats.sourcesNote', '"Present" counts accounts older than a week that were here in the last 7 days. "Unknown" is accounts created before sources were recorded.')}
+                </p>
+              </div>
+            </>
+          )}
+
           <h3 className="admin-stats-subhead">{t('adminStats.retentionByActivity')}</h3>
           <div className="admin-stats-cards">
             <StatCard
