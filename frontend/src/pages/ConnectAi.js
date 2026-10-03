@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import SITE_URL from '../config/siteUrl';
 import { HOSTED_ORIGIN, isHostedOrigin, claudeOneClickUrl } from '../utils/mcpConnect';
+import { track } from '../utils/track';
 import './ConnectAi.css';
 
 const TOKEN_PLACEHOLDER = 'cel_YOUR_TOKEN_HERE';
@@ -19,6 +20,7 @@ function Snippet({ text, copyLabel, copiedLabel }) {
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(text);
+      track('ai-connect-started', { via: 'copy' });
       setCopied(true);
       clearTimeout(timer.current);
       timer.current = setTimeout(() => setCopied(false), 2000);
@@ -198,7 +200,13 @@ function ConnectAi() {
                 'Opens Claude with the connector details filled in. You still sign in and choose an access level.',
               )}
             </p>
-            <a className="btn btn-primary" href={claudeOneClickUrl(origin)} target="_blank" rel="noopener noreferrer">
+            <a
+              className="btn btn-primary"
+              href={claudeOneClickUrl(origin)}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => track('ai-connect-started', { via: 'claude-one-click' })}
+            >
               {t('connectAi.oneClick.cta', 'Add Cellarion to Claude')}
             </a>
           </section>

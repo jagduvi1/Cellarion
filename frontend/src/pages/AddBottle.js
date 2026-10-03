@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { searchWines, resolveWine, identifyWineByText } from '../api/wines';
 import { adoptRegistryWine } from '../api/bridge';
 import { getRacks } from '../api/racks';
+import { track } from '../utils/track';
 import DialogBox from '../components/DialogBox';
 import useLabelScanner from '../hooks/useLabelScanner';
 import { CURRENCIES } from '../config/currencies';
@@ -893,6 +894,10 @@ function AddBottle() {
           wineRefId = data.bottle?.wineDefinition?._id || data.bottle?.wineDefinition;
         }
       }
+
+      // Counted per add (Umami funnels count each visitor once, so "added a
+      // bottle" there is "added their first bottle this visit").
+      track('bottle-added', { count: createdBottles.length, via: scanImageId ? 'scan' : 'manual' });
 
       // A custom field the server would not take (a name already used as
       // another type, a value that fails its type) must not pass silently —

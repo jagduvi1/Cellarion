@@ -14,6 +14,11 @@ import './i18n';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import * as serviceWorkerRegistration from './serviceWorkerRegistration';
+import { captureSignupSource } from './utils/signupSource';
+
+// Note where this visit came from before any in-app navigation rewrites the
+// URL: the referrer and the landing link's campaign tags (in memory only).
+captureSignupSource();
 
 // A page's code file that no longer exists: this tab is on a build that a
 // deploy has replaced (and, offline, the stored app is now the new build).

@@ -2,6 +2,9 @@ import { useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { takePostLoginRedirect } from '../utils/postLoginRedirect';
+import { takeSsoSignupSource } from '../utils/signupSource';
+import { recordSignupSource } from '../api/auth';
+import { track } from '../utils/track';
 import './Login.css';
 
 // Landing route for the OAuth round-trip (backend redirects here after any
@@ -27,7 +30,7 @@ const ERROR_MESSAGES = {
 };
 
 function OAuthCallback() {
-  const { user } = useAuth();
+  const { user, apiFetch } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const error = params.get('error');
@@ -44,12 +47,25 @@ function OAuthCallback() {
     if (error) return; // show the error card + let the user go back to login
     if (ranRef.current) return;
     ranRef.current = true;
+    if (signedIn) {
+      // Where the visit came from, carried across the provider round trip.
+      // The server keeps it only if this sign-on just created the account,
+      // which is also the one case worth counting as a signup. Fire and
+      // forget: analytics never holds up the sign-in.
+      const source = takeSsoSignupSource();
+      if (source) {
+        recordSignupSource(apiFetch, source)
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => { if (data?.recorded) track('signup-completed', { method: 'sso' }); })
+          .catch(() => {});
+      }
+    }
     // No error: the session either restored (→ wherever they were heading
     // before the sign-in interrupted them, else home) or silently failed
     // (→ login). The stash is left alone on failure so that retrying still
     // finishes the journey.
     navigate(signedIn ? (takePostLoginRedirect() || '/cellars') : '/login', { replace: true });
-  }, [error, signedIn, navigate]);
+  }, [error, signedIn, navigate, apiFetch]);
 
   if (error) {
     return (

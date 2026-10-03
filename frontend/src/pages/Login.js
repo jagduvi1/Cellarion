@@ -4,6 +4,7 @@ import { useTranslation, Trans } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import useVersion from '../hooks/useVersion';
 import { stashPostLoginRedirect, takePostLoginRedirect, isSafeInternalPath } from '../utils/postLoginRedirect';
+import { stashSignupSourceForSso } from '../utils/signupSource';
 import './Login.css';
 
 const LOGO_WEBP = '/cellarion-logo-light.webp';
@@ -334,6 +335,8 @@ function Login() {
                   // Router state does not survive the full-page trip out to
                   // Google, so hand the destination over before we leave.
                   stashPostLoginRedirect(location.state?.from);
+                  // So is where the visit came from, in case this signs up.
+                  stashSignupSourceForSso();
                   window.location.href = '/api/auth/google';
                 }}
               >
@@ -348,6 +351,7 @@ function Login() {
                 onClick={() => {
                   // Same full-page round trip as Google, same reason to stash.
                   stashPostLoginRedirect(location.state?.from);
+                  stashSignupSourceForSso();
                   window.location.href = '/api/auth/oidc';
                 }}
               >

@@ -12,7 +12,7 @@
  * governed by per-feature use. Keep it in sync with the version shown on the
  * Privacy Policy page (frontend/src/pages/PrivacyPolicy.js).
  */
-const CURRENT_PRIVACY_POLICY_VERSION = '2026-10-02';
+const CURRENT_PRIVACY_POLICY_VERSION = '2026-10-03';
 
 // The Registry Data Terms (frontend/src/pages/RegistryTerms.js, "/terms"):
 // the licence a person accepts before a Registry Bridge key is issued to
