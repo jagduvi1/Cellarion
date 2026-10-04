@@ -63,6 +63,7 @@ function PrivacyPolicy() {
           <li>To provide and operate the Cellarion service, including authentication and cellar management.</li>
           <li>To send you notifications you have opted into (drink-window alerts, email digests, push notifications).</li>
           <li>To process bottle label images for wine identification (when you use the label scanning feature).</li>
+          <li>To recognise wines by their barcode. When the camera reads a bottle's barcode while you add it, the barcode is saved on that bottle (it is part of your data export and is deleted with the bottle). Barcodes on members' bottles are used to suggest the same wine when another member scans that barcode; only the wine is shown, never whose bottle it came from. The barcode is read on your device; no camera image is sent for it.</li>
           <li>To answer support requests you send us, in the app and by email. Each emailed answer has a link that stops these emails, and you can also turn them off in Settings.</li>
           <li>To maintain security, prevent abuse, and investigate incidents via activity logs.</li>
           <li>To operate AI-assistant connections you set up yourself (see section 5), including the action trail that lets you review and undo changes a connected assistant made.</li>

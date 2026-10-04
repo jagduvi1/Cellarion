@@ -24,6 +24,8 @@ const { isValidId } = require('../utils/validation');
 // regionally correct label for THIS wine (Tinta Roriz on a Douro Port) —
 // while `name` stays canonical. Storage/filters/stats are untouched.
 const { decorateGrapes } = require('../utils/grapeDisplay');
+const { normalizeBarcode } = require('../utils/barcode');
+const { lookupBarcode } = require('../services/barcodeLookup');
 const { getReleaseCurve } = require('../services/communityPrice');
 const aiBurstLimiter = require('../middleware/aiBurstLimiter');
 const asyncHandler = require('../utils/asyncHandler');
@@ -1064,6 +1066,24 @@ router.get('/:idOrSlug/community-prices', publicWineLimiter, async (req, res) =>
   } catch (error) {
     console.error('Get community prices error:', error);
     res.status(500).json({ error: 'Failed to get community prices' });
+  }
+});
+
+// GET /api/wines/barcode/:code — the registry wine a retail barcode belongs to,
+// learned from members' bottles that were added after scanning it
+// (services/barcodeLookup). Answers { wine, vintage, owners } or { wine: null }
+// — an unknown or invalid code is not an error, it is simply not known yet.
+// No AI and no write: a cheap read the add-bottle camera makes when it sees a
+// barcode.
+router.get('/barcode/:code', requireAuth, async (req, res) => {
+  try {
+    const code = normalizeBarcode(req.params.code);
+    if (!code) return res.json({ wine: null, invalid: true });
+    const result = await lookupBarcode(code, { userId: req.user.id, roles: req.user.roles });
+    res.json({ ...result, code });
+  } catch (error) {
+    console.error('Barcode lookup error:', error.message);
+    res.status(500).json({ error: 'Barcode lookup failed' });
   }
 });
 

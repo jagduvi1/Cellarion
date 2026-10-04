@@ -2,12 +2,13 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { searchWines, resolveWine, identifyWineByText } from '../api/wines';
+import { searchWines, resolveWine, identifyWineByText, lookupBarcode } from '../api/wines';
 import { adoptRegistryWine } from '../api/bridge';
 import { getRacks } from '../api/racks';
 import { track } from '../utils/track';
 import DialogBox from '../components/DialogBox';
 import useLabelScanner from '../hooks/useLabelScanner';
+import useBarcodeWatch from '../hooks/useBarcodeWatch';
 import { CURRENCIES } from '../config/currencies';
 import { BOTTLE_SIZES, bottleSizeLabel } from '../config/bottleSizes';
 import { validatePriceSanity } from '../utils/priceValidation';
@@ -144,6 +145,14 @@ function AddBottle() {
   // Id of the stored ORIGINAL scan frame (never rendered — it rides the commit
   // so the minted wine keeps the label a curator may need to read).
   const [scanImageId, setScanImageId] = useState(null);
+  // ── Barcode ──
+  // The retail barcode the camera read while it was open (useBarcodeWatch).
+  // It rides every bottle this add creates — that is how the next member who
+  // scans the same code is offered this wine. barcodeWineId: the wine a known
+  // code resolved to, so step 2 can say how it was found.
+  const [barcode, setBarcode] = useState(null);
+  const [barcodeNoted, setBarcodeNoted] = useState(false);
+  const [barcodeWineId, setBarcodeWineId] = useState(null);
   // ── Back-label rescue ──
   // Offered ONLY when the front pass came back incomplete (`extracted.partial`)
   // or unreadable (a 422, which still hands back a scanImageId). Optional and
@@ -341,6 +350,34 @@ function AddBottle() {
     clearAi();
     setStep(2);
   }, [clearAi]);
+
+  // A barcode read in the viewfinder. A code members have already added a
+  // bottle of goes straight to that wine — no label photo, no AI call. An
+  // unknown one is kept for this add (so it teaches the next scan) and the
+  // viewfinder asks for the label photo as usual.
+  const handleBarcodeDetected = useCallback(async (code) => {
+    setBarcode(code);
+    let data = null;
+    try {
+      const res = await lookupBarcode(apiFetch, code);
+      data = res.ok ? await res.json() : null;
+    } catch { /* offline or failed: treat as unknown */ }
+    if (data?.wine) {
+      track('barcode-scan', { result: 'known' });
+      stopLabelCamera();
+      setBarcodeNoted(false);
+      setBarcodeWineId(data.wine._id);
+      applyResolvedWine(data.wine, data.vintage || '');
+      return;
+    }
+    track('barcode-scan', { result: 'new' });
+    setBarcodeNoted(true);
+  }, [apiFetch, stopLabelCamera, applyResolvedWine]);
+
+  useBarcodeWatch(labelVideoRef, {
+    active: labelCam.open && !labelCam.error && !labelScanning,
+    onDetect: handleBarcodeDetected,
+  });
 
   // Advance to step 2 WITHOUT any registry write: the confirmed wine fields
   // ride along and are minted by POST /api/bottles when the user commits the
@@ -784,6 +821,9 @@ function AddBottle() {
         rating: bottleData.rating ? parseFloat(bottleData.rating) : undefined,
         ratingScale: bottleData.ratingScale || '5',
         dateAdded: bottleData.dateAdded || undefined,
+        // The barcode the camera read: stored on each bottle, so the next
+        // member who scans this code is offered the same wine.
+        barcode: barcode || undefined,
         addToHistory: addToHistory || undefined,
         ...(addToHistory ? {
           consumedAt: historyData.consumedAt || undefined,
@@ -977,7 +1017,11 @@ function AddBottle() {
                   <>
                     <div className="camera-overlay">
                       <div className="label-guide-frame" />
-                      <p className="overlay-hint">{t('addBottle.scanHint')}</p>
+                      <p className="overlay-hint">
+                        {barcodeNoted
+                          ? t('addBottle.barcodeNoted', 'Barcode read — not known yet. Now take the photo of the label.')
+                          : t('addBottle.scanHint')}
+                      </p>
                     </div>
                     <div className="camera-controls">
                       <button type="button" className="camera-btn camera-btn-close" onClick={stopLabelCamera} aria-label="Close camera">✕</button>
@@ -1446,6 +1490,11 @@ function AddBottle() {
               {t('addBottle.changeWine')}
             </button>
           </div>
+          {barcodeWineId && selectedWine?._id === barcodeWineId && (
+            <p className="selected-wine-barcode-note">
+              {t('addBottle.barcodeFound', 'Found by its barcode. Not this wine? Use Change wine.')}
+            </p>
+          )}
 
           {/* A wine the registry does not know yet will be MINTED with this
               bottle. Offer to keep it private first: a draft is editable by

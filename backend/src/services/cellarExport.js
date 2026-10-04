@@ -123,6 +123,7 @@ function mapBottlesForExport(bottles, racks, imagesByBottle = new Map(), reviews
     if (b.purchaseDate) item.purchaseDate = b.purchaseDate.toISOString().slice(0, 10);
     if (b.purchaseLocation) item.purchaseLocation = b.purchaseLocation;
     if (b.purchaseUrl) item.purchaseUrl = b.purchaseUrl;
+    if (b.barcode) item.barcode = b.barcode;
     if (b.location) item.location = b.location;
     if (b.notes) item.notes = b.notes;
 

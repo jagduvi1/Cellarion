@@ -51,6 +51,7 @@ const { planRackCreations, placeBottlesInRack, DEFAULT_ANCHOR } = require('../ut
 const { getMaxPosition, cabinetShelfRows, cabinetShelfCols, cabinetShelfAlternate } = require('../utils/rackGeometry');
 const { resolveRating } = require('../utils/ratingUtils');
 const { normalizeBottleSize, DEFAULT_SIZE } = require('../config/bottleSizes');
+const { normalizeBarcode } = require('../utils/barcode');
 const { stripHtml } = require('../utils/sanitize');
 const { parseAndValidateVintage, parseDrinkYear } = require('../utils/validation');
 const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
@@ -177,6 +178,7 @@ function exportBottleToItem(b) {
     purchaseDate: b.purchaseDate,
     purchaseLocation: b.purchaseLocation,
     purchaseUrl: b.purchaseUrl,
+    barcode: b.barcode,
     location: b.location,
     notes: b.notes,
     occasion: b.occasion,
@@ -504,6 +506,7 @@ function buildBottle({ cellarId, ownerId, item, canonicalVintage, wineDefinition
     purchaseDate: item.purchaseDate || undefined,
     purchaseLocation: stripHtml(item.purchaseLocation),
     purchaseUrl: item.purchaseUrl || undefined,
+    barcode: normalizeBarcode(item.barcode) || undefined,
     location: stripHtml(item.location),
     notes: stripHtml(item.notes),
     occasion: stripHtml(item.occasion),

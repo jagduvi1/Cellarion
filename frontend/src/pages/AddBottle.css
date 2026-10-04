@@ -914,6 +914,13 @@
   border-radius: var(--radius-md);
 }
 
+/* "Found by its barcode" — a quiet line under the wine, not a banner. */
+.selected-wine-barcode-note {
+  margin: 0.4rem 0 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
 .selected-wine-bar-img {
   width: 36px;
   height: 52px;
