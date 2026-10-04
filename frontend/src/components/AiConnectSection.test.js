@@ -26,12 +26,11 @@ afterEach(() => {
 });
 
 describe('AiConnectSection', () => {
-  test('is labelled Beta and says plainly that it is used at your own risk', () => {
+  test('is out of beta, and still states the safety net up front', () => {
     render(<AiConnectSection />);
-    // The badge rides in the heading, so the accessible name carries it too.
-    expect(screen.getByRole('heading', { name: /Connect your AI\s+Beta/ })).toBeInTheDocument();
-    expect(screen.getByText(/beta feature and you use it at your own risk/i)).toBeInTheDocument();
-    // The reassurances that make the warning honest rather than just scary.
+    expect(screen.getByRole('heading', { name: 'Connect your AI' })).toBeInTheDocument();
+    expect(screen.queryByText(/\bbeta\b/i)).toBeNull();
+    // Read-only tokens, reversible changes, instant revoke.
     expect(screen.getByText(/read-only token/i)).toBeInTheDocument();
     expect(screen.getByText(/revoking the token cuts it off instantly/i)).toBeInTheDocument();
   });

@@ -183,10 +183,10 @@ function ConnectAi() {
               'Cellarion speaks the Model Context Protocol, so you can run your cellar from Claude, ChatGPT or any MCP client.',
             )}
           </p>
-          <p className="connect-ai-beta">
+          <p className="connect-ai-undo-note">
             {t(
-              'connectAi.beta',
-              'The AI connector is in beta. Everything an assistant changes is listed in your account and can be undone.',
+              'connectAi.undoNote',
+              'Everything an assistant changes is listed in your account and can be undone.',
             )}
           </p>
         </header>
