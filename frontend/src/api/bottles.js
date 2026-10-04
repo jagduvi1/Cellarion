@@ -138,6 +138,17 @@ export const validateImport = (apiFetch, data) =>
     body: JSON.stringify(data),
   });
 
+// POST /api/bottles/import/receipt — multipart, field `files`: up to five
+// photos of one receipt, or one PDF. apiFetch leaves the Content-Type to the
+// browser so the multipart boundary is set. Answers
+// { receipt: { documentType, store, purchaseDate, currency }, items, skipped, warnings };
+// the items go through validateImport like any parsed file.
+export const scanReceipt = (apiFetch, files) => {
+  const fd = new FormData();
+  for (const file of files) fd.append('files', file);
+  return apiFetch('/api/bottles/import/receipt', { method: 'POST', body: fd });
+};
+
 export const confirmImport = (apiFetch, data) =>
   apiFetch('/api/bottles/import/confirm', {
     method: 'POST',

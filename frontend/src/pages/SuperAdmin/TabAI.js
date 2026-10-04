@@ -322,6 +322,18 @@ function LabelScanPromptPanel({ prompt, apiFetch }) {
   );
 }
 
+function ReceiptScanPromptPanel({ prompt, apiFetch }) {
+  return (
+    <PromptPanel
+      title="Receipt Scan — AI Prompt"
+      endpoint="/api/superadmin/ai/receipt-scan-prompt"
+      intro="Sent with the photos or PDF when a user scans a receipt on the import page. It reads the wine lines (text, quantity, price, shop, date) — identification happens afterwards in the import review. Uses the label scan model. Takes effect immediately on save."
+      prompt={prompt}
+      apiFetch={apiFetch}
+    />
+  );
+}
+
 function LabelScanModelPanel({ currentModel, apiFetch }) {
   return (
     <ModelPickerPanel
@@ -689,6 +701,7 @@ export function PromptCachingPanel({ enabled, apiFetch }) {
 const AI_FEATURE_LABELS = {
   label_scan: 'Label scan',
   label_scan_back: 'Back-label scan',
+  receipt_scan: 'Receipt scan',
   import_identify: 'Import identification',
   text_lookup: 'Text lookup',
   chat: 'Cellar Chat — answers',
@@ -1486,6 +1499,7 @@ export default function TabAI() {
       <SystemPromptPanel prompt={config.chatSystemPrompt || ''} apiFetch={apiFetch} />
       <LabelScanModelPanel currentModel={config.labelScanModel || 'claude-sonnet-5'} apiFetch={apiFetch} />
       <LabelScanPromptPanel prompt={config.labelScanPrompt || ''} apiFetch={apiFetch} />
+      <ReceiptScanPromptPanel prompt={config.receiptScanPrompt || ''} apiFetch={apiFetch} />
       <ImportLookupModelPanel currentModel={config.importLookupModel || 'claude-sonnet-5'} apiFetch={apiFetch} />
       <ImportLookupPromptPanel prompt={config.importLookupPrompt || ''} apiFetch={apiFetch} />
       <MaturitySuggestModelPanel currentModel={config.maturitySuggestModel || 'claude-sonnet-5'} apiFetch={apiFetch} />
