@@ -184,6 +184,7 @@
     "demoBlocked": "Connecting an AI assistant is not available in the demo. Create a free account to use it.",
     "beta": "Beta",
     "betaNotice": "Connecting an AI is a beta feature and you use it at your own risk — it is new and still being tested. Everything it changes is reversible, and you can revoke access at any time in Settings.",
+    "reversibleNotice": "Everything it changes is reversible, and you can revoke access at any time in Settings.",
     "wantsChoose": "wants to connect to your Cellarion cellar. Choose how much it may do:",
     "accessLevel": "Access level",
     "levelRead": "Read only — it can look, never change anything",
@@ -194,6 +195,7 @@
     "title": "Connect your AI to your wine cellar",
     "subtitle": "Cellarion speaks the Model Context Protocol, so you can run your cellar from Claude, ChatGPT or any MCP client.",
     "beta": "The AI connector is in beta. Everything an assistant changes is listed in your account and can be undone.",
+    "undoNote": "Everything an assistant changes is listed in your account and can be undone.",
     "copy": "Copy",
     "copied": "Copied",
     "oneClick": {
@@ -458,7 +460,8 @@
       "docsLink": "Set-up guides for every client",
       "testError": "Could not verify right now (server busy or unreachable) — this says nothing about your token. Try again in a moment.",
       "beta": "Beta",
-      "betaNotice": "This is a beta feature and you use it at your own risk. It works, but it is new and still being tested — expect rough edges, and changes while we refine it. If you are unsure, connect with a read-only token: anything an AI changes can be undone under \"What your AI has changed\", and revoking the token cuts it off instantly."
+      "betaNotice": "This is a beta feature and you use it at your own risk. It works, but it is new and still being tested — expect rough edges, and changes while we refine it. If you are unsure, connect with a read-only token: anything an AI changes can be undone under \"What your AI has changed\", and revoking the token cuts it off instantly.",
+      "safetyNotice": "If you are unsure, start with a read-only token. Anything an AI changes can be undone under \"What your AI has changed\", and revoking the token cuts it off instantly."
     },
     "climateDevices": {
       "title": "Climate devices",

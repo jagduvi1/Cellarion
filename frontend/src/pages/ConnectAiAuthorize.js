@@ -188,13 +188,12 @@ function ConnectAiAuthorize() {
     <>
       <h1 className="oauth-consent-title">
         {t('oauthConsent.title', 'Connect your AI assistant')}
-        <span className="oauth-consent-beta">{t('oauthConsent.beta', 'Beta')}</span>
       </h1>
-      {/* This is the moment access is granted, so the beta framing has to be
-          here too — not only back in Settings where the flow started. */}
+      {/* This is the moment access is granted, so the safety net is said here
+          too — not only back in Settings where the flow started. */}
       <div className="alert alert-info">
-        {t('oauthConsent.betaNotice',
-          'Connecting an AI is a beta feature and you use it at your own risk — it is new and still being tested. Everything it changes is reversible, and you can revoke access at any time in Settings.')}
+        {t('oauthConsent.reversibleNotice',
+          'Everything it changes is reversible, and you can revoke access at any time in Settings.')}
       </div>
       <p className="oauth-consent-lead">
         <strong>{who}</strong>{' '}

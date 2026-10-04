@@ -55,13 +55,13 @@ afterEach(() => {
 });
 
 describe('ConnectAi', () => {
-  test('renders the page and is honest that the connector is in beta', () => {
+  test('renders the page, out of beta, with the undo reassurance', () => {
     setOrigin(HOSTED);
     renderPage();
     expect(
       screen.getByRole('heading', { name: /Connect your AI to your wine cellar/ }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/in beta/i)).toBeInTheDocument();
+    expect(screen.queryByText(/in beta/i)).toBeNull();
     expect(screen.getByText(/can be undone/i)).toBeInTheDocument();
   });
 

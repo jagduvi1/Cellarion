@@ -54,11 +54,11 @@ test('a demo user is told to make a real account', () => {
   expect(screen.getByText(/not available in the demo/i)).toBeInTheDocument();
 });
 
-test('the consent screen is labelled Beta and says it is used at your own risk', () => {
+test('the consent screen is out of beta and still says everything is reversible', () => {
   render(<ConnectAiAuthorize />);
-  // The badge rides in the heading, so it lands in the accessible name too.
-  expect(screen.getByRole('heading', { name: /Connect your AI assistant\s+Beta/ })).toBeInTheDocument();
-  expect(screen.getByText(/beta feature and you use it at your own risk/i)).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Connect your AI assistant' })).toBeInTheDocument();
+  expect(screen.queryByText(/\bbeta\b/i)).toBeNull();
+  expect(screen.getByText(/reversible, and you can revoke access/i)).toBeInTheDocument();
 });
 
 test('logged in → shows the client name, requested scopes, and the return host', () => {
