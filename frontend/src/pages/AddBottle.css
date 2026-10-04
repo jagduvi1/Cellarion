@@ -914,6 +914,29 @@
   border-radius: var(--radius-md);
 }
 
+/* "Found by its barcode" — a quiet line under the wine, not a banner. */
+.selected-wine-barcode-note {
+  margin: 0.4rem 0 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+/* "Help the community: scan the barcode" — same quiet register, one button. */
+.barcode-help {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  margin: 0.4rem 0 0;
+}
+
+.barcode-help p {
+  margin: 0;
+  flex: 1 1 16rem;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
 .selected-wine-bar-img {
   width: 36px;
   height: 52px;

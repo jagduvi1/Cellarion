@@ -191,6 +191,14 @@ describe('addBottle (real execution)', () => {
     expect(getOrCreateDailySnapshot).toHaveBeenCalledTimes(1); // awaited pre-save, REST parity
   });
 
+  test('a scanned barcode is stored in its canonical form; a bad one never refuses the add', async () => {
+    expect((await addBottle(CELLAR, WINE, { barcode: '036000291452' }, REQ)).bottle.barcode).toBe('0036000291452'); // UPC-A → EAN-13
+    const misread = await addBottle(CELLAR, WINE, { barcode: '4006381333932' }, REQ); // wrong check digit
+    expect(misread.error).toBeUndefined();
+    expect(misread.bottle.barcode).toBeUndefined();
+    expect((await addBottle(CELLAR, WINE, {}, REQ)).bottle.barcode).toBeUndefined();
+  });
+
   test('location is stored HTML-stripped and capped with the REST message', async () => {
     const res = await addBottle(CELLAR, WINE, { location: 'Shelf <i>2</i>' }, REQ);
     expect(res.bottle.location).toBe('Shelf 2');

@@ -18,6 +18,7 @@ const resolveRatingUtil = resolveRating;
 const { stripHtml, isSafeUrl } = require('../utils/sanitize');
 const { parseAndValidateVintage, parseDrinkYear } = require('../utils/validation');
 const { normalizeBottleSize, DEFAULT_SIZE } = require('../config/bottleSizes');
+const { normalizeBarcode } = require('../utils/barcode');
 const { logAudit } = require('./audit');
 const Rack = require('../models/Rack');
 const Bottle = require('../models/Bottle');
@@ -397,6 +398,7 @@ async function addBottle(cellarDoc, wineDoc, fields = {}, req) {
     // Migration helpers — backdate the bottle, or add it directly to history.
     dateAdded, addToHistory,
     consumedAt, consumedReason, consumedNote, consumedRating, consumedRatingScale,
+    barcode,
   } = fields;
 
   const parsedVintage = parseAndValidateVintage(vintage);
@@ -471,6 +473,10 @@ async function addBottle(cellarDoc, wineDoc, fields = {}, req) {
   }
   if (purchaseLocation) doc.purchaseLocation = stripHtml(purchaseLocation);
   if (purchaseUrl) doc.purchaseUrl = purchaseUrl;
+  // A scanned retail barcode. Never a reason to refuse an add: a code that is
+  // not a valid public GTIN (misread, shop-internal) is simply not stored.
+  const code = normalizeBarcode(barcode);
+  if (code) doc.barcode = code;
   if (location) doc.location = stripHtml(location);
   if (notes) doc.notes = stripHtml(notes);
   if (occasion) doc.occasion = stripHtml(occasion);

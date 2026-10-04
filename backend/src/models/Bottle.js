@@ -82,6 +82,16 @@ const bottleSchema = new mongoose.Schema({
     trim: true,
     maxlength: [2048, 'Purchase URL too long (max 2048 characters)']
   },
+  // The retail barcode scanned when this bottle was added, in the canonical
+  // form utils/barcode.normalizeBarcode returns. The member's own data
+  // (exported and deleted with the bottle); bottles carrying a barcode are
+  // also how the same wine is recognised when another member scans it
+  // (services/barcodeLookup) — counted, never shown with whose they are.
+  barcode: {
+    type: String,
+    match: /^\d{8,14}$/,
+    default: undefined
+  },
   // Cellar management
   location: {
     type: String,
@@ -286,6 +296,9 @@ const bottleSchema = new mongoose.Schema({
 // Compound indexes for efficient queries
 bottleSchema.index({ user: 1, cellar: 1, wineDefinition: 1 });
 bottleSchema.index({ wineDefinition: 1 }); // For reverse lookup
+// Barcode → wine recognition (services/barcodeLookup). Partial: only the few
+// bottles added by scanning carry one, so the index stays small.
+bottleSchema.index({ barcode: 1, wineDefinition: 1 }, { partialFilterExpression: { barcode: { $type: 'string' } } });
 bottleSchema.index({ cellar: 1, vintage: 1 }); // For filtering by vintage
 bottleSchema.index({ cellar: 1, rating: 1 }); // For filtering by rating
 bottleSchema.index({ user: 1, vintage: 1 }); // For user-wide vintage queries
