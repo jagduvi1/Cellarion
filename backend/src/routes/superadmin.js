@@ -637,6 +637,9 @@ registerPromptRoute('/ai/label-scan-prompt',    'labelScanPrompt',    SCAN_PROMP
 // The back-label rescue prompt (POST /api/wines/scan-label-back). No model
 // route beside it: the back scan runs on labelScanModel, above.
 registerPromptRoute('/ai/label-scan-back-prompt', 'labelScanBackPrompt', SCAN_PROMPT_MAX_LENGTH, 'Failed to save back label scan prompt');
+// The receipt scan prompt (POST /api/bottles/import/receipt). Like the back
+// scan, it runs on labelScanModel — no model route of its own.
+registerPromptRoute('/ai/receipt-scan-prompt',  'receiptScanPrompt',  SCAN_PROMPT_MAX_LENGTH,   'Failed to save receipt scan prompt');
 registerPromptRoute('/ai/import-lookup-prompt', 'importLookupPrompt', SCAN_PROMPT_MAX_LENGTH,   'Failed to save import lookup prompt');
 registerModelRoute('/ai/import-lookup-model',   'importLookupModel',  'Failed to save import lookup model');
 registerModelRoute('/ai/label-scan-model',      'labelScanModel',     'Failed to save label scan model');

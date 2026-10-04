@@ -42,6 +42,7 @@ const adminAiBudgetRequestsRoute = require('./routes/admin/aiBudgetRequests');
 const supportRoute = require('./routes/support');
 const wineReportsRoute = require('./routes/wineReports');
 const importRoute = require('./routes/import');
+const importReceiptRoute = require('./routes/importReceipt');
 const cellarImportRoute = require('./routes/cellarImport');
 const racksRoute = require('./routes/racks');
 const offlineRoute = require('./routes/offline');
@@ -354,6 +355,8 @@ app.use('/api/ai-budget', aiBudgetRoute);
 app.use('/api/admin/ai-budget-requests', adminAiBudgetRequestsRoute);
 app.use('/api/support', supportRoute);
 app.use('/api/wine-reports', wineReportsRoute);
+// Receipt scan first: its own multipart upload, auth and AI budget (routes/importReceipt).
+app.use('/api/bottles/import/receipt', importReceiptRoute);
 app.use('/api/bottles/import', importRoute);
 app.use('/api/cellar-import', cellarImportRoute);
 app.use('/api/racks', racksRoute);

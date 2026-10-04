@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation, Trans } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { validateImport, confirmImport } from '../api/bottles';
+import { validateImport, confirmImport, scanReceipt } from '../api/bottles';
 import { getAiBudgetStatus, requestAiBudgetIncrease } from '../api/aiBudget';
 import { searchWines } from '../api/wines';
 import { getRacks } from '../api/racks';
@@ -15,6 +15,7 @@ import { buildImportItem as buildImportItemPayload } from '../utils/importPayloa
 import { prepareImportItems } from '../utils/importPrepare';
 import { describePriceWarning } from '../utils/priceValidation';
 import { summariseImportOutcome, buildImportReportCsv } from '../utils/importReport';
+import { expandReceiptItems, groupSkippedLines, receiptErrorKey } from '../utils/receiptImport';
 import {
   rowsNeedingAiRetry,
   reconcileRetrySelections,
@@ -55,7 +56,8 @@ const FORMAT_LABEL_KEYS = {
   vivino: 'importBottles.formats.vivino',
   cellartracker: 'importBottles.formats.cellartracker',
   'oeno-export': 'importBottles.formats.oenoExport',
-  generic: 'importBottles.formats.generic'
+  generic: 'importBottles.formats.generic',
+  receipt: 'importBottles.formats.receipt'
 };
 
 const STATUS_LABEL_KEYS = {
@@ -203,6 +205,12 @@ function ImportBottles() {
   // in importMappers.
   const [vivinoScanHistory, setVivinoScanHistory] = useState(false);
   const [vivinoImportMode, setVivinoImportMode] = useState('history');
+  // Receipt scan: a photo/PDF read server-side into the same rows a file
+  // produces. receiptInfo = { documentType, store, purchaseDate, currency,
+  // lines, bottles, skipped: [{ reason, count, lines }], warnings } for the
+  // summary under the drop zone; null when the rows did not come from a receipt.
+  const [receiptScanning, setReceiptScanning] = useState(false);
+  const [receiptInfo, setReceiptInfo] = useState(null);
 
   // AI daily budget (rows with aiSkipped fell back to fuzzy matching).
   // Status from GET /api/ai-budget/status: { dailyMax, usedToday, override, pendingRequest }
@@ -483,6 +491,7 @@ function ImportBottles() {
    */
   const processFiles = useCallback((fileList) => {
     setError(null);
+    setReceiptInfo(null); // a file replaces rows read from a receipt
     const files = Array.from(fileList || []).filter(Boolean);
     if (files.length === 0) return;
 
@@ -580,6 +589,53 @@ function ImportBottles() {
     e.preventDefault();
     setDragOver(false);
     processFiles(e.dataTransfer.files);
+  };
+
+  // ── Receipt scan ────────────────────────────────────────────────────────
+  // Photos (or a PDF) of a receipt are read server-side into the same rows a
+  // parsed file produces. From there the import is the usual match → review →
+  // confirm, so every receipt line is checked before a bottle is created.
+  const handleReceiptFiles = async (fileList) => {
+    const files = Array.from(fileList || []).filter(Boolean);
+    if (files.length === 0 || receiptScanning) return;
+    setError(null);
+    setReceiptScanning(true);
+    try {
+      const res = await scanReceipt(apiFetch, files);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        track('receipt-scan', { result: data?.code || `http-${res.status}` });
+        const { key, values } = receiptErrorKey(res.status, data);
+        setError(t(key, values));
+        return;
+      }
+      const items = expandReceiptItems(data.items);
+      track('receipt-scan', { result: items.length > 0 ? 'read' : 'no-wine', lines: data.items?.length || 0 });
+      if (items.length === 0) {
+        setError(t('importBottles.receipt.errors.noWine'));
+        return;
+      }
+      const missingVintage = items.filter(i => i.vintageMissing).length;
+      setSourceText(null);
+      applyParsed(
+        { items, format: 'receipt', warnings: missingVintage > 0 ? [{ code: 'vintage-missing', count: missingVintage }] : [] },
+        { fileName: data.receipt?.store || t('importBottles.receipt.defaultName'), encoding: null }
+      );
+      // Every row already carries the receipt's currency; show the same in the
+      // picker rather than the profile default (it covers rows without one).
+      if (data.receipt?.currency) setImportCurrency(data.receipt.currency);
+      setReceiptInfo({
+        ...data.receipt,
+        lines: data.items.length,
+        bottles: items.length,
+        skipped: groupSkippedLines(data.skipped),
+        warnings: Array.isArray(data.warnings) ? data.warnings : [],
+      });
+    } catch {
+      setError(t('importBottles.receipt.errors.generic'));
+    } finally {
+      setReceiptScanning(false);
+    }
   };
 
   // ── Validation ──────────────────────────────────────────────────────────
@@ -1030,6 +1086,52 @@ function ImportBottles() {
 
   // ── Render helpers ──────────────────────────────────────────────────────
 
+  // What the receipt scan read: the shop and date, how many wines, the lines it
+  // left out (beer, deposits, bags…) so nothing disappears unexplained, and the
+  // notices that need a decision before importing.
+  const renderReceiptSummary = () => {
+    const r = receiptInfo;
+    const skippedCount = r.skipped.reduce((sum, g) => sum + g.count, 0);
+    const secondDocument = r.documentType === 'prepayment' || r.documentType === 'proforma';
+    return (
+      <div className="receipt-summary">
+        <p className="receipt-summary-head">
+          <strong>{t('importBottles.receipt.summary', { count: r.bottles, lines: r.lines })}</strong>
+          {(r.store || r.purchaseDate) && (
+            <span className="receipt-summary-meta">{[r.store, r.purchaseDate].filter(Boolean).join(' · ')}</span>
+          )}
+        </p>
+        {secondDocument && (
+          <div className="import-parse-warning-banner" role="note">
+            {t(r.documentType === 'prepayment' ? 'importBottles.receipt.prepaymentNote' : 'importBottles.receipt.proformaNote')}
+          </div>
+        )}
+        {r.warnings.includes('mixed_case') && (
+          <div className="import-parse-warning-banner" role="note">{t('importBottles.receipt.mixedCaseNote')}</div>
+        )}
+        {r.warnings.includes('wine_discount_spread') && (
+          <div className="import-parse-warning-banner" role="note">{t('importBottles.receipt.discountNote')}</div>
+        )}
+        {r.warnings.includes('currency_unsupported') && (
+          <div className="import-parse-warning-banner" role="note">{t('importBottles.receipt.currencyNote')}</div>
+        )}
+        {skippedCount > 0 && (
+          <details className="receipt-summary-skipped">
+            <summary>{t('importBottles.receipt.skippedTitle', { count: skippedCount })}</summary>
+            <ul>
+              {r.skipped.map(g => (
+                <li key={g.reason}>
+                  <strong>{t(`importBottles.receipt.skipReason.${g.reason}`, g.reason)}:</strong> {g.lines.join(', ')}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+        <p className="receipt-summary-hint">{t('importBottles.receipt.reviewHint')}</p>
+      </div>
+    );
+  };
+
   // Non-blocking parse warnings (shown on both upload and review steps).
   // The CT truncation warning gets elevated styling + a bold headline: a
   // 25-row page export silently missing 90% of a cellar is the single worst
@@ -1242,6 +1344,37 @@ function ImportBottles() {
           </div>
         </div>
       )}
+      {/* Receipt scan: photos or a PDF of a purchase, read by the AI into rows
+          for the same review as a file. The document itself is not stored.
+          First on the page: on a phone, photographing a receipt is the import
+          most people come here for. */}
+      <div className="receipt-scan">
+        <div className="receipt-scan-text">
+          <h3>
+            {t('importBottles.receipt.title')}
+            <span className="receipt-beta-badge">{t('importBottles.receipt.beta', 'Beta')}</span>
+          </h3>
+          <p>{t('importBottles.receipt.desc')}</p>
+          <p className="receipt-scan-privacy">{t('importBottles.receipt.privacy')}</p>
+        </div>
+        <input
+          id="receipt-file-input"
+          type="file"
+          accept="image/*,application/pdf"
+          multiple
+          onChange={(e) => { handleReceiptFiles(e.target.files); e.target.value = ''; }}
+          style={{ display: 'none' }}
+        />
+        <button
+          type="button"
+          className="btn btn-primary receipt-scan-btn"
+          disabled={receiptScanning}
+          onClick={() => document.getElementById('receipt-file-input').click()}
+        >
+          {receiptScanning ? t('importBottles.receipt.reading') : t('importBottles.receipt.choose')}
+        </button>
+      </div>
+
       <div className="import-instructions">
         <h3>{t('importBottles.upload.supportedFormats')}</h3>
         <div className="format-cards">
@@ -1313,6 +1446,7 @@ function ImportBottles() {
         )}
       </div>
 
+      {parsedItems.length > 0 && detectedFormat === 'receipt' && receiptInfo && renderReceiptSummary()}
       {parsedItems.length > 0 && renderImportWarnings()}
       {parsedItems.length > 0 && renderCtDisclosure()}
       {parsedItems.length > 0 && renderVivinoHistoryChoice()}
@@ -2012,6 +2146,14 @@ function ImportBottles() {
                           ) : (r.item.vintage || t('importBottles.preview.nv'))}
                           {r.item.country && ` · ${r.item.country}`}
                         </span>
+                        {/* Receipt rows: the line as printed, to check an
+                            abbreviated name against its match. */}
+                        {r.item.receiptLine && (
+                          <span className="source-receipt-line" title={t('importBottles.receipt.printedLine')}>
+                            {r.item.receiptLine}
+                            {r.item.mixedCase && ` · ${t('importBottles.receipt.mixedCaseBadge')}`}
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="col-match">
@@ -2472,6 +2614,7 @@ function ImportBottles() {
           onClick={() => {
             setStep('upload');
             setParsedItems([]);
+            setReceiptInfo(null);
             setResults([]);
             setSummary(null);
             setSelections({});

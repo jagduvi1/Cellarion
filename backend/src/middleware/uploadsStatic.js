@@ -24,6 +24,14 @@ const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
 const IMMUTABLE_CACHE = 'public, max-age=31536000, immutable';
 
 function uploadsGuard(req, res, next) {
+  // Receipts kept during the receipt-scan beta (services/receiptArchive) share
+  // the uploads volume but are private: never served, whatever the extension.
+  // 404, not 403, so the folder's existence is not confirmed either.
+  let decoded = req.path;
+  try { decoded = decodeURIComponent(req.path); } catch { /* malformed: checked raw */ }
+  if (/^\/+receipts(\/|$)/i.test(decoded)) {
+    return res.status(404).json({ error: 'Not found' });
+  }
   const ext = path.extname(req.path).toLowerCase();
   if (!ALLOWED_EXTENSIONS.includes(ext)) {
     return res.status(403).json({ error: 'File type not allowed' });

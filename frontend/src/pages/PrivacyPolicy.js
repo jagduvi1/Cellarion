@@ -42,7 +42,7 @@ function PrivacyPolicy() {
         <h2>2. Legal basis for processing</h2>
         <ul>
           <li><strong>Contract performance (Art. 6(1)(b) GDPR):</strong> processing your account data, cellar data, and preferences is necessary to provide the Cellarion service you signed up for.</li>
-          <li><strong>Consent (Art. 6(1)(a) GDPR):</strong> we process your data for optional features (email notifications, label scanning via AI, connecting an external AI assistant) only with your explicit consent, which you can withdraw at any time.</li>
+          <li><strong>Consent (Art. 6(1)(a) GDPR):</strong> we process your data for optional features (email notifications, label and receipt scanning via AI, connecting an external AI assistant) only with your explicit consent, which you can withdraw at any time.</li>
           <li><strong>Legitimate interest (Art. 6(1)(f) GDPR):</strong> we maintain activity logs and security measures to protect the service and its users.</li>
         </ul>
 
@@ -63,6 +63,7 @@ function PrivacyPolicy() {
           <li>To provide and operate the Cellarion service, including authentication and cellar management.</li>
           <li>To send you notifications you have opted into (drink-window alerts, email digests, push notifications).</li>
           <li>To process bottle label images for wine identification (when you use the label scanning feature).</li>
+          <li>To read the wines on a receipt, order confirmation or invoice you choose to scan when importing bottles. The wines, prices, shop and date you then import are kept as part of those bottles; names, addresses, member numbers and card details on the document are never copied to them. While receipt scanning is in beta, we also keep the scanned receipt (photos with their location data removed, or the PDF) and what was read from it for 5 days, so we can fix reading mistakes. Only Cellarion's administrators can see it. While it is kept, what was read from it is part of your data export. It is deleted automatically after 5 days, and at once if you delete your account.</li>
           <li>To answer support requests you send us, in the app and by email. Each emailed answer has a link that stops these emails, and you can also turn them off in Settings.</li>
           <li>To maintain security, prevent abuse, and investigate incidents via activity logs.</li>
           <li>To operate AI-assistant connections you set up yourself (see section 5), including the action trail that lets you review and undo changes a connected assistant made.</li>
@@ -93,8 +94,8 @@ function PrivacyPolicy() {
             </tr>
             <tr>
               <td>Anthropic (Claude API)</td>
-              <td>Wine label scanning and AI cellar chat</td>
-              <td>Bottle label images, wine metadata, chat messages</td>
+              <td>Wine label and receipt scanning, and AI cellar chat</td>
+              <td>Bottle label images, images or PDFs of receipts you scan, wine metadata, chat messages</td>
               <td>US</td>
             </tr>
             <tr>
