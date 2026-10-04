@@ -87,11 +87,24 @@ it('reads a receipt into one row per bottle with the shop, date and skipped line
   expect(validateImport).not.toHaveBeenCalled();
 });
 
-it('warns that a prepayment receipt and the sales receipt list the same bottles', async () => {
+it('a prepayment receipt is pre-set to come in on order, and says so; unticked, the same-bottles warning returns', async () => {
   scanReceipt.mockResolvedValue(jsonRes({ ...RECEIPT, receipt: { ...RECEIPT.receipt, documentType: 'prepayment' } }));
   const { container } = render(<ImportBottles />);
   chooseReceipt(container);
-  await waitFor(() => expect(screen.getByText('importBottles.receipt.prepaymentNote')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('importBottles.receipt.prepaymentOnOrderNote')).toBeTruthy());
+  const onOrder = screen.getByText('importBottles.wholeImport.onOrderLabel').closest('label').querySelector('input');
+  expect(onOrder.checked).toBe(true);
+  fireEvent.click(onOrder);
+  expect(screen.getByText('importBottles.receipt.prepaymentNote')).toBeTruthy();
+});
+
+it('an ordinary receipt does not come in on order unless the user ticks it', async () => {
+  scanReceipt.mockResolvedValue(jsonRes(RECEIPT));
+  const { container } = render(<ImportBottles />);
+  chooseReceipt(container);
+  await waitFor(() => expect(screen.getByText('importBottles.wholeImport.onOrderLabel')).toBeTruthy());
+  const onOrder = screen.getByText('importBottles.wholeImport.onOrderLabel').closest('label').querySelector('input');
+  expect(onOrder.checked).toBe(false);
 });
 
 it('explains a refused scan', async () => {

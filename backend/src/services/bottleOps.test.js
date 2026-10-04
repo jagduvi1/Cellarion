@@ -706,3 +706,80 @@ describe('consumedLoggedAt and the restore window (post-ship audit 2026-09-03)',
     expect(checkRestockGap).toHaveBeenCalledTimes(1);
   });
 });
+
+// ── On order (bought, not delivered yet) ────────────────────────────────────
+describe('bottles on order', () => {
+  const { markArrived, openBottle, pourFromBottle } = require('./bottleOps');
+  const ordered = (over = {}) => freshBottle({ status: 'ordered', addedToCellarAt: new Date('2026-01-01T12:00:00Z'), ...over });
+
+  test('addBottle onOrder creates the bottle ordered, with the expected MONTH, audited as on order', async () => {
+    const res = await addBottle(CELLAR, WINE, { vintage: '2023', onOrder: true, expectedArrival: '2027-03' }, REQ);
+    expect(res.error).toBeUndefined();
+    expect(res.bottle.status).toBe('ordered');
+    expect(res.bottle.expectedArrival.toISOString()).toBe('2027-03-01T12:00:00.000Z');
+    expect(logAudit).toHaveBeenCalledWith(REQ, 'bottle.add', expect.anything(),
+      { wineName: 'Barolo', vintage: '2023', onOrder: true });
+  });
+
+  test('addBottle onOrder without a date is fine; a bad month or a history add is a 400', async () => {
+    const noDate = await addBottle(CELLAR, WINE, { vintage: '2023', onOrder: true }, REQ);
+    expect(noDate.bottle.status).toBe('ordered');
+    expect(noDate.bottle.expectedArrival).toBeUndefined();
+    expect((await addBottle(CELLAR, WINE, { vintage: '2023', onOrder: true, expectedArrival: '2027-13' }, REQ)).error.status).toBe(400);
+    expect((await addBottle(CELLAR, WINE, { vintage: '2023', onOrder: true, expectedArrival: '2207-01' }, REQ)).error.status).toBe(400);
+    expect((await addBottle(CELLAR, WINE, { vintage: '2023', onOrder: true, addToHistory: true }, REQ)).error.status).toBe(400);
+  });
+
+  test('nothing on order can be drunk, opened or poured (409 not_arrived, nothing saved)', async () => {
+    for (const res of [
+      await consumeBottle(ordered(), { reason: 'drank' }, REQ),
+      await openBottle(ordered(), { preservationMethod: 'vacuum' }, REQ),
+      await pourFromBottle(ordered({ openedAt: new Date() }), {}, REQ),
+    ]) {
+      expect(res.error).toMatchObject({ status: 409, code: 'not_arrived' });
+    }
+    expect(Rack.updateMany).not.toHaveBeenCalled();
+  });
+
+  test('markArrived: ordered → active, arrival day becomes addedToCellarAt, marker cleared, audited', async () => {
+    const b = ordered({ expectedArrival: new Date('2026-09-01T12:00:00Z'), arrivalNotifiedAt: new Date() });
+    const res = await markArrived(b, {}, REQ);
+    expect(res.error).toBeUndefined();
+    expect(b.status).toBe('active');
+    expect(b.arrivedAt).toBeInstanceOf(Date);
+    expect(b.addedToCellarAt).toBe(b.arrivedAt);
+    expect(b.arrivalNotifiedAt).toBeUndefined();
+    expect(b.save).toHaveBeenCalled();
+    expect(logAudit).toHaveBeenCalledWith(REQ, 'bottle.arrive', { type: 'bottle', id: 'b1', cellarId: 'c1' },
+      { expectedArrival: new Date('2026-09-01T12:00:00Z') });
+  });
+
+  test('markArrived takes a day (noon UTC), refuses the future and a bottle not on order', async () => {
+    const b = ordered();
+    await markArrived(b, { arrivedAt: '2026-09-18' }, REQ);
+    expect(b.arrivedAt.toISOString()).toBe('2026-09-18T12:00:00.000Z');
+    expect((await markArrived(ordered(), { arrivedAt: new Date(Date.now() + 5 * 86400000).toISOString() }, REQ)).error.status).toBe(400);
+    expect((await markArrived(freshBottle(), {}, REQ)).error).toMatchObject({ status: 409, code: 'not_on_order' });
+  });
+
+  test('updateBottleFields: expectedArrival changes (and re-arms the reminder) only on a bottle on order', async () => {
+    const b = new BottleModel({ cellar: 'c1', status: 'ordered', vintage: '2023', ratingScale: '5', arrivalNotifiedAt: new Date() });
+    const res = await updateBottleFields(b, { expectedArrival: '2027-05' }, REQ);
+    expect(res.changes.expectedArrival.toISOString()).toBe('2027-05-01T12:00:00.000Z');
+    expect(b.arrivalNotifiedAt).toBeUndefined();
+
+    const active = new BottleModel({ cellar: 'c1', status: 'active', vintage: '2023', ratingScale: '5' });
+    const res2 = await updateBottleFields(active, { expectedArrival: '2027-05' }, REQ);
+    expect(res2.changes).toEqual({});
+    expect(active.expectedArrival).toBeUndefined();
+
+    expect((await updateBottleFields(new BottleModel({ cellar: 'c1', status: 'ordered', vintage: '2023' }), { expectedArrival: 'soon' }, REQ)).error.status).toBe(400);
+  });
+
+  test('a cancelled order is removed with the same cascade as a mistake', async () => {
+    const b = new BottleModel({ cellar: 'c1', status: 'ordered', pendingWineRequest: null });
+    const res = await removeBottleCascade(b, REQ, 'bottle.undo');
+    expect(res.removed).toBe(true);
+    expect(b.deleteOne).toHaveBeenCalled();
+  });
+});

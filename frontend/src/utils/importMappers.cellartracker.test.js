@@ -189,7 +189,7 @@ describe('empty CT exports', () => {
 });
 
 // ---------------------------------------------------------------------------
-// List table — one row per WINE, Quantity expands, Pending is NOT quantity
+// List table — one row per WINE, Quantity expands, Pending adds bottles on order
 // ---------------------------------------------------------------------------
 describe('CT List table (bundle, 20 wines)', () => {
   const result = parseAndMap(decode('bundle', 'CellarTracker_List.tsv').text);
@@ -199,14 +199,18 @@ describe('CT List table (bundle, 20 wines)', () => {
     expect(result.ctTable).toBe('list');
   });
 
-  it('expands Quantity to exactly 46 bottles (1+5+6+1+2+3+4+3+1+2+1+6+3+4+1+2+1)', () => {
-    expect(result.items).toHaveLength(46);
+  it('expands Quantity to exactly 46 bottles in the cellar (1+5+6+1+2+3+4+3+1+2+1+6+3+4+1+2+1)', () => {
+    expect(result.items.filter((i) => !i.onOrder)).toHaveLength(46);
+    expect(result.items).toHaveLength(49); // + the 3 Pétrus on order
   });
 
-  it('skips the fully-pending Pétrus (Quantity 0 / Pending 3) and reports it', () => {
-    expect(result.items.some((i) => i.producer === 'Pétrus')).toBe(false);
+  it('imports the fully-pending Pétrus (Quantity 0 / Pending 3) as 3 bottles on order, unplaced, and reports it', () => {
+    const petrus = result.items.filter((i) => i.producer === 'Pétrus');
+    expect(petrus).toHaveLength(3);
+    expect(petrus.every((i) => i.onOrder === true)).toBe(true);
+    expect(petrus.some((i) => i.rackName || i.rackPosition || i._ctLocation)).toBe(false);
     expect(result.warnings).toEqual([
-      { code: 'ct-pending-skipped', count: 3, wines: ['Pétrus'] },
+      { code: 'ct-pending-on-order', count: 3, wines: ['Pétrus'] },
     ]);
   });
 
@@ -355,7 +359,7 @@ describe('CT List: TSV / UTF-8 CSV / Windows-1252 CSV equivalence', () => {
     const tsv = parseFixture('bundle', 'CellarTracker_List.tsv');
     const win = parseFixture('bundle', 'CellarTracker_List_win1252.csv');
     expect(win.items).toEqual(tsv.items);
-    expect(win.warnings).toEqual([{ code: 'ct-pending-skipped', count: 3, wines: ['Pétrus'] }]);
+    expect(win.warnings).toEqual([{ code: 'ct-pending-on-order', count: 3, wines: ['Pétrus'] }]);
     expect(win.items.some((i) => i.producer === 'Joh. Jos. Prüm')).toBe(true);
   });
 
@@ -370,16 +374,20 @@ describe('CT List: TSV / UTF-8 CSV / Windows-1252 CSV equivalence', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Inventory table — one row per bottle; (pending) rows skipped; native currency
+// Inventory table — one row per bottle; (pending) rows on order; native currency
 // ---------------------------------------------------------------------------
 describe('CT Inventory table (bundle)', () => {
   const result = parseAndMap(decode('bundle', 'CellarTracker_Inventory.tsv').text);
 
-  it('yields 46 in-cellar bottles and skips the 3 (pending) Pétrus rows', () => {
+  it('yields 46 in-cellar bottles and the 3 (pending) Pétrus rows on order', () => {
     expect(result.ctTable).toBe('inventory');
-    expect(result.items).toHaveLength(46);
+    expect(result.items.filter((i) => !i.onOrder)).toHaveLength(46);
+    const onOrder = result.items.filter((i) => i.onOrder);
+    expect(onOrder).toHaveLength(3);
+    // "(pending)" is CT's placeholder location, not a place in the cellar.
+    expect(onOrder.some((i) => /pending/i.test(i.location || ''))).toBe(false);
     expect(result.warnings).toEqual([
-      { code: 'ct-pending-skipped', count: 3, wines: ['Pétrus'] },
+      { code: 'ct-pending-on-order', count: 3, wines: ['Pétrus'] },
     ]);
   });
 
@@ -432,18 +440,19 @@ describe('CT Inventory table (bundle)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Bottles table — every state: -1 pending (skip), 0 consumed (history), 1 active
+// Bottles table — every state: -1 pending (on order), 0 consumed (history), 1 active
 // ---------------------------------------------------------------------------
 describe('CT Bottles table (bundle)', () => {
   const result = parseAndMap(decode('bundle', 'CellarTracker_Bottles.tsv').text);
 
-  it('yields 50 bottles: 46 active + 4 consumed; 3 pending skipped', () => {
+  it('yields 53 bottles: 46 active + 4 consumed + 3 pending on order', () => {
     expect(result.ctTable).toBe('bottles');
-    expect(result.items).toHaveLength(50);
+    expect(result.items).toHaveLength(53);
     expect(result.items.filter((i) => i.addToHistory)).toHaveLength(4);
-    expect(result.items.filter((i) => !i.addToHistory)).toHaveLength(46);
+    expect(result.items.filter((i) => !i.addToHistory && !i.onOrder)).toHaveLength(46);
+    expect(result.items.filter((i) => i.onOrder)).toHaveLength(3);
     expect(result.warnings).toEqual([
-      { code: 'ct-pending-skipped', count: 3, wines: ['Pétrus'] },
+      { code: 'ct-pending-on-order', count: 3, wines: ['Pétrus'] },
     ]);
   });
 
@@ -545,10 +554,12 @@ describe('CT Purchase and Pending tables (bundle)', () => {
     const result = parseFixture('bundle', 'CellarTracker_Purchase.tsv');
     expect(result.ctTable).toBe('purchase'); // mixed Delivered values
     expect(result.items).toHaveLength(53);   // Σ Quantity, reconciles with Bottles rows
-    expect(result.warnings).toBeUndefined();
+    // The undelivered Pétrus lot comes in on order.
+    expect(result.warnings).toEqual([{ code: 'ct-pending-on-order', count: 3, wines: ['Pétrus'] }]);
 
     const petrus = result.items.filter((i) => i.producer === 'Pétrus');
     expect(petrus).toHaveLength(3);
+    expect(petrus.every((i) => i.onOrder === true)).toBe(true);
     expect(petrus[0].purchaseDate).toBe('2020-05-25');
     expect(petrus[0].purchaseLocation).toBe('Farr Vintners');
     expect(petrus[0].price).toBeUndefined(); // CT price 0 = not recorded
@@ -571,6 +582,7 @@ describe('CT Purchase and Pending tables (bundle)', () => {
       vintage: '2008',
       purchaseDate: '2020-05-25',
       purchaseLocation: 'Farr Vintners',
+      onOrder: true,
     });
   });
 });
@@ -596,12 +608,13 @@ describe('25-row truncation warning', () => {
 // mathroule WebQuery fixtures — genuine CT output, second independent source
 // ---------------------------------------------------------------------------
 describe('mathroule WebQuery fixtures', () => {
-  it('list.tsv → 6 bottles (DRC 1 + Yquem 5), Pétrus pending skipped', () => {
+  it('list.tsv → 6 bottles (DRC 1 + Yquem 5), Pétrus pending on order', () => {
     const result = parseFixture('webquery', 'list.tsv');
     expect(result.ctTable).toBe('list');
-    expect(result.items).toHaveLength(6);
+    expect(result.items.filter((i) => !i.onOrder)).toHaveLength(6);
+    expect(result.items.filter((i) => i.onOrder)).toHaveLength(3);
     expect(result.warnings).toEqual([
-      { code: 'ct-pending-skipped', count: 3, wines: ['Pétrus'] },
+      { code: 'ct-pending-on-order', count: 3, wines: ['Pétrus'] },
     ]);
     const drc = result.items.find((i) => i.producer === 'Domaine de la Romanée-Conti');
     expect(drc.wineName).toBe('La Tâche');
@@ -612,21 +625,23 @@ describe('mathroule WebQuery fixtures', () => {
   it('inventory.tsv → 6 bottles; StoreName "Unknown" is a sentinel, not a store', () => {
     const result = parseFixture('webquery', 'inventory.tsv');
     expect(result.ctTable).toBe('inventory');
-    expect(result.items).toHaveLength(6);
+    expect(result.items.filter((i) => !i.onOrder)).toHaveLength(6);
+    expect(result.items.filter((i) => i.onOrder)).toHaveLength(3); // the (pending) Pétrus rows
     expect(result.items.every((i) => i.purchaseLocation === '')).toBe(true);
     const drc = result.items.find((i) => i.producer === 'Domaine de la Romanée-Conti');
     expect(drc.purchaseDate).toBe('2020-04-08');
   });
 
-  it('bottles.tsv → 8 bottles (6 active + 2 consumed), 3 pending skipped', () => {
+  it('bottles.tsv → 8 bottles (6 active + 2 consumed), 3 pending on order', () => {
     const result = parseFixture('webquery', 'bottles.tsv');
     expect(result.ctTable).toBe('bottles');
-    expect(result.items).toHaveLength(8);
+    expect(result.items.filter((i) => !i.onOrder)).toHaveLength(8);
+    expect(result.items.filter((i) => i.onOrder)).toHaveLength(3);
     const consumed = result.items.filter((i) => i.addToHistory);
     expect(consumed).toHaveLength(2);
     expect(consumed.map((i) => i.consumedAt).sort()).toEqual(['2020-05-01', '2020-05-21']);
     expect(result.warnings).toEqual([
-      { code: 'ct-pending-skipped', count: 3, wines: ['Pétrus'] },
+      { code: 'ct-pending-on-order', count: 3, wines: ['Pétrus'] },
     ]);
   });
 
@@ -649,10 +664,11 @@ describe('mathroule WebQuery fixtures', () => {
     expect(result.items).toHaveLength(11);
   });
 
-  it('pending.tsv → relabeled pending, 3 bottles', () => {
+  it('pending.tsv → relabeled pending, 3 bottles on order', () => {
     const result = parseFixture('webquery', 'pending.tsv');
     expect(result.ctTable).toBe('pending');
     expect(result.items).toHaveLength(3);
+    expect(result.items.every((i) => i.onOrder === true)).toBe(true);
   });
 });
 

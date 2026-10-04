@@ -7,7 +7,7 @@ const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { isValidId } = require('../utils/validation');
-const { CONSUMED_STATUSES } = require('../config/constants');
+const { CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES } = require('../config/constants');
 
 const ROLE_LEVELS = { viewer: 1, editor: 2, owner: 3 };
 
@@ -157,7 +157,7 @@ function bottleSummary(b) {
  */
 async function countBottlesByCellar(cellarIds, { consumed = false } = {}) {
   const rows = await Bottle.aggregate([
-    { $match: { cellar: { $in: cellarIds }, status: consumed ? { $in: CONSUMED_STATUSES } : { $nin: CONSUMED_STATUSES } } },
+    { $match: { cellar: { $in: cellarIds }, status: consumed ? { $in: CONSUMED_STATUSES } : { $nin: NOT_IN_CELLAR_STATUSES } } },
     { $group: { _id: '$cellar', n: { $sum: 1 } } },
   ]);
   return new Map(rows.map((r) => [String(r._id), r.n]));

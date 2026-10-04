@@ -12,13 +12,14 @@
 // that reaches the ESM-only meilisearch package (services/search) must never be
 // a top-level require here: jest cannot parse it, and it would break every
 // suite that loads the MCP tool registry (the #702 failure mode).
-const { CONSUMED_STATUSES } = require('../config/constants');
+const { CONSUMED_STATUSES, ORDERED_STATUS } = require('../config/constants');
 const { resolveRating } = require('../utils/ratingUtils');
 const resolveRatingUtil = resolveRating;
 const { stripHtml, isSafeUrl } = require('../utils/sanitize');
 const { parseAndValidateVintage, parseDrinkYear } = require('../utils/validation');
 const { normalizeBottleSize, DEFAULT_SIZE } = require('../config/bottleSizes');
 const { normalizeBarcode } = require('../utils/barcode');
+const { parseExpectedArrival } = require('../utils/onOrder');
 const { logAudit } = require('./audit');
 const Rack = require('../models/Rack');
 const Bottle = require('../models/Bottle');
@@ -28,6 +29,14 @@ const WineRequest = require('../models/WineRequest');
 // Restores are "undo an accidental log", not resurrection of a bottle drunk
 // long ago (see the /restore route docs). Shared so REST and MCP agree.
 const RESTORE_WINDOW_MS = 2 * 24 * 60 * 60 * 1000; // 2 days
+
+// A bottle on order is not in the cellar yet: nothing can be drunk, opened,
+// poured or closed until it is marked as arrived. One error for REST and MCP.
+const NOT_ARRIVED_ERROR = Object.freeze({
+  status: 409,
+  code: 'not_arrived',
+  message: 'This bottle is on order and has not arrived yet. Mark it as arrived first.',
+});
 
 /** Free any rack slot holding this bottle (consume/delete paths). */
 async function removeFromRacks(bottleId) {
@@ -64,6 +73,7 @@ function parseConsumedAt(value) {
 }
 
 async function consumeBottle(bottle, { reason = 'drank', note, rating, ratingScale, consumedAt, skipRestockCheck = false } = {}, req) {
+  if (bottle.status === ORDERED_STATUS) return { error: { ...NOT_ARRIVED_ERROR } };
   if (!CONSUMED_STATUSES.includes(reason)) {
     return { error: { status: 400, message: 'Invalid reason' } };
   }
@@ -182,6 +192,7 @@ const MAX_OPEN_BACKDATE_MS = 90 * 24 * 60 * 60 * 1000;
  * Returns { error } | { bottle }.
  */
 async function openBottle(bottle, { preservationMethod, openedAt } = {}, req) {
+  if (bottle.status === ORDERED_STATUS) return { error: { ...NOT_ARRIVED_ERROR } };
   if (CONSUMED_STATUSES.includes(bottle.status)) {
     return { error: { status: 400, message: 'Bottle is already consumed' } };
   }
@@ -225,6 +236,7 @@ async function openBottle(bottle, { preservationMethod, openedAt } = {}, req) {
  * Returns { error } | { bottle }.
  */
 async function pourFromBottle(bottle, { ml, count } = {}, req) {
+  if (bottle.status === ORDERED_STATUS) return { error: { ...NOT_ARRIVED_ERROR } };
   if (CONSUMED_STATUSES.includes(bottle.status)) {
     return { error: { status: 400, message: 'Bottle is already consumed' } };
   }
@@ -339,15 +351,35 @@ function validatePeakWindow(peakFromRaw, peakUntilRaw, fromValue, toValue) {
   return { peakFrom: pFrom.value, peakUntil: pUntil.value };
 }
 
+/**
+ * The on-order pair of the bottle-create surface: `onOrder: true` creates the
+ * bottle as bought-not-delivered (status 'ordered'), with an optional
+ * `expectedArrival` month. A bottle cannot be on order and already drunk.
+ * Returns { error } | { onOrder: boolean, expectedArrival: Date|null }.
+ */
+function parseOnOrderFields({ onOrder, expectedArrival, addToHistory } = {}) {
+  const on = onOrder === true || onOrder === 'true';
+  if (!on) return { onOrder: false, expectedArrival: null };
+  if (addToHistory) {
+    return { error: { status: 400, message: 'A bottle cannot be both on order and added to history' } };
+  }
+  const ea = parseExpectedArrival(expectedArrival);
+  if (!ea.ok) return { error: { status: 400, message: ea.error } };
+  return { onOrder: true, expectedArrival: ea.value };
+}
+
 function validateBottleCommitFields(fields = {}) {
   const {
     vintage, purchaseLocation, purchaseUrl, location,
     notes, occasion, rating, ratingScale, drinkFrom, drinkTo, peakFrom, peakUntil,
     addToHistory, consumedReason, consumedRating, consumedRatingScale,
+    onOrder, expectedArrival,
   } = fields;
 
   const parsedVintage = parseAndValidateVintage(vintage);
   if (!parsedVintage.ok) return { error: { status: 400, message: parsedVintage.error } };
+  const orderCheck = parseOnOrderFields({ onOrder, expectedArrival, addToHistory });
+  if (orderCheck.error) return orderCheck;
   const from = parseDrinkYear(drinkFrom, 'drinkFrom');
   if (!from.ok) return { error: { status: 400, message: from.error } };
   const to = parseDrinkYear(drinkTo, 'drinkTo');
@@ -399,10 +431,14 @@ async function addBottle(cellarDoc, wineDoc, fields = {}, req) {
     dateAdded, addToHistory,
     consumedAt, consumedReason, consumedNote, consumedRating, consumedRatingScale,
     barcode,
+    // Bought, not delivered yet (en primeur, a pre-order): status 'ordered'.
+    onOrder, expectedArrival,
   } = fields;
 
   const parsedVintage = parseAndValidateVintage(vintage);
   if (!parsedVintage.ok) return { error: { status: 400, message: parsedVintage.error } };
+  const order = parseOnOrderFields({ onOrder, expectedArrival, addToHistory });
+  if (order.error) return order;
 
   const from = parseDrinkYear(drinkFrom, 'drinkFrom');
   if (!from.ok) return { error: { status: 400, message: from.error } };
@@ -495,6 +531,11 @@ async function addBottle(cellarDoc, wineDoc, fields = {}, req) {
   // Seed the cellar journey: the bottle enters this cellar at its added date.
   bottle.addedToCellarAt = bottle.createdAt;
   bottle.cellarHistory = [{ cellar: cellarDoc._id, cellarName: cellarDoc.name, enteredAt: bottle.createdAt }];
+  // On order: in this cellar's books but not on its shelves until it arrives.
+  if (order.onOrder) {
+    bottle.status = ORDERED_STATUS;
+    if (order.expectedArrival) bottle.expectedArrival = order.expectedArrival;
+  }
   // Migration helper: create the bottle directly as consumed history.
   if (addToHistory) {
     const reason = consumedReason || 'drank';
@@ -530,7 +571,7 @@ async function addBottle(cellarDoc, wineDoc, fields = {}, req) {
   // bare vintage with no wine name). wineDoc is the resolved registry wine.
   logAudit(req, addToHistory ? 'bottle.addToHistory' : 'bottle.add',
     { type: 'bottle', id: bottle._id, cellarId: cellarDoc._id },
-    { wineName: wineDoc.name, vintage: bottle.vintage });
+    { wineName: wineDoc.name, vintage: bottle.vintage, ...(order.onOrder ? { onOrder: true } : {}) });
   // Fire-and-forget AI enrichment — both calls carry their own kill-switch /
   // per-user budget gates (embeddingJob: chatEnabled; enrichmentJob: tryDebitAi).
   const { embedSinglePair } = require('./embeddingJob');
@@ -551,6 +592,8 @@ const UPDATABLE_FIELDS = [
   'purchaseDate', 'purchaseLocation', 'purchaseUrl',
   'location', 'notes', 'occasion', 'rating', 'ratingScale',
   'drinkFrom', 'drinkTo', 'peakFrom', 'peakUntil', 'reservedFor', 'reservedUntil',
+  // Only on a bottle still on order; ignored on any other (see below).
+  'expectedArrival',
 ];
 
 // Normalize a value for change detection: Date objects and ISO-ish strings
@@ -681,6 +724,19 @@ async function updateBottleFields(bottle, fields, req) {
     reservedUntilYear = p.value !== undefined ? p.value : null;
   }
 
+  // Expected arrival (a month) belongs to a bottle on order. On any other
+  // bottle it is dropped, not refused: the field means nothing once the
+  // bottle is in the cellar, and a bulk edit can span both.
+  if (fields.expectedArrival !== undefined) {
+    if (bottle.status !== ORDERED_STATUS) {
+      delete fields.expectedArrival;
+    } else {
+      const p = parseExpectedArrival(fields.expectedArrival);
+      if (!p.ok) return { error: { status: 400, message: p.error } };
+      fields.expectedArrival = p.value;
+    }
+  }
+
   if (fields.rating === null || fields.rating === '') {
     // Explicit clear — needed so undoing a rating-SET can restore "unrated"
     // (resolveRating treats null/'' as "no input" and would silently skip it,
@@ -750,6 +806,10 @@ async function updateBottleFields(bottle, fields, req) {
   if ('reservedUntil' in changes) {
     bottle.reservationNotifiedAt = null;
   }
+  // A new expected month re-arms the "should have arrived by now" reminder.
+  if ('expectedArrival' in changes) {
+    bottle.arrivalNotifiedAt = undefined;
+  }
 
   try {
     await bottle.save();
@@ -793,7 +853,8 @@ async function updateBottleFields(bottle, fields, req) {
  * Returns { error } | { removed: true }.
  */
 async function removeBottleCascade(bottle, req, auditAction) {
-  if (bottle.status !== 'active') {
+  // A bottle on order qualifies too: a cancelled order is removed this way.
+  if (bottle.status !== 'active' && bottle.status !== ORDERED_STATUS) {
     return { error: { status: 400, message: 'Only an active bottle can be removed this way' } };
   }
   const bottleId = bottle._id;
@@ -845,8 +906,48 @@ async function removeBottleCascade(bottle, req, auditAction) {
   return { removed: true };
 }
 
+/**
+ * A bottle on order has been delivered: status ordered → active. It lands
+ * UNPLACED in its cellar, like a moved or restored bottle, and from now on
+ * counts everywhere an active bottle does. `arrivedAt` is an optional day
+ * ("it came on Friday"), never in the future; default now. The order date
+ * stays purchaseDate/createdAt; addedToCellarAt, "when it entered this
+ * cellar", becomes the delivery day.
+ * Mirrors POST /api/bottles/:id/arrive and the bulk 'arrive' action.
+ * Returns { error } | { bottle }.
+ */
+async function markArrived(bottle, { arrivedAt } = {}, req) {
+  if (bottle.status !== ORDERED_STATUS) {
+    return { error: { status: 409, code: 'not_on_order', message: 'This bottle is not on order' } };
+  }
+  let when = new Date();
+  if (arrivedAt !== undefined && arrivedAt !== null && arrivedAt !== '') {
+    const d = parseConsumedAt(arrivedAt);
+    if (Number.isNaN(d.getTime()) || d.getTime() > Date.now() + FUTURE_SLACK_MS || d.getFullYear() < 1990) {
+      return { error: { status: 400, message: 'arrivedAt must be a valid date and not in the future' } };
+    }
+    when = d;
+  }
+  const expected = bottle.expectedArrival || null;
+  bottle.status = 'active';
+  bottle.arrivedAt = when;
+  bottle.addedToCellarAt = when;
+  bottle.arrivalNotifiedAt = undefined;
+  try {
+    await bottle.save();
+  } catch (err) {
+    if (err?.name === 'VersionError') return { error: { status: 409, message: 'This bottle was modified by another request. Please refresh and try again.' } };
+    throw err;
+  }
+  logAudit(req, 'bottle.arrive',
+    { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
+    { ...(expected ? { expectedArrival: expected } : {}) });
+  return { bottle };
+}
+
 module.exports = {
   consumeBottle, restoreBottle, removeFromRacks, RESTORE_WINDOW_MS,
+  markArrived, parseOnOrderFields, NOT_ARRIVED_ERROR,
   addBottle, validateBottleCommitFields, updateBottleFields, removeBottleCascade, UPDATABLE_FIELDS,
   openBottle, pourFromBottle, closeBottle,
   PRESERVATION_METHODS, DEFAULT_POUR_ML, MAX_POURS,

@@ -36,6 +36,7 @@ const sections = [
       'Share a bottle: click the share icon on the bottle detail page to send a link to someone.',
       'Consume/remove: click "Remove Bottle" to mark it as consumed. Set the date you drank it. The bottle moves to the cellar\'s history.',
       'Write a review: on the bottle detail page, scroll down to write a community review.',
+      'Bottles on order: bought wine that has not arrived yet (en primeur, a pre-order)? When adding, open More details and tick "Not delivered yet". It waits on the cellar\'s "On order" list, outside counts and racks, until you tap "Mark as arrived". If the expected month passes, Cellarion asks whether it has come.',
     ],
     tourId: 'add-bottle',
   },

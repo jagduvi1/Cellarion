@@ -55,7 +55,8 @@ const { normalizeBarcode } = require('../utils/barcode');
 const { stripHtml } = require('../utils/sanitize');
 const { parseAndValidateVintage, parseDrinkYear } = require('../utils/validation');
 const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
-const { CONSUMED_STATUSES } = require('../config/constants');
+const { CONSUMED_STATUSES, ORDERED_STATUS } = require('../config/constants');
+const { parseExpectedArrival } = require('../utils/onOrder');
 
 const EXPORT_SCHEMA = 'cellarion-export@1';
 const MAX_IMAGES_PER_BOTTLE = 20;
@@ -883,6 +884,12 @@ async function buildCellarContents({ cellarId, ownerId, userId, cellar, items, i
         bottle.consumedAt = item.consumedAt ? new Date(item.consumedAt) : new Date();
         if (item.consumedNote) bottle.consumedNote = stripHtml(item.consumedNote);
         if (cRating !== undefined) { bottle.consumedRating = cRating; bottle.consumedRatingScale = cScale; }
+      } else if (item.onOrder === true) {
+        // Bought, not delivered yet — re-created on order. An unreadable
+        // month is dropped, not fatal (same forgiveness as the other fields).
+        bottle.status = ORDERED_STATUS;
+        const ea = parseExpectedArrival(item.expectedArrival);
+        if (ea.ok && ea.value) bottle.expectedArrival = ea.value;
       }
 
       // Restore open-bottle (Coravin / preservation) state — invalid values

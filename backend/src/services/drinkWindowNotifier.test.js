@@ -2,12 +2,12 @@
 // These are hoisted above the require below; shouldSendDigestEmail is pure and
 // unaffected (its tests pass emailVerificationEnabled explicitly).
 jest.mock('../models/Cellar', () => ({ distinct: jest.fn() }));
-jest.mock('../models/Bottle', () => ({ find: jest.fn(), updateOne: jest.fn(), bulkWrite: jest.fn() }));
+jest.mock('../models/Bottle', () => ({ find: jest.fn(), updateOne: jest.fn(), updateMany: jest.fn(), bulkWrite: jest.fn() }));
 jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn() }));
 jest.mock('./notifications', () => ({ createNotification: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('./mailgun', () => ({ sendDrinkWindowDigest: jest.fn().mockResolvedValue(undefined), EMAIL_VERIFICATION_ENABLED: false }));
 
-const { shouldSendDigestEmail, processUser, processReservations } = require('./drinkWindowNotifier');
+const { shouldSendDigestEmail, processUser, processReservations, processArrivals } = require('./drinkWindowNotifier');
 const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const WineVintageProfile = require('../models/WineVintageProfile');
@@ -308,5 +308,57 @@ describe('processReservations', () => {
     expect(count).toBe(0);
     expect(createNotification).not.toHaveBeenCalled();
     expect(Bottle.updateOne).not.toHaveBeenCalled();
+  });
+});
+
+describe('processArrivals — bottles on order past their expected month', () => {
+  beforeAll(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-10-04T08:00:00Z'));
+  });
+  afterAll(() => jest.useRealTimers());
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    Bottle.updateMany.mockResolvedValue({});
+    Cellar.distinct.mockResolvedValue(['c1', 'c2']);
+  });
+
+  const mockOrdered = (bottles) => {
+    Bottle.find.mockReturnValue({ select: () => ({ populate: () => ({ lean: () => Promise.resolve(bottles) }) }) });
+  };
+  const month = (iso) => new Date(`${iso}-01T12:00:00Z`);
+
+  test('queries only un-notified bottles on order expected before this month began', async () => {
+    mockOrdered([]);
+    await processArrivals({ _id: 'u1' });
+    const q = Bottle.find.mock.calls[0][0];
+    expect(q).toMatchObject({ user: 'u1', status: 'ordered', arrivalNotifiedAt: null });
+    expect(q.expectedArrival).toEqual({ $lt: new Date('2026-10-01T00:00:00Z') });
+  });
+
+  test('one notification per cellar, linking its on-order page; every bottle in it is stamped', async () => {
+    mockOrdered([
+      { _id: 'b1', cellar: 'c1', vintage: '2023', expectedArrival: month('2026-09'), wineDefinition: { name: 'Léoville Barton' } },
+      { _id: 'b2', cellar: 'c1', vintage: '2023', expectedArrival: month('2026-08'), wineDefinition: { name: 'Léoville Barton' } },
+      { _id: 'b3', cellar: 'c2', vintage: 'NV', expectedArrival: month('2026-06'), wineDefinition: { name: 'Krug Grande Cuvée' } },
+    ]);
+    const count = await processArrivals({ _id: 'u1' });
+    expect(count).toBe(2);
+    const [first, second] = createNotification.mock.calls;
+    expect(first[1]).toBe('order_arrival_due');
+    expect(first[3]).toContain('2 bottles on order');
+    expect(first[4]).toBe('/cellars/c1/on-order');
+    expect(first[5]).toBe('drinkWindow');
+    expect(second[3]).toContain('Krug Grande Cuvée was expected in June 2026');
+    expect(second[4]).toBe('/cellars/c2/on-order');
+    expect(Bottle.updateMany).toHaveBeenCalledWith({ _id: { $in: ['b1', 'b2'] } }, { $set: { arrivalNotifiedAt: expect.any(Date) } });
+  });
+
+  test('a bottle in a deleted cellar is never announced', async () => {
+    Cellar.distinct.mockResolvedValue([]);
+    mockOrdered([{ _id: 'b1', cellar: 'gone', vintage: '2023', expectedArrival: month('2026-01'), wineDefinition: { name: 'X' } }]);
+    expect(await processArrivals({ _id: 'u1' })).toBe(0);
+    expect(createNotification).not.toHaveBeenCalled();
   });
 });

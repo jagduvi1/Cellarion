@@ -82,6 +82,24 @@ export const restoreBottle = (apiFetch, id) =>
     method: 'POST',
   });
 
+// A bottle on order has been delivered: it becomes an ordinary (unplaced)
+// bottle in its cellar. arrivedAt is an optional 'YYYY-MM-DD'; default today.
+export const markBottleArrived = (apiFetch, id, arrivedAt) =>
+  apiFetch(`/api/bottles/${id}/arrive`, {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(arrivedAt ? { arrivedAt } : {}),
+  });
+
+// A delivery of MANY bottles on order, one day for all (action 'arrive').
+// A bottle that is not on order comes back in `skipped` as 'not_on_order'.
+export const bulkArriveBottles = (apiFetch, bottleIds, arrivedAt) =>
+  apiFetch('/api/bottles/bulk', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ action: 'arrive', bottleIds, ...(arrivedAt ? { arrivedAt } : {}) }),
+  });
+
 export const moveBottle = (apiFetch, id, toCellarId) =>
   apiFetch(`/api/bottles/${id}/move`, {
     method: 'POST',

@@ -997,11 +997,12 @@ function ctCommonFields(get, { sizeKeys = ['Size'] } = {}) {
 }
 
 // -- Per-table mappers (WebQuery fingerprinted files) ------------------------
-// Items flagged `_ctPending` are pending (undelivered) purchases — Cellarion
-// has no on-order state, so parseAndMap skips them and reports a warning.
+// Items flagged `_ctPending` are pending (undelivered) purchases. parseAndMap
+// imports them as bottles ON ORDER (`onOrder: true`): kept out of the cellar
+// until the user marks them as arrived, and reported in a warning.
 
 /** List: one row per WINE with Quantity (+ Pending). Quantity expands to N
- *  bottles; Quantity 0 + Pending > 0 rows are on-order only → skipped. */
+ *  bottles in the cellar; Pending adds that many bottles on order. */
 function mapCtListRow(row) {
   const get = makeGetter(row);
   const qty = parseInt(get(['Quantity']), 10);
@@ -1011,15 +1012,20 @@ function mapCtListRow(row) {
     ...ctMoney(get),
     quantity: Number.isNaN(qty) ? 1 : qty,
   };
-  if (item.quantity === 0 && pending > 0) {
-    item._ctPending = true;
-    item._ctPendingCount = pending;
+  if (pending > 0) {
+    if (item.quantity === 0) {
+      item._ctPending = true;
+      item._ctPendingCount = pending;
+    } else {
+      // Some in the cellar, some still on their way: both come across.
+      item._ctAlsoPending = pending;
+    }
   }
   return item;
 }
 
 /** Inventory: one row per physical in-cellar bottle (plus pending rows,
- *  marked Location "(pending)", which are skipped). */
+ *  marked Location "(pending)", which come in on order). */
 function mapCtInventoryRow(row) {
   const get = makeGetter(row);
   const item = {
@@ -1037,13 +1043,20 @@ function mapCtInventoryRow(row) {
 }
 
 /** Bottles: one row per bottle in ANY state.
- *  BottleState: -1 = pending (skip), 0 = consumed (history), 1 = in cellar. */
+ *  BottleState: -1 = pending (on order), 0 = consumed (history), 1 = in cellar. */
 function mapCtBottlesRow(row) {
   const get = makeGetter(row);
   const common = ctCommonFields(get, { sizeKeys: ['BottleSize', 'Size'] });
   const state = get(['BottleState']).trim();
   if (state === '-1') {
-    return { ...common, quantity: 1, _ctPending: true };
+    return {
+      ...common,
+      ...ctMoney(get, { priceKeys: ['BottleCost'], currencyKeys: ['BottleCostCurrency'] }),
+      quantity: 1,
+      purchaseDate: ctDate(get(['PurchaseDate'])),
+      purchaseLocation: ctClean(get(['Store', 'StoreName'])),
+      _ctPending: true,
+    };
   }
   const qty = parseInt(get(['Quantity']), 10);
   const item = {
@@ -1082,17 +1095,20 @@ function mapCtConsumedRow(row) {
 
 /** Purchase / Pending: one row per purchase ORDER with Quantity — expanded.
  *  The two tables share a schema; a file whose rows are all Delivered=False
- *  is relabeled 'pending' by parseAndMap. */
+ *  is relabeled 'pending' by parseAndMap. A row not delivered yet comes in
+ *  on order. */
 function mapCtPurchaseRow(row) {
   const get = makeGetter(row);
   const qty = parseInt(get(['Quantity']), 10);
-  return {
+  const item = {
     ...ctCommonFields(get),
     ...ctMoney(get),
     quantity: Number.isNaN(qty) || qty < 1 ? 1 : qty,
     purchaseDate: ctDate(get(['PurchaseDate'])),
     purchaseLocation: ctClean(get(['StoreName', 'Store'])),
   };
+  if ((get(['Delivered']) || '').trim().toLowerCase() === 'false') item._ctPending = true;
+  return item;
 }
 
 const CT_TABLE_MAPPERS = {
@@ -1101,6 +1117,7 @@ const CT_TABLE_MAPPERS = {
   bottles: mapCtBottlesRow,
   consumed: mapCtConsumedRow,
   purchase: mapCtPurchaseRow,
+  pending: mapCtPurchaseRow,
 };
 
 /**
@@ -1758,8 +1775,8 @@ export function applyCtRackAutoMap(items, opts = {}) {
     if (!item || typeof item !== 'object') return;
     const loc = (item._ctLocation || '').trim();
     if (!loc) return;
-    // Never re-place consumed history or items that already carry a rack signal.
-    if (item.addToHistory || item.rackName || item.rackPosition || item.row || item.col) return;
+    // Never re-place consumed history, bottles still on order, or items that already carry a rack signal.
+    if (item.addToHistory || item.onOrder || item.rackName || item.rackPosition || item.row || item.col) return;
     if (!groupIndexes.has(loc)) groupIndexes.set(loc, []);
     groupIndexes.get(loc).push(i);
   });
@@ -2335,20 +2352,31 @@ export function parseAndMap(text, forceFormat, opts = {}) {
 
   // Map rows and expand quantity > 1 into individual items
   const items = [];
-  const ctPendingSkipped = { count: 0, wines: [] };
+  const ctPendingOnOrder = { count: 0, wines: [] };
+  const notePending = (wineName, count) => {
+    ctPendingOnOrder.count += count;
+    if (wineName && !ctPendingOnOrder.wines.includes(wineName)) ctPendingOnOrder.wines.push(wineName);
+  };
   let noIdentitySkipped = 0;
   for (const row of rows) {
     const mapped = mapper(row);
 
-    // Pending (undelivered) CT bottles: Cellarion has no on-order state \u2014
-    // skip them but keep an honest count for the review-step warning.
+    // Pending (undelivered) CT bottles come in ON ORDER: kept out of the
+    // cellar until marked as arrived. Not in a rack yet, so no placement.
     if (mapped._ctPending) {
-      ctPendingSkipped.count += mapped._ctPendingCount || 1;
-      if (mapped.wineName && !ctPendingSkipped.wines.includes(mapped.wineName)) {
-        ctPendingSkipped.wines.push(mapped.wineName);
-      }
-      continue;
+      if (mapped._ctPendingCount) mapped.quantity = mapped._ctPendingCount;
+      notePending(mapped.wineName, mapped.quantity ?? 1);
+      mapped.onOrder = true;
+      delete mapped._ctPending;
+      delete mapped._ctPendingCount;
+      delete mapped._ctLocation;
+      delete mapped._ctBin;
+      if (/^\(pending\)/i.test(mapped.location || '')) delete mapped.location;
     }
+    // A List row with bottles in the cellar AND more pending: the pending
+    // ones are pushed as on-order copies after the in-cellar expansion.
+    const alsoPending = mapped._ctAlsoPending || 0;
+    delete mapped._ctAlsoPending;
 
     // Normalise dates (mirror parseJSON)
     if (mapped.purchaseDate) mapped.purchaseDate = tryParseDate(mapped.purchaseDate);
@@ -2377,6 +2405,13 @@ export function parseAndMap(text, forceFormat, opts = {}) {
     for (let q = 0; q < qty; q++) {
       items.push({ ...mapped });
     }
+    if (alsoPending > 0) {
+      notePending(mapped.wineName, alsoPending);
+      const { _ctLocation, _ctBin, location, ...rest } = mapped;
+      for (let q = 0; q < alsoPending; q++) {
+        items.push({ ...rest, onOrder: true });
+      }
+    }
   }
 
   // CellarTracker Location/Bin → rack auto-map. Runs after quantity
@@ -2398,11 +2433,11 @@ export function parseAndMap(text, forceFormat, opts = {}) {
   if (format === 'cellartracker' && rows.length === 25) {
     warnings.push({ code: 'ct-truncated' });
   }
-  if (ctPendingSkipped.count > 0) {
+  if (ctPendingOnOrder.count > 0) {
     warnings.push({
-      code: 'ct-pending-skipped',
-      count: ctPendingSkipped.count,
-      wines: ctPendingSkipped.wines,
+      code: 'ct-pending-on-order',
+      count: ctPendingOnOrder.count,
+      wines: ctPendingOnOrder.wines,
     });
   }
   if (noIdentitySkipped > 0) {

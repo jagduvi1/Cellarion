@@ -63,6 +63,8 @@ async function runCheck(userId, bottleId, cellarId) {
     // Scope: 'cellar' = only check the cellar the bottle came from;
     //        'all' (default) = check across all user's cellars.
     const scope = user.preferences?.restockScope || 'all';
+    // Bottles on order count here on purpose: a similar wine already bought
+    // and on its way is no reason to suggest restocking.
     const activeQuery = {
       user: userId,
       wineDefinition: { $ne: null },

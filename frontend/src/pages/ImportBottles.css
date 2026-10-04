@@ -1732,3 +1732,21 @@
 
 /* A typed vintage that is not a real year (audit 2026-09-07). */
 .review-vintage-input[aria-invalid="true"] { border-color: var(--color-danger); outline: 1px solid var(--color-danger); }
+
+/* "Not delivered yet" — the whole import comes in on order */
+.import-on-order .toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.import-on-order .rack-options-hint { margin: 0.35rem 0 0.5rem; }
+.import-on-order-month {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-width: 16rem;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}

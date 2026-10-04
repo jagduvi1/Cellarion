@@ -11,7 +11,7 @@ const { z } = require('zod');
 const Bottle = require('../../models/Bottle');
 const Cellar = require('../../models/Cellar');
 const Rack = require('../../models/Rack');
-const { WINE_POPULATE, WINE_POPULATE_LIST, CONSUMED_STATUSES } = require('../../config/constants');
+const { WINE_POPULATE, WINE_POPULATE_LIST, CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES, ORDERED_STATUS } = require('../../config/constants');
 const { registerTool } = require('../registry');
 const {
   ok, fail, objectId, MSG_CELLAR_NOT_FOUND, MSG_BOTTLE_NOT_FOUND,
@@ -25,7 +25,8 @@ const bottleSearch = require('../../services/bottleSearch');
 function statusToMongo(status) {
   if (status === 'all') return {};
   if (status === 'consumed') return { status: { $in: CONSUMED_STATUSES } };
-  return { status: { $nin: CONSUMED_STATUSES } }; // active (default)
+  if (status === 'on_order') return { status: ORDERED_STATUS };
+  return { status: { $nin: NOT_IN_CELLAR_STATUSES } }; // active (default)
 }
 
 registerTool({
@@ -33,7 +34,7 @@ registerTool({
   title: 'Search / list bottles',
   description:
     'Searches the bottles in the cellars the user owns (pass cellar_id to search one specific cellar, including shared ' +
-    'ones). Filters: free-text query (wine name, producer, region, grape, notes), status (active | consumed | all), ' +
+    'ones). Filters: free-text query (wine name, producer, region, grape, notes), status (active | consumed | on_order | all), ' +
     'vintage, wine type, reserved (only/exclude "spoken for" bottles). Paginated and bounded; every item includes its ' +
     'rating, so filter by rating yourself from the results, and has_photo (own or published photo, or a registry ' +
     'image — get_bottle → photos has the detail). wine carries grapes, region and country. maturity is the drink ' +
@@ -52,7 +53,8 @@ registerTool({
   inputSchema: {
     query: z.string().max(200).optional().describe('Free-text search (name, producer, region, grape…)'),
     cellar_id: objectId.optional().describe('Restrict to one cellar (any cellar you own or are a member of)'),
-    status: z.enum(['active', 'consumed', 'all']).default('active'),
+    status: z.enum(['active', 'consumed', 'on_order', 'all']).default('active')
+      .describe('active = in the cellar now; on_order = bought, not delivered yet; consumed = history'),
     // Alphanumeric only — a vintage is a year or "NV". The search path and
     // the list path below both exact-match it; rejecting anything else here
     // keeps a stray punctuation mark from reading as "no vintage matches".
@@ -105,7 +107,7 @@ registerTool({
     if ((query || args.type) && !args.reserved) {
       const res = await bottleSearch.searchBottles(query, {
         cellarIds: cellarIds.map(String),
-        statusFilter: args.status || 'active',
+        statusFilter: args.status === 'on_order' ? ORDERED_STATUS : (args.status || 'active'),
         type: args.type,
         vintage: args.vintage,
         sort: query ? undefined : '-createdAt',
@@ -318,6 +320,11 @@ async function buildBottleDetail(userId, bottleId) {
         ? { for: b.reservedFor || null, until: b.reservedUntil ?? null }
         : null,
       purchase: { date: b.purchaseDate || null, location: b.purchaseLocation || null },
+      // Bought, not delivered yet: not in the cellar, so it cannot be opened,
+      // consumed or placed until the user marks it as arrived in the app.
+      on_order: b.status === ORDERED_STATUS
+        ? { expected_arrival_month: b.expectedArrival ? new Date(b.expectedArrival).toISOString().slice(0, 7) : null }
+        : null,
       open_bottle: b.openedAt
         ? { opened_at: b.openedAt, preservation: b.preservationMethod || null, pours: (b.pours || []).length }
         : null,

@@ -8,6 +8,7 @@ import { API_URL } from '../../api/apiConstants';
 import { CURRENCIES } from '../../config/currencies';
 import { BOTTLE_SIZES, bottleSizeLabel, normalizeBottleSize } from '../../config/bottleSizes';
 import RatingInput from '../RatingInput';
+import { isOnOrder, toMonthInput } from '../../utils/onOrder';
 
 const ImageUpload = lazy(() => import('../ImageUpload'));
 const ImageGallery = lazy(() => import('../ImageGallery'));
@@ -57,6 +58,8 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded, lotSiblingIds = 
     purchaseDate:     toInputDate(bottle.purchaseDate),
     purchaseLocation: bottle.purchaseLocation || '',
     purchaseUrl:      bottle.purchaseUrl || '',
+    // Only sent for a bottle on order ('YYYY-MM'; '' clears the month).
+    expectedArrival:  toMonthInput(bottle.expectedArrival),
   });
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState(null);
@@ -80,8 +83,10 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded, lotSiblingIds = 
     setSaving(true);
     setError(null);
     try {
+      const { expectedArrival, ...formFields } = form;
       const payload = {
-        ...form,
+        ...formFields,
+        ...(isOnOrder(bottle) ? { expectedArrival: expectedArrival || null } : {}),
         price:  form.price  ? parseFloat(form.price)  : null,
         rating: form.rating ? parseFloat(form.rating) : null,
         ratingScale: form.ratingScale || '5',
@@ -182,6 +187,13 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded, lotSiblingIds = 
           <label>{t('addBottle.purchaseDate')}</label>
           <input type="date" value={form.purchaseDate} onChange={set('purchaseDate')} />
         </div>
+
+        {isOnOrder(bottle) && (
+          <div className="form-group">
+            <label htmlFor="edit-expected-arrival">{t('addBottle.expectedArrival')}</label>
+            <input id="edit-expected-arrival" type="month" value={form.expectedArrival} onChange={set('expectedArrival')} />
+          </div>
+        )}
       </div>
 
       <div className="form-group">

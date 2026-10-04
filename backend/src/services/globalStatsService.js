@@ -5,6 +5,7 @@ const BridgeKey = require('../models/BridgeKey');
 const WineDefinition = require('../models/WineDefinition');
 const AuditLog = require('../models/AuditLog');
 const { PLAN_NAMES } = require('../config/plans');
+const { CONSUMED_STATUSES } = require('../config/constants');
 const { classifySignupSource } = require('../utils/signupSource');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -415,7 +416,9 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
     Cellar.countDocuments(cellarMatch),
     Bottle.countDocuments(bottleMatch),
     Bottle.countDocuments({ ...bottleMatch, status: 'active' }),
-    Bottle.countDocuments({ ...bottleMatch, status: { $ne: 'active' } }),
+    // Consumed = the four consumed statuses (not "anything but active": a
+    // bottle on order is neither).
+    Bottle.countDocuments({ ...bottleMatch, status: { $in: CONSUMED_STATUSES } }),
     Bottle.countDocuments({ ...bottleMatch, status: 'drank' }),
     Bottle.countDocuments({ ...bottleMatch, status: 'gifted' }),
     Bottle.countDocuments({ ...bottleMatch, status: 'sold' }),
@@ -823,7 +826,7 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
 
   const [trendBottlesAdded, trendBottlesConsumed, trendNewUsers, trendNewCellars] = await Promise.all([
     buildMonthlySeries(Bottle, 'createdAt',  bottleMatch),
-    buildMonthlySeries(Bottle, 'consumedAt', bottleMatch, { status: { $ne: 'active' } }),
+    buildMonthlySeries(Bottle, 'consumedAt', bottleMatch, { status: { $in: CONSUMED_STATUSES } }),
     buildMonthlySeries(User,   'createdAt',  userMatch),
     buildMonthlySeries(Cellar, 'createdAt',  cellarMatch),
   ]);

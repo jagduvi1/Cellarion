@@ -14,7 +14,7 @@ const { z } = require('zod');
 const Cellar = require('../../models/Cellar');
 const Bottle = require('../../models/Bottle');
 const WineDefinition = require('../../models/WineDefinition');
-const { CONSUMED_STATUSES } = require('../../config/constants');
+const { NOT_IN_CELLAR_STATUSES } = require('../../config/constants');
 const { registerTool } = require('../registry');
 const { ok, fail, wineSummary } = require('../toolUtil');
 
@@ -123,7 +123,7 @@ registerTool({
       wineIds = cellars.length
         ? await Bottle.distinct('wineDefinition', {
             cellar: { $in: cellars.map((c) => c._id) },
-            status: { $nin: CONSUMED_STATUSES },
+            status: { $nin: NOT_IN_CELLAR_STATUSES },
             wineDefinition: { $ne: null },
           })
         : [];

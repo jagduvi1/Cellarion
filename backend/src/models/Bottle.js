@@ -223,13 +223,28 @@ const bottleSchema = new mongoose.Schema({
   // Set by the daily notifier when the reserved-until alert fires, so it fires
   // exactly once per reservation. Reset whenever reservedUntil changes.
   reservationNotifiedAt: { type: Date, default: null },
-  // Bottle lifecycle — 'active' until the user consumes/gifts/sells it
+  // Bottle lifecycle — 'active' until the user consumes/gifts/sells it.
+  // 'ordered' comes BEFORE active: bought, not delivered yet (en primeur, a
+  // pre-order). See ORDERED_STATUS in config/constants.
   status: {
     type: String,
-    enum: ['active', 'drank', 'gifted', 'sold', 'other'],
+    enum: ['ordered', 'active', 'drank', 'gifted', 'sold', 'other'],
     default: 'active',
     index: true
   },
+  // ── On order ─────────────────────────────────────────────────────────
+  // When an ordered bottle is expected, to the MONTH: always stored as the
+  // 1st of that month at noon UTC (utils/onOrder.parseExpectedArrival), so
+  // it reads as the same month in every zone. Optional — an en primeur
+  // purchase often has no date yet.
+  expectedArrival: { type: Date, default: undefined },
+  // When the bottle was marked as arrived (status ordered → active). The
+  // order date stays purchaseDate/createdAt; addedToCellarAt moves to this.
+  arrivedAt: { type: Date, default: undefined },
+  // Set by the daily notifier when the "should have arrived by now" reminder
+  // fires, so it fires once per expected month. Reset when expectedArrival
+  // changes. (A query on `arrivalNotifiedAt: null` also matches "absent".)
+  arrivalNotifiedAt: { type: Date, default: undefined },
   consumedAt: { type: Date },
   // When the consume was LOGGED (always now), as distinct from consumedAt,
   // which the user may backdate (bulk "mark as drunk" with one date). The

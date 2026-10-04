@@ -47,4 +47,27 @@ describe('BottleJourney', () => {
     const { container } = render(<BottleJourney bottle={null} />);
     expect(container).toBeEmptyDOMElement();
   });
+
+  test('a bottle still on order ends with an "on order" step, not a consumed one', () => {
+    render(<BottleJourney bottle={{
+      status: 'ordered', expectedArrival: null,
+      cellarHistory: [{ cellarName: 'Cellar A', enteredAt: '2026-01-02' }],
+    }} />);
+    expect(screen.getByText('history.journey.onOrder')).toBeInTheDocument();
+    expect(screen.queryByText('Drank')).toBeNull();
+  });
+
+  test('an arrived bottle shows the arrival in date order with its moves', () => {
+    render(<BottleJourney bottle={{
+      status: 'active', arrivedAt: '2026-04-01',
+      cellarHistory: [
+        { cellarName: 'Cellar A', enteredAt: '2026-01-02' },
+        { cellarName: 'Cellar B', enteredAt: '2026-05-05' },
+      ],
+    }} />);
+    const texts = screen.getAllByRole('listitem').map((li) => li.textContent);
+    expect(texts[0]).toMatch(/Added to Cellar A/);
+    expect(texts[1]).toMatch(/history.journey.arrived/);
+    expect(texts[2]).toMatch(/Moved to Cellar B/);
+  });
 });

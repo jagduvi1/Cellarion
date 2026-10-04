@@ -4,7 +4,7 @@
 const { z } = require('zod');
 const Bottle = require('../../models/Bottle');
 const Rack = require('../../models/Rack');
-const { CONSUMED_STATUSES } = require('../../config/constants');
+const { CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES, ORDERED_STATUS } = require('../../config/constants');
 const { registerTool } = require('../registry');
 const { getCellarRole } = require('../../utils/cellarAccess');
 const { ok, fail, MSG_CELLAR_NOT_FOUND, resolveCellarAccess, accessibleCellars, countBottlesByCellar } = require('../toolUtil');
@@ -38,7 +38,7 @@ registerTool({
   name: 'get_cellar',
   title: 'Get one cellar',
   description:
-    'Returns one cellar\'s summary: name, your role, active-bottle count, consumed count, rack count, member count. ' +
+    'Returns one cellar\'s summary: name, your role, active-bottle count, consumed count, on-order count (bought, not delivered yet), rack count, member count. ' +
     'Call when the user refers to a specific cellar and you already know its cellar_id (from list_cellars).',
   scope: 'read',
   annotations: { readOnlyHint: true, openWorldHint: false },
@@ -47,9 +47,10 @@ registerTool({
     const access = await resolveCellarAccess(ctx.user.id, args.cellar_id);
     if (!access) return fail('not_found', MSG_CELLAR_NOT_FOUND);
     const { cellar, role } = access;
-    const [active, consumed, racks] = await Promise.all([
-      Bottle.countDocuments({ cellar: cellar._id, status: { $nin: CONSUMED_STATUSES } }),
+    const [active, consumed, onOrder, racks] = await Promise.all([
+      Bottle.countDocuments({ cellar: cellar._id, status: { $nin: NOT_IN_CELLAR_STATUSES } }),
       Bottle.countDocuments({ cellar: cellar._id, status: { $in: CONSUMED_STATUSES } }),
+      Bottle.countDocuments({ cellar: cellar._id, status: ORDERED_STATUS }),
       Rack.countDocuments({ cellar: cellar._id, deletedAt: null }),
     ]);
     return ok(`Cellar "${cellar.name}"`, {
@@ -59,6 +60,7 @@ registerTool({
       role,
       active_bottles: active,
       consumed_bottles: consumed,
+      on_order_bottles: onOrder,
       racks,
       member_count: (cellar.members || []).length,
       created_at: cellar.createdAt,

@@ -21,7 +21,7 @@ const Bottle = require('../models/Bottle');
 const Rack = require('../models/Rack');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
-const { CONSUMED_STATUSES, WINE_POPULATE_CARDS } = require('../config/constants');
+const { NOT_IN_CELLAR_STATUSES, WINE_POPULATE_CARDS } = require('../config/constants');
 const { getDataVersion } = require('./dataVersion');
 
 const SNAPSHOT_SCHEMA = 1;
@@ -136,7 +136,7 @@ async function buildOfflineSnapshot(userId, { attachBottleImageUrls }) {
   const ids = cellars.map((c) => c._id);
 
   const bottles = ids.length
-    ? await Bottle.find({ cellar: { $in: ids }, status: { $nin: CONSUMED_STATUSES } })
+    ? await Bottle.find({ cellar: { $in: ids }, status: { $nin: NOT_IN_CELLAR_STATUSES } })
       .populate(SNAPSHOT_WINE_POPULATE)
       .lean()
     : [];

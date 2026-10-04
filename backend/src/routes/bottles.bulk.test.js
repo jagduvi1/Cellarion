@@ -31,7 +31,7 @@ jest.mock('../services/rackOps', () => ({ moveBottleToCellar: jest.fn() }));
 jest.mock('../services/bottleOps', () => ({
   addBottle: jest.fn(), validateBottleCommitFields: jest.fn(), updateBottleFields: jest.fn(), consumeBottle: jest.fn(),
   restoreBottle: jest.fn(), removeFromRacks: jest.fn(), removeBottleCascade: jest.fn(),
-  openBottle: jest.fn(), pourFromBottle: jest.fn(), closeBottle: jest.fn(),
+  openBottle: jest.fn(), pourFromBottle: jest.fn(), closeBottle: jest.fn(), markArrived: jest.fn(),
 }));
 jest.mock('../utils/exchangeRates', () => ({ getSnapshotForDate: jest.fn().mockResolvedValue(null) }));
 jest.mock('../utils/vintageProfile', () => ({ ensurePendingVintageProfile: jest.fn() }));
@@ -51,7 +51,7 @@ jest.mock('../models/Bottle', () => ({ findById: jest.fn(), find: jest.fn() }));
 
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
-const { updateBottleFields, consumeBottle } = require('../services/bottleOps');
+const { updateBottleFields, consumeBottle, markArrived } = require('../services/bottleOps');
 const { logAudit } = require('../services/audit');
 const { checkRestockGap } = require('../services/restockChecker');
 const bottlesRouter = require('./bottles');
@@ -276,5 +276,38 @@ describe('POST /api/bottles/bulk — per-bottle window conflicts (audit 2026-09-
     updateBottleFields.mockResolvedValueOnce({ error: { status: 400, message: 'purchaseDate must be a valid date' } });
     const { status } = await postJson(app(), '/api/bottles/bulk', { action: 'update', bottleIds: [B(1)], fields: { purchaseDate: 'nope' } });
     expect(status).toBe(400);
+  });
+});
+
+describe('POST /api/bottles/bulk — arrive (bottles on order)', () => {
+  test('marks every bottle on order as arrived with one day; anything else is skipped as not_on_order', async () => {
+    markArrived.mockResolvedValue({ bottle: {} });
+    Bottle.find.mockResolvedValue([
+      { _id: B(1), cellar: OWNED, status: 'ordered' },
+      { _id: B(2), cellar: OWNED, status: 'ordered' },
+      { _id: B(3), cellar: OWNED, status: 'active' },
+    ]);
+
+    const { status, body } = await postJson(app(), '/api/bottles/bulk', {
+      action: 'arrive', bottleIds: [B(1), B(2), B(3)], arrivedAt: '2026-10-02',
+    });
+
+    expect(status).toBe(200);
+    expect(body).toEqual({ done: 2, doneIds: [B(1), B(2)], skipped: [{ id: B(3), reason: 'not_on_order' }] });
+    expect(markArrived).toHaveBeenCalledTimes(2);
+    expect(markArrived).toHaveBeenCalledWith(expect.objectContaining({ _id: B(1) }), { arrivedAt: '2026-10-02' }, expect.anything());
+    expect(consumeBottle).not.toHaveBeenCalled();
+    expect(logAudit).toHaveBeenCalledWith(
+      expect.anything(), 'bottle.bulk_arrive', expect.objectContaining({ type: 'cellar', id: OWNED }),
+      { requested: 3, done: 2, skipped: 1 },
+    );
+  });
+
+  test('a bad arrival date fails the whole request before anything is touched', async () => {
+    markArrived.mockResolvedValue({ error: { status: 400, message: 'arrivedAt must be a valid date and not in the future' } });
+    Bottle.find.mockResolvedValue([{ _id: B(1), cellar: OWNED, status: 'ordered' }]);
+    const { status, body } = await postJson(app(), '/api/bottles/bulk', { action: 'arrive', bottleIds: [B(1)], arrivedAt: 'later' });
+    expect(status).toBe(400);
+    expect(body.error).toMatch(/arrivedAt/);
   });
 });

@@ -38,6 +38,9 @@ const notificationSchema = new mongoose.Schema({
       'drink_window_past',
       'open_bottle_expiring',
       'reservation_due',
+      // A bottle on order is past its expected month (services/drinkWindowNotifier
+      // processArrivals): has it arrived?
+      'order_arrival_due',
       'wine_recommendation',
       'journal_mention',
       'restock_alert',

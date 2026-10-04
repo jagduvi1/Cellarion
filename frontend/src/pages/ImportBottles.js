@@ -11,7 +11,7 @@ import {
   parseAndMap, parseJSON, summariseRacks, getDefaultRackConfig, getDefaultAnchor, decodeImportBuffer,
   parseCSV, detectDelimiter, detectPlocFile, parsePlocFiles,
 } from '../utils/importMappers';
-import { buildImportItem as buildImportItemPayload } from '../utils/importPayload';
+import { buildImportItem as buildImportItemPayload, applyImportOnOrder } from '../utils/importPayload';
 import { prepareImportItems } from '../utils/importPrepare';
 import { describePriceWarning } from '../utils/priceValidation';
 import { summariseImportOutcome, buildImportReportCsv } from '../utils/importReport';
@@ -163,6 +163,11 @@ function ImportBottles() {
   // carry their own note in the file keep it (fill-blank only).
   const [importNotes, setImportNotes] = useState('');
   const [importOccasion, setImportOccasion] = useState('');
+  // "Not delivered yet": every bottle of this import comes in ON ORDER, with
+  // an optional expected month ('YYYY-MM'). Pre-ticked for a prepayment
+  // receipt or a pro-forma invoice.
+  const [importOnOrder, setImportOnOrder] = useState(false);
+  const [importExpectedArrival, setImportExpectedArrival] = useState('');
 
   // Review step
   const [results, setResults] = useState([]);
@@ -492,6 +497,7 @@ function ImportBottles() {
   const processFiles = useCallback((fileList) => {
     setError(null);
     setReceiptInfo(null); // a file replaces rows read from a receipt
+    setImportOnOrder(false);
     const files = Array.from(fileList || []).filter(Boolean);
     if (files.length === 0) return;
 
@@ -631,6 +637,10 @@ function ImportBottles() {
         skipped: groupSkippedLines(data.skipped),
         warnings: Array.isArray(data.warnings) ? data.warnings : [],
       });
+      // A prepayment receipt or a pro-forma invoice is an order not handed
+      // over yet: suggest importing it on order (the user can untick it).
+      const docType = data.receipt?.documentType;
+      setImportOnOrder(docType === 'prepayment' || docType === 'proforma');
     } catch {
       setError(t('importBottles.receipt.errors.generic'));
     } finally {
@@ -1041,7 +1051,9 @@ function ImportBottles() {
     setSubmittedRows(importableRows);
     setUserSkippedRows(skippedAtReview);
     setUnresolvedRows(unresolvedAtReview);
-    const items = importableRows.map(buildImportItem);
+    const items = applyImportOnOrder(importableRows.map(buildImportItem), {
+      onOrder: importOnOrder, expectedArrival: importExpectedArrival,
+    });
 
     // Mirror of the backend cap: /confirm refuses more than MAX_IMPORT_ROWS
     // in one request — fail here with guidance instead of a bare 400 after
@@ -1103,7 +1115,9 @@ function ImportBottles() {
         </p>
         {secondDocument && (
           <div className="import-parse-warning-banner" role="note">
-            {t(r.documentType === 'prepayment' ? 'importBottles.receipt.prepaymentNote' : 'importBottles.receipt.proformaNote')}
+            {importOnOrder
+              ? t(r.documentType === 'prepayment' ? 'importBottles.receipt.prepaymentOnOrderNote' : 'importBottles.receipt.proformaOnOrderNote')
+              : t(r.documentType === 'prepayment' ? 'importBottles.receipt.prepaymentNote' : 'importBottles.receipt.proformaNote')}
           </div>
         )}
         {r.warnings.includes('mixed_case') && (
@@ -1157,6 +1171,10 @@ function ImportBottles() {
             </>
           )}
           {w.code === 'ct-pending-skipped' && t('importBottles.warnings.ctPendingSkipped', {
+            count: w.count,
+            wines: (w.wines || []).join(', ')
+          })}
+          {w.code === 'ct-pending-on-order' && t('importBottles.warnings.ctPendingOnOrder', {
             count: w.count,
             wines: (w.wines || []).join(', ')
           })}
@@ -1483,6 +1501,30 @@ function ImportBottles() {
               placeholder={t('importBottles.wholeImport.occasionPlaceholder')}
               maxLength={500}
             />
+          </div>
+          {/* Not delivered yet: the whole import comes in ON ORDER. Pre-ticked
+              for a prepayment receipt or a pro-forma invoice (an order that
+              has not been handed over). */}
+          <div className="form-group import-on-order">
+            <label className="toggle-label">
+              <input
+                type="checkbox"
+                checked={importOnOrder}
+                onChange={(e) => setImportOnOrder(e.target.checked)}
+              />
+              <span>{t('importBottles.wholeImport.onOrderLabel')}</span>
+            </label>
+            <p className="rack-options-hint">{t('importBottles.wholeImport.onOrderHint')}</p>
+            {importOnOrder && (
+              <label className="import-on-order-month">
+                <span>{t('addBottle.expectedArrival')}</span>
+                <input
+                  type="month"
+                  value={importExpectedArrival}
+                  onChange={(e) => setImportExpectedArrival(e.target.value)}
+                />
+              </label>
+            )}
           </div>
         </div>
       )}
@@ -2460,6 +2502,14 @@ function ImportBottles() {
             <span className="done-number">{importResult.createdActive ?? importResult.created}</span>
             <span>{t('importBottles.done.activeBottles')}</span>
           </div>
+          {importResult.createdOnOrder > 0 && (
+            <div className="done-stat">
+              <span className="done-number">{importResult.createdOnOrder}</span>
+              <span>
+                <Link to={`/cellars/${cellarId}/on-order`}>{t('importBottles.done.onOrder')}</Link>
+              </span>
+            </div>
+          )}
           {importResult.createdHistory > 0 && (
             <div className="done-stat">
               <span className="done-number">{importResult.createdHistory}</span>
@@ -2615,6 +2665,8 @@ function ImportBottles() {
             setStep('upload');
             setParsedItems([]);
             setReceiptInfo(null);
+            setImportOnOrder(false);
+            setImportExpectedArrival('');
             setResults([]);
             setSummary(null);
             setSelections({});

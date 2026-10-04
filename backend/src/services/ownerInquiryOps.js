@@ -19,7 +19,7 @@ const WineOwnerInquiry = require('../models/WineOwnerInquiry');
 const WineDefinition = require('../models/WineDefinition');
 const Bottle = require('../models/Bottle');
 const User = require('../models/User');
-const { CONSUMED_STATUSES } = require('../config/constants');
+const { CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES } = require('../config/constants');
 const { createNotifications, createNotification } = require('./notifications');
 const { logAudit } = require('./audit');
 const { stripHtml } = require('../utils/sanitize');
@@ -252,7 +252,7 @@ async function buildRecipients(wineId) {
     { $project: { bottle: 1, cellar: 1 } },
   ]);
 
-  let rows = await ownersWith({ $nin: CONSUMED_STATUSES });
+  let rows = await ownersWith({ $nin: NOT_IN_CELLAR_STATUSES });
   let fallbackUsed = false;
   if (rows.length === 0) {
     rows = await ownersWith({ $in: CONSUMED_STATUSES });

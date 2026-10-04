@@ -81,6 +81,10 @@ function AddBottle() {
     dateAdded: ''
   });
   const [addToHistory, setAddToHistory] = useState(false);
+  // "Not delivered yet": the bottles are added ON ORDER (status 'ordered'),
+  // with an optional expected month ('YYYY-MM').
+  const [onOrder, setOnOrder] = useState(false);
+  const [expectedArrival, setExpectedArrival] = useState('');
   const [historyData, setHistoryData] = useState({
     consumedAt: '',
     consumedReason: 'drank',
@@ -789,7 +793,13 @@ function AddBottle() {
     const newIds = createdBottlesRef.current.map(b => b?._id).filter(Boolean);
     let hasRacks = false;
     // Bottles added straight into the drinking history are consumed — a
-    // consumed bottle has no place in a rack (audit 2026-09-14 M).
+    // consumed bottle has no place in a rack (audit 2026-09-14 M). Nor does
+    // one on order: it is placed once it arrives, and its list is where the
+    // user goes next.
+    if (onOrder && !addToHistory) {
+      navigate(`/cellars/${cellarId}/on-order`);
+      return;
+    }
     if (newIds.length > 0 && !addToHistory) {
       try {
         const rr = await getRacks(apiFetch, cellarId, { summary: true });
@@ -848,6 +858,8 @@ function AddBottle() {
         // member who scans this code is offered the same wine.
         barcode: barcode || undefined,
         addToHistory: addToHistory || undefined,
+        // Bought, not delivered yet: kept out of the cellar until it arrives.
+        ...(onOrder && !addToHistory ? { onOrder: true, expectedArrival: expectedArrival || undefined } : {}),
         ...(addToHistory ? {
           consumedAt: historyData.consumedAt || undefined,
           consumedReason: historyData.consumedReason,
@@ -1759,6 +1771,34 @@ function AddBottle() {
                   </div>
                 </div>
 
+                {/* ── Not delivered yet (on order) ── optional, off by default */}
+                <div className="add-on-order-section">
+                  <label className="toggle-label">
+                    <input
+                      type="checkbox"
+                      checked={onOrder}
+                      onChange={(e) => {
+                        setOnOrder(e.target.checked);
+                        if (e.target.checked) setAddToHistory(false);
+                      }}
+                    />
+                    <span>{t('addBottle.onOrder')}</span>
+                  </label>
+                  <p className="help-text">{t('addBottle.onOrderHint')}</p>
+                  {onOrder && (
+                    <div className="form-group">
+                      <label htmlFor="add-expected-arrival">{t('addBottle.expectedArrival')}</label>
+                      <input
+                        id="add-expected-arrival"
+                        type="month"
+                        value={expectedArrival}
+                        onChange={(e) => setExpectedArrival(e.target.value)}
+                      />
+                      <p className="help-text">{t('addBottle.expectedArrivalHint')}</p>
+                    </div>
+                  )}
+                </div>
+
                 <div className="form-group">
                   <label>{t('common.notes')}</label>
                   <textarea
@@ -1870,7 +1910,10 @@ function AddBottle() {
                     <input
                       type="checkbox"
                       checked={addToHistory}
-                      onChange={(e) => setAddToHistory(e.target.checked)}
+                      onChange={(e) => {
+                        setAddToHistory(e.target.checked);
+                        if (e.target.checked) setOnOrder(false);
+                      }}
                     />
                     <span>{t('addBottle.addToHistory')}</span>
                   </label>

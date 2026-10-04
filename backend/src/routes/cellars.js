@@ -23,7 +23,7 @@ const { isReserved } = require('../utils/reservationUtils');
 const {
   normalizeTaxonomyQuery, parseExtraBottleFilters, applyExtraBottleFilters, groupIdenticalBottles,
 } = require('../utils/bottleListFilters');
-const { CONSUMED_STATUSES, WINE_POPULATE_LIST, WINE_POPULATE_CARDS } = require('../config/constants');
+const { CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES, ORDERED_STATUS, WINE_POPULATE_LIST, WINE_POPULATE_CARDS } = require('../config/constants');
 const mongoose = require('mongoose');
 const { parsePagination } = require('../utils/pagination');
 const bottleSearch = require('../services/bottleSearch');
@@ -71,7 +71,7 @@ async function loadGroupedBottlePage({ cellarId, excludeSet, onlyIds = null, sor
   const { ObjectId } = mongoose.Types;
   const match = {
     cellar: new ObjectId(String(cellarId)),
-    status: { $nin: CONSUMED_STATUSES },
+    status: { $nin: NOT_IN_CELLAR_STATUSES },
   };
   if (excludeSet.size > 0) {
     match._id = { $nin: [...excludeSet].map(id => new ObjectId(id)) };
@@ -284,7 +284,7 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
   const needsMaturity = statusFilter !== 'consumed' && !!(maturityFilter || sortField === 'maturity');
   const statusMongo = statusFilter === 'consumed'
     ? { $in: CONSUMED_STATUSES }
-    : { $nin: CONSUMED_STATUSES };
+    : { $nin: NOT_IN_CELLAR_STATUSES };
   const objectIds = cellarIds.map(id => new mongoose.Types.ObjectId(id));
 
   // ── HOT PATH: default view (no search/filters, DB-sortable) ──
@@ -725,7 +725,7 @@ router.get('/:id/statistics', async (req, res) => {
     // so the maps list their keys in a stable order.
     const priced = { $ne: [{ $ifNull: ['$price', 0] }, 0] };
     const groups = await Bottle.aggregate([
-      { $match: { cellar: cellar._id, status: { $nin: CONSUMED_STATUSES } } },
+      { $match: { cellar: cellar._id, status: { $nin: NOT_IN_CELLAR_STATUSES } } },
       {
         $group: {
           _id: {
@@ -967,6 +967,38 @@ router.get('/:id/history', async (req, res) => {
   }
 });
 
+// GET /api/cellars/:id/on-order — the bottles bought for this cellar that
+// have not arrived yet (status 'ordered'): soonest expected first, undated
+// orders last. Any member may look; arriving / editing needs editor, which
+// those endpoints enforce. Capped like the other list paths.
+const ON_ORDER_LIMIT = 2000;
+router.get('/:id/on-order', async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+    const cellar = await Cellar.findById(req.params.id).populate('user', 'username').lean();
+    const role = getCellarRole(cellar, req.user.id);
+    if (!role || cellar.deletedAt) return res.status(404).json({ error: 'Cellar not found' });
+
+    const docs = await Bottle.find({ cellar: req.params.id, status: ORDERED_STATUS })
+      .populate(WINE_POPULATE_CARDS)
+      .sort({ expectedArrival: 1, createdAt: 1 })
+      .limit(ON_ORDER_LIMIT)
+      .lean();
+    // An ascending sort puts a missing date FIRST; dated orders lead instead.
+    const ordered = [...docs.filter((b) => b.expectedArrival), ...docs.filter((b) => !b.expectedArrival)];
+    const bottles = await attachBottleImageUrls(ordered, req.user.id);
+
+    res.json({
+      cellar: { ...cellar, userRole: role, userColor: getUserColor(cellar, req.user.id) },
+      bottles,
+      total: bottles.length,
+    });
+  } catch (error) {
+    console.error('Get on-order bottles error:', error);
+    res.status(500).json({ error: 'Failed to get the bottles on order' });
+  }
+});
+
 // GET /api/cellars/:id/members - List members (owner only)
 router.get('/:id/members', async (req, res) => {
   try {
@@ -1170,7 +1202,7 @@ router.get('/:id', async (req, res) => {
       // ── LIST PATH: no search — rating / maturity / reserved / chart filters or an in-memory sort ──
       const filter = {
         cellar: req.params.id,
-        status: { $nin: CONSUMED_STATUSES }
+        status: { $nin: NOT_IN_CELLAR_STATUSES }
       };
 
       if (excludeSet.size > 0) {
@@ -1331,8 +1363,26 @@ router.get('/:id', async (req, res) => {
     const facets = onlyIds ? null : facetSource.facetDistribution;
     const facetMeta = facetSource.facetMeta;
 
+    // Bottles bought for this cellar that have not arrived yet: the page
+    // shows a link to them (GET /:id/on-order) instead of mixing them into
+    // the list. One indexed count; the next date only when there are any.
+    // Auxiliary: a failed lookup degrades to "no link", never a 500 page.
+    let onOrderCount = 0;
+    let nextExpected = null;
+    try {
+      onOrderCount = await Bottle.countDocuments({ cellar: req.params.id, status: ORDERED_STATUS });
+      if (onOrderCount > 0) {
+        const next = await Bottle.findOne({ cellar: req.params.id, status: ORDERED_STATUS, expectedArrival: { $ne: null } })
+          .sort({ expectedArrival: 1 }).select('expectedArrival').lean();
+        nextExpected = next?.expectedArrival || null;
+      }
+    } catch (err) {
+      console.warn('On-order summary failed (non-fatal):', err.message);
+    }
+
     res.json({
       cellar: { ...cellar, userRole: role, userColor: getUserColor(cellar, req.user.id) },
+      onOrder: { count: onOrderCount, nextExpected },
       bottles: {
         total: totalCount,
         count: responseItems.length,

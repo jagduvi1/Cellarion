@@ -77,7 +77,7 @@ const STATIC_FIELDS = [
   // Inventory
   dim({ key: 'bottle.vintage', label: 'Vintage', domain: 'inventory', type: 'text', source: 'bottle', path: 'vintage' }),
   dim({ key: 'bottle.size', label: 'Bottle size', domain: 'inventory', type: 'text', source: 'bottle', path: 'bottleSize' }),
-  dim({ key: 'bottle.status', label: 'Status', domain: 'inventory', type: 'enum', source: 'bottle', path: 'status', enumOptions: ['active', 'drank', 'gifted', 'sold', 'other'] }),
+  dim({ key: 'bottle.status', label: 'Status', domain: 'inventory', type: 'enum', source: 'bottle', path: 'status', enumOptions: ['ordered', 'active', 'drank', 'gifted', 'sold', 'other'] }),
   dim({ key: 'bottle.cellar', label: 'Cellar', domain: 'inventory', type: 'text', source: 'computed', path: 'cellar', sortable: false, groupable: true }),
   dim({ key: 'bottle.location', label: 'Rack location', domain: 'inventory', type: 'text', source: 'bottle', path: 'location' }),
   // The rack a bottle actually sits in, and the rack's group (the room or
