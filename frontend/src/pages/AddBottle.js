@@ -153,6 +153,9 @@ function AddBottle() {
   const [barcode, setBarcode] = useState(null);
   const [barcodeNoted, setBarcodeNoted] = useState(false);
   const [barcodeWineId, setBarcodeWineId] = useState(null);
+  // Barcode-only camera, opened from step 2's "help the community" line: no
+  // shutter (nothing is photographed), it just reads the code and closes.
+  const [barcodeMode, setBarcodeMode] = useState(false);
   // ── Back-label rescue ──
   // Offered ONLY when the front pass came back incomplete (`extracted.partial`)
   // or unreadable (a 422, which still hands back a scanImageId). Optional and
@@ -357,6 +360,14 @@ function AddBottle() {
   // viewfinder asks for the label photo as usual.
   const handleBarcodeDetected = useCallback(async (code) => {
     setBarcode(code);
+    // Scanned from step 2 for a wine already chosen: just keep the code for
+    // this bottle — the wine is the user's choice, and their bottle is the vote.
+    if (barcodeMode) {
+      track('barcode-scan', { result: 'contributed' });
+      setBarcodeMode(false);
+      stopLabelCamera();
+      return;
+    }
     let data = null;
     try {
       const res = await lookupBarcode(apiFetch, code);
@@ -372,12 +383,24 @@ function AddBottle() {
     }
     track('barcode-scan', { result: 'new' });
     setBarcodeNoted(true);
-  }, [apiFetch, stopLabelCamera, applyResolvedWine]);
+  }, [apiFetch, stopLabelCamera, applyResolvedWine, barcodeMode]);
 
   useBarcodeWatch(labelVideoRef, {
     active: labelCam.open && !labelCam.error && !labelScanning,
     onDetect: handleBarcodeDetected,
   });
+
+  const startBarcodeScan = useCallback(() => {
+    setBarcodeMode(true);
+    startLabelCamera();
+  }, [startLabelCamera]);
+
+  // Closing the viewfinder by hand also leaves barcode-only mode, so the next
+  // opening is an ordinary label scan again.
+  const closeCamera = useCallback(() => {
+    setBarcodeMode(false);
+    stopLabelCamera();
+  }, [stopLabelCamera]);
 
   // Advance to step 2 WITHOUT any registry write: the confirmed wine fields
   // ride along and are minted by POST /api/bottles when the user commits the
@@ -1003,7 +1026,7 @@ function AddBottle() {
             {labelCam.error ? (
               <div className="camera-error-overlay">
                 <p>{labelCam.error}</p>
-                <button type="button" className="btn btn-secondary" onClick={stopLabelCamera}>Close</button>
+                <button type="button" className="btn btn-secondary" onClick={closeCamera}>Close</button>
               </div>
             ) : (
               <>
@@ -1018,16 +1041,21 @@ function AddBottle() {
                     <div className="camera-overlay">
                       <div className="label-guide-frame" />
                       <p className="overlay-hint">
-                        {barcodeNoted
-                          ? t('addBottle.barcodeNoted', 'Barcode read — not known yet. Now take the photo of the label.')
-                          : t('addBottle.scanHint')}
+                        {barcodeMode
+                          ? t('addBottle.barcodeOnlyHint', 'Point the camera at the barcode — it is read automatically.')
+                          : barcodeNoted
+                            ? t('addBottle.barcodeNoted', 'Barcode read — not known yet. Now take the photo of the label.')
+                            : t('addBottle.scanHint')}
                       </p>
                     </div>
                     <div className="camera-controls">
-                      <button type="button" className="camera-btn camera-btn-close" onClick={stopLabelCamera} aria-label="Close camera">✕</button>
-                      <button type="button" className="camera-btn camera-btn-capture" onClick={captureLabelPhoto} aria-label="Scan label">
-                        <span className="capture-ring" aria-hidden="true"></span>
-                      </button>
+                      <button type="button" className="camera-btn camera-btn-close" onClick={closeCamera} aria-label="Close camera">✕</button>
+                      {/* No shutter in barcode-only mode: nothing is photographed. */}
+                      {!barcodeMode && (
+                        <button type="button" className="camera-btn camera-btn-capture" onClick={captureLabelPhoto} aria-label="Scan label">
+                          <span className="capture-ring" aria-hidden="true"></span>
+                        </button>
+                      )}
                       <button type="button" className="camera-btn camera-btn-switch" onClick={() => setLabelFacing(f => f === 'environment' ? 'user' : 'environment')} aria-label="Switch camera">⟲</button>
                     </div>
                   </>
@@ -1490,10 +1518,23 @@ function AddBottle() {
               {t('addBottle.changeWine')}
             </button>
           </div>
-          {barcodeWineId && selectedWine?._id === barcodeWineId && (
+          {barcodeWineId && selectedWine?._id === barcodeWineId ? (
             <p className="selected-wine-barcode-note">
               {t('addBottle.barcodeFound', 'Found by its barcode. Not this wine? Use Change wine.')}
             </p>
+          ) : barcode ? (
+            <p className="selected-wine-barcode-note">
+              {t('addBottle.barcodeThanks', 'Thank you — the barcode is saved with this bottle, so the next member who scans it finds this wine straight away.')}
+            </p>
+          ) : (
+            // The registry learns barcodes only from bottles added with one, so
+            // ask — once, quietly, at the one step every add path reaches.
+            <div className="barcode-help">
+              <p>{t('addBottle.barcodeHelp', 'Help the community: scan the barcode on this bottle, and the next member who scans it will find this wine straight away.')}</p>
+              <button type="button" className="btn btn-ghost btn-small" onClick={startBarcodeScan}>
+                {t('addBottle.barcodeHelpBtn', 'Scan barcode')}
+              </button>
+            </div>
           )}
 
           {/* A wine the registry does not know yet will be MINTED with this

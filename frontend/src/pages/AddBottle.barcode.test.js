@@ -9,12 +9,13 @@
  */
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
-const { apiFetchMock, navigateMock, barcodeRef, camState, stopCameraMock } = vi.hoisted(() => ({
+const { apiFetchMock, navigateMock, barcodeRef, camState, stopCameraMock, startCameraMock } = vi.hoisted(() => ({
   apiFetchMock: vi.fn(),
   navigateMock: vi.fn(),
   barcodeRef: { current: null },
   camState: { open: false },
   stopCameraMock: vi.fn(),
+  startCameraMock: vi.fn(),
 }));
 
 vi.mock('../api/wines', () => ({
@@ -35,7 +36,7 @@ vi.mock('../hooks/useLabelScanner', () => ({
   default: () => ({
     labelCam: { open: camState.open, error: null }, labelScanning: false, labelFacing: 'environment',
     setLabelFacing: vi.fn(), labelVideoRef: { current: null }, labelCanvasRef: { current: null },
-    startCamera: vi.fn(), startBackCamera: vi.fn(), stopCamera: stopCameraMock, capturePhoto: vi.fn(),
+    startCamera: startCameraMock, startBackCamera: vi.fn(), stopCamera: stopCameraMock, capturePhoto: vi.fn(),
   }),
 }));
 // The watcher itself is tested in hooks/useBarcodeWatch.test.js; here we only
@@ -97,6 +98,36 @@ it('a known barcode goes straight to its wine, and rides the bottle POST', async
   const calls = bottlesCalls();
   expect(calls).toHaveLength(1);
   expect(JSON.parse(calls[0][1].body)).toMatchObject({ wineDefinition: WINE._id, barcode: CODE, vintage: '2019' });
+});
+
+it('step 2 asks for the barcode; one scanned there is kept for the bottle, no lookup, no shutter', async () => {
+  camState.open = false;
+  searchWines.mockResolvedValue(jsonRes({ wines: [WINE] }));
+  render(<AddBottle />);
+
+  // Reach step 2 by search — no barcode has been read on this path.
+  fireEvent.click(screen.getByText('addBottle.searchManuallyInstead'));
+  fireEvent.change(screen.getByPlaceholderText('addBottle.searchPlaceholder'), { target: { value: 'Barolo' } });
+  await act(async () => { fireEvent.click(screen.getByText('addBottle.searchBtn')); });
+  await act(async () => { fireEvent.click(screen.getByText('Barolo').closest('.wine-row')); });
+  expect(screen.getByText('addBottle.barcodeHelp')).toBeInTheDocument();
+
+  camState.open = true; // the click opens the camera
+  await act(async () => { fireEvent.click(screen.getByText('addBottle.barcodeHelpBtn')); });
+  expect(startCameraMock).toHaveBeenCalled();
+  expect(screen.getByText('addBottle.barcodeOnlyHint')).toBeInTheDocument();
+  expect(screen.queryByLabelText('Scan label')).toBeNull(); // nothing to photograph
+
+  await detect(CODE);
+  expect(lookupBarcode).not.toHaveBeenCalled(); // the wine is already the user's choice
+  expect(stopCameraMock).toHaveBeenCalled();
+  camState.open = false;
+  expect(screen.getByText('addBottle.barcodeThanks')).toBeInTheDocument();
+  expect(screen.queryByText('addBottle.barcodeHelp')).toBeNull();
+
+  fireEvent.change(screen.getByPlaceholderText('addBottle.vintagePlaceholder'), { target: { value: '2018' } });
+  await act(async () => { fireEvent.click(screen.getByText('addBottle.addBottleBtn')); });
+  expect(JSON.parse(bottlesCalls()[0][1].body)).toMatchObject({ wineDefinition: WINE._id, barcode: CODE });
 });
 
 it('an unknown barcode is noted in the viewfinder and the camera stays open for the label', async () => {
