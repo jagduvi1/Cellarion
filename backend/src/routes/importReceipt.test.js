@@ -21,6 +21,7 @@ jest.mock('../services/aiBudget', () => ({
   isRefundableScanError: (err) => err?.status !== 422,
 }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
+jest.mock('../services/receiptArchive', () => ({ archiveReceiptScan: jest.fn(async () => ({ _id: 'kept' })) }));
 jest.mock('../config/rateLimits', () => ({ get: () => ({ aiBurst: { max: 1000 } }) }));
 // requireAuth confirms a demo session is still live; say it is.
 jest.mock('../models/User', () => ({ exists: jest.fn(() => Promise.resolve(true)) }));
@@ -31,6 +32,7 @@ const jwt = require('jsonwebtoken');
 const receiptScan = require('../services/receiptScan');
 const { tryDebitAi } = require('../services/aiBudget');
 const { logAudit } = require('../services/audit');
+const { archiveReceiptScan } = require('../services/receiptArchive');
 const router = require('./importReceipt');
 
 const USER = '64b000000000000000000001';
@@ -50,8 +52,8 @@ const refund = jest.fn();
 beforeEach(() => {
   jest.clearAllMocks();
   router._inFlightForTests.clear();
-  receiptScan.prepareReceiptContent.mockResolvedValue({ blocks: [{ type: 'image' }], stats: { pdf: false, files: 1, images: 2 } });
-  receiptScan.readReceipt.mockResolvedValue({ isReceipt: true, wines: [] });
+  receiptScan.prepareReceiptContent.mockResolvedValue({ blocks: [{ type: 'image' }], stats: { pdf: false, files: 1, images: 2 }, archive: [{ buffer: Buffer.from('jpg'), mediaType: 'image/jpeg' }] });
+  receiptScan.readReceipt.mockResolvedValue({ parsed: { isReceipt: true, wines: [] }, raw: '{"isReceipt":true}', model: 'claude-sonnet-5' });
   receiptScan.buildReceiptResult.mockReturnValue({
     receipt: { documentType: 'receipt', store: 'Shop', purchaseDate: '2026-10-03', currency: 'SEK' },
     items: [{ wineName: 'A', quantity: 2 }, { wineName: 'B', quantity: 1 }],
@@ -79,6 +81,19 @@ test('reads a receipt, charges one AI unit, and logs counts only', async () => {
     pdf: false, files: 1, images: 2, wineLines: 2, bottles: 3, skippedLines: 1,
   });
   expect(JSON.stringify(logAudit.mock.calls[0][3])).not.toContain('Shop');
+  // Beta: the receipt, the model's reply and what was read are kept.
+  expect(receiptScan.buildReceiptResult).toHaveBeenCalledWith({ isReceipt: true, wines: [] });
+  expect(archiveReceiptScan).toHaveBeenCalledWith(expect.objectContaining({
+    userId: USER, outcome: 'read', rawReply: '{"isReceipt":true}', model: 'claude-sonnet-5',
+    files: [{ buffer: Buffer.from('jpg'), mediaType: 'image/jpeg' }],
+    result: expect.objectContaining({ items: expect.any(Array) }),
+  }));
+});
+
+test('a read is still answered when keeping the receipt fails', async () => {
+  archiveReceiptScan.mockResolvedValueOnce(null); // archiveReceiptScan never throws; null = not kept
+  const res = await post();
+  expect(res.status).toBe(200);
 });
 
 test('requires a signed-in, non-demo account', async () => {
@@ -116,13 +131,16 @@ test('refunds when the provider is not configured, keeps the charge for a comple
   expect(res.status).toBe(503);
   expect((await res.json()).code).toBe('ai_unavailable');
   expect(refund).toHaveBeenCalledTimes(1);
+  expect(archiveReceiptScan).not.toHaveBeenCalled(); // no read happened: nothing to keep
 
   refund.mockClear();
-  receiptScan.readReceipt.mockRejectedValueOnce(Object.assign(new Error('The receipt could not be read.'), { status: 422, code: 'unreadable' }));
+  receiptScan.readReceipt.mockRejectedValueOnce(Object.assign(new Error('The receipt could not be read.'), { status: 422, code: 'unreadable', raw: 'garbled', model: 'm' }));
   res = await post();
   expect(res.status).toBe(422);
   expect((await res.json()).code).toBe('unreadable');
   expect(refund).not.toHaveBeenCalled();
+  // An unreadable answer is exactly what the beta archive is for.
+  expect(archiveReceiptScan).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'unreadable', rawReply: 'garbled', result: null }));
 });
 
 test('a document that is not a purchase is a 422', async () => {
@@ -130,6 +148,7 @@ test('a document that is not a purchase is a 422', async () => {
   const res = await post();
   expect(res.status).toBe(422);
   expect((await res.json()).code).toBe('not_a_receipt');
+  expect(archiveReceiptScan).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'not_a_receipt' }));
 });
 
 test('refuses a second scan while the first is still being read', async () => {
@@ -140,7 +159,7 @@ test('refuses a second scan while the first is still being read', async () => {
   const second = await post();
   expect(second.status).toBe(429);
   expect((await second.json()).code).toBe('scan_busy');
-  finish({ isReceipt: true, wines: [] });
+  finish({ parsed: { isReceipt: true, wines: [] }, raw: '{}', model: 'm' });
   expect((await first).status).toBe(200);
   expect(router._inFlightForTests.size).toBe(0);
 });

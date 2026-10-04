@@ -5,6 +5,7 @@ const aiBurstLimiter = require('../middleware/aiBurstLimiter');
 const { tryDebitAi, isRefundableScanError } = require('../services/aiBudget');
 const { logAudit } = require('../services/audit');
 const { prepareReceiptContent, readReceipt, buildReceiptResult, limits } = require('../services/receiptScan');
+const { archiveReceiptScan } = require('../services/receiptArchive');
 
 const router = express.Router();
 
@@ -14,9 +15,11 @@ const router = express.Router();
 // (in order) or one PDF. Returns { receipt: { documentType, store,
 // purchaseDate, currency }, items, skipped, warnings } — rows for the import
 // page, which runs them through the normal validate → review → confirm flow.
-// Nothing is created here, and the uploaded document is never written
-// anywhere: it lives in memory for the length of the request
-// (services/receiptScan).
+// No bottle is created here. During the BETA every completed read — good,
+// unreadable or "not a receipt" — is kept for a few days with the model's
+// reply (services/receiptArchive) so a misread can be diagnosed; the import
+// page says so before the user chooses a file. A call that never completed
+// (no provider, transport error) is not kept: there is nothing to diagnose.
 //
 // requireNonDemo + tryDebitAi: a scan is one paid vision call, debited from
 // the shared daily AI budget like a label scan, and refunded when the call
@@ -105,12 +108,20 @@ router.post('/', requireAuth, requireNonDemo, aiBurstLimiter, gateScan, handleUp
   // The billable call. Refund only when it produced no completion (no
   // provider configured, transport failure); a completed reply with no usable
   // JSON (422) stays debited — the same policy as the label scan.
-  let parsed;
+  // Beta archive of a completed read (best-effort: never fails the request).
+  const keep = (outcome, { raw, model, result = null }) => archiveReceiptScan({
+    userId: req.user.id, files: content.archive, rawReply: raw, result, outcome, model, stats: content.stats,
+  });
+
+  let reply;
   try {
-    parsed = await readReceipt(content.blocks);
+    reply = await readReceipt(content.blocks);
   } catch (err) {
     if (isRefundableScanError(err)) await debit.refund();
-    if (err.status === 422) return res.status(422).json({ error: err.message, code: err.code });
+    if (err.status === 422) {
+      await keep('unreadable', { raw: err.raw, model: err.model });
+      return res.status(422).json({ error: err.message, code: err.code });
+    }
     if (err.status === 503) {
       return res.status(503).json({ error: 'Reading receipts needs the AI service, which is not set up on this server.', code: 'ai_unavailable' });
     }
@@ -120,12 +131,16 @@ router.post('/', requireAuth, requireNonDemo, aiBurstLimiter, gateScan, handleUp
 
   let result;
   try {
-    result = buildReceiptResult(parsed);
+    result = buildReceiptResult(reply.parsed);
   } catch (err) {
-    if (err.status === 422) return res.status(422).json({ error: err.message, code: err.code });
+    if (err.status === 422) {
+      await keep(err.code || 'unreadable', { raw: reply.raw, model: reply.model });
+      return res.status(422).json({ error: err.message, code: err.code });
+    }
     console.error('Receipt result error:', err.message);
     return res.status(500).json({ error: 'The receipt could not be read.' });
   }
+  await keep('read', { raw: reply.raw, model: reply.model, result });
 
   // Counts only: the shop, the wines and the prices are the user's own data
   // and reach the audit trail when (and if) the import is confirmed.

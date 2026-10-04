@@ -1261,7 +1261,7 @@ function AddBottle() {
               {/* Several bottles from one purchase: the import page reads the
                   whole receipt at once (Import → Scan a receipt). */}
               <Link to={`/cellars/${cellarId}/import`} className="wine-select-manual-link">
-                {t('addBottle.scanReceiptInstead', 'Bought several? Scan the receipt instead →')}
+                {t('addBottle.scanReceiptInstead', 'Bought several? Scan the receipt instead (beta) →')}
               </Link>
             </div>
           )}

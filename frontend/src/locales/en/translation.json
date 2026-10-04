@@ -1011,7 +1011,7 @@
     "startCamera": "Start Camera",
     "useCameraInstead": "Use camera instead",
     "searchManuallyInstead": "No camera? Search manually instead →",
-    "scanReceiptInstead": "Bought several? Scan the receipt instead →",
+    "scanReceiptInstead": "Bought several? Scan the receipt instead (beta) →",
     "createAsDraft": "Keep this wine as a private draft",
     "createAsDraftHint": "Only you can see it and you can edit it freely. Publish it to the shared registry when the record is complete; an untouched draft with bottles publishes by itself after 7 days.",
     "searchBtn": "Search",
@@ -4283,7 +4283,8 @@
     "receipt": {
       "title": "Scan a receipt or order",
       "desc": "Bought several bottles? Take photos of the receipt, or upload a screenshot or PDF of the order or invoice. The wines on it become rows you check below before anything is added. A long receipt can take up to five photos, top to bottom.",
-      "privacy": "The photos are sent to our AI service to read the wines and are not stored. Only the wines, prices, shop and date are kept, and only once you import them. Names, addresses and card numbers on the receipt are never saved.",
+      "beta": "Beta",
+      "privacy": "The receipt is sent to our AI service to read the wines. While receipt scanning is in beta, we also keep the receipt and what was read from it for 5 days, so we can fix reading mistakes. Then it is deleted automatically. Names, addresses and card numbers on the receipt are never copied to your bottles.",
       "choose": "Choose photos or PDF",
       "reading": "Reading the receipt…",
       "defaultName": "Receipt",

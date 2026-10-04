@@ -56,6 +56,7 @@ const DiscussionReport = require('../models/DiscussionReport');
 const Follow = require('../models/Follow');
 const ImportSession = require('../models/ImportSession');
 const ImportArchive = require('../models/ImportArchive');
+const ReceiptScan = require('../models/ReceiptScan');
 const JournalEntry = require('../models/JournalEntry');
 const Notification = require('../models/Notification');
 const PendingShare = require('../models/PendingShare');
@@ -976,6 +977,18 @@ const REGISTRY = [
     exportFragment: async (ctx) => ({
       importArchives: markTrunc(ctx, 'importArchives', await ImportArchive.find({ user: ctx.userId })
         .select('cellar fileName detectedFormat detectedEncoding importWarnings rows rowCount rowsTruncated summary retainUntil createdAt')
+        .limit(EXPORT_MAX).lean()),
+    }),
+  },
+  {
+    // Receipts kept during the receipt-scan beta (models/ReceiptScan, at most
+    // 5 days). Exported as what was read and when (the image bytes stay out of
+    // the JSON); erased with the account — files first, via receiptArchive.
+    model: ReceiptScan, category: 'personal-data', userFields: ['user'],
+    purge: (ctx) => require('./receiptArchive').purgeUserReceiptScans(ctx.userId),
+    exportFragment: async (ctx) => ({
+      receiptScans: markTrunc(ctx, 'receiptScans', await ReceiptScan.find({ user: ctx.userId })
+        .select('files outcome model result rawReply retainUntil createdAt')
         .limit(EXPORT_MAX).lean()),
     }),
   },

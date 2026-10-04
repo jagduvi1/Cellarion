@@ -30,6 +30,32 @@ function run(reqPath) {
   return { statusCode, jsonBody, headers, nextCalled };
 }
 
+describe('uploadsGuard private receipts', () => {
+  // Receipts kept during the receipt-scan beta sit on the same volume but must
+  // never be served — not even with an image extension and a known filename.
+  test.each([
+    '/receipts/0f3b2a1c-uuid.jpg',
+    '/receipts/0f3b2a1c-uuid.pdf',
+    '//receipts/x.png',
+    '/RECEIPTS/x.webp',
+    '/%72eceipts/x.jpg',
+    '/receipts',
+  ])('refuses %s with a 404', (p) => {
+    const { nextCalled, statusCode } = run(p);
+    expect(nextCalled).toBe(false);
+    expect(statusCode).toBe(404);
+  });
+
+  test('a malformed escape does not throw', () => {
+    expect(() => run('/receipts/%E0%A4%A.jpg')).not.toThrow();
+    expect(run('/receipts/%E0%A4%A.jpg').statusCode).toBe(404);
+  });
+
+  test('a file merely NAMED like the folder elsewhere is unaffected', () => {
+    expect(run('/originals/receipts-photo.jpg').nextCalled).toBe(true);
+  });
+});
+
 describe('uploadsGuard extension allowlist', () => {
   test.each(['.jpg', '.jpeg', '.png', '.webp'])(
     'allows %s files through to static serving',

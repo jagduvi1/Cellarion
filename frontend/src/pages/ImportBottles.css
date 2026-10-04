@@ -273,6 +273,21 @@
   margin: 0 0 0.35rem;
 }
 
+/* Same look as the Settings page's beta badge. */
+.receipt-beta-badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  background: var(--color-primary);
+  color: #fff;
+}
+
 .receipt-scan-text .receipt-scan-privacy {
   font-size: 0.78rem;
   margin: 0;

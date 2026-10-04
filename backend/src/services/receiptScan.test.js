@@ -66,9 +66,14 @@ describe('fitScale', () => {
 
 describe('prepareReceiptContent', () => {
   it('slices a tall photo into JPEG frames within the model limits', async () => {
-    const { blocks, stats } = await prepareReceiptContent([file(await png(800, 5000))]);
+    const { blocks, stats, archive } = await prepareReceiptContent([file(await png(800, 5000))]);
     expect(blocks.length).toBe(planSlices(800, 5000).length);
     expect(stats).toEqual({ pdf: false, files: 1, images: blocks.length });
+    // One archived copy per uploaded photo, upright and whole (not the slices).
+    expect(archive).toHaveLength(1);
+    expect(archive[0].mediaType).toBe('image/jpeg');
+    const whole = await sharp(archive[0].buffer).metadata();
+    expect([whole.width, whole.height]).toEqual([800, 5000]);
     for (const b of blocks) {
       expect(b).toMatchObject({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg' } });
       const meta = await sharp(Buffer.from(b.source.data, 'base64')).metadata();
@@ -84,9 +89,11 @@ describe('prepareReceiptContent', () => {
       .withMetadata({ exif: { IFD0: { Copyright: 'buyer-name' } } })
       .toBuffer();
     expect((await sharp(withExif).metadata()).exif).toBeDefined();
-    const { blocks } = await prepareReceiptContent([file(withExif, 'image/jpeg')]);
+    const { blocks, archive } = await prepareReceiptContent([file(withExif, 'image/jpeg')]);
     const meta = await sharp(Buffer.from(blocks[0].source.data, 'base64')).metadata();
     expect(meta.exif).toBeUndefined();
+    // …and none in the copy the beta archive keeps either.
+    expect((await sharp(archive[0].buffer).metadata()).exif).toBeUndefined();
   });
 
   it('refuses what is not an image or a PDF, and too many photos', async () => {
@@ -99,9 +106,10 @@ describe('prepareReceiptContent', () => {
 
   it('sends a PDF as one document block on Anthropic', async () => {
     const pdf = Buffer.from('%PDF-1.4\n1 0 obj << /Type /Page >> endobj\n%%EOF');
-    const { blocks, stats } = await prepareReceiptContent([file(pdf, 'application/pdf')]);
+    const { blocks, stats, archive } = await prepareReceiptContent([file(pdf, 'application/pdf')]);
     expect(blocks).toEqual([{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdf.toString('base64') } }]);
     expect(stats).toEqual({ pdf: true, files: 1, images: 0 });
+    expect(archive).toEqual([{ buffer: pdf, mediaType: 'application/pdf' }]);
   });
 
   it('refuses a PDF on a provider without document input, a PDF mixed with photos, and a long PDF', async () => {
@@ -126,11 +134,17 @@ describe('readReceipt', () => {
   const reply = (text) => ({ content: [{ type: 'text', text }] });
 
   it('sends the instructions as the system block and parses the JSON reply', async () => {
-    const create = jest.fn().mockResolvedValue(reply('```json\n{"isReceipt":true,"wines":[]}\n```'));
+    const text = '```json\n{"isReceipt":true,"wines":[]}\n```';
+    const create = jest.fn().mockResolvedValue(reply(text));
     aiProvider.getChatClient.mockReturnValue({ messages: { create } });
     const blocks = [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'AAAA' } }];
 
-    await expect(readReceipt(blocks)).resolves.toEqual({ isReceipt: true, wines: [] });
+    // The raw reply comes back too, for the beta archive.
+    await expect(readReceipt(blocks)).resolves.toEqual({
+      parsed: { isReceipt: true, wines: [] },
+      raw: text,
+      model: 'claude-sonnet-5',
+    });
     expect(aiProvider.getChatClient).toHaveBeenCalledWith(expect.objectContaining({ feature: 'receipt_scan' }));
     const req = create.mock.calls[0][0];
     expect(req.model).toBe('claude-sonnet-5');
@@ -152,7 +166,8 @@ describe('readReceipt', () => {
 
   it('throws 422 when the reply holds no JSON', async () => {
     aiProvider.getChatClient.mockReturnValue({ messages: { create: jest.fn().mockResolvedValue(reply('I cannot read this.')) } });
-    await expect(readReceipt([])).rejects.toMatchObject({ status: 422, code: 'unreadable' });
+    // The reply rides on the error for the beta archive.
+    await expect(readReceipt([])).rejects.toMatchObject({ status: 422, code: 'unreadable', raw: 'I cannot read this.', model: 'claude-sonnet-5' });
   });
 });
 

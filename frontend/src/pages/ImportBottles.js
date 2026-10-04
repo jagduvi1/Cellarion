@@ -1350,7 +1350,10 @@ function ImportBottles() {
           most people come here for. */}
       <div className="receipt-scan">
         <div className="receipt-scan-text">
-          <h3>{t('importBottles.receipt.title')}</h3>
+          <h3>
+            {t('importBottles.receipt.title')}
+            <span className="receipt-beta-badge">{t('importBottles.receipt.beta', 'Beta')}</span>
+          </h3>
           <p>{t('importBottles.receipt.desc')}</p>
           <p className="receipt-scan-privacy">{t('importBottles.receipt.privacy')}</p>
         </div>

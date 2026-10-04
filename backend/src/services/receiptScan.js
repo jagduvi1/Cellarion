@@ -3,12 +3,14 @@
  * till receipt, a screenshot of an online order, or a PDF invoice — and turn
  * them into rows for the bottle importer (routes/import.js validate/confirm).
  *
- * The document only ever exists in memory. It is prepared here (orientation
- * baked in, metadata dropped, tall photos sliced), sent to the AI provider, and
- * discarded with the request: receipts carry a name, an address, a member
- * number or the last card digits, none of which Cellarion needs. What survives
- * is what a bottle already stores — price, currency, purchase date and the
- * shop — and only once the user confirms the import.
+ * The document is prepared here (orientation baked in, metadata dropped, tall
+ * photos sliced) and sent to the AI provider. Receipts carry a name, an
+ * address, a member number or the last card digits, none of which Cellarion
+ * needs: the model is told never to copy them, and what reaches a bottle is
+ * only what a bottle already stores — price, currency, purchase date and the
+ * shop — once the user confirms the import. During the BETA the receipt itself
+ * is kept for a few days to diagnose misreads (services/receiptArchive, which
+ * the user is told about before uploading), then deleted.
  *
  * Identification is NOT done here. A receipt line is often truncated or
  * abbreviated ("CH BEL-AIR 19 75CL"); the import's own validate step resolves
@@ -124,6 +126,8 @@ async function prepareImage(buffer) {
     throw httpError(400, 'Upload a JPEG, PNG, WebP or HEIC image, or a PDF.', 'unsupported_type');
   }
 
+  // `data` is the photo upright and metadata-free at full size — the frames
+  // are cut from it, and it is what the beta archive keeps (receiptArchive).
   const { data, info } = await sharp(buffer, { limitInputPixels: MAX_PIXELS })
     .rotate()
     .jpeg({ quality: 95 })
@@ -143,7 +147,7 @@ async function prepareImage(buffer) {
       .toBuffer();
     frames.push(frame.toString('base64'));
   }
-  return frames;
+  return { frames, archived: { buffer: data, mediaType: 'image/jpeg' } };
 }
 
 const isPdf = (buffer) => Buffer.isBuffer(buffer) && buffer.length > 5 && buffer.toString('latin1', 0, 5) === '%PDF-';
@@ -187,6 +191,7 @@ async function prepareReceiptContent(files) {
     return {
       blocks: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdf.toString('base64') } }],
       stats: { pdf: true, files: 1, images: 0 },
+      archive: [{ buffer: pdf, mediaType: 'application/pdf' }],
     };
   }
 
@@ -194,16 +199,19 @@ async function prepareReceiptContent(files) {
     throw httpError(400, `Upload at most ${MAX_IMAGE_FILES} photos at a time.`, 'too_many_files');
   }
   const blocks = [];
+  const archive = [];
   for (const file of files) {
     if (file.buffer.length > MAX_IMAGE_BYTES) throw httpError(400, 'A photo is too large (max 12 MB).', 'too_large');
-    for (const data of await prepareImage(file.buffer)) {
+    const { frames, archived } = await prepareImage(file.buffer);
+    for (const data of frames) {
       blocks.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data } });
     }
+    archive.push(archived);
   }
   if (blocks.length > MAX_IMAGES_PER_SCAN) {
     throw httpError(400, 'The receipt is too long to read in one go. Photograph the part with the wines, or split it into two scans.', 'too_many_pages');
   }
-  return { blocks, stats: { pdf: false, files: files.length, images: blocks.length } };
+  return { blocks, stats: { pdf: false, files: files.length, images: blocks.length }, archive };
 }
 
 // ── The model call ───────────────────────────────────────────────────────────
@@ -236,10 +244,15 @@ async function readReceipt(blocks) {
   const raw = textFromResponse(response);
   const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
   try {
-    return JSON.parse(extractFirstJsonObject(stripped));
+    return { parsed: JSON.parse(extractFirstJsonObject(stripped)), raw, model };
   } catch {
     console.error('[receiptScan] no JSON in the model reply (%d chars)', raw.length);
-    throw httpError(422, 'The receipt could not be read. Try a sharper photo with the whole receipt in view.', 'unreadable');
+    const err = httpError(422, 'The receipt could not be read. Try a sharper photo with the whole receipt in view.', 'unreadable');
+    // The reply rides along for the beta archive: an unreadable answer is
+    // exactly the case worth diagnosing.
+    err.raw = raw;
+    err.model = model;
+    throw err;
   }
 }
 
