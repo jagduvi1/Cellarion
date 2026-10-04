@@ -1044,7 +1044,7 @@ function AddBottle() {
                         {barcodeMode
                           ? t('addBottle.barcodeOnlyHint', 'Point the camera at the barcode — it is read automatically.')
                           : barcodeNoted
-                            ? t('addBottle.barcodeNoted', 'Barcode read — not known yet. Now take the photo of the label.')
+                            ? t('addBottle.barcodeNoted', 'New barcode — thank you! Now photograph the front label, and the barcode will be saved for the next person.')
                             : t('addBottle.scanHint')}
                       </p>
                     </div>
@@ -1535,7 +1535,7 @@ function AddBottle() {
             // The registry learns barcodes only from bottles added with one, so
             // ask — once, quietly, at the one step every add path reaches.
             <div className="barcode-help">
-              <p>{t('addBottle.barcodeHelp', 'Help the community: scan the barcode on this bottle, and the next member who scans it will find this wine straight away.')}</p>
+              <p>{t('addBottle.barcodeHelp', "Help the community: we're building Cellarion's barcode list together, and it's still small. Scan the barcode on this bottle, and the next member who scans it will find this wine straight away.")}</p>
               <button type="button" className="btn btn-ghost btn-small" onClick={startBarcodeScan}>
                 {t('addBottle.barcodeHelpBtn', 'Scan barcode')}
               </button>
