@@ -17,6 +17,7 @@ const DiscussionReply = require('../models/DiscussionReply');
 const { runRegistryReadReport } = require('./registryReadReportJob');
 const embeddingJob = require('./embeddingJob');
 const registryBridge = require('./registryBridge');
+const { runReceiptRetentionSweep } = require('./receiptArchive');
 
 /**
  * Start all scheduled cron jobs.
@@ -121,6 +122,17 @@ function startScheduler() {
       await runSearchIndexReconcile();
     } catch (err) {
       console.error('[scheduler] Search-index reconciliation failed:', err);
+    }
+  });
+
+  // Receipt-scan beta archive: hourly at :17. Deletes every kept receipt past
+  // its retention — record AND file — plus orphaned files (services/
+  // receiptArchive). Hourly so "kept for 5 days" is true to within the hour.
+  cron.schedule('17 * * * *', async () => {
+    try {
+      await runReceiptRetentionSweep();
+    } catch (err) {
+      console.error('[scheduler] Receipt retention sweep failed:', err);
     }
   });
 

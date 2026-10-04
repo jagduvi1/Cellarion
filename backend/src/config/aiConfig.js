@@ -83,6 +83,45 @@ Respond with ONLY a raw JSON object (no markdown, no code fences, no extra text)
 
 Only return {"error":"cannot read label"} if the image contains no wine label at all.`;
 
+// Receipt scan (POST /api/bottles/import/receipt): read the wine lines off a
+// till receipt, an online order or an invoice. Runs on labelScanModel — the
+// same vision task family — so there is no separate model setting to drift.
+// The reply feeds the importer's review screen; identification happens there,
+// so this prompt asks for what is PRINTED, not for what the wine might be.
+const DEFAULT_RECEIPT_SCAN_PROMPT =
+`You are reading a document from a wine purchase: a photographed till receipt, a screenshot of an online order or order email, or a PDF invoice. Several images are parts of ONE document, in order from top to bottom; consecutive images may overlap, so never list the same printed line twice.
+
+List every WINE that was bought. Respond with ONLY a raw JSON object (no markdown, no code fences, no extra text):
+{"isReceipt":true,"documentType":"receipt|order|invoice|prepayment|proforma|other","store":"seller name, with the branch if printed, or null","purchaseDate":"YYYY-MM-DD or null","currency":"ISO 4217 code or null","wineDiscount":null,"wines":[{"line":"product text as printed","producer":"producer or null","name":"the wine's own name or null","vintage":"4-digit year, NV, or null","sizeMl":750,"quantity":1,"unitPrice":0.0,"lineTotal":0.0,"lineDiscount":null,"type":"red|white|rosé|sparkling|dessert|fortified or null","mixedCase":false}],"skipped":[{"line":"text as printed","reason":"beer|cider|spirits|non-alcoholic|food|deposit|packaging|shipping|discount|fee|gift card|return|other"}]}
+
+Wine is still, sparkling, dessert and fortified wine (port, sherry, madeira, marsala), bag-in-box included. Beer, cider, spirits, liqueurs, alcohol-free drinks, food, deposits (pant, pantti, pfand, container fees), bags, wooden boxes, gift wrap, shipping, storage, duty, fees, points and gift cards are NOT wine: put each such line in "skipped". Never list totals, subtotals, VAT, rounding or payment lines. Hints: beer is often 33 or 50 cl, spirits 70 cl at around 40%.
+
+A wine line:
+- "line": the product text as printed, without the price columns.
+- Names are often truncated or abbreviated. Split producer and name only as far as the text supports. Expand an abbreviation only when certain (CH → Château, DOM → Domaine). Never invent a producer, wine, vintage or appellation; use null instead.
+- "name": the wine's own name (cuvée, vineyard, grape or appellation as printed), without producer, vintage or size.
+- vintage: a printed 4-digit year; a 2-digit year in the name ("19" → "2019") only when it clearly is the vintage; "NV" only when printed. Otherwise null. An article number or a date is never a vintage.
+- sizeMl: from the printed size (75cl or 0,75L → 750, 37,5cl → 375, 150cl or MAG → 1500, 3L box → 3000); null when none is printed.
+- type: only when printed or unambiguous from the name (Champagne, Cava, Prosecco → sparkling; Port → fortified); otherwise null.
+
+Quantities and prices — plain numbers with a dot for decimals: "129,00" → 129.0, "1.380,00" and "1,380.00" → 1380.0.
+- quantity is the number of BOTTLES: "2 x 129,00", "2 st à 129,00", "2 stk á", "2 kpl", "2 @ 129.00" or a quantity column. Check the arithmetic to tell a unit price from a line total.
+- A case sold as one line ("6 x 75cl", "12x75", "case of 12", "Case 12*1") → quantity = bottles in the case, unitPrice = case price ÷ bottles. If its wines are not listed (a mixed case), keep one line, set "mixedCase": true, and never invent its contents.
+- unitPrice is the price printed per bottle in the document's currency, BEFORE any discount and without deposits. lineTotal is the printed line total, or null. Do not do discount arithmetic yourself:
+- lineDiscount: a discount printed for that one wine line (directly under it, or on it), as a positive number; otherwise null.
+- wineDiscount: the total of multi-buy discounts on wine ("25% off 6 bottles", "Mix Six", "any 6", "6 för"), as a positive number; otherwise null. Discounts on the whole receipt (member savings, points, coupons on everything) are ignored. Every discount line also goes in "skipped" with reason "discount".
+- A returned, refunded or voided line goes to "skipped" with reason "return".
+
+Seller, date, currency, type:
+- store: who sold the wine ("Systembolaget Hötorget", "Majestic Wine"), never the buyer.
+- purchaseDate: the purchase, order or invoice date — not a delivery, release or print date.
+- currency: from the printed symbol or code. When prices only say "kr", use the seller's country (Systembolaget → SEK, Vinmonopolet → NOK, a Danish shop → DKK) unless another code is printed.
+- documentType: "prepayment" for a prepayment or advance receipt (förskottskvitto), "proforma" for a pro-forma invoice, "order" for an order confirmation, "invoice" for an invoice, "receipt" for a till or sales receipt.
+
+Never copy the buyer's name, address, member or loyalty number, order number or card details into any field.
+
+If the images show no purchase document at all, return {"isReceipt":false,"wines":[],"skipped":[]}. A purchase with no wine returns "isReceipt":true and an empty "wines" list.`;
+
 const DEFAULT_IMPORT_LOOKUP_PROMPT =
 `You are a master sommelier with encyclopedic wine knowledge. Identify the following wine from your knowledge.
 
@@ -376,6 +415,8 @@ const defaults = {
   // thing that can drift out of sync with the provider-resolved vision model.
   labelScanBackPrompt: DEFAULT_LABEL_SCAN_BACK_PROMPT,
   labelScanModel: 'claude-sonnet-5',
+  // Receipt scan runs on labelScanModel too (see DEFAULT_RECEIPT_SCAN_PROMPT).
+  receiptScanPrompt: DEFAULT_RECEIPT_SCAN_PROMPT,
   importLookupPrompt: DEFAULT_IMPORT_LOOKUP_PROMPT,
   importLookupModel: 'claude-sonnet-5',
   maturitySuggestPrompt: DEFAULT_MATURITY_SUGGEST_PROMPT,
@@ -472,6 +513,7 @@ async function load() {
         labelScanPrompt:       doc.value.labelScanPrompt      ?? defaults.labelScanPrompt,
         labelScanBackPrompt:   doc.value.labelScanBackPrompt  ?? defaults.labelScanBackPrompt,
         labelScanModel:        VALID_CHAT_MODELS.includes(doc.value.labelScanModel) ? doc.value.labelScanModel : defaults.labelScanModel,
+        receiptScanPrompt:     doc.value.receiptScanPrompt    ?? defaults.receiptScanPrompt,
         importLookupPrompt:    doc.value.importLookupPrompt   ?? defaults.importLookupPrompt,
         importLookupModel:     VALID_CHAT_MODELS.includes(doc.value.importLookupModel) ? doc.value.importLookupModel : defaults.importLookupModel,
         maturitySuggestPrompt: doc.value.maturitySuggestPrompt ?? defaults.maturitySuggestPrompt,
@@ -571,4 +613,4 @@ function set(value) {
   cache = { ...defaults, ...value };
 }
 
-module.exports = { load, get, getRaw, set, defaults, DEFAULT_SYSTEM_PROMPT, DEFAULT_LABEL_SCAN_PROMPT, DEFAULT_LABEL_SCAN_BACK_PROMPT, DEFAULT_IMPORT_LOOKUP_PROMPT, DEFAULT_TEXT_SEARCH_PROMPT, DEFAULT_MATURITY_SUGGEST_PROMPT, DEFAULT_MATURITY_SUGGEST_PROMPT_NV, DEFAULT_PRICE_SUGGEST_PROMPT, DEFAULT_ENRICHMENT_PROMPT, VALID_CHAT_MODELS };
+module.exports = { load, get, getRaw, set, defaults, DEFAULT_SYSTEM_PROMPT, DEFAULT_LABEL_SCAN_PROMPT, DEFAULT_LABEL_SCAN_BACK_PROMPT, DEFAULT_RECEIPT_SCAN_PROMPT, DEFAULT_IMPORT_LOOKUP_PROMPT, DEFAULT_TEXT_SEARCH_PROMPT, DEFAULT_MATURITY_SUGGEST_PROMPT, DEFAULT_MATURITY_SUGGEST_PROMPT_NV, DEFAULT_PRICE_SUGGEST_PROMPT, DEFAULT_ENRICHMENT_PROMPT, VALID_CHAT_MODELS };

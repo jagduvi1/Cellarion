@@ -1330,6 +1330,11 @@ function AddBottle() {
               <button type="button" className="wine-select-manual-link" onClick={() => setShowTextSearch(true)}>
                 {t('addBottle.searchManuallyInstead', 'No camera? Search manually instead →')}
               </button>
+              {/* Several bottles from one purchase: the import page reads the
+                  whole receipt at once (Import → Scan a receipt). */}
+              <Link to={`/cellars/${cellarId}/import`} className="wine-select-manual-link">
+                {t('addBottle.scanReceiptInstead', 'Bought several? Scan the receipt instead (beta) →')}
+              </Link>
             </div>
           )}
 
