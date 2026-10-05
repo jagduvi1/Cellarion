@@ -1931,7 +1931,9 @@ router.post('/confirm', async (req, res) => {
 
         // Seed the sommelier maturity queue for this wine+vintage (no-op for
         // "Unknown"). Fire-and-forget — best-effort relative to the import.
-        ensurePendingVintageProfile(wineDoc._id, canonicalVintage);
+        // Not for a bottle on order: it is queued when it arrives (an en
+        // primeur vintage may not be released yet).
+        if (bottle.status !== ORDERED_STATUS) ensurePendingVintageProfile(wineDoc._id, canonicalVintage);
       } catch (err) {
         errors.push({ index: i, reason: err.message });
       }

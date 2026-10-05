@@ -557,10 +557,15 @@ async function addBottle(cellarDoc, wineDoc, fields = {}, req) {
   }
 
   // Post-save side effects, one order for both surfaces.
-  try {
-    const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
-    await ensurePendingVintageProfile(wineDoc._id, bottle.vintage);
-  } catch (err) { /* profile bookkeeping must never fail the add */ }
+  // A bottle ON ORDER is not queued for a sommelier drink window yet: an en
+  // primeur vintage may not even be released, so there is nothing to judge.
+  // markArrived queues it the day it arrives.
+  if (!order.onOrder) {
+    try {
+      const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
+      await ensurePendingVintageProfile(wineDoc._id, bottle.vintage);
+    } catch (err) { /* profile bookkeeping must never fail the add */ }
+  }
   // A bottle added to the creator's private draft is a "touch": the draft's
   // untouched clock restarts (draft design 2026-09-12). Best-effort.
   if (wineDoc.draft === true) {
@@ -948,10 +953,11 @@ async function markArrived(bottle, { arrivedAt } = {}, req) {
   logAudit(req, 'bottle.arrive',
     { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
     { ...(expected ? { expectedArrival: expected } : {}) });
-  // In the cellar now: make sure its vintage is queued for a drink window and
-  // embedded, as an add does (a wine that was pending when the order was
-  // placed skipped the queue then). Both are idempotent and never fail the
-  // arrival; the embedding is skipped for demo accounts (zero AI spend).
+  // In the cellar now: THIS is when its vintage enters the sommelier maturity
+  // queue (a bottle on order never does — an en primeur vintage may not be
+  // released yet), and the pair is embedded as an add does. Both are
+  // idempotent and never fail the arrival; the embedding is skipped for demo
+  // accounts (zero AI spend).
   const wineId = bottle.wineDefinition && (bottle.wineDefinition._id || bottle.wineDefinition);
   if (wineId) {
     try {

@@ -327,8 +327,9 @@ router.put('/:id/resolve', async (req, res) => {
     let backfilledCount = 0;
     if (wineRequest.requestType === 'new_wine') {
       // Capture the distinct vintages BEFORE the update unsets pendingWineRequest
-      // — needed to seed the maturity queue once the wine is known.
-      const pendingVintages = await Bottle.distinct('vintage', { pendingWineRequest: wineRequest._id });
+      // — needed to seed the maturity queue once the wine is known. Bottles on
+      // order are left out: they are queued when they arrive.
+      const pendingVintages = await Bottle.distinct('vintage', { pendingWineRequest: wineRequest._id, status: { $ne: 'ordered' } });
       const pendingBottleIds = await Bottle.distinct('_id', { pendingWineRequest: wineRequest._id });
       const pendingOwners = await Bottle.distinct('user', { pendingWineRequest: wineRequest._id });
 

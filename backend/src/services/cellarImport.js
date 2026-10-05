@@ -936,8 +936,10 @@ async function buildCellarContents({ cellarId, ownerId, userId, cellar, items, i
       // reviewed window in the export (attachMaturity only restores existing
       // curated data). Mirrors the hand-add / CSV-import behaviour so imported
       // wines surface for a somm. Idempotent ($setOnInsert never clobbers the
-      // reviewed profile above) and deduped per wine+vintage.
-      if (!demoMode && wine.wineDefinitionId) {
+      // reviewed profile above) and deduped per wine+vintage. A bottle on
+      // order is queued when it arrives instead (its vintage may not be
+      // released yet) — and does not mark the pair as seen.
+      if (!demoMode && wine.wineDefinitionId && bottle.status !== ORDERED_STATUS) {
         const pk = `${wine.wineDefinitionId}:${canonicalVintage}`;
         if (!seenPendingProfile.has(pk)) {
           seenPendingProfile.add(pk);
