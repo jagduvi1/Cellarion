@@ -195,7 +195,7 @@ async function moveBottleToCellar(bottle, sourceCellar, destCellar, req) {
   // A bottle on order may be moved too: an order booked to the wrong cellar
   // is redirected before it arrives.
   if (bottle.status !== 'active' && bottle.status !== 'ordered') {
-    return { error: { status: 400, message: 'Only active bottles can be moved' } };
+    return { error: { status: 400, message: 'Only bottles in the cellar or on order can be moved' } };
   }
   const now = new Date();
   if (bottle.cellarHistory.length === 0) {

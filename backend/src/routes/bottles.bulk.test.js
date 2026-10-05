@@ -303,6 +303,19 @@ describe('POST /api/bottles/bulk — arrive (bottles on order)', () => {
     );
   });
 
+  test('update: a bad expected month is refused up front, whatever the order of the bottles', async () => {
+    Bottle.find.mockResolvedValue([
+      { _id: B(1), cellar: OWNED, status: 'active' },
+      { _id: B(2), cellar: OWNED, status: 'ordered' },
+    ]);
+    const { status, body } = await postJson(app(), '/api/bottles/bulk', {
+      action: 'update', bottleIds: [B(1), B(2)], fields: { expectedArrival: '3/27' },
+    });
+    expect(status).toBe(400);
+    expect(body.error).toMatch(/YYYY-MM/);
+    expect(updateBottleFields).not.toHaveBeenCalled();
+  });
+
   test('a bad arrival date fails the whole request before anything is touched', async () => {
     markArrived.mockResolvedValue({ error: { status: 400, message: 'arrivedAt must be a valid date and not in the future' } });
     Bottle.find.mockResolvedValue([{ _id: B(1), cellar: OWNED, status: 'ordered' }]);

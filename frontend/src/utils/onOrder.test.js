@@ -43,7 +43,7 @@ test('totalsByCurrency sums priced bottles per currency', () => {
 
 test('applyImportOnOrder: cellar rows come in on order; history, wishlist and own-dated rows are left alone', () => {
   const items = [
-    { wineName: 'A' },
+    { wineName: 'A', rackName: 'Rack 1', rackPosition: 4, row: 1, col: 4 },
     { wineName: 'B', addToHistory: true },
     { wineName: 'C', addToWishlist: true },
     { wineName: 'D', onOrder: true, expectedArrival: '2026-11' },

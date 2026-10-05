@@ -201,6 +201,12 @@ function exportBottleToItem(b) {
     consumedNote: b.consumedNote,
     consumedRating: b.consumedRating,
     consumedRatingScale: b.consumedRatingScale,
+    // Bought, not delivered yet — re-created on order with its month. Without
+    // these an exported order came back as a bottle IN the cellar.
+    onOrder: b.onOrder === true,
+    expectedArrival: b.expectedArrival,
+    // When an order arrived (an active bottle's delivery day).
+    arrivedAt: b.arrivedAt,
     // Open-bottle (Coravin / preservation) state
     openedAt: b.openedAt,
     preservationMethod: b.preservationMethod,
@@ -890,11 +896,15 @@ async function buildCellarContents({ cellarId, ownerId, userId, cellar, items, i
         bottle.status = ORDERED_STATUS;
         const ea = parseExpectedArrival(item.expectedArrival);
         if (ea.ok && ea.value) bottle.expectedArrival = ea.value;
+      } else if (item.arrivedAt) {
+        const arrived = new Date(item.arrivedAt);
+        if (!isNaN(arrived.getTime())) bottle.arrivedAt = arrived;
       }
 
       // Restore open-bottle (Coravin / preservation) state — invalid values
       // are dropped rather than failing the bottle (schema-mirrored bounds).
-      if (item.openedAt) {
+      // Never on a bottle still on order: it cannot have been opened.
+      if (item.openedAt && bottle.status !== ORDERED_STATUS) {
         const openedDate = new Date(item.openedAt);
         if (!isNaN(openedDate.getTime())) {
           bottle.openedAt = openedDate;

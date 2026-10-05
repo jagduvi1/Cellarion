@@ -226,7 +226,7 @@ describe('moveBottleToCellar', () => {
 
   test('guards: same cellar, non-active; VersionError → conflict', async () => {
     expect((await moveBottleToCellar(bottle(), src, src, REQ)).error.message).toMatch(/already in that cellar/);
-    expect((await moveBottleToCellar(bottle({ status: 'drank' }), src, dest, REQ)).error.message).toMatch(/active/);
+    expect((await moveBottleToCellar(bottle({ status: 'drank' }), src, dest, REQ)).error.message).toMatch(/in the cellar or on order/);
     const b = bottle(); b.save = jest.fn().mockRejectedValue(Object.assign(new Error('v'), { name: 'VersionError' }));
     expect((await moveBottleToCellar(b, src, dest, REQ)).error).toMatchObject({ status: 409, code: 'conflict' });
     expect(removeFromRacks).not.toHaveBeenCalled(); // never unracked on a failed save

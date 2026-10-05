@@ -7,6 +7,17 @@ describe('parseExpectedArrival', () => {
     }
   });
 
+  test('a timestamp is read as WRITTEN — local midnight on the 1st east of UTC stays that month', () => {
+    expect(parseExpectedArrival('2027-03-01T00:00:00+01:00').value).toEqual(new Date('2027-03-01T12:00:00Z'));
+    expect(parseExpectedArrival('2027-03-31T23:30:00-05:00').value).toEqual(new Date('2027-03-01T12:00:00Z'));
+  });
+
+  test('free text a browser without a month picker lets through is refused, not guessed', () => {
+    for (const v of ['3/27', '03/2027', 'March 2027', '2027', '2027-03-01junk']) {
+      expect(parseExpectedArrival(v)).toMatchObject({ ok: false, error: expect.stringMatching(/YYYY-MM/) });
+    }
+  });
+
   test('empty means "no date"', () => {
     for (const v of [undefined, null, '']) expect(parseExpectedArrival(v)).toEqual({ ok: true, value: null });
   });

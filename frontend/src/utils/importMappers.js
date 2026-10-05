@@ -2290,8 +2290,8 @@ export function parsePlocFiles(texts) {
  *   `warnings` are non-blocking notices:
  *     { code: 'ct-truncated' }                       \u2014 exactly 25 data rows
  *       (CellarTracker's "Only wines on this page" default page size)
- *     { code: 'ct-pending-skipped', count, wines }   \u2014 undelivered bottles
- *       skipped (Cellarion has no on-order state)
+ *     { code: 'ct-pending-on-order', count, wines }  \u2014 undelivered bottles
+ *       imported ON ORDER (onOrder: true), kept out of the cellar until arrival
  *     { code: 'no-identity-skipped', count }         \u2014 rows with neither a
  *       wine name nor a producer skipped (e.g. failed Vivino scans)
  * @throws Error with code 'ct-error-page' for HTML error pages, or
@@ -2365,13 +2365,13 @@ export function parseAndMap(text, forceFormat, opts = {}) {
     // cellar until marked as arrived. Not in a rack yet, so no placement.
     if (mapped._ctPending) {
       if (mapped._ctPendingCount) mapped.quantity = mapped._ctPendingCount;
-      notePending(mapped.wineName, mapped.quantity ?? 1);
       mapped.onOrder = true;
       delete mapped._ctPending;
       delete mapped._ctPendingCount;
       delete mapped._ctLocation;
       delete mapped._ctBin;
-      if (/^\(pending\)/i.test(mapped.location || '')) delete mapped.location;
+      // Not in the cellar yet, so in no place of it (CT writes "(pending)").
+      delete mapped.location;
     }
     // A List row with bottles in the cellar AND more pending: the pending
     // ones are pushed as on-order copies after the in-cellar expansion.
@@ -2395,6 +2395,8 @@ export function parseAndMap(text, forceFormat, opts = {}) {
     // doc has always said wineName is required; now the gate agrees.
     // Name-only rows (no producer) still pass \u2014 those resolve fine.
     if (!mapped.wineName) { noIdentitySkipped++; continue; }
+    // Counted only once the row is known to import (a nameless one is skipped).
+    if (mapped.onOrder) notePending(mapped.wineName, mapped.quantity ?? 1);
 
     // `?? 1` not `|| 1`: CT List rows can legitimately carry quantity 0
     // (fully pending wines) and must expand to zero items. All other

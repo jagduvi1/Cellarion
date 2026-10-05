@@ -88,7 +88,14 @@ export function buildImportItem(r, selection) {
  */
 export function applyImportOnOrder(items, { onOrder, expectedArrival } = {}) {
   if (!onOrder) return items;
-  return items.map((it) => (it.addToHistory || it.addToWishlist || it.onOrder
-    ? it
-    : { ...it, onOrder: true, expectedArrival: expectedArrival || undefined }));
+  return items.map((it) => {
+    if (it.addToHistory || it.addToWishlist || it.onOrder) return it;
+    // Not in the cellar yet, so in no rack: the file's placement is dropped
+    // (otherwise the import would create racks that stay empty).
+    const {
+      rackName, rackPosition, row, col, layer, slotInLayer, internalSlot, rackType, rackRows, rackCols,
+      ...rest
+    } = it;
+    return { ...rest, onOrder: true, expectedArrival: expectedArrival || undefined };
+  });
 }

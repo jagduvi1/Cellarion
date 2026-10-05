@@ -27,6 +27,7 @@ const { createEntry, deleteEntry, OCCASIONS, MAX_PAIRINGS, MAX_PEOPLE } = requir
 const { resolveRating } = require('../../utils/ratingUtils');
 const { stripHtml } = require('../../utils/sanitize');
 const { logAudit } = require('../../services/audit');
+const { CONSUMED_STATUSES } = require('../../config/constants');
 const { ok, fail, objectId, MSG_BOTTLE_NOT_FOUND, resolveBottleAccess } = require('../toolUtil');
 const { logAction, replay } = require('../actionLedger');
 const { takeMutationSlot, ipKeyFor } = require('../mutationBudget');
@@ -150,7 +151,9 @@ registerTool({
       if (r.item.rating === undefined || r.item.rating === null) continue;
       const rr = resolveRating(r.item.rating, r.item.rating_scale);
       if (rr.error) return fail('invalid_input', multi ? `Bottle ${r.item.bottle_id}: ${rr.error}` : rr.error);
-      const consumed = r.bottle.status !== 'active';
+      // Consumed = one of the four consumed statuses. A bottle still on order
+      // (a barrel sample tasted before delivery) takes the ordinary rating.
+      const consumed = CONSUMED_STATUSES.includes(r.bottle.status);
       r.change = {
         field: consumed ? 'consumedRating' : 'rating',
         value: rr.rating,

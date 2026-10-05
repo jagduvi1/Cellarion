@@ -762,6 +762,23 @@ describe('bottles on order', () => {
     expect((await markArrived(freshBottle(), {}, REQ)).error).toMatchObject({ status: 409, code: 'not_on_order' });
   });
 
+  test('markArrived refuses a day before the order; the order day itself is fine', async () => {
+    const placed = () => ordered({ createdAt: new Date('2026-09-10T15:00:00Z') });
+    expect((await markArrived(placed(), { arrivedAt: '2026-09-09' }, REQ)).error).toMatchObject({ status: 400 });
+    expect((await markArrived(placed(), { arrivedAt: '2026-09-10' }, REQ)).error).toBeUndefined();
+  });
+
+  test('markArrived queues the vintage for a drink window and embeds it (not for demo accounts)', async () => {
+    const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
+    await markArrived(ordered({ wineDefinition: 'w9', vintage: '2022' }), {}, REQ);
+    expect(ensurePendingVintageProfile).toHaveBeenCalledWith('w9', '2022');
+    expect(embedSinglePair).toHaveBeenCalledWith('w9', '2022');
+
+    embedSinglePair.mockClear();
+    await markArrived(ordered({ wineDefinition: 'w9', vintage: '2022' }), {}, { user: { id: 'd1', isDemo: true }, headers: {} });
+    expect(embedSinglePair).not.toHaveBeenCalled();
+  });
+
   test('updateBottleFields: expectedArrival changes (and re-arms the reminder) only on a bottle on order', async () => {
     const b = new BottleModel({ cellar: 'c1', status: 'ordered', vintage: '2023', ratingScale: '5', arrivalNotifiedAt: new Date() });
     const res = await updateBottleFields(b, { expectedArrival: '2027-05' }, REQ);

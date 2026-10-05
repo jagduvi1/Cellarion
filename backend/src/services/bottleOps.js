@@ -926,6 +926,12 @@ async function markArrived(bottle, { arrivedAt } = {}, req) {
     if (Number.isNaN(d.getTime()) || d.getTime() > Date.now() + FUTURE_SLACK_MS || d.getFullYear() < 1990) {
       return { error: { status: 400, message: 'arrivedAt must be a valid date and not in the future' } };
     }
+    // Not before the order itself (compared by day: an order placed this
+    // afternoon may arrive "today", noon UTC).
+    const orderedOn = bottle.createdAt ? new Date(bottle.createdAt).toISOString().slice(0, 10) : null;
+    if (orderedOn && d.toISOString().slice(0, 10) < orderedOn) {
+      return { error: { status: 400, message: 'arrivedAt cannot be before the bottle was ordered' } };
+    }
     when = d;
   }
   const expected = bottle.expectedArrival || null;
@@ -942,6 +948,19 @@ async function markArrived(bottle, { arrivedAt } = {}, req) {
   logAudit(req, 'bottle.arrive',
     { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
     { ...(expected ? { expectedArrival: expected } : {}) });
+  // In the cellar now: make sure its vintage is queued for a drink window and
+  // embedded, as an add does (a wine that was pending when the order was
+  // placed skipped the queue then). Both are idempotent and never fail the
+  // arrival; the embedding is skipped for demo accounts (zero AI spend).
+  const wineId = bottle.wineDefinition && (bottle.wineDefinition._id || bottle.wineDefinition);
+  if (wineId) {
+    try {
+      await require('../utils/vintageProfile').ensurePendingVintageProfile(wineId, bottle.vintage);
+    } catch { /* bookkeeping only */ }
+    if (!req?.user?.isDemo) {
+      require('./embeddingJob').embedSinglePair(wineId, bottle.vintage).catch(() => {});
+    }
+  }
   return { bottle };
 }
 

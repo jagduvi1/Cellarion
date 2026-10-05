@@ -1791,6 +1791,8 @@ function AddBottle() {
                       <input
                         id="add-expected-arrival"
                         type="month"
+                        placeholder="YYYY-MM"
+                        pattern="\d{4}-\d{2}"
                         value={expectedArrival}
                         onChange={(e) => setExpectedArrival(e.target.value)}
                       />
@@ -1973,7 +1975,7 @@ function AddBottle() {
 
             <div className="form-actions">
               <button type="submit" className="btn btn-success" disabled={saving}>
-                {saving ? t('common.saving', 'Saving…') : addToHistory ? t('addBottle.addToHistoryBtn') : t('addBottle.addBottleBtn')}
+                {saving ? t('common.saving', 'Saving…') : addToHistory ? t('addBottle.addToHistoryBtn') : onOrder ? t('addBottle.addOnOrderBtn') : t('addBottle.addBottleBtn')}
               </button>
               <button
                 type="button"

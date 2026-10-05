@@ -1048,7 +1048,8 @@
     "onOrder": "Not delivered yet (on order)",
     "onOrderHint": "For en primeur, pre-orders or a delivery on its way. The bottle waits on the cellar's “On order” list, outside counts and racks, until you mark it as arrived.",
     "expectedArrival": "Expected arrival",
-    "expectedArrivalHint": "Optional. The month is enough: if it has not arrived once that month is over, we will ask."
+    "expectedArrivalHint": "Optional. The month is enough: if it has not arrived once that month is over, we will ask.",
+    "addOnOrderBtn": "Add on order"
   },
   "bottleDetail": {
     "producerPending": "producer being confirmed",
@@ -5300,6 +5301,12 @@
     "linkCount_other": "{{count}} bottles on order",
     "linkNext": "next expected {{month}}",
     "cancelOrder": "Order cancelled? Remove it",
-    "bottleHint": "Bought, not delivered yet. It stays out of your cellar's counts, racks and drinking suggestions until you mark it as arrived."
+    "bottleHint": "Bought, not delivered yet. It stays out of your cellar's counts, racks and drinking suggestions until you mark it as arrived.",
+    "changeMonth": "Change month",
+    "saveMonth": "Save month",
+    "monthFailed": "Could not change the expected month. Please try again.",
+    "monthAppliesTo_one": "For this bottle",
+    "monthAppliesTo_other": "For all {{count}} bottles of this delivery",
+    "linkLate": "expected {{month}}: has it arrived?"
   }
 }

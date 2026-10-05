@@ -1155,3 +1155,7 @@
   flex-shrink: 0;
 }
 
+.on-order-link-bar .on-order-link-next.is-late {
+  color: var(--color-warning);
+  font-weight: 600;
+}

@@ -355,10 +355,11 @@ describe('processArrivals — bottles on order past their expected month', () =>
     expect(Bottle.updateMany).toHaveBeenCalledWith({ _id: { $in: ['b1', 'b2'] } }, { $set: { arrivalNotifiedAt: expect.any(Date) } });
   });
 
-  test('a bottle in a deleted cellar is never announced', async () => {
+  test('a bottle in a deleted cellar, or one the user does not own, is never announced', async () => {
     Cellar.distinct.mockResolvedValue([]);
     mockOrdered([{ _id: 'b1', cellar: 'gone', vintage: '2023', expectedArrival: month('2026-01'), wineDefinition: { name: 'X' } }]);
     expect(await processArrivals({ _id: 'u1' })).toBe(0);
     expect(createNotification).not.toHaveBeenCalled();
+    expect(Cellar.distinct).toHaveBeenCalledWith('_id', expect.objectContaining({ user: 'u1', deletedAt: null }));
   });
 });

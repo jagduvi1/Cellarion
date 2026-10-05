@@ -168,6 +168,7 @@ function mapBottlesForExport(bottles, racks, imagesByBottle = new Map(), reviews
 
     // Bottles on order (bought, not delivered yet) — the importer re-creates
     // them on order, with the expected month.
+    if (b.arrivedAt) item.arrivedAt = b.arrivedAt.toISOString().slice(0, 10);
     if (b.status === 'ordered') {
       item.onOrder = true;
       if (b.expectedArrival) item.expectedArrival = b.expectedArrival.toISOString().slice(0, 7);

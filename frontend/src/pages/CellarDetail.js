@@ -15,7 +15,7 @@ import CellarPageHeader from '../components/CellarPageHeader';
 import { readBottleViewMode, storeBottleViewMode } from '../utils/bottleViewMode';
 import { ratingRangeLabel, toMaturityArray, MATURITY_I18N_KEY } from '../utils/filterLabels';
 import { CELLAR_SORTS, DEFAULT_CELLAR_SORT, preferredCellarSort } from '../utils/cellarSort';
-import { formatArrivalMonth } from '../utils/onOrder';
+import { formatArrivalMonth, isArrivalLate } from '../utils/onOrder';
 import './CellarDetail.css';
 
 // Stable empty rack map for the cross-cellar view (rack placement is per-cellar,
@@ -332,8 +332,10 @@ function CellarDetail() {
       if (seq !== fetchSeq.current) return;
       if (res.ok) {
         if (data.cellar) setCellar(data.cellar);
-        // Single-cellar responses only; the cross-cellar view has no on-order link.
-        if (data.onOrder) setOnOrder(data.onOrder);
+        // Single-cellar responses only; the cross-cellar view has no on-order
+        // link. Reset when absent (an offline copy carries none), so another
+        // cellar's count never lingers.
+        if (!multi) setOnOrder(data.onOrder || null);
         setBottlesTotal(data.bottles.total);
         if (skip === 0) {
           // Set the data + its shape together so BottlesList never sees a
@@ -769,8 +771,9 @@ function CellarDetail() {
                     <span aria-hidden="true">🚚</span>
                     <span>{t('onOrder.linkCount', { count: onOrder.count })}</span>
                     {onOrder.nextExpected && (
-                      <span className="on-order-link-next">
-                        · {t('onOrder.linkNext', { month: formatArrivalMonth(onOrder.nextExpected, i18n.language) })}
+                      <span className={`on-order-link-next${isArrivalLate(onOrder.nextExpected) ? ' is-late' : ''}`}>
+                        · {t(isArrivalLate(onOrder.nextExpected) ? 'onOrder.linkLate' : 'onOrder.linkNext',
+                          { month: formatArrivalMonth(onOrder.nextExpected, i18n.language) })}
                       </span>
                     )}
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
