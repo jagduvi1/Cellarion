@@ -410,10 +410,11 @@ async function processArrivals(user) {
   const due = bottles.filter((b) => isArrivalDue(b.expectedArrival, now));
   if (due.length === 0) return 0;
 
-  // Only cellars that still exist: a bottle in a deleted cellar is gone for
-  // the user, and a link to it would dead-end.
+  // Only cellars that still exist and that this user owns: a bottle in a
+  // deleted cellar is gone for the user, and a link to a cellar they cannot
+  // open would dead-end.
   const liveCellars = new Set((await Cellar.distinct('_id', {
-    _id: { $in: [...new Set(due.map((b) => String(b.cellar)))] }, deletedAt: null,
+    _id: { $in: [...new Set(due.map((b) => String(b.cellar)))] }, user: user._id, deletedAt: null,
   })).map(String));
 
   const byCellar = new Map();

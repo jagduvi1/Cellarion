@@ -14,12 +14,17 @@ const MIN_ARRIVAL_YEAR = 1990;
 // longer. Fifteen years ahead is generous without accepting typos like 2207.
 const MAX_YEARS_AHEAD = 15;
 
-const MONTH_RX = /^(\d{4})-(\d{1,2})(?:-\d{1,2})?$/;
+// 'YYYY-MM' (what <input type="month"> sends), 'YYYY-MM-DD', or an ISO
+// timestamp that starts with a date. The month is read AS WRITTEN — never
+// through new Date(), which would shift "2027-03-01T00:00+01:00" into
+// February and read free text like "3/27" as March 2001.
+const MONTH_RX = /^(\d{4})-(\d{1,2})(?:-\d{1,2}(?:[T ][\d:.]+(?:Z|[+-]\d{2}:?\d{2})?)?)?$/;
 
 /**
  * Parse an expected-arrival value to the month it names.
- * Accepts 'YYYY-MM' (what <input type="month"> sends), 'YYYY-MM-DD', an ISO
- * timestamp or a Date. Empty (undefined / null / '') means "no date".
+ * Accepts 'YYYY-MM', 'YYYY-MM-DD', an ISO timestamp or a Date. Anything else
+ * (free text a browser without a month picker lets through) is refused.
+ * Empty (undefined / null / '') means "no date".
  *
  * @returns {{ ok: true, value: Date|null } | { ok: false, error: string }}
  */
@@ -32,17 +37,10 @@ function parseExpectedArrival(raw) {
     year = raw.getUTCFullYear();
     month = raw.getUTCMonth() + 1;
   } else if (typeof raw === 'string') {
-    const s = raw.trim();
-    const m = MONTH_RX.exec(s);
-    if (m) {
-      year = Number(m[1]);
-      month = Number(m[2]);
-    } else {
-      const d = new Date(s);
-      if (Number.isNaN(d.getTime())) return { ok: false, error: 'Expected arrival must be a month (YYYY-MM)' };
-      year = d.getUTCFullYear();
-      month = d.getUTCMonth() + 1;
-    }
+    const m = MONTH_RX.exec(raw.trim());
+    if (!m) return { ok: false, error: 'Expected arrival must be a month written as YYYY-MM, e.g. 2027-03' };
+    year = Number(m[1]);
+    month = Number(m[2]);
   } else {
     // Arrays / objects (qs shapes like ?x[$gt]=) never pass as a date.
     return { ok: false, error: 'Expected arrival must be a month (YYYY-MM)' };

@@ -6,9 +6,9 @@ import WineImage from '../components/WineImage';
 import CellarNav from '../components/CellarNav';
 import CellarPageHeader from '../components/CellarPageHeader';
 import { getCellarOnOrder } from '../api/cellars';
-import { markBottleArrived, bulkArriveBottles } from '../api/bottles';
+import { markBottleArrived, bulkArriveBottles, bulkUpdateBottles } from '../api/bottles';
 import {
-  groupOnOrder, formatArrivalMonth, isArrivalLate, totalsByCurrency, todayInput,
+  groupOnOrder, formatArrivalMonth, isArrivalLate, totalsByCurrency, todayInput, toMonthInput,
 } from '../utils/onOrder';
 import './CellarDetail.css';
 import './CellarOnOrder.css';
@@ -18,12 +18,13 @@ import './CellarOnOrder.css';
  * 'ordered'): en primeur, pre-orders, deliveries on their way. They stay out
  * of the cellar's counts, racks and drinking suggestions until they are
  * marked as arrived here (or on the bottle page), which makes them ordinary
- * unplaced bottles.
+ * unplaced bottles. A delivery's expected month is changed here too, for
+ * all its bottles at once.
  */
 function CellarOnOrder() {
   const { t, i18n } = useTranslation();
   const { id } = useParams();
-  const { apiFetch, user } = useAuth();
+  const { apiFetch } = useAuth();
   const [cellar, setCellar] = useState(null);
   const [bottles, setBottles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,35 +32,50 @@ function CellarOnOrder() {
   // { count } after a delivery was marked — the "now in your cellar" note.
   const [arrived, setArrived] = useState(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await getCellarOnOrder(apiFetch, id);
-        const data = await res.json();
-        if (cancelled) return;
-        if (!res.ok) { setError(data.error || t('onOrder.loadFailed')); return; }
-        setCellar(data.cellar);
-        setBottles(data.bottles || []);
-      } catch {
-        if (!cancelled) setError(t('onOrder.loadFailed'));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-    // Load once per cellar: re-running on every new `t` or apiFetch identity
-    // would reload the list and undo a delivery just marked as arrived.
-  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const load = async () => {
+    try {
+      const res = await getCellarOnOrder(apiFetch, id);
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || t('onOrder.loadFailed')); return; }
+      setCellar(data.cellar);
+      setBottles(data.bottles || []);
+    } catch {
+      setError(t('onOrder.loadFailed'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load once per cellar: re-running on every new `t` or apiFetch identity
+  // would reload the list and undo a delivery just marked as arrived.
+  useEffect(() => { load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const groups = useMemo(() => groupOnOrder(bottles), [bottles]);
   const totals = useMemo(() => totalsByCurrency(bottles), [bottles]);
-  const canEdit = !!cellar && ['owner', 'editor'].includes(cellar.userRole) && !user?.isDemo;
+  // Same rule as the bottle page (and the arrive endpoint): owner or editor.
+  const canEdit = !!cellar && ['owner', 'editor'].includes(cellar.userRole);
 
-  const handleArrived = (ids) => {
-    const gone = new Set(ids.map(String));
+  // doneIds arrived now; goneIds also leave the list (bottles someone else
+  // had already marked as arrived — the server skips them as not_on_order).
+  const handleArrived = (doneIds, goneIds = []) => {
+    const gone = new Set([...doneIds, ...goneIds].map(String));
     setBottles((prev) => prev.filter((b) => !gone.has(String(b._id))));
-    setArrived({ count: ids.length });
+    if (doneIds.length > 0) setArrived({ count: doneIds.length });
+  };
+
+  // A delivery's new month, mirrored locally the way the server stores it
+  // (1st of the month, noon UTC) so the row regroups at once.
+  const handleMonthChanged = (ids, month) => {
+    const set = new Set(ids.map(String));
+    const value = month ? `${month}-01T12:00:00.000Z` : null;
+    setBottles((prev) => prev.map((b) => (set.has(String(b._id)) ? { ...b, expectedArrival: value } : b)));
+  };
+
+  // An action failed — perhaps because the list was out of date (another
+  // member already marked bottles as arrived): say so and re-read it.
+  const handleFailure = (message) => {
+    setError(message);
+    load();
   };
 
   const totalText = totals
@@ -115,7 +131,8 @@ function CellarOnOrder() {
                 cellarId={id}
                 canEdit={canEdit}
                 onArrived={handleArrived}
-                onError={setError}
+                onMonthChanged={handleMonthChanged}
+                onFailure={handleFailure}
               />
             ))}
           </div>
@@ -125,39 +142,58 @@ function CellarOnOrder() {
   );
 }
 
-function OnOrderGroup({ group, cellarId, canEdit, onArrived, onError }) {
+function OnOrderGroup({ group, cellarId, canEdit, onArrived, onMonthChanged, onFailure }) {
   const { t, i18n } = useTranslation();
   const { apiFetch } = useAuth();
   const first = group.bottles[0];
   const count = group.bottles.length;
+  const ids = group.bottles.map((b) => b._id);
   const wine = first.wineDefinition;
   const name = wine?.name || first.pendingWineRequest?.wineName || t('common.unknownWine');
   const producer = wine?.producer || first.pendingWineRequest?.producer;
   const month = formatArrivalMonth(first.expectedArrival, i18n.language);
   const late = isArrivalLate(first.expectedArrival);
 
-  const [open, setOpen] = useState(false);
+  // null | 'arrive' | 'month'
+  const [panel, setPanel] = useState(null);
   const [howMany, setHowMany] = useState(count);
   const [date, setDate] = useState(todayInput);
+  const [newMonth, setNewMonth] = useState(() => toMonthInput(first.expectedArrival));
   const [busy, setBusy] = useState(false);
 
-  const confirm = async () => {
+  const confirmArrived = async () => {
     const n = Math.min(Math.max(1, Number(howMany) || 1), count);
-    const ids = group.bottles.slice(0, n).map((b) => b._id);
+    const chosen = ids.slice(0, n);
     setBusy(true);
     try {
       const res = n === 1
-        ? await markBottleArrived(apiFetch, ids[0], date)
-        : await bulkArriveBottles(apiFetch, ids, date);
+        ? await markBottleArrived(apiFetch, chosen[0], date)
+        : await bulkArriveBottles(apiFetch, chosen, date);
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) { onError(data.error || t('onOrder.arriveFailed')); return; }
-      const done = n === 1 ? ids : (data.doneIds || ids);
+      if (!res.ok) { onFailure(data.error || t('onOrder.arriveFailed')); return; }
+      const done = n === 1 ? chosen : (data.doneIds || chosen);
+      const alreadyArrived = (data.skipped || []).filter((s) => s.reason === 'not_on_order').map((s) => s.id);
       // Part of a delivery arrived: the rest stays listed, panel closed.
-      setOpen(false);
-      setHowMany(Math.max(1, count - done.length));
-      onArrived(done);
+      setPanel(null);
+      setHowMany(Math.max(1, count - done.length - alreadyArrived.length));
+      onArrived(done, alreadyArrived);
     } catch {
-      onError(t('onOrder.arriveFailed'));
+      onFailure(t('onOrder.arriveFailed'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveMonth = async () => {
+    setBusy(true);
+    try {
+      const res = await bulkUpdateBottles(apiFetch, ids, { expectedArrival: newMonth || null });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { onFailure(data.error || t('onOrder.monthFailed')); return; }
+      setPanel(null);
+      onMonthChanged(data.doneIds || ids, newMonth);
+    } catch {
+      onFailure(t('onOrder.monthFailed'));
     } finally {
       setBusy(false);
     }
@@ -187,14 +223,19 @@ function OnOrderGroup({ group, cellarId, canEdit, onArrived, onError }) {
               : t('onOrder.noDate')}
           </p>
         </div>
-        {canEdit && !open && (
-          <button type="button" className="btn btn-primary btn-small on-order-arrive-btn" onClick={() => setOpen(true)}>
-            {t('onOrder.markArrived')}
-          </button>
+        {canEdit && !panel && (
+          <div className="on-order-actions">
+            <button type="button" className="btn btn-primary btn-small on-order-arrive-btn" onClick={() => setPanel('arrive')}>
+              {t('onOrder.markArrived')}
+            </button>
+            <button type="button" className="btn btn-secondary btn-small" onClick={() => setPanel('month')}>
+              {t('onOrder.changeMonth')}
+            </button>
+          </div>
         )}
       </div>
 
-      {canEdit && open && (
+      {canEdit && panel === 'arrive' && (
         <div className="on-order-arrive-panel">
           {count > 1 && (
             <label className="on-order-field">
@@ -205,7 +246,6 @@ function OnOrderGroup({ group, cellarId, canEdit, onArrived, onError }) {
                 max={count}
                 value={howMany}
                 onChange={(e) => setHowMany(e.target.value)}
-               
               />
               <span className="on-order-field-hint">{t('onOrder.ofCount', { count })}</span>
             </label>
@@ -215,10 +255,34 @@ function OnOrderGroup({ group, cellarId, canEdit, onArrived, onError }) {
             <input type="date" value={date} max={todayInput()} onChange={(e) => setDate(e.target.value)} />
           </label>
           <div className="on-order-arrive-actions">
-            <button type="button" className="btn btn-primary btn-small" onClick={confirm} disabled={busy}>
+            <button type="button" className="btn btn-primary btn-small" onClick={confirmArrived} disabled={busy}>
               {busy ? t('common.saving', 'Saving…') : t('onOrder.confirmArrived')}
             </button>
-            <button type="button" className="btn btn-secondary btn-small" onClick={() => setOpen(false)} disabled={busy}>
+            <button type="button" className="btn btn-secondary btn-small" onClick={() => setPanel(null)} disabled={busy}>
+              {t('common.cancel')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {canEdit && panel === 'month' && (
+        <div className="on-order-arrive-panel">
+          <label className="on-order-field">
+            <span>{t('addBottle.expectedArrival')}</span>
+            <input
+              type="month"
+              placeholder="YYYY-MM"
+              pattern="\d{4}-\d{2}"
+              value={newMonth}
+              onChange={(e) => setNewMonth(e.target.value)}
+            />
+            {count > 1 && <span className="on-order-field-hint">{t('onOrder.monthAppliesTo', { count })}</span>}
+          </label>
+          <div className="on-order-arrive-actions">
+            <button type="button" className="btn btn-primary btn-small" onClick={saveMonth} disabled={busy}>
+              {busy ? t('common.saving', 'Saving…') : t('onOrder.saveMonth')}
+            </button>
+            <button type="button" className="btn btn-secondary btn-small" onClick={() => setPanel(null)} disabled={busy}>
               {t('common.cancel')}
             </button>
           </div>

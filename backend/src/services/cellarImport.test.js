@@ -294,6 +294,18 @@ describe('buildBottle drink window + occasion', () => {
     expect(bottle.drinkTo).toBe(2040);
     expect(bottle.occasion).toBe('For my 50th');
   });
+
+  test('a bottle on order survives export → import as on order with its month; an arrived one keeps its arrival day', () => {
+    const oid = (s) => ({ toString: () => s });
+    const [orderedOut, arrivedOut] = mapBottlesForExport([
+      { _id: oid('b1'), vintage: '2023', wineDefinition: { name: 'W' }, status: 'ordered', expectedArrival: new Date('2027-03-01T12:00:00Z') },
+      { _id: oid('b2'), vintage: '2023', wineDefinition: { name: 'W' }, status: 'active', arrivedAt: new Date('2026-09-18T12:00:00Z') },
+    ], []);
+    const ordered = exportBottleToItem(orderedOut);
+    expect(ordered).toMatchObject({ onOrder: true, expectedArrival: '2027-03', addToHistory: false });
+    const arrived = exportBottleToItem(arrivedOut);
+    expect(arrived).toMatchObject({ onOrder: false, arrivedAt: '2026-09-18' });
+  });
 });
 
 describe('attachMaturity', () => {

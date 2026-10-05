@@ -979,14 +979,22 @@ router.get('/:id/on-order', async (req, res) => {
     const role = getCellarRole(cellar, req.user.id);
     if (!role || cellar.deletedAt) return res.status(404).json({ error: 'Cellar not found' });
 
-    const docs = await Bottle.find({ cellar: req.params.id, status: ORDERED_STATUS })
+    // Dated orders first (soonest first), then undated ones. Two queries,
+    // because an ascending sort puts a missing date FIRST — and with the cap
+    // that would cut dated orders rather than undated ones.
+    const dated = await Bottle.find({ cellar: req.params.id, status: ORDERED_STATUS, expectedArrival: { $ne: null } })
       .populate(WINE_POPULATE_CARDS)
       .sort({ expectedArrival: 1, createdAt: 1 })
       .limit(ON_ORDER_LIMIT)
       .lean();
-    // An ascending sort puts a missing date FIRST; dated orders lead instead.
-    const ordered = [...docs.filter((b) => b.expectedArrival), ...docs.filter((b) => !b.expectedArrival)];
-    const bottles = await attachBottleImageUrls(ordered, req.user.id);
+    const undated = dated.length < ON_ORDER_LIMIT
+      ? await Bottle.find({ cellar: req.params.id, status: ORDERED_STATUS, expectedArrival: null })
+        .populate(WINE_POPULATE_CARDS)
+        .sort({ createdAt: 1 })
+        .limit(ON_ORDER_LIMIT - dated.length)
+        .lean()
+      : [];
+    const bottles = await attachBottleImageUrls([...dated, ...undated], req.user.id);
 
     res.json({
       cellar: { ...cellar, userRole: role, userColor: getUserColor(cellar, req.user.id) },

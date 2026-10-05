@@ -47,6 +47,7 @@ const {
 // (or resolved) INSIDE the bottle create, never before it. Shared with the
 // wishlist route; findOrCreateWine itself is lazy-required inside the service.
 const { resolveOrMintWine } = require('../services/wineCommit');
+const { parseExpectedArrival } = require('../utils/onOrder');
 const { moveBottleToCellar } = require('../services/rackOps');
 const { getDataVersion } = require('../services/dataVersion');
 const { REGISTRY_PHOTO, OWN_PHOTO } = require('../services/photoRetention');
@@ -1084,7 +1085,7 @@ router.post('/:id/move', requireBottleAccess('owner'), async (req, res) => {
       return res.status(400).json({ error: 'Bottle is already in that cellar' });
     }
     if (bottle.status !== 'active' && bottle.status !== ORDERED_STATUS) {
-      return res.status(400).json({ error: 'Only active bottles can be moved' });
+      return res.status(400).json({ error: 'Only bottles in the cellar or on order can be moved' });
     }
 
     // Destination must be an active cellar the user OWNS (v1: own cellars only).
@@ -1263,6 +1264,14 @@ router.post('/bulk', async (req, res) => {
       for (const k of BULK_UPDATE_FIELDS) if (src[k] !== undefined) fields[k] = src[k];
       if (Object.keys(fields).length === 0) {
         return res.status(400).json({ error: `fields must include at least one of: ${BULK_UPDATE_FIELDS.join(', ')}` });
+      }
+      // A bad month is the same error for every bottle: refuse it up front.
+      // The shared update only parses it on bottles on order (it drops the
+      // field on any other), so an invalid value would otherwise pass or fail
+      // depending on which bottle came first in the list.
+      if (fields.expectedArrival !== undefined) {
+        const p = parseExpectedArrival(fields.expectedArrival);
+        if (!p.ok) return res.status(400).json({ error: p.error });
       }
     } else {
       const { reason = 'drank', note, consumedAt } = req.body;

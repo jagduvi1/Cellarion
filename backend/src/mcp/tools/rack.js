@@ -219,7 +219,7 @@ registerTool({
   name: 'move_bottle',
   title: 'Move a bottle to another cellar',
   description:
-    'Moves one ACTIVE bottle to a different cellar the user OWNS. It arrives unplaced (racking is separate). Confirm ' +
+    'Moves one ACTIVE bottle (or one still on order) to a different cellar the user OWNS. It arrives unplaced (racking is separate). Confirm ' +
     'the destination first. Reversible via undo_last (moves it back).',
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },

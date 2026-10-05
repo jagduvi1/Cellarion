@@ -495,9 +495,9 @@ async function attachDraftBottles(wine, targetWineId, { userId, roles = [], req 
   if (String(target._id) === String(wine._id)) return fail('invalid_input', 'A draft cannot be attached to itself.');
 
   const bottleIds = await Bottle.distinct('_id', { wineDefinition: wine._id });
-  // Only the vintages still in a cellar get a maturity row on the target
+  // Only the vintages still in a cellar (or on order) get a maturity row on the target
   // (the promotion follow-through uses the same status filter).
-  const vintages = await Bottle.distinct('vintage', { wineDefinition: wine._id, status: 'active' });
+  const vintages = await Bottle.distinct('vintage', { wineDefinition: wine._id, status: { $in: ['active', 'ordered'] } });
   // The label-scan frames stay with the draft and go with it: they are
   // curation evidence for a row that is not becoming registry content, and
   // on the target they would be unreadable-but-retained forever.

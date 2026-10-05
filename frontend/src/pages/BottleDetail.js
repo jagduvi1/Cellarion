@@ -244,7 +244,8 @@ function BottleDetail() {
     try {
       const res = await undoBottle(apiFetch, bottleId);
       if (res.ok) {
-        navigate(`/cellars/${cellarId}`);
+        // A cancelled order goes back to the list it came from.
+        navigate(isOnOrder(bottle) ? `/cellars/${cellarId}/on-order` : `/cellars/${cellarId}`);
       } else {
         const data = await res.json().catch(() => ({}));
         alert(data.error || t('bottleDetail.mistakeError', 'Failed to remove bottle'));

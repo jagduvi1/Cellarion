@@ -136,7 +136,7 @@ function ImportBottles() {
   const [detectedEncoding, setDetectedEncoding] = useState(null);
   // Which CellarTracker table the file is (list/inventory/bottles/…), if CT
   const [ctTable, setCtTable] = useState(null);
-  // Non-blocking parse warnings ({ code: 'ct-truncated' | 'ct-pending-skipped', … })
+  // Non-blocking parse warnings ({ code: 'ct-truncated' | 'ct-pending-on-order', … })
   const [importWarnings, setImportWarnings] = useState([]);
   // CellarTracker Location groups whose bins had no consistent pattern —
   // their bottles keep the location as text: [{ location, count }]
@@ -357,6 +357,11 @@ function ImportBottles() {
     try {
       const res = await getImportSession(apiFetch, session._id);
       if (!res.ok) return;
+      // A draft does not remember "Not delivered yet": start it cleared, so a
+      // choice made for an unrelated file or receipt never rides along. The
+      // review step shows the choice to set again.
+      setImportOnOrder(false);
+      setImportExpectedArrival('');
       const { session: s, refreshed } = await res.json();
 
       // Apply refreshed matches (items that were 'request' but now have an exact wine)
@@ -425,10 +430,7 @@ function ImportBottles() {
   const applyParsed = useCallback((parsed, { fileName: sourceName, encoding }) => {
     const { items, format, oenoRackSpecs } = parsed;
     if (items.length === 0) {
-      const pendingWarning = (parsed.warnings || []).find(w => w.code === 'ct-pending-skipped');
-      setError(pendingWarning
-        ? t('importBottles.errors.ctAllPending', { count: pendingWarning.count })
-        : t('importBottles.errors.noValidItems'));
+      setError(t('importBottles.errors.noValidItems'));
       return;
     }
     setParsedItems(items);
@@ -498,6 +500,7 @@ function ImportBottles() {
     setError(null);
     setReceiptInfo(null); // a file replaces rows read from a receipt
     setImportOnOrder(false);
+    setImportExpectedArrival('');
     const files = Array.from(fileList || []).filter(Boolean);
     if (files.length === 0) return;
 
@@ -641,6 +644,7 @@ function ImportBottles() {
       // over yet: suggest importing it on order (the user can untick it).
       const docType = data.receipt?.documentType;
       setImportOnOrder(docType === 'prepayment' || docType === 'proforma');
+      setImportExpectedArrival('');
     } catch {
       setError(t('importBottles.receipt.errors.generic'));
     } finally {
@@ -1098,6 +1102,36 @@ function ImportBottles() {
 
   // ── Render helpers ──────────────────────────────────────────────────────
 
+  // Not delivered yet: the whole import comes in ON ORDER. Pre-ticked for a
+  // prepayment receipt or a pro-forma invoice (an order not handed over yet).
+  // Shown on the upload step AND the review step, so a resumed draft (which
+  // does not remember the choice) can still set it before importing.
+  const renderOnOrderChoice = () => (
+    <div className="form-group import-on-order">
+      <label className="toggle-label">
+        <input
+          type="checkbox"
+          checked={importOnOrder}
+          onChange={(e) => setImportOnOrder(e.target.checked)}
+        />
+        <span>{t('importBottles.wholeImport.onOrderLabel')}</span>
+      </label>
+      <p className="rack-options-hint">{t('importBottles.wholeImport.onOrderHint')}</p>
+      {importOnOrder && (
+        <label className="import-on-order-month">
+          <span>{t('addBottle.expectedArrival')}</span>
+          <input
+            type="month"
+            placeholder="YYYY-MM"
+            pattern="\d{4}-\d{2}"
+            value={importExpectedArrival}
+            onChange={(e) => setImportExpectedArrival(e.target.value)}
+          />
+        </label>
+      )}
+    </div>
+  );
+
   // What the receipt scan read: the shop and date, how many wines, the lines it
   // left out (beer, deposits, bags…) so nothing disappears unexplained, and the
   // notices that need a decision before importing.
@@ -1502,30 +1536,7 @@ function ImportBottles() {
               maxLength={500}
             />
           </div>
-          {/* Not delivered yet: the whole import comes in ON ORDER. Pre-ticked
-              for a prepayment receipt or a pro-forma invoice (an order that
-              has not been handed over). */}
-          <div className="form-group import-on-order">
-            <label className="toggle-label">
-              <input
-                type="checkbox"
-                checked={importOnOrder}
-                onChange={(e) => setImportOnOrder(e.target.checked)}
-              />
-              <span>{t('importBottles.wholeImport.onOrderLabel')}</span>
-            </label>
-            <p className="rack-options-hint">{t('importBottles.wholeImport.onOrderHint')}</p>
-            {importOnOrder && (
-              <label className="import-on-order-month">
-                <span>{t('addBottle.expectedArrival')}</span>
-                <input
-                  type="month"
-                  value={importExpectedArrival}
-                  onChange={(e) => setImportExpectedArrival(e.target.value)}
-                />
-              </label>
-            )}
-          </div>
+          {renderOnOrderChoice()}
         </div>
       )}
 
@@ -1990,8 +2001,11 @@ function ImportBottles() {
           )}
         </div>
 
-        {/* Parse-time warnings (CT truncation / skipped pending bottles) + encoding info */}
+        {/* Parse-time warnings (CT truncation / pending bottles on order) + encoding info */}
         {renderImportWarnings()}
+        <div className="import-rack-options import-on-order-review">
+          {renderOnOrderChoice()}
+        </div>
         {detectedEncoding && (
           <p className="import-encoding-line">
             {t('importBottles.upload.encodingLine', { encoding: ENCODING_LABELS[detectedEncoding] || detectedEncoding })}

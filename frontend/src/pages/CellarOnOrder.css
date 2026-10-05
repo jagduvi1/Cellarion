@@ -172,7 +172,21 @@
   .on-order-main {
     flex-wrap: wrap;
   }
-  .on-order-arrive-btn {
+}
+
+.on-order-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+@media (max-width: 560px) {
+  .on-order-actions {
     width: 100%;
+    flex-direction: row;
+  }
+  .on-order-actions .btn {
+    flex: 1;
   }
 }

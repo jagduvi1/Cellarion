@@ -190,7 +190,7 @@ async function undoStructural(last, ctx, { ok, fail, logAction }) {
     }
     // Verify move-ability BEFORE claiming the ledger row, so a bottle consumed
     // since the move doesn't burn the row on a reversal that would fail anyway.
-    if (access.bottle.status !== 'active') {
+    if (access.bottle.status !== 'active' && access.bottle.status !== 'ordered') {
       return fail('conflict', 'That bottle has been consumed since the move; nothing was changed.');
     }
     const origin = await Cellar.findOne({ _id: fromId, user: ctx.user.id, deletedAt: null });

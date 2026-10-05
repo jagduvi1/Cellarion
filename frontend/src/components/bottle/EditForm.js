@@ -191,7 +191,7 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded, lotSiblingIds = 
         {isOnOrder(bottle) && (
           <div className="form-group">
             <label htmlFor="edit-expected-arrival">{t('addBottle.expectedArrival')}</label>
-            <input id="edit-expected-arrival" type="month" value={form.expectedArrival} onChange={set('expectedArrival')} />
+            <input id="edit-expected-arrival" type="month" placeholder="YYYY-MM" pattern="\d{4}-\d{2}" value={form.expectedArrival} onChange={set('expectedArrival')} />
           </div>
         )}
       </div>
