@@ -319,7 +319,7 @@ describe('attachDraftBottles', () => {
     expect(BottleImage.deleteMany).toHaveBeenCalledWith({ _id: { $in: ['scan1'] } });
     expect(reassignWineRefs).toHaveBeenCalledWith(WINE, TARGET);
     expect(Bottle.updateMany).not.toHaveBeenCalled();
-    expect(Bottle.distinct).toHaveBeenLastCalledWith('vintage', { wineDefinition: WINE, status: { $in: ['active', 'ordered'] } });
+    expect(Bottle.distinct).toHaveBeenLastCalledWith('vintage', { wineDefinition: WINE, status: 'active' });
     expect(ensurePendingVintageProfile).toHaveBeenCalledTimes(2);
     expect(WineDefinition.deleteOne).toHaveBeenCalledWith({ _id: WINE, draft: true });
     expect(logAudit).toHaveBeenCalledWith(null, 'wine.draft_attach', expect.anything(), expect.objectContaining({ targetId: TARGET, bottlesMoved: 2 }));

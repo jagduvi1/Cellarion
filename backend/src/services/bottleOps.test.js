@@ -721,6 +721,15 @@ describe('bottles on order', () => {
       { wineName: 'Barolo', vintage: '2023', onOrder: true });
   });
 
+  test('a bottle on order is NOT queued for a sommelier drink window (an en primeur vintage may be unreleased); an ordinary add is', async () => {
+    const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
+    ensurePendingVintageProfile.mockClear();
+    await addBottle(CELLAR, WINE, { vintage: '2024', onOrder: true }, REQ);
+    expect(ensurePendingVintageProfile).not.toHaveBeenCalled();
+    await addBottle(CELLAR, WINE, { vintage: '2024' }, REQ);
+    expect(ensurePendingVintageProfile).toHaveBeenCalledWith('w1', '2024');
+  });
+
   test('addBottle onOrder without a date is fine; a bad month or a history add is a 400', async () => {
     const noDate = await addBottle(CELLAR, WINE, { vintage: '2023', onOrder: true }, REQ);
     expect(noDate.bottle.status).toBe('ordered');

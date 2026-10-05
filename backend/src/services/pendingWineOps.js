@@ -590,8 +590,9 @@ async function runPromotionFollowThrough(wine) {
   // are waiting for finally get curated.
   try {
     const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
-    // Bottles on order count too: their owners want the drink window before delivery.
-    const vintages = await Bottle.distinct('vintage', { wineDefinition: wine._id, status: { $in: ['active', 'ordered'] } });
+    // Bottles on order are left out: they are queued when they arrive
+    // (bottleOps.markArrived) — an en primeur vintage may not be released yet.
+    const vintages = await Bottle.distinct('vintage', { wineDefinition: wine._id, status: 'active' });
     for (const v of vintages) await ensurePendingVintageProfile(wine._id, v);
   } catch (err) {
     console.warn('Maturity re-seed after pending promotion failed (non-fatal):', err.message);
