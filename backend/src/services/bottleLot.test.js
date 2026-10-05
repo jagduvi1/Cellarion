@@ -7,7 +7,11 @@
  */
 jest.mock('../models/Bottle', () => ({ find: jest.fn() }));
 jest.mock('../models/Cellar', () => ({ find: jest.fn() }));
-jest.mock('../config/constants', () => ({ CONSUMED_STATUSES: ['drank', 'gifted', 'sold', 'other'] }));
+jest.mock('../config/constants', () => ({
+  CONSUMED_STATUSES: ['drank', 'gifted', 'sold', 'other'],
+  ORDERED_STATUS: 'ordered',
+  NOT_IN_CELLAR_STATUSES: ['drank', 'gifted', 'sold', 'other', 'ordered'],
+}));
 
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
@@ -36,8 +40,13 @@ describe('lotSiblingQuery', () => {
       cellar: { $in: ['c1', 'c2'] },
       wineDefinition: 'w',
       vintage: '2019',
-      status: { $nin: ['drank', 'gifted', 'sold', 'other'] },
+      status: { $nin: ['drank', 'gifted', 'sold', 'other', 'ordered'] },
     });
+  });
+
+  test('a bottle on order has its own lot: the other bottles of that wine and vintage still on order', async () => {
+    const q = await lotSiblingQuery(ME, { _id: 'b1', wineDefinition: 'w', vintage: '2022', status: 'ordered' });
+    expect(q.status).toBe('ordered');
   });
 
   test('a populated wine is reduced to its id; NV matches blank and null vintages too', async () => {

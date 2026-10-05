@@ -6,6 +6,18 @@
 // Bottle statuses that indicate the bottle has been removed from the active cellar
 const CONSUMED_STATUSES = ['drank', 'gifted', 'sold', 'other'];
 
+// A bottle ON ORDER is bought but not delivered yet (en primeur, a pre-order,
+// a delivery on its way). It belongs to a cellar without being IN it: kept
+// out of counts, racks, drink suggestions, stats and alerts until it is
+// marked as arrived (status → 'active'). The lifecycle reads
+// ordered → active → drank/gifted/sold/other.
+const ORDERED_STATUS = 'ordered';
+
+// Every status that is NOT in the cellar right now. "In the cellar" queries
+// filter { status: { $nin: NOT_IN_CELLAR_STATUSES } }: a $nin rather than
+// 'active' so a legacy row without a status still counts, as it always has.
+const NOT_IN_CELLAR_STATUSES = [...CONSUMED_STATUSES, ORDERED_STATUS];
+
 // Milliseconds in a single day — used for drink-window calculations
 const MS_PER_DAY = 86400000;
 
@@ -134,6 +146,8 @@ const CELLAR_SORTS = ['-createdAt', 'createdAt', 'name', '-name', 'vintage', '-v
 module.exports = {
   CELLAR_SORTS,
   CONSUMED_STATUSES,
+  ORDERED_STATUS,
+  NOT_IN_CELLAR_STATUSES,
   MCP_PERSONAL_SCOPES,
   SUPPORT_CATEGORIES,
   MS_PER_DAY,

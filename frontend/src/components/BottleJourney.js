@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { isOnOrder, formatArrivalMonth } from '../utils/onOrder';
 
 function fmtDate(d) {
   if (!d) return '';
@@ -18,7 +19,7 @@ export const CONSUMED_LABEL_KEYS = {
  * fields. Falls back to a single "added" entry when history isn't seeded yet.
  */
 export default function BottleJourney({ bottle }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   if (!bottle) return null;
 
   const history = Array.isArray(bottle.cellarHistory) && bottle.cellarHistory.length
@@ -34,7 +35,20 @@ export default function BottleJourney({ bottle }) {
     date: h.enteredAt,
   }));
 
-  if (bottle.status && bottle.status !== 'active') {
+  // Bought on order: the delivery is its own step, in date order with any
+  // move made while the bottle was still on its way.
+  if (bottle.arrivedAt) {
+    items.push({ key: 'arrived', icon: '🚚', text: t('history.journey.arrived'), date: bottle.arrivedAt });
+    items.sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
+  }
+  if (isOnOrder(bottle)) {
+    const month = formatArrivalMonth(bottle.expectedArrival, i18n?.language);
+    items.push({
+      key: 'onorder',
+      icon: '🚚',
+      text: month ? t('history.journey.onOrderExpected', { month }) : t('history.journey.onOrder'),
+    });
+  } else if (bottle.status && bottle.status !== 'active') {
     const reasonKey = CONSUMED_LABEL_KEYS[bottle.consumedReason] || CONSUMED_LABEL_KEYS[bottle.status];
     items.push({
       key: 'consumed',

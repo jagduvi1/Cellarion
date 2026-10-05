@@ -116,7 +116,8 @@ describe('scope — never unscoped (security audit 2026-09-02, D10-5)', () => {
   });
 
   test.each([
-    ['active', { status: { $nin: ['drank', 'gifted', 'sold', 'other'] } }],
+    ['active', { status: { $nin: ['drank', 'gifted', 'sold', 'other', 'ordered'] } }],
+    ['ordered', { status: 'ordered' }],
     ['consumed', { status: { $in: ['drank', 'gifted', 'sold', 'other'] } }],
   ])('statusFilter %s', async (statusFilter, expected) => {
     await search('x', { statusFilter });
@@ -328,7 +329,7 @@ describe('bottleFacets — the plain cellar page', () => {
     const res = await bottleFacets({ cellarId: CELLAR });
     const [pipeline] = Bottle.aggregate.mock.calls[0];
     expect(String(pipeline[0].$match.cellar.$in[0])).toBe(CELLAR);
-    expect(pipeline[0].$match.status).toEqual({ $nin: ['drank', 'gifted', 'sold', 'other'] });
+    expect(pipeline[0].$match.status).toEqual({ $nin: ['drank', 'gifted', 'sold', 'other', 'ordered'] });
     expect(res.facetDistribution.vintage).toEqual({ 2015: 2, NV: 1, 2020: 4 });
     expect(res.facetDistribution.countryName).toEqual({ France: 2, Portugal: 1 });
     expect(res.baseFacetDistribution).toBe(res.facetDistribution);

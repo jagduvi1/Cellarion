@@ -6,7 +6,7 @@ const { z } = require('zod');
 const User = require('../../models/User');
 const Cellar = require('../../models/Cellar');
 const Bottle = require('../../models/Bottle');
-const { CONSUMED_STATUSES, WINE_POPULATE_LIST } = require('../../config/constants');
+const { CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES, WINE_POPULATE_LIST } = require('../../config/constants');
 const { registerTool } = require('../registry');
 const { ok } = require('../toolUtil');
 
@@ -79,7 +79,7 @@ async function buildStats(userId, currencyOverride) {
   }
   const scope = { user: userId, cellar: { $in: cellars.map((c) => c._id) } };
   const [activeBottles, consumedBottles] = await Promise.all([
-    Bottle.find({ ...scope, status: { $nin: CONSUMED_STATUSES } }).populate(WINE_POPULATE_LIST).lean(),
+    Bottle.find({ ...scope, status: { $nin: NOT_IN_CELLAR_STATUSES } }).populate(WINE_POPULATE_LIST).lean(),
     Bottle.find({ ...scope, status: { $in: CONSUMED_STATUSES } }).populate(WINE_POPULATE_LIST).lean(),
   ]);
   const stats = await computeOverview({ activeBottles, consumedBottles, cellars, targetCurrency, targetRatingScale });

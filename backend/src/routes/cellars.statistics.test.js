@@ -120,7 +120,7 @@ test('one grouping query over this cellar\'s active bottles, by what the figures
   const { cellar, ...rest } = pipeline[0].$match;
   expect(cellar).toBeInstanceOf(mongoose.Types.ObjectId);
   expect(String(cellar)).toBe(CELLAR_ID);
-  expect(rest).toEqual({ status: { $nin: ['drank', 'gifted', 'sold', 'other'] } });
+  expect(rest).toEqual({ status: { $nin: ['drank', 'gifted', 'sold', 'other', 'ordered'] } });
   expect(Object.keys(pipeline[1].$group._id)).toEqual(['wine', 'vintage', 'rating', 'ratingScale', 'currency', 'priceDay']);
   expect(pipeline[2]).toEqual({ $sort: { first: 1 } });
   expect(body.statistics).toMatchObject({ totalBottles: 0, uniqueWines: 0, totalValue: 0, oldestVintage: null, newestVintage: null });

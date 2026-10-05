@@ -12,10 +12,14 @@
  * owner's decisions (the bulk bar is owner-only for the same reason). Bottle
  * size is deliberately NOT part of the key — a magnum ages differently, but
  * the request was wine + vintage, and the checkbox is opt-in per save.
+ *
+ * A bottle ON ORDER has its own lot: the other on-order bottles of that wine
+ * and vintage. An en primeur price must not be written onto the bottles of
+ * the same wine already in the cellar, nor theirs onto the order.
  */
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
-const { CONSUMED_STATUSES } = require('../config/constants');
+const { NOT_IN_CELLAR_STATUSES, ORDERED_STATUS } = require('../config/constants');
 
 // The fields a lot shares. Everything else — rating, notes, reservation,
 // rack slot, purchase metadata — stays per bottle.
@@ -36,7 +40,7 @@ async function lotSiblingQuery(userId, bottle) {
     cellar: { $in: cellars.map((c) => c._id) },
     wineDefinition: wineId,
     vintage: vintage === 'NV' ? { $in: ['NV', '', null] } : vintage,
-    status: { $nin: CONSUMED_STATUSES },
+    status: bottle.status === ORDERED_STATUS ? ORDERED_STATUS : { $nin: NOT_IN_CELLAR_STATUSES },
   };
 }
 

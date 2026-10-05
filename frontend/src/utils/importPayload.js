@@ -73,5 +73,22 @@ export function buildImportItem(r, selection) {
     // Wishlist destination (e.g. Vivino scan-history sent to the wishlist):
     // the backend creates a WishlistItem instead of a Bottle.
     addToWishlist: r.item.addToWishlist,
+    // Bought, not delivered yet (a CellarTracker pending purchase): the
+    // bottle is created ON ORDER, with the expected month when known.
+    onOrder: r.item.onOrder,
+    expectedArrival: r.item.expectedArrival,
   };
+}
+
+/**
+ * The review step's "Not delivered yet" choice, applied to the confirm items:
+ * every row that becomes a bottle in the cellar is imported ON ORDER instead.
+ * Rows going to history or the wishlist are left alone, and a row already on
+ * order keeps its own expected month.
+ */
+export function applyImportOnOrder(items, { onOrder, expectedArrival } = {}) {
+  if (!onOrder) return items;
+  return items.map((it) => (it.addToHistory || it.addToWishlist || it.onOrder
+    ? it
+    : { ...it, onOrder: true, expectedArrival: expectedArrival || undefined }));
 }

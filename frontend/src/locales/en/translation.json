@@ -1044,7 +1044,11 @@
     "aiConfidence": "{{percent}}% confident",
     "aiSimilarTitle": "Already in the registry — did you mean one of these?",
     "detailsApplyToAll_one": "This applies to the bottle you are adding.",
-    "detailsApplyToAll_other": "These details apply to all {{count}} bottles."
+    "detailsApplyToAll_other": "These details apply to all {{count}} bottles.",
+    "onOrder": "Not delivered yet (on order)",
+    "onOrderHint": "For en primeur, pre-orders or a delivery on its way. The bottle waits on the cellar's “On order” list, outside counts and racks, until you mark it as arrived.",
+    "expectedArrival": "Expected arrival",
+    "expectedArrivalHint": "Optional. The month is enough: if it has not arrived once that month is over, we will ask."
   },
   "bottleDetail": {
     "producerPending": "producer being confirmed",
@@ -1530,7 +1534,10 @@
     "journey": {
       "title": "History",
       "added": "Added to {{cellar}}",
-      "moved": "Moved to {{cellar}}"
+      "moved": "Moved to {{cellar}}",
+      "arrived": "Arrived",
+      "onOrder": "On order",
+      "onOrderExpected": "On order, expected {{month}}"
     },
     "vintageLabel": "Vintage:",
     "paidLabel": "Paid:",
@@ -1575,13 +1582,16 @@
       "cellarDelete": "Deleted cellar",
       "cellarShareAdd": "Shared cellar",
       "cellarShareUpdate": "Changed share role",
-      "cellarShareRemove": "Removed share"
+      "cellarShareRemove": "Removed share",
+      "bottleArrive": "Bottle arrived",
+      "bottleBulkArrive": "Bottles arrived in bulk"
     },
     "anonymous": "anonymous",
     "sharedAs": "{{user}} as {{role}}",
     "roleChanged": "Role changed: {{from}} → {{to}}",
     "bulkMoveDetail": "{{moved}} of {{requested}} bottles moved",
-    "bulkDoneDetail": "{{done}} of {{requested}} bottles · {{what}}"
+    "bulkDoneDetail": "{{done}} of {{requested}} bottles · {{what}}",
+    "bulkArriveDetail": "{{done}} of {{requested}} bottles arrived"
   },
   "bulk": {
     "moveAction": "Move",
@@ -3257,7 +3267,8 @@
         "d4": "Upload photos: on the bottle detail page, you can add photos of the bottle or label. Background removal is automatic.",
         "d5": "Share a bottle: click the share icon on the bottle detail page to send a link to someone.",
         "d6": "Consume/remove: click \"Remove Bottle\" to mark it as consumed. Set the date you drank it. The bottle moves to the cellar's history.",
-        "d7": "Write a review: on the bottle detail page, scroll down to write a community review."
+        "d7": "Write a review: on the bottle detail page, scroll down to write a community review.",
+        "d8": "Bottles on order: bought wine that has not arrived yet (en primeur, a pre-order)? When adding, open More details and tick \"Not delivered yet\". It waits on the cellar's \"On order\" list, outside counts and racks, until you tap \"Mark as arrived\". If the expected month passes, Cellarion asks whether it has come."
       },
       "labelScan": {
         "title": "Label Scanning",
@@ -4336,7 +4347,9 @@
         "tooMany": "Too many scans in a short time. Wait a minute and try again.",
         "withReason": "{{reason}}",
         "generic": "The receipt couldn't be read right now. Please try again."
-      }
+      },
+      "prepaymentOnOrderNote": "This is a prepayment receipt: the wine is paid for but not handed over yet, so it will come in on order. When you collect it, mark the bottles as arrived instead of importing the sales receipt too.",
+      "proformaOnOrderNote": "This is a pro-forma invoice: the wine is ordered but not delivered, so it will come in on order. When it arrives, mark the bottles as arrived instead of importing the final invoice too."
     },
     "status": {
       "exact": "Matched",
@@ -4385,7 +4398,9 @@
       "plocDateOrder": "Ploc does not say whether its dates are day/month or month/day, and nothing in your file settles it. We read them as day/month.",
       "plocExtraSlots": "\"{{wine}}\" has {{slots}} slot(s) recorded but only {{stock}} bottle(s) in stock, so the extra slots were left empty.",
       "plocRackTooBig": "\"{{rack}}\" is {{rows}} x {{cols}}, larger than a Cellarion rack allows (20 x 20). Its bottles will be imported without a position.",
-      "plocUnmatchedHistory": "{{count}} history entr(y/ies) refer to wines that are not in the wines file, and were skipped."
+      "plocUnmatchedHistory": "{{count}} history entr(y/ies) refer to wines that are not in the wines file, and were skipped.",
+      "ctPendingOnOrder_one": "{{count}} bottle still on order in CellarTracker will be imported as on order: {{wines}}. It stays out of your cellar until you mark it as arrived.",
+      "ctPendingOnOrder_other": "{{count}} bottles still on order in CellarTracker will be imported as on order: {{wines}}. They stay out of your cellar until you mark them as arrived."
     },
     "ctTables": {
       "list": "List table",
@@ -4458,7 +4473,9 @@
       "commentLabel": "Comment",
       "commentPlaceholder": "e.g. Moved over from my old cellar app",
       "occasionLabel": "Occasion",
-      "occasionPlaceholder": "e.g. Estate auction, March 2026"
+      "occasionPlaceholder": "e.g. Estate auction, March 2026",
+      "onOrderLabel": "Not delivered yet: import these bottles as on order",
+      "onOrderHint": "For an order you have paid for but not received (en primeur, a pre-order). The bottles wait on the cellar's “On order” list until you mark them as arrived."
     },
     "rack": {
       "title": "Rack placement",
@@ -4680,7 +4697,8 @@
       "notImportedStat": "Not imported",
       "downloadReport": "Download report (CSV)",
       "goToCellar": "Go to Cellar",
-      "importMore": "Import More"
+      "importMore": "Import More",
+      "onOrder": "on order"
     },
     "search": {
       "title": "Search Wine Library",
@@ -5249,5 +5267,39 @@
       "no": "No thanks",
       "yes": "Yes, keep it offline"
     }
+  },
+  "onOrder": {
+    "title": "On order",
+    "badge": "On order",
+    "bottleCount_one": "{{count}} bottle on its way",
+    "bottleCount_other": "{{count}} bottles on their way",
+    "intro": "Bottles you have bought that have not arrived yet. They stay out of this cellar's counts, racks and drinking suggestions until you mark them as arrived.",
+    "paidTotal": "Paid so far: {{amount}}",
+    "loadFailed": "Could not load the bottles on order.",
+    "emptyTitle": "Nothing on order",
+    "emptyText": "Bought wine that has not been delivered yet? When you add a bottle, open More details and tick “Not delivered yet”. It waits here, outside your cellar's counts and racks, until you mark it as arrived.",
+    "backToBottles": "Back to the bottles",
+    "backToOnOrder": "Back to on order",
+    "qty_one": "{{count}} bottle",
+    "qty_other": "{{count}} bottles",
+    "pricePerBottle": "{{price}} per bottle",
+    "expected": "Expected {{month}}",
+    "expectedLate": "Expected {{month}}: has it arrived?",
+    "noDate": "No expected date yet",
+    "markArrived": "Mark as arrived",
+    "howMany": "How many arrived?",
+    "ofCount": "of {{count}}",
+    "arrivedOn": "Arrived on",
+    "confirmArrived": "Confirm",
+    "arriveFailed": "Could not mark it as arrived. Please try again.",
+    "arrivedNote_one": "{{count}} bottle arrived and is now in your cellar.",
+    "arrivedNote_other": "{{count}} bottles arrived and are now in your cellar.",
+    "arrivedOne": "Arrived! The bottle is now in your cellar. Place it in a rack whenever you like.",
+    "placeInRack": "Place in a rack",
+    "linkCount_one": "{{count}} bottle on order",
+    "linkCount_other": "{{count}} bottles on order",
+    "linkNext": "next expected {{month}}",
+    "cancelOrder": "Order cancelled? Remove it",
+    "bottleHint": "Bought, not delivered yet. It stays out of your cellar's counts, racks and drinking suggestions until you mark it as arrived."
   }
 }

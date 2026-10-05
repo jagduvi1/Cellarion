@@ -14,7 +14,7 @@ const User = require('../models/User');
 const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const WishlistItem = require('../models/WishlistItem');
-const { CONSUMED_STATUSES, WINE_POPULATE_LIST } = require('../config/constants');
+const { CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES, ORDERED_STATUS, WINE_POPULATE_LIST } = require('../config/constants');
 const { classifyMaturity, buildProfileMap, maturityLabel, resolveWindowForBottle } = require('../utils/maturityUtils');
 const { toNormalized } = require('../utils/ratingUtils');
 
@@ -41,7 +41,7 @@ async function loadPortfolio(userId, currencyOverride) {
   }
   const scope = { user: userId, cellar: { $in: cellars.map((c) => c._id) } };
   const [activeBottles, consumedBottles] = await Promise.all([
-    Bottle.find({ ...scope, status: { $nin: CONSUMED_STATUSES } }).populate(WINE_POPULATE_LIST).lean(),
+    Bottle.find({ ...scope, status: { $nin: NOT_IN_CELLAR_STATUSES } }).populate(WINE_POPULATE_LIST).lean(),
     Bottle.find({ ...scope, status: { $in: CONSUMED_STATUSES } }).populate(WINE_POPULATE_LIST).lean(),
   ]);
   return { cellars, activeBottles, consumedBottles, targetCurrency, targetRatingScale };
@@ -411,7 +411,8 @@ async function buildCaseJourneys(userId, {
 } = {}) {
   const cellars = await Cellar.find({ user: userId, deletedAt: null }).select('_id').lean();
   if (cellars.length === 0) return { summary: 'No cellars yet', data: [] };
-  const scope = { cellar: { $in: cellars.map((c) => c._id) } };
+  // A lot is what came INTO the cellar: bottles still on order join it on arrival.
+  const scope = { cellar: { $in: cellars.map((c) => c._id) }, status: { $ne: ORDERED_STATUS } };
   if (focusWineId) scope.wineDefinition = focusWineId;
   const bottles = await Bottle.find(scope).populate(WINE_POPULATE_LIST).lean();
 

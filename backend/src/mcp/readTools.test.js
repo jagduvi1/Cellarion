@@ -147,7 +147,7 @@ describe('ownership scoping', () => {
     // the Meili path (page holes / inflated totals).
     expect(filter.user).toBeUndefined();
     expect(filter.cellar).toEqual({ $in: [oid('c')] });
-    expect(filter.status).toEqual({ $nin: ['drank', 'gifted', 'sold', 'other'] });
+    expect(filter.status).toEqual({ $nin: ['drank', 'gifted', 'sold', 'other', 'ordered'] });
   });
 
   test('get_cellar on a foreign cellar → not_found (indistinguishable from missing)', async () => {

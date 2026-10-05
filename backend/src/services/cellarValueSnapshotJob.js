@@ -8,7 +8,7 @@ const User = require('../models/User');
 const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const CellarValueSnapshot = require('../models/CellarValueSnapshot');
-const { CONSUMED_STATUSES } = require('../config/constants');
+const { NOT_IN_CELLAR_STATUSES } = require('../config/constants');
 const { getOrCreateDailySnapshot, convertCurrency } = require('../utils/exchangeRates');
 const { resolveReplacementForBottles } = require('./valuation');
 
@@ -36,7 +36,7 @@ async function runCellarValueSnapshots() {
       const bottles = await Bottle.find({
         user: userId,
         cellar: { $in: cellarIds },
-        status: { $nin: CONSUMED_STATUSES }
+        status: { $nin: NOT_IN_CELLAR_STATUSES }
       }).select('cellar price currency wineDefinition vintage').lean();
 
       // Replacement estimate per bottle (secondary ?? currentRelease ?? paid).

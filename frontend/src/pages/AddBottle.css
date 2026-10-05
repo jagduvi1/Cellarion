@@ -586,11 +586,22 @@
 }
 
 /* ── Add to History ── */
-.add-to-history-section {
+.add-to-history-section,
+.add-on-order-section {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: 1rem 1.25rem;
+}
+
+/* ── Not delivered yet (on order) ── */
+.add-on-order-section {
+  margin: 1rem 0;
+}
+
+.add-on-order-section .form-group {
+  margin: 0.75rem 0 0;
+  max-width: 16rem;
 }
 
 .toggle-label {

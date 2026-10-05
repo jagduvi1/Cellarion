@@ -12,7 +12,7 @@
  */
 const Bottle = require('../models/Bottle');
 const CommunityWinePrice = require('../models/CommunityWinePrice');
-const { CONSUMED_STATUSES } = require('../config/constants');
+const { NOT_IN_CELLAR_STATUSES } = require('../config/constants');
 const { ABSOLUTE_CAP } = require('../utils/priceValidation');
 const { buildReleaseCurve, median, FIRM_MIN_OWNERS } = require('../utils/communityPricing');
 
@@ -38,7 +38,7 @@ async function runCommunityPriceAggregation() {
   const rowCursor = Bottle.aggregate([
     {
       $match: {
-        status: { $nin: CONSUMED_STATUSES },
+        status: { $nin: NOT_IN_CELLAR_STATUSES },
         price: { $gt: 0 },
         wineDefinition: { $ne: null },
         $or: [

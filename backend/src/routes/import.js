@@ -29,6 +29,7 @@ const rateLimitsConfig = require('../config/rateLimits');
 const { generateWineKey } = require('../utils/normalize');
 const {
   CONSUMED_STATUSES,
+  ORDERED_STATUS,
   IMPORT_EXACT_THRESHOLD,
   IMPORT_FUZZY_THRESHOLD,
   MAX_IMPORT_SIZE,
@@ -50,6 +51,21 @@ const { findOrCreatePendingRequest, pickImportHints } = require('../services/win
 const WishlistItem = require('../models/WishlistItem');
 const ImportSession = require('../models/ImportSession');
 const ImportArchive = require('../models/ImportArchive');
+const { parseExpectedArrival } = require('../utils/onOrder');
+
+/**
+ * A row flagged `onOrder` (a CellarTracker pending purchase, or a receipt the
+ * review marked "not delivered yet") becomes a bottle ON ORDER, with its
+ * expected month when the row has a usable one. Forgiving like the rest of
+ * the import: an unreadable date imports the bottle without one rather than
+ * failing the row. Never applied to a row going straight into history.
+ */
+function applyOnOrder(bottle, item) {
+  if (item.onOrder !== true) return;
+  bottle.status = ORDERED_STATUS;
+  const ea = parseExpectedArrival(item.expectedArrival);
+  if (ea.ok && ea.value) bottle.expectedArrival = ea.value;
+}
 
 const router = express.Router();
 // requireNonDemo: the CT/CSV importer spends AI on identify and creates registry
@@ -1512,6 +1528,9 @@ router.post('/confirm', async (req, res) => {
     // Oeno-export rows with a Consumed On date.
     let createdActive = 0;
     let createdHistory = 0;
+    // Rows imported as bottles ON ORDER (bought, not delivered yet — a
+    // CellarTracker pending purchase, a pro-forma or prepayment receipt).
+    let createdOnOrder = 0;
     // Rows flagged addToWishlist (e.g. a Vivino scan-history import sent to
     // the wishlist) become WishlistItems for the IMPORTING user — wishlists
     // are personal, unlike bottles which belong to the cellar owner.
@@ -1789,12 +1808,16 @@ router.post('/confirm', async (req, res) => {
               bottle.consumedRating = resolvedConsumedRating;
               bottle.consumedRatingScale = resolvedConsumedScale;
             }
+          } else {
+            applyOnOrder(bottle, item);
           }
 
           await bottle.save();
           created++;
           if (item.addToHistory) {
             createdHistory++;
+          } else if (bottle.status === ORDERED_STATUS) {
+            createdOnOrder++;
           } else {
             createdActive++;
           }
@@ -1884,12 +1907,16 @@ router.post('/confirm', async (req, res) => {
             bottle.consumedRating = resolvedConsumedRating;
             bottle.consumedRatingScale = resolvedConsumedScale;
           }
+        } else {
+          applyOnOrder(bottle, item);
         }
 
         await bottle.save();
         created++;
         if (item.addToHistory) {
           createdHistory++;
+        } else if (bottle.status === ORDERED_STATUS) {
+          createdOnOrder++;
         } else {
           createdActive++;
         }
@@ -1990,6 +2017,7 @@ router.post('/confirm', async (req, res) => {
     logAudit(req, 'bottle.import', { type: 'cellar', id: cellarId, cellarId: cellar._id }, {
       created,
       createdActive,
+      ...(createdOnOrder ? { createdOnOrder } : {}),
       createdHistory,
       wishlistCreated,
       skipped: skipped.length,
@@ -2049,6 +2077,7 @@ router.post('/confirm', async (req, res) => {
         rowsTruncated: items.length > ARCHIVE_ROW_CAP,
         summary: {
           created, createdActive, createdHistory, wishlistCreated,
+          ...(createdOnOrder ? { createdOnOrder } : {}),
           skipped: skipped.length, errors: errors.length,
           ...(errors.length ? { errorReasons: summariseReasons(errors) } : {}),
           pendingIdentity: pendingIdentityCount,
@@ -2065,6 +2094,8 @@ router.post('/confirm', async (req, res) => {
     res.json({
       created,
       createdActive,
+      // Only when some rows came in on order — the response shape is otherwise unchanged.
+      ...(createdOnOrder ? { createdOnOrder } : {}),
       createdHistory,
       wishlistCreated,
       skipped,

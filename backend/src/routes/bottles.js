@@ -19,7 +19,7 @@ const { isReserved } = require('../utils/reservationUtils');
 const { logAudit } = require('../services/audit');
 const { getSnapshotForDate } = require('../utils/exchangeRates');
 const { resolveRating } = require('../utils/ratingUtils');
-const { CONSUMED_STATUSES, WINE_POPULATE, WINE_POPULATE_LIST } = require('../config/constants');
+const { CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES, ORDERED_STATUS, WINE_POPULATE, WINE_POPULATE_LIST } = require('../config/constants');
 const { unlinkImageFiles } = require('../services/imageProcessor');
 const { gatherPriceWarnings } = require('../services/priceWarnings');
 const { getCurrentRelease } = require('../services/communityPrice');
@@ -41,7 +41,7 @@ const mongoose = require('mongoose');
 // shared service so the REST routes and the MCP tools can never drift (§7).
 const {
   addBottle, validateBottleCommitFields, updateBottleFields, consumeBottle, restoreBottle, removeFromRacks, removeBottleCascade,
-  openBottle, pourFromBottle, closeBottle,
+  openBottle, pourFromBottle, closeBottle, markArrived,
 } = require('../services/bottleOps');
 // Mint-at-commit for the POST route's `newWine` branch — the wine is created
 // (or resolved) INSIDE the bottle create, never before it. Shared with the
@@ -168,16 +168,19 @@ router.get('/', async (req, res) => {
 
     // Status / lifecycle scope
     if (!statusFilter || statusFilter === 'active') {
-      filter.status = { $nin: CONSUMED_STATUSES };
+      filter.status = { $nin: NOT_IN_CELLAR_STATUSES };
     } else if (statusFilter === 'all') {
       // no status constraint — include everything
+    } else if (statusFilter === ORDERED_STATUS) {
+      // Bought, not delivered yet
+      filter.status = ORDERED_STATUS;
     } else if (CONSUMED_STATUSES.includes(statusFilter)) {
       filter.status = statusFilter;
     } else if (statusFilter === 'consumed') {
       filter.status = { $in: CONSUMED_STATUSES };
     } else {
       // Unknown value — fall back to the default active scope
-      filter.status = { $nin: CONSUMED_STATUSES };
+      filter.status = { $nin: NOT_IN_CELLAR_STATUSES };
     }
 
     if (vintage) {
@@ -979,6 +982,23 @@ router.post('/:id/consume', requireBottleAccess('editor'), async (req, res) => {
   }
 });
 
+// POST /api/bottles/:id/arrive — a bottle on order has been delivered (owner
+// or editor). It becomes active and lands unplaced; body.arrivedAt is an
+// optional day, default today. Many at once: POST /bulk { action: 'arrive' }.
+router.post('/:id/arrive', requireBottleAccess('editor'), async (req, res) => {
+  try {
+    const result = await markArrived(req.bottle, { arrivedAt: req.body?.arrivedAt }, req);
+    if (result.error) {
+      const { status, message, code } = result.error;
+      return res.status(status).json({ error: message, ...(code ? { code } : {}) });
+    }
+    res.json({ bottle: result.bottle });
+  } catch (error) {
+    console.error('Mark arrived error:', error);
+    res.status(500).json({ error: 'Failed to mark the bottle as arrived' });
+  }
+});
+
 // ── Open-bottle (Coravin / preservation) tracking ────────────────────────────
 // The open/pour/close logic lives in services/bottleOps (shared with the MCP
 // open_bottle / pour_glass / close_bottle tools), same as consume/restore.
@@ -1048,7 +1068,7 @@ router.delete('/:id/pour', requireBottleAccess('editor'), async (req, res) => {
 });
 
 // POST /api/bottles/:id/move - Move an active bottle to another cellar you own.
-// v1: own-cellars-only + active bottles only; the bottle lands UNPLACED in the
+// v1: own-cellars-only + active (or on-order) bottles only; it lands UNPLACED in the
 // destination (freed from any source rack slot). All bottle data is kept —
 // createdAt (acquisition date) is preserved; addedToCellarAt + cellarHistory are
 // updated. requireBottleAccess('owner') enforces you own the SOURCE cellar.
@@ -1063,7 +1083,7 @@ router.post('/:id/move', requireBottleAccess('owner'), async (req, res) => {
     if (String(toCellarId) === String(sourceCellar._id)) {
       return res.status(400).json({ error: 'Bottle is already in that cellar' });
     }
-    if (bottle.status !== 'active') {
+    if (bottle.status !== 'active' && bottle.status !== ORDERED_STATUS) {
       return res.status(400).json({ error: 'Only active bottles can be moved' });
     }
 
@@ -1175,7 +1195,7 @@ router.post('/bulk-move', async (req, res) => {
       if (item.reason) { skipped.push({ id: item.id, reason: item.reason }); continue; }
       const { id, bottle, cellar: sourceCellar } = item;
       if (String(sourceCellar._id) === String(destCellar._id)) { skipped.push({ id, reason: 'same_cellar' }); continue; }
-      if (bottle.status !== 'active') { skipped.push({ id, reason: 'not_active' }); continue; }
+      if (bottle.status !== 'active' && bottle.status !== ORDERED_STATUS) { skipped.push({ id, reason: 'not_active' }); continue; }
       const result = await moveBottleToCellar(bottle, sourceCellar, destCellar, req);
       if (result.error) { skipped.push({ id, reason: result.error.code || 'error' }); continue; }
       movedIds.push(id);
@@ -1212,21 +1232,29 @@ router.post('/bulk-move', async (req, res) => {
 //       warns and the MCP tool refuses without an acknowledgement — bulk must
 //       not be the one path that consumes a reservation silently). The
 //       restock-gap check runs ONCE per wine+vintage afterwards, not per bottle.
+//   { action: 'arrive', bottleIds, arrivedAt }
+//       → services/bottleOps.markArrived per bottle: a delivery of bottles on
+//       order, one day for all. A bottle not on order is skipped as
+//       'not_on_order'. expectedArrival rides 'update' like the purchase
+//       details (it is dropped on a bottle that is not on order).
 // Editor+ on each bottle's cellar (the single PUT / consume rule).
 // A payload the shared validation rejects (a bad date, a note too long) is
 // the SAME error for every bottle, so it fails the whole request with that
 // message before anything is touched, rather than reporting N identical skips.
 // Response: { done, doneIds: string[], skipped: [{ id, reason }] }
-const BULK_UPDATE_FIELDS = ['price', 'currency', 'purchaseDate', 'purchaseLocation', 'purchaseUrl', 'reservedFor', 'reservedUntil', 'drinkFrom', 'drinkTo', 'peakFrom', 'peakUntil'];
+const BULK_UPDATE_FIELDS = ['price', 'currency', 'purchaseDate', 'purchaseLocation', 'purchaseUrl', 'reservedFor', 'reservedUntil', 'drinkFrom', 'drinkTo', 'peakFrom', 'peakUntil', 'expectedArrival'];
 router.post('/bulk', async (req, res) => {
   try {
     const { action, bottleIds } = req.body || {};
-    if (!['update', 'consume'].includes(action)) {
-      return res.status(400).json({ error: 'action must be "update" or "consume"' });
+    if (!['update', 'consume', 'arrive'].includes(action)) {
+      return res.status(400).json({ error: 'action must be "update", "consume" or "arrive"' });
     }
     let fields = null;
     let consumeArgs = null;
-    if (action === 'update') {
+    const arriveArgs = action === 'arrive' ? { arrivedAt: req.body.arrivedAt } : null;
+    if (action === 'arrive') {
+      // Nothing more to collect — markArrived validates the date.
+    } else if (action === 'update') {
       const src = req.body.fields;
       if (!src || typeof src !== 'object' || Array.isArray(src)) {
         return res.status(400).json({ error: 'fields must be an object' });
@@ -1260,6 +1288,9 @@ router.post('/bulk', async (req, res) => {
       let result;
       if (action === 'update') {
         result = await updateBottleFields(bottle, { ...fields }, req);
+      } else if (action === 'arrive') {
+        if (bottle.status !== ORDERED_STATUS) { skipped.push({ id, reason: 'not_on_order' }); continue; }
+        result = await markArrived(bottle, arriveArgs, req);
       } else {
         if (bottle.status !== 'active') { skipped.push({ id, reason: 'not_active' }); continue; }
         if (!includeReserved && isReserved(bottle)) { skipped.push({ id, reason: 'reserved' }); continue; }
@@ -1292,13 +1323,15 @@ router.post('/bulk', async (req, res) => {
       }
     }
 
-    // One summary row on top of the per-bottle update / consume rows.
+    // One summary row on top of the per-bottle update / consume / arrive rows.
     if (firstCellar) {
-      logAudit(req, action === 'update' ? 'bottle.bulk_update' : 'bottle.bulk_consume',
+      const summaryAction = { update: 'bottle.bulk_update', consume: 'bottle.bulk_consume', arrive: 'bottle.bulk_arrive' }[action];
+      logAudit(req, summaryAction,
         { type: 'cellar', id: firstCellar._id, cellarId: firstCellar._id },
         {
           requested: resolved.ids.length, done: doneIds.length, skipped: skipped.length,
-          ...(action === 'update' ? { fields: Object.keys(fields) } : { reason: consumeArgs.reason }),
+          ...(action === 'update' ? { fields: Object.keys(fields) } : {}),
+          ...(action === 'consume' ? { reason: consumeArgs.reason } : {}),
         });
     }
 

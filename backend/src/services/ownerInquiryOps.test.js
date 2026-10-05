@@ -37,7 +37,7 @@ const Bottle = require('../models/Bottle');
 const User = require('../models/User');
 const { createNotifications, createNotification } = require('./notifications');
 const { logAudit } = require('./audit');
-const { CONSUMED_STATUSES } = require('../config/constants');
+const { CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES } = require('../config/constants');
 const {
   RECIPIENT_CAP,
   EXPIRY_NOTE,
@@ -82,7 +82,7 @@ describe('buildRecipients', () => {
     expect(Bottle.aggregate).toHaveBeenCalledTimes(1);
 
     const pipeline = Bottle.aggregate.mock.calls[0][0];
-    expect(pipeline[0].$match.status).toEqual({ $nin: CONSUMED_STATUSES });
+    expect(pipeline[0].$match.status).toEqual({ $nin: NOT_IN_CELLAR_STATUSES });
     // Newest-first sort feeds $first, so each user's entry is their latest bottle.
     expect(pipeline[1]).toEqual({ $sort: { createdAt: -1 } });
     expect(pipeline[2].$group._id).toBe('$user');

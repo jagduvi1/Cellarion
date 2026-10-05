@@ -1540,3 +1540,19 @@
 .bd-lot-apply { margin-top: 0.5rem; }
 .bd-lot-apply-label { display: flex; align-items: flex-start; gap: 0.5rem; font-weight: 500; cursor: pointer; }
 .bd-lot-apply-label input { margin-top: 0.2rem; }
+
+/* ── On order: bought, not delivered yet ── */
+.bd-on-order {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  padding: 0.9rem 1.1rem;
+  border-left: 4px solid var(--color-info);
+}
+.bd-on-order.is-late { border-left-color: var(--color-warning); }
+.bd-on-order-text { flex: 1; min-width: 14rem; display: flex; flex-direction: column; gap: 0.15rem; }
+.bd-on-order-when { font-size: 0.9rem; color: var(--color-info); }
+.bd-on-order.is-late .bd-on-order-when { color: var(--color-warning); font-weight: 600; }
+.bd-on-order-hint { margin: 0.2rem 0 0; font-size: 0.82rem; color: var(--color-text-secondary); }

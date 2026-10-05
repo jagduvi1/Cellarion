@@ -34,7 +34,7 @@
 const mongoose = require('mongoose');
 const Bottle = require('../models/Bottle');
 const WineDefinition = require('../models/WineDefinition');
-const { CONSUMED_STATUSES } = require('../config/constants');
+const { CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES, ORDERED_STATUS } = require('../config/constants');
 const { grapeSearchNames } = require('../utils/grapeDisplay');
 
 // Searchable fields, most important first — the order is the field ranking.
@@ -451,8 +451,9 @@ function scopeOf({ cellarId, cellarIds }) {
 }
 
 function statusMatch(statusFilter) {
-  if (statusFilter === 'active') return { status: { $nin: CONSUMED_STATUSES } };
+  if (statusFilter === 'active') return { status: { $nin: NOT_IN_CELLAR_STATUSES } };
   if (statusFilter === 'consumed') return { status: { $in: CONSUMED_STATUSES } };
+  if (statusFilter === ORDERED_STATUS) return { status: ORDERED_STATUS };
   return {};
 }
 
@@ -654,7 +655,7 @@ function emptyResult() {
  *
  * @param {string} query free text; '' lists every bottle that passes the filters
  * @param {object} opts
- * @param {string} [opts.statusFilter='active'] 'active' | 'consumed' | 'all'
+ * @param {string} [opts.statusFilter='active'] 'active' | 'consumed' | 'ordered' (on order) | 'all'
  * @param {string} [opts.type] comma-separated wine types
  * @param {string} [opts.countryId] comma-separated ids
  * @param {string} [opts.regionId] comma-separated ids

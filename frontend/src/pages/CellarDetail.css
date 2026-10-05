@@ -1126,3 +1126,32 @@
 /* Bulk drink window: the four year fields in two columns (one on a phone). */
 .bulk-year-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 0.75rem; }
 @media (max-width: 480px) { .bulk-year-grid { grid-template-columns: 1fr; } }
+
+/* The cellar page's link to this view (CellarDetail, bottles tab). */
+.on-order-link-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.75rem;
+  padding: 0.55rem 0.9rem;
+  background: var(--color-info-bg);
+  border: 1px solid var(--color-info-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  text-decoration: none;
+  font-size: 0.88rem;
+}
+
+.on-order-link-bar:hover {
+  border-color: var(--color-info);
+}
+
+.on-order-link-bar .on-order-link-next {
+  color: var(--color-text-secondary);
+}
+
+.on-order-link-bar svg {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+

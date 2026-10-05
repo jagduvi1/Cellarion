@@ -119,6 +119,9 @@ async function placeBottleInRack(rack, position, bottleId, req) {
   // any surface (web slot picker, post-add placing queue, MCP place_bottle).
   // Audit 2026-09-14: bottles added straight into the drinking history were
   // offered for placement and this accepted them.
+  if (bottle.status === 'ordered') {
+    return { error: { status: 400, message: 'This bottle is on order and has not arrived yet — mark it as arrived before placing it in a rack' } };
+  }
   if (bottle.status && bottle.status !== 'active') {
     return { error: { status: 400, message: 'Only a bottle still in the cellar can be placed in a rack — this one is consumed' } };
   }
@@ -189,7 +192,9 @@ async function moveBottleToCellar(bottle, sourceCellar, destCellar, req) {
   if (String(destCellar._id) === String(sourceCellar._id)) {
     return { error: { status: 400, message: 'Bottle is already in that cellar' } };
   }
-  if (bottle.status !== 'active') {
+  // A bottle on order may be moved too: an order booked to the wrong cellar
+  // is redirected before it arrives.
+  if (bottle.status !== 'active' && bottle.status !== 'ordered') {
     return { error: { status: 400, message: 'Only active bottles can be moved' } };
   }
   const now = new Date();

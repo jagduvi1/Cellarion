@@ -12,7 +12,8 @@ const User = require('../models/User');
 const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const SiteConfig = require('../models/SiteConfig');
-const { CONSUMED_STATUSES } = require('../config/constants');
+const { NOT_IN_CELLAR_STATUSES, ORDERED_STATUS } = require('../config/constants');
+const { isArrivalDue, formatArrivalMonth } = require('../utils/onOrder');
 const { classifyMaturity, classifyPersonalWindow, buildProfileMap, resolveWindowForBottle } = require('../utils/maturityUtils');
 const { shouldNotifyOpenBottle, openBottleDaysLeft } = require('../utils/openBottleUtils');
 const { createNotification } = require('./notifications');
@@ -90,6 +91,13 @@ async function runDrinkWindowCheck() {
     } catch (err) {
       console.error(`[drinkWindowNotifier] Reservation check failed for user ${user._id}:`, err.message);
     }
+    try {
+      // Orders past their expected month: same category, no seed (bottles on
+      // order can only exist after the feature shipped).
+      totalNotified += await processArrivals(user);
+    } catch (err) {
+      console.error(`[drinkWindowNotifier] Arrival check failed for user ${user._id}:`, err.message);
+    }
   }
 
   if (isFirstRun) {
@@ -123,7 +131,7 @@ async function processUser(user, isFirstRun) {
   const bottles = await Bottle.find({
     user: user._id,
     cellar: { $in: cellarIds },
-    status: { $nin: CONSUMED_STATUSES },
+    status: { $nin: NOT_IN_CELLAR_STATUSES },
     // Profile-classified bottles need a wine definition — including NV
     // bottles, whose curated `relative` profiles are resolved per bottle by
     // classifyMaturity (bottles with no reviewed profile classify to null and
@@ -297,7 +305,7 @@ async function processUser(user, isFirstRun) {
 async function processOpenBottles(user) {
   const bottles = await Bottle.find({
     user: user._id,
-    status: { $nin: CONSUMED_STATUSES },
+    status: { $nin: NOT_IN_CELLAR_STATUSES },
     openedAt: { $ne: null },
     openBottleNotifiedAt: null,
   }).populate({ path: 'wineDefinition', select: 'name' }).lean();
@@ -344,7 +352,7 @@ async function processReservations(user) {
   const currentYear = new Date().getFullYear();
   const bottles = await Bottle.find({
     user: user._id,
-    status: { $nin: CONSUMED_STATUSES },
+    status: { $nin: NOT_IN_CELLAR_STATUSES },
     // $lte on a number never matches null/missing (BSON type bracketing), so
     // bottles reserved without a year — or not reserved at all — are skipped.
     reservedUntil: { $lte: currentYear },
@@ -379,6 +387,68 @@ async function processReservations(user) {
   return count;
 }
 
+/**
+ * Once the month a bottle on order was expected has passed, ask whether it
+ * has arrived: ONE notification per cellar per run, however many bottles of
+ * that cellar are late, linking to its on-order page where they are marked
+ * as arrived. The arrivalNotifiedAt marker makes it once per expected month;
+ * a new expected month re-arms it (bottleOps.updateBottleFields).
+ * Returns the number of notifications created.
+ */
+async function processArrivals(user) {
+  const now = new Date();
+  // Coarse filter in the query (expected before this month began), exact
+  // rule in isArrivalDue. Bottles on order with no date are never "late".
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const bottles = await Bottle.find({
+    user: user._id,
+    status: ORDERED_STATUS,
+    expectedArrival: { $lt: monthStart },
+    arrivalNotifiedAt: null,
+  }).select('_id cellar vintage expectedArrival wineDefinition')
+    .populate({ path: 'wineDefinition', select: 'name' }).lean();
+  const due = bottles.filter((b) => isArrivalDue(b.expectedArrival, now));
+  if (due.length === 0) return 0;
+
+  // Only cellars that still exist: a bottle in a deleted cellar is gone for
+  // the user, and a link to it would dead-end.
+  const liveCellars = new Set((await Cellar.distinct('_id', {
+    _id: { $in: [...new Set(due.map((b) => String(b.cellar)))] }, deletedAt: null,
+  })).map(String));
+
+  const byCellar = new Map();
+  for (const b of due) {
+    const key = String(b.cellar);
+    if (!liveCellars.has(key)) continue;
+    if (!byCellar.has(key)) byCellar.set(key, []);
+    byCellar.get(key).push(b);
+  }
+
+  let count = 0;
+  for (const [cellarId, list] of byCellar) {
+    const first = list[0];
+    const wineName = first.wineDefinition?.name || 'A wine';
+    const wine = first.vintage && first.vintage !== 'NV' ? `${wineName} ${first.vintage}` : wineName;
+    const message = list.length === 1
+      ? `${wine} was expected in ${formatArrivalMonth(first.expectedArrival)}. Has it arrived? Mark it as arrived, or update the expected month.`
+      : `${list.length} bottles on order were expected by now, including ${wine}. Have they arrived? Mark them as arrived, or update the expected month.`;
+    await createNotification(
+      user._id,
+      'order_arrival_due',
+      list.length === 1 ? 'Has your order arrived?' : 'Have your orders arrived?',
+      message,
+      `/cellars/${cellarId}/on-order`,
+      'drinkWindow'
+    );
+    await Bottle.updateMany(
+      { _id: { $in: list.map((b) => b._id) } },
+      { $set: { arrivalNotifiedAt: now } }
+    );
+    count++;
+  }
+  return count;
+}
+
 function buildNotification(alert) {
   const { name, vintage, status } = alert;
   const wine = `${name} ${vintage}`;
@@ -406,4 +476,4 @@ function buildNotification(alert) {
   }
 }
 
-module.exports = { runDrinkWindowCheck, processUser, processOpenBottles, processReservations, shouldSendDigestEmail };
+module.exports = { runDrinkWindowCheck, processUser, processOpenBottles, processReservations, processArrivals, shouldSendDigestEmail };

@@ -12,7 +12,7 @@ const User = require('../models/User');
 const Bottle = require('../models/Bottle');
 const Rack = require('../models/Rack');
 const WineDefinition = require('../models/WineDefinition');
-const { CONSUMED_STATUSES, WINE_POPULATE_LIST } = require('../config/constants');
+const { NOT_IN_CELLAR_STATUSES, WINE_POPULATE_LIST } = require('../config/constants');
 const { classifyMaturity, buildProfileMap, maturityLabel, resolveEffectiveWindow } = require('../utils/maturityUtils');
 const { toNormalized } = require('../utils/ratingUtils');
 const { isReserved } = require('../utils/reservationUtils');
@@ -73,7 +73,7 @@ function uniqueWineIds(entries) {
 async function readyCandidates(userId, cellarIds, { wineType, maxPrice, currency } = {}) {
   if (!cellarIds.length) return { ranked: [], profileMap: new Map(), totalActive: 0, considered: 0, notReady: 0, reservedExcluded: 0, priceWarning: null };
 
-  const bottles = await Bottle.find({ cellar: { $in: cellarIds }, status: { $nin: CONSUMED_STATUSES } })
+  const bottles = await Bottle.find({ cellar: { $in: cellarIds }, status: { $nin: NOT_IN_CELLAR_STATUSES } })
     .populate(WINE_POPULATE_LIST).lean();
 
   let pool = bottles;

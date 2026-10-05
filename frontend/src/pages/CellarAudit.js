@@ -22,6 +22,8 @@ const ACTION_LABEL_KEYS = {
   'bottle.bulk_move':    'cellarAudit.actions.bottleBulkMove',
   'bottle.bulk_update':  'cellarAudit.actions.bottleBulkUpdate',
   'bottle.bulk_consume': 'cellarAudit.actions.bottleBulkConsume',
+  'bottle.arrive':       'cellarAudit.actions.bottleArrive',
+  'bottle.bulk_arrive':  'cellarAudit.actions.bottleBulkArrive',
   'cellar.delete':       'cellarAudit.actions.cellarDelete',
   'cellar.share.add':    'cellarAudit.actions.cellarShareAdd',
   'cellar.share.update': 'cellarAudit.actions.cellarShareUpdate',
@@ -38,6 +40,8 @@ const ACTION_ICONS = {
   'bottle.bulk_move':    '📦',
   'bottle.bulk_update':  '✏️',
   'bottle.bulk_consume': '🍷',
+  'bottle.arrive':       '🚚',
+  'bottle.bulk_arrive':  '🚚',
   'cellar.delete':       '🗑️',
   'cellar.share.add':    '🔗',
   'cellar.share.update': '🔄',
@@ -57,7 +61,7 @@ function fmtVal(val) {
 function formatDetail(action, detail, t) {
   if (!detail || Object.keys(detail).length === 0) return null;
   if (action === 'bottle.add' && detail.wineName) {
-    return `${detail.wineName}${detail.vintage ? ` · ${detail.vintage}` : ''}`;
+    return `${detail.wineName}${detail.vintage ? ` · ${detail.vintage}` : ''}${detail.onOrder ? ` · ${t('onOrder.badge')}` : ''}`;
   }
   if (action === 'bottle.consume' && detail.reason) {
     return detail.reason;
@@ -71,6 +75,9 @@ function formatDetail(action, detail, t) {
   // The one summary row a bulk action writes on top of its per-bottle rows.
   if (action === 'bottle.bulk_move') {
     return t('cellarAudit.bulkMoveDetail', { moved: detail.moved ?? 0, requested: detail.requested ?? 0 });
+  }
+  if (action === 'bottle.bulk_arrive') {
+    return t('cellarAudit.bulkArriveDetail', { done: detail.done ?? 0, requested: detail.requested ?? 0 });
   }
   if (action === 'bottle.bulk_update' || action === 'bottle.bulk_consume') {
     const what = action === 'bottle.bulk_update'

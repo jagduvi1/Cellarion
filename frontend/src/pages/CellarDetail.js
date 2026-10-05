@@ -15,6 +15,7 @@ import CellarPageHeader from '../components/CellarPageHeader';
 import { readBottleViewMode, storeBottleViewMode } from '../utils/bottleViewMode';
 import { ratingRangeLabel, toMaturityArray, MATURITY_I18N_KEY } from '../utils/filterLabels';
 import { CELLAR_SORTS, DEFAULT_CELLAR_SORT, preferredCellarSort } from '../utils/cellarSort';
+import { formatArrivalMonth } from '../utils/onOrder';
 import './CellarDetail.css';
 
 // Stable empty rack map for the cross-cellar view (rack placement is per-cellar,
@@ -80,7 +81,7 @@ const readSavedFilters = (cellarId) => {
 };
 
 function CellarDetail() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { id } = useParams();
   const { apiFetch, user, updatePreferences } = useAuth();
   const ratingScale = user?.preferences?.ratingScale || '5';
@@ -90,6 +91,8 @@ function CellarDetail() {
   const [cellar, setCellar] = useState(null);
   const [bottles, setBottles] = useState([]);
   const [bottlesTotal, setBottlesTotal] = useState(0);
+  // { count, nextExpected } — bottles bought for this cellar, not arrived yet.
+  const [onOrder, setOnOrder] = useState(null);
   const [statistics, setStatistics] = useState(null);
   const [rackMap, setRackMap] = useState(new Map());
   // null = rack layout not yet loaded. Gates the "Unplaced" badge: only badge
@@ -329,6 +332,8 @@ function CellarDetail() {
       if (seq !== fetchSeq.current) return;
       if (res.ok) {
         if (data.cellar) setCellar(data.cellar);
+        // Single-cellar responses only; the cross-cellar view has no on-order link.
+        if (data.onOrder) setOnOrder(data.onOrder);
         setBottlesTotal(data.bottles.total);
         if (skip === 0) {
           // Set the data + its shape together so BottlesList never sees a
@@ -755,6 +760,21 @@ function CellarDetail() {
                       {t('cellarDetail.clearAllFilters')}
                     </button>
                   </div>
+                )}
+
+                {/* Bottles bought for this cellar that have not arrived yet —
+                    kept out of the list below, one tap away. */}
+                {!dataIsMulti && onOrder?.count > 0 && (
+                  <Link to={`/cellars/${id}/on-order`} className="on-order-link-bar">
+                    <span aria-hidden="true">🚚</span>
+                    <span>{t('onOrder.linkCount', { count: onOrder.count })}</span>
+                    {onOrder.nextExpected && (
+                      <span className="on-order-link-next">
+                        · {t('onOrder.linkNext', { month: formatArrivalMonth(onOrder.nextExpected, i18n.language) })}
+                      </span>
+                    )}
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+                  </Link>
                 )}
 
                 {showFilterModal && (

@@ -5,7 +5,8 @@ import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
 import { useAuth } from '../contexts/AuthContext';
-import { getBottle, consumeBottle, setBottleDefaultImage, undoBottle, openBottle, restoreBottle } from '../api/bottles';
+import { getBottle, consumeBottle, setBottleDefaultImage, undoBottle, openBottle, restoreBottle, markBottleArrived } from '../api/bottles';
+import { isOnOrder, formatArrivalMonth, isArrivalLate } from '../utils/onOrder';
 import { isReserved, reservationSummary } from '../utils/reservation';
 import OpenBottlePanel from '../components/bottle/OpenBottlePanel';
 import { PRESERVATION_METHODS } from '../utils/openBottle';
@@ -38,7 +39,7 @@ const RecommendWineModal = lazy(() => import('../components/RecommendWineModal')
 const AddMoreBottlesModal = lazy(() => import('../components/AddMoreBottlesModal'));
 
 function BottleDetail() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { id: cellarId, bottleId } = useParams();
   const { apiFetch, user } = useAuth();
   const navigate = useNavigate();
@@ -66,6 +67,7 @@ function BottleDetail() {
   const [moveOpen, setMoveOpen] = useState(false);
   const [bdMoreOpen, setBdMoreOpen] = useState(false); // ⋮ overflow (Move, Added by mistake)
   const [restoreBusy, setRestoreBusy] = useState(false);
+  const [arriveBusy, setArriveBusy] = useState(false);
   const [restoreError, setRestoreError] = useState(null);
   const [mistakeOpen, setMistakeOpen] = useState(false);
   const [mistakeBusy, setMistakeBusy] = useState(false);
@@ -308,11 +310,26 @@ function BottleDetail() {
   const isPending = !wine && !!bottle?.pendingWineRequest;
   const displayName = wine?.name || bottle?.pendingWineRequest?.wineName;
   const displayProducer = wine?.producer || bottle?.pendingWineRequest?.producer;
-  const isConsumed = bottle?.status && bottle.status !== 'active';
+  // On order = bought, not delivered yet: editable and movable, but nothing
+  // can be opened, drunk or racked until it is marked as arrived.
+  const onOrderNow = isOnOrder(bottle);
+  const isConsumed = bottle?.status && bottle.status !== 'active' && !onOrderNow;
   const canEdit = !isConsumed && (userRole === 'owner' || userRole === 'editor');
   const canEditConsumed = isConsumed && (userRole === 'owner' || userRole === 'editor');
-  // v1: move only active bottles, and only between cellars you own.
+  // v1: move only active (or on-order) bottles, and only between cellars you own.
   const canMove = !isConsumed && userRole === 'owner';
+  const arrivalMonth = onOrderNow ? formatArrivalMonth(bottle.expectedArrival, i18n.language) : '';
+  const arrivalLate = onOrderNow && isArrivalLate(bottle.expectedArrival);
+  const backTo = fromChat
+    ? '/cellar-chat'
+    : onOrderNow
+      ? `/cellars/${cellarId}/on-order`
+      : (isConsumed || fromHistory ? `/cellars/${cellarId}/history` : `/cellars/${cellarId}`);
+  const backLabel = fromChat
+    ? t('bottleDetail.backToChat', 'Back to chat')
+    : onOrderNow
+      ? t('onOrder.backToOnOrder')
+      : (isConsumed || fromHistory ? t('bottleDetail.backToHistory', 'Back to history') : t('bottleDetail.backToCellar'));
 
   // "Move back to cellar" (undo an accidental removal) — only for a bottle
   // consumed within the last 2 days. Matches the server-side restore window;
@@ -334,7 +351,7 @@ function BottleDetail() {
           Needs a real registry wine to clone (pending-request bottles have
           none) and a non-demo account (POST /api/bottles is requireNonDemo,
           same gate that hides the Add Bottle form in the demo). */}
-      {canEdit && wine && !user?.isDemo && (
+      {canEdit && wine && !user?.isDemo && !onOrderNow && (
         <button className="bd-overflow-item" role="menuitem" onClick={() => { setAddMoreOpen(true); setBdMoreOpen(false); }}>
           <span aria-hidden="true">➕</span> {t('bottleDetail.addMore.action', 'Add more bottles')}
         </button>
@@ -346,11 +363,33 @@ function BottleDetail() {
       )}
       {canEdit && (
         <button className="bd-overflow-item bd-overflow-item--danger" role="menuitem" onClick={() => { setMistakeOpen(true); setBdMoreOpen(false); }}>
-          <span aria-hidden="true">↩️</span> {t('bottleDetail.mistakeLink', 'Added by mistake?')}
+          <span aria-hidden="true">↩️</span> {onOrderNow ? t('onOrder.cancelOrder') : t('bottleDetail.mistakeLink', 'Added by mistake?')}
         </button>
       )}
     </>
   );
+
+  // The order arrived: the bottle becomes an ordinary, unplaced bottle and the
+  // page re-reads it (rack slot, lot, journey all change with the status).
+  const handleArrive = async () => {
+    if (arriveBusy) return;
+    setArriveBusy(true);
+    setError(null);
+    try {
+      const res = await markBottleArrived(apiFetch, bottleId);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || t('onOrder.arriveFailed'));
+        return;
+      }
+      setAddMoreMsg(t('onOrder.arrivedOne'));
+      fetchBottle();
+    } catch {
+      setError(t('onOrder.arriveFailed'));
+    } finally {
+      setArriveBusy(false);
+    }
+  };
 
   const handleMoved = () => {
     setMoveOpen(false);
@@ -437,9 +476,9 @@ function BottleDetail() {
       {/* ── Clean header ── */}
       <div className="bd-page-header">
         <div className="bd-header-top">
-          <Link to={fromChat ? '/cellar-chat' : (isConsumed || fromHistory ? `/cellars/${cellarId}/history` : `/cellars/${cellarId}`)} className="back-link">
+          <Link to={backTo} className="back-link">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
-            {fromChat ? t('bottleDetail.backToChat', 'Back to chat') : (isConsumed || fromHistory ? t('bottleDetail.backToHistory', 'Back to history') : t('bottleDetail.backToCellar'))}
+            {backLabel}
           </Link>
           {!loading && !editing && (
             <div className="bd-header-actions">
@@ -449,15 +488,21 @@ function BottleDetail() {
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     <span className="bd-btn-label">{t('bottleDetail.editDetails')}</span>
                   </button>
-                  {!bottle?.openedAt && (
-                    <button className="btn btn-secondary btn-small" onClick={() => setOpenPickerOpen(true)}>
-                      🍷 <span className="bd-btn-label">{t('openBottle.openBtn', 'Open bottle…')}</span>
-                    </button>
+                  {/* A bottle on order cannot be opened or drunk yet; its one
+                      action, "Mark as arrived", lives in the on-order banner. */}
+                  {!onOrderNow && (
+                    <>
+                      {!bottle?.openedAt && (
+                        <button className="btn btn-secondary btn-small" onClick={() => setOpenPickerOpen(true)}>
+                          🍷 <span className="bd-btn-label">{t('openBottle.openBtn', 'Open bottle…')}</span>
+                        </button>
+                      )}
+                      <button className="btn btn-consume btn-small" onClick={() => setConsumeOpen(true)}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 2h8l4 10H4L8 2z"/><path d="M12 12v6"/><path d="M8 22h8"/></svg>
+                        <span className="bd-btn-label">{t('bottleDetail.removeBottle')}</span>
+                      </button>
+                    </>
                   )}
-                  <button className="btn btn-consume btn-small" onClick={() => setConsumeOpen(true)}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 2h8l4 10H4L8 2z"/><path d="M12 12v6"/><path d="M8 22h8"/></svg>
-                    <span className="bd-btn-label">{t('bottleDetail.removeBottle')}</span>
-                  </button>
                 </>
               )}
               {/* Less-frequent actions (Add more, Move, Added by mistake) live
@@ -500,6 +545,26 @@ function BottleDetail() {
           onBottleChange={(patch) => setBottle(prev => ({ ...prev, ...patch }))}
           onFinish={() => setConsumeOpen(true)}
         />
+      )}
+
+      {/* ── On order: bought, not delivered yet ── */}
+      {onOrderNow && (
+        <div className={`bd-on-order card${arrivalLate ? ' is-late' : ''}`} role="status">
+          <div className="bd-on-order-text">
+            <strong>🚚 {t('onOrder.badge')}</strong>
+            <span className="bd-on-order-when">
+              {arrivalMonth
+                ? (arrivalLate ? t('onOrder.expectedLate', { month: arrivalMonth }) : t('onOrder.expected', { month: arrivalMonth }))
+                : t('onOrder.noDate')}
+            </span>
+            <p className="bd-on-order-hint">{t('onOrder.bottleHint')}</p>
+          </div>
+          {canEdit && (
+            <button type="button" className="btn btn-primary btn-small" onClick={handleArrive} disabled={arriveBusy}>
+              {arriveBusy ? t('common.saving', 'Saving…') : t('onOrder.markArrived')}
+            </button>
+          )}
+        </div>
       )}
 
       {/* ── Wine hero card ── */}
@@ -815,17 +880,22 @@ function BottleDetail() {
           </button>
           {/* Same visibility rule as the desktop header button — the mobile
               bar was missed when open-bottle tracking shipped (canEdit already
-              excludes consumed bottles). */}
-          {!bottle?.openedAt && (
-            <button className="bd-mobile-action-btn bd-mobile-action-open" onClick={() => setOpenPickerOpen(true)}>
-              <span aria-hidden="true">🍷</span>
-              {t('openBottle.openBtnShort', 'Open')}
-            </button>
+              excludes consumed bottles). A bottle on order gets neither: its
+              "Mark as arrived" lives in the on-order banner. */}
+          {!onOrderNow && (
+            <>
+              {!bottle?.openedAt && (
+                <button className="bd-mobile-action-btn bd-mobile-action-open" onClick={() => setOpenPickerOpen(true)}>
+                  <span aria-hidden="true">🍷</span>
+                  {t('openBottle.openBtnShort', 'Open')}
+                </button>
+              )}
+              <button className="bd-mobile-action-btn bd-mobile-action-consume" onClick={() => setConsumeOpen(true)}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 2h8l4 10H4L8 2z"/><path d="M12 12v6"/><path d="M8 22h8"/></svg>
+                {t('bottleDetail.removeBottleShort')}
+              </button>
+            </>
           )}
-          <button className="bd-mobile-action-btn bd-mobile-action-consume" onClick={() => setConsumeOpen(true)}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 2h8l4 10H4L8 2z"/><path d="M12 12v6"/><path d="M8 22h8"/></svg>
-            {t('bottleDetail.removeBottleShort')}
-          </button>
           {/* Less-frequent actions (Add more, Move, Added by mistake) — keeps
               the bar to three visible buttons so nothing gets cut off on
               narrow screens */}
