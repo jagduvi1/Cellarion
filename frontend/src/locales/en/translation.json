@@ -1585,7 +1585,8 @@
       "cellarShareUpdate": "Changed share role",
       "cellarShareRemove": "Removed share",
       "bottleArrive": "Bottle arrived",
-      "bottleBulkArrive": "Bottles arrived in bulk"
+      "bottleBulkArrive": "Bottles arrived in bulk",
+      "bottleChangeWine": "Changed a bottle's wine"
     },
     "anonymous": "anonymous",
     "sharedAs": "{{user}} as {{role}}",
@@ -3269,7 +3270,8 @@
         "d5": "Share a bottle: click the share icon on the bottle detail page to send a link to someone.",
         "d6": "Consume/remove: click \"Remove Bottle\" to mark it as consumed. Set the date you drank it. The bottle moves to the cellar's history.",
         "d7": "Write a review: on the bottle detail page, scroll down to write a community review.",
-        "d8": "Bottles on order: bought wine that has not arrived yet (en primeur, a pre-order)? When adding, open More details and tick \"Not delivered yet\". It waits on the cellar's \"On order\" list, outside counts and racks, until you tap \"Mark as arrived\". If the expected month passes, Cellarion asks whether it has come."
+        "d8": "Bottles on order: bought wine that has not arrived yet (en primeur, a pre-order)? When adding, open More details and tick \"Not delivered yet\". It waits on the cellar's \"On order\" list, outside counts and racks, until you tap \"Mark as arrived\". If the expected month passes, Cellarion asks whether it has come.",
+        "d9": "Saved a bottle under the wrong wine? Open the bottle, tap the ⋮ menu and choose \"Change wine…\": search for the right wine and the bottle moves there, keeping its dates, price, notes, rating, rack slot and history."
       },
       "labelScan": {
         "title": "Label Scanning",
@@ -5308,5 +5310,20 @@
     "monthAppliesTo_one": "For this bottle",
     "monthAppliesTo_other": "For all {{count}} bottles of this delivery",
     "linkLate": "expected {{month}}: has it arrived?"
+  },
+  "changeWine": {
+    "action": "Change wine…",
+    "title": "Change wine",
+    "current": "Saved as:",
+    "intro": "Saved under the wrong wine? Search for the right one and the bottle moves there.",
+    "searchPlaceholder": "Search for the right wine…",
+    "alsoLot_one": "Also move the other bottle of this wine and vintage",
+    "alsoLot_other": "Also move the other {{count}} bottles of this wine and vintage",
+    "keeps": "The bottle keeps its dates, price, notes, rating, rack slot and history.",
+    "confirm": "Move bottle",
+    "error": "Could not change the wine. Please try again.",
+    "done": "Wine changed. The bottle kept all its details.",
+    "doneMany_one": "Wine changed for {{count}} bottle. They kept all their details.",
+    "doneMany_other": "Wine changed for {{count}} bottles. They kept all their details."
   }
 }

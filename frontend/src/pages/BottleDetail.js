@@ -33,6 +33,7 @@ import './BottleDetail.css';
 // Lazy-load heavy components only needed on user interaction
 const ReportWineModal = lazy(() => import('../components/ReportWineModal'));
 const MoveBottleModal = lazy(() => import('../components/MoveBottleModal'));
+const ChangeWineModal = lazy(() => import('../components/ChangeWineModal'));
 const ReviewForm = lazy(() => import('../components/ReviewForm'));
 const ConsumeModal = lazy(() => import('../components/ConsumeModal').then(m => ({ default: m.ConsumeModal })));
 const RecommendWineModal = lazy(() => import('../components/RecommendWineModal'));
@@ -65,6 +66,7 @@ function BottleDetail() {
   const [editing, setEditing] = useState(false);
   const [consumeOpen, setConsumeOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
+  const [changeWineOpen, setChangeWineOpen] = useState(false);
   const [bdMoreOpen, setBdMoreOpen] = useState(false); // ⋮ overflow (Move, Added by mistake)
   const [restoreBusy, setRestoreBusy] = useState(false);
   const [arriveBusy, setArriveBusy] = useState(false);
@@ -360,6 +362,13 @@ function BottleDetail() {
       {canMove && (
         <button className="bd-overflow-item" role="menuitem" onClick={() => { setMoveOpen(true); setBdMoreOpen(false); }}>
           <span aria-hidden="true">📦</span> {t('moveBottle.action')}
+        </button>
+      )}
+      {/* Saved under the wrong wine (the estate's white instead of its red,
+          a near-twin from the search): move it, keeping all its own data. */}
+      {canEdit && (
+        <button className="bd-overflow-item" role="menuitem" onClick={() => { setChangeWineOpen(true); setBdMoreOpen(false); }}>
+          <span aria-hidden="true">🔁</span> {t('changeWine.action')}
         </button>
       )}
       {canEdit && (
@@ -974,6 +983,24 @@ function BottleDetail() {
             wineLabel={displayName}
             onClose={() => setMoveOpen(false)}
             onMoved={handleMoved}
+          />
+        )}
+
+        {changeWineOpen && bottle && (
+          <ChangeWineModal
+            bottleId={bottle._id}
+            currentLabel={[displayProducer, displayName].filter(Boolean).join(' — ')}
+            lotCount={lotSiblingIds.length}
+            onClose={() => setChangeWineOpen(false)}
+            onChanged={({ alsoMoved }) => {
+              setChangeWineOpen(false);
+              setAddMoreMsg(alsoMoved > 0
+                ? t('changeWine.doneMany', { count: alsoMoved + 1 })
+                : t('changeWine.done'));
+              // The page re-reads the bottle: wine, drink window, lot and
+              // reviews all belong to the new wine now.
+              fetchBottle();
+            }}
           />
         )}
 

@@ -23,7 +23,7 @@ const { CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES, ORDERED_STATUS, WINE_POPULATE
 const { unlinkImageFiles } = require('../services/imageProcessor');
 const { gatherPriceWarnings } = require('../services/priceWarnings');
 const { getCurrentRelease } = require('../services/communityPrice');
-const { findLotSiblingIds } = require('../services/bottleLot');
+const { findLotSiblingIds, findLotSiblings } = require('../services/bottleLot');
 const { buildCaseJourneys } = require('../services/insightsService');
 const { stripHtml, escapeRegex } = require('../utils/sanitize');
 const { toNormalized } = require('../utils/ratingUtils');
@@ -41,7 +41,7 @@ const mongoose = require('mongoose');
 // shared service so the REST routes and the MCP tools can never drift (§7).
 const {
   addBottle, validateBottleCommitFields, updateBottleFields, consumeBottle, restoreBottle, removeFromRacks, removeBottleCascade,
-  openBottle, pourFromBottle, closeBottle, markArrived,
+  openBottle, pourFromBottle, closeBottle, markArrived, changeBottleWine,
 } = require('../services/bottleOps');
 // Mint-at-commit for the POST route's `newWine` branch — the wine is created
 // (or resolved) INSIDE the bottle create, never before it. Shared with the
@@ -980,6 +980,42 @@ router.post('/:id/consume', requireBottleAccess('editor'), async (req, res) => {
     }
     console.error('Consume bottle error:', error);
     res.status(500).json({ error: 'Failed to consume bottle' });
+  }
+});
+
+// POST /api/bottles/:id/change-wine — move a saved bottle to another registry
+// wine (owner or editor): { wineDefinitionId, applyToLot? }. The bottle keeps
+// all its own data (services/bottleOps.changeBottleWine). applyToLot also
+// moves the other bottles of the same wine and vintage in the caller's OWN
+// cellars (services/bottleLot — the "also apply to the other N" lot), found
+// BEFORE the move so they are the old wine's lot.
+router.post('/:id/change-wine', requireBottleAccess('editor'), async (req, res) => {
+  try {
+    const { wineDefinitionId, applyToLot } = req.body || {};
+    if (!mongoose.isValidObjectId(wineDefinitionId)) {
+      return res.status(400).json({ error: 'A valid wineDefinitionId is required' });
+    }
+    // The same visibility rule as adding a bottle: someone else's pending or
+    // private draft wine is reported as not found.
+    const wineDoc = await findVisibleWine(String(wineDefinitionId), { userId: req.user.id, roles: req.user.roles });
+    if (!wineDoc) return res.status(404).json({ error: 'Wine not found' });
+
+    const siblings = applyToLot === true ? await findLotSiblings(req.user.id, req.bottle) : [];
+    const result = await changeBottleWine(req.bottle, wineDoc, req);
+    if (result.error) {
+      const { status, message, code } = result.error;
+      return res.status(status).json({ error: message, ...(code ? { code } : {}) });
+    }
+    let alsoMoved = 0;
+    for (const sibling of siblings) {
+      const r = await changeBottleWine(sibling, wineDoc, req);
+      if (!r.error) alsoMoved += 1;
+    }
+    await result.bottle.populate(WINE_POPULATE);
+    res.json({ bottle: result.bottle, alsoMoved });
+  } catch (error) {
+    console.error('Change wine error:', error);
+    res.status(500).json({ error: 'Failed to change the wine' });
   }
 });
 

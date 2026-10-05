@@ -1556,3 +1556,18 @@
 .bd-on-order-when { font-size: 0.9rem; color: var(--color-info); }
 .bd-on-order.is-late .bd-on-order-when { color: var(--color-warning); font-weight: 600; }
 .bd-on-order-hint { margin: 0.2rem 0 0; font-size: 0.82rem; color: var(--color-text-secondary); }
+
+/* ── Change wine modal ── */
+.change-wine-current { margin: 0 0 0.5rem; color: var(--color-text-secondary); }
+.change-wine-picker { margin: 0.75rem 0; }
+.change-wine-lot { display: flex; align-items: flex-start; gap: 0.5rem; margin: 0.5rem 0; cursor: pointer; }
+.change-wine-lot input { margin-top: 0.2rem; }
+.change-wine-hint { margin: 0.5rem 0 0; font-size: 0.82rem; color: var(--color-text-muted); }
+/* Inside the modal the results flow in the box (which scrolls) instead of
+   floating over its edge, where the modal box would clip them. */
+.change-wine-picker .wine-search-picker__dropdown {
+  position: static;
+  margin-top: 4px;
+  max-height: 16rem;
+  box-shadow: none;
+}

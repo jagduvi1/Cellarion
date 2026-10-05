@@ -100,6 +100,16 @@ export const bulkArriveBottles = (apiFetch, bottleIds, arrivedAt) =>
     body: JSON.stringify({ action: 'arrive', bottleIds, ...(arrivedAt ? { arrivedAt } : {}) }),
   });
 
+// The bottle was saved under the wrong registry wine: move it to another one,
+// keeping all its own data. applyToLot also moves the other bottles of the
+// same wine and vintage in the user's own cellars.
+export const changeBottleWine = (apiFetch, id, wineDefinitionId, { applyToLot = false } = {}) =>
+  apiFetch(`/api/bottles/${id}/change-wine`, {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ wineDefinitionId, ...(applyToLot ? { applyToLot: true } : {}) }),
+  });
+
 export const moveBottle = (apiFetch, id, toCellarId) =>
   apiFetch(`/api/bottles/${id}/move`, {
     method: 'POST',

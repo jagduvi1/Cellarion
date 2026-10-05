@@ -37,6 +37,7 @@ const sections = [
       'Consume/remove: click "Remove Bottle" to mark it as consumed. Set the date you drank it. The bottle moves to the cellar\'s history.',
       'Write a review: on the bottle detail page, scroll down to write a community review.',
       'Bottles on order: bought wine that has not arrived yet (en primeur, a pre-order)? When adding, open More details and tick "Not delivered yet". It waits on the cellar\'s "On order" list, outside counts and racks, until you tap "Mark as arrived". If the expected month passes, Cellarion asks whether it has come.',
+      'Saved a bottle under the wrong wine? Open the bottle, tap the ⋮ menu and choose "Change wine…": search for the right wine and the bottle moves there, keeping its dates, price, notes, rating, rack slot and history.',
     ],
     tourId: 'add-bottle',
   },
