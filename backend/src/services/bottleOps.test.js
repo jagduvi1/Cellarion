@@ -127,6 +127,7 @@ jest.mock('./enrichmentJob', () => ({ enrichWineById: jest.fn().mockResolvedValu
 jest.mock('../utils/exchangeRates', () => ({ getOrCreateDailySnapshot: jest.fn().mockResolvedValue({}) }));
 jest.mock('../utils/vintageProfile', () => ({ ensurePendingVintageProfile: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('./imageProcessor', () => ({ unlinkImageFiles: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../models/WineDefinition', () => ({ findById: jest.fn(() => ({ select: () => ({ lean: async () => ({ producer: 'Old Estate', name: 'Old Wine' }) }) })) }));
 
 const BottleModel = require('../models/Bottle');
 const BottleImage = require('../models/BottleImage');
@@ -807,5 +808,56 @@ describe('bottles on order', () => {
     const res = await removeBottleCascade(b, REQ, 'bottle.undo');
     expect(res.removed).toBe(true);
     expect(b.deleteOne).toHaveBeenCalled();
+  });
+});
+
+// ── Change wine (a bottle saved under the wrong registry wine) ──────────────
+describe('changeBottleWine', () => {
+  const { changeBottleWine } = require('./bottleOps');
+  const NEW_WINE = { _id: 'w-red', producer: 'Domaine du Vieux Lazaret', name: 'Châteauneuf-du-Pape' };
+  const saved = (over = {}) => freshBottle({ wineDefinition: 'w-white', vintage: '2021', status: 'active', ...over });
+
+  test('moves the bottle, keeps its own data, moves its own photos (not an official picture), audits from → to', async () => {
+    const b = saved({ price: 30, notes: 'birthday', rating: 4 });
+    const res = await changeBottleWine(b, NEW_WINE, REQ);
+    expect(res.error).toBeUndefined();
+    expect(b.wineDefinition).toBe('w-red');
+    expect(b).toMatchObject({ price: 30, notes: 'birthday', rating: 4, vintage: '2021', status: 'active' });
+    expect(b.save).toHaveBeenCalled();
+    expect(BottleImage.updateMany).toHaveBeenCalledWith(
+      { bottle: 'b1', assignedToWine: { $ne: true } }, { $set: { wineDefinition: 'w-red' } });
+    expect(logAudit).toHaveBeenCalledWith(REQ, 'bottle.change_wine', { type: 'bottle', id: 'b1', cellarId: 'c1' },
+      expect.objectContaining({ fromWineId: 'w-white', fromWine: 'Old Estate — Old Wine', toWineId: 'w-red', toWine: 'Domaine du Vieux Lazaret — Châteauneuf-du-Pape', vintage: '2021' }));
+    expect(Rack.updateMany).not.toHaveBeenCalled(); // the rack slot stays
+  });
+
+  test('queues the new vintage for a drink window and embeds it — but not the queue for a bottle on order', async () => {
+    const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
+    ensurePendingVintageProfile.mockClear(); embedSinglePair.mockClear();
+    await changeBottleWine(saved(), NEW_WINE, REQ);
+    expect(ensurePendingVintageProfile).toHaveBeenCalledWith('w-red', '2021');
+    expect(embedSinglePair).toHaveBeenCalledWith('w-red', '2021');
+
+    ensurePendingVintageProfile.mockClear();
+    await changeBottleWine(saved({ status: 'ordered' }), NEW_WINE, REQ);
+    expect(ensurePendingVintageProfile).not.toHaveBeenCalled();
+  });
+
+  test('refuses the wine it already is', async () => {
+    const b = saved({ wineDefinition: 'w-red' });
+    expect((await changeBottleWine(b, NEW_WINE, REQ)).error).toMatchObject({ status: 400, code: 'same_wine' });
+    expect(b.save).not.toHaveBeenCalled();
+  });
+
+  test('a bottle waiting on an import request leaves it; the request goes only when nobody else waits on it', async () => {
+    BottleModel.countDocuments.mockResolvedValueOnce(2);
+    const b1 = saved({ wineDefinition: null, pendingWineRequest: 'req1' });
+    await changeBottleWine(b1, NEW_WINE, REQ);
+    expect(b1.pendingWineRequest).toBeUndefined();
+    expect(WineRequest.deleteOne).not.toHaveBeenCalled();
+
+    BottleModel.countDocuments.mockResolvedValueOnce(0);
+    await changeBottleWine(saved({ wineDefinition: null, pendingWineRequest: 'req1' }), NEW_WINE, REQ);
+    expect(WineRequest.deleteOne).toHaveBeenCalledWith({ _id: 'req1', status: 'pending' });
   });
 });

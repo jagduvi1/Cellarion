@@ -970,9 +970,85 @@ async function markArrived(bottle, { arrivedAt } = {}, req) {
   return { bottle };
 }
 
+/**
+ * "Change wine": the bottle was saved under the wrong registry wine (a red
+ * filed under the estate's white, a twin picked from the search). It moves to
+ * `wineDoc` and keeps everything that is the owner's own: dates, price,
+ * notes, rating, rack slot, journey, personal data and barcode (which from
+ * now on counts for the right wine). Before this existed the only way out was
+ * remove + add again, which lost all of that.
+ *
+ * Also: the bottle's own photos follow it (an official registry picture of
+ * the old wine stays put: that is curation); a bottle still waiting on an
+ * import wine request leaves the request, which is withdrawn when no bottle
+ * waits on it any more; the new vintage is queued for a drink window (not
+ * for a bottle on order — it is queued when it arrives) and embedded.
+ *
+ * `wineDoc` must already be visibility-checked by the caller
+ * (services/wineVisibility.findVisibleWine). Mirrors POST /api/bottles/:id/change-wine.
+ * Returns { error } | { bottle, from }.
+ */
+async function changeBottleWine(bottle, wineDoc, req) {
+  const fromId = bottle.wineDefinition ? String(bottle.wineDefinition._id || bottle.wineDefinition) : null;
+  if (fromId && fromId === String(wineDoc._id)) {
+    return { error: { status: 400, code: 'same_wine', message: 'The bottle is already this wine' } };
+  }
+  let fromName = null;
+  if (fromId) {
+    const WineDefinition = require('../models/WineDefinition');
+    const from = await WineDefinition.findById(fromId).select('producer name').lean();
+    fromName = from ? [from.producer, from.name].filter(Boolean).join(' — ') : null;
+  }
+  const pendingRequestId = bottle.pendingWineRequest || null;
+
+  bottle.wineDefinition = wineDoc._id;
+  bottle.pendingWineRequest = undefined;
+  try {
+    await bottle.save();
+  } catch (err) {
+    if (err?.name === 'VersionError') return { error: { status: 409, message: 'This bottle was modified by another request. Please refresh and try again.' } };
+    if (err?.name === 'ValidationError') return { error: { status: 400, message: err.message } };
+    throw err;
+  }
+
+  // The bottle's own photos show this bottle, so they follow it. An image the
+  // old wine uses as its official picture stays: that is a registry decision.
+  await BottleImage.updateMany(
+    { bottle: bottle._id, assignedToWine: { $ne: true } },
+    { $set: { wineDefinition: wineDoc._id } }
+  );
+
+  // Same rule as removeBottleCascade: one import request covers every bottle
+  // of that wine, so it goes only when THIS was the last bottle waiting on it.
+  if (pendingRequestId) {
+    const stillWaiting = await Bottle.countDocuments({ pendingWineRequest: pendingRequestId });
+    if (stillWaiting === 0) {
+      await WineRequest.deleteOne({ _id: pendingRequestId, status: 'pending' });
+    }
+  }
+
+  logAudit(req, 'bottle.change_wine',
+    { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
+    { fromWineId: fromId, fromWine: fromName, toWineId: String(wineDoc._id), toWine: [wineDoc.producer, wineDoc.name].filter(Boolean).join(' — '), vintage: bottle.vintage });
+
+  // Bookkeeping for the new (wine, vintage): never fails the change.
+  if (bottle.status !== ORDERED_STATUS) {
+    try {
+      await require('../utils/vintageProfile').ensurePendingVintageProfile(wineDoc._id, bottle.vintage);
+    } catch { /* bookkeeping only */ }
+  }
+  if (!req?.user?.isDemo) {
+    require('./embeddingJob').embedSinglePair(wineDoc._id, bottle.vintage).catch(() => {});
+  }
+  if (wineDoc.draft === true) {
+    try { await require('./wineDraftOps').touchDraft(wineDoc._id); } catch { /* never fails the change */ }
+  }
+  return { bottle, from: fromId };
+}
+
 module.exports = {
   consumeBottle, restoreBottle, removeFromRacks, RESTORE_WINDOW_MS,
-  markArrived, parseOnOrderFields, NOT_ARRIVED_ERROR,
+  markArrived, parseOnOrderFields, NOT_ARRIVED_ERROR, changeBottleWine,
   addBottle, validateBottleCommitFields, updateBottleFields, removeBottleCascade, UPDATABLE_FIELDS,
   openBottle, pourFromBottle, closeBottle,
   PRESERVATION_METHODS, DEFAULT_POUR_ML, MAX_POURS,
