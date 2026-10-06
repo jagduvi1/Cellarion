@@ -248,6 +248,60 @@ describe('buildReceiptResult', () => {
     expect(misread.warnings).not.toContain('wine_discount_spread');
   });
 
+  it('adds the VAT to net prices, after the discounts, at the line rate or the document rate', () => {
+    const out = build({
+      isReceipt: true,
+      pricesIncludeVat: false,
+      vatRate: 20,
+      wines: [
+        { name: 'A', quantity: 1, unitPrice: 24.79339, vatRate: 21 }, // 30.00 incl. 21%
+        { name: 'B', quantity: 2, unitPrice: 50, lineDiscount: 20 }, // 40 net each, document rate 20%
+        { name: 'C', quantity: 1, unitPrice: 10, vatRate: '0%' }, // exempt: nothing added
+        { name: 'D', quantity: 1 },
+      ],
+    });
+    expect(out.items.map((i) => i.price)).toEqual([30, 48, 10, undefined]);
+    expect(out.warnings).toContain('vat_added');
+    expect(out.warnings).not.toContain('vat_rate_missing');
+  });
+
+  it('recognises net prices by their decimals when the document does not say', () => {
+    // A rate column and prices computed back from round gross prices.
+    const out = build({
+      isReceipt: true,
+      pricesIncludeVat: null,
+      wines: [
+        { name: 'A', quantity: 1, unitPrice: 24.79339, vatRate: 21 },
+        { name: 'B', quantity: 6, unitPrice: 41.32231, vatRate: 21 },
+        { name: 'C', quantity: 1, unitPrice: 20, vatRate: 21 },
+      ],
+    });
+    expect(out.items.map((i) => i.price)).toEqual([30, 50, 24.2]);
+    expect(out.warnings).toContain('vat_added');
+  });
+
+  it('leaves gross prices alone', () => {
+    // Said to include VAT, even with a net-looking price.
+    const incl = build({ isReceipt: true, pricesIncludeVat: true, wines: [{ name: 'A', quantity: 1, unitPrice: 24.79339, vatRate: 21 }] });
+    expect(incl.items[0].price).toBe(24.79);
+    // Unknown, with a rate printed but ordinary prices — a till receipt.
+    const till = build({ isReceipt: true, wines: [{ name: 'A', quantity: 1, unitPrice: 129, vatRate: 25 }] });
+    expect(till.items[0].price).toBe(129);
+    // Unknown, and a line total ÷ quantity is not a printed price.
+    const split = build({ isReceipt: true, wines: [{ name: 'A', quantity: 3, lineTotal: 100, vatRate: 21 }] });
+    expect(split.items[0].price).toBe(33.33);
+    // A rate given as a fraction is dropped, not read as 21%.
+    const fraction = build({ isReceipt: true, pricesIncludeVat: false, wines: [{ name: 'A', quantity: 1, unitPrice: 100, vatRate: 0.21 }] });
+    expect(fraction.items[0].price).toBe(100);
+    for (const out of [incl, till, split]) expect(out.warnings).toEqual([]);
+  });
+
+  it('says so when the prices are net but no VAT rate is printed', () => {
+    const out = build({ isReceipt: true, pricesIncludeVat: false, wines: [{ name: 'A', quantity: 1, unitPrice: 100 }] });
+    expect(out.items[0].price).toBe(100);
+    expect(out.warnings).toEqual(['vat_rate_missing']);
+  });
+
   it('rejects an impossible calendar date', () => {
     expect(build({ isReceipt: true, purchaseDate: '2026-02-30', wines: [] }).receipt.purchaseDate).toBeNull();
   });
