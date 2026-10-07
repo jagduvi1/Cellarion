@@ -58,6 +58,7 @@ const MAX_WINES = 200;
 const MAX_SKIPPED = 50;
 const MAX_QUANTITY = 240; // 20 cases of 12; more is a misread, not a purchase
 const MAX_UNIT_PRICE = 1_000_000;
+const MAX_VAT_RATE = 30; // the highest standard rate in Europe is 27%
 
 const SKIP_REASONS = new Set([
   'beer', 'cider', 'spirits', 'non-alcoholic', 'food', 'deposit', 'packaging',
@@ -273,6 +274,19 @@ const toNumber = (v) => {
 
 const round2 = (n) => Math.round(n * 100) / 100;
 
+// A VAT rate in percent ("21", 21, "21%"); 0 is a real rate (exempt, reverse
+// charge). A fraction like 0.21 is not accepted as 21%: it is dropped instead.
+function cleanVatRate(v) {
+  const n = toNumber(typeof v === 'string' ? v.replace('%', '') : v);
+  if (n == null || n < 0 || n > MAX_VAT_RATE || (n > 0 && n < 1)) return null;
+  return n;
+}
+
+// True when an amount carries digits below the cent — which a price someone
+// actually pays never does. Tolerant of the float noise of a 4–5 decimal net
+// price grossed up (30 / 1.21 printed as 24.79339 → 30.0000019).
+const hasSubCent = (n) => Math.abs(n * 100 - Math.round(n * 100)) > 0.01;
+
 function cleanVintage(v, currentYear) {
   const s = clean(String(v ?? ''), 8).toUpperCase();
   if (s === 'NV') return 'NV';
@@ -325,6 +339,9 @@ function buildReceiptResult(parsed, { now = new Date() } = {}) {
   if (wines.length > MAX_WINES) warnings.add('too_many_lines');
 
   const items = [];
+  // Per item, in step with `items`: the VAT rate printed on its line and its
+  // price as printed (before discounts), for the VAT step below.
+  const vatLines = [];
   for (const w of wines.slice(0, MAX_WINES)) {
     if (!w || typeof w !== 'object') continue;
     const receiptLine = clean(w.line, 160);
@@ -351,6 +368,7 @@ function buildReceiptResult(parsed, { now = new Date() } = {}) {
 
     // The printed price per bottle, before discounts…
     let price = toNumber(w.unitPrice);
+    const printedPrice = price; // as printed — never a line total ÷ quantity
     const lineTotal = toNumber(w.lineTotal);
     if (price == null && lineTotal != null && lineTotal > 0) price = lineTotal / quantity;
     if (price != null && (price < 0 || price > MAX_UNIT_PRICE)) price = null;
@@ -382,6 +400,7 @@ function buildReceiptResult(parsed, { now = new Date() } = {}) {
       warnings.add('mixed_case');
     }
     items.push(item);
+    vatLines.push({ rate: cleanVatRate(w.vatRate), printedPrice });
   }
 
   // A multi-buy discount on wine ("Mix Six", "25% off 6 bottles") is one line
@@ -395,6 +414,35 @@ function buildReceiptResult(parsed, { now = new Date() } = {}) {
     for (const i of items) if (i.price != null) i.price *= factor;
     warnings.add('wine_discount_spread');
   }
+
+  // VAT. A merchant's invoice often prints net prices and adds VAT only in
+  // its totals, so a bottle would be stored well under what was paid (~17%
+  // low at 21% VAT). The model REPORTS whether the prices include VAT and
+  // which rate is printed; the gross-up happens here, after the discounts,
+  // which are printed on the same net basis.
+  //
+  // When the document does not say, one signature still settles it: a net
+  // price is computed backwards from the gross one and printed to several
+  // decimals (30 incl. 21% VAT → 24,79339). A price below the cent, beside a
+  // VAT rate, that comes to whole cents once that VAT is added is net.
+  const docVatRate = cleanVatRate(parsed.vatRate);
+  const looksNet = ({ rate, printedPrice }) => rate > 0 && printedPrice > 0
+    && hasSubCent(printedPrice) && !hasSubCent(printedPrice * (1 + rate / 100));
+  const pricesAreNet = parsed.pricesIncludeVat === false
+    || (parsed.pricesIncludeVat !== true && vatLines.some(looksNet));
+  if (pricesAreNet) {
+    items.forEach((item, idx) => {
+      if (item.price == null) return;
+      const rate = vatLines[idx].rate ?? docVatRate;
+      if (rate == null) {
+        warnings.add('vat_rate_missing');
+      } else if (rate > 0) {
+        item.price *= 1 + rate / 100;
+        warnings.add('vat_added');
+      }
+    });
+  }
+
   for (const i of items) if (i.price != null) i.price = round2(i.price);
 
   const skippedIn = Array.isArray(parsed.skipped) ? parsed.skipped : [];

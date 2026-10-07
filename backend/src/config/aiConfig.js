@@ -92,7 +92,7 @@ const DEFAULT_RECEIPT_SCAN_PROMPT =
 `You are reading a document from a wine purchase: a photographed till receipt, a screenshot of an online order or order email, or a PDF invoice. Several images are parts of ONE document, in order from top to bottom; consecutive images may overlap, so never list the same printed line twice.
 
 List every WINE that was bought. Respond with ONLY a raw JSON object (no markdown, no code fences, no extra text):
-{"isReceipt":true,"documentType":"receipt|order|invoice|prepayment|proforma|other","store":"seller name, with the branch if printed, or null","purchaseDate":"YYYY-MM-DD or null","currency":"ISO 4217 code or null","wineDiscount":null,"wines":[{"line":"product text as printed","producer":"producer or null","name":"the wine's own name or null","vintage":"4-digit year, NV, or null","sizeMl":750,"quantity":1,"unitPrice":0.0,"lineTotal":0.0,"lineDiscount":null,"type":"red|white|rosé|sparkling|dessert|fortified or null","mixedCase":false}],"skipped":[{"line":"text as printed","reason":"beer|cider|spirits|non-alcoholic|food|deposit|packaging|shipping|discount|fee|gift card|return|other"}]}
+{"isReceipt":true,"documentType":"receipt|order|invoice|prepayment|proforma|other","store":"seller name, with the branch if printed, or null","purchaseDate":"YYYY-MM-DD or null","currency":"ISO 4217 code or null","pricesIncludeVat":null,"vatRate":null,"wineDiscount":null,"wines":[{"line":"product text as printed","producer":"producer or null","name":"the wine's own name or null","vintage":"4-digit year, NV, or null","sizeMl":750,"quantity":1,"unitPrice":0.0,"lineTotal":0.0,"lineDiscount":null,"vatRate":null,"type":"red|white|rosé|sparkling|dessert|fortified or null","mixedCase":false}],"skipped":[{"line":"text as printed","reason":"beer|cider|spirits|non-alcoholic|food|deposit|packaging|shipping|discount|fee|gift card|return|other"}]}
 
 Wine is still, sparkling, dessert and fortified wine (port, sherry, madeira, marsala), bag-in-box included. Beer, cider, spirits, liqueurs, alcohol-free drinks, food, deposits (pant, pantti, pfand, container fees), bags, wooden boxes, gift wrap, shipping, storage, duty, fees, points and gift cards are NOT wine: put each such line in "skipped". Never list totals, subtotals, VAT, rounding or payment lines. Hints: beer is often 33 or 50 cl, spirits 70 cl at around 40%.
 
@@ -111,6 +111,11 @@ Quantities and prices — plain numbers with a dot for decimals: "129,00" → 12
 - lineDiscount: a discount printed for that one wine line (directly under it, or on it), as a positive number; otherwise null.
 - wineDiscount: the total of multi-buy discounts on wine ("25% off 6 bottles", "Mix Six", "any 6", "6 för"), as a positive number; otherwise null. Discounts on the whole receipt (member savings, points, coupons on everything) are ignored. Every discount line also goes in "skipped" with reason "discount".
 - A returned, refunded or voided line goes to "skipped" with reason "return".
+
+VAT — report it, never add or remove it yourself:
+- pricesIncludeVat: false when the wine prices are printed WITHOUT VAT: a heading or column says excl. VAT, ex VAT, net, HT, hors TVA, excl. btw, exkl. moms, zzgl. MwSt., netto or IVA esclusa, or VAT is added on top of a subtotal to reach the total. true when they include it: incl. VAT, TTC, inkl. moms, or VAT shown only as the part of the total it already contains (usual on a till receipt). null when the document does not show which.
+- vatRate on a wine line: the VAT rate printed on that line (a "21%" column) as a number, 21; otherwise null. vatRate at the top: the one VAT rate the document applies to the wines when it is printed elsewhere (in the totals); otherwise null.
+- unitPrice, lineTotal and discounts stay exactly as printed, with every decimal ("24,79339" → 24.79339). Never round them.
 
 Seller, date, currency, type:
 - store: who sold the wine ("Systembolaget Hötorget", "Majestic Wine"), never the buyer.

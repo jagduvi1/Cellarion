@@ -4322,6 +4322,8 @@
       "prepaymentNote": "This is a prepayment receipt. The sales receipt for the same order lists the same bottles, so import only one of the two.",
       "proformaNote": "This is a pro-forma invoice. The final invoice for the same order lists the same wines, so import only one of the two.",
       "discountNote": "A multi-buy discount on the receipt has been spread over the wine prices, so each bottle shows what you actually paid for it.",
+      "vatAddedNote": "The receipt lists prices without VAT. The VAT printed on it has been added, so each bottle shows what you actually paid for it.",
+      "vatRateMissingNote": "The receipt lists prices without VAT but shows no VAT rate, so the prices are without VAT. Check them before importing.",
       "currencyNote": "The receipt's currency is not one Cellarion supports. The prices use the import currency below; check them before importing.",
       "skipReason": {
         "beer": "Beer",

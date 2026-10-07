@@ -1160,6 +1160,12 @@ function ImportBottles() {
         {r.warnings.includes('wine_discount_spread') && (
           <div className="import-parse-warning-banner" role="note">{t('importBottles.receipt.discountNote')}</div>
         )}
+        {r.warnings.includes('vat_added') && (
+          <div className="import-parse-warning-banner" role="note">{t('importBottles.receipt.vatAddedNote')}</div>
+        )}
+        {r.warnings.includes('vat_rate_missing') && (
+          <div className="import-parse-warning-banner" role="note">{t('importBottles.receipt.vatRateMissingNote')}</div>
+        )}
         {r.warnings.includes('currency_unsupported') && (
           <div className="import-parse-warning-banner" role="note">{t('importBottles.receipt.currencyNote')}</div>
         )}
