@@ -19,7 +19,7 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "archiver": "^7.0.1",
     "bcrypt": "^6.0.0",
-    "compression": "^1.8.1",
+    "compression": "^1.8.2",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "csv-parse": "^7.0.2",
