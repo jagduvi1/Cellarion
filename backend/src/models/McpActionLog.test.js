@@ -9,6 +9,8 @@
  * execute in production. This asserts the index declaration directly (no DB),
  * mirroring models/AiBudgetRequest.test.js.
  */
+const fs = require('fs');
+const path = require('path');
 const McpActionLog = require('./McpActionLog');
 
 describe('McpActionLog indexes', () => {
@@ -41,5 +43,48 @@ describe('McpActionLog.NON_ACTIVITY_ACTIONS', () => {
   test('every non-activity action is a real enum value (so the $nin actually matches rows)', () => {
     const enumVals = McpActionLog.schema.path('action').enumValues;
     for (const a of McpActionLog.NON_ACTIVITY_ACTIONS) expect(enumVals).toContain(a);
+  });
+});
+
+// Every tool test mocks this model, so an action missing from the enum only
+// shows up in production — logAction swallows the validation error, the tool
+// still succeeds, and the ledger row is silently never written. Three curator
+// tools shipped that way. Scan every logAction call in src/mcp and check each
+// literal action it can log; dynamic ones (undo's row.action) replay values
+// that were already validated.
+describe('McpActionLog action enum covers every logAction call', () => {
+  const mcpDir = path.join(__dirname, '..', 'mcp');
+  const files = [];
+  (function walk(dir) {
+    for (const name of fs.readdirSync(dir)) {
+      const p = path.join(dir, name);
+      if (fs.statSync(p).isDirectory()) walk(p);
+      else if (name.endsWith('.js') && !name.endsWith('.test.js')) files.push(p);
+    }
+  })(mcpDir);
+
+  const logged = [];
+  for (const file of files) {
+    const src = fs.readFileSync(file, 'utf8');
+    const re = /logAction\(ctx,/g;
+    let m;
+    while ((m = re.exec(src))) {
+      const call = src.slice(m.index, src.indexOf('});', m.index));
+      const expr = call.match(/\baction:\s*([^,\n}]+)/);
+      if (!expr) continue;
+      for (const [, value] of expr[1].matchAll(/'([a-z_]+)'/g)) {
+        logged.push({ value, at: `${path.relative(mcpDir, file)}:${src.slice(0, m.index).split('\n').length}` });
+      }
+    }
+  }
+
+  test('the scan finds the tool calls (guards the scanner itself)', () => {
+    expect(logged.length).toBeGreaterThan(50);
+  });
+
+  test('every logged action is an enum value', () => {
+    const enumVals = McpActionLog.schema.path('action').enumValues;
+    const missing = logged.filter(({ value }) => !enumVals.includes(value));
+    expect(missing).toEqual([]);
   });
 });

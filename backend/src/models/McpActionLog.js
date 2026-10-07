@@ -32,7 +32,11 @@ const mcpActionLogSchema = new mongoose.Schema({
     'support_ticket', 'support_reply', 'wine_request', 'suggest_correction', 'suggest_value', 'propose_key',
     // An owner's answer to a curator's question (answer_curator_question,
     // 2026-09-24): single-shot on the inquiry itself, so never undo-eligible.
-    'inquiry_answer'], required: true },
+    'inquiry_answer',
+    // Curator queue closes (resolve_owner_inquiry, respond_to_wine_report,
+    // fix_pending_wine): notifications or a registry write are already out,
+    // so never undo-eligible.
+    'somm_owner_inquiry_resolve', 'somm_wine_report_close', 'somm_pending_fix'], required: true },
   bottle: { type: mongoose.Schema.Types.ObjectId, ref: 'Bottle' },
   cellar: { type: mongoose.Schema.Types.ObjectId, ref: 'Cellar' },
   // Small, non-PII operational detail (reason, ml, …) for the timeline.
