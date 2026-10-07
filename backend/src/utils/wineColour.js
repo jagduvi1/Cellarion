@@ -102,6 +102,27 @@ function colourTypeConflict(typeAfter, colour) {
     'If the type is what is wrong, correct the type in the same call.';
 }
 
+/**
+ * Why a STATED colour cannot be the registry wine `wine` — or null when it can.
+ *
+ * `statedType` is a wine type as a caller states it (an import row's type).
+ * It speaks only when it is a colour: a row typed sparkling, dessert or
+ * fortified carries no colour of its own (the CellarTracker mapper reduces
+ * "Red - Sparkling" to 'sparkling'), and an untyped row says nothing at all.
+ * The wine is read through effectiveColour, so a sparkling rosé IS rosé.
+ * Both sides must state a colour before this judges: an unknown is never a
+ * conflict, only two different known colours are.
+ *
+ * Returned as a reason string, the same shape as conflictingStyleTerms, so a
+ * match can carry it to the client as-is.
+ */
+function statedColourConflict(statedType, wine) {
+  if (!isWineColour(statedType)) return null;
+  const recorded = effectiveColour(wine);
+  if (!recorded || recorded === statedType) return null;
+  return `the file says ${statedType}, the registry wine is ${recorded}`;
+}
+
 module.exports = {
   WINE_COLOURS,
   STYLE_TYPES,
@@ -112,4 +133,5 @@ module.exports = {
   effectiveColour,
   stateColour,
   colourTypeConflict,
+  statedColourConflict,
 };

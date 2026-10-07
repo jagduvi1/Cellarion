@@ -4,6 +4,26 @@
 // request still pending" decisions are unit-testable without rendering the page.
 
 /**
+ * The match a row may be PRE-selected with: the best one (the list is score-
+ * ordered) the server did not mark as conflicting, or null.
+ *
+ * styleConflict: the row and the candidate NAME a different Prädikat or
+ * sweetness, so they are two wines from one producer's range (issue #1134).
+ * colourConflict: the row and the candidate state different colours — the
+ * other bottle of a red/white pair sharing one name. Either way the user can
+ * still pick it by hand; it is only never chosen FOR them. Every preselection
+ * path (first load, retry, AI re-search, the bulk "select all") reads this one
+ * rule, so a conflicted match cannot slip in through a side door.
+ *
+ * @param {Array} matches  a row's score-ordered matches
+ * @returns {object|null}  the match to preselect
+ */
+export function preselectableMatch(matches) {
+  if (!Array.isArray(matches)) return null;
+  return matches.find((m) => m && !m.styleConflict && !m.colourConflict) || null;
+}
+
+/**
  * Rows the bulk "Retry AI lookups" should re-validate: those still needing an
  * AI look-up (aiSkipped fallback or an outright no_match) that the user has NOT
  * already resolved. A committed decision — skip, request, or a manual search
@@ -59,7 +79,11 @@ export function reconcileRetrySelections(prevSelections, updatedByIndex, manualW
     if (hasMatch) {
       const stillPresent = cur != null && r.matches.some((m) => m.wineId === cur);
       if (cur == null || !stillPresent) {
-        next[idx] = r.matches[0].wineId;
+        // Only a non-conflicting match may replace the pick; with none, a
+        // stale pick of a wine the row no longer offers is cleared, not kept.
+        const top = preselectableMatch(r.matches);
+        if (top) next[idx] = top.wineId;
+        else delete next[idx];
       }
     } else {
       // Same replace-a-stale-pick rule as matches: fill an empty selection, or
@@ -123,13 +147,12 @@ export function autoSelectionsFor(rows) {
       (r.status === 'exact' || r.status === 'fuzzy' || r.status === 'ai_match') &&
       Array.isArray(r.matches) && r.matches.length > 0
     ) {
-      // Never preselect a match the server marked styleConflict: the row and
-      // that candidate NAME a different Prädikat/sweetness, so they are two
-      // wines from one producer's range — bulk-confirming the preselection is
-      // exactly how issue #1134 replays at import scale. The best
-      // non-conflicting candidate (list is score-ordered) is preselected
-      // instead; if every candidate conflicts, the row is left for the user.
-      const top = r.matches.find((m) => !m.styleConflict);
+      // Never preselect a match the server marked styleConflict or
+      // colourConflict (preselectableMatch): bulk-confirming the preselection
+      // is exactly how issue #1134 replays at import scale. The best
+      // non-conflicting candidate is preselected instead; if every candidate
+      // conflicts, the row is left for the user.
+      const top = preselectableMatch(r.matches);
       if (top) sel[r.index] = top.wineId;
     } else if (r.status === 'ai_new' && r.aiProposed != null) {
       // AI-identified NEW wines default to 'create' — the wine is minted at

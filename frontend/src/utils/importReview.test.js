@@ -4,6 +4,7 @@ import {
   mergeRetryResults,
   mergeValidateSummaries,
   autoSelectionsFor,
+  preselectableMatch,
   canResumeValidation,
   restoreSessionMeta,
   nextAiBudgetRequestState,
@@ -224,6 +225,21 @@ describe('autoSelectionsFor', () => {
     expect(autoSelectionsFor(conflicted)).toEqual({ 0: 'clean' });
   });
 
+  it('never pre-selects a colourConflict match — an ai_match of the other colour is left for the user', () => {
+    // A red row whose name the registry knows only as the white: the server
+    // marks the match and the client must not choose it for the user.
+    const conflicted = [
+      { index: 0, status: 'ai_match', matches: [
+        { wineId: 'white', colourConflict: 'the file says red, the registry wine is white' },
+      ] },
+      { index: 1, status: 'fuzzy', matches: [
+        { wineId: 'white', colourConflict: 'the file says red, the registry wine is white' },
+        { wineId: 'red', colourConflict: null },
+      ] },
+    ];
+    expect(autoSelectionsFor(conflicted)).toEqual({ 1: 'red' });
+  });
+
   it("pre-selects 'create' for ai_new rows with a proposal — and nothing without one", () => {
     const aiRows = [
       { index: 6, status: 'ai_new', matches: [], aiProposed: { name: 'X', producer: 'Y' } },
@@ -327,5 +343,35 @@ describe('isAiBudgetRequestPending', () => {
   it('is not pending once both signals are clear', () => {
     expect(isAiBudgetRequestPending({ pendingRequest: false }, 'idle')).toBe(false);
     expect(isAiBudgetRequestPending(null, 'idle')).toBe(false);
+  });
+});
+
+describe('preselectableMatch', () => {
+  it('returns the first match carrying neither conflict, or null', () => {
+    expect(preselectableMatch([{ wineId: 'a' }, { wineId: 'b' }])).toEqual({ wineId: 'a' });
+    expect(preselectableMatch([
+      { wineId: 's', styleConflict: 'x' },
+      { wineId: 'c', colourConflict: 'y' },
+      { wineId: 'ok' },
+    ])).toEqual({ wineId: 'ok' });
+    expect(preselectableMatch([{ wineId: 'c', colourConflict: 'y' }])).toBeNull();
+    expect(preselectableMatch([])).toBeNull();
+    expect(preselectableMatch(undefined)).toBeNull();
+  });
+});
+
+describe('reconcileRetrySelections — conflicted refresh', () => {
+  it('never fills an empty pick with a conflicted match, and clears a stale one', () => {
+    const updated = new Map([
+      [0, { index: 0, status: 'ai_match', matches: [{ wineId: 'white', colourConflict: 'z' }] }],
+      [1, { index: 1, status: 'ai_match', matches: [{ wineId: 'white', colourConflict: 'z' }] }],
+    ]);
+    const next = reconcileRetrySelections({ 1: 'gone' }, updated, {});
+    expect(next).toEqual({});
+  });
+
+  it('still fills an empty pick with the best clean match', () => {
+    const updated = new Map([[0, { index: 0, status: 'fuzzy', matches: [{ wineId: 'white', colourConflict: 'z' }, { wineId: 'red' }] }]]);
+    expect(reconcileRetrySelections({}, updated, {})).toEqual({ 0: 'red' });
   });
 });
