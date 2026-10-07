@@ -21,6 +21,7 @@ const aiProvider = require('../services/aiProvider');
 const { findOrCreateWine } = require('../services/findOrCreateWine');
 const { scoreWineMatchVariants, stripProducerPrefix, stripAppellationPrefix, stripProducerBrackets, importQueryVariants } = require('../services/wineMatching');
 const { conflictingStyleTerms, pradikatOnlyValue, pradikatContradictsName } = require('../utils/styleTerms');
+const { statedColourConflict } = require('../utils/wineColour');
 const { wineVisibilityFilter, findVisibleWine } = require('../services/wineVisibility');
 // Audit 2026-09 D13-12: parse-time warnings are bounded before they are stored.
 const { sanitizeImportWarnings } = require('../utils/importWarnings');
@@ -457,6 +458,23 @@ function scoreCandidate(candidate, item) {
 }
 
 /**
+ * The colour gate: why this import row cannot be registry wine `wine`, or null.
+ *
+ * Neither the normalizedKey (`producer:name:appellation`) nor the scorer reads
+ * colour, so a producer whose red and white share a name ("Châteauneuf-du-Pape"
+ * for both) scores 1.0 either way, and the cascade filed a file's RED rows
+ * under the registry's WHITE with status 'exact' — the one status users are
+ * told needs no review. Where the row and the wine both state a colour and
+ * the two differ, it is the other bottle of the pair. Same contract as
+ * styleConflict: never auto-link it, carry the reason on the match, let the
+ * user choose. Fails open — an untyped row, a style-typed row (no colour of
+ * its own) or a wine of unknown colour is never a conflict.
+ */
+function rowColourConflict(item, wine) {
+  return statedColourConflict(String((item && item.type) || '').trim().toLowerCase(), wine);
+}
+
+/**
  * Registry-first exact lookup for an import item — step (a) of the AI-saving
  * cascade. Tries the raw normalizedKey and, when the wine name embeds the
  * producer as a prefix, the prefix-stripped variant key. One indexed query,
@@ -664,10 +682,15 @@ async function findWineMatches(item, viewer = {}) {
   // from one vineyard measures 0.9543 through this scorer. Annotated here,
   // at the single place all three consumers get their matches, so the
   // >= EXACT_THRESHOLD gates and the client's preselection read one verdict.
+  // colourConflict rides alongside for the same consumers (rowColourConflict).
   const sorted = [...candidates.values()]
     .sort((a, b) => b.score - a.score)
     .slice(0, 5)
-    .map((m) => ({ ...m, styleConflict: conflictingStyleTerms(item.wineName, m.wine.name) }));
+    .map((m) => ({
+      ...m,
+      styleConflict: conflictingStyleTerms(item.wineName, m.wine.name),
+      colourConflict: rowColourConflict(item, m.wine),
+    }));
 
   return sorted;
 }
@@ -830,8 +853,11 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
       // forceAi bypasses the cascade only when there is an AI to reach; with
       // no key configured the shared cascade is the best available outcome.
       if (pr.forceAi && aiConfigured) continue;
+      // An exact KEY is not an exact WINE when the colours differ: the key
+      // carries no colour (rowColourConflict). Such a hit falls through to
+      // (b), which offers the same wine with the conflict on the match.
       const exactWine = await findExactRegistryWine(pr.item);
-      if (exactWine) {
+      if (exactWine && !rowColourConflict(pr.item, exactWine)) {
         pr.registryWine = { wine: exactWine, score: 1 };
         continue;
       }
@@ -842,7 +868,8 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
       // "outcome-identical" claim is false and the import files a Trocken
       // under its Halbtrocken sibling with status 'exact'. A conflicted top
       // match falls through to the AI/fuzzy path, where the user chooses.
-      if (matches.length > 0 && matches[0].score >= EXACT_THRESHOLD && !matches[0].styleConflict) {
+      // colourConflict is gated the same way, for the same reason.
+      if (matches.length > 0 && matches[0].score >= EXACT_THRESHOLD && !matches[0].styleConflict && !matches[0].colourConflict) {
         pr.registryWine = { wine: matches[0].wine, score: matches[0].score };
         continue;
       }
@@ -932,7 +959,14 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     for (const pr of identifyEligible) {
       const key = `${normalizeString(pr.item.wineName)}:${normalizeString(pr.item.producer)}`;
       const rep = aiKeyMap.get(key);
-      if (rep.registryWine) { pr.registryWine = rep.registryWine; continue; }
+      // The representative is chosen by name + producer, not colour: a file
+      // listing a red and a white under one name shares one representative,
+      // so its registry hit is re-checked against THIS row's colour. A row it
+      // does not fit leaves here unresolved and is matched on its own below.
+      if (rep.registryWine) {
+        if (!rowColourConflict(pr.item, rep.registryWine.wine)) pr.registryWine = rep.registryWine;
+        continue;
+      }
       if (rep.preMatches && !pr.preMatches) pr.preMatches = rep.preMatches;
       if (rep.aiSkipped) { pr.aiSkipped = true; continue; }
       // A representative identified by the FILE (Pass 1a's complete-row
@@ -1162,6 +1196,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
       } else if (pr.aiWine) {
         // AI identified the wine and the registry already knows it
         status = 'ai_match';
+        const aiColourConflict = rowColourConflict(pr.item, pr.aiWine);
         resultMatches = [{
           wineId: pr.aiWine._id,
           name: pr.aiWine.name,
@@ -1172,7 +1207,12 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
           type: pr.aiWine.type,
           image: pr.aiWine.image || null,
           score: pr.aiIdentified.confidence ?? 1,
-          aiIdentified: true
+          aiIdentified: true,
+          // findOrCreateWine resolves by key, and the key carries no colour, so
+          // the model's red can resolve to the registry's white of that name.
+          // Only present when set: an ordinary ai_match keeps its exact shape
+          // (pinned by import.validate.aiBudget.test.js).
+          ...(aiColourConflict ? { colourConflict: aiColourConflict } : {})
         }];
       } else if (pr.aiProposed) {
         // AI identified the wine but the registry doesn't know it yet. NOTHING
@@ -1191,15 +1231,18 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
           type: m.wine.type,
           image: m.wine.image || null,
           score: Math.round(m.score * 100) / 100,
-          styleConflict: m.styleConflict || null
+          styleConflict: m.styleConflict || null,
+          colourConflict: rowColourConflict(pr.item, m.wine)
         }));
       } else if (pr.matches.length > 0) {
         // AI failed or unavailable, but fuzzy matching found candidates.
-        // A style-conflicting top match never earns 'exact' — that status
-        // tells the user no review is needed, which is precisely wrong for
-        // a range sibling (see the findWineMatches annotation).
+        // A style- or colour-conflicting top match never earns 'exact' — that
+        // status tells the user no review is needed, which is precisely wrong
+        // for a range sibling or the other colour of a pair (see the
+        // findWineMatches annotation). The colour is re-read against THIS row:
+        // its matches may be a shared representative's.
         const { matches } = pr;
-        if (matches[0].score >= EXACT_THRESHOLD && !matches[0].styleConflict) {
+        if (matches[0].score >= EXACT_THRESHOLD && !matches[0].styleConflict && !rowColourConflict(pr.item, matches[0].wine)) {
           status = 'exact';
         } else {
           status = 'fuzzy';
@@ -1214,7 +1257,8 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
           type: m.wine.type,
           image: m.wine.image || null,
           score: Math.round(m.score * 100) / 100,
-          styleConflict: m.styleConflict || null
+          styleConflict: m.styleConflict || null,
+          colourConflict: rowColourConflict(pr.item, m.wine)
         }));
       } else {
         // No match from either AI or fuzzy
@@ -2247,9 +2291,10 @@ router.get('/sessions/:id', async (req, res) => {
       if (!result?.item) continue;
       try {
         const matches = await findWineMatches(result.item, { userId: req.user.id, roles: req.user.roles });
-        // Same styleConflict gate as Pass 1a: this path silently re-points a
-        // row the user marked 'request', so a range sibling must never pass.
-        if (matches.length > 0 && matches[0].score >= EXACT_THRESHOLD && !matches[0].styleConflict) {
+        // Same styleConflict + colourConflict gates as Pass 1a: this path
+        // silently re-points a row the user marked 'request', so a range
+        // sibling or the other colour of a pair must never pass.
+        if (matches.length > 0 && matches[0].score >= EXACT_THRESHOLD && !matches[0].styleConflict && !matches[0].colourConflict) {
           const m = matches[0];
           refreshed[idx] = {
             wineId: m.wine._id,

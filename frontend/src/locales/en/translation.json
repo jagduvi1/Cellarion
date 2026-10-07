@@ -4620,6 +4620,7 @@
       "autoBadge": "Auto",
       "willCreateBadge": "New — added on import",
       "keepCreate": "Create as new wine",
+      "colourConflict": "Your file gives this wine a different colour",
       "matchScore": "{{score}}% match",
       "noMatchFound": "No match found",
       "lookupFailed": "Lookup failed",

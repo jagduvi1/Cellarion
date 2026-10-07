@@ -22,6 +22,7 @@ import {
   mergeRetryResults,
   mergeValidateSummaries,
   autoSelectionsFor,
+  preselectableMatch,
   canResumeValidation,
   restoreSessionMeta,
   nextAiBudgetRequestState,
@@ -875,8 +876,9 @@ function ImportBottles() {
       if (!res.ok || !data.results?.[0]) return;
       const updated = { ...data.results[0], index: rowIndex };
       setResults(prev => prev.map(x => x.index === rowIndex ? updated : x));
-      if ((updated.status === 'ai_match' || updated.status === 'exact' || updated.status === 'fuzzy') && updated.matches.length > 0) {
-        setSelections(prev => ({ ...prev, [rowIndex]: updated.matches[0].wineId }));
+      const top = preselectableMatch(updated.matches);
+      if ((updated.status === 'ai_match' || updated.status === 'exact' || updated.status === 'fuzzy') && top) {
+        setSelections(prev => ({ ...prev, [rowIndex]: top.wineId }));
       } else if (updated.status === 'ai_new' && updated.aiProposed) {
         // AI identified a wine the registry doesn't have — select the
         // create-on-confirm proposal.
@@ -984,9 +986,10 @@ function ImportBottles() {
   const selectAllExact = () => {
     const sel = { ...selections };
     results.forEach(r => {
-      if ((r.status === 'exact' || r.status === 'fuzzy') && r.matches.length > 0) {
-        sel[r.index] = r.matches[0].wineId;
-      }
+      // A conflicted top match (a range sibling, or the other colour of a
+      // pair) is never bulk-selected — the next clean one is, or none.
+      const top = (r.status === 'exact' || r.status === 'fuzzy') ? preselectableMatch(r.matches) : null;
+      if (top) sel[r.index] = top.wineId;
     });
     setSelections(sel);
   };
@@ -2372,6 +2375,11 @@ function ImportBottles() {
                                   <span className="type-dot" style={{ background: TYPE_DOTS[m.type] || '#888' }} />
                                   {m.country || ''}{m.region ? ` · ${m.region}` : ''}
                                 </span>
+                                {/* Never preselected (preselectableMatch) — say why, so a
+                                    hand pick of the other colour is a decision, not a slip. */}
+                                {m.colourConflict && (
+                                  <span className="candidate-conflict">{t('importBottles.review.colourConflict')}</span>
+                                )}
                               </div>
                               <span className="candidate-score">{Math.round(m.score * 100)}%</span>
                             </button>

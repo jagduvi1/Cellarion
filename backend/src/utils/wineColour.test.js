@@ -111,3 +111,26 @@ describe('stateColour / colourTypeConflict', () => {
     expect(colourTypeConflict('white', 'red')).toMatch(/correct the type in the same call/);
   });
 });
+
+describe('statedColourConflict', () => {
+  const { statedColourConflict } = require('./wineColour');
+
+  test('two different stated colours conflict, with a readable reason', () => {
+    expect(statedColourConflict('red', { type: 'white' })).toBe('the file says red, the registry wine is white');
+    expect(statedColourConflict('white', { type: 'sparkling', colour: 'rosé' }))
+      .toBe('the file says white, the registry wine is rosé');
+  });
+
+  test.each([
+    ['red', { type: 'red' }],                          // same colour
+    ['rosé', { type: 'sparkling', colour: 'rosé' }],   // a sparkling rosé IS rosé
+    ['red', { type: 'fortified', colour: null }],      // wine colour unknown
+    ['red', { type: null }],                           // wine untyped
+    ['sparkling', { type: 'white' }],                  // a style states no colour
+    [null, { type: 'white' }],                         // row untyped
+    ['', { type: 'white' }],
+    ['Red', { type: 'white' }],                        // callers lower-case first
+  ])('no conflict: %p vs %p', (stated, wine) => {
+    expect(statedColourConflict(stated, wine)).toBeNull();
+  });
+});
