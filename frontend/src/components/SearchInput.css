@@ -1,0 +1,42 @@
+/* Search box with a clear button (components/SearchInput.js). The wrapper takes
+   the input's place in a flex row (.search-row), so the input keeps its own
+   look and only gains room on the right for the button. */
+.search-input-clearable {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.search-input-clearable > input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+}
+
+.search-input-clearable > input.search-input-clearable__input--has-text {
+  padding-right: 2.75rem;
+}
+
+.search-input-clearable__clear {
+  position: absolute;
+  top: 50%;
+  right: 0.25rem;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.search-input-clearable__clear:hover,
+.search-input-clearable__clear:focus-visible {
+  color: var(--color-text);
+  background: var(--color-surface-hover);
+}

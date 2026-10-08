@@ -26,6 +26,7 @@
     "search": "Search",
     "filter": "Filter",
     "clear": "Clear",
+    "clearSearch": "Clear search",
     "submit": "Submit",
     "networkError": "Network error",
     "noRating": "Not rated",
@@ -442,7 +443,7 @@
     },
     "aiConnect": {
       "title": "Connect your AI",
-      "hint": "Talk to your cellar from Claude Desktop, Claude Code, or any MCP-capable assistant: ask what to open tonight, where a bottle is stored, or what your collection is worth. Connections are read-only and use a personal token you can revoke at any time.",
+      "hint": "Talk to your cellar from Claude Desktop, Claude Code, or any MCP-capable assistant: ask what to open tonight, where a bottle is stored, or what your collection is worth. You choose what the assistant may do: only look, also log what you drink, or full access to add and edit bottles. You can revoke it at any time.",
       "step1": "Step 1 — create an API token with the \"read\" scope in the API tokens section above, then paste it here to fill in the configs (the token is only kept on this page):",
       "tokenPlaceholder": "cel_… (paste your token, optional)",
       "testBtn": "Test connection",

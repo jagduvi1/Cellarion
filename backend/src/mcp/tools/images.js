@@ -14,7 +14,7 @@ const { ingestBottleImage } = require('../../services/imageOps');
 const { safeFetchImage } = require('../../utils/safeImageFetch');
 const { logAudit } = require('../../services/audit');
 const { ok, fail, objectId, MSG_BOTTLE_NOT_FOUND, resolveBottleAccess } = require('../toolUtil');
-const { logAction, replay } = require('../actionLedger');
+const { logAction, replay, releaseClaim } = require('../actionLedger');
 const Bottle = require('../../models/Bottle');
 const BottleImage = require('../../models/BottleImage');
 const WineDefinition = require('../../models/WineDefinition');
@@ -31,7 +31,8 @@ registerTool({
   description:
     'Adds a label or bottle photo to one of the user\'s bottles, from an image URL (https) or base64 image data ' +
     '(JPEG/PNG/WebP). Use image_url for a product image you found on the web (e.g. a retailer\'s wine page); use ' +
-    'image_base64 for a photo the user shared directly. The image is background-removed automatically after upload. ' +
+    'image_base64 for a photo the user shared directly. The image is background-removed automatically after upload — ' +
+    'keep that for every photo of a whole bottle, even on a busy background (see keep_background). ' +
     'Attach ONCE per wine: the photo shows on ALL the user\'s bottles of that wine, so never repeat the same photo ' +
     'for duplicate bottles — check get_bottle → photos first, and the response says how many photos the wine ' +
     'already had from the user (photos_before) and on how many bottles it now shows (shows_on_bottles). Pass wine_id ' +
@@ -45,7 +46,7 @@ registerTool({
     image_url: z.string().url().optional().describe('https URL of the image (retailer/CDN product image)'),
     image_base64: z.string().max(MAX_BASE64_CHARS).optional().describe('Base64 image data (no data: prefix needed); alternative to image_url'),
     credit: z.string().max(200).optional().describe('Optional attribution/source note — admin accounts only; silently ignored for regular users (matches the web app)'),
-    keep_background: z.boolean().optional().describe('Skip background removal. Set it for a photo of just the label, a retailer product shot, or anything that is not a whole bottle on a plain background — background removal expects a bottle and cuts everything else away. Default false.'),
+    keep_background: z.boolean().optional().describe('Skip background removal. Leave it false (the default) for ANY photo of a whole bottle, whatever is behind it — a table, a shelf, a fridge, a busy room: removal cuts the bottle out cleanly, and that is how bottles look best in the cellar. Set true only when there is no whole bottle to cut out: a close-up of just the label, a partial or cropped bottle, or a product image already on a plain white or transparent background. Once a photo is kept with its background it cannot be cut out later.'),
     idempotency_key: z.string().max(100).optional(),
   },
   handler: async (args, ctx) => {
@@ -288,5 +289,107 @@ async function respond(ref, caption, data) {
     ],
   };
 }
+
+// set_bottle_default_image / delete_bottle_image: the two photo actions the
+// bottle page has and the MCP lacked. Both run services/imageOps, the same
+// code as PUT /api/bottles/:id/default-image and DELETE /api/images/:id.
+
+registerTool({
+  name: 'set_bottle_default_image',
+  title: 'Choose which photo a bottle shows',
+  description:
+    'Sets the photo a bottle shows by default (cards, lists, the bottle page) — one of its own photos or a ' +
+    'published picture of its wine: an image_id from get_bottle → photos (photos.default_image_id is the current ' +
+    'choice). image_id null clears the choice, so the bottle falls back to the usual picture. Confirm with the user ' +
+    'first. Reversible via undo_last.',
+  scope: 'write',
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  inputSchema: {
+    bottle_id: objectId,
+    image_id: objectId.nullable().describe('An image_id from get_bottle → photos, or null to clear the choice'),
+    idempotency_key: z.string().max(100).optional(),
+  },
+  handler: async (args, ctx) => {
+    const replayed = await replay(ctx, args.idempotency_key, 'set_bottle_default_image');
+    if (replayed) return replayed;
+    const access = await resolveBottleAccess(ctx.user.id, args.bottle_id, 'editor');
+    if (!access) return fail('not_found', MSG_BOTTLE_NOT_FOUND);
+    const { bottle } = access;
+    const { setBottleDefaultImage } = require('../../services/imageOps');
+    const result = await setBottleDefaultImage(bottle, args.image_id || null);
+    if (result.error) {
+      return fail(result.error.status === 404 ? 'not_found' : 'invalid_input',
+        result.error.status === 404 ? 'That photo is not one of this bottle\'s — use an image_id from get_bottle → photos.' : result.error.message);
+    }
+    const now = bottle.defaultImage ? String(bottle.defaultImage) : null;
+    if (now === (result.prev || null)) {
+      // Already the choice: no ledger row, so undo_last never spends a step
+      // "restoring" what did not change (same as update_bottle's no-op path).
+      await releaseClaim(ctx, args.idempotency_key, 'set_bottle_default_image');
+      return ok('No change — that is already the bottle\'s default photo', { bottle_id: bottle._id, default_image_id: now });
+    }
+    const envelope = {
+      summary: now ? `Bottle ${bottle._id} now shows photo ${now} by default` : `Bottle ${bottle._id} has no chosen default photo now`,
+      data: { bottle_id: bottle._id, default_image_id: now, previous_image_id: result.prev, undo: 'undo_last restores the previous choice' },
+    };
+    await logAction(ctx, {
+      tool: 'set_bottle_default_image',
+      action: 'default_image',
+      bottle: bottle._id,
+      cellar: bottle.cellar,
+      detail: { imageId: now },
+      prev: { defaultImage: result.prev },
+      idempotencyKey: args.idempotency_key || null,
+      result: envelope,
+    });
+    return ok(envelope.summary, envelope.data);
+  },
+});
+
+registerTool({
+  name: 'delete_bottle_image',
+  title: 'Delete one of the user\'s own photos (needs confirm)',
+  description:
+    'Deletes a photo the user uploaded (an image_id from get_bottle → photos with mine:true), for a wrong, ' +
+    'duplicate or unwanted picture. It disappears from every bottle of the wine it showed on — and, if it was ' +
+    'published for everyone (state published), from other users\' bottles too. NOT reversible — ' +
+    'the file is deleted — so show the user which photo (get_photo lets you look at it) and get an explicit yes, ' +
+    'then call with confirm:true. A photo that has become the wine\'s registry picture cannot be deleted here ' +
+    '(other people\'s pages show it); the user reports it on the bottle page instead.',
+  scope: 'write',
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+  inputSchema: {
+    image_id: objectId.describe('An image_id from get_bottle → photos (the user\'s own, mine:true)'),
+    confirm: z.boolean().describe('Must be true — only after the user explicitly agreed to delete this photo'),
+    idempotency_key: z.string().max(100).optional(),
+  },
+  handler: async (args, ctx) => {
+    if (args.confirm !== true) {
+      return fail('invalid_input', 'delete_bottle_image needs confirm:true — show the user the photo and ask before deleting. It cannot be undone.');
+    }
+    const replayed = await replay(ctx, args.idempotency_key, 'delete_bottle_image');
+    if (replayed) return replayed;
+    const { deleteOwnImage } = require('../../services/imageOps');
+    const result = await deleteOwnImage(args.image_id, ctx.user.id, ctx.req);
+    if (result.error) {
+      if (result.error.status === 404) return fail('not_found', 'No photo of yours with that id. Use an image_id from get_bottle → photos with mine:true.');
+      return fail('conflict', result.error.message);
+    }
+    const { image } = result;
+    const envelope = {
+      summary: `Deleted photo ${image._id}`,
+      data: { image_id: image._id, bottle_id: image.bottle || null, wine_id: image.wineDefinition || null, undo: 'not reversible — the file is gone' },
+    };
+    await logAction(ctx, {
+      tool: 'delete_bottle_image',
+      action: 'delete_image',
+      bottle: image.bottle || undefined,
+      detail: { imageId: String(image._id) },
+      idempotencyKey: args.idempotency_key || null,
+      result: envelope,
+    });
+    return ok(envelope.summary, envelope.data);
+  },
+});
 
 module.exports = {};

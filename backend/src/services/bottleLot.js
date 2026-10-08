@@ -24,6 +24,12 @@ const { NOT_IN_CELLAR_STATUSES, ORDERED_STATUS } = require('../config/constants'
 // The fields a lot shares. Everything else — rating, notes, reservation,
 // rack slot, purchase metadata — stays per bottle.
 const LOT_FIELDS = ['drinkFrom', 'drinkTo', 'peakFrom', 'peakUntil', 'price', 'currency'];
+// Per bottle by default (the edit form and the bulk bar never copy them), but
+// shared when a caller explicitly asks in one call: a case bought together
+// has one purchase date and one shop, and a note written for the case belongs
+// on every bottle of it. MCP update_bottle's apply_to_lot takes these on top
+// of LOT_FIELDS, so a case is one call instead of one per bottle.
+const LOT_FIELDS_ON_REQUEST = ['notes', 'purchaseDate', 'purchaseLocation', 'purchaseUrl'];
 // Same ceiling as the bulk route (BULK_MAX): each sibling costs a save, a
 // search index update and an audit row, sequentially (audit 2026-09-07).
 const LOT_LIMIT = 500;
@@ -59,11 +65,15 @@ async function findLotSiblings(userId, bottle) {
   return Bottle.find(q).sort({ createdAt: 1 }).limit(LOT_LIMIT);
 }
 
-/** The subset of an update payload that a lot shares (undefined = not sent). */
-function pickLotFields(fields) {
+/**
+ * The subset of an update payload that a lot shares (undefined = not sent).
+ * `keys` defaults to LOT_FIELDS; a caller that offers the on-request fields
+ * passes [...LOT_FIELDS, ...LOT_FIELDS_ON_REQUEST].
+ */
+function pickLotFields(fields, keys = LOT_FIELDS) {
   const out = {};
-  for (const k of LOT_FIELDS) if (fields[k] !== undefined) out[k] = fields[k];
+  for (const k of keys) if (fields[k] !== undefined) out[k] = fields[k];
   return out;
 }
 
-module.exports = { LOT_FIELDS, LOT_LIMIT, lotSiblingQuery, findLotSiblingIds, findLotSiblings, pickLotFields };
+module.exports = { LOT_FIELDS, LOT_FIELDS_ON_REQUEST, LOT_LIMIT, lotSiblingQuery, findLotSiblingIds, findLotSiblings, pickLotFields };

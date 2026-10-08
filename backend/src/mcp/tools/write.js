@@ -22,7 +22,7 @@ const { registerTool } = require('../registry');
 // — a top-level require here would break every suite that loads the tool
 // registry (the #702 failure mode).
 const { addBottle, updateBottleFields } = require('../../services/bottleOps');
-const { findLotSiblings, pickLotFields, LOT_FIELDS, LOT_LIMIT } = require('../../services/bottleLot');
+const { findLotSiblings, pickLotFields, LOT_FIELDS, LOT_FIELDS_ON_REQUEST, LOT_LIMIT } = require('../../services/bottleLot');
 const { logAudit } = require('../../services/audit');
 const { isValidId } = require('../../utils/validation');
 const { decorateGrapes } = require('../../utils/grapeDisplay');
@@ -265,28 +265,58 @@ registerTool({
   },
 });
 
-// The AI-useful subset of the shared service's UPDATABLE_FIELDS — the web
-// edit form covers the rest (vintage, bottle size, purchase metadata). Named
-// here, next to the inputSchema it must mirror, so description and schema
-// can't drift apart.
-const MCP_UPDATE_PARAMS = ['price', 'currency', 'notes', 'occasion', 'rating', 'rating_scale', 'drink_from', 'drink_to', 'peak_from', 'peak_until', 'reserved_for', 'reserved_until'];
+// The bottle fields the MCP can edit — every field of the shared service's
+// UPDATABLE_FIELDS except expectedArrival (an order's month, set in the app).
+// Named here, next to the inputSchema it must mirror, so description and
+// schema can't drift apart.
+const MCP_UPDATE_PARAMS = ['vintage', 'bottle_size', 'price', 'currency', 'purchase_date', 'purchase_location', 'purchase_url', 'location', 'notes', 'occasion', 'rating', 'rating_scale', 'drink_from', 'drink_to', 'peak_from', 'peak_until', 'reserved_for', 'reserved_until'];
+// What apply_to_lot copies: the lot's own fields plus the ones a case shares
+// when asked (services/bottleLot) — notes and the purchase.
+const MCP_LOT_FIELDS = [...LOT_FIELDS, ...LOT_FIELDS_ON_REQUEST];
+const MCP_LOT_PARAMS = 'drink_from, drink_to, peak_from, peak_until, price, currency, notes, purchase_date, purchase_location, purchase_url';
+
+// bottle_size as a model says it: a volume ("1.5 L", "375ml") or a format
+// name ("Magnum"). The shared service maps anything it cannot parse to the
+// 750 ml default, which is right for a web form's own select but would turn
+// a model's "Magnum" into a standard bottle — so an unreadable size is
+// refused here instead, with the accepted sizes named.
+const { BOTTLE_SIZES, normalizeBottleSize } = require('../../config/bottleSizes');
+const SIZE_NAMES = {
+  split: '187ml', half: '375ml', 'half bottle': '375ml', demi: '375ml', 'half litre': '500ml', 'half liter': '500ml',
+  clavelin: '620ml', standard: '750ml', litre: '1000ml', liter: '1000ml', magnum: '1500ml',
+  'double magnum': '3000ml', imperial: '6000ml',
+};
+const SIZE_HELP = BOTTLE_SIZES.map((s) => s.code).join(', ') + ' (or a name: magnum, half, imperial…)';
+function resolveMcpBottleSize(input) {
+  const name = String(input).trim().toLowerCase().replace(/\s+/g, ' ');
+  if (SIZE_NAMES[name]) return SIZE_NAMES[name];
+  return normalizeBottleSize(input);
+}
 
 registerTool({
   name: 'update_bottle',
-  title: 'Update a bottle (price, notes, rating, drink window, occasion, reservation)',
+  title: 'Update a bottle (price, purchase, notes, rating, drink window, storage, vintage, size, reservation)',
   description:
     `Partially updates one bottle. Updatable: ${MCP_UPDATE_PARAMS.join(', ')}. Only send the ` +
     'fields to change; confirm the change with the user first. Set reserved_for and/or reserved_until (a year) to ' +
     'mark the bottle reserved ("spoken for" — excluded from drink suggestions); send null for both to clear the ' +
-    'reservation. Reversible via undo_last. apply_to_lot: true also writes the lot-level fields of this call ' +
-    `(${LOT_FIELDS.join(', ')}) to every active bottle of the same wine and vintage in the user's own cellars — ` +
-    'one call for a case instead of one per bottle; undo_last then reverts the whole lot.',
+    'reservation. location is free text for where it is kept (rack slots are place_bottle). A new vintage moves the ' +
+    'bottle into that vintage\'s lot. Reversible via undo_last. apply_to_lot: true also writes the lot-level fields of this call ' +
+    `(${MCP_LOT_PARAMS}) to every active bottle of the same wine and vintage in the user's own cellars — ` +
+    'one call for a case instead of one per bottle (a note or purchase written for the case lands on every bottle ' +
+    'of it, replacing what each had); undo_last then reverts the whole lot.',
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
     bottle_id: objectId,
+    vintage: z.string().max(10).optional().describe('e.g. "2019", "NV" or "Unknown"'),
+    bottle_size: z.string().max(40).optional().describe('A volume ("750ml", "1.5 L", "375ml") or a format name ("magnum", "half", "imperial")'),
     price: z.number().min(0).optional(),
     currency: z.string().regex(/^[A-Za-z]{3}$/).optional(),
+    purchase_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('Day bought, YYYY-MM-DD'),
+    purchase_location: z.string().max(500).nullable().optional().describe('Shop, merchant or place bought (null clears)'),
+    purchase_url: z.string().max(2048).nullable().optional().describe('https link to the purchase or product page (null clears)'),
+    location: z.string().max(500).nullable().optional().describe('Free-text storage spot, e.g. "garage, top shelf" (null clears)'),
     notes: z.string().max(5000).optional(),
     occasion: z.string().max(500).optional(),
     rating: z.number().min(0).max(100).optional(),
@@ -297,7 +327,7 @@ registerTool({
     peak_until: z.number().int().nullable().optional().describe('Peak end inside the drink window (null clears)'),
     reserved_for: z.string().max(200).nullable().optional().describe('Who/what the bottle is held for (null clears)'),
     reserved_until: z.number().int().nullable().optional().describe('Year the reservation runs to, e.g. 2034 (null clears)'),
-    apply_to_lot: z.boolean().optional().describe('Also apply the drink window / price / currency of this call to every other active bottle of the same wine and vintage in the user\'s own cellars. Other fields stay on this bottle.'),
+    apply_to_lot: z.boolean().optional().describe('Also apply the drink window / price / currency / notes / purchase date, location and url of this call to every other active bottle of the same wine and vintage in the user\'s own cellars. Other fields (vintage, size, storage, rating, occasion, reservation) stay on this bottle.'),
     idempotency_key: z.string().max(100).optional(),
   },
   handler: async (args, ctx) => {
@@ -308,9 +338,24 @@ registerTool({
     if (!access) return fail('not_found', MSG_BOTTLE_NOT_FOUND);
     const { bottle } = access;
 
+    let bottleSize;
+    if (args.bottle_size !== undefined) {
+      bottleSize = resolveMcpBottleSize(args.bottle_size);
+      if (!bottleSize) {
+        await releaseClaim(ctx, args.idempotency_key, 'update_bottle');
+        return fail('invalid_input', `bottle_size "${args.bottle_size}" is not a size Cellarion can read. Use one of: ${SIZE_HELP}.`);
+      }
+    }
+
     const fields = {
+      vintage: args.vintage,
+      bottleSize,
       price: args.price,
       currency: args.currency,
+      purchaseDate: args.purchase_date,
+      purchaseLocation: args.purchase_location,
+      purchaseUrl: args.purchase_url,
+      location: args.location,
       notes: args.notes,
       occasion: args.occasion,
       rating: args.rating,
@@ -322,6 +367,15 @@ registerTool({
       reservedFor: args.reserved_for,
       reservedUntil: args.reserved_until,
     };
+    // The lot is found BEFORE the update: a vintage change in this same call
+    // would otherwise look up the NEW vintage's bottles — another case — and
+    // write this one's note and purchase onto them.
+    const ownCellar = String(access.cellar.user && (access.cellar.user._id || access.cellar.user)) === String(ctx.user.id);
+    const lotFieldsRequested = args.apply_to_lot ? pickLotFields(fields, MCP_LOT_FIELDS) : {};
+    const lotSiblings = (args.apply_to_lot && ownCellar && Object.keys(lotFieldsRequested).length)
+      ? await findLotSiblings(ctx.user.id, bottle)
+      : null;
+
     const result = await updateBottleFields(bottle, fields, ctx.req);
     if (result.error) return fail('invalid_input', result.error.message);
 
@@ -330,7 +384,9 @@ registerTool({
     // ticket 2026-09-06 — six identical calls for a case). Each sibling runs
     // the same shared validation; one that refuses (a peak outside ITS own
     // window, say) is reported under skipped, never fatal for the rest.
-    const lotFields = args.apply_to_lot ? pickLotFields(fields) : {};
+    // Notes and the purchase travel too, but only here, on an explicit
+    // apply_to_lot — the app's own lot paths keep them per bottle.
+    const lotFields = lotFieldsRequested;
     // A price is meaningless without its currency: carry this bottle's
     // (audit 2026-09-07 — siblings kept their own, default USD, so "350"
     // landed as 350 USD next to 350 SEK).
@@ -342,13 +398,12 @@ registerTool({
     const warnings = [];
     // The lot is the caller's OWN bottles; from a bottle in someone else's
     // cellar that would be the wrong lot (audit 2026-09-07), so say so.
-    const ownCellar = String(access.cellar.user && (access.cellar.user._id || access.cellar.user)) === String(ctx.user.id);
     if (args.apply_to_lot && !Object.keys(lotFields).length) {
-      warnings.push(`apply_to_lot ignored: none of the fields in this call are lot-level (${LOT_FIELDS.join(', ')})`);
+      warnings.push(`apply_to_lot ignored: none of the fields in this call are lot-level (${MCP_LOT_PARAMS})`);
     } else if (args.apply_to_lot && !ownCellar) {
       warnings.push('apply_to_lot ignored: this bottle is in a cellar shared with you, and the lot would be your own bottles, not that cellar\'s. Update the other bottles there one by one.');
     } else if (args.apply_to_lot) {
-      const siblings = await findLotSiblings(ctx.user.id, bottle);
+      const siblings = lotSiblings || [];
       lot.count = siblings.length;
       if (siblings.length >= LOT_LIMIT) warnings.push(`The lot was capped at ${LOT_LIMIT} bottles.`);
       for (const sib of siblings) {

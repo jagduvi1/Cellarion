@@ -578,43 +578,15 @@ const REPORTS_MAX = 20;
 router.delete('/:id', requireAuth, async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    const image = await BottleImage.findById(req.params.id);
-    if (!image) return res.status(404).json({ error: 'Image not found' });
-
-    // 404 rather than 403 for someone else's photo: a stranger's image id is
-    // not something this endpoint should confirm the existence of.
-    if (String(image.uploadedBy) !== String(req.user.id)) {
-      return res.status(404).json({ error: 'Image not found' });
+    // Shared with the MCP delete_bottle_image tool (services/imageOps): a
+    // stranger's photo is a 404, not a 403 (its existence is not confirmed);
+    // a registry picture is refused; references are cleared before the files go.
+    const { deleteOwnImage } = require('../services/imageOps');
+    const result = await deleteOwnImage(req.params.id, req.user.id, req);
+    if (result.error) {
+      const { status, message, code } = result.error;
+      return res.status(status).json({ error: message, ...(code ? { code } : {}) });
     }
-    if (image.assignedToWine) {
-      return res.status(409).json({
-        error: 'This photo is being used as the wine\'s picture in the shared registry, so removing it would change the wine page for everyone. Report it instead and an admin will take it down.',
-        code: 'assigned_to_wine',
-      });
-    }
-
-    // Clear every reference before the files go, so nothing renders a hole.
-    await Bottle.updateMany({ defaultImage: image._id }, { $set: { defaultImage: null } });
-    if (image.wineDefinition) {
-      const WineDefinition = require('../models/WineDefinition');
-      await WineDefinition.updateOne(
-        { _id: image.wineDefinition, scanImage: image._id }, { $set: { scanImage: null } }
-      );
-      await WineDefinition.updateOne(
-        { _id: image.wineDefinition, scanImageBack: image._id }, { $set: { scanImageBack: null } }
-      );
-    }
-
-    const { unlinkImageFiles } = require('../services/imageProcessor');
-    try { await unlinkImageFiles(image); } catch (err) {
-      // The row is what makes the photo reachable; a stranded file is a
-      // janitorial problem, not a reason to tell the user it is still there.
-      console.warn('[images] unlink failed during user delete (continuing):', err.message);
-    }
-    await BottleImage.deleteOne({ _id: image._id });
-
-    logAudit(req, 'image.delete', { type: 'image', id: image._id },
-      { kind: image.kind, visibility: image.visibility, status: image.status, byOwner: true });
 
     res.json({ message: 'Photo deleted' });
   } catch (error) {

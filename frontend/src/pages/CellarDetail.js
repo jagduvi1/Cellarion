@@ -12,6 +12,7 @@ import CellarScopePicker from '../components/CellarScopePicker';
 import ClimateCard from '../components/ClimateCard';
 import CellarNav from '../components/CellarNav';
 import CellarPageHeader from '../components/CellarPageHeader';
+import SearchInput from '../components/SearchInput';
 import { readBottleViewMode, storeBottleViewMode } from '../utils/bottleViewMode';
 import { ratingRangeLabel, toMaturityArray, MATURITY_I18N_KEY } from '../utils/filterLabels';
 import { CELLAR_SORTS, DEFAULT_CELLAR_SORT, preferredCellarSort } from '../utils/cellarSort';
@@ -697,13 +698,10 @@ function CellarDetail() {
             return (
               <>
                 <div className="search-row">
-                  <input
-                    type="text"
+                  <SearchInput
                     placeholder={t('cellarDetail.searchPlaceholder')}
                     value={filters.search}
-                    onChange={e => setFilters({ ...filters, search: e.target.value })}
-                    className="search-input"
-                    aria-label={t('cellarDetail.searchPlaceholder')}
+                    onChange={search => setFilters({ ...filters, search })}
                   />
                   <button
                     type="button"
