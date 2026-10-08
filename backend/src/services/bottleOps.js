@@ -855,11 +855,14 @@ async function updateBottleFields(bottle, fields, req) {
  * file unlink, wine-assigned image unassignment, pending wine request, then
  * the bottle document itself). auditAction distinguishes 'bottle.undo' from
  * 'bottle.delete', which run the identical cascade.
+ * options.anyStatus also removes a consumed bottle (a duplicate history row
+ * from an import is deleted the same way); options.auditDetail replaces the
+ * default { reason: 'mistake' }.
  * Returns { error } | { removed: true }.
  */
-async function removeBottleCascade(bottle, req, auditAction) {
+async function removeBottleCascade(bottle, req, auditAction, options = {}) {
   // A bottle on order qualifies too: a cancelled order is removed this way.
-  if (bottle.status !== 'active' && bottle.status !== ORDERED_STATUS) {
+  if (!options.anyStatus && bottle.status !== 'active' && bottle.status !== ORDERED_STATUS) {
     return { error: { status: 400, message: 'Only an active bottle can be removed this way' } };
   }
   const bottleId = bottle._id;
@@ -906,9 +909,101 @@ async function removeBottleCascade(bottle, req, auditAction) {
 
   logAudit(req, auditAction || 'bottle.undo',
     { type: 'bottle', id: bottleId, cellarId },
-    { reason: 'mistake' });
+    options.auditDetail || { reason: 'mistake' });
 
   return { removed: true };
+}
+
+/**
+ * Delete a bottle of any status, keeping what an undo needs to bring it back
+ * (MCP delete_bottle). Runs the same cascade as the app (rack slot freed, the
+ * owner's own photos deleted with their files, registry photos detached, the
+ * import request withdrawn when no other bottle waits on it), but first takes
+ * a snapshot: the bottle document as stored, its rack slot, the registry
+ * photos it pointed at and a request this delete is about to withdraw.
+ *
+ * Restoring with the SAME _id reconnects everything else that refers to the
+ * bottle by id (tasting notes, personal data, lists). The own photos cannot
+ * come back: their files are gone. The caller says so before deleting.
+ * Returns { error } | { snapshot, ownPhotosDeleted }.
+ */
+async function deleteBottleRecoverably(bottle, req, auditDetail = {}) {
+  const { REGISTRY_PHOTO, OWN_PHOTO } = require('./photoRetention');
+  const raw = typeof bottle.toObject === 'function'
+    ? bottle.toObject({ depopulate: true, virtuals: false })
+    : { ...bottle };
+  const rack = await Rack.findOne({ 'slots.bottle': bottle._id }).select('_id slots').lean();
+  const slot = rack ? (rack.slots || []).find((s) => String(s.bottle) === String(bottle._id)) : null;
+  const registryPhotos = await BottleImage.find({ bottle: bottle._id, ...REGISTRY_PHOTO }).select('_id').lean();
+  const ownPhotosDeleted = await BottleImage.countDocuments({ bottle: bottle._id, ...OWN_PHOTO });
+  let wineRequest = null;
+  if (bottle.pendingWineRequest) {
+    const others = await Bottle.countDocuments({ pendingWineRequest: bottle.pendingWineRequest, _id: { $ne: bottle._id } });
+    if (others === 0) wineRequest = await WineRequest.findOne({ _id: bottle.pendingWineRequest, status: 'pending' }).lean();
+  }
+
+  const result = await removeBottleCascade(bottle, req, 'bottle.delete', { anyStatus: true, auditDetail });
+  if (result.error) return result;
+  return {
+    snapshot: {
+      bottle: raw,
+      rack: slot ? { rackId: rack._id, position: slot.position } : null,
+      registryPhotoIds: registryPhotos.map((p) => p._id),
+      wineRequest,
+    },
+    ownPhotosDeleted,
+  };
+}
+
+/**
+ * Bring back a bottle deleted by deleteBottleRecoverably, under its original
+ * _id. Refuses (409) when the world moved on: the id is in use again, the
+ * cellar is gone, or the wine was merged away or removed since. The rack slot
+ * is taken back only while it is still free; otherwise the bottle returns
+ * unplaced. Access is the caller's to check (the cellar's editor role).
+ * Returns { error } | { bottle, placed, position }.
+ */
+async function restoreDeletedBottle(snapshot, req) {
+  const raw = snapshot && snapshot.bottle;
+  if (!raw || !raw._id) return { error: { status: 409, message: 'There is no snapshot to restore from' } };
+  if (await Bottle.exists({ _id: raw._id })) {
+    return { error: { status: 409, message: 'The bottle already exists again' } };
+  }
+  const Cellar = require('../models/Cellar');
+  if (!(await Cellar.exists({ _id: raw.cellar, deletedAt: null }))) {
+    return { error: { status: 409, message: 'Its cellar no longer exists' } };
+  }
+  if (raw.wineDefinition) {
+    const WineDefinition = require('../models/WineDefinition');
+    if (!(await WineDefinition.exists({ _id: raw.wineDefinition }))) {
+      return { error: { status: 409, message: 'Its wine has been merged or removed from the registry since' } };
+    }
+  }
+  if (snapshot.wineRequest && !(await WineRequest.exists({ _id: snapshot.wineRequest._id }))) {
+    await WineRequest.collection.insertOne(snapshot.wineRequest);
+  }
+  // The stored document as it was: same id, same dates, no defaults re-run.
+  await Bottle.collection.insertOne(raw);
+  if (snapshot.registryPhotoIds && snapshot.registryPhotoIds.length) {
+    await BottleImage.updateMany({ _id: { $in: snapshot.registryPhotoIds }, bottle: null }, { $set: { bottle: raw._id } });
+  }
+
+  let placed = false;
+  if (snapshot.rack && raw.status === 'active') {
+    const rack = await Rack.findOne({ _id: snapshot.rack.rackId, deletedAt: null });
+    const taken = rack && (rack.slots || []).some((s) => s.position === snapshot.rack.position);
+    if (rack && !taken) {
+      // Lazy: services/rackOps top-requires this module.
+      const { placeBottleInRack } = require('./rackOps');
+      const r = await placeBottleInRack(rack, snapshot.rack.position, raw._id, req);
+      placed = !r.error;
+    }
+  }
+  logAudit(req, 'bottle.restore_deleted',
+    { type: 'bottle', id: raw._id, cellarId: raw.cellar },
+    { via: 'undo', placed });
+  const bottle = await Bottle.findById(raw._id);
+  return { bottle, placed, position: placed ? snapshot.rack.position : null };
 }
 
 /**
@@ -1050,6 +1145,7 @@ module.exports = {
   consumeBottle, restoreBottle, removeFromRacks, RESTORE_WINDOW_MS,
   markArrived, parseOnOrderFields, NOT_ARRIVED_ERROR, changeBottleWine,
   addBottle, validateBottleCommitFields, updateBottleFields, removeBottleCascade, UPDATABLE_FIELDS,
+  deleteBottleRecoverably, restoreDeletedBottle,
   openBottle, pourFromBottle, closeBottle,
   PRESERVATION_METHODS, DEFAULT_POUR_ML, MAX_POURS,
 };

@@ -10,6 +10,7 @@ import { listCellars, getCellarHistory, getMultiCellarHistory } from '../api/cel
 import CellarScopePicker from '../components/CellarScopePicker';
 import CellarNav from '../components/CellarNav';
 import CellarPageHeader from '../components/CellarPageHeader';
+import SearchInput from '../components/SearchInput';
 import './CellarDetail.css';
 import './CellarHistory.css';
 
@@ -306,13 +307,10 @@ function CellarHistory() {
 
       {/* Search + filter bar — same layout as cellar bottles tab */}
       <div className="search-row history-search-row">
-        <input
-          type="text"
-          className="search-input"
+        <SearchInput
           placeholder={t('cellarDetail.searchPlaceholder')}
           value={filters.search}
-          onChange={e => setFilters({ ...filters, search: e.target.value })}
-          aria-label={t('cellarDetail.searchPlaceholder')}
+          onChange={search => setFilters({ ...filters, search })}
         />
         <button
           type="button"

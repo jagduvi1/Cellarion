@@ -108,6 +108,8 @@ async function photosForBottle(userId, bottle) {
   return {
     count: items.length,
     has_photo: !!registryImage || inline || items.some((p) => p.state !== 'rejected' && !!p.url),
+    // The photo the owner chose to show for this bottle (set_bottle_default_image), or null.
+    default_image_id: bottle.defaultImage ? String(bottle.defaultImage._id || bottle.defaultImage) : null,
     mine_pending: items.filter((p) => p.mine && PENDING_STATES.includes(p.state)).length,
     registry_image: registryImage,
     ...(inline ? { registry_image_inline: true } : {}),

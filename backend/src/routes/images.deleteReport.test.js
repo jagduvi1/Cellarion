@@ -23,7 +23,9 @@ jest.mock('../models/Cellar', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineDefinition', () => ({ exists: jest.fn(), findById: jest.fn(), updateOne: jest.fn() }));
 jest.mock('../services/imageProcessor', () => ({ processImage: jest.fn(), unlinkImageFiles: jest.fn(async () => {}) }));
 jest.mock('../services/imageSanitizer', () => ({ sanitizeImageBuffer: jest.fn() }));
-jest.mock('../services/imageOps', () => ({ ingestBottleImage: jest.fn() }));
+// The delete route runs services/imageOps.deleteOwnImage (shared with MCP), so
+// only the upload pipeline is stubbed here.
+jest.mock('../services/imageOps', () => ({ ...jest.requireActual('../services/imageOps'), ingestBottleImage: jest.fn() }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../config/upload', () => ({ upload: { single: () => (req, res, next) => next() }, ORIGINALS_DIR: '/app/uploads/originals' }));
 jest.mock('../utils/cellarAccess', () => ({ getCellarRole: jest.fn(() => null) }));

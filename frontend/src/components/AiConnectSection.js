@@ -95,7 +95,7 @@ export default function AiConnectSection() {
       </div>
       <p className="settings-hint">
         {t('settings.aiConnect.hint',
-          'Talk to your cellar from Claude Desktop, Claude Code, or any MCP-capable assistant: ask what to open tonight, where a bottle is stored, or what your collection is worth. Connections are read-only and use a personal token you can revoke at any time.')}
+          'Talk to your cellar from Claude Desktop, Claude Code, or any MCP-capable assistant: ask what to open tonight, where a bottle is stored, or what your collection is worth. You choose what the assistant may do: only look, also log what you drink, or full access to add and edit bottles. You can revoke it at any time.')}
       </p>
       <p className="settings-hint">
         {t('settings.aiConnect.step1',

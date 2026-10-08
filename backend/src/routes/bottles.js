@@ -915,41 +915,15 @@ router.put('/:id/default-image', requireBottleAccess('editor'), async (req, res)
     const { bottle } = req;
     const { imageId } = req.body;
 
-    if (!imageId) {
-      // Clear default image
-      bottle.defaultImage = null;
-      await bottle.save();
-      return res.json({ bottle });
-    }
+    // Shared with the MCP set_bottle_default_image tool (services/imageOps):
+    // the candidate rule, the id cast and the clear-on-empty live there once.
+    // Lazy: imageOps pulls in the image pipeline, which this route needs only here.
+    const { setBottleDefaultImage } = require('../services/imageOps');
+    const result = await setBottleDefaultImage(bottle, imageId);
+    if (result.error) return res.status(result.error.status).json({ error: result.error.message });
+    if (!imageId) return res.json({ bottle });
 
-    // Cast the user-provided id to a real ObjectId before it touches the
-    // query (a junk string would otherwise throw a CastError → 500; the cast
-    // also clears the user-input-in-query taint for static analysis).
-    if (!mongoose.isValidObjectId(imageId)) {
-      return res.status(400).json({ error: 'Invalid image ID' });
-    }
-    const imageOid = new mongoose.Types.ObjectId(String(imageId));
-
-    // Verify the image exists and belongs to this bottle or its wine
-    // definition. Only add the wine clause when the bottle HAS a wine:
-    // BottleImage.wineDefinition defaults to null, so for a pending-request
-    // bottle (wineDefinition null) the clause would match ANY approved
-    // unattached image in the DB. Also require public visibility, matching
-    // the candidate list the UI offers (images.js /bottle/:bottleId).
-    const orClauses = [{ bottle: bottle._id }];
-    if (bottle.wineDefinition) {
-      orClauses.push({ wineDefinition: bottle.wineDefinition, status: 'approved', visibility: 'public' });
-    }
-    const image = await BottleImage.findOne({ _id: imageOid, $or: orClauses });
-
-    if (!image) {
-      return res.status(404).json({ error: 'Image not found or not associated with this bottle' });
-    }
-
-    bottle.defaultImage = image._id;
-    await bottle.save();
     await bottle.populate(WINE_POPULATE);
-
     res.json({ bottle });
   } catch (error) {
     console.error('Set default image error:', error);

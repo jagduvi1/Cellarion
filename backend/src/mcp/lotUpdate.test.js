@@ -46,11 +46,13 @@ jest.mock('../services/bottleOps', () => ({
 }));
 jest.mock('../services/bottleLot', () => {
   const LOT_FIELDS = ['drinkFrom', 'drinkTo', 'peakFrom', 'peakUntil', 'price', 'currency'];
+  const LOT_FIELDS_ON_REQUEST = ['notes', 'purchaseDate', 'purchaseLocation', 'purchaseUrl'];
   return {
     LOT_FIELDS,
+    LOT_FIELDS_ON_REQUEST,
     LOT_LIMIT: 500,
     findLotSiblings: jest.fn(),
-    pickLotFields: (fields) => Object.fromEntries(LOT_FIELDS.filter((k) => fields[k] !== undefined).map((k) => [k, fields[k]])),
+    pickLotFields: (fields, keys = LOT_FIELDS) => Object.fromEntries(keys.filter((k) => fields[k] !== undefined).map((k) => [k, fields[k]])),
   };
 });
 
@@ -92,24 +94,25 @@ describe('update_bottle apply_to_lot', () => {
     primary();
     findLotSiblings.mockResolvedValue([sib('1'), sib('2')]);
     bottleOps.updateBottleFields
-      .mockResolvedValueOnce(changed({ drinkFrom: 2028, drinkTo: 2040, notes: 'case of six' }, { drinkFrom: null, drinkTo: null, notes: '' }))
+      .mockResolvedValueOnce(changed({ drinkFrom: 2028, drinkTo: 2040, notes: 'case of six', occasion: 'wedding' }, { drinkFrom: null, drinkTo: null, notes: '', occasion: '' }))
       .mockResolvedValueOnce(changed({ drinkFrom: 2028, drinkTo: 2040 }, { drinkFrom: 2026, drinkTo: 2035 }))
       .mockResolvedValueOnce(changed({}, {})); // already matched
     const body = parse(await tool('update_bottle').handler(
-      { bottle_id: oid('d'), drink_from: 2028, drink_to: 2040, notes: 'case of six', apply_to_lot: true }, CTX));
+      { bottle_id: oid('d'), drink_from: 2028, drink_to: 2040, notes: 'case of six', occasion: 'wedding', apply_to_lot: true }, CTX));
 
     expect(findLotSiblings).toHaveBeenCalledWith(ME, expect.objectContaining({ vintage: '2019' }));
     expect(bottleOps.updateBottleFields).toHaveBeenCalledTimes(3);
-    // Siblings receive ONLY the lot-level fields — the note stays on the bottle.
-    expect(bottleOps.updateBottleFields.mock.calls[1][1]).toEqual({ drinkFrom: 2028, drinkTo: 2040 });
-    expect(bottleOps.updateBottleFields.mock.calls[2][1]).toEqual({ drinkFrom: 2028, drinkTo: 2040 });
-    expect(body.data.changes).toEqual({ drinkFrom: 2028, drinkTo: 2040, notes: 'case of six' });
+    // Siblings receive the lot-level fields — the case note included, asked for
+    // by apply_to_lot — while the occasion stays on this bottle.
+    expect(bottleOps.updateBottleFields.mock.calls[1][1]).toEqual({ drinkFrom: 2028, drinkTo: 2040, notes: 'case of six' });
+    expect(bottleOps.updateBottleFields.mock.calls[2][1]).toEqual({ drinkFrom: 2028, drinkTo: 2040, notes: 'case of six' });
+    expect(body.data.changes).toEqual({ drinkFrom: 2028, drinkTo: 2040, notes: 'case of six', occasion: 'wedding' });
     expect(body.data.lot).toEqual({ count: 2, applied: [oid('1')], unchanged: 1, skipped: [] });
 
     const row = McpActionLog.create.mock.calls[0][0];
     expect(row.action).toBe('lot_update');
     expect(row.prev).toEqual({
-      [oid('d')]: { drinkFrom: null, drinkTo: null, notes: '' },
+      [oid('d')]: { drinkFrom: null, drinkTo: null, notes: '', occasion: '' },
       [oid('1')]: { drinkFrom: 2026, drinkTo: 2035 },
     });
     expect(row.detail).toMatchObject({ bottles: [oid('d'), oid('1')], lot: 2 });
@@ -133,11 +136,11 @@ describe('update_bottle apply_to_lot', () => {
 
   test('no lot-level field in the call: warning, ordinary update row, siblings never looked up', async () => {
     primary();
-    bottleOps.updateBottleFields.mockResolvedValueOnce(changed({ notes: 'x' }, { notes: '' }));
-    const body = parse(await tool('update_bottle').handler({ bottle_id: oid('d'), notes: 'x', apply_to_lot: true }, CTX));
+    bottleOps.updateBottleFields.mockResolvedValueOnce(changed({ occasion: 'x' }, { occasion: '' }));
+    const body = parse(await tool('update_bottle').handler({ bottle_id: oid('d'), occasion: 'x', apply_to_lot: true }, CTX));
     expect(findLotSiblings).not.toHaveBeenCalled();
     expect(body.warnings[0]).toMatch(/apply_to_lot ignored/);
-    expect(McpActionLog.create.mock.calls[0][0]).toMatchObject({ action: 'update', prev: { notes: '' } });
+    expect(McpActionLog.create.mock.calls[0][0]).toMatchObject({ action: 'update', prev: { occasion: '' } });
   });
 
   test('bottle already matching but siblings changed: still a lot_update row, without the bottle in prev', async () => {
@@ -195,5 +198,27 @@ describe('apply_to_lot guards (audit 2026-09-07)', () => {
     expect(findLotSiblings).not.toHaveBeenCalled();
     expect(body.warnings[0]).toMatch(/shared with you/);
     expect(McpActionLog.create.mock.calls[0][0].action).toBe('update');
+  });
+});
+
+describe('update_bottle: the purchase, storage, vintage and size fields', () => {
+  test('each maps to its service field; only the purchase travels with apply_to_lot', async () => {
+    primary();
+    findLotSiblings.mockResolvedValue([sib('1')]);
+    bottleOps.updateBottleFields
+      .mockResolvedValueOnce(changed({ vintage: '2020' }, { vintage: '2019' }))
+      .mockResolvedValueOnce(changed({ purchaseLocation: 'Shop' }, { purchaseLocation: null }));
+    await tool('update_bottle').handler({
+      bottle_id: oid('d'), vintage: '2020', bottle_size: '1500ml', purchase_date: '2026-10-01',
+      purchase_location: 'Shop', purchase_url: 'https://shop.example/w', location: 'garage', apply_to_lot: true,
+    }, CTX);
+    expect(bottleOps.updateBottleFields.mock.calls[0][1]).toMatchObject({
+      vintage: '2020', bottleSize: '1500ml', purchaseDate: '2026-10-01',
+      purchaseLocation: 'Shop', purchaseUrl: 'https://shop.example/w', location: 'garage',
+    });
+    // A case shares its purchase; the vintage, size and storage spot stay on this bottle.
+    expect(bottleOps.updateBottleFields.mock.calls[1][1]).toEqual({
+      purchaseDate: '2026-10-01', purchaseLocation: 'Shop', purchaseUrl: 'https://shop.example/w',
+    });
   });
 });

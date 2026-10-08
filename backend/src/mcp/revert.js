@@ -29,7 +29,7 @@ const CONSUME_REVERSIBLE = ['consume', 'restore', 'open', 'pour', 'close'];
 const WRITE_REVERSIBLE = ['add', 'update', 'lot_update', 'bulk_add', 'somm_maturity', 'somm_maturity_remove',
   'somm_wine_profile', 'somm_price', 'somm_price_decline', 'somm_proposal',
   'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange', 'tasting_note', 'attach_image',
-  'winelist_add', 'winelist_price', 'personal_data'];
+  'winelist_add', 'winelist_price', 'personal_data', 'delete', 'change_wine', 'default_image'];
 
 function reversibleActionsFor(scopes) {
   return (scopes || []).includes('write') ? [...CONSUME_REVERSIBLE, ...WRITE_REVERSIBLE] : CONSUME_REVERSIBLE;
@@ -73,6 +73,97 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
       data: { undone: 'attach_bottle_image', image_removed: removed },
     };
     await logAction(ctx, { tool: 'undo_last', action: 'attach_image', viaUndo: true, bottle: row.bottle, cellar: row.cellar, detail: { undid: String(row._id) }, result: envelope });
+    return ok(envelope.summary, envelope.data);
+  }
+
+  // delete_bottle — bring the bottle back under its own id from the snapshot
+  // the delete stored. The bottle no longer exists, so access is checked on
+  // its CELLAR (editor), not through resolveBottleAccess.
+  if (row.action === 'delete') {
+    const { resolveCellarAccess } = require('./toolUtil');
+    const { restoreDeletedBottle } = require('../services/bottleOps');
+    const snapshot = row.prev || {};
+    const cellarId = snapshot.bottle && snapshot.bottle.cellar;
+    if (!cellarId || !(await resolveCellarAccess(ctx.user.id, cellarId, 'editor'))) {
+      return fail('conflict', 'The cellar of that bottle is no longer yours to edit; nothing was changed.');
+    }
+    const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+    if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
+    let result;
+    try {
+      result = await restoreDeletedBottle(snapshot, ctx.req);
+    } catch (err) {
+      await unclaim(row._id);
+      throw err;
+    }
+    if (result.error) {
+      await unclaim(row._id);
+      return fail('conflict', `Cannot undo that delete: ${result.error.message}. Nothing was changed.`);
+    }
+    const { bottle } = result;
+    const ownPhotos = row.detail?.own_photos_deleted || 0;
+    const envelope = {
+      summary: `Undid delete — ${bottleLabel(bottle)} is back${result.placed ? ` in its rack slot ${result.position}` : (snapshot.rack ? ' (unplaced: its old slot is taken now)' : '')}${ownPhotos ? `; its ${ownPhotos} own photo(s) could not be restored` : ''}`,
+      data: { undone: 'delete_bottle', bottle_id: bottle._id, status: bottle.status, placed: result.placed, position: result.position, photos_restored: false },
+    };
+    await logAction(ctx, { tool: 'undo_last', action: 'add', viaUndo: true, bottle: bottle._id, cellar: bottle.cellar, detail: { undid: String(row._id) }, result: envelope });
+    return ok(envelope.summary, envelope.data);
+  }
+
+  // change_bottle_wine — move every bottle the action moved back to the wine
+  // it came from (prev: { [bottleId]: fromWineId }), through the same service.
+  if (row.action === 'change_wine') {
+    const { changeBottleWine } = require('../services/bottleOps');
+    const { findVisibleWine } = require('../services/wineVisibility');
+    const moves = Object.entries(row.prev || {});
+    if (!moves.length) return fail('conflict', 'That change has no recorded previous wine; nothing was changed.');
+    if (moves.some(([, fromId]) => !fromId)) {
+      return fail('conflict', 'That bottle had no registry wine before (it was waiting on a wine request), so the move cannot be reversed. Change it to the right wine instead.');
+    }
+    const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+    if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
+    const restored = [];
+    const skipped = [];
+    for (const [bottleId, fromId] of moves) {
+      const access = await resolveBottleAccess(ctx.user.id, bottleId, 'editor');
+      const wine = access && await findVisibleWine(String(fromId), { userId: ctx.user.id, roles: ctx.user.roles });
+      if (!access || !wine) { skipped.push(bottleId); continue; }
+      const r = await changeBottleWine(access.bottle, wine, ctx.req);
+      if (r.error && r.error.code !== 'same_wine') skipped.push(bottleId);
+      else restored.push(bottleId);
+    }
+    if (!restored.length) {
+      await unclaim(row._id);
+      return fail('conflict', 'None of those bottles could be moved back (no longer accessible, or the old wine is gone). Nothing was changed.');
+    }
+    const envelope = {
+      summary: `Undid change wine — ${restored.length} bottle(s) back on their previous wine${skipped.length ? `, ${skipped.length} could not be` : ''}`,
+      data: { undone: 'change_bottle_wine', restored, skipped },
+    };
+    await logAction(ctx, { tool: 'undo_last', action: 'change_wine', viaUndo: true, bottle: row.bottle, cellar: row.cellar, detail: { undid: String(row._id) }, result: envelope });
+    return ok(envelope.summary, envelope.data);
+  }
+
+  // set_bottle_default_image — put the previous default picture back (or none).
+  if (row.action === 'default_image') {
+    const access = await resolveBottleAccess(ctx.user.id, row.bottle, 'editor');
+    if (!access) return fail('conflict', 'The bottle from that action is no longer accessible; nothing was changed.');
+    const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+    if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
+    const { setBottleDefaultImage } = require('../services/imageOps');
+    const prevImage = row.prev?.defaultImage || null;
+    const r = await setBottleDefaultImage(access.bottle, prevImage);
+    if (r.error) {
+      // The old picture may be gone since; falling back to "no default" is
+      // still a faithful undo of choosing the new one.
+      const cleared = await setBottleDefaultImage(access.bottle, null);
+      if (cleared.error) { await unclaim(row._id); return fail('conflict', `Cannot undo that: ${cleared.error.message}`); }
+    }
+    const envelope = {
+      summary: `Undid default photo — ${prevImage && !r.error ? 'the previous photo is the default again' : 'the bottle has no chosen default photo again'}`,
+      data: { undone: 'set_bottle_default_image', bottle_id: access.bottle._id, default_image: r.error ? null : prevImage },
+    };
+    await logAction(ctx, { tool: 'undo_last', action: 'default_image', viaUndo: true, bottle: access.bottle._id, cellar: access.bottle.cellar, detail: { undid: String(row._id) }, result: envelope });
     return ok(envelope.summary, envelope.data);
   }
 

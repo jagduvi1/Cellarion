@@ -20,6 +20,7 @@ require('./registryData');
 require('./consume');
 require('./openBottle');
 require('./write');
+require('./bottleEdit');
 require('./bulk');
 require('./wineDrafts');
 require('./somm');
