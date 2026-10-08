@@ -93,7 +93,9 @@ beforeEach(() => {
   jest.clearAllMocks();
   Cellar.findById.mockResolvedValue({ _id: CELLAR_ID, name: 'Main', user: USER_ID, members: [], deletedAt: null });
   Rack.updateMany.mockResolvedValue({});
-  BottleImage.find.mockReturnValue({ select: () => ({ lean: async () => [] }) });
+  // The route runs services/bottleOps.removeBottleCascade, which awaits the
+  // query directly; select/lean kept for any other reader.
+  BottleImage.find.mockImplementation(() => Object.assign(Promise.resolve([]), { select: () => ({ lean: async () => [] }) }));
   BottleImage.deleteMany.mockResolvedValue({});
   BottleImage.updateMany.mockResolvedValue({});
 });

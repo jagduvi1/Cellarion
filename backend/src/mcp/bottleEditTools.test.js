@@ -21,7 +21,7 @@ const chain = (result) => {
 
 jest.mock('../models/Cellar', () => ({ find: jest.fn(), findById: jest.fn() }));
 jest.mock('../models/Bottle', () => ({
-  find: jest.fn(), findById: jest.fn(), findOne: jest.fn(), aggregate: jest.fn(), countDocuments: jest.fn(),
+  find: jest.fn(), findById: jest.fn(), findOne: jest.fn(), aggregate: jest.fn(), countDocuments: jest.fn(), exists: jest.fn(),
 }));
 jest.mock('../models/Rack', () => ({ find: jest.fn(), findOne: jest.fn(), countDocuments: jest.fn(), updateMany: jest.fn() }));
 jest.mock('../models/WishlistItem', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
@@ -50,7 +50,7 @@ jest.mock('../services/bottleOps', () => ({
   consumeBottle: jest.fn(), restoreBottle: jest.fn(), removeFromRacks: jest.fn(),
   RESTORE_WINDOW_MS: 2 * 24 * 60 * 60 * 1000,
   addBottle: jest.fn(), updateBottleFields: jest.fn(), removeBottleCascade: jest.fn(),
-  changeBottleWine: jest.fn(), deleteBottleRecoverably: jest.fn(), restoreDeletedBottle: jest.fn(),
+  changeBottleWine: jest.fn(), snapshotBottleForDelete: jest.fn(), restoreDeletedBottle: jest.fn(),
   UPDATABLE_FIELDS: ['price', 'currency', 'notes'],
 }));
 jest.mock('../services/bottleLot', () => ({
@@ -144,21 +144,59 @@ describe('delete_bottle', () => {
     primary();
     const res = await tool('delete_bottle').handler({ bottle_id: oid('d'), confirm: false }, CTX);
     expect(parse(res).error.code).toBe('invalid_input');
-    expect(bottleOps.deleteBottleRecoverably).not.toHaveBeenCalled();
+    expect(bottleOps.snapshotBottleForDelete).not.toHaveBeenCalled();
+    expect(bottleOps.removeBottleCascade).not.toHaveBeenCalled();
     expect(McpActionLog.create).not.toHaveBeenCalled();
   });
 
-  test('deletes through the recoverable service and keeps the snapshot as prev', async () => {
+  const SNAPSHOT = { bottle: { _id: oid('d'), cellar: oid('c') }, rack: { rackId: oid('7'), position: 4 }, registryPhotoIds: [], wineRequest: null };
+
+  test('the snapshot is stored in the ledger BEFORE the shared cascade deletes anything', async () => {
     primary();
-    const snapshot = { bottle: { _id: oid('d'), cellar: oid('c') }, rack: { rackId: oid('7'), position: 4 }, registryPhotoIds: [], wineRequest: null };
-    bottleOps.deleteBottleRecoverably.mockResolvedValue({ snapshot, ownPhotosDeleted: 2 });
+    const order = [];
+    bottleOps.snapshotBottleForDelete.mockResolvedValue({ snapshot: SNAPSHOT, ownPhotos: 2 });
+    McpActionLog.create.mockImplementation(async () => { order.push('ledger'); return { _id: 'row1' }; });
+    bottleOps.removeBottleCascade.mockImplementation(async () => { order.push('delete'); return { removed: true }; });
     const body = parse(await tool('delete_bottle').handler({ bottle_id: oid('d'), confirm: true }, CTX));
-    expect(bottleOps.deleteBottleRecoverably).toHaveBeenCalledWith(expect.objectContaining({ vintage: '2019' }), REQ, { via: 'mcp' });
+    expect(order).toEqual(['ledger', 'delete']);
+    expect(bottleOps.removeBottleCascade).toHaveBeenCalledWith(
+      expect.objectContaining({ vintage: '2019' }), REQ, 'bottle.delete', { anyStatus: true, auditDetail: { via: 'mcp' } });
     expect(body.summary).toMatch(/Deleted bottle .* \(Domaine X — Blanc 2019\) from "Mine"; its 2 own photo\(s\) were deleted permanently/);
     expect(body.data).toMatchObject({ rack_slot_freed: 4, own_photos_deleted: 2, status_was: 'active' });
     const row = McpActionLog.create.mock.calls[0][0];
-    expect(row).toMatchObject({ tool: 'delete_bottle', action: 'delete', prev: snapshot });
+    expect(row).toMatchObject({ tool: 'delete_bottle', action: 'delete', prev: SNAPSHOT });
     expect(row.detail).toMatchObject({ own_photos_deleted: 2, status: 'active' });
+  });
+
+  test('no ledger row, no delete: the way back must exist before the bottle goes', async () => {
+    primary();
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    bottleOps.snapshotBottleForDelete.mockResolvedValue({ snapshot: SNAPSHOT, ownPhotos: 0 });
+    McpActionLog.create.mockRejectedValue(new Error('mongo hiccup')); // logAction swallows → null
+    const res = parse(await tool('delete_bottle').handler({ bottle_id: oid('d'), confirm: true }, CTX));
+    expect(res.error.code).toBe('unavailable');
+    expect(bottleOps.removeBottleCascade).not.toHaveBeenCalled();
+  });
+
+  test('a cascade that refuses drops the ledger row again', async () => {
+    primary();
+    bottleOps.snapshotBottleForDelete.mockResolvedValue({ snapshot: SNAPSHOT, ownPhotos: 0 });
+    McpActionLog.create.mockResolvedValue({ _id: 'row1' });
+    bottleOps.removeBottleCascade.mockResolvedValue({ error: { status: 409, message: 'modified' } });
+    const res = parse(await tool('delete_bottle').handler({ bottle_id: oid('d'), confirm: true }, CTX));
+    expect(res.error.code).toBe('conflict');
+    expect(McpActionLog.deleteOne).toHaveBeenCalledWith({ _id: 'row1' });
+  });
+});
+
+describe('change_bottle_wine on a bottle that had no wine', () => {
+  test('a bottle waiting on a wine request moves, recorded as final (never undo-eligible)', async () => {
+    primary({ wineDefinition: null, pendingWineRequest: oid('8') });
+    bottleOps.changeBottleWine.mockResolvedValue({ bottle: {}, from: null });
+    const body = parse(await tool('change_bottle_wine').handler({ bottle_id: oid('d'), wine_id: oid('f') }, CTX));
+    expect(body.data.undo).toMatch(/not reversible/);
+    expect(McpActionLog.create.mock.calls[0][0].action).toBe('change_wine_from_request');
+    expect(WRITE_REVERSIBLE).not.toContain('change_wine_from_request');
   });
 });
 
@@ -169,6 +207,14 @@ describe('set_bottle_default_image / delete_bottle_image', () => {
     const body = parse(await tool('set_bottle_default_image').handler({ bottle_id: oid('d'), image_id: oid('4') }, CTX));
     expect(body.data).toMatchObject({ default_image_id: oid('4'), previous_image_id: oid('3') });
     expect(McpActionLog.create.mock.calls[0][0]).toMatchObject({ action: 'default_image', prev: { defaultImage: oid('3') } });
+  });
+
+  test('choosing the photo that already is the default logs nothing, so undo never spends a step on it', async () => {
+    primary();
+    imageOps.setBottleDefaultImage.mockImplementation(async (b, id) => { b.defaultImage = id; return { bottle: b, prev: oid('4') }; });
+    const body = parse(await tool('set_bottle_default_image').handler({ bottle_id: oid('d'), image_id: oid('4') }, CTX));
+    expect(body.summary).toMatch(/No change/);
+    expect(McpActionLog.create).not.toHaveBeenCalled();
   });
 
   test('a photo that is not the bottle\'s is not_found', async () => {
@@ -218,24 +264,58 @@ describe('undo_last reversals', () => {
   test('change_wine: every moved bottle goes back to the wine it came from', async () => {
     primary({ wineDefinition: new mongoose.Types.ObjectId(oid('f')) });
     bottleOps.changeBottleWine.mockResolvedValue({ bottle: {} });
-    const res = await revertLedgerRow({ _id: 'row', action: 'change_wine', prev: { [oid('d')]: oid('e') } }, CTX, HELPERS);
+    const res = await revertLedgerRow({ _id: 'row', action: 'change_wine', prev: { [oid('d')]: oid('e') }, detail: { to: oid('f') } }, CTX, HELPERS);
     expect(res.ok).toBe(true);
     expect(bottleOps.changeBottleWine).toHaveBeenCalledWith(expect.anything(), WHITE, REQ);
     expect(res.data.restored).toEqual([oid('d')]);
   });
 
-  test('change_wine: a bottle that had no wine before cannot be moved back', async () => {
+  test('change_wine: a bottle moved to yet another wine since keeps that later choice', async () => {
+    primary({ wineDefinition: new mongoose.Types.ObjectId(oid('9')) }); // the user fixed it in the app since
+    const res = await revertLedgerRow({ _id: 'row', action: 'change_wine', prev: { [oid('d')]: oid('e') }, detail: { to: oid('f') } }, CTX, HELPERS);
+    expect(res).toMatchObject({ ok: false, code: 'conflict' });
+    expect(res.message).toMatch(/moved to another wine since/);
+    expect(bottleOps.changeBottleWine).not.toHaveBeenCalled();
+    expect(McpActionLog.findOneAndUpdate).not.toHaveBeenCalled(); // never claimed
+  });
+
+  test('change_wine: a bottle that failed stays undoable — the row keeps only what is outstanding', async () => {
+    Bottle.findById.mockImplementation((id) => chain(bottleDoc({ _id: new mongoose.Types.ObjectId(String(id)), wineDefinition: new mongoose.Types.ObjectId(oid('f')) })));
+    myCellar();
+    bottleOps.changeBottleWine
+      .mockResolvedValueOnce({ bottle: {} })
+      .mockResolvedValueOnce({ error: { status: 409, message: 'modified by another request' } });
+    const res = await revertLedgerRow({ _id: 'row', action: 'change_wine', prev: { [oid('d')]: oid('e'), [oid('1')]: oid('e') }, detail: { to: oid('f') } }, CTX, HELPERS);
+    expect(res.ok).toBe(true);
+    expect(res.summary).toMatch(/1 bottle\(s\) back .* 1 not yet/);
+    expect(McpActionLog.updateOne).toHaveBeenCalledWith({ _id: 'row' }, { $set: { reversed: false, prev: { [oid('1')]: oid('e') } } });
+  });
+
+  test('change_wine: a row with no previous wine at all cannot be moved back', async () => {
     const res = await revertLedgerRow({ _id: 'row', action: 'change_wine', prev: { [oid('d')]: null } }, CTX, HELPERS);
     expect(res).toMatchObject({ ok: false, code: 'conflict' });
     expect(bottleOps.changeBottleWine).not.toHaveBeenCalled();
   });
 
   test('default_image: the previous choice comes back', async () => {
-    primary();
+    primary({ defaultImage: new mongoose.Types.ObjectId(oid('4')) });
     imageOps.setBottleDefaultImage.mockResolvedValue({ bottle: {}, prev: oid('4') });
-    const res = await revertLedgerRow({ _id: 'row', action: 'default_image', bottle: oid('d'), prev: { defaultImage: oid('3') } }, CTX, HELPERS);
+    const res = await revertLedgerRow({ _id: 'row', action: 'default_image', bottle: oid('d'), detail: { imageId: oid('4') }, prev: { defaultImage: oid('3') } }, CTX, HELPERS);
     expect(res.ok).toBe(true);
     expect(imageOps.setBottleDefaultImage).toHaveBeenCalledWith(expect.anything(), oid('3'));
+  });
+
+  test('default_image: a photo chosen since wins over the undo', async () => {
+    primary({ defaultImage: new mongoose.Types.ObjectId(oid('5')) });
+    const res = await revertLedgerRow({ _id: 'row', action: 'default_image', bottle: oid('d'), detail: { imageId: oid('4') }, prev: { defaultImage: oid('3') } }, CTX, HELPERS);
+    expect(res).toMatchObject({ ok: false, code: 'conflict' });
+    expect(imageOps.setBottleDefaultImage).not.toHaveBeenCalled();
+  });
+
+  test('delete: a snapshot cleared after the undo window says so', async () => {
+    const res = await revertLedgerRow({ _id: 'row', action: 'delete', prev: null }, CTX, HELPERS);
+    expect(res).toMatchObject({ ok: false, code: 'conflict' });
+    expect(res.message).toMatch(/undo window has passed/);
   });
 
   test('the three reversible actions are undo-eligible for a write connection', () => {

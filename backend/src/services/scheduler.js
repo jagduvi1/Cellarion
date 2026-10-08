@@ -5,6 +5,7 @@ const { runCommunityPriceAggregation } = require('./communityPriceJob');
 const { runUserDeletionJob } = require('./userDeletionJob');
 const { runCellarRetentionPurge } = require('./cellarRetentionJob');
 const { runRecommendationEmailScrub } = require('./recommendationRetentionJob');
+const { runMcpSnapshotScrub } = require('./mcpSnapshotRetentionJob');
 const { runScanImageRetentionSweep } = require('./scanImageRetentionJob');
 const { runWineDraftExpirySweep } = require('./wineDraftExpiryJob');
 const { runSearchIndexReconcile } = require('./searchReconcileJob');
@@ -93,6 +94,16 @@ function startScheduler() {
       await runRecommendationEmailScrub();
     } catch (err) {
       console.error('[scheduler] Recommendation email scrub failed:', err);
+    }
+  });
+
+  // MCP delete snapshots: hourly at :41. A deleted bottle's snapshot is only
+  // usable inside the undo window; after it, the contents are cleared.
+  cron.schedule('41 * * * *', async () => {
+    try {
+      await runMcpSnapshotScrub();
+    } catch (err) {
+      console.error('[scheduler] MCP snapshot scrub failed:', err);
     }
   });
 

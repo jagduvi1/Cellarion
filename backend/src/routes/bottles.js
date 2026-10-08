@@ -13,14 +13,12 @@ const WineVintageProfile = require('../models/WineVintageProfile');
 const PriceTrackingRequest = require('../models/PriceTrackingRequest');
 const PriceTrackingSkip = require('../models/PriceTrackingSkip');
 const BottleImage = require('../models/BottleImage');
-const WineRequest = require('../models/WineRequest');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { isReserved } = require('../utils/reservationUtils');
 const { logAudit } = require('../services/audit');
 const { getSnapshotForDate } = require('../utils/exchangeRates');
 const { resolveRating } = require('../utils/ratingUtils');
 const { CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES, ORDERED_STATUS, WINE_POPULATE, WINE_POPULATE_LIST } = require('../config/constants');
-const { unlinkImageFiles } = require('../services/imageProcessor');
 const { gatherPriceWarnings } = require('../services/priceWarnings');
 const { getCurrentRelease } = require('../services/communityPrice');
 const { findLotSiblingIds, findLotSiblings } = require('../services/bottleLot');
@@ -40,7 +38,7 @@ const mongoose = require('mongoose');
 // add/update/consume/restore/remove logic + rack-slot freeing live in the
 // shared service so the REST routes and the MCP tools can never drift (§7).
 const {
-  addBottle, validateBottleCommitFields, updateBottleFields, consumeBottle, restoreBottle, removeFromRacks, removeBottleCascade,
+  addBottle, validateBottleCommitFields, updateBottleFields, consumeBottle, restoreBottle, removeBottleCascade,
   openBottle, pourFromBottle, closeBottle, markArrived, changeBottleWine,
 } = require('../services/bottleOps');
 // Mint-at-commit for the POST route's `newWine` branch — the wine is created
@@ -50,7 +48,6 @@ const { resolveOrMintWine } = require('../services/wineCommit');
 const { parseExpectedArrival } = require('../utils/onOrder');
 const { moveBottleToCellar } = require('../services/rackOps');
 const { getDataVersion } = require('../services/dataVersion');
-const { REGISTRY_PHOTO, OWN_PHOTO } = require('../services/photoRetention');
 
 const router = express.Router();
 
@@ -1416,44 +1413,15 @@ router.post('/:id/undo', requireBottleAccess('editor'), async (req, res) => {
 // of orphaning BottleImage docs and pending requests.
 router.delete('/:id', requireBottleAccess('editor'), async (req, res) => {
   try {
-    const { bottle } = req;
-    const pendingRequestId = bottle.pendingWineRequest || null;
-
-    // Remove bottle from any rack slot that references it
-    await removeFromRacks(bottle._id);
-
-    // The user's own photos go with the bottle; registry photos (the wine's
-    // picture, or any photo approved as public — services/photoRetention)
-    // are kept and detached, other people see them.
-    const ownImages = await BottleImage.find({ bottle: bottle._id, ...OWN_PHOTO })
-      .select('originalUrl processedUrl').lean();
-    for (const img of ownImages) await unlinkImageFiles(img);
-    await BottleImage.deleteMany({ bottle: bottle._id, ...OWN_PHOTO });
-    await BottleImage.updateMany(
-      { bottle: bottle._id, ...REGISTRY_PHOTO },
-      { $set: { bottle: null } }
-    );
-    await bottle.deleteOne();
-
-    // After the delete, as every other writer audits: the audit moves the
-    // data version, and a search reading the new version before the bottle
-    // is gone would keep it for its whole cache window.
-    logAudit(req, 'bottle.delete',
-      { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
-      {}
-    );
-
-    // Only when THIS was the last bottle waiting on the request — see the
-    // same guard in services/bottleOps.removeBottleCascade for the full
-    // reasoning. One import request covers every bottle of that wine, so
-    // deleting it outright orphaned the siblings. Counted after the bottle
-    // is gone so it cannot count itself.
-    if (pendingRequestId) {
-      const stillWaiting = await Bottle.countDocuments({ pendingWineRequest: pendingRequestId });
-      if (stillWaiting === 0) {
-        await WineRequest.deleteOne({ _id: pendingRequestId, status: 'pending' });
-      }
-    }
+    // The shared cascade (services/bottleOps.removeBottleCascade), the same
+    // one MCP delete_bottle runs, for a bottle of any status: rack slot
+    // freed, the user's own photos deleted with their files, registry photos
+    // (the wine's picture, or any photo approved as public) kept and
+    // detached, the import request withdrawn only when THIS was the last
+    // bottle waiting on it, and the audit written after the delete so the
+    // data version moves once the bottle is really gone.
+    const result = await removeBottleCascade(req.bottle, req, 'bottle.delete', { anyStatus: true, auditDetail: {} });
+    if (result.error) return res.status(result.error.status).json({ error: result.error.message });
     res.json({ message: 'Bottle deleted successfully' });
   } catch (error) {
     console.error('Delete bottle error:', error);

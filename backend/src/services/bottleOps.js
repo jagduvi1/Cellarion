@@ -915,19 +915,19 @@ async function removeBottleCascade(bottle, req, auditAction, options = {}) {
 }
 
 /**
- * Delete a bottle of any status, keeping what an undo needs to bring it back
- * (MCP delete_bottle). Runs the same cascade as the app (rack slot freed, the
- * owner's own photos deleted with their files, registry photos detached, the
- * import request withdrawn when no other bottle waits on it), but first takes
- * a snapshot: the bottle document as stored, its rack slot, the registry
- * photos it pointed at and a request this delete is about to withdraw.
+ * What an undo needs to bring a deleted bottle back (MCP delete_bottle):
+ * the bottle document as stored, its rack slot, the registry photos it
+ * points at, and an import request the delete is about to withdraw (no other
+ * bottle waits on it). Taken BEFORE the delete, and the caller stores it
+ * before deleting anything — a bottle must never be gone without its way back.
  *
  * Restoring with the SAME _id reconnects everything else that refers to the
- * bottle by id (tasting notes, personal data, lists). The own photos cannot
- * come back: their files are gone. The caller says so before deleting.
- * Returns { error } | { snapshot, ownPhotosDeleted }.
+ * bottle by id (tasting notes, personal data, lists). The owner's own photos
+ * cannot come back: the delete removes their files. ownPhotos says how many
+ * that is, so the caller can say so first.
+ * Returns { snapshot, ownPhotos }.
  */
-async function deleteBottleRecoverably(bottle, req, auditDetail = {}) {
+async function snapshotBottleForDelete(bottle) {
   const { REGISTRY_PHOTO, OWN_PHOTO } = require('./photoRetention');
   const raw = typeof bottle.toObject === 'function'
     ? bottle.toObject({ depopulate: true, virtuals: false })
@@ -935,15 +935,12 @@ async function deleteBottleRecoverably(bottle, req, auditDetail = {}) {
   const rack = await Rack.findOne({ 'slots.bottle': bottle._id }).select('_id slots').lean();
   const slot = rack ? (rack.slots || []).find((s) => String(s.bottle) === String(bottle._id)) : null;
   const registryPhotos = await BottleImage.find({ bottle: bottle._id, ...REGISTRY_PHOTO }).select('_id').lean();
-  const ownPhotosDeleted = await BottleImage.countDocuments({ bottle: bottle._id, ...OWN_PHOTO });
+  const ownPhotos = await BottleImage.countDocuments({ bottle: bottle._id, ...OWN_PHOTO });
   let wineRequest = null;
   if (bottle.pendingWineRequest) {
     const others = await Bottle.countDocuments({ pendingWineRequest: bottle.pendingWineRequest, _id: { $ne: bottle._id } });
     if (others === 0) wineRequest = await WineRequest.findOne({ _id: bottle.pendingWineRequest, status: 'pending' }).lean();
   }
-
-  const result = await removeBottleCascade(bottle, req, 'bottle.delete', { anyStatus: true, auditDetail });
-  if (result.error) return result;
   return {
     snapshot: {
       bottle: raw,
@@ -951,20 +948,26 @@ async function deleteBottleRecoverably(bottle, req, auditDetail = {}) {
       registryPhotoIds: registryPhotos.map((p) => p._id),
       wineRequest,
     },
-    ownPhotosDeleted,
+    ownPhotos,
   };
 }
 
 /**
- * Bring back a bottle deleted by deleteBottleRecoverably, under its original
- * _id. Refuses (409) when the world moved on: the id is in use again, the
- * cellar is gone, or the wine was merged away or removed since. The rack slot
- * is taken back only while it is still free; otherwise the bottle returns
- * unplaced. Access is the caller's to check (the cellar's editor role).
+ * Bring back a bottle from a snapshotBottleForDelete snapshot, under its
+ * original _id. Refuses (409) when the world moved on: the id is in use
+ * again, the cellar is gone, or the wine was merged away or removed since.
+ * Access is the caller's to check (the cellar's editor role).
+ *
+ * The bottle insert is the one step that decides success, so it runs first;
+ * everything after it (registry photos re-linked, a withdrawn request
+ * recreated, the rack slot re-taken while it is still free) is best effort
+ * and never throws, so a hiccup there can't leave the bottle back while the
+ * undo looks failed. A default photo that was one of the deleted own photos
+ * is dropped rather than restored as a dangling id.
  * Returns { error } | { bottle, placed, position }.
  */
 async function restoreDeletedBottle(snapshot, req) {
-  const raw = snapshot && snapshot.bottle;
+  const raw = snapshot && snapshot.bottle ? { ...snapshot.bottle } : null;
   if (!raw || !raw._id) return { error: { status: 409, message: 'There is no snapshot to restore from' } };
   if (await Bottle.exists({ _id: raw._id })) {
     return { error: { status: 409, message: 'The bottle already exists again' } };
@@ -979,30 +982,45 @@ async function restoreDeletedBottle(snapshot, req) {
       return { error: { status: 409, message: 'Its wine has been merged or removed from the registry since' } };
     }
   }
-  if (snapshot.wineRequest && !(await WineRequest.exists({ _id: snapshot.wineRequest._id }))) {
-    await WineRequest.collection.insertOne(snapshot.wineRequest);
+  if (raw.defaultImage && !(await BottleImage.exists({ _id: raw.defaultImage }))) {
+    raw.defaultImage = null;
   }
   // The stored document as it was: same id, same dates, no defaults re-run.
   await Bottle.collection.insertOne(raw);
-  if (snapshot.registryPhotoIds && snapshot.registryPhotoIds.length) {
-    await BottleImage.updateMany({ _id: { $in: snapshot.registryPhotoIds }, bottle: null }, { $set: { bottle: raw._id } });
-  }
 
+  const bestEffort = async (label, fn) => {
+    try { return await fn(); } catch (err) {
+      console.warn(`[bottleOps] restore of ${raw._id}: ${label} failed (bottle is back):`, err.message);
+      return null;
+    }
+  };
+  if (snapshot.registryPhotoIds && snapshot.registryPhotoIds.length) {
+    await bestEffort('registry photo re-link', () => BottleImage.updateMany(
+      { _id: { $in: snapshot.registryPhotoIds }, bottle: null }, { $set: { bottle: raw._id } }));
+  }
+  if (snapshot.wineRequest) {
+    await bestEffort('wine request recreate', async () => {
+      if (!(await WineRequest.exists({ _id: snapshot.wineRequest._id }))) {
+        await WineRequest.collection.insertOne(snapshot.wineRequest);
+      }
+    });
+  }
   let placed = false;
   if (snapshot.rack && raw.status === 'active') {
-    const rack = await Rack.findOne({ _id: snapshot.rack.rackId, deletedAt: null });
-    const taken = rack && (rack.slots || []).some((s) => s.position === snapshot.rack.position);
-    if (rack && !taken) {
+    placed = !!(await bestEffort('rack slot', async () => {
+      const rack = await Rack.findOne({ _id: snapshot.rack.rackId, deletedAt: null });
+      const taken = rack && (rack.slots || []).some((s) => s.position === snapshot.rack.position);
+      if (!rack || taken) return false;
       // Lazy: services/rackOps top-requires this module.
       const { placeBottleInRack } = require('./rackOps');
       const r = await placeBottleInRack(rack, snapshot.rack.position, raw._id, req);
-      placed = !r.error;
-    }
+      return !r.error;
+    }));
   }
   logAudit(req, 'bottle.restore_deleted',
     { type: 'bottle', id: raw._id, cellarId: raw.cellar },
     { via: 'undo', placed });
-  const bottle = await Bottle.findById(raw._id);
+  const bottle = (await bestEffort('reload', () => Bottle.findById(raw._id))) || raw;
   return { bottle, placed, position: placed ? snapshot.rack.position : null };
 }
 
@@ -1145,7 +1163,7 @@ module.exports = {
   consumeBottle, restoreBottle, removeFromRacks, RESTORE_WINDOW_MS,
   markArrived, parseOnOrderFields, NOT_ARRIVED_ERROR, changeBottleWine,
   addBottle, validateBottleCommitFields, updateBottleFields, removeBottleCascade, UPDATABLE_FIELDS,
-  deleteBottleRecoverably, restoreDeletedBottle,
+  snapshotBottleForDelete, restoreDeletedBottle,
   openBottle, pourFromBottle, closeBottle,
   PRESERVATION_METHODS, DEFAULT_POUR_ML, MAX_POURS,
 };

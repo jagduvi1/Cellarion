@@ -14,7 +14,7 @@ const { ingestBottleImage } = require('../../services/imageOps');
 const { safeFetchImage } = require('../../utils/safeImageFetch');
 const { logAudit } = require('../../services/audit');
 const { ok, fail, objectId, MSG_BOTTLE_NOT_FOUND, resolveBottleAccess } = require('../toolUtil');
-const { logAction, replay } = require('../actionLedger');
+const { logAction, replay, releaseClaim } = require('../actionLedger');
 const Bottle = require('../../models/Bottle');
 const BottleImage = require('../../models/BottleImage');
 const WineDefinition = require('../../models/WineDefinition');
@@ -322,6 +322,12 @@ registerTool({
         result.error.status === 404 ? 'That photo is not one of this bottle\'s — use an image_id from get_bottle → photos.' : result.error.message);
     }
     const now = bottle.defaultImage ? String(bottle.defaultImage) : null;
+    if (now === (result.prev || null)) {
+      // Already the choice: no ledger row, so undo_last never spends a step
+      // "restoring" what did not change (same as update_bottle's no-op path).
+      await releaseClaim(ctx, args.idempotency_key, 'set_bottle_default_image');
+      return ok('No change — that is already the bottle\'s default photo', { bottle_id: bottle._id, default_image_id: now });
+    }
     const envelope = {
       summary: now ? `Bottle ${bottle._id} now shows photo ${now} by default` : `Bottle ${bottle._id} has no chosen default photo now`,
       data: { bottle_id: bottle._id, default_image_id: now, previous_image_id: result.prev, undo: 'undo_last restores the previous choice' },
@@ -345,7 +351,8 @@ registerTool({
   title: 'Delete one of the user\'s own photos (needs confirm)',
   description:
     'Deletes a photo the user uploaded (an image_id from get_bottle → photos with mine:true), for a wrong, ' +
-    'duplicate or unwanted picture. It disappears from every bottle of the wine it showed on. NOT reversible — ' +
+    'duplicate or unwanted picture. It disappears from every bottle of the wine it showed on — and, if it was ' +
+    'published for everyone (state published), from other users\' bottles too. NOT reversible — ' +
     'the file is deleted — so show the user which photo (get_photo lets you look at it) and get an explicit yes, ' +
     'then call with confirm:true. A photo that has become the wine\'s registry picture cannot be deleted here ' +
     '(other people\'s pages show it); the user reports it on the bottle page instead.',

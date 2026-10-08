@@ -222,3 +222,33 @@ describe('update_bottle: the purchase, storage, vintage and size fields', () => 
     });
   });
 });
+
+describe('update_bottle: audit fixes', () => {
+  test('the lot is found BEFORE a vintage change, so the case the bottle came from gets the note', async () => {
+    primary();
+    const order = [];
+    findLotSiblings.mockImplementation(async (_u, b) => { order.push(`lot:${b.vintage}`); return [sib('1')]; });
+    bottleOps.updateBottleFields.mockImplementation(async (b, f) => {
+      order.push('update');
+      if (f.vintage) b.vintage = f.vintage; // the service mutates the doc in place
+      return changed({ ...f }, {});
+    });
+    await tool('update_bottle').handler({ bottle_id: oid('d'), vintage: '2018', notes: 'case note', apply_to_lot: true }, CTX);
+    expect(order[0]).toBe('lot:2019');
+  });
+
+  test('a format name is read ("Magnum" → 1500ml); an unreadable size is refused, never stored as 750ml', async () => {
+    primary();
+    bottleOps.updateBottleFields.mockResolvedValue(changed({ bottleSize: '1500ml' }, { bottleSize: '750ml' }));
+    await tool('update_bottle').handler({ bottle_id: oid('d'), bottle_size: 'Magnum' }, CTX);
+    expect(bottleOps.updateBottleFields.mock.calls[0][1].bottleSize).toBe('1500ml');
+    await tool('update_bottle').handler({ bottle_id: oid('d'), bottle_size: '1.5 L' }, CTX);
+    expect(bottleOps.updateBottleFields.mock.calls[1][1].bottleSize).toBe('1500ml');
+
+    bottleOps.updateBottleFields.mockClear();
+    const res = parse(await tool('update_bottle').handler({ bottle_id: oid('d'), bottle_size: 'Jeroboam' }, CTX));
+    expect(res.error.code).toBe('invalid_input');
+    expect(res.error.message).toMatch(/750ml/);
+    expect(bottleOps.updateBottleFields).not.toHaveBeenCalled();
+  });
+});

@@ -39,8 +39,10 @@ const mcpActionLogSchema = new mongoose.Schema({
     'somm_owner_inquiry_resolve', 'somm_wine_report_close', 'somm_pending_fix',
     // Bottle corrections (2026-10-08): delete_bottle (reversible from the
     // snapshot in prev), change_bottle_wine and set_bottle_default_image
-    // (reversible), delete_bottle_image (the file is gone: never undo-eligible).
-    'delete', 'change_wine', 'default_image', 'delete_image'], required: true },
+    // (reversible); delete_bottle_image (the file is gone) and a wine change
+    // on a bottle that had no wine before (nothing to go back to) are never
+    // undo-eligible.
+    'delete', 'change_wine', 'default_image', 'delete_image', 'change_wine_from_request'], required: true },
   bottle: { type: mongoose.Schema.Types.ObjectId, ref: 'Bottle' },
   cellar: { type: mongoose.Schema.Types.ObjectId, ref: 'Cellar' },
   // Small, non-PII operational detail (reason, ml, …) for the timeline.

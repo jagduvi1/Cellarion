@@ -10,13 +10,15 @@
 const { z } = require('zod');
 const { registerTool } = require('../registry');
 const { findVisibleWine } = require('../../services/wineVisibility');
-const { changeBottleWine, deleteBottleRecoverably } = require('../../services/bottleOps');
+const { changeBottleWine, snapshotBottleForDelete, removeBottleCascade } = require('../../services/bottleOps');
 const { findLotSiblings, LOT_LIMIT } = require('../../services/bottleLot');
 const { isValidId } = require('../../utils/validation');
+const Bottle = require('../../models/Bottle');
+const McpActionLog = require('../../models/McpActionLog');
 const {
   ok, fail, objectId, MSG_BOTTLE_NOT_FOUND, resolveBottleAccess, wineSummary,
 } = require('../toolUtil');
-const { logAction, replay } = require('../actionLedger');
+const { logAction, replay, releaseClaim } = require('../actionLedger');
 
 const wineLabel = (w) => [w && w.producer, w && w.name].filter(Boolean).join(' — ');
 const ownsCellar = (cellar, userId) => String(cellar.user && (cellar.user._id || cellar.user)) === String(userId);
@@ -77,6 +79,10 @@ registerTool({
     }
 
     const from = fromId ? await findVisibleWine(fromId, { userId: ctx.user.id, roles: ctx.user.roles }) : null;
+    // A bottle that was waiting on a wine request had no registry wine to go
+    // back to, so that move is recorded as final — a reversible row it could
+    // never reverse would sit in front of every older undo for the window.
+    const reversible = fromId !== null;
     const envelope = {
       summary: `Moved bottle ${bottle._id} (vintage ${bottle.vintage}) ${from ? `from ${wineLabel(from)} ` : ''}to ${wineLabel(wineDoc)}` +
         (alsoMoved.length ? `; ${alsoMoved.length} other bottle(s) of the lot moved too` : ''),
@@ -85,12 +91,14 @@ registerTool({
         from_wine_id: fromId,
         wine: { ...wineSummary(wineDoc) },
         ...(args.apply_to_lot ? { lot: { count: siblings.length, moved: alsoMoved } } : {}),
-        undo: 'undo_last moves the bottle(s) back to the previous wine',
+        undo: reversible
+          ? 'undo_last moves the bottle(s) back to the previous wine'
+          : 'not reversible: the bottle had no registry wine before (it was waiting on a wine request)',
       },
     };
     await logAction(ctx, {
       tool: 'change_bottle_wine',
-      action: 'change_wine',
+      action: reversible ? 'change_wine' : 'change_wine_from_request',
       bottle: bottle._id,
       cellar: bottle.cellar,
       detail: { from: fromId, to: String(wineDoc._id), bottles: Object.keys(prev).length },
@@ -135,9 +143,10 @@ registerTool({
     const status = bottle.status;
     const vintage = bottle.vintage;
 
-    const result = await deleteBottleRecoverably(bottle, ctx.req, { via: 'mcp' });
-    if (result.error) return fail('conflict', result.error.message);
-    const { snapshot, ownPhotosDeleted } = result;
+    // The way back is stored BEFORE anything is deleted: the snapshot goes
+    // into the ledger row first, and a row that could not be written means
+    // no delete at all (logAction never throws — it returns null).
+    const { snapshot, ownPhotos: ownPhotosDeleted } = await snapshotBottleForDelete(bottle);
 
     const envelope = {
       summary: `Deleted bottle ${bottle._id}${wine ? ` (${wineLabel(wine)} ${vintage})` : ` (vintage ${vintage})`} from "${cellar.name}"` +
@@ -153,17 +162,36 @@ registerTool({
         undo: 'undo_last brings the bottle back (not its own photos)',
       },
     };
-    await logAction(ctx, {
+    const row = await logAction(ctx, {
       tool: 'delete_bottle',
       action: 'delete',
       bottle: bottle._id,
       cellar: cellar._id,
       detail: { wine: wineId, vintage, status, own_photos_deleted: ownPhotosDeleted },
       // The snapshot undo_last restores from (services/bottleOps.restoreDeletedBottle).
+      // Kept only for the undo window: mcpSnapshotRetentionJob clears it after.
       prev: snapshot,
       idempotencyKey: args.idempotency_key || null,
       result: envelope,
     });
+    if (!row) {
+      await releaseClaim(ctx, args.idempotency_key, 'delete_bottle');
+      return fail('unavailable', 'Could not record the undo for this delete, so nothing was deleted. Try again in a moment.');
+    }
+
+    let result;
+    try {
+      result = await removeBottleCascade(bottle, ctx.req, 'bottle.delete', { anyStatus: true, auditDetail: { via: 'mcp' } });
+    } catch (err) {
+      // Nothing to undo if the bottle is still there; a ledger row pointing
+      // at a live bottle would only make undo_last fail on it.
+      if (await Bottle.exists({ _id: bottle._id })) await McpActionLog.deleteOne({ _id: row._id }).catch(() => {});
+      throw err;
+    }
+    if (result.error) {
+      await McpActionLog.deleteOne({ _id: row._id }).catch(() => {});
+      return fail('conflict', result.error.message);
+    }
     return ok(envelope.summary, envelope.data);
   },
 });
