@@ -16,7 +16,7 @@ const { ingestBottleImage } = require('../services/imageOps');
 const { mayCurationReadScan, logCurationImageRead } = require('../services/labelScanAccess');
 const { isValidId } = require('../utils/validation');
 const { stripHtml } = require('../utils/sanitize');
-const { photoVintage } = require('../utils/imageVintage');
+const { photoVintage, vintageOfficialOrder } = require('../utils/imageVintage');
 const rateLimitsConfig = require('../config/rateLimits');
 const { logAudit } = require('../services/audit');
 
@@ -213,15 +213,19 @@ router.get('/bottle/:bottleId', requireAuth, async (req, res) => {
       }).sort({ assignedToWine: -1, createdAt: -1 });
       // Exclude any that are already in the bottle-specific list
       wineImages = wineImages.filter(img => !bottleImageIds.has(img._id.toString()));
-      // Photos of THIS vintage first (support ticket 2026-10-09): the first
-      // wine-level slide is the one a bottle without its own photo shows, and
-      // a 2016 bottle should open on a 2016 label when one exists. Stable
-      // sort: within each half the official-first, newest-first order holds.
+      // Photos of THIS vintage first (support ticket 2026-10-09), led by the
+      // vintage's official photo: the first wine-level slide is the one a
+      // bottle without its own photo opens on, and a 2016 bottle should open
+      // on a 2016 label when one exists. With none, the wine's official image
+      // leads, as before. Within each part the official-first, newest-first
+      // order of the query holds.
       const thisVintage = photoVintage(bottle.vintage);
       if (thisVintage) {
         const same = wineImages.filter(img => img.vintage === thisVintage);
         const other = wineImages.filter(img => img.vintage !== thisVintage);
-        wineImages = [...same, ...other];
+        // All rows here are this bottle's wine, so the rule is just the order.
+        const official = [...same].sort(vintageOfficialOrder)[0] || null;
+        wineImages = [...(official ? [official] : []), ...same.filter(img => img !== official), ...other];
       }
     }
 
@@ -517,9 +521,11 @@ router.post('/link-to-bottle', requireAuth, async (req, res) => {
       return res.status(400).json({ error: `Maximum of ${MAX_IMAGES_PER_BOTTLE} images per bottle reached` });
     }
 
+    // The AddBottle flow uploads before the bottle exists, so the photo learns
+    // its vintage here, with its bottle (support ticket 2026-10-09).
     await BottleImage.updateMany(
       { _id: { $in: imageIds }, uploadedBy: req.user.id },
-      { bottle: bottleId }
+      { bottle: bottleId, vintage: photoVintage(bottle.vintage) }
     );
 
     res.json({ message: 'Images linked to bottle' });

@@ -64,7 +64,7 @@ const selectLean = (doc) => ({ select: () => ({ lean: async () => doc }) });
 const sortLean = (doc) => ({ sort: () => ({ lean: async () => doc }) });
 // The own-photo lookup is find().sort().limit().lean() — a few candidates,
 // chosen among in code (this bottle → same vintage → newest).
-const ownPhotos = (rows) => ({ sort: () => ({ limit: () => ({ lean: async () => rows }) }) });
+const ownPhotos = (rows) => { const q = { sort: () => q, limit: () => q, select: () => q, lean: async () => rows }; return q; };
 
 function mkBottle(over = {}) {
   return {
@@ -127,7 +127,7 @@ describe('GET /api/bottles/:id pending photo', () => {
 
   test('an APPROVED own photo keeps showing on the bottle page hero (ticket 2026-09-05 / #1227)', async () => {
     BottleImage.find.mockReturnValue(ownPhotos([{
-      _id: 'img1', kind: 'bottle', status: 'approved', visibility: 'public',
+      _id: 'img1', kind: 'bottle', status: 'approved', bottle: BOTTLE, visibility: 'public',
       originalUrl: null, processedUrl: '/api/uploads/processed/approved.png',
     }]));
     const res = await getJson(app(), `/api/bottles/${BOTTLE}`);
@@ -136,14 +136,14 @@ describe('GET /api/bottles/:id pending photo', () => {
 
   test('a genuine bottle photo still shows — the processed file first, the original only while rembg is still running', async () => {
     BottleImage.find.mockReturnValue(ownPhotos([{
-      _id: 'img1', kind: 'bottle', status: 'processing',
+      _id: 'img1', kind: 'bottle', status: 'processing', bottle: BOTTLE,
       originalUrl: '/api/uploads/originals/x.jpg', processedUrl: null,
     }]));
     let res = await getJson(app(), `/api/bottles/${BOTTLE}`);
     expect(res.body.pendingImageUrl).toBe('/api/uploads/originals/x.jpg');
 
     BottleImage.find.mockReturnValue(ownPhotos([{
-      _id: 'img1', kind: 'bottle', status: 'processed',
+      _id: 'img1', kind: 'bottle', status: 'processed', bottle: BOTTLE,
       originalUrl: null, processedUrl: '/api/uploads/processed/x.png',
     }]));
     res = await getJson(app(), `/api/bottles/${BOTTLE}`);
@@ -152,50 +152,74 @@ describe('GET /api/bottles/:id pending photo', () => {
 });
 
 /**
- * Photos per vintage (support ticket 2026-10-09): the hero picks this
- * bottle's own photo, else the viewer's photo of the SAME vintage, else
- * their newest photo of the wine — and offers a public same-vintage photo
- * before the wine's generic image. Same order as the cellar list, so the
+ * Photos per vintage (support ticket 2026-10-09). The hero picks, in order:
+ * this bottle's own photo, the viewer's photo of the SAME vintage, the
+ * vintage's official photo (the first of that wine + vintage approved, or an
+ * admin's choice), the wine's registry image (client), and only then the
+ * viewer's photo of another vintage. Same order as the cellar list, so the
  * card and the page agree.
  */
 describe('GET /api/bottles/:id and the photo\'s vintage', () => {
   const WINE = '64b0000000000000000000aa';
   const photo = (id, over) => ({ _id: id, kind: 'bottle', status: 'approved', originalUrl: null, processedUrl: `/api/uploads/processed/${id}.webp`, ...over });
+  // Own photos (filter has uploadedBy) and published photos of the vintage
+  // (the vintage-official query) come from the same find(); answer by filter.
+  const answer = (own, published = []) => BottleImage.find.mockImplementation((filter) => {
+    const rows = filter.uploadedBy ? own : published;
+    const q = { sort: () => q, limit: () => q, select: () => q, lean: async () => rows };
+    return q;
+  });
 
-  test('this bottle\'s photo first, then the same vintage, then the newest of the wine', async () => {
+  test('this bottle\'s photo first, then the same vintage; another vintage only as the last resort', async () => {
     Bottle.findById.mockResolvedValue(mkBottle({ wineDefinition: WINE, vintage: '2016' }));
     // Newest first, as the query sorts.
-    BottleImage.find.mockReturnValue(ownPhotos([
+    answer([
       photo('newest2015', { bottle: null, vintage: '2015' }),
       photo('same2016', { bottle: null, vintage: '2016' }),
       photo('thisBottle', { bottle: BOTTLE, vintage: '2016' }),
-    ]));
+    ]);
     let res = await getJson(app(), `/api/bottles/${BOTTLE}`);
     expect(res.body.pendingImageUrl).toBe('/api/uploads/processed/thisBottle.webp');
+    expect(res.body.otherVintageImageUrl).toBeNull();
 
-    BottleImage.find.mockReturnValue(ownPhotos([photo('newest2015', { bottle: null, vintage: '2015' }), photo('same2016', { bottle: null, vintage: '2016' })]));
+    answer([photo('newest2015', { bottle: null, vintage: '2015' }), photo('same2016', { bottle: null, vintage: '2016' })]);
     res = await getJson(app(), `/api/bottles/${BOTTLE}`);
     expect(res.body.pendingImageUrl).toBe('/api/uploads/processed/same2016.webp');
 
-    BottleImage.find.mockReturnValue(ownPhotos([photo('newest2015', { bottle: null, vintage: '2015' })]));
+    answer([photo('newest2015', { bottle: null, vintage: '2015' })]);
     res = await getJson(app(), `/api/bottles/${BOTTLE}`);
-    expect(res.body.pendingImageUrl).toBe('/api/uploads/processed/newest2015.webp');
+    expect(res.body.pendingImageUrl).toBeNull();
+    expect(res.body.otherVintageImageUrl).toBe('/api/uploads/processed/newest2015.webp');
   });
 
-  test('a public photo of this wine and vintage rides along with its credit; none is asked for without a wine or a usable vintage', async () => {
+  test('a sibling\'s photo whose row has no vintage tag counts as a photo of the sibling\'s vintage', async () => {
+    const SIB = '64b0000000000000000000b9';
     Bottle.findById.mockResolvedValue(mkBottle({ wineDefinition: WINE, vintage: '2016' }));
-    BottleImage.findOne.mockReturnValue(sortLean(photo('pub', { vintage: '2016', credit: 'Anna' })));
+    Bottle.find.mockReturnValueOnce({ select: () => ({ lean: async () => [{ _id: SIB, vintage: '2016' }] }) });
+    answer([photo('sib', { bottle: SIB })]);
+    const res = await getJson(app(), `/api/bottles/${BOTTLE}`);
+    expect(res.body.pendingImageUrl).toBe('/api/uploads/processed/sib.webp');
+  });
+
+  test('the vintage official rides along with its credit: the first approved, by anyone; none is asked for without a usable vintage', async () => {
+    Bottle.findById.mockResolvedValue(mkBottle({ wineDefinition: WINE, vintage: '2016' }));
+    answer([], [
+      photo('later', { wineDefinition: WINE, vintage: '2016', visibility: 'public', createdAt: '2026-05-01T00:00:00Z', credit: 'Bo' }),
+      photo('first', { wineDefinition: WINE, vintage: '2016', visibility: 'public', createdAt: '2026-02-01T00:00:00Z', credit: 'Anna' }),
+    ]);
     let res = await getJson(app(), `/api/bottles/${BOTTLE}`);
-    expect(BottleImage.findOne).toHaveBeenCalledWith({
-      wineDefinition: WINE, vintage: '2016', status: 'approved', visibility: 'public', kind: { $ne: 'label-scan' },
+    const officialQuery = BottleImage.find.mock.calls.map(([f]) => f).find((f) => !f.uploadedBy);
+    expect(officialQuery).toEqual({
+      status: 'approved', visibility: 'public', kind: { $ne: 'label-scan' },
+      wineDefinition: { $in: [WINE] }, vintage: { $in: ['2016'] },
     });
-    expect(res.body.vintageImageUrl).toBe('/api/uploads/processed/pub.webp');
+    expect(res.body.vintageImageUrl).toBe('/api/uploads/processed/first.webp');
     expect(res.body.vintageImageCredit).toBe('Anna');
 
-    BottleImage.findOne.mockClear();
+    BottleImage.find.mockClear();
     Bottle.findById.mockResolvedValue(mkBottle({ wineDefinition: WINE, vintage: 'Unknown' }));
     res = await getJson(app(), `/api/bottles/${BOTTLE}`);
-    expect(BottleImage.findOne).not.toHaveBeenCalled();
+    expect(BottleImage.find.mock.calls.filter(([f]) => !f.uploadedBy)).toHaveLength(0);
     expect(res.body.vintageImageUrl).toBeNull();
   });
 });

@@ -489,3 +489,7 @@ export const adminRevokeBridgeKey = (apiFetch, id, reason) =>
     headers: J,
     body: JSON.stringify({ reason }),
   });
+
+// "This is THE photo of this wine's vintage" (support ticket 2026-10-09).
+export const adminSetVintageOfficialImage = (apiFetch, id) =>
+  apiFetch(`/api/admin/images/${id}/set-vintage-official`, { method: 'PUT' });

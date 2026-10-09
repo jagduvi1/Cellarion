@@ -10,6 +10,7 @@ const { createNotification } = require('../../services/notifications');
 const { incrementCred } = require('../../utils/cellarCred');
 const { parsePagination } = require('../../utils/pagination');
 const { isValidId } = require('../../utils/validation');
+const { photoVintage, vintageKey, pickVintageOfficials } = require('../../utils/imageVintage');
 
 const router = express.Router();
 
@@ -112,7 +113,7 @@ router.get('/by-wine', async (req, res) => {
     // Bottles for these wines: their ids link bottle-only images, and their
     // count is shown per wine.
     const bottles = await Bottle.find({ wineDefinition: { $in: wineIds } })
-      .select('_id wineDefinition').lean();
+      .select('_id wineDefinition vintage').lean();
     const bottleToWine = new Map(bottles.map(b => [b._id.toString(), b.wineDefinition.toString()]));
     const bottleCount = {};
     for (const b of bottles) {
@@ -139,6 +140,23 @@ router.get('/by-wine', async (req, res) => {
       if (!wid || !wineMap.has(wid)) continue;
       if (!imagesByWine.has(wid)) imagesByWine.set(wid, []);
       imagesByWine.get(wid).push(img);
+    }
+
+    // Each image's vintage (its tag, else its bottle's) and whether it is the
+    // photo its vintage shows (support ticket 2026-10-09), so the curator sees
+    // which photo stands for which year and can choose another.
+    const bottleVintage = new Map(bottles.map(b => [b._id.toString(), photoVintage(b.vintage)]));
+    for (const imgs of imagesByWine.values()) {
+      for (const img of imgs) {
+        img.vintage = photoVintage(img.vintage) || (img.bottle ? bottleVintage.get(img.bottle.toString()) : null) || null;
+      }
+    }
+    const eligible = [...imagesByWine.entries()].flatMap(([wid, imgs]) => imgs
+      .filter(img => img.status === 'approved' && img.visibility === 'public' && img.vintage)
+      .map(img => ({ ...img, wineDefinition: wid })));
+    const officialIds = new Set([...pickVintageOfficials(eligible).values()].map(img => String(img._id)));
+    for (const imgs of imagesByWine.values()) {
+      for (const img of imgs) img.vintageOfficial = officialIds.has(String(img._id));
     }
 
     const items = groups
@@ -641,6 +659,63 @@ router.put('/:id/set-official', async (req, res) => {
   } catch (error) {
     console.error('Set official image error:', error);
     res.status(500).json({ error: 'Failed to set official image' });
+  }
+});
+
+// PUT /api/admin/images/:id/set-vintage-official — "this is THE photo of this
+// wine's <vintage>" (support ticket 2026-10-09). Without a choice a vintage
+// shows the wine's official image when it is of that vintage, else the first
+// photo of it approved (utils/imageVintage.pickVintageOfficials); this is the
+// override. Like set-official it promotes any non-rejected photo — approving
+// and publishing it in the same step — but it never touches the wine's own
+// official image.
+router.put('/:id/set-vintage-official', async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+    const image = await BottleImage.findById(req.params.id).populate('bottle', 'wineDefinition vintage');
+    if (!image) return res.status(404).json({ error: 'Image not found' });
+    if (image.status === 'rejected') {
+      return res.status(400).json({ error: 'Rejected images cannot be a vintage\'s photo' });
+    }
+    // Never a label scan (audit L-6): private curation evidence, never published.
+    if (image.kind === 'label-scan') {
+      return res.status(400).json({ error: 'A label scan is private curation evidence, not a wine image' });
+    }
+    if (!(image.processedUrl || image.originalUrl)) return res.status(400).json({ error: 'Image has no file to use' });
+
+    const wineDefId = image.wineDefinition || image.bottle?.wineDefinition;
+    if (!wineDefId) return res.status(400).json({ error: 'Image is not linked to a wine' });
+    // Its own tag, else its bottle's vintage (a row older than the tag).
+    const vintage = photoVintage(image.vintage) || photoVintage(image.bottle?.vintage);
+    if (!vintage) return res.status(400).json({ error: 'This photo is not of a known vintage' });
+
+    // One choice per wine + vintage.
+    await BottleImage.updateMany(
+      { wineDefinition: wineDefId, vintage, assignedToVintage: true, _id: { $ne: image._id } },
+      { $set: { assignedToVintage: false } }
+    );
+
+    image.wineDefinition = wineDefId;
+    image.vintage = vintage;
+    image.assignedToVintage = true;
+    image.status = 'approved';
+    image.visibility = 'public';
+    if (!image.reviewedBy) {
+      image.reviewedBy = req.user.id;
+      image.reviewedAt = new Date();
+    }
+    await discardOriginal(image);
+    await image.save();
+
+    logAudit(req, 'admin.image.setVintageOfficial',
+      { type: 'image', id: image._id },
+      { wineDefinitionId: wineDefId, vintage }
+    );
+
+    res.json({ ok: true, vintage });
+  } catch (error) {
+    console.error('Set vintage official image error:', error);
+    res.status(500).json({ error: 'Failed to set the vintage\'s photo' });
   }
 });
 

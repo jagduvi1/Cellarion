@@ -348,7 +348,7 @@ describe('updateBottleFields (real execution)', () => {
   test('a changed vintage moves the bottle\'s photos to that vintage; an unchanged one leaves them alone (ticket 2026-10-09)', async () => {
     const b = liveBottle({ wineDefinition: 'w9' });
     await updateBottleFields(b, { vintage: 2021 }, REQ);
-    expect(BottleImage.updateMany).toHaveBeenCalledWith({ bottle: b._id }, { $set: { vintage: '2021' } });
+    expect(BottleImage.updateMany).toHaveBeenCalledWith({ bottle: b._id }, { $set: { vintage: '2021', assignedToVintage: false } });
     BottleImage.updateMany.mockClear();
     await updateBottleFields(liveBottle({ wineDefinition: 'w9' }), { vintage: '2019', price: 30 }, REQ);
     expect(BottleImage.updateMany).not.toHaveBeenCalled();

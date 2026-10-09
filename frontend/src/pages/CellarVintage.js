@@ -128,10 +128,13 @@ function CellarVintage() {
   const maturityStatus = profile ? getMaturityStatus(profile, anchorYear) : null;
   const profileReviewed = profile?.status === 'reviewed';
 
-  // Hero: the same order as the cards — a chosen or own photo, a public
-  // photo of this vintage, the registry image.
-  const heroSrc = first?.defaultImageUrl || first?.pendingImageUrl || first?.vintageImageUrl || wine?.image || null;
-  const heroCredit = first?.defaultImageUrl || first?.pendingImageUrl ? null : (first?.vintageImageUrl ? first?.vintageImageCredit : wine?.imageCredit);
+  // Hero: the same order as the cards — a chosen or own photo of this
+  // vintage, the vintage's official photo, the wine's registry image, and
+  // only then an own photo of another vintage.
+  const heroOwn = first?.defaultImageUrl || first?.pendingImageUrl || null;
+  const heroRegistry = first?.vintageImageUrl || wine?.image || null;
+  const heroSrc = heroOwn || heroRegistry || first?.otherVintageImageUrl || null;
+  const heroCredit = heroOwn || !heroRegistry ? null : (first?.vintageImageUrl ? first?.vintageImageCredit : wine?.imageCredit);
 
   const handleDrunk = (bottle, reason) => {
     setDrinkOpen(false);

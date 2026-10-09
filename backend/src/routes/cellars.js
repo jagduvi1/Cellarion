@@ -38,7 +38,8 @@ const scopeVersion = (ownerIds) => [...new Set(ownerIds.map((id) => String(id &&
   .map((id) => `${id}:${getDataVersion(id)}`)
   .join(',');
 const { isValidId, coerceStringQuery } = require('../utils/validation');
-const { photoVintage } = require('../utils/imageVintage');
+const { photoVintage, vintageKey } = require('../utils/imageVintage');
+const { findVintageOfficials } = require('../services/vintageImages');
 
 const router = express.Router();
 
@@ -456,11 +457,22 @@ async function attachBottleImageUrls(bottles, userId) {
   // not), so the by-wine arm never sees it — the photo's bottle is the only
   // way to learn its wine.
   const wineOfBottle = {};
-  for (const b of bottles) { const w = wineIdOf(b); if (w) wineOfBottle[b._id.toString()] = w.toString(); }
+  // …and each bottle's vintage, so a photo pinned to a sibling counts as a
+  // photo of THAT bottle's vintage even before the row carries its own tag
+  // (rows written before BottleImage.vintage existed, until the boot backfill).
+  const vintageOfBottle = {};
+  for (const b of bottles) {
+    const w = wineIdOf(b);
+    if (w) wineOfBottle[b._id.toString()] = w.toString();
+    vintageOfBottle[b._id.toString()] = photoVintage(b.vintage);
+  }
   if (wineIds.length) {
     try {
-      const siblings = await Bottle.find({ user: userId, wineDefinition: { $in: wineIds } }).select('_id wineDefinition').lean();
-      for (const s of siblings) if (s.wineDefinition) wineOfBottle[s._id.toString()] = s.wineDefinition.toString();
+      const siblings = await Bottle.find({ user: userId, wineDefinition: { $in: wineIds } }).select('_id wineDefinition vintage').lean();
+      for (const s of siblings) {
+        if (s.wineDefinition) wineOfBottle[s._id.toString()] = s.wineDefinition.toString();
+        vintageOfBottle[s._id.toString()] = photoVintage(s.vintage);
+      }
     } catch (err) {
       // A photo nicety must never take the cellar list down.
       console.error('Sibling photo lookup failed:', err.message);
@@ -491,56 +503,51 @@ async function attachBottleImageUrls(bottles, userId) {
     kind: { $ne: 'label-scan' },
   }).sort({ createdAt: -1 }).lean();
 
-  // Three maps, consulted bottle-first: a photo pinned to this exact bottle
-  // must always beat one that merely matches the wine, or choosing a
-  // per-bottle photo would appear to do nothing. Between the wine-level
-  // candidates, one of the SAME VINTAGE beats any other (support ticket
-  // 2026-10-09: the 2015 label, year printed on it, showed on the 2016
-  // bottles) — a photo carries its bottle's vintage (BottleImage.vintage).
+  // Which picture a card shows (support ticket 2026-10-09; Johan: "a new
+  // vintage without an image should display the wine's image … so we always
+  // show an image"). In order:
+  //   1. the bottle's starred photo (defaultImageUrl, below)
+  //   2. the viewer's own photo of THIS bottle — choosing a per-bottle photo
+  //      must never appear to do nothing
+  //   3. the viewer's own photo of the same vintage (a sibling bottle's)
+  //   4. the vintage's official photo (vintageImageUrl)
+  //   5. the wine's registry image (wineDefinition.image, on the client)
+  //   6. the viewer's own photo of another vintage (otherVintageImageUrl) —
+  //      only reached when the wine has no registry image, so a card with any
+  //      photo of the wine is never blank
+  // 2–3 go out as pendingImageUrl, as before. A photo of the 2015 label no
+  // longer stands in for the 2016 bottles while the wine has an image.
   const pendingByBottle = {};
   const pendingByWineVintage = {};
   const pendingByWine = {};
-  const vintageKey = (wine, vintage) => `${wine}::${vintage}`;
   for (const img of pendingImages) {
     const url = img.processedUrl || img.originalUrl;
     if (!url) continue;
     if (img.bottle && !pendingByBottle[img.bottle.toString()]) {
       pendingByBottle[img.bottle.toString()] = url;
     }
-    // The wine the photo belongs to: its own reference, else its bottle's.
+    // The wine the photo belongs to: its own reference, else its bottle's;
+    // its vintage: its own tag, else its bottle's.
     const imgWine = (img.wineDefinition && img.wineDefinition.toString()) || (img.bottle && wineOfBottle[img.bottle.toString()]) || null;
-    if (imgWine && img.vintage && !pendingByWineVintage[vintageKey(imgWine, img.vintage)]) {
-      pendingByWineVintage[vintageKey(imgWine, img.vintage)] = url;
+    const imgVintage = photoVintage(img.vintage) || (img.bottle ? vintageOfBottle[img.bottle.toString()] : null) || null;
+    if (imgWine && imgVintage && !pendingByWineVintage[vintageKey(imgWine, imgVintage)]) {
+      pendingByWineVintage[vintageKey(imgWine, imgVintage)] = url;
     }
     if (imgWine && !pendingByWine[imgWine]) {
       pendingByWine[imgWine] = url;
     }
   }
 
-  // A public photo of the same wine AND vintage, by anyone, with its credit:
-  // the card shows it before the wine's generic registry image, which may be
-  // another year's label. Only vintages this page actually needs.
-  const publicByWineVintage = {};
+  // The vintage official of each (wine, vintage) on this page: the photo of
+  // that vintage an admin approved first (or chose), by anyone, with its
+  // credit. One query for the page.
+  let officials = new Map();
   const vintagesWanted = [...new Set(bottles.map(b => photoVintage(b.vintage)).filter(Boolean))];
-  if (wineIds.length && vintagesWanted.length) {
-    try {
-      const publics = await BottleImage.find({
-        wineDefinition: { $in: wineIds },
-        vintage: { $in: vintagesWanted },
-        status: 'approved',
-        visibility: 'public',
-        kind: { $ne: 'label-scan' },
-      }).sort({ assignedToWine: -1, createdAt: -1 }).lean();
-      for (const img of publics) {
-        const url = img.processedUrl || img.originalUrl;
-        if (!url) continue;
-        const key = vintageKey(img.wineDefinition.toString(), img.vintage);
-        if (!publicByWineVintage[key]) publicByWineVintage[key] = { url, credit: img.credit || null };
-      }
-    } catch (err) {
-      // A photo nicety must never take the cellar list down.
-      console.error('Vintage photo lookup failed:', err.message);
-    }
+  try {
+    officials = await findVintageOfficials(wineIds, vintagesWanted);
+  } catch (err) {
+    // A photo nicety must never take the cellar list down.
+    console.error('Vintage photo lookup failed:', err.message);
   }
 
   const defaultImageIds = bottles.filter(b => b.defaultImage).map(b => b.defaultImage);
@@ -556,17 +563,15 @@ async function attachBottleImageUrls(bottles, userId) {
     const wineId = wineIdOf(b);
     const vintage = photoVintage(b.vintage);
     const vkey = wineId && vintage ? vintageKey(wineId.toString(), vintage) : null;
-    const publicVintage = vkey ? publicByWineVintage[vkey] : null;
+    const official = vkey ? officials.get(vkey) : null;
+    const own = pendingByBottle[b._id.toString()] || (vkey ? pendingByWineVintage[vkey] : null) || null;
     return {
       ...b,
-      pendingImageUrl:
-        pendingByBottle[b._id.toString()]
-        || (vkey ? pendingByWineVintage[vkey] : null)
-        || (wineId ? pendingByWine[wineId.toString()] : null)
-        || null,
+      pendingImageUrl: own,
       defaultImageUrl: b.defaultImage ? (defaultImageMap[b.defaultImage.toString()] || null) : null,
-      vintageImageUrl: publicVintage ? publicVintage.url : null,
-      vintageImageCredit: publicVintage ? publicVintage.credit : null,
+      vintageImageUrl: official ? official.url : null,
+      vintageImageCredit: official ? official.credit : null,
+      otherVintageImageUrl: !own && wineId ? (pendingByWine[wineId.toString()] || null) : null,
     };
   });
 }

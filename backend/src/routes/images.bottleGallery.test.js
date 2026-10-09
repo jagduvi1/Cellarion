@@ -145,3 +145,21 @@ describe('wine-level photos of the bottle\'s own vintage come first', () => {
     expect(body.images[1].vintage).toBe('2015'); // the slide can say which year it shows
   });
 });
+
+describe('the vintage\'s official photo leads the bottle\'s gallery (ticket 2026-10-09)', () => {
+  test('an admin\'s choice of 2016 photo comes first, ahead of an earlier 2016 photo and the wine\'s official image', async () => {
+    Bottle.findById.mockResolvedValue({ _id: BOTTLE, cellar: CELLAR, wineDefinition: WINE, vintage: '2016', defaultImage: null });
+    const pub = (c, over) => ({ _id: oid(c), processedUrl: `/api/uploads/processed/${c}.webp`, originalUrl: null, status: 'approved', visibility: 'public', uploadedBy: oid('2'), createdAt: '2026-01-01T00:00:00Z', ...over });
+    BottleImage.find
+      .mockReturnValueOnce(makeQuery([]))
+      .mockReturnValueOnce(makeQuery([
+        pub('3', { assignedToWine: true, vintage: null }),
+        pub('4', { vintage: '2016', createdAt: '2026-02-01T00:00:00Z' }),
+        pub('5', { vintage: '2016', createdAt: '2026-06-01T00:00:00Z', assignedToVintage: true }),
+      ]));
+
+    const res = await get(`/api/images/bottle/${BOTTLE}`, tokenFor(USER, ['user']));
+    const body = await res.json();
+    expect(body.images.map((i) => i._id)).toEqual([oid('5'), oid('4'), oid('3')]);
+  });
+});

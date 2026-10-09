@@ -38,16 +38,20 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
   // and whenever placement is unknown (cross-cellar view, or no racks exist).
   const isUnplaced = rackKnown && !isGroup && !rackInfo && bottle.status === 'active';
   const rackNavPref = user?.preferences?.rackNavigation || 'auto';
-  // Chosen default → the owner's own photo (pending or approved, this vintage
-  // first) → a public photo of this wine AND vintage → the registry image.
-  // Same order as the bottle page hero: a photo you took of YOUR bottle beats
-  // a generic registry image, and it must not disappear from the card when an
-  // admin approves it (ticket 2026-09-05, #1227). The same-vintage photo
-  // comes before the registry image because that one may be another year's
-  // label (ticket 2026-10-09).
+  // Chosen default → the owner's own photo of this bottle or this vintage
+  // (pending or approved) → the vintage's official photo → the wine's
+  // registry image → the owner's photo of another vintage. Same order as the
+  // bottle page hero. A photo you took of YOUR bottle beats a generic registry
+  // image and must not disappear when an admin approves it (ticket 2026-09-05,
+  // #1227); a photo of ANOTHER vintage only stands in when the wine has no
+  // image at all, so a 2016 bottle never wears the 2015 label while the wine
+  // has a picture, and a card with any photo is never blank (ticket 2026-10-09).
   const ownImage = bottle.defaultImageUrl || bottle.pendingImageUrl;
-  const imgSrc = ownImage || bottle.vintageImageUrl || bottle.wineDefinition?.image;
-  const credit = ownImage ? null : (bottle.vintageImageUrl ? bottle.vintageImageCredit : bottle.wineDefinition?.imageCredit);
+  const registryImage = bottle.vintageImageUrl || bottle.wineDefinition?.image;
+  const imgSrc = ownImage || registryImage || bottle.otherVintageImageUrl;
+  const credit = ownImage || !registryImage
+    ? null
+    : (bottle.vintageImageUrl ? bottle.vintageImageCredit : bottle.wineDefinition?.imageCredit);
   const isPending = !bottle.wineDefinition && !!bottle.pendingWineRequest;
   const displayName = bottle.wineDefinition?.name || bottle.pendingWineRequest?.wineName || t('common.unknownWine');
   const displayProducer = bottle.wineDefinition?.producer || bottle.pendingWineRequest?.producer;

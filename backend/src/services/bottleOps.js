@@ -829,7 +829,9 @@ async function updateBottleFields(bottle, fields, req) {
     // over the wine's generic image). Bookkeeping: never fails the edit.
     try {
       const { photoVintage } = require('../utils/imageVintage');
-      await BottleImage.updateMany({ bottle: bottle._id }, { $set: { vintage: photoVintage(bottle.vintage) } });
+      // An admin's "official for this vintage" was a choice about the OLD
+      // vintage; it does not travel to the new one.
+      await BottleImage.updateMany({ bottle: bottle._id }, { $set: { vintage: photoVintage(bottle.vintage), assignedToVintage: false } });
     } catch (err) {
       console.error('Photo vintage sync failed:', err.message);
     }

@@ -209,4 +209,23 @@ describe('BottleCard same-vintage photo', () => {
     expect(container.querySelector('img').getAttribute('src')).toBe('/api/uploads/processed/mine.png');
     expect(screen.queryByText('Anna')).toBeNull();
   });
+
+  // Johan, 2026-10-09: "a new vintage without an image should display the
+  // wine's image … so we always show an image". The owner's photo of ANOTHER
+  // vintage never beats the wine's image; it only stands in when there is none.
+  test('a photo of another vintage loses to the wine\'s image, and fills in only when the wine has none', () => {
+    const other = '/api/uploads/processed/mine-2015.webp';
+    const { container, unmount } = renderCard({ bottle: {
+      ...BOTTLE,
+      wineDefinition: { ...BOTTLE.wineDefinition, image: '/api/uploads/processed/registry.png', imageCredit: 'registry credit' },
+      otherVintageImageUrl: other,
+    } });
+    expect(container.querySelector('img').getAttribute('src')).toBe('/api/uploads/processed/registry.png');
+    expect(screen.getByText('registry credit')).toBeInTheDocument();
+    unmount();
+
+    const second = renderCard({ bottle: { ...BOTTLE, otherVintageImageUrl: other } });
+    expect(second.container.querySelector('img').getAttribute('src')).toBe(other);
+    expect(screen.queryByText('registry credit')).toBeNull();
+  });
 });

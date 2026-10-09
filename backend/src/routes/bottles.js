@@ -15,7 +15,8 @@ const PriceTrackingSkip = require('../models/PriceTrackingSkip');
 const BottleImage = require('../models/BottleImage');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { isReserved } = require('../utils/reservationUtils');
-const { photoVintage } = require('../utils/imageVintage');
+const { photoVintage, vintageKey } = require('../utils/imageVintage');
+const { findVintageOfficials } = require('../services/vintageImages');
 // The bottle page's own-photo pick reads a handful of the viewer's newest
 // photos of the wine and chooses among them; it never needs them all.
 const OWN_PHOTO_CANDIDATES = 50;
@@ -677,6 +678,9 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
     // omitted, or `{ wineDefinition: undefined }` matches every document and the
     // lookup returns a pending image from an unrelated bottle.
     const pendingImgOr = [{ bottle: bottle._id }];
+    // Each sibling's vintage: a photo pinned to a sibling is a photo of THAT
+    // bottle's vintage even before the row carries its own tag.
+    const vintageOfSibling = new Map();
     if (bottle.wineDefinition) {
       pendingImgOr.push({ wineDefinition: bottle.wineDefinition });
       // The viewer's other bottles of the same wine: a photo uploaded while a
@@ -684,7 +688,8 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
       // so only its bottle knows the wine (support ticket 2026-09-07 — same
       // fix as the cellar list's attachBottleImageUrls).
       try {
-        const siblings = await Bottle.find({ user: req.user.id, wineDefinition: bottle.wineDefinition, _id: { $ne: bottle._id } }).select('_id').lean();
+        const siblings = await Bottle.find({ user: req.user.id, wineDefinition: bottle.wineDefinition, _id: { $ne: bottle._id } }).select('_id vintage').lean();
+        for (const s of siblings) vintageOfSibling.set(String(s._id), photoVintage(s.vintage));
         if (siblings.length) pendingImgOr.push({ bottle: { $in: siblings.map((s) => s._id) } });
       } catch (err) {
         // A photo nicety must never take the bottle page down.
@@ -703,32 +708,36 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
       // frame is private curation evidence, not a bottle photo.
       kind: { $ne: 'label-scan' },
     }).sort({ createdAt: -1 }).limit(OWN_PHOTO_CANDIDATES).lean();
-    // This bottle's own photo first; among the wine-level ones, the same
-    // vintage before any other (support ticket 2026-10-09) — same order as
-    // the cellar list, so the card and the page agree.
+    // Same order as the cellar list (routes/cellars.js attachBottleImageUrls,
+    // support ticket 2026-10-09), so the card and the page agree: this
+    // bottle's own photo, else the viewer's photo of the same vintage, else
+    // the vintage's official photo, else the wine's registry image (client),
+    // and only then the viewer's photo of another vintage.
     const thisVintage = photoVintage(bottle.vintage);
+    const vintageOfPhoto = (img) => photoVintage(img.vintage) || (img.bottle ? vintageOfSibling.get(String(img.bottle)) : null) || null;
     const pendingImg = ownPhotos.find((img) => img.bottle && String(img.bottle) === String(bottle._id))
-      || (thisVintage ? ownPhotos.find((img) => img.vintage === thisVintage) : null)
-      || ownPhotos[0]
+      || (thisVintage ? ownPhotos.find((img) => vintageOfPhoto(img) === thisVintage) : null)
       || null;
+    const otherVintageImg = pendingImg ? null : (ownPhotos[0] || null);
 
     const pendingImageUrl = pendingImg
       ? (pendingImg.processedUrl || pendingImg.originalUrl)
       : null;
+    const otherVintageImageUrl = otherVintageImg
+      ? (otherVintageImg.processedUrl || otherVintageImg.originalUrl)
+      : null;
 
-    // A public photo of this wine AND vintage, by anyone: the hero shows it
-    // before the wine's generic registry image (another year's label).
+    // The vintage's official photo: the first one of this wine AND vintage
+    // an admin approved (or the one they chose), by anyone, with its credit.
     let vintageImageUrl = null;
     let vintageImageCredit = null;
     if (bottle.wineDefinition && thisVintage) {
       try {
-        const pub = await BottleImage.findOne({
-          wineDefinition: bottle.wineDefinition, vintage: thisVintage,
-          status: 'approved', visibility: 'public', kind: { $ne: 'label-scan' },
-        }).sort({ assignedToWine: -1, createdAt: -1 }).lean();
-        if (pub && (pub.processedUrl || pub.originalUrl)) {
-          vintageImageUrl = pub.processedUrl || pub.originalUrl;
-          vintageImageCredit = pub.credit || null;
+        const wineIdStr = String(bottle.wineDefinition._id || bottle.wineDefinition);
+        const official = (await findVintageOfficials([wineIdStr], [thisVintage])).get(vintageKey(wineIdStr, thisVintage));
+        if (official) {
+          vintageImageUrl = official.url;
+          vintageImageCredit = official.credit;
         }
       } catch (err) {
         console.error('Vintage photo lookup failed:', err.message);
@@ -803,7 +812,7 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
     }
 
     const ucEntry = cellar.userColors?.find(uc => uc.user.toString() === req.user.id.toString());
-    res.json({ bottle: bottleObj, userRole: role, cellarColor: ucEntry?.color || null, pendingImageUrl, defaultImageUrl, vintageImageUrl, vintageImageCredit, currentRelease, rackInfo, lotSiblingIds });
+    res.json({ bottle: bottleObj, userRole: role, cellarColor: ucEntry?.color || null, pendingImageUrl, defaultImageUrl, vintageImageUrl, vintageImageCredit, otherVintageImageUrl, currentRelease, rackInfo, lotSiblingIds });
   } catch (error) {
     console.error('Get bottle error:', error);
     res.status(500).json({ error: 'Failed to get bottle' });

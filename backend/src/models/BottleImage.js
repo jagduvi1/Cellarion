@@ -149,6 +149,15 @@ const bottleImageSchema = new mongoose.Schema({
     maxlength: 10,
     default: null
   },
+  // An admin's choice of THE photo for this wine + vintage (PUT
+  // /api/admin/images/:id/set-vintage-official). Without one, a vintage shows
+  // the wine's official image when it is of that vintage, else the first
+  // photo of it approved — derived on read (utils/imageVintage
+  // .pickVintageOfficials), so this flag is only ever an override.
+  assignedToVintage: {
+    type: Boolean,
+    default: false
+  },
   // SHA-256 (hex) of the stored image file bytes (the cropped image, or the
   // original when there is no crop). Set on import so a cellar export re-imported
   // by the same user reuses an already-stored identical image instead of writing
