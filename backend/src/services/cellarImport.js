@@ -54,6 +54,7 @@ const { normalizeBottleSize, DEFAULT_SIZE } = require('../config/bottleSizes');
 const { normalizeBarcode } = require('../utils/barcode');
 const { stripHtml } = require('../utils/sanitize');
 const { parseAndValidateVintage, parseDrinkYear } = require('../utils/validation');
+const { photoVintage } = require('../utils/imageVintage');
 const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
 const { CONSUMED_STATUSES, ORDERED_STATUS } = require('../config/constants');
 const { parseExpectedArrival } = require('../utils/onOrder');
@@ -665,6 +666,7 @@ async function attachImages(bottle, images, userId, getFileBuffer, result, dedup
 
     const doc = await BottleImage.create({
       bottle: bottle._id,
+      vintage: photoVintage(bottle.vintage),
       uploadedBy: userId,
       originalUrl,
       processedUrl,

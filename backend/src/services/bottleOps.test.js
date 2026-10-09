@@ -345,6 +345,19 @@ describe('updateBottleFields (real execution)', () => {
     expect(embedSinglePair).not.toHaveBeenCalled();
   });
 
+  test('a changed vintage moves the bottle\'s photos to that vintage; an unchanged one leaves them alone (ticket 2026-10-09)', async () => {
+    const b = liveBottle({ wineDefinition: 'w9' });
+    await updateBottleFields(b, { vintage: 2021 }, REQ);
+    expect(BottleImage.updateMany).toHaveBeenCalledWith({ bottle: b._id }, { $set: { vintage: '2021' } });
+    BottleImage.updateMany.mockClear();
+    await updateBottleFields(liveBottle({ wineDefinition: 'w9' }), { vintage: '2019', price: 30 }, REQ);
+    expect(BottleImage.updateMany).not.toHaveBeenCalled();
+    // A failed sync never fails the edit.
+    BottleImage.updateMany.mockRejectedValueOnce(new Error('db down'));
+    const res = await updateBottleFields(liveBottle({ wineDefinition: 'w9' }), { vintage: 'NV' }, REQ);
+    expect(res.error).toBeUndefined();
+  });
+
   test('bottleSize is canonicalized on the way in', async () => {
     const b = liveBottle({ bottleSize: '750ml' });
     const res = await updateBottleFields(b, { bottleSize: '1.5L (Magnum)' }, REQ);

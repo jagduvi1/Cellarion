@@ -6,7 +6,10 @@ import { swatchType } from '../../utils/wineColour';
 
 const ImageGallery = lazy(() => import('../ImageGallery'));
 
-function HeroImage({ bottle, wine, defaultImage, pendingImage, isPending, displayName, canEdit, onSetDefault }) {
+// `vintageImage` / `vintageImageCredit`: a public photo of this wine AND
+// vintage by anyone, shown before the wine's generic registry image, which
+// may be another year's label (support ticket 2026-10-09).
+function HeroImage({ bottle, wine, defaultImage, pendingImage, vintageImage, vintageImageCredit, isPending, displayName, canEdit, onSetDefault }) {
   const { t } = useTranslation();
   const [galleryEmpty, setGalleryEmpty] = useState(false);
 
@@ -18,6 +21,7 @@ function HeroImage({ bottle, wine, defaultImage, pendingImage, isPending, displa
         <Suspense fallback={null}>
           <ImageGallery
             bottleId={bottle._id}
+            vintage={bottle.vintage}
             size="large"
             onEmpty={() => setGalleryEmpty(true)}
             onSetDefault={canEdit ? onSetDefault : undefined}
@@ -30,18 +34,20 @@ function HeroImage({ bottle, wine, defaultImage, pendingImage, isPending, displa
     );
   }
 
-  // Fallback: single image (default, pending, or wine.image)
-  if (defaultImage || pendingImage || wine?.image) {
+  // Fallback: single image (default, pending, this vintage's public photo, or wine.image)
+  if (defaultImage || pendingImage || vintageImage || wine?.image) {
+    const ownImage = defaultImage || pendingImage;
+    const credit = ownImage ? null : (vintageImage ? vintageImageCredit : wine?.imageCredit);
     return (
       <div className="bd-wine-image-wrap">
         <AuthImage
-          src={defaultImage || pendingImage || wine.image}
+          src={ownImage || vintageImage || wine.image}
           alt={displayName}
           className="bd-wine-image"
           onError={e => { e.target.style.display = 'none'; }}
         />
-        {wine?.imageCredit && !defaultImage && <span className="bd-wine-image-credit">{wine.imageCredit}</span>}
-        {(isPending || (pendingImage && !wine?.image && !defaultImage)) && (
+        {credit && <span className="bd-wine-image-credit">{credit}</span>}
+        {(isPending || (pendingImage && !wine?.image && !vintageImage && !defaultImage)) && (
           <span className="bd-pending-badge">{t('bottleDetail.pendingReview', 'Pending review')}</span>
         )}
       </div>

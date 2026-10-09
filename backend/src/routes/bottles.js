@@ -15,6 +15,10 @@ const PriceTrackingSkip = require('../models/PriceTrackingSkip');
 const BottleImage = require('../models/BottleImage');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { isReserved } = require('../utils/reservationUtils');
+const { photoVintage } = require('../utils/imageVintage');
+// The bottle page's own-photo pick reads a handful of the viewer's newest
+// photos of the wine and chooses among them; it never needs them all.
+const OWN_PHOTO_CANDIDATES = 50;
 const { logAudit } = require('../services/audit');
 const { getSnapshotForDate } = require('../utils/exchangeRates');
 const { resolveRating } = require('../utils/ratingUtils');
@@ -687,7 +691,7 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
         console.error('Sibling photo lookup failed:', err.message);
       }
     }
-    const pendingImg = await BottleImage.findOne({
+    const ownPhotos = await BottleImage.find({
       $or: pendingImgOr,
       uploadedBy: req.user.id,
       // Pending OR approved — the uploader's own photo must not vanish from
@@ -698,11 +702,38 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
       // attachBottleImageUrls, support ticket 2026-09-03): the scanner's raw
       // frame is private curation evidence, not a bottle photo.
       kind: { $ne: 'label-scan' },
-    }).sort({ createdAt: -1 }).lean();
+    }).sort({ createdAt: -1 }).limit(OWN_PHOTO_CANDIDATES).lean();
+    // This bottle's own photo first; among the wine-level ones, the same
+    // vintage before any other (support ticket 2026-10-09) — same order as
+    // the cellar list, so the card and the page agree.
+    const thisVintage = photoVintage(bottle.vintage);
+    const pendingImg = ownPhotos.find((img) => img.bottle && String(img.bottle) === String(bottle._id))
+      || (thisVintage ? ownPhotos.find((img) => img.vintage === thisVintage) : null)
+      || ownPhotos[0]
+      || null;
 
     const pendingImageUrl = pendingImg
       ? (pendingImg.processedUrl || pendingImg.originalUrl)
       : null;
+
+    // A public photo of this wine AND vintage, by anyone: the hero shows it
+    // before the wine's generic registry image (another year's label).
+    let vintageImageUrl = null;
+    let vintageImageCredit = null;
+    if (bottle.wineDefinition && thisVintage) {
+      try {
+        const pub = await BottleImage.findOne({
+          wineDefinition: bottle.wineDefinition, vintage: thisVintage,
+          status: 'approved', visibility: 'public', kind: { $ne: 'label-scan' },
+        }).sort({ assignedToWine: -1, createdAt: -1 }).lean();
+        if (pub && (pub.processedUrl || pub.originalUrl)) {
+          vintageImageUrl = pub.processedUrl || pub.originalUrl;
+          vintageImageCredit = pub.credit || null;
+        }
+      } catch (err) {
+        console.error('Vintage photo lookup failed:', err.message);
+      }
+    }
 
     // Resolve user's chosen default bottle image to a URL
     let defaultImageUrl = null;
@@ -772,7 +803,7 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
     }
 
     const ucEntry = cellar.userColors?.find(uc => uc.user.toString() === req.user.id.toString());
-    res.json({ bottle: bottleObj, userRole: role, cellarColor: ucEntry?.color || null, pendingImageUrl, defaultImageUrl, currentRelease, rackInfo, lotSiblingIds });
+    res.json({ bottle: bottleObj, userRole: role, cellarColor: ucEntry?.color || null, pendingImageUrl, defaultImageUrl, vintageImageUrl, vintageImageCredit, currentRelease, rackInfo, lotSiblingIds });
   } catch (error) {
     console.error('Get bottle error:', error);
     res.status(500).json({ error: 'Failed to get bottle' });

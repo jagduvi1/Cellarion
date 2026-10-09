@@ -1,5 +1,18 @@
 import { render, screen } from '@testing-library/react';
 
+// The real i18n is not initialised in tests: `t(key, fallback)` hands the
+// fallback back untouched. Interpolate it here so a fallback with a
+// variable ("{{vintage}} label") reads as it would in the app.
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key, fallback, vars) => {
+      const text = typeof fallback === 'string' ? fallback : key;
+      const values = vars || (typeof fallback === 'object' && fallback ? fallback : {});
+      return text.replace(/\{\{(\w+)\}\}/g, (_, k) => (values[k] != null ? String(values[k]) : `{{${k}}}`));
+    },
+  }),
+}));
+
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({ apiFetch: () => {} }),
 }));
@@ -36,5 +49,20 @@ describe('ImageCarousel state pill', () => {
   test("someone else's published photo carries no pill", () => {
     render(<ImageCarousel images={[{ _id: 'b', processedUrl: '/api/uploads/processed/b.png', status: 'approved', mine: false }]} />);
     expect(screen.queryByRole('status')).toBeNull();
+  });
+});
+
+// Support ticket 2026-10-09: a wine-level photo of ANOTHER vintage names its
+// year on the slide, so a 2016 bottle showing the 2015 label says so.
+describe('ImageCarousel vintage tag', () => {
+  test('a photo of another year is tagged; the bottle\'s own year and untagged photos are not', () => {
+    const { rerender } = render(<ImageCarousel vintage="2016" images={[{ _id: 'a', processedUrl: '/api/uploads/processed/a.png', vintage: '2015' }]} />);
+    expect(screen.getByRole('note').textContent).toBe('2015 label');
+    rerender(<ImageCarousel vintage="2016" images={[{ _id: 'b', processedUrl: '/api/uploads/processed/b.png', vintage: '2016' }]} />);
+    expect(screen.queryByRole('note')).toBeNull();
+    rerender(<ImageCarousel vintage="2016" images={[{ _id: 'c', processedUrl: '/api/uploads/processed/c.png' }]} />);
+    expect(screen.queryByRole('note')).toBeNull();
+    rerender(<ImageCarousel images={[{ _id: 'a', processedUrl: '/api/uploads/processed/a.png', vintage: '2015' }]} />);
+    expect(screen.queryByRole('note')).toBeNull(); // no bottle vintage to compare with
   });
 });

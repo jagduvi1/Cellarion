@@ -4743,7 +4743,42 @@
     "unplaced": "Unplaced",
     "unplacedTooltip": "Added but not placed in a rack",
     "reserved": "Reserved",
-    "reservedUntil": "Reserved · {{year}}"
+    "reservedUntil": "Reserved · {{year}}",
+    "groupInfo": "Info",
+    "groupDrinkOne": "Drink one"
+  },
+  "drinkOne": {
+    "title": "Which bottle?",
+    "hint": "Pick the bottle you are taking out. The others stay as they are.",
+    "slot": "{{rack}} · slot {{position}}",
+    "unplaced": "Not in a rack",
+    "failed": "Could not log the bottle. Please try again."
+  },
+  "cellarVintage": {
+    "title": "Vintage",
+    "loadFailed": "Could not load this vintage.",
+    "inCellar_one": "{{count}} bottle in this cellar",
+    "inCellar_other": "{{count}} bottles in this cellar",
+    "onOrder_one": "{{count}} more on order",
+    "onOrder_other": "{{count}} more on order",
+    "drunk_one": "{{count}} already drunk, gifted or sold",
+    "drunk_other": "{{count}} already drunk, gifted or sold",
+    "paidTotal": "Paid in total: {{amount}}",
+    "rackSlots": "{{rack}} · slots {{slots}}",
+    "unplaced_one": "{{count}} not placed in a rack",
+    "unplaced_other": "{{count}} not placed in a rack",
+    "drinkOne": "Drink one",
+    "setWindowAll_one": "Set the drink window for this bottle",
+    "setWindowAll_other": "Set the drink window for all {{count}}",
+    "registryLink": "Open in the shared registry →",
+    "windowTitle": "This vintage",
+    "sharedTitle_one": "On your bottle",
+    "sharedTitle_other": "The same on all {{count}} bottles",
+    "yourWindow": "Your drink window",
+    "peak": "peak {{range}}",
+    "bottlesTitle": "Your bottles",
+    "noneLeft": "None of this vintage left in this cellar.",
+    "drunkNote": "Logged. One bottle fewer of this vintage."
   },
   "rackView": {
     "reservedAria": "reserved"
@@ -4822,7 +4857,8 @@
       "processing": "Processing…",
       "review": "Awaiting review",
       "published": "Published"
-    }
+    },
+    "otherVintage": "{{vintage}} label"
   },
   "imageUpload": {
     "upload": "Upload",

@@ -99,6 +99,8 @@ function BottleDetail() {
   const [reviewPages, setReviewPages] = useState(0);
   const [pendingImage, setPendingImage] = useState(null);
   const [defaultImage, setDefaultImage] = useState(null);
+  // A public photo of this wine and vintage, with its credit (ticket 2026-10-09).
+  const [vintageImage, setVintageImage] = useState(null);
 
   useEffect(() => {
     fetchBottle();
@@ -143,6 +145,12 @@ function BottleDetail() {
             ? data.defaultImageUrl
             : `${API_URL}${data.defaultImageUrl}`;
           setDefaultImage(url);
+        }
+        if (data.vintageImageUrl) {
+          const url = data.vintageImageUrl.startsWith('http')
+            ? data.vintageImageUrl
+            : `${API_URL}${data.vintageImageUrl}`;
+          setVintageImage({ url, credit: data.vintageImageCredit || null });
         }
         // Fetch community reviews for this wine. Pass the vintage explicitly —
         // this closure still sees the pre-setBottle (null) state, so reading
@@ -585,6 +593,8 @@ function BottleDetail() {
             wine={wine}
             defaultImage={defaultImage}
             pendingImage={pendingImage}
+            vintageImage={vintageImage?.url || null}
+            vintageImageCredit={vintageImage?.credit || null}
             isPending={isPending}
             displayName={displayName}
             canEdit={canEdit}

@@ -16,6 +16,7 @@ const { ingestBottleImage } = require('../services/imageOps');
 const { mayCurationReadScan, logCurationImageRead } = require('../services/labelScanAccess');
 const { isValidId } = require('../utils/validation');
 const { stripHtml } = require('../utils/sanitize');
+const { photoVintage } = require('../utils/imageVintage');
 const rateLimitsConfig = require('../config/rateLimits');
 const { logAudit } = require('../services/audit');
 
@@ -212,6 +213,16 @@ router.get('/bottle/:bottleId', requireAuth, async (req, res) => {
       }).sort({ assignedToWine: -1, createdAt: -1 });
       // Exclude any that are already in the bottle-specific list
       wineImages = wineImages.filter(img => !bottleImageIds.has(img._id.toString()));
+      // Photos of THIS vintage first (support ticket 2026-10-09): the first
+      // wine-level slide is the one a bottle without its own photo shows, and
+      // a 2016 bottle should open on a 2016 label when one exists. Stable
+      // sort: within each half the official-first, newest-first order holds.
+      const thisVintage = photoVintage(bottle.vintage);
+      if (thisVintage) {
+        const same = wineImages.filter(img => img.vintage === thisVintage);
+        const other = wineImages.filter(img => img.vintage !== thisVintage);
+        wineImages = [...same, ...other];
+      }
     }
 
     // Audit 2026-09 D05-1: the gallery is read by every cellar member, viewers

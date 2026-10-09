@@ -566,3 +566,76 @@
   box-shadow: var(--shadow-card);
 }
 .bottle-grid-card.is-selectable .bottle-count-badge { left: 38px; }
+
+/* ── Stacked card actions (support ticket 2026-10-09) ──
+   "Info" opens the vintage page, "Drink one" takes a single bottle out of the
+   group without expanding it. Row of small buttons under the badges in list
+   view, under the meta in the grid; the card's own click still expands. */
+.bottle-group-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.bottle-card .bottle-group-actions {
+  margin-left: auto;
+}
+
+.bottle-grid-card .bottle-group-actions {
+  margin-top: 0.45rem;
+}
+
+.bottle-group-btn {
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0.4rem 0.65rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.bottle-group-btn:hover,
+.bottle-group-btn:focus-visible {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+
+.bottle-group-btn--drink {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.bottle-card--compact .bottle-group-btn {
+  padding: 0.3rem 0.55rem;
+  font-size: 0.74rem;
+}
+
+@media (max-width: 600px) {
+  /* The list row has no spare width on a phone: the buttons drop under the
+     text instead of squeezing the name. */
+  .bottle-card {
+    flex-wrap: wrap;
+  }
+  .bottle-card .bottle-group-actions {
+    margin-left: 0;
+    width: 100%;
+    padding-left: calc(44px + 0.875rem);
+  }
+  /* The decorative ⊕ would land alone on a third line (or steal the width
+     the name and its ×n pill need). The buttons say what the card is; the
+     card's own tap still expands. In select mode the ⊕ is a real button and
+     the actions are not rendered, so it stays. */
+  .bottle-card .bottle-group-actions ~ .bottle-chevron {
+    display: none;
+  }
+  .bottle-card--compact .bottle-group-actions {
+    padding-left: 0;
+  }
+}

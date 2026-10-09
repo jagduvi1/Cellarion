@@ -38,6 +38,7 @@ const scopeVersion = (ownerIds) => [...new Set(ownerIds.map((id) => String(id &&
   .map((id) => `${id}:${getDataVersion(id)}`)
   .join(',');
 const { isValidId, coerceStringQuery } = require('../utils/validation');
+const { photoVintage } = require('../utils/imageVintage');
 
 const router = express.Router();
 
@@ -490,11 +491,16 @@ async function attachBottleImageUrls(bottles, userId) {
     kind: { $ne: 'label-scan' },
   }).sort({ createdAt: -1 }).lean();
 
-  // Two maps, consulted bottle-first: a photo pinned to this exact bottle must
-  // always beat one that merely matches the wine, or choosing a per-bottle
-  // photo would appear to do nothing.
+  // Three maps, consulted bottle-first: a photo pinned to this exact bottle
+  // must always beat one that merely matches the wine, or choosing a
+  // per-bottle photo would appear to do nothing. Between the wine-level
+  // candidates, one of the SAME VINTAGE beats any other (support ticket
+  // 2026-10-09: the 2015 label, year printed on it, showed on the 2016
+  // bottles) — a photo carries its bottle's vintage (BottleImage.vintage).
   const pendingByBottle = {};
+  const pendingByWineVintage = {};
   const pendingByWine = {};
+  const vintageKey = (wine, vintage) => `${wine}::${vintage}`;
   for (const img of pendingImages) {
     const url = img.processedUrl || img.originalUrl;
     if (!url) continue;
@@ -503,8 +509,37 @@ async function attachBottleImageUrls(bottles, userId) {
     }
     // The wine the photo belongs to: its own reference, else its bottle's.
     const imgWine = (img.wineDefinition && img.wineDefinition.toString()) || (img.bottle && wineOfBottle[img.bottle.toString()]) || null;
+    if (imgWine && img.vintage && !pendingByWineVintage[vintageKey(imgWine, img.vintage)]) {
+      pendingByWineVintage[vintageKey(imgWine, img.vintage)] = url;
+    }
     if (imgWine && !pendingByWine[imgWine]) {
       pendingByWine[imgWine] = url;
+    }
+  }
+
+  // A public photo of the same wine AND vintage, by anyone, with its credit:
+  // the card shows it before the wine's generic registry image, which may be
+  // another year's label. Only vintages this page actually needs.
+  const publicByWineVintage = {};
+  const vintagesWanted = [...new Set(bottles.map(b => photoVintage(b.vintage)).filter(Boolean))];
+  if (wineIds.length && vintagesWanted.length) {
+    try {
+      const publics = await BottleImage.find({
+        wineDefinition: { $in: wineIds },
+        vintage: { $in: vintagesWanted },
+        status: 'approved',
+        visibility: 'public',
+        kind: { $ne: 'label-scan' },
+      }).sort({ assignedToWine: -1, createdAt: -1 }).lean();
+      for (const img of publics) {
+        const url = img.processedUrl || img.originalUrl;
+        if (!url) continue;
+        const key = vintageKey(img.wineDefinition.toString(), img.vintage);
+        if (!publicByWineVintage[key]) publicByWineVintage[key] = { url, credit: img.credit || null };
+      }
+    } catch (err) {
+      // A photo nicety must never take the cellar list down.
+      console.error('Vintage photo lookup failed:', err.message);
     }
   }
 
@@ -519,13 +554,19 @@ async function attachBottleImageUrls(bottles, userId) {
 
   return bottles.map(b => {
     const wineId = wineIdOf(b);
+    const vintage = photoVintage(b.vintage);
+    const vkey = wineId && vintage ? vintageKey(wineId.toString(), vintage) : null;
+    const publicVintage = vkey ? publicByWineVintage[vkey] : null;
     return {
       ...b,
       pendingImageUrl:
         pendingByBottle[b._id.toString()]
+        || (vkey ? pendingByWineVintage[vkey] : null)
         || (wineId ? pendingByWine[wineId.toString()] : null)
         || null,
       defaultImageUrl: b.defaultImage ? (defaultImageMap[b.defaultImage.toString()] || null) : null,
+      vintageImageUrl: publicVintage ? publicVintage.url : null,
+      vintageImageCredit: publicVintage ? publicVintage.credit : null,
     };
   });
 }
@@ -999,6 +1040,116 @@ router.get('/:id/history', async (req, res) => {
 // have not arrived yet (status 'ordered'): soonest expected first, undated
 // orders last. Any member may look; arriving / editing needs editor, which
 // those endpoints enforce. Capped like the other list paths.
+// GET /api/cellars/:id/vintages/:wineId/:vintage — one wine and vintage in
+// this cellar: the page behind a grouped "n identical bottles" entry
+// (support ticket 2026-10-09). A VIEW over data that already exists, not a
+// third storage level: the bottles with their rack slots and photos, what
+// they share (a note or drink window identical on every one), how many are
+// on order or already drunk, and a bottle id the page hands to the lot
+// history and personal-data cards, which are keyed by bottle. Any member
+// may look; drinking one needs editor, which the consume route enforces.
+// The sommelier window and the registry's per-vintage values come from
+// their own routes, as on the bottle page.
+const VINTAGE_PAGE_LIMIT = 500;
+const VINTAGE_SHARED_FIELDS = ['notes', 'drinkFrom', 'drinkTo', 'peakFrom', 'peakUntil'];
+router.get('/:id/vintages/:wineId/:vintage', async (req, res) => {
+  try {
+    if (!isValidId(req.params.id) || !isValidId(req.params.wineId)) return res.status(400).json({ error: 'Invalid ID' });
+    const vintageParam = String(req.params.vintage || '').trim().slice(0, 10);
+    if (!vintageParam) return res.status(400).json({ error: 'Invalid vintage' });
+    const cellar = await Cellar.findById(req.params.id).populate('user', 'username').lean();
+    const role = getCellarRole(cellar, req.user.id);
+    if (!role || cellar.deletedAt) return res.status(404).json({ error: 'Cellar not found' });
+
+    // '' and null vintages read as NV in the grouped cellar view; match that
+    // set (same rule as services/bottleLot).
+    const vintageFilter = vintageParam === 'NV' ? { $in: ['NV', '', null] } : vintageParam;
+    const base = { cellar: cellar._id, wineDefinition: req.params.wineId, vintage: vintageFilter };
+    let bottles = await Bottle.find({ ...base, status: { $nin: NOT_IN_CELLAR_STATUSES } })
+      .populate(WINE_POPULATE_CARDS)
+      .sort({ addedToCellarAt: 1, createdAt: 1 })
+      .limit(VINTAGE_PAGE_LIMIT)
+      .lean();
+    const [onOrderCount, consumedCount] = await Promise.all([
+      Bottle.countDocuments({ ...base, status: ORDERED_STATUS }),
+      Bottle.countDocuments({ ...base, status: { $in: CONSUMED_STATUSES } }),
+    ]);
+    // The wine as the cards carry it; from the last drunk bottle when nothing
+    // is left (else one on order), so a vintage that is all history still has
+    // a page.
+    let wine = bottles[0]?.wineDefinition || null;
+    let historyBottleId = bottles[0]?._id || null;
+    if (!wine) {
+      const any = await Bottle.findOne({ ...base, status: { $in: CONSUMED_STATUSES } }).populate(WINE_POPULATE_CARDS).sort({ consumedAt: -1 }).lean()
+        || await Bottle.findOne(base).populate(WINE_POPULATE_CARDS).sort({ createdAt: -1 }).lean();
+      if (!any || !any.wineDefinition) return res.status(404).json({ error: 'No bottles of this wine and vintage here' });
+      wine = any.wineDefinition;
+      historyBottleId = any._id;
+    }
+
+    // Rack slots, answered here like the bottle page does: the page must not
+    // download every rack to place a few bottles.
+    const slotOf = {};
+    if (bottles.length) {
+      try {
+        const ids = bottles.map((b) => b._id);
+        const racks = await Rack.find({ cellar: cellar._id, deletedAt: null, 'slots.bottle': { $in: ids } })
+          .select('name group slots').lean();
+        const wanted = new Set(ids.map(String));
+        let inRoomRacks = null;
+        for (const rack of racks) {
+          for (const slot of rack.slots || []) {
+            const bid = slot.bottle && String(slot.bottle);
+            if (!bid || !wanted.has(bid)) continue;
+            if (inRoomRacks === null) {
+              const CellarLayout = require('../models/CellarLayout');
+              const layout = await CellarLayout.findOne({ cellar: cellar._id }).select('rackPlacements.rack').lean();
+              inRoomRacks = new Set((layout?.rackPlacements || []).map((rp) => String(rp.rack?._id || rp.rack)));
+            }
+            slotOf[bid] = { rackId: rack._id, rackName: rack.name, rackGroup: rack.group || null, position: slot.position, inRoom: inRoomRacks.has(String(rack._id)) };
+          }
+        }
+      } catch (err) {
+        // Placement is auxiliary: never 500 the page over it.
+        console.error('Vintage page rack lookup failed:', err.message);
+      }
+    }
+
+    // Maturity as the cards show it (personal window over the shared profile).
+    const profileMap = await buildProfileMap(bottles);
+    bottles = await attachBottleImageUrls(bottles, req.user.id);
+    bottles = bottles.map((b) => ({
+      ...b,
+      maturityStatus: classifyMaturity(b, profileMap),
+      rackInfo: slotOf[String(b._id)] || null,
+    }));
+
+    // What every bottle in the cellar shares. A note identical on all of them
+    // is shown once on the page; one that differs stays with its bottle.
+    const shared = {};
+    for (const field of VINTAGE_SHARED_FIELDS) {
+      const values = new Set(bottles.map((b) => (b[field] == null || b[field] === '' ? null : b[field])));
+      const only = values.size === 1 ? [...values][0] : undefined;
+      shared[field] = bottles.length > 0 && only != null ? only : null;
+    }
+
+    res.json({
+      cellar: { _id: cellar._id, name: cellar.name, userRole: role, userColor: getUserColor(cellar, req.user.id) },
+      wine,
+      vintage: vintageParam,
+      bottles,
+      total: bottles.length,
+      onOrderCount,
+      consumedCount,
+      historyBottleId,
+      shared,
+    });
+  } catch (error) {
+    console.error('Get vintage page error:', error);
+    res.status(500).json({ error: 'Failed to get this vintage' });
+  }
+});
+
 const ON_ORDER_LIMIT = 2000;
 router.get('/:id/on-order', async (req, res) => {
   try {

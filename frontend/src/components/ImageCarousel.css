@@ -253,3 +253,18 @@
 .carousel-state { position: absolute; top: 6px; left: 6px; font-size: 0.65rem; font-weight: 600; letter-spacing: 0.02em; padding: 2px 8px; border-radius: 999px; background: rgba(0, 0, 0, 0.62); color: #fff; pointer-events: none; }
 .carousel-state-published { background: rgba(47, 122, 58, 0.88); }
 .carousel-state-review { background: rgba(161, 92, 0, 0.88); }
+
+/* A wine-level photo of another vintage names its year (ticket 2026-10-09). */
+.carousel-vintage {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-full);
+  background: rgba(0, 0, 0, 0.6);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}

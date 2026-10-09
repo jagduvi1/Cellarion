@@ -130,3 +130,61 @@ test('empty input is returned as-is without a query', async () => {
   expect(await attachBottleImageUrls([], USER)).toEqual([]);
   expect(BottleImage.find).not.toHaveBeenCalled();
 });
+
+/**
+ * Photos per vintage (support ticket 2026-10-09): a photo of the 2015 label
+ * showed on the 2016 bottles, with the wrong year printed on it. A photo now
+ * carries its bottle's vintage; among the viewer's own wine-level photos the
+ * same vintage wins, and a public photo of the same wine AND vintage (by
+ * anyone) is offered as `vintageImageUrl` for the card to show before the
+ * wine's generic registry image.
+ */
+describe('attachBottleImageUrls and the photo\'s vintage', () => {
+  const own2015 = { _id: 'own15', wineDefinition: WINE, bottle: null, vintage: '2015', originalUrl: null, processedUrl: '/api/uploads/processed/own-2015.webp' };
+  const own2016 = { _id: 'own16', wineDefinition: WINE, bottle: null, vintage: '2016', originalUrl: null, processedUrl: '/api/uploads/processed/own-2016.webp' };
+
+  test('among the viewer\'s own wine-level photos, the one of the bottle\'s vintage wins; another year is still better than nothing', async () => {
+    // Newest first, as the query sorts: the 2015 photo was taken last.
+    BottleImage.find.mockReturnValue(chain([own2015, own2016]));
+    const out = await attachBottleImageUrls([
+      { _id: B1, wineDefinition: WINE, vintage: '2016' },
+      { _id: B2, wineDefinition: WINE, vintage: '2017' },
+    ], USER);
+    expect(out[0].pendingImageUrl).toBe('/api/uploads/processed/own-2016.webp'); // same vintage beats newest
+    expect(out[1].pendingImageUrl).toBe('/api/uploads/processed/own-2015.webp'); // no 2017 photo: newest of the wine
+  });
+
+  test('a public photo of the same wine and vintage is offered with its credit, only for the vintages on the page', async () => {
+    BottleImage.find
+      .mockReturnValueOnce(chain([]))                                      // the viewer's own photos: none
+      .mockReturnValueOnce(chain([                                         // public same-vintage photos
+        { _id: 'pub16', wineDefinition: WINE, vintage: '2016', credit: 'Anna', originalUrl: null, processedUrl: '/api/uploads/processed/pub-2016.webp' },
+      ]));
+    const out = await attachBottleImageUrls([
+      { _id: B1, wineDefinition: WINE, vintage: '2016' },
+      { _id: B2, wineDefinition: WINE, vintage: '2015' },
+    ], USER);
+
+    expect(BottleImage.find.mock.calls[1][0]).toEqual({
+      wineDefinition: { $in: [WINE] },
+      vintage: { $in: ['2016', '2015'] },
+      status: 'approved',
+      visibility: 'public',
+      kind: { $ne: 'label-scan' },
+    });
+    expect(out[0].vintageImageUrl).toBe('/api/uploads/processed/pub-2016.webp');
+    expect(out[0].vintageImageCredit).toBe('Anna');
+    expect(out[1].vintageImageUrl).toBeNull();
+    expect(out[1].vintageImageCredit).toBeNull();
+  });
+
+  test('bottles with no usable vintage (unknown, empty) ask for no public photo at all', async () => {
+    BottleImage.find.mockReturnValue(chain([]));
+    const out = await attachBottleImageUrls([
+      { _id: B1, wineDefinition: WINE, vintage: 'Unknown' },
+      { _id: B2, wineDefinition: WINE },
+    ], USER);
+    expect(BottleImage.find).toHaveBeenCalledTimes(1); // own photos only
+    expect(out[0].vintageImageUrl).toBeNull();
+  });
+});
