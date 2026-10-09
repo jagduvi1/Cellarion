@@ -115,3 +115,13 @@ test('a "Load more" answer that arrives after the search changed is dropped; the
   expect(screen.queryByText('Wine b1')).toBeNull();
   expect(cardNames(section('history.reasonDrank'))).toEqual(['Wine s1']);
 });
+
+// Support ticket 2026-10-09 (follow-up): the vintage page must stay reachable
+// once the last bottle is drunk — from the history card, since the cellar
+// list's group is gone by then.
+test('a history card links to the vintage page of its wine and vintage', async () => {
+  answer = (q) => (q.get('reason') ? page([], { remaining: 0 }) : page([{ ...bottle('b1', 'drank', 9), vintage: '2015' }]));
+  renderPage();
+  await waitFor(() => expect(screen.getByText('Wine b1')).toBeInTheDocument());
+  expect(screen.getByText('history.vintagePage')).toHaveAttribute('href', '/cellars/c1/vintages/w-b1/2015');
+});

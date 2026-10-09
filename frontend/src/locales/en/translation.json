@@ -1215,7 +1215,8 @@
     "showOtherVintages_one": "Other vintage you have ({{count}})",
     "showOtherVintages_other": "Other vintages you have ({{count}})",
     "hideOtherVintages": "Hide other vintages",
-    "otherVintagesHint": "Kept apart on purpose: how a different vintage showed says nothing about when this one is ready."
+    "otherVintagesHint": "Kept apart on purpose: how a different vintage showed says nothing about when this one is ready.",
+    "openVintage": "Open the vintage page →"
   },
   "bottles": {
     "title": "All bottles",
@@ -1535,6 +1536,7 @@
   "history": {
     "title": "Bottle History",
     "backTo": "← Back to {{cellarName}}",
+    "vintagePage": "Vintage page",
     "noHistory": "No bottles have been removed from this cellar yet",
     "bottleCount_one": "{{count}} bottle in history",
     "bottleCount_other": "{{count}} bottles in history",

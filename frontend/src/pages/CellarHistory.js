@@ -493,6 +493,18 @@ function HistoryBottleCard({ bottle, cellarId, showCellarBadge = false }) {
           )}
         </div>
         <div className="history-bottle-main-right">
+          {/* The vintage page stays reachable after the last bottle is drunk
+              (support ticket 2026-10-09): from here, not only from the cellar
+              list's group, which is gone by then. */}
+          {wine?._id && (
+            <Link
+              to={`/cellars/${linkCellarId}/vintages/${wine._id}/${encodeURIComponent(bottle.vintage || 'NV')}`}
+              className="history-vintage-link"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {t('history.vintagePage', 'Vintage page')}
+            </Link>
+          )}
           {wine?._id && (
             <button
               type="button"

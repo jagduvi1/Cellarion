@@ -99,7 +99,12 @@ function LotBlock({ lot, currentBottleId, heading }) {
   );
 }
 
-export default function LotHistory({ apiFetch, bottleId, vintage, isOwner = true }) {
+// `vintageHref`: the vintage page for this bottle's wine and vintage (support
+// ticket 2026-10-09). Offered from the card so the page stays reachable from
+// a DRUNK bottle too — once the last bottle of a vintage is gone the cellar
+// list has no group to open it from, and this card is where the history of
+// that vintage already lives.
+export default function LotHistory({ apiFetch, bottleId, vintage, isOwner = true, vintageHref = null }) {
   const { t } = useTranslation();
   const [lots, setLots] = useState(null);
   const [showOthers, setShowOthers] = useState(false);
@@ -135,13 +140,21 @@ export default function LotHistory({ apiFetch, bottleId, vintage, isOwner = true
 
   // Nothing to say: this is the only bottle of its vintage (drunk or not — a
   // lone drunk bottle's row would only repeat the consumption card above it),
-  // and there is no other vintage of the wine in the cellar.
+  // and there is no other vintage of the wine in the cellar. With a vintage
+  // page to offer, the card still shows for the link alone.
   const thisLotSpeaks = !!thisLot && (thisLot.counts?.total ?? 0) > 1;
-  if (!thisLotSpeaks && otherLots.length === 0) return null;
+  if (!thisLotSpeaks && otherLots.length === 0 && !vintageHref) return null;
 
   return (
     <div className="lot-history card">
-      <h2>{t('lotHistory.title', 'This wine in your cellar')}</h2>
+      <div className="lot-history__head">
+        <h2>{t('lotHistory.title', 'This wine in your cellar')}</h2>
+        {vintageHref && (
+          <Link to={vintageHref} className="lot-history__vintage-link">
+            {t('lotHistory.openVintage', 'Open the vintage page →')}
+          </Link>
+        )}
+      </div>
 
       {thisLot
         ? <LotBlock lot={thisLot} currentBottleId={bottleId} />

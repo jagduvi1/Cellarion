@@ -161,3 +161,24 @@ describe('LotHistory', () => {
     expect(container).toBeEmptyDOMElement();
   });
 });
+
+/**
+ * Support ticket 2026-10-09 (follow-up): once the last bottle of a vintage is
+ * drunk the cellar list has no group to open the vintage page from, so the
+ * card offers the link — and shows for the link alone on a lone drunk bottle.
+ */
+describe('LotHistory and the vintage page link', () => {
+  test('renders the link when given one, even with nothing else to say', async () => {
+    respond([lot('2020')]);
+    mount({ vintageHref: '/cellars/c1/vintages/w1/2020' });
+    const link = await screen.findByText('lotHistory.openVintage');
+    expect(link.closest('a')).toHaveAttribute('href', '/cellars/c1/vintages/w1/2020');
+  });
+
+  test('without a link the lone-bottle card still hides itself', async () => {
+    respond([lot('2020')]);
+    const { container } = mount();
+    await waitFor(() => expect(fetchLotHistory).toHaveBeenCalled());
+    expect(container.querySelector('.lot-history')).toBeNull();
+  });
+});

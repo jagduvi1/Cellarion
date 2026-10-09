@@ -705,7 +705,13 @@ function BottleDetail() {
           ones already drunk (support ticket 2026-09-16). Hides itself when
           there is nothing to say. Personal, so it sits with the personal
           cards, above the registry's profile and the community reviews. ── */}
-      <LotHistory apiFetch={apiFetch} bottleId={bottleId} vintage={bottle?.vintage} isOwner={userRole === 'owner'} />
+      <LotHistory
+        apiFetch={apiFetch}
+        bottleId={bottleId}
+        vintage={bottle?.vintage}
+        isOwner={userRole === 'owner'}
+        vintageHref={wine?._id ? `/cellars/${cellarId}/vintages/${wine._id}/${encodeURIComponent(bottle?.vintage || 'NV')}` : null}
+      />
 
       {/* ── AI tasting profile (generated, vintage-neutral) ── */}
       {wine?.aiProfile?.description && (
