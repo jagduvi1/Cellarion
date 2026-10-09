@@ -133,14 +133,17 @@ users until they search.
   one the install already shows.
 - **Contributions flow back.** A field correction or a value suggestion filed on the
   install for an adopted wine is also sent to the hosted queues, and a new-wine
-  request is forwarded too, with its label photo. All fire-and-forget: the local record
-  stands alone if the hosted side is unreachable.
+  request is forwarded too, with its label photo. The photo is re-encoded before it
+  leaves (WebP, at most 1200 px), so no camera metadata (EXIF, GPS) goes with it. All
+  fire-and-forget: the local record stands alone if the hosted side is unreachable.
 - **Requests come back answered.** The install keeps the id the registry gives a
   forwarded request and asks about its pending ones every hour (`GET /requests`). When
   a request is approved on cellarion.app, the install copies the wine and finishes its
-  own request against it — the bottles that waited on it move onto the wine and the
-  requester is notified, exactly as an admin resolve on the install would. A decline
-  comes back with its reason.
+  own request against it exactly as an admin resolve on the install would: the
+  requester is notified, and any bottles an import left waiting on it move onto the
+  wine. A decline comes back with its reason. A request an admin on the install
+  decides first keeps that decision. Requests forwarded before this existed carry no
+  registry id and are resolved by hand.
 - **No bulk download.** Nothing is copied when the key is set: registry wines appear in
   the add-bottle search straight away and a wine is copied when someone picks it. The
   Monday run only refreshes wines already copied.

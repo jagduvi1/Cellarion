@@ -243,13 +243,41 @@ describe('forwarding', () => {
   });
 
   test('a wine request is forwarded with its photo: a link, or an inline label photo within the cap', async () => {
-    await bridge.forwardRequest({ wineName: 'X', sourceUrl: 'https://x.example', image: 'data:image/webp;base64,AAAA' });
-    expect(client.forwardRequest).toHaveBeenCalledWith({ wineName: 'X', sourceUrl: 'https://x.example', image: 'data:image/webp;base64,AAAA' });
     await bridge.forwardRequest({ wineName: 'Y', sourceUrl: 'https://y.example', image: 'https://y.example/label.jpg' });
     expect(client.forwardRequest).toHaveBeenLastCalledWith({ wineName: 'Y', sourceUrl: 'https://y.example', image: 'https://y.example/label.jpg' });
     // Over the cap the registry would refuse it anyway: the request goes without.
     await bridge.forwardRequest({ wineName: 'Z', sourceUrl: 'https://z.example', image: `data:image/png;base64,${'A'.repeat(500001)}` });
     expect(client.forwardRequest).toHaveBeenLastCalledWith({ wineName: 'Z', sourceUrl: 'https://z.example' });
+    // Not decodable as an image: the request goes without too.
+    await bridge.forwardRequest({ wineName: 'W', sourceUrl: 'https://w.example', image: 'data:image/webp;base64,AAAA' });
+    expect(client.forwardRequest).toHaveBeenLastCalledWith({ wineName: 'W', sourceUrl: 'https://w.example' });
+  });
+
+  test('an inline photo leaves re-encoded: WebP, transparency kept, camera metadata (EXIF, GPS) dropped', async () => {
+    const sharp = require('sharp');
+    const png = await sharp({ create: { width: 8, height: 12, channels: 4, background: { r: 200, g: 20, b: 40, alpha: 0.5 } } })
+      .withExif({ IFD0: { Make: 'TestCam', Copyright: 'someone' } })
+      .png().toBuffer();
+    expect((await sharp(png).metadata()).exif).toBeTruthy(); // the input really carries EXIF
+    await bridge.forwardRequest({ wineName: 'X', sourceUrl: 'https://x.example', image: `data:image/png;base64,${png.toString('base64')}` });
+    const sent = client.forwardRequest.mock.calls.at(-1)[0];
+    expect(sent.image.startsWith('data:image/webp;base64,')).toBe(true);
+    const meta = await sharp(Buffer.from(sent.image.split(',')[1], 'base64')).metadata();
+    expect(meta.format).toBe('webp');
+    expect(meta.hasAlpha).toBe(true);
+    expect(meta.exif).toBeUndefined();
+  });
+
+  test('a registry that refuses the body as too large still gets the request, without the photo', async () => {
+    const sharp = require('sharp');
+    const png = await sharp({ create: { width: 4, height: 4, channels: 3, background: '#808080' } }).png().toBuffer();
+    client.forwardRequest
+      .mockResolvedValueOnce({ ok: false, status: 413, code: 'too_large' })
+      .mockResolvedValueOnce({ ok: true, status: 201, body: { request: { id: 'e'.repeat(24) } } });
+    const r = await bridge.forwardRequest({ wineName: 'X', sourceUrl: 'https://x.example', image: `data:image/png;base64,${png.toString('base64')}` });
+    expect(client.forwardRequest.mock.calls.at(-2)[0].image).toMatch(/^data:image\/webp;base64,/);
+    expect(client.forwardRequest).toHaveBeenLastCalledWith({ wineName: 'X', sourceUrl: 'https://x.example' });
+    expect(r.ok).toBe(true);
   });
 });
 

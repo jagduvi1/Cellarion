@@ -504,14 +504,51 @@ async function forwardValueFor(wineId, { keyId, keyName, value, reason, evidence
 // is what lets a curator on cellarion.app identify the wine.
 const INLINE_REQUEST_IMAGE = /^data:image\/(?:png|jpe?g|webp);base64,[A-Za-z0-9+/=]+$/;
 const INLINE_REQUEST_IMAGE_MAX = 500000;
+const REQUEST_IMAGE_EDGE = 1200;
+
+/**
+ * The inline photo as it leaves the install: re-encoded, so nothing but the
+ * pixels goes to cellarion.app — a photo posted straight to the API is stored
+ * here as sent, EXIF (camera, GPS) included, and sharp drops all metadata.
+ * Upright, at most REQUEST_IMAGE_EDGE px, WebP with its transparency. Null
+ * when it cannot be decoded or still does not fit: the request goes without.
+ */
+async function cleanRequestImage(dataUrl) {
+  try {
+    const sharp = require('sharp');
+    const { MAX_PIXELS } = require('./imageSanitizer');
+    const input = Buffer.from(dataUrl.slice(dataUrl.indexOf(',') + 1), 'base64');
+    const out = await sharp(input, { limitInputPixels: MAX_PIXELS })
+      .rotate()
+      .resize({ width: REQUEST_IMAGE_EDGE, height: REQUEST_IMAGE_EDGE, fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 82 })
+      .toBuffer();
+    const url = `data:image/webp;base64,${out.toString('base64')}`;
+    return url.length <= INLINE_REQUEST_IMAGE_MAX ? url : null;
+  } catch {
+    return null;
+  }
+}
 
 /** A local wine request (a wine nobody has) → the hosted intake. */
 async function forwardRequest({ wineName, sourceUrl, image }) {
   if (!isEnabled()) return null;
   const payload = { wineName, sourceUrl };
   const img = image ? String(image) : '';
-  if (/^https?:\/\//i.test(img) || (img.length <= INLINE_REQUEST_IMAGE_MAX && INLINE_REQUEST_IMAGE.test(img))) payload.image = img;
-  return client.forwardRequest(payload);
+  if (/^https?:\/\//i.test(img)) {
+    payload.image = img;
+  } else if (img.length <= INLINE_REQUEST_IMAGE_MAX && INLINE_REQUEST_IMAGE.test(img)) {
+    const clean = await cleanRequestImage(img);
+    if (clean) payload.image = clean;
+  }
+  const r = await client.forwardRequest(payload);
+  // A registry that refuses the body as too large (one without the 600 kb
+  // limit for this route) still gets the request — only the photo stays here.
+  if (r && !r.ok && r.status === 413 && payload.image) {
+    const { image: _dropped, ...withoutImage } = payload;
+    return client.forwardRequest(withoutImage);
+  }
+  return r;
 }
 
 /**
@@ -541,17 +578,21 @@ const REQUEST_SYNC_MAX = 50;
  * them. Before this, an approved request stayed "pending" here for good while
  * the registry already held the wine. A resolved one: its wine is copied
  * (adoptWine) and the request completes against it exactly as an admin
- * resolve here would (services/wineRequestOps — the waiting bottles move onto
- * the wine, the requester is notified). A declined one completes as declined
- * with the registry's reason. Still pending there: nothing happens. Run
- * hourly by the scheduler; oldest-checked first, so a large backlog rotates.
+ * resolve here would (services/wineRequestOps — the requester is notified, and
+ * any bottles an import left waiting on it move onto the wine). A declined one
+ * completes as declined with the registry's reason. Still pending there:
+ * nothing happens. Run hourly by the scheduler; oldest-checked first, so a
+ * large backlog rotates.
  */
 async function syncForwardedRequests({ now = new Date(), adopt = adoptWine } = {}) {
   if (!isEnabled()) return { skipped: 'disabled' };
   const WineRequest = require('../models/WineRequest');
   const { completeRequestResolve, completeRequestReject } = require('./wineRequestOps');
   const { logAudit } = require('./audit');
+  // Not the photo: up to 50 × 500 KB of base64 per run that nothing here reads
+  // (a save writes only the fields it changed, so leaving it out is safe).
   const pending = await WineRequest.find({ status: 'pending', requestType: 'new_wine', registryRequestId: { $type: 'string' } })
+    .select('-image')
     .sort({ registryCheckedAt: 1, createdAt: 1 }).limit(REQUEST_SYNC_MAX);
   if (!pending.length) return { checked: 0, resolved: 0, rejected: 0, failures: 0 };
 
@@ -559,14 +600,20 @@ async function syncForwardedRequests({ now = new Date(), adopt = adoptWine } = {
   if (answers === null) return { checked: 0, resolved: 0, rejected: 0, failures: 0, failed: true };
   const byId = new Map(answers.map((a) => [String(a.id), a]));
   let resolved = 0; let rejected = 0; let failures = 0;
+  // Every request that is not finished goes to the back of the queue —
+  // failed ones too, so a few that always fail never crowd out the rest.
+  const stamp = (local) => WineRequest.updateOne({ _id: local._id }, { $set: { registryCheckedAt: now } })
+    .catch((err) => console.warn(`[bridge] request sync: stamp ${local._id} failed — ${err.message}`));
 
   for (const local of pending) {
     const a = byId.get(local.registryRequestId);
     try {
       if (a && a.status === 'resolved' && a.wine && isId(a.wine.id)) {
         const adopted = await adopt(a.wine.id, local.user);
-        if (!adopted.ok) { failures++; continue; }
-        await completeRequestResolve(local, adopted.wine, { resolvedBy: null, adminNotes: a.notes || '' });
+        if (!adopted.ok) { failures++; await stamp(local); continue; }
+        // Null: an admin here decided it meanwhile — theirs stands.
+        const done = await completeRequestResolve(local, adopted.wine, { resolvedBy: null, adminNotes: a.notes || '' });
+        if (!done) continue;
         logAudit(null, 'wineRequest.resolve',
           { type: 'wineRequest', id: local._id },
           { via: 'bridge', registryRequestId: local.registryRequestId, linkedWineId: String(adopted.wine._id) });
@@ -574,7 +621,8 @@ async function syncForwardedRequests({ now = new Date(), adopt = adoptWine } = {
         continue;
       }
       if (a && a.status === 'rejected') {
-        await completeRequestReject(local, { resolvedBy: null, adminNotes: a.notes || 'Declined by the shared registry on cellarion.app.' });
+        const done = await completeRequestReject(local, { resolvedBy: null, adminNotes: a.notes || 'Declined by the shared registry on cellarion.app.' });
+        if (!done) continue;
         logAudit(null, 'wineRequest.reject',
           { type: 'wineRequest', id: local._id },
           { via: 'bridge', registryRequestId: local.registryRequestId });
@@ -582,11 +630,12 @@ async function syncForwardedRequests({ now = new Date(), adopt = adoptWine } = {
         continue;
       }
       // Still pending there, or not known to the registry as ours: ask again later.
-      await WineRequest.updateOne({ _id: local._id }, { $set: { registryCheckedAt: now } });
+      await stamp(local);
     } catch (err) {
       // One bad request must not end the run at the same point every hour.
       failures++;
       console.warn(`[bridge] request sync: ${local._id} failed — ${err.message}`);
+      await stamp(local);
     }
   }
   if (resolved || rejected || failures) {

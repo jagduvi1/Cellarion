@@ -5,8 +5,12 @@
  * cellarion.app finishes on a self-hosted install exactly as an admin
  * decision there would: the same bottles move, the same notification goes out.
  *
- * Both take a loaded WineRequest that is still 'pending'; the caller checks
- * that, and decides WHICH wine (resolve) or WHY (reject).
+ * Both take a loaded WineRequest that was 'pending' when loaded; the caller
+ * checks that, and decides WHICH wine (resolve) or WHY (reject). The status
+ * write itself only lands while the request is STILL pending (savePending):
+ * the hourly sync holds a loaded request for minutes while it copies wines,
+ * and an admin deciding the same request meanwhile must not be overwritten.
+ * The one that comes second gets null back and changes nothing more.
  */
 const Bottle = require('../models/Bottle');
 const BottleImage = require('../models/BottleImage');
@@ -15,11 +19,26 @@ const { createNotification } = require('./notifications');
 const { stripHtml } = require('../utils/sanitize');
 const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
 
+// Save only if the stored request is still pending (Mongoose adds `$where`
+// to the save's filter). False when someone else decided it first.
+async function savePending(wineRequest) {
+  wineRequest.$where = { status: 'pending' };
+  try {
+    await wineRequest.save();
+    return true;
+  } catch (err) {
+    if (err && err.name === 'DocumentNotFoundError') return false;
+    throw err;
+  } finally {
+    wineRequest.$where = undefined;
+  }
+}
+
 /**
  * Mark the request resolved against `linkedWine`, then move the bottles that
  * waited on it onto the wine, stamp their photos with it, queue their
  * vintages for a drink window, and tell the requester.
- * Returns { backfilledCount }.
+ * Returns { backfilledCount }, or null when the request was no longer pending.
  */
 async function completeRequestResolve(wineRequest, linkedWine, { resolvedBy = null, adminNotes = '' } = {}) {
   wineRequest.status = 'resolved';
@@ -27,7 +46,7 @@ async function completeRequestResolve(wineRequest, linkedWine, { resolvedBy = nu
   wineRequest.resolvedAt = new Date();
   wineRequest.linkedWineDefinition = linkedWine._id;
   wineRequest.adminNotes = adminNotes ? stripHtml(adminNotes) : '';
-  await wineRequest.save();
+  if (!(await savePending(wineRequest))) return null;
 
   // Backfill any bottles that were imported while waiting for this wine
   let backfilledCount = 0;
@@ -85,7 +104,9 @@ async function completeRequestResolve(wineRequest, linkedWine, { resolvedBy = nu
 /**
  * Mark the request rejected with `adminNotes` as the reason, after detaching
  * the bottles that waited on it, and tell the requester.
- * Returns { bottlesDetached }.
+ * Returns { bottlesDetached }, or null when the request was no longer pending
+ * (a resolve that won the race has already moved the bottles, so the detach
+ * below found none).
  */
 async function completeRequestReject(wineRequest, { resolvedBy = null, adminNotes } = {}) {
   // Detach any bottles that were imported pending this request — the mirror
@@ -116,7 +137,7 @@ async function completeRequestReject(wineRequest, { resolvedBy = null, adminNote
   wineRequest.resolvedBy = resolvedBy;
   wineRequest.resolvedAt = new Date();
   wineRequest.adminNotes = reason;
-  await wineRequest.save();
+  if (!(await savePending(wineRequest))) return null;
 
   let notifMsg = `Your request for "${wineRequest.wineName}" was declined. Reason: ${reason}`;
   if (bottlesDetached > 0) {

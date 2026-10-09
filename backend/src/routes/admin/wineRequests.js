@@ -308,7 +308,11 @@ router.put('/:id/resolve', async (req, res) => {
     // Mark resolved, move the bottles that waited on it, queue their vintages
     // and notify the requester — shared with the Registry Bridge request sync
     // (services/wineRequestOps), so both finish a request the same way.
-    await completeRequestResolve(wineRequest, linkedWine, { resolvedBy: req.user.id, adminNotes });
+    // Null: decided meanwhile (another admin, or the bridge sync) — nothing written.
+    const resolved = await completeRequestResolve(wineRequest, linkedWine, { resolvedBy: req.user.id, adminNotes });
+    if (!resolved) {
+      return res.status(400).json({ error: 'Wine request has already been resolved' });
+    }
 
     // Award Cellar Cred to the submitting user
     const credEvent = wineRequest.requestType === 'grape_suggestion' ? 'grape_suggestion_approved' : 'wine_request_approved';
@@ -361,8 +365,12 @@ router.put('/:id/reject', async (req, res) => {
 
     // Detach the waiting bottles BEFORE the status flip, mark rejected with the
     // reason and notify the requester — shared with the Registry Bridge
-    // request sync (services/wineRequestOps).
-    const { bottlesDetached } = await completeRequestReject(wineRequest, { resolvedBy: req.user.id, adminNotes });
+    // request sync (services/wineRequestOps). Null: decided meanwhile.
+    const rejected = await completeRequestReject(wineRequest, { resolvedBy: req.user.id, adminNotes });
+    if (!rejected) {
+      return res.status(400).json({ error: 'Wine request has already been resolved' });
+    }
+    const { bottlesDetached } = rejected;
 
     await wineRequest.populate([
       { path: 'user', select: 'username email' },

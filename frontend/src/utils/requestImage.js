@@ -14,18 +14,22 @@ const QUALITIES = [0.85, 0.72, 0.6];
 const EDGES = [MAX_EDGE, 720, 560];
 
 /**
- * The first encoding that fits, trying WebP then JPEG at each quality and
- * size. `render(edge, type, quality)` returns a data URL (or null);
+ * The first encoding that fits: every WebP quality and size first, so a
+ * cut-out keeps its transparency whenever any WebP fits, then the same steps
+ * as JPEG. `render(edge, type, quality)` returns a data URL (or null);
  * `maxChars` is the cap. Returns the data URL, or null when nothing fits.
  * Pure apart from `render`, so the choice is testable without a canvas.
  */
 export async function fitDataUrl(render, { maxChars = REQUEST_IMAGE_MAX_CHARS } = {}) {
-  for (const edge of EDGES) {
-    for (const quality of QUALITIES) {
-      for (const type of ['image/webp', 'image/jpeg']) {
+  types: for (const type of ['image/webp', 'image/jpeg']) {
+    for (const edge of EDGES) {
+      for (const quality of QUALITIES) {
         const out = await render(edge, type, quality);
-        // A browser without a WebP encoder silently returns PNG: skip it.
-        if (typeof out === 'string' && out.startsWith(`data:${type};`) && out.length <= maxChars) return out;
+        if (typeof out !== 'string') continue;
+        // A browser without a WebP encoder silently returns PNG: no WebP
+        // step will do better, so go straight to JPEG.
+        if (!out.startsWith(`data:${type};`)) continue types;
+        if (out.length <= maxChars) return out;
       }
     }
   }
@@ -72,7 +76,7 @@ export async function canvasRenderer(source) {
 /**
  * The request photo to send: the background-removed preview when there is
  * one, otherwise the chosen file — fitted under the cap. Null when no
- * encoding fits (the request then goes without a photo).
+ * encoding fits (the form then says the photo is too large and sends nothing).
  */
 export async function requestImageFor({ preview, file }) {
   const source = preview || file;

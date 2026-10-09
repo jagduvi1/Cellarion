@@ -28,10 +28,19 @@ describe('fitDataUrl', () => {
     expect(calls.length).toBeGreaterThan(1);
   });
 
-  test('a browser without a WebP encoder falls back to JPEG instead of sending PNG', async () => {
-    const { render } = fakeRender({ webp: false });
+  test('a browser without a WebP encoder falls back to JPEG instead of sending PNG, after one WebP try', async () => {
+    const { render, calls } = fakeRender({ webp: false });
     const out = await fitDataUrl(render, { maxChars: 480000 });
     expect(out.startsWith('data:image/jpeg;')).toBe(true);
+    expect(calls.filter(([, type]) => type === 'image/webp')).toHaveLength(1);
+  });
+
+  test('every WebP step comes before any JPEG, so a cut-out keeps its transparency', async () => {
+    // WebP too large only at the first quality; JPEG small at every step.
+    const render = async (edge, type, quality) => `data:${type};base64,`
+      + 'A'.repeat(type === 'image/webp' ? (quality === 0.85 ? 600000 : 400000) : 100000);
+    const out = await fitDataUrl(render, { maxChars: 480000 });
+    expect(out.startsWith('data:image/webp;')).toBe(true);
   });
 
   test('nothing fits: null, so the form can say so instead of sending an oversized photo', async () => {
