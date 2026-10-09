@@ -823,14 +823,26 @@ async function updateBottleFields(bottle, fields, req) {
     if (err?.name === 'VersionError') return { error: { status: 409, message: 'This bottle was modified by another request. Please refresh and try again.' } };
     throw err;
   }
-  // Vintage changed: the old (wine, oldVintage) embedding is still stored
-  // but no longer matches this bottle — embed the new pair. Skipped for demo
-  // accounts (a novel year misses the cache and would fire a paid Voyage call).
-  if ('vintage' in changes && !req?.user?.isDemo) {
+  if ('vintage' in changes) {
     const wineId = bottle.wineDefinition && (bottle.wineDefinition._id || bottle.wineDefinition);
     if (wineId) {
-      const { embedSinglePair } = require('./embeddingJob');
-      embedSinglePair(wineId, bottle.vintage).catch(() => {});
+      // The new (wine, vintage) is a pair a sommelier may never have seen:
+      // queue it for a drink window exactly as adding a bottle of it would
+      // (addBottle), and with the same exception — a bottle on order is
+      // queued the day it arrives (markArrived). Until 2026-10-09 an edited
+      // vintage never reached the queue, from the app or over MCP.
+      if (bottle.status !== ORDERED_STATUS) {
+        try {
+          await require('../utils/vintageProfile').ensurePendingVintageProfile(wineId, bottle.vintage);
+        } catch { /* queue bookkeeping must never fail the edit */ }
+      }
+      // The old (wine, oldVintage) embedding is still stored but no longer
+      // matches this bottle — embed the new pair. Skipped for demo accounts
+      // (a novel year misses the cache and would fire a paid Voyage call).
+      if (!req?.user?.isDemo) {
+        const { embedSinglePair } = require('./embeddingJob');
+        embedSinglePair(wineId, bottle.vintage).catch(() => {});
+      }
     }
   }
   // Audit in the SAME { field: { from, to } } shape the REST PUT /bottles/:id

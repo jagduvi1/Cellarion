@@ -133,6 +133,7 @@ const BottleModel = require('../models/Bottle');
 const BottleImage = require('../models/BottleImage');
 const WineRequest = require('../models/WineRequest');
 const { embedSinglePair } = require('./embeddingJob');
+const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
 const { enrichWineById } = require('./enrichmentJob');
 const { getOrCreateDailySnapshot } = require('../utils/exchangeRates');
 const { addBottle, updateBottleFields, removeBottleCascade } = require('./bottleOps');
@@ -315,6 +316,26 @@ describe('updateBottleFields (real execution)', () => {
     expect(res.changes.vintage).toBe('2021');
     expect(embedSinglePair).toHaveBeenCalledWith('w9', '2021');
     expect((await updateBottleFields(liveBottle(), { vintage: '20x9' }, REQ)).error.status).toBe(400);
+  });
+
+  test('a changed vintage enters the sommelier maturity queue, like adding a bottle of it', async () => {
+    const b = liveBottle({ wineDefinition: 'w9' });
+    await updateBottleFields(b, { vintage: 'NV' }, REQ);
+    expect(ensurePendingVintageProfile).toHaveBeenCalledWith('w9', 'NV');
+  });
+
+  test('…but not for a bottle on order (queued when it arrives), nor when the vintage did not change', async () => {
+    await updateBottleFields(liveBottle({ wineDefinition: 'w9', status: 'ordered' }), { vintage: 2021 }, REQ);
+    await updateBottleFields(liveBottle({ wineDefinition: 'w9' }), { vintage: '2019', price: 30 }, REQ);
+    expect(ensurePendingVintageProfile).not.toHaveBeenCalled();
+  });
+
+  test('a queue failure never fails the edit', async () => {
+    ensurePendingVintageProfile.mockRejectedValueOnce(new Error('db down'));
+    const b = liveBottle({ wineDefinition: 'w9' });
+    const res = await updateBottleFields(b, { vintage: 2020 }, REQ);
+    expect(res.error).toBeUndefined();
+    expect(b.vintage).toBe('2020');
   });
 
   test('vintage re-embed is skipped for demo users (zero AI spend guarantee)', async () => {
