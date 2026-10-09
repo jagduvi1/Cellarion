@@ -188,10 +188,10 @@ describe('attach_bottle_image answers with what the user already had and where t
     expect(BottleImage.countDocuments.mock.calls[0][0]).toMatchObject({ uploadedBy: ME, status: { $ne: 'rejected' } });
   });
 
-  test('a kept background skips removal: state awaiting_review, no warning when nothing was there', async () => {
+  test('a row that is already processed reads as awaiting_review, no warning when nothing was there', async () => {
     ownBottle();
     ingestBottleImage.mockResolvedValue({ image: { _id: new mongoose.Types.ObjectId(oid('9')), status: 'processed' } });
-    const body = parse(await tool('attach_bottle_image').handler({ bottle_id: oid('d'), image_url: 'https://cdn.example.com/label.jpg', keep_background: true }, CTX));
+    const body = parse(await tool('attach_bottle_image').handler({ bottle_id: oid('d'), image_url: 'https://cdn.example.com/label.jpg' }, CTX));
     expect(body.data.state).toBe('awaiting_review');
     expect(body.warnings).toBeUndefined();
   });

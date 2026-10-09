@@ -31,8 +31,8 @@ registerTool({
   description:
     'Adds a label or bottle photo to one of the user\'s bottles, from an image URL (https) or base64 image data ' +
     '(JPEG/PNG/WebP). Use image_url for a product image you found on the web (e.g. a retailer\'s wine page); use ' +
-    'image_base64 for a photo the user shared directly. The image is background-removed automatically after upload — ' +
-    'keep that for every photo of a whole bottle, even on a busy background (see keep_background). ' +
+    'image_base64 for a photo the user shared directly. The image ALWAYS goes through background removal after ' +
+    'upload, as an ordinary upload in the app does — so a photo of a whole bottle works best. ' +
     'Attach ONCE per wine: the photo shows on ALL the user\'s bottles of that wine, so never repeat the same photo ' +
     'for duplicate bottles — check get_bottle → photos first, and the response says how many photos the wine ' +
     'already had from the user (photos_before) and on how many bottles it now shows (shows_on_bottles). Pass wine_id ' +
@@ -46,7 +46,11 @@ registerTool({
     image_url: z.string().url().optional().describe('https URL of the image (retailer/CDN product image)'),
     image_base64: z.string().max(MAX_BASE64_CHARS).optional().describe('Base64 image data (no data: prefix needed); alternative to image_url'),
     credit: z.string().max(200).optional().describe('Optional attribution/source note — admin accounts only; silently ignored for regular users (matches the web app)'),
-    keep_background: z.boolean().optional().describe('Skip background removal. Leave it false (the default) for ANY photo of a whole bottle, whatever is behind it — a table, a shelf, a fridge, a busy room: removal cuts the bottle out cleanly, and that is how bottles look best in the cellar. Set true only when there is no whole bottle to cut out: a close-up of just the label, a partial or cropped bottle, or a product image already on a plain white or transparent background. Once a photo is kept with its background it cannot be cut out later.'),
+    // Kept in the schema so a caller that still sends it is not refused
+    // (docs/mcp-versioning.md: removing an input field is breaking), but it
+    // no longer does anything: photos from an AI assistant always have their
+    // background removed. Only the app's own checkbox can keep one.
+    keep_background: z.boolean().optional().describe('Deprecated and ignored: background removal always runs on photos added here. To keep a background (a label-only photo), the user uploads it in the app with "Keep the background".'),
     idempotency_key: z.string().max(100).optional(),
   },
   handler: async (args, ctx) => {
@@ -125,7 +129,8 @@ registerTool({
     }));
     const result = await ingestBottleImage({
       buffer, userId: ctx.user.id, userRoles: ctx.user.roles, bottle, wineDefinitionId, credit: args.credit || null,
-      keepBackground: args.keep_background === true,
+      // Always removed for photos added through MCP; keep_background is ignored.
+      keepBackground: false,
     }, ctx.req);
     if (result.error) {
       // 4xx = the caller's image is bad (invalid_input); 5xx = a transient
