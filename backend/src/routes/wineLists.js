@@ -20,36 +20,13 @@ const Bottle = require('../models/Bottle');
 
 const router = express.Router();
 
-/** Every distinct wine id referenced by a list, in any structure mode. */
-const entryWineIds = (wineList) =>
-  new Set(allEntries(wineList).filter(e => e.wine).map(e => String(e.wine)));
-
-/**
- * Refuse to ADD a pendingIdentity wine to a wine list.
- *
- * ABSOLUTE, like the discussion gate and for the same reason: a list can be
- * PUBLISHED, and routes/wineListPublic.js serves it with no auth — so attaching
- * is the act that would make a hidden half-identified wine public. Enforced at
- * WRITE time, which closes the public render, the PDF and the stats endpoint in
- * one place.
- *
- * Only NEWLY referenced wines are checked. The PUT replaces sections wholesale,
- * so judging the whole payload would soft-lock any list that already carried a
- * pending row from before this gate existed — the owner could not even edit it
- * to remove the entry. Rows already on the list are handled by the read-side
- * exclusion in services/wineListData.loadWineMap, which drops them from every
- * render; this gate stops the set from growing.
- *
- * @returns {Promise<string|null>} an error message, or null when the write is clean
- */
-async function pendingWineAdded(wineList, previousIds) {
-  const added = [...entryWineIds(wineList)].filter(id => !previousIds.has(id));
-  if (!added.length) return null;
-  const pending = await WineDefinition.find({ _id: { $in: added }, pendingIdentity: true })
-    .select('name').limit(3).lean();
-  if (!pending.length) return null;
-  return `This wine is still waiting for its producer to be identified and can't go on a list that may be published: ${pending.map(w => w.name).join(', ')}`;
-}
+// Pending-identity wines (a label nobody could read — no producer yet) are the
+// owner's ordinary wines on their own lists: they go on and come off like any
+// other, with no gate at write time. What may RENDER is decided in one place,
+// services/wineListData.ownerWineFilter — the owner's own pending rows do,
+// a stranger's hidden row never does, so an id that is not the owner's to
+// show simply never resolves, exactly like a deleted wine (support ticket
+// 2026-10-09: an owner could not save a list of their own cellar).
 
 // --- Logo upload setup ---
 ensureLogoDir();
@@ -197,10 +174,6 @@ router.put('/:id', requireAuth, requireNonDemo, async (req, res) => {
     const wineList = await WineList.findOne({ _id: req.params.id, user: req.user.id });
     if (!wineList) return res.status(404).json({ error: 'Wine list not found' });
 
-    // Snapshot the wines already on the list BEFORE the payload overwrites
-    // sections — pendingWineAdded only judges what this write introduces.
-    const previousWineIds = entryWineIds(wineList);
-
     // Allowed update fields
     const fields = [
       'name', 'structureMode', 'language',
@@ -227,9 +200,6 @@ router.put('/:id', requireAuth, requireNonDemo, async (req, res) => {
       wineList.autoGrouping.levels = [];
     }
 
-    const pendingMsg = await pendingWineAdded(wineList, previousWineIds);
-    if (pendingMsg) return res.status(400).json({ error: pendingMsg });
-
     await wineList.save();
     logAudit(req, 'winelist.update', { type: 'winelist', id: wineList._id, cellarId: wineList.cellar });
 
@@ -252,13 +222,13 @@ router.put('/:id', requireAuth, requireNonDemo, async (req, res) => {
 // a wine already on the list is reported as skipped, never duplicated. Same
 // rules as the MCP add_to_list tool: writes go to the ACTIVE container only, a
 // custom-structured list needs a section (created if new) unless it has
-// exactly one, and a pendingIdentity wine is refused — the list may be
-// published. Bottles must be in cellars the caller OWNS (lists are owner-only).
-// Prices are left for the editor: a menu price is a decision, not a purchase
-// price.
+// exactly one. A pending-identity wine the caller holds is theirs to list like
+// any other (see the note above the PUT). Bottles must be in cellars the
+// caller OWNS (lists are owner-only). Prices are left for the editor: a menu
+// price is a decision, not a purchase price.
 // Body:     { bottleIds: string[] (≤500), section?: string }
 // Response: { added, skipped: [{ id, reason }], list: { _id, name } }
-//   reason ∈ 'not_found', 'no_wine', 'pending_wine', 'already_on_list'
+//   reason ∈ 'not_found', 'no_wine', 'already_on_list'
 router.post('/:id/add-bottles', requireAuth, async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
@@ -306,10 +276,9 @@ router.post('/:id/add-bottles', requireAuth, async (req, res) => {
     };
     const wineIds = [...new Set(bottles.map((b) => b.wineDefinition && String(b.wineDefinition)).filter(Boolean))];
     const wines = wineIds.length
-      ? await WineDefinition.find({ _id: { $in: wineIds } }).select('pendingIdentity').lean()
+      ? await WineDefinition.find({ _id: { $in: wineIds } }).select('_id').lean()
       : [];
     const knownWine = new Set(wines.map((w) => String(w._id)));
-    const pendingWine = new Set(wines.filter((w) => w.pendingIdentity).map((w) => String(w._id)));
 
     const keyOf = (wine, vintage, bottleSize) => entryKey({
       wine: String(wine),
@@ -328,7 +297,6 @@ router.post('/:id/add-bottles', requireAuth, async (req, res) => {
       if (!b || !(await ownsCellar(b.cellar))) { skipped.push({ id, reason: 'not_found' }); continue; }
       const wineId = b.wineDefinition ? String(b.wineDefinition) : null;
       if (!wineId || !knownWine.has(wineId)) { skipped.push({ id, reason: 'no_wine' }); continue; }
-      if (pendingWine.has(wineId)) { skipped.push({ id, reason: 'pending_wine' }); continue; }
       const key = keyOf(wineId, b.vintage, b.bottleSize);
       if (present.has(key)) { skipped.push({ id, reason: 'already_on_list' }); continue; }
       present.add(key);

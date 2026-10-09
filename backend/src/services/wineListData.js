@@ -1,6 +1,8 @@
 const mongoose = require('mongoose');
 const Bottle = require('../models/Bottle');
+const Cellar = require('../models/Cellar');
 const WineDefinition = require('../models/WineDefinition');
+const { DRAFT_EXCLUDED } = require('./wineVisibility');
 
 const WINE_SELECT = 'name producer type appellation country region grapes classification';
 const WINE_POPULATE = [
@@ -59,11 +61,56 @@ async function loadStockMap(cellarId) {
 }
 
 /**
+ * Which of `wineIds` may sit on this owner's wine lists: every published
+ * registry wine, plus the pending-identity rows that are the owner's OWN —
+ * created by them, or held by a bottle in a cellar they own or belong to (a
+ * member's unread label in a shared cellar is still the owner's wine on the
+ * owner's menu). A list is the owner's document about the owner's wines, so a
+ * wine they see on their bottle page belongs on it like any other; the public
+ * page then prints the row the way the bottle page does (name, no producer).
+ *
+ * Nothing else: a published list is served by routes/wineListPublic.js with
+ * NO auth at all, so a stranger's hidden row must stay hidden there too. That
+ * is why this is a QUERY filter rather than a post-filter — `pendingIdentity`
+ * and `createdBy` are deliberately absent from WINE_SELECT, and a post-filter
+ * reading an absent field would pass every row (services/wineVisibility
+ * explains the trap). Shared by the renderer (loadWineMap) and the MCP
+ * add_to_list lookup, so what can be added and what renders is one rule.
+ *
+ * @param {any} ownerId  the list owner (WineList.user)
+ * @param {string[]} wineIds
+ */
+async function ownerWineFilter(ownerId, wineIds) {
+  const ids = [...new Set(wineIds.map(String))];
+  let held = [];
+  if (ids.length) {
+    const cellarIds = await Cellar.find({ $or: [{ user: ownerId }, { 'members.user': ownerId }], deletedAt: null }).distinct('_id');
+    if (cellarIds.length) {
+      held = await Bottle.distinct('wineDefinition', { cellar: { $in: cellarIds }, wineDefinition: { $in: ids } });
+    }
+  }
+  return {
+    _id: { $in: ids },
+    $or: [
+      { pendingIdentity: { $ne: true } },
+      // The owner's own rows, their private drafts included: a draft is the
+      // owner's wine too, and this is the owner's own menu.
+      { pendingIdentity: true, createdBy: ownerId },
+      // Held by a bottle in a cellar of theirs — a member's unread label — but
+      // never another member's private draft: a draft stays creator-only on
+      // every publish surface (services/wineVisibility, decision 2).
+      { pendingIdentity: true, ...DRAFT_EXCLUDED, _id: { $in: held } },
+    ],
+  };
+}
+
+/**
  * Load everything needed to render a wine list: populated WineDefinitions for
  * every entry plus per-entry stock from the list's cellar.
  *
  * Returns Map<entryKey, { wine, stock, avgPrice }> — entries whose wine no
- * longer exists in the registry are simply absent.
+ * longer exists in the registry, or is a hidden row that is not the owner's
+ * own (ownerWineFilter), are simply absent.
  */
 async function loadWineMap(wineList) {
   const wineIds = new Set();
@@ -72,17 +119,12 @@ async function loadWineMap(wineList) {
   }
 
   const [wines, stockMap] = await Promise.all([
-    // pendingIdentity rows are excluded here as well as refused at write time
-    // (routes/wineLists.js, mcp/tools/wineLists.js). Defence in depth with a
-    // reason: a published wine list is served by routes/wineListPublic.js,
-    // which has NO auth at all, and rows attached before the write gate existed
-    // would otherwise still render a stranger's hidden wine to the internet.
-    // An excluded entry simply drops out of the map — the exact same handling
-    // an entry whose wine was deleted already gets.
-    WineDefinition.find({ _id: { $in: [...wineIds] }, pendingIdentity: { $ne: true } })
-      .select(WINE_SELECT)
-      .populate(WINE_POPULATE)
-      .lean(),
+    ownerWineFilter(wineList.user, [...wineIds]).then(filter =>
+      WineDefinition.find(filter)
+        .select(WINE_SELECT)
+        .populate(WINE_POPULATE)
+        .lean()
+    ),
     loadStockMap(wineList.cellar),
   ]);
 
@@ -134,4 +176,4 @@ async function loadCellarWines(cellarId) {
   return result;
 }
 
-module.exports = { entryKey, allEntries, loadWineMap, loadCellarWines };
+module.exports = { entryKey, allEntries, ownerWineFilter, loadWineMap, loadCellarWines };

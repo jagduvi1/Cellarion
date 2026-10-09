@@ -4,10 +4,11 @@
  *
  * Pinned: entries collapse on wine + vintage + size (a case of twelve is one
  * line; a second identical bottle is skipped as already_on_list), a wine
- * already on the ACTIVE container is skipped, a pendingIdentity wine is
- * refused (the list may be published), a bottle in a cellar the caller does
- * not own reads as not_found, and a custom-structured list needs a section
- * unless it has exactly one.
+ * already on the ACTIVE container is skipped, a pendingIdentity wine the
+ * caller holds goes on like any other (support ticket 2026-10-09 — it is the
+ * owner's wine; what renders is decided by services/wineListData), a bottle
+ * in a cellar the caller does not own reads as not_found, and a
+ * custom-structured list needs a section unless it has exactly one.
  */
 const express = require('express');
 const http = require('http');
@@ -105,7 +106,7 @@ describe('POST /api/wine-lists/:id/add-bottles', () => {
     Bottle.find.mockReturnValue(selectLean([
       { _id: B(1), cellar: OWNED, wineDefinition: W1, vintage: '2019', bottleSize: '750ml' },
       { _id: B(2), cellar: OWNED, wineDefinition: W1, vintage: '2019', bottleSize: '750ml' }, // same line as B1
-      { _id: B(3), cellar: OWNED, wineDefinition: W2, vintage: '2020', bottleSize: '750ml' }, // pending identity
+      { _id: B(3), cellar: OWNED, wineDefinition: W2, vintage: '2020', bottleSize: '750ml' }, // pending identity — the caller's own wine, listed like any other
       { _id: B(4), cellar: OWNED, wineDefinition: null, vintage: 'NV', bottleSize: '750ml' },  // no registry wine
       { _id: B(5), cellar: FOREIGN, wineDefinition: W1, vintage: '2019', bottleSize: '750ml' }, // not my cellar
       { _id: B(6), cellar: OWNED, wineDefinition: W3, vintage: '2018', bottleSize: '750ml' }, // already on the list
@@ -117,21 +118,21 @@ describe('POST /api/wine-lists/:id/add-bottles', () => {
     });
 
     expect(status).toBe(200);
-    expect(body.added).toBe(2);
+    expect(body.added).toBe(3);
     expect(body.skipped).toEqual([
       { id: B(2), reason: 'already_on_list' },
-      { id: B(3), reason: 'pending_wine' },
       { id: B(4), reason: 'no_wine' },
       { id: B(5), reason: 'not_found' },
       { id: B(6), reason: 'already_on_list' },
       { id: B(8), reason: 'not_found' },
     ]);
     expect(body.list).toEqual({ _id: LIST, name: 'Menu' });
-    expect(list.autoGroupEntries).toHaveLength(3);
+    expect(list.autoGroupEntries).toHaveLength(4);
     expect(list.autoGroupEntries[1]).toMatchObject({ wine: W1, vintage: '2019', bottleSize: '750ml', sortOrder: 1 });
-    expect(list.autoGroupEntries[2]).toMatchObject({ wine: W1, vintage: '2019', bottleSize: '1500ml', sortOrder: 2 });
+    expect(list.autoGroupEntries[2]).toMatchObject({ wine: W2, vintage: '2020', bottleSize: '750ml', sortOrder: 2 });
+    expect(list.autoGroupEntries[3]).toMatchObject({ wine: W1, vintage: '2019', bottleSize: '1500ml', sortOrder: 3 });
     expect(list.save).toHaveBeenCalledTimes(1);
-    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'winelist.entry.add', expect.objectContaining({ type: 'winelist', id: LIST }), { added: 2, requested: 8, via: 'bulk' });
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'winelist.entry.add', expect.objectContaining({ type: 'winelist', id: LIST }), { added: 3, requested: 8, via: 'bulk' });
   });
 
   test('custom list: needs a section when it has several; a wine in ANY section is a duplicate; titles match case-insensitively; a new section is created', async () => {

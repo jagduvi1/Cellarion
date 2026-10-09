@@ -60,6 +60,11 @@ function WineListEditor() {
   const [wines, setWines] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saveState, setSaveState] = useState('saved'); // saved | unsaved | saving | error
+  // Why the last save failed: the server's own reason when it answered with
+  // one, '' when it answered without, null when the request never got through.
+  // A refused save used to show as "check your connection" (support ticket
+  // 2026-10-09) — the reason the server gave is what the owner needs to see.
+  const [saveError, setSaveError] = useState(null);
   const [activeTab, setActiveTab] = useState('wines');
   const [error, setError] = useState(null);
   const [bulkPercent, setBulkPercent] = useState('');
@@ -131,13 +136,19 @@ function WineListEditor() {
       if (res.ok) {
         lastSavedRef.current = json;
         lastErrorRef.current = null;
+        setSaveError(null);
         setSaveState('saved');
       } else {
+        // The server answered: show its reason, never "check your connection".
+        let reason = '';
+        try { reason = (await res.json())?.error || ''; } catch { /* no JSON body */ }
         lastErrorRef.current = json;
+        setSaveError(typeof reason === 'string' ? reason : '');
         setSaveState('error');
       }
     } catch {
       lastErrorRef.current = json;
+      setSaveError(null);
       setSaveState('error');
     } finally {
       savingRef.current = false;
@@ -509,7 +520,9 @@ function WineListEditor() {
     saved: t('wineLists.savedState'),
     unsaved: t('wineLists.unsavedChanges'),
     saving: t('wineLists.saving'),
-    error: t('wineLists.autosaveFailed'),
+    // "check your connection" only when the request never got through; a
+    // server that answered gets its reason shown under the header instead.
+    error: saveError == null ? t('wineLists.autosaveFailed') : t('wineLists.saveFailed'),
   }[saveState];
 
   const renderVintageSize = (vintage, bottleSize) => {
@@ -537,6 +550,9 @@ function WineListEditor() {
             </button>
           </div>
         </div>
+        {saveState === 'error' && saveError && (
+          <div className="alert alert-error" role="alert">{t('wineLists.saveRefused', { reason: saveError })}</div>
+        )}
       </div>
 
       {/* Quick-start banner for empty lists */}

@@ -11,8 +11,9 @@ const NEW_LIST = '__new__';
  * Bulk "Add to a wine list": the wines of every selected bottle go on one of
  * this cellar's lists (or a list created right here). Entries are wine +
  * vintage + size, so a case collapses into one line; wines already on the
- * list, and wines still awaiting identification, come back as skipped. A
- * custom-structured list needs a section — pick one, or type a new name.
+ * list come back as skipped (a wine still awaiting identification is the
+ * owner's wine and goes on like any other). A custom-structured list needs a
+ * section — pick one, or type a new name.
  */
 export default function BulkAddToListModal({ bottleIds, cellarId, onClose, onDone }) {
   const { t } = useTranslation();
