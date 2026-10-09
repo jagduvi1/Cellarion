@@ -40,7 +40,6 @@ const KNOWN_SAFE = {
   'mcp/tools/publicContent.js': ['wine.pendingIdentity === true'], // skip guard: hides drafts too
   'routes/import.js': ['pendingIdentity: true } : {}'],          // audit detail
   'routes/somm/pendingWines.js': ['pendingIdentity: wine.pendingIdentity === true'], // response flag on a queue-loaded row
-  'routes/wineLists.js': ['pendingIdentity: true })'],            // attach REFUSAL: refuses drafts too
   'services/embeddingJob.js': ['wine.pendingIdentity === true'],  // skip guard
   'services/enrichmentJob.js': ['wine.pendingIdentity === true'], // skip guard
   'services/search.js': ['wine.pendingIdentity === true'],        // index REMOVAL: removes drafts too

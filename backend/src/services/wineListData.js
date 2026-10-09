@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
 const WineDefinition = require('../models/WineDefinition');
+const { DRAFT_EXCLUDED } = require('./wineVisibility');
 
 const WINE_SELECT = 'name producer type appellation country region grapes classification';
 const WINE_POPULATE = [
@@ -92,8 +93,13 @@ async function ownerWineFilter(ownerId, wineIds) {
     _id: { $in: ids },
     $or: [
       { pendingIdentity: { $ne: true } },
+      // The owner's own rows, their private drafts included: a draft is the
+      // owner's wine too, and this is the owner's own menu.
       { pendingIdentity: true, createdBy: ownerId },
-      { pendingIdentity: true, _id: { $in: held } },
+      // Held by a bottle in a cellar of theirs — a member's unread label — but
+      // never another member's private draft: a draft stays creator-only on
+      // every publish surface (services/wineVisibility, decision 2).
+      { pendingIdentity: true, ...DRAFT_EXCLUDED, _id: { $in: held } },
     ],
   };
 }

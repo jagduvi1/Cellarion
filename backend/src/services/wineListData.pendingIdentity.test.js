@@ -72,8 +72,10 @@ describe('ownerWineFilter', () => {
       _id: { $in: ALL },
       $or: [
         { pendingIdentity: { $ne: true } },
+        // the owner's own rows, private drafts included
         { pendingIdentity: true, createdBy: OWNER },
-        { pendingIdentity: true, _id: { $in: [HELD_PENDING] } },
+        // held rows: a member's unread label yes, a member's PRIVATE DRAFT never
+        { pendingIdentity: true, draft: { $ne: true }, _id: { $in: [HELD_PENDING] } },
       ],
     });
   });
@@ -95,7 +97,7 @@ describe('ownerWineFilter', () => {
     expect(filter.$or).toEqual([
       { pendingIdentity: { $ne: true } },
       { pendingIdentity: true, createdBy: OWNER },
-      { pendingIdentity: true, _id: { $in: [] } },
+      { pendingIdentity: true, draft: { $ne: true }, _id: { $in: [] } },
     ]);
   });
 });
