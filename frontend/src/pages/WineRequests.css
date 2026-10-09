@@ -220,3 +220,26 @@
     gap: 0.5rem;
   }
 }
+
+/* More links and the back label (#1460) */
+.field-hint {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.extra-link-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.extra-link-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.request-links a {
+  word-break: break-all;
+}

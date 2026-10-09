@@ -111,7 +111,7 @@ router.put('/:id/resolve', async (req, res) => {
       // 2026-07-22 RC4). A likely duplicate returns 409 with candidates so the
       // admin links the request to the existing wine instead — or resubmits
       // with confirmCreate:true after an explicit "create anyway".
-      const { name, producer, country, region, appellation, grapes, type, colour, image, useRequestPhoto } = wineData;
+      const { name, producer, country, region, appellation, grapes, type, colour, image, useRequestPhoto, addBackPhoto } = wineData;
 
       if (!name || !producer || !country) {
         return res.status(400).json({ error: 'Name, producer, and country are required to create wine' });
@@ -140,7 +140,7 @@ router.put('/:id/resolve', async (req, res) => {
       // list that shows the wine): it becomes the new wine's official picture
       // as a file, once the wine exists — when the admin keeps it
       // (useRequestPhoto), or when an API caller leaves the image out.
-      const { decodeInlineImage, attachOfficialWineImage } = require('../../services/imageOps');
+      const { decodeInlineImage, attachOfficialWineImage, ingestBottleImage } = require('../../services/imageOps');
       const { sanitizeImageBuffer, hasTransparency } = require('../../services/imageSanitizer');
       const requestPhoto = decodeInlineImage(wineRequest.image);
       const blankImage = image === '' || image === null;
@@ -157,6 +157,19 @@ router.put('/:id/resolve', async (req, res) => {
           await sanitizeImageBuffer(requestPhoto);
         } catch {
           return res.status(400).json({ error: 'The photo on the request could not be read. Approve without it, or give a picture link.' });
+        }
+      }
+      // The back label (#1460) can join the new wine's PUBLIC photos — a
+      // gallery photo marked as the back, never the wine's picture. On unless
+      // the admin unticks it (addBackPhoto: false), like the front photo; an
+      // inline photo only — a link is left on the request, nothing is fetched.
+      const backPhoto = decodeInlineImage(wineRequest.backImage);
+      const addBack = !!backPhoto && addBackPhoto !== false;
+      if (addBack) {
+        try {
+          await sanitizeImageBuffer(backPhoto);
+        } catch {
+          return res.status(400).json({ error: 'The back label photo on the request could not be read. Untick "add the back label" to approve without it.' });
         }
       }
 
@@ -293,6 +306,37 @@ router.put('/:id/resolve', async (req, res) => {
           }
         } catch (err) {
           console.error('[wine-requests] request photo not attached:', err.message);
+        }
+      }
+
+      // The back label joins the gallery: ingested like a member's upload,
+      // published at once (the admin approved it by leaving the box ticked),
+      // marked as the back so a reader can tell the faces apart. Not the
+      // official picture — assignedToWine stays false. Only for a wine created
+      // here, and best-effort, like the front.
+      if (addBack && createdHere) {
+        try {
+          const keepBackground = await hasTransparency(backPhoto);
+          const ingest = await ingestBottleImage(
+            { buffer: backPhoto, wineDefinitionId: linkedWine._id, userId: req.user.id, userRoles: req.user.roles, keepBackground },
+            req
+          );
+          if (ingest.error) {
+            console.error('[wine-requests] back label not added:', ingest.error.message);
+          } else {
+            const backRow = ingest.image;
+            backRow.status = 'approved';
+            backRow.visibility = 'public';
+            backRow.side = 'back';
+            backRow.reviewedBy = req.user.id;
+            backRow.reviewedAt = new Date();
+            await backRow.save();
+            logAudit(req, 'admin.image.approve',
+              { type: 'image', id: backRow._id },
+              { wineDefinitionId: String(linkedWine._id), fromRequest: String(wineRequest._id), side: 'back' });
+          }
+        } catch (err) {
+          console.error('[wine-requests] back label not added:', err.message);
         }
       }
     } else if (wineDefinitionId) {

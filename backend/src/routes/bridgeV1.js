@@ -348,11 +348,14 @@ router.post('/wines/changes', validChanges, quota('changeChecks'), async (req, r
   }
 });
 
-// POST /v1/requests — { wineName, sourceUrl, image? } → the hosted wine-request queue.
+// POST /v1/requests — { wineName, sourceUrl, sourceUrls?, image?, backImage? }
+// → the hosted wine-request queue. sourceUrls (up to three links, sourceUrl
+// first) and backImage arrived with #1460; an older install sends neither.
 router.post('/requests', quota('contributions'), async (req, res) => {
   try {
     const r = await createWineRequest(req.user.id, {
-      wineName: req.body?.wineName, sourceUrl: req.body?.sourceUrl, image: req.body?.image,
+      wineName: req.body?.wineName, sourceUrl: req.body?.sourceUrl, sourceUrls: req.body?.sourceUrls,
+      image: req.body?.image, backImage: req.body?.backImage,
     }, { via: 'bridge', req });
     if (r.error) return res.status(r.error.status || 400).json({ error: r.error.message, code: 'invalid' });
     logAudit(req, 'bridge.request.forwarded', { type: 'wineRequest', id: r.wineRequest._id },

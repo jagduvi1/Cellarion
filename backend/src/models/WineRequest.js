@@ -33,11 +33,27 @@ const wineRequestSchema = new mongoose.Schema({
       message: 'Please provide a valid URL'
     }
   },
+  // Every link the requester gave, in their order, sourceUrl first. One link
+  // was all a request could carry; a winery page and a review page give a
+  // curator different evidence (#1460). sourceUrl stays the first of these,
+  // for the readers and the older installs that know only one.
+  sourceUrls: [{
+    type: String,
+    trim: true
+  }],
   suggestedGrapes: [{
     type: String,
     trim: true
   }],
   image: {
+    type: String,
+    trim: true
+  },
+  // The back label (#1460): often the producer, the appellation and the
+  // importer the front leaves out. Same shapes as image — an http(s) link or
+  // an inline data: image under the cap — shown to the reviewing admin beside
+  // the front; it never becomes the wine's picture.
+  backImage: {
     type: String,
     trim: true
   },

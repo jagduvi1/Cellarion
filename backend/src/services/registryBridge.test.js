@@ -539,3 +539,34 @@ describe('audit 2026-09-08 — refresh keeps its promises', () => {
     expect(local.image).toBe('/api/uploads/processed/local.png');
   });
 });
+
+describe('forwarding — links and the back label (#1460)', () => {
+  test('the extra links and the back label travel with the request; a single link rides as sourceUrl only', async () => {
+    await bridge.forwardRequest({ wineName: 'Y', sourceUrl: 'https://y.example', sourceUrls: ['https://y.example'], image: null, backImage: 'https://y.example/back.jpg' });
+    expect(client.forwardRequest).toHaveBeenLastCalledWith({ wineName: 'Y', sourceUrl: 'https://y.example', backImage: 'https://y.example/back.jpg' });
+    await bridge.forwardRequest({ wineName: 'Y', sourceUrl: 'https://y.example', sourceUrls: ['https://y.example', 'https://review.example/y'] });
+    expect(client.forwardRequest).toHaveBeenLastCalledWith({ wineName: 'Y', sourceUrl: 'https://y.example', sourceUrls: ['https://y.example', 'https://review.example/y'] });
+  });
+
+  test('an inline back label leaves re-encoded like the front; one over the cap stays home', async () => {
+    const sharp = require('sharp');
+    const png = await sharp({ create: { width: 4, height: 4, channels: 3, background: '#808080' } }).png().toBuffer();
+    await bridge.forwardRequest({ wineName: 'X', sourceUrl: 'https://x.example', backImage: `data:image/png;base64,${png.toString('base64')}` });
+    expect(client.forwardRequest.mock.calls.at(-1)[0].backImage).toMatch(/^data:image\/webp;base64,/);
+    await bridge.forwardRequest({ wineName: 'X', sourceUrl: 'https://x.example', backImage: `data:image/png;base64,${'A'.repeat(500001)}` });
+    expect(client.forwardRequest).toHaveBeenLastCalledWith({ wineName: 'X', sourceUrl: 'https://x.example' });
+  });
+
+  test('a registry that refuses the body drops the back label first, then the front photo', async () => {
+    client.forwardRequest
+      .mockResolvedValueOnce({ ok: false, status: 413, code: 'too_large' })
+      .mockResolvedValueOnce({ ok: false, status: 413, code: 'too_large' })
+      .mockResolvedValueOnce({ ok: true, status: 201, body: { request: { id: 'e'.repeat(24) } } });
+    const r = await bridge.forwardRequest({ wineName: 'X', sourceUrl: 'https://x.example', image: 'https://x.example/front.jpg', backImage: 'https://x.example/back.jpg' });
+    const sent = client.forwardRequest.mock.calls.slice(-3).map((c) => c[0]);
+    expect(sent[0]).toEqual({ wineName: 'X', sourceUrl: 'https://x.example', image: 'https://x.example/front.jpg', backImage: 'https://x.example/back.jpg' });
+    expect(sent[1]).toEqual({ wineName: 'X', sourceUrl: 'https://x.example', image: 'https://x.example/front.jpg' });
+    expect(sent[2]).toEqual({ wineName: 'X', sourceUrl: 'https://x.example' });
+    expect(r.ok).toBe(true);
+  });
+});

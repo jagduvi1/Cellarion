@@ -35,6 +35,9 @@ jest.mock('../../services/producerSpelling', () => ({ resolveCanonicalProducerSp
 jest.mock('../../services/imageOps', () => ({
   ...jest.requireActual('../../services/imageOps'),
   attachOfficialWineImage: jest.fn(async () => ({ image: { _id: 'img-1', processedUrl: '/api/uploads/originals/img-1.webp' } })),
+  // The back label (#1460) goes through the ordinary upload path and is
+  // published by the route; the row's save is what the tests inspect.
+  ingestBottleImage: jest.fn(async () => ({ image: { _id: 'img-2', status: 'uploaded', visibility: 'private', side: 'front', save: jest.fn(async () => {}) } })),
 }));
 jest.mock('../../services/imageSanitizer', () => ({
   ...jest.requireActual('../../services/imageSanitizer'),
@@ -250,6 +253,94 @@ describe('the photo attached to the request', () => {
     attachOfficialWineImage.mockResolvedValueOnce({ error: { status: 500, message: 'disk full' } });
     jest.spyOn(console, 'error').mockImplementation(() => {});
     const res = await resolve({ image: '', useRequestPhoto: true });
+    expect(res.status).toBe(200);
+    expect(requestDoc.save).toHaveBeenCalled();
+  });
+});
+
+// ── The back label on the request (#1460) — a public gallery photo, never the picture ──
+
+describe('the back label photo on the request', () => {
+  const { ingestBottleImage, attachOfficialWineImage } = require('../../services/imageOps');
+  const { sanitizeImageBuffer, hasTransparency } = require('../../services/imageSanitizer');
+  const { logAudit } = require('../../services/audit');
+
+  test('left ticked (the default): it joins the new wine\'s public photos as the back, not as its picture', async () => {
+    requestDoc.backImage = `data:image/png;base64,${PNG_1PX}`;
+    const res = await resolve({ image: '' });
+    expect(res.status).toBe(200);
+    expect(ingestBottleImage).toHaveBeenCalledTimes(1);
+    const [opts] = ingestBottleImage.mock.calls[0];
+    expect(opts).toMatchObject({ wineDefinitionId: 'wine-new', userId: ADMIN_ID, userRoles: ['admin'], keepBackground: true });
+    expect(opts.buffer.equals(Buffer.from(PNG_1PX, 'base64'))).toBe(true);
+    const row = (await ingestBottleImage.mock.results[0].value).image;
+    expect(row).toMatchObject({ status: 'approved', visibility: 'public', side: 'back', reviewedBy: ADMIN_ID });
+    expect(row.reviewedAt).toBeInstanceOf(Date);
+    expect(row.save).toHaveBeenCalled();
+    expect(attachOfficialWineImage).not.toHaveBeenCalled(); // not the wine's picture
+    expect(WineDefinition.mock.calls[0][0].image).toBeNull();
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'admin.image.approve', { type: 'image', id: 'img-2' },
+      { wineDefinitionId: 'wine-new', fromRequest: REQUEST_ID, side: 'back' });
+  });
+
+  test('unticked: the back label stays on the request only', async () => {
+    requestDoc.backImage = `data:image/png;base64,${PNG_1PX}`;
+    const res = await resolve({ image: '', addBackPhoto: false });
+    expect(res.status).toBe(200);
+    expect(ingestBottleImage).not.toHaveBeenCalled();
+  });
+
+  test('both photos: the front becomes the picture and the back a gallery photo', async () => {
+    requestDoc.image = `data:image/png;base64,${PNG_1PX}`;
+    requestDoc.backImage = `data:image/jpeg;base64,${JPEG_BYTES}`;
+    const res = await resolve({ image: '', useRequestPhoto: true, addBackPhoto: true });
+    expect(res.status).toBe(200);
+    expect(attachOfficialWineImage).toHaveBeenCalledTimes(1);
+    expect(ingestBottleImage).toHaveBeenCalledTimes(1);
+    expect(ingestBottleImage.mock.calls[0][0].buffer.equals(Buffer.from(JPEG_BYTES, 'base64'))).toBe(true);
+  });
+
+  test('an opaque back label goes through background removal', async () => {
+    requestDoc.backImage = `data:image/jpeg;base64,${JPEG_BYTES}`;
+    hasTransparency.mockResolvedValueOnce(false);
+    await resolve({ image: '' });
+    expect(ingestBottleImage.mock.calls[0][0].keepBackground).toBe(false);
+  });
+
+  test('an unreadable back label is refused before anything is created', async () => {
+    requestDoc.backImage = `data:image/png;base64,${PNG_1PX}`;
+    sanitizeImageBuffer.mockRejectedValueOnce(new Error('corrupt'));
+    const res = await resolve({ image: '' });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/back label/i);
+    expect(WineDefinition).not.toHaveBeenCalled();
+    expect(ingestBottleImage).not.toHaveBeenCalled();
+  });
+
+  test('a back label given as a link is left on the request — nothing is fetched', async () => {
+    requestDoc.backImage = 'https://cdn.example.com/back.png';
+    const res = await resolve({ image: '' });
+    expect(res.status).toBe(200);
+    expect(ingestBottleImage).not.toHaveBeenCalled();
+  });
+
+  test('when the wine turns out to exist already (same key), nothing is added to it', async () => {
+    requestDoc.backImage = `data:image/png;base64,${PNG_1PX}`;
+    WineDefinition.mockImplementation(function (doc) {
+      Object.assign(this, doc);
+      this.save = jest.fn().mockRejectedValue(Object.assign(new Error('dup'), { code: 11000 }));
+    });
+    WineDefinition.findOne.mockResolvedValue({ _id: 'wine-existing', image: '/api/uploads/processed/own.webp' });
+    const res = await resolve({ image: '' });
+    expect(res.status).toBe(200);
+    expect(ingestBottleImage).not.toHaveBeenCalled();
+  });
+
+  test('a failed ingest does not undo the approval', async () => {
+    requestDoc.backImage = `data:image/png;base64,${PNG_1PX}`;
+    ingestBottleImage.mockResolvedValueOnce({ error: { status: 500, message: 'disk full' } });
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    const res = await resolve({ image: '' });
     expect(res.status).toBe(200);
     expect(requestDoc.save).toHaveBeenCalled();
   });

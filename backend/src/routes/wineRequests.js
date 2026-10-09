@@ -18,7 +18,7 @@ router.use(requireAuth);
 // the demo is reaped — queue-spam vector.
 router.post('/', requireNonDemo, async (req, res) => {
   try {
-    const { requestType = 'new_wine', wineName, sourceUrl, image, linkedWineDefinition, suggestedGrapes } = req.body;
+    const { requestType = 'new_wine', wineName, sourceUrl, sourceUrls, image, backImage, linkedWineDefinition, suggestedGrapes } = req.body;
 
     if (requestType === 'grape_suggestion') {
       // ── Grape suggestion for an existing wine ──
@@ -57,7 +57,7 @@ router.post('/', requireNonDemo, async (req, res) => {
 
     // ── New wine request ── (validation + creation shared with the MCP
     // request_wine_addition tool via services/accountOps)
-    const { wineRequest, error } = await createWineRequest(req.user.id, { wineName, sourceUrl, image }, { via: 'web', req });
+    const { wineRequest, error } = await createWineRequest(req.user.id, { wineName, sourceUrl, sourceUrls, image, backImage }, { via: 'web', req });
     if (error) return res.status(error.status).json({ error: error.message });
     logAudit(req, 'wineRequest.create', { type: 'wineRequest', id: wineRequest._id });
     // Registry Bridge (self-hosted installs): a wine nobody here has is worth

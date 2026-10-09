@@ -1522,7 +1522,13 @@
     "imageNotice": "Images are reviewed by an admin before being added to the shared wine registry, where they will be visible to all Cellarion users.",
     "submitFailed": "The request could not be sent. Please try again.",
     "submitFailedReason": "The request could not be sent: {{reason}}",
-    "photoTooLarge": "This photo could not be made small enough to send. Try another photo, or send the request without one."
+    "photoTooLarge": "This photo could not be made small enough to send. Try another photo, or send the request without one.",
+    "moreLinksLabel": "More links",
+    "linksHint": "A winery page and a review each give the reviewer something different.",
+    "addLink": "Add another link",
+    "removeLink": "Remove",
+    "backImageLabel": "Back label",
+    "backImageHint": "The back label often names the producer, the appellation and the importer."
   },
   "history": {
     "title": "Bottle History",
@@ -1715,6 +1721,9 @@
       "grapesLabel": "Grapes",
       "imageUrlLabel": "Image URL",
       "useRequestPhoto": "Use the photo from the request as the wine's picture",
+      "frontLabel": "Front",
+      "backLabel": "Back label",
+      "addBackPhoto": "Add the back label to the wine's public photos",
       "adminNotesLabel": "Admin Notes",
       "dupTitle": "Possible duplicates found",
       "dupHint": "Link the request to one of these instead — or create anyway if it is genuinely different.",
