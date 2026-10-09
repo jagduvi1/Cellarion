@@ -96,11 +96,12 @@ describe('attach_bottle_image', () => {
     expect(row.detail.imageId).toBeDefined();
   });
 
-  test('keep_background reaches the shared pipeline as keepBackground (label-only photos, ticket 6a97f870)', async () => {
+  test('photos added through MCP always go through background removal: keep_background is accepted but ignored', async () => {
     ownBottle();
     safeFetchImage.mockResolvedValue({ buffer: Buffer.from('imgbytes'), contentType: 'image/jpeg' });
+    // Still accepted (an older caller is not refused) — and still removed.
     await tool('attach_bottle_image').handler({ bottle_id: oid('d'), image_url: 'https://cdn.example.com/label.jpg', keep_background: true }, CTX);
-    expect(ingestBottleImage).toHaveBeenCalledWith(expect.objectContaining({ keepBackground: true }), CTX.req);
+    expect(ingestBottleImage).toHaveBeenCalledWith(expect.objectContaining({ keepBackground: false }), CTX.req);
 
     ingestBottleImage.mockClear();
     await tool('attach_bottle_image').handler({ bottle_id: oid('d'), image_url: 'https://cdn.example.com/label.jpg' }, CTX);
