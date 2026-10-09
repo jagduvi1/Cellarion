@@ -7,6 +7,9 @@ const Notification = require('../../models/Notification');
 const { registerTool } = require('../registry');
 const { ok, fail, objectId, MSG_CELLAR_NOT_FOUND, resolveCellarAccess } = require('../toolUtil');
 const { isValidId } = require('../../utils/validation');
+// Marking read changes what a token poll of /api/notifications answers from
+// memory (release audit 2026-10-09, M1 — the REST routes bumped, this did not).
+const { bumpNotificationsVersion } = require('../../services/dataVersion');
 
 const serialize = (n) => ({
   notification_id: n._id,
@@ -68,6 +71,7 @@ registerTool({
     // the mutation budget via readOnlyHint:false like every write.
     if (args.all === true) {
       const r = await Notification.updateMany({ user: ctx.user.id, read: false }, { $set: { read: true } });
+      bumpNotificationsVersion(ctx.user.id);
       return ok(`Marked ${r.modifiedCount} notification(s) read`, { marked: r.modifiedCount });
     }
     if (!args.notification_id || !isValidId(args.notification_id)) {
@@ -80,6 +84,7 @@ registerTool({
     if (r.matchedCount === 0) {
       return fail('not_found', 'No such notification on this account. Use list_notifications for valid ids.');
     }
+    bumpNotificationsVersion(ctx.user.id);
     return ok('Notification marked read', { notification_id: args.notification_id, marked: r.modifiedCount });
   },
 });

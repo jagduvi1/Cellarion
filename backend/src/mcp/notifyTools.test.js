@@ -203,3 +203,29 @@ describe('climate_status', () => {
     expect(tool('climate_status').description).not.toMatch(/Historical charts are web-app-only/);
   });
 });
+
+// routes/notifications answers API-token polls from memory while the user's
+// notifications version holds; marking read over MCP must move it too
+// (release audit 2026-10-09, M1 — the REST routes did, this did not).
+describe('mark_notification_read and the notifications version', () => {
+  const { getNotificationsVersion } = require('../services/dataVersion');
+  const Notification = require('../models/Notification');
+
+  test('all:true moves the caller\'s version', async () => {
+    Notification.updateMany.mockResolvedValue({ modifiedCount: 2 });
+    const before = getNotificationsVersion(ME);
+    await tool('mark_notification_read').handler({ all: true }, CTX);
+    expect(getNotificationsVersion(ME)).not.toBe(before);
+  });
+
+  test('a single matched id moves it; a miss does not', async () => {
+    Notification.updateOne.mockResolvedValueOnce({ matchedCount: 1, modifiedCount: 1 });
+    const before = getNotificationsVersion(ME);
+    await tool('mark_notification_read').handler({ notification_id: 'a'.repeat(24) }, CTX);
+    const after = getNotificationsVersion(ME);
+    expect(after).not.toBe(before);
+    Notification.updateOne.mockResolvedValueOnce({ matchedCount: 0, modifiedCount: 0 });
+    await tool('mark_notification_read').handler({ notification_id: 'b'.repeat(24) }, CTX);
+    expect(getNotificationsVersion(ME)).toBe(after);
+  });
+});

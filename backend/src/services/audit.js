@@ -15,7 +15,9 @@ const STATS_CHANGED_PREFIXES = ['bottle.', 'cellar.'];
 // the rack layout in the offline copy (its 304 check in routes/offline reads
 // the data version), MCP rack reads, the token bottle list. They move the data
 // version and the MCP caches like wine-data changes, without the stats push.
-const DATA_CHANGED_PREFIXES = [...STATS_CHANGED_PREFIXES, 'rack.'];
+// Climate device and bounds changes ride in the cellar list (cellar.climate),
+// which token polls read from memory (release audit 2026-10-09, L).
+const DATA_CHANGED_PREFIXES = [...STATS_CHANGED_PREFIXES, 'rack.', 'climate.'];
 
 // Invalidate a user's MCP read caches on any wine-data mutation (grand-audit
 // M3). Lazy-required so these MCP modules stay off audit's load path (they pull

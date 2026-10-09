@@ -184,7 +184,7 @@ test('every link and the back label photo are shown on the request', async () =>
   fireEvent.click(await screen.findByText('Wine 0'));
   expect(await screen.findByRole('link', { name: 'https://review.example/w' })).toHaveAttribute('href', 'https://review.example/w');
   expect(screen.getByRole('link', { name: 'https://winery.example/w' })).toBeInTheDocument();
-  expect(screen.getByAltText('Back label')).toHaveAttribute('src', 'https://cdn.example.com/back.png');
+  expect(screen.getByAltText('admin.requests.backLabel')).toHaveAttribute('src', 'https://cdn.example.com/back.png');
   expect(screen.getByText('admin.requests.backLabel')).toBeInTheDocument();
   expect(screen.getByText('admin.requests.frontLabel')).toBeInTheDocument();
 });
@@ -197,7 +197,7 @@ test('a request with one link and no back label shows them the old way', async (
   render(<AdminRequests />);
   fireEvent.click(await screen.findByText('Wine 0'));
   expect(await screen.findByRole('link', { name: 'https://winery.example/w' })).toBeInTheDocument();
-  expect(screen.queryByAltText('Back label')).toBeNull();
+  expect(screen.queryByAltText('admin.requests.backLabel')).toBeNull();
   expect(screen.queryByText('admin.requests.frontLabel')).toBeNull();
 });
 

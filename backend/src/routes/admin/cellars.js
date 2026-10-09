@@ -5,6 +5,9 @@ const Rack = require('../../models/Rack');
 const WineRequest = require('../../models/WineRequest');
 const { purgeCellarPermanently } = require('../../services/cellarPurge');
 const { logAudit } = require('../../services/audit');
+// The audit entry moves the admin's and the owner's version; the members'
+// cached token lists change too (release audit 2026-10-09, L).
+const { bumpDataVersion } = require('../../services/dataVersion');
 const { parsePagination } = require('../../utils/pagination');
 const { isValidId, coerceStringQuery } = require('../../utils/validation');
 const { escapeRegex } = require('../../utils/sanitize');
@@ -67,6 +70,7 @@ router.post('/:id/restore', async (req, res) => {
     cellar.name = restoredName;
     cellar.deletedAt = null;
     await cellar.save();
+    for (const m of cellar.members || []) bumpDataVersion(m.user);
 
     // Restore only the racks cascade-deleted WITH this cellar (matching its
     // exact deletedAt).

@@ -65,10 +65,15 @@ function sanitizeCredit(credit, userRoles) {
  * @param {object}  [opts.bottle]          access-checked bottle doc (editor+)
  * @param {string}  [opts.wineDefinitionId] pre-validated registry wine id
  * @param {string}  [opts.credit]          RAW credit — gated + sanitised here (admin-only)
+ * @param {{ side?: 'front'|'back' }} [opts.publish]  an ADMIN-approved photo: the row is born
+ *   approved + public, reviewed by the uploader, BEFORE background removal is
+ *   kicked off. The worker keeps an already-approved row approved; a row
+ *   approved after the hand-off raced it and usually ended 'processed' —
+ *   invisible in every gallery (release audit 2026-10-09, H1).
  * @param {object}  req                    for downstream audit attribution
  * @returns {{ image }} | {{ error: { status, message } }}
  */
-async function ingestBottleImage({ buffer, userId, userRoles = [], bottle = null, wineDefinitionId = null, credit = null, keepBackground = false }, req) {
+async function ingestBottleImage({ buffer, userId, userRoles = [], bottle = null, wineDefinitionId = null, credit = null, keepBackground = false, publish = null }, req) {
   if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
     return { error: { status: 400, message: 'No image data provided' } };
   }
@@ -143,6 +148,15 @@ async function ingestBottleImage({ buffer, userId, userRoles = [], bottle = null
     keepBackground: keep,
     credit: sanitizeCredit(credit, userRoles),
     contentHash,
+    // Published at birth (see `publish` above): approved before the worker
+    // can read the row, so its settled status stays 'approved'.
+    ...(publish ? {
+      status: 'approved',
+      visibility: 'public',
+      side: publish.side === 'back' ? 'back' : 'front',
+      reviewedBy: userId,
+      reviewedAt: new Date(),
+    } : {}),
   });
   await image.save();
 

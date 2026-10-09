@@ -107,11 +107,17 @@ const MAX_OAUTH_CONNECTIONS_PER_USER = 20; // Claude + ChatGPT + Desktop + … �
 // token. Outside the window that is still reuse and still revokes the
 // connection (OAuth 2.1 security BCP §4.14.2). Inside it the connection
 // rotates again from where it is: the retrying client gets a working pair,
-// and the successor it never received stops working, so at worst the OTHER
-// holder re-authorizes instead of the whole connection dying. Usage check
-// 2026-10-09: one connector replayed its revoked token every ten minutes for
-// a day and a half, because it never re-authorizes on invalid_grant.
-const REFRESH_REUSE_GRACE_MS = (process.env.OAUTH_REFRESH_GRACE_S === undefined
+// and the successor it never received becomes the spent one — so if that
+// successor is ever presented later, outside the window, reuse detection
+// still fires and the connection dies as it would have under strict
+// rotation. What the window gives up: a thief who replays a spent token
+// within a minute of the owner's rotation holds a live pair until the
+// owner's next refresh trips detection (release audit 2026-10-09, M2).
+// Usage check 2026-10-09: one connector replayed its revoked token every ten
+// minutes for a day and a half, because it never re-authorizes on
+// invalid_grant. An empty value means "unset" (compose forwards knobs as
+// ${X:-}), only an explicit 0 is strict.
+const REFRESH_REUSE_GRACE_MS = (process.env.OAUTH_REFRESH_GRACE_S === undefined || process.env.OAUTH_REFRESH_GRACE_S === ''
   ? 60
   : Math.max(0, parseInt(process.env.OAUTH_REFRESH_GRACE_S, 10) || 0)) * 1000;
 
@@ -365,7 +371,7 @@ router.post('/token', oauthLimiter, async (req, res) => {
     console.warn('[oauth] token request refused', {
       status,
       error,
-      grant: grantType || null,
+      grant: grantType ? grantType.slice(0, 40) : null,
       client: client?.clientName || client?.clientId || null,
       userAgent: String(req.get('user-agent') || '').slice(0, 80),
     });
@@ -473,19 +479,21 @@ router.post('/token', oauthLimiter, async (req, res) => {
       // one wins, and the loser gets invalid_grant WITHOUT tripping reuse
       // detection (it already matched the current hash on the read above).
       //
-      // A graced retry pins the spent hash it presented instead and leaves it
-      // as the previous one — the same lost response may be retried again
-      // inside the window — while the current pair, which this client never
-      // received, is replaced. The rotation time is NOT moved: the window is
-      // measured from the last real rotation, so a spent token is never kept
-      // alive by replaying it.
+      // A graced retry pins the spent hash it presented instead, and the
+      // current pair — which this client never received — becomes the spent
+      // one: presented later, outside the window, it trips reuse detection
+      // like any replay, so the window never hides a theft for good. Two
+      // graced retries racing each other: the first moves the previous hash,
+      // the second misses the filter and gets invalid_grant without revoking.
+      // The rotation time is NOT moved: the window is measured from the last
+      // real rotation, so a spent token is never kept alive by replaying it.
       const cred = rotateCredentials();
       const rotated = await ApiToken.findOneAndUpdate(
         graced
           ? { _id: token._id, prevRefreshTokenHash: presented, revokedAt: null }
           : { _id: token._id, refreshTokenHash: token.refreshTokenHash, revokedAt: null },
         graced
-          ? { $set: { ...cred.fields } }
+          ? { $set: { ...cred.fields, prevRefreshTokenHash: token.refreshTokenHash } }
           : { $set: { ...cred.fields, prevRefreshTokenHash: token.refreshTokenHash, refreshRotatedAt: new Date() } },
         { new: true }
       );

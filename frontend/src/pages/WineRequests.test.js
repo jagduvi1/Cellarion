@@ -76,3 +76,32 @@ test('no more than three links can be added', async () => {
   expect(screen.getAllByPlaceholderText('https://...')).toHaveLength(2);
   expect(screen.getByText('+ Add another link')).toBeInTheDocument();
 });
+
+test('closing the form forgets its links and photos; reopening starts clean', async () => {
+  apiFetch.mockImplementation(() => jsonRes({ requests: [] }));
+  render(<WineRequests />);
+  fireEvent.click(await screen.findByText('+ wineRequests.newRequest'));
+  fireEvent.click(screen.getByText('+ Add another link'));
+  fireEvent.change(screen.getAllByPlaceholderText('https://...')[1], { target: { value: 'https://review.example/s' } });
+  fireEvent.change(screen.getAllByPlaceholderText('Paste image URL…')[1], { target: { value: 'https://cdn.example.com/back.png' } });
+  // The header button closes the form (it reads "cancel" while open).
+  fireEvent.click(screen.getAllByText('common.cancel')[0]); // the header button, first in the page
+  fireEvent.click(screen.getByText('+ wineRequests.newRequest'));
+  expect(screen.getAllByPlaceholderText('https://...')).toHaveLength(1);
+  expect(screen.getAllByPlaceholderText('Paste image URL…')[1]).toHaveValue('');
+});
+
+test('blank extra rows are dropped from the links sent', async () => {
+  apiFetch.mockImplementation((url, opts) => (opts && opts.method === 'POST' ? jsonRes({ wineRequest: {} }) : jsonRes({ requests: [] })));
+  render(<WineRequests />);
+  fireEvent.click(await screen.findByText('+ wineRequests.newRequest'));
+  fireEvent.change(screen.getByPlaceholderText('wineRequests.wineNamePlaceholder'), { target: { value: 'Salmos' } });
+  fireEvent.change(screen.getByPlaceholderText('https://...'), { target: { value: 'https://winery.example/s' } });
+  fireEvent.click(screen.getByText('+ Add another link'));
+  fireEvent.click(screen.getByText('+ Add another link'));
+  fireEvent.change(screen.getAllByPlaceholderText('https://...')[2], { target: { value: '  https://review.example/s  ' } });
+  fireEvent.click(screen.getByText('wineRequests.submitRequest'));
+  await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/api/wine-requests', expect.objectContaining({ method: 'POST' })));
+  const sent = JSON.parse(apiFetch.mock.calls.find((c) => c[1] && c[1].method === 'POST')[1].body);
+  expect(sent.sourceUrls).toEqual(['https://winery.example/s', 'https://review.example/s']);
+});

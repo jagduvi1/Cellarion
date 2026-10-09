@@ -1497,6 +1497,9 @@ router.patch('/:id/color', async (req, res) => {
     }
 
     await cellar.save();
+    // Not audited (a personal preference), but userColor rides in the cached
+    // token list of this user (release audit 2026-10-09, L).
+    bumpDataVersion(req.user.id);
     res.json({ userColor: color || null });
   } catch (error) {
     console.error('Set cellar color error:', error);

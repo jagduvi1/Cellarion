@@ -215,3 +215,35 @@ describe('attachOfficialWineImage', () => {
     expect(BottleImage.updateMany).not.toHaveBeenCalled();
   });
 });
+
+// A photo an admin publishes at ingest (the back label of an approved wine
+// request) is born approved + public, BEFORE the background-removal worker is
+// handed the row — the worker keeps an approved row approved, while a row
+// approved after the hand-off raced it and usually settled 'processed', out
+// of every gallery (release audit 2026-10-09, H1).
+describe('publish at ingest', () => {
+  test('the row is saved approved, public, reviewed by the uploader and marked with its side before bg removal starts', async () => {
+    const res = await ingestBottleImage({ buffer: Buffer.from('RAW'), userId: 'admin-1', userRoles: ['admin'], wineDefinitionId: 'w1', publish: { side: 'back' } }, REQ);
+    expect(res.error).toBeUndefined();
+    expect(res.image).toMatchObject({ status: 'approved', visibility: 'public', side: 'back', reviewedBy: 'admin-1', wineDefinition: 'w1', bottle: null });
+    expect(res.image.reviewedAt).toBeInstanceOf(Date);
+    expect(res.image.assignedToWine).toBeUndefined(); // never the wine's picture
+    // Saved first, handed to the worker second.
+    expect(res.image.save.mock.invocationCallOrder[0]).toBeLessThan(processImage.mock.invocationCallOrder[0]);
+    expect(processImage).toHaveBeenCalledWith('img-new');
+  });
+
+  test('an unknown side falls back to front; keepBackground still publishes, with the original as the kept photo', async () => {
+    const res = await ingestBottleImage({ buffer: Buffer.from('RAW'), userId: 'admin-1', keepBackground: true, publish: { side: 'sideways' } }, REQ);
+    expect(res.image).toMatchObject({ status: 'approved', visibility: 'public', side: 'front' });
+    expect(res.image.processedUrl).toBe(res.image.originalUrl);
+    expect(processImage).not.toHaveBeenCalled();
+  });
+
+  test('without publish nothing changes: born uploaded and private', async () => {
+    const res = await ingestBottleImage({ buffer: Buffer.from('RAW'), userId: 'u1', bottle: { _id: 'b1' } }, REQ);
+    expect(res.image.status).toBe('uploaded');
+    expect(res.image.visibility).toBeUndefined();
+    expect(res.image.reviewedBy).toBeUndefined();
+  });
+});

@@ -36,7 +36,15 @@ FROM nginxinc/nginx-unprivileged:alpine@sha256:26b0bf6fbf07297983cb341998d79c831
 COPY --from=builder /app/dist /usr/share/nginx/html
 # The stock main config with more connections per worker (see its header).
 COPY nginx-main.conf /etc/nginx/nginx.conf
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# A template, not the config itself: the image's entrypoint renders it into
+# conf.d/default.conf at start, filling ${NGINX_LOCAL_RESOLVERS} from the
+# container's /etc/resolv.conf (see the upstream block in nginx.conf). Only
+# names of set environment variables are substituted, so nginx's own
+# $variables are left alone. The entrypoint fills the variable only when
+# asked to (NGINX_ENTRYPOINT_LOCAL_RESOLVERS); a value set in the
+# environment wins over the file.
+ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
+COPY nginx.conf /etc/nginx/templates/default.conf.template
 # Shared security-header snippet, include'd by every HTML-serving location.
 # Lives outside conf.d/ so nginx does not auto-load it a second time at the
 # http{} level.

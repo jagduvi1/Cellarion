@@ -273,14 +273,16 @@ describe('the back label photo on the request', () => {
     const [opts] = ingestBottleImage.mock.calls[0];
     expect(opts).toMatchObject({ wineDefinitionId: 'wine-new', userId: ADMIN_ID, userRoles: ['admin'], keepBackground: true });
     expect(opts.buffer.equals(Buffer.from(PNG_1PX, 'base64'))).toBe(true);
+    // Published AT INGEST (the row is born approved + public + back), never by
+    // a save after the hand-off: that raced the background-removal worker,
+    // which settled the row 'processed' (release audit 2026-10-09, H1).
+    expect(opts.publish).toEqual({ side: 'back' });
     const row = (await ingestBottleImage.mock.results[0].value).image;
-    expect(row).toMatchObject({ status: 'approved', visibility: 'public', side: 'back', reviewedBy: ADMIN_ID });
-    expect(row.reviewedAt).toBeInstanceOf(Date);
-    expect(row.save).toHaveBeenCalled();
+    expect(row.save).not.toHaveBeenCalled();
     expect(attachOfficialWineImage).not.toHaveBeenCalled(); // not the wine's picture
     expect(WineDefinition.mock.calls[0][0].image).toBeNull();
     expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'admin.image.approve', { type: 'image', id: 'img-2' },
-      { wineDefinitionId: 'wine-new', fromRequest: REQUEST_ID, side: 'back' });
+      { wineDefinitionId: 'wine-new', visibility: 'public', fromRequest: REQUEST_ID, side: 'back' });
   });
 
   test('unticked: the back label stays on the request only', async () => {
