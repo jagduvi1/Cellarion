@@ -200,3 +200,48 @@ test('a request with one link and no back label shows them the old way', async (
   expect(screen.queryByAltText('Back label')).toBeNull();
   expect(screen.queryByText('admin.requests.frontLabel')).toBeNull();
 });
+
+// The back label on a request (#1460) is offered for the wine's public photos
+// with its own checkbox, on by default, and sent as addBackPhoto.
+test('a back label on the request is offered for the public photos, on by default, and sent as addBackPhoto', async () => {
+  adminResolveWineRequest.mockResolvedValue(jsonRes({ wineRequest: {} }));
+  getWineRequests.mockResolvedValue(jsonRes({
+    count: 1, total: 1,
+    requests: [{ ...makeRequests(1)[0], backImage: 'data:image/png;base64,iVBORw0KGgo=' }],
+  }));
+  render(<AdminRequests />);
+  fireEvent.click(await screen.findByText('Wine 0'));
+
+  const box = await screen.findByTestId('add-back-photo');
+  expect(box).toBeChecked();
+  expect(screen.queryByTestId('use-request-photo')).toBeNull(); // no front photo on this request
+
+  fireEvent.click(screen.getByRole('button', { name: 'admin.requests.resolve' }));
+  await waitFor(() => expect(adminResolveWineRequest).toHaveBeenCalledTimes(1));
+  expect(adminResolveWineRequest.mock.calls[0][2].wineData).toMatchObject({ addBackPhoto: true });
+});
+
+test('unticked, the back label stays on the request', async () => {
+  adminResolveWineRequest.mockResolvedValue(jsonRes({ wineRequest: {} }));
+  getWineRequests.mockResolvedValue(jsonRes({
+    count: 1, total: 1,
+    requests: [{ ...makeRequests(1)[0], backImage: 'data:image/png;base64,iVBORw0KGgo=' }],
+  }));
+  render(<AdminRequests />);
+  fireEvent.click(await screen.findByText('Wine 0'));
+  fireEvent.click(await screen.findByTestId('add-back-photo'));
+  fireEvent.click(screen.getByRole('button', { name: 'admin.requests.resolve' }));
+  await waitFor(() => expect(adminResolveWineRequest).toHaveBeenCalledTimes(1));
+  expect(adminResolveWineRequest.mock.calls[0][2].wineData).toMatchObject({ addBackPhoto: false });
+});
+
+test('a back label given as a link offers no checkbox', async () => {
+  getWineRequests.mockResolvedValue(jsonRes({
+    count: 1, total: 1,
+    requests: [{ ...makeRequests(1)[0], backImage: 'https://cdn.example.com/back.png' }],
+  }));
+  render(<AdminRequests />);
+  fireEvent.click(await screen.findByText('Wine 0'));
+  await screen.findByPlaceholderText('https://...');
+  expect(screen.queryByTestId('add-back-photo')).toBeNull();
+});

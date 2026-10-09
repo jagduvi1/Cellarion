@@ -92,9 +92,11 @@ const bottleImageSchema = new mongoose.Schema({
     default: 'bottle',
     index: true
   },
-  // WHICH FACE of the bottle this frame shows. Meaningful ONLY for
-  // kind:'label-scan' — a kind:'bottle' gallery photo keeps the 'front' default
-  // and nothing reads it there.
+  // WHICH FACE of the bottle this frame shows. Read for kind:'label-scan'
+  // evidence; a kind:'bottle' gallery photo keeps the 'front' default, except
+  // the back label of an approved wine request, which is published with
+  // 'back' (routes/admin/wineRequests.js, #1460) — nothing reads it in the
+  // gallery yet.
   //
   // Exists because the back label is the rescue path when the front scan came
   // back incomplete: both frames are kept as curation evidence on the same

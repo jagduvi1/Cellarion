@@ -184,6 +184,9 @@ function AdminRequests() {
     // A photo attached to the request (inline) is offered as a checkbox
     // instead: kept, the server stores it as the new wine's picture file.
     const hasRequestPhoto = !!requestImage && requestImage.startsWith('data:');
+    // A back label photo (#1460) is offered for the wine's public photos the
+    // same way — on by default, the server publishes it as a gallery photo.
+    const hasBackPhoto = !!displayableImage(request.backImage)?.startsWith('data:');
     setResolveData({
       mode: request.requestType === 'grape_suggestion' ? 'apply_grapes' : 'create',
       adminNotes: '',
@@ -198,7 +201,8 @@ function AdminRequests() {
         appellation: '',
         grapes: [],
         image: prefillImage,
-        useRequestPhoto: hasRequestPhoto
+        useRequestPhoto: hasRequestPhoto,
+        addBackPhoto: hasBackPhoto
       }
     });
     // Cancel any pending/in-flight duplicate check from the previous request
@@ -762,6 +766,20 @@ function AdminRequests() {
                                 }}
                               />
                               <span>{t('admin.requests.useRequestPhoto', "Use the photo from the request as the wine's picture")}</span>
+                            </label>
+                          )}
+                          {displayableImage(selected.backImage)?.startsWith('data:') && (
+                            <label className="request-photo-toggle">
+                              <input
+                                type="checkbox"
+                                data-testid="add-back-photo"
+                                checked={!!resolveData.wineData.addBackPhoto}
+                                onChange={(e) => {
+                                  const wineData = { ...resolveData.wineData, addBackPhoto: e.target.checked };
+                                  setResolveData({ ...resolveData, wineData });
+                                }}
+                              />
+                              <span>{t('admin.requests.addBackPhoto', "Add the back label to the wine's public photos")}</span>
                             </label>
                           )}
                         </div>

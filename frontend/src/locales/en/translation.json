@@ -1723,6 +1723,7 @@
       "useRequestPhoto": "Use the photo from the request as the wine's picture",
       "frontLabel": "Front",
       "backLabel": "Back label",
+      "addBackPhoto": "Add the back label to the wine's public photos",
       "adminNotesLabel": "Admin Notes",
       "dupTitle": "Possible duplicates found",
       "dupHint": "Link the request to one of these instead — or create anyway if it is genuinely different.",
