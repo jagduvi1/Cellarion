@@ -12,7 +12,9 @@
  *        discussion index, and rendered for CRAWLERS by routes/og.js. Refused
  *        at WRITE time, which closes all three reads at once.
  *   H-5  Wine lists — a published list is served by routes/wineListPublic.js
- *        with NO auth at all.
+ *        with NO auth at all. Since support ticket 2026-10-09 the owner's own
+ *        pending rows DO render there (it is their menu); the renderer's
+ *        owner rule in services/wineListData keeps a stranger's row out.
  */
 
 process.env.JWT_SECRET = 'test-secret';

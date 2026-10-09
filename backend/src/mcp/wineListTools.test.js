@@ -17,6 +17,9 @@ jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../services/wineListData', () => ({
   entryKey: (e) => `${e.wine}|${e.vintage || 'NV'}|${e.bottleSize || '750ml'}`,
   loadWineMap: jest.fn(async () => new Map()),
+  // add_to_list looks the wine up through the renderer's owner rule; the
+  // filter itself is pinned in services/wineListData.pendingIdentity.test.js.
+  ownerWineFilter: jest.fn(async (ownerId, ids) => ({ _id: { $in: ids }, owner: ownerId })),
 }));
 // revert.js and tools/write.js top-require bottleOps (which pulls the search/
 // meili chain) — mock the full surface they read at load, same as
@@ -70,8 +73,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   McpActionLog.create.mockResolvedValue({});
   McpActionLog.findOne.mockReturnValue({ lean: () => Promise.resolve(null) });
-  // findOne with an absolute pendingIdentity exclusion: a wine list can be
-  // PUBLISHED and routes/wineListPublic.js has no auth (security audit H-5).
+  // findOne through the owner rule (ownerWineFilter above): the caller's own
+  // pending rows resolve, a stranger's hidden row reads as not_found.
   WineDefinition.findOne.mockReturnValue({ populate: jest.fn(() => Promise.resolve({ _id: WINE, name: 'Barolo Riserva', producer: 'Rinaldi' })) });
 });
 

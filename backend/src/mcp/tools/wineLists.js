@@ -26,7 +26,7 @@ const { suggestGlassPrice } = require('../../utils/glassPrice');
 // get_wine_list reads the SAME rendered structure the app and the PDF use —
 // nested auto-mode headings and live per-entry stock (support ticket
 // 2026-09-12: a client could not see the grouping of the menu it was reading).
-const { loadWineMap, entryKey } = require('../../services/wineListData');
+const { loadWineMap, entryKey, ownerWineFilter } = require('../../services/wineListData');
 const { buildSections, groupingLevels } = require('../../services/wineListPdf');
 
 // The active entry container for writes; [{ section, entries }] for reads.
@@ -231,10 +231,12 @@ registerTool({
 
     const [list, wine] = await Promise.all([
       WineList.findOne({ _id: args.list_id, user: ctx.user.id }),
-      // ABSOLUTE pendingIdentity gate, matching the REST PUT: a wine list can
-      // be published, and routes/wineListPublic.js serves it with no auth — so
-      // not even the pending row's own creator may put it on one.
-      WineDefinition.findOne({ _id: args.wine_id, pendingIdentity: { $ne: true } }).populate('country region'),
+      // The same rule the renderer applies (services/wineListData): every
+      // published wine, plus the caller's OWN pending-identity rows — created
+      // by them or held in a cellar of theirs. A stranger's hidden row reads
+      // as not_found, so what can be added is exactly what will render.
+      ownerWineFilter(ctx.user.id, [args.wine_id])
+        .then((filter) => WineDefinition.findOne(filter).populate('country region')),
     ]);
     if (!list) return fail('not_found', 'No such wine list. Use list_wine_lists for valid ids.');
     if (!wine) return fail('not_found', 'No such registry wine. Find the wine_id via search_registry or a bottle\'s wine.');
