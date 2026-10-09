@@ -165,3 +165,38 @@ test('no checkbox for a request without a photo, or once a link is typed', async
   fireEvent.change(screen.getByPlaceholderText('https://...'), { target: { value: 'https://cdn.example.com/b.png' } });
   expect(screen.queryByTestId('use-request-photo')).toBeNull();
 });
+
+// A request may carry several links and a back-label photo (#1460). The detail
+// shows every link and both photos, captioned, so the reviewer sees what the
+// requester saw.
+test('every link and the back label photo are shown on the request', async () => {
+  getWineRequests.mockResolvedValue(jsonRes({
+    count: 1, total: 1,
+    requests: [{
+      ...makeRequests(1)[0],
+      sourceUrl: 'https://winery.example/w',
+      sourceUrls: ['https://winery.example/w', 'https://review.example/w'],
+      image: 'data:image/png;base64,iVBORw0KGgo=',
+      backImage: 'https://cdn.example.com/back.png',
+    }],
+  }));
+  render(<AdminRequests />);
+  fireEvent.click(await screen.findByText('Wine 0'));
+  expect(await screen.findByRole('link', { name: 'https://review.example/w' })).toHaveAttribute('href', 'https://review.example/w');
+  expect(screen.getByRole('link', { name: 'https://winery.example/w' })).toBeInTheDocument();
+  expect(screen.getByAltText('Back label')).toHaveAttribute('src', 'https://cdn.example.com/back.png');
+  expect(screen.getByText('admin.requests.backLabel')).toBeInTheDocument();
+  expect(screen.getByText('admin.requests.frontLabel')).toBeInTheDocument();
+});
+
+test('a request with one link and no back label shows them the old way', async () => {
+  getWineRequests.mockResolvedValue(jsonRes({
+    count: 1, total: 1,
+    requests: [{ ...makeRequests(1)[0], sourceUrl: 'https://winery.example/w', image: 'https://cdn.example.com/front.png' }],
+  }));
+  render(<AdminRequests />);
+  fireEvent.click(await screen.findByText('Wine 0'));
+  expect(await screen.findByRole('link', { name: 'https://winery.example/w' })).toBeInTheDocument();
+  expect(screen.queryByAltText('Back label')).toBeNull();
+  expect(screen.queryByText('admin.requests.frontLabel')).toBeNull();
+});

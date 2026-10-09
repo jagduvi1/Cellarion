@@ -355,30 +355,61 @@ function validateImageRef(image, { allowInline = true } = {}) {
 }
 
 /**
+ * The links of a request (#1460): sourceUrl and sourceUrls merged in that
+ * order, trimmed, without repeats, at most MAX_SOURCE_URLS, each a public
+ * http(s) URL. The first is required — it is what sourceUrl holds for every
+ * reader and older install that knows one link. Returns { links } or { error }.
+ */
+const MAX_SOURCE_URLS = 3;
+function collectSourceUrls(sourceUrl, sourceUrls) {
+  if (sourceUrls != null && !Array.isArray(sourceUrls)) return { error: 'sourceUrls must be a list of links' };
+  const links = [];
+  for (const raw of [sourceUrl, ...(sourceUrls || [])]) {
+    if (raw == null || raw === '') continue;
+    if (typeof raw !== 'string') return { error: 'Please provide a valid URL' };
+    const link = raw.trim();
+    if (!link || links.includes(link)) continue;
+    links.push(link);
+  }
+  if (links.length === 0) return { error: validateSourceUrl(sourceUrl) };
+  if (links.length > MAX_SOURCE_URLS) return { error: `At most ${MAX_SOURCE_URLS} source links` };
+  for (const link of links) {
+    const urlErr = validateSourceUrl(link);
+    if (urlErr) return { error: urlErr };
+  }
+  return { links };
+}
+
+/**
  * Validate + create a `new_wine` WineRequest (the fallback when resolve_wine
  * dead-ends and the user can't confirm enough to mint a registry entry). Returns
  * { wineRequest } or { error }. The grape_suggestion request type is deliberately
  * NOT handled here — it stays inline in the REST route (niche, needs a linked
  * wine) and is not exposed over MCP.
  */
-async function createWineRequest(userId, { wineName, sourceUrl, image } = {}, { via, req } = {}) {
+async function createWineRequest(userId, { wineName, sourceUrl, sourceUrls, image, backImage } = {}, { via, req } = {}) {
   if (!wineName) return { error: err(400, 'Wine name and source URL are required') };
-  const urlErr = validateSourceUrl(sourceUrl);
-  if (urlErr) return { error: err(400, urlErr) };
+  const collected = collectSourceUrls(sourceUrl, sourceUrls);
+  if (collected.error) return { error: err(400, collected.error) };
 
   const trimmedName = String(wineName).trim();
   const trimmedImage = image ? String(image).trim() : '';
+  const trimmedBack = backImage ? String(backImage).trim() : '';
   if (trimmedName.length > 300) {
     return { error: err(400, 'Wine name must be 300 characters or fewer') };
   }
   const imageErr = validateImageRef(trimmedImage);
   if (imageErr) return { error: err(400, imageErr) };
+  const backErr = validateImageRef(trimmedBack);
+  if (backErr) return { error: err(400, `Back label: ${backErr}`) };
 
   const wineRequest = new WineRequest({
     requestType: 'new_wine',
     wineName: trimmedName,
-    sourceUrl: sourceUrl.trim(),
+    sourceUrl: collected.links[0],
+    sourceUrls: collected.links,
     image: trimmedImage || null,
+    backImage: trimmedBack || null,
     user: userId,
     status: 'pending',
     // Which surface and, over the bridge, which install — kept on the record
@@ -400,6 +431,7 @@ module.exports = {
   createWineRequest,
   validateSourceUrl,
   validateImageRef,
+  MAX_SOURCE_URLS,
   // Exposed so the MCP tool descriptions/schemas can enumerate the same options.
   ALLOWED_CURRENCIES,
   LANGUAGE_TAG,

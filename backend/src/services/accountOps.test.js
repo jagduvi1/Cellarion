@@ -309,3 +309,40 @@ describe('replyToTicket', () => {
     expect(ticket.save).toHaveBeenCalled();
   });
 });
+
+describe('createWineRequest — links and the back label (#1460)', () => {
+  test('sourceUrls follow sourceUrl in order, trimmed and without repeats; sourceUrl is the first', async () => {
+    const res = await createWineRequest(UID, {
+      wineName: 'X', sourceUrl: ' https://winery.example/x ', sourceUrls: ['https://review.example/x', 'https://winery.example/x', ''],
+    });
+    expect(res.error).toBeUndefined();
+    expect(WineRequest).toHaveBeenCalledWith(expect.objectContaining({
+      sourceUrl: 'https://winery.example/x', sourceUrls: ['https://winery.example/x', 'https://review.example/x'],
+    }));
+  });
+
+  test('the first link may arrive in sourceUrls alone; a request with no link at all is refused as before', async () => {
+    await createWineRequest(UID, { wineName: 'X', sourceUrls: ['https://a.example'] });
+    expect(WineRequest).toHaveBeenCalledWith(expect.objectContaining({ sourceUrl: 'https://a.example', sourceUrls: ['https://a.example'] }));
+    expect((await createWineRequest(UID, { wineName: 'X', sourceUrls: [] })).error.message).toBe('Source URL is required');
+  });
+
+  test('every link is checked like sourceUrl; more than three, a non-list and a non-string are refused', async () => {
+    const submit = (sourceUrls) => createWineRequest(UID, { wineName: 'X', sourceUrl: 'https://a.example', sourceUrls });
+    expect((await submit(['http://10.0.0.1/x'])).error.message).toMatch(/private\/internal/);
+    expect((await submit(['https://b.example', 'https://c.example', 'https://d.example'])).error.message).toMatch(/At most 3/);
+    expect((await submit('https://b.example')).error.status).toBe(400);
+    expect((await submit([42])).error.status).toBe(400);
+  });
+
+  test('the back label takes the shapes the front photo does, and is named in its error', async () => {
+    const submit = (backImage) => createWineRequest(UID, { wineName: 'X', sourceUrl: 'https://a.example', backImage });
+    expect((await submit('data:image/png;base64,iVBORw0KGgo=')).wineRequest.backImage).toBe('data:image/png;base64,iVBORw0KGgo=');
+    expect((await submit('https://img.example.com/back.png')).wineRequest.backImage).toBe('https://img.example.com/back.png');
+    expect((await submit(undefined)).wineRequest.backImage).toBeNull();
+    const bad = await submit('javascript:alert(1)');
+    expect(bad.error.status).toBe(400);
+    expect(bad.error.message).toMatch(/^Back label:/);
+    expect((await submit('d'.repeat(500001))).error.status).toBe(400);
+  });
+});

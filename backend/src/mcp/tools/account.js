@@ -343,7 +343,9 @@ registerTool({
   inputSchema: {
     wine_name: z.string().min(1).max(300).describe('The wine name as printed on the label / source'),
     source_url: z.string().min(1).max(2048).describe('An http(s) link to a page describing the wine (required)'),
+    source_urls: z.array(z.string().min(1).max(2048)).max(3).optional().describe('Further http(s) links — a winery page and a review each help the reviewer. Three links in all, source_url counted'),
     image_url: z.string().max(500000).optional().describe('Optional picture of the wine: an http(s) link or an inline data:image. An admin reviews it; on approval it may become the picture of the wine in the shared registry, visible to all Cellarion users'),
+    back_image_url: z.string().max(500000).optional().describe('Optional photo of the BACK label (an http(s) link or an inline data:image): often the producer, appellation and importer the front leaves out. Seen by the reviewing admin; it never becomes the wine picture'),
     idempotency_key: IDEMPOTENCY_KEY,
   },
   handler: async (args, ctx) => {
@@ -351,7 +353,8 @@ registerTool({
     if (replayed) return replayed;
 
     const { wineRequest, error } = await createWineRequest(ctx.user.id, {
-      wineName: args.wine_name, sourceUrl: args.source_url, image: args.image_url,
+      wineName: args.wine_name, sourceUrl: args.source_url, sourceUrls: args.source_urls,
+      image: args.image_url, backImage: args.back_image_url,
     }, { via: 'mcp', req: ctx.req });
     if (error) return fail('invalid_input', error.message);
     logAudit(ctx.req, 'wineRequest.create', { type: 'wineRequest', id: wineRequest._id }, { via: 'mcp' });

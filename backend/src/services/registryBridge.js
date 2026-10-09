@@ -530,23 +530,42 @@ async function cleanRequestImage(dataUrl) {
   }
 }
 
-/** A local wine request (a wine nobody has) → the hosted intake. */
-async function forwardRequest({ wineName, sourceUrl, image }) {
-  if (!isEnabled()) return null;
-  const payload = { wineName, sourceUrl };
+/**
+ * A request photo as it may travel: a link as it is, an inline image within
+ * the cap re-encoded (cleanRequestImage), anything else not at all.
+ */
+async function outgoingRequestImage(image) {
   const img = image ? String(image) : '';
-  if (/^https?:\/\//i.test(img)) {
-    payload.image = img;
-  } else if (img.length <= INLINE_REQUEST_IMAGE_MAX && INLINE_REQUEST_IMAGE.test(img)) {
-    const clean = await cleanRequestImage(img);
-    if (clean) payload.image = clean;
+  if (/^https?:\/\//i.test(img)) return img;
+  if (img.length <= INLINE_REQUEST_IMAGE_MAX && INLINE_REQUEST_IMAGE.test(img)) return cleanRequestImage(img);
+  return null;
+}
+
+/** A local wine request (a wine nobody has) → the hosted intake. */
+async function forwardRequest({ wineName, sourceUrl, sourceUrls, image, backImage }) {
+  if (!isEnabled()) return null;
+  let payload = { wineName, sourceUrl };
+  // The extra links (#1460) only when there are any: a registry from before
+  // them ignores the field, and the first link rides as sourceUrl regardless.
+  const links = Array.isArray(sourceUrls) ? sourceUrls.filter((u) => typeof u === 'string' && u) : [];
+  if (links.length > 1) payload.sourceUrls = links;
+  const front = await outgoingRequestImage(image);
+  if (front) payload.image = front;
+  const back = await outgoingRequestImage(backImage);
+  if (back) payload.backImage = back;
+  let r = await client.forwardRequest(payload);
+  // A registry that refuses the body as too large (one from before the back
+  // label, or without the limit for this route) still gets the request: first
+  // without the back label, then without any photo. A new object each time —
+  // the one already sent is never changed under the client.
+  if (r && !r.ok && r.status === 413 && payload.backImage) {
+    const { backImage: _back, ...withoutBack } = payload;
+    payload = withoutBack;
+    r = await client.forwardRequest(payload);
   }
-  const r = await client.forwardRequest(payload);
-  // A registry that refuses the body as too large (one without the 600 kb
-  // limit for this route) still gets the request — only the photo stays here.
   if (r && !r.ok && r.status === 413 && payload.image) {
     const { image: _dropped, ...withoutImage } = payload;
-    return client.forwardRequest(withoutImage);
+    r = await client.forwardRequest(withoutImage);
   }
   return r;
 }
@@ -558,7 +577,10 @@ async function forwardRequest({ wineName, sourceUrl, image }) {
  */
 async function forwardAndTrackRequest(wineRequest) {
   try {
-    const r = await forwardRequest({ wineName: wineRequest.wineName, sourceUrl: wineRequest.sourceUrl, image: wineRequest.image });
+    const r = await forwardRequest({
+      wineName: wineRequest.wineName, sourceUrl: wineRequest.sourceUrl, sourceUrls: wineRequest.sourceUrls,
+      image: wineRequest.image, backImage: wineRequest.backImage,
+    });
     const remoteId = r && r.ok && r.body && r.body.request && r.body.request.id;
     if (remoteId && isId(remoteId)) {
       const WineRequest = require('../models/WineRequest');
@@ -589,10 +611,10 @@ async function syncForwardedRequests({ now = new Date(), adopt = adoptWine } = {
   const WineRequest = require('../models/WineRequest');
   const { completeRequestResolve, completeRequestReject } = require('./wineRequestOps');
   const { logAudit } = require('./audit');
-  // Not the photo: up to 50 × 500 KB of base64 per run that nothing here reads
-  // (a save writes only the fields it changed, so leaving it out is safe).
+  // Not the photos: up to 50 × 2 × 500 KB of base64 per run that nothing here
+  // reads (a save writes only the fields it changed, so leaving them out is safe).
   const pending = await WineRequest.find({ status: 'pending', requestType: 'new_wine', registryRequestId: { $type: 'string' } })
-    .select('-image')
+    .select('-image -backImage')
     .sort({ registryCheckedAt: 1, createdAt: 1 }).limit(REQUEST_SYNC_MAX);
   if (!pending.length) return { checked: 0, resolved: 0, rejected: 0, failures: 0 };
 

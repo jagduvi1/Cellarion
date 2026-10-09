@@ -373,3 +373,18 @@ describe('GET /requests — what became of the requests this install filed', () 
     expect(WineRequest.find.mock.calls[0][0]._id.$in).toHaveLength(50);
   });
 });
+
+// #1460: the extra links and the back label an install forwards reach the
+// shared service the way the first link and the front photo do.
+test('the extra links and the back label reach the shared service', async () => {
+  createWineRequest.mockResolvedValue({ wineRequest: { _id: 'r2', status: 'pending', wineName: 'X' } });
+  const res = await call('POST', '/api/bridge/v1/requests', {
+    wineName: 'X', sourceUrl: 'https://a.example', sourceUrls: ['https://a.example', 'https://b.example'], backImage: 'https://a.example/back.jpg',
+  });
+  expect(res.status).toBe(201);
+  expect(createWineRequest).toHaveBeenCalledWith(
+    'u1',
+    { wineName: 'X', sourceUrl: 'https://a.example', sourceUrls: ['https://a.example', 'https://b.example'], image: undefined, backImage: 'https://a.example/back.jpg' },
+    expect.objectContaining({ via: 'bridge' })
+  );
+});

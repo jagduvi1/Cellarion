@@ -181,9 +181,10 @@ app.use('/api/mcp', express.json({ limit: '2mb' }));
 // of JSON); everything else on the router is small. Registered above the
 // 10 kb default rule below (first express.json to parse wins).
 app.use('/api/bridge/v1/wines/changes', express.json({ limit: '256kb' }));
-// A forwarded wine request may carry the requester's label photo inline, up
-// to the same 500,000-character cap a request has here (services/accountOps).
-app.use('/api/bridge/v1/requests', express.json({ limit: '600kb' }));
+// A forwarded wine request may carry the requester's label photos inline —
+// front and, since #1460, back — each up to the same 500,000-character cap a
+// request has here (services/accountOps).
+app.use('/api/bridge/v1/requests', express.json({ limit: '1200kb' }));
 app.use(express.json({ limit: '10kb' }));
 const corsOrigin = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? false : 'http://localhost:3000');
 if (process.env.NODE_ENV === 'production' && !process.env.FRONTEND_URL) {

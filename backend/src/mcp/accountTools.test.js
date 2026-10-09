@@ -358,3 +358,17 @@ describe('idempotency on the human-queue writes (support ticket 2026-09-12)', ()
     }
   });
 });
+
+describe('request_wine_addition — links and the back label (#1460)', () => {
+  test('source_urls and back_image_url pass through to the shared service', async () => {
+    accountOps.createWineRequest.mockResolvedValue({ wineRequest: { _id: 'wr2', wineName: 'Barolo', status: 'pending' } });
+    await tool('request_wine_addition').handler({
+      wine_name: 'Barolo', source_url: 'https://winery.example/b', source_urls: ['https://review.example/b'], back_image_url: 'https://winery.example/back.jpg',
+    }, CTX);
+    expect(accountOps.createWineRequest).toHaveBeenCalledWith(
+      ME,
+      { wineName: 'Barolo', sourceUrl: 'https://winery.example/b', sourceUrls: ['https://review.example/b'], image: undefined, backImage: 'https://winery.example/back.jpg' },
+      expect.objectContaining({ via: 'mcp' })
+    );
+  });
+});

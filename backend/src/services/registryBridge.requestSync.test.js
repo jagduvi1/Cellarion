@@ -77,7 +77,7 @@ describe('syncForwardedRequests', () => {
     // Only pending, forwarded (string id) new-wine requests are asked about —
     // without their photos, which nothing here reads.
     expect(WineRequest.find).toHaveBeenCalledWith({ status: 'pending', requestType: 'new_wine', registryRequestId: { $type: 'string' } });
-    expect(selected.at(-1)).toBe('-image');
+    expect(selected.at(-1)).toBe('-image -backImage');
     expect(client.requestStatuses).toHaveBeenCalledWith([R1, R2, R3]);
     expect(adopt).toHaveBeenCalledWith(W1, 'u1');
     expect(completeRequestResolve).toHaveBeenCalledWith(rows[0], adopted, { resolvedBy: null, adminNotes: 'Added as Domaine X — Y' });

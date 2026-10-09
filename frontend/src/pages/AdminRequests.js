@@ -483,9 +483,15 @@ function AdminRequests() {
                 ) : (
                   <p>
                     <strong>{t('common.source')}:</strong>{' '}
-                    <a href={safeUrl(selected.sourceUrl) || undefined} target="_blank" rel="noopener noreferrer">
-                      {selected.sourceUrl}
-                    </a>
+                    {/* Every link the requester gave (#1460); older requests know one. */}
+                    {(Array.isArray(selected.sourceUrls) && selected.sourceUrls.length ? selected.sourceUrls : [selected.sourceUrl])
+                      .filter(Boolean)
+                      .map((url, index) => (
+                        <span key={url}>
+                          {index > 0 && ' · '}
+                          <a href={safeUrl(url) || undefined} target="_blank" rel="noopener noreferrer">{url}</a>
+                        </span>
+                      ))}
                   </p>
                 )}
                 {selected.hints && (selected.hints.country || selected.hints.region || selected.hints.appellation || selected.hints.type) && (
@@ -494,8 +500,22 @@ function AdminRequests() {
                     {[selected.hints.country, selected.hints.region, selected.hints.appellation, selected.hints.type].filter(Boolean).join(' · ')}
                   </p>
                 )}
-                {displayableImage(selected.image) && (
-                  <img src={displayableImage(selected.image)} alt="Wine" className="wine-image-preview" />
+                {(displayableImage(selected.image) || displayableImage(selected.backImage)) && (
+                  <div className="request-photos">
+                    {displayableImage(selected.image) && (
+                      <figure>
+                        <img src={displayableImage(selected.image)} alt="Wine" className="wine-image-preview" />
+                        {displayableImage(selected.backImage) && <figcaption>{t('admin.requests.frontLabel', 'Front')}</figcaption>}
+                      </figure>
+                    )}
+                    {/* The back label (#1460): evidence for the reviewer, never the wine's picture. */}
+                    {displayableImage(selected.backImage) && (
+                      <figure>
+                        <img src={displayableImage(selected.backImage)} alt="Back label" className="wine-image-preview" />
+                        <figcaption>{t('admin.requests.backLabel', 'Back label')}</figcaption>
+                      </figure>
+                    )}
+                  </div>
                 )}
                 {selected.requestType !== 'grape_suggestion' && selected.status === 'pending' && (
                   <div className="ai-lookup-row">

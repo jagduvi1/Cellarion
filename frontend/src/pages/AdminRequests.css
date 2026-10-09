@@ -346,3 +346,21 @@
   background: var(--color-border-light, #f0ece8);
   color: var(--color-text-secondary, #888);
 }
+
+/* Front and back label side by side (#1460) */
+.request-photos {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.request-photos figure {
+  margin: 0;
+}
+
+.request-photos figcaption {
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  text-align: center;
+  color: var(--color-text-muted);
+}
