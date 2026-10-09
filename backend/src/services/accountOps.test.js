@@ -346,3 +346,27 @@ describe('createWineRequest — links and the back label (#1460)', () => {
     expect((await submit('d'.repeat(500001))).error.status).toBe(400);
   });
 });
+
+// The repeat check is quadratic in the list and the route takes megabytes of
+// JSON: the length is refused BEFORE the loop (release audit 2026-10-09, H2).
+describe('createWineRequest — an oversized link list is refused at once', () => {
+  test('a list of 200,000 one-character strings is refused in well under a second', async () => {
+    const sourceUrls = Array.from({ length: 200000 }, (_, i) => String(i));
+    const started = Date.now();
+    const res = await createWineRequest(UID, { wineName: 'X', sourceUrl: 'https://a.example', sourceUrls });
+    expect(Date.now() - started).toBeLessThan(500);
+    expect(res.error.status).toBe(400);
+    expect(res.error.message).toMatch(/At most 3/);
+  });
+
+  test('the form\'s list (sourceUrl repeated inside sourceUrls, three in all) still passes', async () => {
+    const res = await createWineRequest(UID, { wineName: 'X', sourceUrl: 'https://a.example', sourceUrls: ['https://a.example', 'https://b.example', 'https://c.example'] });
+    expect(res.error).toBeUndefined();
+    expect(WineRequest).toHaveBeenCalledWith(expect.objectContaining({ sourceUrls: ['https://a.example', 'https://b.example', 'https://c.example'] }));
+  });
+
+  test('four entries are refused even when they collapse to fewer distinct links', async () => {
+    const res = await createWineRequest(UID, { wineName: 'X', sourceUrl: 'https://a.example', sourceUrls: ['https://a.example', 'https://a.example', 'https://a.example', 'https://b.example'] });
+    expect(res.error.message).toMatch(/At most 3/);
+  });
+});

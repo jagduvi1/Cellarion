@@ -5,6 +5,10 @@ const User = require('../models/User');
 const Notification = require('../models/Notification');
 const { logAudit } = require('../services/audit');
 const { isValidId } = require('../utils/validation');
+// The row below is written straight to the model; services/notifications is
+// what moves the recipient's notifications version for the cached token polls
+// (release audit 2026-10-09, L).
+const { bumpNotificationsVersion } = require('../services/dataVersion');
 
 const router = express.Router();
 
@@ -44,7 +48,7 @@ router.post('/:userId', requireNonDemo, async (req, res) => {
       message: `${followerName} started following you`,
       link: `/users/${req.user.id}`,
       actor: req.user.id, // so GDPR erasure can remove this on the follower's deletion
-    }).save().catch(() => {});
+    }).save().then(() => bumpNotificationsVersion(targetId)).catch(() => {});
 
     logAudit(req, 'user.follow', { type: 'user', id: targetId });
 

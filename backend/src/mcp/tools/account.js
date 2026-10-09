@@ -343,9 +343,9 @@ registerTool({
   inputSchema: {
     wine_name: z.string().min(1).max(300).describe('The wine name as printed on the label / source'),
     source_url: z.string().min(1).max(2048).describe('An http(s) link to a page describing the wine (required)'),
-    source_urls: z.array(z.string().min(1).max(2048)).max(3).optional().describe('Further http(s) links — a winery page and a review each help the reviewer. Three links in all, source_url counted'),
+    source_urls: z.array(z.string().min(1).max(2048)).max(2).optional().describe('Up to two FURTHER http(s) links beyond source_url — a winery page and a review each help the reviewer (three links in all)'),
     image_url: z.string().max(500000).optional().describe('Optional picture of the wine: an http(s) link or an inline data:image. An admin reviews it; on approval it may become the picture of the wine in the shared registry, visible to all Cellarion users'),
-    back_image_url: z.string().max(500000).optional().describe('Optional photo of the BACK label (an http(s) link or an inline data:image): often the producer, appellation and importer the front leaves out. Seen by the reviewing admin; it never becomes the wine picture'),
+    back_image_url: z.string().max(500000).optional().describe('Optional photo of the BACK label (an http(s) link or an inline data:image): often the producer, appellation and importer the front leaves out. An admin reviews it; on approval it may be published among the wine\'s public photos in the shared registry, visible to all Cellarion users — never as the wine\'s main picture. Tell the user that before sending one'),
     idempotency_key: IDEMPOTENCY_KEY,
   },
   handler: async (args, ctx) => {

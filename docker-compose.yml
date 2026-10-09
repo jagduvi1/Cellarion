@@ -126,6 +126,10 @@ services:
       - CLIMATE_MAX_READINGS_PER_DAY=${CLIMATE_MAX_READINGS_PER_DAY:-}
       - LOG_LEVEL=${LOG_LEVEL:-}
       - AUDIT_TTL_DAYS=${AUDIT_TTL_DAYS:-}
+      # Capacity knobs (all optional; unset or empty keeps the in-code defaults).
+      - SSE_MAX_STREAMS=${SSE_MAX_STREAMS:-}
+      - MCP_MAX_SESSIONS=${MCP_MAX_SESSIONS:-}
+      - OAUTH_REFRESH_GRACE_S=${OAUTH_REFRESH_GRACE_S:-}
       - INDEXNOW_KEY=${INDEXNOW_KEY:-}
       # Registry Bridge (self-hosted installs). The env block enumerates vars,
       # so these MUST be forwarded or the documented two-line .env setup is a

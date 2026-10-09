@@ -486,10 +486,11 @@ describe('POST /token — refresh_token (the grace window after a rotation)', ()
     expect(filter).toMatchObject({ _id: 't1', prevRefreshTokenHash: sha256('spent'), revokedAt: null });
     expect(update.$set.tokenHash).toBeTruthy();
     expect(update.$set.refreshTokenHash).toBeTruthy();
-    // The previous hash and the rotation time are NOT moved: the window is
-    // measured from the last real rotation, so a spent token cannot be kept
-    // alive by replaying it.
-    expect(update.$set.prevRefreshTokenHash).toBeUndefined();
+    // The successor the retrying client never received becomes the spent
+    // one, so presenting it later (outside the window) trips reuse detection
+    // like any replay; the rotation time is NOT moved, so a spent token cannot
+    // be kept alive by replaying it (release audit 2026-10-09, M2).
+    expect(update.$set.prevRefreshTokenHash).toBe(sha256('current'));
     expect(update.$set.refreshRotatedAt).toBeUndefined();
   });
 
@@ -555,5 +556,35 @@ describe('POST /token — refusals are logged', () => {
     const r = await formPost('/token', { grant_type: 'refresh_token', client_id: CLIENT.clientId, refresh_token: 'ok' });
     expect(r.status).toBe(200);
     expect(warn.mock.calls.find((c) => String(c[0]).includes('token request refused'))).toBeUndefined();
+  });
+});
+
+describe('POST /token — the grace window never hides a theft for good (release audit 2026-10-09, M2)', () => {
+  test('a graced retry that loses the race to a real rotation gets invalid_grant, nothing revoked', async () => {
+    OAuthClient.findOne.mockResolvedValue(CLIENT);
+    const save = jest.fn().mockResolvedValue();
+    ApiToken.findOne
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ _id: 't1', oauthClientId: CLIENT.clientId, refreshTokenHash: sha256('current'), refreshRotatedAt: new Date(Date.now() - 5 * 1000), save });
+    ApiToken.findOneAndUpdate.mockResolvedValue(null); // the pinned prev hash moved under us
+    const r = await formPost('/token', { grant_type: 'refresh_token', client_id: CLIENT.clientId, refresh_token: 'spent' });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toBe('invalid_grant');
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  test('the successor a graced retry displaced, presented after the window, is reuse: the connection is revoked', async () => {
+    // After the graced rotation the row holds { current: R3, prev: R2 } with
+    // the rotation time still that of the real rotation. The other holder
+    // (the thief, or the owner) presents R2 a few minutes later.
+    OAuthClient.findOne.mockResolvedValue(CLIENT);
+    const save = jest.fn().mockResolvedValue();
+    ApiToken.findOne
+      .mockResolvedValueOnce(null) // R2 is not current
+      .mockResolvedValueOnce({ _id: 't1', oauthClientId: CLIENT.clientId, refreshTokenHash: sha256('R3'), prevRefreshTokenHash: sha256('R2'), refreshRotatedAt: new Date(Date.now() - 5 * 60 * 1000), save });
+    const r = await formPost('/token', { grant_type: 'refresh_token', client_id: CLIENT.clientId, refresh_token: 'R2' });
+    expect(r.status).toBe(400);
+    expect(save).toHaveBeenCalled(); // revokedAt set
+    expect(ApiToken.findOneAndUpdate).not.toHaveBeenCalled();
   });
 });

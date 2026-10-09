@@ -364,3 +364,7 @@
   text-align: center;
   color: var(--color-text-muted);
 }
+
+.request-links a {
+  word-break: break-all;
+}

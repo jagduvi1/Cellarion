@@ -9,6 +9,10 @@ const { sendSupportReplyEmail, EMAIL_VERIFICATION_ENABLED } = require('../../ser
 const { stripHtml } = require('../../utils/sanitize');
 const { parsePagination } = require('../../utils/pagination');
 const { isValidId } = require('../../utils/validation');
+// A row written straight to the model bypasses services/notifications, which
+// is what moves the recipient's notifications version for the cached token
+// polls (release audit 2026-10-09, L).
+const { bumpNotificationsVersion } = require('../../services/dataVersion');
 
 const TICKET_STATUSES = ['open', 'in_progress', 'closed'];
 const REPLY_EMAIL_TIMEOUT_MS = 10000;
@@ -114,6 +118,7 @@ router.put('/:id/respond', async (req, res) => {
       message: `Your support ticket "${ticket.subject}" has received a response.`,
       link: '/support'
     });
+    bumpNotificationsVersion(ticket.user);
     const emailed = await emailSupportReply(ticket, cleaned);
 
     logAudit(req, 'support.ticket.responded', { type: 'SupportTicket', id: ticket._id }, {

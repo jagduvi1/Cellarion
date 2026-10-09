@@ -55,7 +55,9 @@ const data = createClock();
 // routes/notifications answers API-token polls from memory while it holds,
 // and marking a notification read must not make the next poll recompute the
 // user's whole statistics. Moved by services/notifications for every
-// recipient of a new row and by the mark-read routes for the reader.
+// recipient of a new row, by the two writers that bypass it (admin support
+// replies, follows), and by every mark-read — the REST routes and the MCP
+// mark_notification_read tool.
 const notifications = createClock();
 
 function bumpDataVersion(userId) { data.bump(userId); }

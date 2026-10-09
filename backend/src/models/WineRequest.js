@@ -37,9 +37,17 @@ const wineRequestSchema = new mongoose.Schema({
   // was all a request could carry; a winery page and a review page give a
   // curator different evidence (#1460). sourceUrl stays the first of these,
   // for the readers and the older installs that know only one.
+  // The service (accountOps.collectSourceUrls) is the real gate; the schema
+  // repeats the shape so a later writer that bypasses it cannot store a
+  // javascript: entry the admin page renders as a link.
   sourceUrls: [{
     type: String,
-    trim: true
+    trim: true,
+    maxlength: 2048,
+    validate: {
+      validator: (v) => !v || /^https?:\/\/.+/.test(v),
+      message: 'Please provide a valid URL'
+    }
   }],
   suggestedGrapes: [{
     type: String,
@@ -51,11 +59,14 @@ const wineRequestSchema = new mongoose.Schema({
   },
   // The back label (#1460): often the producer, the appellation and the
   // importer the front leaves out. Same shapes as image — an http(s) link or
-  // an inline data: image under the cap — shown to the reviewing admin beside
-  // the front; it never becomes the wine's picture.
+  // an inline data: image under the cap (services/accountOps
+  // MAX_IMAGE_REF_LENGTH, repeated here) — shown to the reviewing admin beside
+  // the front. Never the wine's picture; on approval it may be published as
+  // one of the wine's gallery photos (routes/admin/wineRequests.js).
   backImage: {
     type: String,
-    trim: true
+    trim: true,
+    maxlength: 500000
   },
   // What the import FILE said about the wine (CellarTracker / Vivino / Ploc
   // all name these). Plain strings for the curator's benefit — prefilled on

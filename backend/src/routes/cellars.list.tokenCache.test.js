@@ -139,3 +139,33 @@ test('removing a member moves their version too', async () => {
   expect(r.status).toBe(200);
   expect(getDataVersion(member)).not.toBe(before);
 });
+
+test('renaming a cellar moves every member\'s version — their cached list shows the new name', async () => {
+  const member = '64b000000000000000000062';
+  const before = getDataVersion(member);
+  const cellar = {
+    _id: CELLAR_ID, name: 'Old', description: '', user: OWNER, members: [{ user: member, role: 'viewer' }], userColors: [],
+    save: jest.fn(async () => {}),
+    toObject() { return { _id: CELLAR_ID, name: this.name, user: OWNER, members: this.members, userColors: [] }; },
+  };
+  Cellar.findOne.mockResolvedValue(cellar);
+  const r = await fetch(`${base}/api/cellars/${CELLAR_ID}`, {
+    method: 'PUT', headers: { 'content-type': 'application/json', 'x-user': OWNER },
+    body: JSON.stringify({ name: 'New' }),
+  });
+  expect(r.status).toBe(200);
+  expect(getDataVersion(member)).not.toBe(before);
+});
+
+test('changing the personal colour moves the actor\'s own version', async () => {
+  const user = '64b000000000000000000072';
+  const before = getDataVersion(user);
+  const cellar = { _id: CELLAR_ID, user: OWNER, members: [{ user, role: 'viewer' }], userColors: [], deletedAt: null, save: jest.fn(async () => {}) };
+  Cellar.findById.mockResolvedValue(cellar);
+  const r = await fetch(`${base}/api/cellars/${CELLAR_ID}/color`, {
+    method: 'PATCH', headers: { 'content-type': 'application/json', 'x-user': user },
+    body: JSON.stringify({ color: '#aabbcc' }),
+  });
+  expect(r.status).toBe(200);
+  expect(getDataVersion(user)).not.toBe(before);
+});

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import PhotoCapture from '../components/PhotoCapture';
 import { requestImageFor } from '../utils/requestImage';
+import safeUrl from '../utils/safeUrl';
 import './WineRequests.css';
 
 // Links a request may carry (#1460): the required source plus two more — a
@@ -28,10 +29,13 @@ function WineRequests() {
   const [imageFile, setImageFile] = useState(null);
   const [imageBgRemoved, setImageBgRemoved] = useState(null);
   const [processingBg, setProcessingBg] = useState(false);
-  // The back label (#1460): a photo or a link, like the front, but it is
-  // evidence for the reviewer, not a picture of the wine — no background
-  // removal, nothing of it reaches the registry.
+  // The back label (#1460): a photo or a link, like the front. Never the
+  // wine's picture and no background removal here; after review the admin
+  // may publish it among the wine's gallery photos (the notice says so).
   const [backImageFile, setBackImageFile] = useState(null);
+  // One submission at a time: the photo encodes take a moment, and a second
+  // tap used to file the same request twice.
+  const [submitting, setSubmitting] = useState(false);
   const [backImageUrl, setBackImageUrl] = useState('');
 
   useEffect(() => {
@@ -110,6 +114,8 @@ function WineRequests() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting || processingBg) return;
+    setSubmitting(true);
     try {
       let imageValue = formData.image || null;
       if (imageFile) {
@@ -125,7 +131,7 @@ function WineRequests() {
       if (backImageFile) {
         backImageValue = await requestImageFor({ file: backImageFile });
         if (!backImageValue) {
-          alert(t('wineRequests.photoTooLarge'));
+          alert(t('wineRequests.backPhotoTooLarge', 'The back label photo could not be made small enough to send. Try another photo, or send the request without it.'));
           return;
         }
       }
@@ -149,6 +155,8 @@ function WineRequests() {
       }
     } catch (err) {
       alert(t('wineRequests.submitFailed'));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -156,6 +164,10 @@ function WineRequests() {
     resetForm();
     setShowForm(false);
   };
+  // Closing the form forgets its photos and links: a photo taken for one wine
+  // used to ride along into the next request after the form was reopened
+  // (release audit 2026-10-09, F2).
+  const toggleForm = () => (showForm ? handleCancel() : setShowForm(true));
 
   const setExtraUrl = (index, value) => setExtraUrls(extraUrls.map((u, i) => (i === index ? value : u)));
   const removeExtraUrl = (index) => setExtraUrls(extraUrls.filter((_, i) => i !== index));
@@ -164,12 +176,12 @@ function WineRequests() {
     <div className="wine-requests-page">
       <div className="winerequest-header">
         <h1>{t('wineRequests.title')}</h1>
-        <button onClick={() => setShowForm(!showForm)} className="btn btn-primary winerequest-desktop-create">
+        <button onClick={toggleForm} className="btn btn-primary winerequest-desktop-create">
           {showForm ? t('common.cancel') : `+ ${t('wineRequests.newRequest')}`}
         </button>
       </div>
 
-      <button className="fab winerequest-fab" onClick={() => setShowForm(!showForm)} aria-label="New Request">
+      <button className="fab winerequest-fab" onClick={toggleForm} aria-label="New Request">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </button>
 
@@ -258,10 +270,17 @@ function WineRequests() {
               </p>
             </div>
 
-            {/* Back label (#1460): evidence for the reviewer, never the wine's picture */}
+            {/* Back label (#1460): never the wine's picture, but after review it may
+                join the wine's public photos — said here, like the notice above. */}
             <div className="form-group">
               <label>{t('wineRequests.backImageLabel', 'Back label')} <span className="label-optional">({t('common.optional', 'optional')})</span></label>
               <p className="field-hint">{t('wineRequests.backImageHint', 'The back label often names the producer, the appellation and the importer.')}</p>
+              <p className="image-public-notice">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, marginTop: '1px' }}>
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                {t('wineRequests.backImageNotice', 'After review, the back label may be shown among the wine\'s photos in the shared registry, visible to all Cellarion users.')}
+              </p>
               <PhotoCapture
                 onCapture={(file) => {
                   setBackImageFile(file);
@@ -286,7 +305,7 @@ function WineRequests() {
             </div>
 
             <div className="form-actions">
-              <button type="submit" className="btn btn-success">{t('wineRequests.submitRequest')}</button>
+              <button type="submit" className="btn btn-success" disabled={submitting || processingBg}>{t('wineRequests.submitRequest')}</button>
               <button type="button" onClick={handleCancel} className="btn btn-secondary">
                 {t('common.cancel')}
               </button>
@@ -328,7 +347,7 @@ function WineRequests() {
                   {linksOf(request).map((url, index) => (
                     <span key={url}>
                       {index > 0 && ' · '}
-                      <a href={url} target="_blank" rel="noopener noreferrer">{url}</a>
+                      <a href={safeUrl(url) || undefined} target="_blank" rel="noopener noreferrer">{url}</a>
                     </span>
                   ))}
                 </p>

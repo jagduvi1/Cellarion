@@ -309,31 +309,26 @@ router.put('/:id/resolve', async (req, res) => {
         }
       }
 
-      // The back label joins the gallery: ingested like a member's upload,
-      // published at once (the admin approved it by leaving the box ticked),
-      // marked as the back so a reader can tell the faces apart. Not the
-      // official picture — assignedToWine stays false. Only for a wine created
-      // here, and best-effort, like the front.
+      // The back label joins the gallery: ingested like a member's upload and
+      // published at birth (the admin approved it by leaving the box ticked),
+      // marked as the back so a reader can tell the faces apart. Born approved
+      // — approving it after the hand-off raced the background-removal worker,
+      // which then settled it 'processed' and out of every gallery (release
+      // audit 2026-10-09, H1). Not the official picture: assignedToWine stays
+      // false. Only for a wine created here, and best-effort, like the front.
       if (addBack && createdHere) {
         try {
           const keepBackground = await hasTransparency(backPhoto);
           const ingest = await ingestBottleImage(
-            { buffer: backPhoto, wineDefinitionId: linkedWine._id, userId: req.user.id, userRoles: req.user.roles, keepBackground },
+            { buffer: backPhoto, wineDefinitionId: linkedWine._id, userId: req.user.id, userRoles: req.user.roles, keepBackground, publish: { side: 'back' } },
             req
           );
           if (ingest.error) {
             console.error('[wine-requests] back label not added:', ingest.error.message);
           } else {
-            const backRow = ingest.image;
-            backRow.status = 'approved';
-            backRow.visibility = 'public';
-            backRow.side = 'back';
-            backRow.reviewedBy = req.user.id;
-            backRow.reviewedAt = new Date();
-            await backRow.save();
             logAudit(req, 'admin.image.approve',
-              { type: 'image', id: backRow._id },
-              { wineDefinitionId: String(linkedWine._id), fromRequest: String(wineRequest._id), side: 'back' });
+              { type: 'image', id: ingest.image._id },
+              { wineDefinitionId: String(linkedWine._id), visibility: 'public', fromRequest: String(wineRequest._id), side: 'back' });
           }
         } catch (err) {
           console.error('[wine-requests] back label not added:', err.message);

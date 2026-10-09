@@ -1523,12 +1523,14 @@
     "submitFailed": "The request could not be sent. Please try again.",
     "submitFailedReason": "The request could not be sent: {{reason}}",
     "photoTooLarge": "This photo could not be made small enough to send. Try another photo, or send the request without one.",
+    "backPhotoTooLarge": "The back label photo could not be made small enough to send. Try another photo, or send the request without it.",
     "moreLinksLabel": "More links",
     "linksHint": "A winery page and a review each give the reviewer something different.",
     "addLink": "Add another link",
     "removeLink": "Remove",
     "backImageLabel": "Back label",
-    "backImageHint": "The back label often names the producer, the appellation and the importer."
+    "backImageHint": "The back label often names the producer, the appellation and the importer.",
+    "backImageNotice": "After review, the back label may be shown among the wine's photos in the shared registry, visible to all Cellarion users."
   },
   "history": {
     "title": "Bottle History",

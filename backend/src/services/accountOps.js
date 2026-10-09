@@ -363,6 +363,12 @@ function validateImageRef(image, { allowInline = true } = {}) {
 const MAX_SOURCE_URLS = 3;
 function collectSourceUrls(sourceUrl, sourceUrls) {
   if (sourceUrls != null && !Array.isArray(sourceUrls)) return { error: 'sourceUrls must be a list of links' };
+  // Refuse the length BEFORE the loop: the route accepts megabytes of JSON,
+  // and the repeat check below is quadratic in the list (release audit
+  // 2026-10-09, H2 — a 5 MB list of one-character strings pinned the event
+  // loop for minutes). The form sends sourceUrl inside sourceUrls too, so the
+  // list itself is capped at the maximum, repeats included.
+  if (sourceUrls && sourceUrls.length > MAX_SOURCE_URLS) return { error: `At most ${MAX_SOURCE_URLS} source links` };
   const links = [];
   for (const raw of [sourceUrl, ...(sourceUrls || [])]) {
     if (raw == null || raw === '') continue;

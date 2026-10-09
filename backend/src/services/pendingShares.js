@@ -1,6 +1,9 @@
 const PendingShare = require('../models/PendingShare');
 const Cellar = require('../models/Cellar');
 const { createNotification } = require('./notifications');
+// Nothing here is audited; the owner's cached token list carries the members
+// (release audit 2026-10-09, L).
+const { bumpDataVersion } = require('./dataVersion');
 
 /**
  * Resolve any pending cellar shares for a newly registered / verified / SSO user.
@@ -26,6 +29,7 @@ async function resolvePendingShares(user) {
 
       cellar.members.push({ user: user._id, role: invite.role });
       await cellar.save();
+      bumpDataVersion(cellar.user);
 
       createNotification(
         user._id,
