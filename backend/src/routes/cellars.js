@@ -27,7 +27,8 @@ const { CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES, ORDERED_STATUS, WINE_POPULATE
 const mongoose = require('mongoose');
 const { parsePagination } = require('../utils/pagination');
 const bottleSearch = require('../services/bottleSearch');
-const { getDataVersion } = require('../services/dataVersion');
+const { getDataVersion, bumpDataVersion } = require('../services/dataVersion');
+const { createTokenReadCache } = require('../services/tokenReadCache');
 
 // The data version of a search scope's owners (services/dataVersion): the
 // search keeps the scope's documents while it holds (services/bottleSearch),
@@ -44,6 +45,23 @@ const router = express.Router();
 function getUserColor(cellar, userId) {
   const entry = cellar.userColors?.find(uc => uc.user.toString() === userId.toString());
   return entry?.color || null;
+}
+
+// Machine polling (usage check 2026-10-09): the Home Assistant integration
+// asks for the cellar list every few minutes per install, about 2,200 reads a
+// day from some thirty installs, and it runs on about one active user in
+// four. API-token requests are answered from memory while the user's data
+// version (services/dataVersion) is unchanged — every audited cellar.* change
+// moves the actor's and the owner's, and the membership routes move the
+// member's, whose list changes without them acting. Browser reads are never
+// cached.
+const tokenListCache = createTokenReadCache();
+
+// The people whose cellar list changes when this cellar changes hands, name
+// or existence without them acting: its members. The actor and the owner are
+// moved by the audit entry; these are the others.
+function bumpMembers(cellar) {
+  for (const m of cellar?.members || []) bumpDataVersion(m.user);
 }
 
 // Group key parts default like the JS grouping path: missing/empty vintage →
@@ -530,6 +548,14 @@ router.use(requireAuth);
 // GET /api/cellars - List user's cellars (owned + shared)
 router.get('/', async (req, res) => {
   try {
+    // Read the version BEFORE loading: a change landing during the load moves
+    // it on, so the entry stored below can never outlive that change.
+    const version = req.apiToken ? getDataVersion(req.user.id) : null;
+    if (req.apiToken) {
+      const hit = tokenListCache.get(req.user.id, 'list', version);
+      if (hit) return res.json(hit);
+    }
+
     const cellars = await Cellar.find({
       $or: [{ user: req.user.id }, { 'members.user': req.user.id }],
       deletedAt: null
@@ -543,7 +569,9 @@ router.get('/', async (req, res) => {
       return obj;
     });
 
-    res.json({ count: cellarsWithRole.length, cellars: cellarsWithRole });
+    const body = { count: cellarsWithRole.length, cellars: cellarsWithRole };
+    if (req.apiToken) tokenListCache.set(req.user.id, 'list', version, body);
+    res.json(body);
   } catch (error) {
     console.error('Get cellars error:', error);
     res.status(500).json({ error: 'Failed to get cellars' });
@@ -1427,6 +1455,7 @@ router.put('/:id', async (req, res) => {
     if (description !== undefined) cellar.description = description?.trim() || '';
 
     await cellar.save();
+    bumpMembers(cellar);
 
     logAudit(req, 'cellar.update', { type: 'cellar', id: cellar._id, cellarId: cellar._id }, { name: cellar.name });
 
@@ -1492,6 +1521,7 @@ router.delete('/:id', async (req, res) => {
     const now = new Date();
     cellar.deletedAt = now;
     await cellar.save();
+    bumpMembers(cellar);
 
     // Cascade soft-delete to the LIVE racks only ({ deletedAt: null }). Racks
     // the user already soft-deleted individually keep their own (earlier)
@@ -1645,6 +1675,7 @@ router.post('/:id/members', requireNonDemo, async (req, res) => {
 
     cellar.members.push({ user: userToAdd._id, role });
     await cellar.save();
+    bumpDataVersion(userToAdd._id);
 
     const sharingUser = await User.findById(req.user.id).select('username').lean();
     createNotification(
@@ -1687,6 +1718,7 @@ router.put('/:id/members/:userId', async (req, res) => {
     const previousRole = member.role;
     member.role = role;
     await cellar.save();
+    bumpDataVersion(req.params.userId);
 
     // Assigning a climate device to a cellar requires owner/editor. If this
     // member is downgraded to viewer, detach any device they had assigned here
@@ -1732,6 +1764,7 @@ router.delete('/:id/members/:userId', async (req, res) => {
 
     cellar.members.splice(memberIndex, 1);
     await cellar.save();
+    bumpDataVersion(req.params.userId);
 
     // Detach any climate devices the removed member had assigned to this
     // cellar — otherwise their token keeps posting readings into a cellar they
@@ -1810,6 +1843,8 @@ router.post('/:id/transfer-ownership', requireNonDemo, async (req, res) => {
     }
 
     const result = await transferCellarOwnership(req.params.id, newOwnerId, req.user.id);
+    bumpDataVersion(newOwnerId);
+    bumpMembers(result.cellar);
 
     logAudit(
       req,

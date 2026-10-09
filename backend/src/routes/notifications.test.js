@@ -21,7 +21,10 @@ jest.mock('../models/Notification', () => ({
 jest.mock('../middleware/auth', () => ({
   requireAuth: (req, res, next) => {
     if (!req.headers.authorization) return res.status(401).json({ error: 'No token provided' });
-    req.user = { id: 'u1' };
+    req.user = { id: req.headers['x-user'] || 'u1' };
+    // An API-token request (the Home Assistant integration), the way
+    // apiTokenAuth marks one.
+    if (req.headers['x-token'] === '1') req.apiToken = { id: 'tok', scopes: ['read'] };
     next();
   },
 }));
@@ -124,4 +127,75 @@ test('the probe requires a signed-in user', async () => {
   const res = await fetch(`${baseUrl}/api/notifications/unread-count`);
   expect(res.status).toBe(401);
   expect(Notification.countDocuments).not.toHaveBeenCalled();
+});
+
+// ── API-token polls are answered from memory ─────────────────────────────────
+// The Home Assistant integration asks for the list every few minutes per
+// install (usage check 2026-10-09). A token request repeats the stored answer
+// until the user's notifications version moves (a new row, a mark-read) or
+// the entry ages out; browser requests never see the cache.
+const { bumpNotificationsVersion } = require('../services/dataVersion');
+const tokenGet = (path, user) => fetch(`${baseUrl}${path}`, { headers: { Authorization: 'Bearer cel_x', 'x-token': '1', 'x-user': user } });
+const browserGet = (path, user) => fetch(`${baseUrl}${path}`, { headers: { Authorization: 'Bearer jwt', 'x-user': user } });
+
+describe('API-token polls', () => {
+  test('an unchanged token poll of the list is answered from memory', async () => {
+    Notification.find.mockReturnValue(query([{ _id: NEWEST, read: false }]));
+    Notification.countDocuments.mockResolvedValue(1);
+    const a = await (await tokenGet('/api/notifications', 'tok-list')).json();
+    const b = await (await tokenGet('/api/notifications', 'tok-list')).json();
+    expect(b).toEqual(a);
+    expect(Notification.find).toHaveBeenCalledTimes(1);
+    expect(Notification.countDocuments).toHaveBeenCalledTimes(1);
+  });
+
+  test('an unchanged token poll of the probe is answered from memory', async () => {
+    Notification.findOne.mockReturnValue(query({ _id: NEWEST }));
+    Notification.countDocuments.mockResolvedValue(2);
+    await tokenGet('/api/notifications/unread-count', 'tok-probe');
+    const b = await (await tokenGet('/api/notifications/unread-count', 'tok-probe')).json();
+    expect(b).toEqual({ unreadCount: 2, newestId: String(NEWEST) });
+    expect(Notification.findOne).toHaveBeenCalledTimes(1);
+  });
+
+  test('a new row for the user (the version moves) brings a fresh answer', async () => {
+    Notification.find.mockReturnValue(query([{ _id: OLDER, read: false }]));
+    Notification.countDocuments.mockResolvedValue(1);
+    await tokenGet('/api/notifications', 'tok-change');
+    bumpNotificationsVersion('tok-change'); // what services/notifications does on insert
+    Notification.find.mockReturnValue(query([{ _id: NEWEST, read: false }, { _id: OLDER, read: false }]));
+    Notification.countDocuments.mockResolvedValue(2);
+    const b = await (await tokenGet('/api/notifications', 'tok-change')).json();
+    expect(b.unreadCount).toBe(2);
+    expect(Notification.find).toHaveBeenCalledTimes(2);
+  });
+
+  test('marking read through the API moves the version, so the next poll is fresh', async () => {
+    Notification.find.mockReturnValue(query([{ _id: NEWEST, read: false }]));
+    Notification.countDocuments.mockResolvedValue(1);
+    await tokenGet('/api/notifications', 'tok-read');
+    Notification.updateMany.mockResolvedValue({ modifiedCount: 1 });
+    const r = await fetch(`${baseUrl}/api/notifications/read-all`, { method: 'PUT', headers: { Authorization: 'Bearer cel_x', 'x-token': '1', 'x-user': 'tok-read' } });
+    expect(r.status).toBe(200);
+    Notification.countDocuments.mockResolvedValue(0);
+    const b = await (await tokenGet('/api/notifications', 'tok-read')).json();
+    expect(b.unreadCount).toBe(0);
+    expect(Notification.find).toHaveBeenCalledTimes(2);
+  });
+
+  test('another user never shares an answer', async () => {
+    Notification.find.mockReturnValue(query([{ _id: NEWEST, read: false }]));
+    Notification.countDocuments.mockResolvedValue(1);
+    await tokenGet('/api/notifications', 'tok-a');
+    await tokenGet('/api/notifications', 'tok-b');
+    expect(Notification.find).toHaveBeenCalledTimes(2);
+  });
+
+  test('browser requests (no API token) are never cached', async () => {
+    Notification.find.mockReturnValue(query([{ _id: NEWEST, read: false }]));
+    Notification.countDocuments.mockResolvedValue(1);
+    await browserGet('/api/notifications', 'browser-u');
+    await browserGet('/api/notifications', 'browser-u');
+    expect(Notification.find).toHaveBeenCalledTimes(2);
+  });
 });

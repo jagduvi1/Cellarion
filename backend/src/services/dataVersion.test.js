@@ -91,3 +91,29 @@ test('when the map is dropped to bound memory, no earlier version comes back', (
   dv.bumpDataVersion('u1');
   expect(dv.getDataVersion('u1')).not.toBe(before);
 });
+
+describe('the notifications version', () => {
+  // Kept apart from the data version (usage check 2026-10-09): marking a
+  // notification read must never make the next statistics poll recompute.
+  test('is its own clock — neither moves the other', () => {
+    const d0 = dv.getDataVersion('u1');
+    const n0 = dv.getNotificationsVersion('u1');
+    dv.bumpNotificationsVersion('u1');
+    expect(dv.getDataVersion('u1')).toBe(d0);
+    expect(dv.getNotificationsVersion('u1')).not.toBe(n0);
+    const n1 = dv.getNotificationsVersion('u1');
+    dv.bumpDataVersion('u1');
+    expect(dv.getNotificationsVersion('u1')).toBe(n1);
+    expect(dv.getDataVersion('u1')).not.toBe(d0);
+  });
+
+  test('moves for that user and nobody else, and never for no user', () => {
+    const other = dv.getNotificationsVersion('u2');
+    dv.bumpNotificationsVersion('u1');
+    expect(dv.getNotificationsVersion('u2')).toBe(other);
+    const v = dv.getNotificationsVersion('u1');
+    dv.bumpNotificationsVersion(null);
+    dv.bumpNotificationsVersion(undefined);
+    expect(dv.getNotificationsVersion('u1')).toBe(v);
+  });
+});

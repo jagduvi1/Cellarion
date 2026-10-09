@@ -464,3 +464,96 @@ describe('non-string credentials are rejected, never 500 (L-2)', () => {
     expect(ApiToken.findOne).not.toHaveBeenCalled();
   });
 });
+
+describe('POST /token — refresh_token (the grace window after a rotation)', () => {
+  // A spent refresh token presented INSIDE the grace window is a lost
+  // rotation response or a second process of the same client, not a theft
+  // (usage check 2026-10-09: a connector replayed its revoked token every ten
+  // minutes for a day and a half). The connection rotates on from where it is.
+  test('inside the window the spent token rotates the connection on; nothing is revoked', async () => {
+    OAuthClient.findOne.mockResolvedValue(CLIENT);
+    const save = jest.fn().mockResolvedValue();
+    ApiToken.findOne
+      .mockResolvedValueOnce(null) // not the current token
+      .mockResolvedValueOnce({ _id: 't1', oauthClientId: CLIENT.clientId, refreshTokenHash: sha256('current'), refreshRotatedAt: new Date(Date.now() - 10 * 1000), save });
+    ApiToken.findOneAndUpdate.mockResolvedValue({ _id: 't1', scopes: ['read'] });
+    const r = await formPost('/token', { grant_type: 'refresh_token', client_id: CLIENT.clientId, refresh_token: 'spent' });
+    expect(r.status).toBe(200);
+    expect((await r.json()).refresh_token).toBeTruthy();
+    expect(save).not.toHaveBeenCalled();
+    const [filter, update] = ApiToken.findOneAndUpdate.mock.calls[0];
+    // Pinned on the spent hash it presented — a concurrent real rotation wins.
+    expect(filter).toMatchObject({ _id: 't1', prevRefreshTokenHash: sha256('spent'), revokedAt: null });
+    expect(update.$set.tokenHash).toBeTruthy();
+    expect(update.$set.refreshTokenHash).toBeTruthy();
+    // The previous hash and the rotation time are NOT moved: the window is
+    // measured from the last real rotation, so a spent token cannot be kept
+    // alive by replaying it.
+    expect(update.$set.prevRefreshTokenHash).toBeUndefined();
+    expect(update.$set.refreshRotatedAt).toBeUndefined();
+  });
+
+  test('outside the window it is reuse: the connection is revoked', async () => {
+    OAuthClient.findOne.mockResolvedValue(CLIENT);
+    const save = jest.fn().mockResolvedValue();
+    ApiToken.findOne
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ _id: 't1', oauthClientId: CLIENT.clientId, refreshRotatedAt: new Date(Date.now() - 5 * 60 * 1000), save });
+    const r = await formPost('/token', { grant_type: 'refresh_token', client_id: CLIENT.clientId, refresh_token: 'spent' });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toBe('invalid_grant');
+    expect(save).toHaveBeenCalled();
+    expect(ApiToken.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  test('a connection rotated before the field existed has no window', async () => {
+    OAuthClient.findOne.mockResolvedValue(CLIENT);
+    const save = jest.fn().mockResolvedValue();
+    ApiToken.findOne
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ _id: 't1', oauthClientId: CLIENT.clientId, save }); // no refreshRotatedAt
+    const r = await formPost('/token', { grant_type: 'refresh_token', client_id: CLIENT.clientId, refresh_token: 'spent' });
+    expect(r.status).toBe(400);
+    expect(save).toHaveBeenCalled();
+  });
+
+  test('a real rotation stamps the time the window is measured from', async () => {
+    OAuthClient.findOne.mockResolvedValue(CLIENT);
+    ApiToken.findOne.mockResolvedValue({ _id: 't1', oauthClientId: CLIENT.clientId, refreshTokenHash: sha256('current'), scopes: ['read'] });
+    ApiToken.findOneAndUpdate.mockResolvedValue({ _id: 't1', scopes: ['read'] });
+    await formPost('/token', { grant_type: 'refresh_token', client_id: CLIENT.clientId, refresh_token: 'current' });
+    expect(ApiToken.findOneAndUpdate.mock.calls[0][1].$set.refreshRotatedAt).toBeInstanceOf(Date);
+  });
+});
+
+describe('POST /token — refusals are logged', () => {
+  let warn;
+  beforeEach(() => { warn = jest.spyOn(console, 'warn').mockImplementation(() => {}); });
+  afterEach(() => { warn.mockRestore(); });
+
+  test('a refused refresh names the client, the grant and the reason — never the token', async () => {
+    OAuthClient.findOne.mockResolvedValue(CLIENT);
+    ApiToken.findOne.mockResolvedValue(null);
+    await formPost('/token', { grant_type: 'refresh_token', client_id: CLIENT.clientId, refresh_token: 'secret-refresh-value' });
+    const line = warn.mock.calls.find((c) => String(c[0]).includes('token request refused'));
+    expect(line).toBeTruthy();
+    expect(line[1]).toMatchObject({ status: 400, error: 'invalid_grant', grant: 'refresh_token', client: 'Claude' });
+    expect(JSON.stringify(line)).not.toContain('secret-refresh-value');
+  });
+
+  test('an unknown client is logged without a client name', async () => {
+    OAuthClient.findOne.mockResolvedValue(null);
+    await formPost('/token', { grant_type: 'refresh_token', client_id: 'mcpc_nobody', refresh_token: 'x' });
+    const line = warn.mock.calls.find((c) => String(c[0]).includes('token request refused'));
+    expect(line[1]).toMatchObject({ status: 401, error: 'invalid_client', client: null });
+  });
+
+  test('a successful exchange logs nothing', async () => {
+    OAuthClient.findOne.mockResolvedValue(CLIENT);
+    ApiToken.findOne.mockResolvedValue({ _id: 't1', oauthClientId: CLIENT.clientId, refreshTokenHash: sha256('ok'), scopes: ['read'] });
+    ApiToken.findOneAndUpdate.mockResolvedValue({ _id: 't1', scopes: ['read'] });
+    const r = await formPost('/token', { grant_type: 'refresh_token', client_id: CLIENT.clientId, refresh_token: 'ok' });
+    expect(r.status).toBe(200);
+    expect(warn.mock.calls.find((c) => String(c[0]).includes('token request refused'))).toBeUndefined();
+  });
+});

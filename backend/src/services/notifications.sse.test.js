@@ -60,3 +60,28 @@ describe('createNotifications SSE nudges', () => {
     expect(eventBus.emit).not.toHaveBeenCalled();
   });
 });
+
+describe('createNotifications and the notifications version', () => {
+  // routes/notifications answers API-token polls from memory while the
+  // recipient's notifications version holds (usage check 2026-10-09); every
+  // inserted row must move its recipient's version, and nobody else's.
+  test('every recipient of an inserted row gets a new version', async () => {
+    const { getNotificationsVersion } = require('./dataVersion');
+    Notification.insertMany.mockResolvedValue([
+      doc('n1', 'v-u1', 'drink_window'),
+      doc('n2', 'v-u1', 'drink_window'),
+      doc('n3', 'v-u2', 'community_reply'),
+    ]);
+    const before = ['v-u1', 'v-u2', 'v-u3'].map(getNotificationsVersion);
+
+    await createNotifications([
+      { userId: 'v-u1', type: 'drink_window', title: 't', message: 'm' },
+      { userId: 'v-u1', type: 'drink_window', title: 't', message: 'm' },
+      { userId: 'v-u2', type: 'community_reply', title: 't', message: 'm' },
+    ]);
+
+    expect(getNotificationsVersion('v-u1')).not.toBe(before[0]);
+    expect(getNotificationsVersion('v-u2')).not.toBe(before[1]);
+    expect(getNotificationsVersion('v-u3')).toBe(before[2]);
+  });
+});

@@ -3,6 +3,7 @@ const PushSubscription = require('../models/PushSubscription');
 const User = require('../models/User');
 const { runConcurrent } = require('../utils/concurrency');
 const eventBus = require('./eventBus');
+const { bumpNotificationsVersion } = require('./dataVersion');
 
 // Max simultaneous web-push HTTPS calls per batch — a popular thread can have
 // hundreds of watchers; an uncapped burst stampedes the event loop and the
@@ -103,6 +104,9 @@ async function createNotifications(items) {
   for (const doc of created) {
     eventBus.emit(doc.user, 'notification', { id: doc._id.toString(), type: doc.type });
   }
+  // The recipients' cached notification reads (routes/notifications answers
+  // API-token polls from memory) are out of date from this instant.
+  for (const userId of new Set(created.map((doc) => String(doc.user)))) bumpNotificationsVersion(userId);
 
   // Web push — fire and forget
   if (!VAPID_CONFIGURED) return;

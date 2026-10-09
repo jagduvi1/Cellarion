@@ -18,7 +18,13 @@
  */
 
 const MAX_STREAMS_PER_USER = 5;
-const MAX_STREAMS_GLOBAL = 500;
+// Sized for the measured growth (usage check 2026-10-09): about one active
+// user in four runs the Home Assistant integration, and every install holds
+// one stream, so the old cap of 500 would have been reached at roughly
+// fifteen times today's users. A stream costs a response object and two
+// timers; nginx allows 8,192 connections and a proxied stream uses two of
+// them. SSE_MAX_STREAMS overrides for a differently sized deployment.
+const MAX_STREAMS_GLOBAL = Math.max(1, parseInt(process.env.SSE_MAX_STREAMS, 10) || 2000);
 const DEBOUNCE_MS = 2000;
 
 // userId -> Set<{ res, tokenId }>

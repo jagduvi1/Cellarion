@@ -100,6 +100,20 @@ const MAX_REDIRECT_URIS = 5;
 // 2048 is the same bound accountOps applies to URLs; no real client is near it.
 const MAX_REDIRECT_URI_LEN = 2048;
 const MAX_OAUTH_CONNECTIONS_PER_USER = 20; // Claude + ChatGPT + Desktop + … — generous, but bounded.
+// A refresh token that was just rotated away is honoured once more for this
+// long after the rotation (OAUTH_REFRESH_GRACE_S seconds; 0 = never). A
+// client whose rotation response was lost in transit, or a second process of
+// the same client started from the same stored token, retries with the spent
+// token. Outside the window that is still reuse and still revokes the
+// connection (OAuth 2.1 security BCP §4.14.2). Inside it the connection
+// rotates again from where it is: the retrying client gets a working pair,
+// and the successor it never received stops working, so at worst the OTHER
+// holder re-authorizes instead of the whole connection dying. Usage check
+// 2026-10-09: one connector replayed its revoked token every ten minutes for
+// a day and a half, because it never re-authorizes on invalid_grant.
+const REFRESH_REUSE_GRACE_MS = (process.env.OAUTH_REFRESH_GRACE_S === undefined
+  ? 60
+  : Math.max(0, parseInt(process.env.OAUTH_REFRESH_GRACE_S, 10) || 0)) * 1000;
 
 // ── error helpers (RFC 6749 §5.2) ────────────────────────────────────────────
 function oauthError(res, status, error, description) {
@@ -342,10 +356,24 @@ async function authenticateClient(req) {
 
 // ── POST /token — code exchange + refresh rotation ───────────────────────────
 router.post('/token', oauthLimiter, async (req, res) => {
+  // Every refusal is logged — client, grant and reason, never a token value.
+  // A connector looping on a dead refresh token was invisible for a day and a
+  // half (usage check 2026-10-09). Request strings ride as log ARGUMENTS,
+  // never inside the format string.
+  const grantType = typeof req.body?.grant_type === 'string' ? req.body.grant_type : undefined;
+  const refuse = (client, status, error, description) => {
+    console.warn('[oauth] token request refused', {
+      status,
+      error,
+      grant: grantType || null,
+      client: client?.clientName || client?.clientId || null,
+      userAgent: String(req.get('user-agent') || '').slice(0, 80),
+    });
+    return oauthError(res, status, error, description);
+  };
   try {
     const client = await authenticateClient(req);
-    if (!client) return oauthError(res, 401, 'invalid_client', 'client authentication failed');
-    const grantType = req.body.grant_type;
+    if (!client) return refuse(null, 401, 'invalid_client', 'client authentication failed');
 
     if (grantType === 'authorization_code') {
       const { code, code_verifier, redirect_uri, resource } = req.body;
@@ -356,7 +384,7 @@ router.post('/token', oauthLimiter, async (req, res) => {
       // would then throw a TypeError and the catch would answer 500 instead of
       // the RFC-shaped invalid_request. (verifyPkce already guards its own.)
       if (typeof code !== 'string' || !code || !code_verifier) {
-        return oauthError(res, 400, 'invalid_request', 'code and code_verifier are required');
+        return refuse(client, 400, 'invalid_request', 'code and code_verifier are required');
       }
 
       // Single-use: atomically claim the code (consumedAt null → now). A replay
@@ -366,16 +394,16 @@ router.post('/token', oauthLimiter, async (req, res) => {
         { $set: { consumedAt: new Date() } },
         { new: false }
       );
-      if (!codeDoc) return oauthError(res, 400, 'invalid_grant', 'authorization code is invalid, expired, or already used');
-      if (codeDoc.clientId !== client.clientId) return oauthError(res, 400, 'invalid_grant', 'code was issued to a different client');
-      if (redirect_uri && redirect_uri !== codeDoc.redirectUri) return oauthError(res, 400, 'invalid_grant', 'redirect_uri mismatch');
-      if (!verifyPkce(code_verifier, codeDoc.codeChallenge)) return oauthError(res, 400, 'invalid_grant', 'PKCE verification failed');
-      if (resource && resource !== (codeDoc.resource || resourceUrl())) return oauthError(res, 400, 'invalid_target', 'resource mismatch');
+      if (!codeDoc) return refuse(client, 400, 'invalid_grant', 'authorization code is invalid, expired, or already used');
+      if (codeDoc.clientId !== client.clientId) return refuse(client, 400, 'invalid_grant', 'code was issued to a different client');
+      if (redirect_uri && redirect_uri !== codeDoc.redirectUri) return refuse(client, 400, 'invalid_grant', 'redirect_uri mismatch');
+      if (!verifyPkce(code_verifier, codeDoc.codeChallenge)) return refuse(client, 400, 'invalid_grant', 'PKCE verification failed');
+      if (resource && resource !== (codeDoc.resource || resourceUrl())) return refuse(client, 400, 'invalid_target', 'resource mismatch');
 
       // Bound how many live AI connections one account can accrue.
       const activeConnections = await ApiToken.countDocuments({ user: codeDoc.user, origin: 'oauth', revokedAt: null });
       if (activeConnections >= MAX_OAUTH_CONNECTIONS_PER_USER) {
-        return oauthError(res, 400, 'invalid_grant', `too many active AI connections (max ${MAX_OAUTH_CONNECTIONS_PER_USER}); revoke one in Settings`);
+        return refuse(client, 400, 'invalid_grant', `too many active AI connections (max ${MAX_OAUTH_CONNECTIONS_PER_USER}); revoke one in Settings`);
       }
 
       const cred = rotateCredentials();
@@ -398,11 +426,14 @@ router.post('/token', oauthLimiter, async (req, res) => {
     if (grantType === 'refresh_token') {
       const { refresh_token } = req.body;
       if (typeof refresh_token !== 'string' || !refresh_token) {
-        return oauthError(res, 400, 'invalid_request', 'refresh_token is required');
+        return refuse(client, 400, 'invalid_request', 'refresh_token is required');
       }
       const presented = ApiToken.hashToken(refresh_token);
       // Look up the connection by the CURRENT refresh hash.
-      const token = await ApiToken.findOne({ refreshTokenHash: presented, origin: 'oauth', revokedAt: null });
+      let token = await ApiToken.findOne({ refreshTokenHash: presented, origin: 'oauth', revokedAt: null });
+      // Set when the presented token is the connection's just-spent one,
+      // inside REFRESH_REUSE_GRACE_MS of its rotation.
+      let graced = false;
 
       if (!token) {
         // REUSE DETECTION (OAuth 2.1 security BCP §4.14.2). The token matched no
@@ -410,42 +441,61 @@ router.post('/token', oauthLimiter, async (req, res) => {
         // refresh token, then a spent token is being replayed, which means it
         // leaked: the legitimate client would be holding the rotated successor.
         // We cannot tell thief from victim, so kill the whole connection; both
-        // must re-authorize. (Trade-off: a client whose successful rotation
-        // response was lost in transit retries with the spent token and also
-        // trips this — it re-auths. Rare, and the safe direction to err.)
+        // must re-authorize. The one exception is the grace window right after
+        // a rotation (REFRESH_REUSE_GRACE_MS above): there a replay is far more
+        // likely a lost response or a second process of the same client than a
+        // theft, and the connection rotates on instead of dying.
         const reused = await ApiToken.findOne({
           prevRefreshTokenHash: presented, origin: 'oauth', revokedAt: null, oauthClientId: client.clientId,
         });
-        if (reused) {
-          reused.revokedAt = new Date();
-          await reused.save();
-          eventBus.dropToken(reused._id);
-          logAudit(req, 'oauth.refresh_reuse_detected', { type: 'apiToken', id: reused._id }, { clientId: client.clientId });
+        const rotatedAt = reused?.refreshRotatedAt ? new Date(reused.refreshRotatedAt).getTime() : NaN;
+        if (reused && REFRESH_REUSE_GRACE_MS > 0 && Date.now() - rotatedAt <= REFRESH_REUSE_GRACE_MS) {
+          token = reused;
+          graced = true;
+        } else {
+          if (reused) {
+            reused.revokedAt = new Date();
+            await reused.save();
+            eventBus.dropToken(reused._id);
+            logAudit(req, 'oauth.refresh_reuse_detected', { type: 'apiToken', id: reused._id }, { clientId: client.clientId });
+          }
+          return refuse(client, 400, 'invalid_grant', 'refresh token is invalid or revoked');
         }
-        return oauthError(res, 400, 'invalid_grant', 'refresh token is invalid or revoked');
       }
       if (token.oauthClientId !== client.clientId) {
-        return oauthError(res, 400, 'invalid_grant', 'refresh token is invalid or revoked');
+        return refuse(client, 400, 'invalid_grant', 'refresh token is invalid or revoked');
       }
 
       // Rotate BOTH tokens (OAuth 2.1 §4.3.1), remembering the spent refresh
-      // hash so a later replay of it is caught above. A concurrent double-
+      // hash so a later replay of it is caught above, and stamping the
+      // rotation time the grace window is measured from. A concurrent double-
       // refresh is guarded by pinning the old hash in the update filter — only
       // one wins, and the loser gets invalid_grant WITHOUT tripping reuse
       // detection (it already matched the current hash on the read above).
+      //
+      // A graced retry pins the spent hash it presented instead and leaves it
+      // as the previous one — the same lost response may be retried again
+      // inside the window — while the current pair, which this client never
+      // received, is replaced. The rotation time is NOT moved: the window is
+      // measured from the last real rotation, so a spent token is never kept
+      // alive by replaying it.
       const cred = rotateCredentials();
       const rotated = await ApiToken.findOneAndUpdate(
-        { _id: token._id, refreshTokenHash: token.refreshTokenHash, revokedAt: null },
-        { $set: { ...cred.fields, prevRefreshTokenHash: token.refreshTokenHash } },
+        graced
+          ? { _id: token._id, prevRefreshTokenHash: presented, revokedAt: null }
+          : { _id: token._id, refreshTokenHash: token.refreshTokenHash, revokedAt: null },
+        graced
+          ? { $set: { ...cred.fields } }
+          : { $set: { ...cred.fields, prevRefreshTokenHash: token.refreshTokenHash, refreshRotatedAt: new Date() } },
         { new: true }
       );
-      if (!rotated) return oauthError(res, 400, 'invalid_grant', 'refresh token is invalid or revoked');
-      logAudit(req, 'oauth.token_refreshed', { type: 'apiToken', id: token._id }, { clientId: client.clientId });
+      if (!rotated) return refuse(client, 400, 'invalid_grant', 'refresh token is invalid or revoked');
+      logAudit(req, 'oauth.token_refreshed', { type: 'apiToken', id: token._id }, { clientId: client.clientId, ...(graced ? { graced: true } : {}) });
       res.setHeader('Cache-Control', 'no-store');
       return res.json(tokenResponse(cred.raw.access, cred.raw.refresh, rotated.scopes));
     }
 
-    return oauthError(res, 400, 'unsupported_grant_type', 'only authorization_code and refresh_token are supported');
+    return refuse(client, 400, 'unsupported_grant_type', 'only authorization_code and refresh_token are supported');
   } catch (err) {
     console.error('OAuth token error:', err);
     return oauthError(res, 500, 'server_error', 'token request failed');

@@ -98,6 +98,14 @@ const apiTokenSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
+  // When the refresh token was last rotated — the instant prevRefreshTokenHash
+  // was set. For a short window after it the refresh grant still honours the
+  // spent token (a lost rotation response, a second process of the same
+  // client); see REFRESH_REUSE_GRACE_MS in routes/mcpOAuth.js.
+  refreshRotatedAt: {
+    type: Date,
+    default: null,
+  },
   // The DCR client this connection belongs to (OAuthClient.clientId).
   oauthClientId: {
     type: String,
