@@ -137,6 +137,27 @@ const bottleImageSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // The vintage the photo was taken of — its bottle's vintage at upload, kept
+  // in step when that bottle's vintage is edited (utils/imageVintage). null =
+  // not tied to a vintage: a wine-level upload, an unknown year, or a label
+  // scan. Lets a 2016 bottle show a 2016 label rather than the 2015 one
+  // (support ticket 2026-10-09). Rows older than the field have no key at
+  // all until the boot-time backfill (services/imageVintageBackfill) sets it.
+  vintage: {
+    type: String,
+    trim: true,
+    maxlength: 10,
+    default: null
+  },
+  // An admin's choice of THE photo for this wine + vintage (PUT
+  // /api/admin/images/:id/set-vintage-official). Without one, a vintage shows
+  // the wine's official image when it is of that vintage, else the first
+  // photo of it approved — derived on read (utils/imageVintage
+  // .pickVintageOfficials), so this flag is only ever an override.
+  assignedToVintage: {
+    type: Boolean,
+    default: false
+  },
   // SHA-256 (hex) of the stored image file bytes (the cropped image, or the
   // original when there is no crop). Set on import so a cellar export re-imported
   // by the same user reuses an already-stored identical image instead of writing
@@ -183,6 +204,8 @@ const bottleImageSchema = new mongoose.Schema({
 bottleImageSchema.index({ status: 1, createdAt: -1 });
 bottleImageSchema.index({ bottle: 1, status: 1 });
 bottleImageSchema.index({ wineDefinition: 1, assignedToWine: 1 });
+// The same-vintage photo lookups (cellar list, bottle page, gallery order).
+bottleImageSchema.index({ wineDefinition: 1, vintage: 1 });
 // unlinkIfUnreferenced / discardOriginal ask "does any OTHER row point at this
 // file?" — on every processed upload since 2026-09-03 — so the answer must be
 // an index seek, not a collection scan. Partial: only rows that carry a URL.

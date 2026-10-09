@@ -40,7 +40,7 @@ jest.mock('../models/Grape', () => ({}));
 jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn() }));
 jest.mock('../models/PriceTrackingRequest', () => ({}));
 jest.mock('../models/PriceTrackingSkip', () => ({}));
-jest.mock('../models/BottleImage', () => ({ findOne: jest.fn(), findById: jest.fn() }));
+jest.mock('../models/BottleImage', () => ({ find: jest.fn(), findOne: jest.fn(), findById: jest.fn() }));
 jest.mock('../models/WineRequest', () => ({}));
 // find(): the sibling-bottle lookup added for support ticket 2026-09-07 — empty here.
 jest.mock('../models/Bottle', () => ({ findById: jest.fn(), find: jest.fn(() => ({ select: () => ({ lean: async () => [] }) })) }));
@@ -62,6 +62,9 @@ const BOTTLE = '64b0000000000000000000bb';
 
 const selectLean = (doc) => ({ select: () => ({ lean: async () => doc }) });
 const sortLean = (doc) => ({ sort: () => ({ lean: async () => doc }) });
+// The own-photo lookup is find().sort().limit().lean() — a few candidates,
+// chosen among in code (this bottle → same vintage → newest).
+const ownPhotos = (rows) => { const q = { sort: () => q, limit: () => q, select: () => q, lean: async () => rows }; return q; };
 
 function mkBottle(over = {}) {
   return {
@@ -101,6 +104,7 @@ beforeEach(() => {
   });
   Bottle.findById.mockResolvedValue(mkBottle());
   Rack.findOne.mockReturnValue(selectLean(null));
+  BottleImage.find.mockReturnValue(ownPhotos([]));
   BottleImage.findOne.mockReturnValue(sortLean(null));
   BottleImage.findById.mockReturnValue({ lean: async () => null });
 });
@@ -111,8 +115,8 @@ describe('GET /api/bottles/:id pending photo', () => {
 
     expect(status).toBe(200);
     expect(body.pendingImageUrl).toBeNull();
-    expect(BottleImage.findOne).toHaveBeenCalledTimes(1);
-    expect(BottleImage.findOne).toHaveBeenCalledWith(expect.objectContaining({
+    expect(BottleImage.find).toHaveBeenCalledTimes(1);
+    expect(BottleImage.find).toHaveBeenCalledWith(expect.objectContaining({
       uploadedBy: USER,
       // 'approved' is deliberate — see the cellar-list twin (ticket 2026-09-05 / #1227).
       status: { $in: ['uploaded', 'processing', 'processed', 'approved'] },
@@ -122,27 +126,100 @@ describe('GET /api/bottles/:id pending photo', () => {
   });
 
   test('an APPROVED own photo keeps showing on the bottle page hero (ticket 2026-09-05 / #1227)', async () => {
-    BottleImage.findOne.mockReturnValue(sortLean({
-      _id: 'img1', kind: 'bottle', status: 'approved', visibility: 'public',
+    BottleImage.find.mockReturnValue(ownPhotos([{
+      _id: 'img1', kind: 'bottle', status: 'approved', bottle: BOTTLE, visibility: 'public',
       originalUrl: null, processedUrl: '/api/uploads/processed/approved.png',
-    }));
+    }]));
     const res = await getJson(app(), `/api/bottles/${BOTTLE}`);
     expect(res.body.pendingImageUrl).toBe('/api/uploads/processed/approved.png');
   });
 
   test('a genuine bottle photo still shows — the processed file first, the original only while rembg is still running', async () => {
-    BottleImage.findOne.mockReturnValue(sortLean({
-      _id: 'img1', kind: 'bottle', status: 'processing',
+    BottleImage.find.mockReturnValue(ownPhotos([{
+      _id: 'img1', kind: 'bottle', status: 'processing', bottle: BOTTLE,
       originalUrl: '/api/uploads/originals/x.jpg', processedUrl: null,
-    }));
+    }]));
     let res = await getJson(app(), `/api/bottles/${BOTTLE}`);
     expect(res.body.pendingImageUrl).toBe('/api/uploads/originals/x.jpg');
 
-    BottleImage.findOne.mockReturnValue(sortLean({
-      _id: 'img1', kind: 'bottle', status: 'processed',
+    BottleImage.find.mockReturnValue(ownPhotos([{
+      _id: 'img1', kind: 'bottle', status: 'processed', bottle: BOTTLE,
       originalUrl: null, processedUrl: '/api/uploads/processed/x.png',
-    }));
+    }]));
     res = await getJson(app(), `/api/bottles/${BOTTLE}`);
     expect(res.body.pendingImageUrl).toBe('/api/uploads/processed/x.png');
+  });
+});
+
+/**
+ * Photos per vintage (support ticket 2026-10-09). The hero picks, in order:
+ * this bottle's own photo, the viewer's photo of the SAME vintage, the
+ * vintage's official photo (the first of that wine + vintage approved, or an
+ * admin's choice), the wine's registry image (client), and only then the
+ * viewer's photo of another vintage. Same order as the cellar list, so the
+ * card and the page agree.
+ */
+describe('GET /api/bottles/:id and the photo\'s vintage', () => {
+  const WINE = '64b0000000000000000000aa';
+  const photo = (id, over) => ({ _id: id, kind: 'bottle', status: 'approved', originalUrl: null, processedUrl: `/api/uploads/processed/${id}.webp`, ...over });
+  // Own photos (filter has uploadedBy) and published photos of the vintage
+  // (the vintage-official query) come from the same find(); answer by filter.
+  const answer = (own, published = []) => BottleImage.find.mockImplementation((filter) => {
+    const rows = filter.uploadedBy ? own : published;
+    const q = { sort: () => q, limit: () => q, select: () => q, lean: async () => rows };
+    return q;
+  });
+
+  test('this bottle\'s photo first, then the same vintage; another vintage only as the last resort', async () => {
+    Bottle.findById.mockResolvedValue(mkBottle({ wineDefinition: WINE, vintage: '2016' }));
+    // Newest first, as the query sorts.
+    answer([
+      photo('newest2015', { bottle: null, vintage: '2015' }),
+      photo('same2016', { bottle: null, vintage: '2016' }),
+      photo('thisBottle', { bottle: BOTTLE, vintage: '2016' }),
+    ]);
+    let res = await getJson(app(), `/api/bottles/${BOTTLE}`);
+    expect(res.body.pendingImageUrl).toBe('/api/uploads/processed/thisBottle.webp');
+    expect(res.body.otherVintageImageUrl).toBeNull();
+
+    answer([photo('newest2015', { bottle: null, vintage: '2015' }), photo('same2016', { bottle: null, vintage: '2016' })]);
+    res = await getJson(app(), `/api/bottles/${BOTTLE}`);
+    expect(res.body.pendingImageUrl).toBe('/api/uploads/processed/same2016.webp');
+
+    answer([photo('newest2015', { bottle: null, vintage: '2015' })]);
+    res = await getJson(app(), `/api/bottles/${BOTTLE}`);
+    expect(res.body.pendingImageUrl).toBeNull();
+    expect(res.body.otherVintageImageUrl).toBe('/api/uploads/processed/newest2015.webp');
+  });
+
+  test('a sibling\'s photo whose row has no vintage tag counts as a photo of the sibling\'s vintage', async () => {
+    const SIB = '64b0000000000000000000b9';
+    Bottle.findById.mockResolvedValue(mkBottle({ wineDefinition: WINE, vintage: '2016' }));
+    Bottle.find.mockReturnValueOnce({ select: () => ({ lean: async () => [{ _id: SIB, vintage: '2016' }] }) });
+    answer([photo('sib', { bottle: SIB })]);
+    const res = await getJson(app(), `/api/bottles/${BOTTLE}`);
+    expect(res.body.pendingImageUrl).toBe('/api/uploads/processed/sib.webp');
+  });
+
+  test('the vintage official rides along with its credit: the first approved, by anyone; none is asked for without a usable vintage', async () => {
+    Bottle.findById.mockResolvedValue(mkBottle({ wineDefinition: WINE, vintage: '2016' }));
+    answer([], [
+      photo('later', { wineDefinition: WINE, vintage: '2016', visibility: 'public', createdAt: '2026-05-01T00:00:00Z', credit: 'Bo' }),
+      photo('first', { wineDefinition: WINE, vintage: '2016', visibility: 'public', createdAt: '2026-02-01T00:00:00Z', credit: 'Anna' }),
+    ]);
+    let res = await getJson(app(), `/api/bottles/${BOTTLE}`);
+    const officialQuery = BottleImage.find.mock.calls.map(([f]) => f).find((f) => !f.uploadedBy);
+    expect(officialQuery).toEqual({
+      status: 'approved', visibility: 'public', kind: { $ne: 'label-scan' },
+      wineDefinition: { $in: [WINE] }, vintage: { $in: ['2016'] },
+    });
+    expect(res.body.vintageImageUrl).toBe('/api/uploads/processed/first.webp');
+    expect(res.body.vintageImageCredit).toBe('Anna');
+
+    BottleImage.find.mockClear();
+    Bottle.findById.mockResolvedValue(mkBottle({ wineDefinition: WINE, vintage: 'Unknown' }));
+    res = await getJson(app(), `/api/bottles/${BOTTLE}`);
+    expect(BottleImage.find.mock.calls.filter(([f]) => !f.uploadedBy)).toHaveLength(0);
+    expect(res.body.vintageImageUrl).toBeNull();
   });
 });

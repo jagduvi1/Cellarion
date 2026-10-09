@@ -17,6 +17,7 @@ import { readBottleViewMode, storeBottleViewMode } from '../utils/bottleViewMode
 import { ratingRangeLabel, toMaturityArray, MATURITY_I18N_KEY } from '../utils/filterLabels';
 import { CELLAR_SORTS, DEFAULT_CELLAR_SORT, preferredCellarSort } from '../utils/cellarSort';
 import { formatArrivalMonth, isArrivalLate } from '../utils/onOrder';
+import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
 import './CellarDetail.css';
 
 // Stable empty rack map for the cross-cellar view (rack placement is per-cellar,
@@ -34,6 +35,7 @@ const BulkConsumeModal = lazy(() => import('../components/BulkConsumeModal'));
 const BulkReserveModal = lazy(() => import('../components/BulkReserveModal'));
 const BulkDrinkWindowModal = lazy(() => import('../components/BulkDrinkWindowModal'));
 const BulkAddToListModal = lazy(() => import('../components/BulkAddToListModal'));
+const DrinkOneModal = lazy(() => import('../components/DrinkOneModal'));
 
 // The select-mode bar's actions, in display order. Each opens one modal; all
 // of them reuse the single-bottle operations server-side and report skipped
@@ -828,6 +830,7 @@ function CellarDetail() {
               multi={dataIsMulti}
               rackKnown={!dataIsMulti && hasRacks === true}
               canBulkMove={!dataIsMulti && cellar?.userRole === 'owner'}
+              canConsume={!dataIsMulti && canEdit}
               onBulkDone={() => { fetchCellarData(0); fetchStatistics(); fetchRacks(); }}
               onSelectModeChange={setSelecting}
             />
@@ -892,8 +895,20 @@ function CellarDetail() {
 // `canBulkMove` (owner of this one cellar) enables select mode and its bulk
 // actions; `onBulkDone` refreshes the parent's list, stats and racks after
 // one; `onSelectModeChange` tells the parent to hide the FAB meanwhile.
-function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadMore, multi = false, rackKnown = false, canBulkMove = false, onBulkDone, onSelectModeChange }) {
+function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadMore, multi = false, rackKnown = false, canBulkMove = false, canConsume = false, onBulkDone, onSelectModeChange }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  // "Drink one" on a stacked card (support ticket 2026-10-09): the group
+  // whose bottle is being picked, then — after the server logged it — the
+  // journal prompt the bottle page offers for a bottle drunk, unless the
+  // user opted out of it. The list refreshes through onBulkDone either way.
+  const [drinkGroup, setDrinkGroup] = useState(null);
+  const [journalBottle, setJournalBottle] = useState(null);
+  const handleDrunk = (bottle, reason) => {
+    setDrinkGroup(null);
+    if (reason === 'drank' && !journalPromptOptedOut()) setJournalBottle(bottle);
+    else onBulkDone?.();
+  };
   const [viewMode, setViewMode] = useState(readBottleViewMode);
   const [density, setDensity] = useState(() => {
     try { return localStorage.getItem('cellarion_bottle_density') || 'comfortable'; } catch { return 'comfortable'; }
@@ -1100,6 +1115,9 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
               );
             }
             if (!expandedGroups.has(item.key)) {
+              // The vintage page needs a registry wine; a group still waiting
+              // on a wine request has none, so it gets no Info button.
+              const groupWineId = rep.wineDefinition?._id;
               return (
                 <BottleCard
                   key={item.key}
@@ -1110,6 +1128,8 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
                   viewMode={viewMode}
                   groupCount={item.count}
                   onClick={() => toggleGroup(item.key)}
+                  onInfo={groupWineId ? () => navigate(`/cellars/${groupCellarId}/vintages/${groupWineId}/${encodeURIComponent(rep.vintage || 'NV')}`) : undefined}
+                  onDrinkOne={canConsume ? () => setDrinkGroup(item) : undefined}
                   selectable={selectableNow}
                   selected={isSelected(idsOf(item))}
                   onToggleSelect={() => toggleIds(idsOf(item))}
@@ -1173,7 +1193,19 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
         {bulkAction === 'list' && (
           <BulkAddToListModal bottleIds={[...selectedIds]} cellarId={cellarId} onClose={closeAction} onDone={finishAction} />
         )}
+        {drinkGroup && (
+          <DrinkOneModal
+            bottles={drinkGroup.bottles}
+            rackMap={rackMap}
+            wineName={[drinkGroup.bottles[0]?.wineDefinition?.name || drinkGroup.bottles[0]?.pendingWineRequest?.wineName || '', drinkGroup.bottles[0]?.vintage || ''].filter(Boolean).join(' ')}
+            onClose={() => setDrinkGroup(null)}
+            onDone={handleDrunk}
+          />
+        )}
       </Suspense>
+      {journalBottle && (
+        <JournalPrompt bottle={journalBottle} onDone={() => { setJournalBottle(null); onBulkDone?.(); }} />
+      )}
     </>
   );
 }

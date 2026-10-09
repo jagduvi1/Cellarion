@@ -57,3 +57,7 @@ export const declinePriceTrackingRequest = (apiFetch, requestId, reason) =>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ reason }),
   });
+
+// The sommelier drink window for one wine and vintage (read by any user).
+export const lookupMaturityProfile = (apiFetch, wineId, vintage) =>
+  apiFetch(`/api/somm/maturity/lookup?wine=${wineId}&vintage=${encodeURIComponent(vintage)}`);

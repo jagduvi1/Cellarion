@@ -247,3 +247,15 @@ describe('publish at ingest', () => {
     expect(res.image.reviewedBy).toBeUndefined();
   });
 });
+
+// Photos per vintage (support ticket 2026-10-09): a photo is of ONE bottle,
+// so the row is filed under that bottle's vintage; a wine-level upload has
+// no bottle and stays wine-wide.
+test('the row carries its bottle\'s vintage; a wine-level upload carries none', async () => {
+  let res = await ingestBottleImage({ buffer: Buffer.from('RAW'), userId: 'u1', bottle: { _id: 'b1', vintage: '2015' } }, REQ);
+  expect(res.image.vintage).toBe('2015');
+  res = await ingestBottleImage({ buffer: Buffer.from('RAW'), userId: 'u1', bottle: { _id: 'b2', vintage: 'Unknown' } }, REQ);
+  expect(res.image.vintage).toBeNull();
+  res = await ingestBottleImage({ buffer: Buffer.from('RAW'), userId: 'u1', wineDefinitionId: 'w1', keepBackground: true }, REQ);
+  expect(res.image.vintage).toBeNull();
+});

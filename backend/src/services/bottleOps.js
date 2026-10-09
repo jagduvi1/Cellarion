@@ -824,6 +824,17 @@ async function updateBottleFields(bottle, fields, req) {
     throw err;
   }
   if ('vintage' in changes) {
+    // The bottle's photos are photos of THIS bottle, so they follow its
+    // vintage (support ticket 2026-10-09: same-vintage photos are preferred
+    // over the wine's generic image). Bookkeeping: never fails the edit.
+    try {
+      const { photoVintage } = require('../utils/imageVintage');
+      // An admin's "official for this vintage" was a choice about the OLD
+      // vintage; it does not travel to the new one.
+      await BottleImage.updateMany({ bottle: bottle._id }, { $set: { vintage: photoVintage(bottle.vintage), assignedToVintage: false } });
+    } catch (err) {
+      console.error('Photo vintage sync failed:', err.message);
+    }
     const wineId = bottle.wineDefinition && (bottle.wineDefinition._id || bottle.wineDefinition);
     if (wineId) {
       // The new (wine, vintage) is a pair a sommelier may never have seen:

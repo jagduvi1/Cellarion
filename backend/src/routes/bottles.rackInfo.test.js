@@ -40,7 +40,7 @@ jest.mock('../models/Grape', () => ({}));
 jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn() }));
 jest.mock('../models/PriceTrackingRequest', () => ({}));
 jest.mock('../models/PriceTrackingSkip', () => ({}));
-jest.mock('../models/BottleImage', () => ({ findOne: jest.fn(), findById: jest.fn() }));
+jest.mock('../models/BottleImage', () => ({ find: jest.fn(), findOne: jest.fn(), findById: jest.fn() }));
 jest.mock('../models/WineRequest', () => ({}));
 jest.mock('../models/Bottle', () => ({ findById: jest.fn() }));
 
@@ -94,6 +94,8 @@ beforeEach(() => {
   Cellar.findById.mockResolvedValue({
     _id: CELLAR, user: USER, deletedAt: null, members: [], userColors: [],
   });
+  // Own photos: find().sort().limit().lean(); the vintage official: find().select().lean() (2026-10-09).
+  BottleImage.find.mockImplementation(() => { const q = { sort: () => q, limit: () => q, select: () => q, lean: async () => [] }; return q; });
   BottleImage.findOne.mockReturnValue(sortLean(null));
   BottleImage.findById.mockReturnValue({ lean: async () => null });
 });

@@ -24,6 +24,7 @@ const { sanitizeImageBuffer, detectImageFormat } = require('./imageSanitizer');
 const { processImage, hashImageBytes } = require('./imageProcessor');
 const { encodeKeptPhoto, KEPT_EXTENSION } = require('./photoFormat');
 const { stripHtml } = require('../utils/sanitize');
+const { photoVintage } = require('../utils/imageVintage');
 
 const MAX_IMAGES_PER_BOTTLE = 20;
 const EXT_FOR = { jpeg: 'jpg', png: 'png', webp: 'webp' };
@@ -141,6 +142,8 @@ async function ingestBottleImage({ buffer, userId, userRoles = [], bottle = null
   const image = new BottleImage({
     bottle: bottle ? bottle._id : null,
     wineDefinition: wineDefinitionId || null,
+    // A photo is of one bottle, so it is of that bottle's vintage.
+    vintage: bottle ? photoVintage(bottle.vintage) : null,
     uploadedBy: userId,
     originalUrl,
     processedUrl: keep ? originalUrl : null,

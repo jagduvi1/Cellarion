@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { adminGetImagesByWine, adminSetOfficialImage, adminDeleteImage } from '../api/admin';
+import { adminGetImagesByWine, adminSetOfficialImage, adminSetVintageOfficialImage, adminDeleteImage } from '../api/admin';
 import AuthImage from '../components/AuthImage';
 import { API_URL } from '../api/apiConstants';
 
@@ -58,6 +58,23 @@ export default function AdminImagesByWine() {
     if (img.assignedToWine) return true;
     if (!wine.image) return false;
     return wine.image === img.processedUrl || wine.image === img.originalUrl;
+  };
+
+  // "This is the photo of its vintage" (support ticket 2026-10-09). Without a
+  // choice a vintage shows the first photo of it approved; this overrides.
+  const setVintageOfficial = async (img) => {
+    setBusyId(img._id);
+    setError(null);
+    try {
+      const res = await adminSetVintageOfficialImage(apiFetch, img._id);
+      const data = await res.json();
+      if (res.ok) await fetchData();
+      else setError(data.error || 'Failed to set the vintage\'s photo');
+    } catch {
+      setError('Network error');
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const setOfficial = async (img) => {
@@ -157,6 +174,20 @@ export default function AdminImagesByWine() {
                           {dup && <span className="by-wine-dup-flag" title={t('admin.images.duplicateHint')}>{t('admin.images.duplicate')}</span>}
                         </div>
 
+                        <div className="by-wine-img-meta by-wine-img-meta--vintage">
+                          {img.vintage ? (
+                            img.vintageOfficial ? (
+                              <span className="by-wine-tag by-wine-tag--vintage" title={t('admin.images.vintagePhotoHint', { vintage: img.vintage })}>
+                                ★ {t('admin.images.vintagePhoto', { vintage: img.vintage })}
+                              </span>
+                            ) : (
+                              <span className="by-wine-vintage">{img.vintage}</span>
+                            )
+                          ) : (
+                            <span className="by-wine-vintage by-wine-vintage--none">{t('admin.images.noVintage')}</span>
+                          )}
+                        </div>
+
                         <div className="by-wine-img-meta">
                           <span className="by-wine-uploader" title={img.uploadedBy?.username || ''}>
                             {img.uploadedBy?.username || '—'}
@@ -209,6 +240,16 @@ export default function AdminImagesByWine() {
                                     ? t('admin.images.processing')
                                     : t('admin.images.setOfficial')}
                               </button>
+                              {img.vintage && !img.vintageOfficial && (
+                                <button
+                                  type="button"
+                                  className="btn btn-small btn-secondary by-wine-set-vintage"
+                                  onClick={() => setVintageOfficial(img)}
+                                  disabled={busy}
+                                >
+                                  {t('admin.images.setVintagePhoto', { vintage: img.vintage })}
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 className="btn btn-small btn-ghost by-wine-reject"

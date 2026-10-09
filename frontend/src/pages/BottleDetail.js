@@ -99,6 +99,10 @@ function BottleDetail() {
   const [reviewPages, setReviewPages] = useState(0);
   const [pendingImage, setPendingImage] = useState(null);
   const [defaultImage, setDefaultImage] = useState(null);
+  // The vintage's official photo with its credit, and the viewer's own photo
+  // of another vintage as the last resort (ticket 2026-10-09).
+  const [vintageImage, setVintageImage] = useState(null);
+  const [otherVintageImage, setOtherVintageImage] = useState(null);
 
   useEffect(() => {
     fetchBottle();
@@ -143,6 +147,18 @@ function BottleDetail() {
             ? data.defaultImageUrl
             : `${API_URL}${data.defaultImageUrl}`;
           setDefaultImage(url);
+        }
+        if (data.vintageImageUrl) {
+          const url = data.vintageImageUrl.startsWith('http')
+            ? data.vintageImageUrl
+            : `${API_URL}${data.vintageImageUrl}`;
+          setVintageImage({ url, credit: data.vintageImageCredit || null });
+        }
+        if (data.otherVintageImageUrl) {
+          const url = data.otherVintageImageUrl.startsWith('http')
+            ? data.otherVintageImageUrl
+            : `${API_URL}${data.otherVintageImageUrl}`;
+          setOtherVintageImage(url);
         }
         // Fetch community reviews for this wine. Pass the vintage explicitly —
         // this closure still sees the pre-setBottle (null) state, so reading
@@ -585,6 +601,9 @@ function BottleDetail() {
             wine={wine}
             defaultImage={defaultImage}
             pendingImage={pendingImage}
+            vintageImage={vintageImage?.url || null}
+            vintageImageCredit={vintageImage?.credit || null}
+            otherVintageImage={otherVintageImage}
             isPending={isPending}
             displayName={displayName}
             canEdit={canEdit}
@@ -695,7 +714,13 @@ function BottleDetail() {
           ones already drunk (support ticket 2026-09-16). Hides itself when
           there is nothing to say. Personal, so it sits with the personal
           cards, above the registry's profile and the community reviews. ── */}
-      <LotHistory apiFetch={apiFetch} bottleId={bottleId} vintage={bottle?.vintage} isOwner={userRole === 'owner'} />
+      <LotHistory
+        apiFetch={apiFetch}
+        bottleId={bottleId}
+        vintage={bottle?.vintage}
+        isOwner={userRole === 'owner'}
+        vintageHref={wine?._id ? `/cellars/${cellarId}/vintages/${wine._id}/${encodeURIComponent(bottle?.vintage || 'NV')}` : null}
+      />
 
       {/* ── AI tasting profile (generated, vintage-neutral) ── */}
       {wine?.aiProfile?.description && (

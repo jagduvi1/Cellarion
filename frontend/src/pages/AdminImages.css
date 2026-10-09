@@ -402,3 +402,20 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Each photo's vintage, and the one its vintage shows (support ticket 2026-10-09). */
+.by-wine-vintage {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.by-wine-vintage--none {
+  font-weight: 400;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.by-wine-tag--vintage {
+  font-weight: 600;
+  color: var(--color-primary);
+}

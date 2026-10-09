@@ -167,7 +167,9 @@ export function photoUrlsOf(snap) {
     const thumb = full ? thumbUrl(full) : null;
     if (thumb && thumb !== full) urls.add(thumb);
   };
-  for (const b of snap.bottles || []) { add(b.defaultImageUrl); add(b.pendingImageUrl); }
+  for (const b of snap.bottles || []) {
+    add(b.defaultImageUrl); add(b.pendingImageUrl); add(b.vintageImageUrl); add(b.otherVintageImageUrl);
+  }
   for (const w of Object.values(snap.wines || {})) add(w?.image);
   return urls;
 }

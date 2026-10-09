@@ -9,7 +9,9 @@ import Modal from './Modal';
 // routes/images.js — the server validates, this only labels.
 const REPORT_REASONS = ['private-info', 'not-this-wine', 'poor-quality', 'offensive', 'other'];
 
-const ImageGallery = forwardRef(function ImageGallery({ bottleId, wineDefinitionId, size = 'medium', onEmpty, onLoaded, defaultImageId: externalDefaultId, onSetDefault, showAll = false }, ref) {
+// `vintage`: the bottle's vintage, so a wine-level photo of ANOTHER year can
+// say so on the slide (support ticket 2026-10-09).
+const ImageGallery = forwardRef(function ImageGallery({ bottleId, wineDefinitionId, vintage, size = 'medium', onEmpty, onLoaded, defaultImageId: externalDefaultId, onSetDefault, showAll = false }, ref) {
   const { apiFetch, user } = useAuth();
   const { t } = useTranslation();
   const [images, setImages] = useState([]);
@@ -162,6 +164,7 @@ const ImageGallery = forwardRef(function ImageGallery({ bottleId, wineDefinition
       <ImageCarousel
         images={images}
         size={size}
+        vintage={vintage}
         defaultImageId={resolvedDefaultId}
         onSetDefault={handleSetDefault}
         currentUserId={user?._id || user?.id}
