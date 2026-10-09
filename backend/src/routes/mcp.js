@@ -151,6 +151,20 @@ const JWT_SCOPES = MCP_PERSONAL_SCOPES;
 // only other way in). A `cel_` token never carries isDemo, so requireNonDemo is a
 // no-op for it and blocks only demo JWT sessions.
 router.post('/', requireMcpEnabled, mcpIpLimiter, mcpChallenge, requireAuth, requireNonDemo, mcpUserLimiter, async (req, res, next) => {
+  // Diagnostics (usage check 2026-10-09): one connector had 7% of its posts
+  // answered 400 by the transport, and nothing said why. Log what the access
+  // log cannot see — the JSON-RPC method, whether a session was named and the
+  // client — never the body. 401 and 429 are answered before this handler.
+  res.on('finish', () => {
+    if (res.statusCode < 400) return;
+    const body = req.body;
+    console.warn('[mcp] request refused', {
+      status: res.statusCode,
+      method: Array.isArray(body) ? 'batch' : (typeof body?.method === 'string' ? body.method.slice(0, 60) : null),
+      session: Boolean(req.headers['mcp-session-id']),
+      userAgent: String(req.get('user-agent') || '').slice(0, 60),
+    });
+  });
   try {
     const scopes = req.apiToken ? req.apiToken.scopes : JWT_SCOPES;
     // ctx.req rides along for the mutating tools: logAudit reads actor/ip/UA

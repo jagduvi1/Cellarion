@@ -18,7 +18,12 @@ const crypto = require('crypto');
 const eventBus = require('../services/eventBus');
 
 const MAX_SESSIONS_PER_USER = 3;
-const MAX_SESSIONS_GLOBAL = 200;
+// A session holds a live server with its tool registrations, so this cap is
+// tighter than the event bus's stream cap. 400 is twice the old value — the
+// measured growth (usage check 2026-10-09) put the old 200 within reach at
+// about fifteen times today's users. Above it, new sessions fall back to
+// stateless (no pushes), nothing breaks. MCP_MAX_SESSIONS overrides.
+const MAX_SESSIONS_GLOBAL = Math.max(1, parseInt(process.env.MCP_MAX_SESSIONS, 10) || 400);
 // Sliding idle TTL — refreshed by any request AND by every delivered push, so
 // a quiet subscriber waiting for events isn't reaped mid-watch. 30 min idle
 // with zero requests and zero pushes = the client is gone; it re-initializes

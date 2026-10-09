@@ -3,13 +3,36 @@ const router = express.Router();
 const Notification = require('../models/Notification');
 const { requireAuth } = require('../middleware/auth');
 const { isValidId } = require('../utils/validation');
+const { getNotificationsVersion, bumpNotificationsVersion } = require('../services/dataVersion');
+const { createTokenReadCache } = require('../services/tokenReadCache');
 
 // All routes require auth
 router.use(requireAuth);
 
+// Machine polling (usage check 2026-10-09): the Home Assistant integration
+// asks for the list every few minutes per install — about 2,200 reads a day
+// from some thirty installs, two database queries each, and the integration
+// runs on about one active user in four, so the reads grow with the users.
+// API-token requests are answered from memory while the user's notifications
+// version (services/dataVersion) is unchanged: services/notifications moves
+// it for every recipient of a new row, and the two mark-read routes below
+// move it for the reader. Its own version, not the data version, so marking
+// a notification read never makes the next poll recompute the statistics.
+// The max age is short because rows also leave through the TTL index, which
+// nothing announces. Browser requests are never cached.
+const tokenCache = createTokenReadCache({ maxAgeMs: 10 * 60 * 1000 });
+
 // GET /api/notifications - fetch the 30 most recent notifications for the current user
 router.get('/', async (req, res) => {
   try {
+    // Read the version BEFORE loading: a row inserted during the load moves
+    // it on, so the entry stored below can never outlive that row.
+    const version = req.apiToken ? getNotificationsVersion(req.user.id) : null;
+    if (req.apiToken) {
+      const hit = tokenCache.get(req.user.id, 'list', version);
+      if (hit) return res.json(hit);
+    }
+
     const [notifications, unreadCount] = await Promise.all([
       // _id breaks ties between rows created in the same millisecond (a burst
       // of notifications), so the order — and the probe's newestId below — is
@@ -23,7 +46,9 @@ router.get('/', async (req, res) => {
       Notification.countDocuments({ user: req.user.id, read: false }),
     ]);
 
-    res.json({ notifications, unreadCount });
+    const body = { notifications, unreadCount };
+    if (req.apiToken) tokenCache.set(req.user.id, 'list', version, body);
+    res.json(body);
   } catch (error) {
     console.error('Get notifications error:', error);
     res.status(500).json({ error: 'Failed to get notifications' });
@@ -39,6 +64,12 @@ router.get('/', async (req, res) => {
 // first row the list returns.
 router.get('/unread-count', async (req, res) => {
   try {
+    const version = req.apiToken ? getNotificationsVersion(req.user.id) : null;
+    if (req.apiToken) {
+      const hit = tokenCache.get(req.user.id, 'probe', version);
+      if (hit) return res.json(hit);
+    }
+
     const [unreadCount, newest] = await Promise.all([
       Notification.countDocuments({ user: req.user.id, read: false }),
       Notification.findOne({ user: req.user.id })
@@ -46,7 +77,10 @@ router.get('/unread-count', async (req, res) => {
         .select('_id')
         .lean(),
     ]);
-    res.json({ unreadCount, newestId: newest ? String(newest._id) : null });
+
+    const body = { unreadCount, newestId: newest ? String(newest._id) : null };
+    if (req.apiToken) tokenCache.set(req.user.id, 'probe', version, body);
+    res.json(body);
   } catch (error) {
     console.error('Get unread count error:', error);
     res.status(500).json({ error: 'Failed to get unread count' });
@@ -60,6 +94,7 @@ router.put('/read-all', async (req, res) => {
       { user: req.user.id, read: false },
       { read: true }
     );
+    bumpNotificationsVersion(req.user.id);
     res.json({ ok: true });
   } catch (error) {
     console.error('Mark all read error:', error);
@@ -79,6 +114,7 @@ router.put('/:id/read', async (req, res) => {
     if (!notification) {
       return res.status(404).json({ error: 'Notification not found' });
     }
+    bumpNotificationsVersion(req.user.id);
     res.json({ notification });
   } catch (error) {
     console.error('Mark read error:', error);

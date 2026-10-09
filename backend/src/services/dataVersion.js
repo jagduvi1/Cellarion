@@ -25,25 +25,43 @@
 // `floor`. To bound memory the map is dropped and `floor` raised to the clock —
 // every user then reads a number at least as new as any version handed out
 // before, so an entry cached earlier can only still match if nothing changed.
-const versions = new Map(); // userId -> tick of their last change
 const MAX_USERS = 50000;
-let clock = 0;
-let floor = 0;
 
-function bumpDataVersion(userId) {
-  if (!userId) return;
-  const key = String(userId);
-  if (versions.size >= MAX_USERS && !versions.has(key)) {
-    floor = clock;
-    versions.clear();
-  }
-  clock += 1;
-  versions.set(key, clock);
+function createClock() {
+  const versions = new Map(); // userId -> tick of their last change
+  let clock = 0;
+  let floor = 0;
+  return {
+    bump(userId) {
+      if (!userId) return;
+      const key = String(userId);
+      if (versions.size >= MAX_USERS && !versions.has(key)) {
+        floor = clock;
+        versions.clear();
+      }
+      clock += 1;
+      versions.set(key, clock);
+    },
+    get(userId) {
+      return versions.get(String(userId)) ?? floor;
+    },
+  };
 }
 
-function getDataVersion(userId) {
-  return versions.get(String(userId)) ?? floor;
-}
+// The wine-data version: bottles, cellars, racks — everything the statistics,
+// the bottle lists and the offline copy are built from.
+const data = createClock();
+// The notifications version, kept apart on purpose (usage check 2026-10-09):
+// routes/notifications answers API-token polls from memory while it holds,
+// and marking a notification read must not make the next poll recompute the
+// user's whole statistics. Moved by services/notifications for every
+// recipient of a new row and by the mark-read routes for the reader.
+const notifications = createClock();
+
+function bumpDataVersion(userId) { data.bump(userId); }
+function getDataVersion(userId) { return data.get(userId); }
+function bumpNotificationsVersion(userId) { notifications.bump(userId); }
+function getNotificationsVersion(userId) { return notifications.get(userId); }
 
 /**
  * Move the version of every user who owns a bottle of these wines — for a
@@ -62,4 +80,4 @@ async function bumpWineOwners(wineIds) {
   } catch { /* the caches cap their age; a missed bump is a slower refresh, not an error */ }
 }
 
-module.exports = { bumpDataVersion, getDataVersion, bumpWineOwners };
+module.exports = { bumpDataVersion, getDataVersion, bumpWineOwners, bumpNotificationsVersion, getNotificationsVersion };

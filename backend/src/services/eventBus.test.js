@@ -258,3 +258,20 @@ describe('closeAll (graceful shutdown)', () => {
     expect(() => eventBus.closeAll()).not.toThrow();
   });
 });
+
+describe('global cap sizing', () => {
+  afterEach(() => { delete process.env.SSE_MAX_STREAMS; });
+
+  test('the default is sized for the measured growth and SSE_MAX_STREAMS overrides it', () => {
+    expect(eventBus.MAX_STREAMS_GLOBAL).toBe(2000);
+    process.env.SSE_MAX_STREAMS = '7';
+    jest.resetModules();
+    expect(require('./eventBus').MAX_STREAMS_GLOBAL).toBe(7);
+  });
+
+  test('a nonsense override falls back to the default', () => {
+    process.env.SSE_MAX_STREAMS = 'lots';
+    jest.resetModules();
+    expect(require('./eventBus').MAX_STREAMS_GLOBAL).toBe(2000);
+  });
+});

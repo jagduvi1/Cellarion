@@ -253,3 +253,14 @@ describe('closeAllSessions (graceful shutdown)', () => {
     expect(sessions.sessionCounts().draining).toBe(0);
   });
 });
+
+describe('global cap sizing', () => {
+  afterEach(() => { delete process.env.MCP_MAX_SESSIONS; });
+
+  test('the default is 400 and MCP_MAX_SESSIONS overrides it', () => {
+    expect(sessions.MAX_SESSIONS_GLOBAL).toBe(400);
+    process.env.MCP_MAX_SESSIONS = '5';
+    jest.resetModules();
+    expect(require('./sessions').MAX_SESSIONS_GLOBAL).toBe(5);
+  });
+});
