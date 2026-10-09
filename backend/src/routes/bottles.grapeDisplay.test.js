@@ -53,7 +53,7 @@ jest.mock('../models/Region', () => ({}));
 jest.mock('../models/Grape', () => ({}));
 jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn() }));
 jest.mock('../models/PriceTrackingRequest', () => ({}));
-jest.mock('../models/BottleImage', () => ({ findOne: jest.fn(), findById: jest.fn() }));
+jest.mock('../models/BottleImage', () => ({ find: jest.fn(), findOne: jest.fn(), findById: jest.fn() }));
 jest.mock('../models/WineRequest', () => ({}));
 // find(): the sibling-bottle photo lookup (support ticket 2026-09-07) — empty here.
 jest.mock('../models/Bottle', () => ({ findById: jest.fn(), find: jest.fn(() => ({ select: () => ({ lean: async () => [] }) })) }));
@@ -115,6 +115,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   Cellar.findById.mockResolvedValue({ _id: CELLAR_ID, name: 'Main', user: USER_ID, members: [], deletedAt: null });
   // No pending/default images in this suite.
+  // The own-photo pick is find().sort().limit().lean() since the photo-per-vintage work (2026-10-09).
+  BottleImage.find.mockReturnValue({ sort: () => ({ limit: () => ({ lean: async () => [] }) }) });
   BottleImage.findOne.mockReturnValue({ sort: () => ({ lean: async () => null }) });
   BottleImage.findById.mockReturnValue({ lean: async () => null });
 
