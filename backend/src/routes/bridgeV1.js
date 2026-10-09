@@ -27,7 +27,8 @@ const { CURRENT_REGISTRY_TERMS_VERSION } = require('../config/legal');
 //   GET  /search?q=          up to 10 identities (no profiles)
 //   GET  /wines/:id          one wine in full: identity, profile, windows, values
 //   POST /wines/changes      which of the ids the install HOLDS changed since a time
-//   POST /requests           a wine request into the hosted intake
+//   POST /requests           a wine request into the hosted intake (a label photo may ride along)
+//   GET  /requests?ids=      what became of the requests this install filed
 //   POST /corrections        a field-correction proposal into the admin queue
 //   POST /values             a public-value suggestion into the review queue
 //   GET  /me                 the key, its quotas and today's spend
@@ -360,6 +361,47 @@ router.post('/requests', quota('contributions'), async (req, res) => {
   } catch (error) {
     console.error('Bridge request error:', error);
     res.status(500).json({ error: 'Failed to file the request' });
+  }
+});
+
+// GET /v1/requests?ids=a,b,… — what became of requests this install filed.
+// Before this existed a request answered here stayed "pending" on the install
+// for good. Only the key owner's own bridge-filed requests answer (any of
+// their keys, so a rotated key still learns the outcome); any other id is
+// simply absent from the answer, never confirmed to exist. A resolved
+// request carries its wine's identity when that wine is visible — what the
+// install then copies (adopt) and links its waiting bottles to.
+const REQUEST_STATUS_MAX = 50;
+router.get('/requests', async (req, res) => {
+  try {
+    const ids = [...new Set(String(req.query.ids || '').split(',').map((s) => s.trim()).filter(isValidId))].slice(0, REQUEST_STATUS_MAX);
+    if (!ids.length) {
+      return res.status(400).json({ error: `ids must be up to ${REQUEST_STATUS_MAX} comma-separated request ids`, code: 'invalid' });
+    }
+    const WineRequest = require('../models/WineRequest');
+    const rows = await WineRequest.find({ _id: { $in: ids }, user: req.user.id, via: 'bridge' })
+      .select('status linkedWineDefinition adminNotes resolvedAt').lean();
+    const wineIds = rows.filter((r) => r.status === 'resolved' && r.linkedWineDefinition).map((r) => r.linkedWineDefinition);
+    const wines = wineIds.length
+      ? await WineDefinition.find({ _id: { $in: wineIds }, ...VISIBLE }).select(IDENTITY_SELECT).populate('country region grapes', 'name').lean()
+      : [];
+    const byId = new Map(wines.map((w) => [String(w._id), w]));
+    res.json({
+      requests: rows.map((r) => {
+        const wine = r.linkedWineDefinition ? byId.get(String(r.linkedWineDefinition)) : null;
+        return {
+          id: String(r._id),
+          status: r.status,
+          resolvedAt: r.resolvedAt || null,
+          // The admin's note to the requester — the reason, for a decline.
+          notes: r.adminNotes || null,
+          wine: wine ? identity(wine) : null,
+        };
+      }),
+    });
+  } catch (error) {
+    console.error('Bridge request status error:', error);
+    res.status(500).json({ error: 'Failed to read the requests' });
   }
 });
 

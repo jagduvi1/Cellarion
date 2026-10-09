@@ -3,8 +3,6 @@ const express = require('express');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const WineRequest = require('../../models/WineRequest');
 const WineDefinition = require('../../models/WineDefinition');
-const Bottle = require('../../models/Bottle');
-const BottleImage = require('../../models/BottleImage');
 const { generateWineKey, normalizeAppellation, normalizeString } = require('../../utils/normalize');
 const { canonicalizeWineName } = require('../../utils/producerPrefix');
 const Country = require('../../models/Country');
@@ -12,14 +10,11 @@ const { findOrCreateWine } = require('../../services/findOrCreateWine');
 const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const searchService = require('../../services/search');
 const { logAudit } = require('../../services/audit');
-const { bumpDataVersion } = require('../../services/dataVersion');
-const { createNotification } = require('../../services/notifications');
-const { stripHtml } = require('../../utils/sanitize');
+const { completeRequestResolve, completeRequestReject } = require('../../services/wineRequestOps');
 const { incrementCred } = require('../../utils/cellarCred');
 const { parsePagination } = require('../../utils/pagination');
 const { isValidId } = require('../../utils/validation');
 const { validateImageRef } = require('../../services/accountOps');
-const { ensurePendingVintageProfile } = require('../../utils/vintageProfile');
 const { WINE_COLOURS, colourTypeConflict } = require('../../utils/wineColour');
 
 const router = express.Router();
@@ -310,75 +305,18 @@ router.put('/:id/resolve', async (req, res) => {
       return res.status(400).json({ error: 'Must provide either wineDefinitionId or wineData to create new wine' });
     }
 
-    // Update wine request
-    wineRequest.status = 'resolved';
-    wineRequest.resolvedBy = req.user.id;
-    wineRequest.resolvedAt = new Date();
-    wineRequest.linkedWineDefinition = linkedWine._id;
-    wineRequest.adminNotes = adminNotes ? stripHtml(adminNotes) : '';
-
-    await wineRequest.save();
+    // Mark resolved, move the bottles that waited on it, queue their vintages
+    // and notify the requester — shared with the Registry Bridge request sync
+    // (services/wineRequestOps), so both finish a request the same way.
+    // Null: decided meanwhile (another admin, or the bridge sync) — nothing written.
+    const resolved = await completeRequestResolve(wineRequest, linkedWine, { resolvedBy: req.user.id, adminNotes });
+    if (!resolved) {
+      return res.status(400).json({ error: 'Wine request has already been resolved' });
+    }
 
     // Award Cellar Cred to the submitting user
     const credEvent = wineRequest.requestType === 'grape_suggestion' ? 'grape_suggestion_approved' : 'wine_request_approved';
     incrementCred(wineRequest.user, credEvent).catch(() => {});
-
-    // Backfill any bottles that were imported while waiting for this wine
-    let backfilledCount = 0;
-    if (wineRequest.requestType === 'new_wine') {
-      // Capture the distinct vintages BEFORE the update unsets pendingWineRequest
-      // — needed to seed the maturity queue once the wine is known. Bottles on
-      // order are left out: they are queued when they arrive.
-      const pendingVintages = await Bottle.distinct('vintage', { pendingWineRequest: wineRequest._id, status: { $ne: 'ordered' } });
-      const pendingBottleIds = await Bottle.distinct('_id', { pendingWineRequest: wineRequest._id });
-      const pendingOwners = await Bottle.distinct('user', { pendingWineRequest: wineRequest._id });
-
-      const result = await Bottle.updateMany(
-        { pendingWineRequest: wineRequest._id },
-        { $set: { wineDefinition: linkedWine._id }, $unset: { pendingWineRequest: '' } }
-      );
-      backfilledCount = result.modifiedCount || 0;
-      // Their owners' statistics change with it; after the write, so no cache
-      // pairs the new version with the old data (services/dataVersion).
-      pendingOwners.forEach(bumpDataVersion);
-
-      // Photos uploaded while these bottles waited for their wine carry no
-      // wineDefinition; stamp it now so the by-wine photo lookups (cellar
-      // list, bottle page) see them on every bottle of the wine (support
-      // ticket 2026-09-07). Best-effort — a failure here must not undo the link.
-      if (pendingBottleIds.length) {
-        BottleImage.updateMany(
-          { bottle: { $in: pendingBottleIds }, wineDefinition: null },
-          { $set: { wineDefinition: linkedWine._id } }
-        ).catch((err) => console.error('[wine-requests] image wine stamp failed:', err.message));
-      }
-
-      // Now that these bottles have a real wineDefinition, put each wine+vintage
-      // into the sommelier maturity queue — mirroring the hand-add and matched-
-      // import paths. Without this, wines that entered via an import "request"
-      // never surfaced for a somm to set a drink window.
-      for (const vintage of pendingVintages) {
-        await ensurePendingVintageProfile(linkedWine._id, vintage);
-      }
-    }
-
-    let notifMsg;
-    if (wineRequest.requestType === 'grape_suggestion') {
-      notifMsg = `Your grape suggestion for "${wineRequest.wineName}" has been reviewed. Thank you for helping improve the wine registry!`;
-    } else if (backfilledCount > 0) {
-      const many = backfilledCount !== 1;
-      notifMsg = `Your request for "${wineRequest.wineName}" has been approved and added to the registry as "${linkedWine.name}" by ${linkedWine.producer}. Your ${backfilledCount} bottle${many ? 's' : ''} in the cellar ${many ? 'have' : 'has'} been updated.`;
-    } else {
-      notifMsg = `Your request for "${wineRequest.wineName}" has been approved. It was added to the registry as "${linkedWine.name}" by ${linkedWine.producer}.`;
-    }
-
-    createNotification(
-      wineRequest.user,
-      'wine_request_resolved',
-      'Wine request approved',
-      notifMsg,
-      '/wine-requests'
-    );
 
     await wineRequest.populate([
       { path: 'user', select: 'username email' },
@@ -425,48 +363,14 @@ router.put('/:id/reject', async (req, res) => {
       return res.status(400).json({ error: 'Wine request has already been resolved' });
     }
 
-    // Detach any bottles that were imported pending this request — the mirror
-    // of resolve's backfill above. A rejected request can never become
-    // resolvable again, and wineDefinition isn't user-updatable, so a bottle
-    // left pointing at it would be permanently stranded; unset the reference
-    // and the bottle falls back to the normal editable "no wine" state.
-    // Runs BEFORE the status flip: if the detach fails the request is still
-    // pending, so the admin's retry re-runs it (the $unset is idempotent).
-    // Saved first, a detach failure would leave the request rejected behind
-    // the not-pending guard above — re-stranding the bottles permanently,
-    // the exact condition this detach exists to fix.
-    let bottlesDetached = 0;
-    if (wineRequest.requestType === 'new_wine') {
-      const pendingOwners = await Bottle.distinct('user', { pendingWineRequest: wineRequest._id });
-      const result = await Bottle.updateMany(
-        { pendingWineRequest: wineRequest._id },
-        { $unset: { pendingWineRequest: '' } }
-      );
-      bottlesDetached = result.modifiedCount || 0;
-      // Their owners' statistics and bottle lists change with it — the same
-      // bump resolve makes (services/dataVersion; audit 2026-09-27 M6).
-      pendingOwners.forEach(bumpDataVersion);
+    // Detach the waiting bottles BEFORE the status flip, mark rejected with the
+    // reason and notify the requester — shared with the Registry Bridge
+    // request sync (services/wineRequestOps). Null: decided meanwhile.
+    const rejected = await completeRequestReject(wineRequest, { resolvedBy: req.user.id, adminNotes });
+    if (!rejected) {
+      return res.status(400).json({ error: 'Wine request has already been resolved' });
     }
-
-    wineRequest.status = 'rejected';
-    wineRequest.resolvedBy = req.user.id;
-    wineRequest.resolvedAt = new Date();
-    wineRequest.adminNotes = adminNotes.trim();
-
-    await wineRequest.save();
-
-    let notifMsg = `Your request for "${wineRequest.wineName}" was declined. Reason: ${adminNotes.trim()}`;
-    if (bottlesDetached > 0) {
-      notifMsg += ` Your ${bottlesDetached} bottle${bottlesDetached !== 1 ? 's' : ''} awaiting this wine remain in your cellar without a linked registry wine.`;
-    }
-
-    createNotification(
-      wineRequest.user,
-      'wine_request_rejected',
-      'Wine request declined',
-      notifMsg,
-      '/wine-requests'
-    );
+    const { bottlesDetached } = rejected;
 
     await wineRequest.populate([
       { path: 'user', select: 'username email' },

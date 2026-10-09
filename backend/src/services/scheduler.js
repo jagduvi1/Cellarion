@@ -256,6 +256,19 @@ function startScheduler() {
     }
   });
 
+  // Registry Bridge request sync (self-hosted installs): hourly at :29, finish
+  // the wine requests this install forwarded once cellarion.app has answered
+  // them — copy the wine and move the waiting bottles, or pass on a decline.
+  // A no-op when REGISTRY_BRIDGE_KEY is not set.
+  cron.schedule('29 * * * *', async () => {
+    if (!registryBridge.isEnabled()) return;
+    try {
+      await registryBridge.syncForwardedRequests();
+    } catch (err) {
+      console.error('[scheduler] Registry bridge request sync failed:', err);
+    }
+  });
+
   // Private-draft expiry: hourly, because the 24-hour warning before an empty
   // draft is deleted cannot be honoured by a daily pass (draft design 2026-09-12).
   cron.schedule('23 * * * *', async () => {

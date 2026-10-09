@@ -91,6 +91,19 @@ const wineRequestSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  // Self-hosted installs only (Registry Bridge): the id the shared registry
+  // gave this request when it was forwarded there, and when its outcome was
+  // last asked for. A request answered on cellarion.app finishes here too
+  // (services/registryBridge.syncForwardedRequests).
+  registryRequestId: {
+    type: String,
+    default: null,
+    maxlength: 24
+  },
+  registryCheckedAt: {
+    type: Date,
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -106,6 +119,8 @@ wineRequestSchema.index({ status: 1, createdAt: -1 });
 // Provenance lookups: everything one install or one key sent us.
 wineRequestSchema.index({ bridgeKey: 1, createdAt: -1 }, { sparse: true });
 wineRequestSchema.index({ instanceHost: 1, createdAt: -1 }, { sparse: true });
+// The bridge request sync: pending requests forwarded to the registry.
+wineRequestSchema.index({ status: 1, registryRequestId: 1 }, { partialFilterExpression: { registryRequestId: { $type: 'string' } } });
 
 // Update timestamp on save
 wineRequestSchema.pre('save', function(next) {
