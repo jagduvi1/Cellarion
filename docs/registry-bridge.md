@@ -37,7 +37,8 @@ header that names your install in the readers report and on contributions.
 | `GET /search?q=` | Up to 10 identities matching `q` (2–120 chars) | 600 |
 | `GET /wines/:id` | One wine in full: identity, profile, reviewed drink windows, published values | 300 |
 | `POST /wines/changes` | `{ ids: [≤5000], since: ISO }` → which of those changed, which were removed | 1 |
-| `POST /requests` | `{ wineName, sourceUrl, image? }` → a wine request into the hosted queue | 50 (shared) |
+| `POST /requests` | `{ wineName, sourceUrl, image? }` → a wine request into the hosted queue; `image` is a link or an inline label photo (≤ 500,000 characters) | 50 (shared) |
+| `GET /requests?ids=` | Up to 50 ids from `POST /requests` → `{ id, status, notes, wine }` for each that this key's owner filed over the bridge; `wine` is the registry identity a resolved request was linked to | — |
 | `POST /corrections` | `{ wineId, fields, reason, evidenceUrl }` → an admin-reviewed proposal | 50 (shared) |
 | `POST /values` | `{ wineId, keyName \| keyId, value, reason, evidenceUrl, vintage? }` → a value suggestion | 50 (shared) |
 
@@ -132,8 +133,17 @@ users until they search.
   one the install already shows.
 - **Contributions flow back.** A field correction or a value suggestion filed on the
   install for an adopted wine is also sent to the hosted queues, and a new-wine
-  request is forwarded too. All fire-and-forget: the local record stands alone if the
-  hosted side is unreachable.
+  request is forwarded too, with its label photo. All fire-and-forget: the local record
+  stands alone if the hosted side is unreachable.
+- **Requests come back answered.** The install keeps the id the registry gives a
+  forwarded request and asks about its pending ones every hour (`GET /requests`). When
+  a request is approved on cellarion.app, the install copies the wine and finishes its
+  own request against it — the bottles that waited on it move onto the wine and the
+  requester is notified, exactly as an admin resolve on the install would. A decline
+  comes back with its reason.
+- **No bulk download.** Nothing is copied when the key is set: registry wines appear in
+  the add-bottle search straight away and a wine is copied when someone picks it. The
+  Monday run only refreshes wines already copied.
 - **Settings.** A "Shared wine registry" card shows the connection (key prefix, copies
   held, today's quota use, last refresh) or, when not connected, the three steps.
 

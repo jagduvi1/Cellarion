@@ -61,8 +61,10 @@ router.post('/', requireNonDemo, async (req, res) => {
     if (error) return res.status(error.status).json({ error: error.message });
     logAudit(req, 'wineRequest.create', { type: 'wineRequest', id: wineRequest._id });
     // Registry Bridge (self-hosted installs): a wine nobody here has is worth
-    // asking the shared registry for too. Fire-and-forget.
-    registryBridge.forwardRequest({ wineName, sourceUrl, image }).catch(() => {});
+    // asking the shared registry for too — label photo included — and the id
+    // it gets there is kept, so the answer comes back (hourly request sync).
+    // Fire-and-forget: the request here never waits on the registry.
+    registryBridge.forwardAndTrackRequest(wineRequest).catch(() => {});
     res.status(201).json({ wineRequest });
   } catch (error) {
     console.error('Create wine request error:', error);

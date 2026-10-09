@@ -425,7 +425,7 @@
       "heldCopies": "{{count}} wines copied from the registry",
       "removedCopies": "{{count}} no longer in the registry",
       "lastRefresh": "Last refresh {{when}}: {{updated}} updated, {{removed}} removed",
-      "neverRefreshed": "Copies refresh weekly on Monday mornings.",
+      "neverRefreshed": "Nothing is downloaded in bulk: registry wines show up in the add-bottle search right away and are copied when you pick one. Copies refresh weekly, on Monday mornings.",
       "quotaLine": "Today: {{searches}}/{{searchCap}} searches · {{fetches}}/{{fetchCap}} wines copied",
       "importWindowActive": "import window open",
       "blocked": "The registry answered \"{{reason}}\"; this install pauses its requests until {{until}}.",
@@ -1519,7 +1519,10 @@
     "suggestedGrapes": "Suggested",
     "imageLabel": "Image",
     "imageUrlPlaceholder": "Paste image URL…",
-    "imageNotice": "Images are reviewed by an admin before being added to the shared wine registry, where they will be visible to all Cellarion users."
+    "imageNotice": "Images are reviewed by an admin before being added to the shared wine registry, where they will be visible to all Cellarion users.",
+    "submitFailed": "The request could not be sent. Please try again.",
+    "submitFailedReason": "The request could not be sent: {{reason}}",
+    "photoTooLarge": "This photo could not be made small enough to send. Try another photo, or send the request without one."
   },
   "history": {
     "title": "Bottle History",

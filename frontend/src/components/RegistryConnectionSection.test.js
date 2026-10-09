@@ -41,7 +41,9 @@ describe('RegistryConnectionSection (self-hosted Settings card)', () => {
     apiFetch.mockImplementation(() => ok({ enabled: true, url: 'https://cellarion.app', keyPrefix: 'cbr_12345678', blocked: { reason: 'quota', until: '2026-09-08T12:00:00Z' }, lastError: { code: 'quota' }, held: 0, removed: 0, lastRefresh: null, me: null }));
     render(<RegistryConnectionSection />);
     expect(await screen.findByText(/The registry answered "quota"/)).toBeInTheDocument();
-    expect(screen.getByText(/Copies refresh weekly on Monday mornings/)).toBeInTheDocument();
+    // No bulk download exists: the card must not read as if one were coming on Monday.
+    expect(screen.getByText(/Nothing is downloaded in bulk/)).toBeInTheDocument();
+    expect(screen.getByText(/Copies refresh weekly, on Monday mornings/)).toBeInTheDocument();
   });
 
   test('an unconnected install gets the reason and the three steps, with links to the hosted settings and the docs', async () => {

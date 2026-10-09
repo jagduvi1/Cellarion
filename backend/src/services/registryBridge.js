@@ -9,7 +9,8 @@
  *     with `registryId` + `createdVia: 'bridge'` (adoptWine);
  *   - keep its copies fresh with one change check a week (refreshHeld);
  *   - forward the corrections, values and wine requests its users file to
- *     the hosted queues (forward*).
+ *     the hosted queues (forward*), and finish a forwarded request here once
+ *     it is answered there (syncForwardedRequests, hourly).
  *
  * The registry never arrives as a whole: every function here works on wines
  * the install's own users chose. Transport lives in registryBridgeClient.js
@@ -498,12 +499,100 @@ async function forwardValueFor(wineId, { keyId, keyName, value, reason, evidence
   return client.forwardValue({ wineId: wine.registryId, keyName: name, value, reason, evidenceUrl, vintage });
 }
 
+// An inline photo travels with a forwarded request up to the cap a request
+// has on either side (services/accountOps MAX_IMAGE_REF_LENGTH): the label
+// is what lets a curator on cellarion.app identify the wine.
+const INLINE_REQUEST_IMAGE = /^data:image\/(?:png|jpe?g|webp);base64,[A-Za-z0-9+/=]+$/;
+const INLINE_REQUEST_IMAGE_MAX = 500000;
+
 /** A local wine request (a wine nobody has) → the hosted intake. */
 async function forwardRequest({ wineName, sourceUrl, image }) {
   if (!isEnabled()) return null;
   const payload = { wineName, sourceUrl };
-  if (image && /^https?:\/\//i.test(String(image))) payload.image = image;
+  const img = image ? String(image) : '';
+  if (/^https?:\/\//i.test(img) || (img.length <= INLINE_REQUEST_IMAGE_MAX && INLINE_REQUEST_IMAGE.test(img))) payload.image = img;
   return client.forwardRequest(payload);
+}
+
+/**
+ * Forward a request just saved here and remember the id the registry gave it,
+ * so syncForwardedRequests can finish it when it is answered on cellarion.app.
+ * Fire-and-forget from the route; never throws.
+ */
+async function forwardAndTrackRequest(wineRequest) {
+  try {
+    const r = await forwardRequest({ wineName: wineRequest.wineName, sourceUrl: wineRequest.sourceUrl, image: wineRequest.image });
+    const remoteId = r && r.ok && r.body && r.body.request && r.body.request.id;
+    if (remoteId && isId(remoteId)) {
+      const WineRequest = require('../models/WineRequest');
+      await WineRequest.updateOne({ _id: wineRequest._id }, { $set: { registryRequestId: String(remoteId) } });
+    }
+    return r;
+  } catch (err) {
+    console.warn('[bridge] request forward failed:', err.message);
+    return null;
+  }
+}
+
+const REQUEST_SYNC_MAX = 50;
+
+/**
+ * Finish the requests this install forwarded once cellarion.app has answered
+ * them. Before this, an approved request stayed "pending" here for good while
+ * the registry already held the wine. A resolved one: its wine is copied
+ * (adoptWine) and the request completes against it exactly as an admin
+ * resolve here would (services/wineRequestOps — the waiting bottles move onto
+ * the wine, the requester is notified). A declined one completes as declined
+ * with the registry's reason. Still pending there: nothing happens. Run
+ * hourly by the scheduler; oldest-checked first, so a large backlog rotates.
+ */
+async function syncForwardedRequests({ now = new Date(), adopt = adoptWine } = {}) {
+  if (!isEnabled()) return { skipped: 'disabled' };
+  const WineRequest = require('../models/WineRequest');
+  const { completeRequestResolve, completeRequestReject } = require('./wineRequestOps');
+  const { logAudit } = require('./audit');
+  const pending = await WineRequest.find({ status: 'pending', requestType: 'new_wine', registryRequestId: { $type: 'string' } })
+    .sort({ registryCheckedAt: 1, createdAt: 1 }).limit(REQUEST_SYNC_MAX);
+  if (!pending.length) return { checked: 0, resolved: 0, rejected: 0, failures: 0 };
+
+  const answers = await client.requestStatuses(pending.map((r) => r.registryRequestId));
+  if (answers === null) return { checked: 0, resolved: 0, rejected: 0, failures: 0, failed: true };
+  const byId = new Map(answers.map((a) => [String(a.id), a]));
+  let resolved = 0; let rejected = 0; let failures = 0;
+
+  for (const local of pending) {
+    const a = byId.get(local.registryRequestId);
+    try {
+      if (a && a.status === 'resolved' && a.wine && isId(a.wine.id)) {
+        const adopted = await adopt(a.wine.id, local.user);
+        if (!adopted.ok) { failures++; continue; }
+        await completeRequestResolve(local, adopted.wine, { resolvedBy: null, adminNotes: a.notes || '' });
+        logAudit(null, 'wineRequest.resolve',
+          { type: 'wineRequest', id: local._id },
+          { via: 'bridge', registryRequestId: local.registryRequestId, linkedWineId: String(adopted.wine._id) });
+        resolved++;
+        continue;
+      }
+      if (a && a.status === 'rejected') {
+        await completeRequestReject(local, { resolvedBy: null, adminNotes: a.notes || 'Declined by the shared registry on cellarion.app.' });
+        logAudit(null, 'wineRequest.reject',
+          { type: 'wineRequest', id: local._id },
+          { via: 'bridge', registryRequestId: local.registryRequestId });
+        rejected++;
+        continue;
+      }
+      // Still pending there, or not known to the registry as ours: ask again later.
+      await WineRequest.updateOne({ _id: local._id }, { $set: { registryCheckedAt: now } });
+    } catch (err) {
+      // One bad request must not end the run at the same point every hour.
+      failures++;
+      console.warn(`[bridge] request sync: ${local._id} failed — ${err.message}`);
+    }
+  }
+  if (resolved || rejected || failures) {
+    console.log(`[bridge] request sync: ${pending.length} checked, ${resolved} resolved, ${rejected} declined, ${failures} failed`);
+  }
+  return { checked: pending.length, resolved, rejected, failures };
 }
 
 /** What the self-hosted Settings card shows. */
@@ -525,5 +614,6 @@ function _reset() { lastRefresh = null; }
 
 module.exports = {
   isEnabled, adoptWine, registrySearch, refreshHeld, forwardCorrection, forwardValueFor, forwardRequest, status,
+  forwardAndTrackRequest, syncForwardedRequests,
   refreshMode, setRefreshMode, REFRESH_MODES, profileFrom, REGISTRY_NOTE, bridgeState, _reset,
 };

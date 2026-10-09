@@ -12,6 +12,7 @@
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn() }));
 jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn() }));
 jest.mock('../models/User', () => ({ find: jest.fn() }));
+jest.mock('../models/WineRequest', () => ({ find: jest.fn() }));
 jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false), search: jest.fn() }));
 jest.mock('../services/wineVisibility', () => ({ findVisibleWine: jest.fn() }));
 jest.mock('../services/photoState', () => ({ absoluteImageUrl: (p) => (p ? `https://api.test${p}` : null) }));
@@ -341,5 +342,34 @@ describe('audit 2026-09-08 — counting and the kill switch', () => {
     WineDefinition.find.mockReturnValue(chain([]));
     expect((await call('POST', '/api/bridge/v1/wines/changes', { ids: [ID] })).status).toBe(200);
     expect(global.__bridgeQuotaSpends).toEqual(['changeChecks']);
+  });
+});
+
+describe('GET /requests — what became of the requests this install filed', () => {
+  const WineRequest = require('../models/WineRequest');
+  const RQ1 = 'c'.repeat(24); const RQ2 = 'd'.repeat(24);
+
+  test('only the key owner\'s own bridge requests answer; a resolved one carries its visible wine', async () => {
+    WineRequest.find.mockReturnValue(chain([
+      { _id: RQ1, status: 'resolved', linkedWineDefinition: ID, adminNotes: 'Added', resolvedAt: new Date('2026-10-01T10:00:00Z') },
+      { _id: RQ2, status: 'rejected', adminNotes: 'Not a wine', resolvedAt: new Date('2026-10-02T10:00:00Z') },
+    ]));
+    WineDefinition.find.mockReturnValue(chain([wine()]));
+    const res = await call('GET', `/api/bridge/v1/requests?ids=${RQ1},${RQ2},not-an-id`);
+    expect(res.status).toBe(200);
+    expect(WineRequest.find).toHaveBeenCalledWith({ _id: { $in: [RQ1, RQ2] }, user: 'u1', via: 'bridge' });
+    // A wine still pending identity or flagged non-wine never travels.
+    expect(WineDefinition.find.mock.calls[0][0]).toMatchObject({ nonWine: { $ne: true }, pendingIdentity: { $ne: true } });
+    const body = await res.json();
+    expect(body.requests[0]).toMatchObject({ id: RQ1, status: 'resolved', notes: 'Added', wine: { id: ID, name: 'Salmos', producer: 'Torres' } });
+    expect(body.requests[1]).toMatchObject({ id: RQ2, status: 'rejected', notes: 'Not a wine', wine: null });
+  });
+
+  test('no usable id is a 400; more than 50 are capped', async () => {
+    expect((await call('GET', '/api/bridge/v1/requests?ids=x,y')).status).toBe(400);
+    WineRequest.find.mockReturnValue(chain([]));
+    const many = Array.from({ length: 60 }, (_, i) => i.toString(16).padStart(24, '0')).join(',');
+    expect((await call('GET', `/api/bridge/v1/requests?ids=${many}`)).status).toBe(200);
+    expect(WineRequest.find.mock.calls[0][0]._id.$in).toHaveLength(50);
   });
 });

@@ -242,11 +242,14 @@ describe('forwarding', () => {
     expect(await bridge.forwardValueFor('c'.repeat(24), { keyName: 'ABV', value: 1 })).toBeNull();
   });
 
-  test('a wine request is forwarded, an inline image is not', async () => {
-    await bridge.forwardRequest({ wineName: 'X', sourceUrl: 'https://x.example', image: 'data:image/png;base64,AAAA' });
-    expect(client.forwardRequest).toHaveBeenCalledWith({ wineName: 'X', sourceUrl: 'https://x.example' });
+  test('a wine request is forwarded with its photo: a link, or an inline label photo within the cap', async () => {
+    await bridge.forwardRequest({ wineName: 'X', sourceUrl: 'https://x.example', image: 'data:image/webp;base64,AAAA' });
+    expect(client.forwardRequest).toHaveBeenCalledWith({ wineName: 'X', sourceUrl: 'https://x.example', image: 'data:image/webp;base64,AAAA' });
     await bridge.forwardRequest({ wineName: 'Y', sourceUrl: 'https://y.example', image: 'https://y.example/label.jpg' });
     expect(client.forwardRequest).toHaveBeenLastCalledWith({ wineName: 'Y', sourceUrl: 'https://y.example', image: 'https://y.example/label.jpg' });
+    // Over the cap the registry would refuse it anyway: the request goes without.
+    await bridge.forwardRequest({ wineName: 'Z', sourceUrl: 'https://z.example', image: `data:image/png;base64,${'A'.repeat(500001)}` });
+    expect(client.forwardRequest).toHaveBeenLastCalledWith({ wineName: 'Z', sourceUrl: 'https://z.example' });
   });
 });
 

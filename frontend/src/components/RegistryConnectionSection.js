@@ -93,7 +93,7 @@ function RegistryConnectionSection() {
                   {status.removed > 0 ? `${t('settings.registryConnection.removedCopies', '{{count}} no longer in the registry', { count: status.removed })} · ` : ''}
                   {status.lastRefresh?.at
                     ? t('settings.registryConnection.lastRefresh', 'Last refresh {{when}}: {{updated}} updated, {{removed}} removed', { when: formatDate(status.lastRefresh.at), updated: status.lastRefresh.updated ?? 0, removed: status.lastRefresh.removed ?? 0 })
-                    : t('settings.registryConnection.neverRefreshed', 'Copies refresh weekly on Monday mornings.')}
+                    : t('settings.registryConnection.neverRefreshed', 'Nothing is downloaded in bulk: registry wines show up in the add-bottle search right away and are copied when you pick one. Copies refresh weekly, on Monday mornings.')}
                 </span>
                 {usage && (
                   <span className="api-token-meta">

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import PhotoCapture from '../components/PhotoCapture';
+import { requestImageFor } from '../utils/requestImage';
 import './WineRequests.css';
 
 function WineRequests() {
@@ -86,7 +87,13 @@ function WineRequests() {
     try {
       let imageValue = formData.image || null;
       if (imageFile) {
-        imageValue = imageBgRemoved || await compressImage(imageFile);
+        // The background-removed preview (or the photo itself), re-encoded to
+        // fit the server's cap — a raw PNG preview often did not (utils/requestImage).
+        imageValue = await requestImageFor({ preview: imageBgRemoved, file: imageFile });
+        if (!imageValue) {
+          alert(t('wineRequests.photoTooLarge'));
+          return;
+        }
       }
       const res = await apiFetch('/api/wine-requests', {
         method: 'POST',
@@ -99,10 +106,13 @@ function WineRequests() {
         setShowForm(false);
         fetchRequests();
       } else {
-        alert('Failed to submit request');
+        // Say WHY: the server names the problem (a URL it refuses, a photo
+        // it cannot read); a bare "failed" left the user nothing to fix.
+        const data = await res.json().catch(() => ({}));
+        alert(data.error ? t('wineRequests.submitFailedReason', { reason: data.error }) : t('wineRequests.submitFailed'));
       }
     } catch (err) {
-      alert('Failed to submit request');
+      alert(t('wineRequests.submitFailed'));
     }
   };
 
