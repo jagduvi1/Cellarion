@@ -1,5 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { openCamera } from '../utils/camera';
+import useTapToFocus from '../hooks/useTapToFocus';
+import CameraFocusRing from './CameraFocusRing';
 import { useAuth } from '../contexts/AuthContext';
 import AuthImage from './AuthImage';
 import { API_URL } from '../api/apiConstants';
@@ -20,6 +23,7 @@ function ImageUpload({ bottleId, wineDefinitionId, credit, onUploadComplete, onP
   // (support ticket 6a97f870, 2026-09-02).
   const [keepBackground, setKeepBackground] = useState(false);
   const videoRef = useRef(null);
+  const tapFocus = useTapToFocus(videoRef);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -185,10 +189,8 @@ function ImageUpload({ bottleId, wineDefinitionId, credit, onUploadComplete, onP
     setCameraOpen(true);
     cameraOpenRef.current = true;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
-        audio: false
-      });
+      // In focus where the phone allows it (utils/camera).
+      const stream = await openCamera({ facingMode, width: 1920, height: 1080 });
       // The viewfinder may have been closed while the permission prompt was
       // up — stop the just-acquired stream or the camera stays on forever.
       if (!cameraOpenRef.current) {
@@ -257,7 +259,7 @@ function ImageUpload({ bottleId, wineDefinitionId, credit, onUploadComplete, onP
       {/* Camera viewfinder modal */}
       {cameraOpen && (
         <div className="camera-modal">
-          <div className="camera-container">
+          <div className="camera-container" onPointerDown={tapFocus.onPointerDown}>
             {cameraError ? (
               <div className="camera-error-overlay">
                 <p>{cameraError}</p>
@@ -266,6 +268,7 @@ function ImageUpload({ bottleId, wineDefinitionId, credit, onUploadComplete, onP
             ) : (
               <>
                 <video ref={videoRef} autoPlay playsInline muted className="camera-video" />
+                <CameraFocusRing ring={tapFocus.ring} />
                 <div className="camera-overlay">
                   <img src="/bottle-overlay.png" alt="" className="bottle-guide" aria-hidden="true" />
                   <p className="overlay-hint">{t('camera.placeBottle')}</p>

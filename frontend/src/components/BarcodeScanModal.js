@@ -4,6 +4,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { updateBottle, bulkUpdateBottles } from '../api/bottles';
 import useBarcodeWatch from '../hooks/useBarcodeWatch';
 import { normalizeBarcode, sharedBarcode } from '../utils/barcode';
+import { openCamera } from '../utils/camera';
+import useTapToFocus from '../hooks/useTapToFocus';
+import CameraFocusRing from './CameraFocusRing';
 import Modal from './Modal';
 import './BarcodeScanModal.css';
 
@@ -28,6 +31,7 @@ export default function BarcodeScanModal({ bottle, bottles, otherCount = 0, onCl
   const { apiFetch } = useAuth();
   const inputId = useId();
   const videoRef = useRef(null);
+  const tapFocus = useTapToFocus(videoRef);
   const streamRef = useRef(null);
   const openRef = useRef(true);
   const [cameraError, setCameraError] = useState(null);
@@ -58,10 +62,9 @@ export default function BarcodeScanModal({ bottle, bottles, otherCount = 0, onCl
     (async () => {
       try {
         if (!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error('no camera'), { name: 'NotFoundError' });
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
-          audio: false,
-        });
+        // In focus where the phone allows it (utils/camera): a blurred
+        // preview reads no barcode.
+        const stream = await openCamera({ facingMode: 'environment', width: 1920, height: 1080 });
         // Closed while the permission prompt was up: never leave it running.
         if (!openRef.current) { stream.getTracks().forEach((track) => track.stop()); return; }
         streamRef.current = stream;
@@ -136,7 +139,10 @@ export default function BarcodeScanModal({ bottle, bottles, otherCount = 0, onCl
         <p className="barcode-scan-camera-error" role="status">{cameraError}</p>
       ) : (
         <div className="barcode-scan-viewfinder">
-          <video ref={videoRef} autoPlay playsInline muted className="barcode-scan-video" />
+          <div className="barcode-scan-frame" onPointerDown={tapFocus.onPointerDown}>
+            <video ref={videoRef} autoPlay playsInline muted className="barcode-scan-video" />
+            <CameraFocusRing ring={tapFocus.ring} />
+          </div>
           <p className="barcode-scan-hint">
             {saving ? t('barcodeScan.saving', 'Saving…') : t('barcodeScan.hint', 'Point the camera at the barcode on the bottle.')}
           </p>

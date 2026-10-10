@@ -5,6 +5,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { searchWines, getWine, resolveWine, identifyWineByText } from '../api/wines';
 import { adoptRegistryWine } from '../api/bridge';
 import useLabelScanner from '../hooks/useLabelScanner';
+import useTapToFocus from '../hooks/useTapToFocus';
+import CameraFocusRing from '../components/CameraFocusRing';
 import { addToWishlist } from '../api/wishlist';
 import '../components/ImageUpload.css';
 import './AddBottle.css';
@@ -270,6 +272,8 @@ function AddToWishlist() {
     onScanError: handleScanError,
     onBackScanSuccess: handleBackScanSuccess,
   });
+  // Tap the preview to focus there, as in a camera app.
+  const tapFocus = useTapToFocus(labelVideoRef);
 
   const startBackScan = useCallback(() => {
     startBackLabelCamera({
@@ -613,7 +617,7 @@ function AddToWishlist() {
       {/* Label-scan camera modal */}
       {labelCam.open && (
         <div className="camera-modal">
-          <div className="camera-container">
+          <div className="camera-container" onPointerDown={tapFocus.onPointerDown}>
             {labelCam.error ? (
               <div className="camera-error-overlay">
                 <p>{labelCam.error}</p>
@@ -622,6 +626,7 @@ function AddToWishlist() {
             ) : (
               <>
                 <video ref={labelVideoRef} autoPlay playsInline muted className="camera-video" />
+                <CameraFocusRing ring={tapFocus.ring} />
                 {labelScanning ? (
                   <div className="label-scan-overlay">
                     <div className="label-scan-spinner" />

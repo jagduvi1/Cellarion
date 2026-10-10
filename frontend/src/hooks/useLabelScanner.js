@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import i18n from '../i18n';
 import { scanLabel, scanLabelBack } from '../api/wines';
 import { track } from '../utils/track';
+import { openCamera } from '../utils/camera';
 
 /**
  * Custom hook that encapsulates label-scan camera logic.
@@ -77,10 +78,9 @@ export default function useLabelScanner(apiFetch, { onScanSuccess, onScanError, 
     setLabelCam({ open: true, error: null });
     camOpenRef.current = true;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: labelFacing, width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false
-      });
+      // In focus where the phone allows it — a label and a barcode are read
+      // up close (utils/camera).
+      const stream = await openCamera({ facingMode: labelFacing, width: 1280, height: 720 });
       if (!camOpenRef.current) {
         stream.getTracks().forEach(t => t.stop());
         return;

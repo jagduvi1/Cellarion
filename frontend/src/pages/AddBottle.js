@@ -8,6 +8,8 @@ import { getRacks } from '../api/racks';
 import { track } from '../utils/track';
 import DialogBox from '../components/DialogBox';
 import useLabelScanner from '../hooks/useLabelScanner';
+import useTapToFocus from '../hooks/useTapToFocus';
+import CameraFocusRing from '../components/CameraFocusRing';
 import useBarcodeWatch from '../hooks/useBarcodeWatch';
 import { CURRENCIES } from '../config/currencies';
 import { BOTTLE_SIZES, bottleSizeLabel } from '../config/bottleSizes';
@@ -316,6 +318,8 @@ function AddBottle() {
     onScanError: handleScanError,
     onBackScanSuccess: handleBackScanSuccess,
   });
+  // Tap the preview to focus there, as in a camera app.
+  const tapFocus = useTapToFocus(labelVideoRef);
 
   const startBackScan = useCallback(() => {
     startBackLabelCamera({
@@ -1034,7 +1038,7 @@ function AddBottle() {
       {/* Label-scan camera modal */}
       {labelCam.open && (
         <div className="camera-modal">
-          <div className="camera-container">
+          <div className="camera-container" onPointerDown={tapFocus.onPointerDown}>
             {labelCam.error ? (
               <div className="camera-error-overlay">
                 <p>{labelCam.error}</p>
@@ -1043,6 +1047,7 @@ function AddBottle() {
             ) : (
               <>
                 <video ref={labelVideoRef} autoPlay playsInline muted className="camera-video" />
+                <CameraFocusRing ring={tapFocus.ring} />
                 {labelScanning ? (
                   <div className="label-scan-overlay">
                     <div className="label-scan-spinner" />

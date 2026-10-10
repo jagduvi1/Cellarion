@@ -1,0 +1,24 @@
+/* Where a tap set the camera's focus — over the live preview, so it is
+   drawn in white with a dark edge to read on any picture. */
+.camera-focus-ring {
+  position: absolute;
+  width: 64px;
+  height: 64px;
+  margin: -32px 0 0 -32px;
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  z-index: 3;
+  animation: camera-focus-ring 0.9s ease-out forwards;
+}
+
+@keyframes camera-focus-ring {
+  0% { transform: scale(1.35); opacity: 0; }
+  25% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .camera-focus-ring { animation: none; opacity: 1; }
+}
