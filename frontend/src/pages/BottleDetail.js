@@ -37,6 +37,7 @@ const ReviewForm = lazy(() => import('../components/ReviewForm'));
 const ConsumeModal = lazy(() => import('../components/ConsumeModal').then(m => ({ default: m.ConsumeModal })));
 const RecommendWineModal = lazy(() => import('../components/RecommendWineModal'));
 const AddMoreBottlesModal = lazy(() => import('../components/AddMoreBottlesModal'));
+const BarcodeScanModal = lazy(() => import('../components/BarcodeScanModal'));
 
 function BottleDetail() {
   const { t, i18n } = useTranslation();
@@ -85,6 +86,7 @@ function BottleDetail() {
   const [draftNotice, setDraftNotice] = useState(null);
   useEffect(() => { setDraftNotice(null); }, [bottleId]);
   const [addMoreOpen, setAddMoreOpen] = useState(false);
+  const [barcodeOpen, setBarcodeOpen] = useState(false);
   const [addMoreMsg, setAddMoreMsg] = useState(null); // success banner after "Add more bottles"
   const [reportWineOpen, setReportWineOpen] = useState(false);
   const [reportDefaultReason, setReportDefaultReason] = useState(null);
@@ -381,6 +383,14 @@ function BottleDetail() {
       {canEdit && wine && !user?.isDemo && !onOrderNow && (
         <button className="bd-overflow-item" role="menuitem" onClick={() => { setAddMoreOpen(true); setBdMoreOpen(false); }}>
           <span aria-hidden="true">➕</span> {t('bottleDetail.addMore.action', 'Add more bottles')}
+        </button>
+      )}
+      {/* The retail barcode, for a bottle already in the cellar — until now
+          only Add Bottle could read one. Demo accounts cannot (each code is
+          a vote in the shared barcode lookup; the server refuses too). */}
+      {canEdit && !user?.isDemo && (
+        <button className="bd-overflow-item" role="menuitem" onClick={() => { setBarcodeOpen(true); setBdMoreOpen(false); }}>
+          <span aria-hidden="true">📷</span> {bottle?.barcode ? t('barcodeScan.titleChange', 'Change barcode') : t('barcodeScan.title', 'Add barcode')}
         </button>
       )}
       {canMove && (
@@ -960,6 +970,18 @@ function BottleDetail() {
             bottle={bottle}
             onClose={() => setAddMoreOpen(false)}
             onAdded={handleAddedMore}
+          />
+        )}
+
+        {barcodeOpen && bottle && (
+          <BarcodeScanModal
+            bottle={bottle}
+            onClose={() => setBarcodeOpen(false)}
+            onSaved={(code) => {
+              setBarcodeOpen(false);
+              setBottle((prev) => ({ ...prev, barcode: code || null }));
+              setAddMoreMsg(code ? t('barcodeScan.saved', 'Barcode saved: {{code}}', { code }) : t('barcodeScan.removed', 'Barcode removed.'));
+            }}
           />
         )}
 

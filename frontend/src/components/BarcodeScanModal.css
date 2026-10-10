@@ -1,0 +1,61 @@
+/* "Add barcode" on the bottle page (BarcodeScanModal) */
+
+.barcode-scan-current {
+  margin: 0 0 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+}
+
+.barcode-scan-viewfinder {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.barcode-scan-video {
+  width: 100%;
+  max-height: 46vh;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  background: #000;
+}
+
+.barcode-scan-hint {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.barcode-scan-camera-error {
+  margin: 0 0 1rem;
+  color: var(--color-text-secondary);
+}
+
+.barcode-scan-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.barcode-scan-form label {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.barcode-scan-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.barcode-scan-row input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.barcode-scan-remove {
+  margin-right: auto;
+}

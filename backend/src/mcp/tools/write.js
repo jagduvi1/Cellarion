@@ -266,7 +266,8 @@ registerTool({
 });
 
 // The bottle fields the MCP can edit — every field of the shared service's
-// UPDATABLE_FIELDS except expectedArrival (an order's month, set in the app).
+// UPDATABLE_FIELDS except expectedArrival (an order's month, set in the app)
+// and barcode (read by the camera on the bottle page).
 // Named here, next to the inputSchema it must mirror, so description and
 // schema can't drift apart.
 const MCP_UPDATE_PARAMS = ['vintage', 'bottle_size', 'price', 'currency', 'purchase_date', 'purchase_location', 'purchase_url', 'location', 'notes', 'occasion', 'rating', 'rating_scale', 'drink_from', 'drink_to', 'peak_from', 'peak_until', 'reserved_for', 'reserved_until'];
