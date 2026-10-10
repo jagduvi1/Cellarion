@@ -46,6 +46,12 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
             <span className="bd-detail-value">{bottleSizeLabel(bottle.bottleSize, t)}</span>
           </div>
         )}
+        {bottle.barcode && (
+          <div className="bd-detail-item">
+            <span className="bd-detail-label">{t('bottleDetail.barcode', 'Barcode')}</span>
+            <span className="bd-detail-value" style={{ fontVariantNumeric: 'tabular-nums' }}>{bottle.barcode}</span>
+          </div>
+        )}
         {bottle.rating && (
           <div className="bd-detail-item">
             <span className="bd-detail-label">{t('bottleDetail.ratingLabel')}</span>

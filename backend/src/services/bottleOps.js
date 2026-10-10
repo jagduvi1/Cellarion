@@ -599,6 +599,10 @@ const UPDATABLE_FIELDS = [
   'drinkFrom', 'drinkTo', 'peakFrom', 'peakUntil', 'reservedFor', 'reservedUntil',
   // Only on a bottle still on order; ignored on any other (see below).
   'expectedArrival',
+  // The retail barcode, added to a bottle already in the cellar (the bottle
+  // page's "Add barcode"); the add sets it from the scan. Not in the MCP
+  // update_bottle schema.
+  'barcode',
 ];
 
 // Normalize a value for change detection: Date objects and ISO-ish strings
@@ -727,6 +731,22 @@ async function updateBottleFields(bottle, fields, req) {
     const p = parseDrinkYear(fields.reservedUntil, 'reservedUntil');
     if (!p.ok) return { error: { status: 400, message: p.error } };
     reservedUntilYear = p.value !== undefined ? p.value : null;
+  }
+
+  // Barcode: the same canonical form the add stores. Unlike on add, a code
+  // that is not a valid public GTIN is refused — the user asked for exactly
+  // this change, so a typo must not vanish silently. Empty clears it. Each
+  // barcode is a vote in the shared barcode lookup (services/barcodeLookup),
+  // so demo accounts, thrown away within hours, cannot add one.
+  if (fields.barcode !== undefined) {
+    if (fields.barcode === null || fields.barcode === '') {
+      fields.barcode = null;
+    } else {
+      if (req?.user?.isDemo) return { error: { status: 403, message: 'Demo accounts cannot add barcodes' } };
+      const code = normalizeBarcode(fields.barcode);
+      if (!code) return { error: { status: 400, message: 'Not a valid barcode (EAN-13, EAN-8 or UPC-A)' } };
+      fields.barcode = code;
+    }
   }
 
   // Expected arrival (a month) belongs to a bottle on order. On any other

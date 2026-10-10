@@ -1207,7 +1207,8 @@
       "success_one": "{{count}} more bottle added to this cellar. It's unplaced — place it from the cellar page whenever you like.",
       "success_other": "{{count}} more bottles added to this cellar. They're unplaced — place them from the cellar page whenever you like."
     },
-    "backToVintage": "Back to the vintage"
+    "backToVintage": "Back to the vintage",
+    "barcode": "Barcode"
   },
   "lotHistory": {
     "title": "This wine in your cellar",
@@ -5454,5 +5455,19 @@
     "ownDataHint": "Critic scores, lot number and your other own data: under \"Your wine data\" on this page.",
     "submit": "Save for the vintage",
     "doneTitle": "Vintage saved"
+  },
+  "barcodeScan": {
+    "title": "Add barcode",
+    "titleChange": "Change barcode",
+    "current": "Saved now: {{code}}",
+    "hint": "Point the camera at the barcode on the bottle.",
+    "saving": "Saving…",
+    "typeLabel": "Or type the numbers under the stripes",
+    "save": "Save",
+    "remove": "Remove barcode",
+    "failed": "Could not save the barcode. Please try again.",
+    "invalid": "That is not a valid barcode. Check the numbers under the stripes (8, 12 or 13 digits).",
+    "saved": "Barcode saved: {{code}}",
+    "removed": "Barcode removed."
   }
 }

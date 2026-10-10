@@ -269,6 +269,32 @@ describe('updateBottleFields (real execution)', () => {
     expect(b.drinkWindowNotifiedStatus).toBeNull();
   });
 
+  test('a barcode added to a bottle already in the cellar is stored in canonical form; a bad one is refused', async () => {
+    // The bottle page's "Add barcode": UPC-A becomes its EAN-13 form, as on add.
+    const b = liveBottle();
+    let res = await updateBottleFields(b, { barcode: '0 12345 67890 5' }, REQ);
+    expect(res.error).toBeUndefined();
+    expect(b.barcode).toBe('0012345678905');
+    expect(res.changes).toEqual({ barcode: '0012345678905' });
+
+    // Unlike on add, the user asked for exactly this — a typo is an error.
+    res = await updateBottleFields(liveBottle(), { barcode: '7310070000001' }, REQ); // wrong check digit
+    expect(res.error.status).toBe(400);
+    res = await updateBottleFields(liveBottle(), { barcode: '2001234567893' }, REQ); // shop-internal prefix
+    expect(res.error.status).toBe(400);
+  });
+
+  test('an empty barcode clears it; a demo account cannot add one (each code is a vote in the shared lookup)', async () => {
+    const b = liveBottle({ barcode: '7310070000002' });
+    const res = await updateBottleFields(b, { barcode: '' }, REQ);
+    expect(res.error).toBeUndefined();
+    expect(b.barcode).toBeNull();
+    expect(res.changes).toEqual({ barcode: null });
+
+    const demo = await updateBottleFields(liveBottle(), { barcode: '7310070000002' }, { ...REQ, user: { ...REQ.user, isDemo: true } });
+    expect(demo.error.status).toBe(403);
+  });
+
   test('audit log uses the { field: { from, to } } shape CellarAudit renders (grand-audit H2)', async () => {
     const b = liveBottle({ rating: 92, ratingScale: '100' });
     await updateBottleFields(b, { rating: null, ratingScale: '5' }, REQ);
