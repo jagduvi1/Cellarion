@@ -87,3 +87,24 @@ test('a camera that cannot open says why, and typing still works', async () => {
   expect(watchActive).toBe(false);
   expect(screen.getByLabelText('Or type the numbers under the stripes')).toBeEnabled();
 });
+
+test('on the vintage page the code goes on every bottle of the vintage in one bulk request', async () => {
+  api = vi.fn(async () => ({ ok: true, json: async () => ({ done: 3, doneIds: ['b1', 'b2', 'b3'], skipped: [] }) }));
+  const onSaved = vi.fn();
+  render(<BarcodeScanModal bottles={[{ _id: 'b1' }, { _id: 'b2' }, { _id: 'b3' }]} onClose={vi.fn()} onSaved={onSaved} />);
+  expect(screen.getByText(/barcodeScan.allBottles/)).toBeInTheDocument();
+  await waitFor(() => expect(watchActive).toBe(true));
+  await act(async () => { await detect('7310070000002'); });
+  expect(api).toHaveBeenCalledWith('/api/bottles/bulk', expect.objectContaining({ method: 'POST' }));
+  expect(sentBody()).toEqual({ action: 'update', bottleIds: ['b1', 'b2', 'b3'], fields: { barcode: '7310070000002' } });
+  expect(onSaved).toHaveBeenCalledWith('7310070000002');
+});
+
+test('bottles that share a code show it and offer "Change"; bottles that differ start from nothing', () => {
+  const { unmount } = render(<BarcodeScanModal bottles={[{ _id: 'b1', barcode: '7310070000002' }, { _id: 'b2', barcode: '7310070000002' }]} onClose={vi.fn()} onSaved={vi.fn()} />);
+  expect(screen.getByText('Change barcode')).toBeInTheDocument();
+  unmount();
+  render(<BarcodeScanModal bottles={[{ _id: 'b1', barcode: '7310070000002' }, { _id: 'b2' }]} onClose={vi.fn()} onSaved={vi.fn()} />);
+  expect(screen.getByText('Add barcode')).toBeInTheDocument();
+  expect(screen.queryByText('Remove barcode')).toBeNull();
+});

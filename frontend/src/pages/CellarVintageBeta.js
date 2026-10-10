@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { lazy } from '../utils/lazyWithReload';
 import { useParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +8,7 @@ import { getBottle } from '../api/bottles';
 import { lookupMaturityProfile } from '../api/somm';
 import AuthImage from '../components/AuthImage';
 import BetaBadge from '../components/BetaBadge';
+import Modal from '../components/Modal';
 import CellarNav from '../components/CellarNav';
 import CellarPageHeader from '../components/CellarPageHeader';
 import MaturityPhaseTable from '../components/bottle/MaturityPhaseTable';
@@ -15,6 +16,11 @@ import LotHistory from '../components/bottle/LotHistory';
 import PersonalDataCard from '../components/bottle/PersonalDataCard';
 import TastingProfileCard from '../components/bottle/TastingProfileCard';
 import WineRecordSection from '../components/bottle/WineRecordSection';
+import WineReviewsCard from '../components/bottle/WineReviewsCard';
+import OwnerInquiryCard from '../components/bottle/OwnerInquiryCard';
+import PriceHistoryTimeline from '../components/bottle/PriceHistoryTimeline';
+import PriceTrackingToggle from '../components/bottle/PriceTrackingToggle';
+import { fetchRates } from '../utils/currency';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
 import { getMaturityStatus } from '../utils/drinkStatus';
 import { bottleAnchorYear } from '../utils/maturityUtils';
@@ -32,6 +38,10 @@ const DrinkOneModal = lazy(() => import('../components/DrinkOneModal'));
 const EditVintageModal = lazy(() => import('../components/EditVintageModal'));
 const AddMoreBottlesModal = lazy(() => import('../components/AddMoreBottlesModal'));
 const ReportWineModal = lazy(() => import('../components/ReportWineModal'));
+const RecommendWineModal = lazy(() => import('../components/RecommendWineModal'));
+const BarcodeScanModal = lazy(() => import('../components/BarcodeScanModal'));
+const ImageGallery = lazy(() => import('../components/ImageGallery'));
+const ImageUpload = lazy(() => import('../components/ImageUpload'));
 
 const filled = (v) => v !== null && v !== undefined && String(v).trim() !== '';
 
@@ -58,7 +68,12 @@ function CellarVintageBeta() {
   const [error, setError] = useState(null);
   const [profile, setProfile] = useState(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
-  const [modal, setModal] = useState(null); // 'drink' | 'edit' | 'add' | 'report'
+  const [modal, setModal] = useState(null); // 'drink' | 'edit' | 'add' | 'report' | 'reportWine' | 'recommend' | 'barcode'
+  const [priceHistory, setPriceHistory] = useState(null);
+  const [rates, setRates] = useState(null);
+  const [galleryEmpty, setGalleryEmpty] = useState(false);
+  const [photoOpen, setPhotoOpen] = useState(false);
+  const galleryRef = useRef(null);
   const [addTemplate, setAddTemplate] = useState(null);
   const [moreOpen, setMoreOpen] = useState(null); // 'top' | 'bar'
   const [suggestSignal, setSuggestSignal] = useState(0);
@@ -100,6 +115,24 @@ function CellarVintageBeta() {
     return () => { cancelled = true; };
   }, [apiFetch, wineId, vintage]);
 
+  // What the vintage is worth on the market, as on the bottle page (not for
+  // NV or an unknown year), with the rates to show it in the reader's currency.
+  useEffect(() => {
+    if (!vintage || vintage === 'NV' || vintage === 'Unknown') { setPriceHistory(null); return undefined; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiFetch(`/api/somm/prices/lookup?wine=${wineId}&vintage=${encodeURIComponent(vintage)}`);
+        const body = await res.json().catch(() => ({}));
+        if (!cancelled) setPriceHistory(res.ok ? body.history || [] : []);
+      } catch {
+        if (!cancelled) setPriceHistory([]);
+      }
+    })();
+    fetchRates().then((r) => { if (!cancelled && r) setRates(r); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [apiFetch, wineId, vintage]);
+
   const bottles = data?.bottles || [];
   const wine = data?.wine || null;
   const cellar = data?.cellar || null;
@@ -108,6 +141,14 @@ function CellarVintageBeta() {
   const canAdd = canEdit && !!wine && !user?.isDemo && (bottles.length > 0 || !!data?.historyBottleId);
   const first = bottles[0] || null;
   const title = wine ? `${wine.name} ${vintage}` : t('cellarVintage.title', 'Vintage');
+  // Photos are filed under a bottle and its vintage (BottleImage.vintage), so
+  // a photo added here goes through a bottle of this vintage — one still in
+  // the cellar, else the last one drunk — and shows on every bottle of it.
+  const photoBottleId = first?._id || data?.historyBottleId || null;
+  const canPhoto = canEdit && !user?.isDemo && !!wine && !!photoBottleId;
+  // A barcode belongs to the product, so it goes on every bottle of the vintage.
+  const canBarcode = canEdit && !user?.isDemo && bottles.length > 0;
+  const canReport = !!wine && !user?.isDemo;
 
   // Where the bottles sit, as one line per rack: "Left wall · slots 3, 7".
   const placements = useMemo(() => {
@@ -180,11 +221,32 @@ function CellarVintageBeta() {
     setSuggestSignal((n) => n + 1);
   };
 
+  const pick = (next) => () => { setMoreOpen(null); setModal(next); };
   const moreItems = (
     <>
+      {canPhoto && (
+        <button type="button" className="bd-overflow-item" role="menuitem" onClick={() => { setMoreOpen(null); setPhotoOpen(true); }}>
+          <span aria-hidden="true">🖼️</span> {t('cellarVintageBeta.addPhoto', 'Add a photo of this vintage')}
+        </button>
+      )}
+      {canBarcode && (
+        <button type="button" className="bd-overflow-item" role="menuitem" onClick={pick('barcode')}>
+          <span aria-hidden="true">📷</span> {bottles.every((b) => b.barcode && b.barcode === bottles[0].barcode) ? t('barcodeScan.titleChange', 'Change barcode') : t('barcodeScan.title', 'Add barcode')}
+        </button>
+      )}
       {canSuggest && (
         <button type="button" className="bd-overflow-item" role="menuitem" onClick={suggestFix}>
           <span aria-hidden="true">✏️</span> {t('cellarVintageBeta.editWine', 'Suggest a fix to the wine')}
+        </button>
+      )}
+      {canReport && (
+        <button type="button" className="bd-overflow-item" role="menuitem" onClick={pick('reportWine')}>
+          <span aria-hidden="true">⚑</span> {t('cellarVintageBeta.reportWine', 'Report a problem with this wine')}
+        </button>
+      )}
+      {canReport && (
+        <button type="button" className="bd-overflow-item" role="menuitem" onClick={pick('recommend')}>
+          <span aria-hidden="true">💌</span> {t('cellarVintageBeta.recommend', 'Recommend to a friend')}
         </button>
       )}
       {wine?.slug && (
@@ -194,7 +256,7 @@ function CellarVintageBeta() {
       )}
     </>
   );
-  const hasMore = canSuggest || !!wine?.slug;
+  const hasMore = canPhoto || canBarcode || canSuggest || canReport || !!wine?.slug;
   const canDrink = canEdit && bottles.length > 0;
   const canEditVintage = canEdit && bottles.length > 0;
   const hasActions = canDrink || canEditVintage || canAdd || hasMore;
@@ -257,7 +319,16 @@ function CellarVintageBeta() {
         title={title}
         loading={loading}
         userColor={cellar?.userColor}
-        subtitle={wine?.producer || null}
+        // Which page this is, at a glance: the vintage, not one bottle — the
+        // bottle page carries the matching "Bottle" label.
+        subtitle={cellar ? (
+          <span className="page-kind-line">
+            <span className="page-kind">{t('cellarVintageBeta.kind', 'Vintage')}</span>
+            {bottles.length > 0
+              ? t('cellarVintageBeta.kindLine', { count: bottles.length, cellar: cellar.name })
+              : t('cellarVintageBeta.kindLineNone', 'This wine and year · none left in {{cellar}}', { cellar: cellar.name })}
+          </span>
+        ) : null}
         actions={headerActions}
       />
 
@@ -300,14 +371,34 @@ function CellarVintageBeta() {
             {/* 1. The wine: who made it, where, the grapes, the description. */}
             <section className="cvb-col" aria-labelledby="cvb-wine-title">
               <h2 id="cvb-wine-title" className="cvb-h2">{t('cellarVintageBeta.wineTitle', 'The wine')}</h2>
+              {wine && !user?.isDemo && <OwnerInquiryCard apiFetch={apiFetch} wineId={wine._id} />}
               {wine && (
                 <div className="card cvb-wine">
-                  {heroSrc && (
-                    <div className="cvb-hero">
-                      <AuthImage src={heroSrc} alt={title} className="cvb-hero-img" onError={(e) => { e.target.style.display = 'none'; }} />
-                      {heroCredit && <span className="bd-wine-image-credit">{heroCredit}</span>}
-                    </div>
-                  )}
+                  {/* This vintage's photos (the bottle page's gallery, through a
+                      bottle of the vintage), else the hero in the cards' order;
+                      and "Add a photo" for whoever looks after the bottles. */}
+                  <div className="cvb-photo">
+                    {photoBottleId && !galleryEmpty ? (
+                      <div className="cvb-gallery">
+                        <Suspense fallback={null}>
+                          <ImageGallery ref={galleryRef} bottleId={photoBottleId} vintage={vintage} size="medium" onEmpty={() => setGalleryEmpty(true)} />
+                        </Suspense>
+                      </div>
+                    ) : heroSrc ? (
+                      <div className="cvb-hero">
+                        <AuthImage src={heroSrc} alt={title} className="cvb-hero-img" onError={(e) => { e.target.style.display = 'none'; }} />
+                        {heroCredit && <span className="bd-wine-image-credit">{heroCredit}</span>}
+                      </div>
+                    ) : (
+                      // No photo yet: the wine's colour, as on the bottle page.
+                      <div className={`bd-wine-placeholder ${swatchType(wine, '')}`} aria-hidden="true" />
+                    )}
+                    {canPhoto && (
+                      <button type="button" className="btn btn-secondary btn-small cvb-add-photo" onClick={() => setPhotoOpen(true)}>
+                        <span aria-hidden="true">🖼️</span> {t('cellarVintageBeta.addPhotoShort', 'Add a photo')}
+                      </button>
+                    )}
+                  </div>
                   <div className="cvb-wine-meta">
                     <div className="cvb-wine-name">{wine.name}</div>
                     <div className="cvb-wine-line">
@@ -381,6 +472,17 @@ function CellarVintageBeta() {
                       <span className="cvb-muted">{t('cellarVintageBeta.noNotes', 'No notes yet.')}</span>
                     )}
                   </div>
+                  {/* What the vintage is worth, as on the bottle page — and,
+                      while nobody has priced it, the request to track it. */}
+                  {vintage !== 'NV' && vintage !== 'Unknown' && priceHistory !== null && (
+                    <div className="cvb-block">
+                      <span className="bd-section-label">{t('bottleDetail.priceEvolution')}</span>
+                      <PriceHistoryTimeline history={priceHistory} rates={rates} userCurrency={user?.preferences?.currency || 'USD'} />
+                      {priceHistory.length === 0 && photoBottleId && !user?.isDemo && (
+                        <PriceTrackingToggle bottleId={photoBottleId} vintage={vintage} />
+                      )}
+                    </div>
+                  )}
                   {canEditVintage && (
                     <button type="button" className="btn btn-secondary btn-small cvb-edit-vintage" onClick={() => setModal('edit')}>
                       {t('cellarVintageBeta.editVintage', 'Edit vintage')}
@@ -410,6 +512,9 @@ function CellarVintageBeta() {
                   <LotHistory apiFetch={apiFetch} bottleId={data.historyBottleId} vintage={vintage} isOwner={cellar?.userRole === 'owner'} />
                 )}
               </section>
+
+              {/* Reviews of the wine, this vintage first — as on the bottle page. */}
+              {wine && <WineReviewsCard wine={wine} vintage={vintage} communityRating={wine.communityRating} />}
             </div>
           </div>
         </>
@@ -456,13 +561,44 @@ function CellarVintageBeta() {
             onAdded={(n) => { setModal(null); setNotice(t('bottleDetail.addMore.success', { count: n })); load(); }}
           />
         )}
-        {modal === 'report' && wine && (
+        {(modal === 'report' || modal === 'reportWine') && wine && (
           <ReportWineModal
             wine={wine}
-            defaultReason="wrong_tasting_profile"
+            defaultReason={modal === 'report' ? 'wrong_tasting_profile' : null}
             onSuggestFix={canSuggest ? () => { setModal(null); setSuggestSignal((n) => n + 1); } : undefined}
             onClose={() => setModal(null)}
           />
+        )}
+        {modal === 'recommend' && wine && (
+          <RecommendWineModal wineId={wine._id} wineName={title} onClose={() => setModal(null)} />
+        )}
+        {modal === 'barcode' && bottles.length > 0 && (
+          <BarcodeScanModal
+            bottles={bottles}
+            onClose={() => setModal(null)}
+            onSaved={(code) => {
+              setModal(null);
+              setNotice(code ? t('barcodeScan.savedAll', { count: bottles.length, code }) : t('barcodeScan.removed', 'Barcode removed.'));
+              load();
+            }}
+          />
+        )}
+        {/* A photo of this vintage's label: filed under a bottle of the
+            vintage, shown on every bottle of it, reviewed before others see it. */}
+        {photoOpen && wine && photoBottleId && (
+          <Modal title={t('cellarVintageBeta.addPhoto', 'Add a photo of this vintage')} onClose={() => setPhotoOpen(false)} showClose trapFocus>
+            <p className="cvb-photo-hint">{t('cellarVintageBeta.photoHint', 'A photo of this vintage’s label. It shows on all your bottles of this vintage.')}</p>
+            <ImageUpload
+              bottleId={photoBottleId}
+              wineDefinitionId={wine._id}
+              onUploadComplete={() => { setGalleryEmpty(false); galleryRef.current?.refresh(); }}
+              onProcessingComplete={() => { setGalleryEmpty(false); galleryRef.current?.refresh(); }}
+            />
+            <p className="cvb-photo-hint">{t('bottleDetail.imageNotice', 'Images are reviewed by an admin before being added to the shared wine registry, where they will be visible to all Cellarion users.')}</p>
+            <div className="modal-actions">
+              <button type="button" className="btn btn-primary" onClick={() => { setPhotoOpen(false); load(); }}>{t('common.done', 'Done')}</button>
+            </div>
+          </Modal>
         )}
       </Suspense>
       {journalBottle && (
@@ -519,7 +655,8 @@ function BottleRow({ bottle, cellarId, fromPath, showNote }) {
             )}
           </span>
         )}
-        <span className="cvb-bottle-chevron" aria-hidden="true">›</span>
+        {/* Each bottle still has its own page: its price, slot, opening it. */}
+        <span className="cvb-bottle-open">{t('cellarVintageBeta.openBottle', 'Open bottle')} <span aria-hidden="true">›</span></span>
       </Link>
     </li>
   );

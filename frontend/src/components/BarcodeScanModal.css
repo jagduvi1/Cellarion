@@ -59,3 +59,9 @@
 .barcode-scan-remove {
   margin-right: auto;
 }
+
+.barcode-scan-scope {
+  margin: 0 0 0.75rem;
+  font-size: 0.88rem;
+  color: var(--color-text-secondary);
+}

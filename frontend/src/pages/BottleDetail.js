@@ -5,15 +5,13 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getBottle, consumeBottle, setBottleDefaultImage, undoBottle, openBottle, restoreBottle, markBottleArrived } from '../api/bottles';
 import { isOnOrder, formatArrivalMonth, isArrivalLate } from '../utils/onOrder';
+import { useFeature } from '../utils/featureFlags';
 import { isReserved, reservationSummary } from '../utils/reservation';
 import OpenBottlePanel from '../components/bottle/OpenBottlePanel';
 import { PRESERVATION_METHODS } from '../utils/openBottle';
 import { fetchRates } from '../utils/currency';
 import SITE_URL from '../config/siteUrl';
 import { API_URL } from '../api/apiConstants';
-import ReviewCard from '../components/ReviewCard';
-import { getWineReviews } from '../api/reviews';
-import { fromNormalized } from '../utils/ratingUtils';
 import ShareButton from '../components/ShareButton';
 import HeroImage from '../components/bottle/HeroImage';
 import ConsumedDetails from '../components/bottle/ConsumedDetails';
@@ -24,6 +22,7 @@ import OwnerInquiryCard from '../components/bottle/OwnerInquiryCard';
 import PersonalDataCard from '../components/bottle/PersonalDataCard';
 import LotHistory from '../components/bottle/LotHistory';
 import TastingProfileCard from '../components/bottle/TastingProfileCard';
+import WineReviewsCard from '../components/bottle/WineReviewsCard';
 import DialogBox from '../components/DialogBox';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
 import { swatchType, wineTypeLabel } from '../utils/wineColour';
@@ -33,7 +32,6 @@ import './BottleDetail.css';
 const ReportWineModal = lazy(() => import('../components/ReportWineModal'));
 const MoveBottleModal = lazy(() => import('../components/MoveBottleModal'));
 const ChangeWineModal = lazy(() => import('../components/ChangeWineModal'));
-const ReviewForm = lazy(() => import('../components/ReviewForm'));
 const ConsumeModal = lazy(() => import('../components/ConsumeModal').then(m => ({ default: m.ConsumeModal })));
 const RecommendWineModal = lazy(() => import('../components/RecommendWineModal'));
 const AddMoreBottlesModal = lazy(() => import('../components/AddMoreBottlesModal'));
@@ -43,6 +41,8 @@ function BottleDetail() {
   const { t, i18n } = useTranslation();
   const { id: cellarId, bottleId } = useParams();
   const { apiFetch, user } = useAuth();
+  // Early access: a wine and vintage has its own page, so this one says it is a bottle.
+  const vintagePageOn = useFeature('vintagePage');
   const navigate = useNavigate();
   const location = useLocation();
   const fromHistory = location.state?.fromHistory === true;
@@ -95,14 +95,6 @@ function BottleDetail() {
   const [openPickerOpen, setOpenPickerOpen] = useState(false);
   const [openingMethod, setOpeningMethod] = useState('coravin');
   const [openingBusy, setOpeningBusy] = useState(false);
-  const [reviewFormOpen, setReviewFormOpen] = useState(false);
-  const [wineReviews, setWineReviews] = useState([]);
-  const [communityRating, setCommunityRating] = useState(null);
-  const [reviewAudience, setReviewAudience] = useState('all');
-  const [reviewVintage, setReviewVintage] = useState('this');
-  const [reviewPage, setReviewPage] = useState(1);
-  const [reviewTotal, setReviewTotal] = useState(0);
-  const [reviewPages, setReviewPages] = useState(0);
   const [pendingImage, setPendingImage] = useState(null);
   const [defaultImage, setDefaultImage] = useState(null);
   // The vintage's official photo with its credit, and the viewer's own photo
@@ -113,12 +105,6 @@ function BottleDetail() {
   useEffect(() => {
     fetchBottle();
   }, [bottleId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Re-fetch reviews when audience or vintage filter changes
-  useEffect(() => {
-    const wineId = bottle?.wineDefinition?._id;
-    if (wineId) fetchWineReviews(wineId, { audience: reviewAudience, vintage: reviewVintage, page: 1 });
-  }, [reviewAudience, reviewVintage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchBottle = async () => {
     // A new bottle id on the same mounted page (a notification link from
@@ -166,17 +152,6 @@ function BottleDetail() {
             : `${API_URL}${data.otherVintageImageUrl}`;
           setOtherVintageImage(url);
         }
-        // Fetch community reviews for this wine. Pass the vintage explicitly —
-        // this closure still sees the pre-setBottle (null) state, so reading
-        // `bottle?.vintage` here would silently drop the default
-        // "this vintage" filter on the initial load.
-        const wineObj = data.bottle?.wineDefinition;
-        if (wineObj?._id) {
-          fetchWineReviews(wineObj._id, { bottleVintage: data.bottle.vintage });
-          if (wineObj.communityRating?.reviewCount > 0) {
-            setCommunityRating(wineObj.communityRating);
-          }
-        }
         // Fetch the sommelier maturity profile. NV bottles (non-vintage
         // Champagne / Cap Classique blends) get a profile too — somms can set a
         // drink window for them — so we fetch it for NV as well; only truly
@@ -197,37 +172,6 @@ function BottleDetail() {
       setError('Network error');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchWineReviews = async (wineId, opts = {}) => {
-    try {
-      const audience = opts.audience ?? reviewAudience;
-      const vintageFilter = opts.vintage ?? reviewVintage;
-      const page = opts.page ?? 1;
-      const bottleVintage = opts.bottleVintage ?? bottle?.vintage;
-
-      const params = new URLSearchParams();
-      params.set('limit', '10');
-      params.set('page', String(page));
-      params.set('audience', audience);
-
-      if (vintageFilter === 'this' && bottleVintage) {
-        params.set('vintage', bottleVintage);
-      } else if (vintageFilter !== 'all' && vintageFilter !== 'this') {
-        params.set('vintage', vintageFilter);
-      }
-
-      const res = await getWineReviews(apiFetch, wineId, params.toString());
-      const data = await res.json();
-      if (res.ok) {
-        setWineReviews(data.reviews || []);
-        setReviewTotal(data.total || 0);
-        setReviewPages(data.pages || 0);
-        setReviewPage(page);
-      }
-    } catch {
-      // Non-critical
     }
   };
 
@@ -634,6 +578,23 @@ function BottleDetail() {
             }}
           />
           <div className="bd-wine-meta">
+            {/* Early access, where a wine and vintage has its own page: say
+                this is ONE bottle — where it sits — and lead to all of them. */}
+            {vintagePageOn && wine?._id && !isConsumed && (
+              <div className="page-kind-line bd-page-kind">
+                <span className="page-kind">{t('bottleDetail.kind', 'Bottle')}</span>
+                <span>
+                  {rackInfo
+                    ? (rackInfo.position != null
+                      ? t('drinkOne.slot', '{{rack}} · slot {{position}}', { rack: rackInfo.rackName, position: rackInfo.position })
+                      : rackInfo.rackName)
+                    : t('drinkOne.unplaced', 'Not in a rack')}
+                </span>
+                <Link to={`/cellars/${cellarId}/vintages/${wine._id}/${encodeURIComponent(bottle?.vintage || 'NV')}`}>
+                  {t('bottleDetail.allOfVintage', 'All bottles of this vintage')} ›
+                </Link>
+              </div>
+            )}
             <div className="bd-wine-name-row">
               <h1 className={cellarColor ? 'cellar-accent-border' : ''} style={cellarColor ? { '--cellar-color': cellarColor } : undefined}>
                 {displayName || t('common.unknownWine')}
@@ -748,97 +709,8 @@ function BottleDetail() {
         onReport={() => { setReportDefaultReason('wrong_tasting_profile'); setReportWineOpen(true); }}
       />
 
-      {/* ── Reviews section ── */}
-      {wine && (
-        <div className="bd-reviews card">
-          <div className="bd-reviews__header">
-            <h2>{t('reviews.communityReviews', 'Reviews')}</h2>
-            {communityRating && communityRating.reviewCount > 0 && (
-              <span className="bd-reviews__avg">
-                {fromNormalized(communityRating.averageNormalized, user?.preferences?.ratingScale || '5').toFixed(1)}
-                {user?.preferences?.ratingScale === '100' ? 'pts' : user?.preferences?.ratingScale === '20' ? '/20' : '★'}
-                <span className="bd-reviews__count">({communityRating.reviewCount})</span>
-              </span>
-            )}
-          </div>
-          <div className="bd-reviews__filters">
-            <select
-              value={reviewAudience}
-              onChange={e => setReviewAudience(e.target.value)}
-              className="bd-reviews__filter-select"
-            >
-              <option value="all">{t('reviews.audienceAll', 'All')}</option>
-              <option value="mine">{t('reviews.audienceMine', 'My Reviews')}</option>
-              <option value="following">{t('reviews.audienceFollowing', 'Following')}</option>
-            </select>
-            <select
-              value={reviewVintage}
-              onChange={e => setReviewVintage(e.target.value)}
-              className="bd-reviews__filter-select"
-            >
-              <option value="this">{t('reviews.vintageThis', 'This vintage')}</option>
-              <option value="all">{t('reviews.vintageAll', 'All vintages')}</option>
-            </select>
-          </div>
-          {wineReviews.length > 0 ? (
-            wineReviews.map(review => (
-              <ReviewCard
-                key={review._id}
-                review={review}
-                showWine={false}
-                onDelete={() => {
-                  // Same refresh as after saving a review: refetch the list and
-                  // drop the (now stale) community aggregate.
-                  fetchWineReviews(wine._id);
-                  setCommunityRating(null);
-                }}
-              />
-            ))
-          ) : (
-            <p className="bd-reviews__empty">{t('reviews.noReviews', 'No reviews yet. Be the first to review this wine!')}</p>
-          )}
-          {reviewPages > 1 && (
-            <div className="bd-reviews__pagination">
-              <button
-                className="btn btn-secondary btn-small"
-                disabled={reviewPage <= 1}
-                onClick={() => fetchWineReviews(wine._id, { page: reviewPage - 1 })}
-              >
-                {t('common.previous', 'Previous')}
-              </button>
-              <span className="bd-reviews__page-info">{reviewPage} / {reviewPages}</span>
-              <button
-                className="btn btn-secondary btn-small"
-                disabled={reviewPage >= reviewPages}
-                onClick={() => fetchWineReviews(wine._id, { page: reviewPage + 1 })}
-              >
-                {t('common.next', 'Next')}
-              </button>
-            </div>
-          )}
-          <button
-            className="btn btn-primary btn-small"
-            onClick={() => setReviewFormOpen(true)}
-          >
-            {t('reviews.writeReview', 'Write a Review')}
-          </button>
-        </div>
-      )}
-
-      <Suspense fallback={null}>
-        {reviewFormOpen && wine && (
-          <ReviewForm
-            wineDefinition={wine._id}
-            wineName={wine.name}
-            defaultVintage={bottle?.vintage !== 'NV' ? bottle?.vintage : ''}
-            onClose={() => setReviewFormOpen(false)}
-            onSaved={() => {
-              fetchWineReviews(wine._id);
-              setCommunityRating(null);
-            }}
-          />
-        )}
-      </Suspense>
+      {/* ── Reviews (the wine's and this vintage's; shared with the vintage page) ── */}
+      <WineReviewsCard wine={wine} vintage={bottle?.vintage} communityRating={wine?.communityRating} />
 
       </>}
 

@@ -1208,7 +1208,10 @@
       "success_other": "{{count}} more bottles added to this cellar. They're unplaced — place them from the cellar page whenever you like."
     },
     "backToVintage": "Back to the vintage",
-    "barcode": "Barcode"
+    "barcode": "Barcode",
+    "purchaseLink": "Link",
+    "kind": "Bottle",
+    "allOfVintage": "All bottles of this vintage"
   },
   "lotHistory": {
     "title": "This wine in your cellar",
@@ -5444,7 +5447,17 @@
     "notSet": "Not set yet.",
     "notesDiffer": "Each bottle has its own note: see the bottles below.",
     "noNotes": "No notes yet.",
-    "savedNote": "Saved for the vintage."
+    "savedNote": "Saved for the vintage.",
+    "kind": "Vintage",
+    "kindLine_one": "Your bottle of this wine and year in {{cellar}}",
+    "kindLine_other": "Your {{count}} bottles of this wine and year in {{cellar}}",
+    "kindLineNone": "This wine and year · none left in {{cellar}}",
+    "addPhoto": "Add a photo of this vintage",
+    "addPhotoShort": "Add a photo",
+    "photoHint": "A photo of this vintage’s label. It shows on all your bottles of this vintage.",
+    "reportWine": "Report a problem with this wine",
+    "recommend": "Recommend to a friend",
+    "openBottle": "Open bottle"
   },
   "editVintage": {
     "title": "Edit vintage",
@@ -5468,6 +5481,10 @@
     "failed": "Could not save the barcode. Please try again.",
     "invalid": "That is not a valid barcode. Check the numbers under the stripes (8, 12 or 13 digits).",
     "saved": "Barcode saved: {{code}}",
-    "removed": "Barcode removed."
+    "removed": "Barcode removed.",
+    "allBottles_one": "Saved on your bottle of this vintage.",
+    "allBottles_other": "Saved on all {{count}} bottles of this vintage.",
+    "savedAll_one": "Barcode saved: {{code}}",
+    "savedAll_other": "Barcode saved on all {{count}} bottles: {{code}}"
   }
 }

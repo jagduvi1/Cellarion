@@ -134,6 +134,19 @@ describe('POST /api/bottles/bulk', () => {
     );
   });
 
+  test('update: a barcode reaches every bottle — the vintage page\'s "Add barcode" (the shared update checks and normalises it)', async () => {
+    Bottle.find.mockResolvedValue([
+      { _id: B(1), cellar: OWNED, status: 'active' },
+      { _id: B(2), cellar: OWNED, status: 'active' },
+    ]);
+    const { status, body } = await postJson(app(), '/api/bottles/bulk', {
+      action: 'update', bottleIds: [B(1), B(2)], fields: { barcode: '7310070000002' },
+    });
+    expect(status).toBe(200);
+    expect(body.done).toBe(2);
+    expect(updateBottleFields).toHaveBeenNthCalledWith(1, expect.objectContaining({ _id: B(1) }), { barcode: '7310070000002' }, expect.anything());
+  });
+
   test('update: a note sent on purpose reaches every bottle — the vintage page\'s "Edit vintage" writes one note for the vintage', async () => {
     // Notes stay per bottle by default (the bulk bar never sends one); a
     // caller that sends a note asks for it on all of them, as the lot rule

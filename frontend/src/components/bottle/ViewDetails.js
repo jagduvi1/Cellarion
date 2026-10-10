@@ -291,7 +291,7 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
             {bottle.purchaseLocation && <span>{bottle.purchaseLocation}</span>}
             {safeUrl(bottle.purchaseUrl) && (
               <a href={safeUrl(bottle.purchaseUrl)} target="_blank" rel="noreferrer" className="bd-purchase-link">
-                <span aria-hidden="true">{'\u{1F517}'}</span> Link
+                <span aria-hidden="true">{'\u{1F517}'}</span> {t('bottleDetail.purchaseLink', 'Link')}
               </a>
             )}
           </div>
