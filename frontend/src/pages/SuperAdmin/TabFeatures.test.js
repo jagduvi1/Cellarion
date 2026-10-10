@@ -47,6 +47,18 @@ test('moving a flag saves its state and reports who was told', async () => {
   expect(getFeatures).toHaveBeenCalledTimes(2); // reloaded after the save
 });
 
+test('a forum link typed on one row survives a save on another row', async () => {
+  const OTHER = { ...FLAG, key: 'otherThing', title: 'Other thing', state: 'off' };
+  getFeatures.mockResolvedValue(json({ optedIn: 4, features: [FLAG, OTHER] }));
+  saveFeature.mockResolvedValue(json({ feature: { ...OTHER, state: 'beta' }, notified: { announced: 0, thanked: 0 } }));
+  renderTab();
+  const input = await screen.findByLabelText('Forum thread for One page per wine and vintage');
+  fireEvent.change(input, { target: { value: '/community/discussions/draft' } });
+  fireEvent.change(screen.getByLabelText('State of Other thing'), { target: { value: 'beta' } });
+  await waitFor(() => expect(getFeatures).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.getByLabelText('Forum thread for One page per wine and vintage')).toHaveValue('/community/discussions/draft'));
+});
+
 test('the forum link is saved on its own; a refusal shows the server\'s reason', async () => {
   saveFeature.mockResolvedValue(json({ error: 'forumPath must point to a page on this site' }, false));
   renderTab();

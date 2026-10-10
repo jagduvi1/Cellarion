@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { superadminGetFeatures, superadminSaveFeature } from '../../api/admin';
@@ -32,6 +32,7 @@ export default function TabFeatures() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [forum, setForum] = useState({});
+  const serverForum = useRef({}); // the links as last read from the server, per key
   const [busy, setBusy] = useState(null);
   const [msg, setMsg] = useState(null);
 
@@ -40,7 +41,15 @@ export default function TabFeatures() {
       .then(r => r.json())
       .then(d => {
         setData(d);
-        setForum(Object.fromEntries((d.features || []).map(f => [f.key, f.forumPath || ''])));
+        // A forum link typed on one row survives a save on another: only a
+        // draft that still equals the server's old value takes the new one.
+        const previous = serverForum.current;
+        const next = Object.fromEntries((d.features || []).map(f => [f.key, f.forumPath || '']));
+        serverForum.current = next;
+        setForum(prev => Object.fromEntries(Object.entries(next).map(([key, server]) => [
+          key,
+          prev[key] !== undefined && prev[key] !== (previous[key] ?? server) ? prev[key] : server,
+        ])));
       })
       .catch(() => setError('Failed to load feature flags'));
   }, [apiFetch]);
@@ -80,7 +89,7 @@ export default function TabFeatures() {
         <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 12 }}>
           A flagged feature is <strong>off</strong> (nobody sees it — unfinished work can ship dark),
           in <strong>beta</strong> (members who turned on “Try new features early” in Settings) or
-          out for <strong>everyone</strong>. Changes apply without a deploy; browsers pick them up within a minute.
+          out for <strong>everyone</strong>. Changes apply without a deploy; an open app re-reads them within five minutes or when it comes back into view, a fresh load within a minute.
           Moving a feature into beta notifies the early-access members, and releasing it to everyone thanks
           whoever sent beta feedback on it — each only once. Remove a released flag from the code in a later cleanup.
         </div>

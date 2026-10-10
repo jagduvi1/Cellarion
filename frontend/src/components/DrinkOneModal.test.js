@@ -84,4 +84,11 @@ test('a refused consume of a single bottle shows the reason too, with that bottl
   expect(await screen.findByText('Already consumed')).toBeInTheDocument();
   expect(screen.getByText('drinkOne.slot:{"rack":"Left wall","position":3}')).toBeInTheDocument();
   expect(onDone).not.toHaveBeenCalled();
+  // Trying again from the picker: Cancel in the form goes back to the picker
+  // (and its reason), not out of the modal — as with several bottles.
+  fireEvent.click(screen.getByText('drinkOne.slot:{"rack":"Left wall","position":3}'));
+  expect(screen.getByText('bottleDetail.removeBottleTitle')).toBeInTheDocument();
+  fireEvent.click(screen.getByText('common.cancel'));
+  expect(screen.getByText('drinkOne.title')).toBeInTheDocument();
+  expect(screen.getByText('Already consumed')).toBeInTheDocument();
 });

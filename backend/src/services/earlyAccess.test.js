@@ -29,7 +29,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   featureFlags.set({});
   updateSiteConfig.mockResolvedValue({});
-  createNotifications.mockResolvedValue(undefined);
+  // createNotifications answers the rows it created (it never throws).
+  createNotifications.mockImplementation(async (items) => items.map((i) => ({ user: i.userId, type: i.type })));
   User.find.mockReturnValue({ select: () => ({ lean: async () => [{ _id: 'u1' }, { _id: 'u2' }] }) });
   SupportTicket.distinct.mockResolvedValue(['u2', 'u3']);
 });
@@ -90,6 +91,18 @@ describe('changeFlag', () => {
 
     expect((await changeFlag('noSuchFeature', { state: 'beta' }, ADMIN)).error.status).toBe(404);
     expect((await changeFlag('vintagePage', { state: 'later' }, ADMIN)).error.status).toBe(400);
+  });
+
+  test('the counts report what was really created, not who was addressed', async () => {
+    // A refused insert comes back as fewer rows (createNotifications catches
+    // it); the panel and the audit row must not claim everyone was told.
+    createNotifications.mockImplementation(async (items) => items.slice(1).map((i) => ({ user: i.userId })));
+    featureFlags.set({ vintagePage: { state: 'off' } });
+    const res = await changeFlag('vintagePage', { state: 'beta' }, ADMIN);
+    expect(res.notified).toEqual({ announced: 1, thanked: 0 });
+    createNotifications.mockResolvedValue(undefined);
+    const rel = await changeFlag('vintagePage', { state: 'everyone' }, ADMIN);
+    expect(rel.notified).toEqual({ announced: 0, thanked: 0 });
   });
 
   test('a notice that cannot go out never undoes the saved change', async () => {

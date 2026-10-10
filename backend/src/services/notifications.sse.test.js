@@ -54,9 +54,11 @@ describe('createNotifications SSE nudges', () => {
 
   test('total failure (no insertedDocs on the error) emits nothing and does not throw', async () => {
     Notification.insertMany.mockRejectedValue(new Error('connection lost'));
+    // The rows created are the answer: none here, so a caller counting what
+    // reached the bell counts zero (release audit 2026-10-10).
     await expect(createNotifications([
       { userId: 'u1', type: 'drink_window', title: 't', message: 'm' },
-    ])).resolves.toBeUndefined();
+    ])).resolves.toEqual([]);
     expect(eventBus.emit).not.toHaveBeenCalled();
   });
 });
@@ -83,5 +85,21 @@ describe('createNotifications and the notifications version', () => {
     expect(getNotificationsVersion('v-u1')).not.toBe(before[0]);
     expect(getNotificationsVersion('v-u2')).not.toBe(before[1]);
     expect(getNotificationsVersion('v-u3')).toBe(before[2]);
+  });
+});
+
+// Early access notices stay in the app (release audit 2026-10-10): the
+// permissive "any push toggle on" fallback for an unknown category must not
+// web-push a notice no member opted into push for.
+describe('pushAllowedFor', () => {
+  const { pushAllowedFor } = require('./notifications');
+  test('an in-app-only category is never pushed, whatever the member\'s push toggles', () => {
+    const prefs = { drinkWindow: { push: true }, communityReply: { push: true } };
+    expect(pushAllowedFor(prefs, 'earlyAccess')).toBe(false);
+    // The known categories and the legacy fallback are as before.
+    expect(pushAllowedFor(prefs, 'drinkWindow')).toBe(true);
+    expect(pushAllowedFor({ drinkWindow: { push: false } }, 'drinkWindow')).toBe(false);
+    expect(pushAllowedFor(prefs, undefined)).toBe(true);
+    expect(pushAllowedFor(null, 'drinkWindow')).toBe(false);
   });
 });
