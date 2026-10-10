@@ -119,18 +119,39 @@ describe('POST /api/bottles/bulk', () => {
     const { status, body } = await postJson(app(), '/api/bottles/bulk', {
       action: 'update',
       bottleIds: [B(1), B(2), B(3), B(4)],
-      fields: { purchaseDate: '2026-09-01', price: 120, currency: 'SEK', notes: 'must not pass', vintage: '1999' },
+      fields: { purchaseDate: '2026-09-01', price: 120, currency: 'SEK', vintage: '1999', rating: 5 },
     });
 
     expect(status).toBe(200);
     expect(body).toEqual({ done: 2, doneIds: [B(1), B(2)], skipped: [{ id: B(3), reason: 'not_found' }, { id: B(4), reason: 'not_found' }] });
     expect(updateBottleFields).toHaveBeenCalledTimes(2);
-    // Only the bulk whitelist reaches the shared update — notes/vintage are per bottle.
+    // Only the bulk whitelist reaches the shared update — vintage and rating are per bottle.
     expect(updateBottleFields).toHaveBeenNthCalledWith(1,
       expect.objectContaining({ _id: B(1) }), { purchaseDate: '2026-09-01', price: 120, currency: 'SEK' }, expect.anything());
     expect(logAudit).toHaveBeenCalledWith(
       expect.anything(), 'bottle.bulk_update', expect.objectContaining({ type: 'cellar', id: OWNED }),
       { requested: 4, done: 2, skipped: 2, fields: ['price', 'currency', 'purchaseDate'] },
+    );
+  });
+
+  test('update: a note sent on purpose reaches every bottle — the vintage page\'s "Edit vintage" writes one note for the vintage', async () => {
+    // Notes stay per bottle by default (the bulk bar never sends one); a
+    // caller that sends a note asks for it on all of them, as the lot rule
+    // in services/bottleLot has it (LOT_FIELDS_ON_REQUEST).
+    Bottle.find.mockResolvedValue([
+      { _id: B(1), cellar: OWNED, status: 'active' },
+      { _id: B(2), cellar: OWNED, status: 'active' },
+    ]);
+    const { status, body } = await postJson(app(), '/api/bottles/bulk', {
+      action: 'update', bottleIds: [B(1), B(2)], fields: { notes: 'Bought as a case of six', drinkFrom: 2028 },
+    });
+    expect(status).toBe(200);
+    expect(body.done).toBe(2);
+    expect(updateBottleFields).toHaveBeenNthCalledWith(2,
+      expect.objectContaining({ _id: B(2) }), { notes: 'Bought as a case of six', drinkFrom: 2028 }, expect.anything());
+    expect(logAudit).toHaveBeenCalledWith(
+      expect.anything(), 'bottle.bulk_update', expect.anything(),
+      expect.objectContaining({ fields: ['drinkFrom', 'notes'] }),
     );
   });
 
@@ -176,7 +197,7 @@ describe('POST /api/bottles/bulk', () => {
     let res = await postJson(app(), '/api/bottles/bulk', { action: 'delete', bottleIds: [B(1)] });
     expect(res.status).toBe(400);
 
-    res = await postJson(app(), '/api/bottles/bulk', { action: 'update', bottleIds: [B(1)], fields: { notes: 'x' } });
+    res = await postJson(app(), '/api/bottles/bulk', { action: 'update', bottleIds: [B(1)], fields: { vintage: '1999' } });
     expect(res.status).toBe(400);
 
     res = await postJson(app(), '/api/bottles/bulk', { action: 'update', bottleIds: [], fields: { price: 1 } });

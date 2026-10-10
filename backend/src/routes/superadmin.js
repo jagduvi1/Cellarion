@@ -17,6 +17,9 @@ const enrichmentJob = require('../services/enrichmentJob');
 const vectorStore = require('../services/vectorStore');
 const aiConfig = require('../config/aiConfig');
 const announcementConfig = require('../config/announcement');
+const featureFlags = require('../config/featureFlags');
+const earlyAccess = require('../services/earlyAccess');
+const { logAudit } = require('../services/audit');
 const aiChat = require('../services/aiChat');
 const aiProvider = require('../services/aiProvider');
 const { summarizeCosts } = require('../services/aiCostLedger');
@@ -791,6 +794,59 @@ router.patch('/announcement', async (req, res) => {
   } catch (error) {
     console.error('[superadmin] announcement error:', error);
     res.status(500).json({ error: 'Failed to save announcement' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/superadmin/features
+// The feature flags (config/featureFlags): each flagged feature's state
+// (off / beta / everyone), dates, linked forum thread and how much beta
+// feedback came in, plus how many members try new features early.
+// ---------------------------------------------------------------------------
+router.get('/features', async (req, res) => {
+  try {
+    res.json(await earlyAccess.overview());
+  } catch (error) {
+    console.error('[superadmin] features error:', error);
+    res.status(500).json({ error: 'Failed to load feature flags' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /api/superadmin/features/:key  { state?, forumPath? }
+// Moves a flag between off / beta / everyone without a deploy, or links its
+// forum thread. Entering beta announces the feature to the early-access
+// members, going out to everyone thanks whoever sent feedback (each once —
+// services/earlyAccess). Unlike the other site settings this one is
+// audit-logged: it decides which screens members see.
+// ---------------------------------------------------------------------------
+router.patch('/features/:key', async (req, res) => {
+  const key = featureFlags.FEATURE_KEYS.find((k) => k === req.params.key);
+  if (!key) return res.status(404).json({ error: 'Unknown feature' });
+  const { state, forumPath } = req.body || {};
+  if (state === undefined && forumPath === undefined) {
+    return res.status(400).json({ error: 'Send state and/or forumPath' });
+  }
+  const patch = {};
+  if (state !== undefined) patch.state = state;
+  if (forumPath !== undefined) {
+    const parsed = featureFlags.parseForumPath(forumPath);
+    if (!parsed.ok) return res.status(400).json({ error: parsed.error });
+    patch.forumPath = parsed.value;
+  }
+  try {
+    const result = await earlyAccess.changeFlag(key, patch, req.user.id);
+    if (result.error) return res.status(result.error.status).json({ error: result.error.message });
+    const { before, after, notified } = result;
+    logAudit(req, 'superadmin.feature_flag', { type: 'feature', id: key }, {
+      from: { state: before.state, forumPath: before.forumPath },
+      to: { state: after.state, forumPath: after.forumPath },
+      notified,
+    });
+    res.json({ feature: after, notified });
+  } catch (error) {
+    console.error('[superadmin] feature flag error:', error);
+    res.status(500).json({ error: 'Failed to save the feature flag' });
   }
 });
 

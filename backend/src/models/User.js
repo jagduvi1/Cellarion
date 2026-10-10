@@ -198,6 +198,14 @@ const userSchema = new mongoose.Schema({
     // frontend ignores a value it doesn't offer.
     cellarSort: {
       type: String
+    },
+    // "Try new features early" (Settings → Early access): this user sees the
+    // features a super admin has put in beta (config/featureFlags) before
+    // everyone does. One switch for all of them. It only changes which
+    // screens the app shows; nothing is stored differently for a beta user.
+    earlyAccess: {
+      type: Boolean,
+      default: false
     }
   },
   // One entry per signed-in device/browser (per-device sessions, 2026-09-04):

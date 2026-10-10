@@ -2,8 +2,6 @@ import { useState, useEffect, Suspense } from 'react';
 import { lazy } from '../utils/lazyWithReload';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import ReactMarkdown from 'react-markdown';
-import rehypeSanitize from 'rehype-sanitize';
 import { useAuth } from '../contexts/AuthContext';
 import { getBottle, consumeBottle, setBottleDefaultImage, undoBottle, openBottle, restoreBottle, markBottleArrived } from '../api/bottles';
 import { isOnOrder, formatArrivalMonth, isArrivalLate } from '../utils/onOrder';
@@ -25,6 +23,7 @@ import BottleJourney from '../components/BottleJourney';
 import OwnerInquiryCard from '../components/bottle/OwnerInquiryCard';
 import PersonalDataCard from '../components/bottle/PersonalDataCard';
 import LotHistory from '../components/bottle/LotHistory';
+import TastingProfileCard from '../components/bottle/TastingProfileCard';
 import DialogBox from '../components/DialogBox';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
 import { swatchType, wineTypeLabel } from '../utils/wineColour';
@@ -47,6 +46,11 @@ function BottleDetail() {
   const location = useLocation();
   const fromHistory = location.state?.fromHistory === true;
   const fromChat = location.state?.fromChat === true;
+  // Opened from a row on the vintage page (early access): back goes there.
+  // Only an in-app cellar path is taken from the router state.
+  const fromVintage = typeof location.state?.fromVintage === 'string' && location.state.fromVintage.startsWith('/cellars/')
+    ? location.state.fromVintage
+    : null;
   const [bottle, setBottle] = useState(null);
   const [userRole, setUserRole] = useState(null);
   const [cellarColor, setCellarColor] = useState(null);
@@ -343,12 +347,16 @@ function BottleDetail() {
     ? '/cellar-chat'
     : onOrderNow
       ? `/cellars/${cellarId}/on-order`
-      : (isConsumed || fromHistory ? `/cellars/${cellarId}/history` : `/cellars/${cellarId}`);
+      : fromVintage
+        ? fromVintage
+        : (isConsumed || fromHistory ? `/cellars/${cellarId}/history` : `/cellars/${cellarId}`);
   const backLabel = fromChat
     ? t('bottleDetail.backToChat', 'Back to chat')
     : onOrderNow
       ? t('onOrder.backToOnOrder')
-      : (isConsumed || fromHistory ? t('bottleDetail.backToHistory', 'Back to history') : t('bottleDetail.backToCellar'));
+      : fromVintage
+        ? t('bottleDetail.backToVintage', 'Back to the vintage')
+        : (isConsumed || fromHistory ? t('bottleDetail.backToHistory', 'Back to history') : t('bottleDetail.backToCellar'));
 
   // "Move back to cellar" (undo an accidental removal) — only for a bottle
   // consumed within the last 2 days. Matches the server-side restore window;
@@ -722,95 +730,13 @@ function BottleDetail() {
         vintageHref={wine?._id ? `/cellars/${cellarId}/vintages/${wine._id}/${encodeURIComponent(bottle?.vintage || 'NV')}` : null}
       />
 
-      {/* ── AI tasting profile (generated, vintage-neutral) ── */}
-      {wine?.aiProfile?.description && (
-        <div className="bd-ai-profile card">
-          <div className="bd-ai-profile__header">
-            <h2>{t('bottleDetail.tastingProfile', 'Tasting profile')}</h2>
-            {/* Provenance is load-bearing (#985): never present AI-generated
-                profile text as established fact. */}
-            {wine.aiProfile.source === 'curator' ? (
-              <span className="bd-ai-tag bd-ai-tag--curator" title={t('bottleDetail.provenanceCuratorTitle', 'A sommelier has verified this profile')}>
-                {t('bottleDetail.provenanceCurator', 'Curator-verified')}
-              </span>
-            ) : (
-              <span className="bd-ai-tag" title={t('bottleDetail.provenanceAiTitle', 'Written by AI from the wine’s identity — a starting point, not a fact')}>
-                {t('bottleDetail.provenanceAi', 'AI-generated')}
-              </span>
-            )}
-          </div>
-
-          {(() => {
-            const ap = wine.aiProfile;
-            const structure = [
-              ap.body && `${ap.body}-bodied`,
-              ap.tannin && `${ap.tannin} tannin`,
-              ap.acidity && `${ap.acidity} acidity`,
-              ap.sweetness,
-            ].filter(Boolean);
-            const flavours = ap.flavors || [];
-            return (
-              <>
-                {structure.length > 0 && (
-                  <div className="bd-ai-group">
-                    <span className="bd-ai-group-label">{t('bottleDetail.structure', 'Structure')}</span>
-                    <div className="bd-ai-chips">
-                      {structure.map((c, i) => <span key={`s${i}`} className="bd-ai-chip bd-ai-chip--style">{c}</span>)}
-                    </div>
-                  </div>
-                )}
-                {flavours.length > 0 && (
-                  <div className="bd-ai-group">
-                    <span className="bd-ai-group-label">{t('bottleDetail.flavours', 'Flavours')}</span>
-                    <div className="bd-ai-chips">
-                      {flavours.map((f, i) => <span key={`f${i}`} className="bd-ai-chip">{f}</span>)}
-                    </div>
-                  </div>
-                )}
-              </>
-            );
-          })()}
-
-          <div className="bd-ai-prose">
-            <ReactMarkdown rehypePlugins={[rehypeSanitize]} disallowedElements={['img']} unwrapDisallowed>{wine.aiProfile.description}</ReactMarkdown>
-          </div>
-
-          {wine.aiProfile.foodPairings?.length > 0 && (
-            <div className="bd-ai-pairings">
-              <span className="bd-ai-pairings__label">{t('bottleDetail.pairsWith', 'Pairs with')}:</span>
-              {wine.aiProfile.foodPairings.join(' · ')}
-            </div>
-          )}
-
-          <div className="bd-report-wine">
-            <button
-              type="button"
-              className="btn-report-wine"
-              onClick={() => { setReportDefaultReason('wrong_tasting_profile'); setReportWineOpen(true); }}
-            >
-              {t('bottleDetail.reportTastingProfile', 'Report tasting profile')}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* No published profile — an honest "not yet assessed" instead of a
-          silent blank (somm ticket 6a83e765 rollout note). Held-by-the-gate
-          and never-generated are deliberately indistinguishable here, so the
-          card can never leak WHY a profile is missing. */}
-      {wine && !wine.aiProfile?.description && (
-        <div className="bd-ai-profile card">
-          <div className="bd-ai-profile__header">
-            <h2>{t('bottleDetail.tastingProfile', 'Tasting profile')}</h2>
-            <span className="bd-ai-tag" title={t('bottleDetail.profilePendingTitle', 'This wine has not been through assessment yet — profiles are generated and reviewed over time')}>
-              {t('bottleDetail.profilePending', 'Not yet assessed')}
-            </span>
-          </div>
-          <p style={{ color: 'var(--color-text-muted)', margin: 0, fontSize: '0.9rem' }}>
-            {t('bottleDetail.profilePendingBody', 'This wine hasn’t been assessed yet. A tasting profile appears here once it has been.')}
-          </p>
-        </div>
-      )}
+      {/* ── Tasting profile (generated or curator-verified, vintage-neutral;
+          "not yet assessed" when there is none) — shared with the vintage
+          page ── */}
+      <TastingProfileCard
+        wine={wine}
+        onReport={() => { setReportDefaultReason('wrong_tasting_profile'); setReportWineOpen(true); }}
+      />
 
       {/* ── Reviews section ── */}
       {wine && (

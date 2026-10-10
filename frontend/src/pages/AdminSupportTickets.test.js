@@ -91,3 +91,29 @@ test('respects a reduced-motion preference', async () => {
   await openFirstTicket();
   expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'auto' });
 });
+
+// Beta feedback (sent from a feature's own "Give feedback" button) names the
+// feature on its badge, and the queue filters by category — opened from
+// SuperAdmin → Feature flags with ?category=beta&feature=<key>, every status.
+test('a beta ticket\'s badge names its feature; the category filter reaches the request', async () => {
+  getTickets.mockResolvedValue(jsonRes({ tickets: [{ ...TICKET, _id: 't2', category: 'beta', feature: 'vintagePage', featureTitle: 'One page per wine and vintage' }], total: 1 }));
+  render(<AdminSupportTickets />);
+  expect(await screen.findByText('Beta · One page per wine and vintage')).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'beta' } });
+  await waitFor(() => expect(getTickets.mock.calls.at(-1)[1]).toMatch(/category=beta/));
+});
+
+test('arriving with ?category=beta&feature=… lists that feature\'s feedback in every status', async () => {
+  window.history.pushState({}, '', '/admin/support?category=beta&feature=vintagePage');
+  try {
+    render(<AdminSupportTickets />);
+    await waitFor(() => expect(getTickets).toHaveBeenCalled());
+    const params = new URLSearchParams(getTickets.mock.calls[0][1]);
+    expect(params.get('category')).toBe('beta');
+    expect(params.get('feature')).toBe('vintagePage');
+    expect(params.get('status')).toBeNull();
+    expect(await screen.findByText(/Feature: vintagePage/)).toBeInTheDocument();
+  } finally {
+    window.history.pushState({}, '', '/');
+  }
+});

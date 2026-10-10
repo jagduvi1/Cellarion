@@ -135,7 +135,9 @@ const MCP_PERSONAL_SCOPES = ['read', 'consume', 'write'];
 
 // Support-ticket categories — single source for the model enum, the
 // accountOps validation, and the MCP tool's input schema (grand-audit M9).
-const SUPPORT_CATEGORIES = ['bug', 'help', 'feature', 'other'];
+// 'beta' is feedback on a feature in early access, sent from the feature's
+// own "Give feedback" button with the feature's key (config/featureFlags).
+const SUPPORT_CATEGORIES = ['bug', 'help', 'feature', 'other', 'beta'];
 
 // The orders a cellar's bottle list can open in: the values of the cellar
 // page's sort select (the frontend's utils/cellarSort.js keeps the same list).

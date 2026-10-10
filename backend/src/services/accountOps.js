@@ -18,6 +18,7 @@ const WineRequest = require('../models/WineRequest');
 const { originFrom } = require('../utils/contributionOrigin');
 const { stripHtml } = require('../utils/sanitize');
 const { SUPPORTED_CURRENCIES } = require('../config/currencies');
+const featureFlags = require('../config/featureFlags');
 
 // Allow-lists — the single source of truth the REST routes previously kept
 // inline. Kept here so the MCP tools validate byte-for-byte identically.
@@ -51,7 +52,7 @@ const err = (status, message) => ({ status, message });
  * the user. Returns { update } or { error }.
  */
 async function buildPreferencesUpdate(userId, body = {}) {
-  const { currency, language, ratingScale, rackNavigation, restockScope, cellarSort, defaultCellarId, notifications } = body;
+  const { currency, language, ratingScale, rackNavigation, restockScope, cellarSort, defaultCellarId, notifications, earlyAccess } = body;
   const update = {};
 
   // Notifications: per-category × per-channel booleans, explicitly allow-listed
@@ -133,6 +134,15 @@ async function buildPreferencesUpdate(userId, body = {}) {
     update['preferences.cellarSort'] = cellarSort;
   }
 
+  // "Try new features early": a real boolean, not coerced — a stray string
+  // must not switch a user into the beta screens.
+  if (earlyAccess !== undefined) {
+    if (typeof earlyAccess !== 'boolean') {
+      return { error: err(400, 'earlyAccess must be true or false') };
+    }
+    update['preferences.earlyAccess'] = earlyAccess;
+  }
+
   if (defaultCellarId !== undefined) {
     if (defaultCellarId === null) {
       update['preferences.defaultCellarId'] = null;
@@ -212,11 +222,28 @@ async function updateProfile(userId, body) {
 
 // ── Support ticket ───────────────────────────────────────────────────────────
 
-/** Validate + create a support ticket. Returns { ticket } or { error }. */
-async function createSupportTicket(userId, { category, subject, message } = {}) {
+/**
+ * Validate + create a support ticket. Returns { ticket } or { error }.
+ *
+ * Category 'beta' is feedback on a feature in early access (config/
+ * featureFlags), sent from the feature's own "Give feedback" button: it names
+ * the feature by key, and when it brings no subject the subject is the
+ * feature's English title, so the admin queue reads the same whatever
+ * language the feedback came in.
+ */
+async function createSupportTicket(userId, { category, subject, message, feature } = {}) {
   if (!SUPPORT_CATEGORIES.includes(category)) {
     return { error: err(400, 'Invalid category') };
   }
+  let featureKey = null;
+  if (feature !== undefined && feature !== null && feature !== '') {
+    if (category !== 'beta') return { error: err(400, 'feature is only for beta feedback') };
+    const known = featureFlags.get(String(feature));
+    if (!known) return { error: err(400, 'Unknown feature') };
+    featureKey = known.key;
+    if (!subject || !String(subject).trim()) subject = `Beta feedback: ${known.title}`;
+  }
+  if (category === 'beta' && (!subject || !String(subject).trim())) subject = 'Beta feedback';
   if (!subject || !String(subject).trim()) return { error: err(400, 'Subject is required') };
   if (!message || !String(message).trim()) return { error: err(400, 'Message is required') };
   if (String(subject).trim().length > 200) {
@@ -230,6 +257,7 @@ async function createSupportTicket(userId, { category, subject, message } = {}) 
     category,
     subject: stripHtml(subject),
     message: stripHtml(message),
+    ...(featureKey ? { feature: featureKey } : {}),
   });
   return { ticket };
 }

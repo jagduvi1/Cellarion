@@ -588,6 +588,10 @@
       "danger": {
         "title": "Delete account",
         "summary": "Permanently delete your account and all your data"
+      },
+      "earlyAccess": {
+        "title": "Early access",
+        "summary": "Try new features before everyone else, and tell us what you think"
       }
     }
   },
@@ -1202,7 +1206,8 @@
       "submit_other": "Add {{count}} bottles",
       "success_one": "{{count}} more bottle added to this cellar. It's unplaced — place it from the cellar page whenever you like.",
       "success_other": "{{count}} more bottles added to this cellar. They're unplaced — place them from the cellar page whenever you like."
-    }
+    },
+    "backToVintage": "Back to the vintage"
   },
   "lotHistory": {
     "title": "This wine in your cellar",
@@ -4751,7 +4756,8 @@
     "reserved": "Reserved",
     "reservedUntil": "Reserved · {{year}}",
     "groupInfo": "Info",
-    "groupDrinkOne": "Drink one"
+    "groupDrinkOne": "Drink one",
+    "drinkOneAria": "Drink a bottle of this"
   },
   "drinkOne": {
     "title": "Which bottle?",
@@ -4978,7 +4984,8 @@
       "bug": "Bug Report",
       "help": "Help / Question",
       "feature": "Feature Request",
-      "other": "Other"
+      "other": "Other",
+      "beta": "Beta feedback"
     },
     "status": {
       "open": "Open",
@@ -5386,5 +5393,66 @@
     "done": "Wine changed. The bottle kept all its details.",
     "doneMany_one": "Wine changed for {{count}} bottle. They kept all their details.",
     "doneMany_other": "Wine changed for {{count}} bottles. They kept all their details."
+  },
+  "earlyAccess": {
+    "badge": "Beta",
+    "badgeNote": "You are trying this early.",
+    "giveFeedback": "Give feedback",
+    "discuss": "Discuss with other testers",
+    "title": "Try new features early",
+    "intro": "Larger changes reach the members who turn this on first, before everyone gets them, so they can be tried and improved with your feedback. Your data is stored the same way either way: turn it off at any time and nothing is lost.",
+    "toggle": "Show me new features before everyone else",
+    "saveFailed": "Could not save. Please try again.",
+    "inBetaTitle": "In beta now",
+    "noneInBeta": "Nothing is in beta right now.",
+    "since": "In beta since {{date}}",
+    "releasedTitle": "Recently released",
+    "releasedOn": "For everyone since {{date}}",
+    "feedbackTitle": "Feedback: {{name}}",
+    "feedbackLabel": "What works, what does not, what you miss",
+    "feedbackHint": "It goes to the Cellarion team as a support ticket about this feature.",
+    "feedbackSend": "Send feedback",
+    "feedbackSending": "Sending…",
+    "feedbackFailed": "Could not send your feedback. Please try again.",
+    "feedbackSentTitle": "Thank you",
+    "feedbackSent": "Your feedback is with the Cellarion team. The answer comes like a support reply: in the app under Support, and by email unless you turned those off.",
+    "openSupport": "Open Support",
+    "features": {
+      "vintagePage": {
+        "name": "One page per wine and vintage",
+        "description": "Tapping a wine in your cellar list opens one page for that wine and vintage, whether you have one bottle or twenty: the wine, then the vintage, then each bottle with its slot, size, price and shop. Drink, Edit vintage and Add sit in a bar that stays in reach.",
+        "where": "In your cellar list: tap any wine."
+      }
+    }
+  },
+  "cellarVintageBeta": {
+    "betaNote": "A new layout for this page, in early access.",
+    "wineTitle": "The wine",
+    "vintageTitle": "This vintage: {{vintage}}",
+    "drink": "Drink a bottle",
+    "drinkShort": "Drink",
+    "editVintage": "Edit vintage",
+    "editVintageShort": "Edit",
+    "add": "Add bottle",
+    "addShort": "Add",
+    "addFailed": "Could not start adding a bottle. Please try again.",
+    "editWine": "Suggest a fix to the wine",
+    "openRegistry": "Open in the shared registry",
+    "noBottlesForWindow": "Kept on the bottles; none left in this cellar.",
+    "windowDiffers": "Differs between the bottles. Edit vintage sets one for all of them.",
+    "notSet": "Not set yet.",
+    "notesDiffer": "Each bottle has its own note: see the bottles below.",
+    "noNotes": "No notes yet.",
+    "savedNote": "Saved for the vintage."
+  },
+  "editVintage": {
+    "title": "Edit vintage",
+    "intro_one": "Saved on your bottle of this vintage in this cellar.",
+    "intro_other": "Saved on all {{count}} bottles of this vintage in this cellar, the same on each.",
+    "differs": "Differs between the bottles: left as it is unless you fill it in",
+    "differsShort": "Differs",
+    "ownDataHint": "Critic scores, lot number and your other own data: under \"Your wine data\" on this page.",
+    "submit": "Save for the vintage",
+    "doneTitle": "Vintage saved"
   }
 }

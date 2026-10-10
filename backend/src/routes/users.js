@@ -189,8 +189,13 @@ router.patch('/preferences', requireAuth, async (req, res) => {
   try {
     // Validation + persistence live in services/accountOps so the MCP
     // update_preferences tool applies byte-for-byte the same rules.
-    const { user, error } = await updatePreferences(req.user.id, req.body);
+    const { user, error, changed } = await updatePreferences(req.user.id, req.body);
     if (error) return res.status(error.status).json({ error: error.message });
+    // Early access decides which screens a user sees, so switching it is
+    // logged (the other preferences are display settings and are not).
+    if ((changed || []).includes('preferences.earlyAccess')) {
+      logAudit(req, 'user.early_access', { type: 'user', id: user._id }, { on: user.preferences.earlyAccess === true });
+    }
     res.json({ user: user.toJSON() });
   } catch (error) {
     console.error('Update preferences error:', error);

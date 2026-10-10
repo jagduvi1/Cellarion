@@ -359,6 +359,18 @@ export const superadminSaveAnnouncement = (apiFetch, data) =>
     body: JSON.stringify(data),
   });
 
+// ── Feature flags / early access (SuperAdmin) ─────────────────────────────────
+export const superadminGetFeatures = (apiFetch) =>
+  apiFetch('/api/superadmin/features');
+
+// `data` is { state } and/or { forumPath }.
+export const superadminSaveFeature = (apiFetch, key, data) =>
+  apiFetch(`/api/superadmin/features/${encodeURIComponent(key)}`, {
+    method: 'PATCH',
+    headers: J,
+    body: JSON.stringify(data),
+  });
+
 // ── AI spend (SuperAdmin → AI) ────────────────────────────────────────────────
 // Estimated AI spend per feature over the last `days` UTC days.
 export const superadminAiCostsPath = (days = 30) => `/api/superadmin/ai/costs?days=${days}`;

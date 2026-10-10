@@ -18,6 +18,7 @@ import { ratingRangeLabel, toMaturityArray, MATURITY_I18N_KEY } from '../utils/f
 import { CELLAR_SORTS, DEFAULT_CELLAR_SORT, preferredCellarSort } from '../utils/cellarSort';
 import { formatArrivalMonth, isArrivalLate } from '../utils/onOrder';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
+import { useFeature } from '../utils/featureFlags';
 import './CellarDetail.css';
 
 // Stable empty rack map for the cross-cellar view (rack placement is per-cellar,
@@ -904,6 +905,16 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
   // user opted out of it. The list refreshes through onBulkDone either way.
   const [drinkGroup, setDrinkGroup] = useState(null);
   const [journalBottle, setJournalBottle] = useState(null);
+  // Early access, one page per wine and vintage: a tap on ANY entry — one
+  // bottle or a stack — opens the vintage page, so the last bottle of a
+  // vintage looks and behaves like the ones before it, and "Drink one" sits
+  // on every entry. A stack still expands from the ⊕ in select mode. An
+  // entry still waiting on a wine request has no registry wine and keeps the
+  // classic behaviour. Without early access nothing changes here.
+  const vintageFirst = useFeature('vintagePage');
+  const vintageHref = (rep, inCellar) => (rep?.wineDefinition?._id
+    ? `/cellars/${inCellar}/vintages/${rep.wineDefinition._id}/${encodeURIComponent(rep.vintage || 'NV')}`
+    : null);
   const handleDrunk = (bottle, reason) => {
     setDrinkGroup(null);
     if (reason === 'drank' && !journalPromptOptedOut()) setJournalBottle(bottle);
@@ -1109,9 +1120,17 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
             const rep = item.bottles[0];
             // Cross-cellar groups live in one cellar: link + badge with it.
             const groupCellarId = multi ? (rep.cellar || cellarId) : cellarId;
+            // Early access: the vintage page every entry opens (null when the
+            // entry has no registry wine yet, or without early access).
+            const pageHref = vintageFirst ? vintageHref(rep, groupCellarId) : null;
             if (item.count === 1) {
               return (
-                <BottleCard key={rep._id} bottle={rep} rackMap={rackMap} cellarId={groupCellarId} showCellarBadge={multi} viewMode={viewMode} compact={compact} rackKnown={rackKnown} showNotes={notesOn} selectable={selectableNow} selected={isSelected(idsOf(item))} onToggleSelect={() => toggleIds(idsOf(item))} onLongPress={canBulkMove ? () => enterSelectWith(idsOf(item)) : undefined} />
+                <BottleCard
+                  key={rep._id} bottle={rep} rackMap={rackMap} cellarId={groupCellarId} showCellarBadge={multi} viewMode={viewMode} compact={compact} rackKnown={rackKnown} showNotes={notesOn} selectable={selectableNow} selected={isSelected(idsOf(item))} onToggleSelect={() => toggleIds(idsOf(item))} onLongPress={canBulkMove ? () => enterSelectWith(idsOf(item)) : undefined}
+                  onClick={pageHref ? () => navigate(pageHref) : undefined}
+                  onDrinkOne={vintageFirst && canConsume ? () => setDrinkGroup(item) : undefined}
+                  actionsInline={vintageFirst}
+                />
               );
             }
             if (!expandedGroups.has(item.key)) {
@@ -1127,8 +1146,10 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
                   showCellarBadge={multi}
                   viewMode={viewMode}
                   groupCount={item.count}
-                  onClick={() => toggleGroup(item.key)}
-                  onInfo={groupWineId ? () => navigate(`/cellars/${groupCellarId}/vintages/${groupWineId}/${encodeURIComponent(rep.vintage || 'NV')}`) : undefined}
+                  onClick={pageHref ? () => navigate(pageHref) : () => toggleGroup(item.key)}
+                  onExpand={pageHref ? () => toggleGroup(item.key) : undefined}
+                  actionsInline={vintageFirst}
+                  onInfo={!vintageFirst && groupWineId ? () => navigate(`/cellars/${groupCellarId}/vintages/${groupWineId}/${encodeURIComponent(rep.vintage || 'NV')}`) : undefined}
                   onDrinkOne={canConsume ? () => setDrinkGroup(item) : undefined}
                   selectable={selectableNow}
                   selected={isSelected(idsOf(item))}

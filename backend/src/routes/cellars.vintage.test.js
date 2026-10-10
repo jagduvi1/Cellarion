@@ -32,6 +32,7 @@ jest.mock('../models/Rack', () => ({ find: jest.fn() }));
 jest.mock('../models/CellarLayout', () => ({ findOne: jest.fn() }));
 jest.mock('../models/BottleImage', () => ({ find: jest.fn() }));
 jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn() }));
+jest.mock('../models/WineDefinition', () => ({ findById: jest.fn() }));
 jest.mock('../models/User', () => ({}));
 jest.mock('../models/AuditLog', () => ({}));
 jest.mock('../models/PendingShare', () => ({}));
@@ -50,6 +51,7 @@ const Rack = require('../models/Rack');
 const CellarLayout = require('../models/CellarLayout');
 const BottleImage = require('../models/BottleImage');
 const WineVintageProfile = require('../models/WineVintageProfile');
+const WineDefinition = require('../models/WineDefinition');
 const cellarsRouter = require('./cellars');
 
 const USER_ID = '64b000000000000000000001';
@@ -83,6 +85,7 @@ function request(url, userId = USER_ID) {
 
 const wineDoc = { _id: WINE, name: 'Château Margaux', producer: 'Château Margaux', image: '/api/uploads/processed/registry.webp' };
 let ROWS;
+let profileSelect;
 const row = (n, over = {}) => ({
   _id: id(n), cellar: CELLAR_ID, user: USER_ID, wineDefinition: WINE, vintage: '2015', status: 'active',
   notes: 'Bought en primeur', drinkFrom: 2025, drinkTo: 2045, addedToCellarAt: new Date(Date.UTC(2026, 0, n)), ...over,
@@ -136,6 +139,8 @@ beforeEach(() => {
   const imageChain = { sort: () => imageChain, lean: async () => [] };
   BottleImage.find.mockReturnValue(imageChain);
   WineVintageProfile.find.mockReturnValue({ lean: async () => [] });
+  profileSelect = jest.fn(() => ({ lean: async () => ({ _id: WINE, aiProfile: { description: 'Cassis and cedar.', body: 'full', flavors: ['cassis'], source: 'curator' } }) }));
+  WineDefinition.findById.mockReturnValue({ select: profileSelect });
 });
 
 const url = (vintage = '2015', wine = WINE, cellar = CELLAR_ID) => `/api/cellars/${cellar}/vintages/${wine}/${vintage}`;
@@ -194,6 +199,24 @@ describe('GET /api/cellars/:id/vintages/:wineId/:vintage', () => {
     expect((await request(url('1999'))).status).toBe(404);
     expect((await request(url(), STRANGER)).status).toBe(404);
     expect((await request(url('2015', 'not-an-id'))).status).toBe(400);
+  });
+
+  test('the wine carries its tasting profile — the display fields only — and a failed lookup leaves it out, never a 500', async () => {
+    let { status, body } = await request(url());
+    expect(status).toBe(200);
+    expect(body.wine.aiProfile).toEqual({ description: 'Cassis and cedar.', body: 'full', flavors: ['cassis'], source: 'curator' });
+    // Only the prose and descriptors the page shows are read, never the
+    // registry's bookkeeping (confidence, held reason, producer doubts).
+    expect(WineDefinition.findById).toHaveBeenCalledWith(WINE);
+    const fields = profileSelect.mock.calls[0][0].split(' ');
+    expect(fields).toEqual(expect.arrayContaining(['aiProfile.description', 'aiProfile.flavors', 'aiProfile.source']));
+    expect(fields.some((f) => /confidence|held|producer/i.test(f))).toBe(false);
+
+    WineDefinition.findById.mockReturnValue({ select: () => ({ lean: async () => { throw new Error('db down'); } }) });
+    ({ status, body } = await request(url()));
+    expect(status).toBe(200);
+    expect(body.wine.name).toBe('Château Margaux');
+    expect(body.wine.aiProfile).toBeUndefined();
   });
 
   test('a rack lookup failure degrades to "no slot shown", never a 500', async () => {

@@ -16,6 +16,7 @@ const User = require('../../models/User');
 const { registerTool } = require('../registry');
 const { ok, fail, pageParams } = require('../toolUtil');
 const { logAudit } = require('../../services/audit');
+const featureFlags = require('../../config/featureFlags');
 // The human-queue writes (ticket, reply, wine request) cannot be unsent, so a
 // retry after an ambiguous transport failure must be safe: idempotency_key
 // claims/replays through the ledger (support ticket 2026-09-12).
@@ -189,12 +190,19 @@ registerTool({
   },
 });
 
+// The early-access features the user can send beta feedback on — named in
+// the tool description so the assistant can pick the key from what the user
+// says ("the new vintage page").
+const BETA_FEATURES_NOTE = featureFlags.FEATURES.length
+  ? ` category beta is feedback on a feature the user tries in early access (Settings → Early access); pass feature: ${featureFlags.FEATURES.map((f) => `${f.key} = ${f.title}`).join('; ')}.`
+  : '';
+
 registerTool({
   name: 'create_support_ticket',
   title: 'Contact Cellarion support',
   description:
     'Files a support ticket to the Cellarion admins (a bug report, a question, a feature request). category is one ' +
-    `of ${SUPPORT_CATEGORIES.join(' / ')}; subject ≤200 chars, message ≤5000. Use only for issues WITH the app itself — ` +
+    `of ${SUPPORT_CATEGORIES.join(' / ')}; subject ≤200 chars, message ≤5000.${BETA_FEATURES_NOTE} Use only for issues WITH the app itself — ` +
     'not for cellar actions you can do with other tools. Confirm the wording with the user first; this reaches a ' +
     'human and cannot be unsent. Track replies with list_my_tickets (or in the web app under Settings → Support). ' +
     RETRY_NOTE('list_my_tickets'),
@@ -204,6 +212,8 @@ registerTool({
     category: z.enum(SUPPORT_CATEGORIES),
     subject: z.string().min(1).max(200),
     message: z.string().min(1).max(5000),
+    feature: (featureFlags.FEATURE_KEYS.length ? z.enum(featureFlags.FEATURE_KEYS) : z.string().max(64)).optional()
+      .describe('Only with category beta: the early-access feature the feedback is about'),
     idempotency_key: IDEMPOTENCY_KEY,
   },
   handler: async (args, ctx) => {
@@ -212,10 +222,12 @@ registerTool({
 
     const { ticket, error } = await createSupportTicket(ctx.user.id, {
       category: args.category, subject: args.subject, message: args.message,
+      ...(args.feature ? { feature: args.feature } : {}),
     });
     if (error) return fail('invalid_input', error.message);
     logAudit(ctx.req, 'support.ticket.created', { type: 'SupportTicket', id: ticket._id }, {
       via: 'mcp', category: ticket.category,
+      ...(ticket.feature ? { feature: ticket.feature } : {}),
     });
     const envelope = envelopeOf(`Support ticket submitted (${ticket.category})`, {
       ticket_id: ticket._id,

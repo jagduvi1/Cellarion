@@ -130,6 +130,28 @@
 .admin-support-badge.badge--help { background: var(--color-info-bg); color: var(--color-info); }
 .admin-support-badge.badge--feature { background: var(--color-success-bg); color: var(--color-success); }
 .admin-support-badge.badge--other { background: var(--color-warning-bg); color: var(--color-accent); }
+.admin-support-badge.badge--beta { background: var(--color-surface); color: var(--color-info); border: 1px solid var(--color-info-border); }
+
+/* Category filter + the "Feature: x ✕" chip from SuperAdmin → Feature flags */
+.admin-support-category {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 5px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+.admin-support-feature-chip {
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 4px 10px;
+  border: 1px solid var(--color-info-border);
+  border-radius: var(--radius-full);
+  background: var(--color-info-bg);
+  color: var(--color-info);
+  cursor: pointer;
+}
 
 .admin-support-badge.status-open { background: var(--color-info-bg); color: var(--color-info); }
 .admin-support-badge.status-in_progress { background: var(--color-warning-bg); color: var(--color-warning); }

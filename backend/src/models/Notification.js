@@ -79,7 +79,13 @@ const notificationSchema = new mongoose.Schema({
       // in the registry and attached the bottles to it instead.
       'wine_draft_expiring',
       'wine_draft_published',
-      'wine_draft_merged'
+      'wine_draft_merged',
+      // Early access (config/featureFlags, services/earlyAccess): a feature
+      // went into beta (to every user who tries new features early), and a
+      // beta feature went out to everyone (a thank-you to whoever sent
+      // feedback on it). Once per feature each.
+      'early_access_new',
+      'early_access_released'
     ],
     required: true
   },

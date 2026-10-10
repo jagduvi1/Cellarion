@@ -73,3 +73,15 @@ test('a refused consume returns to the picker with the server\'s reason; nothing
   expect(screen.getByText('drinkOne.title')).toBeInTheDocument();
   expect(onDone).not.toHaveBeenCalled();
 });
+
+test('a refused consume of a single bottle shows the reason too, with that bottle to try again', async () => {
+  // A single entry in the cellar list carries "Drink one" with early access;
+  // the consume form has no room for an error, so the picker shows it.
+  api = vi.fn(async () => ({ ok: false, status: 409, json: async () => ({ error: 'Already consumed' }) }));
+  const onDone = vi.fn();
+  render(<DrinkOneModal bottles={[BOTTLES[0]]} rackMap={RACKS} wineName="Margaux 2015" onClose={vi.fn()} onDone={onDone} />);
+  fireEvent.click(screen.getByText('common.confirm'));
+  expect(await screen.findByText('Already consumed')).toBeInTheDocument();
+  expect(screen.getByText('drinkOne.slot:{"rack":"Left wall","position":3}')).toBeInTheDocument();
+  expect(onDone).not.toHaveBeenCalled();
+});

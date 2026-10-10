@@ -8,7 +8,9 @@ const CATEGORY_LABELS = {
   help: 'Help',
   feature: 'Feature',
   other: 'Other',
+  beta: 'Beta',
 };
+const CATEGORY_OPTIONS = ['bug', 'help', 'feature', 'other', 'beta'];
 
 const STATUS_OPTIONS = ['open', 'in_progress', 'closed'];
 const STATUS_LABELS = { open: 'Open', in_progress: 'In Progress', closed: 'Closed' };
@@ -18,13 +20,26 @@ const CATEGORY_COLOR = {
   help: 'badge--help',
   feature: 'badge--feature',
   other: 'badge--other',
+  beta: 'badge--beta',
 };
+
+// Beta feedback names the early-access feature it is about (the server adds
+// its English title); the badge says which.
+const categoryLabel = (ticket) => (ticket.category === 'beta' && (ticket.featureTitle || ticket.feature)
+  ? `Beta · ${ticket.featureTitle || ticket.feature}`
+  : CATEGORY_LABELS[ticket.category]);
 
 function AdminSupportTickets() {
   const { apiFetch } = useAuth();
+  // ?category=beta&feature=<key> (the link from SuperAdmin → Feature flags)
+  // opens the queue on that feature's feedback, every status. Read once, on
+  // arrival; the filters below take over from there.
+  const [searchParams] = useState(() => new URLSearchParams(window.location.search));
   const [tickets, setTickets] = useState([]);
   const [total, setTotal] = useState(0);
-  const [statusFilter, setStatusFilter] = useState('open');
+  const [categoryFilter, setCategoryFilter] = useState(() => (CATEGORY_OPTIONS.includes(searchParams.get('category')) ? searchParams.get('category') : ''));
+  const [featureFilter, setFeatureFilter] = useState(() => searchParams.get('feature') || '');
+  const [statusFilter, setStatusFilter] = useState(() => (searchParams.get('category') ? '' : 'open'));
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
@@ -53,7 +68,7 @@ function AdminSupportTickets() {
 
   useEffect(() => {
     fetchTickets();
-  }, [statusFilter, page, apiFetch]);
+  }, [statusFilter, categoryFilter, featureFilter, page, apiFetch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchTickets = async () => {
     setLoading(true);
@@ -61,6 +76,8 @@ function AdminSupportTickets() {
     try {
       const params = new URLSearchParams({ page, limit: LIMIT });
       if (statusFilter) params.set('status', statusFilter);
+      if (categoryFilter) params.set('category', categoryFilter);
+      if (categoryFilter === 'beta' && featureFilter) params.set('feature', featureFilter);
       const res = await adminGetSupportTickets(apiFetch, params.toString());
       const data = await res.json();
       if (!res.ok) return setError(data.error || 'Failed to load tickets');
@@ -135,6 +152,20 @@ function AdminSupportTickets() {
             </button>
           ))}
         </div>
+        <select
+          className="admin-support-category"
+          aria-label="Category"
+          value={categoryFilter}
+          onChange={e => { setCategoryFilter(e.target.value); setFeatureFilter(''); setPage(1); setSelected(null); }}
+        >
+          <option value="">All categories</option>
+          {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c === 'beta' ? 'Beta feedback' : CATEGORY_LABELS[c]}</option>)}
+        </select>
+        {categoryFilter === 'beta' && featureFilter && (
+          <button type="button" className="admin-support-feature-chip" onClick={() => { setFeatureFilter(''); setPage(1); setSelected(null); }}>
+            Feature: {featureFilter} ✕
+          </button>
+        )}
         <span className="admin-support-count">{total} ticket{total !== 1 ? 's' : ''}</span>
       </div>
 
@@ -155,7 +186,7 @@ function AdminSupportTickets() {
             >
               <div className="admin-support-item-top">
                 <span className={`admin-support-badge ${CATEGORY_COLOR[ticket.category]}`}>
-                  {CATEGORY_LABELS[ticket.category]}
+                  {categoryLabel(ticket)}
                 </span>
                 <span className={`admin-support-badge status-${ticket.status}`}>
                   {STATUS_LABELS[ticket.status]}
@@ -187,7 +218,7 @@ function AdminSupportTickets() {
                 <h2>{selected.subject}</h2>
                 <div className="admin-support-detail-badges">
                   <span className={`admin-support-badge ${CATEGORY_COLOR[selected.category]}`}>
-                    {CATEGORY_LABELS[selected.category]}
+                    {categoryLabel(selected)}
                   </span>
                   <span className={`admin-support-badge status-${selected.status}`}>
                     {STATUS_LABELS[selected.status]}

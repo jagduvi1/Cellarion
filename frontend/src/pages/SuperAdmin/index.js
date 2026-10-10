@@ -14,6 +14,7 @@ import TabCellars from './TabCellars';
 import TabImport from './TabImport';
 import TabBackups from './TabBackups';
 import TabAnnouncement from './TabAnnouncement';
+import TabFeatures from './TabFeatures';
 import { RefreshContext } from './helpers';
 import '../SuperAdmin.css';
 
@@ -28,6 +29,7 @@ const TABS = [
   { id: 'import',     label: 'Import Wines' },
   { id: 'ai',         label: 'AI & Embeddings' },
   { id: 'announcement', label: 'Announcement' },
+  { id: 'features',   label: 'Feature flags' },
   { id: 'settings',   label: 'Settings' },
 ];
 
@@ -38,7 +40,7 @@ const TABS = [
 // The remaining list tabs (users, audit, cellars) manage their own fetching
 // and hold no drafts, so they keep the remount-on-refresh behavior.
 const IN_PLACE_REFRESH_TABS = new Set([
-  'overview', 'services', 'database', 'backups', 'import', 'ai', 'announcement', 'settings',
+  'overview', 'services', 'database', 'backups', 'import', 'ai', 'announcement', 'features', 'settings',
 ]);
 
 export default function SuperAdmin() {
@@ -171,6 +173,7 @@ export default function SuperAdmin() {
           {tab === 'import'     && <TabImport />}
           {tab === 'ai'         && <TabAI />}
           {tab === 'announcement' && <TabAnnouncement />}
+          {tab === 'features'   && <TabFeatures />}
           {tab === 'settings'   && <TabSettings />}
         </div>
       </RefreshContext.Provider>

@@ -339,3 +339,31 @@ describe('WineCorrectionProposal export', () => {
     }
   });
 });
+
+// Portability of beta feedback (early access, 2026-10-10): a 'beta' ticket
+// names the feature it is about. The row is selected AND mapped field by
+// field, so a new field has to be added in both places — this pins the second.
+describe('SupportTicket export', () => {
+  const SupportTicket = require('../models/SupportTicket');
+  const entry = REGISTRY.find((e) => e.model === SupportTicket);
+
+  test('carries the feature a beta ticket is about; other tickets carry none', async () => {
+    const c = {};
+    for (const m of ['select', 'limit']) c[m] = jest.fn(() => c);
+    c.lean = jest.fn(async () => [
+      { category: 'beta', feature: 'vintagePage', subject: 'Beta feedback: One page per wine and vintage', message: 'm', status: 'open', createdAt: 'c1', replies: [] },
+      { category: 'bug', subject: 'Crash', message: 'n', status: 'closed', createdAt: 'c2', replies: [{ author: 'admin', by: 'admin-id', message: 'Fixed', createdAt: 'r1' }] },
+    ]);
+    const findSpy = jest.spyOn(SupportTicket, 'find').mockReturnValue(c);
+    try {
+      const frag = await entry.exportFragment({ userId: 'u1', truncated: {} });
+      expect(c.select.mock.calls[0][0]).toEqual(expect.stringContaining('feature'));
+      expect(frag.supportTickets[0]).toMatchObject({ category: 'beta', feature: 'vintagePage', subject: 'Beta feedback: One page per wine and vintage' });
+      expect(frag.supportTickets[1]).not.toHaveProperty('feature');
+      // The admin's account id is not the exporting user's data.
+      expect(frag.supportTickets[1].replies).toEqual([{ author: 'admin', message: 'Fixed', createdAt: 'r1' }]);
+    } finally {
+      findSpy.mockRestore();
+    }
+  });
+});

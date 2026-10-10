@@ -20,6 +20,7 @@ const STORE_KEY = 'cellarion-settings-open';
 export const SETTINGS_HASH_GROUP = {
   account: 'account', profile: 'account', password: 'account', supporter: 'account',
   preferences: 'preferences', display: 'preferences', notifications: 'preferences', offline: 'preferences',
+  'early-access': 'early-access', beta: 'early-access',
   connections: 'connections', ai: 'connections', mcp: 'connections', 'api-tokens': 'connections',
   bridge: 'connections', climate: 'connections',
   data: 'data', export: 'data', portability: 'data',

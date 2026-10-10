@@ -22,6 +22,7 @@ import McpActivitySection from '../components/McpActivitySection';
 import ClimateDevicesSection from '../components/ClimateDevicesSection';
 import { journalPromptOptedOut, setJournalPromptOptOut } from '../components/JournalPrompt';
 import OfflineSettings from '../components/OfflineSettings';
+import EarlyAccessSettings from '../components/EarlyAccessSettings';
 import SettingsGroup from '../components/SettingsGroup';
 import './Settings.css';
 
@@ -810,6 +811,16 @@ function Settings() {
       {/* ── Offline mode (#1355) ── */}
       <OfflineSettings />
 
+      </SettingsGroup>
+
+      {/* ── Early access: one switch for every feature in beta, the list of
+          them, and the way to send feedback (backend config/featureFlags) ── */}
+      <SettingsGroup
+        id="early-access"
+        title={t('settings.groups.earlyAccess.title', 'Early access')}
+        summary={t('settings.groups.earlyAccess.summary', 'Try new features before everyone else, and tell us what you think')}
+      >
+        <EarlyAccessSettings />
       </SettingsGroup>
 
       {/* ── AI & connections (none of it for demo — tokens are blocked there) ── */}
