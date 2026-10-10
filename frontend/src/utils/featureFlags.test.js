@@ -9,7 +9,7 @@ let auth;
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => auth }));
 
 const flagsModule = await import('./featureFlags');
-const { isFeatureOn, useFeature, useFeatureFlags, loadFeatureFlags, __setFeatureFlagsForTest } = flagsModule;
+const { isFeatureOn, useFeature, useFeatureFlags, useFeatureFlagsReady, loadFeatureFlags, __setFeatureFlagsForTest } = flagsModule;
 
 // Node's own localStorage has no storage behind it here; the app wraps every
 // access in try/catch, the test needs a working one to read back.
@@ -58,6 +58,25 @@ test('a fresh list from the server reaches every subscriber and is remembered fo
   await waitFor(() => expect(result.current).toEqual([{ key: 'vintagePage', state: 'everyone' }]));
   expect(fetch).toHaveBeenCalledWith('/api/site/features');
   expect(JSON.parse(localStorage.getItem('cellarion-feature-flags'))).toEqual([{ key: 'vintagePage', state: 'everyone' }]);
+});
+
+test('the app knows its flags only after the first answer — or a failure — so a page can wait instead of swapping layouts', async () => {
+  __setFeatureFlagsForTest([], { known: false });
+  const { result } = renderHook(() => useFeatureFlagsReady());
+  expect(result.current).toBe(false);
+  vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline'); }));
+  await act(async () => { await loadFeatureFlags({ force: true }); });
+  await waitFor(() => expect(result.current).toBe(true));
+});
+
+test('an open tab re-reads the flags when it comes back into view', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ features: [{ key: 'vintagePage', state: 'off' }] }) })));
+  renderHook(() => useFeatureFlags());
+  const before = fetch.mock.calls.length;
+  Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+  document.dispatchEvent(new Event('visibilitychange'));
+  await waitFor(() => expect(fetch.mock.calls.length).toBeGreaterThan(before));
+  expect(fetch).toHaveBeenLastCalledWith('/api/site/features');
 });
 
 test('a failed or broken answer keeps what the app already had', async () => {

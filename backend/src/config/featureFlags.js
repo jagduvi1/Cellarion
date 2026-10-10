@@ -84,7 +84,9 @@ function featureOf(key) {
 }
 
 // The flag as everything else reads it: its state, when it entered beta and
-// when it went to everyone, and the forum thread a super admin linked.
+// when it went to everyone, and the forum thread a super admin linked. A
+// flag that started in beta in the code reports the day it entered the code;
+// one moved straight to everyone was never in beta and says so (null).
 function get(key) {
   const f = featureOf(key);
   if (!f) return null;
@@ -93,7 +95,7 @@ function get(key) {
     key: f.key,
     title: f.title,
     state: row.state,
-    betaAt: row.betaAt || (row.state !== 'off' ? toIso(f.since) : null),
+    betaAt: row.betaAt || (row.state === 'beta' ? toIso(f.since) : null),
     releasedAt: row.releasedAt,
     forumPath: row.forumPath,
     betaNotifiedAt: row.betaNotifiedAt,

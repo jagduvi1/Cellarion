@@ -53,10 +53,17 @@ async function createNotification(userId, type, title, message, link = null, cat
   return createNotifications([{ userId, type, title, message, link, category, actor }]);
 }
 
+// Categories that stay in the app (the bell): no push preference covers
+// them, and the permissive fallback below must not reach for one. Early
+// access notices (a feature entered beta, a thank-you) are not something a
+// member opted into push for (release audit 2026-10-10).
+const IN_APP_ONLY = new Set(['earlyAccess']);
+
 // Push-preference gate: category-specific when the caller named one,
 // otherwise permissive ("any push toggle enabled") so legacy callers that
 // haven't been migrated to pass a category keep working.
 function pushAllowedFor(prefs, category) {
+  if (IN_APP_ONLY.has(category)) return false;
   if (!prefs) return false;
   const prefKey = category ? PUSH_PREF_PATH[category] : null;
   if (prefKey) return !!prefs[prefKey]?.push;
@@ -108,8 +115,9 @@ async function createNotifications(items) {
   // API-token polls from memory) are out of date from this instant.
   for (const userId of new Set(created.map((doc) => String(doc.user)))) bumpNotificationsVersion(userId);
 
-  // Web push — fire and forget
-  if (!VAPID_CONFIGURED) return;
+  // Web push — fire and forget. The rows created are the answer either way,
+  // so a caller can count what really reached the bell.
+  if (!VAPID_CONFIGURED) return created;
   try {
     const userIds = [...new Set(items.map(i => String(i.userId)))];
     const users = await User.find({ _id: { $in: userIds } })
@@ -118,11 +126,11 @@ async function createNotifications(items) {
     const prefsById = new Map(users.map(u => [String(u._id), u.preferences?.notifications]));
 
     const allowed = items.filter(i => pushAllowedFor(prefsById.get(String(i.userId)), i.category));
-    if (allowed.length === 0) return;
+    if (allowed.length === 0) return created;
 
     const allowedIds = [...new Set(allowed.map(i => String(i.userId)))];
     const subs = await PushSubscription.find({ user: { $in: allowedIds } }).lean();
-    if (subs.length === 0) return;
+    if (subs.length === 0) return created;
 
     const subsByUser = new Map();
     for (const sub of subs) {
@@ -144,6 +152,7 @@ async function createNotifications(items) {
   } catch (err) {
     console.error('[notifications] Push dispatch error:', err.message);
   }
+  return created;
 }
 
-module.exports = { createNotification, createNotifications };
+module.exports = { createNotification, createNotifications, pushAllowedFor };

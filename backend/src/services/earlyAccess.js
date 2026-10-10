@@ -22,10 +22,15 @@ const { createNotifications } = require('./notifications');
 const LINK = '/settings#early-access';
 const BATCH = 500;
 
+// Resolves to how many rows were really created (createNotifications never
+// throws: a refused insert comes back as fewer rows, not as an error).
 async function notifyInBatches(userIds, build) {
+  let created = 0;
   for (let i = 0; i < userIds.length; i += BATCH) {
-    await createNotifications(userIds.slice(i, i + BATCH).map(build));
+    const rows = await createNotifications(userIds.slice(i, i + BATCH).map(build));
+    created += Array.isArray(rows) ? rows.length : 0;
   }
+  return created;
 }
 
 async function optedInUserIds() {
@@ -77,8 +82,7 @@ async function changeFlag(key, patch, actorId) {
   const notified = { announced: 0, thanked: 0 };
   try {
     if (announce) {
-      const ids = await optedInUserIds();
-      await notifyInBatches(ids, (userId) => ({
+      notified.announced = await notifyInBatches(await optedInUserIds(), (userId) => ({
         userId,
         type: 'early_access_new',
         title: `New in early access: ${after.title}`,
@@ -86,11 +90,9 @@ async function changeFlag(key, patch, actorId) {
         link: LINK,
         category: 'earlyAccess',
       }));
-      notified.announced = ids.length;
     }
     if (thank) {
-      const ids = await feedbackUserIds(key);
-      await notifyInBatches(ids, (userId) => ({
+      notified.thanked = await notifyInBatches(await feedbackUserIds(key), (userId) => ({
         userId,
         type: 'early_access_released',
         title: `Now for everyone: ${after.title}`,
@@ -98,7 +100,6 @@ async function changeFlag(key, patch, actorId) {
         link: LINK,
         category: 'earlyAccess',
       }));
-      notified.thanked = ids.length;
     }
   } catch (err) {
     console.error('[earlyAccess] Notices for a flag change failed:', err.message);

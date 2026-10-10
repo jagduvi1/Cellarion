@@ -189,12 +189,19 @@ router.patch('/preferences', requireAuth, async (req, res) => {
   try {
     // Validation + persistence live in services/accountOps so the MCP
     // update_preferences tool applies byte-for-byte the same rules.
+    // Early access decides which screens a user sees, so switching it is
+    // logged (the other preferences are display settings and are not) — a
+    // real switch, not a form re-sending the value it already had.
+    let earlyAccessBefore;
+    if (req.body && typeof req.body.earlyAccess === 'boolean') {
+      const before = await User.findById(req.user.id).select('preferences.earlyAccess').lean();
+      earlyAccessBefore = before?.preferences?.earlyAccess === true;
+    }
     const { user, error, changed } = await updatePreferences(req.user.id, req.body);
     if (error) return res.status(error.status).json({ error: error.message });
-    // Early access decides which screens a user sees, so switching it is
-    // logged (the other preferences are display settings and are not).
-    if ((changed || []).includes('preferences.earlyAccess')) {
-      logAudit(req, 'user.early_access', { type: 'user', id: user._id }, { on: user.preferences.earlyAccess === true });
+    const earlyAccessNow = user.preferences?.earlyAccess === true;
+    if ((changed || []).includes('preferences.earlyAccess') && earlyAccessBefore !== earlyAccessNow) {
+      logAudit(req, 'user.early_access', { type: 'user', id: user._id }, { on: earlyAccessNow });
     }
     res.json({ user: user.toJSON() });
   } catch (error) {

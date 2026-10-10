@@ -23,6 +23,9 @@ export default function DrinkOneModal({ bottles, rackMap, wineName, onClose, onD
   const { apiFetch, user } = useAuth();
   const [picked, setPicked] = useState(() => (bottles.length === 1 ? bottles[0] : null));
   const [error, setError] = useState(null);
+  // Once the picker has been shown (a refusal sends a single bottle back to
+  // it too), Cancel in the form returns to the picker, not out of the modal.
+  const [pickerShown, setPickerShown] = useState(bottles.length !== 1);
   const titleId = useId();
   const boxRef = useDialogA11y(onClose);
 
@@ -52,12 +55,14 @@ export default function DrinkOneModal({ bottles, rackMap, wineName, onClose, onD
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setPicked(null);
+        setPickerShown(true);
         setError(data.error || t('drinkOne.failed', 'Could not log the bottle. Please try again.'));
         return;
       }
       onDone(picked, reason);
     } catch {
       setPicked(null);
+      setPickerShown(true);
       setError(t('drinkOne.failed', 'Could not log the bottle. Please try again.'));
     }
   };
@@ -69,7 +74,7 @@ export default function DrinkOneModal({ bottles, rackMap, wineName, onClose, onD
         defaultRatingScale={user?.preferences?.ratingScale || '5'}
         reservationText={isReserved(picked) ? reservationSummary(picked, t) : undefined}
         onConfirm={handleConfirm}
-        onCancel={bottles.length === 1 ? onClose : () => setPicked(null)}
+        onCancel={pickerShown ? () => setPicked(null) : onClose}
       />
     );
   }

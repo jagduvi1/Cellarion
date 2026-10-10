@@ -105,7 +105,7 @@ function CellarVintage() {
     for (const b of bottles) {
       if (!b.rackInfo) continue;
       const key = String(b.rackInfo.rackId);
-      if (!byRack.has(key)) byRack.set(key, { name: b.rackInfo.rackName, positions: [] });
+      if (!byRack.has(key)) byRack.set(key, { id: key, name: b.rackInfo.rackName, positions: [] });
       if (b.rackInfo.position != null) byRack.get(key).positions.push(b.rackInfo.position);
     }
     return [...byRack.values()].map((r) => ({ ...r, positions: r.positions.sort((a, b) => a - b) }));
@@ -198,7 +198,7 @@ function CellarVintage() {
               {placements.length > 0 && (
                 <ul className="cellar-vintage-slots">
                   {placements.map((r) => (
-                    <li key={r.name}>
+                    <li key={r.id}>
                       <span aria-hidden="true">📍</span> {r.positions.length
                         ? t('cellarVintage.rackSlots', '{{rack}} · slots {{slots}}', { rack: r.name, slots: r.positions.join(', ') })
                         : r.name}

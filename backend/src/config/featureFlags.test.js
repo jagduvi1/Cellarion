@@ -75,6 +75,14 @@ describe('load', () => {
     expect(Object.keys(featureFlags.storedValue())).toEqual(featureFlags.FEATURE_KEYS);
   });
 
+  test('a flag released straight from off was never in beta: no "in beta since" date', async () => {
+    stored({ vintagePage: { state: 'everyone', releasedAt: '2026-11-01T08:00:00.000Z' } });
+    await featureFlags.load();
+    expect(featureFlags.get('vintagePage')).toEqual(expect.objectContaining({ state: 'everyone', betaAt: null, releasedAt: '2026-11-01T08:00:00.000Z' }));
+    featureFlags.set({ vintagePage: { state: 'off' } });
+    expect(featureFlags.get('vintagePage').betaAt).toBeNull();
+  });
+
   test('a corrupt state falls back to the default, never to everyone', async () => {
     stored({ vintagePage: { state: 'EVERYBODY!', betaAt: 'not a date' } });
     await featureFlags.load();

@@ -10,7 +10,7 @@ import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import ReconsentModal from './components/ReconsentModal';
 import Analytics from './components/Analytics';
-import { useFeature, loadFeatureFlags } from './utils/featureFlags';
+import { useFeature, useFeatureFlagsReady, loadFeatureFlags } from './utils/featureFlags';
 import './styles/common.css';
 
 // Lazy-load all pages so each route gets its own chunk.
@@ -92,9 +92,14 @@ const PublicWineList       = lazy(() => import('./pages/PublicWineList'));
 
 // The vintage page in the layout the user's flags call for: early access's
 // one page per wine and vintage, or the classic one (utils/featureFlags).
-// Same address, same data — a bookmark works with the switch on or off.
+// Same address, same data — a bookmark works with the switch on or off. On a
+// cold start (no cached flags) it waits for the answer instead of mounting
+// the classic page and swapping — which loaded everything twice.
 function VintagePage() {
-  return useFeature('vintagePage') ? <CellarVintageBeta /> : <CellarVintage />;
+  const ready = useFeatureFlagsReady();
+  const beta = useFeature('vintagePage');
+  if (!ready) return <div className="loading">Loading…</div>;
+  return beta ? <CellarVintageBeta /> : <CellarVintage />;
 }
 
 function AppRoutes() {
