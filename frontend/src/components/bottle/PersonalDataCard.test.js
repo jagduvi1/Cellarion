@@ -218,6 +218,16 @@ test('on the vintage page: add on this vintage or all vintages, never "this bott
   ));
 });
 
+test('on the vintage page with no vintage to scope to (an NV group of empty vintages), every vintage is the one choice', async () => {
+  render(<PersonalDataCard apiFetch={vi.fn()} bottleId={BOTTLE_ID} currentUserId={ME} vintage="NV" scope="vintage" vintageScopable={false} />);
+  await screen.findByText('Nothing recorded yet.');
+  fireEvent.click(screen.getByText('+ Add'));
+  await screen.findByText('Add wine data');
+  const options = [...screen.getByLabelText('Applies to').querySelectorAll('option')].map((o) => o.value);
+  expect(options).toEqual(['wine']);
+  expect(screen.getByLabelText('Applies to')).toHaveValue('wine');
+});
+
 test('on the bottle page "This bottle only" stays the default', async () => {
   render(<PersonalDataCard apiFetch={vi.fn()} bottleId={BOTTLE_ID} currentUserId={ME} vintage="2015" />);
   await screen.findByText('Nothing recorded yet.');

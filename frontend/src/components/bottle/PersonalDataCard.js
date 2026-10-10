@@ -33,9 +33,13 @@ const emptyForm = {
 // through one bottle of the vintage. There "this bottle" means nothing, so
 // new data goes on this vintage or on every vintage of the wine, and one
 // bottle's own entries stay on that bottle's page (beta feedback 2026-10-10).
-function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, scope = 'bottle' }) {
+// `vintageScopable`: whether that bottle has a vintage to scope to — the
+// server scopes "this vintage" through it, and an NV group of imported
+// bottles may have only empty ones; then "every vintage" is the one choice.
+function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, scope = 'bottle', vintageScopable = true }) {
   const { t } = useTranslation();
   const onVintagePage = scope === 'vintage' && !!vintage;
+  const offerVintage = !!vintage && (!onVintagePage || vintageScopable);
   const [data, setData] = useState({ bottleEntries: [], wineEntries: [] });
   const [keys, setKeys] = useState([]);
   const [modal, setModal] = useState(null); // { mode: 'add' } | { mode: 'edit', entry }
@@ -73,7 +77,7 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
   const effectiveType = matchedKey ? matchedKey.type : form.keyType;
 
   const openAdd = async () => {
-    setForm(onVintagePage ? { ...emptyForm, level: 'wine-vintage' } : emptyForm);
+    setForm(onVintagePage ? { ...emptyForm, level: offerVintage ? 'wine-vintage' : 'wine' } : emptyForm);
     setError(null);
     setModal({ mode: 'add' });
     try {
@@ -390,7 +394,7 @@ function PersonalDataCard({ apiFetch, bottleId, currentUserId, wineId, vintage, 
                     {!onVintagePage && (
                       <option value="bottle">{t('personalData.levelBottle', 'This bottle only')}</option>
                     )}
-                    {vintage && (
+                    {offerVintage && (
                       <option value="wine-vintage">{t('personalData.levelWineVintage', 'Every bottle of this vintage ({{vintage}})', { vintage })}</option>
                     )}
                     <option value="wine">{t('personalData.levelWine', 'Every bottle of this wine (all vintages)')}</option>

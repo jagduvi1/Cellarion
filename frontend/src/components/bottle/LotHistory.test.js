@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
 // "This wine in your cellar" (support ticket 2026-09-16): the viewer's other
 // bottles of this wine, and what happened to the ones already drunk. Pins the
@@ -17,7 +17,7 @@ vi.mock('react-i18next', () => {
 vi.mock('../../api/bottles', () => ({ fetchLotHistory: vi.fn() }));
 vi.mock('../RatingDisplay', () => ({ default: ({ value }) => <span data-testid="rating">{value}</span> }));
 vi.mock('react-router-dom', () => ({
-  Link: ({ to, children, ...rest }) => <a href={to} {...rest}>{children}</a>,
+  Link: ({ to, children, state, ...rest }) => <a href={to} data-state={state ? JSON.stringify(state) : undefined} {...rest}>{children}</a>,
 }));
 const { apiFetch } = vi.hoisted(() => ({ apiFetch: () => {} }));
 vi.mock('../../contexts/AuthContext', () => ({
@@ -190,20 +190,33 @@ describe('LotHistory and the vintage page link', () => {
  * that open their own vintage pages, with no "kept apart" hint.
  */
 describe('LotHistory on the vintage page', () => {
-  const onPage = () => mount({ vintagePage: { cellarId: 'c1' } });
+  const onPage = (over = {}) => mount({ vintagePage: { cellarId: 'c1', fromPath: '/cellars/c1/vintages/w1/2020', consumedCount: 2, ...over } });
+  // Let the answer land before asserting on what is NOT there.
+  const settle = () => act(() => new Promise((r) => { setTimeout(r, 0); }));
 
-  test('the drunk bottles of this vintage, each linked to its own page — no count line repeating the page', async () => {
+  test('this cellar\'s drunk bottles of the vintage, each linked to its page with the way back — no count line repeating the page', async () => {
     respond([lot('2020', {
-      counts: { total: 3, remaining: 1, consumed: 2 },
-      consumed_events: [event('b2'), event('b1', { note: 'Still tight' })],
+      counts: { total: 4, remaining: 1, consumed: 3 },
+      // b8 was drunk from another of the owner's cellars: not this page's.
+      consumed_events: [event('b2'), event('b1', { note: 'Still tight' }), event('b8', { cellar_id: 'c9' })],
     })]);
     onPage();
     expect(await screen.findByText('lotHistory.drunkTitle')).toBeInTheDocument();
     expect(screen.queryByText('lotHistory.title')).toBeNull();
     expect(screen.queryByText(/lotHistory.remaining/)).toBeNull();
     // b1 is the bottle the page reads through, not a bottle on screen: linked too.
-    expect(screen.getAllByRole('link').map((a) => a.getAttribute('href')))
-      .toEqual(['/cellars/c1/bottles/b2', '/cellars/c1/bottles/b1']);
+    const links = screen.getAllByRole('link');
+    expect(links.map((a) => a.getAttribute('href'))).toEqual(['/cellars/c1/bottles/b2', '/cellars/c1/bottles/b1']);
+    expect(links[0]).toHaveAttribute('data-state', '{"fromVintage":"/cellars/c1/vintages/w1/2020"}');
+    // Every drunk bottle of this cellar is shown: no "all in the history" link.
+    expect(screen.queryByText(/lotHistory.allInHistory/)).toBeNull();
+  });
+
+  test('when the cellar drank more than the rows show, the card leads to the cellar history', async () => {
+    respond([lot('2020', { counts: { total: 7, remaining: 1, consumed: 6 }, consumed_events: [event('b2'), event('b3')] })]);
+    onPage({ consumedCount: 6 });
+    const more = await screen.findByText(/lotHistory.allInHistory:\{"count":6\}/);
+    expect(more.closest('a')).toHaveAttribute('href', '/cellars/c1/history');
   });
 
   test('other vintages are rows that open their own vintage page, in the cellar that holds them', async () => {
@@ -223,10 +236,12 @@ describe('LotHistory on the vintage page', () => {
     expect(screen.getByText('2018').closest('a')).toHaveTextContent('lotHistory.remaining:{"count":1} · lotHistory.consumed:{"count":2}');
   });
 
-  test('nothing drunk and no other vintage: nothing at all', async () => {
-    respond([lot('2020', { counts: { total: 3, remaining: 3, consumed: 0 } })]);
-    const { container } = onPage();
+  test('nothing drunk here and no other vintage: nothing at all', async () => {
+    // Drunk only from another cellar: nothing for this page either.
+    respond([lot('2020', { counts: { total: 3, remaining: 2, consumed: 1 }, consumed_events: [event('b8', { cellar_id: 'c9' })] })]);
+    const { container } = onPage({ consumedCount: 0 });
     await waitFor(() => expect(fetchLotHistory).toHaveBeenCalled());
+    await settle();
     expect(container).toBeEmptyDOMElement();
   });
 });

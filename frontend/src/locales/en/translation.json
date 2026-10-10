@@ -1228,7 +1228,9 @@
     "otherVintagesHint": "Kept apart on purpose: how a different vintage showed says nothing about when this one is ready.",
     "openVintage": "Open the vintage page →",
     "drunkTitle": "Drunk from this vintage",
-    "otherVintagesTitle": "Other vintages"
+    "otherVintagesTitle": "Other vintages",
+    "allInHistory_one": "The one in the cellar history",
+    "allInHistory_other": "All {{count}} in the cellar history"
   },
   "bottles": {
     "title": "All bottles",

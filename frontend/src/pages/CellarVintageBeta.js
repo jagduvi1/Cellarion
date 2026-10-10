@@ -49,6 +49,13 @@ const filled = (v) => v !== null && v !== undefined && String(v).trim() !== '';
 // More bottles than this and the list starts folded under its stock line.
 const FOLD_BOTTLES_OVER = 6;
 
+// The router hands the vintage over decoded already: a second decode is a
+// no-op for an ordinary vintage, and must not throw on a lone '%' in an
+// imported one.
+const safeDecode = (s) => {
+  try { return decodeURIComponent(s); } catch { return s; }
+};
+
 /**
  * One wine and vintage in a cellar — the EARLY-ACCESS layout (feature flag
  * 'vintagePage', backend config/featureFlags). The same page whether the
@@ -83,10 +90,23 @@ function CellarVintageBeta() {
   const [suggestSignal, setSuggestSignal] = useState(0);
   const [journalBottle, setJournalBottle] = useState(null);
   const [notice, setNotice] = useState(null);
-  const [showAllBottles, setShowAllBottles] = useState(false);
 
-  const vintage = decodeURIComponent(vintageParam || 'NV');
+  const vintage = safeDecode(vintageParam || 'NV');
   const pagePath = `/cellars/${id}/vintages/${wineId}/${encodeURIComponent(vintage)}`;
+
+  // Whether a long list is unfolded, remembered for this page in this tab:
+  // back from one of its bottles, the list is as the user left it.
+  const foldKey = `cvb-unfolded:${pagePath}`;
+  const [showAllBottles, setShowAllBottlesState] = useState(() => {
+    try { return window.sessionStorage.getItem(foldKey) === '1'; } catch { return false; }
+  });
+  const setShowAllBottles = (open) => {
+    setShowAllBottlesState(open);
+    try {
+      if (open) window.sessionStorage.setItem(foldKey, '1');
+      else window.sessionStorage.removeItem(foldKey);
+    } catch { /* storage off: the list just folds again next time */ }
+  };
 
   const load = async () => {
     try {
@@ -218,7 +238,8 @@ function CellarVintageBeta() {
       <span key="paid" className="cvb-summary-item">{t('cellarVintageBeta.paid', { amount: totalText, count: pricedCount })}</span>
     ),
   ].filter(Boolean);
-  const bottlesFolded = bottles.length > FOLD_BOTTLES_OVER && !showAllBottles;
+  const foldable = bottles.length > FOLD_BOTTLES_OVER;
+  const bottlesFolded = foldable && !showAllBottles;
 
   // What the bottles share, per field: the common value, nothing at all, or
   // values that differ — the vintage section says which.
@@ -501,7 +522,18 @@ function CellarVintageBeta() {
                     {notes.kind === 'shared' ? (
                       <p className="cellar-vintage-notes">{notes.value}</p>
                     ) : notes.kind === 'differs' ? (
-                      <span className="cvb-muted">{t('cellarVintageBeta.notesDiffer', 'Each bottle has its own note: see the bottles below.')}</span>
+                      <span className="cvb-muted">
+                        {t('cellarVintageBeta.notesDiffer', 'Each bottle has its own note: see the bottles below.')}
+                        {/* The notes are on the rows: a folded list opens from here too. */}
+                        {bottlesFolded && (
+                          <>
+                            {' '}
+                            <button type="button" className="cvb-inline-link" onClick={() => setShowAllBottles(true)}>
+                              {t('cellarVintageBeta.showBottles', { count: bottles.length })}
+                            </button>
+                          </>
+                        )}
+                      </span>
                     ) : (
                       <span className="cvb-muted">{t('cellarVintageBeta.noNotes', 'No notes yet.')}</span>
                     )}
@@ -525,7 +557,17 @@ function CellarVintageBeta() {
                   )}
                 </div>
                 {data.historyBottleId && !user?.isDemo && (
-                  <PersonalDataCard apiFetch={apiFetch} bottleId={data.historyBottleId} currentUserId={user?.id} wineId={wine?._id} vintage={vintage} scope="vintage" />
+                  <PersonalDataCard
+                    apiFetch={apiFetch}
+                    bottleId={data.historyBottleId}
+                    currentUserId={user?.id}
+                    wineId={wine?._id}
+                    vintage={vintage}
+                    scope="vintage"
+                    // "This vintage" is scoped through that bottle's own
+                    // vintage; an NV group of imported bottles may have none.
+                    vintageScopable={!!data.historyBottleVintage}
+                  />
                 )}
               </section>
 
@@ -540,21 +582,30 @@ function CellarVintageBeta() {
                   {stockItems.length > 0 && <div className="cvb-stock">{stockItems}</div>}
                   {bottles.length === 0 ? (
                     <p className="cellar-vintage-empty">{t('cellarVintage.noneLeft', 'None of this vintage left in this cellar.')}</p>
-                  ) : bottlesFolded ? (
-                    <button type="button" className="cvb-bottles-toggle" aria-expanded="false" onClick={() => setShowAllBottles(true)}>
-                      {t('cellarVintageBeta.showBottles', { count: bottles.length })} ▾
-                    </button>
                   ) : (
                     <>
-                      <ul className="cvb-bottle-list">
-                        {bottles.map((b) => (
-                          <BottleRow key={b._id} bottle={b} cellarId={id} fromPath={pagePath} showNote={notes.kind === 'differs'} />
-                        ))}
-                      </ul>
-                      {bottles.length > FOLD_BOTTLES_OVER && (
-                        <button type="button" className="cvb-bottles-toggle" aria-expanded="true" onClick={() => setShowAllBottles(false)}>
-                          {t('cellarVintageBeta.hideBottles', 'Fold the list')} ▴
+                      {/* One toggle that stays put: focus never falls off a
+                          button that vanished under the keyboard. */}
+                      {foldable && (
+                        <button
+                          type="button"
+                          className="cvb-bottles-toggle"
+                          aria-expanded={!bottlesFolded}
+                          aria-controls="cvb-bottle-list"
+                          onClick={() => setShowAllBottles(bottlesFolded)}
+                        >
+                          {bottlesFolded
+                            ? t('cellarVintageBeta.showBottles', { count: bottles.length })
+                            : t('cellarVintageBeta.hideBottles', 'Fold the list')}
+                          <span aria-hidden="true">{bottlesFolded ? ' ▾' : ' ▴'}</span>
                         </button>
+                      )}
+                      {!bottlesFolded && (
+                        <ul id="cvb-bottle-list" className="cvb-bottle-list">
+                          {bottles.map((b) => (
+                            <BottleRow key={b._id} bottle={b} cellarId={id} fromPath={pagePath} showNote={notes.kind === 'differs'} />
+                          ))}
+                        </ul>
                       )}
                     </>
                   )}
@@ -567,7 +618,7 @@ function CellarVintageBeta() {
                     bottleId={data.historyBottleId}
                     vintage={vintage}
                     isOwner={cellar?.userRole === 'owner'}
-                    vintagePage={{ cellarId: id }}
+                    vintagePage={{ cellarId: id, fromPath: pagePath, consumedCount: data.consumedCount || 0 }}
                   />
                 )}
               </section>

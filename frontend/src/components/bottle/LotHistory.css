@@ -174,3 +174,10 @@
 .lot-history__vintage-go {
   color: var(--color-text-muted);
 }
+
+.lot-history__more {
+  display: inline-block;
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--color-primary);
+}

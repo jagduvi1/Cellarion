@@ -28,7 +28,9 @@ const REASON_ICONS = { drank: '\u{1F377}', gifted: '\u{1F381}', sold: '\u{1F4B0}
  * The whole card hides itself when there is nothing to say — one bottle, never
  * drunk, no other vintages — so a single-bottle cellar gains no empty box.
  */
-function EventRow({ event, currentBottleId }) {
+// `linkState`: router state for the link to the drunk bottle's page (the
+// vintage page passes { fromVintage } so that page leads back to it).
+function EventRow({ event, currentBottleId, linkState }) {
   const { t } = useTranslation();
   const { user } = useAuth();
   const reason = event.reason || 'drank';
@@ -54,7 +56,7 @@ function EventRow({ event, currentBottleId }) {
             but must not link to the page you are on. */}
         {isCurrent
           ? <span className="lot-history__self">{head} <em>{t('lotHistory.thisBottle', 'this bottle')}</em></span>
-          : <Link className="lot-history__link" to={`/cellars/${event.cellar_id}/bottles/${event.bottle_id}`}>{head}</Link>}
+          : <Link className="lot-history__link" to={`/cellars/${event.cellar_id}/bottles/${event.bottle_id}`} state={linkState}>{head}</Link>}
         {event.rating != null && (
           <RatingDisplay
             value={event.rating}
@@ -70,23 +72,32 @@ function EventRow({ event, currentBottleId }) {
   );
 }
 
-function LotBlock({ lot, currentBottleId, heading }) {
+// "3 in your cellar · 2 drunk" — one wording for the card and the vintage rows.
+function LotCounts({ lot }) {
   const { t } = useTranslation();
-  const events = lot.consumed_events || [];
   const remaining = lot.counts?.remaining ?? 0;
   const consumed = lot.counts?.consumed ?? 0;
+  return (
+    <>
+      <span>{t('lotHistory.remaining', '{{count}} in your cellar', { count: remaining })}</span>
+      {consumed > 0 && (
+        <>
+          <span aria-hidden="true"> · </span>
+          <span>{t('lotHistory.consumed', '{{count}} drunk', { count: consumed })}</span>
+        </>
+      )}
+    </>
+  );
+}
+
+function LotBlock({ lot, currentBottleId, heading }) {
+  const events = lot.consumed_events || [];
 
   return (
     <div className="lot-history__lot">
       {heading && <h3 className="lot-history__vintage">{heading}</h3>}
       <p className="lot-history__counts">
-        <span>{t('lotHistory.remaining', '{{count}} in your cellar', { count: remaining })}</span>
-        {consumed > 0 && (
-          <>
-            <span aria-hidden="true"> · </span>
-            <span>{t('lotHistory.consumed', '{{count}} drunk', { count: consumed })}</span>
-          </>
-        )}
+        <LotCounts lot={lot} />
       </p>
       {events.length > 0 && (
         <ul className="lot-history__events">
@@ -106,10 +117,17 @@ function LotBlock({ lot, currentBottleId, heading }) {
 // rows that open their own vintage pages (beta feedback 2026-10-10). Each
 // opens in the cellar the lot names: where bottles of it are left, else
 // where it was drunk; this cellar when it is one of them.
-function VintagePageHistory({ thisLot, otherLots, cellarId }) {
+//
+// The page belongs to one cellar, so the drunk bottles are this cellar's
+// (the lot spans all the owner's cellars), each linking to its page with the
+// way back here. The rows are the latest few (the lot keeps the last 20, and
+// a bottle drunk without a date has no row): when the cellar has drunk more,
+// the card says so and leads to the cellar history.
+function VintagePageHistory({ thisLot, otherLots, cellarId, fromPath = null, consumedCount = 0 }) {
   const { t } = useTranslation();
-  const drunk = thisLot?.consumed_events || [];
+  const drunk = (thisLot?.consumed_events || []).filter((e) => String(e.cellar_id) === String(cellarId));
   if (drunk.length === 0 && otherLots.length === 0) return null;
+  const linkState = fromPath ? { fromVintage: fromPath } : undefined;
   const hrefOf = (lot) => {
     const ids = (lot.cellar_ids || []).map(String);
     const cid = ids.includes(String(cellarId)) ? cellarId : (ids[0] || cellarId);
@@ -124,8 +142,13 @@ function VintagePageHistory({ thisLot, otherLots, cellarId }) {
             <h2>{t('lotHistory.drunkTitle', 'Drunk from this vintage')}</h2>
           </div>
           <ul className="lot-history__events">
-            {drunk.map((e) => <EventRow key={String(e.bottle_id)} event={e} currentBottleId={null} />)}
+            {drunk.map((e) => <EventRow key={String(e.bottle_id)} event={e} currentBottleId={null} linkState={linkState} />)}
           </ul>
+          {consumedCount > drunk.length && (
+            <Link to={`/cellars/${cellarId}/history`} className="lot-history__more">
+              {t('lotHistory.allInHistory', 'All {{count}} in the cellar history', { count: consumedCount })} ›
+            </Link>
+          )}
         </div>
       )}
       {otherLots.length > 0 && (
@@ -134,22 +157,15 @@ function VintagePageHistory({ thisLot, otherLots, cellarId }) {
             <h2>{t('lotHistory.otherVintagesTitle', 'Other vintages')}</h2>
           </div>
           <ul className="lot-history__vintage-rows">
-            {otherLots.map((lot) => {
-              const remaining = lot.counts?.remaining ?? 0;
-              const consumed = lot.counts?.consumed ?? 0;
-              return (
-                <li key={String(lot.vintage)}>
-                  <Link to={hrefOf(lot)} className="lot-history__vintage-row">
-                    <span className="lot-history__vintage-year">{lot.vintage}</span>
-                    <span className="lot-history__vintage-counts">
-                      {t('lotHistory.remaining', '{{count}} in your cellar', { count: remaining })}
-                      {consumed > 0 && ` · ${t('lotHistory.consumed', '{{count}} drunk', { count: consumed })}`}
-                    </span>
-                    <span className="lot-history__vintage-go" aria-hidden="true">›</span>
-                  </Link>
-                </li>
-              );
-            })}
+            {otherLots.map((lot) => (
+              <li key={String(lot.vintage)}>
+                <Link to={hrefOf(lot)} className="lot-history__vintage-row">
+                  <span className="lot-history__vintage-year">{lot.vintage}</span>
+                  <span className="lot-history__vintage-counts"><LotCounts lot={lot} /></span>
+                  <span className="lot-history__vintage-go" aria-hidden="true">›</span>
+                </Link>
+              </li>
+            ))}
           </ul>
         </div>
       )}
@@ -162,8 +178,8 @@ function VintagePageHistory({ thisLot, otherLots, cellarId }) {
 // a DRUNK bottle too — once the last bottle of a vintage is gone the cellar
 // list has no group to open it from, and this card is where the history of
 // that vintage already lives.
-// `vintagePage` ({ cellarId }): rendered ON the vintage page — see
-// VintagePageHistory above.
+// `vintagePage` ({ cellarId, fromPath, consumedCount }): rendered ON the
+// vintage page — see VintagePageHistory above.
 export default function LotHistory({ apiFetch, bottleId, vintage, isOwner = true, vintageHref = null, vintagePage = null }) {
   const { t } = useTranslation();
   const [lots, setLots] = useState(null);
@@ -199,7 +215,15 @@ export default function LotHistory({ apiFetch, bottleId, vintage, isOwner = true
   const otherLots = lots.filter((l) => String(l.vintage) !== own);
 
   if (vintagePage) {
-    return <VintagePageHistory thisLot={thisLot} otherLots={otherLots} cellarId={vintagePage.cellarId} />;
+    return (
+      <VintagePageHistory
+        thisLot={thisLot}
+        otherLots={otherLots}
+        cellarId={vintagePage.cellarId}
+        fromPath={vintagePage.fromPath}
+        consumedCount={vintagePage.consumedCount}
+      />
+    );
   }
 
   // Nothing to say: this is the only bottle of its vintage (drunk or not — a

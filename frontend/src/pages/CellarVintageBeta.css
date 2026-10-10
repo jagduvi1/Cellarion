@@ -33,8 +33,19 @@
   cursor: pointer;
 }
 
-.cvb-bottle-list + .cvb-bottles-toggle {
+.cvb-bottles-toggle + .cvb-bottle-list {
   border-top: 1px solid var(--color-border-light);
+}
+
+/* "Show all N bottles" inside a sentence (the notes-differ hint). */
+.cvb-inline-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-primary);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 .cvb-summary-item {

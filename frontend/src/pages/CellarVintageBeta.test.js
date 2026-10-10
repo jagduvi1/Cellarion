@@ -16,11 +16,13 @@ vi.mock('react-i18next', () => {
   return { useTranslation: () => ({ t, i18n: { language: 'en-GB' } }) };
 });
 vi.mock('../components/AuthImage', () => ({ default: ({ src, alt }) => <img src={src} alt={alt} /> }));
+// A tripwire: the page does not use the cellar menu; were it put back, this
+// stand-in would show up and the test below would say so.
 vi.mock('../components/CellarNav', () => ({ default: () => <nav data-testid="cellar-nav" /> }));
 vi.mock('../components/BetaBadge', () => ({ default: ({ feature }) => <div data-testid="beta-badge">{feature}</div> }));
 vi.mock('../components/bottle/WineRecordSection', () => ({ default: ({ suggestSignal }) => <div data-testid="wine-record">{suggestSignal}</div> }));
-vi.mock('../components/bottle/PersonalDataCard', () => ({ default: ({ bottleId, vintage, scope }) => <div data-testid="personal-data">{bottleId}:{vintage}:{scope}</div> }));
-vi.mock('../components/bottle/LotHistory', () => ({ default: ({ bottleId, vintagePage }) => <div data-testid="lot-history">{bottleId}:{vintagePage?.cellarId}</div> }));
+vi.mock('../components/bottle/PersonalDataCard', () => ({ default: ({ bottleId, vintage, scope, vintageScopable }) => <div data-testid="personal-data">{bottleId}:{vintage}:{scope}:{String(vintageScopable)}</div> }));
+vi.mock('../components/bottle/LotHistory', () => ({ default: ({ bottleId, vintagePage }) => <div data-testid="lot-history">{bottleId}:{JSON.stringify(vintagePage)}</div> }));
 vi.mock('../components/DrinkOneModal', () => ({
   default: ({ bottles, onDone }) => <button type="button" onClick={() => onDone(bottles[0], 'gifted')}>drink-stub:{bottles.length}</button>,
 }));
@@ -70,8 +72,8 @@ function Where() {
   const loc = useLocation();
   return <div data-testid="where">{loc.pathname}|{JSON.stringify(loc.state)}</div>;
 }
-const renderPage = () => render(
-  <MemoryRouter initialEntries={['/cellars/c1/vintages/w1/2015']}>
+const renderPage = (at = '/cellars/c1/vintages/w1/2015') => render(
+  <MemoryRouter initialEntries={[at]}>
     <Routes>
       <Route path="/cellars/:id/vintages/:wineId/:vintage" element={<CellarVintageBeta />} />
       <Route path="/cellars/:id/bottles/:bottleId" element={<Where />} />
@@ -90,7 +92,7 @@ beforeEach(() => {
       bottle('b2', { rackInfo: { rackId: 'r1', rackName: 'Left wall', position: 7 }, price: 380 }),
       bottle('b3', { notes: 'Gift from Anna' }),
     ],
-    total: 3, onOrderCount: 0, consumedCount: 1, historyBottleId: 'b1',
+    total: 3, onOrderCount: 0, consumedCount: 1, historyBottleId: 'b1', historyBottleVintage: '2015',
   };
   api = vi.fn(async (url) => {
     if (url === '/api/cellars/c1/vintages/w1/2015') return ok(page);
@@ -125,8 +127,8 @@ test('the wine, then the vintage, then the bottles — with the description and 
   expect(screen.getByText('2030–2045')).toBeInTheDocument();
   // Own data on this vintage or all vintages, never "this bottle"; the
   // history card in its vintage-page form (drunk bottles + other vintages).
-  expect(screen.getByTestId('personal-data')).toHaveTextContent('b1:2015:vintage');
-  expect(screen.getByTestId('lot-history')).toHaveTextContent('b1:c1');
+  expect(screen.getByTestId('personal-data')).toHaveTextContent('b1:2015:vintage:true');
+  expect(screen.getByTestId('lot-history')).toHaveTextContent('b1:{"cellarId":"c1","fromPath":"/cellars/c1/vintages/w1/2015","consumedCount":1}');
 });
 
 test('what the bottles share shows once; what differs says so; each row shows what differs between bottles', async () => {
@@ -337,14 +339,22 @@ test('one bottle: the stock line speaks in the singular (one slot, "Paid")', asy
   expect(stock).toHaveTextContent('cellarVintageBeta.paid:{"amount":"400 EUR","count":1}');
 });
 
-test('a long list starts folded under its stock line; a tap shows every row, another folds it', async () => {
+test('a long list starts folded under its stock line; one toggle shows every row and folds them again', async () => {
   page.bottles = Array.from({ length: 8 }, (_, i) => bottle(`b${i + 1}`));
   renderPage();
   await screen.findByText('cellarVintageBeta.kindLine:{"count":8,"cellar":"Home"}');
   expect(document.querySelectorAll('.cvb-bottle-list > li')).toHaveLength(0);
-  fireEvent.click(screen.getByText(/cellarVintageBeta.showBottles:8/));
+  const toggle = document.querySelector('.cvb-bottles-toggle');
+  expect(toggle).toHaveTextContent('cellarVintageBeta.showBottles:8');
+  expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.click(toggle);
   expect(document.querySelectorAll('.cvb-bottle-list > li')).toHaveLength(8);
-  fireEvent.click(screen.getByText(/cellarVintageBeta.hideBottles/));
+  // The same button, still in the page (focus stays on it), now folds.
+  expect(document.querySelector('.cvb-bottles-toggle')).toBe(toggle);
+  expect(toggle).toHaveTextContent('cellarVintageBeta.hideBottles');
+  expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  expect(toggle).toHaveAttribute('aria-controls', 'cvb-bottle-list');
+  fireEvent.click(toggle);
   expect(document.querySelectorAll('.cvb-bottle-list > li')).toHaveLength(0);
 });
 
@@ -354,4 +364,46 @@ test('six bottles or fewer are never folded', async () => {
   await screen.findByText('cellarVintageBeta.kindLine:{"count":6,"cellar":"Home"}');
   expect(document.querySelectorAll('.cvb-bottle-list > li')).toHaveLength(6);
   expect(screen.queryByText(/cellarVintageBeta.(showBottles|hideBottles)/)).toBeNull();
+});
+
+describe('the folded list and coming back to the page', () => {
+  const memoryStorage = () => {
+    const m = new Map();
+    return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k), clear: () => m.clear() };
+  };
+  beforeEach(() => { vi.stubGlobal('sessionStorage', memoryStorage()); });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  test('back from one of its bottles, an unfolded list is still unfolded', async () => {
+    page.bottles = Array.from({ length: 8 }, (_, i) => bottle(`b${i + 1}`));
+    const { unmount } = renderPage();
+    await screen.findByText('cellarVintageBeta.kindLine:{"count":8,"cellar":"Home"}');
+    fireEvent.click(document.querySelector('.cvb-bottles-toggle'));
+    unmount();
+    renderPage();
+    await screen.findByText('cellarVintageBeta.kindLine:{"count":8,"cellar":"Home"}');
+    expect(document.querySelectorAll('.cvb-bottle-list > li')).toHaveLength(8);
+  });
+
+  test('when the notes differ and the list is folded, the hint opens the list', async () => {
+    page.bottles = Array.from({ length: 8 }, (_, i) => bottle(`b${i + 1}`, { notes: `Note ${i}` }));
+    renderPage();
+    await screen.findByText('cellarVintageBeta.kindLine:{"count":8,"cellar":"Home"}');
+    const hint = screen.getByText(/cellarVintageBeta.notesDiffer/);
+    fireEvent.click(within(hint).getByRole('button'));
+    expect(document.querySelectorAll('.cvb-bottle-list > li')).toHaveLength(8);
+    expect(within(hint).queryByRole('button')).toBeNull();
+  });
+});
+
+test('own data is told when "this vintage" cannot be scoped (an NV group of empty vintages)', async () => {
+  page.historyBottleVintage = null;
+  renderPage();
+  await screen.findByText('cellarVintageBeta.kindLine:{"count":3,"cellar":"Home"}');
+  expect(screen.getByTestId('personal-data')).toHaveTextContent(':vintage:false');
+});
+
+test('a vintage with a "%" in it does not crash the page (the router has decoded it already)', async () => {
+  renderPage('/cellars/c1/vintages/w1/100%25');
+  expect(await screen.findByTestId('beta-badge')).toBeInTheDocument();
 });

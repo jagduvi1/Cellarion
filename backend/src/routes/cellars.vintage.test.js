@@ -184,6 +184,31 @@ describe('GET /api/cellars/:id/vintages/:wineId/:vintage', () => {
     expect(Bottle.find.mock.calls[0][0].vintage).toEqual({ $in: ['NV', '', null] });
   });
 
+  test('the history bottle is one whose vintage is written out, and the page is told that vintage', async () => {
+    // An NV group whose first bottle was imported with an empty vintage:
+    // "this vintage" own data can only be scoped through a written one.
+    ROWS.push(row(22, { vintage: '' }), row(23, { vintage: 'NV' }));
+    let { body } = await request(url('NV'));
+    expect(body.historyBottleId).toBe(id(23));
+    expect(body.historyBottleVintage).toBe('NV');
+    // Only empty vintages: no vintage to scope to, and the page is told so.
+    ROWS = ROWS.filter((r) => r._id !== id(23));
+    ({ body } = await request(url('NV')));
+    expect(body.historyBottleId).toBe(id(22));
+    expect(body.historyBottleVintage).toBeNull();
+    // An ordinary vintage: the first bottle, its vintage.
+    ({ body } = await request(url()));
+    expect([body.historyBottleId, body.historyBottleVintage]).toEqual([id(11), '2015']);
+  });
+
+  test('a vintage of up to 20 characters is looked up whole (an imported "Non-Vintage" is its own group)', async () => {
+    ROWS.push(row(24, { vintage: 'Non-Vintage' }));
+    const { status, body } = await request(url('Non-Vintage'));
+    expect(status).toBe(200);
+    expect(body.vintage).toBe('Non-Vintage');
+    expect(body.bottles.map((b) => b._id)).toEqual([id(24)]);
+  });
+
   test('a vintage that is all history still has a page: the wine comes from a drunk bottle, nothing is listed', async () => {
     ROWS = ROWS.filter((r) => !(r.vintage === '2015' && r.status === 'active' && r.cellar === CELLAR_ID));
     const { status, body } = await request(url());

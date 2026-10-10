@@ -1062,7 +1062,9 @@ const VINTAGE_PROFILE_SELECT = ['description', 'body', 'tannin', 'acidity', 'swe
 router.get('/:id/vintages/:wineId/:vintage', async (req, res) => {
   try {
     if (!isValidId(req.params.id) || !isValidId(req.params.wineId)) return res.status(400).json({ error: 'Invalid ID' });
-    const vintageParam = String(req.params.vintage || '').trim().slice(0, 10);
+    // Up to the 20 characters a bottle's vintage may hold: an imported
+    // "Non-Vintage" is its own group, and its page link must find it.
+    const vintageParam = String(req.params.vintage || '').trim().slice(0, 20);
     if (!vintageParam) return res.status(400).json({ error: 'Invalid vintage' });
     const cellar = await Cellar.findById(req.params.id).populate('user', 'username').lean();
     const role = getCellarRole(cellar, req.user.id);
@@ -1084,14 +1086,23 @@ router.get('/:id/vintages/:wineId/:vintage', async (req, res) => {
     // The wine as the cards carry it; from the last drunk bottle when nothing
     // is left (else one on order), so a vintage that is all history still has
     // a page.
+    // The page reads the vintage's history and own data through one bottle:
+    // one whose vintage is written out when there is one — an NV group also
+    // holds imported bottles with an empty vintage, and "this vintage" own
+    // data can only be scoped through a bottle that has one. The page is told
+    // that bottle's vintage, so it offers the scope only when it can work.
     let wine = bottles[0]?.wineDefinition || null;
-    let historyBottleId = bottles[0]?._id || null;
+    const written = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+    const historyBottle = bottles.find((b) => written(b.vintage)) || bottles[0] || null;
+    let historyBottleId = historyBottle?._id || null;
+    let historyBottleVintage = written(historyBottle?.vintage);
     if (!wine) {
       const any = await Bottle.findOne({ ...base, status: { $in: CONSUMED_STATUSES } }).populate(WINE_POPULATE_CARDS).sort({ consumedAt: -1 }).lean()
         || await Bottle.findOne(base).populate(WINE_POPULATE_CARDS).sort({ createdAt: -1 }).lean();
       if (!any || !any.wineDefinition) return res.status(404).json({ error: 'No bottles of this wine and vintage here' });
       wine = any.wineDefinition;
       historyBottleId = any._id;
+      historyBottleVintage = written(any.vintage);
     }
 
     // The tasting profile for the page's wine section. The cards leave the
@@ -1161,6 +1172,7 @@ router.get('/:id/vintages/:wineId/:vintage', async (req, res) => {
       onOrderCount,
       consumedCount,
       historyBottleId,
+      historyBottleVintage,
       shared,
     });
   } catch (error) {
