@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { updateBottle } from '../api/bottles';
+import { updateBottle, bulkUpdateBottles } from '../api/bottles';
 import useBarcodeWatch from '../hooks/useBarcodeWatch';
 import { normalizeBarcode } from '../utils/barcode';
 import Modal from './Modal';
@@ -19,7 +19,7 @@ import './BarcodeScanModal.css';
  * Saving goes through the ordinary bottle update (PUT /api/bottles/:id),
  * which stores the canonical form and refuses an invalid code.
  */
-export default function BarcodeScanModal({ bottle, onClose, onSaved }) {
+export default function BarcodeScanModal({ bottle, bottles, onClose, onSaved }) {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const inputId = useId();
@@ -31,6 +31,10 @@ export default function BarcodeScanModal({ bottle, onClose, onSaved }) {
   const [typed, setTyped] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  // The bottles the code goes on: one (the bottle page) or every bottle of a
+  // vintage (the vintage page). 'current' is the code they share, if any.
+  const targets = useMemo(() => (bottles && bottles.length ? bottles : [bottle]), [bottles, bottle]);
+  const current = targets.every((b) => b.barcode && b.barcode === targets[0].barcode) ? targets[0].barcode : null;
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
@@ -72,7 +76,11 @@ export default function BarcodeScanModal({ bottle, onClose, onSaved }) {
     setSaving(true);
     setError(null);
     try {
-      const res = await updateBottle(apiFetch, bottle._id, { barcode: code });
+      // One bottle: its own update. Every bottle of a vintage (the vintage
+      // page): one bulk request — they are the same product.
+      const res = targets.length === 1
+        ? await updateBottle(apiFetch, targets[0]._id, { barcode: code })
+        : await bulkUpdateBottles(apiFetch, targets.map((b) => b._id), { barcode: code });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(data.error || t('barcodeScan.failed', 'Could not save the barcode. Please try again.'));
@@ -80,12 +88,12 @@ export default function BarcodeScanModal({ bottle, onClose, onSaved }) {
         return;
       }
       stopCamera();
-      onSaved(data.bottle?.barcode ?? (code || null));
+      onSaved(targets.length === 1 ? (data.bottle?.barcode ?? (code || null)) : (code || null));
     } catch {
       setError(t('barcodeScan.failed', 'Could not save the barcode. Please try again.'));
       setSaving(false);
     }
-  }, [apiFetch, bottle._id, onSaved, stopCamera, t]);
+  }, [apiFetch, targets, onSaved, stopCamera, t]);
 
   useBarcodeWatch(videoRef, { active: cameraOn && !saving, onDetect: save });
 
@@ -100,11 +108,14 @@ export default function BarcodeScanModal({ bottle, onClose, onSaved }) {
   };
 
   return (
-    <Modal title={bottle.barcode ? t('barcodeScan.titleChange', 'Change barcode') : t('barcodeScan.title', 'Add barcode')} onClose={onClose} showClose trapFocus>
-      {bottle.barcode && (
+    <Modal title={current ? t('barcodeScan.titleChange', 'Change barcode') : t('barcodeScan.title', 'Add barcode')} onClose={onClose} showClose trapFocus>
+      {current && (
         <p className="barcode-scan-current">
-          {t('barcodeScan.current', 'Saved now: {{code}}', { code: bottle.barcode })}
+          {t('barcodeScan.current', 'Saved now: {{code}}', { code: current })}
         </p>
+      )}
+      {targets.length > 1 && (
+        <p className="barcode-scan-scope">{t('barcodeScan.allBottles', { count: targets.length })}</p>
       )}
       {cameraError ? (
         <p className="barcode-scan-camera-error" role="status">{cameraError}</p>
@@ -139,7 +150,7 @@ export default function BarcodeScanModal({ bottle, onClose, onSaved }) {
       {error && <p className="error-message" role="alert">{error}</p>}
 
       <div className="modal-actions">
-        {bottle.barcode && (
+        {current && (
           <button type="button" className="btn btn-secondary barcode-scan-remove" onClick={() => save('')} disabled={saving}>
             {t('barcodeScan.remove', 'Remove barcode')}
           </button>

@@ -314,7 +314,7 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded, lotSiblingIds = 
 
       <div className="form-group">
         <label>{t('addBottle.purchaseUrl')}</label>
-        <input type="url" value={form.purchaseUrl} onChange={set('purchaseUrl')} placeholder="https://\u2026" />
+        <input type="url" value={form.purchaseUrl} onChange={set('purchaseUrl')} placeholder="https://…" />
       </div>
 
       <div className="form-group bd-image-section">
