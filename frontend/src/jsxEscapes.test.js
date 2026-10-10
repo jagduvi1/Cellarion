@@ -1,12 +1,13 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 // A JSX attribute in plain quotes is NOT a JavaScript string: escapes are not
 // processed, so placeholder="https://…" showed the six characters
 // "…" to members instead of "…" (the purchase-URL field, 2026-10-10).
 // Write the character itself, or use braces: placeholder={'https://…'}.
 
-const SRC = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
+const SRC = path.dirname(fileURLToPath(import.meta.url));
 const ATTR_WITH_ESCAPE = /\s[a-zA-Z-]+="[^"{}]*\\u[0-9a-fA-F{]/;
 
 function sourceFiles(dir) {

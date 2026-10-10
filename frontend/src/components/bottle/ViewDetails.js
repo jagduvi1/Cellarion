@@ -324,7 +324,7 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
           {/* Wrap the handler — passing it directly would hand the click
               event to the `reason` parameter and break the report form */}
           <button className="btn-report-wine" onClick={() => onReportWine()}>
-            Report an issue with this wine
+            {t('bottleDetail.reportWineIssue', 'Report an issue with this wine')}
           </button>
         </div>
       )}

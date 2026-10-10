@@ -58,3 +58,22 @@ test('an NV wine writes a review with no vintage preset', async () => {
   fireEvent.click(screen.getByText('reviews.writeReview'));
   expect(await screen.findByText('review-form:')).toBeInTheDocument();
 });
+
+test('a slow answer for the last wine never lands over the current one', async () => {
+  // The bottle page moving to another bottle: w1's reviews answer after w2's.
+  let releaseOld;
+  api = vi.fn((url) => {
+    if (url.includes('/w1?')) {
+      return new Promise((resolve) => { releaseOld = () => resolve({ ok: true, json: async () => ({ reviews: [{ _id: 'old' }], pages: 1 }) }); });
+    }
+    return Promise.resolve({ ok: true, json: async () => ({ reviews: [{ _id: 'new' }], pages: 1 }) });
+  });
+  const { rerender } = render(<WineReviewsCard wine={WINE} vintage="2015" />);
+  await waitFor(() => expect(api).toHaveBeenCalledTimes(1));
+  rerender(<WineReviewsCard wine={{ _id: 'w2', name: 'Barbaresco' }} vintage="2016" />);
+  expect(await screen.findByTestId('review')).toHaveTextContent('new');
+  releaseOld();
+  await new Promise((r) => setTimeout(r, 20));
+  expect(screen.getAllByTestId('review')).toHaveLength(1);
+  expect(screen.getByTestId('review')).toHaveTextContent('new');
+});

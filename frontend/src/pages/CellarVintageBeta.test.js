@@ -31,11 +31,18 @@ vi.mock('../components/AddMoreBottlesModal', () => ({
   default: ({ bottle }) => <div data-testid="add-more">{bottle._id}:{bottle.vintage}</div>,
 }));
 vi.mock('../components/ReportWineModal', () => ({ default: ({ defaultReason }) => <div data-testid="report">{String(defaultReason)}</div> }));
-vi.mock('../components/RecommendWineModal', () => ({ default: ({ wineId }) => <div data-testid="recommend">{wineId}</div> }));
+vi.mock('../components/RecommendWineModal', () => ({ default: ({ wineId, wineName }) => <div data-testid="recommend">{wineId}:{wineName}</div> }));
 vi.mock('../components/BarcodeScanModal', () => ({
-  default: ({ bottles, onSaved }) => <button type="button" onClick={() => onSaved('7310070000002')}>barcode-stub:{bottles.map((b) => b._id).join(',')}</button>,
+  default: ({ bottles, otherCount, onSaved }) => (
+    <div>
+      <button type="button" onClick={() => onSaved('7310070000002', { done: bottles.length, total: bottles.length })}>
+        barcode-stub:{bottles.map((b) => b._id).join(',')}|others:{otherCount}
+      </button>
+      <button type="button" onClick={() => onSaved('7310070000002', { done: bottles.length - 1, total: bottles.length })}>barcode-partial</button>
+    </div>
+  ),
 }));
-vi.mock('../components/ImageGallery', () => ({ default: ({ bottleId, vintage }) => <div data-testid="gallery">{bottleId}:{vintage}</div> }));
+vi.mock('../components/ImageGallery', () => ({ default: ({ bottleId, vintage, vintageScope }) => <div data-testid="gallery">{bottleId}:{vintage}:{vintageScope ? 'all-bottles' : 'one-bottle'}</div> }));
 vi.mock('../components/ImageUpload', () => ({ default: ({ bottleId, wineDefinitionId }) => <div data-testid="upload">{bottleId}:{wineDefinitionId}</div> }));
 vi.mock('../components/bottle/WineReviewsCard', () => ({ default: ({ wine, vintage }) => <div data-testid="reviews">{wine._id}:{vintage}</div> }));
 vi.mock('../components/bottle/OwnerInquiryCard', () => ({ default: ({ wineId }) => <div data-testid="inquiry">{wineId}</div> }));
@@ -199,35 +206,95 @@ test('the page says what it is: the vintage, with how many bottles and where', a
 test('what belongs to the wine and the vintage is here: photos, price, reviews, curator questions', async () => {
   renderPage();
   await screen.findByText('cellarVintage.inCellar:3');
-  // This vintage's photos, through a bottle of it; "Add a photo" uploads through the same bottle.
-  expect(screen.getByTestId('gallery')).toHaveTextContent('b1:2015');
+  // This vintage's photos — of every bottle of it in the cellar, through a
+  // bottle of it; "Add a photo" uploads through the same bottle.
+  expect(screen.getByTestId('gallery')).toHaveTextContent('b1:2015:all-bottles');
   fireEvent.click(screen.getByText('cellarVintageBeta.addPhotoShort'));
   expect(await screen.findByTestId('upload')).toHaveTextContent('b1:w1');
-  // Market price of the vintage; nobody priced it yet, so the tracking request.
-  expect(await screen.findByTestId('price-history')).toHaveTextContent('0');
-  expect(screen.getByTestId('price-tracking')).toHaveTextContent('b1:2015');
+  // Closing the window reloads the page (the photo may still be cut out).
+  const loads = () => api.mock.calls.filter(([u]) => u === '/api/cellars/c1/vintages/w1/2015').length;
+  const before = loads();
+  fireEvent.click(screen.getByText('common.done'));
+  await waitFor(() => expect(loads()).toBe(before + 1));
+  // Market price of the vintage; nobody priced it yet, so only the tracking request.
+  expect(await screen.findByTestId('price-tracking')).toHaveTextContent('b1:2015');
+  expect(screen.queryByTestId('price-history')).toBeNull();
   expect(api).toHaveBeenCalledWith('/api/somm/prices/lookup?wine=w1&vintage=2015');
   expect(screen.getByTestId('reviews')).toHaveTextContent('w1:2015');
   expect(screen.getByTestId('inquiry')).toHaveTextContent('w1');
 });
 
-test('the ⋮ menu: a barcode for every bottle of the vintage, a report, a recommendation', async () => {
+test('the ⋮ menu: a barcode for the bottles of the vintage\'s size, a report, a recommendation', async () => {
   renderPage();
   await screen.findByText('cellarVintage.inCellar:3');
   const openMenu = () => fireEvent.click(screen.getAllByLabelText('cellarDetail.moreActions')[0]);
 
+  // b1 is a magnum — another product with its own code — so the code goes
+  // on the two 75 cl bottles and the window is told one is left alone.
   openMenu();
   fireEvent.click(screen.getByText('barcodeScan.title'));
-  fireEvent.click(await screen.findByText('barcode-stub:b1,b2,b3'));
-  expect(await screen.findByText('barcodeScan.savedAll:{"count":3,"code":"7310070000002"}')).toBeInTheDocument();
+  fireEvent.click(await screen.findByText('barcode-stub:b2,b3|others:1'));
+  expect(await screen.findByText('barcodeScan.savedOn:{"count":2,"code":"7310070000002"}')).toBeInTheDocument();
+
+  // Some bottles not changed: the notice says how many were.
+  openMenu();
+  fireEvent.click(screen.getByText('barcodeScan.title'));
+  fireEvent.click(await screen.findByText('barcode-partial'));
+  expect(await screen.findByText('barcodeScan.savedSome:{"count":1,"total":2,"code":"7310070000002"}')).toBeInTheDocument();
 
   openMenu();
   fireEvent.click(screen.getByText('cellarVintageBeta.reportWine'));
   expect(await screen.findByTestId('report')).toHaveTextContent('null');
 
+  // The wine is recommended by its name (the year is not part of it).
   openMenu();
   fireEvent.click(screen.getByText('cellarVintageBeta.recommend'));
-  expect(await screen.findByTestId('recommend')).toHaveTextContent('w1');
+  expect(await screen.findByTestId('recommend')).toHaveTextContent('w1:Château Margaux');
+});
+
+test('"Change barcode" when the bottles of the size share one; no barcode item when each has its own', async () => {
+  page.bottles = [
+    bottle('b1', { barcode: '7310070000002' }),
+    bottle('b2'),
+  ];
+  const { unmount } = renderPage();
+  await screen.findByText('cellarVintage.inCellar:2');
+  fireEvent.click(screen.getAllByLabelText('cellarDetail.moreActions')[0]);
+  expect(screen.getByText('barcodeScan.titleChange')).toBeInTheDocument();
+  unmount();
+
+  page.bottles = [
+    bottle('b1', { barcode: '7310070000002' }),
+    bottle('b2', { barcode: '0012345678905' }),
+  ];
+  renderPage();
+  await screen.findByText('cellarVintage.inCellar:2');
+  fireEvent.click(screen.getAllByLabelText('cellarDetail.moreActions')[0]);
+  expect(screen.queryByText('barcodeScan.title')).toBeNull();
+  expect(screen.queryByText('barcodeScan.titleChange')).toBeNull();
+});
+
+test('a priced vintage shows its price history and no tracking request', async () => {
+  const base = api.getMockImplementation();
+  api.mockImplementation(async (url, opts) => (url.startsWith('/api/somm/prices/lookup')
+    ? ok({ history: [{ price: 120, currency: 'EUR' }, { price: 140, currency: 'EUR' }] })
+    : base(url, opts)));
+  renderPage();
+  expect(await screen.findByTestId('price-history')).toHaveTextContent('2');
+  expect(screen.queryByTestId('price-tracking')).toBeNull();
+});
+
+test('a private draft wine: no report, no recommendation, no price tracking (none of them take a draft)', async () => {
+  page.wine = { ...WINE, draft: true };
+  renderPage();
+  await screen.findByText('cellarVintage.inCellar:3');
+  await waitFor(() => expect(api).toHaveBeenCalledWith('/api/somm/prices/lookup?wine=w1&vintage=2015'));
+  expect(screen.queryByTestId('price-tracking')).toBeNull();
+  fireEvent.click(screen.getAllByLabelText('cellarDetail.moreActions')[0]);
+  expect(screen.queryByText('cellarVintageBeta.reportWine')).toBeNull();
+  expect(screen.queryByText('cellarVintageBeta.recommend')).toBeNull();
+  // Its own photo and barcode are still the owner's to add.
+  expect(screen.getByText('barcodeScan.title')).toBeInTheDocument();
 });
 
 test('a viewer and a demo account get no photo upload and no barcode', async () => {

@@ -4,9 +4,11 @@ import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getBottle, consumeBottle, setBottleDefaultImage, undoBottle, openBottle, restoreBottle, markBottleArrived } from '../api/bottles';
+import { lookupPriceHistory } from '../api/somm';
 import { isOnOrder, formatArrivalMonth, isArrivalLate } from '../utils/onOrder';
 import { useFeature } from '../utils/featureFlags';
 import { isReserved, reservationSummary } from '../utils/reservation';
+import { slotLabel } from '../utils/slotLabel';
 import OpenBottlePanel from '../components/bottle/OpenBottlePanel';
 import { PRESERVATION_METHODS } from '../utils/openBottle';
 import { fetchRates } from '../utils/currency';
@@ -189,9 +191,7 @@ function BottleDetail() {
 
   const fetchPriceHistory = async (wineId, vintage) => {
     try {
-      const res = await apiFetch(
-        `/api/somm/prices/lookup?wine=${wineId}&vintage=${vintage}`
-      );
+      const res = await lookupPriceHistory(apiFetch, wineId, vintage);
       const data = await res.json();
       if (res.ok) setPriceHistory(data.history || []);
       else setPriceHistory([]);
@@ -580,16 +580,10 @@ function BottleDetail() {
           <div className="bd-wine-meta">
             {/* Early access, where a wine and vintage has its own page: say
                 this is ONE bottle — where it sits — and lead to all of them. */}
-            {vintagePageOn && wine?._id && !isConsumed && (
+            {vintagePageOn && wine?._id && !isConsumed && !onOrderNow && (
               <div className="page-kind-line bd-page-kind">
                 <span className="page-kind">{t('bottleDetail.kind', 'Bottle')}</span>
-                <span>
-                  {rackInfo
-                    ? (rackInfo.position != null
-                      ? t('drinkOne.slot', '{{rack}} · slot {{position}}', { rack: rackInfo.rackName, position: rackInfo.position })
-                      : rackInfo.rackName)
-                    : t('drinkOne.unplaced', 'Not in a rack')}
-                </span>
+                <span>{slotLabel(rackInfo, t)}</span>
                 <Link to={`/cellars/${cellarId}/vintages/${wine._id}/${encodeURIComponent(bottle?.vintage || 'NV')}`}>
                   {t('bottleDetail.allOfVintage', 'All bottles of this vintage')} ›
                 </Link>

@@ -48,6 +48,8 @@ jest.mock('../models/PriceTrackingSkip', () => ({}));
 jest.mock('../models/BottleImage', () => ({ findOne: jest.fn(), findById: jest.fn() }));
 jest.mock('../models/WineRequest', () => ({}));
 jest.mock('../models/Bottle', () => ({ findById: jest.fn(), find: jest.fn() }));
+// The auth middleware checks a demo token's account still exists.
+jest.mock('../models/User', () => ({ exists: jest.fn().mockResolvedValue(true) }));
 
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
@@ -80,8 +82,8 @@ function app() {
   return a;
 }
 
-function postJson(a, path, body) {
-  const token = jwt.sign({ id: USER, roles: ['user'] }, process.env.JWT_SECRET, { expiresIn: '1h' });
+function postJson(a, path, body, { isDemo = false } = {}) {
+  const token = jwt.sign({ id: USER, roles: ['user'], ...(isDemo ? { isDemo: true } : {}) }, process.env.JWT_SECRET, { expiresIn: '1h' });
   const payload = JSON.stringify(body);
   return new Promise((resolve, reject) => {
     const server = http.createServer(a);
@@ -145,6 +147,19 @@ describe('POST /api/bottles/bulk', () => {
     expect(status).toBe(200);
     expect(body.done).toBe(2);
     expect(updateBottleFields).toHaveBeenNthCalledWith(1, expect.objectContaining({ _id: B(1) }), { barcode: '7310070000002' }, expect.anything());
+  });
+
+  test('update: a demo account cannot add a barcode to many bottles either (the single-bottle edit refuses it too)', async () => {
+    Bottle.find.mockResolvedValue([
+      { _id: B(1), cellar: OWNED, status: 'active' },
+      { _id: B(2), cellar: OWNED, status: 'active' },
+    ]);
+    const { status, body } = await postJson(app(), '/api/bottles/bulk', {
+      action: 'update', bottleIds: [B(1), B(2)], fields: { barcode: '7310070000002' },
+    }, { isDemo: true });
+    expect(status).toBe(403);
+    expect(body.error).toMatch(/barcode/i);
+    expect(updateBottleFields).not.toHaveBeenCalled();
   });
 
   test('update: a note sent on purpose reaches every bottle — the vintage page\'s "Edit vintage" writes one note for the vintage', async () => {

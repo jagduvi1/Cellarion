@@ -1314,6 +1314,13 @@ router.post('/bulk', async (req, res) => {
       if (Object.keys(fields).length === 0) {
         return res.status(400).json({ error: `fields must include at least one of: ${BULK_UPDATE_FIELDS.join(', ')}` });
       }
+      // A demo account cannot add a barcode (each code is a vote in the
+      // shared lookup). The shared update refuses it per bottle with a 403,
+      // which the loop below would turn into "skipped" behind a 200 — refuse
+      // the request itself, as the single-bottle route does.
+      if (fields.barcode && req.user.isDemo) {
+        return res.status(403).json({ error: 'Demo accounts cannot add barcodes' });
+      }
       // A bad month is the same error for every bottle: refuse it up front.
       // The shared update only parses it on bottles on order (it drops the
       // field on any other), so an invalid value would otherwise pass or fail

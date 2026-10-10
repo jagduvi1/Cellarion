@@ -169,6 +169,7 @@ router.post('/upload', requireAuth, requireNonDemo, imageUploadLimiter, handleIm
 });
 
 // GET /api/images/bottle/:bottleId - Get images for a bottle
+const VINTAGE_GALLERY_BOTTLES = 500; // the vintage page's own cap (routes/cellars VINTAGE_PAGE_LIMIT)
 router.get('/bottle/:bottleId', requireAuth, async (req, res) => {
   try {
     if (!isValidId(req.params.bottleId)) return res.status(400).json({ error: 'Invalid ID' });
@@ -194,8 +195,24 @@ router.get('/bottle/:bottleId', requireAuth, async (req, res) => {
     // Handing it back took the whole bottle page down for its owner (support
     // ticket 2026-09-03: ImageCarousel called .startsWith on the null URL and
     // the ErrorBoundary swallowed the page) — 138 bottles / 47 owners on prod.
+    // ?scope=vintage (the vintage page): the photos of EVERY bottle of this
+    // wine and vintage in this cellar, not just this one — a label photo
+    // added through one bottle belongs to the vintage, and the page must not
+    // lose it when that bottle is drunk or another one sorts first. Same
+    // visibility rule per photo; the caller already has a role on the cellar,
+    // so its sibling bottles are theirs to see.
+    let bottleIds = null;
+    if (req.query.scope === 'vintage' && bottle.wineDefinition) {
+      const v = typeof bottle.vintage === 'string' && bottle.vintage.trim() ? bottle.vintage.trim() : 'NV';
+      const siblings = await Bottle.find({
+        cellar: bottle.cellar,
+        wineDefinition: bottle.wineDefinition,
+        vintage: v === 'NV' ? { $in: ['NV', '', null] } : v,
+      }).select('_id').limit(VINTAGE_GALLERY_BOTTLES).lean();
+      bottleIds = [...new Set([String(bottle._id), ...siblings.map((s) => String(s._id))])];
+    }
     const bottleImages = await BottleImage.find({
-      bottle: req.params.bottleId,
+      bottle: bottleIds ? { $in: bottleIds } : req.params.bottleId,
       $or: [
         { status: 'approved', visibility: 'public' },
         { uploadedBy: req.user.id, status: { $ne: 'rejected' } }

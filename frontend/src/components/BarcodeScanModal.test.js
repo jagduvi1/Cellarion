@@ -42,7 +42,7 @@ test('a code the camera reads is saved to the bottle at once', async () => {
   await act(async () => { await detect('7310070000002'); });
   expect(api).toHaveBeenCalledWith('/api/bottles/b1', expect.objectContaining({ method: 'PUT' }));
   expect(sentBody()).toEqual({ barcode: '7310070000002' });
-  expect(onSaved).toHaveBeenCalledWith('7310070000002');
+  expect(onSaved).toHaveBeenCalledWith('7310070000002', { done: 1, total: 1 });
 });
 
 test('typed numbers are checked before anything is sent; a UPC-A is saved in its EAN-13 form', async () => {
@@ -56,7 +56,7 @@ test('typed numbers are checked before anything is sent; a UPC-A is saved in its
 
   fireEvent.change(input, { target: { value: '0 12345 67890 5' } });
   fireEvent.click(screen.getByText('Save'));
-  await waitFor(() => expect(onSaved).toHaveBeenCalledWith('0012345678905'));
+  await waitFor(() => expect(onSaved).toHaveBeenCalledWith('0012345678905', { done: 1, total: 1 }));
   expect(sentBody()).toEqual({ barcode: '0012345678905' });
 });
 
@@ -76,7 +76,7 @@ test('a bottle with a barcode shows it, says "Change", and can lose it', async (
   expect(screen.getByText('Change barcode')).toBeInTheDocument();
   expect(screen.getByText(/Saved now: \{\{code\}\}:\{"code":"7310070000002"\}/)).toBeInTheDocument();
   fireEvent.click(screen.getByText('Remove barcode'));
-  await waitFor(() => expect(onSaved).toHaveBeenCalledWith(null));
+  await waitFor(() => expect(onSaved).toHaveBeenCalledWith(null, { done: 1, total: 1 }));
   expect(sentBody()).toEqual({ barcode: '' });
 });
 
@@ -97,14 +97,42 @@ test('on the vintage page the code goes on every bottle of the vintage in one bu
   await act(async () => { await detect('7310070000002'); });
   expect(api).toHaveBeenCalledWith('/api/bottles/bulk', expect.objectContaining({ method: 'POST' }));
   expect(sentBody()).toEqual({ action: 'update', bottleIds: ['b1', 'b2', 'b3'], fields: { barcode: '7310070000002' } });
-  expect(onSaved).toHaveBeenCalledWith('7310070000002');
+  expect(onSaved).toHaveBeenCalledWith('7310070000002', { done: 3, total: 3 });
 });
 
-test('bottles that share a code show it and offer "Change"; bottles that differ start from nothing', () => {
-  const { unmount } = render(<BarcodeScanModal bottles={[{ _id: 'b1', barcode: '7310070000002' }, { _id: 'b2', barcode: '7310070000002' }]} onClose={vi.fn()} onSaved={vi.fn()} />);
+test('some bottles not changed: the window closes and says how many were; none changed is an error', async () => {
+  // The bulk request answers 200 with the bottles it could not change as
+  // "skipped" — that must not read as "saved on all of them".
+  api = vi.fn(async () => ({ ok: true, json: async () => ({ done: 2, doneIds: ['b1', 'b2'], skipped: [{ id: 'b3', reason: 'error' }] }) }));
+  const onSaved = vi.fn();
+  const { unmount } = render(<BarcodeScanModal bottles={[{ _id: 'b1' }, { _id: 'b2' }, { _id: 'b3' }]} onClose={vi.fn()} onSaved={onSaved} />);
+  await waitFor(() => expect(watchActive).toBe(true));
+  await act(async () => { await detect('7310070000002'); });
+  expect(onSaved).toHaveBeenCalledWith('7310070000002', { done: 2, total: 3 });
+  unmount();
+
+  api = vi.fn(async () => ({ ok: true, json: async () => ({ done: 0, doneIds: [], skipped: [{ id: 'b1', reason: 'error' }, { id: 'b2', reason: 'error' }] }) }));
+  const onSaved2 = vi.fn();
+  render(<BarcodeScanModal bottles={[{ _id: 'b1' }, { _id: 'b2' }]} onClose={vi.fn()} onSaved={onSaved2} />);
+  await waitFor(() => expect(watchActive).toBe(true));
+  await act(async () => { await detect('7310070000002'); });
+  expect(onSaved2).not.toHaveBeenCalled();
+  expect(screen.getByRole('alert')).toHaveTextContent('Could not save the barcode');
+});
+
+test('bottles of the vintage it leaves alone are named, so "all" never overstates it', () => {
+  render(<BarcodeScanModal bottles={[{ _id: 'b1' }, { _id: 'b2' }]} otherCount={1} onClose={vi.fn()} onSaved={vi.fn()} />);
+  expect(screen.getByText(/barcodeScan.someBottles/)).toHaveTextContent('barcodeScan.othersKeep:{"count":1}');
+  expect(screen.queryByText(/barcodeScan.allBottles/)).toBeNull();
+});
+
+test('bottles with one code between them show it and offer "Change"; bottles whose codes differ start from nothing', () => {
+  // A bottle without a code does not count against the shared one: saving
+  // goes to all of them, so it gets the same.
+  const { unmount } = render(<BarcodeScanModal bottles={[{ _id: 'b1', barcode: '7310070000002' }, { _id: 'b2' }]} onClose={vi.fn()} onSaved={vi.fn()} />);
   expect(screen.getByText('Change barcode')).toBeInTheDocument();
   unmount();
-  render(<BarcodeScanModal bottles={[{ _id: 'b1', barcode: '7310070000002' }, { _id: 'b2' }]} onClose={vi.fn()} onSaved={vi.fn()} />);
+  render(<BarcodeScanModal bottles={[{ _id: 'b1', barcode: '7310070000002' }, { _id: 'b2', barcode: '0012345678905' }]} onClose={vi.fn()} onSaved={vi.fn()} />);
   expect(screen.getByText('Add barcode')).toBeInTheDocument();
   expect(screen.queryByText('Remove barcode')).toBeNull();
 });
