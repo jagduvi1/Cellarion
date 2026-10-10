@@ -1271,8 +1271,9 @@ router.post('/bulk-move', async (req, res) => {
 //   { action: 'update',  bottleIds, fields }  → services/bottleOps.updateBottleFields
 //       per bottle. `fields` is limited to BULK_UPDATE_FIELDS — the purchase
 //       details a delivery shares (date, shop, price), the reservation
-//       ("spoken for X until 2028") and the drink window a wine and vintage
-//       share (support ticket 2026-09-06) — everything else stays per bottle.
+//       ("spoken for X until 2028"), and the drink window and notes a wine and
+//       vintage share (support ticket 2026-09-06; notes for the vintage page's
+//       "Edit vintage") — everything else stays per bottle.
 //   { action: 'consume', bottleIds, reason, note, consumedAt, includeReserved }
 //       → services/bottleOps.consumeBottle per bottle, one date for all;
 //       already-consumed bottles are skipped as not_active, and a "spoken for"
@@ -1290,7 +1291,7 @@ router.post('/bulk-move', async (req, res) => {
 // the SAME error for every bottle, so it fails the whole request with that
 // message before anything is touched, rather than reporting N identical skips.
 // Response: { done, doneIds: string[], skipped: [{ id, reason }] }
-const BULK_UPDATE_FIELDS = ['price', 'currency', 'purchaseDate', 'purchaseLocation', 'purchaseUrl', 'reservedFor', 'reservedUntil', 'drinkFrom', 'drinkTo', 'peakFrom', 'peakUntil', 'expectedArrival'];
+const BULK_UPDATE_FIELDS = ['price', 'currency', 'purchaseDate', 'purchaseLocation', 'purchaseUrl', 'reservedFor', 'reservedUntil', 'drinkFrom', 'drinkTo', 'peakFrom', 'peakUntil', 'notes', 'expectedArrival'];
 router.post('/bulk', async (req, res) => {
   try {
     const { action, bottleIds } = req.body || {};

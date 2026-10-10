@@ -75,7 +75,7 @@ it('forceOpen wins over a remembered "closed" (e.g. a scheduled account deletion
   expect(container.querySelector('.settings-group--danger')).not.toBeNull();
 });
 
-it('every alias points at one of the five groups', () => {
-  const groups = new Set(['account', 'preferences', 'connections', 'data', 'danger']);
+it('every alias points at one of the six groups', () => {
+  const groups = new Set(['account', 'preferences', 'early-access', 'connections', 'data', 'danger']);
   for (const g of Object.values(SETTINGS_HASH_GROUP)) expect(groups.has(g)).toBe(true);
 });

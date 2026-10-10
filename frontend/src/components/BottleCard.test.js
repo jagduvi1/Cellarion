@@ -167,9 +167,10 @@ describe('BottleCard stacked card actions', () => {
     }
   });
 
-  test('a single bottle shows no actions; a group without handlers shows none; select mode hides them', () => {
-    renderCard({ onInfo: vi.fn(), onDrinkOne: vi.fn() });
-    expect(screen.queryByText('bottleCard.groupInfo')).toBeNull();
+  test('the caller decides: no handlers, no actions; select mode hides them', () => {
+    const { unmount: u1 } = renderCard({});
+    expect(screen.queryByText('bottleCard.groupDrinkOne')).toBeNull();
+    u1();
     const { unmount } = renderCard({ groupCount: 3, onClick: vi.fn() });
     expect(screen.queryByText('bottleCard.groupDrinkOne')).toBeNull();
     unmount();
@@ -182,6 +183,44 @@ describe('BottleCard stacked card actions', () => {
     renderCard({ groupCount: 2, onClick: vi.fn(), onInfo: vi.fn() });
     expect(screen.getByText('bottleCard.groupInfo')).toBeInTheDocument();
     expect(screen.queryByText('bottleCard.groupDrinkOne')).toBeNull();
+  });
+});
+
+/**
+ * Early access, one page per wine and vintage: a tap on any entry opens the
+ * vintage page, and "Drink one" sits on every card — the last bottle of a
+ * vintage looks and behaves like the ones before it. The stack still expands
+ * from the ⊕ in select mode, through its own handler.
+ */
+describe('BottleCard with one page per wine and vintage (early access)', () => {
+  test('a single bottle carries Drink one too, compact and named for screen readers; the card itself opens the page', () => {
+    const onClick = vi.fn(); // navigate to the vintage page
+    const onDrinkOne = vi.fn();
+    const { container } = renderCard({ onClick, onDrinkOne, actionsInline: true });
+    const drink = screen.getByRole('button', { name: 'bottleCard.drinkOneAria' });
+    expect(container.querySelector('.bottle-group-actions--inline')).not.toBeNull();
+    fireEvent.click(drink);
+    expect(onDrinkOne).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText('Barolo Albe'));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    // A tap opens a page, so the card shows ›, like a single bottle.
+    expect(container.querySelector('.bottle-chevron').textContent).toBe('›');
+  });
+
+  test('a stack whose tap opens the page shows ›, and in select mode its ⊕ expands through onExpand', () => {
+    const onClick = vi.fn();
+    const onExpand = vi.fn();
+    const { container, unmount } = renderCard({ groupCount: 3, onClick, onExpand, onDrinkOne: vi.fn(), actionsInline: true });
+    expect(container.querySelector('.bottle-chevron').textContent).toBe('›');
+    unmount();
+
+    const onToggleSelect = vi.fn();
+    renderCard({ groupCount: 3, onClick, onExpand, selectable: true, onToggleSelect });
+    fireEvent.click(screen.getByLabelText('bottleCard.expandGroup'));
+    expect(onExpand).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
+    expect(onToggleSelect).not.toHaveBeenCalled();
   });
 });
 

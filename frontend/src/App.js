@@ -1,4 +1,4 @@
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
 import { lazy } from './utils/lazyWithReload';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
@@ -10,6 +10,7 @@ import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import ReconsentModal from './components/ReconsentModal';
 import Analytics from './components/Analytics';
+import { useFeature, loadFeatureFlags } from './utils/featureFlags';
 import './styles/common.css';
 
 // Lazy-load all pages so each route gets its own chunk.
@@ -34,6 +35,7 @@ const BottleDetail    = lazy(() => import('./pages/BottleDetail'));
 const CellarHistory   = lazy(() => import('./pages/CellarHistory'));
 const CellarOnOrder   = lazy(() => import('./pages/CellarOnOrder'));
 const CellarVintage   = lazy(() => import('./pages/CellarVintage'));
+const CellarVintageBeta = lazy(() => import('./pages/CellarVintageBeta'));
 const CellarAudit     = lazy(() => import('./pages/CellarAudit'));
 const WineRequests    = lazy(() => import('./pages/WineRequests'));
 const WineDrafts      = lazy(() => import('./pages/WineDrafts'));
@@ -87,6 +89,13 @@ const ConnectAi            = lazy(() => import('./pages/ConnectAi'));
 const WineLists            = lazy(() => import('./pages/WineLists'));
 const WineListEditor       = lazy(() => import('./pages/WineListEditor'));
 const PublicWineList       = lazy(() => import('./pages/PublicWineList'));
+
+// The vintage page in the layout the user's flags call for: early access's
+// one page per wine and vintage, or the classic one (utils/featureFlags).
+// Same address, same data — a bookmark works with the switch on or off.
+function VintagePage() {
+  return useFeature('vintagePage') ? <CellarVintageBeta /> : <CellarVintage />;
+}
 
 function AppRoutes() {
   const { user, loading } = useAuth();
@@ -237,7 +246,7 @@ function AppRoutes() {
           path="/cellars/:id/vintages/:wineId/:vintage"
           element={
             <ProtectedRoute>
-              <Layout><CellarVintage /></Layout>
+              <Layout><VintagePage /></Layout>
             </ProtectedRoute>
           }
         />
@@ -589,6 +598,9 @@ function AppRoutes() {
 }
 
 function App() {
+  // Ask for the feature flags as the app starts, so the cellar list already
+  // knows which screens to show (utils/featureFlags; cached between visits).
+  useEffect(() => { loadFeatureFlags(); }, []);
   return (
     <HelmetProvider>
       <ThemeProvider>

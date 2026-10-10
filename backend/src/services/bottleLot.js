@@ -28,7 +28,8 @@ const LOT_FIELDS = ['drinkFrom', 'drinkTo', 'peakFrom', 'peakUntil', 'price', 'c
 // shared when a caller explicitly asks in one call: a case bought together
 // has one purchase date and one shop, and a note written for the case belongs
 // on every bottle of it. MCP update_bottle's apply_to_lot takes these on top
-// of LOT_FIELDS, so a case is one call instead of one per bottle.
+// of LOT_FIELDS, so a case is one call instead of one per bottle; the vintage
+// page's "Edit vintage" sends its note through the bulk route the same way.
 const LOT_FIELDS_ON_REQUEST = ['notes', 'purchaseDate', 'purchaseLocation', 'purchaseUrl'];
 // Same ceiling as the bulk route (BULK_MAX): each sibling costs a save, a
 // search index update and an audit row, sequentially (audit 2026-09-07).

@@ -42,18 +42,22 @@ export default function DrinkOneModal({ bottles, rackMap, wineName, onClose, onD
     return parts.join(' · ');
   };
 
+  // A refusal goes back to the picker, which is where the error shows — the
+  // consume form has no room for one. With a single bottle too: the picker
+  // then lists that one bottle, so the error is read and the retry is a tap
+  // (before, a failed single-bottle drink silently kept the form open).
   const handleConfirm = async (reason, note, rating, consumedRatingScale, consumedAt) => {
     try {
       const res = await consumeBottle(apiFetch, picked._id, { reason, note, rating, consumedRatingScale, consumedAt });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setPicked(bottles.length === 1 ? bottles[0] : null);
+        setPicked(null);
         setError(data.error || t('drinkOne.failed', 'Could not log the bottle. Please try again.'));
         return;
       }
       onDone(picked, reason);
     } catch {
-      setPicked(bottles.length === 1 ? bottles[0] : null);
+      setPicked(null);
       setError(t('drinkOne.failed', 'Could not log the bottle. Please try again.'));
     }
   };

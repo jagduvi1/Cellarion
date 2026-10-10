@@ -127,7 +127,7 @@ export const bulkMoveBottles = (apiFetch, bottleIds, toCellarId) =>
   });
 
 // ONE edit applied to MANY bottles (POST /api/bottles/bulk, action 'update').
-// `fields` is limited server-side to purchase details, reservation and the drink window.
+// `fields` is limited server-side to purchase details, reservation, the drink window and notes.
 export const bulkUpdateBottles = (apiFetch, bottleIds, fields) =>
   apiFetch('/api/bottles/bulk', {
     method: 'POST',

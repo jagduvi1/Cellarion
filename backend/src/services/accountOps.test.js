@@ -124,6 +124,13 @@ describe('buildPreferencesUpdate', () => {
   test('an empty patch is a 400 (nothing to change)', async () => {
     expect((await buildPreferencesUpdate(UID, {})).error.status).toBe(400);
   });
+
+  test('earlyAccess ("Try new features early") takes a real boolean only — a stray string never switches a user into beta', async () => {
+    expect((await buildPreferencesUpdate(UID, { earlyAccess: true })).update).toEqual({ 'preferences.earlyAccess': true });
+    expect((await buildPreferencesUpdate(UID, { earlyAccess: false })).update).toEqual({ 'preferences.earlyAccess': false });
+    expect((await buildPreferencesUpdate(UID, { earlyAccess: 'true' })).error.status).toBe(400);
+    expect((await buildPreferencesUpdate(UID, { earlyAccess: 1 })).error.status).toBe(400);
+  });
 });
 
 describe('updatePreferences', () => {
@@ -189,6 +196,27 @@ describe('createSupportTicket', () => {
     expect(SupportTicket.create).toHaveBeenCalledWith({
       user: UID, category: 'help', subject: 'Hi there', message: 'Need help',
     });
+  });
+
+  test('beta feedback names its feature; without a subject it takes the feature\'s English title', async () => {
+    SupportTicket.create.mockResolvedValue({ _id: 't2', category: 'beta', status: 'open' });
+    const res = await createSupportTicket(UID, { category: 'beta', feature: 'vintagePage', message: 'Love the bar at the bottom' });
+    expect(res.error).toBeUndefined();
+    expect(SupportTicket.create).toHaveBeenCalledWith({
+      user: UID, category: 'beta', feature: 'vintagePage',
+      subject: 'Beta feedback: One page per wine and vintage', message: 'Love the bar at the bottom',
+    });
+    // A subject the sender wrote wins; beta feedback with no feature still files.
+    await createSupportTicket(UID, { category: 'beta', feature: 'vintagePage', subject: 'Rows', message: 'm' });
+    expect(SupportTicket.create).toHaveBeenLastCalledWith(expect.objectContaining({ subject: 'Rows', feature: 'vintagePage' }));
+    await createSupportTicket(UID, { category: 'beta', message: 'm' });
+    expect(SupportTicket.create).toHaveBeenLastCalledWith({ user: UID, category: 'beta', subject: 'Beta feedback', message: 'm' });
+  });
+
+  test('a feature key is checked: unknown keys and keys on non-beta tickets are refused', async () => {
+    expect((await createSupportTicket(UID, { category: 'beta', feature: 'noSuchThing', message: 'm' })).error.status).toBe(400);
+    expect((await createSupportTicket(UID, { category: 'bug', feature: 'vintagePage', subject: 's', message: 'm' })).error.status).toBe(400);
+    expect(SupportTicket.create).not.toHaveBeenCalled();
   });
 });
 

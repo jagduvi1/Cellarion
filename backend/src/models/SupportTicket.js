@@ -24,6 +24,16 @@ const supportTicketSchema = new mongoose.Schema({
     required: true,
     index: true
   },
+  // The feature a 'beta' ticket is about (a key from config/featureFlags):
+  // lets the admin queue filter beta feedback per feature, and tells who to
+  // thank when that feature goes out to everyone. Deliberately not an enum —
+  // a flag is deleted from the code once released, and its tickets stay.
+  feature: {
+    type: String,
+    trim: true,
+    maxlength: 64,
+    default: undefined
+  },
   subject: {
     type: String,
     required: [true, 'Subject is required'],

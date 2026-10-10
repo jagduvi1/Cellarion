@@ -1057,6 +1057,8 @@ router.get('/:id/history', async (req, res) => {
 // their own routes, as on the bottle page.
 const VINTAGE_PAGE_LIMIT = 500;
 const VINTAGE_SHARED_FIELDS = ['notes', 'drinkFrom', 'drinkTo', 'peakFrom', 'peakUntil'];
+const VINTAGE_PROFILE_SELECT = ['description', 'body', 'tannin', 'acidity', 'sweetness', 'flavors', 'foodPairings', 'source']
+  .map((f) => `aiProfile.${f}`).join(' ');
 router.get('/:id/vintages/:wineId/:vintage', async (req, res) => {
   try {
     if (!isValidId(req.params.id) || !isValidId(req.params.wineId)) return res.status(400).json({ error: 'Invalid ID' });
@@ -1090,6 +1092,18 @@ router.get('/:id/vintages/:wineId/:vintage', async (req, res) => {
       if (!any || !any.wineDefinition) return res.status(404).json({ error: 'No bottles of this wine and vintage here' });
       wine = any.wineDefinition;
       historyBottleId = any._id;
+    }
+
+    // The tasting profile for the page's wine section. The cards leave the
+    // prose out (WINE_LIST_SELECT), so it is read once here: the display
+    // fields only, as the bottle page shows them. A held profile stores no
+    // description and no descriptors, so it stays silent here too.
+    try {
+      const profiled = await WineDefinition.findById(wine._id).select(VINTAGE_PROFILE_SELECT).lean();
+      wine = { ...wine, aiProfile: profiled?.aiProfile || null };
+    } catch (err) {
+      // Auxiliary, like the rack slots below: never 500 the page over it.
+      console.error('Vintage page profile lookup failed:', err.message);
     }
 
     // Rack slots, answered here like the bottle page does: the page must not

@@ -93,6 +93,7 @@ const wellKnownOAuthRoute = require('./routes/wellKnownOAuth');
 const rateLimitsConfig = require('./config/rateLimits');
 const aiConfig = require('./config/aiConfig');
 const announcementConfig = require('./config/announcement');
+const featureFlags = require('./config/featureFlags');
 const { logAudit, logger } = require('./services/audit');
 const { drainingConnectionClose } = require('./services/shutdown');
 
@@ -455,6 +456,11 @@ aiConfig.load().catch(err =>
 // Load the site announcement banner from DB on startup
 announcementConfig.load().catch(err =>
   console.warn('[announcement] Startup load failed, using defaults:', err.message)
+);
+
+// Load the feature flags (off / beta / everyone per flagged feature)
+featureFlags.load().catch(err =>
+  console.warn('[featureFlags] Startup load failed, using defaults:', err.message)
 );
 
 module.exports = app;

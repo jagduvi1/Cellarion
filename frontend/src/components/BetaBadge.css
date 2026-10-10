@@ -1,0 +1,90 @@
+/* Early access: the strip a beta feature carries, the pill in it, and the
+   feedback form. Info tokens, so it reads in light and dark alike (the
+   primary-coloured beta pills lose contrast on the dark theme's gold). */
+
+.beta-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  padding: 0.45rem 0.75rem;
+  margin: 0.75rem 0 0;
+  border: 1px solid var(--color-info-border);
+  border-radius: var(--radius-md);
+  background: var(--color-info-bg);
+  color: var(--color-text);
+  font-size: 0.85rem;
+}
+
+.beta-pill {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--color-info-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-info);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.4;
+}
+
+.beta-strip-text {
+  flex: 1 1 12rem;
+  min-width: 0;
+  color: var(--color-text-secondary);
+}
+
+.beta-strip-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.beta-strip-btn {
+  font: inherit;
+  font-weight: 600;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--color-info-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-info);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.beta-strip-btn:hover,
+.beta-strip-btn:focus-visible {
+  border-color: var(--color-info);
+}
+
+.beta-strip-link {
+  color: var(--color-info);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.beta-feedback-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.beta-feedback-form label {
+  font-weight: 600;
+}
+
+.beta-feedback-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  font: inherit;
+}
+
+.beta-feedback-hint {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}

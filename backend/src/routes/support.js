@@ -14,9 +14,12 @@ router.post('/', requireAuth, requireNonDemo, async (req, res) => {
     const { ticket, error } = await createSupportTicket(req.user.id, req.body || {});
     if (error) return res.status(error.status).json({ error: error.message });
 
+    // The stored subject: beta feedback may arrive without one and take the
+    // feature's title (services/accountOps).
     logAudit(req, 'support.ticket.created', { type: 'SupportTicket', id: ticket._id }, {
       category: ticket.category,
-      subject: String(req.body.subject).trim()
+      subject: ticket.subject,
+      ...(ticket.feature ? { feature: ticket.feature } : {}),
     });
 
     res.status(201).json({ ticket });

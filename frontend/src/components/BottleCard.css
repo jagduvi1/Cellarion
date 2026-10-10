@@ -84,6 +84,9 @@
 }
 
 .bottle-name {
+  display: flex;
+  align-items: center;
+  min-width: 0;
   font-size: 0.95rem;
   font-weight: 600;
   color: var(--color-text);
@@ -91,6 +94,17 @@
   overflow: hidden;
   text-overflow: ellipsis;
   margin-bottom: 0.2rem;
+}
+
+/* The name gives way, the ×n pill stays (see BottleCard). */
+.bottle-name-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bottle-name .bottle-count-pill {
+  flex-shrink: 0;
 }
 
 .bottle-meta {
@@ -637,5 +651,28 @@
   }
   .bottle-card--compact .bottle-group-actions {
     padding-left: 0;
+  }
+}
+
+/* Early access (one page per wine and vintage): "Drink one" sits on every
+   card, one bottle or many, and stays on the row. On a phone it shrinks to
+   the glass instead of dropping under the text, so the list keeps its height. */
+@media (max-width: 600px) {
+  .bottle-card .bottle-group-actions--inline {
+    margin-left: auto;
+    width: auto;
+    padding-left: 0;
+  }
+  .bottle-card .bottle-group-actions--inline .bottle-group-btn-label {
+    display: none;
+  }
+  .bottle-card .bottle-group-actions--inline .bottle-group-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 42px;
+    min-height: 38px;
+    padding: 0.35rem 0.6rem;
+    font-size: 1.05rem;
   }
 }
