@@ -163,3 +163,33 @@ describe('the vintage\'s official photo leads the bottle\'s gallery (ticket 2026
     expect(body.images.map((i) => i._id)).toEqual([oid('5'), oid('4'), oid('3')]);
   });
 });
+
+// The vintage page (?scope=vintage): a label photo added through one bottle
+// belongs to the vintage, so the gallery takes in every bottle of this wine
+// and vintage in the same cellar — same visibility rule per photo.
+describe('scope=vintage', () => {
+  test('lists the photos of every bottle of the wine and vintage in this cellar', async () => {
+    Bottle.findById.mockResolvedValue({ _id: BOTTLE, cellar: CELLAR, wineDefinition: WINE, vintage: '2015', defaultImage: null });
+    const sibling = oid('d');
+    Bottle.find = jest.fn(() => ({ select: () => ({ limit: () => ({ lean: async () => [{ _id: BOTTLE }, { _id: sibling }] }) }) }));
+    BottleImage.find.mockReturnValue(makeQuery([]));
+
+    const res = await get(`/api/images/bottle/${BOTTLE}?scope=vintage`, tokenFor(USER, ['user']));
+    expect(res.status).toBe(200);
+    expect(Bottle.find).toHaveBeenCalledWith({ cellar: CELLAR, wineDefinition: WINE, vintage: '2015' });
+    const bottleFilter = BottleImage.find.mock.calls[0][0];
+    expect(bottleFilter.bottle).toEqual({ $in: [BOTTLE, sibling] });
+    expect(bottleFilter.$or).toEqual([
+      { status: 'approved', visibility: 'public' },
+      { uploadedBy: USER, status: { $ne: 'rejected' } },
+    ]);
+  });
+
+  test('NV takes in the bottles filed under an empty or missing vintage too', async () => {
+    Bottle.findById.mockResolvedValue({ _id: BOTTLE, cellar: CELLAR, wineDefinition: WINE, vintage: 'NV', defaultImage: null });
+    Bottle.find = jest.fn(() => ({ select: () => ({ limit: () => ({ lean: async () => [] }) }) }));
+    BottleImage.find.mockReturnValue(makeQuery([]));
+    await get(`/api/images/bottle/${BOTTLE}?scope=vintage`, tokenFor(USER, ['user']));
+    expect(Bottle.find.mock.calls[0][0].vintage).toEqual({ $in: ['NV', '', null] });
+  });
+});

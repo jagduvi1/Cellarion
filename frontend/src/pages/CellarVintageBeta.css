@@ -195,12 +195,6 @@ a.cvb-summary-item:hover {
   gap: 0.3rem;
 }
 
-.cvb-bottle-chevron {
-  font-size: 1.3rem;
-  line-height: 1;
-  color: var(--color-text-muted);
-}
-
 @media (max-width: 1000px) {
   .cvb-grid {
     grid-template-columns: minmax(0, 1fr);

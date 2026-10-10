@@ -6,6 +6,7 @@ import { ConsumeModal } from './ConsumeModal';
 import { useDialogA11y } from '../utils/useDialogA11y';
 import { isReserved, reservationSummary } from '../utils/reservation';
 import './DrinkOneModal.css';
+import { slotLabel as slotWords } from '../utils/slotLabel';
 
 /**
  * "Drink one" from a grouped entry or the vintage page (support ticket
@@ -30,13 +31,7 @@ export default function DrinkOneModal({ bottles, rackMap, wineName, onClose, onD
   const boxRef = useDialogA11y(onClose);
 
   const slotOf = (b) => b.rackInfo || rackMap?.get(String(b._id)) || null;
-  const slotLabel = (b) => {
-    const s = slotOf(b);
-    if (!s) return t('drinkOne.unplaced', 'Not in a rack');
-    return s.position != null
-      ? t('drinkOne.slot', '{{rack}} · slot {{position}}', { rack: s.rackName, position: s.position })
-      : s.rackName;
-  };
+  const slotLabel = (b) => slotWords(slotOf(b), t);
   const purchaseLabel = (b) => {
     const parts = [];
     if (b.purchaseDate) parts.push(new Date(b.purchaseDate).toLocaleDateString(i18n.language, { year: 'numeric', month: 'short' }));

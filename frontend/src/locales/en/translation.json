@@ -1211,7 +1211,8 @@
     "barcode": "Barcode",
     "purchaseLink": "Link",
     "kind": "Bottle",
-    "allOfVintage": "All bottles of this vintage"
+    "allOfVintage": "All bottles of this vintage",
+    "reportWineIssue": "Report an issue with this wine"
   },
   "lotHistory": {
     "title": "This wine in your cellar",
@@ -5485,6 +5486,16 @@
     "allBottles_one": "Saved on your bottle of this vintage.",
     "allBottles_other": "Saved on all {{count}} bottles of this vintage.",
     "savedAll_one": "Barcode saved: {{code}}",
-    "savedAll_other": "Barcode saved on all {{count}} bottles: {{code}}"
+    "savedAll_other": "Barcode saved on all {{count}} bottles: {{code}}",
+    "someBottles_one": "Saved on 1 bottle of this vintage.",
+    "someBottles_other": "Saved on {{count}} bottles of this vintage.",
+    "othersKeep_one": "Not on the other bottle: it is another size or has a barcode of its own.",
+    "othersKeep_other": "Not on the other {{count}}: they are another size or have a barcode of their own.",
+    "savedSome_one": "Barcode saved on 1 of {{total}} bottles: {{code}}. Open the others to try again.",
+    "savedSome_other": "Barcode saved on {{count}} of {{total}} bottles: {{code}}. Open the others to try again.",
+    "removedSome_one": "Barcode removed from 1 of {{total}} bottles. Open the others to try again.",
+    "removedSome_other": "Barcode removed from {{count}} of {{total}} bottles. Open the others to try again.",
+    "savedOn_one": "Barcode saved on 1 bottle: {{code}}",
+    "savedOn_other": "Barcode saved on {{count}} bottles: {{code}}"
   }
 }

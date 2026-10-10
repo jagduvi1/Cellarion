@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { lazy } from '../../utils/lazyWithReload';
 import { useAuth } from '../../contexts/AuthContext';
@@ -34,8 +34,15 @@ export default function WineReviewsCard({ wine, vintage, communityRating }) {
     setRating(communityRating?.reviewCount > 0 ? communityRating : null);
   }, [wineId, communityRating?.reviewCount, communityRating?.averageNormalized]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ...and never shows the last wine's reviews while its own load.
+  useEffect(() => { setReviews([]); setPages(0); setPage(1); }, [wineId]);
+
+  // Only the latest request may fill the list: a slow answer for the last
+  // wine, filter or page must not land over the current one.
+  const seq = useRef(0);
   const load = useCallback(async (nextPage = 1) => {
     if (!wineId) return;
+    const mine = ++seq.current;
     try {
       const params = new URLSearchParams();
       params.set('limit', '10');
@@ -44,6 +51,7 @@ export default function WineReviewsCard({ wine, vintage, communityRating }) {
       if (vintageFilter === 'this' && vintage) params.set('vintage', vintage);
       const res = await getWineReviews(apiFetch, wineId, params.toString());
       const data = await res.json();
+      if (mine !== seq.current) return;
       if (res.ok) {
         setReviews(data.reviews || []);
         setPages(data.pages || 0);

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { updateBottle, bulkUpdateBottles } from '../api/bottles';
 import useBarcodeWatch from '../hooks/useBarcodeWatch';
-import { normalizeBarcode } from '../utils/barcode';
+import { normalizeBarcode, sharedBarcode } from '../utils/barcode';
 import Modal from './Modal';
 import './BarcodeScanModal.css';
 
@@ -17,9 +17,13 @@ import './BarcodeScanModal.css';
  * barcode can have it removed here.
  *
  * Saving goes through the ordinary bottle update (PUT /api/bottles/:id),
- * which stores the canonical form and refuses an invalid code.
+ * which stores the canonical form and refuses an invalid code. On the
+ * vintage page the code goes on several bottles at once (`bottles`, chosen
+ * by vintageBarcodeTargets) in one bulk request; `otherCount` says how many
+ * bottles of the vintage it leaves alone. onSaved(code, { done, total }) —
+ * done < total when some bottles could not be changed.
  */
-export default function BarcodeScanModal({ bottle, bottles, onClose, onSaved }) {
+export default function BarcodeScanModal({ bottle, bottles, otherCount = 0, onClose, onSaved }) {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const inputId = useId();
@@ -31,10 +35,10 @@ export default function BarcodeScanModal({ bottle, bottles, onClose, onSaved }) 
   const [typed, setTyped] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-  // The bottles the code goes on: one (the bottle page) or every bottle of a
+  // The bottles the code goes on: one (the bottle page) or the bottles of a
   // vintage (the vintage page). 'current' is the code they share, if any.
   const targets = useMemo(() => (bottles && bottles.length ? bottles : [bottle]), [bottles, bottle]);
-  const current = targets.every((b) => b.barcode && b.barcode === targets[0].barcode) ? targets[0].barcode : null;
+  const current = sharedBarcode(targets);
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
@@ -82,13 +86,19 @@ export default function BarcodeScanModal({ bottle, bottles, onClose, onSaved }) 
         ? await updateBottle(apiFetch, targets[0]._id, { barcode: code })
         : await bulkUpdateBottles(apiFetch, targets.map((b) => b._id), { barcode: code });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
+      // The bulk request answers 200 with the bottles it could not change
+      // listed as skipped: none done is a failure, some done is said so.
+      const done = targets.length === 1 ? 1 : Number(data.done) || 0;
+      if (!res.ok || done === 0) {
         setError(data.error || t('barcodeScan.failed', 'Could not save the barcode. Please try again.'));
         setSaving(false);
         return;
       }
       stopCamera();
-      onSaved(targets.length === 1 ? (data.bottle?.barcode ?? (code || null)) : (code || null));
+      onSaved(
+        targets.length === 1 ? (data.bottle?.barcode ?? (code || null)) : (code || null),
+        { done, total: targets.length },
+      );
     } catch {
       setError(t('barcodeScan.failed', 'Could not save the barcode. Please try again.'));
       setSaving(false);
@@ -114,8 +124,13 @@ export default function BarcodeScanModal({ bottle, bottles, onClose, onSaved }) 
           {t('barcodeScan.current', 'Saved now: {{code}}', { code: current })}
         </p>
       )}
-      {targets.length > 1 && (
-        <p className="barcode-scan-scope">{t('barcodeScan.allBottles', { count: targets.length })}</p>
+      {(targets.length > 1 || otherCount > 0) && (
+        <p className="barcode-scan-scope">
+          {otherCount > 0
+            ? t('barcodeScan.someBottles', { count: targets.length })
+            : t('barcodeScan.allBottles', { count: targets.length })}
+          {otherCount > 0 && <> {t('barcodeScan.othersKeep', { count: otherCount })}</>}
+        </p>
       )}
       {cameraError ? (
         <p className="barcode-scan-camera-error" role="status">{cameraError}</p>
