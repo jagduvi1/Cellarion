@@ -108,6 +108,31 @@ describe('attach_bottle_image', () => {
     expect(ingestBottleImage).toHaveBeenCalledWith(expect.objectContaining({ keepBackground: false }), CTX.req);
   });
 
+  test('label_only keeps a photo of the label alone as sent — background removal would cut its edges away', async () => {
+    ownBottle();
+    safeFetchImage.mockResolvedValue({ buffer: Buffer.from('imgbytes'), contentType: 'image/jpeg' });
+    ingestBottleImage.mockImplementation(async () => ({ image: { _id: oid('9'), status: 'processed', keepBackground: true } }));
+    const res = await tool('attach_bottle_image').handler({ bottle_id: oid('d'), image_url: 'https://cdn.example.com/label.jpg', label_only: true }, CTX);
+    expect(ingestBottleImage).toHaveBeenCalledWith(expect.objectContaining({ keepBackground: true }), CTX.req);
+    const body = parse(res);
+    expect(body.data.background_kept).toBe(true);
+    expect(body.data.state).toBe('awaiting_review');
+
+    // keep_background alone still keeps nothing; label_only: false neither.
+    ingestBottleImage.mockClear();
+    await tool('attach_bottle_image').handler({ bottle_id: oid('d'), image_url: 'https://cdn.example.com/label.jpg', label_only: false, keep_background: true }, CTX);
+    expect(ingestBottleImage).toHaveBeenCalledWith(expect.objectContaining({ keepBackground: false }), CTX.req);
+  });
+
+  test('the tool says which photos label_only is for, so a client does not find out by trial', () => {
+    const t = tool('attach_bottle_image');
+    expect(t.description).toMatch(/label_only/);
+    const schema = t.inputSchema;
+    expect(schema.label_only.description).toMatch(/label alone/i);
+    expect(schema.label_only.description).toMatch(/never for a photo with the bottle in it/i);
+    expect(schema.keep_background.description).toMatch(/label_only/);
+  });
+
   test('a bottle with no registry wine yet attaches bottle-only (no wine linkage)', async () => {
     ownBottle(); // pending-wine-request bottles have no wineDefinition
     safeFetchImage.mockResolvedValue({ buffer: Buffer.from('imgbytes'), contentType: 'image/jpeg' });
