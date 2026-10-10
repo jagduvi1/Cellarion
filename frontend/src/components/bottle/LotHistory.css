@@ -127,3 +127,50 @@
   color: var(--color-primary);
   white-space: nowrap;
 }
+
+/* On the vintage page: the drunk bottles of this vintage, and the other
+   vintages as rows that open their own pages (beta feedback 2026-10-10). */
+.lot-history__head + .lot-history__events,
+.lot-history__head + .lot-history__vintage-rows {
+  margin-top: 0.75rem;
+}
+
+.lot-history__vintage-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.lot-history__vintage-rows li + li {
+  border-top: 1px solid var(--color-border-light);
+}
+
+.lot-history__vintage-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.55rem 0;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.lot-history__vintage-row:hover .lot-history__vintage-year,
+.lot-history__vintage-row:focus-visible .lot-history__vintage-year {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+.lot-history__vintage-year {
+  font-weight: 600;
+  min-width: 3.2rem;
+}
+
+.lot-history__vintage-counts {
+  flex: 1;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.lot-history__vintage-go {
+  color: var(--color-text-muted);
+}

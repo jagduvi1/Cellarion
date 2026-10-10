@@ -9,7 +9,6 @@ import { lookupMaturityProfile, lookupPriceHistory } from '../api/somm';
 import AuthImage from '../components/AuthImage';
 import BetaBadge from '../components/BetaBadge';
 import Modal from '../components/Modal';
-import CellarNav from '../components/CellarNav';
 import CellarPageHeader from '../components/CellarPageHeader';
 import MaturityPhaseTable from '../components/bottle/MaturityPhaseTable';
 import LotHistory from '../components/bottle/LotHistory';
@@ -47,6 +46,9 @@ const ImageUpload = lazy(() => import('../components/ImageUpload'));
 
 const filled = (v) => v !== null && v !== undefined && String(v).trim() !== '';
 
+// More bottles than this and the list starts folded under its stock line.
+const FOLD_BOTTLES_OVER = 6;
+
 /**
  * One wine and vintage in a cellar — the EARLY-ACCESS layout (feature flag
  * 'vintagePage', backend config/featureFlags). The same page whether the
@@ -81,6 +83,7 @@ function CellarVintageBeta() {
   const [suggestSignal, setSuggestSignal] = useState(0);
   const [journalBottle, setJournalBottle] = useState(null);
   const [notice, setNotice] = useState(null);
+  const [showAllBottles, setShowAllBottles] = useState(false);
 
   const vintage = decodeURIComponent(vintageParam || 'NV');
   const pagePath = `/cellars/${id}/vintages/${wineId}/${encodeURIComponent(vintage)}`;
@@ -189,6 +192,33 @@ function CellarVintageBeta() {
   const totalText = totals
     .map(({ currency, total }) => `${total.toLocaleString(i18n.language, { maximumFractionDigits: 2 })} ${currency}`)
     .join(' + ');
+  const pricedCount = bottles.filter((b) => Number(b.price) > 0).length;
+
+  // The stock line at the head of the bottle list: where they sit, what is
+  // on order or was drunk, what was paid — in the singular for one ("slot
+  // 147", "Paid", beta feedback 2026-10-10).
+  const stockItems = [
+    ...placements.map((r) => (
+      <span key={`rack-${r.id}`} className="cvb-summary-item">
+        <span aria-hidden="true">📍</span> {r.positions.length
+          ? t('cellarVintageBeta.rackSlots', { rack: r.name, slots: r.positions.join(', '), count: r.positions.length })
+          : r.name}
+      </span>
+    )),
+    placements.length > 0 && unplaced > 0 && (
+      <span key="unplaced" className="cvb-summary-item">{t('cellarVintage.unplaced', { count: unplaced })}</span>
+    ),
+    data?.onOrderCount > 0 && (
+      <Link key="on-order" to={`/cellars/${id}/on-order`} className="cvb-summary-item">{t('cellarVintage.onOrder', { count: data.onOrderCount })}</Link>
+    ),
+    data?.consumedCount > 0 && (
+      <Link key="drunk" to={`/cellars/${id}/history`} className="cvb-summary-item">{t('cellarVintage.drunk', { count: data.consumedCount })}</Link>
+    ),
+    totalText && (
+      <span key="paid" className="cvb-summary-item">{t('cellarVintageBeta.paid', { amount: totalText, count: pricedCount })}</span>
+    ),
+  ].filter(Boolean);
+  const bottlesFolded = bottles.length > FOLD_BOTTLES_OVER && !showAllBottles;
 
   // What the bottles share, per field: the common value, nothing at all, or
   // values that differ — the vintage section says which.
@@ -355,8 +385,9 @@ function CellarVintageBeta() {
         actions={headerActions}
       />
 
-      <CellarNav cellarId={id} />
-
+      {/* No cellar menu here: it belongs to the cellar, not to the wine, and
+          "Back to the cellar" above already leads there (beta feedback
+          2026-10-10). */}
       <BetaBadge feature="vintagePage" note={t('cellarVintageBeta.betaNote', 'A new layout for this page, in early access.')} />
 
       {notice && (
@@ -370,26 +401,6 @@ function CellarVintageBeta() {
         <div className="loading">{t('common.loading')}</div>
       ) : !data ? null : (
         <>
-          {/* The summary adapts to one bottle or many; the page below keeps its shape. */}
-          <div className="cvb-summary card">
-            <span className="cvb-summary-count">{t('cellarVintage.inCellar', { count: bottles.length })}</span>
-            {placements.map((r) => (
-              <span key={r.id} className="cvb-summary-item">
-                <span aria-hidden="true">📍</span> {r.positions.length
-                  ? t('cellarVintage.rackSlots', '{{rack}} · slots {{slots}}', { rack: r.name, slots: r.positions.join(', ') })
-                  : r.name}
-              </span>
-            ))}
-            {placements.length > 0 && unplaced > 0 && <span className="cvb-summary-item">{t('cellarVintage.unplaced', { count: unplaced })}</span>}
-            {data.onOrderCount > 0 && (
-              <Link to={`/cellars/${id}/on-order`} className="cvb-summary-item">{t('cellarVintage.onOrder', { count: data.onOrderCount })}</Link>
-            )}
-            {data.consumedCount > 0 && (
-              <Link to={`/cellars/${id}/history`} className="cvb-summary-item">{t('cellarVintage.drunk', { count: data.consumedCount })}</Link>
-            )}
-            {totalText && <span className="cvb-summary-item">{t('cellarVintage.paidTotal', { amount: totalText })}</span>}
-          </div>
-
           <div className="cvb-grid">
             {/* 1. The wine: who made it, where, the grapes, the description. */}
             <section className="cvb-col" aria-labelledby="cvb-wine-title">
@@ -514,26 +525,50 @@ function CellarVintageBeta() {
                   )}
                 </div>
                 {data.historyBottleId && !user?.isDemo && (
-                  <PersonalDataCard apiFetch={apiFetch} bottleId={data.historyBottleId} currentUserId={user?.id} wineId={wine?._id} vintage={vintage} />
+                  <PersonalDataCard apiFetch={apiFetch} bottleId={data.historyBottleId} currentUserId={user?.id} wineId={wine?._id} vintage={vintage} scope="vintage" />
                 )}
               </section>
 
-              {/* 3. The bottles: one row each, with what differs between them. */}
+              {/* 3. The bottles: where they sit, what came and went, what was
+                  paid — once, at the head of the list (the page label above
+                  already says how many) — then one row each with what differs
+                  between them. A long list starts folded: the stock line is
+                  the glance, the rows are a tap away (beta feedback 2026-10-10). */}
               <section aria-labelledby="cvb-bottles-title">
                 <h2 id="cvb-bottles-title" className="cvb-h2">{t('cellarVintage.bottlesTitle', 'Your bottles')}</h2>
                 <div className="card cvb-bottles">
+                  {stockItems.length > 0 && <div className="cvb-stock">{stockItems}</div>}
                   {bottles.length === 0 ? (
                     <p className="cellar-vintage-empty">{t('cellarVintage.noneLeft', 'None of this vintage left in this cellar.')}</p>
+                  ) : bottlesFolded ? (
+                    <button type="button" className="cvb-bottles-toggle" aria-expanded="false" onClick={() => setShowAllBottles(true)}>
+                      {t('cellarVintageBeta.showBottles', { count: bottles.length })} ▾
+                    </button>
                   ) : (
-                    <ul className="cvb-bottle-list">
-                      {bottles.map((b) => (
-                        <BottleRow key={b._id} bottle={b} cellarId={id} fromPath={pagePath} showNote={notes.kind === 'differs'} />
-                      ))}
-                    </ul>
+                    <>
+                      <ul className="cvb-bottle-list">
+                        {bottles.map((b) => (
+                          <BottleRow key={b._id} bottle={b} cellarId={id} fromPath={pagePath} showNote={notes.kind === 'differs'} />
+                        ))}
+                      </ul>
+                      {bottles.length > FOLD_BOTTLES_OVER && (
+                        <button type="button" className="cvb-bottles-toggle" aria-expanded="true" onClick={() => setShowAllBottles(false)}>
+                          {t('cellarVintageBeta.hideBottles', 'Fold the list')} ▴
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
+                {/* What happened to the bottles already drunk, and the other
+                    vintages of the wine as links to their own pages. */}
                 {data.historyBottleId && (
-                  <LotHistory apiFetch={apiFetch} bottleId={data.historyBottleId} vintage={vintage} isOwner={cellar?.userRole === 'owner'} />
+                  <LotHistory
+                    apiFetch={apiFetch}
+                    bottleId={data.historyBottleId}
+                    vintage={vintage}
+                    isOwner={cellar?.userRole === 'owner'}
+                    vintagePage={{ cellarId: id }}
+                  />
                 )}
               </section>
 
@@ -554,7 +589,7 @@ function CellarVintageBeta() {
           )}
           {canEditVintage && (
             <button type="button" className="bd-mobile-action-btn bd-mobile-action-edit" onClick={() => setModal('edit')}>
-              {t('cellarVintageBeta.editVintageShort', 'Edit')}
+              {t('cellarVintageBeta.editVintage', 'Edit vintage')}
             </button>
           )}
           {canAdd && (

@@ -404,10 +404,17 @@ function vintageSortKey(vintage) {
  * must be among them — or a 21-vintage vertical's oldest bottle would read
  * "no bottles of this vintage" about the one in the owner's hand (audit
  * 2026-09-16). The pinned lot takes the last place when it would be cut.
+ *
+ * `withCellars`: each lot also names the cellars to open it in
+ * (`cellar_ids`): the cellars with bottles of it left, or — all drunk — the
+ * cellars it was drunk from. A per-wine page then links another vintage to
+ * its own vintage page, which belongs to a cellar, without landing on an
+ * empty one while the bottles sit in another. Off by default, so the MCP
+ * case_journey envelope is unchanged.
  */
 async function buildCaseJourneys(userId, {
   focusWineId = null, focusVintage = null, minCount = 3, limit = 8,
-  sort = 'count', noteMaxLength = JOURNEY_NOTE_MAX, pinVintage = null,
+  sort = 'count', noteMaxLength = JOURNEY_NOTE_MAX, pinVintage = null, withCellars = false,
 } = {}) {
   const cellars = await Cellar.find({ user: userId, deletedAt: null }).select('_id').lean();
   if (cellars.length === 0) return { summary: 'No cellars yet', data: [] };
@@ -547,6 +554,9 @@ async function buildCaseJourneys(userId, {
       consumed_events: events,
       rating_trend: ratingTrend,
       pace,
+      ...(withCellars ? {
+        cellar_ids: [...new Set((active.length ? active : lot.bottles).map((b) => String(b.cellar)))],
+      } : {}),
     };
   });
 

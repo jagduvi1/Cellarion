@@ -9,18 +9,32 @@
   justify-content: flex-end;
 }
 
-.cvb-summary {
+/* The stock line at the head of "Your bottles": where they sit, on order,
+   drunk, paid. */
+.cvb-stock {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 0.35rem 1.1rem;
-  padding: 0.75rem 1rem;
-  margin-top: 1rem;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--color-border-light);
 }
 
-.cvb-summary-count {
-  font-size: 1.05rem;
-  font-weight: 700;
+.cvb-bottles-toggle {
+  display: block;
+  width: 100%;
+  padding: 0.65rem 1rem;
+  border: none;
+  background: none;
+  color: var(--color-primary);
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cvb-bottle-list + .cvb-bottles-toggle {
+  border-top: 1px solid var(--color-border-light);
 }
 
 .cvb-summary-item {

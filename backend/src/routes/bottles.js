@@ -861,6 +861,9 @@ router.get('/:id/lot-history', requireBottleAccess('viewer'), async (req, res) =
       pinVintage: scope === 'all' ? (bottle.vintage || 'NV') : null,
       // The page shows a note as the user wrote it (the field allows 1000).
       noteMaxLength: 1000,
+      // The vintage page links each other vintage to ITS vintage page, which
+      // lives under a cellar — the lot says which cellars hold it.
+      withCellars: true,
     });
     res.json({ ...empty, lots: result.data || [] });
   } catch (error) {

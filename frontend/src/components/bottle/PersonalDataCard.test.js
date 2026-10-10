@@ -188,6 +188,46 @@ test('a rejected value surfaces the backend message and keeps the modal open', a
   expect(screen.getByText('Add wine data')).toBeInTheDocument();
 });
 
+// The vintage page (beta feedback 2026-10-10): the card reaches the data
+// through one bottle of the vintage, so "This bottle only" means nothing
+// there. Add offers this vintage (preselected) or every vintage; one bottle's
+// own entries stay on that bottle's page.
+test('on the vintage page: add on this vintage or all vintages, never "this bottle"; one bottle\'s entries are not shown', async () => {
+  getPersonalData.mockResolvedValue(ok({
+    bottleEntries: [entry()],
+    wineEntries: [entry({ _id: 'e2', level: 'wine', vintage: '2015', key: { _id: 'k2', name: 'Lot', type: 'text', unit: null, enumOptions: null }, value: 'L123' })],
+  }));
+  addPersonalData.mockResolvedValue(ok({ entry: entry() }));
+  render(<PersonalDataCard apiFetch={vi.fn()} bottleId={BOTTLE_ID} currentUserId={ME} wineId="w1" vintage="2015" scope="vintage" />);
+
+  expect(await screen.findByText('L123')).toBeInTheDocument();
+  expect(screen.queryByText('This bottle')).toBeNull();
+  expect(screen.queryByText('13.5 %')).toBeNull();
+
+  fireEvent.click(screen.getByText('+ Add'));
+  await screen.findByText('Add wine data');
+  const options = [...screen.getByLabelText('Applies to').querySelectorAll('option')].map((o) => o.value);
+  expect(options).toEqual(['wine-vintage', 'wine']);
+  expect(screen.getByLabelText('Applies to')).toHaveValue('wine-vintage');
+
+  fireEvent.change(screen.getByPlaceholderText('e.g. ABV, Provenance, Cork condition'), { target: { value: 'Critic score' } });
+  fireEvent.change(screen.getByLabelText(/^Value$/), { target: { value: '96' } });
+  fireEvent.click(screen.getByText('Save'));
+  await waitFor(() => expect(addPersonalData).toHaveBeenCalledWith(
+    expect.any(Function), BOTTLE_ID, expect.objectContaining({ level: 'wine', vintageScoped: true, value: '96' }),
+  ));
+});
+
+test('on the bottle page "This bottle only" stays the default', async () => {
+  render(<PersonalDataCard apiFetch={vi.fn()} bottleId={BOTTLE_ID} currentUserId={ME} vintage="2015" />);
+  await screen.findByText('Nothing recorded yet.');
+  fireEvent.click(screen.getByText('+ Add'));
+  await screen.findByText('Add wine data');
+  const options = [...screen.getByLabelText('Applies to').querySelectorAll('option')].map((o) => o.value);
+  expect(options).toEqual(['bottle', 'wine-vintage', 'wine']);
+  expect(screen.getByLabelText('Applies to')).toHaveValue('bottle');
+});
+
 test('delete removes own entry and reloads', async () => {
   getPersonalData.mockResolvedValue(ok({ bottleEntries: [entry()], wineEntries: [] }));
   deletePersonalDataEntry.mockResolvedValue(ok({ deleted: true }));

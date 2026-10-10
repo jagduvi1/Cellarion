@@ -16,11 +16,11 @@ vi.mock('react-i18next', () => {
   return { useTranslation: () => ({ t, i18n: { language: 'en-GB' } }) };
 });
 vi.mock('../components/AuthImage', () => ({ default: ({ src, alt }) => <img src={src} alt={alt} /> }));
-vi.mock('../components/CellarNav', () => ({ default: () => null }));
+vi.mock('../components/CellarNav', () => ({ default: () => <nav data-testid="cellar-nav" /> }));
 vi.mock('../components/BetaBadge', () => ({ default: ({ feature }) => <div data-testid="beta-badge">{feature}</div> }));
 vi.mock('../components/bottle/WineRecordSection', () => ({ default: ({ suggestSignal }) => <div data-testid="wine-record">{suggestSignal}</div> }));
-vi.mock('../components/bottle/PersonalDataCard', () => ({ default: ({ bottleId, vintage }) => <div data-testid="personal-data">{bottleId}:{vintage}</div> }));
-vi.mock('../components/bottle/LotHistory', () => ({ default: ({ bottleId }) => <div data-testid="lot-history">{bottleId}</div> }));
+vi.mock('../components/bottle/PersonalDataCard', () => ({ default: ({ bottleId, vintage, scope }) => <div data-testid="personal-data">{bottleId}:{vintage}:{scope}</div> }));
+vi.mock('../components/bottle/LotHistory', () => ({ default: ({ bottleId, vintagePage }) => <div data-testid="lot-history">{bottleId}:{vintagePage?.cellarId}</div> }));
 vi.mock('../components/DrinkOneModal', () => ({
   default: ({ bottles, onDone }) => <button type="button" onClick={() => onDone(bottles[0], 'gifted')}>drink-stub:{bottles.length}</button>,
 }));
@@ -113,12 +113,20 @@ test('the wine, then the vintage, then the bottles — with the description and 
   expect(screen.getByText('Cassis, cedar and violets.')).toBeInTheDocument();
   expect(screen.getByText('Château Margaux · Margaux · France')).toBeInTheDocument();
   expect(screen.getByTestId('beta-badge')).toHaveTextContent('vintagePage');
-  expect(screen.getByText('cellarVintage.inCellar:3')).toBeInTheDocument();
-  expect(screen.getByText(/cellarVintage.rackSlots:.*"slots":"3, 7"/)).toBeInTheDocument();
+  // The stock line heads the bottle list (no summary box above the page).
+  const stock = document.querySelector('.cvb-bottles .cvb-stock');
+  expect(stock).toHaveTextContent('cellarVintageBeta.rackSlots:{"rack":"Left wall","slots":"3, 7","count":2}');
+  expect(stock).toHaveTextContent('cellarVintage.drunk:1');
+  expect(stock).toHaveTextContent('cellarVintageBeta.paid:{"amount":"1,180 EUR","count":3}');
+  expect(document.querySelector('.cvb-summary')).toBeNull();
+  // No cellar menu between the title and the page: it belongs to the cellar.
+  expect(screen.queryByTestId('cellar-nav')).toBeNull();
   // The sommelier window, from the lookup.
   expect(screen.getByText('2030–2045')).toBeInTheDocument();
-  expect(screen.getByTestId('personal-data')).toHaveTextContent('b1:2015');
-  expect(screen.getByTestId('lot-history')).toHaveTextContent('b1');
+  // Own data on this vintage or all vintages, never "this bottle"; the
+  // history card in its vintage-page form (drunk bottles + other vintages).
+  expect(screen.getByTestId('personal-data')).toHaveTextContent('b1:2015:vintage');
+  expect(screen.getByTestId('lot-history')).toHaveTextContent('b1:c1');
 });
 
 test('what the bottles share shows once; what differs says so; each row shows what differs between bottles', async () => {
@@ -141,7 +149,7 @@ test('what the bottles share shows once; what differs says so; each row shows wh
 
 test('a row opens the bottle page, which is told to lead back here', async () => {
   renderPage();
-  await screen.findByText('cellarVintage.inCellar:3');
+  await screen.findByText('cellarVintageBeta.kindLine:{"count":3,"cellar":"Home"}');
   const rows = [...document.querySelectorAll('.cvb-bottle-list > li')];
   fireEvent.click(within(rows[1]).getByRole('link'));
   expect(screen.getByTestId('where').textContent).toBe('/cellars/c1/bottles/b2|{"fromVintage":"/cellars/c1/vintages/w1/2015"}');
@@ -149,12 +157,12 @@ test('a row opens the bottle page, which is told to lead back here', async () =>
 
 test('Drink, Edit vintage and Add act on this vintage\'s bottles; the page reloads after each', async () => {
   renderPage();
-  await screen.findByText('cellarVintage.inCellar:3');
+  await screen.findByText('cellarVintageBeta.kindLine:{"count":3,"cellar":"Home"}');
   // Two surfaces (header and phone bar) carry the same actions.
   fireEvent.click(screen.getAllByText('cellarVintageBeta.drinkShort')[0]);
   page = { ...page, bottles: page.bottles.slice(1), total: 2 };
   fireEvent.click(await screen.findByText('drink-stub:3'));
-  expect(await screen.findByText('cellarVintage.inCellar:2')).toBeInTheDocument();
+  expect(await screen.findByText('cellarVintageBeta.kindLine:{"count":2,"cellar":"Home"}')).toBeInTheDocument();
   expect(screen.getByText('cellarVintage.drunkNote')).toBeInTheDocument();
 
   fireEvent.click(screen.getAllByText('cellarVintageBeta.editVintage')[0]);
@@ -179,7 +187,7 @@ test('nothing left: Add copies the last bottle drunk — buying the same vintage
 test('a viewer of a shared cellar reads the page but gets no Drink, Edit or Add', async () => {
   page.cellar.userRole = 'viewer';
   renderPage();
-  await screen.findByText('cellarVintage.inCellar:3');
+  await screen.findByText('cellarVintageBeta.kindLine:{"count":3,"cellar":"Home"}');
   expect(screen.queryByText('cellarVintageBeta.drinkShort')).toBeNull();
   expect(screen.queryByText('cellarVintageBeta.editVintage')).toBeNull();
   expect(screen.queryByText('cellarVintageBeta.add')).toBeNull();
@@ -187,7 +195,7 @@ test('a viewer of a shared cellar reads the page but gets no Drink, Edit or Add'
 
 test('"Suggest a fix to the wine" opens the record\'s suggest mode', async () => {
   renderPage();
-  await screen.findByText('cellarVintage.inCellar:3');
+  await screen.findByText('cellarVintageBeta.kindLine:{"count":3,"cellar":"Home"}');
   expect(screen.getByTestId('wine-record')).toHaveTextContent('0');
   fireEvent.click(screen.getAllByLabelText('cellarDetail.moreActions')[0]);
   fireEvent.click(screen.getByText('cellarVintageBeta.editWine'));
@@ -196,7 +204,7 @@ test('"Suggest a fix to the wine" opens the record\'s suggest mode', async () =>
 
 test('the page says what it is: the vintage, with how many bottles and where', async () => {
   renderPage();
-  await screen.findByText('cellarVintage.inCellar:3');
+  await screen.findByText('cellarVintageBeta.kindLine:{"count":3,"cellar":"Home"}');
   expect(screen.getByText('cellarVintageBeta.kind')).toHaveClass('page-kind');
   expect(screen.getByText('cellarVintageBeta.kindLine:{"count":3,"cellar":"Home"}')).toBeInTheDocument();
   // Each bottle row says it opens that bottle's own page.
@@ -205,7 +213,7 @@ test('the page says what it is: the vintage, with how many bottles and where', a
 
 test('what belongs to the wine and the vintage is here: photos, price, reviews, curator questions', async () => {
   renderPage();
-  await screen.findByText('cellarVintage.inCellar:3');
+  await screen.findByText('cellarVintageBeta.kindLine:{"count":3,"cellar":"Home"}');
   // This vintage's photos — of every bottle of it in the cellar, through a
   // bottle of it; "Add a photo" uploads through the same bottle.
   expect(screen.getByTestId('gallery')).toHaveTextContent('b1:2015:all-bottles');
@@ -226,7 +234,7 @@ test('what belongs to the wine and the vintage is here: photos, price, reviews, 
 
 test('the ⋮ menu: a barcode for the bottles of the vintage\'s size, a report, a recommendation', async () => {
   renderPage();
-  await screen.findByText('cellarVintage.inCellar:3');
+  await screen.findByText('cellarVintageBeta.kindLine:{"count":3,"cellar":"Home"}');
   const openMenu = () => fireEvent.click(screen.getAllByLabelText('cellarDetail.moreActions')[0]);
 
   // b1 is a magnum — another product with its own code — so the code goes
@@ -258,7 +266,7 @@ test('"Change barcode" when the bottles of the size share one; no barcode item w
     bottle('b2'),
   ];
   const { unmount } = renderPage();
-  await screen.findByText('cellarVintage.inCellar:2');
+  await screen.findByText('cellarVintageBeta.kindLine:{"count":2,"cellar":"Home"}');
   fireEvent.click(screen.getAllByLabelText('cellarDetail.moreActions')[0]);
   expect(screen.getByText('barcodeScan.titleChange')).toBeInTheDocument();
   unmount();
@@ -268,7 +276,7 @@ test('"Change barcode" when the bottles of the size share one; no barcode item w
     bottle('b2', { barcode: '0012345678905' }),
   ];
   renderPage();
-  await screen.findByText('cellarVintage.inCellar:2');
+  await screen.findByText('cellarVintageBeta.kindLine:{"count":2,"cellar":"Home"}');
   fireEvent.click(screen.getAllByLabelText('cellarDetail.moreActions')[0]);
   expect(screen.queryByText('barcodeScan.title')).toBeNull();
   expect(screen.queryByText('barcodeScan.titleChange')).toBeNull();
@@ -287,7 +295,7 @@ test('a priced vintage shows its price history and no tracking request', async (
 test('a private draft wine: no report, no recommendation, no price tracking (none of them take a draft)', async () => {
   page.wine = { ...WINE, draft: true };
   renderPage();
-  await screen.findByText('cellarVintage.inCellar:3');
+  await screen.findByText('cellarVintageBeta.kindLine:{"count":3,"cellar":"Home"}');
   await waitFor(() => expect(api).toHaveBeenCalledWith('/api/somm/prices/lookup?wine=w1&vintage=2015'));
   expect(screen.queryByTestId('price-tracking')).toBeNull();
   fireEvent.click(screen.getAllByLabelText('cellarDetail.moreActions')[0]);
@@ -300,7 +308,7 @@ test('a private draft wine: no report, no recommendation, no price tracking (non
 test('a viewer and a demo account get no photo upload and no barcode', async () => {
   page.cellar.userRole = 'viewer';
   const { unmount } = renderPage();
-  await screen.findByText('cellarVintage.inCellar:3');
+  await screen.findByText('cellarVintageBeta.kindLine:{"count":3,"cellar":"Home"}');
   expect(screen.queryByText('cellarVintageBeta.addPhotoShort')).toBeNull();
   fireEvent.click(screen.getAllByLabelText('cellarDetail.moreActions')[0]);
   expect(screen.queryByText('barcodeScan.title')).toBeNull();
@@ -309,6 +317,41 @@ test('a viewer and a demo account get no photo upload and no barcode', async () 
   page.cellar.userRole = 'owner';
   auth = { ...auth, user: { ...auth.user, isDemo: true } };
   renderPage();
-  await screen.findByText('cellarVintage.inCellar:3');
+  await screen.findByText('cellarVintageBeta.kindLine:{"count":3,"cellar":"Home"}');
   expect(screen.queryByText('cellarVintageBeta.addPhotoShort')).toBeNull();
+});
+
+test('the phone bar says "Edit vintage", not just "Edit"', async () => {
+  renderPage();
+  await screen.findByText('cellarVintageBeta.kindLine:{"count":3,"cellar":"Home"}');
+  expect(document.querySelector('.cvb-mobile-actions')).toHaveTextContent('cellarVintageBeta.editVintage');
+});
+
+test('one bottle: the stock line speaks in the singular (one slot, "Paid")', async () => {
+  page.bottles = [bottle('b1', { rackInfo: { rackId: 'r1', rackName: 'Left wall', position: 147 } })];
+  page.consumedCount = 0;
+  renderPage();
+  await screen.findByText('cellarVintageBeta.kindLine:{"count":1,"cellar":"Home"}');
+  const stock = document.querySelector('.cvb-stock');
+  expect(stock).toHaveTextContent('cellarVintageBeta.rackSlots:{"rack":"Left wall","slots":"147","count":1}');
+  expect(stock).toHaveTextContent('cellarVintageBeta.paid:{"amount":"400 EUR","count":1}');
+});
+
+test('a long list starts folded under its stock line; a tap shows every row, another folds it', async () => {
+  page.bottles = Array.from({ length: 8 }, (_, i) => bottle(`b${i + 1}`));
+  renderPage();
+  await screen.findByText('cellarVintageBeta.kindLine:{"count":8,"cellar":"Home"}');
+  expect(document.querySelectorAll('.cvb-bottle-list > li')).toHaveLength(0);
+  fireEvent.click(screen.getByText(/cellarVintageBeta.showBottles:8/));
+  expect(document.querySelectorAll('.cvb-bottle-list > li')).toHaveLength(8);
+  fireEvent.click(screen.getByText(/cellarVintageBeta.hideBottles/));
+  expect(document.querySelectorAll('.cvb-bottle-list > li')).toHaveLength(0);
+});
+
+test('six bottles or fewer are never folded', async () => {
+  page.bottles = Array.from({ length: 6 }, (_, i) => bottle(`b${i + 1}`));
+  renderPage();
+  await screen.findByText('cellarVintageBeta.kindLine:{"count":6,"cellar":"Home"}');
+  expect(document.querySelectorAll('.cvb-bottle-list > li')).toHaveLength(6);
+  expect(screen.queryByText(/cellarVintageBeta.(showBottles|hideBottles)/)).toBeNull();
 });

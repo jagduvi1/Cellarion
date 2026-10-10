@@ -118,6 +118,9 @@ describe('GET /api/bottles/:id/lot-history', () => {
       focusVintage: null, sort: 'vintage', limit: 20,
       // The bottle on screen survives the cap (a 21-vintage vertical).
       pinVintage: '2020',
+      // Each lot names its cellars: the vintage page links every other
+      // vintage to its own vintage page, which lives under a cellar.
+      withCellars: true,
     }));
   });
 

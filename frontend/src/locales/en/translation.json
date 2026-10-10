@@ -1226,7 +1226,9 @@
     "showOtherVintages_other": "Other vintages you have ({{count}})",
     "hideOtherVintages": "Hide other vintages",
     "otherVintagesHint": "Kept apart on purpose: how a different vintage showed says nothing about when this one is ready.",
-    "openVintage": "Open the vintage page →"
+    "openVintage": "Open the vintage page →",
+    "drunkTitle": "Drunk from this vintage",
+    "otherVintagesTitle": "Other vintages"
   },
   "bottles": {
     "title": "All bottles",
@@ -5437,7 +5439,6 @@
     "drink": "Drink a bottle",
     "drinkShort": "Drink",
     "editVintage": "Edit vintage",
-    "editVintageShort": "Edit",
     "add": "Add bottle",
     "addShort": "Add",
     "addFailed": "Could not start adding a bottle. Please try again.",
@@ -5458,7 +5459,14 @@
     "photoHint": "A photo of this vintage’s label. It shows on all your bottles of this vintage.",
     "reportWine": "Report a problem with this wine",
     "recommend": "Recommend to a friend",
-    "openBottle": "Open bottle"
+    "openBottle": "Open bottle",
+    "rackSlots_one": "{{rack}} · slot {{slots}}",
+    "rackSlots_other": "{{rack}} · slots {{slots}}",
+    "paid_one": "Paid: {{amount}}",
+    "paid_other": "Paid in total: {{amount}}",
+    "showBottles_one": "Show the bottle",
+    "showBottles_other": "Show all {{count}} bottles",
+    "hideBottles": "Fold the list"
   },
   "editVintage": {
     "title": "Edit vintage",

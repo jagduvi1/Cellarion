@@ -1,6 +1,6 @@
 import { Suspense, useEffect } from 'react';
 import { lazy } from './utils/lazyWithReload';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import OfflineSync from './components/OfflineSync';
@@ -95,11 +95,16 @@ const PublicWineList       = lazy(() => import('./pages/PublicWineList'));
 // Same address, same data — a bookmark works with the switch on or off. On a
 // cold start (no cached flags) it waits for the answer instead of mounting
 // the classic page and swapping — which loaded everything twice.
+// Keyed by the address: one vintage page links to another (its "Other
+// vintages"), and the next one must start fresh — no notice, open window or
+// folded list carried over from the last.
 function VintagePage() {
+  const { id, wineId, vintage } = useParams();
   const ready = useFeatureFlagsReady();
   const beta = useFeature('vintagePage');
   if (!ready) return <div className="loading">Loading…</div>;
-  return beta ? <CellarVintageBeta /> : <CellarVintage />;
+  const key = `${id}/${wineId}/${vintage}`;
+  return beta ? <CellarVintageBeta key={key} /> : <CellarVintage key={key} />;
 }
 
 function AppRoutes() {

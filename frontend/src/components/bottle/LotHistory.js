@@ -99,12 +99,72 @@ function LotBlock({ lot, currentBottleId, heading }) {
   );
 }
 
+// On the vintage page itself: the page already says how many bottles of the
+// vintage there are, so the counts would only repeat it. What stays is what
+// the page does not show — the bottles of this vintage already drunk, with
+// their dates, ratings and notes — and the other vintages of the wine as
+// rows that open their own vintage pages (beta feedback 2026-10-10). Each
+// opens in the cellar the lot names: where bottles of it are left, else
+// where it was drunk; this cellar when it is one of them.
+function VintagePageHistory({ thisLot, otherLots, cellarId }) {
+  const { t } = useTranslation();
+  const drunk = thisLot?.consumed_events || [];
+  if (drunk.length === 0 && otherLots.length === 0) return null;
+  const hrefOf = (lot) => {
+    const ids = (lot.cellar_ids || []).map(String);
+    const cid = ids.includes(String(cellarId)) ? cellarId : (ids[0] || cellarId);
+    return `/cellars/${cid}/vintages/${lot.wine?.wine_id}/${encodeURIComponent(lot.vintage)}`;
+  };
+
+  return (
+    <>
+      {drunk.length > 0 && (
+        <div className="lot-history card">
+          <div className="lot-history__head">
+            <h2>{t('lotHistory.drunkTitle', 'Drunk from this vintage')}</h2>
+          </div>
+          <ul className="lot-history__events">
+            {drunk.map((e) => <EventRow key={String(e.bottle_id)} event={e} currentBottleId={null} />)}
+          </ul>
+        </div>
+      )}
+      {otherLots.length > 0 && (
+        <div className="lot-history card">
+          <div className="lot-history__head">
+            <h2>{t('lotHistory.otherVintagesTitle', 'Other vintages')}</h2>
+          </div>
+          <ul className="lot-history__vintage-rows">
+            {otherLots.map((lot) => {
+              const remaining = lot.counts?.remaining ?? 0;
+              const consumed = lot.counts?.consumed ?? 0;
+              return (
+                <li key={String(lot.vintage)}>
+                  <Link to={hrefOf(lot)} className="lot-history__vintage-row">
+                    <span className="lot-history__vintage-year">{lot.vintage}</span>
+                    <span className="lot-history__vintage-counts">
+                      {t('lotHistory.remaining', '{{count}} in your cellar', { count: remaining })}
+                      {consumed > 0 && ` · ${t('lotHistory.consumed', '{{count}} drunk', { count: consumed })}`}
+                    </span>
+                    <span className="lot-history__vintage-go" aria-hidden="true">›</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </>
+  );
+}
+
 // `vintageHref`: the vintage page for this bottle's wine and vintage (support
 // ticket 2026-10-09). Offered from the card so the page stays reachable from
 // a DRUNK bottle too — once the last bottle of a vintage is gone the cellar
 // list has no group to open it from, and this card is where the history of
 // that vintage already lives.
-export default function LotHistory({ apiFetch, bottleId, vintage, isOwner = true, vintageHref = null }) {
+// `vintagePage` ({ cellarId }): rendered ON the vintage page — see
+// VintagePageHistory above.
+export default function LotHistory({ apiFetch, bottleId, vintage, isOwner = true, vintageHref = null, vintagePage = null }) {
   const { t } = useTranslation();
   const [lots, setLots] = useState(null);
   const [showOthers, setShowOthers] = useState(false);
@@ -137,6 +197,10 @@ export default function LotHistory({ apiFetch, bottleId, vintage, isOwner = true
   const own = String(vintage || 'NV');
   const thisLot = lots.find((l) => String(l.vintage) === own) || null;
   const otherLots = lots.filter((l) => String(l.vintage) !== own);
+
+  if (vintagePage) {
+    return <VintagePageHistory thisLot={thisLot} otherLots={otherLots} cellarId={vintagePage.cellarId} />;
+  }
 
   // Nothing to say: this is the only bottle of its vintage (drunk or not — a
   // lone drunk bottle's row would only repeat the consumption card above it),

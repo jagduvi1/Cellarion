@@ -182,3 +182,51 @@ describe('LotHistory and the vintage page link', () => {
     expect(container.querySelector('.lot-history')).toBeNull();
   });
 });
+
+/**
+ * On the vintage page itself (beta feedback 2026-10-10): the page already
+ * says how many bottles there are, so no counts; the drunk bottles of this
+ * vintage keep their dates, ratings and notes; the other vintages are rows
+ * that open their own vintage pages, with no "kept apart" hint.
+ */
+describe('LotHistory on the vintage page', () => {
+  const onPage = () => mount({ vintagePage: { cellarId: 'c1' } });
+
+  test('the drunk bottles of this vintage, each linked to its own page — no count line repeating the page', async () => {
+    respond([lot('2020', {
+      counts: { total: 3, remaining: 1, consumed: 2 },
+      consumed_events: [event('b2'), event('b1', { note: 'Still tight' })],
+    })]);
+    onPage();
+    expect(await screen.findByText('lotHistory.drunkTitle')).toBeInTheDocument();
+    expect(screen.queryByText('lotHistory.title')).toBeNull();
+    expect(screen.queryByText(/lotHistory.remaining/)).toBeNull();
+    // b1 is the bottle the page reads through, not a bottle on screen: linked too.
+    expect(screen.getAllByRole('link').map((a) => a.getAttribute('href')))
+      .toEqual(['/cellars/c1/bottles/b2', '/cellars/c1/bottles/b1']);
+  });
+
+  test('other vintages are rows that open their own vintage page, in the cellar that holds them', async () => {
+    respond([
+      lot('2021', { cellar_ids: ['c2'], counts: { total: 2, remaining: 2, consumed: 0 } }),
+      lot('2020'),
+      lot('2018', { cellar_ids: ['c2', 'c1'], counts: { total: 3, remaining: 1, consumed: 2 } }),
+      lot('NV', { cellar_ids: [] }),
+    ]);
+    onPage();
+    expect(await screen.findByText('lotHistory.otherVintagesTitle')).toBeInTheDocument();
+    expect(screen.queryByText('lotHistory.otherVintagesHint')).toBeNull();
+    expect(screen.queryByText(/lotHistory.showOtherVintages/)).toBeNull();
+    const hrefs = [...document.querySelectorAll('.lot-history__vintage-row')].map((a) => a.getAttribute('href'));
+    // 2021 only in c2; 2018 in this cellar too, so here; no cellar named → here.
+    expect(hrefs).toEqual(['/cellars/c2/vintages/w1/2021', '/cellars/c1/vintages/w1/2018', '/cellars/c1/vintages/w1/NV']);
+    expect(screen.getByText('2018').closest('a')).toHaveTextContent('lotHistory.remaining:{"count":1} · lotHistory.consumed:{"count":2}');
+  });
+
+  test('nothing drunk and no other vintage: nothing at all', async () => {
+    respond([lot('2020', { counts: { total: 3, remaining: 3, consumed: 0 } })]);
+    const { container } = onPage();
+    await waitFor(() => expect(fetchLotHistory).toHaveBeenCalled());
+    expect(container).toBeEmptyDOMElement();
+  });
+});

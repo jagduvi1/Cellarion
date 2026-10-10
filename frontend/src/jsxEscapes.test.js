@@ -26,4 +26,6 @@ test('no JSX attribute in plain quotes carries a \\u escape (it would render lit
     });
   }
   expect(offenders).toEqual([]);
-});
+// It reads every source file: ~50 ms alone, but a full run on a busy machine
+// pushed it past the 5 s default once.
+}, 30000);
