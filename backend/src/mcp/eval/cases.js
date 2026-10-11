@@ -160,7 +160,9 @@ const CASES = [
     id: 'attach-photo',
     prompt: 'Here is the label photo for that Barolo — https://example.com/barolo-label.jpg — put it on the bottle.',
     expect: { anyOf: ['attach_bottle_image', 'search_bottles'] }, // may resolve the bottle id first
-    args: (a) => a.image_url === undefined || /barolo-label/.test(a.image_url),
+    // A "label photo" found on the web is a product image, not a frame-
+    // filling crop of the label: label_only stays off for it.
+    args: (a) => (a.image_url === undefined || /barolo-label/.test(a.image_url)) && a.label_only !== true,
   },
 
   // ── Phase 7: self-service account tools ──

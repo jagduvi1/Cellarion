@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { openCamera } from '../utils/camera';
+import { openCamera, isSuperseded } from '../utils/camera';
 import useTapToFocus from '../hooks/useTapToFocus';
 import CameraFocusRing from './CameraFocusRing';
 import './ImageUpload.css'; // reuse camera + button styles
@@ -74,6 +74,8 @@ function PhotoCapture({ onCapture, onRemove, processedUrl, processing }) {
         if (videoRef.current) videoRef.current.srcObject = stream;
       });
     } catch (err) {
+      // A newer open (a quick camera switch) took over: nothing to show.
+      if (isSuperseded(err)) return;
       if (err.name === 'NotAllowedError') setCameraError(t('camera.accessDenied'));
       else if (err.name === 'NotFoundError') setCameraError(t('camera.notFound'));
       else setCameraError(t('camera.accessError'));

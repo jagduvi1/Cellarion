@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import i18n from '../i18n';
 import { scanLabel, scanLabelBack } from '../api/wines';
 import { track } from '../utils/track';
-import { openCamera } from '../utils/camera';
+import { openCamera, isSuperseded } from '../utils/camera';
 
 /**
  * Custom hook that encapsulates label-scan camera logic.
@@ -92,6 +92,8 @@ export default function useLabelScanner(apiFetch, { onScanSuccess, onScanError, 
         if (labelVideoRef.current) labelVideoRef.current.srcObject = stream;
       });
     } catch (err) {
+      // A newer open (a quick camera switch) took over: nothing to show.
+      if (isSuperseded(err)) return;
       let msg = i18n.t('camera.accessError');
       if (err.name === 'NotAllowedError') msg = i18n.t('camera.accessDenied');
       else if (err.name === 'NotFoundError') msg = i18n.t('camera.notFound');

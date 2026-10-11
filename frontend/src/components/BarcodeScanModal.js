@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { updateBottle, bulkUpdateBottles } from '../api/bottles';
 import useBarcodeWatch from '../hooks/useBarcodeWatch';
 import { normalizeBarcode, sharedBarcode } from '../utils/barcode';
-import { openCamera } from '../utils/camera';
+import { openCamera, isSuperseded } from '../utils/camera';
 import useTapToFocus from '../hooks/useTapToFocus';
 import CameraFocusRing from './CameraFocusRing';
 import Modal from './Modal';
@@ -61,9 +61,9 @@ export default function BarcodeScanModal({ bottle, bottles, otherCount = 0, onCl
     openRef.current = true;
     (async () => {
       try {
-        if (!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error('no camera'), { name: 'NotFoundError' });
         // In focus where the phone allows it (utils/camera): a blurred
-        // preview reads no barcode.
+        // preview reads no barcode. No camera API at all is a NotFoundError
+        // there, for every camera view.
         const stream = await openCamera({ facingMode: 'environment', width: 1920, height: 1080 });
         // Closed while the permission prompt was up: never leave it running.
         if (!openRef.current) { stream.getTracks().forEach((track) => track.stop()); return; }
@@ -71,6 +71,8 @@ export default function BarcodeScanModal({ bottle, bottles, otherCount = 0, onCl
         if (videoRef.current) videoRef.current.srcObject = stream;
         setCameraOn(true);
       } catch (err) {
+        // A newer open (a quick camera switch) took over: nothing to show.
+        if (isSuperseded(err)) return;
         if (err?.name === 'NotAllowedError') setCameraError(t('camera.accessDenied'));
         else if (err?.name === 'NotFoundError') setCameraError(t('camera.notFound'));
         else setCameraError(t('camera.accessError'));

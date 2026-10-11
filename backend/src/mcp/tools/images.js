@@ -9,6 +9,7 @@
 // sanitise/persist/background-removal pipeline the web upload uses, so an
 // EXIF-laden or malformed image is rejected identically on both surfaces.
 const { z } = require('zod');
+const sharp = require('sharp');
 const { registerTool } = require('../registry');
 const { ingestBottleImage } = require('../../services/imageOps');
 const { safeFetchImage } = require('../../utils/safeImageFetch');
@@ -25,21 +26,36 @@ const { renderImage, imageSource, IMAGE_MAX_EDGE } = require('../../services/pho
 // chars ≈ ~1.1MB image — plenty for a label; larger photos must come by URL.
 const MAX_BASE64_CHARS = 1_500_000;
 
+// Height ÷ width at which a picture is a whole bottle, not a label: a label
+// photo is near square (a rectified one ~1.2), a bottle shot ~3.
+const BOTTLE_SHAPED = 2;
+
+// The picture's upright width and height (EXIF orientations 5–8 turn it a
+// quarter), or null when it cannot be read — the shared pipeline then
+// refuses it with its own message.
+async function imageShape(buffer) {
+  try {
+    const meta = await sharp(buffer, { limitInputPixels: 100_000_000 }).metadata();
+    if (!meta.width || !meta.height) return null;
+    return meta.orientation >= 5 ? { width: meta.height, height: meta.width } : { width: meta.width, height: meta.height };
+  } catch {
+    return null;
+  }
+}
+
 registerTool({
   name: 'attach_bottle_image',
   title: 'Attach a label/bottle photo',
+  // Kept under 1024 characters: clients that turn MCP tools into function
+  // definitions cut a longer description, losing the rules at its end.
   description:
-    'Adds a label or bottle photo to one of the user\'s bottles, from an image URL (https) or base64 image data ' +
-    '(JPEG/PNG/WebP). Use image_url for a product image you found on the web (e.g. a retailer\'s wine page); use ' +
-    'image_base64 for a photo the user shared directly. A photo of a bottle ALWAYS goes through background removal ' +
-    'after upload, as an ordinary upload in the app does — so a photo of a whole bottle works best. The one ' +
-    'exception is a photo of the LABEL ALONE, cropped or rectified so the label fills the frame: pass label_only: ' +
-    'true and it is kept as sent (background removal expects a bottle and would cut the label\'s edges away). ' +
-    'Attach ONCE per wine: the photo shows on ALL the user\'s bottles of that wine, so never repeat the same photo ' +
-    'for duplicate bottles — check get_bottle → photos first, and the response says how many photos the wine ' +
-    'already had from the user (photos_before) and on how many bottles it now shows (shows_on_bottles). Pass wine_id ' +
-    'instead of bottle_id when you only know the wine; the photo goes on the user\'s newest active bottle of it. ' +
-    'Confirm with the user before attaching. Reversible via undo_last.',
+    'Adds a label or bottle photo to one of the user\'s bottles, from an https image URL (e.g. a retailer\'s ' +
+    'product image) or base64 data (a photo the user shared; JPEG/PNG/WebP). Photos go through background ' +
+    'removal, as in the app, so a whole bottle works best; a photo of the label alone, filling the frame, passes ' +
+    'label_only: true and keeps its background. Attach ONCE per wine: the photo shows on ALL the user\'s bottles ' +
+    'of that wine, so check get_bottle → photos first; the response gives photos_before and shows_on_bottles. ' +
+    'Pass wine_id instead of bottle_id when you only know the wine (the photo goes on the newest active bottle ' +
+    'of it). Confirm with the user before attaching. Reversible via undo_last.',
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
@@ -50,11 +66,12 @@ registerTool({
     credit: z.string().max(200).optional().describe('Optional attribution/source note — admin accounts only; silently ignored for regular users (matches the web app)'),
     // A photo of the label alone, filling the frame (support ticket
     // 2026-10-10): background removal expects a bottle and cuts a flat
-    // label's edges away, so it is kept as sent — the app's "Keep the
+    // label's edges away, so its background is kept — the app's "Keep the
     // background" for the same photo. Named for what the photo IS, not for
     // what to do with it: the broad keep_background was set on whole-bottle
-    // photos, which then kept their backgrounds (#1455).
-    label_only: z.boolean().optional().describe('true ONLY for a photo of the label alone, cropped or rectified so the label fills the frame (no bottle, no table, no shelf). It is kept as sent, without background removal. Never for a photo with the bottle in it, a retailer product image or a shelf photo: those are always cut out.'),
+    // photos, which then kept their backgrounds (#1455). A bottle-shaped
+    // picture is cut out even with the flag (see BOTTLE_SHAPED).
+    label_only: z.boolean().optional().describe('true ONLY for a photo of the label alone, cropped or rectified so the label fills the frame (no bottle, table or shelf in it): it keeps its background, with no background removal (which expects a bottle and would cut the label\'s edges away). Never set it for a retailer product image or any photo with the bottle in it. A tall, narrow, bottle-shaped picture is cut out anyway, with a warning.'),
     // Kept in the schema so a caller that still sends it is not refused
     // (docs/mcp-versioning.md: removing an input field is breaking), but it
     // does nothing: a bottle photo is always cut out; label_only covers the
@@ -136,11 +153,26 @@ registerTool({
       uploadedBy: ctx.user.id, status: { $ne: 'rejected' }, kind: { $ne: 'label-scan' },
       $or: [{ bottle: bottle._id }, ...(wineDefinitionId ? [{ wineDefinition: wineDefinitionId }] : [])],
     }));
+    // The background is removed from every bottle photo and kept only for a
+    // label-only one. The flag is the model's word for it, so a picture
+    // shaped like a whole bottle (tall and narrow, as retailer product shots
+    // are) is cut out anyway: the #1455 rule holds even when a model sets
+    // label_only on the wrong photo. keep_background is ignored, and said so.
+    const notes = [];
+    let keepBackground = args.label_only === true;
+    if (keepBackground) {
+      const shape = await imageShape(buffer);
+      if (shape && shape.height / shape.width >= BOTTLE_SHAPED) {
+        keepBackground = false;
+        notes.push('This picture is tall and narrow like a whole bottle, so its background was removed; label_only is for a photo of the label alone, filling the frame.');
+      }
+    }
+    if (args.keep_background === true && args.label_only !== true) {
+      notes.push('keep_background is ignored: a photo with the bottle in it is always cut out. For a photo of the label alone, filling the frame, pass label_only: true.');
+    }
     const result = await ingestBottleImage({
       buffer, userId: ctx.user.id, userRoles: ctx.user.roles, bottle, wineDefinitionId, credit: args.credit || null,
-      // Removed for every bottle photo; kept only for a label-only photo.
-      // keep_background is ignored.
-      keepBackground: args.label_only === true,
+      keepBackground,
     }, ctx.req);
     if (result.error) {
       // 4xx = the caller's image is bad (invalid_input); 5xx = a transient
@@ -156,9 +188,12 @@ registerTool({
     // 'processed' = the background was kept, so nothing runs; otherwise the
     // row waits for background removal ('uploaded' → queued).
     const state = image.status === 'processed' ? 'awaiting_review' : 'queued';
-    const warnings = photosBefore > 0
-      ? [`This wine already had ${photosBefore} photo(s) from you — if this one duplicates it, undo_last removes it.`]
-      : [];
+    const warnings = [
+      ...notes,
+      ...(photosBefore > 0
+        ? [`This wine already had ${photosBefore} photo(s) from you — if this one duplicates it, undo_last removes it.`]
+        : []),
+    ];
     const envelope = {
       summary: `Attached a photo to vintage ${bottle.vintage}` +
         (wineDefinitionId ? ` — it shows on ${showsOn == null ? 'all' : showsOn} of your bottle(s) of this wine` : '') +
