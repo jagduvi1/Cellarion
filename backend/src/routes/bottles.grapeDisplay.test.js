@@ -231,3 +231,40 @@ describe('GET /api/bottles list search', () => {
     expect(body.bottles.items).toHaveLength(0);
   });
 });
+
+// ── GET /api/bottles — history lists by the rating each bottle counts with ──
+// (support ticket 2026-10-11: a drunk bottle counts with the rating given when
+// drinking; a statistics band link selects exactly the band's bottles).
+describe('GET /api/bottles rating band and rating sort on history', () => {
+  const wine = { _id: WINE_ID, name: 'Barolo', producer: 'X', type: 'red', grapes: [] };
+  const drunk = (n, consumedRating, consumedRatingScale, over = {}) => ({
+    _id: String(n).padStart(24, '0'), cellar: CELLAR_ID, status: 'drank', createdAt: new Date(2026, 0, n),
+    consumedRating, consumedRatingScale, wineDefinition: wine, ...over,
+  });
+  const prime = (bottles) => {
+    Cellar.find.mockReturnValue({ distinct: jest.fn().mockResolvedValue([CELLAR_ID]) });
+    const chain = {
+      populate: jest.fn().mockReturnThis(), sort: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(), limit: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockResolvedValue(bottles),
+    };
+    Bottle.find.mockReturnValue(chain);
+    return chain;
+  };
+
+  test('?ratingBand picks the band\'s bottles by the drink-time rating, an edge value included', async () => {
+    // Davis 18.2 → ~80.8: the statistics count it in 81-100.
+    prime([drunk(1, 18.2, '20'), drunk(2, 3, '5'), drunk(3, null, null, { rating: 5, ratingScale: '5' })]);
+    const { body } = await get('/api/bottles?status=consumed&ratingBand=81-100');
+    // 1: Davis 18.2 given when drinking; 3: no drink-time rating, 5★ on the bottle.
+    expect(body.bottles.items.map((b) => Number(b._id))).toEqual([1, 3]);
+  });
+
+  test('sort=rating on a history list orders by the drink-time rating, in memory, unrated last', async () => {
+    const chain = prime([drunk(1, 2, '5'), drunk(2, 5, '5'), drunk(3, null, null), drunk(4, 4, '5')]);
+    const { body } = await get('/api/bottles?status=consumed&sort=-rating');
+    expect(body.bottles.items.map((b) => Number(b._id))).toEqual([2, 4, 1, 3]);
+    // Not handed to the database: its sort only knows the stored rating.
+    expect(chain.sort).not.toHaveBeenCalledWith({ rating: -1 });
+  });
+});

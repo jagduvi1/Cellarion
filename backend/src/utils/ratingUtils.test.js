@@ -118,3 +118,39 @@ describe('bottleRating', () => {
     expect(bottleRating(null)).toBeNull();
   });
 });
+
+describe('ratingBand and filterByRating — a band count and its list agree', () => {
+  const { ratingBand, filterByRating, bottleRating: own, RATING_BANDS } = require('./ratingUtils');
+  // Davis 18.2 → ~80.8 and 11.3 → ~20.6: just above a band edge.
+  const b = (rating, ratingScale, over = {}) => ({ status: 'active', rating, ratingScale, ...over });
+
+  test('a fractional rating just above an edge has exactly one band, and the band filter finds it there', () => {
+    const edge = b(18.2, '20');
+    const r = own(edge);
+    expect(r).toBeGreaterThan(80);
+    expect(r).toBeLessThan(81);
+    expect(ratingBand(r)).toBe('81-100');
+    expect(filterByRating([edge], { ratingBand: '81-100' })).toEqual([edge]);
+    expect(filterByRating([edge], { ratingBand: '61-80' })).toEqual([]);
+    // Every bottle lands in exactly one band's list.
+    const many = [b(18.2, '20'), b(11.3, '20'), b(15.8, '20'), b(3, '5'), b(100, '100')];
+    const hits = RATING_BANDS.map((band) => filterByRating(many, { ratingBand: band }).length);
+    expect(hits.reduce((a, n) => a + n, 0)).toBe(many.length);
+  });
+
+  test('min / max are inclusive; a limit that is not a number, or an unknown band, is ignored', () => {
+    const list = [b(2, '5'), b(4, '5'), b(5, '5')]; // 25, 75, 100
+    expect(filterByRating(list, { minRating: '75' }).length).toBe(2);
+    expect(filterByRating(list, { maxRating: '75' }).length).toBe(2);
+    expect(filterByRating(list, { minRating: 'abc' })).toBe(list);
+    expect(filterByRating(list, { ratingBand: 'best' })).toBe(list);
+    expect(filterByRating(list, {})).toBe(list);
+  });
+
+  test('a stored 0 is unrated; an unreadable drink-time rating falls back to the bottle\'s own', () => {
+    expect(own({ status: 'active', rating: 0, ratingScale: '5' })).toBeNull();
+    expect(own({ status: 'drank', consumedRating: 0, rating: 4, ratingScale: '5' })).toBe(toNormalized(4, '5'));
+    expect(own({ status: 'drank', consumedRating: 'n/a', rating: 4, ratingScale: '5' })).toBe(toNormalized(4, '5'));
+    expect(own({ status: 'drank', consumedRating: '' })).toBeNull();
+  });
+});

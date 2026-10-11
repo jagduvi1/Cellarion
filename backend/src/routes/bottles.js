@@ -29,7 +29,7 @@ const { getCurrentRelease } = require('../services/communityPrice');
 const { findLotSiblingIds, findLotSiblings } = require('../services/bottleLot');
 const { buildCaseJourneys } = require('../services/insightsService');
 const { stripHtml, escapeRegex } = require('../utils/sanitize');
-const { bottleRating } = require('../utils/ratingUtils');
+const { bottleRating, filterByRating } = require('../utils/ratingUtils');
 const { classifyMaturity, buildProfileMap, parseMaturityFilter, matchesMaturityFilter } = require('../utils/maturityUtils');
 const { parsePagination } = require('../utils/pagination');
 const personalData = require('../services/personalData');
@@ -149,6 +149,7 @@ router.get('/', async (req, res) => {
     const bottleSize       = q(req.query.bottleSize);
     const minRating        = q(req.query.minRating);
     const maxRating        = q(req.query.maxRating);
+    const ratingBandParam  = q(req.query.ratingBand); // one of RATING_BANDS (a statistics band link)
     // null when absent; a Set of statuses otherwise (multi-select, OR).
     const maturityFilter   = parseMaturityFilter(q(req.query.maturity));
     const sort             = q(req.query.sort) || '-createdAt';
@@ -288,9 +289,13 @@ router.get('/', async (req, res) => {
       filter.wineDefinition = null;
     }
 
-    const directSortFields = ['createdAt', 'vintage', 'price', 'rating'];
+    // A list that holds history bottles sorts "by rating" on the rating each
+    // bottle counts with — for a drunk one the rating given when drinking —
+    // as it filters (utils/ratingUtils.bottleRating), so in memory.
+    const holdsHistory = statusFilter === 'all' || statusFilter === 'consumed' || CONSUMED_STATUSES.includes(statusFilter);
+    const directSortFields = ['createdAt', 'vintage', 'price', ...(holdsHistory ? [] : ['rating'])];
     const canSortInDb = directSortFields.includes(sortField);
-    const needsInMemoryFilter = !!(search || minRating || maxRating || maturityFilter);
+    const needsInMemoryFilter = !!(search || minRating || maxRating || ratingBandParam || maturityFilter);
     const canPaginateInDb = canSortInDb && !needsInMemoryFilter;
 
     let query = Bottle.find(filter).populate(WINE_POPULATE_LIST);
@@ -342,27 +347,10 @@ router.get('/', async (req, res) => {
       });
     }
 
-    // ── Min-rating post-filter (rating scales must be normalised) ──────────────
-    // bottleRating: a drunk bottle's rating is the one given when drinking,
-    // as the statistics count it (utils/ratingUtils).
-    if (minRating) {
-      const min = parseFloat(minRating);
-      if (!isNaN(min)) {
-        bottles = bottles.filter(b => {
-          const r = bottleRating(b);
-          return r != null && r >= min;
-        });
-      }
-    }
-    if (maxRating) {
-      const max = parseFloat(maxRating);
-      if (!isNaN(max)) {
-        bottles = bottles.filter(b => {
-          const r = bottleRating(b);
-          return r != null && r <= max;
-        });
-      }
-    }
+    // ── Rating post-filter (rating scales must be normalised) ──────────────────
+    // A drunk bottle counts with the rating given when drinking, and a band is
+    // exactly the statistics' band (utils/ratingUtils).
+    bottles = filterByRating(bottles, { minRating, maxRating, ratingBand: ratingBandParam });
 
     // ── Maturity post-filter / sort (needs WineVintageProfile lookup) ─────────
     let maturityMap = null;
@@ -387,6 +375,10 @@ router.get('/', async (req, res) => {
         if (sortField === 'name') {
           aVal = a.wineDefinition?.name || '';
           bVal = b.wineDefinition?.name || '';
+        } else if (sortField === 'rating') {
+          // Unrated last when sorting high to low, as the database sorts nulls.
+          aVal = bottleRating(a) ?? -1;
+          bVal = bottleRating(b) ?? -1;
         } else if (sortField === 'maturity' && maturityMap) {
           const aStatus = maturityMap.get(a._id.toString());
           const bStatus = maturityMap.get(b._id.toString());

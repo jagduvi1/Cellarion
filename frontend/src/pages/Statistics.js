@@ -197,7 +197,9 @@ function Statistics() {
         <KPICard icon={'\ud83c\udf0d'} label={t('statistics.kpi.countries')} value={fmt(overview.totalCountries)}
           sub={t('statistics.kpi.grapeVarieties', { count: overview.totalGrapes })} accentColor="#6EC6C6" />
         <KPICard icon={'\u2b50'} label={t('statistics.kpi.avgRating')}
-          value={overview.avgRating != null ? fmtRating(overview.avgRating, targetScale) : '\u2014'}
+          // Every rating, as the rating card's "All": a drunk bottle with the
+          // rating given when drinking (support ticket 2026-10-11).
+          value={(ratingViews?.all?.avg ?? overview.avgRating) != null ? fmtRating(ratingViews?.all?.avg ?? overview.avgRating, targetScale) : '\u2014'}
           accentColor="#D4C87A" />
         <KPICard icon={'\ud83d\udcc5'} label={t('statistics.kpi.avgVintageAge')}
           value={overview.avgVintageAge ? `${overview.avgVintageAge} ${t('statistics.kpi.yrs')}` : '\u2014'}
@@ -434,17 +436,19 @@ function Statistics() {
         <div className="stats-card">
           <h2 className="stats-card-title">{t('statistics.sections.ratingDistribution')}</h2>
           {/* All / In the cellar / History: a drunk bottle counts with the
-              rating given when drinking. A band opens its bottles — the
-              cellar list, or the history ones — by the band's range. */}
+              rating given when drinking. A band opens exactly its bottles
+              (?ratingBand — the server selects with the band rule it counts
+              with): the cellar list, the history, or both. */}
           <RatingViewsCard
             views={ratingViews}
             fallback={{ byRating, avg: overview.avgRating }}
             targetScale={targetScale}
             onBand={(view, band) => {
               // band.key is "0-20" / "21-40" / "41-60" / "61-80" / "81-100"
-              const [min, max] = String(band.key).split('-').map((n) => parseInt(n, 10));
-              const range = { minRating: isNaN(min) ? '' : String(min), maxRating: isNaN(max) ? '' : String(max) };
-              goWithFilter(view === 'history' ? { status: 'consumed', ...range } : range);
+              const ratingBand = band.key;
+              if (view === 'history') goWithFilter({ status: 'consumed', ratingBand });
+              else if (view === 'all') goWithFilter({ status: 'all', ratingBand });
+              else goWithFilter({ ratingBand });
             }}
           />
         </div>

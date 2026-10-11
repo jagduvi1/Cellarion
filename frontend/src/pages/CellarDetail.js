@@ -14,7 +14,7 @@ import CellarNav from '../components/CellarNav';
 import CellarPageHeader from '../components/CellarPageHeader';
 import SearchInput from '../components/SearchInput';
 import { readBottleViewMode, storeBottleViewMode } from '../utils/bottleViewMode';
-import { ratingRangeLabel, toMaturityArray, MATURITY_I18N_KEY } from '../utils/filterLabels';
+import { ratingRangeLabel, ratingBandName, toMaturityArray, MATURITY_I18N_KEY } from '../utils/filterLabels';
 import { CELLAR_SORTS, DEFAULT_CELLAR_SORT, preferredCellarSort } from '../utils/cellarSort';
 import { formatArrivalMonth, isArrivalLate } from '../utils/onOrder';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
@@ -62,7 +62,7 @@ const buildDefaultFilters = (sort = DEFAULT_CELLAR_SORT) => ({
   grapes: [], vintage: [], minRating: '', maxRating: '', maturity: [], unplaced: '', reserved: '', storage: '',
   // Only set by Statistics chart deep links (no control in the filter modal);
   // shown as removable chips.
-  producer: '', bottleSize: '', purchaseYear: '',
+  producer: '', bottleSize: '', purchaseYear: '', ratingBand: '',
   sort
 });
 // Every URL param the page reads on arrival (and then clears from the URL).
@@ -70,7 +70,7 @@ const buildDefaultFilters = (sort = DEFAULT_CELLAR_SORT) => ({
 // Statistics page's chart segments land here (support ticket 2026-09-19).
 const URL_FILTER_KEYS = ['search', 'type', 'country', 'region', 'appellation',
   'grapes', 'vintage', 'minRating', 'maxRating', 'maturity', 'unplaced', 'reserved', 'storage',
-  'producer', 'bottleSize', 'purchaseYear', 'sort'];
+  'producer', 'bottleSize', 'purchaseYear', 'ratingBand', 'sort'];
 const readSavedFilters = (cellarId) => {
   try {
     const raw = sessionStorage.getItem(FILTERS_STORAGE_PREFIX + cellarId);
@@ -148,6 +148,8 @@ function CellarDetail() {
       producer: searchParams.get('producer') || '',
       bottleSize: searchParams.get('bottleSize') || '',
       purchaseYear: searchParams.get('purchaseYear') || '',
+      // A statistics rating band ('61-80'): exactly the bottles counted in it.
+      ratingBand: searchParams.get('ratingBand') || '',
       sort: searchParams.get('sort') || preferredSort
     };
   });
@@ -268,7 +270,7 @@ function CellarDetail() {
     filters.appellation.join(','), filters.grapes.join(','), filters.vintage.join(','),
     filters.minRating, filters.maxRating, toMaturityArray(filters.maturity).join(','),
     filters.unplaced, filters.reserved, filters.storage,
-    filters.producer, filters.bottleSize, filters.purchaseYear, filters.sort
+    filters.producer, filters.bottleSize, filters.purchaseYear, filters.ratingBand, filters.sort
   ].join('|');
 
   // Refetch on cellar id, filters, or scope change. `id` is included so an
@@ -667,6 +669,7 @@ function CellarDetail() {
             // One chip for the rating range (either bound or both), in the user's scale.
             const ratingLabel = ratingRangeLabel(t, filters.minRating, filters.maxRating, ratingScale);
             if (ratingLabel) activeChips.push({ key: 'rating', value: '', label: ratingLabel });
+            if (filters.ratingBand) activeChips.push({ key: 'ratingBand', value: filters.ratingBand, label: t('bottles.chipRatingRange', 'Rating: {{value}}', { value: ratingBandName(filters.ratingBand, t) }) });
             toMaturityArray(filters.maturity).forEach(v => activeChips.push({ key: 'maturity', value: v, label: t(MATURITY_I18N_KEY[v] || v, v) }));
             if (filters.unplaced) activeChips.push({ key: 'unplaced', value: '1', label: t('cellarDetail.unplacedOnly', 'Unplaced only') });
             if (filters.reserved) activeChips.push({ key: 'reserved', value: '1', label: t('cellarDetail.reservedOnly', 'Reserved only') });
@@ -695,7 +698,7 @@ function CellarDetail() {
               ...prev,
               type: [], country: [], region: [], appellation: [], grapes: [], vintage: [],
               minRating: '', maxRating: '', maturity: [], unplaced: '', reserved: '', storage: '',
-              producer: '', bottleSize: '', purchaseYear: ''
+              producer: '', bottleSize: '', purchaseYear: '', ratingBand: ''
             }));
 
             return (
@@ -806,7 +809,7 @@ function CellarDetail() {
           {loading ? (
             <div className="loading">{t('cellarDetail.loadingCellar')}</div>
           ) : bottles.length === 0 && !bottlesLoading ? (
-            (filters.search || filters.vintage?.length || filters.minRating || filters.maxRating || toMaturityArray(filters.maturity).length || filters.unplaced || filters.reserved || filters.storage || filters.producer || filters.bottleSize || filters.purchaseYear || filters.type?.length || filters.country?.length || filters.region?.length || filters.appellation?.length || filters.grapes?.length) ? (
+            (filters.search || filters.vintage?.length || filters.minRating || filters.maxRating || toMaturityArray(filters.maturity).length || filters.unplaced || filters.reserved || filters.storage || filters.producer || filters.bottleSize || filters.purchaseYear || filters.ratingBand || filters.type?.length || filters.country?.length || filters.region?.length || filters.appellation?.length || filters.grapes?.length) ? (
               <div className="empty-state">
                 <p>{t('cellarDetail.noSearchResults')}</p>
               </div>

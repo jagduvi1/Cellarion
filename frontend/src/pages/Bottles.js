@@ -4,12 +4,12 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { listBottles } from '../api/bottles';
 import BottleCard from '../components/BottleCard';
-import { ratingRangeLabel, toMaturityArray, MATURITY_I18N_KEY } from '../utils/filterLabels';
+import { ratingRangeLabel, ratingBandName, toMaturityArray, MATURITY_I18N_KEY } from '../utils/filterLabels';
 import './Bottles.css';
 
 const FILTER_KEYS = [
   'search', 'type', 'country', 'region', 'appellation', 'grapes',
-  'vintage', 'producer', 'bottleSize', 'minRating', 'maxRating', 'maturity', 'sort',
+  'vintage', 'producer', 'bottleSize', 'minRating', 'maxRating', 'ratingBand', 'maturity', 'sort',
   'purchaseYear', 'consumedYear', 'status',
 ];
 
@@ -157,6 +157,8 @@ function Bottles() {
     // Rating bounds arrive normalised (0–100) and read back in the user's scale.
     const ratingLabel = ratingRangeLabel(t, filters.minRating || '', filters.maxRating || '', ratingScale);
     if (ratingLabel) labels.rating = t('bottles.chipRatingRange', 'Rating: {{value}}', { value: ratingLabel });
+    // A statistics band link: the band's name ("Excellent").
+    if (filters.ratingBand) labels.ratingBand = t('bottles.chipRatingRange', 'Rating: {{value}}', { value: ratingBandName(filters.ratingBand, t) });
     if (filters.maturity) {
       const names = toMaturityArray(filters.maturity).map(v => t(MATURITY_I18N_KEY[v] || v, v));
       labels.maturity = t('bottles.chipMaturity', 'Maturity: {{value}}', { value: names.join(', ') });

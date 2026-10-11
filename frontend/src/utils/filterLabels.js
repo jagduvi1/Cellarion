@@ -1,4 +1,5 @@
 import { formatRating, fromNormalized } from './ratingUtils';
+import { RATING_BAND_DEFS } from '../components/charts/chartHelpers';
 
 // The six maturity buckets the bottle-list filter offers, in display order.
 // 'none' = no maturity data. Mirrors backend MATURITY_FILTER_VALUES.
@@ -36,6 +37,12 @@ export function toMaturityArray(value) {
  * wire format) rendered in the user's own scale: "3.5★ and up", "Up to 4.2★",
  * "3.5★ to 4.2★". Returns null when neither bound is set.
  */
+/** A statistics rating band's name ("Excellent") for a key such as '81-100'; the key itself when unknown. */
+export function ratingBandName(key, t) {
+  const def = RATING_BAND_DEFS.find((d) => d.key === key);
+  return def ? t(`statistics.ratingBands.${def.labelKey}`) : key;
+}
+
 export function ratingRangeLabel(t, minNorm, maxNorm, scale) {
   const fmt = (n) => formatRating(fromNormalized(Number(n), scale), scale);
   const hasMin = minNorm !== '' && minNorm != null && !isNaN(Number(minNorm));

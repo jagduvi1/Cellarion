@@ -19,15 +19,18 @@ const VIEWS = {
 };
 const clickable = () => document.querySelectorAll('.rating-row--clickable');
 
-test('"All" first: every rating at once, with each view\'s count, and no band links', () => {
-  render(<RatingViewsCard views={VIEWS} targetScale="5" onBand={vi.fn()} />);
+test('"All" first: every rating at once, with each view\'s count; its bands open their bottles too', () => {
+  const onBand = vi.fn();
+  render(<RatingViewsCard views={VIEWS} targetScale="5" onBand={onBand} />);
   const all = screen.getByRole('button', { name: /All/ });
   expect(all).toHaveAttribute('aria-pressed', 'true');
   expect(all).toHaveTextContent('4');
   expect(screen.getByRole('button', { name: /In the cellar/ })).toHaveTextContent('1');
   expect(screen.getByRole('button', { name: /History/ })).toHaveTextContent('3');
-  expect(clickable()).toHaveLength(0);
   expect(document.querySelector('.rating-chart')).toHaveTextContent('statistics.rating.acrossBottles:4');
+  expect(clickable()).toHaveLength(2);
+  fireEvent.click(clickable()[0]);
+  expect(onBand).toHaveBeenLastCalledWith('all', expect.objectContaining({ key: expect.stringMatching(/^(61-80|81-100)$/) }));
 });
 
 test('"History" and "In the cellar" show their part, and a band opens its bottles in that part', () => {

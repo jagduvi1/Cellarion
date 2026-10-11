@@ -1,23 +1,7 @@
 const { getOrCreateDailySnapshot, convertCurrency } = require('../utils/exchangeRates');
-const { toNormalized, bottleRating } = require('../utils/ratingUtils');
+const { toNormalized, bottleRating, RATING_BANDS, emptyBands, ratingBand } = require('../utils/ratingUtils');
 const { classifyMaturity, classifyPersonalWindow, buildProfileMap, resolveWindowForBottle } = require('../utils/maturityUtils');
 
-// ── Main export ───────────────────────────────────────────────────────────────
-
-/**
- * Compute the full stats overview given pre-fetched data.
- *
- * @param {object} opts
- * @param {Array}  opts.activeBottles
- * @param {Array}  opts.consumedBottles
- * @param {Array}  opts.cellars          Lean cellar docs the user owns
- * @param {string} opts.targetCurrency
- * @param {string} opts.targetRatingScale
- * @returns {Promise<object>} Full stats payload
- */
-const RATING_BANDS = ['0-20', '21-40', '41-60', '61-80', '81-100'];
-const emptyBands = () => Object.fromEntries(RATING_BANDS.map((k) => [k, 0]));
-const ratingBand = (n) => (n <= 20 ? '0-20' : n <= 40 ? '21-40' : n <= 60 ? '41-60' : n <= 80 ? '61-80' : '81-100');
 const avgOf = (sum, count) => (count > 0 ? Math.round((sum / count) * 10) / 10 : null);
 
 /**
@@ -37,6 +21,19 @@ function ratingViews(cellar, history) {
   };
 }
 
+// ── Main export ───────────────────────────────────────────────────────────────
+
+/**
+ * Compute the full stats overview given pre-fetched data.
+ *
+ * @param {object} opts
+ * @param {Array}  opts.activeBottles
+ * @param {Array}  opts.consumedBottles
+ * @param {Array}  opts.cellars          Lean cellar docs the user owns
+ * @param {string} opts.targetCurrency
+ * @param {string} opts.targetRatingScale
+ * @returns {Promise<object>} Full stats payload
+ */
 async function computeOverview({ activeBottles, consumedBottles, cellars, targetCurrency, targetRatingScale }) {
   const profileMap = await buildProfileMap(activeBottles);
 
@@ -67,7 +64,7 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
   const byRegion      = {};
   const byGrape       = {};
   const byVintage     = {};
-  const byRating      = { '0-20': 0, '21-40': 0, '41-60': 0, '61-80': 0, '81-100': 0 };
+  const byRating      = emptyBands();
   const byBottleSize  = {};
   const byPurchaseYear = {};
   const byProducer    = {};
@@ -92,11 +89,10 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
       if (v != null) { totalValue += v; priceCount++; }
     }
 
-    if (b.rating) {
-      const normRating = toNormalized(b.rating, b.ratingScale || '5');
-      ratingSum += normRating; ratingCount++;
-      const band = ratingBand(normRating);
-      byRating[band] = (byRating[band] || 0) + 1;
+    const ownRating = bottleRating(b);
+    if (ownRating != null) {
+      ratingSum += ownRating; ratingCount++;
+      byRating[ratingBand(ownRating)]++;
     }
 
     const type = wd?.type || 'unknown';

@@ -115,22 +115,69 @@ function resolveRating(rawRating, rawScale) {
   return { rating: parseFloat(rawRating), ratingScale };
 }
 
+// A stored rating as a number 0–100, or null for none: missing, empty, not a
+// number, or 0 (a legacy "unrated", never a real score on any scale).
+function normalizedOrNull(value, scale) {
+  if (value == null || value === '') return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const norm = toNormalized(n, scale || '5');
+  return Number.isFinite(norm) ? norm : null;
+}
+
 /**
  * A bottle's own rating, normalised 0–100, or null when it has none: for a
  * bottle drunk (or gifted, sold) the rating given then, which is the final
- * verdict, else the rating on the bottle. One rule for the statistics and
- * the rating filters (support ticket 2026-10-11: someone who rates only when
+ * verdict, else the rating on the bottle — also when the one given then
+ * cannot be read. One rule for the statistics, the rating filters and the
+ * rating sort (support ticket 2026-10-11: someone who rates only when
  * drinking saw an empty rating distribution, and the filters found nothing).
  */
 function bottleRating(b) {
   if (!b) return null;
-  if (CONSUMED_STATUSES.includes(b.status) && b.consumedRating != null) {
-    return toNormalized(b.consumedRating, b.consumedRatingScale || '5');
+  if (CONSUMED_STATUSES.includes(b.status)) {
+    const given = normalizedOrNull(b.consumedRating, b.consumedRatingScale);
+    if (given != null) return given;
   }
-  return b.rating != null ? toNormalized(b.rating, b.ratingScale || '5') : null;
+  return normalizedOrNull(b.rating, b.ratingScale);
+}
+
+// The five rating bands of the statistics, and the band of a normalised
+// rating: '0-20' holds up to 20, '21-40' everything above 20 up to 40, and
+// so on — so a fractional rating such as 80.8 has exactly one band. The
+// statistics count with it and the band filter selects with it, so a band's
+// count and its list always agree.
+const RATING_BANDS = ['0-20', '21-40', '41-60', '61-80', '81-100'];
+const emptyBands = () => Object.fromEntries(RATING_BANDS.map((k) => [k, 0]));
+const ratingBand = (n) => (n <= 20 ? '0-20' : n <= 40 ? '21-40' : n <= 60 ? '41-60' : n <= 80 ? '61-80' : '81-100');
+
+/**
+ * The bottles whose own rating (bottleRating) is within the request's limits:
+ * minRating / maxRating (normalised 0–100, inclusive) and ratingBand (one of
+ * RATING_BANDS — exactly the bottles the statistics count in it). A limit
+ * that is not a number, or a band that does not exist, is ignored; with no
+ * limit the same array comes back. One implementation for every list.
+ */
+function filterByRating(bottles, { minRating, maxRating, ratingBand: band } = {}) {
+  const num = (v) => (v == null || v === '' ? NaN : parseFloat(v));
+  const min = num(minRating);
+  const max = num(maxRating);
+  const inBand = RATING_BANDS.includes(band) ? band : null;
+  if (Number.isNaN(min) && Number.isNaN(max) && !inBand) return bottles;
+  return bottles.filter((b) => {
+    const r = bottleRating(b);
+    if (r == null) return false;
+    if (!Number.isNaN(min) && r < min) return false;
+    if (!Number.isNaN(max) && r > max) return false;
+    if (inBand && ratingBand(r) !== inBand) return false;
+    return true;
+  });
 }
 
 // ANCHORS/COL are exported for the analytics engine (#987), which GENERATES a
 // Mongo aggregation expression from the same anchor table so in-pipeline
 // normalization can never drift from toNormalized — a parity test pins them.
-module.exports = { SCALE_META, VALID_SCALES, ANCHORS, COL, toNormalized, fromNormalized, isValidRating, resolveRating, bottleRating };
+module.exports = {
+  SCALE_META, VALID_SCALES, ANCHORS, COL, toNormalized, fromNormalized, isValidRating, resolveRating,
+  bottleRating, RATING_BANDS, emptyBands, ratingBand, filterByRating,
+};

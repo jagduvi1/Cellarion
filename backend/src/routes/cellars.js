@@ -17,7 +17,7 @@ const { getSnapshotsForDates, getOrCreateDailySnapshot, convertCurrency } = requ
 const { createNotification } = require('../services/notifications');
 const { transferCellarOwnership } = require('../services/cellarTransfer');
 const { sendCellarInviteEmail } = require('../services/mailgun');
-const { toNormalized, bottleRating } = require('../utils/ratingUtils');
+const { toNormalized, ratingBand, filterByRating } = require('../utils/ratingUtils');
 const { classifyMaturity, buildProfileMap, parseMaturityFilter, matchesMaturityFilter } = require('../utils/maturityUtils');
 const { isReserved } = require('../utils/reservationUtils');
 const {
@@ -288,6 +288,7 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
   const appellation = coerceStringQuery(req.query.appellation);
   const minRating = coerceStringQuery(req.query.minRating);
   const maxRating = coerceStringQuery(req.query.maxRating);
+  const ratingBandParam = coerceStringQuery(req.query.ratingBand);
   // null when absent; a Set of statuses otherwise (multi-select, OR-combined).
   const maturityFilter = parseMaturityFilter(coerceStringQuery(req.query.maturity));
   const sort = coerceStringQuery(req.query.sort) || '-createdAt';
@@ -313,7 +314,7 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
   // trivially correct here since the cross-cellar view never groups.
   const canPaginateInDb = paginate
     && !hasSearchFilters
-    && !minRating && !maxRating && !maturityFilter && !extraFilters
+    && !minRating && !maxRating && !ratingBandParam && !maturityFilter && !extraFilters
     && ['createdAt', 'vintage', 'price', 'rating'].includes(sortField);
   if (canPaginateInDb) {
     const filter = { cellar: { $in: objectIds }, status: statusMongo };
@@ -346,7 +347,7 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
     // The search has ranked and sorted every hit. With nothing left to filter
     // or re-sort in memory, load only the page instead of every hit.
     const pageOnly = paginate && statusFilter !== 'consumed'
-      && !minRating && !maxRating && !maturityFilter && !extraFilters
+      && !minRating && !maxRating && !ratingBandParam && !maturityFilter && !extraFilters
       && sortField !== 'name' && sortField !== 'maturity';
     if (pageOnly) {
       const items = await loadBottlesInOrder(found.ids.slice(skip, skip + limit));
@@ -358,7 +359,7 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
   // and reason (four fields), then only the page in full. The rating and
   // chart filters (not offered on the history page) read whole bottles, so
   // they take the path below.
-  if (history && !minRating && !maxRating && !extraFilters) {
+  if (history && !minRating && !maxRating && !ratingBandParam && !extraFilters) {
     const page = await pageHistory(found
       ? { _id: { $in: found.ids } }
       : { cellar: { $in: objectIds }, status: statusMongo }, history);
@@ -380,16 +381,9 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
 
   // ── Shared post-filters (extra + rating + maturity), applied to both paths ──
   bottles = applyExtraBottleFilters(bottles, extraFilters);
-  // bottleRating: a drunk bottle's rating is the one given when drinking
-  // (the history list), as the statistics count it.
-  if (minRating) {
-    const min = parseFloat(minRating);
-    bottles = bottles.filter(b => { const r = bottleRating(b); return r != null && r >= min; });
-  }
-  if (maxRating) {
-    const max = parseFloat(maxRating);
-    bottles = bottles.filter(b => { const r = bottleRating(b); return r != null && r <= max; });
-  }
+  // A drunk bottle counts with the rating given when drinking (the history
+  // list), and a band is exactly the statistics' band (utils/ratingUtils).
+  bottles = filterByRating(bottles, { minRating, maxRating, ratingBand: ratingBandParam });
   let maturityStatusMap;
   if (needsMaturity) {
     const profileMap = await buildProfileMap(bottles);
@@ -929,7 +923,7 @@ router.get('/:id/statistics', async (req, res) => {
       // By rating — normalize to 0-100 and bucket into 5 bands
       if (g._id.rating) {
         const norm = toNormalized(g._id.rating, g._id.ratingScale || '5');
-        const band = norm <= 20 ? '0-20' : norm <= 40 ? '21-40' : norm <= 60 ? '41-60' : norm <= 80 ? '61-80' : '81-100';
+        const band = ratingBand(norm);
         stats.byRating[band] = (stats.byRating[band] || 0) + g.count;
       }
     }
@@ -1260,6 +1254,7 @@ router.get('/:id', async (req, res) => {
       appellation,
       minRating,
       maxRating,
+      ratingBand: ratingBandParam,
       search,
       maturity: maturityRaw,
       sort = '-createdAt',
@@ -1348,7 +1343,7 @@ router.get('/:id', async (req, res) => {
     // Group + paginate inside MongoDB instead of hydrating the whole cellar.
     const groupedInDb = grouped
       && !hasSearchFilters
-      && !minRating && !maxRating && !maturityFilter && !reservedOnly && !extraFilters
+      && !minRating && !maxRating && !ratingBandParam && !maturityFilter && !reservedOnly && !extraFilters
       && ['createdAt', 'vintage', 'price', 'rating'].includes(sortField);
     if (groupedInDb) {
       ({ groupsForPage, bottles, totalCount } = await loadGroupedBottlePage({
@@ -1368,7 +1363,7 @@ router.get('/:id', async (req, res) => {
       // reserved, chart filters), the ranked hits are the final order: page
       // over them, grouped or not, and load only the page's bottles. Loading
       // every hit to show 30 cost a big cellar ~4 MB and most of the request.
-      const pageOnly = !minRating && !maxRating && !maturityFilter && !reservedOnly && !extraFilters
+      const pageOnly = !minRating && !maxRating && !ratingBandParam && !maturityFilter && !reservedOnly && !extraFilters
         && sortField !== 'maturity';
       found = await bottleSearch.searchBottles(search || '', {
         cellarId: req.params.id,
@@ -1432,7 +1427,7 @@ router.get('/:id', async (req, res) => {
 
       const directSortFields = ['createdAt', 'vintage', 'price', 'rating'];
       const canSortInDb_ = directSortFields.includes(sortField);
-      const needsInMemoryFilter = !!(minRating || maxRating || maturityFilter || reservedOnly || extraFilters);
+      const needsInMemoryFilter = !!(minRating || maxRating || ratingBandParam || maturityFilter || reservedOnly || extraFilters);
       const needsInMemorySort = !canSortInDb_;
       // Grouping needs every matching bottle in memory before it can collapse
       // duplicates, so it disables DB-level pagination.
@@ -1494,17 +1489,9 @@ router.get('/:id', async (req, res) => {
 
     bottles = applyExtraBottleFilters(bottles, extraFilters);
 
-    // bottleRating: a drunk bottle's rating is the one given when drinking
-    // (the history list), as the statistics count it.
-    if (minRating) {
-      const min = parseFloat(minRating);
-      bottles = bottles.filter(b => { const r = bottleRating(b); return r != null && r >= min; });
-    }
-
-    if (maxRating) {
-      const max = parseFloat(maxRating);
-      bottles = bottles.filter(b => { const r = bottleRating(b); return r != null && r <= max; });
-    }
+    // A drunk bottle counts with the rating given when drinking (the history
+    // list), and a band is exactly the statistics' band (utils/ratingUtils).
+    bottles = filterByRating(bottles, { minRating, maxRating, ratingBand: ratingBandParam });
 
     let maturityStatusMap;
     if (needsMaturity) {

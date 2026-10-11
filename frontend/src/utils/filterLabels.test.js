@@ -1,4 +1,4 @@
-import { toMaturityArray, ratingRangeLabel, NEEDS_ATTENTION, MATURITY_FILTER_OPTIONS } from './filterLabels';
+import { toMaturityArray, ratingRangeLabel, ratingBandName, NEEDS_ATTENTION, MATURITY_FILTER_OPTIONS } from './filterLabels';
 
 // t() that returns the English default with its placeholders substituted.
 const t = (key, fallback, vars = {}) => fallback.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k]);
@@ -39,5 +39,17 @@ describe('ratingRangeLabel — normalised bounds rendered in the user scale', ()
   test('neither bound → null (no chip)', () => {
     expect(ratingRangeLabel(t, '', '', '5')).toBeNull();
     expect(ratingRangeLabel(t, undefined, null, '5')).toBeNull();
+  });
+});
+
+// A statistics band link's chip names the band (support ticket 2026-10-11).
+describe('ratingBandName', () => {
+  const t = (k) => k;
+  it('names a band by its statistics label', () => {
+    expect(ratingBandName('81-100', t)).toBe('statistics.ratingBands.excellent');
+    expect(ratingBandName('0-20', t)).toBe('statistics.ratingBands.poor');
+  });
+  it('an unknown band reads as itself', () => {
+    expect(ratingBandName('90-95', t)).toBe('90-95');
   });
 });

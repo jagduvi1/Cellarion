@@ -276,3 +276,17 @@ describe('rating filter on drink-time ratings', () => {
     expect(ids(low.body.bottles)).toEqual([id(20)]);
   });
 });
+
+describe('the band filter from a statistics band link', () => {
+  test('?ratingBand selects exactly the bottles counted in the band, edges included; a nonsense min is ignored', async () => {
+    // Davis 18.2 is ~80.8: counted in '81-100', so listed there and nowhere else.
+    ROWS.push({ _id: id(21), cellar: CELLAR_ID, status: 'drank', consumedReason: 'drank', consumedAt: day(3), consumedRating: 18.2, consumedRatingScale: '20' });
+    const top = await multi('ratingBand=81-100');
+    expect(ids(top.body.bottles)).toContain(id(21));
+    const below = await multi('ratingBand=61-80');
+    expect(ids(below.body.bottles)).not.toContain(id(21));
+    const all = await multi('');
+    const ignored = await multi('minRating=abc');
+    expect(ids(ignored.body.bottles)).toEqual(ids(all.body.bottles));
+  });
+});
