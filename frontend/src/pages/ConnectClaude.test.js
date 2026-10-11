@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import ConnectClaude from './ConnectClaude';
@@ -37,12 +37,20 @@ const renderPage = () =>
 
 const originalLocation = window.location;
 
+beforeEach(() => {
+  Object.defineProperty(window.navigator, 'clipboard', {
+    value: { writeText: vi.fn().mockResolvedValue(undefined) },
+    configurable: true,
+  });
+});
+
 afterEach(() => {
   Object.defineProperty(window, 'location', {
     value: originalLocation,
     writable: true,
     configurable: true,
   });
+  delete window.navigator.clipboard;
   vi.clearAllMocks();
 });
 
@@ -69,11 +77,15 @@ describe('ConnectClaude', () => {
     expect(track).toHaveBeenCalledWith('ai-connect-started', { via: 'claude-guide' });
   });
 
-  test('the manual address is always there as a fallback', () => {
+  test("the manual address is always there as a fallback, and a copy is counted as the guide's", async () => {
     setOrigin(HOSTED);
     const { container } = renderPage();
     expect(screen.getByText(/Button not working\?/)).toBeInTheDocument();
     expect(container.querySelector('.connect-ai-snippet').textContent).toBe('https://cellarion.app/api/mcp');
+
+    fireEvent.click(container.querySelector('.connect-ai-copy'));
+    await waitFor(() =>
+      expect(track).toHaveBeenCalledWith('ai-connect-started', { via: 'claude-guide-copy' }));
   });
 
   test('self-hosted installs get manual steps with their own address and no claude.ai link', () => {
@@ -87,11 +99,24 @@ describe('ConnectClaude', () => {
     expect(screen.getByText(/can be reached from outside your home or office network/)).toBeInTheDocument();
   });
 
-  test('answers the safety questions and links to the full guide for other apps', () => {
+  test('answers the safety questions with the real Settings paths and links to the full guide', () => {
     setOrigin(HOSTED);
     renderPage();
-    expect(screen.getByText(/Settings → Recent AI activity/)).toBeInTheDocument();
-    expect(screen.getByText(/Settings → API tokens and click Revoke/)).toBeInTheDocument();
+    // Both sections live in the collapsed "AI & connections" group.
+    expect(screen.getByText(/Settings → AI & connections → Recent AI activity/)).toBeInTheDocument();
+    expect(screen.getByText(/Settings → AI & connections → API tokens and click Revoke next to Claude \(AI\)/)).toBeInTheDocument();
+    // Removing the connector in Claude does not revoke the token Cellarion issued.
+    expect(screen.getByText(/Revoke is what ends the access on Cellarion's side/)).toBeInTheDocument();
+    // What Claude can read is wider than the cellar.
+    expect(screen.getByText(/wishlist, journal, profile, settings, notifications and support tickets/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Set-up for other AI apps/ })).toHaveAttribute('href', '/connect-ai');
+  });
+
+  test("describes the access levels in the consent screen's own words", () => {
+    setOrigin(HOSTED);
+    renderPage();
+    expect(screen.getByText('Read only — it can look, never change anything')).toBeInTheDocument();
+    expect(screen.getByText(/^Read \+ log drinking — /)).toBeInTheDocument();
+    expect(screen.getByText(/^Full access — /)).toBeInTheDocument();
   });
 });

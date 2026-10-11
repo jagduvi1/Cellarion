@@ -304,14 +304,6 @@
       }
     },
     "levelsTitle": "The three access levels",
-    "levels": {
-      "readTitle": "Read only",
-      "readBody": "Claude can look at your cellars, bottles, racks and notes, and changes nothing.",
-      "consumeTitle": "Read + log drinking",
-      "consumeBody": "Claude can also mark bottles as opened or drunk.",
-      "writeTitle": "Full access",
-      "writeBody": "Claude can also add and edit bottles, and organise your racks and cellars."
-    },
     "faqTitle": "Good to know",
     "faq": {
       "cost": {
@@ -320,15 +312,15 @@
       },
       "sees": {
         "q": "What does Claude see?",
-        "a": "Only your own cellar, such as your bottles, ratings, notes and racks, and only when a chat needs it. What Claude reads is handled under your own Claude account and Anthropic's terms, like anything else you write in Claude."
+        "a": "Your own Cellarion data: your cellars, bottles, ratings, notes and racks, and also things like your wishlist, journal, profile, settings, notifications and support tickets. Never other members' private data. Claude reads only what a chat needs, and what it reads is handled under your own Claude account and Anthropic's terms, like anything else you write in Claude."
       },
       "mistakes": {
         "q": "What if Claude gets something wrong?",
-        "a": "Every change Claude makes is listed in Cellarion under Settings → Recent AI activity, where recent changes can be undone with one click. You can also simply tell Claude \"undo that\"."
+        "a": "Changes Claude makes to your bottles, racks and cellars are listed in Cellarion under Settings → AI & connections → Recent AI activity, where you can undo recent ones. You can also simply tell Claude \"undo that\". A few things cannot be undone, such as a support ticket Claude sends for you."
       },
       "disconnect": {
         "q": "How do I disconnect?",
-        "a": "In Cellarion, open Settings → API tokens and click Revoke next to the connection. Or remove Cellarion in Claude under Customize → Connectors. Either way, Claude loses access straight away."
+        "a": "In Cellarion, open Settings → AI & connections → API tokens and click Revoke next to Claude (AI). That cuts Claude off straight away. Removing Cellarion in Claude under Customize → Connectors only stops Claude from using it; Revoke is what ends the access on Cellarion's side."
       },
       "chatStays": {
         "q": "Is Cellar Chat going away?",
@@ -339,7 +331,8 @@
         "a": "Yes. Cellarion works with any AI assistant that supports connectors. The set-up for other apps is in the full connection guide."
       }
     },
-    "otherAppsLink": "Set-up for other AI apps, and the technical details"
+    "otherAppsLink": "Set-up for other AI apps, and the technical details",
+    "metaDescription": "Connect your Cellarion wine cellar to Claude in about five minutes, with a free Claude account. A step-by-step guide for beginners."
   },
   "settings": {
     "title": "Settings",
@@ -5028,7 +5021,7 @@
     "tipExample": "<1>\"Grilled salmon with herb butter\"</1> works much better than <3>\"white wine\"</3>.",
     "claudeHint": {
       "body": "Enjoying Cellar Chat? Claude can do even more with your cellar: count and compare every bottle, log what you drink and add new bottles for you.",
-      "limit": "Want to keep asking? You can carry on the conversation in Claude.",
+      "limit": "Want to keep asking? Claude can answer questions about your cellar too.",
       "link": "Connect Cellarion to Claude (free, about five minutes)"
     },
     "searchingFor": "Searching for",

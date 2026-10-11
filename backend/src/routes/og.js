@@ -400,6 +400,7 @@ router.get('/connect-ai', ogLimiter, (req, res) => {
   <header>
     <h1>${esc(title)}</h1>
     <p>${esc(metaDescription)}</p>
+    <p><a href="${esc(SITE_URL)}/connect-ai/claude">New to AI assistants? Start with the step-by-step guide for Claude</a></p>
   </header>
   <main>
     <section>
@@ -423,6 +424,108 @@ router.get('/connect-ai', ogLimiter, (req, res) => {
     res.send(html);
   } catch (err) {
     console.error('[og] connect-ai page error:', err.message);
+    res.status(500).send('Error generating page');
+  }
+});
+
+// GET /og/connect-ai/claude — server-rendered twin of the beginner's guide to
+// connecting Claude (frontend/src/pages/ConnectClaude.js), for crawlers and
+// link previews. Same deliberate duplication as /connect-ai above: the copy
+// mirrors the frontend's `connectClaude` locale block — keep them in step.
+router.get('/connect-ai/claude', ogLimiter, (req, res) => {
+  try {
+    const pageUrl = `${SITE_URL}/connect-ai/claude`;
+    const title = 'Ask Claude about your wine cellar';
+    const metaDescription = 'Connect your Cellarion wine cellar to Claude in about five minutes, with a free Claude account. A step-by-step guide for beginners.';
+    const intro = 'Cellar Chat is made for quick questions. Connect Cellarion to Claude and your whole cellar joins a full conversation: Claude can look through every bottle, count and compare, and, if you allow it, log what you drink and add new bottles for you.';
+    const personalEndpoint = `${SITE_URL}/api/mcp`;
+
+    const steps = [
+      { title: 'Get a Claude account', text: 'Go to claude.ai and sign up for free, or sign in if you already have an account. The free plan lets you add one connector of your own, and Cellarion is the only one you need.' },
+      { title: 'Add Cellarion to Claude', text: `In Claude, open Customize, then Connectors, click + Add and choose Add custom connector. Name it Cellarion, paste ${personalEndpoint} and click Add.` },
+      { title: 'Sign in and choose what Claude may do', text: 'Claude takes you to a Cellarion page. Sign in, pick an access level (Read only, Read + log drinking, or Full access) and click Approve.' },
+      { title: 'Start chatting', text: 'Open a new chat in Claude and ask about your cellar. A connector added on the web or desktop works in the Claude phone app too.' },
+    ];
+    const faq = [
+      { q: 'Does it cost anything?', a: 'Not from Cellarion: the connector is free. Claude\'s free plan is enough.' },
+      { q: 'What does Claude see?', a: 'Your own Cellarion data: your cellars, bottles, ratings, notes and racks, and also things like your wishlist, journal, profile, settings, notifications and support tickets. Never other members\' private data.' },
+      { q: 'What if Claude gets something wrong?', a: 'Changes Claude makes to your bottles, racks and cellars are listed in Cellarion under Settings, AI & connections, Recent AI activity, where you can undo recent ones.' },
+      { q: 'How do I disconnect?', a: 'In Cellarion, open Settings, AI & connections, API tokens and click Revoke next to Claude (AI).' },
+    ];
+
+    const jsonLd = {
+      '@context': 'https://schema.org',
+      '@graph': [
+        {
+          '@type': 'HowTo',
+          name: title,
+          description: intro,
+          url: pageUrl,
+          step: steps.map((s, i) => ({ '@type': 'HowToStep', position: i + 1, name: s.title, text: s.text })),
+        },
+        {
+          '@type': 'FAQPage',
+          mainEntity: faq.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
+        },
+        {
+          '@type': 'BreadcrumbList',
+          itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Cellarion', item: SITE_URL },
+            { '@type': 'ListItem', position: 2, name: 'Connect your AI to your wine cellar', item: `${SITE_URL}/connect-ai` },
+            { '@type': 'ListItem', position: 3, name: title, item: pageUrl },
+          ],
+        },
+      ],
+    };
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>${esc(title)} — Cellarion</title>
+  <meta name="description" content="${esc(metaDescription)}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="${esc(title)} — Cellarion" />
+  <meta property="og:description" content="${esc(metaDescription)}" />
+  <meta property="og:image" content="${esc(SITE_URL)}/cellarion-logo.jpg" />
+  <meta property="og:url" content="${esc(pageUrl)}" />
+  <meta property="og:site_name" content="Cellarion" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${esc(title)} — Cellarion" />
+  <meta name="twitter:description" content="${esc(metaDescription)}" />
+  <link rel="canonical" href="${esc(pageUrl)}" />
+  <script type="application/ld+json">${serializeJsonLd(jsonLd)}</script>
+</head>
+<body>
+  <nav><a href="${esc(SITE_URL)}">Cellarion</a> / <a href="${esc(SITE_URL)}/connect-ai">Connect your AI</a> / ${esc(title)}</nav>
+  <header>
+    <h1>${esc(title)}</h1>
+    <p>${esc(intro)}</p>
+  </header>
+  <main>
+    <section>
+      <h2>Set it up in four steps</h2>
+      <ol>
+        ${steps.map(s => `<li><strong>${esc(s.title)}</strong> — ${esc(s.text)}</li>`).join('\n        ')}
+      </ol>
+    </section>
+    <section>
+      <h2>Good to know</h2>
+      ${faq.map(f => `<h3>${esc(f.q)}</h3><p>${esc(f.a)}</p>`).join('\n      ')}
+    </section>
+    <p><a href="${esc(SITE_URL)}/connect-ai">Set-up for other AI apps, and the technical details</a></p>
+  </main>
+  <footer>
+    <p><a href="${esc(SITE_URL)}">Cellarion</a> — track your wine collection, get drink-window alerts, and share cellars with friends. Open source, AGPL-3.0.</p>
+  </footer>
+</body>
+</html>`;
+
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.send(html);
+  } catch (err) {
+    console.error('[og] connect-ai/claude page error:', err.message);
     res.status(500).send('Error generating page');
   }
 });

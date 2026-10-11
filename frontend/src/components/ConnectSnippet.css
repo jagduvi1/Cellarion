@@ -1,0 +1,43 @@
+/* The copyable code box of the AI-connector pages (ConnectSnippet.js). */
+
+/* Snippet block: the copy button floats over the top-right of the code box.
+   The <pre> scrolls on its own so a long URL never widens the page. */
+.connect-ai-snippet-block {
+  position: relative;
+}
+
+.connect-ai-copy {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 1;
+}
+
+.connect-ai-snippet {
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1rem;
+  padding-right: 5.5rem;
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--color-text);
+  white-space: pre;
+  overflow-x: auto;
+  user-select: all;
+}
+
+@media (max-width: 600px) {
+  /* On narrow screens the floating button would sit on top of the code, so
+     put it back in flow above the block. */
+  .connect-ai-copy {
+    position: static;
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+
+  .connect-ai-snippet {
+    padding-right: 1rem;
+  }
+}

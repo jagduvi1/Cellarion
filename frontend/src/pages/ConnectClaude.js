@@ -14,7 +14,8 @@ const EXAMPLE_KEYS = ['ex1', 'ex2', 'ex3', 'ex4', 'ex5', 'ex6'];
  * /connect-ai/claude — the beginner's guide to the MCP connector, written for
  * someone who has never added a connector to an AI assistant. Cellar Chat
  * points here; the technical /connect-ai page (every client, raw protocol
- * details) links back for anyone new to it.
+ * details) links back for anyone new to it. Crawlers get the server-rendered
+ * twin in backend/src/routes/og.js — keep the two in step.
  *
  * Facts about Claude's plans and menus were checked against Anthropic's help
  * centre on 2026-10-11 ("Get started with custom connectors using remote
@@ -34,7 +35,14 @@ function ConnectClaude() {
     'connectClaude.intro',
     'Cellar Chat is made for quick questions. Connect Cellarion to Claude and your whole cellar joins a full conversation: Claude can look through every bottle, count and compare, and, if you allow it, log what you drink and add new bottles for you.',
   );
+  const copyLabel = t('connectAi.copy', 'Copy');
+  const copiedLabel = t('connectAi.copied', 'Copied');
+  const address = (
+    <ConnectSnippet text={mcpUrl} copyLabel={copyLabel} copiedLabel={copiedLabel} via="claude-guide-copy" />
+  );
 
+  // Each step carries its own extra content, so its button or address box
+  // can never come apart from its text.
   const steps = [
     {
       id: 'account',
@@ -43,20 +51,60 @@ function ConnectClaude() {
         'connectClaude.steps.account.body',
         'Go to claude.ai and sign up for free, or sign in if you already have an account.',
       ),
+      extra: (
+        <a className="btn btn-secondary btn-small" href="https://claude.ai" target="_blank" rel="noopener noreferrer">
+          {t('connectClaude.steps.account.cta', 'Open claude.ai')}
+        </a>
+      ),
     },
-    {
-      id: 'add',
-      title: t('connectClaude.steps.add.title', 'Add Cellarion to Claude'),
-      body: hosted
-        ? t(
+    hosted
+      ? {
+        id: 'add',
+        title: t('connectClaude.steps.add.title', 'Add Cellarion to Claude'),
+        body: t(
           'connectClaude.steps.add.bodyOneClick',
           'Click the button below. It opens Claude with Cellarion already filled in, so all you do there is click Add.',
-        )
-        : t(
+        ),
+        extra: (
+          <>
+            <a
+              className="btn btn-primary"
+              href={claudeOneClickUrl(origin)}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => track('ai-connect-started', { via: 'claude-guide' })}
+            >
+              {t('connectAi.oneClick.cta', 'Add Cellarion to Claude')}
+            </a>
+            <p className="connect-ai-note connect-claude-fallback">
+              {t(
+                'connectClaude.steps.add.fallback',
+                'Button not working? In Claude, open Customize → Connectors, click + Add and choose Add custom connector. Name it Cellarion and paste this address:',
+              )}
+            </p>
+            {address}
+          </>
+        ),
+      }
+      : {
+        id: 'add',
+        title: t('connectClaude.steps.add.title', 'Add Cellarion to Claude'),
+        body: t(
           'connectClaude.steps.add.bodyManual',
           'In Claude, open Customize → Connectors, click + Add and choose Add custom connector. Name it Cellarion, paste the address below and click Add.',
         ),
-    },
+        extra: (
+          <>
+            {address}
+            <p className="connect-ai-note">
+              {t(
+                'connectClaude.steps.add.selfHostNote',
+                'Claude connects to this address from the internet, so it only works if this Cellarion server can be reached from outside your home or office network.',
+              )}
+            </p>
+          </>
+        ),
+      },
     {
       id: 'approve',
       title: t('connectClaude.steps.approve.title', 'Sign in and choose what Claude may do'),
@@ -75,6 +123,14 @@ function ConnectClaude() {
     },
   ];
 
+  // The consent screen's own wording, so the guide says exactly what the
+  // user is asked to approve (ConnectAiAuthorize.js LEVEL_LABELS).
+  const levels = [
+    { id: 'read', text: t('oauthConsent.levelRead', 'Read only — it can look, never change anything') },
+    { id: 'consume', text: t('oauthConsent.levelConsume', 'Read + log drinking — it can also mark bottles opened or drunk (reversible)') },
+    { id: 'write', text: t('oauthConsent.levelFull', 'Full access — it can also add and edit bottles, racks and cellars') },
+  ];
+
   const faq = [
     {
       id: 'cost',
@@ -89,7 +145,7 @@ function ConnectClaude() {
       q: t('connectClaude.faq.sees.q', 'What does Claude see?'),
       a: t(
         'connectClaude.faq.sees.a',
-        'Only your own cellar, such as your bottles, ratings, notes and racks, and only when a chat needs it. What Claude reads is handled under your own Claude account and Anthropic\'s terms, like anything else you write in Claude.',
+        'Your own Cellarion data: your cellars, bottles, ratings, notes and racks, and also things like your wishlist, journal, profile, settings, notifications and support tickets. Never other members\' private data. Claude reads only what a chat needs, and what it reads is handled under your own Claude account and Anthropic\'s terms, like anything else you write in Claude.',
       ),
     },
     {
@@ -97,7 +153,7 @@ function ConnectClaude() {
       q: t('connectClaude.faq.mistakes.q', 'What if Claude gets something wrong?'),
       a: t(
         'connectClaude.faq.mistakes.a',
-        'Every change Claude makes is listed in Cellarion under Settings → Recent AI activity, where recent changes can be undone with one click. You can also simply tell Claude "undo that".',
+        'Changes Claude makes to your bottles, racks and cellars are listed in Cellarion under Settings → AI & connections → Recent AI activity, where you can undo recent ones. You can also simply tell Claude "undo that". A few things cannot be undone, such as a support ticket Claude sends for you.',
       ),
     },
     {
@@ -105,7 +161,7 @@ function ConnectClaude() {
       q: t('connectClaude.faq.disconnect.q', 'How do I disconnect?'),
       a: t(
         'connectClaude.faq.disconnect.a',
-        'In Cellarion, open Settings → API tokens and click Revoke next to the connection. Or remove Cellarion in Claude under Customize → Connectors. Either way, Claude loses access straight away.',
+        'In Cellarion, open Settings → AI & connections → API tokens and click Revoke next to Claude (AI). That cuts Claude off straight away. Removing Cellarion in Claude under Customize → Connectors only stops Claude from using it; Revoke is what ends the access on Cellarion\'s side.',
       ),
     },
     {
@@ -126,25 +182,11 @@ function ConnectClaude() {
     },
   ];
 
-  const levels = [
-    {
-      id: 'read',
-      title: t('connectClaude.levels.readTitle', 'Read only'),
-      body: t('connectClaude.levels.readBody', 'Claude can look at your cellars, bottles, racks and notes, and changes nothing.'),
-    },
-    {
-      id: 'consume',
-      title: t('connectClaude.levels.consumeTitle', 'Read + log drinking'),
-      body: t('connectClaude.levels.consumeBody', 'Claude can also mark bottles as opened or drunk.'),
-    },
-    {
-      id: 'write',
-      title: t('connectClaude.levels.writeTitle', 'Full access'),
-      body: t('connectClaude.levels.writeBody', 'Claude can also add and edit bottles, and organise your racks and cellars.'),
-    },
-  ];
-
   const pageUrl = `${SITE_URL}/connect-ai/claude`;
+  const metaDescription = t(
+    'connectClaude.metaDescription',
+    'Connect your Cellarion wine cellar to Claude in about five minutes, with a free Claude account. A step-by-step guide for beginners.',
+  );
   const jsonLd = {
     '@context': 'https://schema.org',
     '@graph': [
@@ -179,14 +221,11 @@ function ConnectClaude() {
     ],
   };
 
-  const copyLabel = t('connectAi.copy', 'Copy');
-  const copiedLabel = t('connectAi.copied', 'Copied');
-
   return (
     <div className="connect-ai-page connect-claude-page">
       <SEOHead
         title={`${title} — Cellarion`}
-        description={intro}
+        description={metaDescription}
         path="/connect-ai/claude"
         jsonLd={jsonLd}
       />
@@ -257,50 +296,7 @@ function ConnectClaude() {
               <li key={s.id} className="connect-claude-step">
                 <h3>{s.title}</h3>
                 <p>{s.body}</p>
-
-                {s.id === 'account' && (
-                  <a
-                    className="btn btn-secondary btn-small"
-                    href="https://claude.ai"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    {t('connectClaude.steps.account.cta', 'Open claude.ai')}
-                  </a>
-                )}
-
-                {s.id === 'add' && hosted && (
-                  <>
-                    <a
-                      className="btn btn-primary"
-                      href={claudeOneClickUrl(origin)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => track('ai-connect-started', { via: 'claude-guide' })}
-                    >
-                      {t('connectAi.oneClick.cta', 'Add Cellarion to Claude')}
-                    </a>
-                    <p className="connect-ai-note connect-claude-fallback">
-                      {t(
-                        'connectClaude.steps.add.fallback',
-                        'Button not working? In Claude, open Customize → Connectors, click + Add and choose Add custom connector. Name it Cellarion and paste this address:',
-                      )}
-                    </p>
-                  </>
-                )}
-
-                {s.id === 'add' && (
-                  <ConnectSnippet text={mcpUrl} copyLabel={copyLabel} copiedLabel={copiedLabel} />
-                )}
-
-                {s.id === 'add' && !hosted && (
-                  <p className="connect-ai-note">
-                    {t(
-                      'connectClaude.steps.add.selfHostNote',
-                      'Claude connects to this address from the internet, so it only works if this Cellarion server can be reached from outside your home or office network.',
-                    )}
-                  </p>
-                )}
+                {s.extra}
               </li>
             ))}
           </ol>
@@ -309,13 +305,7 @@ function ConnectClaude() {
         <section className="connect-ai-section">
           <h2>{t('connectClaude.levelsTitle', 'The three access levels')}</h2>
           <ul className="connect-ai-scopes">
-            {levels.map((l) => (
-              <li key={l.id}>
-                <strong>{l.title}</strong>
-                {' — '}
-                {l.body}
-              </li>
-            ))}
+            {levels.map((l) => <li key={l.id}>{l.text}</li>)}
           </ul>
         </section>
 

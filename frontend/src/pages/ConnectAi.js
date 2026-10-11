@@ -154,7 +154,7 @@ function ConnectAi() {
             )}
           </p>
           <p className="connect-ai-beginner">
-            <Link to="/connect-ai/claude">
+            <Link to="/connect-ai/claude" onClick={() => track('claude-guide-opened', { via: 'connect-ai' })}>
               {t('connectAi.beginnerLink', 'New to AI assistants? Start with the step-by-step guide for Claude')} &rarr;
             </Link>
           </p>

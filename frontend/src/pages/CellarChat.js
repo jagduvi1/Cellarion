@@ -5,6 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
 import { useAuth } from '../contexts/AuthContext';
 import { track } from '../utils/track';
+import { isHostedOrigin } from '../utils/mcpConnect';
 import './CellarChat.css';
 
 // ── Session storage keys ─────────────────────────────────────────────────────
@@ -91,12 +92,14 @@ function Message({ msg }) {
 // Points people who enjoy Cellar Chat at Cellarion connected to Claude (MCP),
 // which can do far more with a cellar than this one-question-at-a-time chat.
 // Two quiet places only: under the starter tips, and when the limit is reached.
+// Only on cellarion.app (claude.ai cannot reach most self-hosted servers) and
+// never in the demo (the consent screen refuses demo accounts).
 function ClaudeHint({ atLimit }) {
   const { t } = useTranslation();
   return (
     <div className="cellar-chat__claude-hint">
       {atLimit
-        ? t('cellarChat.claudeHint.limit', 'Want to keep asking? You can carry on the conversation in Claude.')
+        ? t('cellarChat.claudeHint.limit', 'Want to keep asking? Claude can answer questions about your cellar too.')
         : t('cellarChat.claudeHint.body', 'Enjoying Cellar Chat? Claude can do even more with your cellar: count and compare every bottle, log what you drink and add new bottles for you.')}
       {' '}
       <Link
@@ -109,7 +112,7 @@ function ClaudeHint({ atLimit }) {
   );
 }
 
-function StarterPrompts({ onSelect, disabled, atLimit }) {
+function StarterPrompts({ onSelect, disabled, showClaudeHint }) {
   const { t } = useTranslation();
   const [openCategory, setOpenCategory] = useState(null);
 
@@ -147,7 +150,7 @@ function StarterPrompts({ onSelect, disabled, atLimit }) {
         <br />
         <Trans i18nKey="cellarChat.tipExample" components={{ 1: <em />, 3: <em /> }} />
       </div>
-      {!atLimit && <ClaudeHint />}
+      {showClaudeHint && <ClaudeHint />}
     </div>
   );
 }
@@ -215,6 +218,10 @@ export default function CellarChat() {
   }, [messages]);
 
   const atLimit = usage && usage.limit !== -1 && usage.used >= usage.limit;
+  // Waits for the usage count, so a user already at the limit never gets the
+  // starter version first (or has a click on it counted as chat-start).
+  const claudeHintAllowed = isHostedOrigin(window.location.origin) && !user?.isDemo;
+  const claudeHint = !claudeHintAllowed || !usage ? null : atLimit ? 'limit' : 'start';
 
   // Build conversation history from messages state (text only, no wine cards / thinking)
   const buildHistory = useCallback(() =>
@@ -401,7 +408,7 @@ export default function CellarChat() {
 
       <div className="cellar-chat__messages">
         {messages.length === 0 ? (
-          <StarterPrompts onSelect={send} disabled={loading} atLimit={atLimit} />
+          <StarterPrompts onSelect={send} disabled={loading} showClaudeHint={claudeHint === 'start'} />
         ) : (
           messages.map((msg, i) => <Message key={i} msg={msg} />)
         )}
@@ -409,7 +416,7 @@ export default function CellarChat() {
       </div>
 
       {error && <div className="cellar-chat__error">{error}</div>}
-      {atLimit && <ClaudeHint atLimit />}
+      {claudeHint === 'limit' && <ClaudeHint atLimit />}
 
       <form className="cellar-chat__form" onSubmit={handleSubmit}>
         <textarea

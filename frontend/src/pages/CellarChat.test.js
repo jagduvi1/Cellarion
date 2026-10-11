@@ -5,18 +5,22 @@
  * Cellar Chat points people who enjoy it at the beginner's guide for Claude,
  * in exactly two quiet places: under the starter tips while questions are
  * left, and in place of it once the limit is reached. Never both at once, and
- * each click is counted with where it came from.
+ * each click is counted with where it came from. It waits for the usage count
+ * (so someone at the limit never gets the starter version first), and it is
+ * never shown where it cannot work: in the demo, whose accounts the consent
+ * screen refuses, or on a self-hosted install claude.ai usually cannot reach.
  */
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
-const { apiFetchMock, usage } = vi.hoisted(() => ({
+const { apiFetchMock, usage, authUser } = vi.hoisted(() => ({
   apiFetchMock: vi.fn(),
   usage: { current: null },
+  authUser: { current: { preferences: {} } },
 }));
 
 vi.mock('../contexts/AuthContext', () => ({
-  useAuth: () => ({ apiFetch: apiFetchMock, user: { preferences: {} } }),
+  useAuth: () => ({ apiFetch: apiFetchMock, user: authUser.current }),
 }));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key, fallback) => (typeof fallback === 'string' ? fallback : key) }),
@@ -29,14 +33,29 @@ const CellarChat = (await import('./CellarChat')).default;
 
 const jsonRes = (body) => ({ ok: true, status: 200, json: async () => body });
 
+// jsdom's window.location is not writable, so swap in a URL object — the page
+// reads only `.origin` from it.
+const setOrigin = (origin) => {
+  Object.defineProperty(window, 'location', { value: new URL(origin), writable: true, configurable: true });
+};
+const originalLocation = window.location;
+// jsdom has no layout, so no scrollIntoView; put back whatever was there.
+const originalScrollIntoView = Element.prototype.scrollIntoView;
+
 beforeEach(() => {
   vi.clearAllMocks();
-  // jsdom has no layout, so no scrollIntoView.
+  setOrigin('https://cellarion.app');
+  authUser.current = { preferences: {} };
   Element.prototype.scrollIntoView = vi.fn();
   apiFetchMock.mockImplementation(async (url) => {
     if (url === '/api/chat/usage') return jsonRes(usage.current);
     return jsonRes({ cellars: [] });
   });
+});
+
+afterEach(() => {
+  Object.defineProperty(window, 'location', { value: originalLocation, writable: true, configurable: true });
+  Element.prototype.scrollIntoView = originalScrollIntoView;
 });
 
 const renderChat = () => render(<MemoryRouter><CellarChat /></MemoryRouter>);
@@ -66,5 +85,37 @@ describe('CellarChat → Claude guide', () => {
     expect(links).toHaveLength(1);
     fireEvent.click(links[0]);
     expect(track).toHaveBeenCalledWith('claude-guide-opened', { via: 'chat-limit' });
+  });
+
+  test('nothing is shown until the usage count is known', async () => {
+    let answerUsage;
+    apiFetchMock.mockImplementation((url) => {
+      if (url === '/api/chat/usage') return new Promise((resolve) => { answerUsage = resolve; });
+      return Promise.resolve(jsonRes({ cellars: [] }));
+    });
+    renderChat();
+    await screen.findByText('cellarChat.tryAsking');
+    expect(screen.queryByRole('link', { name: /Connect Cellarion to Claude/ })).toBeNull();
+
+    // At the limit the first thing shown is the limit version.
+    await act(async () => answerUsage(jsonRes({ used: 50, limit: 50, period: 'daily' })));
+    expect(screen.getByText(/Want to keep asking\?/)).toBeInTheDocument();
+    expect(screen.queryByText(/Enjoying Cellar Chat\?/)).toBeNull();
+  });
+
+  test('never in the demo, at the limit or not', async () => {
+    authUser.current = { preferences: {}, isDemo: true };
+    usage.current = { used: 50, limit: 50, period: 'daily' };
+    renderChat();
+    await screen.findByText(/50 \/ 50/);
+    expect(screen.queryByRole('link', { name: /Connect Cellarion to Claude/ })).toBeNull();
+  });
+
+  test('never on a self-hosted install', async () => {
+    setOrigin('https://wine.example.org');
+    usage.current = { used: 3, limit: 50, period: 'daily' };
+    renderChat();
+    await screen.findByText(/3 \/ 50/);
+    expect(screen.queryByRole('link', { name: /Connect Cellarion to Claude/ })).toBeNull();
   });
 });

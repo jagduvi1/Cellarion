@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { track } from '../utils/track';
+import './ConnectSnippet.css';
 
 /**
  * A copyable code box for the AI-connector pages (/connect-ai and its Claude
  * guide): the text in a scrolling <pre>, with a Copy button floating over it.
+ * A copy counts as an ai-connect-started event; `via` says which page it was.
  */
-export default function ConnectSnippet({ text, copyLabel, copiedLabel }) {
+export default function ConnectSnippet({ text, copyLabel, copiedLabel, via = 'copy' }) {
   const [copied, setCopied] = useState(false);
   const timer = useRef(null);
 
@@ -16,7 +18,7 @@ export default function ConnectSnippet({ text, copyLabel, copiedLabel }) {
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(text);
-      track('ai-connect-started', { via: 'copy' });
+      track('ai-connect-started', { via });
       setCopied(true);
       clearTimeout(timer.current);
       timer.current = setTimeout(() => setCopied(false), 2000);
