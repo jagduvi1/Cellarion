@@ -86,6 +86,7 @@ const GrapeDetail          = lazy(() => import('./pages/GrapeDetail'));
 const WineTypeDetail       = lazy(() => import('./pages/WineTypeDetail'));
 const Help                 = lazy(() => import('./pages/Help'));
 const ConnectAi            = lazy(() => import('./pages/ConnectAi'));
+const ConnectClaude        = lazy(() => import('./pages/ConnectClaude'));
 const WineLists            = lazy(() => import('./pages/WineLists'));
 const WineListEditor       = lazy(() => import('./pages/WineListEditor'));
 const PublicWineList       = lazy(() => import('./pages/PublicWineList'));
@@ -446,6 +447,8 @@ function AppRoutes() {
         {/* Public set-up docs for the MCP connector. Distinct from
             /connect-ai/authorize above, which is the OAuth consent screen. */}
         <Route path="/connect-ai" element={<Layout><ConnectAi /></Layout>} />
+        {/* The beginner's guide to connecting Claude — Cellar Chat points here. */}
+        <Route path="/connect-ai/claude" element={<Layout><ConnectClaude /></Layout>} />
 
         {/* Admin routes */}
         <Route

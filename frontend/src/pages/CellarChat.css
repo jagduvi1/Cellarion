@@ -233,6 +233,32 @@
   font-family: monospace;
 }
 
+/* ── Pointer to Cellarion in Claude (under the tips, and at the limit) ── */
+
+.cellar-chat__claude-hint {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  line-height: 1.6;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.65rem 0.9rem;
+  max-width: 480px;
+}
+
+.cellar-chat__claude-hint a {
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
+/* At the limit it sits between the message list and the composer. */
+.cellar-chat__error + .cellar-chat__claude-hint,
+.cellar-chat__messages + .cellar-chat__claude-hint {
+  margin-top: 0.6rem;
+  max-width: none;
+  flex-shrink: 0;
+}
+
 /* ── Individual messages ── */
 
 .cellar-chat__msg {

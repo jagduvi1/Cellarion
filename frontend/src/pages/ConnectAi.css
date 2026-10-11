@@ -19,6 +19,15 @@
   margin-bottom: 0.75rem;
 }
 
+.connect-ai-beginner {
+  margin-bottom: 1rem;
+}
+
+.connect-ai-beginner a {
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
 .connect-ai-undo-note {
   background: var(--color-info-bg);
   color: var(--color-info);

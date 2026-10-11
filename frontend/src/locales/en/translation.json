@@ -197,6 +197,7 @@
     "subtitle": "Cellarion speaks the Model Context Protocol, so you can run your cellar from Claude, ChatGPT or any MCP client.",
     "beta": "The AI connector is in beta. Everything an assistant changes is listed in your account and can be undone.",
     "undoNote": "Everything an assistant changes is listed in your account and can be undone.",
+    "beginnerLink": "New to AI assistants? Start with the step-by-step guide for Claude",
     "copy": "Copy",
     "copied": "Copied",
     "oneClick": {
@@ -219,7 +220,7 @@
     "clients": {
       "claude": {
         "title": "Claude (web, desktop and mobile)",
-        "body": "Settings → Connectors → Add custom connector, then paste the URL below. You sign in with your Cellarion account and choose what the assistant may do."
+        "body": "Customize → Connectors → + Add → Add custom connector, then paste the URL below. You sign in with your Cellarion account and choose what the assistant may do."
       },
       "claudeDesktop": {
         "title": "Claude Desktop (local bridge)",
@@ -257,6 +258,88 @@
     "selfHostNote": "These URLs point at this install. All OAuth discovery URLs are derived from FRONTEND_URL, so set it to the address your users actually reach.",
     "helpLink": "Browse the help centre",
     "privacyLink": "How your data is handled"
+  },
+  "connectClaude": {
+    "eyebrow": "No technical skills needed · about five minutes",
+    "title": "Ask Claude about your wine cellar",
+    "intro": "Cellar Chat is made for quick questions. Connect Cellarion to Claude and your whole cellar joins a full conversation: Claude can look through every bottle, count and compare, and, if you allow it, log what you drink and add new bottles for you.",
+    "examplesTitle": "What you can ask",
+    "examples": {
+      "ex1": "“How many bottles of Barolo do I have, and what are they worth together?”",
+      "ex2": "“Which of my wines should I drink in the next six months?”",
+      "ex3": "“We just finished the 2016 Rioja. Mark it as drunk and give it four stars.”",
+      "ex4": "“I’m at the wine shop. What’s missing from my cellar?”",
+      "ex5": "“Plan the wines for a dinner for six: fish to start, then lamb, then cheese.”",
+      "ex6": "“Here’s a photo of a bottle I just bought. Add it to my cellar.”"
+    },
+    "whatTitle": "What is this, exactly?",
+    "whatClaude": "Claude is an AI assistant made by Anthropic. You chat with it on claude.ai, in its desktop app or in its phone app.",
+    "whatConnector": "A connector is a bridge between Claude and another service. Once you add the Cellarion connector, Claude can look things up in your cellar while you chat, just as you would in the app yourself.",
+    "whatMcp": "The technical name for this bridge is MCP (Model Context Protocol). You do not need to know anything about it to use it.",
+    "needTitle": "What you need",
+    "needAccount": "A Claude account. The free plan works: it lets you add one connector of your own, and Cellarion is the only one you need.",
+    "needComputer": "A computer for the first set-up. Afterwards Cellarion works in the Claude phone app too.",
+    "needCellarion": "Your Cellarion account.",
+    "stepsTitle": "Set it up in four steps",
+    "steps": {
+      "account": {
+        "title": "Get a Claude account",
+        "body": "Go to claude.ai and sign up for free, or sign in if you already have an account.",
+        "cta": "Open claude.ai"
+      },
+      "add": {
+        "title": "Add Cellarion to Claude",
+        "bodyOneClick": "Click the button below. It opens Claude with Cellarion already filled in, so all you do there is click Add.",
+        "bodyManual": "In Claude, open Customize → Connectors, click + Add and choose Add custom connector. Name it Cellarion, paste the address below and click Add.",
+        "fallback": "Button not working? In Claude, open Customize → Connectors, click + Add and choose Add custom connector. Name it Cellarion and paste this address:",
+        "selfHostNote": "Claude connects to this address from the internet, so it only works if this Cellarion server can be reached from outside your home or office network."
+      },
+      "approve": {
+        "title": "Sign in and choose what Claude may do",
+        "body": "Claude takes you to a Cellarion page. Sign in, pick an access level and click Approve. Not sure which level? Start with Read only: Claude can look but never change anything. You can connect again with more access later."
+      },
+      "chat": {
+        "title": "Start chatting",
+        "body": "Open a new chat in Claude and ask about your cellar. If Claude does not seem to know about it, click + at the bottom of the chat, choose Connectors and check that Cellarion is switched on."
+      }
+    },
+    "levelsTitle": "The three access levels",
+    "levels": {
+      "readTitle": "Read only",
+      "readBody": "Claude can look at your cellars, bottles, racks and notes, and changes nothing.",
+      "consumeTitle": "Read + log drinking",
+      "consumeBody": "Claude can also mark bottles as opened or drunk.",
+      "writeTitle": "Full access",
+      "writeBody": "Claude can also add and edit bottles, and organise your racks and cellars."
+    },
+    "faqTitle": "Good to know",
+    "faq": {
+      "cost": {
+        "q": "Does it cost anything?",
+        "a": "Not from Cellarion: the connector is free, like everything else here. Claude's free plan is enough. Its paid plans give you more usage, but you do not need one to start."
+      },
+      "sees": {
+        "q": "What does Claude see?",
+        "a": "Only your own cellar, such as your bottles, ratings, notes and racks, and only when a chat needs it. What Claude reads is handled under your own Claude account and Anthropic's terms, like anything else you write in Claude."
+      },
+      "mistakes": {
+        "q": "What if Claude gets something wrong?",
+        "a": "Every change Claude makes is listed in Cellarion under Settings → Recent AI activity, where recent changes can be undone with one click. You can also simply tell Claude \"undo that\"."
+      },
+      "disconnect": {
+        "q": "How do I disconnect?",
+        "a": "In Cellarion, open Settings → API tokens and click Revoke next to the connection. Or remove Cellarion in Claude under Customize → Connectors. Either way, Claude loses access straight away."
+      },
+      "chatStays": {
+        "q": "Is Cellar Chat going away?",
+        "a": "No. Cellar Chat stays for quick questions right here in the app. Claude is for when you want to go further."
+      },
+      "others": {
+        "q": "Can I use ChatGPT or another assistant instead?",
+        "a": "Yes. Cellarion works with any AI assistant that supports connectors. The set-up for other apps is in the full connection guide."
+      }
+    },
+    "otherAppsLink": "Set-up for other AI apps, and the technical details"
   },
   "settings": {
     "title": "Settings",
@@ -4943,6 +5026,11 @@
     "tipLabel": "Tip:",
     "tipBody": "describe food, occasion, or mood for the best results.",
     "tipExample": "<1>\"Grilled salmon with herb butter\"</1> works much better than <3>\"white wine\"</3>.",
+    "claudeHint": {
+      "body": "Enjoying Cellar Chat? Claude can do even more with your cellar: count and compare every bottle, log what you drink and add new bottles for you.",
+      "limit": "Want to keep asking? You can carry on the conversation in Claude.",
+      "link": "Connect Cellarion to Claude (free, about five minutes)"
+    },
     "searchingFor": "Searching for",
     "thinking": "Thinking…",
     "searchingCellar": "Searching your cellar…",

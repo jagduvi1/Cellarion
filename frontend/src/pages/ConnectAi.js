@@ -1,44 +1,14 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
+import Snippet from '../components/ConnectSnippet';
 import SITE_URL from '../config/siteUrl';
 import { HOSTED_ORIGIN, isHostedOrigin, claudeOneClickUrl } from '../utils/mcpConnect';
 import { track } from '../utils/track';
 import './ConnectAi.css';
 
 const TOKEN_PLACEHOLDER = 'cel_YOUR_TOKEN_HERE';
-
-function Snippet({ text, copyLabel, copiedLabel }) {
-  const [copied, setCopied] = useState(false);
-  const timer = useRef(null);
-
-  // Clear on unmount, and reset on every click, so rapid re-clicks can't have
-  // an older timer flip the label back early.
-  useEffect(() => () => clearTimeout(timer.current), []);
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-      track('ai-connect-started', { via: 'copy' });
-      setCopied(true);
-      clearTimeout(timer.current);
-      timer.current = setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* clipboard unavailable (insecure context / denied) — the text is
-         selectable anyway, so failing silently is the honest behaviour */
-    }
-  };
-
-  return (
-    <div className="connect-ai-snippet-block">
-      <button type="button" className="btn btn-secondary btn-small connect-ai-copy" onClick={copy}>
-        {copied ? copiedLabel : copyLabel}
-      </button>
-      <pre className="connect-ai-snippet"><code>{text}</code></pre>
-    </div>
-  );
-}
 
 function ConnectAi() {
   const { t } = useTranslation();
@@ -77,7 +47,7 @@ function ConnectAi() {
         title: t('connectAi.clients.claude.title', 'Claude (web, desktop and mobile)'),
         body: t(
           'connectAi.clients.claude.body',
-          'Settings → Connectors → Add custom connector, then paste the URL below. You sign in with your Cellarion account and choose what the assistant may do.',
+          'Customize → Connectors → + Add → Add custom connector, then paste the URL below. You sign in with your Cellarion account and choose what the assistant may do.',
         ),
         snippet: mcpUrl,
       },
@@ -182,6 +152,11 @@ function ConnectAi() {
               'connectAi.subtitle',
               'Cellarion speaks the Model Context Protocol, so you can run your cellar from Claude, ChatGPT or any MCP client.',
             )}
+          </p>
+          <p className="connect-ai-beginner">
+            <Link to="/connect-ai/claude">
+              {t('connectAi.beginnerLink', 'New to AI assistants? Start with the step-by-step guide for Claude')} &rarr;
+            </Link>
           </p>
           <p className="connect-ai-undo-note">
             {t(

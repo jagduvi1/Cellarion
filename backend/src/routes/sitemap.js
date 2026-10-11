@@ -89,6 +89,7 @@ async function buildPages() {
     { loc: '/community/discussions', priority: '0.8', changefreq: 'daily' },
     { loc: '/help', priority: '0.6', changefreq: 'monthly' },
     { loc: '/connect-ai', priority: '0.7', changefreq: 'monthly' },
+    { loc: '/connect-ai/claude', priority: '0.7', changefreq: 'monthly' },
     { loc: '/privacy', priority: '0.3', changefreq: 'yearly' },
   ];
 

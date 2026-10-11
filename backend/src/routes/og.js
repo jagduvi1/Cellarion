@@ -324,7 +324,7 @@ router.get('/connect-ai', ogLimiter, (req, res) => {
     const steps = [
       {
         title: 'Claude (web, desktop and mobile)',
-        text: `Settings, then Connectors, then Add custom connector, and paste ${personalEndpoint}. Sign in with your Cellarion account and choose an access level.`,
+        text: `Customize, then Connectors, then + Add, then Add custom connector, and paste ${personalEndpoint}. Sign in with your Cellarion account and choose an access level.`,
       },
       {
         title: 'ChatGPT',
