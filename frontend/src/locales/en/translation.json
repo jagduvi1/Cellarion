@@ -2793,7 +2793,13 @@
     "vintageBottle_one": "{{vintage}}: {{count}} bottle",
     "vintageBottle_other": "{{vintage}}: {{count}} bottles",
     "purchased_one": "{{year}}: {{count}} bottle purchased",
-    "purchased_other": "{{year}}: {{count}} bottles purchased"
+    "purchased_other": "{{year}}: {{count}} bottles purchased",
+    "ratingViews": {
+      "label": "Which ratings",
+      "all": "All",
+      "cellar": "In the cellar",
+      "history": "History"
+    }
   },
   "blog": {
     "title": "Blog",

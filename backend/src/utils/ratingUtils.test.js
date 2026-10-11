@@ -104,3 +104,17 @@ describe('resolveRating', () => {
     expect(result.error).toMatch(/out of range/);
   });
 });
+
+describe('bottleRating', () => {
+  const { bottleRating } = require('./ratingUtils');
+  test('a drunk (gifted, sold) bottle: the rating given then, the final verdict', () => {
+    expect(bottleRating({ status: 'drank', rating: 2, ratingScale: '5', consumedRating: 95, consumedRatingScale: '100' })).toBe(toNormalized(95, '100'));
+    expect(bottleRating({ status: 'gifted', consumedRating: 4, consumedRatingScale: '5' })).toBe(toNormalized(4, '5'));
+  });
+  test('else the rating on the bottle; none at all is null', () => {
+    expect(bottleRating({ status: 'drank', rating: 90, ratingScale: '100' })).toBe(toNormalized(90, '100'));
+    expect(bottleRating({ status: 'active', rating: 88, ratingScale: '100', consumedRating: 50, consumedRatingScale: '100' })).toBe(toNormalized(88, '100'));
+    expect(bottleRating({ status: 'active' })).toBeNull();
+    expect(bottleRating(null)).toBeNull();
+  });
+});

@@ -8,7 +8,7 @@ import { TYPE_COLORS, COUNTRY_COLORS, GRAPE_COLORS, fmt, fmtRating, fmtCurrency 
 import DonutChart from '../components/charts/DonutChart';
 import HBarChart from '../components/charts/HBarChart';
 import VintageBarChart from '../components/charts/VintageBarChart';
-import RatingChart from '../components/charts/RatingChart';
+import RatingViewsCard from '../components/charts/RatingViewsCard';
 import MaturityViz from '../components/charts/MaturityViz';
 import HealthScoreCard from '../components/charts/HealthScoreCard';
 import RegretIndexCard from '../components/charts/RegretIndexCard';
@@ -133,7 +133,7 @@ function Statistics() {
 
   const {
     overview, byType, byCountry, byRegion, byGrape,
-    byVintage, byRating, byBottleSize, byPurchaseYear,
+    byVintage, byRating, ratingViews, byBottleSize, byPurchaseYear,
     maturity, maturityCoverage, topValueBottles,
     consumptionByYear, consumptionByReason, cellarBreakdown,
     maturityForecast, urgencyLadder, holdingTime,
@@ -433,14 +433,18 @@ function Statistics() {
         {/* Rating Distribution */}
         <div className="stats-card">
           <h2 className="stats-card-title">{t('statistics.sections.ratingDistribution')}</h2>
-          <RatingChart
-            byRating={byRating}
-            avg={overview.avgRating}
+          {/* All / In the cellar / History: a drunk bottle counts with the
+              rating given when drinking. A band opens its bottles — the
+              cellar list, or the history ones — by the band's range. */}
+          <RatingViewsCard
+            views={ratingViews}
+            fallback={{ byRating, avg: overview.avgRating }}
             targetScale={targetScale}
-            onBandClick={(band) => {
+            onBand={(view, band) => {
               // band.key is "0-20" / "21-40" / "41-60" / "61-80" / "81-100"
-              const min = parseInt(String(band.key).split('-')[0], 10);
-              goWithFilter({ minRating: isNaN(min) ? '' : String(min) });
+              const [min, max] = String(band.key).split('-').map((n) => parseInt(n, 10));
+              const range = { minRating: isNaN(min) ? '' : String(min), maxRating: isNaN(max) ? '' : String(max) };
+              goWithFilter(view === 'history' ? { status: 'consumed', ...range } : range);
             }}
           />
         </div>

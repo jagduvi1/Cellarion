@@ -262,3 +262,17 @@ describe('GET /api/cellars/multi/history', () => {
     expect(body.total).toBe(7);
   });
 });
+
+// A bottle rated only when it was drunk (support ticket 2026-10-11): the
+// rating filter reads the rating given then, as the statistics count it.
+describe('rating filter on drink-time ratings', () => {
+  test('a bottle rated only when drinking is found by its drink-time rating', async () => {
+    ROWS.push({ _id: id(19), cellar: CELLAR_ID, status: 'drank', consumedReason: 'drank', consumedAt: day(3), consumedRating: 5, consumedRatingScale: '5' });
+    ROWS.push({ _id: id(20), cellar: CELLAR_ID, status: 'drank', consumedReason: 'drank', consumedAt: day(3), consumedRating: 2, consumedRatingScale: '5' });
+    const { body } = await multi('minRating=90');
+    expect(ids(body.bottles)).toContain(id(19));
+    expect(ids(body.bottles)).not.toContain(id(20));
+    const low = await multi('maxRating=40');
+    expect(ids(low.body.bottles)).toEqual([id(20)]);
+  });
+});

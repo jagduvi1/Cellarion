@@ -17,7 +17,7 @@ const { getSnapshotsForDates, getOrCreateDailySnapshot, convertCurrency } = requ
 const { createNotification } = require('../services/notifications');
 const { transferCellarOwnership } = require('../services/cellarTransfer');
 const { sendCellarInviteEmail } = require('../services/mailgun');
-const { toNormalized } = require('../utils/ratingUtils');
+const { toNormalized, bottleRating } = require('../utils/ratingUtils');
 const { classifyMaturity, buildProfileMap, parseMaturityFilter, matchesMaturityFilter } = require('../utils/maturityUtils');
 const { isReserved } = require('../utils/reservationUtils');
 const {
@@ -380,13 +380,15 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
 
   // ── Shared post-filters (extra + rating + maturity), applied to both paths ──
   bottles = applyExtraBottleFilters(bottles, extraFilters);
+  // bottleRating: a drunk bottle's rating is the one given when drinking
+  // (the history list), as the statistics count it.
   if (minRating) {
     const min = parseFloat(minRating);
-    bottles = bottles.filter(b => b.rating && toNormalized(b.rating, b.ratingScale || '5') >= min);
+    bottles = bottles.filter(b => { const r = bottleRating(b); return r != null && r >= min; });
   }
   if (maxRating) {
     const max = parseFloat(maxRating);
-    bottles = bottles.filter(b => b.rating && toNormalized(b.rating, b.ratingScale || '5') <= max);
+    bottles = bottles.filter(b => { const r = bottleRating(b); return r != null && r <= max; });
   }
   let maturityStatusMap;
   if (needsMaturity) {
@@ -1492,20 +1494,16 @@ router.get('/:id', async (req, res) => {
 
     bottles = applyExtraBottleFilters(bottles, extraFilters);
 
+    // bottleRating: a drunk bottle's rating is the one given when drinking
+    // (the history list), as the statistics count it.
     if (minRating) {
       const min = parseFloat(minRating);
-      bottles = bottles.filter(b => {
-        if (!b.rating) return false;
-        return toNormalized(b.rating, b.ratingScale || '5') >= min;
-      });
+      bottles = bottles.filter(b => { const r = bottleRating(b); return r != null && r >= min; });
     }
 
     if (maxRating) {
       const max = parseFloat(maxRating);
-      bottles = bottles.filter(b => {
-        if (!b.rating) return false;
-        return toNormalized(b.rating, b.ratingScale || '5') <= max;
-      });
+      bottles = bottles.filter(b => { const r = bottleRating(b); return r != null && r <= max; });
     }
 
     let maturityStatusMap;

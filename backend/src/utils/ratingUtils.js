@@ -11,6 +11,8 @@
  * All scales map to a shared 0–100 normalized range for aggregation.
  */
 
+const { CONSUMED_STATUSES } = require('../config/constants');
+
 const SCALE_META = {
   '5':   { min: 1,  max: 5,   step: 0.1, label: 'Star Rating',      suffix: '★' },
   '20':  { min: 1,  max: 20,  step: 0.1, label: 'Davis 20-Point',   suffix: '/20' },
@@ -113,7 +115,22 @@ function resolveRating(rawRating, rawScale) {
   return { rating: parseFloat(rawRating), ratingScale };
 }
 
+/**
+ * A bottle's own rating, normalised 0–100, or null when it has none: for a
+ * bottle drunk (or gifted, sold) the rating given then, which is the final
+ * verdict, else the rating on the bottle. One rule for the statistics and
+ * the rating filters (support ticket 2026-10-11: someone who rates only when
+ * drinking saw an empty rating distribution, and the filters found nothing).
+ */
+function bottleRating(b) {
+  if (!b) return null;
+  if (CONSUMED_STATUSES.includes(b.status) && b.consumedRating != null) {
+    return toNormalized(b.consumedRating, b.consumedRatingScale || '5');
+  }
+  return b.rating != null ? toNormalized(b.rating, b.ratingScale || '5') : null;
+}
+
 // ANCHORS/COL are exported for the analytics engine (#987), which GENERATES a
 // Mongo aggregation expression from the same anchor table so in-pipeline
 // normalization can never drift from toNormalized — a parity test pins them.
-module.exports = { SCALE_META, VALID_SCALES, ANCHORS, COL, toNormalized, fromNormalized, isValidRating, resolveRating };
+module.exports = { SCALE_META, VALID_SCALES, ANCHORS, COL, toNormalized, fromNormalized, isValidRating, resolveRating, bottleRating };

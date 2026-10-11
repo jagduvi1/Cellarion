@@ -153,3 +153,71 @@ describe('maturityForecast personal-window consistency (BUG 5)', () => {
     expect(byYear[2030]).toBe(0);
   });
 });
+
+/**
+ * The rating distribution three ways (support ticket 2026-10-11): someone who
+ * rates only when drinking saw zero in every band, because only the ratings
+ * on bottles still in the cellar were counted. Each drunk bottle now counts
+ * with the rating given when drinking (else the one on the bottle), and "all"
+ * counts every bottle once.
+ */
+describe('ratingViews', () => {
+  const run = (activeBottles, consumedBottles) => {
+    WineVintageProfile.find.mockReturnValue({ lean: () => Promise.resolve([]) });
+    return computeOverview({
+      activeBottles, consumedBottles, cellars: [{ _id: 'c1', name: 'Main' }], targetCurrency: 'USD', targetRatingScale: '100',
+    });
+  };
+  const wd = { _id: 'wd1', type: 'red' };
+
+  test('ratings given when drinking count, in the history view and in all', async () => {
+    const stats = await run(
+      [{ cellar: 'c1', vintage: '2018', wineDefinition: wd }], // no rating
+      [
+        { cellar: 'c1', status: 'drank', consumedAt: new Date('2026-01-01'), consumedRating: 92, consumedRatingScale: '100', wineDefinition: wd },
+        { cellar: 'c1', status: 'drank', consumedAt: new Date('2026-02-01'), consumedRating: 3, consumedRatingScale: '5', wineDefinition: wd },
+      ],
+    );
+    const v = stats.ratingViews;
+    expect(v.cellar.count).toBe(0);
+    expect(v.history.count).toBe(2);
+    // 92/100 → 77.5 and 3 stars → 50 on the shared 0–100 scale.
+    expect(v.history.byRating['61-80']).toBe(1);
+    expect(v.history.byRating['41-60']).toBe(1);
+    expect(Object.values(v.history.byRating).reduce((a, b) => a + b, 0)).toBe(2);
+    expect(v.all.byRating).toEqual(v.history.byRating);
+    expect(v.all.avg).toBe(v.history.avg);
+    // The old fields are unchanged: the in-cellar distribution.
+    expect(Object.values(stats.byRating).reduce((a, b) => a + b, 0)).toBe(0);
+  });
+
+  test('a drunk bottle rated before AND when drinking counts once, with the rating given when drinking', async () => {
+    const stats = await run([], [
+      { cellar: 'c1', status: 'drank', consumedAt: new Date('2026-01-01'), rating: 2, ratingScale: '5', consumedRating: 95, consumedRatingScale: '100', wineDefinition: wd },
+    ]);
+    expect(stats.ratingViews.history.count).toBe(1);
+    expect(stats.ratingViews.history.byRating['81-100']).toBe(1);
+  });
+
+  test('a drunk bottle with only its earlier rating counts with that one; all = cellar + drunk', async () => {
+    const stats = await run(
+      // 4.5 stars → 87.5; 4 stars → 75.
+      [{ cellar: 'c1', vintage: '2018', rating: 4.5, ratingScale: '5', wineDefinition: wd }],
+      [{ cellar: 'c1', status: 'gifted', consumedAt: new Date('2026-01-01'), rating: 4, ratingScale: '5', wineDefinition: wd }],
+    );
+    const v = stats.ratingViews;
+    expect(v.cellar.byRating['81-100']).toBe(1);
+    expect(v.history.byRating['61-80']).toBe(1);
+    expect(v.all.count).toBe(2);
+    expect(v.all.byRating).toEqual({ '0-20': 0, '21-40': 0, '41-60': 0, '61-80': 1, '81-100': 1 });
+    expect(v.all.avg).toBe(81.3);
+  });
+
+  test('no ratings anywhere: every view is empty with no average', async () => {
+    const stats = await run([{ cellar: 'c1', vintage: '2018', wineDefinition: wd }], []);
+    for (const view of ['all', 'cellar', 'history']) {
+      expect(stats.ratingViews[view].count).toBe(0);
+      expect(stats.ratingViews[view].avg).toBeNull();
+    }
+  });
+});

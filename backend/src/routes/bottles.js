@@ -29,7 +29,7 @@ const { getCurrentRelease } = require('../services/communityPrice');
 const { findLotSiblingIds, findLotSiblings } = require('../services/bottleLot');
 const { buildCaseJourneys } = require('../services/insightsService');
 const { stripHtml, escapeRegex } = require('../utils/sanitize');
-const { toNormalized } = require('../utils/ratingUtils');
+const { bottleRating } = require('../utils/ratingUtils');
 const { classifyMaturity, buildProfileMap, parseMaturityFilter, matchesMaturityFilter } = require('../utils/maturityUtils');
 const { parsePagination } = require('../utils/pagination');
 const personalData = require('../services/personalData');
@@ -343,12 +343,14 @@ router.get('/', async (req, res) => {
     }
 
     // ── Min-rating post-filter (rating scales must be normalised) ──────────────
+    // bottleRating: a drunk bottle's rating is the one given when drinking,
+    // as the statistics count it (utils/ratingUtils).
     if (minRating) {
       const min = parseFloat(minRating);
       if (!isNaN(min)) {
         bottles = bottles.filter(b => {
-          if (b.rating == null) return false;
-          return toNormalized(b.rating, b.ratingScale || '5') >= min;
+          const r = bottleRating(b);
+          return r != null && r >= min;
         });
       }
     }
@@ -356,8 +358,8 @@ router.get('/', async (req, res) => {
       const max = parseFloat(maxRating);
       if (!isNaN(max)) {
         bottles = bottles.filter(b => {
-          if (b.rating == null) return false;
-          return toNormalized(b.rating, b.ratingScale || '5') <= max;
+          const r = bottleRating(b);
+          return r != null && r <= max;
         });
       }
     }
