@@ -122,9 +122,13 @@ describe('overview', () => {
     SupportTicket.aggregate.mockResolvedValue([{ _id: 'vintagePage', total: 3, open: 1 }]);
     const o = await overview();
     expect(o.optedIn).toBe(7);
-    expect(o.features).toEqual([expect.objectContaining({
+    // One row per flag the code knows; a flag nobody wrote feedback on counts zero.
+    expect(o.features).toContainEqual(expect.objectContaining({
       key: 'vintagePage', title: 'One page per wine and vintage', state: 'beta', feedback: { total: 3, open: 1 },
-    })]);
+    }));
+    expect(o.features).toContainEqual(expect.objectContaining({
+      key: 'rackMoveBottles', state: 'beta', feedback: { total: 0, open: 0 },
+    }));
     expect(User.countDocuments).toHaveBeenCalledWith({ 'preferences.earlyAccess': true, isDemo: { $ne: true } });
   });
 });

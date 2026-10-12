@@ -37,9 +37,13 @@ test('a feature in beta is listed with its dates and forum thread, and nothing e
   const { status, headers, body } = await get('/api/site/features');
   expect(status).toBe(200);
   expect(headers['cache-control']).toBe('public, max-age=60');
-  expect(body.features).toEqual([{
+  // Other flags may be listed too; this one carries exactly these fields.
+  expect(body.features.find((f) => f.key === 'vintagePage')).toEqual({
     key: 'vintagePage', state: 'beta', betaAt: '2026-10-10T09:00:00.000Z', releasedAt: null, forumPath: '/community/discussions/vintage-page',
-  }]);
+  });
+  for (const f of body.features) {
+    expect(Object.keys(f).sort()).toEqual(['betaAt', 'forumPath', 'key', 'releasedAt', 'state']);
+  }
 });
 
 test('a feature switched off is left out entirely', async () => {
