@@ -774,7 +774,7 @@ function BottleRow({ bottle, cellarId, fromPath, showNote }) {
           </span>
         )}
         {/* Each bottle still has its own page: its price, slot, opening it. */}
-        <span className="cvb-bottle-open">{t('cellarVintageBeta.openBottle', 'Open bottle')} <span aria-hidden="true">›</span></span>
+        <span className="cvb-bottle-open">{t('cellarVintageBeta.viewBottle', 'View bottle')} <span aria-hidden="true">›</span></span>
       </Link>
     </li>
   );

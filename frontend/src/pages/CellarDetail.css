@@ -213,6 +213,17 @@
   position: relative;
 }
 
+/* "Show on cards": the same dropdown, holding checkboxes. */
+.card-fields-menu { min-width: 190px; }
+.card-fields-title {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  padding: 0.3rem 0.75rem 0.15rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.card-fields-item input { margin: 0; }
+
 .btn-more {
   font-size: 1.2rem;
   letter-spacing: 0.05em;

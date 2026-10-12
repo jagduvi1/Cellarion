@@ -19,6 +19,7 @@ import { CELLAR_SORTS, DEFAULT_CELLAR_SORT, preferredCellarSort } from '../utils
 import { formatArrivalMonth, isArrivalLate } from '../utils/onOrder';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
 import { useFeature } from '../utils/featureFlags';
+import { CARD_FIELDS, cardDetails, readCardFields, storeCardFields } from '../utils/cardDetails';
 import { summarizeSelection } from '../utils/bulkSelection';
 import './CellarDetail.css';
 
@@ -924,8 +925,20 @@ function CellarDetail() {
 // actions; `onBulkDone` refreshes the parent's list, stats and racks after
 // one; `onSelectModeChange` tells the parent to hide the FAB meanwhile.
 function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadMore, multi = false, rackKnown = false, canBulkMove = false, canConsume = false, onBulkDone, onSelectModeChange }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  // "Show on cards" (forum feedback 2026-10-12): extra details the user picks
+  // for every card — rating, price, size, region, purchase date — per device.
+  const [cardFields, setCardFields] = useState(readCardFields);
+  const [fieldsOpen, setFieldsOpen] = useState(false);
+  const toggleCardField = (field) => {
+    setCardFields(prev => {
+      const next = prev.includes(field) ? prev.filter(f => f !== field) : CARD_FIELDS.filter(f => f === field || prev.includes(f));
+      storeCardFields(next);
+      return next;
+    });
+  };
   // "Drink one" on a stacked card (support ticket 2026-10-09): the group
   // whose bottle is being picked, then — after the server logged it — the
   // journal prompt the bottle page offers for a bottle drunk, unless the
@@ -1013,6 +1026,13 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
   const compact = viewMode === 'list' && density === 'compact';
   // Notes preview likewise: the grid tiles have no room for a text line.
   const notesOn = viewMode === 'list' && showNotes;
+  // One line of the picked details for a card's bottles (one, or a stack).
+  // A string, so the memoized BottleCard compares it by value. The grid card
+  // already shows the region.
+  const ratingScale = user?.preferences?.ratingScale || '5';
+  const detailsOf = (list) => cardDetails(list, cardFields, { ratingScale, locale: i18n.language, showRegion: viewMode === 'list' })
+    .map(d => (d.field === 'purchased' ? t('cellarDetail.cardPurchased', { date: d.text, defaultValue: 'Bought {{date}}' }) : d.text))
+    .join(' · ');
 
   const toggleGroup = (key) => {
     setExpandedGroups(prev => {
@@ -1037,6 +1057,33 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
             {t('cellarDetail.selectBottles')}
           </button>
         )}
+        <div className="more-menu-wrap card-fields-wrap">
+          <button
+            type="button"
+            className={`view-toggle-btn card-fields-btn ${cardFields.length ? 'active' : ''}`}
+            onClick={() => setFieldsOpen(o => !o)}
+            aria-haspopup="true"
+            aria-expanded={fieldsOpen}
+            aria-label={t('cellarDetail.cardFields', 'Show on cards')}
+            title={t('cellarDetail.cardFields', 'Show on cards')}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="9" cy="6" r="2" fill="currentColor"/><circle cx="15" cy="12" r="2" fill="currentColor"/><circle cx="7" cy="18" r="2" fill="currentColor"/></svg>
+          </button>
+          {fieldsOpen && (
+            <>
+              <div className="more-menu-backdrop" onClick={() => setFieldsOpen(false)} aria-hidden="true" />
+              <div className="more-menu-dropdown card-fields-menu" role="group" aria-label={t('cellarDetail.cardFields', 'Show on cards')}>
+                <div className="card-fields-title">{t('cellarDetail.cardFields', 'Show on cards')}</div>
+                {CARD_FIELDS.map(field => (
+                  <label key={field} className="more-menu-item card-fields-item">
+                    <input type="checkbox" checked={cardFields.includes(field)} onChange={() => toggleCardField(field)} />
+                    {t(`cellarDetail.cardField.${field}`)}
+                  </label>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
         {viewMode === 'list' && (
           <button
             className={`view-toggle-btn notes-toggle-btn ${showNotes ? 'active' : ''}`}
@@ -1132,6 +1179,7 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
               <BottleCard
                 key={item._id}
                 bottle={item}
+                details={detailsOf([item])}
                 rackMap={rackMap}
                 cellarId={item.cellar || cellarId}
                 viewMode={viewMode}
@@ -1153,7 +1201,7 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
             if (item.count === 1) {
               return (
                 <BottleCard
-                  key={rep._id} bottle={rep} rackMap={rackMap} cellarId={groupCellarId} showCellarBadge={multi} viewMode={viewMode} compact={compact} rackKnown={rackKnown} showNotes={notesOn} selectable={selectableNow} selected={isSelected(idsOf(item))} onToggleSelect={() => toggleIds(idsOf(item))} onLongPress={canBulkMove ? () => enterSelectWith(idsOf(item)) : undefined}
+                  key={rep._id} bottle={rep} details={detailsOf([rep])} rackMap={rackMap} cellarId={groupCellarId} showCellarBadge={multi} viewMode={viewMode} compact={compact} rackKnown={rackKnown} showNotes={notesOn} selectable={selectableNow} selected={isSelected(idsOf(item))} onToggleSelect={() => toggleIds(idsOf(item))} onLongPress={canBulkMove ? () => enterSelectWith(idsOf(item)) : undefined}
                   onClick={pageHref ? () => navigate(pageHref) : undefined}
                   onDrinkOne={vintageFirst && canConsume ? () => setDrinkGroup(item) : undefined}
                   actionsInline={vintageFirst}
@@ -1173,6 +1221,7 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
                   showCellarBadge={multi}
                   viewMode={viewMode}
                   groupCount={item.count}
+                  details={detailsOf(item.bottles)}
                   onClick={pageHref ? () => navigate(pageHref) : () => toggleGroup(item.key)}
                   onExpand={pageHref ? () => toggleGroup(item.key) : undefined}
                   actionsInline={vintageFirst}
@@ -1198,14 +1247,14 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
                   </button>
                 </div>
                 {item.bottles.map(b => (
-                  <BottleCard key={b._id} bottle={b} rackMap={rackMap} cellarId={groupCellarId} showCellarBadge={multi} viewMode={viewMode} compact={compact} rackKnown={rackKnown} showNotes={notesOn} selectable={selectableNow} selected={isSelected([b._id])} onToggleSelect={() => toggleIds([b._id])} onLongPress={canBulkMove ? () => enterSelectWith([b._id]) : undefined} />
+                  <BottleCard key={b._id} bottle={b} details={detailsOf([b])} rackMap={rackMap} cellarId={groupCellarId} showCellarBadge={multi} viewMode={viewMode} compact={compact} rackKnown={rackKnown} showNotes={notesOn} selectable={selectableNow} selected={isSelected([b._id])} onToggleSelect={() => toggleIds([b._id])} onLongPress={canBulkMove ? () => enterSelectWith([b._id]) : undefined} />
                 ))}
               </Fragment>
             );
           }
           // Defensive fallback: a plain bottle item (responses are always grouped)
           return (
-            <BottleCard key={item._id} bottle={item} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} compact={compact} rackKnown={rackKnown} showNotes={notesOn} selectable={selectableNow} selected={isSelected([item._id])} onToggleSelect={() => toggleIds([item._id])} onLongPress={canBulkMove ? () => enterSelectWith([item._id]) : undefined} />
+            <BottleCard key={item._id} bottle={item} details={detailsOf([item])} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} compact={compact} rackKnown={rackKnown} showNotes={notesOn} selectable={selectableNow} selected={isSelected([item._id])} onToggleSelect={() => toggleIds([item._id])} onLongPress={canBulkMove ? () => enterSelectWith([item._id]) : undefined} />
           );
         })}
       </div>

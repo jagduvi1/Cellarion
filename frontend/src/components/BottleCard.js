@@ -21,7 +21,7 @@ const MATURITY_LABELS = {
  * Renders a single bottle in either list or card (grid) view.
  * Props: bottle, rackMap, cellarId, viewMode ('list' | 'card')
  */
-function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onClick, showCellarBadge = false, compact = false, rackKnown = false, showNotes = false, selectable = false, selected = false, onToggleSelect, onLongPress, onInfo, onDrinkOne, onExpand, actionsInline = false }) {
+function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onClick, showCellarBadge = false, compact = false, rackKnown = false, showNotes = false, selectable = false, selected = false, onToggleSelect, onLongPress, onInfo, onDrinkOne, onExpand, actionsInline = false, details = '' }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -228,6 +228,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
               <span className="bottle-grid-region">{bottle.wineDefinition.region.name}</span>
             )}
           </div>
+          {details && <div className="bottle-details">{details}</div>}
           <div className="bottle-badges">
             {cellarBadge && (
               <span className="cellar-badge" style={cellarBadgeColor ? { '--cellar-badge-color': cellarBadgeColor } : undefined}>
@@ -330,6 +331,8 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
           <span className="bottle-producer">{displayProducer}</span>
           {bottle.vintage && <span className="bottle-vintage">{bottle.vintage}</span>}
         </div>
+        {/* The details picked under "Show on cards" (rating, price, …). */}
+        {details && <div className="bottle-details">{details}</div>}
         {notePreview && (
           <div className="bottle-note-preview" title={noteTitle}>{notePreview}</div>
         )}
@@ -416,7 +419,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
 // Whether the two group buttons SHOW is compared (hasGroupActions), so a card
 // re-renders when a caller starts or stops offering them — and so is whether
 // a separate expand handler exists, which decides what the card's tap means.
-const COMPARED_PROPS = ['bottle', 'rackMap', 'cellarId', 'viewMode', 'groupCount', 'showCellarBadge', 'compact', 'rackKnown', 'showNotes', 'selectable', 'selected', 'actionsInline'];
+const COMPARED_PROPS = ['bottle', 'rackMap', 'cellarId', 'viewMode', 'groupCount', 'showCellarBadge', 'compact', 'rackKnown', 'showNotes', 'selectable', 'selected', 'actionsInline', 'details'];
 const hasGroupActions = (p) => `${!!p.onInfo}/${!!p.onDrinkOne}/${!!p.onExpand}`;
 export default memo(BottleCard, (prev, next) =>
   COMPARED_PROPS.every(key => prev[key] === next[key]) && hasGroupActions(prev) === hasGroupActions(next)

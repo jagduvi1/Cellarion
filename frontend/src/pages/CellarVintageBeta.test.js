@@ -210,7 +210,7 @@ test('the page says what it is: the vintage, with how many bottles and where', a
   expect(screen.getByText('cellarVintageBeta.kind')).toHaveClass('page-kind');
   expect(screen.getByText('cellarVintageBeta.kindLine:{"count":3,"cellar":"Home"}')).toBeInTheDocument();
   // Each bottle row says it opens that bottle's own page.
-  expect(screen.getAllByText('cellarVintageBeta.openBottle')).toHaveLength(3);
+  expect(screen.getAllByText('cellarVintageBeta.viewBottle')).toHaveLength(3);
 });
 
 test('what belongs to the wine and the vintage is here: photos, price, reviews, curator questions', async () => {

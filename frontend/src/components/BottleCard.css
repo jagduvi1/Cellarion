@@ -116,6 +116,17 @@
   flex-wrap: wrap;
 }
 
+/* The details picked under "Show on cards" — one line, ellipsised. */
+.bottle-details {
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 0.15rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .bottle-note-preview {
   font-size: 0.78rem;
   font-style: italic;
