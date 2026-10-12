@@ -48,6 +48,15 @@ const FEATURES = Object.freeze([
     defaultState: 'beta',
     since: '2026-10-12',
   }),
+  // The "Bottles lie head to tail" choice for a one-deep wine cabinet. The
+  // option itself (typeConfig.headToTail) is stored and drawn for everyone;
+  // the flag only decides who sees the checkbox.
+  Object.freeze({
+    key: 'cabinetHeadToTail',
+    title: 'Wine cabinet bottles head to tail',
+    defaultState: 'beta',
+    since: '2026-10-12',
+  }),
 ]);
 
 const FEATURE_KEYS = Object.freeze(FEATURES.map((f) => f.key));

@@ -19,6 +19,12 @@ export function betaFeatureText(t, key) {
         description: t('earlyAccess.features.rackMoveBottles.description', 'Move every bottle in a rack to another rack in the same cellar in one go. They keep their order and fill the other rack from its first free slot. Handy when you replace a rack, for example with a wine cabinet.'),
         where: t('earlyAccess.features.rackMoveBottles.where', 'On the Racks page: open a rack, then ⋮ → Move bottles to another rack.'),
       };
+    case 'cabinetHeadToTail':
+      return {
+        name: t('earlyAccess.features.cabinetHeadToTail.name', 'Wine cabinet bottles head to tail'),
+        description: t('earlyAccess.features.cabinetHeadToTail.description', 'For a wine cabinet whose bottles lie one deep, base forward and neck forward in turn. The cabinet drawings then show every other bottle neck forward. The slot numbers stay the same, so you can switch it on for a cabinet that already holds bottles.'),
+        where: t('earlyAccess.features.cabinetHeadToTail.where', 'On the Racks page: create or edit a wine cabinet, untick Two deep, then tick Bottles lie head to tail.'),
+      };
     default:
       return { name: key, description: '', where: '' };
   }

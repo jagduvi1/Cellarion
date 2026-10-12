@@ -1248,6 +1248,9 @@
 .edit-rack-form .form-group { display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 0.75rem; }
 .edit-rack-form .form-group > span { font-size: 0.85rem; color: var(--color-text-secondary); }
 .edit-rack-form input { width: 100%; }
+/* A checkbox keeps its own size, beside its label (not stretched onto a line of its own). */
+.edit-rack-form input[type="checkbox"] { width: auto; margin: 0; }
+.edit-rack-form .edit-rack-option-help { display: block; margin: -0.5rem 0 0.75rem; }
 .edit-rack-form .help-text { font-size: 0.78rem; color: var(--color-text-muted); }
 
 /* Post-add placing mode bar (issue #1055): progress on the left, actions on

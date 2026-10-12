@@ -6,7 +6,7 @@ import {
   BOTTLE_RADIUS, CELL_W, CELL_H, RACK_DEPTH, WOOD_THICK, PANEL_THICK,
   getDisplayDims, buildScaledLayout, getGridDoubleRows, getCabinetGeometry,
 } from '../../utils/roomConstants';
-import { getTotalSlots, getModularTotalSlots, DOUBLE_ROW_HEADROOM, cabinetRowWidth, cabinetBayUnits } from '../../utils/rackLayouts';
+import { getTotalSlots, getModularTotalSlots, DOUBLE_ROW_HEADROOM, cabinetRowWidth, cabinetBayUnits, cabinetNeckForward } from '../../utils/rackLayouts';
 import { swatchType } from '../../utils/wineColour';
 import { CabinetBody, CabinetDoor, CabinetShelfPlank, CABINET_COLORS } from './CabinetParts';
 
@@ -84,6 +84,8 @@ function getWoodTexture() {
 }
 
 // ── Bottle lathe geometry (reused singleton) ─────────────
+// Base at local y = 0, capsule at BOTTLE_LENGTH.
+const BOTTLE_LENGTH = 0.285;
 const _bottleProfiles = {};
 function getBottleGeometry() {
   if (_bottleProfiles.geo) return _bottleProfiles.geo;
@@ -96,8 +98,8 @@ function getBottleGeometry() {
     new THREE.Vector2(0.015, 0.22),
     new THREE.Vector2(0.013, 0.27),
     new THREE.Vector2(0.015, 0.275),
-    new THREE.Vector2(0.014, 0.285),
-    new THREE.Vector2(0, 0.285),
+    new THREE.Vector2(0.014, BOTTLE_LENGTH),
+    new THREE.Vector2(0, BOTTLE_LENGTH),
   ];
   _bottleProfiles.geo = new THREE.LatheGeometry(pts, 12);
   return _bottleProfiles.geo;
@@ -483,6 +485,9 @@ function computeShelfSlotPositions(rows, cols, backCols, width, height, bpc = 1,
 // in the grooves of the wide row below — the shelf is exactly cols wide. A
 // bay narrower than the cabinet (its own cols) sits centred in the body.
 // `row` carries the BAY index so PullOutShelfRow can slide a whole bay.
+// Head to tail (one deep only): every other bottle of a row is turned round,
+// neck toward the viewer, its base a bottle length further in so it fills
+// the same depth as its neighbours.
 function computeCabinetSlotPositions(cab, width, depth) {
   const positions = [];
   // A staggered shelf is half a bottle wider than its bottle count, so the
@@ -499,6 +504,7 @@ function computeCabinetSlotPositions(cab, width, depth) {
   const frontBottleZ = halfD - 0.029;
   const backBottleZ = -(halfD - 0.029);
   const frontEmptyZ = halfD - 0.005;
+  const neckForwardZ = frontBottleZ - BOTTLE_LENGTH;
   const backEmptyZ = -halfD + 0.005;
   let pos = 1;
   cab.bays.forEach((bay, i) => {
@@ -518,14 +524,15 @@ function computeCabinetSlotPositions(cab, width, depth) {
         ? (rowWidth < cols ? cW / 2 : 0)
         : (nest && cols > 1 && level % 2 === 0 ? cW / 2 : 0);
       for (let c = 0; c < rowWidth; c++) {
+        const neckForward = cab.headToTail && !isBack && cabinetNeckForward(c);
         positions.push({
           position: pos++,
           x: x0 + c * cW + nudge,
           y,
           z: isBack ? backEmptyZ : frontEmptyZ,
-          bottleZ: isBack ? backBottleZ : frontBottleZ,
+          bottleZ: isBack ? backBottleZ : neckForward ? neckForwardZ : frontBottleZ,
           isBack,
-          flipNeck: !isBack,
+          flipNeck: !isBack && !neckForward,
           row: i,
         });
       }
@@ -754,7 +761,7 @@ export default function RackMesh({
     () => (isCabinet ? { ...getCabinetGeometry(rack), cols: displayCols } : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [isCabinet, rack.rows, rack.cols, rack.typeConfig?.shelfRows, rack.typeConfig?.twoDeep,
-      rack.typeConfig?.stagger, rack.typeConfig?.alternate, rack.typeConfig?.shelfCols,
+      rack.typeConfig?.stagger, rack.typeConfig?.headToTail, rack.typeConfig?.alternate, rack.typeConfig?.shelfCols,
       rack.typeConfig?.shelfAlternate, displayCols]
   );
 

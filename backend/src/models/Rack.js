@@ -46,6 +46,11 @@ const rackModuleSchema = new mongoose.Schema({
     // shelf). Drawing only — every level still holds `cols` bottles and the
     // position contract is unchanged, so turning it on never moves a bottle.
     stagger: { type: Boolean },
+    // Cabinet racks only, single deep (twoDeep off): bottles in a row lie
+    // head to tail, every other one neck forward, so a row fits more. Drawing
+    // only — capacity and the position contract are unchanged, so it can be
+    // switched on and off with bottles in place (validateCabinetConfig).
+    headToTail: { type: Boolean },
     // Cabinet racks only: rows alternate in width like a honeycomb — the
     // first level's front row holds `cols`, its back row (in the gaps between
     // those bottles) one fewer, the level above nests in its grooves so its
@@ -112,6 +117,11 @@ const rackSchema = new mongoose.Schema({
     // shelf). Drawing only — every level still holds `cols` bottles and the
     // position contract is unchanged, so turning it on never moves a bottle.
     stagger: { type: Boolean },
+    // Cabinet racks only, single deep (twoDeep off): bottles in a row lie
+    // head to tail, every other one neck forward, so a row fits more. Drawing
+    // only — capacity and the position contract are unchanged, so it can be
+    // switched on and off with bottles in place (validateCabinetConfig).
+    headToTail: { type: Boolean },
     // Cabinet racks only: rows alternate in width like a honeycomb — the
     // first level's front row holds `cols`, its back row (in the gaps between
     // those bottles) one fewer, the level above nests in its grooves so its

@@ -1454,6 +1454,7 @@ router.post('/confirm', async (req, res) => {
               : fitted;
             tc.twoDeep = cfg.typeConfig.twoDeep !== false;
             tc.stagger = cfg.typeConfig.stagger !== false;
+            tc.headToTail = !tc.twoDeep && cfg.typeConfig.headToTail === true;
             tc.alternate = cfg.typeConfig.alternate === true;
             // Per-shelf width / pattern, when the file has them (a Cellarion
             // export); fitted to the shelf count the same way as shelfRows.
@@ -1543,6 +1544,7 @@ router.post('/confirm', async (req, res) => {
               shelfRows: cabinetShelfRows(rows, rackData.typeConfig),
               twoDeep: rackData.typeConfig?.twoDeep !== false,
               stagger: rackData.typeConfig?.stagger !== false,
+              headToTail: rackData.typeConfig?.twoDeep === false && rackData.typeConfig?.headToTail === true,
               alternate: rackData.typeConfig?.alternate === true,
               ...(Array.isArray(rackData.typeConfig?.shelfCols) ? { shelfCols: cabinetShelfCols(rows, cols, rackData.typeConfig) } : {}),
               ...(Array.isArray(rackData.typeConfig?.shelfAlternate) ? { shelfAlternate: cabinetShelfAlternate(rows, rackData.typeConfig) } : {}),

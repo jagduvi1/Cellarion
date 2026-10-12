@@ -310,6 +310,18 @@ describe('cabinet rack geometry', () => {
       .toBe(totalSlots('cabinet', 3, 6, { shelfRows: [1, 3, 2], stagger: false }));
   });
 
+  test('headToTail is a boolean, cabinet-only, one deep only, and never changes capacity', () => {
+    expect(validateCabinetConfig({ shelfRows: [2, 2], twoDeep: false, headToTail: true }, 'cabinet', 2, false)).toBeNull();
+    expect(validateCabinetConfig({ shelfRows: [2, 2], twoDeep: true, headToTail: false }, 'cabinet', 2, false)).toBeNull();
+    expect(validateCabinetConfig({ shelfRows: [2, 2], twoDeep: false, headToTail: 'yes' }, 'cabinet', 2, false)).toMatch(/headToTail must be a boolean/);
+    // Neck to neck and head to tail are two ways of lying: never both (twoDeep defaults on).
+    expect(validateCabinetConfig({ shelfRows: [2, 2], twoDeep: true, headToTail: true }, 'cabinet', 2, false)).toMatch(/needs twoDeep off/);
+    expect(validateCabinetConfig({ shelfRows: [2, 2], headToTail: true }, 'cabinet', 2, false)).toMatch(/needs twoDeep off/);
+    expect(validateCabinetConfig({ headToTail: true }, 'grid', 2, false)).toMatch(/cabinet racks only/);
+    expect(totalSlots('cabinet', 3, 6, { shelfRows: [1, 3, 2], twoDeep: false, headToTail: true }))
+      .toBe(totalSlots('cabinet', 3, 6, { shelfRows: [1, 3, 2], twoDeep: false }));
+  });
+
   test('getMaxPosition reads a cabinet document', () => {
     expect(getMaxPosition({ type: 'cabinet', rows: 2, cols: 4, typeConfig: { shelfRows: [1, 5] } })).toBe(24);
   });

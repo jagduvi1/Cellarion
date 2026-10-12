@@ -402,6 +402,21 @@ function shelfLayout(rows, cols, typeConfig) {
 // twoDeep never changes the numbering, only where a row is drawn.
 export const CABINET_MAX_ROWS_PER_SHELF = 12;
 
+/**
+ * Head to tail: on a one-deep cabinet (twoDeep off) the bottles of a row lie
+ * base forward and neck forward in turn. Drawing only — the numbering
+ * contract below never changes. Never on a two-deep cabinet, whose rows lie
+ * neck to neck (the backend refuses the pair).
+ */
+export function cabinetHeadToTail(typeConfig) {
+  return typeConfig?.twoDeep === false && typeConfig?.headToTail === true;
+}
+
+/** Under head to tail, the 2nd, 4th, … bottle from the left of a row (0-based `c`) lies neck forward. */
+export function cabinetNeckForward(c) {
+  return c % 2 === 1;
+}
+
 /** Per-shelf row list fitted to `rows` (missing → 1, clamped 1..12). */
 export function cabinetShelfRows(rows, typeConfig) {
   const n = Math.max(0, Math.min(20, parseInt(rows, 10) || 0));
@@ -503,6 +518,7 @@ function cabinetLayout(rows, cols, typeConfig) {
   const bayShapes = cabinetBays(rows, cols, typeConfig);
   const { twoDeep } = cabinetOptions(typeConfig);
   const stagger = typeConfig?.stagger !== false;
+  const headToTail = cabinetHeadToTail(typeConfig);
   // Every bay alternates → the cabinet does; drawn nesting follows per bay
   // (a narrow row can only lie in the grooves of the wide row below, so an
   // alternating bay always nests, whatever stagger says).
@@ -556,6 +572,7 @@ function cabinetLayout(rows, cols, typeConfig) {
           position: pos++, cx, cy: isBack ? backCY : frontCY,
           ...(isBack ? { isBack: true } : {}),
           ...(!isBack && level > 1 ? { isTop: true } : {}),
+          ...(headToTail && cabinetNeckForward(c) ? { isNeck: true } : {}),
         });
       }
     }
@@ -570,7 +587,7 @@ function cabinetLayout(rows, cols, typeConfig) {
     bottlesPerCell: 1,
     backRadius: twoDeep ? CAB_BACK_R : undefined,
     shelfYs: shelfYs.length ? shelfYs : undefined,
-    cabinet: { shelfRows, twoDeep, stagger: alternate || stagger, alternate, bays },
+    cabinet: { shelfRows, twoDeep, stagger: alternate || stagger, alternate, headToTail, bays },
     viewBox: {
       width: contentRight + PADDING,
       height: y + PADDING - SLOT_GAP,

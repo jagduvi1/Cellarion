@@ -5,7 +5,7 @@
 
 import {
   computeLayout, computeModularLayout, CELL_SIZE,
-  validDoubleHeightRows, DOUBLE_ROW_HEADROOM, cabinetShelfRows, cabinetBays,
+  validDoubleHeightRows, DOUBLE_ROW_HEADROOM, cabinetShelfRows, cabinetBays, cabinetHeadToTail,
 } from './rackLayouts';
 
 // ── Rack physical dimensions (metres) ────────────────────
@@ -41,6 +41,7 @@ export function getCabinetGeometry(rack) {
   const shapes = cabinetBays(rack.rows || 1, rack.cols || 1, rack.typeConfig);
   const twoDeep = rack.typeConfig?.twoDeep !== false;
   const stagger = rack.typeConfig?.stagger !== false;
+  const headToTail = cabinetHeadToTail(rack.typeConfig);
   // Alternating rows always nest (a narrow row lies in the grooves of the
   // wide row below), so a bay that alternates nests whatever stagger says —
   // as in rackLayouts. `alternate` here = every bay does.
@@ -73,7 +74,7 @@ export function getCabinetGeometry(rack) {
     };
   });
   return {
-    shelfRows, twoDeep, stagger, alternate, levelPitch, bays, innerH, height,
+    shelfRows, twoDeep, stagger, alternate, headToTail, levelPitch, bays, innerH, height,
     depth: twoDeep ? CABINET_DEPTH_TWO_DEEP : CABINET_DEPTH_SINGLE,
     topStrip: CABINET_TOP_STRIP, bottomExtra: CABINET_BOTTOM_EXTRA,
   };

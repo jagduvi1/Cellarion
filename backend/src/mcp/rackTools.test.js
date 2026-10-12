@@ -230,6 +230,21 @@ describe('rack groups (support ticket 2026-09-06)', () => {
     expect(body.summary).toMatch(/wine cabinet "Fridge".*2 shelves, 5 across, 25 bottles/);
   });
 
+  test('create_rack cabinet with head_to_tail passes it through, and it is cabinet-only', async () => {
+    ownCellar();
+    const misuse = parse(await tool('create_rack').handler({ cellar_id: oid('c'), name: 'G', rows: 2, cols: 6, head_to_tail: true }, CTX));
+    expect(misuse.error.message).toMatch(/type "cabinet" only/);
+
+    rackOps.createGridRack.mockResolvedValue({ rack: { _id: oid('e'), name: 'Cooler', group: null } });
+    const body = parse(await tool('create_rack').handler({ cellar_id: oid('c'), name: 'Cooler', type: 'cabinet', rows: 2, cols: 7, shelf_rows: [1, 1], two_deep: false, head_to_tail: true }, CTX));
+    expect(rackOps.createGridRack).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ typeConfig: expect.objectContaining({ twoDeep: false, headToTail: true }) }),
+      expect.anything()
+    );
+    expect(body.data).toMatchObject({ capacity: 14, two_deep: false, head_to_tail: true });
+  });
+
   test('create_rack cabinet with alternate: the honeycomb rows (6/5, 5/6) set the capacity, and it is cabinet-only', async () => {
     ownCellar();
     const misuse = parse(await tool('create_rack').handler({ cellar_id: oid('c'), name: 'G', rows: 2, cols: 6, alternate: true }, CTX));

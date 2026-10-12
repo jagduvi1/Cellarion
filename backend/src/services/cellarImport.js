@@ -349,6 +349,7 @@ async function createRacks(cellarId, userId, cellar, items, result) {
         shelfRows: cabinetShelfRows(rackData.rows, rackData.typeConfig),
         twoDeep: rackData.typeConfig?.twoDeep !== false,
         stagger: rackData.typeConfig?.stagger !== false,
+        headToTail: rackData.typeConfig?.twoDeep === false && rackData.typeConfig?.headToTail === true,
         alternate: rackData.typeConfig?.alternate === true,
         ...(Array.isArray(rackData.typeConfig?.shelfCols) ? { shelfCols: cabinetShelfCols(rackData.rows, rackData.cols, rackData.typeConfig) } : {}),
         ...(Array.isArray(rackData.typeConfig?.shelfAlternate) ? { shelfAlternate: cabinetShelfAlternate(rackData.rows, rackData.typeConfig) } : {}),

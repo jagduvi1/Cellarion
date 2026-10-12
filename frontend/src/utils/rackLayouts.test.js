@@ -1,7 +1,7 @@
 import {
   computeLayout, computeModularLayout, getModularTotalSlots, getTotalSlots,
   SLOT_RADIUS, validDoubleHeightRows, DOUBLE_ROW_HEADROOM, cabinetShelfRows,
-  cabinetRowWidth, cabinetBayCapacity, cabinetBays, cabinetBayUnits,
+  cabinetRowWidth, cabinetBayCapacity, cabinetBays, cabinetBayUnits, cabinetHeadToTail,
 } from './rackLayouts';
 
 describe('computeLayout', () => {
@@ -297,6 +297,28 @@ describe('computeLayout', () => {
       const p = (n) => single.slots.find(s => s.position === n);
       expect(p(5).cy).toBeLessThan(p(1).cy); // row 2 above row 1 in the top bay
       expect(p(9).cy).toBeGreaterThan(p(1).cy); // bottom bay below
+    });
+
+    it('head to tail: every other bottle of a one-deep row lies neck forward, numbering unchanged', () => {
+      const plain = computeLayout('cabinet', 2, 4, { shelfRows: [2, 1], twoDeep: false });
+      const h2t = computeLayout('cabinet', 2, 4, { shelfRows: [2, 1], twoDeep: false, headToTail: true });
+      // Drawing only: same slots, same places.
+      expect(h2t.totalSlots).toBe(plain.totalSlots);
+      expect(h2t.slots.map(({ position, cx, cy }) => [position, cx, cy]))
+        .toEqual(plain.slots.map(({ position, cx, cy }) => [position, cx, cy]));
+      // The 2nd and 4th bottle of each row, every row.
+      expect(h2t.slots.filter((s) => s.isNeck).map((s) => s.position)).toEqual([2, 4, 6, 8, 10, 12]);
+      expect(plain.slots.some((s) => s.isNeck)).toBe(false);
+      expect(h2t.cabinet.headToTail).toBe(true);
+    });
+
+    it('head to tail never applies to a two-deep cabinet (rows lie neck to neck there)', () => {
+      expect(cabinetHeadToTail({ headToTail: true })).toBe(false);
+      expect(cabinetHeadToTail({ twoDeep: true, headToTail: true })).toBe(false);
+      expect(cabinetHeadToTail({ twoDeep: false, headToTail: true })).toBe(true);
+      expect(cabinetHeadToTail({ twoDeep: false })).toBe(false);
+      const twoDeep = computeLayout('cabinet', 1, 4, { shelfRows: [2], twoDeep: true, headToTail: true });
+      expect(twoDeep.slots.some((s) => s.isNeck)).toBe(false);
     });
 
     it('stagger (default): stacked levels nest — offset half a bottle, sitting closer together, same positions', () => {

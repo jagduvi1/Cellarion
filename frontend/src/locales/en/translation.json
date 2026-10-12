@@ -1440,8 +1440,11 @@
     "cabinetTwoDeepLocked": "Two deep is part of the shape on a cabinet whose rows alternate — it sets which rows are the narrow ones — so it stays as created.",
     "cabinetTwoDeepHelp": "Bottles lie neck to neck, two rows per level. This changes how the cabinet is drawn, not how many bottles it holds.",
     "cabinetStaggerLabel": "Stacked rows nest (staggered)",
-    "cabinetEditHint": "Both options only change how the cabinet is drawn — the number of bottles it holds and where each bottle sits stay the same. To change the shelves themselves, create a new cabinet.",
+    "cabinetEditHint": "These options only change how the cabinet is drawn — the number of bottles it holds and where each bottle sits stay the same. To change the shelves themselves, create a new cabinet.",
     "cabinetStaggerHelp": "Each stacked row sits in the grooves of the row below, offset half a bottle, the way bottles actually stack on a shelf. Turn it off for rows stacked squarely on top of each other. Drawing only — the number of bottles is the same.",
+    "cabinetHeadToTailLabel": "Bottles lie head to tail",
+    "cabinetHeadToTailHelp": "For bottles that lie one deep, base forward and neck forward in turn, so a row fits more. Every other bottle is drawn neck forward. Drawing only — the number of bottles and the slot numbers stay the same.",
+    "cabinetHeadToTailNeedsSingle": "Head to tail is for bottles that lie one deep: untick Two deep first.",
     "cabinetAlternateLabel": "Rows alternate in width on every shelf (6 / 5 / 6 …)",
     "cabinetAlternateHelp": "The first level holds a full row in front of one bottle fewer behind it; the level above nests in its grooves, one fewer in front of a full row, and so on — the honeycomb of a Liebherr GrandCru shelf. Sets every shelf at once; untick single shelves above. This changes how many bottles the cabinet holds, so it is set when the cabinet is created.",
     "cabinetAlternateNests": "Rows that alternate in width always nest: each narrow row lies in the grooves of the wide row below it.",
@@ -4963,7 +4966,8 @@
     "drunkNote": "Logged. One bottle fewer of this vintage."
   },
   "rackView": {
-    "reservedAria": "reserved"
+    "reservedAria": "reserved",
+    "neckForwardAria": "neck forward"
   },
   "followButton": {
     "follow": "Follow",
@@ -5604,6 +5608,11 @@
         "name": "Move a rack's bottles to another rack",
         "description": "Move every bottle in a rack to another rack in the same cellar in one go. They keep their order and fill the other rack from its first free slot. Handy when you replace a rack, for example with a wine cabinet.",
         "where": "On the Racks page: open a rack, then ⋮ → Move bottles to another rack."
+      },
+      "cabinetHeadToTail": {
+        "name": "Wine cabinet bottles head to tail",
+        "description": "For a wine cabinet whose bottles lie one deep, base forward and neck forward in turn. The cabinet drawings then show every other bottle neck forward. The slot numbers stay the same, so you can switch it on for a cabinet that already holds bottles.",
+        "where": "On the Racks page: create or edit a wine cabinet, untick Two deep, then tick Bottles lie head to tail."
       }
     }
   },

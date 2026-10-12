@@ -68,7 +68,8 @@ registerTool({
     'fridge — rows = shelves, cols = bottles across, shelf_rows = rows of bottles each shelf holds top to bottom ' +
     '(1 = a sliding shelf with one row, more = a stacking bay; one entry per shelf), two_deep = bottles lie neck to ' +
     'neck two rows deep (default true), stagger = stacked rows nest in the grooves of the row below (default true, ' +
-    'drawing only), alternate = rows alternate cols / cols−1 like a honeycomb (6 in front of 5, then 5 in front of 6; ' +
+    'drawing only), head_to_tail = a one-deep row lies head to tail, every other bottle neck forward (needs two_deep ' +
+    'false; drawing only), alternate = rows alternate cols / cols−1 like a honeycomb (6 in front of 5, then 5 in front of 6; ' +
     'default false, changes capacity); shelf_cols / shelf_alternate override width and pattern per shelf (a Liebherr ' +
     'GrandCru 5001: 5 shelves 6 across, shelf_rows [8,8,8,8,8], shelf_cols [4,6,6,6,4], shelf_alternate ' +
     '[false,true,true,true,false] = 196). Confirm name and shape first; group is the optional room or appliance label ' +
@@ -87,6 +88,7 @@ registerTool({
       .describe('Cabinet only: rows of bottles per shelf, top shelf first, one entry per shelf (must equal rows). Required for type "cabinet".'),
     two_deep: z.boolean().optional().describe('Cabinet only: bottles lie neck to neck, two rows deep per level (default true)'),
     stagger: z.boolean().optional().describe('Cabinet only: stacked rows nest in the grooves of the row below, offset half a bottle (default true). Drawing only — capacity is unchanged.'),
+    head_to_tail: z.boolean().optional().describe('Cabinet only, with two_deep false: the bottles of a row lie head to tail, every other one neck forward (default false). Drawing only — capacity and numbering are unchanged.'),
     alternate: z.boolean().optional().describe('Cabinet only: rows alternate in width like a honeycomb — the first level holds cols bottles in front of cols−1, the level above cols−1 in front of cols, and so on (a Liebherr GrandCru shelf: 6 / 5 then 5 / 6). Default false. CHANGES capacity, so pass it only when the cabinet really stacks that way.'),
     shelf_cols: z.array(z.number().int().min(1).max(20)).min(1).max(20).optional()
       .describe('Cabinet only: bottles across per shelf, top shelf first, one entry per shelf (must equal rows), each 1..cols — for shelves narrower than the cabinet. Omit when every shelf is cols wide.'),
@@ -108,11 +110,12 @@ registerTool({
       }
       typeConfig = {
         shelfRows: args.shelf_rows, twoDeep: args.two_deep !== false, stagger: args.stagger !== false, alternate: args.alternate === true,
+        ...(args.head_to_tail !== undefined ? { headToTail: args.head_to_tail } : {}),
         ...(args.shelf_cols ? { shelfCols: args.shelf_cols } : {}),
         ...(args.shelf_alternate ? { shelfAlternate: args.shelf_alternate } : {}),
       };
-    } else if (['shelf_rows', 'two_deep', 'stagger', 'alternate', 'shelf_cols', 'shelf_alternate'].some((k) => args[k] !== undefined)) {
-      return fail('invalid_input', 'shelf_rows, two_deep, stagger, alternate, shelf_cols and shelf_alternate apply to type "cabinet" only');
+    } else if (['shelf_rows', 'two_deep', 'stagger', 'head_to_tail', 'alternate', 'shelf_cols', 'shelf_alternate'].some((k) => args[k] !== undefined)) {
+      return fail('invalid_input', 'shelf_rows, two_deep, stagger, head_to_tail, alternate, shelf_cols and shelf_alternate apply to type "cabinet" only');
     }
     const result = await createGridRack(access.cellar, { name: args.name, type, rows: args.rows, cols: args.cols, typeConfig, group: args.group }, ctx.req);
     if (result.error) {
@@ -128,6 +131,7 @@ registerTool({
         rack_id: result.rack._id, cellar_id: access.cellar._id, type, rows: args.rows, cols: args.cols, capacity,
         ...(type === 'cabinet' ? {
           shelf_rows: args.shelf_rows, two_deep: args.two_deep !== false, stagger: args.stagger !== false, alternate: args.alternate === true,
+          head_to_tail: args.head_to_tail === true,
           shelf_cols: args.shelf_cols || null, shelf_alternate: args.shelf_alternate || null,
         } : {}),
         group: result.rack.group || null, undo: 'undo_last deletes it while still empty',

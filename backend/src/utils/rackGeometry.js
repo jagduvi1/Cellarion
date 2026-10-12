@@ -327,9 +327,11 @@ function cabinetPosition({ shelfIndex, row, slot, cols, shelfRows, twoDeep, alte
 /**
  * Request-time gate for a cabinet's typeConfig (create + update routes, MCP):
  * returns an error string or null. shelfRows must be an array of whole
- * numbers 1..12 whose length equals the shelf count; twoDeep, stagger and
- * alternate booleans; the optional per-shelf lists shelfCols (whole numbers
- * 1..cols, one per shelf) and shelfAlternate (booleans, one per shelf).
+ * numbers 1..12 whose length equals the shelf count; twoDeep, stagger,
+ * headToTail and alternate booleans (headToTail only with twoDeep off: a
+ * row lies head to tail one deep, never neck to neck); the optional
+ * per-shelf lists shelfCols (whole numbers 1..cols, one per shelf) and
+ * shelfAlternate (booleans, one per shelf).
  * Non-cabinet racks may not carry any of them (a stale shelfRows on a grid
  * would be silently ignored by the geometry but is a client bug).
  * `effectiveCols` bounds shelfCols; when the caller has none, that bound
@@ -338,14 +340,18 @@ function cabinetPosition({ shelfIndex, row, slot, cols, shelfRows, twoDeep, alte
 function validateCabinetConfig(typeConfig, effectiveType, effectiveRows, effectiveModular, effectiveCols) {
   if (!typeConfig || typeof typeConfig !== 'object') return null;
   const present = (k) => typeConfig[k] !== undefined && typeConfig[k] !== null;
-  const keys = ['shelfRows', 'twoDeep', 'stagger', 'alternate', 'shelfCols', 'shelfAlternate'];
+  const keys = ['shelfRows', 'twoDeep', 'stagger', 'headToTail', 'alternate', 'shelfCols', 'shelfAlternate'];
   if (!keys.some(present)) return null;
   if (effectiveModular || effectiveType !== 'cabinet') {
-    return 'shelfRows, twoDeep, stagger, alternate, shelfCols and shelfAlternate apply to cabinet racks only';
+    return 'shelfRows, twoDeep, stagger, headToTail, alternate, shelfCols and shelfAlternate apply to cabinet racks only';
   }
   if (present('twoDeep') && typeof typeConfig.twoDeep !== 'boolean') return 'twoDeep must be a boolean';
   if (present('stagger') && typeof typeConfig.stagger !== 'boolean') return 'stagger must be a boolean';
   if (present('alternate') && typeof typeConfig.alternate !== 'boolean') return 'alternate must be a boolean';
+  if (present('headToTail') && typeof typeConfig.headToTail !== 'boolean') return 'headToTail must be a boolean';
+  if (typeConfig.headToTail === true && typeConfig.twoDeep !== false) {
+    return 'headToTail needs twoDeep off: bottles head to tail lie one deep, not neck to neck';
+  }
   if (!present('shelfRows')) return 'shelfRows is required for a cabinet rack';
   const list = typeConfig.shelfRows;
   const rows = parseInt(effectiveRows, 10);

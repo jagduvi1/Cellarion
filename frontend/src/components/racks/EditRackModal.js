@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../Modal';
+import BetaBadge from '../BetaBadge';
 import { cabinetShelfAlternate } from '../../utils/rackLayouts';
+import { useFeature } from '../../utils/featureFlags';
 
 /**
  * Rename a rack and set its group — the room or appliance it belongs to
@@ -20,6 +22,10 @@ import { cabinetShelfAlternate } from '../../utils/rackLayouts';
  * options are creation-only. On a cabinet whose rows alternate, nesting is
  * implied (a narrow row lies in the grooves of the wide row below), so the
  * nesting box is shown ticked and locked.
+ * Head to tail (early access, 'cabinetHeadToTail') is drawing only too, and
+ * only for a one-deep cabinet: ticking Two deep clears it. A cabinet that
+ * already has it keeps the box in view, so it can be switched off again
+ * after early access is.
  */
 export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
   const { t } = useTranslation();
@@ -36,6 +42,8 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
   const anyAlternate = altList.some(Boolean);
   const [twoDeep, setTwoDeep] = useState(rack.typeConfig?.twoDeep !== false);
   const [stagger, setStagger] = useState(alternate || rack.typeConfig?.stagger !== false);
+  const [headToTail, setHeadToTail] = useState(rack.typeConfig?.headToTail === true);
+  const showHeadToTail = useFeature('cabinetHeadToTail') || rack.typeConfig?.headToTail === true;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -47,11 +55,11 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
     setSaving(true);
     setError('');
     // A cabinet's typeConfig is replaced wholesale by the route, so send the
-    // stored shape back untouched alongside the two flags being changed.
+    // stored shape back untouched alongside the flags being changed.
     const result = await onSave({
       name: trimmed,
       group: group.trim(),
-      ...(isCabinet ? { typeConfig: { ...(rack.typeConfig || {}), twoDeep, stagger } } : {}),
+      ...(isCabinet ? { typeConfig: { ...(rack.typeConfig || {}), twoDeep, stagger, headToTail: !twoDeep && headToTail } } : {}),
     });
     if (result?.ok) {
       onClose();
@@ -99,10 +107,26 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
                 {' '}{t('racks.cabinetStaggerLabel', 'Stacked rows nest (staggered)')}
               </span>
             </label>
+            {showHeadToTail && (
+              <>
+                <label className="form-group">
+                  <span>
+                    <input type="checkbox" checked={!twoDeep && headToTail} onChange={(e) => setHeadToTail(e.target.checked)} disabled={saving || twoDeep} aria-describedby="edit-rack-h2t-help" />
+                    {' '}{t('racks.cabinetHeadToTailLabel', 'Bottles lie head to tail')}
+                  </span>
+                </label>
+                <small className="help-text edit-rack-option-help" id="edit-rack-h2t-help">
+                  {twoDeep
+                    ? t('racks.cabinetHeadToTailNeedsSingle', 'Head to tail is for bottles that lie one deep: untick Two deep first.')
+                    : t('racks.cabinetHeadToTailHelp', 'For bottles that lie one deep, base forward and neck forward in turn, so a row fits more. Every other bottle is drawn neck forward. Drawing only — the number of bottles and the slot numbers stay the same.')}
+                </small>
+                <BetaBadge feature="cabinetHeadToTail" />
+              </>
+            )}
             <small className="help-text">
               {anyAlternate ? `${t('racks.cabinetTwoDeepLocked', 'Two deep is part of the shape on a cabinet whose rows alternate — it sets which rows are the narrow ones — so it stays as created.')} ` : ''}
               {alternate ? `${t('racks.cabinetAlternateNests', 'Rows that alternate in width always nest: each narrow row lies in the grooves of the wide row below it.')} ` : ''}
-              {t('racks.cabinetEditHint', 'Both options only change how the cabinet is drawn — the number of bottles it holds and where each bottle sits stay the same. To change the shelves themselves, create a new cabinet.')}
+              {t('racks.cabinetEditHint', 'These options only change how the cabinet is drawn — the number of bottles it holds and where each bottle sits stay the same. To change the shelves themselves, create a new cabinet.')}
             </small>
           </>
         )}

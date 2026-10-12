@@ -34,6 +34,7 @@ import CellarPageHeader from '../components/CellarPageHeader';
 import DialogBox from '../components/DialogBox';
 import EditRackModal from '../components/racks/EditRackModal';
 import MoveRackBottlesModal from '../components/racks/MoveRackBottlesModal';
+import BetaBadge from '../components/BetaBadge';
 import { useFeature } from '../utils/featureFlags';
 import { groupRacks, groupNames } from '../utils/rackGroups';
 import { swatchType, wineTypeLabel } from '../utils/wineColour';
@@ -280,6 +281,9 @@ function CellarRacks() {
           typeConfig.twoDeep = typeConfig.twoDeep !== false;
           typeConfig.stagger = typeConfig.stagger !== false;
           typeConfig.alternate = typeConfig.alternate === true;
+          // Head to tail is for a one-deep cabinet only (the backend refuses
+          // it with two deep), and stored only when on.
+          if (typeConfig.twoDeep === false && typeConfig.headToTail === true) typeConfig.headToTail = true; else delete typeConfig.headToTail;
           // Per-shelf width / pattern: fitted to the final shelf count and
           // width, and stored only where a shelf differs from the cabinet.
           const widths = cabinetShelfCols(newRack.rows, newRack.cols, typeConfig);
@@ -287,7 +291,7 @@ function CellarRacks() {
           const patterns = cabinetShelfAlternate(newRack.rows, typeConfig);
           if (patterns.some((a) => a !== typeConfig.alternate)) typeConfig.shelfAlternate = patterns; else delete typeConfig.shelfAlternate;
         } else {
-          for (const k of ['shelfRows', 'twoDeep', 'stagger', 'alternate', 'shelfCols', 'shelfAlternate']) delete typeConfig[k];
+          for (const k of ['shelfRows', 'twoDeep', 'stagger', 'headToTail', 'alternate', 'shelfCols', 'shelfAlternate']) delete typeConfig[k];
         }
         payload.typeConfig = typeConfig;
       }
@@ -1247,6 +1251,8 @@ function CabinetShapeFields({ newRack, setNewRack }) {
   const alternate = newRack.typeConfig?.alternate === true;
   const allAlternate = shelfAlt.length > 0 && shelfAlt.every(Boolean);
   const stagger = allAlternate || newRack.typeConfig?.stagger !== false;
+  const headToTailOn = useFeature('cabinetHeadToTail');
+  const headToTail = !twoDeep && newRack.typeConfig?.headToTail === true;
   const preset = CABINET_PRESETS.find((p) => p.key === presetKey);
   // The shelves / bottles-across inputs live in the parent form, so editing
   // them must drop the preset label: the shape is no longer that model.
@@ -1405,6 +1411,26 @@ function CabinetShapeFields({ newRack, setNewRack }) {
             : t('racks.cabinetStaggerHelp', 'Each stacked row sits in the grooves of the row below, offset half a bottle, the way bottles actually stack on a shelf. Turn it off for rows stacked squarely on top of each other. Drawing only — the number of bottles is the same.')}
         </small>
       </div>
+
+      {headToTailOn && (
+        <div className="form-group">
+          <label>
+            <input
+              type="checkbox"
+              checked={headToTail}
+              disabled={twoDeep}
+              onChange={(e) => setNewRack({ ...newRack, typeConfig: { ...newRack.typeConfig, headToTail: e.target.checked } })}
+            />
+            {' '}{t('racks.cabinetHeadToTailLabel', 'Bottles lie head to tail')}
+          </label>
+          <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
+            {twoDeep
+              ? t('racks.cabinetHeadToTailNeedsSingle', 'Head to tail is for bottles that lie one deep: untick Two deep first.')
+              : t('racks.cabinetHeadToTailHelp', 'For bottles that lie one deep, base forward and neck forward in turn, so a row fits more. Every other bottle is drawn neck forward. Drawing only — the number of bottles and the slot numbers stay the same.')}
+          </small>
+          <BetaBadge feature="cabinetHeadToTail" />
+        </div>
+      )}
     </>
   );
 }
