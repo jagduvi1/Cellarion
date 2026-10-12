@@ -4,7 +4,7 @@ import { useParams, Link, useSearchParams, useNavigate, useLocation } from 'reac
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getCellar } from '../api/cellars';
-import { getRacks, deleteRack, updateSlot, clearSlot, moveSlot, createRack, updateRack, disableSlot, enableSlot, previewArrange, applyArrange } from '../api/racks';
+import { getRacks, deleteRack, updateSlot, clearSlot, moveSlot, createRack, updateRack, disableSlot, enableSlot, previewArrange, applyArrange, moveRackBottles } from '../api/racks';
 import { consumeBottle, pourBottle, openBottle } from '../api/bottles';
 import { glassesLeft, daysLeft, freshnessStatus, remainingMl } from '../utils/openBottle';
 import PreservationPickerModal from '../components/bottle/PreservationPickerModal';
@@ -33,6 +33,8 @@ import CellarNav from '../components/CellarNav';
 import CellarPageHeader from '../components/CellarPageHeader';
 import DialogBox from '../components/DialogBox';
 import EditRackModal from '../components/racks/EditRackModal';
+import MoveRackBottlesModal from '../components/racks/MoveRackBottlesModal';
+import { useFeature } from '../utils/featureFlags';
 import { groupRacks, groupNames } from '../utils/rackGroups';
 import { swatchType, wineTypeLabel } from '../utils/wineColour';
 import './CellarRacks.css';
@@ -165,6 +167,10 @@ function CellarRacks() {
 
   // Rack tools (⋮) dropdown in the lens toolbar
   const [toolsOpen, setToolsOpen] = useState(false);
+
+  // Early access: "Move bottles to another rack" (MoveRackBottlesModal)
+  const moveRackOn = useFeature('rackMoveBottles');
+  const [moveOpen, setMoveOpen] = useState(false);
 
   // Zone editor modal
   const [zonesOpen, setZonesOpen] = useState(false);
@@ -575,6 +581,20 @@ function CellarRacks() {
     }
   };
 
+  // Every bottle of one rack into another, in order (early access
+  // 'rackMoveBottles'). Both racks change, so reload them all.
+  const handleMoveBottles = async (rackId, toRackId) => {
+    try {
+      const res = await moveRackBottles(apiFetch, rackId, toRackId);
+      const data = await res.json();
+      if (!res.ok) return { ok: false, error: data?.error };
+      await fetchAll();
+      return { ok: true, data };
+    } catch {
+      return { ok: false };
+    }
+  };
+
   // Rename / regroup (support ticket 2026-09-06): PUT name + group and adopt
   // the returned values. An empty group clears it.
   const handleEditRackSave = async (rackId, { name, group, typeConfig }) => {
@@ -617,6 +637,56 @@ function CellarRacks() {
 
   const rack = racks.find(r => r._id === selectedRackId) || racks[0];
   const canEdit = cellar?.userRole !== 'viewer';
+  // Shelves and wine cabinets drawn in 3D hide the lens toolbar (and the rack
+  // header with its pencil lives only in the Compact view).
+  const shelf3d = !!rack && (rack.type === 'shelf' || rack.type === 'cabinet') && !rack.isModular && viewMode === '3d';
+
+  // Rack tools (⋮), for editors, in every view and whether or not the rack
+  // holds bottles. Rename sits here too: the header pencil is missing in the
+  // Shelf and 3D views of shelves and wine cabinets, and a rack you cannot
+  // find a way to rename gets deleted and rebuilt (forum feedback 2026-10-12).
+  const rackToolsMenu = rack && canEdit ? (
+    <div className="rack-tools">
+      <button
+        type="button"
+        className="btn btn-secondary btn-small rack-tools-btn"
+        onClick={() => setToolsOpen(o => !o)}
+        aria-haspopup="menu"
+        aria-expanded={toolsOpen}
+        aria-label={t('racks.toolsMenu', 'Rack tools')}
+        title={t('racks.toolsMenu', 'Rack tools')}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <circle cx="12" cy="5" r="1.9" /><circle cx="12" cy="12" r="1.9" /><circle cx="12" cy="19" r="1.9" />
+        </svg>
+      </button>
+      {toolsOpen && (
+        <>
+          <div className="rack-tools-backdrop" onClick={() => setToolsOpen(false)} aria-hidden="true" />
+          <div className="rack-tools-menu" role="menu">
+            <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); setEditRack(rack._id); }}>
+              {t('racks.renameMenuItem', 'Rename or group…')}
+            </button>
+            {rack.slots.length >= 2 && (
+              <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); setArrangeOpen(true); }}>
+                {t('arrange.openBtn', 'Organize…')}
+              </button>
+            )}
+            {moveRackOn && rack.slots.length > 0 && (
+              <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); setMoveOpen(true); }}>
+                {t('racks.moveBottles.menuItem', 'Move bottles to another rack…')}
+              </button>
+            )}
+            {rack.slots.length > 0 && (
+              <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); setAuditOpen(true); }}>
+                {t('audit.openBtn', 'Audit')}
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  ) : null;
 
   // --- post-add placing mode (issue #1055): handlers ---
   // The add flow hands over the ids of the bottles it just created as router
@@ -839,38 +909,7 @@ function CellarRacks() {
                     {t('rackLens.lensRating', 'My rating')}
                   </button>
                 </div>
-                {canEdit && rack.slots.length > 0 && (
-                  <div className="rack-tools">
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-small rack-tools-btn"
-                      onClick={() => setToolsOpen(o => !o)}
-                      aria-haspopup="menu"
-                      aria-expanded={toolsOpen}
-                      aria-label={t('racks.toolsMenu', 'Rack tools')}
-                      title={t('racks.toolsMenu', 'Rack tools')}
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                        <circle cx="12" cy="5" r="1.9" /><circle cx="12" cy="12" r="1.9" /><circle cx="12" cy="19" r="1.9" />
-                      </svg>
-                    </button>
-                    {toolsOpen && (
-                      <>
-                        <div className="rack-tools-backdrop" onClick={() => setToolsOpen(false)} aria-hidden="true" />
-                        <div className="rack-tools-menu" role="menu">
-                          {rack.slots.length >= 2 && (
-                            <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); setArrangeOpen(true); }}>
-                              {t('arrange.openBtn', 'Organize…')}
-                            </button>
-                          )}
-                          <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); setAuditOpen(true); }}>
-                            {t('audit.openBtn', 'Audit')}
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
+                {rackToolsMenu}
               </div>
               <div className="rack-lens-legend" aria-hidden="true">
                 {getLensLegend(lens).map(e => (
@@ -887,6 +926,7 @@ function CellarRacks() {
               )}
             </>
           )}
+          {shelf3d && rackToolsMenu && <div className="rack-tools-row">{rackToolsMenu}</div>}
           {(rack.type === 'shelf' || rack.type === 'cabinet') && !rack.isModular && (
             <div className="rack-view-mode-toggle" role="tablist">
               <button
@@ -1081,6 +1121,17 @@ function CellarRacks() {
           onPreview={(strategy, positionOrder) => handleArrangePreview(rack._id, strategy, positionOrder)}
           onApply={(target, before) => handleArrangeApply(rack._id, target, before)}
           onClose={() => setArrangeOpen(false)}
+        />
+      )}
+
+      {/* Early access: move every bottle to another rack */}
+      {moveOpen && rack && (
+        <MoveRackBottlesModal
+          rack={rack}
+          racks={racks}
+          onMove={(toRackId) => handleMoveBottles(rack._id, toRackId)}
+          onShowRack={(rackId) => { setMoveOpen(false); setSelectedRackId(rackId); }}
+          onClose={() => setMoveOpen(false)}
         />
       )}
 

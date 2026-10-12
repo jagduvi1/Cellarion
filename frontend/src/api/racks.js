@@ -42,6 +42,16 @@ export const applyArrange = (apiFetch, rackId, { target, before }) =>
     body: JSON.stringify({ target, before }),
   });
 
+// Move every bottle of one rack into another rack of the same cellar, in
+// order, filling its free slots from the first one (POST
+// /api/racks/:id/move-bottles). Response: { moved, left, moves }.
+export const moveRackBottles = (apiFetch, rackId, toRackId) =>
+  apiFetch(`/api/racks/${rackId}/move-bottles`, {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ toRackId }),
+  });
+
 export const disableSlot = (apiFetch, rackId, position) =>
   apiFetch(`/api/racks/${rackId}/slots/${position}/disable`, { method: 'POST' });
 

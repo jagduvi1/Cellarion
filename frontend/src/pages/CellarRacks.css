@@ -739,6 +739,47 @@
   background: var(--color-primary-light);
 }
 
+/* The ⋮ tools on their own row where the lens toolbar is hidden (the 3D view
+   of shelves and wine cabinets), pinned right so the menu opens on-screen. */
+.rack-tools-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 0.5rem;
+}
+
+/* Move bottles to another rack (early access). */
+.move-rack-choices {
+  border: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.move-rack-choices legend {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  margin-bottom: 0.35rem;
+}
+.move-rack-choice {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.move-rack-choice:has(input:checked) {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+.move-rack-choice.is-full { cursor: default; opacity: 0.55; }
+.move-rack-choice-name { min-width: 0; overflow-wrap: anywhere; }
+.move-rack-choice-free { color: var(--color-text-secondary); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.move-rack-short { color: var(--color-text-secondary); }
+
 /* Mobile: keep the lens toolbar tidy. Search + the ⋮ tools button share the
    top row (tools pinned to the RIGHT so its dropdown opens on-screen), and the
    lens segment drops to its own full-width scrollable row below. Without this

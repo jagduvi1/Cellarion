@@ -39,6 +39,15 @@ const FEATURES = Object.freeze([
     defaultState: 'beta',
     since: '2026-10-10',
   }),
+  // The "Move bottles to another rack" action in a rack's tools menu. The
+  // move itself (POST /api/racks/:id/move-bottles) works for everyone; the
+  // flag only decides who sees the button.
+  Object.freeze({
+    key: 'rackMoveBottles',
+    title: "Move a rack's bottles to another rack",
+    defaultState: 'beta',
+    since: '2026-10-12',
+  }),
 ]);
 
 const FEATURE_KEYS = Object.freeze(FEATURES.map((f) => f.key));

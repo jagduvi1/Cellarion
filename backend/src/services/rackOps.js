@@ -330,8 +330,109 @@ async function applyArrangement(rack, target, req, meta = {}) {
   return { rack };
 }
 
+const slotBottleId = (s) => String(s.bottle && s.bottle._id ? s.bottle._id : s.bottle);
+
+/**
+ * Move the bottles of one rack into another rack of the same cellar (forum
+ * feedback 2026-10-12: a rack rebuilt as a wine cabinet meant moving every
+ * bottle across by hand, one at a time). Both racks are loaded and
+ * access-checked by the caller.
+ *
+ * Bottles keep their order: sorted by position in the source, they fill the
+ * target's free positions (in range, not disabled, not taken) from the lowest
+ * up. When the target has fewer free positions than the source has bottles,
+ * the first ones by position move and the rest stay where they are.
+ *
+ * Two racks are two documents and a bottle may sit in one slot only (the
+ * unique slots.bottle index), so the bottles leave the source FIRST and then
+ * enter the target, each save under optimistic concurrency. If the target
+ * write is refused, the bottles go back into the source slots they came from
+ * (those still free); a bottle that cannot go back stays in the cellar,
+ * unplaced — never lost and never in two slots.
+ * Returns { error } | { moved, left, moves: [{ bottleId, from, to }] }.
+ */
+async function moveRackBottles(source, target, req) {
+  if (String(source._id) === String(target._id)) {
+    return { error: { status: 400, message: 'Choose a different rack to move the bottles to' } };
+  }
+  if (String(source.cellar) !== String(target.cellar)) {
+    return { error: { status: 400, message: 'Both racks must be in the same cellar' } };
+  }
+  const occupied = (source.slots || []).filter((s) => s.bottle).sort((a, b) => a.position - b.position);
+  if (occupied.length === 0) {
+    return { error: { status: 400, code: 'empty', message: 'This rack has no bottles to move' } };
+  }
+  const maxPos = getMaxPosition(target);
+  const disabled = new Set(target.disabledPositions || []);
+  const taken = new Set((target.slots || []).map((s) => s.position));
+  const free = [];
+  for (let p = 1; p <= maxPos; p++) if (!disabled.has(p) && !taken.has(p)) free.push(p);
+  if (free.length === 0) {
+    return { error: { status: 409, code: 'full', message: 'The other rack has no free slots' } };
+  }
+
+  const moving = occupied.slice(0, free.length);
+  const moves = moving.map((s, i) => ({
+    bottleId: slotBottleId(s), from: s.position, to: free[i],
+    ...(s.rfidTag ? { rfidTag: s.rfidTag } : {}),
+  }));
+  const movingIds = new Set(moves.map((m) => m.bottleId));
+
+  // 1. Out of the source.
+  source.slots = (source.slots || []).filter((s) => !movingIds.has(slotBottleId(s)));
+  try {
+    await source.save();
+  } catch (err) {
+    if (err.name === 'VersionError') {
+      return { error: { status: 409, code: 'conflict', message: 'This rack was changed at the same moment — nothing was moved.' } };
+    }
+    throw err;
+  }
+
+  // 2. Into the target. Slot-level rfidTags follow their bottle.
+  target.slots = [
+    ...(target.slots || []),
+    ...moves.map((m) => ({ position: m.to, bottle: m.bottleId, ...(m.rfidTag ? { rfidTag: m.rfidTag } : {}) })),
+  ];
+  try {
+    await target.save();
+  } catch (err) {
+    await putBackIntoSource(source._id, moves);
+    if (err.name === 'VersionError' || err.code === 11000) {
+      return { error: { status: 409, code: 'conflict', message: 'The other rack was changed at the same moment — nothing was moved.' } };
+    }
+    throw err;
+  }
+
+  const left = occupied.length - moves.length;
+  logAudit(req, 'rack.move_bottles', { type: 'rack', id: target._id, cellarId: target.cellar },
+    { fromRack: String(source._id), toRack: String(target._id), moved: moves.length, left });
+  return { moved: moves.length, left, moves: moves.map(({ bottleId, from, to }) => ({ bottleId, from, to })) };
+}
+
+// Best effort after a refused target write: each bottle back into its old
+// source slot when that slot is still free and the bottle sits in no rack.
+async function putBackIntoSource(sourceId, moves) {
+  try {
+    const fresh = await Rack.findOne({ _id: sourceId, deletedAt: null });
+    if (!fresh) return;
+    const taken = new Set((fresh.slots || []).map((s) => s.position));
+    const back = [];
+    for (const m of moves) {
+      if (taken.has(m.from)) continue;
+      if (await Rack.exists({ 'slots.bottle': m.bottleId })) continue;
+      back.push({ position: m.from, bottle: m.bottleId, ...(m.rfidTag ? { rfidTag: m.rfidTag } : {}) });
+    }
+    if (back.length === 0) return;
+    fresh.slots = [...fresh.slots, ...back];
+    await fresh.save();
+  } catch (err) {
+    console.warn('[rackOps] moveRackBottles put-back failed (bottles left unplaced):', err.message);
+  }
+}
+
 module.exports = {
   normalizeRackGroup,
   createCellar, createGridRack, placeBottleInRack, clearRackSlot, moveBottleToCellar,
-  buildAnnotatedEntries, validateArrangementTarget, applyArrangement,
+  buildAnnotatedEntries, validateArrangementTarget, applyArrangement, moveRackBottles,
 };

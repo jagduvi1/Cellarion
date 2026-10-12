@@ -12,7 +12,7 @@ const { getMaxPosition, validateDoubleHeightRows, validateCabinetConfig, cabinet
 const {
   createGridRack, placeBottleInRack, clearRackSlot,
   buildAnnotatedEntries, validateArrangementTarget, applyArrangement,
-  normalizeRackGroup,
+  normalizeRackGroup, moveRackBottles,
 } = require('../services/rackOps');
 const { ARRANGE_STRATEGIES, buildArrangePlan } = require('../utils/rackArrange');
 const { isValidId } = require('../utils/validation');
@@ -533,6 +533,40 @@ router.post('/:id/slots/:position/move', async (req, res) => {
     }
     console.error('Move slot error:', err);
     res.status(500).json({ error: 'Failed to move bottle' });
+  }
+});
+
+// POST /api/racks/:id/move-bottles — move this rack's bottles into another
+// rack of the same cellar, keeping their order (services/rackOps.
+// moveRackBottles): they fill the other rack's free slots from the first one
+// on; when it has less room, the first ones by position move and the rest
+// stay. Owner or editor. Body: { toRackId }.
+// Response: { moved, left, moves: [{ bottleId, from, to }] }
+router.post('/:id/move-bottles', async (req, res) => {
+  try {
+    const { toRackId } = req.body || {};
+    if (!isValidId(req.params.id) || !isValidId(toRackId)) return res.status(400).json({ error: 'Invalid ID' });
+    const [source, target] = await Promise.all([
+      Rack.findOne({ _id: req.params.id, deletedAt: null }),
+      Rack.findOne({ _id: toRackId, deletedAt: null }),
+    ]);
+    if (!source || !target) return res.status(404).json({ error: 'Rack not found' });
+
+    const cellarDoc = await Cellar.findById(source.cellar);
+    if (!cellarDoc || cellarDoc.deletedAt) return res.status(404).json({ error: 'Rack not found' });
+    const role = getCellarRole(cellarDoc, req.user.id);
+    if (!role || role === 'viewer') {
+      return res.status(403).json({ error: 'Not authorized to modify rack slots' });
+    }
+
+    const result = await moveRackBottles(source, target, req);
+    if (result.error) {
+      return res.status(result.error.status).json({ error: result.error.message, ...(result.error.code ? { code: result.error.code } : {}) });
+    }
+    res.json(result);
+  } catch (err) {
+    console.error('Move rack bottles error:', err);
+    res.status(500).json({ error: 'Failed to move the bottles' });
   }
 });
 

@@ -1459,6 +1459,30 @@
     "noUnplacedBottles": "No unplaced bottles found",
     "caseOpenBtn": "Place several…",
     "toolsMenu": "Rack tools",
+    "renameMenuItem": "Rename or group…",
+    "moveBottles": {
+      "menuItem": "Move bottles to another rack…",
+      "title": "Move bottles to another rack",
+      "betaNote": "Moving a whole rack at once is in early access.",
+      "intro_one": "The {{count}} bottle in {{from}} moves to the rack you choose, into its first free slot.",
+      "intro_other": "The {{count}} bottles in {{from}} move to the rack you choose. They keep their order and fill its free slots from the first one.",
+      "toLabel": "Move them to",
+      "freeSlots_one": "{{count}} free slot",
+      "freeSlots_other": "{{count}} free slots",
+      "full": "Full",
+      "notAllFit": "Only {{fit}} of the {{count}} fit. The first {{fit}} by position move; the other {{left}} stay in {{from}}.",
+      "submit_one": "Move {{count}} bottle",
+      "submit_other": "Move {{count}} bottles",
+      "moving": "Moving…",
+      "failed": "Couldn't move the bottles. Please try again.",
+      "doneTitle": "Bottles moved",
+      "doneInfo_one": "Moved {{count}} bottle to {{to}}.",
+      "doneInfo_other": "Moved {{count}} bottles to {{to}}.",
+      "doneLeft_one": "{{count}} bottle stayed in {{from}}: there was no more room.",
+      "doneLeft_other": "{{count}} bottles stayed in {{from}}: there was no more room.",
+      "showRack": "Show {{name}}",
+      "noOtherRack": "This cellar has no other rack yet. Create the rack the bottles should go to, for example a wine cabinet, then come back here."
+    },
     "openInfo": "Open — ≈ {{glasses}} glasses left · drink within {{days}}d",
     "pourGlass": "Pour a glass",
     "caseHint": "Fills the free slots from here onward, in position order.",
@@ -5518,6 +5542,11 @@
         "name": "One page per wine and vintage",
         "description": "Tapping a wine in your cellar list opens one page for that wine and vintage, whether you have one bottle or twenty: the wine, then the vintage, then each bottle with its slot, size, price and shop. Drink, Edit vintage and Add sit in a bar that stays in reach.",
         "where": "In your cellar list: tap any wine."
+      },
+      "rackMoveBottles": {
+        "name": "Move a rack's bottles to another rack",
+        "description": "Move every bottle in a rack to another rack in the same cellar in one go. They keep their order and fill the other rack from its first free slot. Handy when you replace a rack, for example with a wine cabinet.",
+        "where": "On the Racks page: open a rack, then ⋮ → Move bottles to another rack."
       }
     }
   },
