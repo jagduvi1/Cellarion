@@ -71,6 +71,29 @@ describe('generic file prices', () => {
     expect(item.price).toBe(45);
   });
 
+  it('the most specific price column wins over a bare "Cost"', () => {
+    const item = first(csv('Wine,Producer,Vintage,Cost,Price per bottle', 'Barolo,Azelia,2016,540,45'));
+    expect(item.price).toBe(45);
+  });
+
+  it('a bare 0/1 "Paid" column is never read as a price', () => {
+    expect(first(csv('Wine,Producer,Vintage,Paid,Bottle Price', 'Barolo,Azelia,2016,1,45')).price).toBe(45);
+    expect(first(csv('Wine,Producer,Vintage,Paid', 'Barolo,Azelia,2016,1')).price).toBeUndefined();
+  });
+
+  it('a date in a price-named column is not a price', () => {
+    expect(first(csv('Wine,Producer,Vintage,Price Paid,Price', 'Barolo,Azelia,2016,2021-09-12,45')).price).toBe(45);
+  });
+
+  it.each(['PurchasePrice', 'BottlePrice', 'Einkaufspreis'])('reads %j', (header) => {
+    expect(first(csv(`Wine,Producer,Vintage,${header}`, 'Barolo,Azelia,2016,45')).price).toBe(45);
+  });
+
+  it('an earlier name written loosely beats a later one written exactly ("purchase_date" over "date")', () => {
+    const item = first(csv('Wine,Producer,Vintage,date,purchase_date', 'Barolo,Azelia,2016,2001-01-01,2020-05-04'));
+    expect(item.purchaseDate).toContain('2020-05-04');
+  });
+
   it('"Value" is not taken as the purchase price', () => {
     const item = first(csv('Wine,Producer,Vintage,Value', 'Barolo,Azelia,2016,120'));
     expect(item.price).toBeUndefined();
@@ -102,6 +125,12 @@ describe('parseLocaleNumber with a currency in front', () => {
     expect(parseLocaleNumber('abc')).toBeNaN();
     expect(parseLocaleNumber('n/a')).toBeNaN();
   });
+  it.each(["CHF 1'200.00", "Fr. 1'200", '1’200'])('Swiss thousands %j → 1200', (input) => {
+    expect(parseLocaleNumber(input)).toBe(1200);
+  });
+  it.each(['WS 95', 'Lot 12', 'No 5', 'Q1 2020'])('only a known currency is stripped in front: %j stays unreadable', (input) => {
+    expect(parseLocaleNumber(input)).toBeNaN();
+  });
 });
 
 describe('the "prices were not read" warning', () => {
@@ -119,6 +148,16 @@ describe('the "prices were not read" warning', () => {
 
   it('no warning once any bottle has a price', () => {
     const w = warningsOf(csv('Wine,Producer,Vintage,Price', 'Barolo,Azelia,2016,45', 'Barbaresco,Gaja,2015,'));
+    expect(w.find((x) => x.code === 'price-not-read')).toBeUndefined();
+  });
+
+  it('a column of zeros (how CellarTracker writes "no price") raises no warning', () => {
+    const w = warningsOf(csv('Wine,Producer,Vintage,Price', 'Barolo,Azelia,2016,0', 'Barbaresco,Gaja,2015,0'));
+    expect(w.find((x) => x.code === 'price-not-read')).toBeUndefined();
+  });
+
+  it('a valuation column ("Market price") raises no warning', () => {
+    const w = warningsOf(csv('Wine,Producer,Vintage,Market price', 'Barolo,Azelia,2016,expensive'));
     expect(w.find((x) => x.code === 'price-not-read')).toBeUndefined();
   });
 

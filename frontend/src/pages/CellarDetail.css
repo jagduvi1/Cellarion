@@ -1131,6 +1131,8 @@
 .move-bottle-skipped { color: var(--color-text-secondary); }
 
 /* Bulk delete: the one select-mode action that reads as dangerous. */
+/* Red at rest too — phones have no hover to tell it apart from the others. */
+.bulk-action-btn--danger { color: var(--color-danger); }
 .bulk-action-btn--danger:hover:not(:disabled) {
   background: var(--color-danger-bg);
   color: var(--color-danger);

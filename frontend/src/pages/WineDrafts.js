@@ -211,7 +211,8 @@ function WineDrafts() {
                     </div>
                     <div className="wine-draft-meta">
                       {t('draftWine.bottleCount', '{{count}} bottle(s)', { count: d.bottleCount || 0 })}
-                      {d.draftExpiresAt && ` · ${d.bottleCount ? t('draftWine.autoPublishes', 'publishes by itself on {{date}}', { date: new Date(d.draftExpiresAt).toLocaleDateString() }) : t('draftWine.expires', 'expires {{date}}', { date: new Date(d.draftExpiresAt).toLocaleDateString() })}`}
+                      {d.recentlyDeletedCount > 0 && ` · ${t('draftWine.recentlyDeleted', { count: d.recentlyDeletedCount, defaultValue: '{{count}} in Recently deleted' })}`}
+                      {d.draftExpiresAt && !(d.recentlyDeletedCount > 0 && !d.bottleCount) && ` · ${d.bottleCount ? t('draftWine.autoPublishes', 'publishes by itself on {{date}}', { date: new Date(d.draftExpiresAt).toLocaleDateString() }) : t('draftWine.expires', 'expires {{date}}', { date: new Date(d.draftExpiresAt).toLocaleDateString() })}`}
                     </div>
                     {state && <div className={`wine-draft-state wine-draft-state--${state.status}`}>{state.message}</div>}
                   </div>
@@ -222,7 +223,8 @@ function WineDrafts() {
                       )}
                       <button type="button" className="btn btn-secondary btn-small" disabled={busy} onClick={() => setEditing(d)}>{t('draftWine.edit', 'Edit')}</button>
                       <button type="button" className="btn btn-primary btn-small" disabled={busy} onClick={() => publishOne(d)}>{t('draftWine.publish', 'Publish')}</button>
-                      {!d.bottleCount && (
+                      {/* Bottles in Recently deleted still need this draft to come back. */}
+                      {!d.bottleCount && !d.recentlyDeletedCount && (
                         <button type="button" className="btn btn-danger btn-small" disabled={busy} onClick={() => remove(d)}>{t('common.delete', 'Delete')}</button>
                       )}
                     </div>

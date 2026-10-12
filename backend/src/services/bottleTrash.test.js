@@ -10,8 +10,9 @@
  * deletes own photos (files first) only for bottles that are really gone,
  * then the rows; the daily run writes one audit row per owner.
  */
-jest.mock('../models/Bottle', () => ({ find: jest.fn() }));
-jest.mock('../models/BottleImage', () => ({ find: jest.fn(), deleteMany: jest.fn().mockResolvedValue({}) }));
+jest.mock('../models/Bottle', () => ({ find: jest.fn(), updateOne: jest.fn().mockResolvedValue({}) }));
+jest.mock('../models/BottleImage', () => ({ find: jest.fn(), deleteMany: jest.fn().mockResolvedValue({}), updateMany: jest.fn().mockResolvedValue({}) }));
+jest.mock('../models/Cellar', () => ({ findById: jest.fn() }));
 jest.mock('../models/DeletedBottle', () => ({
   create: jest.fn(), deleteOne: jest.fn().mockResolvedValue({}), find: jest.fn(),
   deleteMany: jest.fn().mockResolvedValue({}), distinct: jest.fn(),
@@ -26,6 +27,7 @@ jest.mock('./imageProcessor', () => ({ unlinkImageFiles: jest.fn().mockResolvedV
 
 const Bottle = require('../models/Bottle');
 const BottleImage = require('../models/BottleImage');
+const Cellar = require('../models/Cellar');
 const DeletedBottle = require('../models/DeletedBottle');
 const WineDefinition = require('../models/WineDefinition');
 const WineRequest = require('../models/WineRequest');
@@ -42,6 +44,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   jest.spyOn(console, 'log').mockImplementation(() => {});
   jest.spyOn(console, 'error').mockImplementation(() => {});
+  jest.spyOn(console, 'warn').mockImplementation(() => {});
+  Cellar.findById.mockReturnValue(lean({ user: 'owner' }));
 });
 
 describe('trashBottle', () => {
@@ -80,6 +84,27 @@ describe('trashBottle', () => {
     expect(WineDefinition.findById).not.toHaveBeenCalled();
   });
 
+  test('every bottle waiting on an import request keeps its own copy of it, so any of a batch can bring it back', async () => {
+    snapshotBottleForDelete.mockResolvedValue({ snapshot: { ...SNAP, wineRequest: null }, ownPhotos: 0 });
+    WineRequest.findById.mockReturnValue(lean({ _id: 'r1', wineName: 'Cuvée X', status: 'pending' }));
+    DeletedBottle.create.mockImplementation(async (doc) => doc);
+    removeBottleCascade.mockResolvedValue({ removed: true });
+    await trashBottle({ _id: 'b3', user: 'owner', cellar: 'c1', wineDefinition: null, pendingWineRequest: 'r1' }, REQ, { batchId: 'b' });
+    expect(DeletedBottle.create.mock.calls[0][0].snapshot.wineRequest).toMatchObject({ _id: 'r1' });
+  });
+
+  test('a stale row of a delete that never finished is cleared first, so it cannot block this one', async () => {
+    snapshotBottleForDelete.mockResolvedValue({ snapshot: SNAP, ownPhotos: 0 });
+    WineDefinition.findById.mockReturnValue(lean(null));
+    const order = [];
+    DeletedBottle.deleteOne.mockImplementation(async () => { order.push('clear'); return {}; });
+    DeletedBottle.create.mockImplementation(async (doc) => { order.push('row'); return doc; });
+    removeBottleCascade.mockResolvedValue({ removed: true });
+    await trashBottle(bottle, REQ, { batchId: 'b' });
+    expect(DeletedBottle.deleteOne).toHaveBeenCalledWith({ bottleId: 'b1' });
+    expect(order).toEqual(['clear', 'row']);
+  });
+
   test('a cascade that refuses takes the row out again', async () => {
     snapshotBottleForDelete.mockResolvedValue({ snapshot: SNAP, ownPhotos: 0 });
     WineDefinition.findById.mockReturnValue(lean(null));
@@ -104,6 +129,31 @@ describe('restoreTrashed', () => {
     expect(opts).toEqual({ via: 'trash' });
     expect(out.placed).toBe(true);
     expect(DeletedBottle.deleteOne).toHaveBeenCalledWith({ _id: 't1' });
+  });
+
+  test("comes back as the cellar's CURRENT owner's bottle (the cellar may have changed hands)", async () => {
+    Cellar.findById.mockReturnValue(lean({ user: 'new-owner' }));
+    restoreDeletedBottle.mockResolvedValue({ bottle: { _id: 'b1' }, placed: false });
+    await restoreTrashed({ ...row, snapshot: { ...SNAP, bottle: { ...SNAP.bottle, user: 'old-owner' } } }, REQ);
+    expect(restoreDeletedBottle.mock.calls[0][0].bottle.user).toBe('new-owner');
+  });
+
+  test.each([
+    ['resolved', { status: 'resolved', linkedWineDefinition: 'w-new' }, { $set: { wineDefinition: 'w-new' }, $unset: { pendingWineRequest: '' } }],
+    ['rejected', { status: 'rejected' }, { $unset: { pendingWineRequest: '' } }],
+  ])('an import request %s while the bottle sat in the trash is applied to it on restore', async (_label, request, update) => {
+    restoreDeletedBottle.mockResolvedValue({ bottle: { _id: 'b9' }, placed: false });
+    WineRequest.findById.mockReturnValue(lean(request));
+    const pendingRow = { _id: 't9', wineDefinition: null, snapshot: { bottle: { _id: 'b9', cellar: 'c1', wineDefinition: null, pendingWineRequest: 'r1' } } };
+    await restoreTrashed(pendingRow, REQ);
+    expect(Bottle.updateOne).toHaveBeenCalledWith({ _id: 'b9', pendingWineRequest: 'r1' }, update);
+  });
+
+  test('a request still pending leaves the restored bottle waiting on it', async () => {
+    restoreDeletedBottle.mockResolvedValue({ bottle: { _id: 'b9' }, placed: false });
+    WineRequest.findById.mockReturnValue(lean({ status: 'pending' }));
+    await restoreTrashed({ _id: 't9', wineDefinition: null, snapshot: { bottle: { _id: 'b9', cellar: 'c1', pendingWineRequest: 'r1' } } }, REQ);
+    expect(Bottle.updateOne).not.toHaveBeenCalled();
   });
 
   test('a bottle that exists again only loses its stale row', async () => {
@@ -138,6 +188,10 @@ describe('purgeTrashRows', () => {
     expect(photoFilter.$or).toBeDefined(); // the OWN_PHOTO rule — registry photos stay
     expect(order).toEqual(['file', 'doc']);
     expect(DeletedBottle.deleteMany).toHaveBeenCalledWith({ _id: { $in: ['t1', 't2'] } });
+    // A photo approved as public meanwhile stays, without its dead bottle link.
+    const [detachFilter, detach] = BottleImage.updateMany.mock.calls[0];
+    expect(detachFilter.bottle).toEqual({ $in: ['b1'] });
+    expect(detach).toEqual({ $unset: { bottle: '' } });
   });
 
   test('nothing matching: nothing touched', async () => {

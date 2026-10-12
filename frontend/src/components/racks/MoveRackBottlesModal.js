@@ -42,27 +42,31 @@ export default function MoveRackBottlesModal({ rack, racks, onMove, onShowRack, 
     if (!chosen || willMove === 0 || busy) return;
     setBusy(true);
     setError('');
-    const out = await onMove(chosen.rack._id);
+    // Captured now: the page reloads its racks after the move, and the result
+    // screen must still name the racks as they were when the user chose.
+    const to = { id: chosen.rack._id, name: chosen.rack.name };
+    const from = rack.name;
+    const out = await onMove(to.id);
     setBusy(false);
     if (!out?.ok) { setError(out?.error || t('racks.moveBottles.failed', "Couldn't move the bottles. Please try again.")); return; }
-    setResult({ moved: out.data?.moved ?? willMove, left: out.data?.left ?? 0 });
+    setResult({ moved: out.data?.moved ?? willMove, left: out.data?.left ?? 0, to, from });
   };
 
-  if (result && chosen) {
+  if (result) {
     return (
       <Modal title={t('racks.moveBottles.doneTitle', 'Bottles moved')} onClose={onClose} showClose trapFocus>
         <p className="move-bottle-success" role="status">
-          {t('racks.moveBottles.doneInfo', { count: result.moved, to: chosen.rack.name, defaultValue: 'Moved {{count}} bottles to {{to}}.' })}
+          {t('racks.moveBottles.doneInfo', { count: result.moved, to: result.to.name, defaultValue: 'Moved {{count}} bottles to {{to}}.' })}
         </p>
         {result.left > 0 && (
           <p className="move-bottle-skipped">
-            {t('racks.moveBottles.doneLeft', { count: result.left, from: rack.name, defaultValue: '{{count}} bottles stayed in {{from}}: there was no more room.' })}
+            {t('racks.moveBottles.doneLeft', { count: result.left, from: result.from, defaultValue: '{{count}} bottles stayed in {{from}}: there was no more room.' })}
           </p>
         )}
         <div className="modal-actions">
           <button type="button" className="btn btn-secondary" onClick={onClose}>{t('bulk.close', 'Done')}</button>
-          <button type="button" className="btn btn-primary" onClick={() => onShowRack(chosen.rack._id)}>
-            {t('racks.moveBottles.showRack', { name: chosen.rack.name, defaultValue: 'Show {{name}}' })}
+          <button type="button" className="btn btn-primary" onClick={() => onShowRack(result.to.id)}>
+            {t('racks.moveBottles.showRack', { name: result.to.name, defaultValue: 'Show {{name}}' })}
           </button>
         </div>
       </Modal>

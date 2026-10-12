@@ -14,6 +14,7 @@
 
 jest.mock('../models/WineDefinition', () => ({ findOne: jest.fn(), find: jest.fn(), updateOne: jest.fn(), deleteOne: jest.fn() }));
 jest.mock('../models/Bottle', () => ({ exists: jest.fn(), distinct: jest.fn(), updateMany: jest.fn(), aggregate: jest.fn() }));
+jest.mock('../models/DeletedBottle', () => ({ exists: jest.fn(), aggregate: jest.fn() }));
 jest.mock('../models/BottleImage', () => ({ find: jest.fn(), updateMany: jest.fn(), deleteMany: jest.fn() }));
 jest.mock('../models/WineVintageProfile', () => ({ deleteMany: jest.fn() }));
 jest.mock('../models/Country', () => ({ findOne: jest.fn(), findById: jest.fn(), exists: jest.fn() }));
@@ -38,6 +39,7 @@ jest.mock('../routes/admin/wines', () => ({ reassignWineRefs: jest.fn(async () =
 
 const WineDefinition = require('../models/WineDefinition');
 const Bottle = require('../models/Bottle');
+const DeletedBottle = require('../models/DeletedBottle');
 const BottleImage = require('../models/BottleImage');
 const WineVintageProfile = require('../models/WineVintageProfile');
 const Country = require('../models/Country');
@@ -85,6 +87,9 @@ const leanChain = (result) => {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // No bottle sits in a "Recently deleted" unless a test says so.
+  DeletedBottle.exists.mockResolvedValue(null);
+  DeletedBottle.aggregate.mockResolvedValue([]);
   Country.exists.mockResolvedValue(null);
   Region.exists.mockResolvedValue(null);
   Appellation.exists.mockResolvedValue(null);
@@ -338,6 +343,15 @@ describe('deleteDraft', () => {
   test('refuses while bottles remain', async () => {
     Bottle.exists.mockResolvedValue({ _id: 'b1' });
     expect(await ops.deleteDraft(draft(), null)).toMatchObject({ ok: false, code: 'conflict' });
+    expect(WineDefinition.deleteOne).not.toHaveBeenCalled();
+  });
+
+  test('refuses while bottles of it sit in Recently deleted — they need the wine and its photos to come back', async () => {
+    DeletedBottle.exists.mockResolvedValue({ _id: 't1' });
+    const r = await ops.deleteDraft(draft(), null);
+    expect(r).toMatchObject({ ok: false, code: 'conflict' });
+    expect(DeletedBottle.exists).toHaveBeenCalledWith({ wineDefinition: WINE });
+    expect(BottleImage.deleteMany).not.toHaveBeenCalled();
     expect(WineDefinition.deleteOne).not.toHaveBeenCalled();
   });
 

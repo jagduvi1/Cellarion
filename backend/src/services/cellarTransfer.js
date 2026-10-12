@@ -53,6 +53,7 @@
 const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const Rack = require('../models/Rack');
+const DeletedBottle = require('../models/DeletedBottle');
 const User = require('../models/User');
 
 /** An error the route can turn straight into a status code. */
@@ -134,6 +135,18 @@ async function transferCellarOwnership(cellarId, newOwnerId, actorId) {
     { $set: { user: newOwner._id } },
   );
 
+  // ── 2b. The cellar's "Recently deleted" (services/bottleTrash), same
+  //        reasoning: those bottles come back as the new owner's, the new
+  //        owner's export carries them, and the outgoing owner's erasure
+  //        must not reach into this cellar's trash (release audit 2026-10-12).
+  const movedTrashIds = await DeletedBottle.find({ cellar: cellar._id, user: currentOwner }).distinct('_id');
+  if (movedTrashIds.length) {
+    await DeletedBottle.updateMany(
+      { _id: { $in: movedTrashIds } },
+      { $set: { user: newOwner._id, 'snapshot.bottle.user': newOwner._id } },
+    );
+  }
+
   // ── 3. The cellar itself, last.
   //       The outgoing owner becomes an editor so they keep working access —
   //       the whole point of the professional workflow — and the incoming owner
@@ -163,6 +176,9 @@ async function transferCellarOwnership(cellarId, newOwnerId, actorId) {
         : null,
       movedRackIds.length
         ? Rack.updateMany({ _id: { $in: movedRackIds } }, { $set: { user: currentOwner } })
+        : null,
+      movedTrashIds.length
+        ? DeletedBottle.updateMany({ _id: { $in: movedTrashIds } }, { $set: { user: currentOwner, 'snapshot.bottle.user': currentOwner } })
         : null,
     ].filter(Boolean)).catch((rollbackErr) => {
       // A failed rollback is the one state worth shouting about: the bottles

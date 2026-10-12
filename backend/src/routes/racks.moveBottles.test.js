@@ -15,7 +15,7 @@
 process.env.JWT_SECRET = 'test-secret';
 
 jest.mock('../models/Rack', () => {
-  const model = { findOne: jest.fn(), updateMany: jest.fn(), exists: jest.fn() };
+  const model = { findOne: jest.fn(), find: jest.fn(), updateMany: jest.fn(), exists: jest.fn() };
   model.RACK_TYPES = ['grid', 'x-rack', 'hex', 'triangle', 'stack', 'cube', 'shelf', 'cabinet'];
   return model;
 });
@@ -90,8 +90,13 @@ beforeEach(() => {
     // Target, 2×3: 1 taken, 2 disabled → free 3, 4, 5, 6.
     [DST]: rackDoc(DST, { disabledPositions: [2], slots: [{ position: 1, bottle: B(9) }] }),
   };
-  Rack.findOne.mockImplementation(async (q) => racks[String(q._id)] || null);
-  Rack.exists.mockResolvedValue(null);
+  // Honours the cellar filter the route puts on the target lookup.
+  Rack.findOne.mockImplementation(async (q) => {
+    const d = racks[String(q._id)] || null;
+    return d && q.cellar && String(d.cellar) !== String(q.cellar) ? null : d;
+  });
+  // The put-back's "is it in a rack anywhere?" read: nobody, by default.
+  Rack.find.mockReturnValue({ select: () => ({ lean: async () => [] }) });
   Cellar.findById.mockResolvedValue({ _id: CELLAR, user: OWNER, deletedAt: null, members: [{ user: VIEWER, role: 'viewer' }] });
 });
 
@@ -142,7 +147,29 @@ describe('POST /api/racks/:id/move-bottles', () => {
     expect(fresh.save).toHaveBeenCalled();
     expect(slotsOf(fresh)).toEqual([[1, B(1)], [3, B(2)], [5, B(3)]]);
     expect(fresh.slots.find((s) => s.position === 3).rfidTag).toBe('tag-2');
-    expect(logAudit).not.toHaveBeenCalledWith(expect.anything(), 'rack.move_bottles', expect.anything(), expect.anything());
+    expect(body.unplaced).toBeUndefined();
+    // The source changed and changed back: audited, so cached layouts re-read.
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'rack.move_bottles', expect.objectContaining({ id: SRC }),
+      expect.objectContaining({ moved: 0, refused: true, unplaced: 0 }));
+  });
+
+  test('a bottle that cannot go back is reported as unplaced, never put in two slots', async () => {
+    const err = new Error('dup'); err.code = 11000;
+    racks[DST].save.mockRejectedValueOnce(err);
+    // Meanwhile slot 1 of the source was taken, and B(3) was placed elsewhere.
+    const fresh = rackDoc(SRC, { slots: [{ position: 1, bottle: B(7) }] });
+    Rack.findOne.mockImplementation(async (q) => {
+      if (String(q._id) === SRC && racks[SRC].save.mock.calls.length > 0) return fresh;
+      return racks[String(q._id)] || null;
+    });
+    Rack.find.mockReturnValue({ select: () => ({ lean: async () => [{ slots: [{ position: 2, bottle: B(3) }] }] }) });
+
+    const { status, body } = await post(`/api/racks/${SRC}/move-bottles`, { toRackId: DST });
+    expect(status).toBe(409);
+    expect(body.unplaced).toBe(1); // B(1): its slot is taken; B(2) went back; B(3) sits elsewhere
+    expect(slotsOf(fresh)).toEqual([[1, B(7)], [3, B(2)]]);
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'rack.move_bottles', expect.anything(),
+      expect.objectContaining({ refused: true, unplaced: 1 }));
   });
 
   test('a source changed at the same moment: nothing moves', async () => {
@@ -172,10 +199,11 @@ describe('POST /api/racks/:id/move-bottles', () => {
     expect(racks[SRC].save).not.toHaveBeenCalled();
   });
 
-  test('refuses a rack in another cellar', async () => {
+  test('a rack in another cellar reads exactly like one that does not exist', async () => {
     racks[DST].cellar = OTHER_CELLAR;
-    const { status } = await post(`/api/racks/${SRC}/move-bottles`, { toRackId: DST });
-    expect(status).toBe(400);
+    const { status, body } = await post(`/api/racks/${SRC}/move-bottles`, { toRackId: DST });
+    expect(status).toBe(404);
+    expect(body.error).toBe('Rack not found');
     expect(racks[SRC].save).not.toHaveBeenCalled();
   });
 

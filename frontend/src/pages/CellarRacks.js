@@ -168,9 +168,12 @@ function CellarRacks() {
   // Rack tools (⋮) dropdown in the lens toolbar
   const [toolsOpen, setToolsOpen] = useState(false);
 
-  // Early access: "Move bottles to another rack" (MoveRackBottlesModal)
+  // Early access: "Move bottles to another rack" (MoveRackBottlesModal). Holds
+  // the SOURCE rack's id while open — pinned, because reloading the racks
+  // after the move can change which rack the page has selected (a ?highlight
+  // follows its bottle into the target).
   const moveRackOn = useFeature('rackMoveBottles');
-  const [moveOpen, setMoveOpen] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(null);
 
   // Zone editor modal
   const [zonesOpen, setZonesOpen] = useState(false);
@@ -587,10 +590,13 @@ function CellarRacks() {
     try {
       const res = await moveRackBottles(apiFetch, rackId, toRackId);
       const data = await res.json();
-      if (!res.ok) return { ok: false, error: data?.error };
+      // Reload on a refusal too: a move refused halfway can leave bottles
+      // unplaced, and the page must not keep showing them in their old slots.
       await fetchAll();
+      if (!res.ok) return { ok: false, error: data?.error };
       return { ok: true, data };
     } catch {
+      fetchAll();
       return { ok: false };
     }
   };
@@ -673,7 +679,7 @@ function CellarRacks() {
               </button>
             )}
             {moveRackOn && rack.slots.length > 0 && (
-              <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); setMoveOpen(true); }}>
+              <button type="button" role="menuitem" onClick={() => { setToolsOpen(false); setMoveOpen(rack._id); }}>
                 {t('racks.moveBottles.menuItem', 'Move bottles to another rack…')}
               </button>
             )}
@@ -1125,15 +1131,18 @@ function CellarRacks() {
       )}
 
       {/* Early access: move every bottle to another rack */}
-      {moveOpen && rack && (
-        <MoveRackBottlesModal
-          rack={rack}
-          racks={racks}
-          onMove={(toRackId) => handleMoveBottles(rack._id, toRackId)}
-          onShowRack={(rackId) => { setMoveOpen(false); setSelectedRackId(rackId); }}
-          onClose={() => setMoveOpen(false)}
-        />
-      )}
+      {moveOpen && (() => {
+        const source = racks.find(r => r._id === moveOpen);
+        return source ? (
+          <MoveRackBottlesModal
+            rack={source}
+            racks={racks}
+            onMove={(toRackId) => handleMoveBottles(source._id, toRackId)}
+            onShowRack={(rackId) => { setMoveOpen(null); setSelectedRackId(rackId); }}
+            onClose={() => setMoveOpen(null)}
+          />
+        ) : null;
+      })()}
 
       {/* Zone editor modal */}
       {zonesOpen && rack && (

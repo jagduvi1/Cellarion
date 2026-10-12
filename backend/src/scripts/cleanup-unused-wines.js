@@ -35,6 +35,7 @@ const CommunityWinePrice = require('../models/CommunityWinePrice');
 const WineNotDuplicate = require('../models/WineNotDuplicate');
 const PriceTrackingRequest = require('../models/PriceTrackingRequest');
 const Bottle = require('../models/Bottle');
+const DeletedBottle = require('../models/DeletedBottle');
 const WishlistItem = require('../models/WishlistItem');
 const WineList = require('../models/WineList');
 const Discussion = require('../models/Discussion');
@@ -57,6 +58,8 @@ const APPLY = process.argv.includes('--apply');
 /** All (model, path) pairs that hold a live reference to a WineDefinition. */
 const WINE_REF_SOURCES = [
   [Bottle, 'wineDefinition'],
+  // A bottle in someone's "Recently deleted" can still come back to its wine.
+  [DeletedBottle, 'wineDefinition'],
   [WishlistItem, 'wineDefinition'],
   [WineList, 'sections.entries.wine'],
   [WineList, 'autoGroupEntries.wine'],

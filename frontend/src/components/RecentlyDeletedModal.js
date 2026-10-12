@@ -138,6 +138,7 @@ export default function RecentlyDeletedModal({ cellarId, onClose }) {
                     className="btn btn-secondary btn-small"
                     onClick={() => restore(row.id, { ids: [row.id] })}
                     disabled={!!busy}
+                    aria-label={t('trash.restoreAria', { name: labelOf(row) })}
                   >
                     {busy === row.id ? t('trash.restoring') : t('trash.restore')}
                   </button>

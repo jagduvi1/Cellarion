@@ -68,6 +68,10 @@ import { analyzeBinGroups } from './binCodeParser';
  * Returns NaN for empty / unparseable input — drop-in safe replacement
  * for parseFloat on any caller that already handles NaN.
  */
+// Currencies written in front of a price: ISO codes and the usual short
+// forms (Fr. / SFr. for Swiss francs, kr for the Nordic crowns).
+const LEADING_CURRENCY = /^(?:usd|eur|gbp|sek|nok|dkk|isk|chf|aud|nzd|cad|jpy|hkd|sgd|zar|cny|inr|brl|mxn|pln|czk|huf|sfr\.?|fr\.?|kr\.?)\s*(?=[+-]?[\d.,])/i;
+
 export function parseLocaleNumber(input) {
   if (input == null) return NaN;
   let s = String(input).trim();
@@ -75,9 +79,11 @@ export function parseLocaleNumber(input) {
 
   // Strip currency symbols and surrounding whitespace
   s = s.replace(/[$€£¥¢฿₹₽₺]/g, '');
-  // A currency written BEFORE the number ("AUD 45.00", "SEK 199", "Fr. 30"):
-  // up to four letters, but only when a number follows — "abc" stays text.
-  s = s.replace(/^[a-zA-Z]{1,4}\.?\s*(?=[+-]?[\d.,])/, '');
+  // A currency written BEFORE the number ("AUD 45.00", "SEK 199", "Fr. 30") —
+  // only a known currency, so "WS 95" (a critic score) or "Lot 12" stays text.
+  s = s.replace(LEADING_CURRENCY, '');
+  // Swiss thousands: "1'200.00", "1’250".
+  s = s.replace(/(\d)['’](?=\d)/g, '$1');
   // Strip trailing currency words (kr, USD, EUR, etc.) and leading sign words
   s = s.replace(/^[+-]?\s*/, m => m.replace(/\s+/g, ''));
   s = s.replace(/\s*[a-zA-Z]+\s*$/, '');
@@ -431,7 +437,9 @@ export function detectDelimiter(text) {
  * matter ("Purchase_Price", " PRICE ", "purchase-price" → "purchase price").
  */
 export function normHeader(header) {
-  return String(header).replace(/^﻿/, '').toLowerCase().replace(/[\s_.-]+/g, ' ').trim();
+  return String(header).replace(/^﻿/, '')
+    .replace(/([a-z])([A-Z])/g, '$1 $2') // "PurchasePrice" → "Purchase Price"
+    .toLowerCase().replace(/[\s_.-]+/g, ' ').trim();
 }
 
 /**
@@ -443,12 +451,8 @@ export function normHeader(header) {
  * dropped without a word).
  */
 function makeGetter(row) {
-  let normalized = null; // header form → value, built on the first miss
-  return (keys) => {
-    for (const k of keys) {
-      const val = row[k] || row[k.toLowerCase()];
-      if (val) return val.trim();
-    }
+  let normalized = null; // header form → value, built on first use
+  const loose = (k) => {
     if (!normalized) {
       normalized = new Map();
       for (const [header, value] of Object.entries(row)) {
@@ -456,8 +460,14 @@ function makeGetter(row) {
         if (value && String(value).trim() && !normalized.has(key)) normalized.set(key, String(value));
       }
     }
+    return normalized.get(normHeader(k));
+  };
+  // Name by name, in the caller's order of preference: an earlier name
+  // written loosely ("purchase_date") beats a later one written exactly
+  // ("date") — the order is the priority (release audit 2026-10-12).
+  return (keys) => {
     for (const k of keys) {
-      const val = normalized.get(normHeader(k));
+      const val = row[k] || row[k.toLowerCase()] || loose(k);
       if (val) return val.trim();
     }
     return '';
@@ -469,11 +479,14 @@ function makeGetter(row) {
 // The names a purchase-price column goes by in files people write by hand or
 // export from other apps, matched in normHeader form. "Value" is left out on
 // purpose: in a hand-made file it is a valuation, not what was paid.
+// Most specific first: the first column whose value reads as a number wins,
+// so a per-bottle price beats a bare "Cost" (often per case). A bare "Paid"
+// is left out — it is as often a yes/no or 0/1 column as a price.
 export const PRICE_HEADERS = [
-  'Price', 'Cost', 'Purchase Price', 'Price Paid', 'Paid', 'Bottle Price',
-  'Price per Bottle', 'Price/Bottle', 'Unit Price', 'Unit Cost', 'Cost per Bottle',
-  'Purchase Cost', 'Buy Price', 'Pris', 'Inköpspris', 'Prix', "Prix d'achat",
-  'Preis', 'Kaufpreis', 'Prezzo', 'Precio', 'Prijs', 'Hinta',
+  'Price per Bottle', 'Price/Bottle', 'Bottle Price', 'Unit Price', 'Purchase Price',
+  'Price Paid', 'Buy Price', 'Price', 'Cost per Bottle', 'Unit Cost', 'Purchase Cost',
+  'Pris', 'Inköpspris', 'Prix', "Prix d'achat", 'Preis', 'Kaufpreis', 'Einkaufspreis',
+  'Prezzo', 'Precio', 'Prijs', 'Hinta', 'Cost',
 ];
 const PRICE_HEADER_SET = new Set(PRICE_HEADERS.map(normHeader));
 
@@ -482,9 +495,15 @@ const PRICE_HEADER_SET = new Set(PRICE_HEADERS.map(normHeader));
 function firstPrice(get) {
   for (const k of PRICE_HEADERS) {
     const text = get([k]);
-    if (text && !isNaN(parseLocaleNumber(text))) return text;
+    if (text && !looksLikeDate(text) && !isNaN(parseLocaleNumber(text))) return text;
   }
   return '';
+}
+
+// "2021-09-12", "12/09/2021", "12.09.21" — a date read as a number would be a
+// price of 2021 or 12.
+function looksLikeDate(text) {
+  return /^\d{4}-\d{1,2}-\d{1,2}/.test(text) || /^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}$/.test(text.trim());
 }
 
 // Currency marks a price header may carry. "$" and "kr" are each used by
@@ -519,9 +538,12 @@ export function priceFromCurrencyHeader(row) {
 
 // A header that reads like a price column, in any of the languages above —
 // for the "prices were not read" warning, not for reading values.
-const PRICE_LIKE_HEADER = /\b(price|prices|cost|pris|prix|preis|prezzo|precio|prijs|hinta|paid|kostnad|inköpspris|kaufpreis)\b/;
+const PRICE_LIKE_HEADER = /\b(price|prices|cost|pris|prix|preis|prezzo|precio|prijs|hinta|paid|kostnad|inköpspris|kaufpreis|einkaufspreis)\b/;
+// A valuation is not what was paid: "Market price", "Value", "Estimate".
+const VALUATION_HEADER = /\b(market|value|valuation|estimate|estimated|auction|retail)\b/;
 export function looksLikePriceHeader(header) {
-  return PRICE_LIKE_HEADER.test(normHeader(header));
+  const h = normHeader(header);
+  return PRICE_LIKE_HEADER.test(h) && !VALUATION_HEADER.test(h);
 }
 
 /**
@@ -2546,7 +2568,9 @@ export function parseAndMap(text, forceFormat, opts = {}) {
   // as numbers. Said out loud instead of importing every bottle without its
   // price in silence (forum feedback 2026-10-12).
   if (items.length > 0 && !items.some((it) => it.price != null)) {
-    const priceColumn = headers.find((h) => looksLikePriceHeader(h) && rows.some((r) => r[h] && String(r[h]).trim()));
+    // "0" is how CellarTracker writes "no price entered" — not a price left unread.
+    const filled = (v) => { const s = v == null ? '' : String(v).trim(); return s !== '' && parseLocaleNumber(s) !== 0; };
+    const priceColumn = headers.find((h) => looksLikePriceHeader(h) && rows.some((r) => filled(r[h])));
     if (priceColumn) warnings.push({ code: 'price-not-read', column: String(priceColumn).trim() });
   }
 

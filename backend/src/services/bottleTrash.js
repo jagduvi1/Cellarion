@@ -22,6 +22,7 @@
  */
 const Bottle = require('../models/Bottle');
 const BottleImage = require('../models/BottleImage');
+const Cellar = require('../models/Cellar');
 const DeletedBottle = require('../models/DeletedBottle');
 const WineDefinition = require('../models/WineDefinition');
 const WineRequest = require('../models/WineRequest');
@@ -60,6 +61,16 @@ async function labelFor(bottle) {
  */
 async function trashBottle(bottle, req, { batchId, deletedAt = new Date() }) {
   const { snapshot } = await snapshotBottleForDelete(bottle);
+  // The snapshot keeps an import request only when THIS bottle is the last
+  // one waiting on it. Every trashed bottle keeps its own copy instead, so
+  // whichever of a batch is restored first can bring the request back
+  // (release audit 2026-10-12).
+  if (bottle.pendingWineRequest && !snapshot.wineRequest) {
+    snapshot.wineRequest = await WineRequest.findById(bottle.pendingWineRequest).lean() || null;
+  }
+  // The bottle is live, so a row for its id is a leftover of a delete that
+  // never finished — it would block this one on the unique bottleId.
+  await DeletedBottle.deleteOne({ bottleId: bottle._id });
   const row = await DeletedBottle.create({
     user: bottle.user,
     cellar: bottle.cellar,
@@ -93,11 +104,40 @@ async function trashBottle(bottle, req, { batchId, deletedAt = new Date() }) {
 async function restoreTrashed(row, req) {
   const snapshot = { ...row.snapshot, bottle: { ...row.snapshot.bottle } };
   if (row.wineDefinition) snapshot.bottle.wineDefinition = row.wineDefinition;
+  // A bottle belongs to its cellar's owner. The cellar may have changed hands
+  // since the delete; the bottle comes back as the CURRENT owner's, or a
+  // later erasure of the previous owner would take it out of this cellar.
+  const cellar = await Cellar.findById(row.cellar).select('user').lean();
+  if (cellar && cellar.user) snapshot.bottle.user = cellar.user;
   const result = await restoreDeletedBottle(snapshot, req, { via: 'trash' });
   if (!result.error || result.error.code === 'exists') {
     await DeletedBottle.deleteOne({ _id: row._id });
   }
+  if (!result.error && snapshot.bottle.pendingWineRequest) {
+    await settleWineRequest(snapshot.bottle._id, snapshot.bottle.pendingWineRequest);
+  }
   return result;
+}
+
+// A restored bottle waiting on an import request: the request may have been
+// decided while the bottle sat in the trash, and the decision only reached
+// the live bottles. Apply it here the way services/wineRequestOps does —
+// resolved → onto the linked wine, rejected → detached. Best effort.
+async function settleWineRequest(bottleId, requestId) {
+  try {
+    const request = await WineRequest.findById(requestId).select('status linkedWineDefinition').lean();
+    if (!request) return;
+    if (request.status === 'resolved' && request.linkedWineDefinition) {
+      await Bottle.updateOne(
+        { _id: bottleId, pendingWineRequest: requestId },
+        { $set: { wineDefinition: request.linkedWineDefinition }, $unset: { pendingWineRequest: '' } },
+      );
+    } else if (request.status === 'rejected') {
+      await Bottle.updateOne({ _id: bottleId, pendingWineRequest: requestId }, { $unset: { pendingWineRequest: '' } });
+    }
+  } catch (err) {
+    console.warn(`[bottleTrash] settling the import request of restored bottle ${bottleId} failed:`, err.message);
+  }
 }
 
 /**
@@ -113,11 +153,14 @@ async function purgeTrashRows(filter) {
   const live = new Set((await Bottle.find({ _id: { $in: ids } }).distinct('_id')).map(String));
   const gone = ids.filter((id) => !live.has(String(id)));
   if (gone.length > 0) {
-    const { OWN_PHOTO } = require('./photoRetention');
+    const { OWN_PHOTO, REGISTRY_PHOTO } = require('./photoRetention');
     const { unlinkImageFiles } = require('./imageProcessor');
     const photos = await BottleImage.find({ bottle: { $in: gone }, ...OWN_PHOTO }).select('originalUrl processedUrl').lean();
     for (const photo of photos) await unlinkImageFiles(photo);
     await BottleImage.deleteMany({ bottle: { $in: gone }, ...OWN_PHOTO });
+    // A photo approved as public while its bottle sat in the trash is
+    // registry content now: it stays, without the dead bottle link.
+    await BottleImage.updateMany({ bottle: { $in: gone }, ...REGISTRY_PHOTO }, { $unset: { bottle: '' } });
   }
   await DeletedBottle.deleteMany({ _id: { $in: rows.map((r) => r._id) } });
   return rows.length;

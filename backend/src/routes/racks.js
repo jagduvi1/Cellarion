@@ -546,10 +546,11 @@ router.post('/:id/move-bottles', async (req, res) => {
   try {
     const { toRackId } = req.body || {};
     if (!isValidId(req.params.id) || !isValidId(toRackId)) return res.status(400).json({ error: 'Invalid ID' });
-    const [source, target] = await Promise.all([
-      Rack.findOne({ _id: req.params.id, deletedAt: null }),
-      Rack.findOne({ _id: toRackId, deletedAt: null }),
-    ]);
+    const source = await Rack.findOne({ _id: req.params.id, deletedAt: null });
+    // The target is looked up IN the source's cellar: a rack elsewhere reads
+    // exactly like one that does not exist, so the answer cannot be used to
+    // probe for other people's rack ids (release audit 2026-10-12).
+    const target = source ? await Rack.findOne({ _id: toRackId, cellar: source.cellar, deletedAt: null }) : null;
     if (!source || !target) return res.status(404).json({ error: 'Rack not found' });
 
     const cellarDoc = await Cellar.findById(source.cellar);
@@ -561,7 +562,8 @@ router.post('/:id/move-bottles', async (req, res) => {
 
     const result = await moveRackBottles(source, target, req);
     if (result.error) {
-      return res.status(result.error.status).json({ error: result.error.message, ...(result.error.code ? { code: result.error.code } : {}) });
+      const { status, message, code, unplaced } = result.error;
+      return res.status(status).json({ error: message, ...(code ? { code } : {}), ...(unplaced ? { unplaced } : {}) });
     }
     res.json(result);
   } catch (err) {

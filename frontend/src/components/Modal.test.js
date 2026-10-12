@@ -39,6 +39,22 @@ describe('Modal', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  test('Escape closes only the newest of two open dialogs', () => {
+    const outer = vi.fn();
+    const inner = vi.fn();
+    const { rerender } = render(
+      <Modal onClose={outer}>outer<Modal onClose={inner}>inner</Modal></Modal>,
+    );
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(inner).toHaveBeenCalledTimes(1);
+    expect(outer).not.toHaveBeenCalled();
+
+    // With the inner one closed, Escape reaches the outer one again.
+    rerender(<Modal onClose={outer}>outer</Modal>);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(outer).toHaveBeenCalledTimes(1);
+  });
+
   test('exposes dialog semantics', () => {
     render(<Modal title="Edit Wine" onClose={() => {}}>body</Modal>);
     const dialog = screen.getByRole('dialog');

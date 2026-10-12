@@ -21,6 +21,7 @@
 
 const WineDefinition = require('../models/WineDefinition');
 const Bottle = require('../models/Bottle');
+const DeletedBottle = require('../models/DeletedBottle');
 const BottleImage = require('../models/BottleImage');
 const WineVintageProfile = require('../models/WineVintageProfile');
 const Country = require('../models/Country');
@@ -145,14 +146,25 @@ async function listDrafts(userId) {
     .lean();
   const ids = rows.map((r) => r._id);
   const counts = new Map();
+  const trashed = new Map();
   if (ids.length) {
-    const agg = await Bottle.aggregate([
+    const byWine = [
       { $match: { wineDefinition: { $in: ids } } },
       { $group: { _id: '$wineDefinition', n: { $sum: 1 } } },
-    ]);
+    ];
+    const [agg, trashAgg] = await Promise.all([Bottle.aggregate(byWine), DeletedBottle.aggregate(byWine)]);
     for (const a of agg) counts.set(String(a._id), a.n);
+    for (const a of trashAgg) trashed.set(String(a._id), a.n);
   }
-  return { ok: true, drafts: rows.map((r) => draftSummary(r, { bottleCount: counts.get(String(r._id)) || 0 })) };
+  // recentlyDeletedCount: bottles in a "Recently deleted" that still need the
+  // draft to come back — the page must not offer Delete while there are any.
+  return {
+    ok: true,
+    drafts: rows.map((r) => draftSummary(r, {
+      bottleCount: counts.get(String(r._id)) || 0,
+      recentlyDeletedCount: trashed.get(String(r._id)) || 0,
+    })),
+  };
 }
 
 /**
@@ -459,7 +471,7 @@ async function removeDraftRow(wine, req, action, detail = {}, { requireEmpty = f
   // added during the cleanup above must not be left pointing at nothing
   // (audit 2026-09-12). The predicate on draft:true guards a publish in the
   // same window the same way.
-  if (requireEmpty && await Bottle.exists({ wineDefinition: wine._id })) {
+  if (requireEmpty && (await Bottle.exists({ wineDefinition: wine._id }) || await DeletedBottle.exists({ wineDefinition: wine._id }))) {
     return { ok: false, code: 'conflict', message: 'A bottle was added to this draft while it was being removed — it stays.' };
   }
   const del = await WineDefinition.deleteOne({ _id: wine._id, draft: true });
@@ -528,6 +540,11 @@ async function deleteDraft(wine, req = null, { action = 'wine.draft_delete' } = 
   if (wine.draft !== true) return fail('conflict', 'This wine is not a draft.');
   if (await Bottle.exists({ wineDefinition: wine._id })) {
     return fail('conflict', 'This draft holds bottles — publish it, or attach the bottles to an existing wine, instead of deleting it.');
+  }
+  // Bottles in a "Recently deleted" (services/bottleTrash) still need their
+  // wine — and its photos — to come back (release audit 2026-10-12).
+  if (await DeletedBottle.exists({ wineDefinition: wine._id })) {
+    return fail('conflict', 'Bottles of this draft are in Recently deleted. Restore them, or wait until they are deleted for good, before deleting the draft.');
   }
   return removeDraftRow(wine, req, action, {}, { requireEmpty: true });
 }

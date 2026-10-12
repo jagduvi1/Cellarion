@@ -70,7 +70,8 @@ describe('RecentlyDeletedModal', () => {
     const onClose = vi.fn();
     render(<RecentlyDeletedModal cellarId="c1" onClose={onClose} />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'trash.restore' }));
+    // Each Restore button names its wine for screen readers.
+    fireEvent.click(await screen.findByRole('button', { name: 'trash.restoreAria:{"name":"Azelia Barolo 2016"}' }));
     await waitFor(() => expect(restoreRecentlyDeleted).toHaveBeenCalledWith(apiFetch, 'c1', { ids: ['t1'], batchId: undefined }));
     expect(await screen.findByText('trash.skippedWineGone:{"count":1}')).toBeTruthy();
 

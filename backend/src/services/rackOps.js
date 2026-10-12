@@ -397,9 +397,18 @@ async function moveRackBottles(source, target, req) {
   try {
     await target.save();
   } catch (err) {
-    await putBackIntoSource(source._id, moves);
+    const unplaced = await putBackIntoSource(source._id, moves);
+    // The source DID change: bottles left it, and those that could not go
+    // back are now unplaced. Audited either way, so the data version moves
+    // and every cached layout (offline copy, search, MCP) is re-read.
+    logAudit(req, 'rack.move_bottles', { type: 'rack', id: source._id, cellarId: source.cellar },
+      { fromRack: String(source._id), toRack: String(target._id), moved: 0, refused: true, unplaced });
     if (err.name === 'VersionError' || err.code === 11000) {
-      return { error: { status: 409, code: 'conflict', message: 'The other rack was changed at the same moment — nothing was moved.' } };
+      return {
+        error: unplaced > 0
+          ? { status: 409, code: 'conflict', unplaced, message: `The other rack was changed at the same moment, so nothing moved there — but ${unplaced} bottle(s) could not go back to their slots and are now unplaced in the cellar.` }
+          : { status: 409, code: 'conflict', message: 'The other rack was changed at the same moment — nothing was moved.' },
+      };
     }
     throw err;
   }
@@ -412,22 +421,39 @@ async function moveRackBottles(source, target, req) {
 
 // Best effort after a refused target write: each bottle back into its old
 // source slot when that slot is still free and the bottle sits in no rack.
+// Returns how many bottles are left unplaced — not back, and in no rack.
 async function putBackIntoSource(sourceId, moves) {
+  const ids = moves.map((m) => m.bottleId);
   try {
     const fresh = await Rack.findOne({ _id: sourceId, deletedAt: null });
-    if (!fresh) return;
+    if (!fresh) return await countUnplaced(ids);
     const taken = new Set((fresh.slots || []).map((s) => s.position));
+    const placedElsewhere = new Set((await Rack.find({ 'slots.bottle': { $in: ids } }).select('slots.bottle').lean())
+      .flatMap((r) => (r.slots || []).map(slotBottleId)));
     const back = [];
     for (const m of moves) {
-      if (taken.has(m.from)) continue;
-      if (await Rack.exists({ 'slots.bottle': m.bottleId })) continue;
+      if (taken.has(m.from) || placedElsewhere.has(m.bottleId)) continue;
       back.push({ position: m.from, bottle: m.bottleId, ...(m.rfidTag ? { rfidTag: m.rfidTag } : {}) });
     }
-    if (back.length === 0) return;
-    fresh.slots = [...fresh.slots, ...back];
-    await fresh.save();
+    if (back.length > 0) {
+      fresh.slots = [...fresh.slots, ...back];
+      await fresh.save();
+    }
+    return moves.length - back.length - moves.filter((m) => placedElsewhere.has(m.bottleId)).length;
   } catch (err) {
     console.warn('[rackOps] moveRackBottles put-back failed (bottles left unplaced):', err.message);
+    return countUnplaced(ids);
+  }
+}
+
+// How many of these bottles sit in no rack at all.
+async function countUnplaced(ids) {
+  try {
+    const placed = new Set((await Rack.find({ 'slots.bottle': { $in: ids } }).select('slots.bottle').lean())
+      .flatMap((r) => (r.slots || []).map(slotBottleId)));
+    return ids.filter((id) => !placed.has(id)).length;
+  } catch {
+    return ids.length;
   }
 }
 

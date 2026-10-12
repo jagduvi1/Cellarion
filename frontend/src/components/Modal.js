@@ -17,15 +17,37 @@ import './Modal.css';
  * `trapFocus` for modals that must hold focus (e.g. a blocking/non-dismissible
  * modal): on open it moves focus into the dialog and keeps Tab inside it.
  */
+// Open dialogs. Escape closes only the newest: a dialog opened from inside
+// another (the beta feedback form inside the rack "Move bottles" dialog) must
+// not take its parent — and the parent's typed input — with it. "Newest" is
+// the order of FIRST RENDER, which runs parent before child; effects run
+// child before parent, so they cannot tell a nested pair apart.
+const openModals = new Set();
+let modalSeq = 0;
+
 function Modal({ title, onClose, children, wide, showClose, boxStyle, trapFocus = false }) {
   const titleId = useId();
   const boxRef = useRef(null);
+  const token = useRef(null);
+  if (token.current === null) token.current = { seq: ++modalSeq };
+
+  useEffect(() => {
+    const me = token.current;
+    openModals.add(me);
+    return () => { openModals.delete(me); };
+  }, []);
 
   // Escape closes the dialog, independent of the optional focus trap — mirrors
   // Drawer.js so every shared-Modal dialog is keyboard-dismissible.
   useEffect(() => {
     if (!onClose) return undefined;
-    const onKey = (e) => { if (e.key === 'Escape') onClose(e); };
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      let newest = null;
+      for (const m of openModals) if (!newest || m.seq > newest.seq) newest = m;
+      if (newest && newest !== token.current) return;
+      onClose(e);
+    };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
