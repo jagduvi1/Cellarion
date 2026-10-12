@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { listDashboards, createDashboard, updateDashboard, deleteDashboard, runAnalyticsQuery } from '../api/analytics';
 import AnalyticsCharts from '../components/AnalyticsCharts';
 import { humanMeasureLabel } from '../utils/analyticsLabels';
+import { isRatingField, ratingMeasureField, viewerRatingScale, formatRatingCell } from '../utils/analyticsRatings';
 // Shares .at-chip / .at-beta with the analytics table so the two surfaces
 // stay visually one feature.
 import '../components/AnalyticsTable.css';
@@ -86,7 +87,9 @@ function KpiWidget({ data, t }) {
         return (
           <div key={label} className="ad-kpi">
             <div className="ad-kpi-value">
-              {v === null || v === undefined ? '—' : typeof v === 'number' ? Math.round(v * 100) / 100 : String(v)}
+              {v === null || v === undefined ? '—'
+                : typeof v === 'number' && ratingMeasureField(label) ? formatRatingCell(v, data.ratingScale || '5')
+                : typeof v === 'number' ? Math.round(v * 100) / 100 : String(v)}
             </div>
             <div className="ad-kpi-label">
               {humanMeasureLabel(label, null, t)}
@@ -110,7 +113,7 @@ function RowsWidget({ data, t }) {
             <tr key={r.id}>
               {cols.map((k) => {
                 const v = r.values[k];
-                return <td key={k}>{v === null || v === undefined ? '—' : Array.isArray(v) ? v.join(', ') : String(v)}</td>;
+                return <td key={k}>{v === null || v === undefined ? '—' : Array.isArray(v) ? v.join(', ') : isRatingField(k) ? formatRatingCell(v, data.ratingScale || '5') : String(v)}</td>;
               })}
             </tr>
           ))}
@@ -125,7 +128,9 @@ function RowsWidget({ data, t }) {
 
 function Widget({ widget, onRemove }) {
   const { t } = useTranslation();
-  const { apiFetch } = useAuth();
+  const { apiFetch, user } = useAuth();
+  // Ratings come back in the viewer's own scale (Settings), not always stars.
+  const ratingScale = viewerRatingScale(user);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
 
@@ -136,7 +141,7 @@ function Widget({ widget, onRemove }) {
         const q = widget.query?.mode === 'rows' || (!widget.query?.mode && widget.query?.columns)
           ? { ...widget.query, mode: 'rows', limit: 8 }
           : widget.query;
-        const res = await runAnalyticsQuery(apiFetch, q);
+        const res = await runAnalyticsQuery(apiFetch, { ...q, ratingScale });
         const body = await res.json();
         if (!live) return;
         if (!res.ok) setError(body.error || 'Query failed');
@@ -146,7 +151,7 @@ function Widget({ widget, onRemove }) {
       }
     })();
     return () => { live = false; };
-  }, [apiFetch, widget, t]);
+  }, [apiFetch, widget, ratingScale, t]);
 
   const scopeNote = data?.scope && data.scope.bottles !== 'active'
     ? t(`analytics.scope.${data.scope.bottles}`, data.scope.bottles)
@@ -175,7 +180,7 @@ function Widget({ widget, onRemove }) {
                   {data.buckets.slice(0, 8).map((b, i) => (
                     <tr key={i}>
                       {b.dimensions.map((d, j) => <td key={`d${j}`}>{d ?? '—'}</td>)}
-                      {b.measures.map((m, j) => <td key={`m${j}`}>{m == null ? '—' : typeof m === 'number' ? Math.round(m * 100) / 100 : String(m)}</td>)}
+                      {b.measures.map((m, j) => <td key={`m${j}`}>{m == null ? '—' : typeof m === 'number' && ratingMeasureField(data.measureLabels[j]) ? formatRatingCell(m, data.ratingScale || '5') : typeof m === 'number' ? Math.round(m * 100) / 100 : String(m)}</td>)}
                     </tr>
                   ))}
                 </tbody>

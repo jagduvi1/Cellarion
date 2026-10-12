@@ -9,6 +9,9 @@ import AnalyticsCharts from './AnalyticsCharts';
 import { ANALYTICS_PRESETS } from '../utils/analyticsPresets';
 import { humanMeasureLabel } from '../utils/analyticsLabels';
 import {
+  isRatingField, ratingMeasureField, viewerRatingScale, ratingSuffix, formatRatingCell, ratingFieldLabel,
+} from '../utils/analyticsRatings';
+import {
   listDashboards, createDashboard, updateDashboard,
   listViews, saveView, updateView, deleteView, starPreset,
 } from '../api/analytics';
@@ -45,8 +48,10 @@ const OP_LABELS = {
   between: 'between', contains: 'contains', in: 'is one of',
 };
 
-function formatValue(v, field) {
+// `ratingScale` = the scale the response's ratings are in (the viewer's own).
+function formatValue(v, field, ratingScale = '5') {
   if (v === null || v === undefined || v === '') return '—';
+  if (field && isRatingField(field.key) && typeof v === 'number') return formatRatingCell(v, ratingScale);
   if (Array.isArray(v)) return v.join(', ');
   if (typeof v === 'boolean') return v ? 'Yes' : 'No';
   if (field && field.unit && field.unit !== 'currency' && typeof v === 'number') return `${v} ${field.unit}`;
@@ -100,7 +105,9 @@ function FilterValueInput({ field, op, value, onChange }) {
 
 export default function AnalyticsTable({ cellarId }) {
   const { t } = useTranslation();
-  const { apiFetch } = useAuth();
+  const { apiFetch, user } = useAuth();
+  // Ratings come back in the viewer's own scale (Settings), not always stars.
+  const ratingScale = viewerRatingScale(user);
 
   const [catalogue, setCatalogue] = useState([]);
   const [cellars, setCellars] = useState([]);
@@ -163,7 +170,11 @@ export default function AnalyticsTable({ cellarId }) {
           getAnalyticsCatalogue(apiFetch), listCellars(apiFetch), listViews(apiFetch), listDashboards(apiFetch),
         ]);
         if (!live) return;
-        if (catRes.ok) setCatalogue((await catRes.json()).fields || []);
+        if (catRes.ok) {
+          // A rating column shows the viewer's scale, so its name drops "(stars)".
+          const fields = (await catRes.json()).fields || [];
+          setCatalogue(fields.map((f) => (isRatingField(f.key) ? { ...f, label: ratingFieldLabel(f.label) } : f)));
+        }
         if (celRes.ok) {
           const body = await celRes.json();
           setCellars(Array.isArray(body) ? body : body.cellars || []);
@@ -205,7 +216,7 @@ export default function AnalyticsTable({ cellarId }) {
     setError(null);
     (async () => {
       try {
-        const res = await runAnalyticsQuery(apiFetch, query);
+        const res = await runAnalyticsQuery(apiFetch, { ...query, ratingScale });
         if (!live || seq !== queryRef.current) return;
         const body = await res.json();
         if (!res.ok) { setError(body.error || 'Query failed'); setData(null); }
@@ -217,7 +228,7 @@ export default function AnalyticsTable({ cellarId }) {
       }
     })();
     return () => { live = false; };
-  }, [apiFetch, query, t]);
+  }, [apiFetch, query, ratingScale, t]);
 
   const toggleColumn = (key) => {
     setColumns((prev) => {
@@ -376,10 +387,12 @@ export default function AnalyticsTable({ cellarId }) {
     }
   };
 
+  // A rating filter remembers the scale its value is typed in (the viewer's).
+  const newFilter = (f) => ({ field: f.key, op: f.ops[0], value: '', ...(isRatingField(f.key) ? { scale: ratingScale } : {}) });
   const addDraftFilter = () => {
     const first = catalogue.find((f) => f.filterable);
     if (!first) return;
-    setDraftFilters((prev) => [...prev, { field: first.key, op: first.ops[0], value: '' }]);
+    setDraftFilters((prev) => [...prev, newFilter(first)]);
   };
   const applyFilters = () => {
     const ready = draftFilters.filter((f) => f.value !== '' && f.value !== undefined && f.value !== null
@@ -395,7 +408,7 @@ export default function AnalyticsTable({ cellarId }) {
       let csv;
       if (query.mode === 'grouped') {
         // Grouped exports are one bounded response — the current buckets.
-        const res = await runAnalyticsQuery(apiFetch, query);
+        const res = await runAnalyticsQuery(apiFetch, { ...query, ratingScale });
         const body = await res.json();
         if (!res.ok) throw new Error(body.error || 'export failed');
         const header = [
@@ -412,7 +425,7 @@ export default function AnalyticsTable({ cellarId }) {
         let at = 0;
         let total = Infinity;
         while (at < Math.min(total, CSV_MAX_ROWS)) {
-          const res = await runAnalyticsQuery(apiFetch, { ...query, limit: 200, offset: at });
+          const res = await runAnalyticsQuery(apiFetch, { ...query, ratingScale, limit: 200, offset: at });
           const body = await res.json();
           if (!res.ok) throw new Error(body.error || 'export failed');
           total = body.total;
@@ -420,7 +433,8 @@ export default function AnalyticsTable({ cellarId }) {
           if (!body.rows.length) break;
           at += body.rows.length;
         }
-        const header = columns.map((k) => csvEscape(byKey.get(k)?.label || k)).join(',');
+        // A rating column's numbers are in the viewer's scale: the header says which.
+        const header = columns.map((k) => csvEscape((byKey.get(k)?.label || k) + (isRatingField(k) ? ` (${ratingSuffix(ratingScale)})` : ''))).join(',');
         const lines = rows.map((r) => columns.map((k) => {
           const v = r.values[k];
           return csvEscape(Array.isArray(v) ? v.join('; ') : v ?? '');
@@ -435,7 +449,7 @@ export default function AnalyticsTable({ cellarId }) {
     } finally {
       setExporting(false);
     }
-  }, [apiFetch, query, columns, byKey, t]);
+  }, [apiFetch, query, ratingScale, columns, byKey, t]);
 
   const scopeNames = data?.scope?.cellars?.map((c) => c.name) || [];
   const shownColumns = columns.filter((k) => byKey.has(k));
@@ -705,7 +719,7 @@ export default function AnalyticsTable({ cellarId }) {
                 value={f.field}
                 onChange={(e) => {
                   const nf = byKey.get(e.target.value);
-                  setDraftFilters((prev) => prev.map((x, j) => (j === i ? { field: nf.key, op: nf.ops[0], value: '' } : x)));
+                  setDraftFilters((prev) => prev.map((x, j) => (j === i ? newFilter(nf) : x)));
                 }}
               >
                 {catalogue.filter((c) => c.filterable).map((c) => (
@@ -724,6 +738,7 @@ export default function AnalyticsTable({ cellarId }) {
                 value={f.value}
                 onChange={(v) => setDraftFilters((prev) => prev.map((x, j) => (j === i ? { ...x, value: v } : x)))}
               />
+              {isRatingField(f.field) && <span className="at-unit">{ratingSuffix(f.scale || '5')}</span>}
               <button className="at-x" onClick={() => setDraftFilters((prev) => prev.filter((_, j) => j !== i))} aria-label={t('analytics.removeFilter', 'Remove filter')}>×</button>
             </div>
           );
@@ -784,11 +799,13 @@ export default function AnalyticsTable({ cellarId }) {
                   {data.buckets.map((b, i) => (
                     <tr key={i}>
                       {b.dimensions.map((d, j) => (
-                        <td key={j} data-label={byKey.get(data.dimensionKeys[j])?.label}>{formatValue(d, byKey.get(data.dimensionKeys[j]))}</td>
+                        <td key={j} data-label={byKey.get(data.dimensionKeys[j])?.label}>{formatValue(d, byKey.get(data.dimensionKeys[j]), data.ratingScale)}</td>
                       ))}
                       {b.measures.map((m, j) => (
                         <td key={`m${j}`} data-label={data.measureLabels[j]}>
-                          {m === null || m === undefined ? '—' : typeof m === 'number' ? Math.round(m * 100) / 100 : String(m)}
+                          {m === null || m === undefined ? '—'
+                            : typeof m === 'number' && ratingMeasureField(data.measureLabels[j]) ? formatRatingCell(m, data.ratingScale || '5')
+                            : typeof m === 'number' ? Math.round(m * 100) / 100 : String(m)}
                         </td>
                       ))}
                     </tr>
@@ -832,7 +849,7 @@ export default function AnalyticsTable({ cellarId }) {
                 {(data?.rows || []).map((r) => (
                   <tr key={r.id}>
                     {shownColumns.map((k) => (
-                      <td key={k} data-label={byKey.get(k)?.label}>{formatValue(r.values[k], byKey.get(k))}</td>
+                      <td key={k} data-label={byKey.get(k)?.label}>{formatValue(r.values[k], byKey.get(k), data.ratingScale)}</td>
                     ))}
                   </tr>
                 ))}

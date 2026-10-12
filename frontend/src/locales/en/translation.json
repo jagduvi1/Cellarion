@@ -5425,6 +5425,11 @@
       "avg": "Average",
       "min": "Lowest",
       "max": "Highest"
+    },
+    "fieldName": {
+      "purchasePrice": "purchase price",
+      "myRating": "my rating",
+      "consumedRating": "rating at consumption"
     }
   },
   "imageActions": {

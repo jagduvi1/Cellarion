@@ -43,6 +43,12 @@ const { resolveForVintage } = require('../registryDataOps');
 const { resolveField, opsForType } = require('./fieldCatalogue');
 const { validateValue } = require('../../utils/personalDataTypes');
 const { ANCHORS, COL, toNormalized, fromNormalized } = require('../../utils/ratingUtils');
+// A request can ask for its ratings in the viewer's own scale (Settings →
+// rating scale); stars stay the default and the sort order (the scales are
+// monotone, so it never changes). A rating filter carries the scale its
+// value was typed in, so a saved view means the same after a settings change.
+const RATING_SCALES = ['5', '20', '100'];
+const RATING_MAX = { 5: 5, 20: 20, 100: 100 };
 const { getOrCreateDailySnapshot, convertCurrency } = require('../../utils/exchangeRates');
 const { classifyMaturity, buildProfileMap, resolveEffectiveWindow } = require('../../utils/maturityUtils');
 
@@ -440,17 +446,24 @@ async function compileFilters(filters, userId, scopeCellars = null) {
     if (!field.filterable) throw new QueryError(400, `Field "${f.field}" is not filterable`);
 
     if (field.normalized) {
-      // Ratings filter in STARS against the converted expression (audit F3):
-      // the raw stored values mix three scales, so a raw comparison ranks a
-      // 60-point Parker above a 5-star bottle.
-      const castStars = (raw) => {
+      // Ratings filter against the converted expression (audit F3): the raw
+      // stored values mix three scales, so a raw comparison ranks a 60-point
+      // Parker above a 5-star bottle. In stars unless the filter names the
+      // scale its value is in (f.scale: '5' | '20' | '100').
+      const scale = f.scale === undefined || f.scale === null ? '5' : f.scale;
+      if (!RATING_SCALES.includes(scale)) throw new QueryError(400, `Filter on ${field.key}: scale must be 5, 20 or 100`);
+      const castRating = (raw) => {
         const n = castStatic({ ...field, type: 'decimal' }, raw);
-        if (n < 0 || n > 5) throw new QueryError(400, `Filter on ${field.key}: stars run 0–5`);
+        if (n < 0 || n > RATING_MAX[scale]) {
+          throw new QueryError(400, scale === '5'
+            ? `Filter on ${field.key}: stars run 0–5`
+            : `Filter on ${field.key}: the ${scale}-point scale runs 0–${RATING_MAX[scale]}`);
+        }
         return n;
       };
       exprFilters.push({
-        expr: ratingConversionExpr(field.path, field.scalePath, '5'),
-        pred: predicate({ ...field, type: 'decimal' }, f.op, f.value, castStars),
+        expr: ratingConversionExpr(field.path, field.scalePath, scale),
+        pred: predicate({ ...field, type: 'decimal' }, f.op, f.value, castRating),
       });
     } else if (field.source === 'personal' || field.source === 'registry') {
       pre.push(await kvCondition(field, f.op, f.value, userId));
@@ -497,8 +510,9 @@ function exprFilterStages(exprFilters) {
 /**
  * Piecewise-linear rating conversion as an aggregation expression, generated
  * from ratingUtils.ANCHORS — the same table toNormalized/fromNormalized read.
- * `toKey` picks the target column: 'norm' (0–100) or '5' (stars — the one
- * scale this surface speaks after audit F3). A direct from→to piecewise
+ * `toKey` picks the target column: 'norm' (0–100), '5' (stars — the default
+ * this surface speaks since audit F3), or '20' / '100' when a request asks
+ * for the viewer's own scale. A direct from→to piecewise
  * equals the toNormalized∘fromNormalized composition because both walk the
  * same anchor rows; the parity tests pin that.
  */
@@ -674,7 +688,7 @@ function baseMatch(scopeCellarIds, bottleScope, preConds) {
 
 // ── rows mode ──────────────────────────────────────────────────────────────
 
-async function runRows({ userId, scopeCellars, bottleScope, filters, sort, limit, offset, columns }) {
+async function runRows({ userId, scopeCellars, bottleScope, filters, sort, limit, offset, columns, ratingScale = '5' }) {
   const { pre, post, exprFilters, needsWine: filterNeedsWine } = await compileFilters(filters, userId, scopeCellars);
 
   // Sort: one field, validated; default = newest first. _id tiebreaker always.
@@ -732,7 +746,7 @@ async function runRows({ userId, scopeCellars, bottleScope, filters, sort, limit
   const pageIds = (facet?.ids || []).map((r) => r._id);
   const total = facet?.total?.[0]?.n || 0;
 
-  const rows = await hydrateRows({ userId, pageIds, columns, scopeCellars });
+  const rows = await hydrateRows({ userId, pageIds, columns, scopeCellars, ratingScale });
   return {
     mode: 'rows',
     total,
@@ -742,7 +756,7 @@ async function runRows({ userId, scopeCellars, bottleScope, filters, sort, limit
 }
 
 /** find() + populate for the page, then per-column value extraction. */
-async function hydrateRows({ userId, pageIds, columns, scopeCellars }) {
+async function hydrateRows({ userId, pageIds, columns, scopeCellars, ratingScale = '5' }) {
   if (!pageIds.length) return [];
   const fields = [];
   for (const key of columns) {
@@ -861,12 +875,15 @@ async function hydrateRows({ userId, pageIds, columns, scopeCellars }) {
       case 'bottle': {
         const v = f.path.split('.').reduce((o, k) => (o == null ? o : o[k]), b);
         if (f.normalized) {
-          // Ratings display in STARS (audit F3), the same scale the filter
-          // takes and the sort orders by — one decimal, honest across a
-          // cellar whose rows mix 5/20/100-scale entries.
+          // Ratings display in one scale for the whole table (audit F3) —
+          // stars unless the request asks for the viewer's own — honest
+          // across a cellar whose rows mix 5/20/100-scale entries. A rating
+          // already in that scale is shown exactly as entered.
           if (v == null) return null;
-          const stars = fromNormalized(toNormalized(v, b[f.scalePath]), '5');
-          return stars == null ? null : Math.round(stars * 10) / 10;
+          const stored = b[f.scalePath] || '5';
+          if (stored === ratingScale && Number.isFinite(Number(v))) return Number(v);
+          const out = fromNormalized(toNormalized(v, stored), ratingScale);
+          return out == null ? null : Math.round(out * 10) / 10;
         }
         return f.type === 'date' ? iso(v) : v ?? null;
       }
@@ -912,7 +929,7 @@ async function hydrateRows({ userId, pageIds, columns, scopeCellars }) {
 
 // ── grouped mode ───────────────────────────────────────────────────────────
 
-async function runGrouped({ userId, scopeCellars, bottleScope, filters, dimensions, measures }) {
+async function runGrouped({ userId, scopeCellars, bottleScope, filters, dimensions, measures, ratingScale = '5' }) {
   const { pre, post, exprFilters, needsWine: filterNeedsWine } = await compileFilters(filters, userId, scopeCellars);
 
   // ZERO dimensions is the KPI shape (dashboards, R-E): one bucket holding
@@ -983,9 +1000,9 @@ async function runGrouped({ userId, scopeCellars, bottleScope, filters, dimensio
       currencyMeta.fields.push({ i, path: f.path, currencyPath: 'currency' });
       valueExpr = null; // filled in below once the target currency is known
     } else if (f.normalized) {
-      // Stars, not the 0–100 normal form (audit F3) — the same scale the
-      // filter takes, the sort orders by and the column displays.
-      valueExpr = ratingConversionExpr(f.path, f.scalePath, '5');
+      // Stars (or the viewer's own scale when asked), not the 0–100 normal
+      // form (audit F3) — the same scale the column displays.
+      valueExpr = ratingConversionExpr(f.path, f.scalePath, ratingScale);
     }
     measureSpecs.push({ out: `m${i}`, label: `${m.agg}(${f.key})`, agg: m.agg, valueExpr, field: f });
   }
@@ -1093,7 +1110,8 @@ async function runGrouped({ userId, scopeCellars, bottleScope, filters, dimensio
 /**
  * @param {string} userId
  * @param {object} q  { scope: {cellars, bottles}, mode, filters, columns,
- *                      sort, limit, offset, dimensions, measures }
+ *                      sort, limit, offset, dimensions, measures,
+ *                      ratingScale ('5' default | '20' | '100') }
  */
 async function runQuery(userId, q = {}) {
   const scopeReq = q.scope || {};
@@ -1101,6 +1119,8 @@ async function runQuery(userId, q = {}) {
   if (!BOTTLE_SCOPES[bottleScope]) {
     throw new QueryError(400, 'scope.bottles must be active, consumed or all');
   }
+  const ratingScale = q.ratingScale === undefined || q.ratingScale === null ? '5' : q.ratingScale;
+  if (!RATING_SCALES.includes(ratingScale)) throw new QueryError(400, 'ratingScale must be 5, 20 or 100');
   const scopeCellars = await deriveScope(userId, scopeReq.cellars);
 
   const envelopeScope = {
@@ -1111,18 +1131,18 @@ async function runQuery(userId, q = {}) {
   if (q.mode === 'grouped') {
     const out = await runGrouped({
       userId, scopeCellars, bottleScope,
-      filters: q.filters, dimensions: q.dimensions, measures: q.measures,
+      filters: q.filters, dimensions: q.dimensions, measures: q.measures, ratingScale,
     });
-    return { ...out, scope: envelopeScope };
+    return { ...out, scope: envelopeScope, ratingScale };
   }
 
   const columns = Array.isArray(q.columns) && q.columns.length ? q.columns : ['wine.producer', 'wine.name', 'bottle.vintage'];
   if (columns.length > 30) throw new QueryError(400, 'At most 30 columns');
   const out = await runRows({
     userId, scopeCellars, bottleScope,
-    filters: q.filters, sort: q.sort, limit: q.limit, offset: q.offset, columns,
+    filters: q.filters, sort: q.sort, limit: q.limit, offset: q.offset, columns, ratingScale,
   });
-  return { ...out, scope: envelopeScope };
+  return { ...out, scope: envelopeScope, ratingScale };
 }
 
 module.exports = {

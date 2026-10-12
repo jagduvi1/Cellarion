@@ -78,6 +78,8 @@
 }
 .at-between { display: inline-flex; align-items: center; gap: 4px; }
 .at-between input { width: 110px; }
+/* The scale a rating filter's value is in (★, /20, pts). */
+.at-unit { color: var(--color-text-secondary); font-size: 0.85rem; }
 .at-enum-multi { display: inline-flex; gap: 10px; flex-wrap: wrap; font-size: 0.85rem; }
 .at-enum-multi label { display: inline-flex; align-items: center; gap: 4px; }
 .at-filter-actions { display: flex; gap: 6px; }

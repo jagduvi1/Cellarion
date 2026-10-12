@@ -577,6 +577,25 @@ describe('rows mode hydration', () => {
     }]));
     const out = await runQuery(USER, { columns: ['rating.current'] });
     expect(out.rows[0].values['rating.current']).toBeCloseTo(4.1, 5);
+    expect(out.ratingScale).toBe('5');
+  });
+
+  test('ratingScale: a rating hydrates in the viewer scale — exactly as entered when it is already in it', async () => {
+    const B2 = 'f'.repeat(24);
+    aggReturning([{ ids: [{ _id: B1 }, { _id: B2 }], total: [{ n: 2 }] }]);
+    Bottle.find.mockReturnValue(chainLean([
+      { _id: B1, cellar: CELLAR_A, wineDefinition: null, rating: 92, ratingScale: '100' },
+      { _id: B2, cellar: CELLAR_A, wineDefinition: null, rating: 5, ratingScale: '5' },
+    ]));
+    const out = await runQuery(USER, { columns: ['rating.current'], ratingScale: '100' });
+    expect(out.ratingScale).toBe('100');
+    const byId = Object.fromEntries(out.rows.map((r) => [String(r.id), r.values['rating.current']]));
+    expect(byId[String(B1)]).toBe(92); // no round trip through stars
+    expect(byId[String(B2)]).toBe(100); // 5 stars on the 100-point scale
+  });
+
+  test('ratingScale must be 5, 20 or 100', async () => {
+    await expect(runQuery(USER, { columns: ['rating.current'], ratingScale: '10' })).rejects.toThrow(/ratingScale must be/);
   });
 });
 
@@ -619,6 +638,16 @@ describe('AUDIT fixes 2026-08-19 — the rest of the confirmed nine', () => {
   test('F3: a rating filter value outside 0–5 stars is rejected', async () => {
     await expect(compileFilters([{ field: 'rating.current', op: 'gte', value: 92 }], USER))
       .rejects.toThrow(/stars run 0–5/);
+  });
+
+  test('a rating filter in its own scale compares against the expression for that scale', async () => {
+    const { exprFilters } = await compileFilters([{ field: 'rating.current', op: 'gte', value: 90, scale: '100' }], USER);
+    expect(exprFilters[0].pred).toEqual({ $gte: 90 });
+    expect(exprFilters[0].expr).toEqual(ratingConversionExpr('rating', 'ratingScale', '100'));
+    await expect(compileFilters([{ field: 'rating.current', op: 'gte', value: 101, scale: '100' }], USER))
+      .rejects.toThrow(/100-point scale runs 0–100/);
+    await expect(compileFilters([{ field: 'rating.current', op: 'gte', value: 9, scale: '10' }], USER))
+      .rejects.toThrow(/scale must be 5, 20 or 100/);
   });
 
   test('F3: sorting by rating orders by the star expression with the tiebreaker', async () => {
