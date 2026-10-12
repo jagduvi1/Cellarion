@@ -129,6 +129,13 @@ describe('AUDIT F3: the star-conversion expression matches the JS composition', 
     expect(evalExpr(starExpr, { rating: v, ratingScale: scale }))
       .toBeCloseTo(fromNorm(toNorm(v, scale), '5'), 6);
   });
+  test('a rating already in the target scale passes through unclamped, as the rows show it', () => {
+    const davis = ratingConversionExpr('rating', 'ratingScale', '20');
+    expect(evalExpr(davis, { rating: 5, ratingScale: '20' })).toBe(5); // below the 8/20 anchor
+    expect(evalExpr(ratingConversionExpr('rating', 'ratingScale', '100'), { rating: 55, ratingScale: '100' })).toBe(55);
+    expect(evalExpr(davis, { rating: null, ratingScale: '20' })).toBeNull();
+  });
+
   test('a 60-point Parker bottle no longer outranks a 5-star one', () => {
     const parker60 = evalExpr(starExpr, { rating: 60, ratingScale: '100' });
     const fiveStar = evalExpr(starExpr, { rating: 5, ratingScale: '5' });
@@ -643,7 +650,8 @@ describe('AUDIT fixes 2026-08-19 — the rest of the confirmed nine', () => {
   test('a rating filter in its own scale compares against the expression for that scale', async () => {
     const { exprFilters } = await compileFilters([{ field: 'rating.current', op: 'gte', value: 90, scale: '100' }], USER);
     expect(exprFilters[0].pred).toEqual({ $gte: 90 });
-    expect(exprFilters[0].expr).toEqual(ratingConversionExpr('rating', 'ratingScale', '100'));
+    // Rounded to the scale's step, as the rows show it (release audit 2026-10-12).
+    expect(exprFilters[0].expr).toEqual({ $round: [ratingConversionExpr('rating', 'ratingScale', '100'), 0] });
     await expect(compileFilters([{ field: 'rating.current', op: 'gte', value: 101, scale: '100' }], USER))
       .rejects.toThrow(/100-point scale runs 0–100/);
     await expect(compileFilters([{ field: 'rating.current', op: 'gte', value: 9, scale: '10' }], USER))

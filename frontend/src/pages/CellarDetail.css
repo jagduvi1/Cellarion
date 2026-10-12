@@ -213,8 +213,12 @@
   position: relative;
 }
 
-/* "Show on cards": the same dropdown, holding checkboxes. */
-.card-fields-menu { min-width: 190px; }
+/* "Show on cards": the same dropdown, holding checkboxes. It hangs from the
+   toolbar's right edge, not its button's: in list view the button sits ~200px
+   in, and a menu opening leftward from there ran off a 360px phone (release
+   audit 2026-10-12). */
+.card-fields-wrap { position: static; }
+.more-menu-dropdown.card-fields-menu { min-width: 190px; }
 .card-fields-title {
   font-size: 0.75rem;
   color: var(--color-text-muted);
@@ -574,6 +578,7 @@
 
 /* ── View toggle ── */
 .bottles-view-toggle {
+  position: relative;
   display: flex;
   gap: 0.35rem;
   justify-content: flex-end;

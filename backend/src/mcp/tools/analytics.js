@@ -22,7 +22,7 @@ registerTool({
   title: 'Analytics: the queryable field catalogue',
   description:
     'Step 1 of cellar analytics. Returns every field analyze_cellar can filter, sort, group or aggregate — wine ' +
-    'identity, inventory, purchase, star-scale ratings, consumption, maturity, plus the USER\'S OWN typed personal ' +
+    'identity, inventory, purchase, ratings (stars, or the scale analyze_cellar is asked for), consumption, maturity, plus the USER\'S OWN typed personal ' +
     'keys and the public registry vocabulary (their keys embed an id: "personal.<id>", "registry.<id>"). Each entry ' +
     'carries type, unit, the allowed filter ops, allowed aggregations, and whether it can sort/group. Call this ' +
     'once before composing analyze_cellar queries; field keys are exact. Maturity has two layers: ' +
@@ -57,7 +57,7 @@ registerTool({
     'Step 2 of cellar analytics: one typed query over the user\'s bottles. mode "grouped" (default) buckets by 1-2 ' +
     'dimensions with measures like {field:"*",agg:"count"} or {field:"purchase.price",agg:"sum"} — use it for ' +
     '"how much / how many / average per X" questions; monetary measures convert currencies per-row and report the ' +
-    'target + unconvertible count, ratings aggregate in stars. mode "rows" returns flat bottles with chosen ' +
+    'target + unconvertible count, ratings aggregate in stars (or rating_scale). mode "rows" returns flat bottles with chosen ' +
     'columns, filters and sort — use it for "which bottles" questions. Filters are {field, op, value} with field ' +
     'keys and ops exactly as list_analytics_fields declares them; date values are YYYY-MM-DD and match whole days; ' +
     'rating values are stars 0-5 unless rating_scale says "20" or "100" (then ratings come back, and rating ' +

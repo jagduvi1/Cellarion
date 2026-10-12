@@ -26,6 +26,9 @@ export default function BetaFeedbackModal({ feature, onClose }) {
 
   const submit = async (e) => {
     e.preventDefault();
+    // Never let the submit bubble on to a form the strip sits near (release
+    // audit 2026-10-12: a rack form saved itself when feedback was sent).
+    e.stopPropagation();
     if (!message.trim() || sending) return;
     setSending(true);
     setError(null);

@@ -1028,9 +1028,9 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
   const notesOn = viewMode === 'list' && showNotes;
   // One line of the picked details for a card's bottles (one, or a stack).
   // A string, so the memoized BottleCard compares it by value. The grid card
-  // already shows the region.
+  // already shows the region (a wine with only a country still gets it here).
   const ratingScale = user?.preferences?.ratingScale || '5';
-  const detailsOf = (list) => cardDetails(list, cardFields, { ratingScale, locale: i18n.language, showRegion: viewMode === 'list' })
+  const detailsOf = (list) => cardDetails(list, cardFields, { ratingScale, locale: i18n.language, cardShowsRegion: viewMode !== 'list' })
     .map(d => (d.field === 'purchased' ? t('cellarDetail.cardPurchased', { date: d.text, defaultValue: 'Bought {{date}}' }) : d.text))
     .join(' · ');
 

@@ -20,7 +20,7 @@ describe('cardDetails', () => {
   test('every field for one bottle, in a fixed order whatever the pick order', () => {
     const out = cardDetails([b()], ['purchased', 'region', 'size', 'price', 'rating'], opts);
     expect(out.map((d) => d.field)).toEqual(CARD_FIELDS);
-    expect(texts(out)).toEqual(['4.5★', '€45', '750ml', 'Piedmont', 'Mar 2024']);
+    expect(texts(out)).toEqual(['4.5★', '€45', '750 ml', 'Piedmont', 'Mar 2024']);
   });
 
   test('a rating shows in the viewer\'s own scale', () => {
@@ -37,12 +37,28 @@ describe('cardDetails', () => {
 
   test('left out where the bottles have no value, or prices in different currencies', () => {
     expect(cardDetails([b({ rating: null, price: null, purchaseDate: null })], ['rating', 'price', 'purchased'], opts)).toEqual([]);
+    // A stored 0 means unrated, as on the server — never "0.0★" or a range from 0.
+    expect(cardDetails([b({ rating: 0 })], ['rating'], opts)).toEqual([]);
+    expect(texts(cardDetails([b({ rating: 0 }), b({ rating: 4.5 })], ['rating'], opts))).toEqual(['4.5★']);
     expect(cardDetails([b({ currency: 'EUR' }), b({ currency: 'SEK' })], ['price'], opts)).toEqual([]);
   });
 
   test('the region falls back to the country, and is left out where the card shows it already', () => {
     expect(texts(cardDetails([b({ wineDefinition: { country: { name: 'Italy' } } })], ['region'], opts))).toEqual(['Italy']);
-    expect(cardDetails([b()], ['region'], { ...opts, showRegion: false })).toEqual([]);
+    expect(cardDetails([b()], ['region'], { ...opts, cardShowsRegion: true })).toEqual([]);
+    // The grid card shows region names only: a country-only wine still gets its country.
+    expect(texts(cardDetails([b({ wineDefinition: { country: { name: 'Italy' } } })], ['region'], { ...opts, cardShowsRegion: true }))).toEqual(['Italy']);
+  });
+
+  test('a range whose ends read the same shows once', () => {
+    expect(texts(cardDetails([b({ price: 149.5, currency: 'SEK' }), b({ price: 149.9, currency: 'SEK' })], ['price'], opts))).toHaveLength(1);
+    expect(texts(cardDetails([b({ price: 149.5, currency: 'SEK' }), b({ price: 149.9, currency: 'SEK' })], ['price'], opts))[0]).not.toMatch(/–/);
+    expect(texts(cardDetails([b({ rating: 91.6, ratingScale: '100' }), b({ rating: 92, ratingScale: '100' })], ['rating'], { ...opts, ratingScale: '100' }))).toEqual(['92pts']);
+  });
+
+  test('a purchase date stored as UTC midnight reads as that month everywhere', () => {
+    expect(texts(cardDetails([b({ purchaseDate: '2024-03-01T00:00:00.000Z' })], ['purchased'], opts))).toEqual(['Mar 2024']);
+    expect(texts(cardDetails([b({ purchaseDate: '2024-01-01T00:00:00.000Z' }), b({ purchaseDate: '2024-12-31T00:00:00.000Z' })], ['purchased'], opts))).toEqual(['2024']);
   });
 });
 

@@ -43,7 +43,10 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
   const [twoDeep, setTwoDeep] = useState(rack.typeConfig?.twoDeep !== false);
   const [stagger, setStagger] = useState(alternate || rack.typeConfig?.stagger !== false);
   const [headToTail, setHeadToTail] = useState(rack.typeConfig?.headToTail === true);
-  const showHeadToTail = useFeature('cabinetHeadToTail') || rack.typeConfig?.headToTail === true;
+  // Not where Two deep is locked on (rows that alternate): it could never be
+  // ticked there (release audit 2026-10-12).
+  const showHeadToTail = (useFeature('cabinetHeadToTail') || rack.typeConfig?.headToTail === true)
+    && !(anyAlternate && twoDeep);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -120,7 +123,6 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
                     ? t('racks.cabinetHeadToTailNeedsSingle', 'Head to tail is for bottles that lie one deep: untick Two deep first.')
                     : t('racks.cabinetHeadToTailHelp', 'For bottles that lie one deep, base forward and neck forward in turn, so a row fits more. Every other bottle is drawn neck forward. Drawing only — the number of bottles and the slot numbers stay the same.')}
                 </small>
-                <BetaBadge feature="cabinetHeadToTail" />
               </>
             )}
             <small className="help-text">
@@ -138,6 +140,11 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
           <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? t('common.saving') : t('racks.saveRack')}</button>
         </div>
       </form>
+      {/* Outside the form: the feedback dialog has a form of its own, and a
+          submit inside this one saved the rack (release audit 2026-10-12). */}
+      {isCabinet && showHeadToTail && (
+        <BetaBadge feature="cabinetHeadToTail" note={t('racks.cabinetHeadToTailBeta', 'Bottles head to tail is in early access.')} />
+      )}
     </Modal>
   );
 }

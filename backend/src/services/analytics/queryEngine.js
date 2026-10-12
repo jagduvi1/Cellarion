@@ -461,8 +461,10 @@ async function compileFilters(filters, userId, scopeCellars = null) {
         }
         return n;
       };
+      // Rounded to the scale's step, as the rows display it, so a bottle
+      // shown as 83pts is found by "≥ 83" (release audit 2026-10-12).
       exprFilters.push({
-        expr: ratingConversionExpr(field.path, field.scalePath, scale),
+        expr: { $round: [ratingConversionExpr(field.path, field.scalePath, scale), scale === '100' ? 0 : 1] },
         pred: predicate({ ...field, type: 'decimal' }, f.op, f.value, castRating),
       });
     } else if (field.source === 'personal' || field.source === 'registry') {
@@ -518,6 +520,10 @@ function exprFilterStages(exprFilters) {
  */
 function ratingConversionExpr(valuePath, scalePath, toKey = '5') {
   const perScale = (scaleKey) => {
+    // Already in the target scale: the value as entered, never clamped to the
+    // anchor range (a 5/20 stays 5, as the rows show it — release audit
+    // 2026-10-12).
+    if (scaleKey === toKey) return `$${valuePath}`;
     const fromCol = COL[scaleKey];
     const toCol = COL[toKey];
     const v = `$${valuePath}`;

@@ -1428,7 +1428,6 @@ function CabinetShapeFields({ newRack, setNewRack }) {
               ? t('racks.cabinetHeadToTailNeedsSingle', 'Head to tail is for bottles that lie one deep: untick Two deep first.')
               : t('racks.cabinetHeadToTailHelp', 'For bottles that lie one deep, base forward and neck forward in turn, so a row fits more. Every other bottle is drawn neck forward. Drawing only — the number of bottles and the slot numbers stay the same.')}
           </small>
-          <BetaBadge feature="cabinetHeadToTail" />
         </div>
       )}
     </>
@@ -1438,6 +1437,7 @@ function CabinetShapeFields({ newRack, setNewRack }) {
 // ---- New rack creation form with type selector ----
 function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving, groups = [] }) {
   const { t } = useTranslation();
+  const headToTailOn = useFeature('cabinetHeadToTail');
   const dims = TYPE_DIMENSIONS[newRack.type] || TYPE_DIMENSIONS.grid;
   const [showPreview, setShowPreview] = useState(false);
   // Which preview to draw. A cabinet or an open shelf is about its SHAPE, so
@@ -1485,6 +1485,7 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving, grou
   };
 
   return (
+    <>
     <form className="card new-rack-form" onSubmit={onSubmit}>
       <h3>{t('racks.newRackTitle')}</h3>
 
@@ -1746,6 +1747,12 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving, grou
         </div>
       )}
     </form>
+    {/* Outside the form: the feedback dialog has a form of its own, and a
+        submit inside this one created the rack (release audit 2026-10-12). */}
+    {newRack.type === 'cabinet' && headToTailOn && (
+      <BetaBadge feature="cabinetHeadToTail" note={t('racks.cabinetHeadToTailBeta', 'Bottles head to tail is in early access.')} />
+    )}
+    </>
   );
 }
 

@@ -1454,6 +1454,7 @@
     "cabinetHeadToTailLabel": "Bottles lie head to tail",
     "cabinetHeadToTailHelp": "For bottles that lie one deep, base forward and neck forward in turn, so a row fits more. Every other bottle is drawn neck forward. Drawing only — the number of bottles and the slot numbers stay the same.",
     "cabinetHeadToTailNeedsSingle": "Head to tail is for bottles that lie one deep: untick Two deep first.",
+    "cabinetHeadToTailBeta": "Bottles head to tail is in early access.",
     "cabinetAlternateLabel": "Rows alternate in width on every shelf (6 / 5 / 6 …)",
     "cabinetAlternateHelp": "The first level holds a full row in front of one bottle fewer behind it; the level above nests in its grooves, one fewer in front of a full row, and so on — the honeycomb of a Liebherr GrandCru shelf. Sets every shelf at once; untick single shelves above. This changes how many bottles the cabinet holds, so it is set when the cabinet is created.",
     "cabinetAlternateNests": "Rows that alternate in width always nest: each narrow row lies in the grooves of the wide row below it.",

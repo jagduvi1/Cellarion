@@ -413,7 +413,8 @@ export default function AnalyticsTable({ cellarId }) {
         if (!res.ok) throw new Error(body.error || 'export failed');
         const header = [
           ...body.dimensionKeys.map((k) => csvEscape(byKey.get(k)?.label || k)),
-          ...body.measureLabels.map(csvEscape),
+          // A rating measure's numbers are in the viewer's scale: the header says which.
+          ...body.measureLabels.map((l) => csvEscape(ratingMeasureField(l) ? `${l} (${ratingSuffix(body.ratingScale || ratingScale)})` : l)),
         ].join(',');
         const lines = body.buckets.map((b) => [
           ...b.dimensions.map((d) => csvEscape(d ?? '')),
