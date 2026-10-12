@@ -29,6 +29,7 @@ jest.mock('../models/Cellar', () => ({ deleteOne: jest.fn() }));
 jest.mock('../models/WineRequest', () => ({ deleteMany: jest.fn() }));
 jest.mock('./wineListLogos', () => ({ deleteLogoFilesFor: jest.fn() }));
 jest.mock('./imageProcessor', () => ({ unlinkImageFiles: jest.fn() }));
+jest.mock('./bottleTrash', () => ({ purgeTrashRows: jest.fn() }));
 
 const Bottle = require('../models/Bottle');
 const BottleImage = require('../models/BottleImage');
@@ -45,6 +46,7 @@ const WineRequest = require('../models/WineRequest');
 const { deleteLogoFilesFor } = require('./wineListLogos');
 const { unlinkImageFiles } = require('./imageProcessor');
 const { purgeCellarPermanently } = require('./cellarPurge');
+const { purgeTrashRows } = require('./bottleTrash');
 const { REGISTRY_PHOTO, OWN_PHOTO } = require('./photoRetention');
 
 const CELLAR_ID = '64c000000000000000000001';
@@ -75,6 +77,7 @@ function setupMocks({ bottleIds = BOTTLE_IDS, ownImages = OWN_IMAGES } = {}) {
   deleteLogoFilesFor.mockResolvedValue();
   unlinkImageFiles.mockResolvedValue();
   Cellar.deleteOne.mockResolvedValue({ deletedCount: 1 });
+  purgeTrashRows.mockResolvedValue(0);
 }
 
 beforeEach(() => {
@@ -83,6 +86,11 @@ beforeEach(() => {
 });
 
 describe('purgeCellarPermanently', () => {
+  test("the cellar's Recently deleted goes with it, own photos included", async () => {
+    await purgeCellarPermanently(CELLAR_ID);
+    expect(purgeTrashRows).toHaveBeenCalledWith({ cellar: CELLAR_ID });
+  });
+
   test('deletes every cellar-scoped collection with the cellar filter', async () => {
     await purgeCellarPermanently(CELLAR_ID);
 

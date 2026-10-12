@@ -28,6 +28,7 @@ const WineDefinition = require('../models/WineDefinition');
 const WineVintageProfile = require('../models/WineVintageProfile');
 const Bottle = require('../models/Bottle');
 const BottleImage = require('../models/BottleImage');
+const DeletedBottle = require('../models/DeletedBottle');
 const { logAudit } = require('./audit');
 
 async function gcOrphanMintedWine(wineId, req) {
@@ -38,6 +39,9 @@ async function gcOrphanMintedWine(wineId, req) {
 
     const bottleCount = await Bottle.countDocuments({ wineDefinition: wineId });
     if (bottleCount > 0) return { removed: false, reason: `${bottleCount} bottle(s) still reference it` };
+    // A bottle in someone's "Recently deleted" may still come back to it.
+    const trashedCount = await DeletedBottle.countDocuments({ wineDefinition: wineId });
+    if (trashedCount > 0) return { removed: false, reason: `${trashedCount} recently deleted bottle(s) may be restored to it` };
 
     const officialImage = await BottleImage.countDocuments({ wineDefinition: wineId, assignedToWine: true });
     if (officialImage > 0) return { removed: false, reason: 'has an approved wine image' };

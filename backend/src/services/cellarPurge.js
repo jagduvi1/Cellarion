@@ -76,6 +76,12 @@ async function purgeCellarPermanently(cellarId) {
     imagesDeleted = delResult.deletedCount;
   }
 
+  // The cellar's "Recently deleted" goes with it, own photos included — a
+  // trashed bottle cannot be restored into a cellar that no longer exists.
+  // Lazy: services/bottleTrash pulls in the whole bottleOps chain.
+  const { purgeTrashRows } = require('./bottleTrash');
+  await purgeTrashRows({ cellar: cellarId });
+
   await deleteLogoFilesFor(WineList, { cellar: cellarId });
 
   const [rackResult, bottleResult] = await Promise.all([

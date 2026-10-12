@@ -1223,6 +1223,7 @@ function ImportBottles() {
           })}
           {w.code === 'no-identity-skipped' && t('importBottles.warnings.noIdentitySkipped', { count: w.count })}
           {w.code === 'vintage-missing' && t('importBottles.warnings.vintageMissing', { count: w.count })}
+          {w.code === 'price-not-read' && t('importBottles.warnings.priceNotRead', { column: w.column })}
           {w.code === 'extra-files-ignored' && t('importBottles.warnings.extraFilesIgnored', { count: w.count })}
           {w.code === 'ploc-placed' && t('importBottles.warnings.plocPlaced', { count: w.count, racks: w.racks })}
           {w.code === 'ploc-history' && t('importBottles.warnings.plocHistory', { count: w.count })}

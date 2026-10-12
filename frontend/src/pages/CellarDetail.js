@@ -19,6 +19,7 @@ import { CELLAR_SORTS, DEFAULT_CELLAR_SORT, preferredCellarSort } from '../utils
 import { formatArrivalMonth, isArrivalLate } from '../utils/onOrder';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
 import { useFeature } from '../utils/featureFlags';
+import { summarizeSelection } from '../utils/bulkSelection';
 import './CellarDetail.css';
 
 // Stable empty rack map for the cross-cellar view (rack placement is per-cellar,
@@ -36,11 +37,14 @@ const BulkConsumeModal = lazy(() => import('../components/BulkConsumeModal'));
 const BulkReserveModal = lazy(() => import('../components/BulkReserveModal'));
 const BulkDrinkWindowModal = lazy(() => import('../components/BulkDrinkWindowModal'));
 const BulkAddToListModal = lazy(() => import('../components/BulkAddToListModal'));
+const BulkDeleteModal = lazy(() => import('../components/BulkDeleteModal'));
+const RecentlyDeletedModal = lazy(() => import('../components/RecentlyDeletedModal'));
 const DrinkOneModal = lazy(() => import('../components/DrinkOneModal'));
 
 // The select-mode bar's actions, in display order. Each opens one modal; all
 // of them reuse the single-bottle operations server-side and report skipped
-// bottles instead of failing the batch.
+// bottles instead of failing the batch. Delete sits last, set apart: it moves
+// the bottles to "Recently deleted" for 30 days behind its own confirm step.
 const BULK_ACTIONS = [
   { key: 'move',     icon: '📦', label: 'bulk.moveAction' },
   { key: 'purchase', icon: '🧾', label: 'bulk.purchaseAction' },
@@ -48,6 +52,7 @@ const BULK_ACTIONS = [
   { key: 'reserve',  icon: '🔖', label: 'bulk.reserveAction' },
   { key: 'window',   icon: '⏳', label: 'bulk.windowAction' },
   { key: 'list',     icon: '📋', label: 'bulk.listAction' },
+  { key: 'delete',   icon: '🗑️', label: 'bulk.deleteAction', danger: true },
 ];
 
 const BOTTLES_PER_PAGE = 30;
@@ -112,6 +117,7 @@ function CellarDetail() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showTrash, setShowTrash] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   // True while the bottle list is in select mode — hides the add-bottle FAB,
   // which otherwise sits on top of the cards being selected.
@@ -533,6 +539,14 @@ function CellarDetail() {
                         <span aria-hidden="true">🧾</span> {t('cellarDetail.auditLog')}
                       </Link>
                     )}
+                    {canEdit && (
+                      <button
+                        className="more-menu-item"
+                        onClick={() => { setShowTrash(true); setMoreOpen(false); }}
+                      >
+                        <span aria-hidden="true">♻️</span> {t('trash.menuItem')}
+                      </button>
+                    )}
                     {cellar.userRole === 'owner' && (
                       <>
                         <div className="more-menu-divider" />
@@ -886,6 +900,16 @@ function CellarDetail() {
             onClose={() => setShowDeleteModal(false)}
           />
         )}
+
+        {showTrash && (
+          <RecentlyDeletedModal
+            cellarId={id}
+            onClose={(restoredAny) => {
+              setShowTrash(false);
+              if (restoredAny) { fetchCellarData(0); fetchStatistics(); fetchRacks(); }
+            }}
+          />
+        )}
       </Suspense>
     </div>
   );
@@ -1088,7 +1112,7 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
               <button
                 key={a.key}
                 type="button"
-                className="bulk-action-btn"
+                className={`bulk-action-btn${a.danger ? ' bulk-action-btn--danger' : ''}`}
                 onClick={() => setBulkAction(a.key)}
                 disabled={selectedIds.size === 0}
               >
@@ -1216,6 +1240,16 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
         )}
         {bulkAction === 'list' && (
           <BulkAddToListModal bottleIds={[...selectedIds]} cellarId={cellarId} onClose={closeAction} onDone={finishAction} />
+        )}
+        {bulkAction === 'delete' && (
+          <BulkDeleteModal
+            bottleIds={[...selectedIds]}
+            cellarId={cellarId}
+            summary={summarizeSelection(bottles, selectedIds, t('common.unknownWine'))}
+            rackedCount={[...selectedIds].filter(x => rackMap.has(String(x))).length}
+            onClose={closeAction}
+            onDone={finishAction}
+          />
         )}
         {drinkGroup && (
           <DrinkOneModal

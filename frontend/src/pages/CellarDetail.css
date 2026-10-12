@@ -1130,6 +1130,53 @@
 .bulk-mode-row { display: flex; flex-direction: row; gap: 1rem; }
 .move-bottle-skipped { color: var(--color-text-secondary); }
 
+/* Bulk delete: the one select-mode action that reads as dangerous. */
+.bulk-action-btn--danger:hover:not(:disabled) {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  border-color: var(--color-danger-border);
+}
+
+/* Bulk delete confirm: what goes, wine by wine. */
+.trash-summary {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.88rem;
+}
+.trash-summary li { display: flex; justify-content: space-between; gap: 0.75rem; }
+.trash-summary-name { min-width: 0; overflow-wrap: anywhere; }
+.trash-summary-count { flex: none; color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
+.trash-summary-more { color: var(--color-text-muted); }
+.trash-where { color: var(--color-text-secondary); font-size: 0.85rem; }
+
+/* Recently deleted: one block per bulk delete. */
+.trash-intro { color: var(--color-text-secondary); margin-top: 0; }
+.trash-empty { color: var(--color-text-muted); text-align: center; padding: 1.5rem 0; }
+.trash-message p { margin: 0 0 0.35rem; }
+.trash-batch { border-top: 1px solid var(--color-border); padding: 0.75rem 0; }
+.trash-batch-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+.trash-batch-head > div { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.trash-batch-left { color: var(--color-text-muted); font-size: 0.8rem; }
+.trash-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.trash-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.9rem; }
+.trash-row-label { min-width: 0; overflow-wrap: anywhere; }
+.trash-row .btn { flex: none; }
+.trash-show-all { margin-top: 0.5rem; }
+
 /* Bulk drink window: the four year fields in two columns (one on a phone). */
 .bulk-year-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 0.75rem; }
 @media (max-width: 480px) { .bulk-year-grid { grid-template-columns: 1fr; } }

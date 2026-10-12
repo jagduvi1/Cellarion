@@ -11,6 +11,7 @@
  */
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), updateOne: jest.fn() }));
 jest.mock('../models/Bottle', () => ({ exists: jest.fn(), distinct: jest.fn(async () => []) }));
+jest.mock('../models/DeletedBottle', () => ({ exists: jest.fn(), distinct: jest.fn() }));
 jest.mock('./notifications', () => ({ createNotification: jest.fn(async () => {}) }));
 jest.mock('./wineDraftOps', () => ({
   DRAFT_TTL_DAYS: 7,
@@ -22,6 +23,7 @@ jest.mock('./wineDraftOps', () => ({
 
 const WineDefinition = require('../models/WineDefinition');
 const Bottle = require('../models/Bottle');
+const DeletedBottle = require('../models/DeletedBottle');
 const { createNotification } = require('./notifications');
 const ops = require('./wineDraftOps');
 const { runWineDraftExpirySweep } = require('./wineDraftExpiryJob');
@@ -52,7 +54,12 @@ function setup({ warn = [], held = [], lapsed = [] } = {}) {
 let warnSpy;
 beforeAll(() => { warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {}); });
 afterAll(() => warnSpy.mockRestore());
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  // No bottle sits in a "Recently deleted" unless a test says so.
+  DeletedBottle.exists.mockResolvedValue(null);
+  DeletedBottle.distinct.mockResolvedValue([]);
+});
 
 describe('warn pass', () => {
   test('queries empty-clock drafts lapsing within 24 h that were not warned, and marks them warned', async () => {
@@ -84,6 +91,31 @@ describe('warn pass', () => {
     expect(createNotification).toHaveBeenCalledTimes(1);
     expect(WineDefinition.updateOne).toHaveBeenCalledWith(expect.objectContaining({ _id: 'w2' }), expect.anything());
     expect(r.warned).toBe(1);
+  });
+});
+
+describe('bottles in Recently deleted', () => {
+  test('a draft whose only bottles are in Recently deleted is not warned', async () => {
+    // w1 is held — but by the trash, not by a live bottle.
+    setup({ warn: [{ _id: 'w1', name: 'X', createdBy: ME }, { _id: 'w2', name: 'Y', createdBy: ME }], held: ['w1'] });
+    Bottle.distinct.mockResolvedValue([]);
+    DeletedBottle.distinct.mockResolvedValue(['w1']);
+    Bottle.exists.mockResolvedValue(null);
+    const r = await runWineDraftExpirySweep(NOW);
+    expect(DeletedBottle.distinct).toHaveBeenCalledWith('wineDefinition', { wineDefinition: { $in: ['w1', 'w2'] } });
+    expect(WineDefinition.find.mock.calls[1][0]).toEqual({ _id: { $in: ['w2'] }, draft: true, draftExpiryWarnedAt: null });
+    expect(r.warned).toBe(1);
+  });
+
+  test('a lapsed draft whose only bottles are in Recently deleted is neither deleted nor published', async () => {
+    setup({ lapsed: [{ _id: 'w3', name: 'Z', createdBy: ME, draft: true }] });
+    Bottle.exists.mockResolvedValue(null);
+    DeletedBottle.exists.mockResolvedValue({ _id: 't1' });
+    const r = await runWineDraftExpirySweep(NOW);
+    expect(DeletedBottle.exists).toHaveBeenCalledWith({ wineDefinition: 'w3' });
+    expect(ops.deleteDraft).not.toHaveBeenCalled();
+    expect(ops.publishDraft).not.toHaveBeenCalled();
+    expect(r).toMatchObject({ deleted: 0, published: 0, errors: 0 });
   });
 });
 

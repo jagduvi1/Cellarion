@@ -126,6 +126,29 @@ export const bulkMoveBottles = (apiFetch, bottleIds, toCellarId) =>
     body: JSON.stringify({ bottleIds, toCellarId }),
   });
 
+// Move MANY bottles to the cellar's "Recently deleted" (POST
+// /api/bottles/bulk-delete). Kept 30 days, restorable; the response carries
+// the batchId an Undo restores.
+export const bulkDeleteBottles = (apiFetch, bottleIds) =>
+  apiFetch('/api/bottles/bulk-delete', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ bottleIds }),
+  });
+
+// A cellar's "Recently deleted", newest first.
+export const getRecentlyDeleted = (apiFetch, cellarId) =>
+  apiFetch(`/api/bottles/trash?cellar=${encodeURIComponent(cellarId)}`);
+
+// Bring bottles back from "Recently deleted": trash row `ids`, a whole
+// `batchId`, or both.
+export const restoreRecentlyDeleted = (apiFetch, cellarId, { ids, batchId } = {}) =>
+  apiFetch('/api/bottles/trash/restore', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ cellar: cellarId, ...(ids && ids.length ? { ids } : {}), ...(batchId ? { batchId } : {}) }),
+  });
+
 // ONE edit applied to MANY bottles (POST /api/bottles/bulk, action 'update').
 // `fields` is limited server-side to purchase details, reservation, the drink window and notes.
 export const bulkUpdateBottles = (apiFetch, bottleIds, fields) =>

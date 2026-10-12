@@ -4,6 +4,7 @@ const { runCellarValueSnapshots } = require('./cellarValueSnapshotJob');
 const { runCommunityPriceAggregation } = require('./communityPriceJob');
 const { runUserDeletionJob } = require('./userDeletionJob');
 const { runCellarRetentionPurge } = require('./cellarRetentionJob');
+const { runTrashRetentionPurge } = require('./bottleTrash');
 const { runRecommendationEmailScrub } = require('./recommendationRetentionJob');
 const { runMcpSnapshotScrub } = require('./mcpSnapshotRetentionJob');
 const { runScanImageRetentionSweep } = require('./scanImageRetentionJob');
@@ -74,6 +75,13 @@ function startScheduler() {
       await runCellarRetentionPurge();
     } catch (err) {
       console.error('[scheduler] Cellar retention purge failed:', err);
+    }
+    // Bottles in "Recently deleted" past their 30 days go for good, with
+    // their own photos (services/bottleTrash).
+    try {
+      await runTrashRetentionPurge();
+    } catch (err) {
+      console.error('[scheduler] Recently-deleted purge failed:', err);
     }
     // Audit 2026-09 S3-3: the original text of a soft-deleted forum reply is
     // kept 30 days for moderation and was then kept forever — the purge

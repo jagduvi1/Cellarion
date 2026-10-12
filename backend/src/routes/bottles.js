@@ -53,6 +53,11 @@ const { resolveOrMintWine } = require('../services/wineCommit');
 const { parseExpectedArrival } = require('../utils/onOrder');
 const { moveBottleToCellar } = require('../services/rackOps');
 const { getDataVersion } = require('../services/dataVersion');
+const DeletedBottle = require('../models/DeletedBottle');
+const { TRASH_DAYS, trashBottle, restoreTrashed } = require('../services/bottleTrash');
+
+// "Recently deleted" lists at most this many bottles per cellar.
+const TRASH_LIST_MAX = 2000;
 
 const router = express.Router();
 
@@ -634,6 +639,97 @@ router.post('/', requireNonDemo, async (req, res) => {
   } catch (error) {
     console.error('Create bottle error:', error);
     res.status(500).json({ error: 'Failed to create bottle' });
+  }
+});
+
+// ── Recently deleted (services/bottleTrash) ──────────────────────────────
+// Defined BEFORE the /:id routes: Express would otherwise read "trash" as a
+// bottle id (GET /:id, POST /:id/restore). Both act on ONE cellar the caller
+// can edit — the same role a bulk delete needs — and a cellar they can't
+// reads as not found, as everywhere else.
+async function editableCellar(req, cellarId) {
+  if (!cellarId || !mongoose.isValidObjectId(String(cellarId))) {
+    return { error: { status: 400, message: 'A valid cellar id is required' } };
+  }
+  const cellar = await Cellar.findById(String(cellarId));
+  const role = cellar && !cellar.deletedAt ? getCellarRole(cellar, req.user.id) : null;
+  if (!role || (ROLE_LEVELS[role] || 0) < ROLE_LEVELS.editor) {
+    return { error: { status: 404, message: 'Cellar not found' } };
+  }
+  return { cellar };
+}
+
+// GET /api/bottles/trash?cellar=<id> - the cellar's "Recently deleted",
+// newest first. The stored snapshots never leave the server.
+// Response: { items: [{ id, batchId, deletedAt, purgeAt, label }], retentionDays }
+router.get('/trash', async (req, res) => {
+  try {
+    const found = await editableCellar(req, req.query.cellar);
+    if (found.error) return res.status(found.error.status).json({ error: found.error.message });
+    const rows = await DeletedBottle.find({ cellar: found.cellar._id })
+      .sort({ deletedAt: -1, _id: 1 })
+      .limit(TRASH_LIST_MAX)
+      .select('batchId deletedAt purgeAt label')
+      .lean();
+    res.json({
+      items: rows.map((r) => ({ id: r._id, batchId: r.batchId, deletedAt: r.deletedAt, purgeAt: r.purgeAt, label: r.label })),
+      retentionDays: TRASH_DAYS,
+    });
+  } catch (error) {
+    console.error('List recently deleted error:', error);
+    res.status(500).json({ error: 'Failed to load recently deleted bottles' });
+  }
+});
+
+// POST /api/bottles/trash/restore - bring bottles back from "Recently deleted".
+// Body: { cellar, ids?: string[] (trash row ids), batchId?: string } — ids,
+// a whole batch (the Undo after a bulk delete, "Restore all"), or both.
+// Each bottle returns under its old id and re-takes its rack slot if free.
+// Response: { restored, restoredIds: string[] (bottle ids), placed, skipped: [{ id, reason }] }
+//   reason ∈ 'cellar_gone', 'wine_gone', 'exists', 'error'
+router.post('/trash/restore', async (req, res) => {
+  try {
+    const { cellar: cellarId, ids, batchId } = req.body || {};
+    const found = await editableCellar(req, cellarId);
+    if (found.error) return res.status(found.error.status).json({ error: found.error.message });
+    const idList = Array.isArray(ids) ? ids : [];
+    if (idList.length > BULK_MAX) {
+      return res.status(400).json({ error: `At most ${BULK_MAX} bottles per request` });
+    }
+    if (!idList.every((x) => typeof x === 'string' && mongoose.isValidObjectId(x))) {
+      return res.status(400).json({ error: 'ids must be valid ids' });
+    }
+    const hasBatch = typeof batchId === 'string' && mongoose.isValidObjectId(batchId);
+    if (idList.length === 0 && !hasBatch) {
+      return res.status(400).json({ error: 'Give the ids to restore, or a batchId' });
+    }
+    const or = [];
+    if (idList.length) or.push({ _id: { $in: idList.map((x) => new mongoose.Types.ObjectId(x)) } });
+    if (hasBatch) or.push({ batchId: new mongoose.Types.ObjectId(batchId) });
+    const rows = await DeletedBottle.find({ cellar: found.cellar._id, $or: or }).sort({ deletedAt: 1, _id: 1 }).limit(BULK_MAX);
+
+    const restoredIds = [];
+    const skipped = [];
+    let placed = 0;
+    for (const row of rows) {
+      let result;
+      try {
+        result = await restoreTrashed(row, req);
+      } catch (err) {
+        console.error(`Restore from trash: row ${row._id} failed:`, err.message);
+        result = { error: { code: 'error' } };
+      }
+      if (result.error) { skipped.push({ id: String(row._id), reason: result.error.code || 'error' }); continue; }
+      restoredIds.push(String(row.bottleId));
+      if (result.placed) placed += 1;
+    }
+    logAudit(req, 'bottle.bulk_restore',
+      { type: 'cellar', id: found.cellar._id, cellarId: found.cellar._id },
+      { requested: rows.length, restored: restoredIds.length, skipped: skipped.length, ...(hasBatch ? { batchId } : {}) });
+    res.json({ restored: restoredIds.length, restoredIds, placed, skipped });
+  } catch (error) {
+    console.error('Restore recently deleted error:', error);
+    res.status(500).json({ error: 'Failed to restore the bottles' });
   }
 });
 
@@ -1261,6 +1357,62 @@ router.post('/bulk-move', async (req, res) => {
   } catch (error) {
     console.error('Bulk move error:', error);
     res.status(500).json({ error: 'Failed to move bottles' });
+  }
+});
+
+// POST /api/bottles/bulk-delete - Move MANY bottles to the cellar's "Recently
+// deleted" in ONE request (forum feedback 2026-10-12: an import to redo, a
+// batch added wrong). Nothing is gone for good yet: each bottle keeps its
+// snapshot and its own photos for TRASH_DAYS and can be restored, one at a
+// time or the whole batch (services/bottleTrash). Its rack slot is freed now.
+// Editor+ on each bottle's cellar — the single DELETE rule. Any status.
+//
+// Body:     { bottleIds: string[] (1..BULK_MAX) }
+// Response: { deleted, deletedIds: string[], skipped: [{ id, reason }], batchId, purgeAt }
+//   reason ∈ 'not_found', 'error'
+router.post('/bulk-delete', async (req, res) => {
+  try {
+    const resolved = await resolveBulkBottles(req, (req.body || {}).bottleIds, 'editor');
+    if (resolved.error) return res.status(resolved.error.status).json({ error: resolved.error.message });
+
+    const batchId = new mongoose.Types.ObjectId();
+    const deletedAt = new Date();
+    const deletedIds = [];
+    const skipped = [];
+    let firstCellar = null;
+    for (const item of resolved.items) {
+      if (item.reason) { skipped.push({ id: item.id, reason: item.reason }); continue; }
+      // One bottle that fails is reported, not a 500 halfway through a batch
+      // whose first bottles are already in "Recently deleted".
+      let result;
+      try {
+        result = await trashBottle(item.bottle, req, { batchId, deletedAt });
+      } catch (err) {
+        console.error(`Bulk delete: bottle ${item.id} failed:`, err.message);
+        result = { error: { code: 'error' } };
+      }
+      if (result.error) { skipped.push({ id: item.id, reason: result.error.code || 'error' }); continue; }
+      if (!firstCellar) firstCellar = item.cellar;
+      deletedIds.push(item.id);
+    }
+
+    // One summary row on top of the per-bottle bottle.delete rows.
+    if (firstCellar) {
+      logAudit(req, 'bottle.bulk_delete',
+        { type: 'cellar', id: firstCellar._id, cellarId: firstCellar._id },
+        { requested: resolved.ids.length, deleted: deletedIds.length, skipped: skipped.length, batchId: String(batchId), retentionDays: TRASH_DAYS });
+    }
+
+    res.json({
+      deleted: deletedIds.length,
+      deletedIds,
+      skipped,
+      batchId,
+      purgeAt: new Date(deletedAt.getTime() + TRASH_DAYS * 24 * 60 * 60 * 1000),
+    });
+  } catch (error) {
+    console.error('Bulk delete error:', error);
+    res.status(500).json({ error: 'Failed to delete the bottles' });
   }
 });
 

@@ -24,6 +24,7 @@
  */
 const WineDefinition = require('../models/WineDefinition');
 const Bottle = require('../models/Bottle');
+const DeletedBottle = require('../models/DeletedBottle');
 const { createNotification } = require('./notifications');
 
 const SWEEP_LIMIT = 200;
@@ -52,7 +53,14 @@ async function runWineDraftExpirySweep(now = new Date()) {
   const inWindow = await WineDefinition.find({
     draft: true, draftExpiresAt: { $lte: soon, $gt: now }, draftExpiryWarnedAt: null,
   }).select('_id').limit(SWEEP_LIMIT * 5).lean();
-  const held = new Set((await Bottle.distinct('wineDefinition', { wineDefinition: { $in: inWindow.map((w) => w._id) } })).map(String));
+  const inWindowIds = inWindow.map((w) => w._id);
+  // A draft whose bottles sit in "Recently deleted" is not empty either: the
+  // bottles may come back (services/bottleTrash), so it is neither warned nor
+  // expired until the trash lets go of them.
+  const held = new Set([
+    ...(await Bottle.distinct('wineDefinition', { wineDefinition: { $in: inWindowIds } })),
+    ...(await DeletedBottle.distinct('wineDefinition', { wineDefinition: { $in: inWindowIds } })),
+  ].map(String));
   const emptyIds = inWindow.map((w) => w._id).filter((id) => !held.has(String(id))).slice(0, SWEEP_LIMIT);
   const toWarn = emptyIds.length
     ? await WineDefinition.find({ _id: { $in: emptyIds }, draft: true, draftExpiryWarnedAt: null })
@@ -82,6 +90,10 @@ async function runWineDraftExpirySweep(now = new Date()) {
   for (const wine of lapsed) {
     try {
       const hasBottles = await Bottle.exists({ wineDefinition: wine._id });
+      // Bottles in "Recently deleted" hold the draft as it is: not deleted
+      // (they could not be restored) and not published (nobody holds it).
+      // The next sweep after the trash purges them decides.
+      if (!hasBottles && await DeletedBottle.exists({ wineDefinition: wine._id })) continue;
       if (!hasBottles) {
         const d = await ops.deleteDraft(wine, null, { action: 'wine.draft_expire' });
         // A bottle arriving mid-sweep keeps the draft (conflict) — not an error.

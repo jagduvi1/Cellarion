@@ -913,14 +913,18 @@ async function removeBottleCascade(bottle, req, auditAction, options = {}) {
 
   await removeFromRacks(bottleId);
 
-  const { unlinkImageFiles } = require('./imageProcessor');
   // The user's own photos go with the bottle; registry photos (the wine's
   // picture, or any photo approved as public — services/photoRetention) are
-  // kept and detached, other people see them.
+  // kept and detached, other people see them. A bottle moved to "Recently
+  // deleted" (services/bottleTrash) keeps its own photos instead: they come
+  // back with it on restore, and the trash purge deletes them later.
   const { REGISTRY_PHOTO, OWN_PHOTO } = require('./photoRetention');
-  const ownImages = await BottleImage.find({ bottle: bottleId, ...OWN_PHOTO });
-  for (const img of ownImages) await unlinkImageFiles(img);
-  await BottleImage.deleteMany({ bottle: bottleId, ...OWN_PHOTO });
+  if (!options.keepOwnPhotos) {
+    const { unlinkImageFiles } = require('./imageProcessor');
+    const ownImages = await BottleImage.find({ bottle: bottleId, ...OWN_PHOTO });
+    for (const img of ownImages) await unlinkImageFiles(img);
+    await BottleImage.deleteMany({ bottle: bottleId, ...OWN_PHOTO });
+  }
   await BottleImage.updateMany(
     { bottle: bottleId, ...REGISTRY_PHOTO },
     { $set: { bottle: null } }
@@ -1007,22 +1011,24 @@ async function snapshotBottleForDelete(bottle) {
  * and never throws, so a hiccup there can't leave the bottle back while the
  * undo looks failed. A default photo that was one of the deleted own photos
  * is dropped rather than restored as a dangling id.
- * Returns { error } | { bottle, placed, position }.
+ * `via` names the path in the audit row: 'undo' (MCP undo_last) or 'trash'
+ * (a restore from "Recently deleted", services/bottleTrash).
+ * Returns { error: { status, code, message } } | { bottle, placed, position }.
  */
-async function restoreDeletedBottle(snapshot, req) {
+async function restoreDeletedBottle(snapshot, req, { via = 'undo' } = {}) {
   const raw = snapshot && snapshot.bottle ? { ...snapshot.bottle } : null;
-  if (!raw || !raw._id) return { error: { status: 409, message: 'There is no snapshot to restore from' } };
+  if (!raw || !raw._id) return { error: { status: 409, code: 'no_snapshot', message: 'There is no snapshot to restore from' } };
   if (await Bottle.exists({ _id: raw._id })) {
-    return { error: { status: 409, message: 'The bottle already exists again' } };
+    return { error: { status: 409, code: 'exists', message: 'The bottle already exists again' } };
   }
   const Cellar = require('../models/Cellar');
   if (!(await Cellar.exists({ _id: raw.cellar, deletedAt: null }))) {
-    return { error: { status: 409, message: 'Its cellar no longer exists' } };
+    return { error: { status: 409, code: 'cellar_gone', message: 'Its cellar no longer exists' } };
   }
   if (raw.wineDefinition) {
     const WineDefinition = require('../models/WineDefinition');
     if (!(await WineDefinition.exists({ _id: raw.wineDefinition }))) {
-      return { error: { status: 409, message: 'Its wine has been merged or removed from the registry since' } };
+      return { error: { status: 409, code: 'wine_gone', message: 'Its wine has been merged or removed from the registry since' } };
     }
   }
   if (raw.defaultImage && !(await BottleImage.exists({ _id: raw.defaultImage }))) {
@@ -1062,7 +1068,7 @@ async function restoreDeletedBottle(snapshot, req) {
   }
   logAudit(req, 'bottle.restore_deleted',
     { type: 'bottle', id: raw._id, cellarId: raw.cellar },
-    { via: 'undo', placed });
+    { via, placed });
   const bottle = (await bestEffort('reload', () => Bottle.findById(raw._id))) || raw;
   return { bottle, placed, position: placed ? snapshot.rack.position : null };
 }

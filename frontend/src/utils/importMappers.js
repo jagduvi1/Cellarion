@@ -75,6 +75,9 @@ export function parseLocaleNumber(input) {
 
   // Strip currency symbols and surrounding whitespace
   s = s.replace(/[$€£¥¢฿₹₽₺]/g, '');
+  // A currency written BEFORE the number ("AUD 45.00", "SEK 199", "Fr. 30"):
+  // up to four letters, but only when a number follows — "abc" stays text.
+  s = s.replace(/^[a-zA-Z]{1,4}\.?\s*(?=[+-]?[\d.,])/, '');
   // Strip trailing currency words (kr, USD, EUR, etc.) and leading sign words
   s = s.replace(/^[+-]?\s*/, m => m.replace(/\s+/g, ''));
   s = s.replace(/\s*[a-zA-Z]+\s*$/, '');
@@ -423,18 +426,102 @@ export function detectDelimiter(text) {
 // ── Shared row-mapper helpers ───────────────────────────────────────────────
 
 /**
+ * A header as a person may have typed it, reduced to one form: case, spaces
+ * at either end, and runs of spaces, "_", "-" or "." between words do not
+ * matter ("Purchase_Price", " PRICE ", "purchase-price" → "purchase price").
+ */
+export function normHeader(header) {
+  return String(header).replace(/^﻿/, '').toLowerCase().replace(/[\s_.-]+/g, ' ').trim();
+}
+
+/**
  * Build a header-tolerant accessor over a parsed CSV row: get(keys) returns
- * the first non-empty value among the given header names (each also tried
- * lowercased), trimmed — or '' when none match.
+ * the first non-empty value among the given header names, trimmed — or ''
+ * when none match. Each name is tried as written, lowercased, and then in its
+ * normHeader form against the row's headers in theirs (forum feedback
+ * 2026-10-12: a price column that was not spelled exactly "Price" was
+ * dropped without a word).
  */
 function makeGetter(row) {
+  let normalized = null; // header form → value, built on the first miss
   return (keys) => {
     for (const k of keys) {
       const val = row[k] || row[k.toLowerCase()];
       if (val) return val.trim();
     }
+    if (!normalized) {
+      normalized = new Map();
+      for (const [header, value] of Object.entries(row)) {
+        const key = normHeader(header);
+        if (value && String(value).trim() && !normalized.has(key)) normalized.set(key, String(value));
+      }
+    }
+    for (const k of keys) {
+      const val = normalized.get(normHeader(k));
+      if (val) return val.trim();
+    }
     return '';
   };
+}
+
+// ── Prices ──────────────────────────────────────────────────────────────────
+
+// The names a purchase-price column goes by in files people write by hand or
+// export from other apps, matched in normHeader form. "Value" is left out on
+// purpose: in a hand-made file it is a valuation, not what was paid.
+export const PRICE_HEADERS = [
+  'Price', 'Cost', 'Purchase Price', 'Price Paid', 'Paid', 'Bottle Price',
+  'Price per Bottle', 'Price/Bottle', 'Unit Price', 'Unit Cost', 'Cost per Bottle',
+  'Purchase Cost', 'Buy Price', 'Pris', 'Inköpspris', 'Prix', "Prix d'achat",
+  'Preis', 'Kaufpreis', 'Prezzo', 'Precio', 'Prijs', 'Hinta',
+];
+const PRICE_HEADER_SET = new Set(PRICE_HEADERS.map(normHeader));
+
+// The first price column whose value reads as a number — "Paid" is the price
+// in one file and a yes/no column in the next, and must not hide a real one.
+function firstPrice(get) {
+  for (const k of PRICE_HEADERS) {
+    const text = get([k]);
+    if (text && !isNaN(parseLocaleNumber(text))) return text;
+  }
+  return '';
+}
+
+// Currency marks a price header may carry. "$" and "kr" are each used by
+// several currencies, so they are recognised as a currency mark but do not
+// set one.
+const HEADER_CURRENCY_SYMBOLS = { '€': 'EUR', '£': 'GBP', '¥': 'JPY', '$': null, 'kr': null };
+const HEADER_CURRENCY_CODES = new Set([
+  'USD', 'EUR', 'GBP', 'SEK', 'NOK', 'DKK', 'CHF', 'CAD', 'AUD', 'NZD', 'JPY', 'HKD', 'SGD', 'ZAR',
+]);
+
+/**
+ * A price column that names its currency in the header: "Price (AUD)",
+ * "Price [EUR]", "Price in GBP", "Cost €", "Pris kr". Returns the header's
+ * value and the currency it names ({ value, currency }), or null. A currency
+ * mark shared by several currencies ($, kr) gives currency undefined.
+ */
+export function priceFromCurrencyHeader(row) {
+  for (const [header, value] of Object.entries(row || {})) {
+    if (!value || !String(value).trim()) continue;
+    const m = /^(.*?)\s*(?:[([]\s*(?:in\s+)?([^)\]]+?)\s*[)\]]|\s(?:in\s+)?([A-Za-z]{3}|kr)|\s*([€£¥$]))\s*$/i.exec(String(header).replace(/^﻿/, '').trim());
+    if (!m || !PRICE_HEADER_SET.has(normHeader(m[1]))) continue;
+    const mark = (m[2] || m[3] || m[4] || '').trim();
+    const code = mark.toUpperCase();
+    let currency;
+    if (HEADER_CURRENCY_CODES.has(code)) currency = code;
+    else if (Object.prototype.hasOwnProperty.call(HEADER_CURRENCY_SYMBOLS, mark.toLowerCase())) currency = HEADER_CURRENCY_SYMBOLS[mark.toLowerCase()] || undefined;
+    else continue; // "(per case)", "(incl. tax)" — not a currency mark
+    return { value: String(value).trim(), currency };
+  }
+  return null;
+}
+
+// A header that reads like a price column, in any of the languages above —
+// for the "prices were not read" warning, not for reading values.
+const PRICE_LIKE_HEADER = /\b(price|prices|cost|pris|prix|preis|prezzo|precio|prijs|hinta|paid|kostnad|inköpspris|kaufpreis)\b/;
+export function looksLikePriceHeader(header) {
+  return PRICE_LIKE_HEADER.test(normHeader(header));
 }
 
 /**
@@ -1190,7 +1277,12 @@ function mapCellarTrackerRow(row) {
 function mapGenericRow(row) {
   const get = makeGetter(row);
 
-  const price = parseLocaleNumber(get(['Price', 'price', 'Cost', 'cost']));
+  // Any of the usual price names; failing that, a price column that names its
+  // currency in the header ("Price (AUD)") — which then also gives the
+  // currency when the file has no Currency column.
+  const priceText = firstPrice(get);
+  const headerPrice = priceText ? null : priceFromCurrencyHeader(row);
+  const price = parseLocaleNumber(priceText || headerPrice?.value);
   const rating = parseLocaleNumber(get(['Rating', 'rating', 'Score', 'score']));
   const qty = parseInt(get(['Quantity', 'quantity', 'Qty', 'qty', 'Count', 'count']), 10);
 
@@ -1218,7 +1310,7 @@ function mapGenericRow(row) {
     appellation,
     type: mapWineType(get(['Type', 'type', 'Color', 'Colour', 'Category', 'category'])),
     price: isNaN(price) ? undefined : price,
-    currency: get(['Currency', 'currency']) || undefined,
+    currency: get(['Currency', 'currency']) || headerPrice?.currency || undefined,
     bottleSize: normaliseBottleSize(get(['Size', 'size', 'Bottle Size', 'BottleSize'])) || '750ml',
     quantity: isNaN(qty) || qty < 1 ? 1 : qty,
     purchaseDate: get(['Purchase Date', 'PurchaseDate', 'Date', 'date']),
@@ -2448,6 +2540,14 @@ export function parseAndMap(text, forceFormat, opts = {}) {
   const vintageMissing = items.filter((it) => it.vintageMissing).length;
   if (vintageMissing > 0) {
     warnings.push({ code: 'vintage-missing', count: vintageMissing });
+  }
+  // A filled-in column that reads like a price, and not one bottle got a
+  // price from it: its name was not one we know, or its values did not read
+  // as numbers. Said out loud instead of importing every bottle without its
+  // price in silence (forum feedback 2026-10-12).
+  if (items.length > 0 && !items.some((it) => it.price != null)) {
+    const priceColumn = headers.find((h) => looksLikePriceHeader(h) && rows.some((r) => r[h] && String(r[h]).trim()));
+    if (priceColumn) warnings.push({ code: 'price-not-read', column: String(priceColumn).trim() });
   }
 
   return {

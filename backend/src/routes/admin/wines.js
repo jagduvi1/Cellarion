@@ -24,6 +24,7 @@ const {
 const WineDefinition = require('../../models/WineDefinition');
 const Bottle = require('../../models/Bottle');
 const BottleImage = require('../../models/BottleImage');
+const DeletedBottle = require('../../models/DeletedBottle');
 const WineVintageProfile = require('../../models/WineVintageProfile');
 const WineVintagePrice = require('../../models/WineVintagePrice');
 const WineReport = require('../../models/WineReport');
@@ -1604,8 +1605,11 @@ router.delete('/:id', async (req, res) => {
     }
     const id = wine._id;
 
-    const [bottles, wishlistItems, reviews, discussions, discussionReplies, journalEntries, wineLists, recommendations] = await Promise.all([
+    const [bottles, recentlyDeletedBottles, wishlistItems, reviews, discussions, discussionReplies, journalEntries, wineLists, recommendations] = await Promise.all([
       Bottle.countDocuments({ wineDefinition: id }),
+      // Bottles in a "Recently deleted" (services/bottleTrash) can still be
+      // restored onto this wine; a merge re-points them, a delete would strand them.
+      DeletedBottle.countDocuments({ wineDefinition: id }),
       WishlistItem.countDocuments({ wineDefinition: id }),
       Review.countDocuments({ wineDefinition: id }),
       Discussion.countDocuments({ wineDefinition: id }),
@@ -1614,7 +1618,7 @@ router.delete('/:id', async (req, res) => {
       WineList.countDocuments({ $or: [{ 'sections.entries.wine': id }, { 'autoGroupEntries.wine': id }] }),
       Recommendation.countDocuments({ wine: id }),
     ]);
-    const references = { bottles, wishlistItems, reviews, discussions, discussionReplies, journalEntries, wineLists, recommendations };
+    const references = { bottles, recentlyDeletedBottles, wishlistItems, reviews, discussions, discussionReplies, journalEntries, wineLists, recommendations };
     const blocking = Object.entries(references).filter(([, n]) => n > 0);
     if (blocking.length > 0) {
       return res.status(400).json({
@@ -2101,6 +2105,9 @@ async function reassignWineRefs(sourceId, keeperId) {
   owners.forEach(bumpDataVersion);
   await Promise.all([
     reassignWineListEntries(sourceId, keeperId),
+    // Bottles in a "Recently deleted" follow the merge, so a restore lands on
+    // the kept wine instead of failing on the merged-away one.
+    DeletedBottle.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } }),
     BottleImage.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } }),
     // Maturity profiles need collision reconciliation (unique wineDefinition+vintage).
     reassignVintageProfiles(sourceId, keeperId),

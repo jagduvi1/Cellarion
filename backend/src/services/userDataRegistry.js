@@ -42,6 +42,7 @@ const Bottle = require('../models/Bottle');
 const ClimateDevice = require('../models/ClimateDevice');
 const ClimateReading = require('../models/ClimateReading');
 const BottleImage = require('../models/BottleImage');
+const DeletedBottle = require('../models/DeletedBottle');
 const Cellar = require('../models/Cellar');
 const CellarLayout = require('../models/CellarLayout');
 const CellarValueSnapshot = require('../models/CellarValueSnapshot');
@@ -277,6 +278,26 @@ const REGISTRY = [
         .flatMap((i) => (i.reports || [])
           .filter((r) => String(r.user) === String(ctx.userId))
           .map((r) => ({ imageId: String(i._id), reason: r.reason, detail: r.detail || null, reportedAt: r.createdAt }))),
+    }),
+  },
+  {
+    // "Recently deleted" (services/bottleTrash): bottles a bulk delete keeps
+    // for 30 days before they go for good. The user's own rows, and every row
+    // in their cellars' trash, are purged with the account — each bottle's own
+    // photos first (purgeTrashRows), which the BottleImage entry above misses
+    // when another member of a shared cellar took them. A row this user
+    // created in SOMEONE ELSE's cellar trash keeps the bottle (it is the
+    // owner's to restore) and only loses the link to who deleted it.
+    model: DeletedBottle, category: 'personal-data', userFields: ['user', 'deletedBy'],
+    purge: async (ctx) => {
+      const { purgeTrashRows } = require('./bottleTrash');
+      await purgeTrashRows({ $or: [{ user: ctx.userId }, { cellar: { $in: ctx.cellarIds } }] });
+      await DeletedBottle.updateMany({ deletedBy: ctx.userId }, { $set: { deletedBy: ctx.deletedUserId } });
+    },
+    exportFragment: async (ctx) => ({
+      // The bottle as it was stored, and when it is deleted for good.
+      recentlyDeletedBottles: markTrunc(ctx, 'recentlyDeletedBottles', await DeletedBottle.find({ user: ctx.userId }).limit(EXPORT_MAX).lean())
+        .map((r) => ({ bottle: r.snapshot ? r.snapshot.bottle : null, deletedAt: r.deletedAt, purgeAt: r.purgeAt })),
     }),
   },
   {
