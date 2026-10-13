@@ -225,3 +225,11 @@
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* On a phone the two buttons share the row, or each fills its own line once
+   they wrap, instead of a ragged right-aligned stack. */
+@media (max-width: 480px) {
+  .support-reply-actions .btn {
+    flex: 1 1 auto;
+  }
+}
