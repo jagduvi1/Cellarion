@@ -49,6 +49,13 @@ describe('completeRequestResolve', () => {
     expect(doc.$where).toBeUndefined();
   });
 
+  test('filed through the Registry Bridge: resolved without a notification here (the install tells its user)', async () => {
+    const doc = Object.assign(requestDoc(async () => {}), { via: 'bridge' });
+    expect(await completeRequestResolve(doc, wine, { resolvedBy: 'admin1' })).toEqual({ backfilledCount: 0 });
+    expect(doc.status).toBe('resolved');
+    expect(createNotification).not.toHaveBeenCalled();
+  });
+
   test('any other save error still throws', async () => {
     const doc = requestDoc(async () => { throw new Error('db down'); });
     await expect(completeRequestResolve(doc, wine, {})).rejects.toThrow('db down');
@@ -69,5 +76,12 @@ describe('completeRequestReject', () => {
     expect(doc.status).toBe('rejected');
     expect(doc.adminNotes).toBe('a cider');
     expect(createNotification).toHaveBeenCalledWith('u1', 'wine_request_rejected', expect.any(String), expect.stringContaining('a cider'), '/wine-requests');
+  });
+
+  test('filed through the Registry Bridge: rejected without a notification here', async () => {
+    const doc = Object.assign(requestDoc(async () => {}), { via: 'bridge' });
+    expect(await completeRequestReject(doc, { resolvedBy: 'admin1', adminNotes: 'a cider' })).toEqual({ bottlesDetached: 0 });
+    expect(doc.status).toBe('rejected');
+    expect(createNotification).not.toHaveBeenCalled();
   });
 });

@@ -34,6 +34,17 @@ async function savePending(wineRequest) {
   }
 }
 
+// A request a self-hosted install filed through the Registry Bridge is answered
+// to its requester by that install: the hourly sync (services/registryBridge.
+// syncForwardedRequests) finishes it there and notifies the local user. The
+// key owner's account here never filed anything in this app, so a second bell
+// on cellarion.app is noise — and reads as the two accounts being linked by
+// something other than the key. Bridge corrections and values have no such
+// sync, so their notifications stay.
+function answeredByInstall(wineRequest) {
+  return wineRequest.via === 'bridge';
+}
+
 /**
  * Mark the request resolved against `linkedWine`, then move the bottles that
  * waited on it onto the wine, stamp their photos with it, queue their
@@ -96,7 +107,9 @@ async function completeRequestResolve(wineRequest, linkedWine, { resolvedBy = nu
   } else {
     notifMsg = `Your request for "${wineRequest.wineName}" has been approved. It was added to the registry as "${linkedWine.name}" by ${linkedWine.producer}.`;
   }
-  createNotification(wineRequest.user, 'wine_request_resolved', 'Wine request approved', notifMsg, '/wine-requests');
+  if (!answeredByInstall(wineRequest)) {
+    createNotification(wineRequest.user, 'wine_request_resolved', 'Wine request approved', notifMsg, '/wine-requests');
+  }
 
   return { backfilledCount };
 }
@@ -143,7 +156,9 @@ async function completeRequestReject(wineRequest, { resolvedBy = null, adminNote
   if (bottlesDetached > 0) {
     notifMsg += ` Your ${bottlesDetached} bottle${bottlesDetached !== 1 ? 's' : ''} awaiting this wine remain in your cellar without a linked registry wine.`;
   }
-  createNotification(wineRequest.user, 'wine_request_rejected', 'Wine request declined', notifMsg, '/wine-requests');
+  if (!answeredByInstall(wineRequest)) {
+    createNotification(wineRequest.user, 'wine_request_rejected', 'Wine request declined', notifMsg, '/wine-requests');
+  }
 
   return { bottlesDetached };
 }
