@@ -26,7 +26,9 @@ import {
   canResumeValidation,
   restoreSessionMeta,
   nextAiBudgetRequestState,
-  isAiBudgetRequestPending
+  isAiBudgetRequestPending,
+  propagationTargets,
+  lookUpTargets
 } from '../utils/importReview';
 import { getTotalSlots } from '../utils/rackLayouts';
 import { TYPE_DIMENSIONS } from '../components/racks/RackTypeSelector';
@@ -866,6 +868,10 @@ function ImportBottles() {
   const handleAiSearch = async (rowIndex) => {
     const r = results.find(res => res.index === rowIndex);
     if (!r) return;
+    // The same wine's other bottles still in this row's state take the answer
+    // too — decided at click time, before the user can change anything else.
+    const siblings = lookUpTargets(results, selections, rowIndex);
+    const rowsToSet = [rowIndex, ...siblings];
     setAiSearchingRow(rowIndex);
     try {
       const res = await validateImport(apiFetch, {
@@ -875,17 +881,30 @@ function ImportBottles() {
       const data = await res.json();
       if (!res.ok || !data.results?.[0]) return;
       const updated = { ...data.results[0], index: rowIndex };
-      setResults(prev => prev.map(x => x.index === rowIndex ? updated : x));
+      setResults(prev => prev.map(x => {
+        if (x.index === rowIndex) return updated;
+        // Each sibling keeps its own file row (vintage, price, location).
+        if (siblings.includes(x.index)) return { ...updated, index: x.index, item: x.item };
+        return x;
+      }));
+      const setAll = (value) => setSelections(prev => {
+        const next = { ...prev };
+        for (const i of rowsToSet) {
+          if (value === undefined) delete next[i];
+          else next[i] = value;
+        }
+        return next;
+      });
       const top = preselectableMatch(updated.matches);
       if ((updated.status === 'ai_match' || updated.status === 'exact' || updated.status === 'fuzzy') && top) {
-        setSelections(prev => ({ ...prev, [rowIndex]: top.wineId }));
+        setAll(top.wineId);
       } else if (updated.status === 'ai_new' && updated.aiProposed) {
         // AI identified a wine the registry doesn't have — select the
         // create-on-confirm proposal.
-        setSelections(prev => ({ ...prev, [rowIndex]: 'create' }));
+        setAll('create');
       } else {
         // AI couldn't identify — clear the old fuzzy selection
-        setSelections(prev => { const next = { ...prev }; delete next[rowIndex]; return next; });
+        setAll(undefined);
       }
     } catch {
       // Non-fatal
@@ -921,18 +940,13 @@ function ImportBottles() {
 
   const selectSearchResult = (wine) => {
     const sourceIndex = searchModal.index;
+    // The same rows the selection spreads to below, so every row that now
+    // imports this wine also remembers it as a hand-picked match.
+    const targets = propagationTargets(results, selections, sourceIndex, wine._id);
     setSelections(withPropagation(sourceIndex, wine._id));
     setManualWines(prev => {
-      const sourceItem = results.find(r => r.index === sourceIndex)?.item;
-      const key = sourceItem ? wineKey(sourceItem) : null;
       const next = { ...prev, [sourceIndex]: wine };
-      if (key) {
-        results.forEach(r => {
-          if (r.index !== sourceIndex && wineKey(r.item) === key && !selections[r.index]) {
-            next[r.index] = wine;
-          }
-        });
-      }
+      for (const i of targets) next[i] = wine;
       return next;
     });
     setSearchModal(null);
@@ -940,22 +954,13 @@ function ImportBottles() {
 
   // ── Selection helpers ────────────────────────────────────────────────────
 
-  // Returns a key for grouping duplicate wines: "wineName|producer" (lowercased)
-  const wineKey = (item) =>
-    `${(item?.wineName || '').toLowerCase()}|${(item?.producer || '').toLowerCase()}`;
-
-  // Returns a selections updater that also propagates selValue to unselected
-  // rows that have the same wine name + producer as the source row.
+  // Returns a selections updater that also carries selValue to the file's
+  // other bottles of the same wine (utils/importReview propagationTargets:
+  // undecided rows, and rows still on the source row's automatic choice).
   const withPropagation = (sourceIndex, selValue) => (prev) => {
-    const sourceItem = results.find(r => r.index === sourceIndex)?.item;
-    const key = sourceItem ? wineKey(sourceItem) : null;
     const next = { ...prev, [sourceIndex]: selValue };
-    if (key) {
-      results.forEach(r => {
-        if (r.index !== sourceIndex && wineKey(r.item) === key && !prev[r.index]) {
-          next[r.index] = selValue;
-        }
-      });
+    for (const i of propagationTargets(results, prev, sourceIndex, selValue)) {
+      next[i] = selValue;
     }
     return next;
   };

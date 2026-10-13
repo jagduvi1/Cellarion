@@ -9,6 +9,8 @@ import {
   restoreSessionMeta,
   nextAiBudgetRequestState,
   isAiBudgetRequestPending,
+  propagationTargets,
+  lookUpTargets,
 } from './importReview';
 
 // ---------------------------------------------------------------------------
@@ -373,5 +375,82 @@ describe('reconcileRetrySelections — conflicted refresh', () => {
   it('still fills an empty pick with the best clean match', () => {
     const updated = new Map([[0, { index: 0, status: 'fuzzy', matches: [{ wineId: 'white', colourConflict: 'z' }, { wineId: 'red' }] }]]);
     expect(reconcileRetrySelections({}, updated, {})).toEqual({ 0: 'red' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// One decision, the whole line: "Request wine" on one of three identical
+// bottles used to leave the other two on their automatic 'create', so the
+// import minted the wine AND filed a request for it.
+// ---------------------------------------------------------------------------
+describe('propagationTargets', () => {
+  const row = (index, extra = {}) => ({
+    index,
+    item: { producer: 'Domaine Exemple', wineName: 'Cuvée A Spätlese', type: 'white', ...(extra.item || {}) },
+    status: 'ai_new',
+    aiProposed: { name: 'Cuvée A Spätlese' },
+    ...extra,
+  });
+  const other = { index: 9, item: { producer: 'Domaine Exemple', wineName: 'Brut', type: 'sparkling' }, status: 'ai_new', aiProposed: {} };
+
+  it("carries 'request' over the siblings still on the automatic 'create'", () => {
+    const results = [row(0), row(1), row(2), other];
+    const selections = { 0: 'create', 1: 'create', 2: 'create', 9: 'create' };
+    expect(propagationTargets(results, selections, 0, 'request')).toEqual([1, 2]);
+  });
+
+  it('still fills siblings that have no decision yet', () => {
+    const results = [row(0), row(1)];
+    expect(propagationTargets(results, {}, 0, 'request')).toEqual([1]);
+  });
+
+  it('keeps a sibling the user set differently', () => {
+    const results = [row(0), row(1), row(2)];
+    const selections = { 0: 'create', 1: 'skip', 2: 'wine-x' };
+    expect(propagationTargets(results, selections, 0, 'request')).toEqual([]);
+  });
+
+  it('never spreads a skip over a decided sibling (skipping one bottle of three is a real choice)', () => {
+    const results = [row(0), row(1), row(2)];
+    expect(propagationTargets(results, { 0: 'create', 1: 'create', 2: 'create' }, 0, 'skip')).toEqual([]);
+    expect(propagationTargets(results, { 0: 'create' }, 0, 'skip')).toEqual([1, 2]); // undecided rows still follow
+  });
+
+  it('moves siblings that shared a picked wine to the newly picked one', () => {
+    const results = [row(0), row(1)];
+    expect(propagationTargets(results, { 0: 'wine-a', 1: 'wine-a' }, 0, 'wine-b')).toEqual([1]);
+  });
+
+  it('leaves the other colour of a same-name pair alone once it is decided', () => {
+    const results = [row(0), row(1, { item: { type: 'red' } })];
+    expect(propagationTargets(results, { 0: 'create', 1: 'create' }, 0, 'request')).toEqual([]);
+  });
+
+  it("gives 'create' only to siblings that carry their own proposal", () => {
+    const results = [row(0), row(1, { status: 'no_match', aiProposed: undefined })];
+    expect(propagationTargets(results, {}, 0, 'create')).toEqual([]);
+  });
+
+  it('returns nothing for an unknown row', () => {
+    expect(propagationTargets([row(0)], {}, 5, 'request')).toEqual([]);
+  });
+});
+
+describe('lookUpTargets', () => {
+  const fuzzy = (index, type = 'white') => ({
+    index,
+    item: { producer: 'Weingut Beispiel', wineName: 'Lage Riesling Kabinett', type },
+    status: 'fuzzy',
+  });
+
+  it("answers the siblings still on the looked-up row's pick, and the undecided ones", () => {
+    const results = [fuzzy(0), fuzzy(1), fuzzy(2), fuzzy(3)];
+    const selections = { 0: 'fuzzy-pick', 1: 'fuzzy-pick', 3: 'request' };
+    expect(lookUpTargets(results, selections, 0)).toEqual([1, 2]);
+  });
+
+  it('leaves a same-name row of another colour on its own pick', () => {
+    const results = [fuzzy(0), fuzzy(1, 'red')];
+    expect(lookUpTargets(results, { 0: 'p', 1: 'p' }, 0)).toEqual([]);
   });
 });

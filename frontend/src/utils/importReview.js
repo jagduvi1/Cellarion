@@ -23,6 +23,76 @@ export function preselectableMatch(matches) {
   return matches.find((m) => m && !m.styleConflict && !m.colourConflict) || null;
 }
 
+// The file's bottles of one wine: same name + producer (the grouping the
+// review step has always used for duplicate rows).
+const duplicateWineKey = (item) =>
+  `${(item?.wineName || '').toLowerCase()}|${(item?.producer || '').toLowerCase()}`;
+const sameColour = (a, b) =>
+  (a?.type || '').trim().toLowerCase() === (b?.type || '').trim().toLowerCase();
+
+// Siblings of `source` that follow a decision on it. A row with no decision
+// always follows. A decided row follows only when it still holds what the
+// source row held before (the same automatic preselection) and names the same
+// colour, and only when the decision is about WHICH wine this is.
+function followingSiblings(results, selections, sourceIndex, identityChoice) {
+  const rows = results || [];
+  const sel = selections || {};
+  const source = rows.find((r) => r.index === sourceIndex);
+  if (!source) return [];
+  const key = duplicateWineKey(source.item);
+  const before = sel[sourceIndex];
+  return rows.filter((r) => {
+    if (r.index === sourceIndex || duplicateWineKey(r.item) !== key) return false;
+    const cur = sel[r.index];
+    if (cur == null) return true;
+    return identityChoice && before != null && cur === before && sameColour(r.item, source.item);
+  });
+}
+
+/**
+ * The other rows a decision on one row carries to: the file's other bottles
+ * of the same wine.
+ *
+ * Rows without a decision always follow. A row that already holds one follows
+ * only when it still holds what the acted-on row held before (the same
+ * automatic preselection) and names the same colour, and only when the
+ * decision says WHICH wine this is (a wine, 'create', 'request'). A row the
+ * user set differently keeps its choice, and a skip never spreads over a
+ * decided row: skipping one of six bottles is a real choice.
+ *
+ * Without the second rule, "Request wine" on one of three identical bottles
+ * left the other two on their automatic 'create': /confirm minted the wine
+ * AND filed a request for the same wine.
+ *
+ * @param {Array} results       validation-result rows ({ index, item, aiProposed })
+ * @param {object} selections   current selections map
+ * @param {number} sourceIndex  the row the user acted on
+ * @param {*} selValue          the new value: wineId | 'create' | 'request' | 'skip'
+ * @returns {number[]} indices of the rows that take selValue too
+ */
+export function propagationTargets(results, selections, sourceIndex, selValue) {
+  return followingSiblings(results, selections, sourceIndex, selValue !== 'skip')
+    // 'create' mints from the row's OWN proposal; a row without one would
+    // reach /confirm with nothing to create and silently drop out.
+    .filter((r) => selValue !== 'create' || r.aiProposed != null)
+    .map((r) => r.index);
+}
+
+/**
+ * The rows a per-row AI look-up ("Look up") also answers: the same wine's
+ * other bottles that still share the looked-up row's state. They take the
+ * refreshed result and its selection, so one look-up never leaves the rest
+ * of the line on the old fuzzy pick.
+ *
+ * @param {Array} results       validation-result rows
+ * @param {object} selections   current selections map
+ * @param {number} sourceIndex  the looked-up row
+ * @returns {number[]} indices of the sibling rows
+ */
+export function lookUpTargets(results, selections, sourceIndex) {
+  return followingSiblings(results, selections, sourceIndex, true).map((r) => r.index);
+}
+
 /**
  * Rows the bulk "Retry AI lookups" should re-validate: those still needing an
  * AI look-up (aiSkipped fallback or an outright no_match) that the user has NOT
