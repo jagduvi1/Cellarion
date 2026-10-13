@@ -121,11 +121,17 @@ const JOINED_PHRASES = [
   [/\boff dry\b/g, 'offdry'],
 ];
 
+// A producer's own grade inside a Prädikat, printed as stars ("Auslese**",
+// "Auslese***" at Markus Molitor): normalizeString turns a run of stars into
+// one of these words. Each grade is its own wine, so two names stating
+// different grades are two wines, exactly like two Prädikate.
+const STAR_GRADE_TOKEN = /^\d+star$/;
+
 /**
- * The style a NAME declares, as two independent term sets.
+ * The style a NAME declares, as independent term sets.
  *
  * @param {string} name
- * @returns {{pradikat: Set<string>, sweetness: Set<string>}}
+ * @returns {{pradikat: Set<string>, sweetness: Set<string>, grade: Set<string>}}
  */
 function statedStyle(name) {
   // Lowercase BEFORE the ß-fold: the capital eszett ẞ (U+1E9E — the official
@@ -138,14 +144,16 @@ function statedStyle(name) {
 
   const pradikat = new Set();
   const sweetness = new Set();
+  const grade = new Set();
   for (const token of folded.split(/[^a-z0-9]+/)) {
     if (!token) continue;
+    if (STAR_GRADE_TOKEN.test(token)) { grade.add(token); continue; }
     const tier = PRADIKAT_ALIASES.get(token) || token;
     if (PRADIKAT_WORDS.has(tier)) { pradikat.add(tier); continue; }
     const sweet = SWEETNESS_ALIASES.get(token) || token;
     if (SWEETNESS_WORDS.has(sweet) && !NAME_AMBIGUOUS_WORDS.has(sweet)) sweetness.add(sweet);
   }
-  return { pradikat, sweetness };
+  return { pradikat, sweetness, grade };
 }
 
 /**
@@ -250,6 +258,10 @@ function conflictingStyleTerms(nameA, nameB) {
   }
   if (disagree(a.sweetness, b.sweetness)) {
     return `each name states a different sweetness (${[...a.sweetness].sort().join(', ')} vs ${[...b.sweetness].sort().join(', ')})`;
+  }
+  if (disagree(a.grade, b.grade)) {
+    const stars = (set) => [...set].sort().map((g) => '*'.repeat(parseInt(g, 10))).join(', ');
+    return `each name states a different star grade (${stars(a.grade)} vs ${stars(b.grade)})`;
   }
   return null;
 }

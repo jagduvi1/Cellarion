@@ -49,6 +49,14 @@ describe('normalizeString', () => {
   test('trims leading and trailing whitespace', () => {
     expect(normalizeString('  trimmed  ')).toBe('trimmed');
   });
+  test('reads a run of stars as a grade word, not punctuation', () => {
+    // Molitor's Auslese*, ** and *** are three wines; stripped, they were one.
+    expect(normalizeString('Zeltinger Sonnenuhr Riesling Auslese***')).toBe('zeltinger sonnenuhr riesling auslese 3star');
+    expect(normalizeString('Auslese ** Goldkapsel')).toBe('auslese 2star goldkapsel');
+    expect(normalizeString('Auslese*')).toBe('auslese 1star');
+    expect(normalizeString('Auslese ★★★')).toBe('auslese 3star');
+    expect(normalizeString('Auslese**')).not.toBe(normalizeString('Auslese***'));
+  });
 });
 
 // ─── tokenize ────────────────────────────────────────────────────────────────
@@ -255,6 +263,11 @@ describe('generateWineKey', () => {
   test('normalizes all three components', () => {
     const key = generateWineKey('Château Pétrus', 'Pétrus', 'Pomerol');
     expect(key).toBe('petrus:chateau petrus:pomerol');
+  });
+  test('keeps two star grades of one wine apart', () => {
+    expect(generateWineKey('Zeltinger Sonnenuhr Riesling Auslese** Goldkapsel', 'Markus Molitor', 'Mosel'))
+      .not.toBe(generateWineKey('Zeltinger Sonnenuhr Riesling Auslese*** Goldkapsel', 'Markus Molitor', 'Mosel'));
+    expect(generateWineKey('Auslese***', 'Markus Molitor')).toBe('markus molitor:auslese 3star:');
   });
 });
 

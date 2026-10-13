@@ -22,10 +22,19 @@ const WINE_STOP_WORDS = new Set([
   'and', 'et', 'y', 'e', 'und'
 ]);
 
+// A star grade is part of a wine's name, not punctuation: Markus Molitor
+// prints one to three stars after the Pr\u00e4dikat ("Auslese*", "Auslese**",
+// "Auslese***"), and each grade is a separately bottled, separately priced
+// wine. Stripped with the rest of the punctuation, the grades vanished: two of
+// them shared one dedup key (the second could not be added at all) and the
+// matcher read them as the same wine. A run of stars becomes a word instead.
+const STAR_RUN = /[*\u2605]+/g; // '*' and '\u2605'
+
 /**
  * Normalize a string for comparison
  * - Convert to lowercase
  * - Remove accents/diacritics
+ * - A run of stars becomes a grade word ("Auslese***" \u2192 "auslese 3star")
  * - Remove punctuation
  * - Collapse whitespace
  */
@@ -36,6 +45,7 @@ const normalizeString = (str) => {
     .toLowerCase()
     .normalize('NFD') // Decompose accented characters
     .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
+    .replace(STAR_RUN, (run) => ` ${run.length}star `) // Star grade \u2192 word
     .replace(/[^\w\s]/g, '') // Remove punctuation
     .replace(/\s+/g, ' ') // Collapse whitespace
     .trim();

@@ -63,8 +63,8 @@ describe('statedStyle', () => {
   });
 
   it('survives a missing name', () => {
-    expect(statedStyle(undefined)).toEqual({ pradikat: new Set(), sweetness: new Set() });
-    expect(statedStyle('')).toEqual({ pradikat: new Set(), sweetness: new Set() });
+    expect(statedStyle(undefined)).toEqual({ pradikat: new Set(), sweetness: new Set(), grade: new Set() });
+    expect(statedStyle('')).toEqual({ pradikat: new Set(), sweetness: new Set(), grade: new Set() });
   });
 });
 
@@ -104,5 +104,28 @@ describe('conflictingStyleTerms', () => {
   it('says nothing about names that state no style', () => {
     expect(conflictingStyleTerms('Bin 389', 'Bin 389 Cabernet Shiraz')).toBeNull();
     expect(conflictingStyleTerms('Kangarilla', 'Old Vines Grenache Kangarilla')).toBeNull();
+  });
+});
+
+describe('conflictingStyleTerms — star grades', () => {
+  const Z = 'Zeltinger Sonnenuhr Riesling ';
+
+  it('rejects a different star grade at the same Prädikat', () => {
+    expect(conflictingStyleTerms(Z + 'Auslese** Goldkapsel', Z + 'Auslese*** Goldkapsel'))
+      .toBe('each name states a different star grade (** vs ***)');
+    expect(conflictingStyleTerms(Z + 'Auslese *', Z + 'Auslese ***')).toMatch(/different star grade/);
+  });
+
+  it('treats the same grade, written either way, as agreement', () => {
+    expect(conflictingStyleTerms(Z + 'Auslese***', Z + 'Auslese *** Goldkapsel')).toBeNull();
+  });
+
+  it('treats a name without stars as silence, not disagreement', () => {
+    expect(conflictingStyleTerms(Z + 'Auslese', Z + 'Auslese***')).toBeNull();
+  });
+
+  it('reports the grade in statedStyle', () => {
+    expect([...statedStyle(Z + 'Auslese** Goldkapsel').grade]).toEqual(['2star']);
+    expect(statedStyle(Z + 'Spätlese').grade.size).toBe(0);
   });
 });
