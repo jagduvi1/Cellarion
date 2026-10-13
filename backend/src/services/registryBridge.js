@@ -542,9 +542,13 @@ async function outgoingRequestImage(image) {
 }
 
 /** A local wine request (a wine nobody has) → the hosted intake. */
-async function forwardRequest({ wineName, sourceUrl, sourceUrls, image, backImage }) {
+async function forwardRequest({ wineName, sourceUrl, sourceUrls, image, backImage, follow = false }) {
   if (!isEnabled()) return null;
   let payload = { wineName, sourceUrl };
+  // follow: this install keeps the registry's id and finishes the request
+  // itself (syncForwardedRequests), so cellarion.app need not notify the key
+  // owner as well. Only forwardAndTrackRequest may say so.
+  if (follow) payload.follow = true;
   // The extra links (#1460) only when there are any: a registry from before
   // them ignores the field, and the first link rides as sourceUrl regardless.
   const links = Array.isArray(sourceUrls) ? sourceUrls.filter((u) => typeof u === 'string' && u) : [];
@@ -579,7 +583,7 @@ async function forwardAndTrackRequest(wineRequest) {
   try {
     const r = await forwardRequest({
       wineName: wineRequest.wineName, sourceUrl: wineRequest.sourceUrl, sourceUrls: wineRequest.sourceUrls,
-      image: wineRequest.image, backImage: wineRequest.backImage,
+      image: wineRequest.image, backImage: wineRequest.backImage, follow: true,
     });
     const remoteId = r && r.ok && r.body && r.body.request && r.body.request.id;
     if (remoteId && isId(remoteId)) {

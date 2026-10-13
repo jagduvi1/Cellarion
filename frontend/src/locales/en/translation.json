@@ -5168,6 +5168,7 @@
     "closeConfirmTitle": "Mark this ticket as resolved?",
     "closeConfirmMessage": "The ticket \"{{subject}}\" will be closed. A closed ticket can't take more replies, so if you need help with it again, open a new ticket.",
     "closeFailed": "Could not close the ticket — try again.",
+    "closeDiscardsReply": "The reply you have written will not be sent.",
     "awaitingResponse": "Awaiting admin response…",
     "yourDetails": "Your details",
     "reportResponse": "Our response",

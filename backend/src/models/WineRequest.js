@@ -131,6 +131,18 @@ const wineRequestSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  // Registry side (cellarion.app) only, on a request a self-hosted install
+  // filed through the bridge: when that install showed it follows THIS
+  // request — it asked what became of it (GET /v1/requests, v1.252.0+) or
+  // said so when forwarding it. Such an install finishes the request itself
+  // and notifies its own requester, so the decision here does not notify the
+  // key owner a second time (services/wineRequestOps). Null = no sign the
+  // install will ever hear (older than v1.252.0, or forwarded before it
+  // upgraded): the notification here is then the only one, and it stays.
+  installFollowsAt: {
+    type: Date,
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now

@@ -345,7 +345,8 @@ router.put('/:id/resolve', async (req, res) => {
     }
 
     // Mark resolved, move the bottles that waited on it, queue their vintages
-    // and notify the requester — shared with the Registry Bridge request sync
+    // and notify the requester (not for a bridge request its install follows:
+    // the install tells its own user) — shared with the Registry Bridge request sync
     // (services/wineRequestOps), so both finish a request the same way.
     // Null: decided meanwhile (another admin, or the bridge sync) — nothing written.
     const resolved = await completeRequestResolve(wineRequest, linkedWine, { resolvedBy: req.user.id, adminNotes });

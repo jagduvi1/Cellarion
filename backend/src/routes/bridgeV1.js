@@ -348,7 +348,7 @@ router.post('/wines/changes', validChanges, quota('changeChecks'), async (req, r
   }
 });
 
-// POST /v1/requests — { wineName, sourceUrl, sourceUrls?, image?, backImage? }
+// POST /v1/requests — { wineName, sourceUrl, sourceUrls?, image?, backImage?, follow? }
 // → the hosted wine-request queue. sourceUrls (up to three links, sourceUrl
 // first) and backImage arrived with #1460; an older install sends neither.
 router.post('/requests', quota('contributions'), async (req, res) => {
@@ -358,6 +358,15 @@ router.post('/requests', quota('contributions'), async (req, res) => {
       image: req.body?.image, backImage: req.body?.backImage,
     }, { via: 'bridge', req });
     if (r.error) return res.status(r.error.status || 400).json({ error: r.error.message, code: 'invalid' });
+    // An install from v1.264.0 says it will follow the request (follow: true):
+    // it asks for the outcome and tells its own requester, so the decision
+    // here stays silent for the key owner (models/WineRequest installFollowsAt).
+    // An older one sends nothing and is marked on its first GET /requests.
+    if (req.body?.follow === true) {
+      const WineRequest = require('../models/WineRequest');
+      await WineRequest.updateOne({ _id: r.wineRequest._id }, { $set: { installFollowsAt: new Date() } })
+        .catch((err) => console.warn('[bridge] request follow mark failed:', err.message));
+    }
     logAudit(req, 'bridge.request.forwarded', { type: 'wineRequest', id: r.wineRequest._id },
       { key: req.bridge.key.id, instanceHost: req.bridge.key.instanceHost });
     res.status(201).json({ request: { id: r.wineRequest._id, status: r.wineRequest.status, wineName: r.wineRequest.wineName } });
@@ -383,7 +392,14 @@ router.get('/requests', async (req, res) => {
     }
     const WineRequest = require('../models/WineRequest');
     const rows = await WineRequest.find({ _id: { $in: ids }, user: req.user.id, via: 'bridge' })
-      .select('status linkedWineDefinition adminNotes resolvedAt').lean();
+      .select('status linkedWineDefinition adminNotes resolvedAt installFollowsAt').lean();
+    // Asking about a pending request shows this install follows it: it will
+    // finish the request and tell its own requester (installFollowsAt).
+    const nowFollowed = rows.filter((r) => r.status === 'pending' && !r.installFollowsAt).map((r) => r._id);
+    if (nowFollowed.length) {
+      await WineRequest.updateMany({ _id: { $in: nowFollowed }, installFollowsAt: null }, { $set: { installFollowsAt: new Date() } })
+        .catch((err) => console.warn('[bridge] request follow mark failed:', err.message));
+    }
     const wineIds = rows.filter((r) => r.status === 'resolved' && r.linkedWineDefinition).map((r) => r.linkedWineDefinition);
     const wines = wineIds.length
       ? await WineDefinition.find({ _id: { $in: wineIds }, ...VISIBLE }).select(IDENTITY_SELECT).populate('country region grapes', 'name').lean()

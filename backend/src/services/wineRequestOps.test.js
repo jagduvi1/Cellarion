@@ -49,11 +49,26 @@ describe('completeRequestResolve', () => {
     expect(doc.$where).toBeUndefined();
   });
 
-  test('filed through the Registry Bridge: resolved without a notification here (the install tells its user)', async () => {
-    const doc = Object.assign(requestDoc(async () => {}), { via: 'bridge' });
+  test('filed through the Registry Bridge by an install that follows it: resolved without a notification here (the install tells its user)', async () => {
+    const doc = Object.assign(requestDoc(async () => {}), { via: 'bridge', installFollowsAt: new Date() });
     expect(await completeRequestResolve(doc, wine, { resolvedBy: 'admin1' })).toEqual({ backfilledCount: 0 });
     expect(doc.status).toBe('resolved');
     expect(createNotification).not.toHaveBeenCalled();
+  });
+
+  test('a bridge request no install follows (older than v1.252.0) still notifies the key owner here — the only signal', async () => {
+    const doc = Object.assign(requestDoc(async () => {}), { via: 'bridge', installFollowsAt: null });
+    await completeRequestResolve(doc, wine, { resolvedBy: 'admin1' });
+    expect(createNotification).toHaveBeenCalledWith('u1', 'wine_request_resolved', expect.any(String), expect.any(String), '/wine-requests');
+  });
+
+  test('resolved to a wine the bridge does not serve: notified here, because the install can never copy it', async () => {
+    for (const hidden of [{ pendingIdentity: true }, { nonWine: true }]) {
+      createNotification.mockClear();
+      const doc = Object.assign(requestDoc(async () => {}), { via: 'bridge', installFollowsAt: new Date() });
+      await completeRequestResolve(doc, { ...wine, ...hidden }, { resolvedBy: 'admin1' });
+      expect(createNotification).toHaveBeenCalledTimes(1);
+    }
   });
 
   test('any other save error still throws', async () => {
@@ -78,10 +93,16 @@ describe('completeRequestReject', () => {
     expect(createNotification).toHaveBeenCalledWith('u1', 'wine_request_rejected', expect.any(String), expect.stringContaining('a cider'), '/wine-requests');
   });
 
-  test('filed through the Registry Bridge: rejected without a notification here', async () => {
-    const doc = Object.assign(requestDoc(async () => {}), { via: 'bridge' });
+  test('filed through the Registry Bridge by an install that follows it: rejected without a notification here', async () => {
+    const doc = Object.assign(requestDoc(async () => {}), { via: 'bridge', installFollowsAt: new Date() });
     expect(await completeRequestReject(doc, { resolvedBy: 'admin1', adminNotes: 'a cider' })).toEqual({ bottlesDetached: 0 });
     expect(doc.status).toBe('rejected');
     expect(createNotification).not.toHaveBeenCalled();
+  });
+
+  test('a bridge request no install follows: the decline still notifies here', async () => {
+    const doc = Object.assign(requestDoc(async () => {}), { via: 'bridge' });
+    await completeRequestReject(doc, { resolvedBy: 'admin1', adminNotes: 'a cider' });
+    expect(createNotification).toHaveBeenCalledWith('u1', 'wine_request_rejected', expect.any(String), expect.stringContaining('a cider'), '/wine-requests');
   });
 });

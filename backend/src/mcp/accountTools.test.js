@@ -313,12 +313,12 @@ describe('reply_to_ticket (continuing the support conversation)', () => {
 });
 
 describe('close_ticket (the user ends the conversation)', () => {
-  test('is write-scoped, idempotent and not destructive', () => {
+  test('is write-scoped, idempotent and destructive (the user cannot reopen it)', () => {
     const t = tool('close_ticket');
     expect(t.scope).toBe('write');
     expect(t.annotations.readOnlyHint).toBe(false);
     expect(t.annotations.idempotentHint).toBe(true);
-    expect(t.annotations.destructiveHint).toBe(false);
+    expect(t.annotations.destructiveHint).toBe(true);
   });
 
   test('delegates to the shared accountOps service and audits via mcp — no ledger row', async () => {

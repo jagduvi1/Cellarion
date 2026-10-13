@@ -354,7 +354,9 @@ registerTool({
     'the user first, naming the ticket: a closed ticket takes no more replies, and further help means a new ticket ' +
     'with create_support_ticket. Closing an already closed ticket changes nothing.',
   scope: 'write',
-  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  // Destructive for the user: nothing reopens a ticket from their side, so
+  // clients should ask before running it (like consume_bottle).
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
   inputSchema: {
     ticket_id: z.string().regex(/^[a-f0-9]{24}$/i).describe('From list_my_tickets'),
   },

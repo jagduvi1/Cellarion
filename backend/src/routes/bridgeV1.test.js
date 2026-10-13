@@ -12,7 +12,9 @@
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn() }));
 jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn() }));
 jest.mock('../models/User', () => ({ find: jest.fn() }));
-jest.mock('../models/WineRequest', () => ({ find: jest.fn() }));
+jest.mock('../models/WineRequest', () => ({
+  find: jest.fn(), updateOne: jest.fn().mockResolvedValue({}), updateMany: jest.fn().mockResolvedValue({}),
+}));
 jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false), search: jest.fn() }));
 jest.mock('../services/wineVisibility', () => ({ findVisibleWine: jest.fn() }));
 jest.mock('../services/photoState', () => ({ absoluteImageUrl: (p) => (p ? `https://api.test${p}` : null) }));
@@ -252,6 +254,17 @@ describe('contributions', () => {
     expect((await call('POST', '/api/bridge/v1/requests', {})).status).toBe(400);
   });
 
+  test('an install that says it follows the request (follow: true) has it marked at once; one that says nothing does not', async () => {
+    const WineRequest = require('../models/WineRequest');
+    createWineRequest.mockResolvedValue({ wineRequest: { _id: 'r3', status: 'pending', wineName: 'Salmos 2019' } });
+    await call('POST', '/api/bridge/v1/requests', { wineName: 'Salmos 2019', sourceUrl: 'https://torres.es/salmos' });
+    expect(WineRequest.updateOne).not.toHaveBeenCalled();
+    expect((await call('POST', '/api/bridge/v1/requests', { wineName: 'Salmos 2019', sourceUrl: 'https://torres.es/salmos', follow: true })).status).toBe(201);
+    expect(WineRequest.updateOne).toHaveBeenCalledWith({ _id: 'r3' }, { $set: { installFollowsAt: expect.any(Date) } });
+    // follow is a flag for the route, never a field the intake sees.
+    expect(createWineRequest.mock.calls[1][1]).not.toHaveProperty('follow');
+  });
+
   test('a correction is filed via the shared service with via "bridge"; service codes map to statuses', async () => {
     createFieldCorrection.mockResolvedValue({ ok: true, proposal: { _id: 'p1', status: 'pending' } });
     const res = await call('POST', '/api/bridge/v1/corrections', { wineId: ID, fields: { producer: 'Familia Torres' }, reason: 'The label reads Familia Torres.', evidenceUrl: 'https://torres.es' });
@@ -363,6 +376,22 @@ describe('GET /requests — what became of the requests this install filed', () 
     const body = await res.json();
     expect(body.requests[0]).toMatchObject({ id: RQ1, status: 'resolved', notes: 'Added', wine: { id: ID, name: 'Salmos', producer: 'Torres' } });
     expect(body.requests[1]).toMatchObject({ id: RQ2, status: 'rejected', notes: 'Not a wine', wine: null });
+  });
+
+  test('asking about a pending request marks it followed by the install (once); decided ones are left alone', async () => {
+    const RQ3 = 'e'.repeat(24);
+    WineRequest.find.mockReturnValue(chain([
+      { _id: RQ1, status: 'pending' },
+      { _id: RQ2, status: 'resolved', linkedWineDefinition: ID },
+      { _id: RQ3, status: 'pending', installFollowsAt: new Date('2026-10-01T10:00:00Z') },
+    ]));
+    WineDefinition.find.mockReturnValue(chain([]));
+    expect((await call('GET', `/api/bridge/v1/requests?ids=${RQ1},${RQ2},${RQ3}`)).status).toBe(200);
+    expect(WineRequest.updateMany).toHaveBeenCalledTimes(1);
+    expect(WineRequest.updateMany).toHaveBeenCalledWith(
+      { _id: { $in: [RQ1] }, installFollowsAt: null },
+      { $set: { installFollowsAt: expect.any(Date) } }
+    );
   });
 
   test('no usable id is a 400; more than 50 are capped', async () => {

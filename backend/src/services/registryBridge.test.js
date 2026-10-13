@@ -253,6 +253,11 @@ describe('forwarding', () => {
     expect(client.forwardRequest).toHaveBeenLastCalledWith({ wineName: 'W', sourceUrl: 'https://w.example' });
   });
 
+  test('a request this install tracks says it follows it (follow: true), so cellarion.app does not notify the key owner too', async () => {
+    await bridge.forwardAndTrackRequest({ _id: 'local-1', wineName: 'Y', sourceUrl: 'https://y.example' });
+    expect(client.forwardRequest).toHaveBeenLastCalledWith({ wineName: 'Y', sourceUrl: 'https://y.example', follow: true });
+  });
+
   test('an inline photo leaves re-encoded: WebP, transparency kept, camera metadata (EXIF, GPS) dropped', async () => {
     const sharp = require('sharp');
     const png = await sharp({ create: { width: 8, height: 12, channels: 4, background: { r: 200, g: 20, b: 40, alpha: 0.5 } } })

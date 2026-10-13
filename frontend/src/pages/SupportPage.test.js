@@ -68,6 +68,17 @@ test('"Mark as resolved" asks first, then closes the ticket and the reply box gi
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
 
+test('with a reply typed but not sent, the confirmation says it will not be sent', async () => {
+  await openTicket();
+  fireEvent.click(screen.getByRole('button', { name: 'Mark as resolved' }));
+  expect(within(await screen.findByRole('dialog')).queryByText(/will not be sent/)).not.toBeInTheDocument();
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /cancel/i }));
+
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'One more thing…' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Mark as resolved' }));
+  expect(within(await screen.findByRole('dialog')).getByText('The reply you have written will not be sent.')).toBeInTheDocument();
+});
+
 test('cancelling the confirmation leaves the ticket open', async () => {
   await openTicket();
   fireEvent.click(screen.getByRole('button', { name: 'Mark as resolved' }));

@@ -297,6 +297,7 @@ function SupportPage() {
         <ConfirmModal
           title={t('support.closeConfirmTitle', 'Mark this ticket as resolved?')}
           message={t('support.closeConfirmMessage', 'The ticket "{{subject}}" will be closed. A closed ticket can\'t take more replies, so if you need help with it again, open a new ticket.', { subject: closing.subject })}
+          warning={replyText.trim() ? t('support.closeDiscardsReply', 'The reply you have written will not be sent.') : undefined}
           confirmLabel={t('support.markResolved', 'Mark as resolved')}
           confirmClass="btn btn-primary btn-small"
           onConfirm={() => closeTicket(closing._id)}

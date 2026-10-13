@@ -3,7 +3,9 @@
  * (routes/admin/wineRequests.js) and the Registry Bridge request sync
  * (services/registryBridge.syncForwardedRequests), so a request answered on
  * cellarion.app finishes on a self-hosted install exactly as an admin
- * decision there would: the same bottles move, the same notification goes out.
+ * decision there would: the same bottles move, the same notification goes out
+ * (on cellarion.app the key owner is not notified as well when the install
+ * follows the request — see answeredByInstall).
  *
  * Both take a loaded WineRequest that was 'pending' when loaded; the caller
  * checks that, and decides WHICH wine (resolve) or WHY (reject). The status
@@ -34,15 +36,22 @@ async function savePending(wineRequest) {
   }
 }
 
-// A request a self-hosted install filed through the Registry Bridge is answered
-// to its requester by that install: the hourly sync (services/registryBridge.
-// syncForwardedRequests) finishes it there and notifies the local user. The
-// key owner's account here never filed anything in this app, so a second bell
-// on cellarion.app is noise — and reads as the two accounts being linked by
-// something other than the key. Bridge corrections and values have no such
-// sync, so their notifications stay.
-function answeredByInstall(wineRequest) {
-  return wineRequest.via === 'bridge';
+// A request a self-hosted install filed through the Registry Bridge, where the
+// install has shown it follows that request (installFollowsAt, set by the
+// bridge routes), is answered to its requester by the install: the hourly
+// sync (services/registryBridge.syncForwardedRequests) finishes it there and
+// notifies the local user. The key owner's account here never filed anything
+// in this app, so a second bell on cellarion.app is noise, and it reads as the
+// two accounts being linked by something other than the key.
+// The bell here stays when the install will never hear: one older than
+// v1.252.0, a request forwarded before it upgraded (no installFollowsAt), or a
+// resolve to a wine the bridge does not serve (pending identity / not a wine —
+// the sync cannot copy it, so it never finishes there). Bridge corrections and
+// values have no sync at all, so their notifications always stay.
+function answeredByInstall(wineRequest, linkedWine = null) {
+  if (wineRequest.via !== 'bridge' || !wineRequest.installFollowsAt) return false;
+  if (linkedWine && (linkedWine.nonWine === true || linkedWine.pendingIdentity === true)) return false;
+  return true;
 }
 
 /**
@@ -107,7 +116,7 @@ async function completeRequestResolve(wineRequest, linkedWine, { resolvedBy = nu
   } else {
     notifMsg = `Your request for "${wineRequest.wineName}" has been approved. It was added to the registry as "${linkedWine.name}" by ${linkedWine.producer}.`;
   }
-  if (!answeredByInstall(wineRequest)) {
+  if (!answeredByInstall(wineRequest, linkedWine)) {
     createNotification(wineRequest.user, 'wine_request_resolved', 'Wine request approved', notifMsg, '/wine-requests');
   }
 
