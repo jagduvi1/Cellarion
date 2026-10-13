@@ -18,7 +18,7 @@ jest.mock('../../models/WineDefinition', () => {
   ctor.updateMany = jest.fn();
   return ctor;
 });
-jest.mock('../../models/Bottle', () => ({ aggregate: jest.fn(), countDocuments: jest.fn() }));
+jest.mock('../../models/Bottle', () => ({ aggregate: jest.fn(), countDocuments: jest.fn(), distinct: jest.fn() }));
 jest.mock('../../models/BottleImage', () => ({}));
 jest.mock('../../models/WineVintageProfile', () => ({}));
 jest.mock('../../models/WineVintagePrice', () => ({}));
@@ -45,6 +45,7 @@ jest.mock('../../services/search', () => ({ indexWine: jest.fn(), removeWine: je
 jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../../services/indexNow', () => ({ submitUrls: jest.fn() }));
 jest.mock('../../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn() }));
+jest.mock('../../utils/vintageProfile', () => ({ ensurePendingVintageProfile: jest.fn() }));
 
 const express = require('express');
 const http = require('http');
@@ -53,6 +54,7 @@ const WineDefinition = require('../../models/WineDefinition');
 const Bottle = require('../../models/Bottle');
 const searchService = require('../../services/search');
 const { logAudit } = require('../../services/audit');
+const { ensurePendingVintageProfile } = require('../../utils/vintageProfile');
 const adminWinesRouter = require('./wines');
 
 const ADMIN_ID = '64b000000000000000000001';
@@ -101,16 +103,41 @@ test('quarantines a row: sets the flag, saves, self-heals the index, audits', as
     { type: 'wine', id: WINE_ID },
     expect.objectContaining({ value: true, name: 'Blue Label' })
   );
+  // A quarantine seeds nothing — the queue rows are what it takes away.
+  expect(ensurePendingVintageProfile).not.toHaveBeenCalled();
 });
 
-test('restores a row with value: false', async () => {
+test('restores a row with value: false and re-seeds the maturity queue from its bottles in cellars', async () => {
   const doc = { ...wineDoc(), nonWine: true };
   doc.save = jest.fn().mockResolvedValue(doc);
   WineDefinition.findById.mockResolvedValue(doc);
+  Bottle.distinct.mockResolvedValue(['2019', 'NV']);
 
   const res = await toggle(WINE_ID, { value: false });
   expect(res.status).toBe(200);
   expect(doc.nonWine).toBe(false);
+  expect(Bottle.distinct).toHaveBeenCalledWith('vintage', { wineDefinition: WINE_ID, status: 'active' });
+  expect(ensurePendingVintageProfile.mock.calls).toEqual([[WINE_ID, '2019'], [WINE_ID, 'NV']]);
+});
+
+test('a restore still answers 200 when the re-seed fails', async () => {
+  const doc = { ...wineDoc(), nonWine: true };
+  doc.save = jest.fn().mockResolvedValue(doc);
+  WineDefinition.findById.mockResolvedValue(doc);
+  Bottle.distinct.mockRejectedValue(new Error('db down'));
+  const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+  const res = await toggle(WINE_ID, { value: false });
+  expect(res.status).toBe(200);
+  expect(doc.nonWine).toBe(false);
+  warn.mockRestore();
+});
+
+test('setting false on a row that was never quarantined re-seeds nothing', async () => {
+  WineDefinition.findById.mockResolvedValue(wineDoc());
+  const res = await toggle(WINE_ID, { value: false });
+  expect(res.status).toBe(200);
+  expect(Bottle.distinct).not.toHaveBeenCalled();
 });
 
 test.each([

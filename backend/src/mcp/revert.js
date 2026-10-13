@@ -683,9 +683,15 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     if (proposal.status !== 'pending') {
       // 'closed' is not a decision: the wine was merged or deleted under the
       // proposal, and the surviving record is where a fix belongs.
+      // 'approved' covers the proposals that applied on filing as well, so it
+      // is not worded as an admin decision.
       const why = proposal.status === 'closed'
         ? 'That proposal was closed when its wine was merged or deleted — file again against the surviving record if the fix is still needed'
-        : `That proposal has already been ${proposal.status} by an admin — the decision stands`;
+        : proposal.status === 'approved'
+          ? (proposal.kind === 'non_wine'
+            ? 'That non-wine flag has already been applied — an admin restores the wine in Admin → Wines → Proposals (Decided)'
+            : 'That proposal has already been applied — file a further correction to change it')
+          : `That proposal has already been ${proposal.status} by an admin — the decision stands`;
       return fail('conflict', `${why}; nothing was undone.`);
     }
     // Claim before mutating, like every other branch here.

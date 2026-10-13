@@ -99,6 +99,15 @@ export const adminApproveWineProposal = (apiFetch, id, spelling) =>
     ? { method: 'POST', headers: J, body: JSON.stringify(spelling) }
     : { method: 'POST' });
 
+// Lifts (value false) or sets the non-wine quarantine on a registry wine. The
+// proposals list uses it to restore a wine a non_wine proposal quarantined.
+export const adminSetWineNonWine = (apiFetch, wineId, value) =>
+  apiFetch(`/api/admin/wines/${wineId}/non-wine`, {
+    method: 'POST',
+    headers: J,
+    body: JSON.stringify({ value }),
+  });
+
 export const adminRejectWineProposal = (apiFetch, id, reason) =>
   apiFetch(`/api/admin/wine-proposals/${id}/reject`, {
     method: 'POST',

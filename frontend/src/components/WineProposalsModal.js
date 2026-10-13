@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import Modal from './Modal';
 import {
   adminGetWineProposals, adminApproveWineProposal, adminRejectWineProposal,
-  adminBulkApproveWineProposals, adminBulkRejectWineProposals,
+  adminBulkApproveWineProposals, adminBulkRejectWineProposals, adminSetWineNonWine,
 } from '../api/admin';
 
 const PAGE_SIZE = 20;
@@ -173,6 +173,30 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
     }
   };
   const removeDecidedRow = (id) => removeDecidedRows([id]);
+
+  // An applied non-wine flag — usually applied by the curator on filing — is
+  // lifted here. The row stays in the decided list; only its wine changes.
+  const restoreWine = async (proposal) => {
+    setPendingId(proposal._id);
+    setError(null);
+    setRowErrors(prev => { const next = { ...prev }; delete next[proposal._id]; return next; });
+    try {
+      const res = await adminSetWineNonWine(apiFetch, proposal.wineDefinition._id, false);
+      if (res.ok) {
+        setItems(prev => (prev || []).map(x => (x._id === proposal._id
+          ? { ...x, wineDefinition: { ...x.wineDefinition, nonWine: false } }
+          : x)));
+        onChanged?.();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setRowErrors(prev => ({ ...prev, [proposal._id]: data.error || t('admin.wines.proposals.restoreWineError') }));
+      }
+    } catch {
+      setRowErrors(prev => ({ ...prev, [proposal._id]: t('common.networkError') }));
+    } finally {
+      setPendingId(null);
+    }
+  };
 
   // `spelling` is the admin's pick for a producer-spelling split (see
   // adminApproveWineProposal); absent for every other approve.
@@ -696,6 +720,26 @@ function WineProposalsModal({ apiFetch, onClose, onChanged }) {
                     >
                       {t('admin.wines.proposals.reject')}
                     </button>
+                  )}
+                </div>
+              )}
+
+              {p.status === 'approved' && p.kind === 'non_wine' && p.wineDefinition && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+                  {p.wineDefinition.nonWine ? (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-small"
+                      disabled={!!pendingId}
+                      onClick={() => restoreWine(p)}
+                      title={t('admin.wines.proposals.restoreWineTitle')}
+                    >
+                      {pendingId === p._id
+                        ? t('admin.wines.proposals.restoringWine')
+                        : t('admin.wines.proposals.restoreWine')}
+                    </button>
+                  ) : (
+                    <span style={{ ...mutedStyle, fontSize: '0.8rem' }}>{t('admin.wines.proposals.restoredWine')}</span>
                   )}
                 </div>
               )}

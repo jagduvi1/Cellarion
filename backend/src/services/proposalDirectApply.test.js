@@ -6,8 +6,10 @@
  */
 const {
   classifyProposal, appellationImpliedByName, proposedAppellationCountryConflict, appellationsAgree,
+  NON_WINE_DIRECT_MAX_OWNERS,
 } = require('./proposalDirectApply');
 const Appellation = require('../models/Appellation');
+const Bottle = require('../models/Bottle');
 
 // The REAL keying function, not a hand-rolled copy: a mock that normalized
 // differently from production would let every test here pass while the live
@@ -222,8 +224,26 @@ describe('what stays gated, and why', () => {
     expect((await classifyProposal(wine('X'), 'merge', null)).direct).toBe(false);
   });
 
-  it('gates non_wine quarantines', async () => {
-    expect((await classifyProposal(wine('X'), 'non_wine', null)).direct).toBe(false);
+  describe('non_wine (2026-10-13)', () => {
+    const owners = (n) => jest.spyOn(Bottle, 'distinct')
+      .mockResolvedValue(Array.from({ length: n }, (_, i) => `user-${i}`));
+
+    it('applies a quarantine on a row one member holds — the beer in its creator\'s cellar', async () => {
+      const spy = owners(1);
+      const v = await classifyProposal(wine('Sparkling Ale', { _id: 'wine-1' }), 'non_wine', null);
+      expect(v.direct).toBe(true);
+      // Counted per member across every bottle status, for THIS row.
+      expect(spy).toHaveBeenCalledWith('user', { wineDefinition: 'wine-1' });
+    });
+
+    it('applies at the owner limit and gates one past it', async () => {
+      owners(NON_WINE_DIRECT_MAX_OWNERS);
+      expect((await classifyProposal(wine('X'), 'non_wine', null)).direct).toBe(true);
+      owners(NON_WINE_DIRECT_MAX_OWNERS + 1);
+      const v = await classifyProposal(wine('X'), 'non_wine', null);
+      expect(v.direct).toBe(false);
+      expect(v.reason).toMatch(`${NON_WINE_DIRECT_MAX_OWNERS + 1} members`);
+    });
   });
 
   it('refuses an empty payload rather than applying nothing', async () => {

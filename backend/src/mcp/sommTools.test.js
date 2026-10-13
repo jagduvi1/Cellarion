@@ -1652,6 +1652,40 @@ describe('propose_wine_correction', () => {
       expect(approveProposal).not.toHaveBeenCalled();
     });
 
+    // 2026-10-13: beers and ciders sat in public search for hours after the
+    // curator had named them, waiting on an admin.
+    test('a non-wine flag applies on filing through the same approveProposal', async () => {
+      const w = mkWine();
+      WineCorrectionProposal.create.mockResolvedValue({ _id: 'prop-7' });
+      classifyProposal.mockResolvedValueOnce({ direct: true, reason: 'A reversible flag on a row few members hold.' });
+      approveProposal.mockResolvedValueOnce({ status: 200, body: { appliedNote: 'Quarantined as non-wine; 1 pending maturity-queue row(s) removed' } });
+
+      const body = parse(await tool('propose_wine_correction').handler({
+        wine_id: WINE_ID, kind: 'non_wine', reason: REASON,
+      }, SOMM_CTX));
+
+      expect(classifyProposal).toHaveBeenCalledWith(w, 'non_wine', null);
+      expect(approveProposal).toHaveBeenCalledWith('prop-7', expect.anything());
+      expect(body.data.status).toBe('approved');
+      expect(body.data.applied_note).toMatch(/^Quarantined as non-wine/);
+      expect(body.data.note).toMatch(/owners keep their bottles/i);
+      expect(body.data.undo).toMatch(/admin restores it/);
+    });
+
+    test('a non-wine flag on a row many members hold waits for an admin', async () => {
+      mkWine();
+      WineCorrectionProposal.create.mockResolvedValue({ _id: 'prop-8' });
+      classifyProposal.mockResolvedValueOnce({ direct: false, reason: '5 members hold bottles of this wine' });
+
+      const body = parse(await tool('propose_wine_correction').handler({
+        wine_id: WINE_ID, kind: 'non_wine', reason: REASON,
+      }, SOMM_CTX));
+
+      expect(body.data.status).toBe('pending');
+      expect(body.data.why_reviewed).toMatch(/5 members/);
+      expect(approveProposal).not.toHaveBeenCalled();
+    });
+
     test('merges never reach the classifier at all', async () => {
       mkWine();
       WineDefinition.findById.mockReturnValueOnce(chain(mkWine()))
@@ -1885,13 +1919,15 @@ describe('propose_wine_correction', () => {
       { _id: 'wp', reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
   });
 
-  test('undo refuses once an admin decided — the decision stands, nothing claimed or deleted', async () => {
+  test('undo refuses an applied non-wine flag — an admin restores it, nothing claimed or deleted', async () => {
     const row = { _id: 'wp', action: 'somm_proposal', reversed: false, detail: { proposalId: 'prop-1', wineId: WINE_ID, kind: 'non_wine' } };
     McpActionLog.findOne.mockReturnValue(chain(row));
     WineCorrectionProposal.findById.mockReturnValue(chain({ _id: 'prop-1', status: 'approved', kind: 'non_wine' }));
     const res = await tool('undo_last').handler({}, { ...SOMM_CTX, scopes: ['consume', 'write'] });
     expect(parse(res).error.code).toBe('conflict');
-    expect(parse(res).error.message).toMatch(/approved/);
+    // Not worded as an admin decision: a non-wine flag usually applied on filing.
+    expect(parse(res).error.message).toMatch(/already been applied/);
+    expect(parse(res).error.message).toMatch(/Admin → Wines → Proposals/);
     expect(McpActionLog.findOneAndUpdate).not.toHaveBeenCalled();
     expect(WineCorrectionProposal.deleteOne).not.toHaveBeenCalled();
   });

@@ -2112,22 +2112,25 @@ registerTool({
   description:
     'Files a correction on a registry wine. A correction that only FILLS BLANK appellation, region or classification '
     + 'fields, and does not contradict the wine\'s own name, APPLIES IMMEDIATELY — the reply says "Applied" and gives '
-    + 'the applied_note. Everything else is filed for an admin and the reply says "awaiting admin review" with '
+    + 'the applied_note. A non-wine flag applies immediately too, unless more than three members hold bottles of the '
+    + 'row. Everything else is filed for an admin and the reply says "awaiting admin review" with '
     + 'why_reviewed: producer and name (they drive the dedup key and the public URL), country, any OVERWRITE of a '
-    + 'field that already has a value, merges, non-wine flags, and any appellation that disagrees with an appellation '
+    + 'field that already has a value, merges, and any appellation that disagrees with an appellation '
     + 'stated in the wine\'s name. That last one is a ROUTING rule, not a verdict — an Australian "Prosecco" really is '
     + 'a King Valley wine and not the Italian DOC, so file it with your evidence and an admin will read it. ' +
     'THIS is the path for the identity fields set_wine_profile deliberately does not cover: producer, name, ' +
     'appellation, region, country and classification (kind "field_correction", region/country as plain names — ' +
     'resolved against the taxonomy when it applies, never minted). Also: kind "merge" when this wine duplicates another ' +
     'registry wine (merge_target_id = the wine that should SURVIVE), and kind "non_wine" when the row is not wine at ' +
-    'all (spirits/cider/sake) and should be quarantined out of search and the maturity queue. Always give the reason ' +
+    'all (beer/spirits/cider/sake/soft drinks), or nothing on the record or in research shows that it is wine, and ' +
+    'should be quarantined out of search and the maturity queue — owners keep their bottles, and an admin can ' +
+    'restore it. Always give the reason ' +
     'the somm established, and cite an evidence_url (producer site, appellation register) — evidence is what makes a ' +
     'one-click approval possible. One pending proposal per wine and kind — list_pending_corrections shows what is ' +
     'already filed. MERGE proposals are decided in Admin → Wines on the web, DELIBERATELY not over MCP: a wine ' +
     'merge moves bottles and rewrites references (same stance as taxonomy merge), and the merge DELETES the absorbed '
     + 'record — there is no unmerge. undo_last withdraws a proposal that is still pending; one that already applied is '
-    + 'changed by filing a further correction. A producer spelled unlike the rest of that producer in the registry '
+    + 'changed by filing a further correction (an applied non-wine flag is lifted by an admin). A producer spelled unlike the rest of that producer in the registry '
     + 'comes back with registry_spellings: use the registry\'s spelling unless it is the wrong one, and say which in '
     + 'the reason.',
   scope: 'write',
@@ -2317,9 +2320,13 @@ registerTool({
     // (rather than a second write path) is what keeps canonicalization, the
     // dedup key, the search/embed/IndexNow follow-through and the re-enrich
     // identical between the two doors.
+    //
+    // A non-wine flag takes the same door (2026-10-13): the quarantine is one
+    // reversible flag, and classifyProposal keeps the gate only for a row
+    // several members hold.
     let applied = null;
     let reviewReason = null;
-    if (args.kind === 'field_correction') {
+    if (args.kind === 'field_correction' || args.kind === 'non_wine') {
       // Required lazily: wineProposals pulls in the whole admin route tree
       // (which requires the MCP registry back), so a top-level require here
       // would close a cycle.
@@ -2382,9 +2389,16 @@ registerTool({
         ...(proposedFields ? { proposed_fields: proposedFields } : {}),
         evidence_url: evidenceUrl || null,
         applied_note: applied,
-        note: 'Live on the wine now. Blank identity fields that agree with the name apply on filing; '
-          + 'the proposal is kept with your reason so an admin can review it afterwards.',
-        undo: 'This is already applied — file a further correction to change it again.',
+        ...(args.kind === 'non_wine' ? {
+          note: 'Quarantined now: the row is gone from registry search and the maturity queue. Owners keep their '
+            + 'bottles, and a member who adds the same drink again lands on this hidden row. The proposal is kept '
+            + 'with your reason so an admin can review it afterwards.',
+          undo: 'This is already applied — an admin restores it as wine in Admin → Wines → Proposals (Decided).',
+        } : {
+          note: 'Live on the wine now. Blank identity fields that agree with the name apply on filing; '
+            + 'the proposal is kept with your reason so an admin can review it afterwards.',
+          undo: 'This is already applied — file a further correction to change it again.',
+        }),
       },
     } : {
       summary: `Proposal filed: ${kindLabel} for ${wine.producer} — ${wine.name} (awaiting admin review)`,

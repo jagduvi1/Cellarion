@@ -34,6 +34,7 @@ const DiscussionReply = require('../../models/DiscussionReply');
 const WineEmbedding = require('../../models/WineEmbedding');
 const WineNotDuplicate = require('../../models/WineNotDuplicate');
 const { bumpDataVersion } = require('../../services/dataVersion');
+const { ensurePendingVintageProfile } = require('../../utils/vintageProfile');
 // Pending correction proposals close with their wine THROUGH this service, so
 // a user who filed one is told what happened (it owns the model access).
 const { closePendingForWine } = require('../../services/wineCorrectionNotify');
@@ -690,10 +691,24 @@ router.post('/:id/non-wine', async (req, res) => {
     // A user's private draft is not registry content, not even to an admin.
     if (!wine || wine.draft === true) return res.status(404).json({ error: 'Wine not found' });
 
+    const wasNonWine = wine.nonWine === true;
     wine.nonWine = req.body.value;
     await wine.save();
     // Self-healing index sync: indexWine removes flagged rows, re-adds restored ones.
     searchService.indexWine(wine._id);
+
+    // A restore gives back the maturity-queue rows the quarantine removed
+    // (wineProposals' non_wine apply deletes the PENDING ones), seeded from
+    // the bottles in cellars — the same re-seed a pending wine gets when it
+    // is promoted. Bottles on order are queued when they arrive.
+    if (wasNonWine && req.body.value === false) {
+      try {
+        const vintages = await Bottle.distinct('vintage', { wineDefinition: wine._id, status: 'active' });
+        for (const v of vintages) await ensurePendingVintageProfile(wine._id, v);
+      } catch (err) {
+        console.warn('Maturity re-seed after a non-wine restore failed (non-fatal):', err.message);
+      }
+    }
 
     logAudit(req, 'admin.wine.nonWine', { type: 'wine', id: wine._id },
       { value: req.body.value, name: wine.name, producer: wine.producer });

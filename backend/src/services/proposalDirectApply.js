@@ -23,7 +23,6 @@
  *   - merge            performWineMerge ends in source.deleteOne() — the
  *                      absorbed record is destroyed, not tombstoned, so an
  *                      unmerge means rebuilding it by hand
- *   - non_wine         quarantines a row out of search and the queue
  *   - country          coarse, near-never blank on a real record, severe wrong
  *   - OVERWRITES       replacing a value someone already curated is a
  *                      different act from filling a blank
@@ -47,12 +46,28 @@
  * judgement (Prosecco, Rosso Veronese, and the Monatio class — a name carrying
  * the generic designation "Vino Rosso", whose whole legal meaning is the
  * ABSENCE of a geographic indication) route to review.
+ *
+ * NON-WINE (2026-10-13) applies on filing too, by the same reversibility line.
+ * The quarantine is a flag: the row leaves registry search and the maturity
+ * queue, every owner's bottles keep working, and an admin restores it in one
+ * click (Admin → Wines → Proposals → Decided), which re-seeds the queue rows
+ * the quarantine removed. What the gate cost was not: beers and ciders sat in
+ * public search for hours after the curator had already named them, waiting
+ * on an admin to agree with the obvious. One exception keeps the
+ * gate — a row several members hold. A beer is rarely in four cellars; a real
+ * wine with an odd name often is, and hiding it from all of them is an admin's
+ * call.
  */
 const Appellation = require('../models/Appellation');
+const Bottle = require('../models/Bottle');
 const { normalizeAppellationKey } = require('../utils/normalize');
 
 // Blank-fillable, reversible, and not part of the dedup key.
 const DIRECT_FIELDS = ['appellation', 'region', 'classification'];
+
+// A non-wine flag applies on filing while at most this many members hold a
+// bottle of the row (any status — a drunk bottle is still in their history).
+const NON_WINE_DIRECT_MAX_OWNERS = 3;
 
 // A name is at most this many tokens deep for candidate generation — guards a
 // pathological title from generating a quadratic number of lookups.
@@ -192,6 +207,16 @@ async function proposedAppellationCountryConflict(proposed, countryId) {
  *   the curator: when direct is false it says what to expect, not what failed.
  */
 async function classifyProposal(wine, kind, proposedFields) {
+  if (kind === 'non_wine') {
+    const owners = (await Bottle.distinct('user', { wineDefinition: wine._id })).length;
+    if (owners > NON_WINE_DIRECT_MAX_OWNERS) {
+      return {
+        direct: false,
+        reason: `${owners} members hold bottles of this wine — hiding it from all of them is an admin's call.`,
+      };
+    }
+    return { direct: true, reason: 'A reversible flag on a row few members hold.' };
+  }
   if (kind !== 'field_correction') {
     return { direct: false, reason: `${kind} proposals are always reviewed by an admin.` };
   }
@@ -246,4 +271,5 @@ module.exports = {
   appellationsAgree,
   fieldIsEmpty,
   DIRECT_FIELDS,
+  NON_WINE_DIRECT_MAX_OWNERS,
 };

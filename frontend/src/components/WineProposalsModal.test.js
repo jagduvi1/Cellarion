@@ -7,6 +7,7 @@ vi.mock('../api/admin', () => ({
   adminRejectWineProposal: vi.fn(),
   adminBulkApproveWineProposals: vi.fn(),
   adminBulkRejectWineProposals: vi.fn(),
+  adminSetWineNonWine: vi.fn(),
 }));
 
 // `t` must keep a stable identity across renders (the WineLowConfidenceModal
@@ -16,7 +17,7 @@ vi.mock('react-i18next', () => {
   return { useTranslation: () => ({ t }) };
 });
 
-const { adminGetWineProposals, adminApproveWineProposal, adminBulkApproveWineProposals } = await import('../api/admin');
+const { adminGetWineProposals, adminApproveWineProposal, adminBulkApproveWineProposals, adminSetWineNonWine } = await import('../api/admin');
 const WineProposalsModal = (await import('./WineProposalsModal')).default;
 
 // 2026-09-28: approving producer corrections gave wines a spelling the rest of
@@ -127,4 +128,41 @@ test('a coded 409 (the correction would duplicate a wine) keeps the row and show
   fireEvent.click(await screen.findByText('admin.wines.proposals.approve'));
   expect(await screen.findByText(/use a merge proposal instead/)).toBeInTheDocument();
   expect(adminGetWineProposals).toHaveBeenCalledTimes(1);
+});
+
+// 2026-10-13: a curator's non-wine flag applies on filing; the decided list is
+// where an admin lifts one that was wrong.
+const nonWineRow = (id, nonWine) => ({
+  _id: id, kind: 'non_wine', status: 'approved',
+  proposer: { _id: 'u9', username: 'somm1' },
+  wineDefinition: { _id: `w-${id}`, name: 'Brut IPA', producer: 'Some Estate', nonWine },
+  appliedNote: 'Quarantined as non-wine; 0 pending maturity-queue row(s) removed',
+  reason: 'No grape, place or wine style anywhere.', createdAt: '2026-10-13T00:00:00.000Z',
+});
+
+test('an applied non-wine flag offers Restore as wine, and restoring lifts it on the row', async () => {
+  adminGetWineProposals.mockResolvedValue(ok(payload([nonWineRow('n1', true)])));
+  adminSetWineNonWine.mockResolvedValue(ok({ nonWine: false }));
+  renderModal();
+  fireEvent.click(await screen.findByText('admin.wines.proposals.restoreWine'));
+  await waitFor(() => expect(adminSetWineNonWine).toHaveBeenCalledWith(expect.anything(), 'w-n1', false));
+  expect(await screen.findByText('admin.wines.proposals.restoredWine')).toBeInTheDocument();
+  expect(screen.queryByText('admin.wines.proposals.restoreWine')).toBeNull();
+});
+
+test('a failed restore keeps the button and says why on the row', async () => {
+  adminGetWineProposals.mockResolvedValue(ok(payload([nonWineRow('n1', true)])));
+  adminSetWineNonWine.mockResolvedValue({ ok: false, status: 404, json: async () => ({ error: 'Wine not found' }) });
+  renderModal();
+  fireEvent.click(await screen.findByText('admin.wines.proposals.restoreWine'));
+  expect(await screen.findByText('Wine not found')).toBeInTheDocument();
+  expect(screen.getByText('admin.wines.proposals.restoreWine')).toBeInTheDocument();
+});
+
+test('a wine already restored shows that, with no button; other decided kinds show neither', async () => {
+  adminGetWineProposals.mockResolvedValue(ok(payload([nonWineRow('n1', false), { ...row('p1'), status: 'approved' }])));
+  renderModal();
+  expect(await screen.findByText('admin.wines.proposals.restoredWine')).toBeInTheDocument();
+  expect(screen.queryByText('admin.wines.proposals.restoreWine')).toBeNull();
+  expect(screen.getAllByText('admin.wines.proposals.restoredWine')).toHaveLength(1);
 });
