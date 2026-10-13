@@ -2039,13 +2039,15 @@ async function reassignVintageProfiles(sourceId, keeperId) {
 
   for (const sp of sourceProfiles) {
     const kp = keeperByVintage.get(sp.vintage);
+    // updatedAt: a window moving onto the keeper is a change to the keeper
+    // for the Registry Bridge change check (routes/bridgeV1), which reads it.
     if (!kp) {
-      await WineVintageProfile.updateOne({ _id: sp._id }, { $set: { wineDefinition: keeperId } });
+      await WineVintageProfile.updateOne({ _id: sp._id }, { $set: { wineDefinition: keeperId, updatedAt: new Date() } });
       // Track it so a second source with the same vintage reconciles against this one.
       keeperByVintage.set(sp.vintage, { vintage: sp.vintage, status: sp.status });
     } else if (kp.status !== 'reviewed' && sp.status === 'reviewed') {
       await WineVintageProfile.deleteOne({ wineDefinition: keeperId, vintage: sp.vintage });
-      await WineVintageProfile.updateOne({ _id: sp._id }, { $set: { wineDefinition: keeperId } });
+      await WineVintageProfile.updateOne({ _id: sp._id }, { $set: { wineDefinition: keeperId, updatedAt: new Date() } });
       keeperByVintage.set(sp.vintage, { vintage: sp.vintage, status: 'reviewed' });
     } else {
       await WineVintageProfile.deleteOne({ _id: sp._id });

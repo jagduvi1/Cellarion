@@ -247,17 +247,18 @@ describe('POST /wines/changes', () => {
       { _id: ID4, updatedAt: new Date('2026-08-01'), nonWine: true },
     ]));
     WineVintageProfile.aggregate.mockResolvedValue([
-      { _id: ID, at: new Date('2026-09-10T21:14:00Z') },
-      { _id: ID3, at: new Date('2026-08-15') }, // before since: not a change
+      { _id: ID, at: new Date('2026-10-22T21:14:00Z') },
+      { _id: ID3, at: new Date('2026-10-15') }, // before since: not a change
     ]);
-    RegistryDataValue.aggregate.mockResolvedValue([{ _id: ID2, at: new Date('2026-09-12') }]);
+    RegistryDataValue.aggregate.mockResolvedValue([{ _id: ID2, at: new Date('2026-10-24') }]);
 
-    const body = await (await call('POST', '/api/bridge/v1/wines/changes', { ids: [ID, ID2, ID3, ID4], since: '2026-09-01T00:00:00Z' })).json();
+    // A watermark past the cutover: windows and values compare to since.
+    const body = await (await call('POST', '/api/bridge/v1/wines/changes', { ids: [ID, ID2, ID3, ID4], since: '2026-10-19T06:30:00Z' })).json();
 
     // The latest of the three is what the install compares its sync stamp to.
     expect(body.changed).toEqual([
-      { id: ID, updatedAt: '2026-09-10T21:14:00.000Z' },
-      { id: ID2, updatedAt: '2026-09-12T00:00:00.000Z' },
+      { id: ID, updatedAt: '2026-10-22T21:14:00.000Z' },
+      { id: ID2, updatedAt: '2026-10-24T00:00:00.000Z' },
     ]);
     expect(body.removed).toEqual([ID4]);
     // Only wines present and still wine are asked about, and only reviewed
@@ -268,6 +269,30 @@ describe('POST /wines/changes', () => {
     const [valStages] = RegistryDataValue.aggregate.mock.calls[0];
     expect(valStages[0].$match).toEqual({ wineDefinition: { $in: [ID, ID2, ID3] }, status: 'published' });
     expect(valStages[1].$group.at).toEqual({ $max: { $max: ['$updatedAt', '$decidedAt'] } });
+  });
+
+  // The backlog: a window reviewed between an install's copy and its last
+  // check before windows counted was never reported, and is older than that
+  // watermark. A since before the cutover reports every window/value change,
+  // so the install's own sync-stamp skip fetches only the copies behind.
+  test('a watermark from before windows counted is told about every window and value change', async () => {
+    const ID3 = 'c'.repeat(24);
+    WineDefinition.find.mockReturnValue(chain([
+      { _id: ID, updatedAt: new Date('2026-09-01'), nonWine: false },
+      { _id: ID2, updatedAt: new Date('2026-09-01'), nonWine: false },
+      { _id: ID3, updatedAt: new Date('2026-09-01'), nonWine: false },
+    ]));
+    WineVintageProfile.aggregate.mockResolvedValue([{ _id: ID, at: new Date('2026-09-20') }]);
+    RegistryDataValue.aggregate.mockResolvedValue([{ _id: ID2, at: new Date('2026-08-23') }]);
+
+    const body = await (await call('POST', '/api/bridge/v1/wines/changes', { ids: [ID, ID2, ID3], since: '2026-10-12T06:30:00Z' })).json();
+
+    expect(body.changed).toEqual([
+      { id: ID, updatedAt: '2026-09-20T00:00:00.000Z' },
+      // Reported for its value; the time is still the latest of the two.
+      { id: ID2, updatedAt: '2026-09-01T00:00:00.000Z' },
+    ]);
+    // A wine with nothing attached still compares its record to since.
   });
 
   test("a wine record changed later than its window reports the wine's own time", async () => {

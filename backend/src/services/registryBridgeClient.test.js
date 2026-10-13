@@ -100,4 +100,20 @@ describe('search / fetchWine / changes', () => {
     expect(JSON.parse(global.fetch.mock.calls[0][1].body).ids).toHaveLength(5000);
     expect(r).toMatchObject({ changed: [{ id: ids[0], updatedAt: 'x' }], removed: [ids[5000]], checked: 5001, failed: false });
   });
+
+  // The next watermark is the registry's clock, not the install's: the answer
+  // carried checkedAt, but changes() dropped it, so refreshHeld always fell
+  // back to its own start time.
+  test('changes passes on the registry\'s checkedAt from the first chunk', async () => {
+    const ids = Array.from({ length: 5001 }, (_, i) => String(i).padStart(24, '0'));
+    global.fetch
+      .mockResolvedValueOnce(jsonRes(200, { changed: [], removed: [], checked: 5000, checkedAt: '2026-10-19T06:30:01.000Z' }))
+      .mockResolvedValueOnce(jsonRes(200, { changed: [], removed: [], checked: 1, checkedAt: '2026-10-19T06:30:03.000Z' }));
+    expect((await client.changes(ids, null)).checkedAt).toBe('2026-10-19T06:30:01.000Z');
+  });
+
+  test('an older registry that sends no checkedAt leaves it unset', async () => {
+    global.fetch.mockResolvedValueOnce(jsonRes(200, { changed: [], removed: [], checked: 1 }));
+    expect((await client.changes(['a'.repeat(24)], null)).checkedAt).toBeUndefined();
+  });
 });

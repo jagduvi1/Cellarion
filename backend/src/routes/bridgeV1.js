@@ -338,6 +338,16 @@ router.get('/wines/:id', quota('fetches'), async (req, res) => {
  * @param {Array} wineIds
  * @returns {Promise<Map<string, Date>>}
  */
+// Windows and values count from this release on. An install whose watermark
+// is older was never told about the ones reviewed between its copy and its
+// last check, and comparing them to that watermark would leave them missing
+// for good. So until its watermark passes this date it is told about every
+// window/value change. Its own "already have this version" skip
+// (registrySyncedAt >= updatedAt) fetches only the copies actually behind,
+// and a run cut short by the fetch quota keeps its watermark, so the
+// catch-up resumes next week.
+const ATTACHED_COUNTED_FROM = new Date('2026-10-14T00:00:00Z');
+
 async function latestAttachedChange(wineIds) {
   const latest = new Map();
   if (!wineIds.length) return latest;
@@ -377,14 +387,23 @@ router.post('/wines/changes', validChanges, quota('changeChecks'), async (req, r
       .select('_id updatedAt nonWine').lean();
     const present = new Map(found.map((w) => [String(w._id), w]));
     const latest = await latestAttachedChange(found.filter((w) => !w.nonWine).map((w) => w._id));
+    // Before the cutover every window/value change counts (see
+    // ATTACHED_COUNTED_FROM); the wine record itself always compares to since.
+    const attachedSince = since < ATTACHED_COUNTED_FROM ? new Date(0) : since;
     const changed = [];
     const removed = [];
     for (const id of ids) {
       const w = present.get(String(id));
       if (!w || w.nonWine) { removed.push(String(id)); continue; }
-      const changedAt = [w.updatedAt, latest.get(String(id))]
-        .filter(Boolean).map((d) => new Date(d)).reduce((a, b) => (b > a ? b : a), new Date(0));
-      if (changedAt.getTime() > since.getTime()) changed.push({ id: String(id), updatedAt: changedAt });
+      const recordAt = w.updatedAt ? new Date(w.updatedAt) : null;
+      const attachedAt = latest.get(String(id)) || null;
+      const recordChanged = !!recordAt && recordAt > since;
+      const attachedChanged = !!attachedAt && attachedAt > attachedSince;
+      if (!recordChanged && !attachedChanged) continue;
+      // The latest of the two: what the install compares its own sync stamp
+      // to, so a copy already newer than every change is not fetched again.
+      const updatedAt = !attachedAt || (recordAt && recordAt > attachedAt) ? recordAt : attachedAt;
+      changed.push({ id: String(id), updatedAt });
     }
     res.json({ since, checkedAt, checked: ids.length, changed, removed });
   } catch (error) {

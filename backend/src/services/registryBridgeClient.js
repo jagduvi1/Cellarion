@@ -131,6 +131,10 @@ async function changes(ids, since) {
     const chunk = ids.slice(i, i + 5000);
     const r = await request('/wines/changes', { method: 'POST', body: { ids: chunk, since: since ? new Date(since).toISOString() : undefined } });
     if (!r || !r.ok) { out.failed = true; break; }
+    // The registry's own clock for the next watermark — the first chunk's,
+    // the earliest. Without it the install's clock was used, and a clock
+    // running ahead skipped every registry change made in that gap.
+    if (i === 0 && r.body.checkedAt) out.checkedAt = r.body.checkedAt;
     out.changed.push(...(r.body.changed || []));
     out.removed.push(...(r.body.removed || []));
     out.checked += r.body.checked || chunk.length;
