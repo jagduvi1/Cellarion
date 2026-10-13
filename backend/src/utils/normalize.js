@@ -22,19 +22,10 @@ const WINE_STOP_WORDS = new Set([
   'and', 'et', 'y', 'e', 'und'
 ]);
 
-// A star grade is part of a wine's name, not punctuation: Markus Molitor
-// prints one to three stars after the Pr\u00e4dikat ("Auslese*", "Auslese**",
-// "Auslese***"), and each grade is a separately bottled, separately priced
-// wine. Stripped with the rest of the punctuation, the grades vanished: two of
-// them shared one dedup key (the second could not be added at all) and the
-// matcher read them as the same wine. A run of stars becomes a word instead.
-const STAR_RUN = /[*\u2605]+/g; // '*' and '\u2605'
-
 /**
  * Normalize a string for comparison
  * - Convert to lowercase
  * - Remove accents/diacritics
- * - A run of stars becomes a grade word ("Auslese***" \u2192 "auslese 3star")
  * - Remove punctuation
  * - Collapse whitespace
  */
@@ -45,11 +36,41 @@ const normalizeString = (str) => {
     .toLowerCase()
     .normalize('NFD') // Decompose accented characters
     .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
-    .replace(STAR_RUN, (run) => ` ${run.length}star `) // Star grade \u2192 word
     .replace(/[^\w\s]/g, '') // Remove punctuation
     .replace(/\s+/g, ' ') // Collapse whitespace
     .trim();
 };
+
+// A star grade is part of a wine's NAME: Markus Molitor prints one to three
+// stars after the Pr\u00e4dikat ("Auslese*", "Auslese**", "Auslese***"), and each
+// grade is a separately bottled, separately priced wine. Stripped with the
+// rest of the punctuation, the grades vanished: two of them shared one dedup
+// key (the second could not be added at all) and the matcher read them as the
+// same wine.
+//
+// Names only. normalizeString serves every field, and a star means nothing in
+// a grape, a region, a country or a producer: there "Riesling*" must still be
+// Riesling, and a bare "*" must still read as empty (a placeholder), so those
+// keep stripping stars (release audit 2026-10-13).
+//
+// A run of one to MAX_STAR_GRADE stars ('*' or '\u2605', spaces between them
+// allowed) becomes a word: "Auslese***" \u2192 "Auslese 3star ". A longer run is
+// decoration and goes with the punctuation; a value that is nothing but stars
+// is a placeholder, not a grade, and is left for normalizeString to empty.
+const MAX_STAR_GRADE = 5;
+const STAR_RUN = /[*\u2605](?:\s*[*\u2605])*/g;
+const spellStarGrades = (str) => {
+  if (!str) return '';
+  const s = String(str);
+  if (!/[\p{L}\p{N}]/u.test(s.replace(STAR_RUN, ''))) return s;
+  return s.replace(STAR_RUN, (run) => {
+    const n = run.replace(/\s/g, '').length;
+    return n <= MAX_STAR_GRADE ? ` ${n}star ` : ' ';
+  });
+};
+
+/** normalizeString for a wine NAME: a star grade survives as a word. */
+const normalizeWineName = (str) => normalizeString(spellStarGrades(str));
 
 /** Longest a stored taxonomy display name may be. */
 const MAX_TAXONOMY_NAME = 200;
@@ -369,7 +390,7 @@ const normalizeProducerKey = (producer) => {
 const PENDING_KEY_PREFIX = 'pending~';
 const pendingProducerKey = (userId) => `${PENDING_KEY_PREFIX}${String(userId)}`;
 const pendingWineKey = (name, userId, appellation = '') =>
-  `${pendingProducerKey(userId)}:${normalizeString(name)}:${normalizeString(appellation)}`;
+  `${pendingProducerKey(userId)}:${normalizeWineName(name)}:${normalizeString(appellation)}`;
 
 // DRAFT namespace (support ticket 2026-09-12: a wine created privately and
 // published later). Same construction and the same argument as the pending
@@ -382,14 +403,14 @@ const pendingWineKey = (name, userId, appellation = '') =>
 const DRAFT_KEY_PREFIX = 'draft~';
 const draftProducerKey = (userId) => `${DRAFT_KEY_PREFIX}${String(userId)}`;
 const draftWineKey = (name, producer, userId, appellation = '') =>
-  `${draftProducerKey(userId)}:${normalizeString(producer || '')}:${normalizeString(name)}:${normalizeString(appellation)}`;
+  `${draftProducerKey(userId)}:${normalizeString(producer || '')}:${normalizeWineName(name)}:${normalizeString(appellation)}`;
 
 /**
  * Generate a normalized key for wine deduplication
  * Combines producer + wine name + appellation
  */
 const generateWineKey = (name, producer, appellation = '') => {
-  const normalizedName = normalizeString(name);
+  const normalizedName = normalizeWineName(name);
   const normalizedProducer = normalizeString(producer);
   const normalizedAppellation = normalizeString(appellation);
 
@@ -1144,6 +1165,9 @@ const generateWineSlug = (name, producer) => {
 
 module.exports = {
   normalizeString,
+  spellStarGrades,
+  normalizeWineName,
+  MAX_STAR_GRADE,
   sanitizeTaxonomyName,
   MAX_TAXONOMY_NAME,
   slugify,

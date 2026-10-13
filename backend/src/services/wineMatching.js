@@ -7,7 +7,7 @@
  * Composite score = name × 0.45 + producer × 0.45 + appellation × 0.10
  */
 
-const { combinedSimilarity, normalizeString, normalizeProducerKey } = require('../utils/normalize');
+const { combinedSimilarity, normalizeString, normalizeWineName, normalizeProducerKey } = require('../utils/normalize');
 
 const WEIGHTS = { name: 0.45, producer: 0.45, appellation: 0.10 };
 
@@ -34,8 +34,8 @@ function expandNameAbbreviations(normalized) {
 /** Name-axis similarity with abbreviation expansion on both sides. */
 function nameSimilarity(a, b) {
   return combinedSimilarity(
-    expandNameAbbreviations(normalizeString(a || '')),
-    expandNameAbbreviations(normalizeString(b || ''))
+    expandNameAbbreviations(normalizeWineName(a || '')),
+    expandNameAbbreviations(normalizeWineName(b || ''))
   );
 }
 
@@ -103,7 +103,7 @@ function scoreWineMatch(candidate, query, { redistribute = true } = {}) {
  * Makes producer placement irrelevant for equality comparison.
  */
 function concatNormalized(producer, name) {
-  const nName = normalizeString(name);
+  const nName = normalizeWineName(name);
   const nProducer = normalizeString(producer);
   if (!nName) return nProducer;
   if (!nProducer || nName === nProducer || nName.startsWith(nProducer + ' ')) return nName;
@@ -116,7 +116,7 @@ function concatNormalized(producer, name) {
  * back into the scorers/generateWineKey: normalizeString is idempotent.
  */
 function stripProducerPrefix(name, producer) {
-  const nName = normalizeString(name);
+  const nName = normalizeWineName(name);
   const nProducer = normalizeString(producer);
   if (!nProducer || !nName.startsWith(nProducer + ' ')) return null;
   const remainder = nName.slice(nProducer.length + 1).trim();
@@ -169,7 +169,7 @@ function normalizedAppellationHead(hint) {
  * style word, or when the hint would swallow the whole name.
  */
 function stripAppellationPrefix(name, hint) {
-  const nName = normalizeString(name || '');
+  const nName = normalizeWineName(name || '');
   const head = normalizedAppellationHead(hint);
   if (!head || !nName.startsWith(head + ' ')) return null;
   const remainder = nName.slice(head.length + 1).trim();
@@ -180,7 +180,7 @@ function stripAppellationPrefix(name, hint) {
 /** Normalized name with a trailing parenthetical removed ("Château Lagrange (St. Julien)"); null when nothing to strip. */
 function stripNameBrackets(name) {
   const bare = stripProducerBrackets(name);
-  return bare ? normalizeString(bare) : null;
+  return bare ? normalizeWineName(bare) : null;
 }
 
 /** "Ca' Marcanda (Gaja)" → "Ca' Marcanda"; null when nothing to strip or nothing left. */

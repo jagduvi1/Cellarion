@@ -27,13 +27,20 @@ export function preselectableMatch(matches) {
 // review step has always used for duplicate rows).
 const duplicateWineKey = (item) =>
   `${(item?.wineName || '').toLowerCase()}|${(item?.producer || '').toLowerCase()}`;
-const sameColour = (a, b) =>
-  (a?.type || '').trim().toLowerCase() === (b?.type || '').trim().toLowerCase();
+// Two rows may share a decision unless they state DIFFERENT colours — the
+// other bottle of a red/white pair sharing one name is another wine. A row
+// that states no colour is compatible, the same reading as the server's
+// rowColourConflict.
+const colourCompatible = (a, b) => {
+  const ca = (a?.type || '').trim().toLowerCase();
+  const cb = (b?.type || '').trim().toLowerCase();
+  return !ca || !cb || ca === cb;
+};
 
-// Siblings of `source` that follow a decision on it. A row with no decision
-// always follows. A decided row follows only when it still holds what the
-// source row held before (the same automatic preselection) and names the same
-// colour, and only when the decision is about WHICH wine this is.
+// Siblings of `source` that follow a decision on it: same name + producer,
+// compatible colour, and either no decision yet or — when the decision is
+// about WHICH wine this is — still holding what the source row held before
+// (the same automatic preselection).
 function followingSiblings(results, selections, sourceIndex, identityChoice) {
   const rows = results || [];
   const sel = selections || {};
@@ -43,9 +50,10 @@ function followingSiblings(results, selections, sourceIndex, identityChoice) {
   const before = sel[sourceIndex];
   return rows.filter((r) => {
     if (r.index === sourceIndex || duplicateWineKey(r.item) !== key) return false;
+    if (!colourCompatible(r.item, source.item)) return false;
     const cur = sel[r.index];
     if (cur == null) return true;
-    return identityChoice && before != null && cur === before && sameColour(r.item, source.item);
+    return identityChoice && before != null && cur === before;
   });
 }
 
@@ -91,6 +99,64 @@ export function propagationTargets(results, selections, sourceIndex, selValue) {
  */
 export function lookUpTargets(results, selections, sourceIndex) {
   return followingSiblings(results, selections, sourceIndex, true).map((r) => r.index);
+}
+
+// The fields of a validate result that say WHICH wine a row is. Everything
+// else on a row is its own: the file row (item), its index, and the price
+// warnings the server computed from that row's own price.
+const LOOKUP_IDENTITY_FIELDS = ['status', 'matches', 'aiProposed', 'aiDebug', 'aiSkipped', 'aiBypassed'];
+
+/**
+ * A sibling row after a Look-up answered for it: the looked-up row's identity
+ * (status, matches, AI proposal and flags) on the sibling's own row.
+ *
+ * @param {object} updated  the looked-up row's fresh validate result
+ * @param {object} sibling  the sibling's current result row
+ * @returns {object} the sibling's next result row
+ */
+export function lookUpSiblingResult(updated, sibling) {
+  const next = { ...sibling };
+  for (const f of LOOKUP_IDENTITY_FIELDS) {
+    if (updated && updated[f] !== undefined) next[f] = updated[f];
+    else delete next[f];
+  }
+  return next;
+}
+
+/**
+ * Selections after "Undo" on a skipped or requested row.
+ *
+ * The row goes back to its automatic choice (autoSelectionsFor — the same
+ * rule the first load used), not to "no selection": an AI-new row without
+ * fuzzy candidates has no other control that offers 'create' again, so
+ * clearing it left the bottle out of the import. A request spreads over the
+ * line (propagationTargets), so undoing one brings back the same wine's other
+ * requested rows too; a skip never spreads over a decided row, so its undo
+ * stays on the clicked row.
+ *
+ * @param {Array} results       validation-result rows
+ * @param {object} selections   current selections map
+ * @param {number} index        the row whose Undo was clicked
+ * @returns {object} the next selections map
+ */
+export function undoSelections(results, selections, index) {
+  const rows = results || [];
+  const sel = selections || {};
+  const value = sel[index];
+  const back = [index];
+  if (value === 'request') {
+    for (const r of followingSiblings(rows, sel, index, true)) {
+      if (sel[r.index] === 'request') back.push(r.index);
+    }
+  }
+  const next = { ...sel };
+  for (const i of back) {
+    const row = rows.find((r) => r.index === i);
+    const auto = row ? autoSelectionsFor([row])[i] : undefined;
+    if (auto != null) next[i] = auto;
+    else delete next[i];
+  }
+  return next;
 }
 
 /**

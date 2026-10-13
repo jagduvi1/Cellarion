@@ -128,4 +128,10 @@ describe('conflictingStyleTerms — star grades', () => {
     expect([...statedStyle(Z + 'Auslese** Goldkapsel').grade]).toEqual(['2star']);
     expect(statedStyle(Z + 'Spätlese').grade.size).toBe(0);
   });
+
+  it('reads a typed count as text, not a grade (release audit 2026-10-13)', () => {
+    // An unbounded count once reached '*'.repeat(count) in the reason string.
+    expect(statedStyle(Z + 'Auslese 400000000star').grade.size).toBe(0);
+    expect(conflictingStyleTerms(Z + 'Auslese 999999999star', Z + 'Auslese***')).toBeNull();
+  });
 });

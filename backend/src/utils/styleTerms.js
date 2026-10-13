@@ -36,7 +36,7 @@
  * reject; where one side is silent it is silence, not disagreement.
  */
 
-const { normalizeString } = require('./normalize');
+const { normalizeString, spellStarGrades, MAX_STAR_GRADE } = require('./normalize');
 
 // Sweetness / dryness across label languages, pre-normalized (normalizeString
 // folds "Roșu" → 'rosu', "off-dry" → 'offdry'; ß is not decomposable and is
@@ -122,10 +122,12 @@ const JOINED_PHRASES = [
 ];
 
 // A producer's own grade inside a Prädikat, printed as stars ("Auslese**",
-// "Auslese***" at Markus Molitor): normalizeString turns a run of stars into
+// "Auslese***" at Markus Molitor): spellStarGrades turns a run of stars into
 // one of these words. Each grade is its own wine, so two names stating
-// different grades are two wines, exactly like two Prädikate.
-const STAR_GRADE_TOKEN = /^\d+star$/;
+// different grades are two wines, exactly like two Prädikate. Bounded by
+// MAX_STAR_GRADE: a typed "400000000star" is text, not a grade (an unbounded
+// count fed '*'.repeat in the reason below — release audit 2026-10-13).
+const STAR_GRADE_TOKEN = new RegExp(`^[1-${MAX_STAR_GRADE}]star$`);
 
 /**
  * The style a NAME declares, as independent term sets.
@@ -139,7 +141,7 @@ function statedStyle(name) {
   // toLowerCase, and folding first left it for normalizeString to delete as
   // punctuation, silently dropping the sweetness term (post-release audit,
   // verified by execution: "SÜẞ" read as stating nothing).
-  let folded = normalizeString(String(name == null ? '' : name).toLowerCase().replace(/ß/g, 'ss'));
+  let folded = normalizeString(spellStarGrades(String(name == null ? '' : name).toLowerCase().replace(/ß/g, 'ss')));
   for (const [re, joined] of JOINED_PHRASES) folded = folded.replace(re, joined);
 
   const pradikat = new Set();

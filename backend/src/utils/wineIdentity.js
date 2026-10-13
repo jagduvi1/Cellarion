@@ -3,7 +3,7 @@
  * (REGISTRY_DUPLICATE_ANALYSIS_2026-07-22, phase 1).
  *
  *   canonicalKey = normalizeProducerKey(producer)
- *                + ':' + normalizeString(canonicalizeWineName(name, producer))
+ *                + ':' + normalizeWineName(canonicalizeWineName(name, producer))
  *                + ':' + normalizeString(normalizeAppellation(appellation))
  *
  * Unlike normalizedKey (raw strings, UNIQUE — deliberately untouched), the
@@ -22,7 +22,7 @@
  * different-country guard.
  */
 
-const { normalizeString, normalizeProducerKey, normalizeAppellation } = require('./normalize');
+const { normalizeString, normalizeWineName, normalizeProducerKey, normalizeAppellation } = require('./normalize');
 const { canonicalizeWineName } = require('./producerPrefix');
 
 // An all-stopword producer ("Domaine", "Cantina") has an EMPTY comparison key
@@ -37,7 +37,7 @@ const producerSegment = (producer) =>
   normalizeProducerKey(producer || '') || normalizeString(producer || '');
 
 function computeCanonicalKey(name, producer, appellation = '') {
-  const nameKey = normalizeString(canonicalizeWineName(name || '', producer || ''));
+  const nameKey = normalizeWineName(canonicalizeWineName(name || '', producer || ''));
   const appellationKey = normalizeString(
     normalizeAppellation(typeof appellation === 'string' ? appellation : '') || ''
   );
@@ -49,7 +49,7 @@ function computeCanonicalKey(name, producer, appellation = '') {
  * appellation. Anchored-regex scans on the canonicalKey index.
  */
 function canonicalSiblingPrefix(name, producer) {
-  const nameKey = normalizeString(canonicalizeWineName(name || '', producer || ''));
+  const nameKey = normalizeWineName(canonicalizeWineName(name || '', producer || ''));
   return `${producerSegment(producer)}:${nameKey}:`;
 }
 

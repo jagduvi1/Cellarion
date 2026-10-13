@@ -12,7 +12,7 @@ const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
 const { getOrCreateDailySnapshot } = require('../utils/exchangeRates');
 const { resolveRating } = require('../utils/ratingUtils');
-const { normalizeString, resolveCountryName, isRecognizedCountry, isUnknownName, isIdentitySentinel
+const { normalizeString, normalizeWineName, resolveCountryName, isRecognizedCountry, isUnknownName, isIdentitySentinel
 } = require('../utils/normalize');
 const { normalizeBottleSize, DEFAULT_SIZE } = require('../config/bottleSizes');
 const searchService = require('../services/search');
@@ -641,7 +641,7 @@ async function findWineMatches(item, viewer = {}) {
   // Strategy 3: Direct normalized name/producer lookup
   if (candidates.size < 3 && item.producer && item.wineName) {
     const normalizedProducer = normalizeString(item.producer);
-    const normalizedName = normalizeString(item.wineName);
+    const normalizedName = normalizeWineName(item.wineName);
     const bareProducer = stripProducerBrackets(item.producer);
     const bareName = stripAppellationPrefix(item.wineName, item.appellation) || stripAppellationPrefix(item.wineName, item.region);
 
@@ -791,7 +791,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
       if (pr.errorMsg || !pr.item.wineName) continue;
       if (pr.item.producer && !isIdentitySentinel(pr.item.producer)) continue;
       if (pr.item.producer) pr.item.producer = ''; // sentinel → genuinely producer-less
-      const nameKey = normalizeString(pr.item.wineName);
+      const nameKey = normalizeWineName(pr.item.wineName);
       if (!splitByName.has(nameKey)) splitByName.set(nameKey, await splitKnownProducerPrefix(pr.item.wineName));
       const split = splitByName.get(nameKey);
       if (split) {
@@ -808,7 +808,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     // Build unique wine keys — one cascade/AI attempt per unique wine, not per bottle
     const aiKeyMap = new Map(); // normalizedKey -> preResult (representative)
     for (const pr of identifyEligible) {
-      const key = `${normalizeString(pr.item.wineName)}:${normalizeString(pr.item.producer)}`;
+      const key = `${normalizeWineName(pr.item.wineName)}:${normalizeString(pr.item.producer)}`;
       if (!aiKeyMap.has(key)) aiKeyMap.set(key, pr);
       if (pr.forceAi) aiKeyMap.get(key).forceAi = true; // any row's Look-up button forces the key
     }
@@ -950,14 +950,14 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     // Build a key -> AI result lookup (only wines that actually went to AI)
     const aiByKey = new Map();
     for (let j = 0; j < aiRun.length; j++) {
-      const key = `${normalizeString(aiRun[j].item.wineName)}:${normalizeString(aiRun[j].item.producer)}`;
+      const key = `${normalizeWineName(aiRun[j].item.wineName)}:${normalizeString(aiRun[j].item.producer)}`;
       aiByKey.set(key, aiSettled[j]);
     }
 
     // Attach the shared cascade/AI result to every eligible preResult with
     // that key (duplicates share the representative's outcome, as before).
     for (const pr of identifyEligible) {
-      const key = `${normalizeString(pr.item.wineName)}:${normalizeString(pr.item.producer)}`;
+      const key = `${normalizeWineName(pr.item.wineName)}:${normalizeString(pr.item.producer)}`;
       const rep = aiKeyMap.get(key);
       // The representative is chosen by name + producer, not colour: a file
       // listing a red and a white under one name shares one representative,
@@ -1099,7 +1099,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     const matchedWineCache = new Map(); // normalizedKey -> { wine } | { proposed } | { error }
     for (const pr of preResults) {
       if (pr.registryWine || !pr.aiIdentified) continue;
-      const key = `${normalizeString(pr.aiIdentified.name)}:${normalizeString(pr.aiIdentified.producer)}`;
+      const key = `${normalizeWineName(pr.aiIdentified.name)}:${normalizeString(pr.aiIdentified.producer)}`;
       if (matchedWineCache.has(key)) {
         const cached = matchedWineCache.get(key);
         if (cached.wine) pr.aiWine = cached.wine;
@@ -1646,7 +1646,7 @@ router.post('/confirm', async (req, res) => {
             errors.push({ index: i, reason: 'AI wine data is missing its name' });
             continue;
           }
-          const aiKey = `${normalizeString(ai.name)}:${normalizeString(ai.producer || '')}`;
+          const aiKey = `${normalizeWineName(ai.name)}:${normalizeString(ai.producer || '')}`;
           let wine = aiWineCache.get(aiKey);
           if (!wine) {
             const { wine: resolved, created, producerRejected } = await findOrCreateWine({

@@ -11,6 +11,8 @@ import {
   isAiBudgetRequestPending,
   propagationTargets,
   lookUpTargets,
+  lookUpSiblingResult,
+  undoSelections,
 } from './importReview';
 
 // ---------------------------------------------------------------------------
@@ -452,5 +454,51 @@ describe('lookUpTargets', () => {
   it('leaves a same-name row of another colour on its own pick', () => {
     const results = [fuzzy(0), fuzzy(1, 'red')];
     expect(lookUpTargets(results, { 0: 'p', 1: 'p' }, 0)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Release audit 2026-10-13 of #1506.
+// ---------------------------------------------------------------------------
+describe('propagation — colour', () => {
+  const r = (index, type, extra = {}) => ({ index, item: { producer: 'P', wineName: 'W', type }, status: 'fuzzy', ...extra });
+
+  it('never carries a decision to an UNDECIDED row of another colour', () => {
+    expect(propagationTargets([r(0, 'red'), r(1, 'white')], { 0: 'x' }, 0, 'y')).toEqual([]);
+    expect(lookUpTargets([r(0, 'red'), r(1, 'white')], { 0: 'x' }, 0)).toEqual([]);
+  });
+
+  it('treats a row that states no colour as compatible (like the server)', () => {
+    expect(propagationTargets([r(0, 'red'), r(1, undefined)], { 0: 'x', 1: 'x' }, 0, 'y')).toEqual([1]);
+    expect(lookUpTargets([r(0, ''), r(1, 'white')], { 0: 'x', 1: 'x' }, 0)).toEqual([1]);
+  });
+});
+
+describe('lookUpSiblingResult', () => {
+  it("takes the looked-up row's identity and keeps the sibling's own row and price warnings", () => {
+    const updated = { index: 0, item: { price: 10 }, status: 'ai_new', matches: [], aiProposed: { name: 'W' }, priceWarnings: ['src'] };
+    const sibling = { index: 3, item: { price: 900 }, status: 'fuzzy', matches: [{ wineId: 'm' }], aiSkipped: true, priceWarnings: ['own'] };
+    expect(lookUpSiblingResult(updated, sibling)).toEqual({
+      index: 3, item: { price: 900 }, status: 'ai_new', matches: [], aiProposed: { name: 'W' }, priceWarnings: ['own'],
+    });
+  });
+});
+
+describe('undoSelections', () => {
+  const aiNew = (index, extra = {}) => ({ index, item: { producer: 'P', wineName: 'W', type: 'red' }, status: 'ai_new', matches: [], aiProposed: { name: 'W' }, ...extra });
+
+  it("undoing a request brings the line back to its automatic 'create'", () => {
+    const results = [aiNew(0), aiNew(1), aiNew(2)];
+    expect(undoSelections(results, { 0: 'request', 1: 'request', 2: 'request' }, 1)).toEqual({ 0: 'create', 1: 'create', 2: 'create' });
+  });
+
+  it('an undone skip stays on the clicked row', () => {
+    const results = [aiNew(0), aiNew(1)];
+    expect(undoSelections(results, { 0: 'skip', 1: 'skip' }, 0)).toEqual({ 0: 'create', 1: 'skip' });
+  });
+
+  it('leaves rows on another choice alone, and clears a row with no automatic choice', () => {
+    const results = [aiNew(0), aiNew(1), { index: 2, item: { producer: 'P', wineName: 'W', type: 'red' }, status: 'no_match', matches: [] }];
+    expect(undoSelections(results, { 0: 'request', 1: 'wine-x', 2: 'request' }, 2)).toEqual({ 0: 'create', 1: 'wine-x' });
   });
 });

@@ -28,7 +28,9 @@ import {
   nextAiBudgetRequestState,
   isAiBudgetRequestPending,
   propagationTargets,
-  lookUpTargets
+  lookUpTargets,
+  lookUpSiblingResult,
+  undoSelections
 } from '../utils/importReview';
 import { getTotalSlots } from '../utils/rackLayouts';
 import { TYPE_DIMENSIONS } from '../components/racks/RackTypeSelector';
@@ -185,6 +187,10 @@ function ImportBottles() {
   // deliberate re-Match stays a full fresh validation.
   const [validationResume, setValidationResume] = useState(null);
   const [selections, setSelections] = useState({}); // index -> wineId or 'skip'
+  // The latest selections, for an async handler that must see choices made
+  // while it waited (handleAiSearch).
+  const selectionsRef = useRef(selections);
+  useEffect(() => { selectionsRef.current = selections; }, [selections]);
   const [searchModal, setSearchModal] = useState(null); // { index } or null
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -869,9 +875,11 @@ function ImportBottles() {
     const r = results.find(res => res.index === rowIndex);
     if (!r) return;
     // The same wine's other bottles still in this row's state take the answer
-    // too — decided at click time, before the user can change anything else.
+    // too. Chosen at click time; the answer then lands only on rows the user
+    // has not changed while the look-up ran (a skip or request made in the
+    // meantime stands).
     const siblings = lookUpTargets(results, selections, rowIndex);
-    const rowsToSet = [rowIndex, ...siblings];
+    const atClick = { ...selections };
     setAiSearchingRow(rowIndex);
     try {
       const res = await validateImport(apiFetch, {
@@ -881,15 +889,20 @@ function ImportBottles() {
       const data = await res.json();
       if (!res.ok || !data.results?.[0]) return;
       const updated = { ...data.results[0], index: rowIndex };
+      const unchanged = (i) => selectionsRef.current[i] === atClick[i];
+      const followers = siblings.filter(unchanged);
       setResults(prev => prev.map(x => {
         if (x.index === rowIndex) return updated;
-        // Each sibling keeps its own file row (vintage, price, location).
-        if (siblings.includes(x.index)) return { ...updated, index: x.index, item: x.item };
+        // Each sibling keeps its own file row (vintage, price, location) and
+        // the price warnings the server computed from its own price.
+        if (followers.includes(x.index)) return lookUpSiblingResult(updated, x);
         return x;
       }));
+      const rowsToSet = [rowIndex, ...followers];
       const setAll = (value) => setSelections(prev => {
         const next = { ...prev };
         for (const i of rowsToSet) {
+          if (prev[i] !== atClick[i]) continue; // changed meanwhile — the user's choice stands
           if (value === undefined) delete next[i];
           else next[i] = value;
         }
@@ -975,12 +988,10 @@ function ImportBottles() {
     setSelections(withPropagation(index, 'skip'));
   };
 
+  // Undo on a skipped / requested row: back to the automatic choice, and an
+  // undone request brings the rest of the line back with it (undoSelections).
   const unskipItem = (index) => {
-    setSelections(prev => {
-      const next = { ...prev };
-      delete next[index];
-      return next;
-    });
+    setSelections(prev => undoSelections(results, prev, index));
   };
 
   const requestWine = (index) => {

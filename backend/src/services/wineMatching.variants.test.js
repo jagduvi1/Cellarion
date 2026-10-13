@@ -213,3 +213,18 @@ describe('the vineyard-as-appellation guard', () => {
     expect(scoreWineMatchVariants(registry, { name: 'Wehlener Sonnenuhr Riesling Auslese', producer: 'Joh. Jos. Prüm', appellation: 'Wehlener Sonnenuhr' })).toBeGreaterThanOrEqual(EXACT);
   });
 });
+
+describe('star grades (release audit 2026-10-13)', () => {
+  const registry = { name: 'Zeltinger Sonnenuhr Riesling Auslese** Goldkapsel', producer: 'Markus Molitor', appellation: 'Mosel' };
+
+  it('never scores another grade as the same wine — not even through the producer-embedded name', () => {
+    // concatNormalized equality forces an exact 1; with the stars stripped
+    // the producer-prefixed *** row equalled the ** wine.
+    expect(scoreWineMatchVariants(registry, { name: 'Markus Molitor Zeltinger Sonnenuhr Riesling Auslese*** Goldkapsel', producer: '', appellation: 'Mosel' })).toBeLessThan(EXACT);
+    expect(scoreWineMatchVariants(registry, { name: 'Zeltinger Sonnenuhr Riesling Auslese*** Goldkapsel', producer: 'Markus Molitor', appellation: 'Mosel' })).toBeLessThan(EXACT);
+  });
+
+  it('still finds the same grade written with the producer in the name', () => {
+    expect(scoreWineMatchVariants(registry, { name: 'Markus Molitor Zeltinger Sonnenuhr Riesling Auslese ** Goldkapsel', producer: '', appellation: 'Mosel' })).toBeGreaterThanOrEqual(EXACT);
+  });
+});

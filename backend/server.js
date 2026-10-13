@@ -121,6 +121,20 @@ connectDB().then(async () => {
     console.error('[migration] Photo vintage backfill failed (will retry next boot):', err.message);
   }
 
+  // Migration: a wine name's star grade is part of its keys ("Auslese**" and
+  // "Auslese***" are two wines). Re-keys the few names that carry stars; once
+  // their keys are current, a later boot finds nothing to change.
+  try {
+    const { run: rekeyStarGradeWines } = require('./src/scripts/rekey-star-grade-wines');
+    const r = await rekeyStarGradeWines({ apply: true });
+    if (r.rekeyed.length || r.canonical.length) {
+      console.log(`[migration] Star-grade keys: ${r.rekeyed.length} dedup key(s), ${r.canonical.length} canonical key(s) updated`);
+    }
+    for (const line of [...r.skipped, ...r.failed]) console.warn('[migration] Star-grade keys:', line);
+  } catch (err) {
+    console.error('[migration] Star-grade re-key failed (will retry next boot):', err.message);
+  }
+
   try {
     await searchService.initialize();
   } catch (err) {
