@@ -219,6 +219,9 @@
   font-size: 0.9rem;
 }
 
-.support-reply-form .btn-primary {
-  align-self: flex-end;
+.support-reply-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }

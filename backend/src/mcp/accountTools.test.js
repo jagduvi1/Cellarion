@@ -40,6 +40,7 @@ jest.mock('../services/accountOps', () => ({
   updateProfile: jest.fn(),
   createSupportTicket: jest.fn(),
   replyToTicket: jest.fn(),
+  closeTicket: jest.fn(),
   createWineRequest: jest.fn(),
   // The tool descriptions read these allow-lists at module load — keep them real-ish.
   ALLOWED_CURRENCIES: ['USD', 'EUR', 'SEK'],
@@ -308,6 +309,40 @@ describe('reply_to_ticket (continuing the support conversation)', () => {
     expect(parse(await tool('reply_to_ticket').handler({ ticket_id: 'f'.repeat(24), message: 'x' }, CTX)).error.code).toBe('conflict');
     accountOps.replyToTicket.mockResolvedValue({ error: { status: 400, message: 'too long' } });
     expect(parse(await tool('reply_to_ticket').handler({ ticket_id: 'f'.repeat(24), message: 'x' }, CTX)).error.code).toBe('invalid_input');
+  });
+});
+
+describe('close_ticket (the user ends the conversation)', () => {
+  test('is write-scoped, idempotent and not destructive', () => {
+    const t = tool('close_ticket');
+    expect(t.scope).toBe('write');
+    expect(t.annotations.readOnlyHint).toBe(false);
+    expect(t.annotations.idempotentHint).toBe(true);
+    expect(t.annotations.destructiveHint).toBe(false);
+  });
+
+  test('delegates to the shared accountOps service and audits via mcp — no ledger row', async () => {
+    const McpActionLog = require('../models/McpActionLog');
+    accountOps.closeTicket.mockResolvedValue({ ticket: { _id: 't1', subject: 'Import stuck', status: 'closed' }, alreadyClosed: false });
+    const body = parse(await tool('close_ticket').handler({ ticket_id: 'f'.repeat(24) }, CTX));
+    expect(accountOps.closeTicket).toHaveBeenCalledWith(ME, 'f'.repeat(24));
+    expect(body.data).toMatchObject({ ticket_id: 't1', status: 'closed', already_closed: false });
+    expect(body.summary).toMatch(/Closed "Import stuck"/);
+    expect(logAudit).toHaveBeenCalledWith(CTX.req, 'support.ticket.closed_by_user', expect.any(Object), expect.objectContaining({ via: 'mcp' }));
+    expect(McpActionLog.create).not.toHaveBeenCalled();
+  });
+
+  test('an already closed ticket: reported, not audited again', async () => {
+    accountOps.closeTicket.mockResolvedValue({ ticket: { _id: 't1', subject: 'S', status: 'closed' }, alreadyClosed: true });
+    const body = parse(await tool('close_ticket').handler({ ticket_id: 'f'.repeat(24) }, CTX));
+    expect(body.data.already_closed).toBe(true);
+    expect(body.summary).toMatch(/already closed/);
+    expect(logAudit).not.toHaveBeenCalled();
+  });
+
+  test('a missing or foreign ticket maps to not_found', async () => {
+    accountOps.closeTicket.mockResolvedValue({ error: { status: 404, message: 'Ticket not found' } });
+    expect(parse(await tool('close_ticket').handler({ ticket_id: 'f'.repeat(24) }, CTX)).error.code).toBe('not_found');
   });
 });
 

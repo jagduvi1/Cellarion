@@ -207,6 +207,13 @@ const CASES = [
     expect: { anyOf: ['reply_to_ticket', 'list_my_tickets'] },
   },
   {
+    id: 'close-resolved-ticket',
+    // The user ends the conversation themselves — the model may need the
+    // ticket_id first.
+    prompt: 'Support fixed my import problem — please close that ticket.',
+    expect: { anyOf: ['close_ticket', 'list_my_tickets'] },
+  },
+  {
     id: 'request-missing-wine',
     prompt: "Cellarion doesn't have this wine and I don't know the producer — ask the team to add it. Here's the page: https://www.systembolaget.se/produkt/123",
     expect: { anyOf: ['request_wine_addition', 'resolve_wine', 'search_registry'] },

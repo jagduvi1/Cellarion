@@ -294,6 +294,27 @@ async function replyToTicket(userId, ticketId, message) {
   return { ticket };
 }
 
+/**
+ * The USER closes their own ticket — their question is answered or the issue
+ * is gone, so it can leave the admin queue without an admin closing it. The
+ * web "Mark as resolved" button (POST /api/support/:id/close) and the MCP
+ * close_ticket tool share this. Final for the user: a closed ticket refuses
+ * replies (replyToTicket), and the path back is a fresh ticket. Closing one
+ * that is already closed changes nothing and says so (alreadyClosed), so a
+ * retry is harmless.
+ */
+async function closeTicket(userId, ticketId) {
+  if (!mongoose.Types.ObjectId.isValid(String(ticketId))) {
+    return { error: err(404, 'Ticket not found') };
+  }
+  const ticket = await SupportTicket.findOne({ _id: ticketId, user: userId });
+  if (!ticket) return { error: err(404, 'Ticket not found') };
+  if (ticket.status === 'closed') return { ticket, alreadyClosed: true };
+  ticket.status = 'closed';
+  await ticket.save();
+  return { ticket, alreadyClosed: false };
+}
+
 // ── Wine-addition request (the resolve-dead-end fallback) ─────────────────────
 
 /**
@@ -461,6 +482,7 @@ module.exports = {
   updateProfile,
   createSupportTicket,
   replyToTicket,
+  closeTicket,
   TICKET_REPLY_CAP,
   createWineRequest,
   validateSourceUrl,

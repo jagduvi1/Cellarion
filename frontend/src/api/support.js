@@ -10,6 +10,9 @@ export const getMySupportTickets = (apiFetch) =>
 export const replySupportTicket = (apiFetch, id, message) =>
   apiFetch(`/api/support/${id}/reply`, { method: 'POST', headers: J, body: JSON.stringify({ message }) });
 
+export const closeSupportTicket = (apiFetch, id) =>
+  apiFetch(`/api/support/${id}/close`, { method: 'POST' });
+
 // ── Wine Reports (user-facing) ────────────────────────────────────────────────
 export const submitWineReport = (apiFetch, data) =>
   apiFetch('/api/wine-reports', { method: 'POST', headers: J, body: JSON.stringify(data) });

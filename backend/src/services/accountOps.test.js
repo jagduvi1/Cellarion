@@ -338,6 +338,38 @@ describe('replyToTicket', () => {
   });
 });
 
+describe('closeTicket (the user marks their own ticket resolved)', () => {
+  const { closeTicket } = require('./accountOps');
+  const TID = 'e'.repeat(24);
+  const ticketOf = (over = {}) => ({
+    _id: TID, user: UID, status: 'in_progress', replies: [], save: jest.fn().mockResolvedValue(undefined), ...over,
+  });
+
+  test('404s a malformed id without querying, and a foreign/missing ticket (user-scoped query)', async () => {
+    expect((await closeTicket(UID, 'not-an-id')).error.status).toBe(404);
+    expect(SupportTicket.findOne).not.toHaveBeenCalled();
+    SupportTicket.findOne.mockResolvedValue(null);
+    expect((await closeTicket(UID, TID)).error.status).toBe(404);
+    expect(SupportTicket.findOne).toHaveBeenCalledWith({ _id: TID, user: UID });
+  });
+
+  test('closes an open or answered ticket', async () => {
+    const ticket = ticketOf();
+    SupportTicket.findOne.mockResolvedValue(ticket);
+    const res = await closeTicket(UID, TID);
+    expect(res).toEqual({ ticket, alreadyClosed: false });
+    expect(ticket.status).toBe('closed');
+    expect(ticket.save).toHaveBeenCalled();
+  });
+
+  test('an already closed ticket is left as it is and reported as such', async () => {
+    const ticket = ticketOf({ status: 'closed' });
+    SupportTicket.findOne.mockResolvedValue(ticket);
+    expect(await closeTicket(UID, TID)).toEqual({ ticket, alreadyClosed: true });
+    expect(ticket.save).not.toHaveBeenCalled();
+  });
+});
+
 describe('createWineRequest — links and the back label (#1460)', () => {
   test('sourceUrls follow sourceUrl in order, trimmed and without repeats; sourceUrl is the first', async () => {
     const res = await createWineRequest(UID, {

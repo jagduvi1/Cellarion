@@ -3,7 +3,7 @@ const router = express.Router();
 const SupportTicket = require('../models/SupportTicket');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
-const { createSupportTicket, replyToTicket } = require('../services/accountOps');
+const { createSupportTicket, replyToTicket, closeTicket } = require('../services/accountOps');
 
 // POST /api/support — submit a support ticket
 // requireNonDemo: support tickets land in the admin queue and would waste admin
@@ -46,6 +46,25 @@ router.post('/:id/reply', requireAuth, requireNonDemo, async (req, res) => {
   } catch (err) {
     console.error('Reply to support ticket error:', err);
     res.status(500).json({ error: 'Failed to reply to support ticket' });
+  }
+});
+
+// POST /api/support/:id/close — the caller marks their own ticket resolved.
+// Shared with the MCP close_ticket tool. Closing an already closed ticket is
+// a no-op (and is not audited again).
+router.post('/:id/close', requireAuth, requireNonDemo, async (req, res) => {
+  try {
+    const { ticket, alreadyClosed, error } = await closeTicket(req.user.id, req.params.id);
+    if (error) return res.status(error.status).json({ error: error.message });
+
+    if (!alreadyClosed) {
+      logAudit(req, 'support.ticket.closed_by_user', { type: 'SupportTicket', id: ticket._id }, {});
+    }
+
+    res.json({ ticket });
+  } catch (err) {
+    console.error('Close support ticket error:', err);
+    res.status(500).json({ error: 'Failed to close support ticket' });
   }
 });
 

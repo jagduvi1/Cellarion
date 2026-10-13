@@ -29,7 +29,7 @@ const RETRY_NOTE = (readBack) =>
   `Cannot be unsent. Pass an idempotency_key (any unique string) so a retry after a transport error replays the ` +
   `original result instead of filing twice; on a transport error WITHOUT a key, read back with ${readBack} before retrying.`;
 const {
-  updatePreferences, updateProfile, createSupportTicket, replyToTicket, createWineRequest,
+  updatePreferences, updateProfile, createSupportTicket, replyToTicket, closeTicket, createWineRequest,
   ALLOWED_CURRENCIES, LANGUAGE_TAG, LANGUAGE_TAG_MAX, ALLOWED_RATING_SCALES,
   ALLOWED_RACK_NAV, ALLOWED_RESTOCK_SCOPE, ALLOWED_CELLAR_SORTS, ALLOWED_VISIBILITY, SUPPORT_CATEGORIES,
   TICKET_REPLY_CAP,
@@ -250,7 +250,8 @@ registerTool({
   description:
     'The user\'s own support tickets with the full conversation (admin responses + follow-ups), newest first — ' +
     'the read side of create_support_ticket. Call when the user asks whether support has replied, what the answer ' +
-    'was, or what they have filed. Continue an open conversation with reply_to_ticket. Optional status filter: ' +
+    'was, or what they have filed. Continue an open conversation with reply_to_ticket, or close_ticket once the ' +
+    'user says it is resolved. Optional status filter: ' +
     'open / in_progress / closed.',
   scope: 'read',
   annotations: { readOnlyHint: true, openWorldHint: false },
@@ -338,6 +339,36 @@ registerTool({
       idempotencyKey: args.idempotency_key || null, result: envelope,
     });
     return ok(envelope.summary, envelope.data);
+  },
+});
+
+// Ledger-less like the settings tools: closing is idempotent (a second close
+// changes nothing and says so), so a retry after a transport error is safe
+// without an idempotency_key.
+registerTool({
+  name: 'close_ticket',
+  title: 'Close a support ticket',
+  description:
+    'Marks one of the user\'s own support tickets as resolved and closes it, so it leaves the support team\'s queue ' +
+    '— for when the answer arrived or the problem went away (get the ticket_id from list_my_tickets). Confirm with ' +
+    'the user first, naming the ticket: a closed ticket takes no more replies, and further help means a new ticket ' +
+    'with create_support_ticket. Closing an already closed ticket changes nothing.',
+  scope: 'write',
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  inputSchema: {
+    ticket_id: z.string().regex(/^[a-f0-9]{24}$/i).describe('From list_my_tickets'),
+  },
+  handler: async (args, ctx) => {
+    const { ticket, alreadyClosed, error } = await closeTicket(ctx.user.id, args.ticket_id);
+    if (error) return fail(error.status === 404 ? 'not_found' : 'invalid_input', error.message);
+    if (!alreadyClosed) {
+      logAudit(ctx.req, 'support.ticket.closed_by_user', { type: 'SupportTicket', id: ticket._id }, { via: 'mcp' });
+    }
+    return ok(alreadyClosed ? `"${ticket.subject}" was already closed` : `Closed "${ticket.subject}"`, {
+      ticket_id: ticket._id,
+      status: ticket.status,
+      already_closed: alreadyClosed,
+    });
   },
 });
 
