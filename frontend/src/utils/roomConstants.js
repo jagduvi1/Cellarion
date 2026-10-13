@@ -6,6 +6,7 @@
 import {
   computeLayout, computeModularLayout, CELL_SIZE,
   validDoubleHeightRows, DOUBLE_ROW_HEADROOM, cabinetShelfRows, cabinetBays, cabinetHeadToTail,
+  cabinetRowWidth, cabinetBayUnits, cabinetNeckForward,
 } from './rackLayouts';
 
 // ── Rack physical dimensions (metres) ────────────────────
@@ -15,6 +16,7 @@ export const RACK_DEPTH = 0.34;    // default rack depth
 export const WOOD_THICK = 0.012;   // internal shelf/beam thickness
 export const PANEL_THICK = 0.018;  // outer frame panel thickness
 export const BOTTLE_RADIUS = 0.037;
+export const BOTTLE_LENGTH = 0.285; // base to capsule, along the bottle lathe's local +Y
 
 // ── Cabinet (wine fridge) dimensions ─────────────────────
 export const CABINET_LEVEL_H = 0.079;      // vertical pitch of stacked bottle rows
@@ -67,8 +69,9 @@ export function getCabinetGeometry(rack) {
     y = bottom - WOOD_THICK;
     return {
       index: i, rows, levels: levelsOf(rows), height: bayHeights[i], top, bottom,
-      // The bay's own width and pattern, and the pitch its levels stack at.
-      cols: shapes[i].cols, alternate: shapes[i].alternate, levelPitch: pitchOf(shapes[i]),
+      // The bay's own width and pattern, how its bottles lie ('' / 'front' /
+      // 'all' — drawing only), and the pitch its levels stack at.
+      cols: shapes[i].cols, alternate: shapes[i].alternate, sideways: shapes[i].sideways, levelPitch: pitchOf(shapes[i]),
       // The beech plank under this bay (the bottom bay rests on the cabinet floor).
       plankY: i < n - 1 ? bottom - WOOD_THICK / 2 : null,
     };
@@ -216,4 +219,130 @@ export function clampToRoom(x, z, rack, placement, roomDims) {
     x: Math.max(-roomHalfW + halfW, Math.min(roomHalfW - halfW, x)),
     z: Math.max(-roomHalfD + halfD, Math.min(roomHalfD - halfD, z)),
   };
+}
+
+// Cabinet (wine fridge): each bay stacks its rows in Y (real stacking, not
+// the shelf type's z-stagger). Row 1 rests on the plank; with twoDeep, odd
+// rows are the front row of a level (base toward the viewer, neck pointing
+// in) and even rows the back row (neck-to-neck behind them). Geometry comes
+// from roomConstants.getCabinetGeometry so body, planks and bottles agree.
+// On an alternating bay the rows are cols / cols−1 wide in turn
+// (rackLayouts.cabinetRowWidth) and the narrow ones sit half a bottle over,
+// in the grooves of the wide row below — the shelf is exactly cols wide. A
+// bay narrower than the cabinet (its own cols) sits centred in the body.
+// `row` carries the BAY index so PullOutShelfRow can slide a whole bay.
+// Head to tail (one deep only): every other bottle of a row is turned round,
+// neck toward the viewer, its base a bottle length further in so it fills
+// the same depth as its neighbours.
+export function computeCabinetSlotPositions(cab, width, depth) {
+  const positions = [];
+  // A staggered shelf is half a bottle wider than its bottle count, so the
+  // cells are sized against the widest bay's cols + 0.5 and the offset level
+  // lands inside the frame instead of through the side panel. (Not for an
+  // alternating bay: there the offset rows are the narrow ones and never
+  // poke out.)
+  const drawOpts = { twoDeep: cab.twoDeep, stagger: cab.stagger, backOffset: false };
+  const units = Math.max(1, ...cab.bays.map((b) => cabinetBayUnits(b, drawOpts)));
+  const cW = width / units;
+  const halfD = depth / 2;
+  // A bottle's local +Y axis is 0.285 long; a base 0.029 in from a face puts
+  // the neck just short of the centreline (same figures as the shelf type).
+  const frontBottleZ = halfD - 0.029;
+  const backBottleZ = -(halfD - 0.029);
+  const frontEmptyZ = halfD - 0.005;
+  const neckForwardZ = frontBottleZ - BOTTLE_LENGTH;
+  const backEmptyZ = -halfD + 0.005;
+  // Bottles lying ACROSS (typeConfig.shelfSideways): base at the left, neck
+  // to the right, centred in the cabinet; one bottle diameter (+ a hair) is
+  // the front-to-back pitch of a pile.
+  const sideX = -BOTTLE_LENGTH / 2;
+  const sidePitch = BOTTLE_RADIUS * 2 + 0.004;
+  const sideFrontZ = halfD - 0.01 - BOTTLE_RADIUS;
+  let pos = 1;
+  cab.bays.forEach((bay, i) => {
+    const cols = Math.max(1, bay.cols);
+    const nest = bay.alternate || cab.stagger;
+    const x0 = -width / 2 + cW / 2 + ((units - cabinetBayUnits(bay, drawOpts)) / 2) * cW;
+    // 'front': the first bottle of the bottom row lies across the front, so
+    // the bay's other front bottles sit one bottle further in.
+    const frontPush = bay.sideways === 'front' ? sidePitch : 0;
+    // 'all': every row is a front-to-back line of bottles lying across; a
+    // level's rows (front then back, when two deep) share one line.
+    const levelCount = {};
+    if (bay.sideways === 'all') {
+      for (let r = 1; r <= bay.rows; r++) {
+        const level = cab.twoDeep ? Math.ceil(r / 2) : r;
+        levelCount[level] = (levelCount[level] || 0) + cabinetRowWidth(r, cols, { twoDeep: cab.twoDeep, alternate: bay.alternate });
+      }
+    }
+    const levelUsed = {};
+    for (let r = 1; r <= bay.rows; r++) {
+      const level = cab.twoDeep ? Math.ceil(r / 2) : r;
+      const isBack = cab.twoDeep && r % 2 === 0;
+      const y = bay.bottom + BOTTLE_RADIUS + 0.003 + (level - 1) * bay.levelPitch;
+      // Nested levels alternate half a bottle left and right (see
+      // roomConstants.getCabinetGeometry): the shelf is half a bottle wider
+      // than its bottle count, exactly like a real fridge's staggered shelf.
+      // Alternating rows: the narrow rows are the offset ones instead.
+      const rowWidth = cabinetRowWidth(r, cols, { twoDeep: cab.twoDeep, alternate: bay.alternate });
+      const nudge = bay.alternate
+        ? (rowWidth < cols ? cW / 2 : 0)
+        : (nest && cols > 1 && level % 2 === 0 ? cW / 2 : 0);
+      if (bay.sideways === 'all') {
+        // A pile: the line runs from the front of the cabinet inwards, packed
+        // tighter when it would not fit; a nested level sits half a bottle
+        // further in, in the grooves of the one below.
+        const inLevel = levelCount[level];
+        const pitch = Math.min(sidePitch, (depth - 0.02) / Math.max(1, inLevel));
+        const zNudge = nudge ? pitch / 2 : 0;
+        for (let c = 0; c < rowWidth; c++) {
+          const k = levelUsed[level] || 0;
+          levelUsed[level] = k + 1;
+          const z = sideFrontZ - k * pitch - zNudge;
+          positions.push({
+            position: pos++,
+            // The empty-slot target spreads along the bottle so every bottle
+            // of the line can be picked from the front.
+            x: sideX + ((k + 0.5) / inLevel) * BOTTLE_LENGTH,
+            y,
+            z: halfD - 0.005,
+            bottleX: sideX,
+            bottleZ: z,
+            sideways: true,
+            isBack: false,
+            flipNeck: false,
+            row: i,
+          });
+        }
+        continue;
+      }
+      for (let c = 0; c < rowWidth; c++) {
+        if (bay.sideways === 'front' && r === 1 && c === 0) {
+          // The bottle across the front of the shelf, in front of the rest.
+          positions.push({
+            position: pos++, x: 0, y, z: frontEmptyZ,
+            bottleX: sideX, bottleZ: sideFrontZ, sideways: true,
+            isBack: false, flipNeck: false, row: i,
+          });
+          continue;
+        }
+        // Behind an across bottle the row is one bottle narrower, centred.
+        const shift = bay.sideways === 'front' && r === 1 ? -cW / 2 : 0;
+        const neckForward = cab.headToTail && !isBack
+          && cabinetNeckForward(bay.sideways === 'front' && r === 1 ? c - 1 : c);
+        const push = isBack ? 0 : frontPush;
+        positions.push({
+          position: pos++,
+          x: x0 + c * cW + nudge + shift,
+          y,
+          z: isBack ? backEmptyZ : frontEmptyZ - push,
+          bottleZ: isBack ? backBottleZ : (neckForward ? neckForwardZ : frontBottleZ) - push,
+          isBack,
+          flipNeck: !isBack && !neckForward,
+          row: i,
+        });
+      }
+    }
+  });
+  return positions;
 }

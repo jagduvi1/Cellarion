@@ -37,7 +37,7 @@ registerTool({
         ...(r.type === 'cabinet' && !r.isModular
           ? {
             shelf_rows: r.typeConfig?.shelfRows || null, two_deep: r.typeConfig?.twoDeep !== false, stagger: r.typeConfig?.stagger !== false, head_to_tail: r.typeConfig?.headToTail === true, alternate: r.typeConfig?.alternate === true,
-            shelf_cols: r.typeConfig?.shelfCols || null, shelf_alternate: r.typeConfig?.shelfAlternate || null,
+            shelf_cols: r.typeConfig?.shelfCols || null, shelf_alternate: r.typeConfig?.shelfAlternate || null, shelf_sideways: r.typeConfig?.shelfSideways || null,
           }
           : {}),
         modules: r.isModular ? (r.modules || []).length : undefined,
@@ -107,7 +107,7 @@ registerTool({
       ...(rack.type === 'cabinet' && !rack.isModular
         ? {
           shelf_rows: rack.typeConfig?.shelfRows || null, two_deep: rack.typeConfig?.twoDeep !== false, stagger: rack.typeConfig?.stagger !== false, head_to_tail: rack.typeConfig?.headToTail === true, alternate: rack.typeConfig?.alternate === true,
-          shelf_cols: rack.typeConfig?.shelfCols || null, shelf_alternate: rack.typeConfig?.shelfAlternate || null,
+          shelf_cols: rack.typeConfig?.shelfCols || null, shelf_alternate: rack.typeConfig?.shelfAlternate || null, shelf_sideways: rack.typeConfig?.shelfSideways || null,
         }
         : {}),
       modules: rack.isModular

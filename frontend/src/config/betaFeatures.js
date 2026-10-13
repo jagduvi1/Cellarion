@@ -25,6 +25,12 @@ export function betaFeatureText(t, key) {
         description: t('earlyAccess.features.cabinetHeadToTail.description', 'For a wine cabinet whose bottles lie one deep, base forward and neck forward in turn. The cabinet drawings then show every other bottle neck forward. The slot numbers stay the same, so you can switch it on for a cabinet that already holds bottles.'),
         where: t('earlyAccess.features.cabinetHeadToTail.where', 'On the Racks page: create or edit a wine cabinet, untick Two deep, then tick Bottles lie head to tail.'),
       };
+    case 'cabinetSideways':
+      return {
+        name: t('earlyAccess.features.cabinetSideways.name', 'Wine cabinet bottles lying sideways'),
+        description: t('earlyAccess.features.cabinetSideways.description', 'For each shelf of a wine cabinet, choose how its bottles lie: front to back, with one bottle lying across the front of the others (as in a slim fridge), or all lying across (as in a bottom bin). The cabinet drawings follow, including the 3D view. The slot numbers stay the same, so you can change it on a cabinet that already holds bottles. Includes a starting shape for the Kingsbottle Atelier Duo.'),
+        where: t('earlyAccess.features.cabinetSideways.where', 'On the Racks page: create or edit a wine cabinet and pick how each shelf\'s bottles lie, or start from Kingsbottle → Atelier Duo.'),
+      };
     default:
       return { name: key, description: '', where: '' };
   }

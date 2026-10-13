@@ -480,15 +480,51 @@ export function cabinetShelfAlternate(rows, typeConfig) {
   return out;
 }
 
+// How a shelf's bottles lie (typeConfig.shelfSideways, mirrors the backend):
+// '' front to back, 'front' the first bottle of the shelf's bottom row lies
+// ACROSS the front of the others (a slim fridge's shelf: 5 front to back + 1
+// across), 'all' every bottle lies across, piled (a bottom bin). Drawing only.
+export const CABINET_SIDEWAYS = ['', 'front', 'all'];
+
+/** Per-shelf lie list fitted to `rows` (missing or unknown → ''). Mirrors the backend. */
+export function cabinetShelfSideways(rows, typeConfig) {
+  const n = Math.max(0, Math.min(20, parseInt(rows, 10) || 0));
+  const src = Array.isArray(typeConfig?.shelfSideways) ? typeConfig.shelfSideways : [];
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(CABINET_SIDEWAYS.includes(src[i]) ? src[i] : '');
+  return out;
+}
+
 /**
- * Every bay top first with its resolved shape { rows, cols, alternate } —
- * the one place the per-shelf lists are combined (mirrors backend cabinetBays).
+ * Does cell `c` (0-based from the left) of row `row` (1-based, from the
+ * plank) of `bay` hold a bottle lying across? Every renderer asks this one
+ * function, so the 2D map, the shelf view and the 3D room agree.
+ */
+export function cabinetSlotSideways(bay, row, c) {
+  if (bay?.sideways === 'all') return true;
+  return bay?.sideways === 'front' && row === 1 && c === 0;
+}
+
+/**
+ * Head to tail on a row whose first bottle lies across the front: the
+ * bottles behind it alternate from the first of THEM, so the parity runs
+ * from the second cell (the across bottle is neither).
+ */
+export function cabinetNeckIndex(bay, row, c) {
+  return bay?.sideways === 'front' && row === 1 ? c - 1 : c;
+}
+
+/**
+ * Every bay top first with its resolved shape { rows, cols, alternate,
+ * sideways } — the one place the per-shelf lists are combined (mirrors
+ * backend cabinetBays).
  */
 export function cabinetBays(rows, cols, typeConfig) {
   const rowList = cabinetShelfRows(rows, typeConfig);
   const colList = cabinetShelfCols(rows, cols, typeConfig);
   const altList = cabinetShelfAlternate(rows, typeConfig);
-  return rowList.map((r, i) => ({ rows: r, cols: colList[i], alternate: altList[i] }));
+  const sideList = cabinetShelfSideways(rows, typeConfig);
+  return rowList.map((r, i) => ({ rows: r, cols: colList[i], alternate: altList[i], sideways: sideList[i] }));
 }
 
 /**
@@ -568,15 +604,20 @@ function cabinetLayout(rows, cols, typeConfig) {
         const cx = isBack && !bay.alternate
           ? x0 + (c + 0.5 + nudge) * CELL
           : x0 + (c + nudge) * CELL;
+        // A bottle lying across keeps its cell on this map (the numbering is
+        // the map's job); it is drawn lying, and the shelf view and the 3D
+        // room show where it really lies.
+        const sideways = cabinetSlotSideways(bay, r, c);
         slots.push({
           position: pos++, cx, cy: isBack ? backCY : frontCY,
           ...(isBack ? { isBack: true } : {}),
           ...(!isBack && level > 1 ? { isTop: true } : {}),
-          ...(headToTail && cabinetNeckForward(c) ? { isNeck: true } : {}),
+          ...(sideways ? { isSideways: true } : {}),
+          ...(headToTail && !sideways && cabinetNeckForward(cabinetNeckIndex(bay, r, c)) ? { isNeck: true } : {}),
         });
       }
     }
-    bays.push({ index: i, top: bayTop, height: bayH, rows: rowCount, levels, cols: bay.cols, alternate: bay.alternate });
+    bays.push({ index: i, top: bayTop, height: bayH, rows: rowCount, levels, cols: bay.cols, alternate: bay.alternate, sideways: bay.sideways });
     y += bayH;
     if (i < bayShapes.length - 1) shelfYs.push(y - SLOT_GAP / 2);
   });

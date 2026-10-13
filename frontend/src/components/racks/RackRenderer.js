@@ -332,12 +332,13 @@ export default function RackRenderer({
             const backR = layout.backRadius;
 
             if (bpc === 1) {
-              return layout.slots.map(({ position, cx, cy, isBack, isNeck }) => (
+              return layout.slots.map(({ position, cx, cy, isBack, isNeck, isSideways }) => (
                 <SlotCircle
                   key={position}
                   position={position}
                   cx={cx} cy={cy} R={isBack && backR ? backR : R}
                   isNeck={!!isNeck}
+                  isSideways={!!isSideways}
                   slot={slotMap[position]}
                   disabled={disabledSet.has(position)}
                   isActive={activePos === position}
@@ -468,7 +469,7 @@ export function ReservedRibbon({ cx, cy, r }) {
  * base forward shows the dark punt; `isNeck` (a head-to-tail cabinet's
  * every other bottle) shows the light capsule inside the shoulder instead.
  */
-function SlotCircle({ position, cx, cy, R, isNeck = false, slot, disabled, isActive, isHighlight, onSlotClick, getSlotStyle, onDragStart, isDragOrigin, isDragTarget }) {
+function SlotCircle({ position, cx, cy, R, isNeck = false, isSideways = false, slot, disabled, isActive, isHighlight, onSlotClick, getSlotStyle, onDragStart, isDragOrigin, isDragTarget }) {
   const { t } = useTranslation();
   const wine = slot?.bottle?.wineDefinition;
   const wineType = swatchType(wine, 'red');
@@ -522,23 +523,42 @@ function SlotCircle({ position, cx, cy, R, isNeck = false, slot, disabled, isAct
       role="button"
       tabIndex={0}
       aria-label={slot
-        ? `${wine?.name || '?'} (${slot.bottle?.vintage || ''})${isNeck ? `, ${t('rackView.neckForwardAria', 'neck forward')}` : ''}${isReserved(slot.bottle) ? ` — ${t('rackView.reservedAria', 'reserved')}` : ''}`
-        : `Empty slot ${position}`}
+        ? `${wine?.name || '?'} (${slot.bottle?.vintage || ''})${isNeck ? `, ${t('rackView.neckForwardAria', 'neck forward')}` : ''}${isSideways ? `, ${t('rackView.sidewaysAria', 'lying across')}` : ''}${isReserved(slot.bottle) ? ` — ${t('rackView.reservedAria', 'reserved')}` : ''}`
+        : `Empty slot ${position}${isSideways ? `, ${t('rackView.sidewaysAria', 'lying across')}` : ''}`}
       style={{ cursor: draggable ? 'grab' : 'pointer', ...dimStyle }}
     >
-      <circle cx={cx + 1} cy={cy + 1} r={R} fill="rgba(0,0,0,0.08)" pointerEvents="none" />
-      <circle
-        cx={cx} cy={cy} r={R}
-        fill={fillColor}
-        stroke={isActive || isHighlight ? ACTIVE_STROKE : strokeColor}
-        strokeWidth={isActive || isHighlight ? 3 : 1.5}
-      />
-      <circle cx={cx} cy={cy} r={R * (isNeck ? 0.62 : 0.82)} fill="none"
-        stroke={slot ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.08)'} strokeWidth={0.8} pointerEvents="none" />
-      {slot && !isNeck && <circle cx={cx} cy={cy} r={R * 0.3} fill="rgba(0,0,0,0.4)" pointerEvents="none" />}
-      {slot && !isNeck && <circle cx={cx} cy={cy} r={R * 0.18} fill="rgba(255,255,255,0.15)" pointerEvents="none" />}
-      {slot && isNeck && <circle cx={cx} cy={cy} r={R * 0.34} fill="rgba(255,255,255,0.6)" stroke="rgba(0,0,0,0.35)" strokeWidth={0.8} pointerEvents="none" />}
-      {slot && isNeck && <circle cx={cx} cy={cy} r={R * 0.14} fill="rgba(0,0,0,0.18)" pointerEvents="none" />}
+      {isSideways ? (
+        // A bottle lying across, seen from the front: its side, base left,
+        // neck right — same cell, so the numbering on the map is unchanged.
+        <>
+          <rect x={cx - R + 1} y={cy - R * 0.55 + 1} width={R * 1.55} height={R * 1.1} rx={R * 0.5} fill="rgba(0,0,0,0.08)" pointerEvents="none" />
+          <rect x={cx + R * 0.5} y={cy - R * 0.2} width={R * 0.5} height={R * 0.4} rx={R * 0.12}
+            fill={fillColor} stroke={strokeColor} strokeWidth={1} pointerEvents="none" />
+          <rect
+            x={cx - R} y={cy - R * 0.55} width={R * 1.55} height={R * 1.1} rx={R * 0.5}
+            fill={fillColor}
+            stroke={isActive || isHighlight ? ACTIVE_STROKE : strokeColor}
+            strokeWidth={isActive || isHighlight ? 3 : 1.5}
+          />
+          {slot && <rect x={cx - R * 0.55} y={cy - R * 0.32} width={R * 0.7} height={R * 0.64} rx={R * 0.08} fill="rgba(255,255,255,0.55)" pointerEvents="none" />}
+        </>
+      ) : (
+        <>
+          <circle cx={cx + 1} cy={cy + 1} r={R} fill="rgba(0,0,0,0.08)" pointerEvents="none" />
+          <circle
+            cx={cx} cy={cy} r={R}
+            fill={fillColor}
+            stroke={isActive || isHighlight ? ACTIVE_STROKE : strokeColor}
+            strokeWidth={isActive || isHighlight ? 3 : 1.5}
+          />
+          <circle cx={cx} cy={cy} r={R * (isNeck ? 0.62 : 0.82)} fill="none"
+            stroke={slot ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.08)'} strokeWidth={0.8} pointerEvents="none" />
+          {slot && !isNeck && <circle cx={cx} cy={cy} r={R * 0.3} fill="rgba(0,0,0,0.4)" pointerEvents="none" />}
+          {slot && !isNeck && <circle cx={cx} cy={cy} r={R * 0.18} fill="rgba(255,255,255,0.15)" pointerEvents="none" />}
+          {slot && isNeck && <circle cx={cx} cy={cy} r={R * 0.34} fill="rgba(255,255,255,0.6)" stroke="rgba(0,0,0,0.35)" strokeWidth={0.8} pointerEvents="none" />}
+          {slot && isNeck && <circle cx={cx} cy={cy} r={R * 0.14} fill="rgba(0,0,0,0.18)" pointerEvents="none" />}
+        </>
+      )}
       {slot && isReserved(slot.bottle) && <ReservedRibbon cx={cx} cy={cy} r={R} />}
       {!slot && (
         <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" className="slot-number" pointerEvents="none">

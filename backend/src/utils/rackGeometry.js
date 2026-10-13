@@ -241,17 +241,36 @@ function cabinetShelfAlternate(rows, typeConfig) {
   return out;
 }
 
+// How a shelf's bottles lie: '' front to back, 'front' the first bottle of
+// the bottom row across the front, 'all' every bottle across (a bottom bin).
+const CABINET_SIDEWAYS = ['', 'front', 'all'];
+
+/**
+ * Per-shelf lie list fitted to `rows` (typeConfig.shelfSideways; a missing or
+ * unknown entry means front to back). Drawing only — no capacity or position
+ * reads it. Tolerant on READ like cabinetShelfRows.
+ */
+function cabinetShelfSideways(rows, typeConfig) {
+  const n = Number.isFinite(rows) && rows > 0 ? Math.min(20, Math.floor(rows)) : 0;
+  const src = Array.isArray(typeConfig?.shelfSideways) ? typeConfig.shelfSideways : [];
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(CABINET_SIDEWAYS.includes(src[i]) ? src[i] : '');
+  return out;
+}
+
 /**
  * Every bay of a cabinet, top first, with its resolved shape:
- * { rows, cols, alternate } — the row count, the bay's own width (≤ the
- * cabinet's) and whether its rows alternate. The one place the three
- * per-shelf lists are combined; everything else reads bays.
+ * { rows, cols, alternate, sideways } — the row count, the bay's own width
+ * (≤ the cabinet's), whether its rows alternate, and how its bottles lie
+ * (drawing only). The one place the per-shelf lists are combined;
+ * everything else reads bays.
  */
 function cabinetBays(rows, cols, typeConfig) {
   const rowList = cabinetShelfRows(rows, typeConfig);
   const colList = cabinetShelfCols(rows, cols, typeConfig);
   const altList = cabinetShelfAlternate(rows, typeConfig);
-  return rowList.map((r, i) => ({ rows: r, cols: colList[i], alternate: altList[i] }));
+  const sideList = cabinetShelfSideways(rows, typeConfig);
+  return rowList.map((r, i) => ({ rows: r, cols: colList[i], alternate: altList[i], sideways: sideList[i] }));
 }
 
 /**
@@ -330,8 +349,9 @@ function cabinetPosition({ shelfIndex, row, slot, cols, shelfRows, twoDeep, alte
  * numbers 1..12 whose length equals the shelf count; twoDeep, stagger,
  * headToTail and alternate booleans (headToTail only with twoDeep off: a
  * row lies head to tail one deep, never neck to neck); the optional
- * per-shelf lists shelfCols (whole numbers 1..cols, one per shelf) and
- * shelfAlternate (booleans, one per shelf).
+ * per-shelf lists shelfCols (whole numbers 1..cols, one per shelf),
+ * shelfAlternate (booleans, one per shelf) and shelfSideways ('', 'front' or
+ * 'all', one per shelf — drawing only, so valid on a loaded cabinet).
  * Non-cabinet racks may not carry any of them (a stale shelfRows on a grid
  * would be silently ignored by the geometry but is a client bug).
  * `effectiveCols` bounds shelfCols; when the caller has none, that bound
@@ -340,10 +360,10 @@ function cabinetPosition({ shelfIndex, row, slot, cols, shelfRows, twoDeep, alte
 function validateCabinetConfig(typeConfig, effectiveType, effectiveRows, effectiveModular, effectiveCols) {
   if (!typeConfig || typeof typeConfig !== 'object') return null;
   const present = (k) => typeConfig[k] !== undefined && typeConfig[k] !== null;
-  const keys = ['shelfRows', 'twoDeep', 'stagger', 'headToTail', 'alternate', 'shelfCols', 'shelfAlternate'];
+  const keys = ['shelfRows', 'twoDeep', 'stagger', 'headToTail', 'alternate', 'shelfCols', 'shelfAlternate', 'shelfSideways'];
   if (!keys.some(present)) return null;
   if (effectiveModular || effectiveType !== 'cabinet') {
-    return 'shelfRows, twoDeep, stagger, headToTail, alternate, shelfCols and shelfAlternate apply to cabinet racks only';
+    return 'shelfRows, twoDeep, stagger, headToTail, alternate, shelfCols, shelfAlternate and shelfSideways apply to cabinet racks only';
   }
   if (present('twoDeep') && typeof typeConfig.twoDeep !== 'boolean') return 'twoDeep must be a boolean';
   if (present('stagger') && typeof typeConfig.stagger !== 'boolean') return 'stagger must be a boolean';
@@ -383,6 +403,15 @@ function validateCabinetConfig(typeConfig, effectiveType, effectiveRows, effecti
     }
     if (flags.some((v) => typeof v !== 'boolean')) return 'Each shelfAlternate entry must be a boolean';
   }
+  if (present('shelfSideways')) {
+    const lies = typeConfig.shelfSideways;
+    if (!Array.isArray(lies) || lies.length !== rows) {
+      return 'shelfSideways must list one entry per shelf (its length must equal rows)';
+    }
+    if (lies.some((v) => !CABINET_SIDEWAYS.includes(v))) {
+      return 'Each shelfSideways entry must be "" (front to back), "front" (one bottle across the front) or "all" (every bottle across)';
+    }
+  }
   return null;
 }
 
@@ -413,5 +442,5 @@ module.exports = {
   totalSlots, modularTotalSlots, getMaxPosition, validDoubleHeightRows, validateDoubleHeightRows,
   cabinetShelfRows, cabinetPosition, validateCabinetConfig, CABINET_MAX_ROWS_PER_SHELF,
   cabinetOptions, cabinetRowWidth, cabinetBayCapacity, cabinetRows,
-  cabinetShelfCols, cabinetShelfAlternate, cabinetBays,
+  cabinetShelfCols, cabinetShelfAlternate, cabinetShelfSideways, cabinetBays, CABINET_SIDEWAYS,
 };

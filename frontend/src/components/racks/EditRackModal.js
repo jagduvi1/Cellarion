@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../Modal';
 import BetaBadge from '../BetaBadge';
-import { cabinetShelfAlternate } from '../../utils/rackLayouts';
+import { cabinetShelfAlternate, cabinetShelfSideways } from '../../utils/rackLayouts';
 import { useFeature } from '../../utils/featureFlags';
 
 /**
@@ -26,6 +26,10 @@ import { useFeature } from '../../utils/featureFlags';
  * only for a one-deep cabinet: ticking Two deep clears it. A cabinet that
  * already has it keeps the box in view, so it can be switched off again
  * after early access is.
+ * How each shelf's bottles lie (early access, 'cabinetSideways': front to
+ * back, one across the front, all across) is drawing only as well, so it is
+ * edited here on a loaded cabinet; a cabinet that already has a sideways
+ * shelf keeps the choice in view, like head to tail.
  */
 export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
   const { t } = useTranslation();
@@ -47,6 +51,11 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
   // ticked there (release audit 2026-10-12).
   const showHeadToTail = (useFeature('cabinetHeadToTail') || rack.typeConfig?.headToTail === true)
     && !(anyAlternate && twoDeep);
+  const storedSide = isCabinet ? cabinetShelfSideways(rack.rows, rack.typeConfig) : [];
+  const [sideways, setSideways] = useState(storedSide);
+  const sidewaysOn = useFeature('cabinetSideways');
+  const showSideways = isCabinet && (sidewaysOn || storedSide.some(Boolean));
+  const setSide = (i, value) => setSideways((prev) => prev.map((v, k) => (k === i ? value : v)));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -58,11 +67,13 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
     setSaving(true);
     setError('');
     // A cabinet's typeConfig is replaced wholesale by the route, so send the
-    // stored shape back untouched alongside the flags being changed.
+    // stored shape back untouched alongside the flags being changed. The lie
+    // list is stored only while some shelf lies sideways.
+    const lie = showSideways ? { shelfSideways: sideways.some(Boolean) ? sideways : undefined } : {};
     const result = await onSave({
       name: trimmed,
       group: group.trim(),
-      ...(isCabinet ? { typeConfig: { ...(rack.typeConfig || {}), twoDeep, stagger, headToTail: !twoDeep && headToTail } } : {}),
+      ...(isCabinet ? { typeConfig: { ...(rack.typeConfig || {}), twoDeep, stagger, headToTail: !twoDeep && headToTail, ...lie } } : {}),
     });
     if (result?.ok) {
       onClose();
@@ -125,6 +136,24 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
                 </small>
               </>
             )}
+            {showSideways && (
+              <fieldset className="form-group edit-rack-sideways">
+                <legend>{t('racks.cabinetSidewaysEditLabel', 'How each shelf\'s bottles lie')}</legend>
+                {sideways.map((v, i) => (
+                  <label key={i} className="edit-rack-sideways-row">
+                    <span>{t('racks.cabinetShelfN', { n: i + 1 })}</span>
+                    <select value={v} onChange={(e) => setSide(i, e.target.value)} disabled={saving}>
+                      <option value="">{t('racks.cabinetSidewaysNone', 'front to back')}</option>
+                      <option value="front">{t('racks.cabinetSidewaysFront', 'one across the front')}</option>
+                      <option value="all">{t('racks.cabinetSidewaysAll', 'all across')}</option>
+                    </select>
+                  </label>
+                ))}
+                <small className="help-text edit-rack-option-help">
+                  {t('racks.cabinetSidewaysHelp', 'Bottles lie: front to back, one bottle lying across the front of the others (as in a slim fridge), or all lying across (as in a bottom bin). Drawing only: the number of bottles and the slot numbers stay the same.')}
+                </small>
+              </fieldset>
+            )}
             <small className="help-text">
               {anyAlternate ? `${t('racks.cabinetTwoDeepLocked', 'Two deep is part of the shape on a cabinet whose rows alternate — it sets which rows are the narrow ones — so it stays as created.')} ` : ''}
               {alternate ? `${t('racks.cabinetAlternateNests', 'Rows that alternate in width always nest: each narrow row lies in the grooves of the wide row below it.')} ` : ''}
@@ -144,6 +173,9 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
           submit inside this one saved the rack (release audit 2026-10-12). */}
       {isCabinet && showHeadToTail && (
         <BetaBadge feature="cabinetHeadToTail" note={t('racks.cabinetHeadToTailBeta', 'Bottles head to tail is in early access.')} />
+      )}
+      {showSideways && (
+        <BetaBadge feature="cabinetSideways" note={t('racks.cabinetSidewaysBeta', 'Bottles lying sideways is in early access.')} />
       )}
     </Modal>
   );

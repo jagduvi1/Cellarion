@@ -2,6 +2,7 @@ import {
   computeLayout, computeModularLayout, getModularTotalSlots, getTotalSlots,
   SLOT_RADIUS, validDoubleHeightRows, DOUBLE_ROW_HEADROOM, cabinetShelfRows,
   cabinetRowWidth, cabinetBayCapacity, cabinetBays, cabinetBayUnits, cabinetHeadToTail,
+  cabinetShelfSideways, cabinetSlotSideways,
 } from './rackLayouts';
 
 describe('computeLayout', () => {
@@ -312,6 +313,40 @@ describe('computeLayout', () => {
       expect(h2t.cabinet.headToTail).toBe(true);
     });
 
+    // Support forum 2026-10-13: a slim fridge lays one bottle across the front
+    // of each shelf and fills its bin with bottles lying across.
+    it('shelfSideways: lying bottles are marked in their own cells, numbering and places unchanged', () => {
+      const base = { shelfRows: [1, 2, 2], shelfCols: [5, 4, 4], twoDeep: false };
+      const plain = computeLayout('cabinet', 3, 5, base);
+      const side = computeLayout('cabinet', 3, 5, { ...base, shelfSideways: ['front', '', 'all'] });
+      expect(side.totalSlots).toBe(plain.totalSlots);
+      expect(side.viewBox).toEqual(plain.viewBox);
+      expect(side.slots.map(({ position, cx, cy }) => [position, cx, cy]))
+        .toEqual(plain.slots.map(({ position, cx, cy }) => [position, cx, cy]));
+      // Shelf 1 (positions 1..5): only its first bottle lies across. Shelf 3
+      // (positions 14..21): every bottle does.
+      expect(side.slots.filter((s) => s.isSideways).map((s) => s.position)).toEqual([1, 14, 15, 16, 17, 18, 19, 20, 21]);
+      expect(side.cabinet.bays.map((b) => b.sideways)).toEqual(['front', '', 'all']);
+      expect(plain.slots.some((s) => s.isSideways)).toBe(false);
+    });
+
+    it('shelfSideways with head to tail: the bottles behind an across bottle alternate from the first of them', () => {
+      const lay = computeLayout('cabinet', 1, 5, { shelfRows: [1], twoDeep: false, headToTail: true, shelfSideways: ['front'] });
+      // 1 lies across; 2, 4 base forward; 3, 5 neck forward.
+      expect(lay.slots.filter((s) => s.isNeck).map((s) => s.position)).toEqual([3, 5]);
+      expect(lay.slots.find((s) => s.position === 1).isNeck).toBeUndefined();
+    });
+
+    it('cabinetShelfSideways / cabinetSlotSideways: fitted list, one rule for every view', () => {
+      expect(cabinetShelfSideways(3, { shelfSideways: ['all', 'up'] })).toEqual(['all', '', '']);
+      expect(cabinetShelfSideways(2, {})).toEqual(['', '']);
+      expect(cabinetSlotSideways({ sideways: 'front' }, 1, 0)).toBe(true);
+      expect(cabinetSlotSideways({ sideways: 'front' }, 1, 1)).toBe(false);
+      expect(cabinetSlotSideways({ sideways: 'front' }, 2, 0)).toBe(false);
+      expect(cabinetSlotSideways({ sideways: 'all' }, 3, 2)).toBe(true);
+      expect(cabinetSlotSideways({ sideways: '' }, 1, 0)).toBe(false);
+    });
+
     it('head to tail never applies to a two-deep cabinet (rows lie neck to neck there)', () => {
       expect(cabinetHeadToTail({ headToTail: true })).toBe(false);
       expect(cabinetHeadToTail({ twoDeep: true, headToTail: true })).toBe(false);
@@ -458,7 +493,7 @@ describe('computeLayout', () => {
         const explicit = computeLayout('cabinet', 2, 6, { shelfRows: [2, 3], twoDeep: true, shelfCols: [6, 6], shelfAlternate: [false, false] });
         expect(explicit.slots).toEqual(plain.slots);
         expect(explicit.viewBox).toEqual(plain.viewBox);
-        expect(cabinetBays(2, 6, { shelfRows: [1, 2], shelfCols: [3] })).toEqual([{ rows: 1, cols: 3, alternate: false }, { rows: 2, cols: 6, alternate: false }]);
+        expect(cabinetBays(2, 6, { shelfRows: [1, 2], shelfCols: [3] })).toEqual([{ rows: 1, cols: 3, alternate: false, sideways: '' }, { rows: 2, cols: 6, alternate: false, sideways: '' }]);
         // Every slot stays inside the drawing.
         l.slots.forEach((slot) => {
           expect(slot.cx + SLOT_RADIUS).toBeLessThanOrEqual(l.viewBox.width);

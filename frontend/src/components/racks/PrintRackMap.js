@@ -61,9 +61,13 @@ export default function PrintRackMap({ rack }) {
         stroke="#999"
         strokeWidth={1.5}
       />
-      {layout.slots.map(({ position, cx, cy, isBack }) => {
+      {layout.slots.map(({ position, cx, cy, isBack, isSideways }) => {
         const slot = slotMap[position];
         const r = isBack ? R * 0.7 : R;
+        // A bottle lying across prints as a bar in its cell (same numbering).
+        const shape = (props) => (isSideways
+          ? <rect x={cx - r} y={cy - r * 0.55} width={r * 2} height={r * 1.1} rx={r * 0.5} {...props} />
+          : <circle cx={cx} cy={cy} r={r} {...props} />);
         if (disabledSet.has(position)) {
           const d = r * 0.5;
           return (
@@ -77,7 +81,7 @@ export default function PrintRackMap({ rack }) {
         if (!slot) {
           return (
             <g key={position}>
-              <circle cx={cx} cy={cy} r={r} fill="none" stroke="#BBB" strokeWidth={1} strokeDasharray="3 2" />
+              {shape({ fill: 'none', stroke: '#BBB', strokeWidth: 1, strokeDasharray: '3 2' })}
               <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" fontSize={r * 0.62} fill="#AAA">
                 {position}
               </text>
@@ -89,7 +93,7 @@ export default function PrintRackMap({ rack }) {
         const textFill = DARK_TEXT_TYPES.has(type) ? '#332B00' : '#fff';
         return (
           <g key={position}>
-            <circle cx={cx} cy={cy} r={r} fill={fill} stroke="#00000030" strokeWidth={1} />
+            {shape({ fill, stroke: '#00000030', strokeWidth: 1 })}
             <text
               x={cx} y={cy}
               textAnchor="middle"

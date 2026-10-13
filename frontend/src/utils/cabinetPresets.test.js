@@ -41,6 +41,20 @@ describe('cabinetPresets', () => {
     expect(cabinetCapacity(p.cols, p.shelfRows, p)).toBe(196);
   });
 
+  it('the Kingsbottle Atelier Duo is the loading diagram: 86, one bottle across each shelf front, a bin lying across', () => {
+    const p = CABINET_PRESETS.find((x) => x.key === 'kingsbottleAtelierDuo');
+    expect(p).toMatchObject({ group: 'kingsbottle', feature: 'cabinetSideways', shelves: 15, cols: 6, twoDeep: false, capacity: 86 });
+    expect(cabinetCapacity(p.cols, p.shelfRows, p)).toBe(86);
+    expect(p.shelfSideways).toHaveLength(p.shelves);
+    p.shelfSideways.forEach((v) => expect(['', 'front', 'all']).toContain(v));
+    expect(p.shelfSideways.filter((v) => v === 'front')).toHaveLength(13);
+    expect(p.shelfSideways[14]).toBe('all');
+  });
+
+  it('a preset that needs early access names its flag', () => {
+    for (const p of CABINET_PRESETS.filter((x) => x.shelfSideways)) expect(p.feature).toBe('cabinetSideways');
+  });
+
   it('a maker figure is within a couple of bottles of its starting shape', () => {
     for (const p of CABINET_PRESETS.filter((x) => x.capacity)) {
       expect(Math.abs(cabinetCapacity(p.cols, p.shelfRows, p) - p.capacity)).toBeLessThanOrEqual(3);

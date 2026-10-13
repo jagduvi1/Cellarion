@@ -69,6 +69,9 @@ const rackModuleSchema = new mongoose.Schema({
     // own cols / alternate. Shape, like shelfRows: creation-only in the UI.
     shelfCols: { type: [Number], default: undefined },
     shelfAlternate: { type: [Boolean], default: undefined },
+    // How each shelf's bottles lie ('' | 'front' | 'all') — drawing only, see
+    // rackSchema.typeConfig.shelfSideways below.
+    shelfSideways: { type: [{ type: String, enum: ['', 'front', 'all'] }], default: undefined },
     // Hex racks only: mirror the row sequence top-to-bottom. Pure reversal —
     // never changes total slot count (see rackSchema.typeConfig.hexFlip below).
     hexFlip: { type: Boolean, default: false },
@@ -140,6 +143,15 @@ const rackSchema = new mongoose.Schema({
     // own cols / alternate. Shape, like shelfRows: creation-only in the UI.
     shelfCols: { type: [Number], default: undefined },
     shelfAlternate: { type: [Boolean], default: undefined },
+    // Cabinet racks only, per shelf (top first, length === rows when set): how
+    // the bottles of a shelf lie. '' = front to back (the default), 'front' =
+    // the first bottle of the shelf's bottom row lies ACROSS the front, in
+    // front of the others (a slim fridge's shelf: 5 front to back + 1 across),
+    // 'all' = every bottle of the shelf lies across, piled (a bottom bin).
+    // Drawing only — capacity and the position contract are unchanged, so it
+    // can be switched with bottles in place (utils/rackGeometry
+    // .cabinetShelfSideways; support forum 2026-10-13).
+    shelfSideways: { type: [{ type: String, enum: ['', 'front', 'all'] }], default: undefined },
     // Grid racks only: 1-indexed row numbers with headroom for a top layer
     // of bottles resting in the gaps (cols across + cols-1 on top).
     // POSITION NUMBERING CONTRACT (double-height rows): the base grid keeps

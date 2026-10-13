@@ -1252,6 +1252,13 @@
 .edit-rack-form input[type="checkbox"] { width: auto; margin: 0; }
 .edit-rack-form .edit-rack-option-help { display: block; margin: -0.5rem 0 0.75rem; }
 .edit-rack-form .help-text { font-size: 0.78rem; color: var(--color-text-muted); }
+/* How each shelf's bottles lie (early access 'cabinetSideways'): one compact
+   line per shelf, two columns where the dialog is wide enough. */
+.edit-rack-form .edit-rack-sideways { border: 0; padding: 0; margin: 0 0 0.75rem; }
+.edit-rack-form .edit-rack-sideways legend { font-size: 0.85rem; color: var(--color-text-secondary); padding: 0; margin-bottom: 0.35rem; }
+.edit-rack-form .edit-rack-sideways-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; font-size: 0.82rem; padding: 0.15rem 0; }
+.edit-rack-form .edit-rack-sideways-row select { width: auto; min-width: 11rem; }
+.edit-rack-form .edit-rack-sideways .edit-rack-option-help { margin: 0.35rem 0 0; }
 
 /* Post-add placing mode bar (issue #1055): progress on the left, actions on
    the right; wraps to two rows on phones. Colours come from .alert-info /

@@ -5,8 +5,9 @@ import * as THREE from 'three';
 import {
   BOTTLE_RADIUS, CELL_W, CELL_H, RACK_DEPTH, WOOD_THICK, PANEL_THICK,
   getDisplayDims, buildScaledLayout, getGridDoubleRows, getCabinetGeometry,
+  BOTTLE_LENGTH, computeCabinetSlotPositions,
 } from '../../utils/roomConstants';
-import { getTotalSlots, getModularTotalSlots, DOUBLE_ROW_HEADROOM, cabinetRowWidth, cabinetBayUnits, cabinetNeckForward } from '../../utils/rackLayouts';
+import { getTotalSlots, getModularTotalSlots, DOUBLE_ROW_HEADROOM } from '../../utils/rackLayouts';
 import { swatchType } from '../../utils/wineColour';
 import { CabinetBody, CabinetDoor, CabinetShelfPlank, CABINET_COLORS } from './CabinetParts';
 
@@ -84,8 +85,7 @@ function getWoodTexture() {
 }
 
 // ── Bottle lathe geometry (reused singleton) ─────────────
-// Base at local y = 0, capsule at BOTTLE_LENGTH.
-const BOTTLE_LENGTH = 0.285;
+// Base at local y = 0, capsule at BOTTLE_LENGTH (utils/roomConstants).
 const _bottleProfiles = {};
 function getBottleGeometry() {
   if (_bottleProfiles.geo) return _bottleProfiles.geo;
@@ -121,7 +121,7 @@ function useResetCursorOnUnmount() {
   useEffect(() => () => { document.body.style.cursor = ''; }, []);
 }
 
-function Bottle({ position, wineType, slot, onBottleClick, highlighted, scale = 1, flipNeck = false, lensStyle }) {
+function Bottle({ position, wineType, slot, onBottleClick, highlighted, scale = 1, flipNeck = false, sideways = false, lensStyle }) {
   // Lens/search style: a lens color re-tints the whole bottle (glass + wine
   // + glow) so the room reads as a heatmap; dim greys a non-matching bottle
   // out while a search is active. Highlight (gold) still wins below.
@@ -145,7 +145,10 @@ function Bottle({ position, wineType, slot, onBottleClick, highlighted, scale = 
   // -Z instead of the default +Z. Wine fill, foil, and label offsets are
   // all on the bottle's local +Y axis so they stay in the right place after
   // the rotation; only the world-space orientation of the bottle flips.
-  const rotation = flipNeck ? [-Math.PI / 2, 0, 0] : [Math.PI / 2, 0, 0];
+  // A bottle lying ACROSS a cabinet shelf (typeConfig.shelfSideways): a
+  // quarter turn about Z maps local +Y to +X — base at the given position,
+  // neck to the right.
+  const rotation = sideways ? [0, 0, -Math.PI / 2] : flipNeck ? [-Math.PI / 2, 0, 0] : [Math.PI / 2, 0, 0];
 
   return (
     <group position={position} rotation={rotation} scale={scale}>
@@ -475,72 +478,6 @@ function computeShelfSlotPositions(rows, cols, backCols, width, height, bpc = 1,
   return positions;
 }
 
-// Cabinet (wine fridge): each bay stacks its rows in Y (real stacking, not
-// the shelf type's z-stagger). Row 1 rests on the plank; with twoDeep, odd
-// rows are the front row of a level (base toward the viewer, neck pointing
-// in) and even rows the back row (neck-to-neck behind them). Geometry comes
-// from roomConstants.getCabinetGeometry so body, planks and bottles agree.
-// On an alternating bay the rows are cols / cols−1 wide in turn
-// (rackLayouts.cabinetRowWidth) and the narrow ones sit half a bottle over,
-// in the grooves of the wide row below — the shelf is exactly cols wide. A
-// bay narrower than the cabinet (its own cols) sits centred in the body.
-// `row` carries the BAY index so PullOutShelfRow can slide a whole bay.
-// Head to tail (one deep only): every other bottle of a row is turned round,
-// neck toward the viewer, its base a bottle length further in so it fills
-// the same depth as its neighbours.
-function computeCabinetSlotPositions(cab, width, depth) {
-  const positions = [];
-  // A staggered shelf is half a bottle wider than its bottle count, so the
-  // cells are sized against the widest bay's cols + 0.5 and the offset level
-  // lands inside the frame instead of through the side panel. (Not for an
-  // alternating bay: there the offset rows are the narrow ones and never
-  // poke out.)
-  const drawOpts = { twoDeep: cab.twoDeep, stagger: cab.stagger, backOffset: false };
-  const units = Math.max(1, ...cab.bays.map((b) => cabinetBayUnits(b, drawOpts)));
-  const cW = width / units;
-  const halfD = depth / 2;
-  // A bottle's local +Y axis is 0.285 long; a base 0.029 in from a face puts
-  // the neck just short of the centreline (same figures as the shelf type).
-  const frontBottleZ = halfD - 0.029;
-  const backBottleZ = -(halfD - 0.029);
-  const frontEmptyZ = halfD - 0.005;
-  const neckForwardZ = frontBottleZ - BOTTLE_LENGTH;
-  const backEmptyZ = -halfD + 0.005;
-  let pos = 1;
-  cab.bays.forEach((bay, i) => {
-    const cols = Math.max(1, bay.cols);
-    const nest = bay.alternate || cab.stagger;
-    const x0 = -width / 2 + cW / 2 + ((units - cabinetBayUnits(bay, drawOpts)) / 2) * cW;
-    for (let r = 1; r <= bay.rows; r++) {
-      const level = cab.twoDeep ? Math.ceil(r / 2) : r;
-      const isBack = cab.twoDeep && r % 2 === 0;
-      const y = bay.bottom + BOTTLE_RADIUS + 0.003 + (level - 1) * bay.levelPitch;
-      // Nested levels alternate half a bottle left and right (see
-      // roomConstants.getCabinetGeometry): the shelf is half a bottle wider
-      // than its bottle count, exactly like a real fridge's staggered shelf.
-      // Alternating rows: the narrow rows are the offset ones instead.
-      const rowWidth = cabinetRowWidth(r, cols, { twoDeep: cab.twoDeep, alternate: bay.alternate });
-      const nudge = bay.alternate
-        ? (rowWidth < cols ? cW / 2 : 0)
-        : (nest && cols > 1 && level % 2 === 0 ? cW / 2 : 0);
-      for (let c = 0; c < rowWidth; c++) {
-        const neckForward = cab.headToTail && !isBack && cabinetNeckForward(c);
-        positions.push({
-          position: pos++,
-          x: x0 + c * cW + nudge,
-          y,
-          z: isBack ? backEmptyZ : frontEmptyZ,
-          bottleZ: isBack ? backBottleZ : neckForward ? neckForwardZ : frontBottleZ,
-          isBack,
-          flipNeck: !isBack && !neckForward,
-          row: i,
-        });
-      }
-    }
-  });
-  return positions;
-}
-
 // Stack: single column
 function computeStackSlotPositions(rows, height) {
   const cH = height / rows;
@@ -629,7 +566,7 @@ function PullOutShelfRow({
           keep the closed-rack view clean; they only appear once the user
           has pulled the shelf out, so the click targets are then in clear
           space in front of the cabinet rather than buried inside it. */}
-      {rowSlots.map(({ position: pos, x, y, z = 0, bottleZ, isBack, flipNeck }) => {
+      {rowSlots.map(({ position: pos, x, y, z = 0, bottleX, bottleZ, isBack, flipNeck, sideways }) => {
         const slot = slotMap[pos];
         const filled = !!slot;
         const wineType = swatchType(slot?.bottle?.wineDefinition, 'red');
@@ -641,12 +578,13 @@ function PullOutShelfRow({
           return (
             <Bottle
               key={pos}
-              position={[x, y, finalBottleZ]}
+              position={[bottleX !== undefined ? bottleX : x, y, finalBottleZ]}
               wineType={wineType}
               slot={slot}
               onBottleClick={onBottleClick}
               highlighted={highlightBottleId && (slot.bottle?._id || slot.bottle) === highlightBottleId}
               flipNeck={!!flipNeck}
+              sideways={!!sideways}
               lensStyle={getBottleStyle ? getBottleStyle(slot) : null}
             />
           );
@@ -762,7 +700,7 @@ export default function RackMesh({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [isCabinet, rack.rows, rack.cols, rack.typeConfig?.shelfRows, rack.typeConfig?.twoDeep,
       rack.typeConfig?.stagger, rack.typeConfig?.headToTail, rack.typeConfig?.alternate, rack.typeConfig?.shelfCols,
-      rack.typeConfig?.shelfAlternate, displayCols]
+      rack.typeConfig?.shelfAlternate, rack.typeConfig?.shelfSideways, displayCols]
   );
 
   // Double-height rows (grid racks only) — the rack grows taller by
@@ -1170,7 +1108,7 @@ export default function RackMesh({
           );
         })
       ) : (
-        slotPositions.map(({ position: pos, x, y, z = 0, bottleZ, isBack, flipNeck }) => {
+        slotPositions.map(({ position: pos, x, y, z = 0, bottleX, bottleZ, isBack, flipNeck, sideways }) => {
           const slot = slotMap[pos];
           const filled = !!slot;
           const wineType = swatchType(slot?.bottle?.wineDefinition, 'red');
@@ -1187,12 +1125,13 @@ export default function RackMesh({
           return filled ? (
             <Bottle
               key={pos}
-              position={[x, y, finalBottleZ]}
+              position={[bottleX !== undefined ? bottleX : x, y, finalBottleZ]}
               wineType={wineType}
               slot={slot}
               onBottleClick={onBottleClick}
               highlighted={highlightBottleId && (slot.bottle?._id || slot.bottle) === highlightBottleId}
               flipNeck={!!flipNeck}
+              sideways={!!sideways}
               lensStyle={getBottleStyle ? getBottleStyle(slot) : null}
             />
           ) : (

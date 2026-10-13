@@ -19,21 +19,23 @@
  * user can see the difference before they adjust.
  *
  * Shape: { key, group, shelves, cols, shelfRows, twoDeep, alternate,
- * shelfCols, shelfAlternate, capacity } — see the cabinet contract in
+ * shelfCols, shelfAlternate, shelfSideways, capacity, feature } — see the cabinet contract in
  * rackLayouts.cabinetLayout for what each field means. `alternate` marks the
  * honeycomb shelf whose rows alternate cols / cols−1 (6 in front of 5, then 5
  * in front of 6); it changes capacity, so a preset carrying it is one whose
  * maker stacks that way. `shelfCols` / `shelfAlternate` give a shelf its own
- * width and pattern where the maker's layout is not uniform. Whatever the
- * preset says, the owner then edits every shelf — rows, width, pattern —
- * exactly as for a custom shape.
+ * width and pattern where the maker's layout is not uniform. `shelfSideways`
+ * says how a shelf's bottles lie (drawing only); `feature` names the early
+ * access flag a preset needs to be listed (the create form hides it
+ * without). Whatever the preset says, the owner then edits every shelf —
+ * rows, width, pattern — exactly as for a custom shape.
  */
 
 import { getTotalSlots } from './rackLayouts';
 
 export const CABINET_PRESET_GROUPS = [
   'liebherrGrandCru', 'liebherrVinidor', 'liebherrVinothek', 'eurocave', 'vintec',
-  'mquvee', 'dometic', 'temptech', 'boschSiemens', 'caso', 'generic',
+  'mquvee', 'dometic', 'temptech', 'boschSiemens', 'caso', 'kingsbottle', 'generic',
 ];
 
 export const CABINET_PRESETS = [
@@ -108,6 +110,23 @@ export const CABINET_PRESETS = [
   // ── CASO ─────────────────────────────────────────────────────────────────
   // WineComfort 66 / 660: 66 bottles on seven pull-out shelves, two zones.
   { key: 'casoWinecomfort66', group: 'caso', shelves: 7, cols: 5, shelfRows: [2, 2, 2, 2, 2, 2, 1], twoDeep: true, capacity: 66 },
+
+  // ── Kingsbottle ──────────────────────────────────────────────────────────
+  // Atelier Duo (KB245DX), slim dual zone: 86 bottles, the maker's loading
+  // diagram — top shelf 8 (one level on top), six Burgundy shelves of 5 (4
+  // front to back + 1 lying across the front), the upper floor 5, six
+  // Bordeaux shelves of 6 (5 + 1 across), and a bottom bin of 7 lying across
+  // (piled 4 / 3). The diagram's top shelf is 5 with 3 on top; 2 × 4 lands
+  // on the same 8. Shown only with early access 'cabinetSideways', which
+  // draws the bottles that lie across.
+  {
+    key: 'kingsbottleAtelierDuo', group: 'kingsbottle', feature: 'cabinetSideways', shelves: 15, cols: 6, twoDeep: false,
+    shelfRows: [2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
+    shelfCols: [4, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 4],
+    shelfAlternate: [false, false, false, false, false, false, false, false, false, false, false, false, false, false, true],
+    shelfSideways: ['front', 'front', 'front', 'front', 'front', 'front', 'front', '', 'front', 'front', 'front', 'front', 'front', 'front', 'all'],
+    capacity: 86,
+  },
 
   // ── Generic ──────────────────────────────────────────────────────────────
   { key: 'sliding', group: 'generic', shelves: 6, cols: 6, shelfRows: [2, 2, 2, 2, 2, 2], twoDeep: true },

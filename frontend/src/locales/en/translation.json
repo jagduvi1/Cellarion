@@ -1410,6 +1410,7 @@
     "cabinetPresetGroup_temptech": "Temptech",
     "cabinetPresetGroup_boschSiemens": "Bosch / Siemens",
     "cabinetPresetGroup_caso": "CASO",
+    "cabinetPresetGroup_kingsbottle": "Kingsbottle",
     "cabinetPresetGroup_generic": "Other",
     "cabinetPresetCapacity": "The maker quotes {{model}} bottles; this shape holds {{shape}}.",
     "cabinetPreset_vintec50": "Vintec 50 — 50 bottles",
@@ -1433,6 +1434,7 @@
     "cabinetPreset_temptechCol150": "Collector 150 — 138 bottles",
     "cabinetPreset_boschKuw21": "KUW21 / KU21 built-under — 44 bottles, 2 zones",
     "cabinetPreset_casoWinecomfort66": "WineComfort 66 — 66 bottles, 2 zones",
+    "cabinetPreset_kingsbottleAtelierDuo": "Atelier Duo (KB245DX) — 86 bottles, one across the front of each shelf",
     "cabinetPreset_liebherrWtes1672": "WTes 1672 — 34 bottles, 2 zones",
     "cabinetPreset_liebherrWtes4677": "WTes 4677 — 143 bottles, 3 zones",
     "cabinetPreset_liebherrWtes5872": "WTes 5872 — 178 bottles, 3 zones",
@@ -1455,6 +1457,13 @@
     "cabinetHeadToTailHelp": "For bottles that lie one deep, base forward and neck forward in turn, so a row fits more. Every other bottle is drawn neck forward. Drawing only — the number of bottles and the slot numbers stay the same.",
     "cabinetHeadToTailNeedsSingle": "Head to tail is for bottles that lie one deep: untick Two deep first.",
     "cabinetHeadToTailBeta": "Bottles head to tail is in early access.",
+    "cabinetShelfSidewaysShort": "bottles lie",
+    "cabinetSidewaysNone": "front to back",
+    "cabinetSidewaysFront": "one across the front",
+    "cabinetSidewaysAll": "all across",
+    "cabinetSidewaysHelp": "Bottles lie: front to back, one bottle lying across the front of the others (as in a slim fridge), or all lying across (as in a bottom bin). Drawing only: the number of bottles and the slot numbers stay the same.",
+    "cabinetSidewaysEditLabel": "How each shelf's bottles lie",
+    "cabinetSidewaysBeta": "Bottles lying sideways is in early access.",
     "cabinetAlternateLabel": "Rows alternate in width on every shelf (6 / 5 / 6 …)",
     "cabinetAlternateHelp": "The first level holds a full row in front of one bottle fewer behind it; the level above nests in its grooves, one fewer in front of a full row, and so on — the honeycomb of a Liebherr GrandCru shelf. Sets every shelf at once; untick single shelves above. This changes how many bottles the cabinet holds, so it is set when the cabinet is created.",
     "cabinetAlternateNests": "Rows that alternate in width always nest: each narrow row lies in the grooves of the wide row below it.",
@@ -4977,7 +4986,8 @@
   },
   "rackView": {
     "reservedAria": "reserved",
-    "neckForwardAria": "neck forward"
+    "neckForwardAria": "neck forward",
+    "sidewaysAria": "lying across"
   },
   "followButton": {
     "follow": "Follow",
@@ -5633,6 +5643,11 @@
         "name": "Wine cabinet bottles head to tail",
         "description": "For a wine cabinet whose bottles lie one deep, base forward and neck forward in turn. The cabinet drawings then show every other bottle neck forward. The slot numbers stay the same, so you can switch it on for a cabinet that already holds bottles.",
         "where": "On the Racks page: create or edit a wine cabinet, untick Two deep, then tick Bottles lie head to tail."
+      },
+      "cabinetSideways": {
+        "name": "Wine cabinet bottles lying sideways",
+        "description": "For each shelf of a wine cabinet, choose how its bottles lie: front to back, with one bottle lying across the front of the others (as in a slim fridge), or all lying across (as in a bottom bin). The cabinet drawings follow, including the 3D view. The slot numbers stay the same, so you can change it on a cabinet that already holds bottles. Includes a starting shape for the Kingsbottle Atelier Duo.",
+        "where": "On the Racks page: create or edit a wine cabinet and pick how each shelf's bottles lie, or start from Kingsbottle → Atelier Duo."
       }
     }
   },

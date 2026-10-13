@@ -57,6 +57,17 @@ const FEATURES = Object.freeze([
     defaultState: 'beta',
     since: '2026-10-12',
   }),
+  // Per shelf, how a wine cabinet's bottles lie: one across the front of the
+  // others, or all across (a bottom bin) — plus the Kingsbottle Atelier Duo
+  // preset that uses it. The setting (typeConfig.shelfSideways) is stored and
+  // drawn for everyone; the flag only decides who sees the controls and the
+  // preset.
+  Object.freeze({
+    key: 'cabinetSideways',
+    title: 'Wine cabinet bottles lying sideways',
+    defaultState: 'beta',
+    since: '2026-10-13',
+  }),
 ]);
 
 const FEATURE_KEYS = Object.freeze(FEATURES.map((f) => f.key));

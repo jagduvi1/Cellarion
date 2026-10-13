@@ -72,7 +72,9 @@ registerTool({
     'false; drawing only), alternate = rows alternate cols / cols−1 like a honeycomb (6 in front of 5, then 5 in front of 6; ' +
     'default false, changes capacity); shelf_cols / shelf_alternate override width and pattern per shelf (a Liebherr ' +
     'GrandCru 5001: 5 shelves 6 across, shelf_rows [8,8,8,8,8], shelf_cols [4,6,6,6,4], shelf_alternate ' +
-    '[false,true,true,true,false] = 196). Confirm name and shape first; group is the optional room or appliance label ' +
+    '[false,true,true,true,false] = 196); shelf_sideways sets how each shelf\'s bottles lie — "front" = the first bottle of the ' +
+    'shelf\'s bottom row lies across the front of the others (a slim fridge), "all" = every bottle lies across (a bottom bin), ' +
+    '"" = front to back (drawing only). Confirm name and shape first; group is the optional room or appliance label ' +
     'the rack belongs to ("Basement", "Kitchen fridge") — reuse a group name list_racks already shows so racks ' +
     'section together. For other rack shapes, modular racks, zones or disabled slots, use the web app. Reversible ' +
     'via undo_last while the rack is still empty.',
@@ -94,6 +96,8 @@ registerTool({
       .describe('Cabinet only: bottles across per shelf, top shelf first, one entry per shelf (must equal rows), each 1..cols — for shelves narrower than the cabinet. Omit when every shelf is cols wide.'),
     shelf_alternate: z.array(z.boolean()).min(1).max(20).optional()
       .describe('Cabinet only: whether each shelf alternates (see alternate), top shelf first, one entry per shelf (must equal rows). Omit when every shelf follows the cabinet-wide alternate flag.'),
+    shelf_sideways: z.array(z.enum(['', 'front', 'all'])).min(1).max(20).optional()
+      .describe('Cabinet only: how each shelf\'s bottles lie, top shelf first, one entry per shelf (must equal rows): "" front to back, "front" = the first bottle of the bottom row lies across the front of the others, "all" = every bottle lies across (a bottom bin). Drawing only — capacity and numbering are unchanged. Omit when every shelf lies front to back.'),
     group: z.string().max(40).optional().describe('Optional group label (room or appliance), e.g. "Basement"'),
     idempotency_key: z.string().max(100).optional(),
   },
@@ -113,9 +117,10 @@ registerTool({
         ...(args.head_to_tail !== undefined ? { headToTail: args.head_to_tail } : {}),
         ...(args.shelf_cols ? { shelfCols: args.shelf_cols } : {}),
         ...(args.shelf_alternate ? { shelfAlternate: args.shelf_alternate } : {}),
+        ...(args.shelf_sideways ? { shelfSideways: args.shelf_sideways } : {}),
       };
-    } else if (['shelf_rows', 'two_deep', 'stagger', 'head_to_tail', 'alternate', 'shelf_cols', 'shelf_alternate'].some((k) => args[k] !== undefined)) {
-      return fail('invalid_input', 'shelf_rows, two_deep, stagger, head_to_tail, alternate, shelf_cols and shelf_alternate apply to type "cabinet" only');
+    } else if (['shelf_rows', 'two_deep', 'stagger', 'head_to_tail', 'alternate', 'shelf_cols', 'shelf_alternate', 'shelf_sideways'].some((k) => args[k] !== undefined)) {
+      return fail('invalid_input', 'shelf_rows, two_deep, stagger, head_to_tail, alternate, shelf_cols, shelf_alternate and shelf_sideways apply to type "cabinet" only');
     }
     const result = await createGridRack(access.cellar, { name: args.name, type, rows: args.rows, cols: args.cols, typeConfig, group: args.group }, ctx.req);
     if (result.error) {
