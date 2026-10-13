@@ -48,7 +48,7 @@ const { sanitizeImageBuffer, detectImageFormat } = require('./imageSanitizer');
 const { encodeKeptPhoto, KEPT_EXTENSION } = require('./photoFormat');
 const { ORIGINALS_DIR, PROCESSED_DIR } = require('../config/upload');
 const { planRackCreations, placeBottlesInRack, DEFAULT_ANCHOR } = require('../utils/rackImport');
-const { getMaxPosition, cabinetShelfRows, cabinetShelfCols, cabinetShelfAlternate, cabinetShelfSideways } = require('../utils/rackGeometry');
+const { getMaxPosition, fitCabinetTypeConfig } = require('../utils/rackGeometry');
 const { resolveRating } = require('../utils/ratingUtils');
 const { normalizeBottleSize, DEFAULT_SIZE } = require('../config/bottleSizes');
 const { normalizeBarcode } = require('../utils/barcode');
@@ -344,17 +344,7 @@ async function createRacks(cellarId, userId, cellar, items, result) {
     // A cabinet from a (possibly hand-edited) export is stored with a fitted,
     // bounded shelf list — never a missing, short or million-entry one.
     if (safeType === 'cabinet') {
-      rackData.typeConfig = {
-        ...(rackData.typeConfig || {}),
-        shelfRows: cabinetShelfRows(rackData.rows, rackData.typeConfig),
-        twoDeep: rackData.typeConfig?.twoDeep !== false,
-        stagger: rackData.typeConfig?.stagger !== false,
-        headToTail: rackData.typeConfig?.twoDeep === false && rackData.typeConfig?.headToTail === true,
-        alternate: rackData.typeConfig?.alternate === true,
-        ...(Array.isArray(rackData.typeConfig?.shelfCols) ? { shelfCols: cabinetShelfCols(rackData.rows, rackData.cols, rackData.typeConfig) } : {}),
-        ...(Array.isArray(rackData.typeConfig?.shelfAlternate) ? { shelfAlternate: cabinetShelfAlternate(rackData.rows, rackData.typeConfig) } : {}),
-        ...(Array.isArray(rackData.typeConfig?.shelfSideways) ? { shelfSideways: cabinetShelfSideways(rackData.rows, rackData.typeConfig) } : {}),
-      };
+      rackData.typeConfig = fitCabinetTypeConfig(rackData.rows, rackData.cols, rackData.typeConfig);
     }
     if (typeof spec?.group === 'string' && spec.group.trim()) rackData.group = spec.group.trim().slice(0, 40);
     const rackDoc = new Rack(rackData);

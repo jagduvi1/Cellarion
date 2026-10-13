@@ -566,7 +566,7 @@ function PullOutShelfRow({
           keep the closed-rack view clean; they only appear once the user
           has pulled the shelf out, so the click targets are then in clear
           space in front of the cabinet rather than buried inside it. */}
-      {rowSlots.map(({ position: pos, x, y, z = 0, bottleX, bottleZ, isBack, flipNeck, sideways }) => {
+      {rowSlots.map(({ position: pos, x, y, z = 0, bottleX, bottleZ, bottleScale, isBack, flipNeck, sideways }) => {
         const slot = slotMap[pos];
         const filled = !!slot;
         const wineType = swatchType(slot?.bottle?.wineDefinition, 'red');
@@ -585,6 +585,7 @@ function PullOutShelfRow({
               highlighted={highlightBottleId && (slot.bottle?._id || slot.bottle) === highlightBottleId}
               flipNeck={!!flipNeck}
               sideways={!!sideways}
+              scale={bottleScale || 1}
               lensStyle={getBottleStyle ? getBottleStyle(slot) : null}
             />
           );
@@ -1108,7 +1109,7 @@ export default function RackMesh({
           );
         })
       ) : (
-        slotPositions.map(({ position: pos, x, y, z = 0, bottleX, bottleZ, isBack, flipNeck, sideways }) => {
+        slotPositions.map(({ position: pos, x, y, z = 0, bottleX, bottleZ, bottleScale, isBack, flipNeck, sideways }) => {
           const slot = slotMap[pos];
           const filled = !!slot;
           const wineType = swatchType(slot?.bottle?.wineDefinition, 'red');
@@ -1132,6 +1133,7 @@ export default function RackMesh({
               highlighted={highlightBottleId && (slot.bottle?._id || slot.bottle) === highlightBottleId}
               flipNeck={!!flipNeck}
               sideways={!!sideways}
+              scale={bottleScale || 1}
               lensStyle={getBottleStyle ? getBottleStyle(slot) : null}
             />
           ) : (

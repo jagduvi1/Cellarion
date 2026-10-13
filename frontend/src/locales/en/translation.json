@@ -1462,7 +1462,7 @@
     "cabinetSidewaysFront": "one across the front",
     "cabinetSidewaysAll": "all across",
     "cabinetSidewaysHelp": "Bottles lie: front to back, one bottle lying across the front of the others (as in a slim fridge), or all lying across (as in a bottom bin). Drawing only: the number of bottles and the slot numbers stay the same.",
-    "cabinetSidewaysEditLabel": "How each shelf's bottles lie",
+    "cabinetSidewaysEditLabel": "How each shelf's bottles lie, top shelf first",
     "cabinetSidewaysBeta": "Bottles lying sideways is in early access.",
     "cabinetAlternateLabel": "Rows alternate in width on every shelf (6 / 5 / 6 …)",
     "cabinetAlternateHelp": "The first level holds a full row in front of one bottle fewer behind it; the level above nests in its grooves, one fewer in front of a full row, and so on — the honeycomb of a Liebherr GrandCru shelf. Sets every shelf at once; untick single shelves above. This changes how many bottles the cabinet holds, so it is set when the cabinet is created.",

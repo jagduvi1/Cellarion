@@ -1468,6 +1468,7 @@ function CabinetShapeFields({ newRack, setNewRack }) {
 function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving, groups = [] }) {
   const { t } = useTranslation();
   const headToTailOn = useFeature('cabinetHeadToTail');
+  const sidewaysOn = useFeature('cabinetSideways');
   const dims = TYPE_DIMENSIONS[newRack.type] || TYPE_DIMENSIONS.grid;
   const [showPreview, setShowPreview] = useState(false);
   // Which preview to draw. A cabinet or an open shelf is about its SHAPE, so
@@ -1781,6 +1782,9 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving, grou
         submit inside this one created the rack (release audit 2026-10-12). */}
     {newRack.type === 'cabinet' && headToTailOn && (
       <BetaBadge feature="cabinetHeadToTail" note={t('racks.cabinetHeadToTailBeta', 'Bottles head to tail is in early access.')} />
+    )}
+    {newRack.type === 'cabinet' && sidewaysOn && (
+      <BetaBadge feature="cabinetSideways" note={t('racks.cabinetSidewaysBeta', 'Bottles lying sideways is in early access.')} />
     )}
     </>
   );

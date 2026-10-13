@@ -138,7 +138,9 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
             )}
             {showSideways && (
               <fieldset className="form-group edit-rack-sideways">
-                <legend>{t('racks.cabinetSidewaysEditLabel', 'How each shelf\'s bottles lie')}</legend>
+                {/* Top shelf first, as in the create form (the shelf view
+                    numbers from the bottom, so say which end is 1). */}
+                <legend>{t('racks.cabinetSidewaysEditLabel', 'How each shelf\'s bottles lie, top shelf first')}</legend>
                 {sideways.map((v, i) => (
                   <label key={i} className="edit-rack-sideways-row">
                     <span>{t('racks.cabinetShelfN', { n: i + 1 })}</span>

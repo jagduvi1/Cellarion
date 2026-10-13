@@ -69,9 +69,9 @@ const rackModuleSchema = new mongoose.Schema({
     // own cols / alternate. Shape, like shelfRows: creation-only in the UI.
     shelfCols: { type: [Number], default: undefined },
     shelfAlternate: { type: [Boolean], default: undefined },
-    // How each shelf's bottles lie ('' | 'front' | 'all') — drawing only, see
-    // rackSchema.typeConfig.shelfSideways below.
-    shelfSideways: { type: [{ type: String, enum: ['', 'front', 'all'] }], default: undefined },
+    // (No shelfSideways here: a module is never a cabinet, and nothing
+    // validates a module's typeConfig — declared, any strings were stored;
+    // left out, Mongoose drops the key. Release audit 2026-10-13.)
     // Hex racks only: mirror the row sequence top-to-bottom. Pure reversal —
     // never changes total slot count (see rackSchema.typeConfig.hexFlip below).
     hexFlip: { type: Boolean, default: false },

@@ -41,7 +41,7 @@ const { WINE_TYPES } = require('../services/wineProfileOps');
 const { parseAndValidateVintage, parseDrinkYear } = require('../utils/validation');
 const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
 const { extractAiExplanation } = require('../utils/jsonExtract');
-const { getMaxPosition, cabinetShelfRows, cabinetShelfCols, cabinetShelfAlternate, cabinetShelfSideways } = require('../utils/rackGeometry');
+const { getMaxPosition, cabinetShelfRows, cabinetShelfCols, cabinetShelfAlternate, cabinetShelfSideways, fitCabinetTypeConfig } = require('../utils/rackGeometry');
 const { planRackCreations, placeBottlesInRack, VALID_ANCHORS, DEFAULT_ANCHOR } = require('../utils/rackImport');
 const { RACK_TYPES } = require('../models/Rack');
 const { validatePriceSanity } = require('../utils/priceValidation');
@@ -1540,17 +1540,7 @@ router.post('/confirm', async (req, res) => {
           // (the update route's shape gate would otherwise reject every later
           // rename/group/zone edit — audit 2026-09-15).
           if (safeType === 'cabinet') {
-            rackData.typeConfig = {
-              ...(rackData.typeConfig || {}),
-              shelfRows: cabinetShelfRows(rows, rackData.typeConfig),
-              twoDeep: rackData.typeConfig?.twoDeep !== false,
-              stagger: rackData.typeConfig?.stagger !== false,
-              headToTail: rackData.typeConfig?.twoDeep === false && rackData.typeConfig?.headToTail === true,
-              alternate: rackData.typeConfig?.alternate === true,
-              ...(Array.isArray(rackData.typeConfig?.shelfCols) ? { shelfCols: cabinetShelfCols(rows, cols, rackData.typeConfig) } : {}),
-              ...(Array.isArray(rackData.typeConfig?.shelfAlternate) ? { shelfAlternate: cabinetShelfAlternate(rows, rackData.typeConfig) } : {}),
-              ...(Array.isArray(rackData.typeConfig?.shelfSideways) ? { shelfSideways: cabinetShelfSideways(rows, rackData.typeConfig) } : {}),
-            };
+            rackData.typeConfig = fitCabinetTypeConfig(rows, cols, rackData.typeConfig);
           }
           const rack = new Rack(rackData);
           // Disabled positions beyond the created geometry address cells that

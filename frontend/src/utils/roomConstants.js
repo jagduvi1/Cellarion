@@ -253,11 +253,16 @@ export function computeCabinetSlotPositions(cab, width, depth) {
   const neckForwardZ = frontBottleZ - BOTTLE_LENGTH;
   const backEmptyZ = -halfD + 0.005;
   // Bottles lying ACROSS (typeConfig.shelfSideways): base at the left, neck
-  // to the right, centred in the cabinet; one bottle diameter (+ a hair) is
-  // the front-to-back pitch of a pile.
-  const sideX = -BOTTLE_LENGTH / 2;
-  const sidePitch = BOTTLE_RADIUS * 2 + 0.004;
-  const sideFrontZ = halfD - 0.01 - BOTTLE_RADIUS;
+  // to the right, centred in the cabinet — shrunk to fit a cabinet narrower
+  // than a bottle is long; one bottle diameter (+ a hair) is the
+  // front-to-back pitch of a pile. Only the BOTTLE moves to where it lies:
+  // every slot keeps the ordinary cabinet's click target (x, z), so the
+  // targets never overlap (release audit 2026-10-13).
+  const sideScale = Math.max(0.2, Math.min(1, (width - 0.01) / BOTTLE_LENGTH));
+  const sideR = BOTTLE_RADIUS * sideScale;
+  const sideX = -(BOTTLE_LENGTH * sideScale) / 2;
+  const sidePitch = sideR * 2 + 0.004;
+  const sideFrontZ = halfD - 0.01 - sideR;
   let pos = 1;
   cab.bays.forEach((bay, i) => {
     const cols = Math.max(1, bay.cols);
@@ -288,30 +293,28 @@ export function computeCabinetSlotPositions(cab, width, depth) {
       const nudge = bay.alternate
         ? (rowWidth < cols ? cW / 2 : 0)
         : (nest && cols > 1 && level % 2 === 0 ? cW / 2 : 0);
+      // The ordinary cabinet's click target for each slot of this row.
+      const targetX = (c) => x0 + c * cW + nudge;
+      const targetZ = isBack ? backEmptyZ : frontEmptyZ;
       if (bay.sideways === 'all') {
         // A pile: the line runs from the front of the cabinet inwards, packed
-        // tighter when it would not fit; a nested level sits half a bottle
-        // further in, in the grooves of the one below.
+        // tighter when it would not fit (the last bottle's radius and a
+        // nested level's half pitch included, so nothing pokes through the
+        // back panel); a nested LEVEL sits half a bottle further in, in the
+        // grooves of the one below.
         const inLevel = levelCount[level];
-        const pitch = Math.min(sidePitch, (depth - 0.02) / Math.max(1, inLevel));
-        const zNudge = nudge ? pitch / 2 : 0;
+        const nestedLevel = nest && level % 2 === 0;
+        const pitch = Math.min(sidePitch,
+          (depth - 0.02 - 2 * sideR) / Math.max(1, inLevel - 1 + (nestedLevel ? 0.5 : 0)));
+        const zNudge = nestedLevel ? pitch / 2 : 0;
         for (let c = 0; c < rowWidth; c++) {
           const k = levelUsed[level] || 0;
           levelUsed[level] = k + 1;
-          const z = sideFrontZ - k * pitch - zNudge;
           positions.push({
             position: pos++,
-            // The empty-slot target spreads along the bottle so every bottle
-            // of the line can be picked from the front.
-            x: sideX + ((k + 0.5) / inLevel) * BOTTLE_LENGTH,
-            y,
-            z: halfD - 0.005,
-            bottleX: sideX,
-            bottleZ: z,
-            sideways: true,
-            isBack: false,
-            flipNeck: false,
-            row: i,
+            x: targetX(c), y, z: targetZ,
+            bottleX: sideX, bottleZ: sideFrontZ - k * pitch - zNudge, bottleScale: sideScale,
+            sideways: true, isBack, flipNeck: false, row: i,
           });
         }
         continue;
@@ -320,22 +323,25 @@ export function computeCabinetSlotPositions(cab, width, depth) {
         if (bay.sideways === 'front' && r === 1 && c === 0) {
           // The bottle across the front of the shelf, in front of the rest.
           positions.push({
-            position: pos++, x: 0, y, z: frontEmptyZ,
-            bottleX: sideX, bottleZ: sideFrontZ, sideways: true,
+            position: pos++, x: targetX(c), y, z: targetZ,
+            bottleX: sideX, bottleZ: sideFrontZ, bottleScale: sideScale, sideways: true,
             isBack: false, flipNeck: false, row: i,
           });
           continue;
         }
-        // Behind an across bottle the row is one bottle narrower, centred.
-        const shift = bay.sideways === 'front' && r === 1 ? -cW / 2 : 0;
+        // Behind an across bottle the bay's front rows sit one bottle further
+        // in and half a bottle over: the bottom row is one bottle narrower and
+        // centred, the levels above still lie in its grooves, and two deep
+        // the front rows interleave with the back rows instead of meeting
+        // them neck to neck.
+        const frontSide = bay.sideways === 'front' && !isBack;
         const neckForward = cab.headToTail && !isBack
           && cabinetNeckForward(bay.sideways === 'front' && r === 1 ? c - 1 : c);
-        const push = isBack ? 0 : frontPush;
+        const push = frontSide ? frontPush : 0;
         positions.push({
           position: pos++,
-          x: x0 + c * cW + nudge + shift,
-          y,
-          z: isBack ? backEmptyZ : frontEmptyZ - push,
+          x: targetX(c), y, z: targetZ,
+          ...(frontSide ? { bottleX: targetX(c) - cW / 2 } : {}),
           bottleZ: isBack ? backBottleZ : (neckForward ? neckForwardZ : frontBottleZ) - push,
           isBack,
           flipNeck: !isBack && !neckForward,

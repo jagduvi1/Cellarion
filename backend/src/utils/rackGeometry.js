@@ -416,6 +416,29 @@ function validateCabinetConfig(typeConfig, effectiveType, effectiveRows, effecti
 }
 
 /**
+ * The cabinet typeConfig an import stores: every list fitted to the shelf
+ * count, every flag a real boolean (headToTail only one deep), and a per-shelf
+ * key that is not a list DROPPED — a hand-edited file's `"shelfSideways":
+ * "front"` used to be stored as a one-entry list on a 3-shelf cabinet, and
+ * every later edit of the rack was then refused (release audit 2026-10-13).
+ * Other keys pass through untouched.
+ */
+function fitCabinetTypeConfig(rows, cols, typeConfig) {
+  const tc = typeConfig && typeof typeConfig === 'object' ? typeConfig : {};
+  return {
+    ...tc,
+    shelfRows: cabinetShelfRows(rows, tc),
+    twoDeep: tc.twoDeep !== false,
+    stagger: tc.stagger !== false,
+    headToTail: tc.twoDeep === false && tc.headToTail === true,
+    alternate: tc.alternate === true,
+    shelfCols: Array.isArray(tc.shelfCols) ? cabinetShelfCols(rows, cols, tc) : undefined,
+    shelfAlternate: Array.isArray(tc.shelfAlternate) ? cabinetShelfAlternate(rows, tc) : undefined,
+    shelfSideways: Array.isArray(tc.shelfSideways) ? cabinetShelfSideways(rows, tc) : undefined,
+  };
+}
+
+/**
  * Total slots for a modular rack (sum of all modules).
  * @param {Array<{ type: string, rows: number, cols: number, typeConfig?: object }>} modules
  * @returns {number}
@@ -443,4 +466,5 @@ module.exports = {
   cabinetShelfRows, cabinetPosition, validateCabinetConfig, CABINET_MAX_ROWS_PER_SHELF,
   cabinetOptions, cabinetRowWidth, cabinetBayCapacity, cabinetRows,
   cabinetShelfCols, cabinetShelfAlternate, cabinetShelfSideways, cabinetBays, CABINET_SIDEWAYS,
+  fitCabinetTypeConfig,
 };

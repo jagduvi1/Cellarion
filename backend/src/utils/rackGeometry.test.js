@@ -253,7 +253,7 @@ describe('rackGeometry', () => {
 // ── Cabinet (wine fridge) ───────────────────────────────────────────────────
 // Position contract: shelves top to bottom; inside a bay row 1 rests on the
 // plank; position = cols × Σ shelfRows[k<i] + (row − 1) × cols + slot.
-const { cabinetShelfRows, cabinetPosition, validateCabinetConfig, cabinetRowWidth, cabinetBayCapacity, cabinetRows, cabinetBays, cabinetShelfSideways } = require('./rackGeometry');
+const { cabinetShelfRows, cabinetPosition, validateCabinetConfig, cabinetRowWidth, cabinetBayCapacity, cabinetRows, cabinetBays, cabinetShelfSideways, fitCabinetTypeConfig } = require('./rackGeometry');
 
 describe('cabinet rack geometry', () => {
   test('capacity is cols × Σ shelfRows; missing entries count as 1', () => {
@@ -424,6 +424,27 @@ describe('cabinet rack geometry', () => {
       expect(cabinetBays(15, 6, { ...atelier, shelfSideways: lies }).map((b) => b.sideways)).toEqual(lies);
       // Missing or unknown entries read as front to back.
       expect(cabinetShelfSideways(3, { shelfSideways: ['all', 'sideways'] })).toEqual(['all', '', '']);
+    });
+
+    // Release audit 2026-10-13: a hand-edited export's non-list value was
+    // stored as a wrong-length list, and every later edit was then refused.
+    test('fitCabinetTypeConfig: what an import stores is always a valid cabinet config', () => {
+      const fitted = fitCabinetTypeConfig(3, 6, {
+        shelfRows: [2, 2], shelfSideways: 'front', shelfCols: 'wide', shelfAlternate: [true],
+        twoDeep: false, headToTail: true, extra: 'kept',
+      });
+      expect(fitted.shelfRows).toEqual([2, 2, 1]);
+      expect(fitted.shelfSideways).toBeUndefined();
+      expect(fitted.shelfCols).toBeUndefined();
+      expect(fitted.shelfAlternate).toEqual([true, false, false]);
+      expect(fitted.headToTail).toBe(true);
+      expect(fitted.extra).toBe('kept');
+      expect(validateCabinetConfig(fitted, 'cabinet', 3, false, 6)).toBeNull();
+      // A list is fitted to the shelf count, unknown entries read as front to back.
+      expect(fitCabinetTypeConfig(2, 6, { shelfRows: [1, 1], shelfSideways: ['all', 'x', 'front'] }).shelfSideways).toEqual(['all', '']);
+      // Two deep never keeps head to tail.
+      expect(fitCabinetTypeConfig(1, 6, { shelfRows: [1], headToTail: true }).headToTail).toBe(false);
+      expect(validateCabinetConfig(fitCabinetTypeConfig(1, 4, null), 'cabinet', 1, false, 4)).toBeNull();
     });
 
     test('validateCabinetConfig: shelfSideways one of "", "front", "all" per shelf, cabinet only', () => {

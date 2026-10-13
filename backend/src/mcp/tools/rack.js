@@ -137,7 +137,7 @@ registerTool({
         ...(type === 'cabinet' ? {
           shelf_rows: args.shelf_rows, two_deep: args.two_deep !== false, stagger: args.stagger !== false, alternate: args.alternate === true,
           head_to_tail: args.head_to_tail === true,
-          shelf_cols: args.shelf_cols || null, shelf_alternate: args.shelf_alternate || null,
+          shelf_cols: args.shelf_cols || null, shelf_alternate: args.shelf_alternate || null, shelf_sideways: args.shelf_sideways || null,
         } : {}),
         group: result.rack.group || null, undo: 'undo_last deletes it while still empty',
       },
