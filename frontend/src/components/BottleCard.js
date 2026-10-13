@@ -1,4 +1,4 @@
-import { memo, useRef } from 'react';
+import { memo, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { buildRackUrl } from '../utils/rackNavigation';
@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import AuthImage from './AuthImage';
 import { glassesLeft, daysLeft, freshnessStatus } from '../utils/openBottle';
 import { isReserved, reservationSummary } from '../utils/reservation';
-import { swatchType } from '../utils/wineColour';
+import BottlePlaceholder from './BottlePlaceholder';
 import './BottleCard.css';
 
 const MATURITY_LABELS = {
@@ -48,7 +48,11 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
   // has a picture, and a card with any photo is never blank (ticket 2026-10-09).
   const ownImage = bottle.defaultImageUrl || bottle.pendingImageUrl;
   const registryImage = bottle.vintageImageUrl || bottle.wineDefinition?.image;
-  const imgSrc = ownImage || registryImage || bottle.otherVintageImageUrl;
+  // A photo that fails to load shows the drawn bottle instead of a blank;
+  // remembered by address, so a new photo is tried again.
+  const [failedSrc, setFailedSrc] = useState(null);
+  const photoSrc = ownImage || registryImage || bottle.otherVintageImageUrl;
+  const imgSrc = photoSrc && photoSrc !== failedSrc ? photoSrc : null;
   const credit = ownImage || !registryImage
     ? null
     : (bottle.vintageImageUrl ? bottle.vintageImageCredit : bottle.wineDefinition?.imageCredit);
@@ -211,12 +215,14 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
                 className="bottle-grid-image"
                 thumb
                 loading="lazy"
-                onError={e => { e.target.style.display = 'none'; }}
+                onError={() => setFailedSrc(photoSrc)}
               />
               {credit && <span className="img-credit-tooltip">{credit}</span>}
             </>
           ) : (
-            <div className={`bottle-grid-placeholder ${swatchType(bottle.wineDefinition, '')}`} />
+            <div className="bottle-grid-placeholder bottle-grid-placeholder--drawn">
+              <BottlePlaceholder wine={bottle.wineDefinition} compact />
+            </div>
           )}
         </div>
         <div className="bottle-grid-info">
@@ -312,12 +318,14 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
             className="bottle-wine-image"
             thumb
             loading="lazy"
-            onError={e => { e.target.style.display = 'none'; }}
+            onError={() => setFailedSrc(photoSrc)}
           />
           {credit && <span className="img-credit-tooltip">{credit}</span>}
         </div>
       ) : (
-        <div className={`bottle-wine-placeholder ${swatchType(bottle.wineDefinition, '')}`} />
+        <div className="bottle-wine-placeholder bottle-wine-placeholder--drawn">
+          <BottlePlaceholder wine={bottle.wineDefinition} compact />
+        </div>
       )}
 
       <div className="bottle-info">

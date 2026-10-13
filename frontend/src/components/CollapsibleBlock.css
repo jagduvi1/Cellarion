@@ -1,0 +1,59 @@
+/* Folding blocks (components/CollapsibleBlock): the chevron sits in the
+   card's top-right corner; folded, a card shows only its first row. */
+.cblock {
+  position: relative;
+}
+
+.cblock-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.cblock-toggle:hover,
+.cblock-toggle:focus-visible {
+  border-color: var(--color-border);
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.cblock-toggle svg {
+  transition: transform 0.15s ease;
+}
+
+/* Folded: the chevron points right, toward what is hidden. */
+.cblock-toggle--collapsed svg {
+  transform: rotate(-90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cblock-toggle svg { transition: none; }
+}
+
+.cblock > .cblock-toggle {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.75rem;
+  z-index: 1;
+}
+
+/* Room for the button in the card's title row. */
+.cblock:not(.cblock--nested) > .card > :first-child,
+.cblock--nested > .card > :first-child > :first-child {
+  padding-right: 2.3rem;
+}
+
+/* Folded: the title row stays, the rest is hidden. */
+.cblock--collapsed > .card > :not(:first-child),
+.cblock--nested.cblock--collapsed > .card > :first-child > :not(:first-child) {
+  display: none;
+}

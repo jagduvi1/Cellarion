@@ -67,6 +67,21 @@ describe('buildPreferencesUpdate', () => {
     expect((await buildPreferencesUpdate(UID, { cellarSort: { $ne: '' } })).error.status).toBe(400);
   });
 
+  // Beta feedback 2026-10-12: the wine and vintage page's blocks fold away,
+  // and stay folded on any device.
+  test('collapsedBlocks: the whole list of folded blocks, known names only', async () => {
+    expect((await buildPreferencesUpdate(UID, { collapsedBlocks: ['vintage.reviews', 'vintage.tasting'] })).update)
+      .toEqual({ 'preferences.collapsedBlocks': ['vintage.reviews', 'vintage.tasting'] });
+    // Unfolding everything stores an empty list; repeats are dropped.
+    expect((await buildPreferencesUpdate(UID, { collapsedBlocks: [] })).update).toEqual({ 'preferences.collapsedBlocks': [] });
+    expect((await buildPreferencesUpdate(UID, { collapsedBlocks: ['vintage.wine', 'vintage.wine'] })).update)
+      .toEqual({ 'preferences.collapsedBlocks': ['vintage.wine'] });
+    expect((await buildPreferencesUpdate(UID, { collapsedBlocks: ['vintage.nope'] })).error.status).toBe(400);
+    expect((await buildPreferencesUpdate(UID, { collapsedBlocks: 'vintage.wine' })).error.status).toBe(400);
+    expect((await buildPreferencesUpdate(UID, { collapsedBlocks: [{ $ne: '' }] })).error.status).toBe(400);
+    expect((await buildPreferencesUpdate(UID, { collapsedBlocks: Array(50).fill('vintage.wine') })).error.status).toBe(400);
+  });
+
   test('only the allow-listed notification leaves are set — arbitrary keys are ignored', async () => {
     const { update } = await buildPreferencesUpdate(UID, {
       notifications: {

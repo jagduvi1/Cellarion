@@ -7,6 +7,9 @@ import { getCellarVintage } from '../api/cellars';
 import { getBottle } from '../api/bottles';
 import { lookupMaturityProfile, lookupPriceHistory } from '../api/somm';
 import AuthImage from '../components/AuthImage';
+import BottlePlaceholder from '../components/BottlePlaceholder';
+import CollapsibleBlock, { CollapseToggle } from '../components/CollapsibleBlock';
+import { useCollapsedBlocks } from '../utils/collapsedBlocks';
 import BetaBadge from '../components/BetaBadge';
 import Modal from '../components/Modal';
 import CellarPageHeader from '../components/CellarPageHeader';
@@ -74,6 +77,10 @@ function CellarVintageBeta() {
   const { t, i18n } = useTranslation();
   const { id, wineId, vintage: vintageParam } = useParams();
   const { apiFetch, user } = useAuth();
+  // Blocks the member folded away, remembered on the account (beta feedback
+  // 2026-10-12): the three sections, and the cards with a title of their own.
+  const { isCollapsed, toggle, expand } = useCollapsedBlocks();
+  const blockProps = (blockId, label) => ({ id: blockId, label, collapsed: isCollapsed(blockId), onToggle: () => toggle(blockId) });
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -83,6 +90,9 @@ function CellarVintageBeta() {
   const [priceHistory, setPriceHistory] = useState(null);
   const [rates, setRates] = useState(null);
   const [galleryEmpty, setGalleryEmpty] = useState(false);
+  // A hero photo that fails to load shows the drawn bottle, not a blank;
+  // remembered by address, so a new photo is tried again.
+  const [failedHero, setFailedHero] = useState(null);
   const [photoOpen, setPhotoOpen] = useState(false);
   const galleryRef = useRef(null);
   const [addTemplate, setAddTemplate] = useState(null);
@@ -292,6 +302,8 @@ function CellarVintageBeta() {
 
   const suggestFix = () => {
     setMoreOpen(null);
+    // The form opens in the wine record: unfold it if the member folded it.
+    expand('vintage.wine', 'vintage.record');
     setSuggestSignal((n) => n + 1);
   };
 
@@ -425,7 +437,16 @@ function CellarVintageBeta() {
           <div className="cvb-grid">
             {/* 1. The wine: who made it, where, the grapes, the description. */}
             <section className="cvb-col" aria-labelledby="cvb-wine-title">
-              <h2 id="cvb-wine-title" className="cvb-h2">{t('cellarVintageBeta.wineTitle', 'The wine')}</h2>
+              <div className="cvb-h2-row">
+                <h2 id="cvb-wine-title" className="cvb-h2">{t('cellarVintageBeta.wineTitle', 'The wine')}</h2>
+                <CollapseToggle
+                  collapsed={isCollapsed('vintage.wine')}
+                  onToggle={() => toggle('vintage.wine')}
+                  label={t('cellarVintageBeta.wineTitle', 'The wine')}
+                  controls="cvb-wine-body"
+                />
+              </div>
+              <div id="cvb-wine-body" className="cvb-section-body" hidden={isCollapsed('vintage.wine')}>
               {wine && !user?.isDemo && <OwnerInquiryCard apiFetch={apiFetch} wineId={wine._id} />}
               {wine && (
                 <div className="card cvb-wine">
@@ -439,14 +460,17 @@ function CellarVintageBeta() {
                           <ImageGallery ref={galleryRef} bottleId={photoBottleId} vintage={vintage} vintageScope size="medium" onEmpty={() => setGalleryEmpty(true)} />
                         </Suspense>
                       </div>
-                    ) : heroSrc ? (
+                    ) : heroSrc && heroSrc !== failedHero ? (
                       <div className="cvb-hero">
-                        <AuthImage src={heroSrc} alt={title} className="cvb-hero-img" onError={(e) => { e.target.style.display = 'none'; }} />
+                        <AuthImage src={heroSrc} alt={title} className="cvb-hero-img" onError={() => setFailedHero(heroSrc)} />
                         {heroCredit && <span className="bd-wine-image-credit">{heroCredit}</span>}
                       </div>
                     ) : (
-                      // No photo yet: the wine's colour, as on the bottle page.
-                      <div className={`bd-wine-placeholder ${swatchType(wine, '')}`} aria-hidden="true" />
+                      // No photo yet: a drawn bottle with the wine's name on its
+                      // label, as on the bottle page.
+                      <div className="bd-wine-placeholder bd-wine-placeholder--drawn">
+                        <BottlePlaceholder wine={wine} vintage={vintage} title={title} />
+                      </div>
                     )}
                     {canPhoto && (
                       <button type="button" className="btn btn-secondary btn-small cvb-add-photo" onClick={() => setPhotoOpen(true)}>
@@ -463,25 +487,39 @@ function CellarVintageBeta() {
                   </div>
                 </div>
               )}
-              <TastingProfileCard wine={wine} onReport={canSuggest ? () => setModal('report') : undefined} />
+              <CollapsibleBlock {...blockProps('vintage.tasting', t('bottleDetail.tastingProfile', 'Tasting profile'))}>
+                <TastingProfileCard wine={wine} onReport={canSuggest ? () => setModal('report') : undefined} />
+              </CollapsibleBlock>
               {wine && (
-                <section className="card cellar-vintage-section">
-                  <WineRecordSection
-                    wine={wine}
-                    vintage={vintage}
-                    canSuggest={canSuggest}
-                    apiFetch={apiFetch}
-                    promptMissingGrapes={canEdit}
-                    suggestSignal={suggestSignal}
-                  />
-                </section>
+                <CollapsibleBlock nested {...blockProps('vintage.record', t('wineRecord.title', 'Wine record'))}>
+                  <section className="card cellar-vintage-section">
+                    <WineRecordSection
+                      wine={wine}
+                      vintage={vintage}
+                      canSuggest={canSuggest}
+                      apiFetch={apiFetch}
+                      promptMissingGrapes={canEdit}
+                      suggestSignal={suggestSignal}
+                    />
+                  </section>
+                </CollapsibleBlock>
               )}
+              </div>
             </section>
 
             <div className="cvb-col">
               {/* 2. The vintage: the sommelier's window, what you keep for it. */}
               <section aria-labelledby="cvb-vintage-title">
-                <h2 id="cvb-vintage-title" className="cvb-h2">{t('cellarVintageBeta.vintageTitle', 'This vintage: {{vintage}}', { vintage })}</h2>
+                <div className="cvb-h2-row">
+                  <h2 id="cvb-vintage-title" className="cvb-h2">{t('cellarVintageBeta.vintageTitle', 'This vintage: {{vintage}}', { vintage })}</h2>
+                  <CollapseToggle
+                    collapsed={isCollapsed('vintage.vintage')}
+                    onToggle={() => toggle('vintage.vintage')}
+                    label={t('cellarVintageBeta.vintageTitle', 'This vintage: {{vintage}}', { vintage })}
+                    controls="cvb-vintage-body"
+                  />
+                </div>
+                <div id="cvb-vintage-body" className="cvb-section-body" hidden={isCollapsed('vintage.vintage')}>
                 <div className="card cvb-vintage">
                   <div className="cvb-block">
                     <span className="bd-section-label">{t('bottleDetail.sommMaturity')}</span>
@@ -557,18 +595,21 @@ function CellarVintageBeta() {
                   )}
                 </div>
                 {data.historyBottleId && !user?.isDemo && (
-                  <PersonalDataCard
-                    apiFetch={apiFetch}
-                    bottleId={data.historyBottleId}
-                    currentUserId={user?.id}
-                    wineId={wine?._id}
-                    vintage={vintage}
-                    scope="vintage"
-                    // "This vintage" is scoped through that bottle's own
-                    // vintage; an NV group of imported bottles may have none.
-                    vintageScopable={!!data.historyBottleVintage}
-                  />
+                  <CollapsibleBlock {...blockProps('vintage.personal', t('personalData.title', 'Your wine data'))}>
+                    <PersonalDataCard
+                      apiFetch={apiFetch}
+                      bottleId={data.historyBottleId}
+                      currentUserId={user?.id}
+                      wineId={wine?._id}
+                      vintage={vintage}
+                      scope="vintage"
+                      // "This vintage" is scoped through that bottle's own
+                      // vintage; an NV group of imported bottles may have none.
+                      vintageScopable={!!data.historyBottleVintage}
+                    />
+                  </CollapsibleBlock>
                 )}
+                </div>
               </section>
 
               {/* 3. The bottles: where they sit, what came and went, what was
@@ -577,7 +618,16 @@ function CellarVintageBeta() {
                   between them. A long list starts folded: the stock line is
                   the glance, the rows are a tap away (beta feedback 2026-10-10). */}
               <section aria-labelledby="cvb-bottles-title">
-                <h2 id="cvb-bottles-title" className="cvb-h2">{t('cellarVintage.bottlesTitle', 'Your bottles')}</h2>
+                <div className="cvb-h2-row">
+                  <h2 id="cvb-bottles-title" className="cvb-h2">{t('cellarVintage.bottlesTitle', 'Your bottles')}</h2>
+                  <CollapseToggle
+                    collapsed={isCollapsed('vintage.bottles')}
+                    onToggle={() => toggle('vintage.bottles')}
+                    label={t('cellarVintage.bottlesTitle', 'Your bottles')}
+                    controls="cvb-bottles-body"
+                  />
+                </div>
+                <div id="cvb-bottles-body" className="cvb-section-body" hidden={isCollapsed('vintage.bottles')}>
                 <div className="card cvb-bottles">
                   {stockItems.length > 0 && <div className="cvb-stock">{stockItems}</div>}
                   {bottles.length === 0 ? (
@@ -613,18 +663,25 @@ function CellarVintageBeta() {
                 {/* What happened to the bottles already drunk, and the other
                     vintages of the wine as links to their own pages. */}
                 {data.historyBottleId && (
-                  <LotHistory
-                    apiFetch={apiFetch}
-                    bottleId={data.historyBottleId}
-                    vintage={vintage}
-                    isOwner={cellar?.userRole === 'owner'}
-                    vintagePage={{ cellarId: id, fromPath: pagePath, consumedCount: data.consumedCount || 0 }}
-                  />
+                  <CollapsibleBlock {...blockProps('vintage.history', t('cellarVintageBeta.historyLabel', 'Drunk and other vintages'))}>
+                    <LotHistory
+                      apiFetch={apiFetch}
+                      bottleId={data.historyBottleId}
+                      vintage={vintage}
+                      isOwner={cellar?.userRole === 'owner'}
+                      vintagePage={{ cellarId: id, fromPath: pagePath, consumedCount: data.consumedCount || 0 }}
+                    />
+                  </CollapsibleBlock>
                 )}
+                </div>
               </section>
 
               {/* Reviews of the wine, this vintage first — as on the bottle page. */}
-              {wine && <WineReviewsCard wine={wine} vintage={vintage} communityRating={wine.communityRating} />}
+              {wine && (
+                <CollapsibleBlock {...blockProps('vintage.reviews', t('reviews.communityReviews', 'Reviews'))}>
+                  <WineReviewsCard wine={wine} vintage={vintage} communityRating={wine.communityRating} />
+                </CollapsibleBlock>
+              )}
             </div>
           </div>
         </>
@@ -675,7 +732,7 @@ function CellarVintageBeta() {
           <ReportWineModal
             wine={wine}
             defaultReason={modal === 'report' ? 'wrong_tasting_profile' : null}
-            onSuggestFix={canSuggest ? () => { setModal(null); setSuggestSignal((n) => n + 1); } : undefined}
+            onSuggestFix={canSuggest ? () => { setModal(null); expand('vintage.wine', 'vintage.record'); setSuggestSignal((n) => n + 1); } : undefined}
             onClose={() => setModal(null)}
           />
         )}

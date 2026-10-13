@@ -5685,7 +5685,12 @@
     "paid_other": "Paid in total: {{amount}}",
     "showBottles_one": "Show the bottle",
     "showBottles_other": "Show all {{count}} bottles",
-    "hideBottles": "Fold the list"
+    "hideBottles": "Fold the list",
+    "historyLabel": "Drunk and other vintages"
+  },
+  "collapse": {
+    "show": "Show {{name}}",
+    "hide": "Hide {{name}}"
   },
   "editVintage": {
     "title": "Edit vintage",

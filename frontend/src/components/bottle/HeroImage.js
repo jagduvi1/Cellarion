@@ -2,7 +2,7 @@ import { useState, Suspense } from 'react';
 import { lazy } from '../../utils/lazyWithReload';
 import { useTranslation } from 'react-i18next';
 import AuthImage from '../AuthImage';
-import { swatchType } from '../../utils/wineColour';
+import BottlePlaceholder from '../BottlePlaceholder';
 
 const ImageGallery = lazy(() => import('../ImageGallery'));
 
@@ -13,6 +13,10 @@ const ImageGallery = lazy(() => import('../ImageGallery'));
 function HeroImage({ bottle, wine, defaultImage, pendingImage, vintageImage, vintageImageCredit, otherVintageImage, isPending, displayName, canEdit, onSetDefault }) {
   const { t } = useTranslation();
   const [galleryEmpty, setGalleryEmpty] = useState(false);
+  // A photo that fails to load falls back to the drawn bottle, not a blank;
+  // remembered by address, so a new photo is tried again.
+  const [failedSrc, setFailedSrc] = useState(null);
+  const photoSrc = defaultImage || pendingImage || vintageImage || wine?.image || otherVintageImage;
 
   // Show carousel using bottleId — the API now returns both bottle-specific
   // and approved wine-level images, so the user can pick any as their default
@@ -37,7 +41,7 @@ function HeroImage({ bottle, wine, defaultImage, pendingImage, vintageImage, vin
 
   // Fallback: single image — default, own photo of this bottle or vintage,
   // the vintage's official photo, the wine's image, own photo of another vintage.
-  if (defaultImage || pendingImage || vintageImage || wine?.image || otherVintageImage) {
+  if (photoSrc && photoSrc !== failedSrc) {
     const ownImage = defaultImage || pendingImage;
     const registryImage = vintageImage || wine?.image;
     const credit = ownImage || !registryImage ? null : (vintageImage ? vintageImageCredit : wine?.imageCredit);
@@ -47,7 +51,7 @@ function HeroImage({ bottle, wine, defaultImage, pendingImage, vintageImage, vin
           src={ownImage || registryImage || otherVintageImage}
           alt={displayName}
           className="bd-wine-image"
-          onError={e => { e.target.style.display = 'none'; }}
+          onError={() => setFailedSrc(photoSrc)}
         />
         {credit && <span className="bd-wine-image-credit">{credit}</span>}
         {(isPending || (pendingImage && !wine?.image && !defaultImage)) && (
@@ -57,9 +61,10 @@ function HeroImage({ bottle, wine, defaultImage, pendingImage, vintageImage, vin
     );
   }
 
-  // No image at all
+  // No image at all: a drawn bottle with the wine's name on its label.
   return (
-    <div className={`bd-wine-placeholder ${swatchType(wine, '')}`}>
+    <div className="bd-wine-placeholder bd-wine-placeholder--drawn">
+      <BottlePlaceholder wine={wine} vintage={bottle?.vintage} title={displayName} />
       {isPending && (
         <span className="bd-pending-badge">{t('bottleDetail.pendingReview', 'Pending review')}</span>
       )}

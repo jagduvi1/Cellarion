@@ -384,6 +384,15 @@
   border-radius: 4px;
 }
 
+/* No photo: the drawn bottle (components/BottlePlaceholder), in place of a
+   flat colour block. */
+.bottle-wine-placeholder--drawn,
+.bottle-grid-placeholder--drawn {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
 .bottle-grid-placeholder.red       { background: var(--wine-red); }
 .bottle-grid-placeholder.white     { background: var(--wine-white); }
 .bottle-grid-placeholder.rosé      { background: var(--wine-rose); }

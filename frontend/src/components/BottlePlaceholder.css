@@ -1,0 +1,65 @@
+/* The drawn bottle (components/BottlePlaceholder): glass in the colour of a
+   real bottle of that kind of wine (the --wine-* swatch tokens are pastel
+   backgrounds, so a red bottle drawn in them read as pink), a paper label
+   with dark ink in either theme. */
+.bottle-placeholder {
+  --bp-glass: #6b1f2e;          /* red: deep garnet */
+  --bp-outline: rgba(0, 0, 0, 0.22);
+  display: block;
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  overflow: visible;
+}
+
+.bottle-placeholder--white     { --bp-glass: #d9d39b; }  /* straw */
+.bottle-placeholder--rosé      { --bp-glass: #e7a1af; }  /* salmon pink */
+.bottle-placeholder--sparkling { --bp-glass: #3f5b34; }  /* champagne green */
+.bottle-placeholder--dessert   { --bp-glass: #b8742a; }  /* amber */
+.bottle-placeholder--fortified { --bp-glass: #5a2a16; }  /* tawny */
+
+/* On a dark page a dark bottle needs a light edge to keep its shape. */
+[data-theme="dark"] .bottle-placeholder {
+  --bp-outline: rgba(255, 255, 255, 0.28);
+}
+
+.bottle-placeholder__glass {
+  fill: var(--bp-glass);
+  stroke: var(--bp-outline);
+  stroke-width: 1;
+}
+
+.bottle-placeholder__shine {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.3);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.bottle-placeholder__capsule {
+  fill: rgba(0, 0, 0, 0.35);
+}
+
+.bottle-placeholder__label {
+  fill: #f6f0e4;
+  stroke: rgba(0, 0, 0, 0.14);
+  stroke-width: 0.6;
+}
+
+.bottle-placeholder__text text {
+  fill: #3b2f2a;
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+.bottle-placeholder__producer {
+  letter-spacing: 0.3px;
+  opacity: 0.8;
+}
+
+.bottle-placeholder__name {
+  font-weight: 700;
+}
+
+.bottle-placeholder__vintage {
+  opacity: 0.85;
+}

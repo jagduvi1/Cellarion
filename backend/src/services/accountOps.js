@@ -39,7 +39,7 @@ const ALLOWED_RATING_SCALES = ['5', '20', '100'];
 const ALLOWED_RACK_NAV = ['auto', 'room', 'rack'];
 const ALLOWED_RESTOCK_SCOPE = ['all', 'cellar'];
 const ALLOWED_VISIBILITY = ['public', 'private'];
-const { SUPPORT_CATEGORIES, CELLAR_SORTS } = require('../config/constants');
+const { SUPPORT_CATEGORIES, CELLAR_SORTS, COLLAPSIBLE_BLOCKS } = require('../config/constants');
 const ALLOWED_CELLAR_SORTS = CELLAR_SORTS;
 
 const err = (status, message) => ({ status, message });
@@ -52,7 +52,7 @@ const err = (status, message) => ({ status, message });
  * the user. Returns { update } or { error }.
  */
 async function buildPreferencesUpdate(userId, body = {}) {
-  const { currency, language, ratingScale, rackNavigation, restockScope, cellarSort, defaultCellarId, notifications, earlyAccess } = body;
+  const { currency, language, ratingScale, rackNavigation, restockScope, cellarSort, defaultCellarId, notifications, earlyAccess, collapsedBlocks } = body;
   const update = {};
 
   // Notifications: per-category × per-channel booleans, explicitly allow-listed
@@ -132,6 +132,16 @@ async function buildPreferencesUpdate(userId, body = {}) {
       return { error: err(400, `Invalid cellar sort. Allowed: ${ALLOWED_CELLAR_SORTS.join(', ')}`) };
     }
     update['preferences.cellarSort'] = cellarSort;
+  }
+
+  // The wine and vintage page's folded blocks: the whole list each time
+  // (unfolding everything sends []), known block names only, no repeats.
+  if (collapsedBlocks !== undefined) {
+    if (!Array.isArray(collapsedBlocks) || collapsedBlocks.length > COLLAPSIBLE_BLOCKS.length
+      || collapsedBlocks.some((b) => !COLLAPSIBLE_BLOCKS.includes(b))) {
+      return { error: err(400, `collapsedBlocks must list blocks from: ${COLLAPSIBLE_BLOCKS.join(', ')}`) };
+    }
+    update['preferences.collapsedBlocks'] = [...new Set(collapsedBlocks)];
   }
 
   // "Try new features early": a real boolean, not coerced — a stray string

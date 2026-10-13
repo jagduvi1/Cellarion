@@ -145,8 +145,19 @@ const SUPPORT_CATEGORIES = ['bug', 'help', 'feature', 'other', 'beta'];
 // and offered by the MCP update_preferences tool.
 const CELLAR_SORTS = ['-createdAt', 'createdAt', 'name', '-name', 'vintage', '-vintage', 'price', '-price', 'maturity'];
 
+// The blocks of the wine and vintage page a member can fold away: its three
+// sections and the cards with a title of their own (the frontend's
+// utils/collapsedBlocks.js keeps the same list). Remembered per account as
+// preferences.collapsedBlocks — so a fold follows the member to any device —
+// and validated in accountOps (beta feedback 2026-10-12).
+const COLLAPSIBLE_BLOCKS = [
+  'vintage.wine', 'vintage.vintage', 'vintage.bottles',
+  'vintage.tasting', 'vintage.record', 'vintage.personal', 'vintage.history', 'vintage.reviews',
+];
+
 module.exports = {
   CELLAR_SORTS,
+  COLLAPSIBLE_BLOCKS,
   CONSUMED_STATUSES,
   ORDERED_STATUS,
   NOT_IN_CELLAR_STATUSES,

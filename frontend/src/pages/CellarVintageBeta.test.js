@@ -407,3 +407,49 @@ test('a vintage with a "%" in it does not crash the page (the router has decoded
   renderPage('/cellars/c1/vintages/w1/100%25');
   expect(await screen.findByTestId('beta-badge')).toBeInTheDocument();
 });
+
+// Beta feedback 2026-10-12: every block folds, and stays folded next time.
+describe('folding blocks', () => {
+  test('a section folded on the account starts folded; a click folds another and saves the whole list', async () => {
+    auth.user.preferences.collapsedBlocks = ['vintage.bottles'];
+    auth.updatePreferences = vi.fn().mockResolvedValue({ success: true });
+    renderPage();
+    await screen.findByText('cellarVintageBeta.kindLine:{"count":3,"cellar":"Home"}');
+    expect(document.getElementById('cvb-bottles-body')).not.toBeVisible();
+    expect(document.getElementById('cvb-wine-body')).toBeVisible();
+
+    const wineToggle = document.querySelector('[aria-controls="cvb-wine-body"]');
+    expect(wineToggle).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(wineToggle);
+    expect(document.getElementById('cvb-wine-body')).not.toBeVisible();
+    expect(wineToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(auth.updatePreferences).toHaveBeenLastCalledWith({ collapsedBlocks: ['vintage.bottles', 'vintage.wine'] });
+  });
+
+  test('a card folds to its title row: the card stays, the block is marked folded and saved', async () => {
+    auth.updatePreferences = vi.fn().mockResolvedValue({ success: true });
+    renderPage();
+    await screen.findByTestId('reviews');
+    // The reviews card is mocked as a plain div (no .card), so no button: the
+    // button only appears for a real card. The tasting profile is real.
+    const tasting = document.querySelector('[data-block="vintage.tasting"]');
+    const button = tasting.querySelector('.cblock-toggle');
+    fireEvent.click(button);
+    expect(tasting).toHaveClass('cblock--collapsed');
+    expect(auth.updatePreferences).toHaveBeenLastCalledWith({ collapsedBlocks: ['vintage.tasting'] });
+    expect(within(tasting).getByText('bottleDetail.tastingProfile')).toBeInTheDocument();
+  });
+
+  test('"Suggest a fix" unfolds the wine record it opens', async () => {
+    auth.user.preferences.collapsedBlocks = ['vintage.wine', 'vintage.record'];
+    auth.updatePreferences = vi.fn().mockResolvedValue({ success: true });
+    renderPage();
+    await screen.findByText('cellarVintageBeta.kindLine:{"count":3,"cellar":"Home"}');
+    expect(document.getElementById('cvb-wine-body')).not.toBeVisible();
+    fireEvent.click(screen.getAllByLabelText('cellarDetail.moreActions')[0]);
+    fireEvent.click(screen.getByText('cellarVintageBeta.editWine'));
+    expect(document.getElementById('cvb-wine-body')).toBeVisible();
+    expect(document.querySelector('[data-block="vintage.record"]')).not.toHaveClass('cblock--collapsed');
+    expect(auth.updatePreferences).toHaveBeenLastCalledWith({ collapsedBlocks: [] });
+  });
+});

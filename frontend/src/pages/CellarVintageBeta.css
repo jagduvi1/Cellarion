@@ -79,6 +79,28 @@ a.cvb-summary-item:hover {
   min-width: 0;
 }
 
+/* A section title with its fold button (components/CollapsibleBlock). */
+.cvb-h2-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 1.9rem;
+}
+
+/* A section's content under its title — the same column as the section,
+   hidden while the section is folded. */
+.cvb-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: inherit;
+  min-width: 0;
+}
+
+.cvb-section-body[hidden] {
+  display: none;
+}
+
 .cvb-h2 {
   margin: 0;
   font-size: 0.78rem;

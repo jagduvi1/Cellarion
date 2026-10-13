@@ -335,6 +335,17 @@
   border-radius: var(--radius-sm);
 }
 
+/* No photo yet: a drawn bottle with the wine's name on its label
+   (components/BottlePlaceholder), centred where the photo would be. */
+.bd-wine-placeholder--drawn {
+  position: relative;
+  height: 240px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0.25rem 0;
+}
+
 /* ── Contribution prompt ── */
 .bd-contribute {
   position: relative;

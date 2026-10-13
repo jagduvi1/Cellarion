@@ -199,6 +199,15 @@ const userSchema = new mongoose.Schema({
     cellarSort: {
       type: String
     },
+    // The blocks of the wine and vintage page this member folded away
+    // (config/constants COLLAPSIBLE_BLOCKS). Validated in accountOps and,
+    // like cellarSort, deliberately not a schema enum: retiring a block later
+    // must never make a stored value fail validation on sign-in. Absent until
+    // the member folds something.
+    collapsedBlocks: {
+      type: [String],
+      default: undefined
+    },
     // "Try new features early" (Settings → Early access): this user sees the
     // features a super admin has put in beta (config/featureFlags) before
     // everyone does. One switch for all of them. It only changes which
