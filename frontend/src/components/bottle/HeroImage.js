@@ -61,10 +61,18 @@ function HeroImage({ bottle, wine, defaultImage, pendingImage, vintageImage, vin
     );
   }
 
-  // No image at all: a drawn bottle with the wine's name on its label.
+  // No image at all: a drawn bottle with the wine's name on its label — for a
+  // bottle still waiting on its wine request, the name the member asked for
+  // (release audit 2026-10-13: it drew a blank label).
+  const request = bottle?.pendingWineRequest;
+  const labelWine = wine || (request && {
+    name: request.wineName,
+    producer: request.producer,
+    type: request.hints?.type?.toLowerCase(),
+  });
   return (
     <div className="bd-wine-placeholder bd-wine-placeholder--drawn">
-      <BottlePlaceholder wine={wine} vintage={bottle?.vintage} title={displayName} />
+      <BottlePlaceholder wine={labelWine} vintage={bottle?.vintage} title={displayName} />
       {isPending && (
         <span className="bd-pending-badge">{t('bottleDetail.pendingReview', 'Pending review')}</span>
       )}

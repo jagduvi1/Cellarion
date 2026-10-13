@@ -423,7 +423,7 @@ describe('folding blocks', () => {
     fireEvent.click(wineToggle);
     expect(document.getElementById('cvb-wine-body')).not.toBeVisible();
     expect(wineToggle).toHaveAttribute('aria-expanded', 'false');
-    expect(auth.updatePreferences).toHaveBeenLastCalledWith({ collapsedBlocks: ['vintage.bottles', 'vintage.wine'] });
+    await waitFor(() => expect(auth.updatePreferences).toHaveBeenLastCalledWith({ collapsedBlocks: ['vintage.bottles', 'vintage.wine'] }));
   });
 
   test('a card folds to its title row: the card stays, the block is marked folded and saved', async () => {
@@ -436,7 +436,7 @@ describe('folding blocks', () => {
     const button = tasting.querySelector('.cblock-toggle');
     fireEvent.click(button);
     expect(tasting).toHaveClass('cblock--collapsed');
-    expect(auth.updatePreferences).toHaveBeenLastCalledWith({ collapsedBlocks: ['vintage.tasting'] });
+    await waitFor(() => expect(auth.updatePreferences).toHaveBeenLastCalledWith({ collapsedBlocks: ['vintage.tasting'] }));
     expect(within(tasting).getByText('bottleDetail.tastingProfile')).toBeInTheDocument();
   });
 
@@ -450,6 +450,6 @@ describe('folding blocks', () => {
     fireEvent.click(screen.getByText('cellarVintageBeta.editWine'));
     expect(document.getElementById('cvb-wine-body')).toBeVisible();
     expect(document.querySelector('[data-block="vintage.record"]')).not.toHaveClass('cblock--collapsed');
-    expect(auth.updatePreferences).toHaveBeenLastCalledWith({ collapsedBlocks: [] });
+    await waitFor(() => expect(auth.updatePreferences).toHaveBeenLastCalledWith({ collapsedBlocks: [] }));
   });
 });

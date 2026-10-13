@@ -33,17 +33,31 @@ export function toggledCollapsed(list, id) {
  * the account once, when the page opens; a change shows at once and is saved
  * in the background (a failed save only costs the memory, never the fold).
  * Changes read the LATEST list (a ref), so two quick ones never overwrite
- * each other.
+ * each other, and saves are queued, so they reach the server in order.
  */
 export function useCollapsedBlocks() {
   const { user, updatePreferences } = useAuth();
   const [collapsed, setCollapsed] = useState(() => storedCollapsed(user));
   const latest = useRef(collapsed);
+  // Saves go one at a time, each sending the list as it is when it starts:
+  // two quick changes can never land on the server (or come back into the
+  // signed-in user) in the wrong order (release audit 2026-10-13). A save
+  // whose list an earlier one already sent is skipped.
+  const saving = useRef(Promise.resolve());
+  const sent = useRef(collapsed);
   const commit = useCallback((next) => {
     if (next === latest.current) return;
     latest.current = next;
     setCollapsed(next);
-    if (updatePreferences) Promise.resolve(updatePreferences({ collapsedBlocks: next })).catch(() => {});
+    if (!updatePreferences) return;
+    saving.current = saving.current
+      .then(() => {
+        const list = latest.current;
+        if (list === sent.current) return undefined;
+        sent.current = list;
+        return updatePreferences({ collapsedBlocks: list });
+      })
+      .catch(() => {});
   }, [updatePreferences]);
   const isCollapsed = useCallback((id) => collapsed.includes(id), [collapsed]);
   const toggle = useCallback((id) => commit(toggledCollapsed(latest.current, id)), [commit]);

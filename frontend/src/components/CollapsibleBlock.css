@@ -1,7 +1,19 @@
 /* Folding blocks (components/CollapsibleBlock): the chevron sits in the
    card's top-right corner; folded, a card shows only its first row. */
+/* A column, like the section it sits in: a component that renders two cards
+   (the history's drunk + other vintages) keeps the gap between them. */
 .cblock {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+/* The section's gap spaces the blocks; a card's own top margin would sit
+   inside the wrapper and push the card below its fold button. */
+.cblock > .card {
+  margin-top: 0;
 }
 
 .cblock-toggle {
@@ -52,8 +64,10 @@
   padding-right: 2.3rem;
 }
 
-/* Folded: the title row stays, the rest is hidden. */
-.cblock--collapsed > .card > :not(:first-child),
-.cblock--nested.cblock--collapsed > .card > :first-child > :not(:first-child) {
+/* Folded: the title row stays, the rest is hidden — never a dialog the card
+   renders inside itself (release audit 2026-10-13: "+ Add" on a folded card
+   opened an invisible dialog). */
+.cblock--collapsed > .card > :not(:first-child):not(.modal-overlay),
+.cblock--nested.cblock--collapsed > .card > :first-child > :not(:first-child):not(.modal-overlay) {
   display: none;
 }

@@ -39,6 +39,41 @@ describe('CollapsibleBlock', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
+  // Release audit 2026-10-13: "+ Add" on a folded card opened a dialog in
+  // the hidden part of the card.
+  it('folded: a control in the title row unfolds the card; the fold button and plain text do not', () => {
+    const onToggle = vi.fn();
+    const onAdd = vi.fn();
+    render(
+      <CollapsibleBlock id="vintage.personal" label="Your wine data" collapsed onToggle={onToggle}>
+        <div className="card">
+          <div className="head"><h2>Your wine data</h2><button type="button" onClick={onAdd}>+ Add</button></div>
+          <p>The body</p>
+        </div>
+      </CollapsibleBlock>
+    );
+    fireEvent.click(screen.getByText('Your wine data', { selector: 'h2' }));
+    expect(onToggle).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: '+ Add' }));
+    expect(onToggle).toHaveBeenCalledTimes(1);
+    expect(onAdd).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show Your wine data' }));
+    expect(onToggle).toHaveBeenCalledTimes(2);
+  });
+
+  it('unfolded: a control in the card leaves the fold alone', () => {
+    const onToggle = vi.fn();
+    render(
+      <CollapsibleBlock id="vintage.personal" label="Your wine data" collapsed={false} onToggle={onToggle}>
+        <div className="card"><div className="head"><h2>Your wine data</h2><button type="button">+ Add</button></div></div>
+      </CollapsibleBlock>
+    );
+    fireEvent.click(screen.getByRole('button', { name: '+ Add' }));
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
   it('nested: marks the block whose title row is one level down', () => {
     const { container } = render(
       <CollapsibleBlock nested id="vintage.record" label="Wine record" collapsed onToggle={() => {}}><Card /></CollapsibleBlock>
