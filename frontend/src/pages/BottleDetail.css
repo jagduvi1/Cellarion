@@ -744,26 +744,8 @@
   color: var(--color-danger);
 }
 
-/* Consume button */
-.btn-consume {
-  background: #6a3d8a;
-  color: white;
-  border: none;
-  border-radius: var(--radius-sm);
-  padding: 0.75rem 1.5rem;
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 500;
-  transition: background 0.15s;
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.btn-consume:hover {
-  background: #7d3c98;
-}
+/* The consume button lives in styles/common.css: the bulk consume dialog
+   opens outside this page too (the pick list). */
 
 /* ── Edit form ── */
 .bd-edit-form {

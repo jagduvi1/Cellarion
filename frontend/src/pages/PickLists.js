@@ -31,7 +31,7 @@ export default function PickLists() {
       setError(t('pickLists.loadError', 'Could not load your pick lists.'));
       setLists([]);
     }
-  }, [apiFetch, t]);
+  }, [apiFetch]); // eslint-disable-line react-hooks/exhaustive-deps -- t is read at call time; a new t must not reload
 
   useEffect(() => { load(); }, [load]);
 
@@ -62,7 +62,7 @@ export default function PickLists() {
       {error && <p className="error-message" role="alert">{error}</p>}
 
       {lists === null ? (
-        <p className="loading">{t('moveBottle.loading', 'Loading…')}</p>
+        <p className="loading">{t('common.loading', 'Loading…')}</p>
       ) : lists.length === 0 ? (
         <p className="empty-state">{t('pickLists.none', 'No pick lists yet.')}</p>
       ) : (

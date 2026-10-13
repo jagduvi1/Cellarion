@@ -210,4 +210,61 @@ describe('getPickListView', () => {
     expect(list.count).toBe(8);
     expect(list.picked).toBe(1);
   });
+
+  // Release audit 2026-10-13.
+  const oneCellar = (bottles, listed, all) => {
+    PickList.findOne.mockReturnValue(chain({ _id: oid('f1'), name: 'L', items: bottles.map((b) => ({ bottle: b._id })) }));
+    Bottle.find.mockReturnValue(chain(bottles));
+    Rack.find.mockImplementation((filter) => chain(filter['slots.bottle'] ? listed : all));
+    CellarLayout.find.mockReturnValue(chain([]));
+  };
+
+  test('groups follow the rack page: a group sits where its first rack is, even with nothing listed in that rack', async () => {
+    const wine = { _id: oid('dd1'), name: 'W', producer: 'P' };
+    const bottles = [
+      { _id: oid('b1'), cellar: C1, status: 'active', wineDefinition: { ...wine, name: 'Garage' } },
+      { _id: oid('b2'), cellar: C1, status: 'active', wineDefinition: { ...wine, name: 'Basement' } },
+    ];
+    const r1 = { _id: oid('aa1'), cellar: C1, group: 'Basement', createdAt: new Date('2025-01-01') }; // nothing listed
+    const g1 = { _id: oid('aa2'), cellar: C1, group: 'Garage', createdAt: new Date('2025-02-01'), name: 'G1', slots: [{ position: 1, bottle: oid('b1') }] };
+    const r2 = { _id: oid('aa3'), cellar: C1, group: ' Basement ', createdAt: new Date('2025-03-01'), name: 'R2', slots: [{ position: 1, bottle: oid('b2') }] };
+    oneCellar(bottles, [g1, r2], [r1, g1, r2]);
+    const { list } = await ops.getPickListView(ME, String(oid('f1')));
+    expect(list.items.map((it) => it.wine.name)).toEqual(['Basement', 'Garage']);
+  });
+
+  test('two cellars named alike stay apart; a bottle awaiting its wine request shows the name asked for', async () => {
+    const H1 = oid('c1');
+    const H2 = oid('c2');
+    Cellar.find.mockImplementation(() => chain([
+      { _id: H1, name: 'Home', user: oid('a1'), members: [] },
+      { _id: H2, name: 'home', user: oid('a1'), members: [] },
+    ]));
+    const bottles = [
+      { _id: oid('b1'), cellar: H1, status: 'active', wineDefinition: { name: 'A' } },
+      { _id: oid('b2'), cellar: H2, status: 'active', wineDefinition: null, pendingWineRequest: { wineName: 'Asked for', producer: 'Someone' } },
+      { _id: oid('b3'), cellar: H1, status: 'active', wineDefinition: { name: 'C' } },
+    ];
+    oneCellar(bottles, [], []);
+    const { list } = await ops.getPickListView(ME, String(oid('f1')));
+    expect(list.items.map((it) => String(it.cellar.id))).toEqual([String(H1), String(H1), String(H2)]);
+    expect(list.items[2].wine).toMatchObject({ name: 'Asked for', producer: 'Someone' });
+  });
+});
+
+describe('ids and ticks (release audit 2026-10-13)', () => {
+  test('an upper-case bottle id is read as the same bottle', async () => {
+    PickList.countDocuments.mockResolvedValue(0);
+    PickList.create.mockImplementation(async (doc) => ({ ...doc, _id: oid('f1'), toObject() { return this; } }));
+    Bottle.find.mockReturnValue(chain([{ _id: oid('b1'), cellar: C1, status: 'active' }]));
+    const res = await ops.createPickList(ME, { name: 'X', bottleIds: [B(1).toUpperCase()] }, REQ);
+    expect(res.added).toBe(1);
+    expect(res.skipped).toEqual([]);
+  });
+
+  test('a tick reports how many of the named bottles are on the list', async () => {
+    PickList.findOneAndUpdate.mockReturnValue(chain({ _id: oid('f1'), name: 'L', items: [{ bottle: oid('b1') }, { bottle: oid('b2') }] }));
+    const res = await ops.setPicked(ME, String(oid('f1')), [B(1), B(9)], true);
+    expect(res.matched).toBe(1);
+  });
 });

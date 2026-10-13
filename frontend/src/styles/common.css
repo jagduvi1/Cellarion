@@ -437,3 +437,37 @@
   flex-wrap: wrap;
   margin-top: 1.25rem;
 }
+
+/* Shared by dialogs that open on several pages (release audit 2026-10-13: the
+   pick list opened them before CellarDetail.css / BottleDetail.css loaded). */
+/* The bulk modals' forms (purchase details, consume, reserve, add to list). */
+.bulk-form .form-group { display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 0.75rem; }
+.bulk-form .form-group > span { font-size: 0.85rem; color: var(--color-text-secondary); }
+.bulk-form input[type="text"], .bulk-form input[type="url"], .bulk-form input[type="date"],
+.bulk-form input[type="number"], .bulk-form select, .bulk-form textarea { width: 100%; }
+.bulk-form small { color: var(--color-text-muted); font-size: 0.75rem; }
+.bulk-price-row { display: grid; grid-template-columns: 1fr 120px; gap: 0.5rem; }
+.bulk-price-row label { display: flex; flex-direction: column; gap: 0.25rem; }
+.bulk-mode-row { display: flex; flex-direction: row; gap: 1rem; }
+.move-bottle-skipped { color: var(--color-text-secondary); }
+
+/* Consume button */
+.btn-consume {
+  background: #6a3d8a;
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1.5rem;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 500;
+  transition: background 0.15s;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.btn-consume:hover {
+  background: #7d3c98;
+}

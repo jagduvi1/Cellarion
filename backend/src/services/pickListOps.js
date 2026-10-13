@@ -47,7 +47,10 @@ function parseBottleIds(raw, { allowEmpty = false } = {}) {
   const seen = new Set();
   for (const id of raw) {
     if (!isValidId(id)) return { error: 'bottleIds must be valid bottle ids' };
-    if (!seen.has(id)) { seen.add(id); ids.push(id); }
+    // Lower case: ids are compared as strings below, and an upper-case hex id
+    // is valid (release audit 2026-10-13: one read as not_found).
+    const lc = id.toLowerCase();
+    if (!seen.has(lc)) { seen.add(lc); ids.push(lc); }
   }
   if (!ids.length && !allowEmpty) return { error: 'bottleIds must not be empty' };
   return { ids };
@@ -193,7 +196,10 @@ async function setPicked(userId, id, bottleIds, picked) {
     { new: true, arrayFilters: [{ 'it.bottle': { $in: ids } }] },
   ).lean();
   if (!list) return err(404, 'Pick list not found');
-  return { list: summary(list) };
+  // How many of the named bottles are on the list (the rest were not touched).
+  const named = new Set(parsed.ids);
+  const matched = (list.items || []).filter((it) => named.has(String(it.bottle))).length;
+  return { list: summary(list), matched };
 }
 
 async function deletePickList(userId, id, req) {
@@ -216,8 +222,9 @@ async function getPickListView(userId, id) {
 
   const bottles = ids.length
     ? await Bottle.find({ _id: { $in: ids } })
-      .select('wineDefinition vintage bottleSize status cellar location consumedAt')
+      .select('wineDefinition pendingWineRequest vintage bottleSize status cellar location consumedAt')
       .populate({ path: 'wineDefinition', select: 'name producer type colour' })
+      .populate({ path: 'pendingWineRequest', select: 'wineName producer' })
       .lean()
     : [];
   const cellarIds = [...new Set(bottles.map((b) => String(b.cellar)))];
@@ -232,27 +239,36 @@ async function getPickListView(userId, id) {
   const seenIds = seen.map((b) => b._id);
   if (seenIds.length) {
     const visibleIds = [...visibleCellars.keys()];
-    const [racks, layouts] = await Promise.all([
+    const [racks, allRacks, layouts] = await Promise.all([
       Rack.find({ cellar: { $in: visibleIds }, deletedAt: null, 'slots.bottle': { $in: seenIds } })
         .select('name group slots.position slots.bottle cellar createdAt').lean(),
+      // Every rack of these cellars (no slots): the walking order is the rack
+      // page's, which a list holding bottles in only some racks must not change.
+      Rack.find({ cellar: { $in: visibleIds }, deletedAt: null }).select('cellar group createdAt').sort({ createdAt: 1, _id: 1 }).lean(),
       CellarLayout.find({ cellar: { $in: visibleIds } }).select('cellar rackPlacements.rack').lean(),
     ]);
     const inRoom = new Set();
     for (const l of layouts) for (const rp of l.rackPlacements || []) inRoom.add(String(rp.rack?._id || rp.rack));
-    // Walk order within a cellar: racks of one group together (groups by their
-    // first rack), then in the order they were made; ungrouped racks after.
-    const firstOfGroup = new Map();
-    for (const r of [...racks].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))) {
-      const g = `${r.cellar}|${r.group || ''}`;
-      if (!firstOfGroup.has(g)) firstOfGroup.set(g, new Date(r.createdAt).getTime());
+    // Walk order within a cellar, as the rack page groups racks (frontend
+    // utils/rackGroups): groups in the order of their first rack, racks in the
+    // order they were made, ungrouped racks after the groups (release audit
+    // 2026-10-13: groups were ordered by their first rack ON THE LIST).
+    const sectionsOf = new Map(); // cellar → Map(groupKey → rack ids)
+    for (const r of allRacks) {
+      const c = String(r.cellar);
+      if (!sectionsOf.has(c)) sectionsOf.set(c, new Map());
+      const key = (r.group && String(r.group).trim()) || null;
+      const sections = sectionsOf.get(c);
+      if (!sections.has(key)) sections.set(key, []);
+      sections.get(key).push(String(r._id));
     }
-    const order = new Map([...racks]
-      .sort((a, b) => {
-        const ga = a.group ? firstOfGroup.get(`${a.cellar}|${a.group}`) : Infinity;
-        const gb = b.group ? firstOfGroup.get(`${b.cellar}|${b.group}`) : Infinity;
-        return ga - gb || new Date(a.createdAt) - new Date(b.createdAt);
-      })
-      .map((r, i) => [String(r._id), i]));
+    const order = new Map();
+    for (const sections of sectionsOf.values()) {
+      const keys = [...sections.keys()];
+      const walk = [...keys.filter((k) => k !== null), ...keys.filter((k) => k === null)];
+      let i = 0;
+      for (const k of walk) for (const id of sections.get(k)) order.set(id, i++);
+    }
     const wanted = new Set(seenIds.map(String));
     for (const rack of racks) {
       for (const s of rack.slots || []) {
@@ -271,7 +287,10 @@ async function getPickListView(userId, id) {
     const b = bottleById.get(String(it.bottle));
     if (!b) return { bottleId: it.bottle, addedAt: it.addedAt, pickedAt: it.pickedAt, state: 'unavailable' };
     const cellar = visibleCellars.get(String(b.cellar));
-    const w = b.wineDefinition || {};
+    // A bottle still waiting on its wine request shows the name asked for, as
+    // the cellar list does (release audit 2026-10-13: it read "Unknown wine").
+    const req = b.pendingWineRequest;
+    const w = b.wineDefinition || (req ? { name: req.wineName, producer: req.producer } : {});
     return {
       bottleId: b._id,
       addedAt: it.addedAt,
@@ -288,8 +307,10 @@ async function getPickListView(userId, id) {
   });
 
   const rank = (it) => {
-    if (it.state === 'unavailable') return [2, '', 0, 0];
-    return [it.state === 'in_cellar' ? 0 : 1, it.cellar.name.toLowerCase(), it.rack ? it.rack.order : Infinity, it.rack ? it.rack.position : Infinity];
+    if (it.state === 'unavailable') return [2, '', '', 0, 0];
+    // The cellar's id after its name: two cellars named alike ("Home", "home")
+    // stay apart (release audit 2026-10-13).
+    return [it.state === 'in_cellar' ? 0 : 1, it.cellar.name.toLowerCase(), String(it.cellar.id), it.rack ? (it.rack.order ?? Infinity) : Infinity, it.rack ? it.rack.position : Infinity];
   };
   items.sort((a, b) => {
     const ra = rank(a);

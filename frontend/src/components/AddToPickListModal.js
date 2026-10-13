@@ -24,18 +24,30 @@ export default function AddToPickListModal({ bottleIds, onClose, onDone }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     let active = true;
     getPickLists(apiFetch)
-      .then((r) => r.json())
+      .then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error();
+        return data;
+      })
       .then((data) => {
         if (!active) return;
         const arr = Array.isArray(data?.lists) ? data.lists : [];
         setLists(arr);
         setTarget(arr.length ? String(arr[0].id) : NEW_LIST);
       })
-      .catch(() => { if (active) { setLists([]); setTarget(NEW_LIST); } });
+      // Say so: silently offering "new list" invites a duplicate of one that
+      // exists (release audit 2026-10-13).
+      .catch(() => {
+        if (!active) return;
+        setLists([]);
+        setTarget(NEW_LIST);
+        setLoadFailed(true);
+      });
     return () => { active = false; };
   }, [apiFetch]);
 
@@ -84,7 +96,7 @@ export default function AddToPickListModal({ bottleIds, onClose, onDone }) {
       <p>{t('pickLists.addIntro', 'A pick list shows where each bottle sits — cellar, rack and slot — so you can fetch them in one go.')}</p>
       <form onSubmit={submit} className="bulk-form">
         {lists === null ? (
-          <p className="loading">{t('moveBottle.loading', 'Loading…')}</p>
+          <p className="loading">{t('common.loading', 'Loading…')}</p>
         ) : (
           <>
             {lists.length > 0 && (
@@ -113,6 +125,7 @@ export default function AddToPickListModal({ bottleIds, onClose, onDone }) {
           </>
         )}
 
+        {loadFailed && <p className="error-message" role="alert">{t('pickLists.loadError', 'Could not load your pick lists.')}</p>}
         {error && <p className="error-message" role="alert">{error}</p>}
 
         <div className="modal-actions">
@@ -120,7 +133,7 @@ export default function AddToPickListModal({ bottleIds, onClose, onDone }) {
             {t('common.cancel', 'Cancel')}
           </button>
           <button type="submit" className="btn btn-primary" disabled={submitting || !canSubmit}>
-            {submitting ? t('bulk.working', 'Working…') : t('pickLists.addButton', 'Add')}
+            {submitting ? t('pickLists.adding', 'Adding…') : t('pickLists.addButton', 'Add')}
           </button>
         </div>
       </form>

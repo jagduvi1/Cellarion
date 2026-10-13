@@ -9,6 +9,12 @@
   padding: 1.25rem 1rem 3rem;
 }
 
+/* Outside the Layout, nothing else keeps the page clear of a phone's status
+   bar in a home-screen install (release audit 2026-10-13). */
+.pick-list-page {
+  padding-top: calc(1.25rem + env(safe-area-inset-top, 0px));
+}
+
 .pick-lists-intro {
   color: var(--color-text-secondary);
   margin: 0.5rem 0 1.25rem;
@@ -166,17 +172,29 @@
   color: var(--color-text-muted);
 }
 
+/* A 44 px target around the box: it is ticked standing in a cellar, phone in
+   one hand (release audit 2026-10-13). */
+.pick-list-tick {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  margin: -0.4rem 0;
+  cursor: pointer;
+}
+
 .pick-list-tick input {
   width: 1.25rem;
   height: 1.25rem;
   cursor: pointer;
 }
 
+/* Wraps rather than cutting a location or a long slot label short. */
 .pick-list-slot {
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .pick-list-wine {
@@ -195,6 +213,8 @@
   color: var(--color-text-muted);
   font-size: 1.1rem;
   line-height: 1;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
   padding: 0.25rem 0.4rem;
   border-radius: 6px;
   cursor: pointer;
@@ -226,7 +246,13 @@
     display: none !important;
   }
 
+  /* Ink on paper whatever the theme: dark mode's light text tokens printed
+     the title and rack names near-invisible (release audit 2026-10-13). */
   .pick-list-page {
+    --color-text: #000;
+    --color-text-secondary: #333;
+    --color-text-muted: #555;
+    --color-border: #bbb;
     max-width: none;
     padding: 0;
     color: #000;

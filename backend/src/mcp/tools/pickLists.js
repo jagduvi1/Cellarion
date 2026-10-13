@@ -108,27 +108,33 @@ registerTool({
   },
   handler: async (args, ctx) => {
     const done = {};
+    // A later step failing must not hide the steps already applied (release
+    // audit 2026-10-13): the error says what was done before it.
+    const failAfter = (error) => (Object.keys(done).length
+      ? fail(CODE[error.status] || 'error', `${error.message} (already applied: ${JSON.stringify(done)})`)
+      : failFrom(error));
     if (args.name !== undefined) {
       const r = await renamePickList(ctx.user.id, args.pick_list_id, args.name, ctx.req);
-      if (r.error) return failFrom(r.error);
+      if (r.error) return failAfter(r.error);
       done.renamed = r.list.name;
     }
     if (args.add_bottle_ids?.length) {
       const r = await addToPickList(ctx.user.id, args.pick_list_id, args.add_bottle_ids, ctx.req);
-      if (r.error) return failFrom(r.error);
+      if (r.error) return failAfter(r.error);
       done.added = r.added;
       if (r.skipped.length) done.skipped = r.skipped;
     }
     if (args.remove_bottle_ids?.length) {
       const r = await removeFromPickList(ctx.user.id, args.pick_list_id, args.remove_bottle_ids, ctx.req);
-      if (r.error) return failFrom(r.error);
+      if (r.error) return failAfter(r.error);
       done.removed = r.removed;
     }
     for (const [key, picked] of [['picked_bottle_ids', true], ['unpicked_bottle_ids', false]]) {
       if (!args[key]?.length) continue;
       const r = await setPicked(ctx.user.id, args.pick_list_id, args[key], picked);
-      if (r.error) return failFrom(r.error);
-      done[picked ? 'ticked' : 'unticked'] = args[key].length;
+      if (r.error) return failAfter(r.error);
+      // Bottles of these ids that are on the list (others are not ticked).
+      done[picked ? 'ticked' : 'unticked'] = r.matched;
     }
     if (!Object.keys(done).length) return fail('invalid_input', 'Nothing to change: pass name, add/remove bottle ids, or picked/unpicked ids.');
     const view = await getPickListView(ctx.user.id, args.pick_list_id);

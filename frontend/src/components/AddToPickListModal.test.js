@@ -40,6 +40,14 @@ test('adds to the chosen existing list and links to it', async () => {
   expect(screen.getByRole('link', { name: 'Open the pick list' })).toHaveAttribute('href', '/pick-lists/pl1');
 });
 
+// Release audit 2026-10-13: a failed fetch silently offered "new list".
+test('a failed load of the lists is said, and a new list can still be made', async () => {
+  apiFetchMock.mockResolvedValue({ ok: false, json: async () => ({ error: 'nope' }) });
+  render(<AddToPickListModal bottleIds={['b1']} onClose={vi.fn()} onDone={vi.fn()} />);
+  expect(await screen.findByText('Could not load your pick lists.')).toBeInTheDocument();
+  expect(screen.getByPlaceholderText('e.g. Saturday dinner')).toBeInTheDocument();
+});
+
 test('with no lists yet, it creates one with the bottles', async () => {
   apiFetchMock.mockImplementation(async (url, opts) => {
     if (!opts) return json({ lists: [] });

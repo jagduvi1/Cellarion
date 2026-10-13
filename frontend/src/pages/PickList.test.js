@@ -92,6 +92,32 @@ test('"Mark picked as drunk" hands only the picked bottles still in the cellar t
   expect(await screen.findByTestId('consume')).toHaveTextContent('b2');
 });
 
+// Release audit 2026-10-13: a reload in between wiped a tick not yet sent, and
+// the reload wiped the error it was meant to explain.
+test('a reload keeps a tick that is not sent yet', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  await act(async () => { render(<PickList />); });
+  await act(async () => { await Promise.resolve(); });
+  fireEvent.click(screen.getByLabelText('Picked: Brezza — Barolo · 2018'));
+  // Removing another bottle reloads the list before the tick is sent.
+  await act(async () => { fireEvent.click(screen.getAllByRole('button', { name: 'Remove from the list' })[2]); });
+  await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+  expect(screen.getByLabelText('Picked: Brezza — Barolo · 2018')).toBeChecked();
+  await act(async () => { vi.advanceTimersByTime(800); });
+  vi.useRealTimers();
+  await waitFor(() => expect(posts.some((p) => p.url.endsWith('/picked') && p.body.picked === true && p.body.bottleIds.includes('b1'))).toBe(true));
+});
+
+test('a failed removal says so after the list reloads', async () => {
+  apiFetchMock.mockImplementation(async (url, opts) => {
+    if (opts?.method === 'POST') throw new Error('offline');
+    return json({ list: LIST });
+  });
+  await renderPage();
+  fireEvent.click(screen.getByRole('button', { name: 'Remove these from the list' }));
+  expect(await screen.findByText('Could not remove that from the list.')).toBeInTheDocument();
+});
+
 test('bottles no longer in the cellar, and unavailable ones, can be cleared from the list', async () => {
   await renderPage();
   fireEvent.click(screen.getByRole('button', { name: 'Remove these from the list' }));

@@ -32,41 +32,65 @@ export default function PickList() {
   const [newName, setNewName] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [consumeOpen, setConsumeOpen] = useState(false);
+  // Ticks not yet confirmed by the server: waiting for the next batch, or
+  // sent and not answered yet. A reload lays both over what it fetched, so a
+  // tick is never lost to a reload in between (release audit 2026-10-13).
   const pending = useRef(new Map()); // bottleId → picked, not yet sent
+  const inFlight = useRef(new Map()); // bottleId → picked, sent, not answered
+  const flushing = useRef(Promise.resolve()); // batches go one at a time, in order
   const flushTimer = useRef(null);
   const rackPref = user?.preferences?.rackNavigation || 'auto';
+  // Read through a ref: the loads must not re-run when t changes identity.
+  const tRef = useRef(t);
+  tRef.current = t;
 
+  /** Loads the list; true when it worked. Never clears an error: the caller decides. */
   const load = useCallback(async () => {
     try {
       const res = await getPickList(apiFetch, id);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || t('pickLists.loadOneError', 'Could not load this pick list.'));
-      setList(data.list);
-      setError('');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.list) throw new Error(data.error || tRef.current('pickLists.loadOneError', 'Could not load this pick list.'));
+      const overlay = new Map([...inFlight.current, ...pending.current]);
+      const items = data.list.items.map((it) => {
+        const k = String(it.bottleId);
+        if (!overlay.has(k)) return it;
+        return { ...it, pickedAt: overlay.get(k) ? (it.pickedAt || new Date().toISOString()) : null };
+      });
+      setList({ ...data.list, items, picked: items.filter((it) => it.pickedAt).length });
+      return true;
     } catch (err) {
       setError(err.message);
+      return false;
     }
-  }, [apiFetch, id, t]);
+  }, [apiFetch, id]);
 
   useEffect(() => { load(); }, [load]);
 
-  const flush = useCallback(async () => {
+  const flush = useCallback(() => {
     flushTimer.current = null;
-    const batch = [...pending.current.entries()];
+    if (!pending.current.size) return flushing.current;
+    const batch = new Map(pending.current);
     pending.current.clear();
-    const on = batch.filter(([, v]) => v).map(([k]) => k);
-    const off = batch.filter(([, v]) => !v).map(([k]) => k);
-    try {
-      for (const [ids, picked] of [[on, true], [off, false]]) {
-        if (!ids.length) continue;
-        const res = await setPicked(apiFetch, id, ids, picked);
-        if (!res.ok) throw new Error();
+    for (const [k, v] of batch) inFlight.current.set(k, v);
+    const settle = () => { for (const [k, v] of batch) if (inFlight.current.get(k) === v) inFlight.current.delete(k); };
+    flushing.current = flushing.current.then(async () => {
+      const on = [...batch].filter(([, v]) => v).map(([k]) => k);
+      const off = [...batch].filter(([, v]) => !v).map(([k]) => k);
+      try {
+        for (const [ids, picked] of [[on, true], [off, false]]) {
+          if (!ids.length) continue;
+          const res = await setPicked(apiFetch, id, ids, picked);
+          if (!res.ok) throw new Error();
+        }
+        settle();
+      } catch {
+        settle();
+        await load();
+        setError(tRef.current('pickLists.tickError', 'A tick could not be saved. The list was reloaded.'));
       }
-    } catch {
-      setError(t('pickLists.tickError', 'A tick could not be saved. The list was reloaded.'));
-      load();
-    }
-  }, [apiFetch, id, load, t]);
+    });
+    return flushing.current;
+  }, [apiFetch, id, load]);
 
   // Send what is still pending when the page closes — only then: a ref, so a
   // re-render (a new flush) never sends a batch early.
@@ -87,26 +111,43 @@ export default function PickList() {
     flushTimer.current = setTimeout(flush, TICK_FLUSH_MS);
   };
 
+  // Every action catches a network failure too, and shows its error AFTER
+  // the reload (release audit 2026-10-13: the reload wiped it).
   const remove = async (bottleIds) => {
-    const res = await removeFromPickList(apiFetch, id, bottleIds.map(String));
-    if (!res.ok) setError(t('pickLists.removeError', 'Could not remove that from the list.'));
-    load();
+    setError('');
+    let ok = false;
+    try {
+      const res = await removeFromPickList(apiFetch, id, bottleIds.map(String));
+      ok = res.ok;
+    } catch { /* shown below */ }
+    await load();
+    if (!ok) setError(t('pickLists.removeError', 'Could not remove that from the list.'));
   };
 
   const rename = async (e) => {
     e.preventDefault();
     if (!newName.trim()) return;
-    const res = await renamePickList(apiFetch, id, newName.trim());
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) { setError(data.error || t('pickLists.renameError', 'Could not rename the list.')); return; }
-    setRenaming(false);
-    load();
+    setError('');
+    try {
+      const res = await renamePickList(apiFetch, id, newName.trim());
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error);
+      setRenaming(false);
+      await load();
+    } catch (err) {
+      setError(err.message || t('pickLists.renameError', 'Could not rename the list.'));
+    }
   };
 
   const destroy = async () => {
-    const res = await deletePickList(apiFetch, id);
-    if (res.ok) navigate('/pick-lists');
-    else setError(t('pickLists.deleteError', 'Could not delete the list.'));
+    setError('');
+    try {
+      const res = await deletePickList(apiFetch, id);
+      if (!res.ok) throw new Error();
+      navigate('/pick-lists');
+    } catch {
+      setError(t('pickLists.deleteError', 'Could not delete the list.'));
+    }
   };
 
   if (error && !list) {
@@ -117,7 +158,7 @@ export default function PickList() {
       </div>
     );
   }
-  if (!list) return <div className="pick-list-page"><p className="loading">{t('moveBottle.loading', 'Loading…')}</p></div>;
+  if (!list) return <div className="pick-list-page"><p className="loading">{t('common.loading', 'Loading…')}</p></div>;
 
   const inCellar = list.items.filter((it) => it.state === 'in_cellar');
   const gone = list.items.filter((it) => it.state === 'drunk' || it.state === 'ordered');
@@ -213,7 +254,7 @@ export default function PickList() {
                     <Link to={buildRackUrl(it.cellar.id, { rackId: it.rack.rackId, bottleId: it.bottleId, inRoom: it.rack.inRoom, preference: rackPref })}>
                       {t('pickLists.slot', { position: it.rack.position, defaultValue: `slot ${it.rack.position}` })}
                     </Link>
-                  ) : (it.location || '—')}
+                  ) : <span title={it.location || undefined}>{it.location || '—'}</span>}
                 </span>
                 <Link className="pick-list-wine" to={`/cellars/${it.cellar.id}/bottles/${it.bottleId}`}>{wineText(it)}</Link>
                 <button type="button" className="pick-list-icon-btn no-print" onClick={() => remove([it.bottleId])} aria-label={t('pickLists.remove', 'Remove from the list')} title={t('pickLists.remove', 'Remove from the list')}>×</button>

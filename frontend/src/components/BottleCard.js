@@ -2,7 +2,6 @@ import { memo, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { buildRackUrl } from '../utils/rackNavigation';
-import { slotLabel } from '../utils/slotLabel';
 import { useTranslation } from 'react-i18next';
 import AuthImage from './AuthImage';
 import { glassesLeft, daysLeft, freshnessStatus } from '../utils/openBottle';
@@ -35,6 +34,11 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
   // The badge names the slot too ("Fridge · slot 12"; forum request 2026-10-13:
   // finding a bottle should not mean opening it).
   const rackInfo = isGroup ? null : rackMap?.get(bottle._id);
+  // "slot" is the bottle page's already-translated word (release audit
+  // 2026-10-13: drinkOne.slot is English-only in the other locales).
+  const rackBadgeText = rackInfo && (rackInfo.position != null
+    ? `${rackInfo.rackName} · ${t('bottleDetail.rackSlot', 'slot')} ${rackInfo.position}`
+    : rackInfo.rackName);
   // "Unplaced" = the caller knows this cellar's rack layout (single-cellar view
   // of a cellar that has racks) and this active bottle isn't in any slot — i.e.
   // it's been added but not shelved. Suppressed for groups (members may differ)
@@ -290,7 +294,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
                 className="rack-badge"
                 onClick={e => e.stopPropagation()}
               >
-                <span aria-hidden="true">📍</span> {slotLabel(rackInfo, t)}
+                <span aria-hidden="true">📍</span> {rackBadgeText}
               </Link>
             )}
           </div>
@@ -391,7 +395,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
               className="rack-badge"
               onClick={e => e.stopPropagation()}
             >
-              📍 {slotLabel(rackInfo, t)}
+              📍 {rackBadgeText}
             </Link>
           )}
         </div>

@@ -1135,16 +1135,8 @@
 .bulk-action-btn:disabled { opacity: 0.45; cursor: default; }
 .bulk-action-icon { font-size: 1.25rem; line-height: 1; }
 
-/* The bulk modals' forms (purchase details, consume, reserve, add to list). */
-.bulk-form .form-group { display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 0.75rem; }
-.bulk-form .form-group > span { font-size: 0.85rem; color: var(--color-text-secondary); }
-.bulk-form input[type="text"], .bulk-form input[type="url"], .bulk-form input[type="date"],
-.bulk-form input[type="number"], .bulk-form select, .bulk-form textarea { width: 100%; }
-.bulk-form small { color: var(--color-text-muted); font-size: 0.75rem; }
-.bulk-price-row { display: grid; grid-template-columns: 1fr 120px; gap: 0.5rem; }
-.bulk-price-row label { display: flex; flex-direction: column; gap: 0.25rem; }
-.bulk-mode-row { display: flex; flex-direction: row; gap: 1rem; }
-.move-bottle-skipped { color: var(--color-text-secondary); }
+/* The bulk modals' forms live in styles/common.css: they also open outside
+   this page (the pick list, the bottle page). */
 
 /* Bulk delete: the one select-mode action that reads as dangerous. */
 /* Red at rest too — phones have no hover to tell it apart from the others. */

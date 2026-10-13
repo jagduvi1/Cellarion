@@ -50,7 +50,7 @@ test('update_pick_list applies rename, add, remove and ticks in one call', async
   ops.renamePickList.mockResolvedValue({ list: { name: 'Friday' } });
   ops.addToPickList.mockResolvedValue({ added: 1, skipped: [] });
   ops.removeFromPickList.mockResolvedValue({ removed: 1 });
-  ops.setPicked.mockResolvedValue({ list: {} });
+  ops.setPicked.mockResolvedValue({ list: {}, matched: 1 });
   ops.getPickListView.mockResolvedValue({ list: { id: L, name: 'Friday', count: 2, picked: 1, items: [] } });
   const res = parse(await tool('update_pick_list').handler({
     pick_list_id: L, name: 'Friday', add_bottle_ids: [B1], remove_bottle_ids: [B2], picked_bottle_ids: [B1],
@@ -59,6 +59,15 @@ test('update_pick_list applies rename, add, remove and ticks in one call', async
   expect(ops.addToPickList).toHaveBeenCalledWith('u1', L, [B1], CTX.req);
   expect(ops.setPicked).toHaveBeenCalledWith('u1', L, [B1], true);
   expect(parse(await tool('update_pick_list').handler({ pick_list_id: L }, CTX)).error.code).toBe('invalid_input');
+});
+
+// Release audit 2026-10-13: a later step failing hid the steps already applied.
+test('update_pick_list: a failing later step says what was already applied', async () => {
+  ops.renamePickList.mockResolvedValue({ list: { name: 'Friday' } });
+  ops.addToPickList.mockResolvedValue({ error: { status: 400, message: 'A pick list holds at most 500 bottles' } });
+  const res = parse(await tool('update_pick_list').handler({ pick_list_id: L, name: 'Friday', add_bottle_ids: [B1] }, CTX));
+  expect(res.error.code).toBe('invalid_input');
+  expect(res.error.message).toMatch(/already applied: \{"renamed":"Friday"\}/);
 });
 
 test('delete_pick_list needs confirm:true', async () => {

@@ -167,6 +167,9 @@ app.use('/api/bottles/import', express.json({ limit: '8mb' }));
 app.use('/api/bottles', express.json({ limit: '64kb' }));
 app.use('/api/blog/admin/posts', express.json({ limit: '2mb' }));
 app.use('/api/wine-lists', express.json({ limit: '1mb' }));
+// Pick lists: up to 500 bottle ids per request (~14 kB of JSON) — past the
+// 10 kb default (release audit 2026-10-13: 379+ ids answered 413).
+app.use('/api/pick-lists', express.json({ limit: '32kb' }));
 // MCP: the anonymous public surface stays tiny (no image tool) — registered
 // BEFORE the personal /api/mcp rule so /api/mcp/public matches it first (the
 // first express.json to parse wins). The personal endpoint allows a larger

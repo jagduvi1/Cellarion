@@ -5787,6 +5787,7 @@
     "clearGone": "Remove these from the list",
     "unavailable_one": "{{count}} bottle on this list is no longer available — deleted, or in a cellar no longer shared with you.",
     "unavailable_other": "{{count}} bottles on this list are no longer available — deleted, or in a cellar no longer shared with you.",
-    "clearUnavailable": "Remove them from the list"
+    "clearUnavailable": "Remove them from the list",
+    "adding": "Adding…"
   }
 }
