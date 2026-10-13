@@ -13,6 +13,12 @@ const { decorateGrapes } = require('../../utils/grapeDisplay');
 const { publicProfileSummary } = require('../../services/registryTiering');
 const { gateMcpRead, CAP_MESSAGE } = require('../../services/registryReadTracker');
 const { absoluteImageUrl, isInlineImage } = require('../../services/photoState');
+const { findOwnHiddenWineIds, isOwnHiddenWine } = require('../../services/ownHiddenWines');
+
+// A caller's own quarantined drink (services/ownHiddenWines): not in the
+// shared registry, so it says so wherever it is returned.
+const OWN_HIDDEN_NOTE = 'Not in the shared registry: a drink other than wine that only this user has. They can still '
+  + 'add bottles of it — pass this wine_id to add_bottle.';
 
 const REGISTRY_LIMIT = 10; // == USER_SEARCH_LIMIT in routes/wines.js
 
@@ -38,7 +44,9 @@ registerTool({
   description:
     'Searches Cellarion\'s shared wine database (vintage-neutral wines, community data) by name, producer, region or ' +
     'grape. Returns up to 10 matches. Call to identify a wine the user mentions, before recommending, or to check ' +
-    'whether a wine exists in the registry. This searches ALL known wines — use search_bottles for what the user owns.',
+    'whether a wine exists in the registry. This searches ALL known wines — use search_bottles for what the user owns. ' +
+    'A signed-in user\'s own drinks that are not wine (beer, cider, soft drinks — hidden from the shared registry) are ' +
+    'listed first with only_in_your_cellar: true, so they can add more of them.',
   // 'public': registry data is public-site content (every wine has a public
   // URL) — served to ANY authenticated token and to the anonymous
   // /api/mcp/public surface (Phase 6).
@@ -47,10 +55,22 @@ registerTool({
   inputSchema: {
     query: z.string().min(2).max(200).describe('Wine name, producer, appellation or grape'),
   },
-  handler: async (args) => {
+  handler: async (args, ctx) => {
     const searchService = require('../../services/search');
     let wines = [];
     let viaEngine = false;
+    // The caller's own quarantined drinks first — never on the anonymous
+    // surface, never anyone else's.
+    let ownHidden = [];
+    if (ctx?.user && !ctx.anonymous) {
+      try {
+        const ids = await findOwnHiddenWineIds(ctx.user.id, args.query);
+        if (ids.length) {
+          ownHidden = await WineDefinition.find({ _id: { $in: ids }, nonWine: true })
+            .select(SAFE_SELECT).populate(['country', 'region', 'grapes']).lean();
+        }
+      } catch { /* the registry search still answers */ }
+    }
     if (searchService.getIsAvailable()) {
       try {
         const res = await searchService.search(args.query, { limit: REGISTRY_LIMIT });
@@ -69,12 +89,16 @@ registerTool({
         .select(SAFE_SELECT).sort({ score: { $meta: 'textScore' } })
         .limit(REGISTRY_LIMIT).populate(['country', 'region', 'grapes']).lean();
     }
-    const data = wines.map((w) => ({
-      ...wineSummary(w),
-      classification: w.classification || null,
-      community_rating: w.communityRating?.reviewCount ? w.communityRating : null,
-    }));
-    return ok(`${data.length} registry match(es) (max ${REGISTRY_LIMIT})`, data);
+    const data = [
+      ...ownHidden.map((w) => ({ ...wineSummary(w), only_in_your_cellar: true, note: OWN_HIDDEN_NOTE })),
+      ...wines.map((w) => ({
+        ...wineSummary(w),
+        classification: w.classification || null,
+        community_rating: w.communityRating?.reviewCount ? w.communityRating : null,
+      })),
+    ];
+    const ownPart = ownHidden.length ? ` + ${ownHidden.length} of the user's own drink(s) not in the registry` : '';
+    return ok(`${wines.length} registry match(es) (max ${REGISTRY_LIMIT})${ownPart}`, data);
   },
 });
 
@@ -117,8 +141,16 @@ registerTool({
     const visible = anonymous
       ? VISIBLE
       : { nonWine: { $ne: true }, $or: [{ pendingIdentity: { $ne: true } }, { draft: true, createdBy: ctx.user.id }] };
-    const raw = await WineDefinition.findOne({ _id: args.wine_id, ...visible })
+    let raw = await WineDefinition.findOne({ _id: args.wine_id, ...visible })
       .select(SAFE_SELECT).populate(['country', 'region', 'grapes']).lean();
+    // The caller's own quarantined drink: search_registry lists it for them,
+    // so reading it by id works too. Anyone else gets the same not_found.
+    let ownHidden = false;
+    if (!raw && !anonymous && await isOwnHiddenWine(ctx.user.id, args.wine_id)) {
+      raw = await WineDefinition.findOne({ _id: args.wine_id, nonWine: true })
+        .select(SAFE_SELECT).populate(['country', 'region', 'grapes']).lean();
+      ownHidden = !!raw;
+    }
     // Same not_found a missing id gets, so a hidden row's existence never leaks.
     if (!raw) {
       return fail('not_found', 'No registry wine with that id. Find wines via search_registry.');
@@ -156,8 +188,10 @@ registerTool({
             ...(anonymous ? {} : { credit: w.imageCredit || null }),
           }
         : null,
-      // A draft has no public page and no queue state: it is the caller's own record.
-      public_url: w.draft === true ? null : (w.slug ? `${siteBaseUrl()}/wines/${w.slug}` : null),
+      // A draft has no public page and no queue state: it is the caller's own
+      // record. Neither does an own quarantined drink.
+      public_url: w.draft === true || ownHidden ? null : (w.slug ? `${siteBaseUrl()}/wines/${w.slug}` : null),
+      ...(ownHidden ? { only_in_your_cellar: true, note: OWN_HIDDEN_NOTE } : {}),
       ...(anonymous ? {} : { pending_correction: w.draft === true ? null : pendingCorrection }),
       // (a draft answers null above: nothing to read, nothing to file)
       ...(w.draft === true ? {

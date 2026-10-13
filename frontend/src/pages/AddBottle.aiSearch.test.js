@@ -195,3 +195,16 @@ describe('AddBottle — an AI result already in the registry', () => {
     await waitFor(() => expect(screen.getByText('addBottle.addBottleBtn')).toBeInTheDocument());
   });
 });
+
+// 2026-10-13: a member's own drink that is not wine is hidden from the shared
+// registry but must stay findable for them, so they can add another bottle.
+test('the search asks for the member\'s own hidden drinks and labels one instead of a wine type', async () => {
+  searchWines.mockResolvedValue(jsonRes({
+    wines: [{ _id: 'b1', name: 'Pale Lager', producer: 'Example Brewery', type: 'sparkling', nonWine: true, country: { name: 'France' }, grapes: [] }],
+  }));
+  await search('lager');
+  expect(searchWines.mock.calls[0][1]).toMatch(/&ownHidden=1$/);
+  expect(await screen.findByText('wineSearchPicker.onlyInYourCellar')).toBeInTheDocument();
+  // "Sparkling" on a lager says nothing true.
+  expect(document.querySelector('.wine-row .wine-type-pill')).toBeNull();
+});

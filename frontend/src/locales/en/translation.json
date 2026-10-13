@@ -5031,7 +5031,9 @@
   },
   "wineSearchPicker": {
     "placeholder": "Search for a wine...",
-    "noResults": "No wines found"
+    "noResults": "No wines found",
+    "onlyInYourCellar": "Only in your cellar",
+    "onlyInYourCellarTitle": "Not in the shared wine registry: a drink other than wine that only you see. You can still add bottles of it."
   },
   "errorBoundary": {
     "title": "Something went wrong",

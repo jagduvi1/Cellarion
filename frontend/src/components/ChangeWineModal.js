@@ -46,7 +46,7 @@ export default function ChangeWineModal({ bottleId, currentLabel, lotCount = 0, 
       <p>{t('changeWine.intro')}</p>
 
       <div className="change-wine-picker">
-        <WineSearchPicker selected={wine} onSelect={setWine} placeholder={t('changeWine.searchPlaceholder')} />
+        <WineSearchPicker selected={wine} onSelect={setWine} placeholder={t('changeWine.searchPlaceholder')} includeOwnHidden />
       </div>
 
       {lotCount > 0 && (

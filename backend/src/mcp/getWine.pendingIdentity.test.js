@@ -17,6 +17,11 @@ jest.mock('../models/WineDefinition', () => ({ findOne: jest.fn(), find: jest.fn
 jest.mock('../services/wineProposalOps', () => ({ pendingForWine: jest.fn() }));
 jest.mock('../services/search', () => ({ getIsAvailable: () => false, search: jest.fn() }));
 jest.mock('../utils/siteUrl', () => ({ siteBaseUrl: () => 'https://cellarion.app' }));
+// The caller's own quarantined drinks have their own suite (ownHiddenWines.mcp.test.js);
+// here nobody owns the hidden rows.
+jest.mock('../services/ownHiddenWines', () => ({
+  findOwnHiddenWineIds: jest.fn(async () => []), isOwnHiddenWine: jest.fn(async () => false),
+}));
 
 const WineDefinition = require('../models/WineDefinition');
 const { pendingForWine } = require('../services/wineProposalOps');

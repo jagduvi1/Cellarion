@@ -26,6 +26,7 @@ const { isValidId } = require('../utils/validation');
 const { decorateGrapes } = require('../utils/grapeDisplay');
 const { normalizeBarcode } = require('../utils/barcode');
 const { lookupBarcode } = require('../services/barcodeLookup');
+const { findOwnHiddenWineIds } = require('../services/ownHiddenWines');
 const { getReleaseCurve } = require('../services/communityPrice');
 const aiBurstLimiter = require('../middleware/aiBurstLimiter');
 const asyncHandler = require('../utils/asyncHandler');
@@ -364,6 +365,25 @@ router.get('/', requireAuth, async (req, res) => {
       ? await registryBridge.registrySearch(searchTerm).catch(() => [])
       : [];
 
+    // The caller's OWN quarantined drinks (services/ownHiddenWines): first
+    // page only, ahead of the registry's results, carrying nonWine so the
+    // picker can say they are not in the shared registry. Only for pickers
+    // that put a bottle on the wine (?ownHidden=1) — a forum wine tag or a
+    // wine-request link must not point at a row with no public page. Nobody
+    // else's search returns them; a failure here never costs the search.
+    let ownHidden = [];
+    if (searchTerm && parsedOffset === 0 && req.query.ownHidden === '1') {
+      try {
+        const ids = await findOwnHiddenWineIds(req.user.id, searchTerm);
+        if (ids.length) {
+          ownHidden = await WineDefinition.find({ _id: { $in: ids }, nonWine: true })
+            .populate(['country', 'region', 'grapes']);
+        }
+      } catch (err) {
+        console.warn('Own hidden-wine lookup failed (search continues without it):', err.message);
+      }
+    }
+
     // Try Meilisearch for text queries
     if (searchTerm && searchService.getIsAvailable()) {
       try {
@@ -386,11 +406,11 @@ router.get('/', requireAuth, async (req, res) => {
         wines.sort((a, b) => idOrder.get(a._id.toString()) - idOrder.get(b._id.toString()));
 
         return res.json({
-          count: wines.length,
-          total: estimatedTotalHits,
+          count: ownHidden.length + wines.length,
+          total: ownHidden.length + estimatedTotalHits,
           offset: parsedOffset,
           limit: parsedLimit,
-          wines: wines.map(decorateGrapes),
+          wines: [...ownHidden, ...wines].map(decorateGrapes),
           registryWines
         });
       } catch (err) {
@@ -402,11 +422,11 @@ router.get('/', requireAuth, async (req, res) => {
     const { wines, total } = await mongoSearch(filter, sort, parsedLimit, parsedOffset, searchTerm);
 
     res.json({
-      count: wines.length,
-      total,
+      count: ownHidden.length + wines.length,
+      total: ownHidden.length + total,
       offset: parsedOffset,
       limit: parsedLimit,
-      wines: wines.map(decorateGrapes),
+      wines: [...ownHidden, ...wines].map(decorateGrapes),
       registryWines
     });
   } catch (error) {

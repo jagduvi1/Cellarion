@@ -654,6 +654,9 @@ wineDefinitionSchema.index({ 'contribution.instanceHost': 1 }, { sparse: true })
 // Partial on draft:true so the ordinary registry pays nothing for them.
 wineDefinitionSchema.index({ draft: 1, draftExpiresAt: 1 }, { partialFilterExpression: { draft: true } });
 wineDefinitionSchema.index({ createdBy: 1, draft: 1 }, { partialFilterExpression: { draft: true } });
+// Quarantined non-wines: a member's own search looks for theirs among these
+// (services/ownHiddenWines). Partial, so it holds only the flagged rows.
+wineDefinitionSchema.index({ nonWine: 1 }, { partialFilterExpression: { nonWine: true } });
 
 // Update timestamp on save
 wineDefinitionSchema.pre('save', function(next) {

@@ -932,7 +932,8 @@ function ImportBottles() {
     if (!searchQuery.trim()) return;
     setSearching(true);
     try {
-      const res = await searchWines(apiFetch, `search=${encodeURIComponent(searchQuery)}&limit=10`);
+      // ownHidden=1: the member's own drinks that are not wine match too.
+      const res = await searchWines(apiFetch, `search=${encodeURIComponent(searchQuery)}&limit=10&ownHidden=1`);
       const data = await res.json();
       if (res.ok) {
         setSearchResults(data.wines || []);
@@ -2825,6 +2826,9 @@ function ImportBottles() {
                       {wine.region?.name ? ` · ${wine.region.name}` : ''}
                       {wine.appellation ? ` · ${wine.appellation}` : ''}
                     </span>
+                    {wine.nonWine && (
+                      <span className="own-hidden-pill" title={t('wineSearchPicker.onlyInYourCellarTitle')}>{t('wineSearchPicker.onlyInYourCellar')}</span>
+                    )}
                   </div>
                 </button>
               ))}

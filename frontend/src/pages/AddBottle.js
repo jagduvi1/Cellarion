@@ -600,7 +600,9 @@ function AddBottle() {
     setAiSearchError(null);
     clearAi();
 
-    searchWines(apiFetch, `search=${encodeURIComponent(query)}&limit=10`)
+    // ownHidden=1: the member's own drinks that are not wine (hidden from
+    // the shared registry) come back too, so they can add another bottle.
+    searchWines(apiFetch, `search=${encodeURIComponent(query)}&limit=10&ownHidden=1`)
       .then(res => res.json())
       .then(data => {
         if (data.wines) setWines(data.wines);
@@ -757,7 +759,12 @@ function AddBottle() {
         <div className="wine-meta">
           <span>{wine.country?.name}</span>
           {wine.region && <span>• {wine.region.name}</span>}
-          <span className={`wine-type-pill ${swatchType(wine, '')}`}>{wineTypeLabel(wine, t)}</span>
+          {/* A drink that is not wine has no wine type worth showing ("Sparkling" on a lager). */}
+          {wine.nonWine ? (
+            <span className="own-hidden-pill" title={t('wineSearchPicker.onlyInYourCellarTitle')}>{t('wineSearchPicker.onlyInYourCellar')}</span>
+          ) : (
+            <span className={`wine-type-pill ${swatchType(wine, '')}`}>{wineTypeLabel(wine, t)}</span>
+          )}
         </div>
         {wine.grapes?.length > 0 && (
           <p className="wine-grapes">{wine.grapes.map(g => g.displayName || g.name).join(', ')}</p>
