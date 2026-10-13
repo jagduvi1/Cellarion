@@ -5,6 +5,7 @@ const router = express.Router();
 
 const WineDefinition = require('../models/WineDefinition');
 const WineVintageProfile = require('../models/WineVintageProfile');
+const RegistryDataValue = require('../models/RegistryDataValue');
 const User = require('../models/User');
 const searchService = require('../services/search');
 const { findVisibleWine } = require('../services/wineVisibility');
@@ -321,8 +322,49 @@ router.get('/wines/:id', quota('fetches'), async (req, res) => {
   }
 });
 
+/**
+ * The latest change to what a fetch carries BESIDES the wine record: its
+ * reviewed drink windows and its published values. Neither touches the wine's
+ * own updatedAt, so a change check on that alone never reported a window a
+ * sommelier reviewed after an install copied the wine (support ticket
+ * 2026-10-13: the install kept "awaiting staff review" while the hosted wine
+ * had its window). A row's setAt / decidedAt counts as well as its updatedAt:
+ * updates written with $set skip the pre-save hook that stamps updatedAt.
+ *
+ * A window withdrawn back to pending, or a value taken down, leaves nothing
+ * here to report, and the install keeps what it copied: a fetch only adds and
+ * replaces (services/registryBridge applyWindows / applyValues).
+ *
+ * @param {Array} wineIds
+ * @returns {Promise<Map<string, Date>>}
+ */
+async function latestAttachedChange(wineIds) {
+  const latest = new Map();
+  if (!wineIds.length) return latest;
+  const lastOf = (stamps) => ({ $max: { $max: stamps } });
+  const [windows, values] = await Promise.all([
+    WineVintageProfile.aggregate([
+      { $match: { wineDefinition: { $in: wineIds }, status: 'reviewed' } },
+      { $group: { _id: '$wineDefinition', at: lastOf(['$updatedAt', '$setAt']) } },
+    ]),
+    RegistryDataValue.aggregate([
+      { $match: { wineDefinition: { $in: wineIds }, status: 'published' } },
+      { $group: { _id: '$wineDefinition', at: lastOf(['$updatedAt', '$decidedAt']) } },
+    ]),
+  ]);
+  for (const row of [...windows, ...values]) {
+    if (!row.at) continue;
+    const id = String(row._id);
+    const prev = latest.get(id);
+    if (!prev || row.at > prev) latest.set(id, row.at);
+  }
+  return latest;
+}
+
 // POST /v1/wines/changes — { ids: [...], since: ISO } → which of THOSE changed.
 // Never a global feed: an install can only ask about wines it already holds.
+// "Changed" covers the wine record, its reviewed windows and its published
+// values: everything GET /wines/:id carries that an install copies.
 router.post('/wines/changes', validChanges, quota('changeChecks'), async (req, res) => {
   const ids = req.bridgeIds;
   const since = req.bridgeSince;
@@ -334,12 +376,15 @@ router.post('/wines/changes', validChanges, quota('changeChecks'), async (req, r
     const found = await WineDefinition.find({ _id: { $in: ids }, ...VISIBLE, canary: { $ne: true } })
       .select('_id updatedAt nonWine').lean();
     const present = new Map(found.map((w) => [String(w._id), w]));
+    const latest = await latestAttachedChange(found.filter((w) => !w.nonWine).map((w) => w._id));
     const changed = [];
     const removed = [];
     for (const id of ids) {
       const w = present.get(String(id));
       if (!w || w.nonWine) { removed.push(String(id)); continue; }
-      if (w.updatedAt && new Date(w.updatedAt).getTime() > since.getTime()) changed.push({ id: String(id), updatedAt: w.updatedAt });
+      const changedAt = [w.updatedAt, latest.get(String(id))]
+        .filter(Boolean).map((d) => new Date(d)).reduce((a, b) => (b > a ? b : a), new Date(0));
+      if (changedAt.getTime() > since.getTime()) changed.push({ id: String(id), updatedAt: changedAt });
     }
     res.json({ since, checkedAt, checked: ids.length, changed, removed });
   } catch (error) {
