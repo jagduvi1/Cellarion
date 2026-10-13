@@ -75,6 +75,8 @@ const AdminBlogEditor      = lazy(() => import('./pages/AdminBlogEditor'));
 const NfcRedirect          = lazy(() => import('./pages/NfcRedirect'));
 const Wishlist             = lazy(() => import('./pages/Wishlist'));
 const AddToWishlist        = lazy(() => import('./pages/AddToWishlist'));
+const PickLists            = lazy(() => import('./pages/PickLists'));
+const PickList             = lazy(() => import('./pages/PickList'));
 const Unsubscribed         = lazy(() => import('./pages/Unsubscribed'));
 const Recommendations      = lazy(() => import('./pages/Recommendations'));
 const Journal              = lazy(() => import('./pages/Journal'));
@@ -282,6 +284,24 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <Layout><WineDrafts /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        {/* Pick lists (early access, flag pickLists). The list page sits outside
+            Layout, like Cellar Book, so Print gives a clean sheet. */}
+        <Route
+          path="/pick-lists"
+          element={
+            <ProtectedRoute>
+              <Layout><PickLists /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/pick-lists/:id"
+          element={
+            <ProtectedRoute>
+              <PickList />
             </ProtectedRoute>
           }
         />

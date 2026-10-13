@@ -38,6 +38,7 @@ const BulkConsumeModal = lazy(() => import('../components/BulkConsumeModal'));
 const BulkReserveModal = lazy(() => import('../components/BulkReserveModal'));
 const BulkDrinkWindowModal = lazy(() => import('../components/BulkDrinkWindowModal'));
 const BulkAddToListModal = lazy(() => import('../components/BulkAddToListModal'));
+const AddToPickListModal = lazy(() => import('../components/AddToPickListModal'));
 const BulkDeleteModal = lazy(() => import('../components/BulkDeleteModal'));
 const RecentlyDeletedModal = lazy(() => import('../components/RecentlyDeletedModal'));
 const DrinkOneModal = lazy(() => import('../components/DrinkOneModal'));
@@ -52,6 +53,9 @@ const BULK_ACTIONS = [
   { key: 'consume',  icon: '🍷', label: 'bulk.consumeAction' },
   { key: 'reserve',  icon: '🔖', label: 'bulk.reserveAction' },
   { key: 'window',   icon: '⏳', label: 'bulk.windowAction' },
+  // Early access (flag pickLists): the bottles go on a pick list that shows
+  // where each one sits. Shown only to members with the feature on.
+  { key: 'pick',     icon: '📍', label: 'bulk.pickAction', feature: 'pickLists' },
   { key: 'list',     icon: '📋', label: 'bulk.listAction' },
   { key: 'delete',   icon: '🗑️', label: 'bulk.deleteAction', danger: true },
 ];
@@ -952,6 +956,7 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
   // entry still waiting on a wine request has no registry wine and keeps the
   // classic behaviour. Without early access nothing changes here.
   const vintageFirst = useFeature('vintagePage');
+  const pickListsOn = useFeature('pickLists');
   const vintageHref = (rep, inCellar) => (rep?.wineDefinition?._id
     ? `/cellars/${inCellar}/vintages/${rep.wineDefinition._id}/${encodeURIComponent(rep.vintage || 'NV')}`
     : null);
@@ -1155,7 +1160,7 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
             </button>
           </div>
           <div className="bulk-bar-actions">
-            {BULK_ACTIONS.map(a => (
+            {BULK_ACTIONS.filter(a => !a.feature || (a.feature === 'pickLists' && pickListsOn)).map(a => (
               <button
                 key={a.key}
                 type="button"
@@ -1286,6 +1291,9 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
         )}
         {bulkAction === 'window' && (
           <BulkDrinkWindowModal bottleIds={[...selectedIds]} onClose={closeAction} onDone={finishAction} />
+        )}
+        {bulkAction === 'pick' && (
+          <AddToPickListModal bottleIds={[...selectedIds]} onClose={closeAction} onDone={finishAction} />
         )}
         {bulkAction === 'list' && (
           <BulkAddToListModal bottleIds={[...selectedIds]} cellarId={cellarId} onClose={closeAction} onDone={finishAction} />

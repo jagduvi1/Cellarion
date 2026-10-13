@@ -14,6 +14,7 @@ import { getQueueStatus } from '../utils/offlineQueue';
 import OfflinePageNotice from './OfflinePageNotice';
 import OfflinePrompt from './OfflinePrompt';
 import { useOfflineNow, isOfflineCapablePage } from '../utils/useOfflineNow';
+import { useFeature } from '../utils/featureFlags';
 import './Layout.css';
 
 const LOGO_LIGHT_WEBP = '/cellarion-logo-light.webp';
@@ -23,6 +24,7 @@ const LOGO_DARK_PNG   = '/cellarion-logo-dark.png';
 
 function Layout({ children }) {
   const { t } = useTranslation();
+  const pickListsOn = useFeature('pickLists');
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
@@ -125,6 +127,15 @@ function Layout({ children }) {
                 >
                   {t('nav.wishlist')}
                 </Link>
+                {/* Early access (flag pickLists). */}
+                {pickListsOn && (
+                  <Link
+                    to="/pick-lists"
+                    className={`nav-link ${isActive('/pick-lists') ? 'active' : ''}`}
+                  >
+                    {t('nav.pickLists', 'Pick lists')}
+                  </Link>
+                )}
                 <Link
                   to="/recommendations"
                   className={`nav-link ${isActive('/recommendations') ? 'active' : ''}`}
@@ -292,6 +303,7 @@ function Layout({ children }) {
             <div className="mobile-menu-section">
               <Link to="/community/discussions" className={`mobile-menu-link ${isActive('/community') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.community')}</Link>
               <Link to="/wishlist" className={`mobile-menu-link ${isActive('/wishlist') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.wishlist')}</Link>
+              {pickListsOn && <Link to="/pick-lists" className={`mobile-menu-link ${isActive('/pick-lists') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.pickLists', 'Pick lists')}</Link>}
               <Link to="/recommendations" className={`mobile-menu-link ${isActive('/recommendations') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.recommendations')}</Link>
               <Link to="/journal" className={`mobile-menu-link ${isActive('/journal') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.journal')}</Link>
               <Link to="/restock" className={`mobile-menu-link ${isActive('/restock') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.restock')}</Link>

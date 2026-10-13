@@ -37,6 +37,7 @@ const ChangeWineModal = lazy(() => import('../components/ChangeWineModal'));
 const ConsumeModal = lazy(() => import('../components/ConsumeModal').then(m => ({ default: m.ConsumeModal })));
 const RecommendWineModal = lazy(() => import('../components/RecommendWineModal'));
 const AddMoreBottlesModal = lazy(() => import('../components/AddMoreBottlesModal'));
+const AddToPickListModal = lazy(() => import('../components/AddToPickListModal'));
 const BarcodeScanModal = lazy(() => import('../components/BarcodeScanModal'));
 
 function BottleDetail() {
@@ -45,6 +46,7 @@ function BottleDetail() {
   const { apiFetch, user } = useAuth();
   // Early access: a wine and vintage has its own page, so this one says it is a bottle.
   const vintagePageOn = useFeature('vintagePage');
+  const pickListsOn = useFeature('pickLists');
   const navigate = useNavigate();
   const location = useLocation();
   const fromHistory = location.state?.fromHistory === true;
@@ -88,6 +90,7 @@ function BottleDetail() {
   const [draftNotice, setDraftNotice] = useState(null);
   useEffect(() => { setDraftNotice(null); }, [bottleId]);
   const [addMoreOpen, setAddMoreOpen] = useState(false);
+  const [pickOpen, setPickOpen] = useState(false);
   const [barcodeOpen, setBarcodeOpen] = useState(false);
   const [addMoreMsg, setAddMoreMsg] = useState(null); // success banner after "Add more bottles"
   const [reportWineOpen, setReportWineOpen] = useState(false);
@@ -327,6 +330,13 @@ function BottleDetail() {
       {canEdit && wine && !user?.isDemo && !onOrderNow && (
         <button className="bd-overflow-item" role="menuitem" onClick={() => { setAddMoreOpen(true); setBdMoreOpen(false); }}>
           <span aria-hidden="true">➕</span> {t('bottleDetail.addMore.action', 'Add more bottles')}
+        </button>
+      )}
+      {/* Early access (flag pickLists): put this bottle on a pick list, which
+          shows where each bottle sits so they can be fetched in one go. */}
+      {pickListsOn && canEdit && bottle?.status === 'active' && (
+        <button className="bd-overflow-item" role="menuitem" onClick={() => { setPickOpen(true); setBdMoreOpen(false); }}>
+          <span aria-hidden="true">📍</span> {t('pickLists.addAction', 'Add to pick list')}
         </button>
       )}
       {/* The retail barcode, for a bottle already in the cellar — until now
@@ -837,6 +847,10 @@ function BottleDetail() {
             onClose={() => setAddMoreOpen(false)}
             onAdded={handleAddedMore}
           />
+        )}
+
+        {pickOpen && bottle && (
+          <AddToPickListModal bottleIds={[bottle._id]} onClose={() => setPickOpen(false)} onDone={() => setPickOpen(false)} />
         )}
 
         {barcodeOpen && bottle && (

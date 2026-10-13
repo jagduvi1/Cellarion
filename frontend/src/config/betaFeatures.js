@@ -31,6 +31,12 @@ export function betaFeatureText(t, key) {
         description: t('earlyAccess.features.cabinetSideways.description', 'For each shelf of a wine cabinet, choose how its bottles lie: front to back, with one bottle lying across the front of the others (as in a slim fridge), or all lying across (as in a bottom bin). The cabinet drawings follow, including the 3D view. The slot numbers stay the same, so you can change it on a cabinet that already holds bottles. Includes a starting shape for the Kingsbottle Atelier Duo.'),
         where: t('earlyAccess.features.cabinetSideways.where', 'On the Racks page: create or edit a wine cabinet and pick how each shelf\'s bottles lie, or start from Kingsbottle → Atelier Duo.'),
       };
+    case 'pickLists':
+      return {
+        name: t('earlyAccess.features.pickLists.name', 'Pick lists'),
+        description: t('earlyAccess.features.pickLists.description', 'Make a list of the bottles you are about to fetch — for a dinner, a tasting, or what to drink next — and see the cellar, rack and slot of each, in the order you walk past them. Tick bottles off as you pick them, print the list, and mark the picked ones as drunk in one go.'),
+        where: t('earlyAccess.features.pickLists.where', 'In your cellar, tap Select, pick bottles and choose Pick list, or use ⋮ → Add to pick list on a bottle\'s page. Your lists are under Pick lists in the menu.'),
+      };
     default:
       return { name: key, description: '', where: '' };
   }

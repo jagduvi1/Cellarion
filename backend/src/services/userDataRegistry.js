@@ -82,6 +82,7 @@ const PersonalDataKey = require('../models/PersonalDataKey');
 const PersonalDataEntry = require('../models/PersonalDataEntry');
 const SavedDashboard = require('../models/SavedDashboard');
 const SavedView = require('../models/SavedView');
+const PickList = require('../models/PickList');
 const RegistryDataKey = require('../models/RegistryDataKey');
 const RegistryDataValue = require('../models/RegistryDataValue');
 const AuditLog = require('../models/AuditLog');
@@ -402,6 +403,13 @@ const REGISTRY = [
     model: SavedDashboard, category: 'personal-data', userFields: ['user'],
     purge: (ctx) => SavedDashboard.deleteMany({ user: ctx.userId }),
     exportFragment: async (ctx) => ({ analyticsDashboards: await SavedDashboard.find({ user: ctx.userId }).lean() }),
+  },
+  {
+    // Pick lists (forum request 2026-10-13): the user's own named lists of
+    // bottle references — pure personal data, hard delete, full export.
+    model: PickList, category: 'personal-data', userFields: ['user'],
+    purge: (ctx) => PickList.deleteMany({ user: ctx.userId }),
+    exportFragment: async (ctx) => ({ pickLists: markTrunc(ctx, 'pickLists', await PickList.find({ user: ctx.userId }).limit(EXPORT_MAX).lean()) }),
   },
   {
     // Saved analytics views + preset stars (#987 saved-views slice).

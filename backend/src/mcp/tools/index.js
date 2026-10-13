@@ -38,6 +38,7 @@ require('./publicContent');
 require('./taxonomy');
 require('./images');
 require('./account');
+require('./pickLists');
 require('./export');
 require('./wineLists');
 require('./adminRegistry');

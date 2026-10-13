@@ -68,6 +68,17 @@ const FEATURES = Object.freeze([
     defaultState: 'beta',
     since: '2026-10-13',
   }),
+  // Pick lists: named lists of bottles to fetch, each shown with its cellar,
+  // rack and slot (/api/pick-lists, model PickList). The lists and the API
+  // work for everyone; the flag only decides who sees the screens (the "Pick
+  // list" action in Select mode, the bottle page's menu item, the nav entry
+  // and the pages).
+  Object.freeze({
+    key: 'pickLists',
+    title: 'Pick lists',
+    defaultState: 'beta',
+    since: '2026-10-13',
+  }),
 ]);
 
 const FEATURE_KEYS = Object.freeze(FEATURES.map((f) => f.key));

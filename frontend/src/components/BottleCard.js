@@ -2,6 +2,7 @@ import { memo, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { buildRackUrl } from '../utils/rackNavigation';
+import { slotLabel } from '../utils/slotLabel';
 import { useTranslation } from 'react-i18next';
 import AuthImage from './AuthImage';
 import { glassesLeft, daysLeft, freshnessStatus } from '../utils/openBottle';
@@ -31,6 +32,8 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
   const cellarBadgeColor = bottle.cellarColor || null;
   // A collapsed group spans multiple bottles (possibly in different racks), so a
   // single rack badge would be misleading — suppress it until the group expands.
+  // The badge names the slot too ("Fridge · slot 12"; forum request 2026-10-13:
+  // finding a bottle should not mean opening it).
   const rackInfo = isGroup ? null : rackMap?.get(bottle._id);
   // "Unplaced" = the caller knows this cellar's rack layout (single-cellar view
   // of a cellar that has racks) and this active bottle isn't in any slot — i.e.
@@ -287,7 +290,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
                 className="rack-badge"
                 onClick={e => e.stopPropagation()}
               >
-                <span aria-hidden="true">📍</span> {rackInfo.rackName}
+                <span aria-hidden="true">📍</span> {slotLabel(rackInfo, t)}
               </Link>
             )}
           </div>
@@ -388,7 +391,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
               className="rack-badge"
               onClick={e => e.stopPropagation()}
             >
-              📍 {rackInfo.rackName}
+              📍 {slotLabel(rackInfo, t)}
             </Link>
           )}
         </div>
