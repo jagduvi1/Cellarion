@@ -135,6 +135,16 @@ describe('restoreDeletedBottle', () => {
     expect(logAudit).toHaveBeenCalledWith(REQ, 'bottle.restore_deleted', expect.objectContaining({ id: 'b1' }), { via: 'undo', placed: true });
   });
 
+  // Release audit 2026-10-13: the raw insert bypassed the schema's alias setter.
+  test('a currency alias in the snapshot is restored as its code', async () => {
+    worldIntact();
+    Rack.findOne.mockResolvedValue(null);
+    const snap = { ...SNAP, bottle: { ...SNAP.bottle, currency: 'EURO' } };
+    await restoreDeletedBottle(snap, REQ);
+    expect(Bottle.collection.insertOne.mock.calls[0][0].currency).toBe('EUR');
+    expect(snap.bottle.currency).toBe('EURO'); // the snapshot itself is not mutated
+  });
+
   test('a default photo that was deleted with the bottle is dropped, not restored dangling', async () => {
     worldIntact();
     BottleImage.exists.mockResolvedValue(null);

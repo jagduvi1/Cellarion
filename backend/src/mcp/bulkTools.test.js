@@ -124,6 +124,19 @@ describe('preview', () => {
     }, CTX);
     expect(parse(res).data.plan[0].status).toBe('invalid');
   });
+
+  // Release audit 2026-10-13: an unsupported currency passed the preview, then
+  // apply created the new wine before addBottle refused the bottle.
+  test('an unsupported currency is flagged at preview', async () => {
+    ownCellar();
+    const res = await tool('bulk_add').handler({
+      cellar_id: oid('c'),
+      items: [{ wine_id: oid('f'), currency: 'PLN' }],
+    }, CTX);
+    const item = parse(res).data.plan[0];
+    expect(item.status).toBe('invalid');
+    expect(JSON.stringify(item)).toMatch(/Unsupported currency/);
+  });
 });
 
 describe('apply', () => {

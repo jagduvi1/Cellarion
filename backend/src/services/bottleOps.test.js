@@ -298,6 +298,16 @@ describe('updateBottleFields (real execution)', () => {
     expect((await updateBottleFields(liveBottle(), { currency: 7 }, REQ)).error.status).toBe(400);
   });
 
+  // Release audit 2026-10-13: undoing a change away from an old import's code was refused.
+  test('currency: an undo (restoringPrev) puts back a previous code that is not supported', async () => {
+    const b = liveBottle({ currency: 'SEK' });
+    const res = await updateBottleFields(b, { currency: 'ILS' }, REQ, { restoringPrev: true });
+    expect(res.error).toBeUndefined();
+    expect(b.currency).toBe('ILS');
+    // Without the flag the same change is refused.
+    expect((await updateBottleFields(liveBottle({ currency: 'SEK' }), { currency: 'ILS' }, REQ)).error.status).toBe(400);
+  });
+
   test('a barcode added to a bottle already in the cellar is stored in canonical form; a bad one is refused', async () => {
     // The bottle page's "Add barcode": UPC-A becomes its EAN-13 form, as on add.
     const b = liveBottle();

@@ -313,7 +313,7 @@ describe('revertLedgerRow dispatch', () => {
     resolveBottleAccess.mockResolvedValue({ bottle: { _id: 'b1', vintage: 2018, cellar: 'c1' } });
     bottleOps.updateBottleFields.mockResolvedValue({ changes: { price: 100 }, prev: { price: 200 } });
     const res = await revertLedgerRow({ _id: 'r', action: 'update', bottle: 'b1', prev: { price: 100 } }, ctx(), H);
-    expect(bottleOps.updateBottleFields).toHaveBeenCalledWith(expect.anything(), { price: 100 }, expect.anything());
+    expect(bottleOps.updateBottleFields).toHaveBeenCalledWith(expect.anything(), { price: 100 }, expect.anything(), { restoringPrev: true });
     // reverse row snapshots what we overwrote, so undo-of-undo works
     expect(logAction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: 'update', prev: { price: 200 } }));
     expect(res.data.undone).toBe('update_bottle');
@@ -458,8 +458,8 @@ describe('lot_update (update_bottle apply_to_lot, support ticket 2026-09-06)', (
     const row = { _id: 'r', action: 'lot_update', bottle: 'b1', cellar: 'c1', prev: { b1: { drinkFrom: 2026 }, b2: { drinkFrom: 2027 } } };
     const res = await revertLedgerRow(row, ctx(), H);
     expect(bottleOps.updateBottleFields).toHaveBeenCalledTimes(2);
-    expect(bottleOps.updateBottleFields).toHaveBeenCalledWith(expect.objectContaining({ _id: 'b1' }), { drinkFrom: 2026 }, expect.anything());
-    expect(bottleOps.updateBottleFields).toHaveBeenCalledWith(expect.objectContaining({ _id: 'b2' }), { drinkFrom: 2027 }, expect.anything());
+    expect(bottleOps.updateBottleFields).toHaveBeenCalledWith(expect.objectContaining({ _id: 'b1' }), { drinkFrom: 2026 }, expect.anything(), { restoringPrev: true });
+    expect(bottleOps.updateBottleFields).toHaveBeenCalledWith(expect.objectContaining({ _id: 'b2' }), { drinkFrom: 2027 }, expect.anything(), { restoringPrev: true });
     expect(McpActionLog.findOneAndUpdate).toHaveBeenCalledWith({ _id: 'r', reversed: false }, expect.anything());
     expect(res.data).toMatchObject({ undone: 'update_bottle', restored_bottle_ids: ['b1', 'b2'] });
     expect(logAction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: 'lot_update', viaUndo: true }));

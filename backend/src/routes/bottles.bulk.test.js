@@ -383,6 +383,27 @@ describe('POST /api/bottles/bulk — arrive (bottles on order)', () => {
       expect.objectContaining({ _id: B(1) }), { price: 9, currency: 'EUR' }, expect.anything());
   });
 
+  // Release audit 2026-10-13: a lot edit of a bottle with an older import's
+  // code carries that code; it must not be refused up front.
+  test('update: an unsupported code that is a selected bottle\'s own reaches the shared update', async () => {
+    Bottle.find.mockResolvedValue([{ _id: B(1), cellar: OWNED, status: 'active', currency: 'ILS' }]);
+    const res = await postJson(app(), '/api/bottles/bulk', {
+      action: 'update', bottleIds: [B(1)], fields: { price: 90, currency: 'ils' },
+    });
+    expect(res.status).toBe(200);
+    expect(updateBottleFields).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: B(1) }), { price: 90, currency: 'ILS' }, expect.anything());
+  });
+
+  test('update: a currency that is not a string is refused up front', async () => {
+    Bottle.find.mockResolvedValue([{ _id: B(1), cellar: OWNED, status: 'active' }]);
+    const res = await postJson(app(), '/api/bottles/bulk', {
+      action: 'update', bottleIds: [B(1)], fields: { price: 9, currency: 7 },
+    });
+    expect(res.status).toBe(400);
+    expect(updateBottleFields).not.toHaveBeenCalled();
+  });
+
   test('a bad arrival date fails the whole request before anything is touched', async () => {
     markArrived.mockResolvedValue({ error: { status: 400, message: 'arrivedAt must be a valid date and not in the future' } });
     Bottle.find.mockResolvedValue([{ _id: B(1), cellar: OWNED, status: 'ordered' }]);

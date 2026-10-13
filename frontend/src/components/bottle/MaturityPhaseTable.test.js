@@ -27,6 +27,29 @@ describe('MaturityPhaseTable', () => {
     ]);
   });
 
+  // Release audit 2026-10-13: the marked row now comes from the maturity status.
+  describe('a reviewed profile: the row marked as now is the phase its status names', () => {
+    const marked = (profile) => rows(render(<MaturityPhaseTable profile={{ status: 'reviewed', ...profile }} />).container)
+      .filter((r) => r.active).map((r) => r.cls);
+
+    it('an open-ended earlier phase no longer leaves two rows marked', () => {
+      expect(marked({ vintage: '2018', earlyFrom: 2020, peakFrom: 2024, peakUntil: 2030, lateFrom: 2031, lateUntil: 2035 })).toEqual(['peak']);
+    });
+    it('a phase with only an end year is marked', () => {
+      expect(marked({ vintage: '2018', earlyFrom: 2020, earlyUntil: 2023, peakUntil: 2030 })).toEqual(['peak']);
+    });
+    it('a gap year marks the phase the status names', () => {
+      expect(marked({ vintage: '2020', earlyFrom: 2021, earlyUntil: 2024, peakFrom: 2028, peakUntil: 2032 })).toEqual(['early']);
+    });
+    it('a late phase with no end is marked once it has begun', () => {
+      expect(marked({ vintage: '2015', earlyFrom: 2017, earlyUntil: 2019, peakFrom: 2020, peakUntil: 2023, lateFrom: 2024 })).toEqual(['late']);
+    });
+    it('before the first phase and past prime, no row is marked', () => {
+      expect(marked({ vintage: '2025', earlyFrom: 2028, earlyUntil: 2029, peakFrom: 2030, peakUntil: 2035 })).toEqual([]);
+      expect(marked({ vintage: '2010', earlyFrom: 2012, earlyUntil: 2014, peakFrom: 2015, peakUntil: 2020, lateFrom: 2021, lateUntil: 2024 })).toEqual([]);
+    });
+  });
+
   it('keeps open-ended phases as before', () => {
     const profile = { vintage: '2020', earlyFrom: 2022, earlyUntil: 2025, peakFrom: 2026 };
     const { container } = render(<MaturityPhaseTable profile={profile} />);

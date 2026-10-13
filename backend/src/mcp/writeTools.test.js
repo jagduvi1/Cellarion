@@ -112,6 +112,15 @@ describe('add_bottle', () => {
     )).error.code).toBe('invalid_input');
   });
 
+  // Release audit 2026-10-13: the new wine was created before addBottle refused the currency.
+  test('an unsupported currency → invalid_input before any wine work', async () => {
+    const res = await tool('add_bottle').handler(
+      { cellar_id: oid('c'), new_wine: { name: 'x', producer: 'y', country: 'z' }, currency: 'PLN' }, CTX);
+    expect(parse(res).error.code).toBe('invalid_input');
+    expect(findOrCreateWine).not.toHaveBeenCalled();
+    expect(bottleOps.addBottle).not.toHaveBeenCalled();
+  });
+
   test('foreign cellar → not_found before any wine work', async () => {
     Cellar.findById.mockReturnValue(chain({ _id: oid('c'), user: STRANGER, members: [], deletedAt: null }));
     const res = await tool('add_bottle').handler({ cellar_id: oid('c'), wine_id: oid('f') }, CTX);

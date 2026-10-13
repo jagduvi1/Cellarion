@@ -114,6 +114,19 @@ describe('classifyMaturity', () => {
     expect(classifyMaturity(bottle, map)).toBe('declining');
   });
 
+  // Release audit 2026-10-13: a late phase with no end fell through to 'peak'.
+  test('a late phase with no end stays "late" once it has begun', () => {
+    // currentYear=2026, peakFrom=2020, peakUntil=2023, lateFrom=2024, no lateUntil
+    const bottle = makeBottle(2018);
+    const map = makeMap(2018, {
+      status: 'reviewed',
+      earlyFrom: 2019, earlyUntil: 2019,
+      peakFrom: 2020, peakUntil: 2023,
+      lateFrom: 2024,
+    });
+    expect(classifyMaturity(bottle, map)).toBe('late');
+  });
+
   test('peak-only with late: returns "late" when in late window', () => {
     // currentYear=2026, peakFrom=2020, peakUntil=2024, lateFrom=2025, lateUntil=2028
     const bottle = makeBottle(2020);

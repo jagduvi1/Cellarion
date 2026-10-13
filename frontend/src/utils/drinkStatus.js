@@ -9,8 +9,9 @@ const CURRENT_YEAR = new Date().getFullYear();
  *
  * @param {object} profile
  * @param {number} [anchorYear] - the bottle's purchase year (for relative/NV profiles)
+ * @param {number} [year] - the year to classify (defaults to this year)
  */
-export function getMaturityStatus(profile, anchorYear) {
+export function getMaturityStatus(profile, anchorYear, year = CURRENT_YEAR) {
   if (!profile || profile.status !== 'reviewed') return null;
   const { earlyFrom, earlyUntil, peakFrom, peakUntil, lateFrom, lateUntil } = resolveWindow(profile, anchorYear);
 
@@ -18,15 +19,18 @@ export function getMaturityStatus(profile, anchorYear) {
   if (!earlyFrom && !peakFrom && !peakUntil) return null;
 
   const firstYear = earlyFrom || peakFrom;
-  if (firstYear && CURRENT_YEAR < firstYear)                 return { status: 'not-ready', label: `Not yet mature — from ${firstYear}` };
-  if (earlyUntil && CURRENT_YEAR <= earlyUntil)              return { status: 'early',     label: 'Early drinking' };
-  if (peakFrom   && CURRENT_YEAR <  peakFrom)                return { status: 'early',     label: `Early drinking — peak from ${peakFrom}` };
-  if (peakUntil  && CURRENT_YEAR <= peakUntil)               return { status: 'peak',      label: 'Optimal maturity ⭐' };
-  if (lateFrom   && CURRENT_YEAR <  lateFrom)                return { status: 'peak',      label: `Optimal maturity — late phase from ${lateFrom}` };
-  if (lateUntil  && CURRENT_YEAR <= lateUntil)               return { status: 'late',      label: 'Late maturity' };
-  if ((lateUntil && CURRENT_YEAR >  lateUntil) ||
-      (peakUntil && CURRENT_YEAR >  peakUntil && !lateFrom)) return { status: 'declining', label: 'Past prime' };
-  if (peakFrom   && CURRENT_YEAR >= peakFrom)                return { status: 'peak',      label: 'Optimal maturity ⭐' };
+  if (firstYear && year < firstYear)                 return { status: 'not-ready', label: `Not yet mature — from ${firstYear}` };
+  if (earlyUntil && year <= earlyUntil)              return { status: 'early',     label: 'Early drinking' };
+  if (peakFrom   && year <  peakFrom)                return { status: 'early',     label: `Early drinking — peak from ${peakFrom}` };
+  if (peakUntil  && year <= peakUntil)               return { status: 'peak',      label: 'Optimal maturity ⭐' };
+  if (lateFrom   && year <  lateFrom)                return { status: 'peak',      label: `Optimal maturity — late phase from ${lateFrom}` };
+  if (lateUntil  && year <= lateUntil)               return { status: 'late',      label: 'Late maturity' };
+  // A late phase with no end stays late once it has begun (release audit
+  // 2026-10-13: it fell through to "Optimal maturity").
+  if (lateFrom   && !lateUntil && year >= lateFrom)  return { status: 'late',      label: 'Late maturity' };
+  if ((lateUntil && year >  lateUntil) ||
+      (peakUntil && year >  peakUntil && !lateFrom)) return { status: 'declining', label: 'Past prime' };
+  if (peakFrom   && year >= peakFrom)                return { status: 'peak',      label: 'Optimal maturity ⭐' };
   return { status: 'early', label: 'Early drinking' };
 }
 

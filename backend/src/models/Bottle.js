@@ -60,6 +60,9 @@ const bottleSchema = new mongoose.Schema({
     // code: "EURO" → "EUR" (config/currencies). No enum here — older imports
     // hold codes outside the supported list, and a save of such a bottle must
     // keep working; the routes refuse a NEW unsupported code instead.
+    // ⚠️ Mongoose runs this setter on QUERY FILTERS too: Bottle.find({
+    // currency: 'EURO' }) searches for 'EUR'. To find rows stored under an
+    // alias, use Bottle.collection or an aggregation (release audit 2026-10-13).
     set: normalizeCurrency,
     maxlength: [10, 'Currency code too long']
   },

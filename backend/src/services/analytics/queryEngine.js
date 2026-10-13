@@ -43,7 +43,7 @@ const { resolveForVintage } = require('../registryDataOps');
 const { resolveField, opsForType } = require('./fieldCatalogue');
 const { validateValue } = require('../../utils/personalDataTypes');
 const { ANCHORS, COL, toNormalized, fromNormalized } = require('../../utils/ratingUtils');
-const { currencySpellings } = require('../../config/currencies');
+const { currencySpellings, normalizeCurrency } = require('../../config/currencies');
 // A request can ask for its ratings in the viewer's own scale (Settings →
 // rating scale); stars stay the default and the sort order (the scales are
 // monotone, so it never changes). A rating filter carries the scale its
@@ -1032,7 +1032,9 @@ async function runGrouped({ userId, scopeCellars, bottleScope, filters, dimensio
       { $sort: { n: -1, _id: 1 } },
       { $limit: 1 },
     ]).option({ maxTimeMS: MAX_TIME_MS });
-    targetCurrency = top?._id || 'USD';
+    // An alias as the most common stored spelling reads as its code (release
+    // audit 2026-10-13: a cellar mostly stored as "EURO" got no rate at all).
+    targetCurrency = normalizeCurrency(top?._id) || 'USD';
     for (const cf of currencyMeta.fields) {
       const { expr } = convertedPriceExpr(cf.path, cf.currencyPath, rates, targetCurrency);
       const spec = measureSpecs[cf.i];
@@ -1042,7 +1044,8 @@ async function runGrouped({ userId, scopeCellars, bottleScope, filters, dimensio
     // filtered population as the buckets (audit F5: counting before the
     // wine-side and expression filters overstated the exclusions).
     if (rates && rates[targetCurrency]) {
-      const known = Object.keys(rates);
+      // Every spelling convertedPriceExpr converts counts as known (aliases too).
+      const known = Object.keys(rates).flatMap((code) => currencySpellings(code));
       const [uc] = await Bottle.aggregate([
         { $match: baseMatch(cellarIds, bottleScope, pre) },
         ...(needsWine ? WINE_LOOKUP : []),

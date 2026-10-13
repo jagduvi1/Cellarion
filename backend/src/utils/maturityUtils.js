@@ -130,6 +130,9 @@ function classifyMaturity(bottle, profileMap) {
   if (peakUntil && currentYear <= peakUntil) return 'peak';
   if (lateFrom && currentYear < lateFrom) return 'peak';
   if (lateUntil && currentYear <= lateUntil) return 'late';
+  // A late phase with no end stays late once it has begun (release audit
+  // 2026-10-13: it fell through to 'peak'). Mirrors frontend drinkStatus.
+  if (lateFrom && !lateUntil && currentYear >= lateFrom) return 'late';
   if ((lateUntil && currentYear > lateUntil) ||
       (peakUntil && currentYear > peakUntil && !lateFrom)) return 'declining';
   if (peakFrom && currentYear >= peakFrom) return 'peak';

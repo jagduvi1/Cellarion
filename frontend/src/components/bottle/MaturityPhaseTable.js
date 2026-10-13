@@ -1,9 +1,16 @@
 import { useTranslation } from 'react-i18next';
 import { getMaturityPhases, isPhaseActive } from '../../utils/maturityUtils';
+import { getMaturityStatus } from '../../utils/drinkStatus';
 
 function MaturityPhaseTable({ profile, anchorYear }) {
   const { t } = useTranslation();
   const CURRENT_YEAR = new Date().getFullYear();
+  // The row marked as now is the phase the maturity status names, so the
+  // table and the status can never disagree (release audit 2026-10-13: an
+  // open-ended phase, a phase with only an end year, or a gap between phases
+  // marked two rows or none). Before the first phase and past prime, no row
+  // is marked. Without a reviewed status, a row is marked by its own years.
+  const status = getMaturityStatus(profile, anchorYear, CURRENT_YEAR)?.status;
 
   const phases = getMaturityPhases(profile, {
     early: t('bottleDetail.maturityPhaseEarly'),
@@ -16,7 +23,7 @@ function MaturityPhaseTable({ profile, anchorYear }) {
   return (
     <div className="bd-maturity-table">
       {phases.map(p => {
-        const active = isPhaseActive(p, CURRENT_YEAR);
+        const active = status ? p.cls === status : isPhaseActive(p, CURRENT_YEAR);
 
         const yrsFrom  = p.from  && !isNaN(p.vintageInt) ? p.from  - p.vintageInt : null;
         const yrsUntil = p.until && !isNaN(p.vintageInt) ? p.until - p.vintageInt : null;

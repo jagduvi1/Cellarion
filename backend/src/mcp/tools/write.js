@@ -26,6 +26,7 @@ const { findLotSiblings, pickLotFields, LOT_FIELDS, LOT_FIELDS_ON_REQUEST, LOT_L
 const { logAudit } = require('../../services/audit');
 const { isValidId } = require('../../utils/validation');
 const { decorateGrapes } = require('../../utils/grapeDisplay');
+const { parseCurrency } = require('../../config/currencies');
 const {
   ok, fail, objectId, MSG_CELLAR_NOT_FOUND, MSG_BOTTLE_NOT_FOUND,
   resolveCellarAccess, resolveBottleAccess, wineSummary,
@@ -138,6 +139,11 @@ registerTool({
     if (args.draft === true && !args.new_wine) {
       return fail('invalid_input', 'draft:true applies to new_wine only — an existing registry wine cannot become a draft.');
     }
+    // Before any wine is created: addBottle refuses an unsupported currency,
+    // and a new_wine would otherwise be left without its bottle (release
+    // audit 2026-10-13).
+    const currencyCheck = parseCurrency(args.currency);
+    if (!currencyCheck.ok) return fail('invalid_input', currencyCheck.error);
 
     const access = await resolveCellarAccess(ctx.user.id, args.cellar_id, 'editor');
     if (!access) return fail('not_found', MSG_CELLAR_NOT_FOUND);

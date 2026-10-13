@@ -632,9 +632,9 @@ function normForCompare(v) {
  * scale, drink-window ordering + notifier-marker reset, priceSetAt
  * re-anchoring, HTML stripping, re-index, and the { field: { from, to } }
  * audit shape CellarAudit renders.
- * Returns { error } | { bottle, changes, prev }.
+ * Returns { error } | { bottle, changes, prev }. `restoringPrev` (undo) lets a bottle's previous currency back even when it is not a supported code.
  */
-async function updateBottleFields(bottle, fields, req) {
+async function updateBottleFields(bottle, fields, req, { restoringPrev = false } = {}) {
   fields = { ...(fields || {}) }; // shallow copy — REST passes req.body
   const changes = {};
   const prev = {};
@@ -792,10 +792,13 @@ async function updateBottleFields(bottle, fields, req) {
   // a code the app doesn't support is refused. The bottle's own code passes
   // even when it isn't supported (an older import): the web form sends the
   // whole form on every save.
+  // An undo (restoringPrev) puts back the bottle's previous code, supported or
+  // not (release audit 2026-10-13: undoing a change away from an old import's
+  // code was refused).
   if (fields.currency !== undefined && fields.currency !== null && fields.currency !== '') {
     const own = normalizeCurrency(bottle.currency || '');
     const sent = typeof fields.currency === 'string' ? normalizeCurrency(fields.currency) : null;
-    if (sent === null || sent !== own) {
+    if (sent === null || (sent !== own && !restoringPrev)) {
       const parsed = parseCurrency(fields.currency);
       if (!parsed.ok) return { error: { status: 400, message: parsed.error } };
     }
@@ -1053,7 +1056,10 @@ async function restoreDeletedBottle(snapshot, req, { via = 'undo' } = {}) {
   if (raw.defaultImage && !(await BottleImage.exists({ _id: raw.defaultImage }))) {
     raw.defaultImage = null;
   }
-  // The stored document as it was: same id, same dates, no defaults re-run.
+  // The stored document as it was: same id, same dates, no defaults re-run —
+  // except a currency alias, which the raw insert would bypass the schema's
+  // setter for ("EURO" → "EUR"; release audit 2026-10-13).
+  if (typeof raw.currency === 'string') raw.currency = normalizeCurrency(raw.currency);
   await Bottle.collection.insertOne(raw);
 
   const bestEffort = async (label, fn) => {

@@ -24,7 +24,7 @@ const { logAudit } = require('../services/audit');
 const { getSnapshotForDate } = require('../utils/exchangeRates');
 const { resolveRating } = require('../utils/ratingUtils');
 const { CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES, ORDERED_STATUS, WINE_POPULATE, WINE_POPULATE_LIST } = require('../config/constants');
-const { parseCurrency } = require('../config/currencies');
+const { parseCurrency, normalizeCurrency, isSupportedCurrency } = require('../config/currencies');
 const { gatherPriceWarnings } = require('../services/priceWarnings');
 const { getCurrentRelease } = require('../services/communityPrice');
 const { findLotSiblingIds, findLotSiblings } = require('../services/bottleLot');
@@ -1479,12 +1479,12 @@ router.post('/bulk', async (req, res) => {
         const p = parseExpectedArrival(fields.expectedArrival);
         if (!p.ok) return res.status(400).json({ error: p.error });
       }
-      // Same for a currency: an unsupported code is refused once, not skipped
-      // bottle by bottle; an alias is sent on as its code ("EURO" → "EUR").
-      if (fields.currency !== undefined) {
-        const c = parseCurrency(fields.currency);
-        if (!c.ok) return res.status(400).json({ error: c.error });
-        if (c.value) fields.currency = c.value;
+      // A currency: an alias is sent on as its code ("EURO" → "EUR") and a
+      // non-string is refused here; an unsupported code is checked below,
+      // once the bottles are known.
+      if (fields.currency !== undefined && fields.currency !== null && fields.currency !== '') {
+        if (typeof fields.currency !== 'string') return res.status(400).json({ error: 'Invalid currency' });
+        fields.currency = normalizeCurrency(fields.currency);
       }
     } else {
       const { reason = 'drank', note, consumedAt } = req.body;
@@ -1497,6 +1497,15 @@ router.post('/bulk', async (req, res) => {
 
     const resolved = await resolveBulkBottles(req, bottleIds, 'editor');
     if (resolved.error) return res.status(resolved.error.status).json({ error: resolved.error.message });
+
+    // An unsupported currency is refused once, not skipped bottle by bottle —
+    // unless it is the own code of a bottle in the selection (an older
+    // import's code, which a lot edit of that bottle carries; release audit
+    // 2026-10-13). The shared update then keeps it or refuses it per bottle.
+    if (fields && typeof fields.currency === 'string' && fields.currency && !isSupportedCurrency(fields.currency)
+        && !resolved.items.some((it) => it.bottle && normalizeCurrency(it.bottle.currency || '') === fields.currency)) {
+      return res.status(400).json({ error: parseCurrency(fields.currency).error });
+    }
 
     const doneIds = [];
     const skipped = [];

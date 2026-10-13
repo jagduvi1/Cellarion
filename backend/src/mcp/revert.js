@@ -825,7 +825,7 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     const failures = [];
     for (const b of resolved) {
       try {
-        const r = await updateBottleFields(b, prevById[String(b._id)] || {}, ctx.req);
+        const r = await updateBottleFields(b, prevById[String(b._id)] || {}, ctx.req, { restoringPrev: true });
         if (r.error) failures.push({ bottle_id: String(b._id), error: r.error.message });
         else restored.push(String(b._id));
       } catch (err) { failures.push({ bottle_id: String(b._id), error: err.message }); }
@@ -996,7 +996,7 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     const { updateBottleFields } = require('../services/bottleOps');
     const prevFields = row.prev || {};
     if (Object.keys(prevFields).length === 0) return fail('conflict', 'That update has no recorded previous values; nothing was changed.');
-    const result = await updateBottleFields(bottle, prevFields, ctx.req);
+    const result = await updateBottleFields(bottle, prevFields, ctx.req, { restoringPrev: true });
     if (result.error) return fail('conflict', `Cannot undo that update: ${result.error.message}`);
     envelope = { summary: `Undid update on ${bottleLabel(bottle)} — restored: ${Object.keys(prevFields).join(', ')}`, data: { undone: 'update_bottle', bottle_id: bottle._id, restored: result.changes } };
     reverseEntry = { action: 'update', prev: result.prev };

@@ -31,6 +31,21 @@ describe('getMaturityStatus', () => {
     expect(getMaturityStatus({ status: 'reviewed' })).toBeNull();
   });
 
+  // Release audit 2026-10-13: a late phase with no end fell through to "Optimal maturity".
+  test('a late phase with no end stays late once it has begun', () => {
+    const profile = { status: 'reviewed', earlyFrom: 2020, earlyUntil: 2023, peakFrom: 2024, peakUntil: 2027, lateFrom: 2028 };
+    expect(getMaturityStatus(profile, undefined, 2027).status).toBe('peak');
+    expect(getMaturityStatus(profile, undefined, 2028).status).toBe('late');
+    expect(getMaturityStatus(profile, undefined, 2040).status).toBe('late');
+  });
+
+  test('classifies the year it is given (defaults to this year)', () => {
+    const profile = { status: 'reviewed', earlyFrom: 2020, earlyUntil: 2022, peakFrom: 2023, peakUntil: 2030 };
+    expect(getMaturityStatus(profile, undefined, 2019).status).toBe('not-ready');
+    expect(getMaturityStatus(profile, undefined, 2021).status).toBe('early');
+    expect(getMaturityStatus(profile, undefined, 2031).status).toBe('declining');
+  });
+
   test('peak-only: returns not-ready when current year is before peakFrom', () => {
     const result = getMaturityStatus({
       status: 'reviewed',

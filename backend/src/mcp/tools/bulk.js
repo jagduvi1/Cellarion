@@ -21,6 +21,7 @@ const { logAudit } = require('../../services/audit');
 const { isValidId } = require('../../utils/validation');
 const { parseAndValidateVintage, parseDrinkYear } = require('../../utils/validation');
 const { resolveRating } = require('../../utils/ratingUtils');
+const { parseCurrency } = require('../../config/currencies');
 const WineDefinition = require('../../models/WineDefinition');
 const { findVisibleWine } = require('../../services/wineVisibility');
 const { NEW_WINE_SHAPE } = require('./write');
@@ -64,6 +65,10 @@ function validateItemFields(item) {
   if (f.value && t.value && f.value > t.value) return 'drink_from cannot be after drink_to';
   const r = resolveRating(item.rating, item.rating_scale);
   if (r.error) return r.error;
+  // Checked here, in the preview: addBottle refuses an unsupported code, and at
+  // apply a new wine is created BEFORE the bottle (release audit 2026-10-13).
+  const c = parseCurrency(item.currency);
+  if (!c.ok) return c.error;
   return null;
 }
 
