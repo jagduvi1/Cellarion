@@ -50,6 +50,8 @@ async function savePending(wineRequest) {
 // values have no sync at all, so their notifications always stay.
 function answeredByInstall(wineRequest, linkedWine = null) {
   if (wineRequest.via !== 'bridge' || !wineRequest.installFollowsAt) return false;
+  // Not served over the bridge (a private draft is pendingIdentity too): the
+  // install cannot finish the request, so the notification here stays.
   if (linkedWine && (linkedWine.nonWine === true || linkedWine.pendingIdentity === true)) return false;
   return true;
 }
