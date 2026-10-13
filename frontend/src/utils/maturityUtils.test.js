@@ -132,7 +132,19 @@ describe('getMaturityPhases', () => {
     expect(phases).toEqual([]);
   });
 
-  it('preserves from and until values on returned phase objects', () => {
+  it('preserves from and until values of phases that do not share a year', () => {
+    const profile = {
+      vintage: '2016',
+      earlyFrom: 2020, earlyUntil: 2023,
+      peakFrom: 2024,  peakUntil: 2030,
+      lateFrom: 2031,  lateUntil: 2045,
+    };
+    const phases = getMaturityPhases(profile, labels);
+    expect(phases.map((p) => [p.from, p.until])).toEqual([[2020, 2023], [2024, 2030], [2031, 2045]]);
+  });
+
+  // Beta feedback 2026-10-12: two phases were marked as now in the same year.
+  it('a year two phases share goes to the earlier phase, as in the maturity status', () => {
     const profile = {
       vintage: '2016',
       earlyFrom: 2020, earlyUntil: 2024,
@@ -140,12 +152,41 @@ describe('getMaturityPhases', () => {
       lateFrom: 2030,  lateUntil: 2045,
     };
     const phases = getMaturityPhases(profile, labels);
-    expect(phases[0].from).toBe(2020);
-    expect(phases[0].until).toBe(2024);
-    expect(phases[1].from).toBe(2024);
-    expect(phases[1].until).toBe(2030);
-    expect(phases[2].from).toBe(2030);
-    expect(phases[2].until).toBe(2045);
+    expect(phases.map((p) => [p.from, p.until])).toEqual([[2020, 2024], [2025, 2030], [2031, 2045]]);
+  });
+
+  it('a one-year early phase in the first optimal year: early 2026, optimal 2027–2029', () => {
+    const profile = {
+      vintage: '2025',
+      earlyFrom: 2026, earlyUntil: 2026,
+      peakFrom: 2026,  peakUntil: 2029,
+      lateFrom: 2030,  lateUntil: 2032,
+    };
+    const phases = getMaturityPhases(profile, labels);
+    expect(phases.map((p) => [p.cls, p.from, p.until])).toEqual([['early', 2026, 2026], ['peak', 2027, 2029], ['late', 2030, 2032]]);
+    // In 2026 exactly one phase is current.
+    expect(phases.filter((p) => isPhaseActive(p, 2026)).map((p) => p.cls)).toEqual(['early']);
+  });
+
+  it('a phase left with no year of its own is not listed', () => {
+    // Early and optimal on the same years: the status says early, so the table does too.
+    const same = getMaturityPhases({ vintage: '2024', earlyFrom: 2025, earlyUntil: 2026, peakFrom: 2025, peakUntil: 2026, lateFrom: 2027, lateUntil: 2027 }, labels);
+    expect(same.map((p) => [p.cls, p.from, p.until])).toEqual([['early', 2025, 2026], ['late', 2027, 2027]]);
+    // A late phase that ends in the last optimal year.
+    const late = getMaturityPhases({ vintage: '2025', earlyFrom: 2026, earlyUntil: 2026, peakFrom: 2026, peakUntil: 2027, lateFrom: 2027, lateUntil: 2027 }, labels);
+    expect(late.map((p) => [p.cls, p.from, p.until])).toEqual([['early', 2026, 2026], ['peak', 2027, 2027]]);
+  });
+
+  it('open-ended phases keep their shape', () => {
+    const phases = getMaturityPhases({ vintage: '2020', earlyFrom: 2022, earlyUntil: 2025, peakFrom: 2025, peakUntil: undefined }, labels);
+    expect(phases.map((p) => [p.cls, p.from, p.until])).toEqual([['early', 2022, 2025], ['peak', 2026, undefined]]);
+    const untilOnly = getMaturityPhases({ vintage: '2020', earlyFrom: 2022, earlyUntil: 2024, peakUntil: 2030 }, labels);
+    expect(untilOnly.map((p) => [p.cls, p.from, p.until])).toEqual([['early', 2022, 2024], ['peak', undefined, 2030]]);
+  });
+
+  it('relative (NV) windows are trimmed after they are resolved to years', () => {
+    const phases = getMaturityPhases({ vintage: 'NV', relative: true, earlyFrom: 0, earlyUntil: 1, peakFrom: 1, peakUntil: 3 }, labels, 2026);
+    expect(phases.map((p) => [p.cls, p.from, p.until])).toEqual([['early', 2026, 2027], ['peak', 2028, 2029]]);
   });
 
   it('handles vintage as a non-numeric string', () => {

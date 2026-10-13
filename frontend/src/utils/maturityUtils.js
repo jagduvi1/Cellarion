@@ -47,6 +47,15 @@ export function bottleAnchorYear(bottle) {
  * phases that have neither a `from` nor `until` value. Windows are resolved to
  * absolute years using anchorYear (only relevant for relative/NV profiles).
  *
+ * The phases are listed end to end. Profiles often let two phases share a
+ * year (early 2026–2026, optimal 2026–2029), and the maturity status — here
+ * in drinkStatus and on the server — gives a shared year to the EARLIER
+ * phase. So a later phase is shown from the year after the one before it
+ * ends, and a phase left with no year of its own is not listed: the table
+ * marks the same single phase the status names (beta feedback 2026-10-12:
+ * two phases were marked as now in the same year). Display only — the profile
+ * keeps its own numbers.
+ *
  * @param {object} profile
  * @param {{ early: string, peak: string, late: string }} labels - Translated phase labels
  * @param {number} [anchorYear] - the bottle's purchase year (for relative profiles)
@@ -64,7 +73,16 @@ export function getMaturityPhases(profile, labels, anchorYear) {
     { label: labels.late,  cls: 'late',  from: w.lateFrom,  until: w.lateUntil },
   ].filter(p => p.from || p.until);
 
-  return phases.map(p => ({ ...p, vintageInt: base }));
+  const shown = [];
+  let prevEnd = null;
+  for (const p of phases) {
+    const until = Number.isFinite(p.until) ? p.until : null;
+    if (prevEnd !== null && until !== null && until <= prevEnd) continue; // no year of its own
+    const from = prevEnd !== null && Number.isFinite(p.from) && p.from <= prevEnd ? prevEnd + 1 : p.from;
+    shown.push({ ...p, from, vintageInt: base });
+    if (until !== null) prevEnd = until;
+  }
+  return shown;
 }
 
 /**

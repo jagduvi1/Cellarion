@@ -26,11 +26,15 @@ function MaturityPhaseTable({ profile, anchorYear }) {
             <div className={`bd-maturity-phase-dot bd-maturity-phase-dot--${p.cls}`} />
             <span className="bd-maturity-phase-name">{p.label}</span>
             <span className="bd-maturity-phase-range">
-              {p.from && p.until ? `${p.from}\u2013${p.until}` : p.from ? `from ${p.from}` : `until ${p.until}`}
+              {p.from && p.until
+                ? (p.from === p.until ? `${p.from}` : `${p.from}\u2013${p.until}`)
+                : p.from ? `from ${p.from}` : `until ${p.until}`}
             </span>
             {(yrsFrom !== null) && (
               <span className="bd-maturity-phase-yrs">
-                {yrsUntil !== null ? `${yrsFrom}\u2013${yrsUntil} yrs` : `${yrsFrom}+ yrs`}
+                {yrsUntil === null ? `${yrsFrom}+ yrs`
+                  : yrsUntil === yrsFrom ? `${yrsFrom} ${yrsFrom === 1 ? 'yr' : 'yrs'}`
+                  : `${yrsFrom}\u2013${yrsUntil} yrs`}
               </span>
             )}
           </div>
