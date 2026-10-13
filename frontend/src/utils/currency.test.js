@@ -1,6 +1,28 @@
 import { convertAmount, convertAmountHistorical } from './currency';
+import { normalizeCurrency, getCurrencySymbol } from '../config/currencies';
 
 const RATES = { USD: 1, EUR: 0.9, SEK: 10.5, GBP: 0.8 };
+
+// 2026-10-13: browser page translation stored "EURO" for "EUR" on some bottles.
+describe('currency aliases', () => {
+  test('normalizeCurrency maps an alias to its code and upper-cases the rest', () => {
+    expect(normalizeCurrency('EURO')).toBe('EUR');
+    expect(normalizeCurrency(' euros ')).toBe('EUR');
+    expect(normalizeCurrency('€')).toBe('EUR');
+    expect(normalizeCurrency('sek')).toBe('SEK');
+    expect(normalizeCurrency(undefined)).toBeUndefined();
+  });
+
+  test('a bottle stored as "EURO" converts as euros, and needs no conversion to EUR', () => {
+    expect(convertAmount(90, 'EURO', 'USD', RATES)).toBe(convertAmount(90, 'EUR', 'USD', RATES));
+    expect(convertAmount(90, 'EURO', 'EUR', RATES)).toBeNull();
+    expect(convertAmountHistorical(90, 'EURO', 'SEK', null, RATES)).toBe(convertAmount(90, 'EUR', 'SEK', RATES));
+  });
+
+  test('the symbol of an alias is its code\'s', () => {
+    expect(getCurrencySymbol('EURO')).toBe('€');
+  });
+});
 
 describe('convertAmount', () => {
   test('returns null when rates are not provided', () => {

@@ -18,6 +18,7 @@ const resolveRatingUtil = resolveRating;
 const { stripHtml, isSafeUrl } = require('../utils/sanitize');
 const { parseAndValidateVintage, parseDrinkYear } = require('../utils/validation');
 const { normalizeBottleSize, DEFAULT_SIZE } = require('../config/bottleSizes');
+const { normalizeCurrency, parseCurrency } = require('../config/currencies');
 const { normalizeBarcode } = require('../utils/barcode');
 const { parseExpectedArrival } = require('../utils/onOrder');
 const { logAudit } = require('./audit');
@@ -369,6 +370,8 @@ function parseOnOrderFields({ onOrder, expectedArrival, addToHistory } = {}) {
 }
 
 function validateBottleCommitFields(fields = {}) {
+  const currencyCheck = parseCurrency(fields.currency);
+  if (!currencyCheck.ok) return { error: { status: 400, message: currencyCheck.error } };
   const {
     vintage, purchaseLocation, purchaseUrl, location,
     notes, occasion, rating, ratingScale, drinkFrom, drinkTo, peakFrom, peakUntil,
@@ -439,6 +442,8 @@ async function addBottle(cellarDoc, wineDoc, fields = {}, req) {
   if (!parsedVintage.ok) return { error: { status: 400, message: parsedVintage.error } };
   const order = parseOnOrderFields({ onOrder, expectedArrival, addToHistory });
   if (order.error) return order;
+  const parsedCurrency = parseCurrency(currency);
+  if (!parsedCurrency.ok) return { error: { status: 400, message: parsedCurrency.error } };
 
   const from = parseDrinkYear(drinkFrom, 'drinkFrom');
   if (!from.ok) return { error: { status: 400, message: from.error } };
@@ -499,7 +504,7 @@ async function addBottle(cellarDoc, wineDoc, fields = {}, req) {
     vintage: parsedVintage.value,
     // Kept even without a price — the add form lets users pick their currency
     // before (or without) entering a price; the schema default fills 'USD'.
-    currency: currency || 'USD',
+    currency: parsedCurrency.value || 'USD',
     bottleSize: normalizeBottleSize(bottleSize) || DEFAULT_SIZE,
     purchaseDate: purchaseDate || new Date(), // REST defaults this too
   };
@@ -781,6 +786,20 @@ async function updateBottleFields(bottle, fields, req) {
     // UNRATED bottle a scale-only change is harmless and allowed (the web
     // form always sends the scale).
     return { error: { status: 400, message: 'Send rating together with ratingScale when changing the rating scale' } };
+  }
+
+  // Currency: an alias is stored as its code ("EURO" → "EUR"), and a CHANGE to
+  // a code the app doesn't support is refused. The bottle's own code passes
+  // even when it isn't supported (an older import): the web form sends the
+  // whole form on every save.
+  if (fields.currency !== undefined && fields.currency !== null && fields.currency !== '') {
+    const own = normalizeCurrency(bottle.currency || '');
+    const sent = typeof fields.currency === 'string' ? normalizeCurrency(fields.currency) : null;
+    if (sent === null || sent !== own) {
+      const parsed = parseCurrency(fields.currency);
+      if (!parsed.ok) return { error: { status: 400, message: parsed.error } };
+    }
+    fields.currency = sent;
   }
 
   const apply = (key, value) => {

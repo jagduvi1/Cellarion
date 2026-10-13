@@ -1,5 +1,6 @@
 const https = require('https');
 const ExchangeRateSnapshot = require('../models/ExchangeRateSnapshot');
+const { normalizeCurrency } = require('../config/currencies');
 
 /**
  * Fetches current USD-based exchange rates from open.er-api.com.
@@ -88,6 +89,10 @@ async function getSnapshotsForDates(dates) {
  */
 function convertCurrency(amount, from, to, rates) {
   if (!amount || !from || !to) return null;
+  // An alias reads as its code ("EURO" → "EUR"), so a bottle stored before
+  // writes normalised it still converts (config/currencies).
+  from = normalizeCurrency(from);
+  to = normalizeCurrency(to);
   // Same-currency is a no-op even without a rates map — callers legitimately
   // pass rates=null when no snapshot exists, and USD→USD must still work.
   if (from === to) return amount;

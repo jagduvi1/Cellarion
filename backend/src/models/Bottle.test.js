@@ -25,6 +25,27 @@ function makeBottle(fields = {}) {
   });
 }
 
+// 2026-10-13: Chrome's page translation stored "EURO" for "EUR".
+describe('Bottle.currency', () => {
+  test('every write stores an alias as its code', () => {
+    expect(makeBottle({ currency: 'EURO' }).currency).toBe('EUR');
+    expect(makeBottle({ currency: ' euro ' }).currency).toBe('EUR');
+    const b = makeBottle({ currency: 'USD' });
+    b.currency = 'Euros';
+    expect(b.currency).toBe('EUR');
+  });
+
+  test('a code outside the supported list is kept (older imports) and still validates', () => {
+    const b = makeBottle({ currency: 'ils' });
+    expect(b.currency).toBe('ILS');
+    expect(b.validateSync()).toBeUndefined();
+  });
+
+  test('defaults to USD', () => {
+    expect(makeBottle().currency).toBe('USD');
+  });
+});
+
 describe('Bottle.occasion', () => {
   test('accepts an occasion note and trims surrounding whitespace', () => {
     const bottle = makeBottle({ occasion: '  Saving for my 50th birthday  ' });

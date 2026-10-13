@@ -20,4 +20,43 @@ const SUPPORTED_CURRENCIES = [
   'ZAR',
 ];
 
-module.exports = { SUPPORTED_CURRENCIES };
+// Spellings that mean a supported code but are not one. Chrome's page
+// translation turned the add form's "EUR" into "EURO" for members using the
+// English interface in Italian (2026-10-13), and a file can carry
+// a word or a symbol. Every bottle write stores, and every conversion reads,
+// the code they stand for. Mirrored in frontend/src/config/currencies.js.
+const CURRENCY_ALIASES = Object.freeze({ EURO: 'EUR', EUROS: 'EUR', '€': 'EUR' });
+
+/** A currency code as stored: trimmed, upper-case, an alias mapped to its code. Non-strings pass through. */
+function normalizeCurrency(code) {
+  if (typeof code !== 'string') return code;
+  const c = code.trim().toUpperCase();
+  return CURRENCY_ALIASES[c] || c;
+}
+
+/** Whether `code` (after normalizeCurrency) is one the app supports. */
+function isSupportedCurrency(code) {
+  return SUPPORTED_CURRENCIES.includes(normalizeCurrency(code));
+}
+
+/**
+ * A currency sent with a new bottle, or as a change: an alias is mapped to its
+ * code ("EURO" → "EUR"), and the result must be a supported code. Nothing sent
+ * → { ok, value: undefined } (the caller keeps its default).
+ */
+function parseCurrency(value) {
+  if (value === undefined || value === null || value === '') return { ok: true, value: undefined };
+  if (typeof value !== 'string') return { ok: false, error: 'Invalid currency' };
+  const code = normalizeCurrency(value);
+  if (!SUPPORTED_CURRENCIES.includes(code)) {
+    return { ok: false, error: `Unsupported currency. Allowed: ${SUPPORTED_CURRENCIES.join(', ')}` };
+  }
+  return { ok: true, value: code };
+}
+
+/** The stored spellings that mean `code`: the code itself and its aliases. */
+function currencySpellings(code) {
+  return [code, ...Object.keys(CURRENCY_ALIASES).filter((a) => CURRENCY_ALIASES[a] === code)];
+}
+
+module.exports = { SUPPORTED_CURRENCIES, CURRENCY_ALIASES, normalizeCurrency, isSupportedCurrency, parseCurrency, currencySpellings };

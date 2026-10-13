@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { updateBottle, setBottleDefaultImage, bulkUpdateBottles } from '../../api/bottles';
 import { toInputDate, validateDrinkWindowFields, DRINK_YEAR_MIN, DRINK_YEAR_MAX } from '../../utils/drinkStatus';
 import { API_URL } from '../../api/apiConstants';
-import { CURRENCIES } from '../../config/currencies';
+import { CURRENCIES, normalizeCurrency } from '../../config/currencies';
 import { BOTTLE_SIZES, bottleSizeLabel, normalizeBottleSize } from '../../config/bottleSizes';
 import RatingInput from '../RatingInput';
 import { isOnOrder, toMonthInput } from '../../utils/onOrder';
@@ -53,7 +53,7 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded, lotSiblingIds = 
     price:            bottle.price   || '',
     // If bottle has a price, keep stored currency (price and currency must stay in sync).
     // If no price yet, default to user's preference so they don't have to change it every time.
-    currency:         bottle.price ? (bottle.currency || 'USD') : (user?.preferences?.currency || bottle.currency || 'USD'),
+    currency:         normalizeCurrency(bottle.price ? (bottle.currency || 'USD') : (user?.preferences?.currency || bottle.currency || 'USD')),
     bottleSize:       normalizeBottleSize(bottle.bottleSize) || bottle.bottleSize || '750ml',
     purchaseDate:     toInputDate(bottle.purchaseDate),
     purchaseLocation: bottle.purchaseLocation || '',
@@ -166,7 +166,7 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded, lotSiblingIds = 
 
         <div className="form-group">
           <label>{t('common.currency')}</label>
-          <select value={form.currency} onChange={set('currency')}>
+          <select translate="no" value={form.currency} onChange={set('currency')}>
             {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>

@@ -1,4 +1,5 @@
 import { API_URL } from '../api/apiConstants';
+import { normalizeCurrency } from '../config/currencies';
 
 // Module-level frontend cache — avoids repeated API calls within the same session
 let ratesCache = null;
@@ -43,6 +44,9 @@ export async function fetchRates() {
  * Returns null if conversion is not possible or not needed (same currency).
  */
 export function convertAmount(amount, from, to, rates) {
+  // An alias reads as its code ("EURO" → "EUR"; config/currencies).
+  from = normalizeCurrency(from);
+  to = normalizeCurrency(to);
   if (!rates || !from || !to || from === to) return null;
   const fromRate = rates[from];
   const toRate   = rates[to];
@@ -57,6 +61,8 @@ export function convertAmount(amount, from, to, rates) {
  * This ensures that past values are never distorted by later exchange-rate movements.
  */
 export function convertAmountHistorical(amount, from, to, historicalRates, fallbackRates = null) {
+  from = normalizeCurrency(from);
+  to = normalizeCurrency(to);
   if (!from || !to || from === to) return null;
   const result = convertAmount(amount, from, to, historicalRates);
   if (result !== null) return result;

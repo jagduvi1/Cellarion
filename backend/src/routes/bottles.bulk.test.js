@@ -365,6 +365,24 @@ describe('POST /api/bottles/bulk — arrive (bottles on order)', () => {
     expect(updateBottleFields).not.toHaveBeenCalled();
   });
 
+  // 2026-10-13: Chrome's page translation sent "EURO" for "EUR".
+  test('update: an unsupported currency is refused up front; an alias reaches every bottle as its code', async () => {
+    Bottle.find.mockResolvedValue([{ _id: B(1), cellar: OWNED, status: 'active' }]);
+    let res = await postJson(app(), '/api/bottles/bulk', {
+      action: 'update', bottleIds: [B(1)], fields: { price: 9, currency: 'XYZ' },
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/Unsupported currency/);
+    expect(updateBottleFields).not.toHaveBeenCalled();
+
+    res = await postJson(app(), '/api/bottles/bulk', {
+      action: 'update', bottleIds: [B(1)], fields: { price: 9, currency: 'EURO' },
+    });
+    expect(res.status).toBe(200);
+    expect(updateBottleFields).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: B(1) }), { price: 9, currency: 'EUR' }, expect.anything());
+  });
+
   test('a bad arrival date fails the whole request before anything is touched', async () => {
     markArrived.mockResolvedValue({ error: { status: 400, message: 'arrivedAt must be a valid date and not in the future' } });
     Bottle.find.mockResolvedValue([{ _id: B(1), cellar: OWNED, status: 'ordered' }]);

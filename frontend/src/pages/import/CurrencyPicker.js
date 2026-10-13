@@ -7,7 +7,7 @@ export default function CurrencyPicker({ value, onChange, profileCurrency, anyRo
     <div className="import-currency-block">
       <label className="import-currency-label">
         <strong>{t('importBottles.currency.label')}</strong>
-        <select value={value} onChange={(e) => onChange(e.target.value)}>
+        <select translate="no" value={value} onChange={(e) => onChange(e.target.value)}>
           {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
       </label>

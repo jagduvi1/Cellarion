@@ -710,6 +710,7 @@ function Settings() {
             </p>
             <select
               id="currency-select"
+              translate="no"
               className="input settings-select"
               value={currency}
               onChange={e => setCurrency(e.target.value)}

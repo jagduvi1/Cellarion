@@ -86,6 +86,7 @@ function evalExpr(expr, doc) {
     case '$cond': return evalExpr(a[0], doc) ? evalExpr(a[1], doc) : evalExpr(a[2], doc);
     case '$or': return a.some((x) => evalExpr(x, doc));
     case '$eq': return evalExpr(a[0], doc) === evalExpr(a[1], doc);
+    case '$in': { const v = evalExpr(a[0], doc); return a[1].map((x) => evalExpr(x, doc)).includes(v); }
     case '$lte': return evalExpr(a[0], doc) <= evalExpr(a[1], doc);
     case '$type': { const v = evalExpr(a, doc); return v === null ? 'null' : v === undefined ? 'missing' : typeof v; }
     case '$add': return a.reduce((s, x) => s + evalExpr(x, doc), 0);
@@ -154,6 +155,12 @@ describe('convertedPriceExpr parity with convertCurrency', () => {
   });
   test('an unknown currency yields null (counted, not silently zeroed)', () => {
     expect(evalExpr(expr, { price: 100, currency: 'XXX' })).toBeNull();
+  });
+  // 2026-10-13: browser translation stored "EURO" for "EUR" on some bottles.
+  test('a row stored under an alias converts as its code', () => {
+    const asEuro = evalExpr(expr, { price: 100, currency: 'EURO' });
+    expect(asEuro).toBeCloseTo(evalExpr(expr, { price: 100, currency: 'EUR' }), 6);
+    expect(asEuro).toBeCloseTo(convertCurrency(100, 'EURO', 'SEK', rates), 6);
   });
   test('a missing price yields null', () => {
     expect(evalExpr(expr, { currency: 'EUR' })).toBeNull();

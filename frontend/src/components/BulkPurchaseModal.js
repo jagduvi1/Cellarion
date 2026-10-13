@@ -83,7 +83,7 @@ export default function BulkPurchaseModal({ bottleIds, onClose, onDone }) {
           </label>
           <label>
             <span>{t('common.currency', 'Currency')}</span>
-            <select value={form.currency} onChange={set('currency')} disabled={submitting}>
+            <select translate="no" value={form.currency} onChange={set('currency')} disabled={submitting}>
               {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </label>

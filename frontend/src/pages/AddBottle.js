@@ -1639,11 +1639,16 @@ function AddBottle() {
 
               <div className="form-group">
                 <label>{t('common.currency')}</label>
+                {/* Each option carries its code as value, and the list is
+                    never translated: browser page translation rewrote the
+                    option TEXT "EUR" as "EURO", and an option without a value
+                    sends its text (2026-10-13). */}
                 <select
+                  translate="no"
                   value={bottleData.currency}
                   onChange={(e) => setBottleData({ ...bottleData, currency: e.target.value })}
                 >
-                  {CURRENCIES.map(c => <option key={c}>{c}</option>)}
+                  {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
 

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { normalizeCurrency } = require('../config/currencies');
 
 // One entry per cellar the bottle has lived in, in chronological order. The
 // cellar name is snapshotted so the journey survives a later rename/delete of
@@ -55,6 +56,11 @@ const bottleSchema = new mongoose.Schema({
     default: 'USD',
     uppercase: true,
     trim: true,
+    // Every write path (form, MCP, import, restore) stores an alias as its
+    // code: "EURO" → "EUR" (config/currencies). No enum here — older imports
+    // hold codes outside the supported list, and a save of such a bottle must
+    // keep working; the routes refuse a NEW unsupported code instead.
+    set: normalizeCurrency,
     maxlength: [10, 'Currency code too long']
   },
   // Date ('YYYY-MM-DD') when the price was last entered or confirmed.

@@ -136,7 +136,7 @@ const { embedSinglePair } = require('./embeddingJob');
 const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
 const { enrichWineById } = require('./enrichmentJob');
 const { getOrCreateDailySnapshot } = require('../utils/exchangeRates');
-const { addBottle, updateBottleFields, removeBottleCascade } = require('./bottleOps');
+const { addBottle, updateBottleFields, removeBottleCascade, validateBottleCommitFields } = require('./bottleOps');
 
 const CELLAR = { _id: 'c1', user: 'owner1', name: 'Main Cellar' };
 const WINE = { _id: 'w1', name: 'Barolo' };
@@ -191,6 +191,18 @@ describe('addBottle (real execution)', () => {
 
     await addBottle(CELLAR, WINE, { price: 25, currency: 'EUR' }, REQ);
     expect(getOrCreateDailySnapshot).toHaveBeenCalledTimes(1); // awaited pre-save, REST parity
+  });
+
+  // 2026-10-13: Chrome's page translation made the add form send "EURO".
+  test('currency: an alias is stored as its code, an unsupported code is refused', async () => {
+    expect((await addBottle(CELLAR, WINE, { currency: 'EURO' }, REQ)).bottle.currency).toBe('EUR');
+    expect((await addBottle(CELLAR, WINE, { currency: 'eur' }, REQ)).bottle.currency).toBe('EUR');
+    expect((await addBottle(CELLAR, WINE, {}, REQ)).bottle.currency).toBe('USD');
+    expect((await addBottle(CELLAR, WINE, { currency: 'XYZ' }, REQ)).error.status).toBe(400);
+    expect((await addBottle(CELLAR, WINE, { currency: 42 }, REQ)).error.status).toBe(400);
+    // The route's pre-check (before a new wine is minted) applies the same rule.
+    expect(validateBottleCommitFields({ currency: 'XYZ' }).error.status).toBe(400);
+    expect(validateBottleCommitFields({ currency: 'EURO' }).error).toBeUndefined();
   });
 
   test('a scanned barcode is stored in its canonical form; a bad one never refuses the add', async () => {
@@ -267,6 +279,23 @@ describe('updateBottleFields (real execution)', () => {
     expect(res.changes).toEqual({ drinkFrom: 2027 });
     expect(res.prev).toEqual({ drinkFrom: null });
     expect(b.drinkWindowNotifiedStatus).toBeNull();
+  });
+
+  test('currency: an alias is stored as its code; only a CHANGE to an unsupported code is refused', async () => {
+    // Stored as "EURO" before writes normalised it: the form sends it back.
+    let b = liveBottle({ currency: 'EURO' });
+    let res = await updateBottleFields(b, { currency: 'EURO', price: 25 }, REQ);
+    expect(res.error).toBeUndefined();
+    expect(b.currency).toBe('EUR');
+    // An older import's code outside the list: the bottle keeps it on any save.
+    b = liveBottle({ currency: 'ILS' });
+    res = await updateBottleFields(b, { currency: 'ILS', notes: 'kept' }, REQ);
+    expect(res.error).toBeUndefined();
+    expect(b.currency).toBe('ILS');
+    expect(b.notes).toBe('kept');
+    // A change to an unsupported code, or a non-string, is refused.
+    expect((await updateBottleFields(liveBottle(), { currency: 'XYZ' }, REQ)).error.status).toBe(400);
+    expect((await updateBottleFields(liveBottle(), { currency: 7 }, REQ)).error.status).toBe(400);
   });
 
   test('a barcode added to a bottle already in the cellar is stored in canonical form; a bad one is refused', async () => {

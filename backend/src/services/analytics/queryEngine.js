@@ -43,6 +43,7 @@ const { resolveForVintage } = require('../registryDataOps');
 const { resolveField, opsForType } = require('./fieldCatalogue');
 const { validateValue } = require('../../utils/personalDataTypes');
 const { ANCHORS, COL, toNormalized, fromNormalized } = require('../../utils/ratingUtils');
+const { currencySpellings } = require('../../config/currencies');
 // A request can ask for its ratings in the viewer's own scale (Settings →
 // rating scale); stars stay the default and the sort order (the scales are
 // monotone, so it never changes). A rating filter carries the scale its
@@ -586,10 +587,16 @@ function convertedPriceExpr(valuePath, currencyPath, rates, target) {
   if (!rates || !rates[target]) return { expr: null, reason: 'no_rates' };
   const branches = Object.entries(rates)
     .filter(([, r]) => typeof r === 'number' && r > 0)
-    .map(([code, r]) => ({
-      case: { $eq: [`$${currencyPath}`, code] },
-      then: { $multiply: [`$${valuePath}`, rates[target] / r] },
-    }));
+    .map(([code, r]) => {
+      // A row stored under an alias ("EURO") converts as its code.
+      const spellings = currencySpellings(code);
+      return {
+        case: spellings.length === 1
+          ? { $eq: [`$${currencyPath}`, code] }
+          : { $in: [`$${currencyPath}`, spellings] },
+        then: { $multiply: [`$${valuePath}`, rates[target] / r] },
+      };
+    });
   return {
     expr: {
       $cond: [

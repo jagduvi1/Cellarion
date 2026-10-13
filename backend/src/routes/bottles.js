@@ -24,6 +24,7 @@ const { logAudit } = require('../services/audit');
 const { getSnapshotForDate } = require('../utils/exchangeRates');
 const { resolveRating } = require('../utils/ratingUtils');
 const { CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES, ORDERED_STATUS, WINE_POPULATE, WINE_POPULATE_LIST } = require('../config/constants');
+const { parseCurrency } = require('../config/currencies');
 const { gatherPriceWarnings } = require('../services/priceWarnings');
 const { getCurrentRelease } = require('../services/communityPrice');
 const { findLotSiblingIds, findLotSiblings } = require('../services/bottleLot');
@@ -484,7 +485,7 @@ router.get('/', async (req, res) => {
 // semantics to the old find-or-create route, so the UI dialog is unchanged).
 router.post('/', requireNonDemo, async (req, res) => {
   try {
-    const { cellar, wineDefinition, newWine, price, currency, personalData: customFields } = req.body;
+    const { cellar, wineDefinition, newWine, price, personalData: customFields } = req.body;
 
     if (!cellar || (!wineDefinition && !newWine)) {
       return res.status(400).json({ error: 'Cellar and a wine (wineDefinition or newWine) are required' });
@@ -619,7 +620,7 @@ router.post('/', requireNonDemo, async (req, res) => {
       try {
         priceWarnings = await gatherPriceWarnings({
           price,
-          currency: currency || 'USD',
+          currency: bottle.currency || 'USD', // as stored (an alias mapped)
           userId: cellarDoc.user,
           // wineDoc, not the request field — on the newWine path there is no
           // wineDefinition id in the body.
@@ -1477,6 +1478,13 @@ router.post('/bulk', async (req, res) => {
       if (fields.expectedArrival !== undefined) {
         const p = parseExpectedArrival(fields.expectedArrival);
         if (!p.ok) return res.status(400).json({ error: p.error });
+      }
+      // Same for a currency: an unsupported code is refused once, not skipped
+      // bottle by bottle; an alias is sent on as its code ("EURO" → "EUR").
+      if (fields.currency !== undefined) {
+        const c = parseCurrency(fields.currency);
+        if (!c.ok) return res.status(400).json({ error: c.error });
+        if (c.value) fields.currency = c.value;
       }
     } else {
       const { reason = 'drank', note, consumedAt } = req.body;
