@@ -19,7 +19,7 @@ jest.mock('../models/WineOwnerInquiry', () => ({
 }));
 // GET /:id resolves a bottle page the caller can open now (support ticket 2026-10-14).
 jest.mock('../models/Cellar', () => ({ find: jest.fn() }));
-jest.mock('../models/Bottle', () => ({ find: jest.fn() }));
+jest.mock('../models/Bottle', () => ({ find: jest.fn(), findOne: jest.fn() }));
 // requireAuth calls User.exists for demo tokens (must resolve truthy or the
 // demo test would 401 and prove nothing); the respond path reads the asker's
 // roles for the notification link.
@@ -99,6 +99,7 @@ describe('GET /:id', () => {
   test("the caller's question with a bottle page they can open now; never other recipients' answers", async () => {
     WineOwnerInquiry.findOne.mockReturnValue(findOneChain(INQUIRY_ROW));
     Cellar.find.mockReturnValue({ distinct: jest.fn().mockResolvedValue([oid('9')]) });
+    Bottle.findOne.mockReturnValue({ select: () => ({ lean: async () => null }) }); // the original bottle is gone
     Bottle.find.mockReturnValue({ select: () => ({ sort: () => ({ limit: () => ({ lean: async () => [{ _id: oid('7'), cellar: oid('9'), status: 'active' }] }) }) }) });
 
     const res = await one(I1);

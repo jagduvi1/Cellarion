@@ -16,7 +16,9 @@ vi.mock('react-router-dom', () => ({
   useNavigate: () => navigateMock,
   Link: ({ children, to }) => <a href={to}>{children}</a>,
 }));
-vi.mock('../components/bottle/OwnerInquiryCard', () => ({ default: ({ wineId }) => <div data-testid="card">{wineId}</div> }));
+vi.mock('../components/bottle/OwnerInquiryCard', () => ({
+  default: ({ wineId, inquiry, intro }) => <div data-testid="card">{wineId}|{inquiry?._id}|{intro || 'default-intro'}</div>,
+}));
 
 const CuratorQuestion = (await import('./CuratorQuestion')).default;
 const reply = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
@@ -31,19 +33,45 @@ test('a bottle they can open: straight on to it, replacing this page in history'
   expect(apiFetchMock).toHaveBeenCalledWith('/api/owner-inquiries/q1');
 });
 
-test('no bottle of the wine left: the question on its own page, still answerable', async () => {
+test('no bottle of the wine left: THIS question on its own page, still answerable, with words that fit', async () => {
   apiFetchMock.mockResolvedValue(reply(200, { inquiry: { ...INQUIRY, link: null } }));
   render(<CuratorQuestion />);
   expect(await screen.findByText('A curator’s question')).toBeInTheDocument();
   expect(screen.getByText('Pira — Barolo')).toBeInTheDocument();
-  expect(screen.getByTestId('card')).toHaveTextContent('w1');
+  // The card is handed the question the notification was about, and told the
+  // member has no bottle left (not "you own a bottle of it").
+  const card = screen.getByTestId('card');
+  expect(card).toHaveTextContent('w1|q1|');
+  expect(card).toHaveTextContent(/no bottle of this wine in Cellarion any more/);
   expect(navigateMock).not.toHaveBeenCalled();
 });
 
-test('answered and waiting for the curators: a thank-you instead of silence', async () => {
-  apiFetchMock.mockResolvedValue(reply(200, { inquiry: { ...INQUIRY, link: null, responded: true } }));
+test('a curator replied: the card shows the reply, with no "you can answer here"', async () => {
+  apiFetchMock.mockResolvedValue(reply(200, { inquiry: { ...INQUIRY, link: null, status: 'resolved', responded: true, myResponse: 'E. Pira', curatorReply: 'Thanks — fixed.' } }));
+  render(<CuratorQuestion />);
+  expect(await screen.findByTestId('card')).toHaveTextContent('w1|q1|default-intro');
+});
+
+test('answered and waiting for the curators: the question, the answer and a thank-you', async () => {
+  apiFetchMock.mockResolvedValue(reply(200, { inquiry: { ...INQUIRY, link: null, status: 'answered', responded: true, myResponse: 'The back label says E. Pira.' } }));
   render(<CuratorQuestion />);
   expect(await screen.findByText(/You answered this question/)).toBeInTheDocument();
+  expect(screen.getByText('What does the back label say?')).toBeInTheDocument();
+  expect(screen.getByText('The back label says E. Pira.')).toBeInTheDocument();
+  expect(screen.queryByTestId('card')).toBeNull();
+});
+
+test('closed by the curators without a reply: said so, not "they will take it from here"', async () => {
+  apiFetchMock.mockResolvedValue(reply(200, { inquiry: { ...INQUIRY, link: null, status: 'resolved', responded: true, myResponse: 'E. Pira' } }));
+  render(<CuratorQuestion />);
+  expect(await screen.findByText('The curators have closed this question. Thank you for your answer.')).toBeInTheDocument();
+});
+
+test('a link that is not an in-app path is never followed', async () => {
+  apiFetchMock.mockResolvedValue(reply(200, { inquiry: { ...INQUIRY, link: 'https://elsewhere.example/x' } }));
+  render(<CuratorQuestion />);
+  expect(await screen.findByTestId('card')).toBeInTheDocument();
+  expect(navigateMock).not.toHaveBeenCalled();
 });
 
 test('closed, or not addressed to them: said plainly, with a way back', async () => {

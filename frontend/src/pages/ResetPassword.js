@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import CellarionLogo from '../components/CellarionLogo';
 import './Login.css';
 
 function ResetPassword() {
+  // Labels tied to their inputs, so screen readers announce them (pre-release audit 2026-10-14).
+  const passwordId = useId();
+  const confirmId = useId();
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -89,8 +92,9 @@ function ResetPassword() {
           <form onSubmit={handleSubmit}>
             {errorMessage && <div className="alert alert-error">{errorMessage}</div>}
             <div className="form-group">
-              <label>{t('auth.newPassword')}</label>
+              <label htmlFor={passwordId}>{t('auth.newPassword')}</label>
               <input
+                id={passwordId}
                 type="password"
                 autoComplete="new-password"
                 value={password}
@@ -100,8 +104,9 @@ function ResetPassword() {
               />
             </div>
             <div className="form-group">
-              <label>{t('auth.confirmPassword')}</label>
+              <label htmlFor={confirmId}>{t('auth.confirmPassword')}</label>
               <input
+                id={confirmId}
                 type="password"
                 autoComplete="new-password"
                 value={confirm}

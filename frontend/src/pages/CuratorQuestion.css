@@ -14,8 +14,21 @@
   overflow-wrap: anywhere;
 }
 
-.curator-question-hint,
 .curator-question-answered {
   color: var(--color-text-muted);
   margin: 0 0 1rem;
+}
+
+.curator-question-quote {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  overflow-wrap: anywhere;
+}
+
+.curator-question-label {
+  margin: 0 0 0.25rem;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
 }

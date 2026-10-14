@@ -142,3 +142,13 @@ test('a terminal 409 (already answered / closed) hides the form — no retry tha
   expect(screen.queryByText('Send answer')).not.toBeInTheDocument();
   expect(screen.queryByPlaceholderText(/The label says/)).not.toBeInTheDocument();
 });
+
+// Support ticket 2026-10-14: the question page hands the card the question the
+// notification was about, with its own intro when the member has no bottle left.
+test('a given question is shown as is, with no lookup, and its own intro line', async () => {
+  const apiFetch = vi.fn();
+  render(<OwnerInquiryCard apiFetch={apiFetch} wineId={WINE_ID} inquiry={INQUIRY} intro="You have no bottle of this wine any more." />);
+  expect(screen.getByText(INQUIRY.question)).toBeInTheDocument();
+  expect(screen.getByText('You have no bottle of this wine any more.')).toBeInTheDocument();
+  expect(getMyOwnerInquiries).not.toHaveBeenCalled();
+});

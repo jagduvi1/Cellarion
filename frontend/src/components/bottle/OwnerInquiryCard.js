@@ -20,9 +20,12 @@ import { getMyOwnerInquiries, respondToOwnerInquiry } from '../../api/ownerInqui
  * them. Replies are transient by design: the server stops returning them 30
  * days after resolution.
  */
-function OwnerInquiryCard({ apiFetch, wineId }) {
+function OwnerInquiryCard({ apiFetch, wineId, inquiry: given = null, intro = null }) {
   const { t } = useTranslation();
-  const [inquiry, setInquiry] = useState(null);
+  // `inquiry` given (the question page, support ticket 2026-10-14): show THAT
+  // question, not whichever one the wine has, and skip the lookup. `intro`
+  // replaces the "you own a bottle of it" line when the member has none left.
+  const [inquiry, setInquiry] = useState(given);
   const [answer, setAnswer] = useState('');
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
@@ -32,7 +35,7 @@ function OwnerInquiryCard({ apiFetch, wineId }) {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (!wineId) return undefined;
+    if (given || !wineId) return undefined;
     let cancelled = false;
     (async () => {
       try {
@@ -50,7 +53,7 @@ function OwnerInquiryCard({ apiFetch, wineId }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [apiFetch, wineId]);
+  }, [apiFetch, wineId, given]);
 
   if (!inquiry) return null;
 
@@ -117,7 +120,7 @@ function OwnerInquiryCard({ apiFetch, wineId }) {
         {t('bottleDetail.ownerInquiry.title', 'A curator has a question about this wine')}
       </h2>
       <p style={{ margin: '0 0 0.6rem', color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
-        {t('bottleDetail.ownerInquiry.intro', 'You own a bottle of it, so you can check what research cannot. Answering is optional; only registry curators see your answer.')}
+        {intro || t('bottleDetail.ownerInquiry.intro', 'You own a bottle of it, so you can check what research cannot. Answering is optional; only registry curators see your answer.')}
       </p>
       <blockquote style={quoteStyle}>
         {inquiry.question}

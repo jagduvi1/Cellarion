@@ -210,6 +210,7 @@ function Login() {
                 <input
                   id={forgotEmailId}
                   type="email"
+                  autoComplete="email"
                   value={forgotEmail}
                   onChange={(e) => setForgotEmail(e.target.value)}
                   required

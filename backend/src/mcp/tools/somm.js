@@ -2484,7 +2484,7 @@ registerTool({
 
     const label = [result.wine.producer, result.wine.name].filter(Boolean).join(' — ');
     return ok(
-      `Inquiry sent to ${result.recipientCount} bottle owner(s) of ${label}${result.fallbackUsed ? ' (no active bottles — owners of consumed bottles were asked)' : ''}`,
+      `Inquiry sent to ${result.recipientCount} bottle owner(s) of ${label}${result.fallbackUsed ? ' (no bottles still in a cellar — owners of consumed bottles were asked)' : ''}`,
       {
         inquiry_id: result.inquiry._id,
         wine_id: result.wine._id,

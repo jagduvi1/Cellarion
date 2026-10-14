@@ -12,9 +12,12 @@
  *
  * Which: a notification of those two types whose link is a bottle link, for
  * which an inquiry exists with a recipient row of the SAME user and the SAME
- * bottle (the row the notification was written from). When several inquiries
- * match, the newest one created at or before the notification. Anything that
- * does not match exactly is left alone. Only `link` changes.
+ * bottle (the row the notification was written from). A question notification
+ * goes to the newest inquiry CREATED at or before it; a curator's-reply
+ * notification to the newest one RESOLVED at or before it — a second question
+ * about the same wine can be created before the first is resolved
+ * (pre-release audit 2026-10-14). Anything that does not match exactly is left
+ * alone. Only `link` changes. An --apply run writes one summary audit row.
  *
  *   node src/scripts/relink-owner-inquiry-notifications.js          # dry run: counts only
  *   node src/scripts/relink-owner-inquiry-notifications.js --apply  # rewrite the links
@@ -22,6 +25,7 @@
 const mongoose = require('mongoose');
 const Notification = require('../models/Notification');
 const WineOwnerInquiry = require('../models/WineOwnerInquiry');
+const AuditLog = require('../models/AuditLog');
 const { questionLink } = require('../services/ownerInquiryOps');
 
 const TYPES = ['owner_inquiry', 'owner_inquiry_resolved'];
@@ -33,23 +37,37 @@ const BOTTLE_LINK = /^\/cellars\/([a-f0-9]{24})\/bottles\/([a-f0-9]{24})$/;
  */
 async function relinkOwnerInquiryNotifications({ apply = false } = {}) {
   const notes = await Notification.find({ type: { $in: TYPES }, link: { $regex: '^/cellars/' } })
-    .select('user link createdAt')
+    .select('user type link createdAt')
     .lean();
   const stats = { scanned: notes.length, matched: 0, relinked: 0, unmatched: 0 };
   for (const n of notes) {
     const m = BOTTLE_LINK.exec(n.link || '');
     if (!m) { stats.unmatched += 1; continue; }
     const bottleId = new mongoose.Types.ObjectId(m[2]);
+    // A reply belongs to the inquiry resolved when it was sent; a question to
+    // the one created when it was sent.
+    const when = n.type === 'owner_inquiry_resolved' ? 'resolvedAt' : 'createdAt';
     const inquiry = await WineOwnerInquiry.findOne({
       recipients: { $elemMatch: { user: n.user, bottle: bottleId } },
-      ...(n.createdAt ? { createdAt: { $lte: n.createdAt } } : {}),
-    }).sort({ createdAt: -1 }).select('_id').lean();
+      ...(n.type === 'owner_inquiry_resolved' ? { status: 'resolved' } : {}),
+      ...(n.createdAt ? { [when]: { $lte: n.createdAt } } : {}),
+    }).sort({ [when]: -1 }).select('_id').lean();
     if (!inquiry) { stats.unmatched += 1; continue; }
     stats.matched += 1;
     if (apply) {
       const r = await Notification.updateOne({ _id: n._id, link: n.link }, { $set: { link: questionLink(inquiry._id) } });
       stats.relinked += r.modifiedCount || 0;
     }
+  }
+  // One summary row, awaited (logAudit is fire-and-forget and the caller
+  // disconnects right after). Counts only — no user or bottle ids.
+  if (apply) {
+    await AuditLog.create({
+      actor: { userId: null, role: 'system' },
+      action: 'admin.notifications.relinkOwnerInquiry',
+      resource: { type: 'notification' },
+      detail: { ...stats, script: 'relink-owner-inquiry-notifications' },
+    });
   }
   return stats;
 }

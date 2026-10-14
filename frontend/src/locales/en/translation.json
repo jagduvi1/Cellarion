@@ -5754,7 +5754,8 @@
   },
   "curatorQuestion": {
     "title": "A curator’s question",
-    "noBottle": "You have no bottle of this wine in Cellarion any more. If you remember the label, or still have a photo of it, you can answer here.",
+    "noBottle": "You have no bottle of this wine in Cellarion any more. If you remember the label, or still have a photo of it, you can answer here. Answering is optional; only registry curators see your answer.",
+    "resolved": "The curators have closed this question. Thank you for your answer.",
     "answered": "You answered this question. Thank you — the curators will take it from here.",
     "goneTitle": "This question is closed",
     "gone": "The curators have closed this question, or it was not addressed to you. Nothing is needed from you.",
@@ -5763,6 +5764,7 @@
   },
   "pickLists": {
     "whichBottles": "Which bottles?",
+    "chooseTitle": "Choose the bottles to add",
     "title": "Pick lists",
     "betaNote": "Pick lists are in early access.",
     "intro": "A pick list is the bottles you are about to fetch — for a dinner, a tasting, or what to drink next — with the cellar, rack and slot of each, in the order you walk past them. To add bottles, tap Select in your cellar, pick them and choose Pick list, or use ⋮ on a bottle's page.",

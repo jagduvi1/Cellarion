@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getOwnerInquiry } from '../api/ownerInquiries';
+import internalPath from '../utils/internalPath';
 import OwnerInquiryCard from '../components/bottle/OwnerInquiryCard';
 import './CuratorQuestion.css';
 
@@ -13,8 +14,10 @@ import './CuratorQuestion.css';
  * about, and that link went dead once the bottle or its cellar was deleted.
  * Now it opens this page, which asks the server for a bottle page of the wine
  * the member can open NOW and goes there (the question card renders on it).
- * With no bottle of the wine left, the question shows here on its own, still
- * answerable — the card is keyed by the wine, not the bottle.
+ * With no bottle of the wine left, the question shows here on its own: THIS
+ * question (the card is handed it, not left to look one up by wine), with
+ * words that fit its state — still open, answered and waiting, replied to,
+ * or closed without a reply (pre-release audit 2026-10-14).
  */
 export default function CuratorQuestion() {
   const { id } = useParams();
@@ -35,7 +38,9 @@ export default function CuratorQuestion() {
         const data = await res.json().catch(() => ({}));
         if (!active) return;
         if (!res.ok || !data.inquiry) { setState({ status: 'error' }); return; }
-        if (data.inquiry.link) { navigate(data.inquiry.link, { replace: true }); return; }
+        // The link is data: only ever an in-app path (as the bell does).
+        const to = internalPath(data.inquiry.link);
+        if (to) { navigate(to, { replace: true }); return; }
         setState({ status: 'standalone', inquiry: data.inquiry });
       } catch {
         if (active) setState({ status: 'error' });
@@ -71,18 +76,36 @@ export default function CuratorQuestion() {
 
   const { inquiry } = state;
   const wineLabel = inquiry.wine ? [inquiry.wine.producer, inquiry.wine.name].filter(Boolean).join(' — ') : '';
+  const replied = inquiry.responded && !!inquiry.curatorReply;
+  const answerable = !inquiry.responded && (inquiry.status === 'open' || inquiry.status === 'answered');
   return (
     <div className="curator-question-page">
       <h1>{t('curatorQuestion.title', 'A curator’s question')}</h1>
       {wineLabel && <p className="curator-question-wine"><strong>{wineLabel}</strong></p>}
-      <p className="curator-question-hint">
-        {t('curatorQuestion.noBottle', 'You have no bottle of this wine in Cellarion any more. If you remember the label, or still have a photo of it, you can answer here.')}
-      </p>
-      {inquiry.wine?._id && <OwnerInquiryCard apiFetch={apiFetch} wineId={inquiry.wine._id} />}
-      {inquiry.responded && !inquiry.curatorReply && (
-        <p className="curator-question-answered" role="status">
-          {t('curatorQuestion.answered', 'You answered this question. Thank you — the curators will take it from here.')}
-        </p>
+      {(answerable || replied) ? (
+        <OwnerInquiryCard
+          apiFetch={apiFetch}
+          wineId={inquiry.wine?._id}
+          inquiry={inquiry}
+          intro={answerable
+            ? t('curatorQuestion.noBottle', 'You have no bottle of this wine in Cellarion any more. If you remember the label, or still have a photo of it, you can answer here. Answering is optional; only registry curators see your answer.')
+            : null}
+        />
+      ) : (
+        <>
+          <blockquote className="curator-question-quote">{inquiry.question}</blockquote>
+          {inquiry.myResponse && (
+            <>
+              <p className="curator-question-label">{t('bottleDetail.ownerInquiry.yourAnswer', 'Your answer')}</p>
+              <blockquote className="curator-question-quote">{inquiry.myResponse}</blockquote>
+            </>
+          )}
+          <p className="curator-question-answered" role="status">
+            {inquiry.status === 'resolved'
+              ? t('curatorQuestion.resolved', 'The curators have closed this question. Thank you for your answer.')
+              : t('curatorQuestion.answered', 'You answered this question. Thank you — the curators will take it from here.')}
+          </p>
+        </>
       )}
     </div>
   );

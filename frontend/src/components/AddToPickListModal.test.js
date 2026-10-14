@@ -70,7 +70,7 @@ test('with no lists yet, it creates one with the bottles', async () => {
 describe('choosing bottles (the vintage page)', () => {
   const CHOICES = [
     { _id: 'b1', rackInfo: { rackName: 'Left wall', position: 3 } },
-    { _id: 'b2', rackInfo: { rackName: 'Left wall', position: 7 }, purchaseLocation: 'Systembolaget' },
+    { _id: 'b2', rackInfo: { rackName: 'Left wall', position: 7 }, purchaseLocation: 'Systembolaget', price: 380, currency: 'SEK' },
     { _id: 'b3', rackInfo: null },
   ];
   const listsThenAdd = () => apiFetchMock.mockImplementation(async (url, opts) => {
@@ -87,7 +87,7 @@ describe('choosing bottles (the vintage page)', () => {
     expect(boxes.map((b) => b.checked)).toEqual([true, false, false]);
     // Each row is named by where the bottle sits.
     expect(screen.getByText('Left wall · slot 7')).toBeInTheDocument();
-    expect(screen.getByText('Systembolaget')).toBeInTheDocument();
+    expect(screen.getByText('Systembolaget · 380 SEK')).toBeInTheDocument();
     expect(screen.getByText('Not in a rack')).toBeInTheDocument();
 
     fireEvent.click(boxes[2]);
@@ -102,6 +102,7 @@ describe('choosing bottles (the vintage page)', () => {
     await screen.findByRole('option', { name: 'Saturday dinner' });
     fireEvent.click(screen.getAllByRole('checkbox')[0]);
     expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+    expect(screen.getByText('Choose the bottles to add')).toBeInTheDocument();
   });
 
   test('one bottle: nothing to choose, it is the one added', async () => {

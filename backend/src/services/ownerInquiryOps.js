@@ -145,14 +145,18 @@ async function liveBottleLink(userId, wineId, preferBottleId) {
   if (!wineId || !isValidId(String(wineId))) return null;
   const cellarIds = await Cellar.find({ $or: [{ user: userId }, { 'members.user': userId }], deletedAt: null }).distinct('_id');
   if (!cellarIds.length) return null;
+  // The original bottle by id: found however many bottles of the wine there
+  // are, not only among the newest of them (pre-release audit 2026-10-14).
+  const preferred = preferBottleId && isValidId(String(preferBottleId))
+    ? await Bottle.findOne({ _id: preferBottleId, wineDefinition: wineId, cellar: { $in: cellarIds } }).select('cellar').lean()
+    : null;
+  if (preferred) return `/cellars/${preferred.cellar}/bottles/${preferred._id}`;
   const bottles = await Bottle.find({ wineDefinition: wineId, cellar: { $in: cellarIds } })
     .select('cellar status')
     .sort({ createdAt: -1 })
     .limit(50)
     .lean();
-  const pick = bottles.find((b) => preferBottleId && String(b._id) === String(preferBottleId))
-    || bottles.find((b) => !NOT_IN_CELLAR_STATUSES.includes(b.status))
-    || bottles[0];
+  const pick = bottles.find((b) => !NOT_IN_CELLAR_STATUSES.includes(b.status)) || bottles[0];
   return pick ? `/cellars/${pick.cellar}/bottles/${pick._id}` : null;
 }
 
@@ -288,8 +292,9 @@ async function respondToOwnerInquiry({ inquiryId, userId, response, via = 'rest'
  * entry per user, capped at RECIPIENT_CAP. Owners with ACTIVE bottles are the
  * primary audience (they can walk to the shelf and read the label); when the
  * wine has none, owners of consumed bottles are the fallback — they at least
- * held the bottle once. `cellar` rides along only to build the notification
- * deep link; it is not stored on the inquiry.
+ * held the bottle once. Only bottles in a cellar that still exists count, on
+ * both passes. `cellar` is returned for callers' information only; it is not
+ * stored on the inquiry, and notifications link to the question, not to it.
  */
 async function buildRecipients(wineId) {
   const wineOid = new mongoose.Types.ObjectId(String(wineId));

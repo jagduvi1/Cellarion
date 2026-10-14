@@ -23,7 +23,7 @@ jest.mock('../models/WineOwnerInquiry', () => ({
   findOne: jest.fn(),
 }));
 jest.mock('../models/WineDefinition', () => ({ findById: jest.fn() }));
-jest.mock('../models/Bottle', () => ({ aggregate: jest.fn(), find: jest.fn() }));
+jest.mock('../models/Bottle', () => ({ aggregate: jest.fn(), find: jest.fn(), findOne: jest.fn() }));
 jest.mock('../models/Cellar', () => ({ find: jest.fn() }));
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('./notifications', () => ({
@@ -203,7 +203,7 @@ describe('createOwnerInquiry', () => {
     expect(created.askedVia).toBe('rest');
     expect(created.recipients).toHaveLength(2);
     expect(created.recipients[0].notifiedAt).toBeInstanceOf(Date);
-    // The recipient's cellar is used ONLY for the link — never stored.
+    // The recipient's cellar is never stored on the inquiry.
     expect(created.recipients[0].cellar).toBeUndefined();
 
     // One batch call, one item per recipient, linked to the QUESTION, which
@@ -603,20 +603,23 @@ describe('owner side', () => {
     const bottles = (rows) => Bottle.find.mockReturnValue({
       select: () => ({ sort: () => ({ limit: () => ({ lean: async () => rows }) }) }),
     });
+    // The original bottle, looked up by id (null = gone or out of reach).
+    const original = (doc) => Bottle.findOne.mockReturnValue({ select: () => ({ lean: async () => doc }) });
+    beforeEach(() => original(null));
 
-    test('the recipient bottle while it is reachable; looks only in live cellars they own or share', async () => {
+    test('the recipient bottle while it is reachable, by id; looks only in live cellars they own or share', async () => {
       cellars([C1, C2]);
-      bottles([
-        { _id: oid('8'), cellar: C2, status: 'active' },
-        { _id: oid('5'), cellar: C1, status: 'drank' },
-      ]);
+      original({ _id: oid('5'), cellar: C1 });
       expect(await liveBottleLink(ME, WINE, oid('5'))).toBe(`/cellars/${C1}/bottles/${oid('5')}`);
       expect(Cellar.find).toHaveBeenCalledWith({ $or: [{ user: ME }, { 'members.user': ME }], deletedAt: null });
-      expect(Bottle.find).toHaveBeenCalledWith({ wineDefinition: WINE, cellar: { $in: [C1, C2] } });
+      // By id, so it is found however many bottles of the wine there are.
+      expect(Bottle.findOne).toHaveBeenCalledWith({ _id: oid('5'), wineDefinition: WINE, cellar: { $in: [C1, C2] } });
+      expect(Bottle.find).not.toHaveBeenCalled();
     });
 
     test('the original bottle gone: a bottle still in a cellar first, else any (a drunk bottle shows the card too)', async () => {
       cellars([C1]);
+      original(null);
       bottles([
         { _id: oid('7'), cellar: C1, status: 'drank' },
         { _id: oid('8'), cellar: C1, status: 'active' },

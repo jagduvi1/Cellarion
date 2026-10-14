@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getPickLists, createPickList, addToPickList } from '../api/pickLists';
 import Modal from './Modal';
 import { slotLabel } from '../utils/slotLabel';
+import { bottleSizeLabel, DEFAULT_SIZE } from '../config/bottleSizes';
 import './AddToPickListModal.css';
 
 const NEW_LIST = '__new__';
@@ -105,7 +106,14 @@ export default function AddToPickListModal({ bottleIds: fixedIds = [], choices, 
   }
 
   return (
-    <Modal title={t('pickLists.addTitle', { count, defaultValue: count === 1 ? 'Add 1 bottle to a pick list' : `Add ${count} bottles to a pick list` })} onClose={onClose} showClose trapFocus>
+    <Modal
+      title={choosing && count === 0
+        ? t('pickLists.chooseTitle', 'Choose the bottles to add')
+        : t('pickLists.addTitle', { count, defaultValue: count === 1 ? 'Add 1 bottle to a pick list' : `Add ${count} bottles to a pick list` })}
+      onClose={onClose}
+      showClose
+      trapFocus
+    >
       <p>{t('pickLists.addIntro', 'A pick list shows where each bottle sits — cellar, rack and slot — so you can fetch them in one go.')}</p>
       <form onSubmit={submit} className="bulk-form">
         {choosing && choices.length > 1 && (
@@ -114,9 +122,13 @@ export default function AddToPickListModal({ bottleIds: fixedIds = [], choices, 
             <ul className="pick-choices__list">
               {choices.map((b) => {
                 const id = String(b._id);
+                // What tells two bottles apart when their slot does not:
+                // size, purchase and price (pre-release audit 2026-10-14).
                 const bought = [
+                  b.bottleSize && b.bottleSize !== DEFAULT_SIZE ? bottleSizeLabel(b.bottleSize, t) : null,
                   b.purchaseDate ? new Date(b.purchaseDate).toLocaleDateString(i18n?.language, { year: 'numeric', month: 'short' }) : null,
                   b.purchaseLocation || null,
+                  b.price != null && b.price !== '' ? `${b.price} ${b.currency || ''}`.trim() : null,
                 ].filter(Boolean).join(' · ');
                 return (
                   <li key={id}>
