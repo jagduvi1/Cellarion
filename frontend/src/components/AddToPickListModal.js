@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getPickLists, createPickList, addToPickList } from '../api/pickLists';
 import Modal from './Modal';
+import { slotLabel } from '../utils/slotLabel';
+import './AddToPickListModal.css';
 
 const NEW_LIST = '__new__';
 
@@ -13,10 +15,19 @@ const NEW_LIST = '__new__';
  * user's pick lists, or a list created right here. Bottles already on it, or
  * no longer in the cellar, come back as skipped. The done screen links to the
  * list, where each bottle shows its cellar, rack and slot.
+ *
+ * `choices` instead of `bottleIds` (the vintage page — beta feedback
+ * 2026-10-14): the bottles of one wine and year to choose from, each named by
+ * its rack slot like "Drink a bottle" does. The first is ticked; with a single
+ * bottle there is nothing to choose.
  */
-export default function AddToPickListModal({ bottleIds, onClose, onDone }) {
-  const { t } = useTranslation();
+export default function AddToPickListModal({ bottleIds: fixedIds = [], choices, onClose, onDone }) {
+  const { t, i18n } = useTranslation();
   const { apiFetch } = useAuth();
+  const choosing = Array.isArray(choices) && choices.length > 0;
+  const [chosen, setChosen] = useState(() => (choosing ? [String(choices[0]._id)] : []));
+  // In the bottles' own order, whatever order they were ticked in.
+  const bottleIds = choosing ? choices.map((b) => String(b._id)).filter((id) => chosen.includes(id)) : fixedIds;
   const count = bottleIds.length;
   const [lists, setLists] = useState(null); // null while loading
   const [target, setTarget] = useState('');
@@ -51,7 +62,7 @@ export default function AddToPickListModal({ bottleIds, onClose, onDone }) {
     return () => { active = false; };
   }, [apiFetch]);
 
-  const canSubmit = target && (target !== NEW_LIST || newName.trim());
+  const canSubmit = count > 0 && target && (target !== NEW_LIST || newName.trim());
 
   const submit = async (e) => {
     e.preventDefault();
@@ -97,6 +108,33 @@ export default function AddToPickListModal({ bottleIds, onClose, onDone }) {
     <Modal title={t('pickLists.addTitle', { count, defaultValue: count === 1 ? 'Add 1 bottle to a pick list' : `Add ${count} bottles to a pick list` })} onClose={onClose} showClose trapFocus>
       <p>{t('pickLists.addIntro', 'A pick list shows where each bottle sits — cellar, rack and slot — so you can fetch them in one go.')}</p>
       <form onSubmit={submit} className="bulk-form">
+        {choosing && choices.length > 1 && (
+          <fieldset className="pick-choices" disabled={submitting}>
+            <legend>{t('pickLists.whichBottles', 'Which bottles?')}</legend>
+            <ul className="pick-choices__list">
+              {choices.map((b) => {
+                const id = String(b._id);
+                const bought = [
+                  b.purchaseDate ? new Date(b.purchaseDate).toLocaleDateString(i18n?.language, { year: 'numeric', month: 'short' }) : null,
+                  b.purchaseLocation || null,
+                ].filter(Boolean).join(' · ');
+                return (
+                  <li key={id}>
+                    <label className="pick-choices__row">
+                      <input
+                        type="checkbox"
+                        checked={chosen.includes(id)}
+                        onChange={(e) => setChosen((prev) => (e.target.checked ? [...prev, id] : prev.filter((x) => x !== id)))}
+                      />
+                      <span className="pick-choices__slot">{slotLabel(b.rackInfo, t)}</span>
+                      {bought && <span className="pick-choices__meta">{bought}</span>}
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+          </fieldset>
+        )}
         {lists === null ? (
           <p className="loading">{t('common.loading', 'Loading…')}</p>
         ) : (

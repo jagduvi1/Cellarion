@@ -63,6 +63,8 @@ function makeCaches(initial = {}, network = null) {
 class FakeResponse {
   constructor(body) { this.body = body; this.status = 200; this.ok = true; }
   clone() { return this; }
+  // Response.error(): a network-error response (type "error", status 0).
+  static error() { const r = new FakeResponse(null); r.status = 0; r.ok = false; r.type = 'error'; return r; }
 }
 
 function loadWorker({ caches, network, build = null }) {
@@ -319,6 +321,15 @@ describe('service worker offline shell', () => {
     const { caches, handlers } = setup({ build: null });
     expect(await send(handlers, 'offline-enable')).toEqual({ type: 'offline-shell', ok: false });
     expect([...caches.store.keys()].some((n) => n.startsWith('cellarion-shell-'))).toBe(false);
+  });
+
+  // Support ticket 2026-10-14: a page URL fetched outside a navigation, on a
+  // network blip, logged "Uncaught (in promise) TypeError: Failed to fetch".
+  it('nothing cached and the network down: a network-error response, not a rejection', async () => {
+    const network = vi.fn(async () => { throw new TypeError('Failed to fetch'); });
+    const handlers = loadWorker({ caches: makeCaches({}, network), network });
+    const res = await dispatchFetch(handlers, { url: 'https://cellarion.test/cellars/abc/bottles/def', method: 'GET', headers: new Headers(), mode: 'cors' });
+    expect(res).toMatchObject({ type: 'error', status: 0, ok: false });
   });
 
   it('offline, a stored bundle is served without an unhandled rejection', async () => {

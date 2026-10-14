@@ -92,6 +92,7 @@ function ResetPassword() {
               <label>{t('auth.newPassword')}</label>
               <input
                 type="password"
+                autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -102,6 +103,7 @@ function ResetPassword() {
               <label>{t('auth.confirmPassword')}</label>
               <input
                 type="password"
+                autoComplete="new-password"
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
                 required

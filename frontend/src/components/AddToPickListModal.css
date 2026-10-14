@@ -1,0 +1,53 @@
+/* "Which bottles?" in the pick-list dialog, from the vintage page (beta feedback 2026-10-14). */
+.pick-choices {
+  border: 0;
+  margin: 0 0 1rem;
+  padding: 0;
+  min-width: 0;
+}
+
+.pick-choices legend {
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+  padding: 0;
+}
+
+.pick-choices__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.pick-choices__row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 0.6rem;
+  align-items: center;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.pick-choices__row input {
+  grid-row: span 2;
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.pick-choices__slot {
+  overflow-wrap: anywhere;
+}
+
+.pick-choices__meta {
+  grid-column: 2;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}

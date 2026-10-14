@@ -13,9 +13,13 @@ process.env.JWT_SECRET = 'test-secret';
 
 jest.mock('../models/WineOwnerInquiry', () => ({
   find: jest.fn(),
+  findOne: jest.fn(),
   findById: jest.fn(),
   findOneAndUpdate: jest.fn(),
 }));
+// GET /:id resolves a bottle page the caller can open now (support ticket 2026-10-14).
+jest.mock('../models/Cellar', () => ({ find: jest.fn() }));
+jest.mock('../models/Bottle', () => ({ find: jest.fn() }));
 // requireAuth calls User.exists for demo tokens (must resolve truthy or the
 // demo test would 401 and prove nothing); the respond path reads the asker's
 // roles for the notification link.
@@ -84,6 +88,38 @@ const INQUIRY_ROW = {
   createdAt: '2026-08-01T00:00:00.000Z',
   expiresAt: '2026-10-01T00:00:00.000Z',
 };
+
+// Support ticket 2026-10-14: what a curator-question notification opens.
+describe('GET /:id', () => {
+  const Cellar = require('../models/Cellar');
+  const Bottle = require('../models/Bottle');
+  const one = (id, token = tokenFor(ME)) => fetch(`${baseUrl}/api/owner-inquiries/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+  const findOneChain = (doc) => ({ populate: () => ({ lean: async () => doc }) });
+
+  test("the caller's question with a bottle page they can open now; never other recipients' answers", async () => {
+    WineOwnerInquiry.findOne.mockReturnValue(findOneChain(INQUIRY_ROW));
+    Cellar.find.mockReturnValue({ distinct: jest.fn().mockResolvedValue([oid('9')]) });
+    Bottle.find.mockReturnValue({ select: () => ({ sort: () => ({ limit: () => ({ lean: async () => [{ _id: oid('7'), cellar: oid('9'), status: 'active' }] }) }) }) });
+
+    const res = await one(I1);
+    expect(res.status).toBe(200);
+    const { inquiry } = await res.json();
+    expect(inquiry).toMatchObject({ _id: I1, status: 'open', link: `/cellars/${oid('9')}/bottles/${oid('7')}` });
+    expect(JSON.stringify(inquiry)).not.toContain('Secret answer from another owner');
+    expect(WineOwnerInquiry.findOne.mock.calls[0][0]).toMatchObject({ _id: I1, 'recipients.user': ME });
+  });
+
+  test("someone else's or a missing question is a plain 404; /mine still answers the list", async () => {
+    WineOwnerInquiry.findOne.mockReturnValue(findOneChain(null));
+    const res = await one(I1);
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'Inquiry not found' });
+
+    WineOwnerInquiry.find.mockReturnValue(findChain([]));
+    expect((await mine()).status).toBe(200);
+    expect(WineOwnerInquiry.find).toHaveBeenCalled();
+  });
+});
 
 describe('GET /mine', () => {
   test('returns ONLY the caller recipient view — no other recipients, identities or answers', async () => {

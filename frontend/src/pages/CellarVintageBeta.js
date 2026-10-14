@@ -3,6 +3,7 @@ import { lazy } from '../utils/lazyWithReload';
 import { useParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import { useFeature } from '../utils/featureFlags';
 import { getCellarVintage } from '../api/cellars';
 import { getBottle } from '../api/bottles';
 import { lookupMaturityProfile, lookupPriceHistory } from '../api/somm';
@@ -39,6 +40,7 @@ import './CellarVintage.css';
 import './CellarVintageBeta.css';
 
 const DrinkOneModal = lazy(() => import('../components/DrinkOneModal'));
+const AddToPickListModal = lazy(() => import('../components/AddToPickListModal'));
 const EditVintageModal = lazy(() => import('../components/EditVintageModal'));
 const AddMoreBottlesModal = lazy(() => import('../components/AddMoreBottlesModal'));
 const ReportWineModal = lazy(() => import('../components/ReportWineModal'));
@@ -86,7 +88,7 @@ function CellarVintageBeta() {
   const [error, setError] = useState(null);
   const [profile, setProfile] = useState(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
-  const [modal, setModal] = useState(null); // 'drink' | 'edit' | 'add' | 'report' | 'reportWine' | 'recommend' | 'barcode'
+  const [modal, setModal] = useState(null); // 'drink' | 'pickList' | 'edit' | 'add' | 'report' | 'reportWine' | 'recommend' | 'barcode'
   const [priceHistory, setPriceHistory] = useState(null);
   const [rates, setRates] = useState(null);
   const [galleryEmpty, setGalleryEmpty] = useState(false);
@@ -172,6 +174,13 @@ function CellarVintageBeta() {
   const wine = data?.wine || null;
   const cellar = data?.cellar || null;
   const canEdit = !!cellar && ['owner', 'editor'].includes(cellar.userRole);
+  // Early access (flag pickLists): put bottles of this wine and year on a
+  // pick list from here, not only from each bottle's own page (beta feedback
+  // 2026-10-14). Same rule as the bottle page: an owner or editor, bottles
+  // still in the cellar.
+  const pickListsOn = useFeature('pickLists');
+  const pickable = bottles.filter((b) => b.status === 'active');
+  const canPickList = pickListsOn && canEdit && pickable.length > 0;
   const canSuggest = !!wine && !user?.isDemo && wine.draft !== true;
   const canAdd = canEdit && !!wine && !user?.isDemo && (bottles.length > 0 || !!data?.historyBottleId);
   const first = bottles[0] || null;
@@ -310,6 +319,11 @@ function CellarVintageBeta() {
   const pick = (next) => () => { setMoreOpen(null); setModal(next); };
   const moreItems = (
     <>
+      {canPickList && (
+        <button type="button" className="bd-overflow-item" role="menuitem" onClick={pick('pickList')}>
+          <span aria-hidden="true">📍</span> {t('pickLists.addAction', 'Add to pick list')}
+        </button>
+      )}
       {canPhoto && (
         <button type="button" className="bd-overflow-item" role="menuitem" onClick={() => { setMoreOpen(null); setPhotoOpen(true); }}>
           <span aria-hidden="true">🖼️</span> {t('cellarVintageBeta.addPhoto', 'Add a photo of this vintage')}
@@ -342,7 +356,7 @@ function CellarVintageBeta() {
       )}
     </>
   );
-  const hasMore = canPhoto || canBarcode || canSuggest || canReport || !!wine?.slug;
+  const hasMore = canPickList || canPhoto || canBarcode || canSuggest || canReport || !!wine?.slug;
   const canDrink = canEdit && bottles.length > 0;
   const canEditVintage = canEdit && bottles.length > 0;
   const hasActions = canDrink || canEditVintage || canAdd || hasMore;
@@ -712,6 +726,9 @@ function CellarVintageBeta() {
       <Suspense fallback={null}>
         {modal === 'drink' && (
           <DrinkOneModal bottles={bottles} wineName={title} onClose={() => setModal(null)} onDone={handleDrunk} />
+        )}
+        {modal === 'pickList' && (
+          <AddToPickListModal choices={pickable} onClose={() => setModal(null)} onDone={() => setModal(null)} />
         )}
         {modal === 'edit' && (
           <EditVintageModal

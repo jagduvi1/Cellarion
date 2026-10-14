@@ -380,7 +380,10 @@ self.addEventListener('fetch', (event) => {
         networkFetch.catch(() => {}); // offline: the cached copy stands
         return cached;
       }
-      return networkFetch;
+      // Nothing cached and the network failed: a plain network error for the
+      // page, not an "Uncaught (in promise) TypeError: Failed to fetch" in the
+      // console (support ticket 2026-10-14 — it read like the app had broken).
+      return networkFetch.catch(() => Response.error());
     })
   );
 });

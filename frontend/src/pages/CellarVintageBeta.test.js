@@ -32,6 +32,9 @@ vi.mock('../components/EditVintageModal', () => ({
 vi.mock('../components/AddMoreBottlesModal', () => ({
   default: ({ bottle }) => <div data-testid="add-more">{bottle._id}:{bottle.vintage}</div>,
 }));
+vi.mock('../components/AddToPickListModal', () => ({
+  default: ({ choices }) => <div data-testid="pick-list">{choices.map((b) => b._id).join(',')}</div>,
+}));
 vi.mock('../components/ReportWineModal', () => ({ default: ({ defaultReason }) => <div data-testid="report">{String(defaultReason)}</div> }));
 vi.mock('../components/RecommendWineModal', () => ({ default: ({ wineId, wineName }) => <div data-testid="recommend">{wineId}:{wineName}</div> }));
 vi.mock('../components/BarcodeScanModal', () => ({
@@ -81,6 +84,7 @@ const renderPage = (at = '/cellars/c1/vintages/w1/2015') => render(
   </MemoryRouter>,
 );
 const { default: CellarVintageBeta } = await import('./CellarVintageBeta');
+const { __setFeatureFlagsForTest } = await import('../utils/featureFlags');
 
 beforeEach(() => {
   page = {
@@ -202,6 +206,41 @@ test('"Suggest a fix to the wine" opens the record\'s suggest mode', async () =>
   fireEvent.click(screen.getAllByLabelText('cellarDetail.moreActions')[0]);
   fireEvent.click(screen.getByText('cellarVintageBeta.editWine'));
   await waitFor(() => expect(screen.getByTestId('wine-record')).toHaveTextContent('1'));
+});
+
+// Beta feedback 2026-10-14: the bottle page is one level deeper, so the
+// vintage page offers "Add to pick list" too, with the bottles to choose from.
+test('early access: "Add to pick list" in the ⋮ menu offers the bottles of this vintage', async () => {
+  __setFeatureFlagsForTest([{ key: 'pickLists', state: 'beta' }]);
+  try {
+    renderPage();
+    await screen.findByText('cellarVintageBeta.wineTitle');
+    fireEvent.click(screen.getAllByLabelText('cellarDetail.moreActions')[0]);
+    fireEvent.click(screen.getByRole('menuitem', { name: /pickLists.addAction/ }));
+    expect(await screen.findByTestId('pick-list')).toHaveTextContent('b1,b2,b3');
+  } finally {
+    __setFeatureFlagsForTest([]);
+  }
+});
+
+test('no "Add to pick list" without the flag, or for a viewer of a shared cellar', async () => {
+  const { unmount } = renderPage();
+  await screen.findByText('cellarVintageBeta.wineTitle');
+  fireEvent.click(screen.getAllByLabelText('cellarDetail.moreActions')[0]);
+  expect(screen.queryByRole('menuitem', { name: /pickLists.addAction/ })).toBeNull();
+  unmount();
+
+  __setFeatureFlagsForTest([{ key: 'pickLists', state: 'beta' }]);
+  try {
+    page.cellar.userRole = 'viewer';
+    renderPage();
+    await screen.findByText('cellarVintageBeta.wineTitle');
+    const more = screen.queryAllByLabelText('cellarDetail.moreActions');
+    if (more.length) fireEvent.click(more[0]);
+    expect(screen.queryByRole('menuitem', { name: /pickLists.addAction/ })).toBeNull();
+  } finally {
+    __setFeatureFlagsForTest([]);
+  }
 });
 
 test('the page says what it is: the vintage, with how many bottles and where', async () => {

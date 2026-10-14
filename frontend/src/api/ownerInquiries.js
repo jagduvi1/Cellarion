@@ -11,6 +11,12 @@ import { JSON_HEADERS } from './apiConstants';
 export const getMyOwnerInquiries = (apiFetch, wineId = null) =>
   apiFetch(`/api/owner-inquiries/mine${wineId ? `?wine=${wineId}` : ''}`);
 
+/**
+ * One inquiry addressed to the caller, with `link`: a bottle page of the wine
+ * they can open now, or null (what a curator-question notification opens).
+ */
+export const getOwnerInquiry = (apiFetch, id) => apiFetch(`/api/owner-inquiries/${id}`);
+
 /** One immutable answer per recipient — the server 409s a second attempt. */
 export const respondToOwnerInquiry = (apiFetch, id, response) =>
   apiFetch(`/api/owner-inquiries/${id}/respond`, {

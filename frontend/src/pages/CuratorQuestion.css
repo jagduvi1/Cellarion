@@ -1,0 +1,21 @@
+/* What a curator-question notification opens (support ticket 2026-10-14). */
+.curator-question-page {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+.curator-question-page h1 {
+  margin: 0 0 0.5rem;
+}
+
+.curator-question-wine {
+  margin: 0 0 0.5rem;
+  overflow-wrap: anywhere;
+}
+
+.curator-question-hint,
+.curator-question-answered {
+  color: var(--color-text-muted);
+  margin: 0 0 1rem;
+}

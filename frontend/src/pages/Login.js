@@ -370,9 +370,12 @@ function Login() {
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label htmlFor={usernameId}>{mode === 'login' ? t('auth.usernameOrEmail') : t('auth.usernameLabel')}</label>
+            {/* Autocomplete hints let password managers fill and save the
+                right fields (Chrome asks for them; support ticket 2026-10-14). */}
             <input
               id={usernameId}
               type="text"
+              autoComplete="username"
               value={formData.username}
               onChange={(e) => setFormData({ ...formData, username: e.target.value })}
               required
@@ -385,6 +388,7 @@ function Login() {
               <input
                 id={emailId}
                 type="email"
+                autoComplete="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 required
@@ -396,6 +400,7 @@ function Login() {
             <input
               id={passwordId}
               type="password"
+              autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               required

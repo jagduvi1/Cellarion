@@ -77,6 +77,7 @@ const Wishlist             = lazy(() => import('./pages/Wishlist'));
 const AddToWishlist        = lazy(() => import('./pages/AddToWishlist'));
 const PickLists            = lazy(() => import('./pages/PickLists'));
 const PickList             = lazy(() => import('./pages/PickList'));
+const CuratorQuestion      = lazy(() => import('./pages/CuratorQuestion'));
 const Unsubscribed         = lazy(() => import('./pages/Unsubscribed'));
 const Recommendations      = lazy(() => import('./pages/Recommendations'));
 const Journal              = lazy(() => import('./pages/Journal'));
@@ -294,6 +295,17 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <Layout><PickLists /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        {/* A curator question from a notification: goes on to a bottle of the
+            wine the member can open now, or shows the question on its own
+            (support ticket 2026-10-14). */}
+        <Route
+          path="/questions/:id"
+          element={
+            <ProtectedRoute>
+              <Layout><CuratorQuestion /></Layout>
             </ProtectedRoute>
           }
         />

@@ -64,3 +64,53 @@ test('with no lists yet, it creates one with the bottles', async () => {
   expect(JSON.parse(opts.body)).toEqual({ name: 'Drink next', bottleIds: ['b1'] });
   expect(await screen.findByRole('link', { name: 'Open the pick list' })).toHaveAttribute('href', '/pick-lists/pl9');
 });
+
+// Beta feedback 2026-10-14: from the vintage page the bottles of one wine and
+// year are offered to choose from, named by their rack slot.
+describe('choosing bottles (the vintage page)', () => {
+  const CHOICES = [
+    { _id: 'b1', rackInfo: { rackName: 'Left wall', position: 3 } },
+    { _id: 'b2', rackInfo: { rackName: 'Left wall', position: 7 }, purchaseLocation: 'Systembolaget' },
+    { _id: 'b3', rackInfo: null },
+  ];
+  const listsThenAdd = () => apiFetchMock.mockImplementation(async (url, opts) => {
+    if (!opts) return json({ lists: [{ id: 'pl1', name: 'Saturday dinner', count: 0, picked: 0 }] });
+    return json({ list: { id: 'pl1', name: 'Saturday dinner' }, added: 2, skipped: [] });
+  });
+
+  test('the first bottle is ticked; the ones ticked go, in the bottles\' order', async () => {
+    listsThenAdd();
+    render(<AddToPickListModal choices={CHOICES} onClose={vi.fn()} onDone={vi.fn()} />);
+    await screen.findByRole('option', { name: 'Saturday dinner' });
+    expect(screen.getByText('Which bottles?')).toBeInTheDocument();
+    const boxes = screen.getAllByRole('checkbox');
+    expect(boxes.map((b) => b.checked)).toEqual([true, false, false]);
+    // Each row is named by where the bottle sits.
+    expect(screen.getByText('Left wall · slot 7')).toBeInTheDocument();
+    expect(screen.getByText('Systembolaget')).toBeInTheDocument();
+    expect(screen.getByText('Not in a rack')).toBeInTheDocument();
+
+    fireEvent.click(boxes[2]);
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    await screen.findByText('Added to the pick list');
+    expect(JSON.parse(apiFetchMock.mock.calls[1][1].body)).toEqual({ bottleIds: ['b1', 'b3'] });
+  });
+
+  test('nothing ticked: Add is off', async () => {
+    listsThenAdd();
+    render(<AddToPickListModal choices={CHOICES} onClose={vi.fn()} onDone={vi.fn()} />);
+    await screen.findByRole('option', { name: 'Saturday dinner' });
+    fireEvent.click(screen.getAllByRole('checkbox')[0]);
+    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+  });
+
+  test('one bottle: nothing to choose, it is the one added', async () => {
+    listsThenAdd();
+    render(<AddToPickListModal choices={[CHOICES[0]]} onClose={vi.fn()} onDone={vi.fn()} />);
+    await screen.findByRole('option', { name: 'Saturday dinner' });
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    await screen.findByText('Added to the pick list');
+    expect(JSON.parse(apiFetchMock.mock.calls[1][1].body)).toEqual({ bottleIds: ['b1'] });
+  });
+});
