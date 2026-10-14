@@ -410,20 +410,51 @@ describe('cabinet rack geometry', () => {
 
     // Support forum 2026-10-13: a slim fridge lays one bottle across the front
     // of each shelf and fills its bottom bin with bottles lying across.
-    test('shelfSideways is drawing only: capacity and numbering never change', () => {
-      const atelier = {
-        shelfRows: [2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
-        shelfCols: [4, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 4],
-        shelfAlternate: [false, false, false, false, false, false, false, false, false, false, false, false, false, false, true],
-        twoDeep: false,
-      };
-      const lies = ['front', 'front', 'front', 'front', 'front', 'front', 'front', '', 'front', 'front', 'front', 'front', 'front', 'front', 'all'];
-      expect(totalSlots('cabinet', 15, 6, atelier)).toBe(86);
-      expect(totalSlots('cabinet', 15, 6, { ...atelier, shelfSideways: lies })).toBe(86);
-      expect(cabinetRows(15, 6, { ...atelier, shelfSideways: lies })).toEqual(cabinetRows(15, 6, atelier));
-      expect(cabinetBays(15, 6, { ...atelier, shelfSideways: lies }).map((b) => b.sideways)).toEqual(lies);
+    test('shelfSideways is drawing only on one-row shelves, in a bin and two deep', () => {
+      const oneRow = { shelfRows: [1, 1, 1, 2], shelfCols: [5, 5, 6, 4], shelfAlternate: [false, false, false, true], twoDeep: false };
+      const lies = ['front', '', 'front', 'all'];
+      expect(cabinetRows(4, 6, { ...oneRow, shelfSideways: lies })).toEqual(cabinetRows(4, 6, oneRow));
+      expect(cabinetBays(4, 6, { ...oneRow, shelfSideways: lies }).map((b) => b.sideways)).toEqual(lies);
+      // Two deep the bottle across lies in front of both rows: nothing is recounted.
+      const deep = { shelfRows: [2, 4], shelfAlternate: [true, false], twoDeep: true };
+      expect(cabinetRows(2, 6, { ...deep, shelfSideways: ['front', 'front'] })).toEqual(cabinetRows(2, 6, deep));
       // Missing or unknown entries read as front to back.
       expect(cabinetShelfSideways(3, { shelfSideways: ['all', 'sideways'] })).toEqual(['all', '', '']);
+    });
+
+    // Support forum 2026-10-14: on a stacked shelf of a one-deep fridge the
+    // bottle across the front sits BESIDE the first row's bottles, and the
+    // level above rests on the ones behind it: 1 across + 4, 3 on top. It
+    // used to take one of the row's places and stack 4 on 3.
+    test('one bottle across a stacked one-deep shelf: the levels above count from the bottles behind it', () => {
+      const front = { twoDeep: false, sideways: 'front' };
+      expect([1, 2, 3].map((r) => cabinetRowWidth(r, 5, { ...front, alternate: true }))).toEqual([5, 3, 4]);
+      expect([1, 2, 3].map((r) => cabinetRowWidth(r, 5, { ...front, alternate: false }))).toEqual([5, 4, 4]);
+      expect(cabinetBayCapacity(2, 5, { ...front, alternate: true })).toBe(8);
+      expect(cabinetBayCapacity(2, 5, { ...front, alternate: false })).toBe(9);
+      expect(cabinetRowWidth(2, 1, { ...front, alternate: true })).toBe(1); // never 0 wide
+      // Two deep, and the other lies, are counted as before.
+      expect([1, 2, 3, 4].map((r) => cabinetRowWidth(r, 6, { twoDeep: true, alternate: true, sideways: 'front' }))).toEqual([6, 5, 5, 6]);
+      expect([1, 2].map((r) => cabinetRowWidth(r, 5, { twoDeep: false, alternate: true, sideways: 'all' }))).toEqual([5, 4]);
+
+      // The Kingsbottle Atelier Duo with the maker's top shelf: still 86, and
+      // the numbering runs on through the shorter level.
+      const atelier = {
+        shelfRows: [2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
+        shelfCols: [5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 4],
+        shelfAlternate: [true, false, false, false, false, false, false, false, false, false, false, false, false, false, true],
+        shelfSideways: ['front', 'front', 'front', 'front', 'front', 'front', 'front', '', 'front', 'front', 'front', 'front', 'front', 'front', 'all'],
+        twoDeep: false,
+      };
+      expect(totalSlots('cabinet', 15, 6, atelier)).toBe(86);
+      expect(cabinetRows(15, 6, atelier).slice(0, 3)).toEqual([
+        { shelfIndex: 0, row: 1, start: 0, width: 5 },
+        { shelfIndex: 0, row: 2, start: 5, width: 3 },
+        { shelfIndex: 1, row: 1, start: 8, width: 5 },
+      ]);
+      expect(cabinetPosition({ shelfIndex: 0, row: 2, slot: 3, cols: 6, ...atelier })).toBe(8);
+      expect(cabinetPosition({ shelfIndex: 0, row: 2, slot: 4, cols: 6, ...atelier })).toBeNull();
+      expect(cabinetPosition({ shelfIndex: 1, row: 1, slot: 1, cols: 6, ...atelier })).toBe(9);
     });
 
     // Release audit 2026-10-13: a hand-edited export's non-list value was

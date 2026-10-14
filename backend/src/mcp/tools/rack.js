@@ -74,7 +74,7 @@ registerTool({
     'GrandCru 5001: 5 shelves 6 across, shelf_rows [8,8,8,8,8], shelf_cols [4,6,6,6,4], shelf_alternate ' +
     '[false,true,true,true,false] = 196); shelf_sideways sets how each shelf\'s bottles lie — "front" = the first bottle of the ' +
     'shelf\'s bottom row lies across the front of the others (a slim fridge), "all" = every bottle lies across (a bottom bin), ' +
-    '"" = front to back (drawing only). Confirm name and shape first; group is the optional room or appliance label ' +
+    '"" = front to back (drawing only, except "front" on a stacked one-deep shelf — see shelf_sideways). Confirm name and shape first; group is the optional room or appliance label ' +
     'the rack belongs to ("Basement", "Kitchen fridge") — reuse a group name list_racks already shows so racks ' +
     'section together. For other rack shapes, modular racks, zones or disabled slots, use the web app. Reversible ' +
     'via undo_last while the rack is still empty.',
@@ -97,7 +97,7 @@ registerTool({
     shelf_alternate: z.array(z.boolean()).min(1).max(20).optional()
       .describe('Cabinet only: whether each shelf alternates (see alternate), top shelf first, one entry per shelf (must equal rows). Omit when every shelf follows the cabinet-wide alternate flag.'),
     shelf_sideways: z.array(z.enum(['', 'front', 'all'])).min(1).max(20).optional()
-      .describe('Cabinet only: how each shelf\'s bottles lie, top shelf first, one entry per shelf (must equal rows): "" front to back, "front" = the first bottle of the bottom row lies across the front of the others, "all" = every bottle lies across (a bottom bin). Drawing only — capacity and numbering are unchanged. Omit when every shelf lies front to back.'),
+      .describe('Cabinet only: how each shelf\'s bottles lie, top shelf first, one entry per shelf (must equal rows): "" front to back, "front" = the first bottle of the bottom row lies across the front of the others, "all" = every bottle lies across (a bottom bin). Drawing only, except on a stacked shelf (shelf_rows > 1) of a one-deep cabinet: there "front" leaves one bottle fewer on each level above the first, as they rest on the bottles behind the one across (shelf_cols 5 + shelf_alternate true + "front" = 1 across + 4, with 3 on top). Omit when every shelf lies front to back.'),
     group: z.string().max(40).optional().describe('Optional group label (room or appliance), e.g. "Basement"'),
     idempotency_key: z.string().max(100).optional(),
   },

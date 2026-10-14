@@ -7,6 +7,7 @@ import {
   computeLayout, computeModularLayout, CELL_SIZE,
   validDoubleHeightRows, DOUBLE_ROW_HEADROOM, cabinetShelfRows, cabinetBays, cabinetHeadToTail,
   cabinetRowWidth, cabinetBayUnits, cabinetNeckForward,
+  cabinetBayOpts, cabinetRestsBehindAcross, cabinetRowOffset,
 } from './rackLayouts';
 
 // ── Rack physical dimensions (metres) ────────────────────
@@ -277,7 +278,7 @@ export function computeCabinetSlotPositions(cab, width, depth) {
     if (bay.sideways === 'all') {
       for (let r = 1; r <= bay.rows; r++) {
         const level = cab.twoDeep ? Math.ceil(r / 2) : r;
-        levelCount[level] = (levelCount[level] || 0) + cabinetRowWidth(r, cols, { twoDeep: cab.twoDeep, alternate: bay.alternate });
+        levelCount[level] = (levelCount[level] || 0) + cabinetRowWidth(r, cols, cabinetBayOpts(bay, cab.twoDeep));
       }
     }
     const levelUsed = {};
@@ -289,10 +290,17 @@ export function computeCabinetSlotPositions(cab, width, depth) {
       // roomConstants.getCabinetGeometry): the shelf is half a bottle wider
       // than its bottle count, exactly like a real fridge's staggered shelf.
       // Alternating rows: the narrow rows are the offset ones instead.
-      const rowWidth = cabinetRowWidth(r, cols, { twoDeep: cab.twoDeep, alternate: bay.alternate });
-      const nudge = bay.alternate
-        ? (rowWidth < cols ? cW / 2 : 0)
-        : (nest && cols > 1 && level % 2 === 0 ? cW / 2 : 0);
+      const rowWidth = cabinetRowWidth(r, cols, cabinetBayOpts(bay, cab.twoDeep));
+      // A level resting behind a bottle across the front (a stacked one-deep
+      // shelf) lies over the bottles behind that one, which sit half a bottle
+      // in from the first row's cells: there the slot is drawn and clicked
+      // where it lies (rackLayouts.cabinetRowOffset).
+      const behind = cabinetRestsBehindAcross(bay, r, cab.twoDeep);
+      const nudge = behind
+        ? cabinetRowOffset(bay, r, { twoDeep: cab.twoDeep, stagger: cab.stagger }) * cW - cW / 2
+        : (bay.alternate
+          ? (rowWidth < cols ? cW / 2 : 0)
+          : (nest && cols > 1 && level % 2 === 0 ? cW / 2 : 0));
       // The ordinary cabinet's click target for each slot of this row.
       const targetX = (c) => x0 + c * cW + nudge;
       const targetZ = isBack ? backEmptyZ : frontEmptyZ;
@@ -341,7 +349,7 @@ export function computeCabinetSlotPositions(cab, width, depth) {
         positions.push({
           position: pos++,
           x: targetX(c), y, z: targetZ,
-          ...(frontSide ? { bottleX: targetX(c) - cW / 2 } : {}),
+          ...(frontSide && !behind ? { bottleX: targetX(c) - cW / 2 } : {}),
           bottleZ: isBack ? backBottleZ : (neckForward ? neckForwardZ : frontBottleZ) - push,
           isBack,
           flipNeck: !isBack && !neckForward,

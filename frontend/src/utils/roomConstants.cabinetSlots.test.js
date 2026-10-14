@@ -36,12 +36,27 @@ describe('computeCabinetSlotPositions — bottles lying sideways', () => {
     for (const tc of [
       { ...base, shelfSideways: ['front', 'all'] },
       { shelfRows: [4, 2], twoDeep: true, shelfSideways: ['all', 'front'] },
-      { shelfRows: [2], twoDeep: false, headToTail: true, shelfSideways: ['front'] },
+      { shelfRows: [1, 1], twoDeep: false, headToTail: true, shelfSideways: ['front', ''] },
     ]) {
       const plain = { ...tc };
       delete plain.shelfSideways;
       const rows = tc.shelfRows.length;
       expect(targets(slotsOf(tc, rows, 6).slots)).toEqual(targets(slotsOf(plain, rows, 6).slots));
+    }
+  });
+
+  // Forum 2026-10-14: a stacked one-deep shelf with a bottle across the front
+  // is a different shape (one bottle fewer on each level above), so there the
+  // levels above are drawn AND clicked where they lie: never on each other,
+  // never on the first row.
+  it("'front' on a stacked one-deep shelf: the upper level's targets are where its bottles lie, apart", () => {
+    const { slots } = slotsOf({ shelfRows: [3], shelfCols: [5], shelfAlternate: [false], twoDeep: false, headToTail: true, shelfSideways: ['front'] }, 1, 6);
+    expect(slots.map((s) => s.position)).toEqual(Array.from({ length: 13 }, (_, i) => i + 1)); // 5 + 4 + 4
+    for (const s of slots.slice(5)) expect(s.bottleX).toBeUndefined();
+    const byLevel = (y) => slots.filter((s) => s.y === y).map((s) => s.x);
+    for (const y of new Set(slots.map((s) => s.y))) {
+      const xs = byLevel(y).sort((a, b) => a - b);
+      for (let i = 1; i < xs.length; i++) expect(xs[i] - xs[i - 1]).toBeGreaterThan(0.01);
     }
   });
 
@@ -67,14 +82,25 @@ describe('computeCabinetSlotPositions — bottles lying sideways', () => {
     expect(slots.slice(5)).toEqual(plain.slice(5));
   });
 
-  it("'front' with stacked levels: every front row moves half a bottle, so the levels still nest", () => {
-    const tc = { shelfRows: [2], shelfCols: [4], twoDeep: false, stagger: true };
-    const plain = slotsOf(tc, 1, 4).slots;
-    const { slots } = slotsOf({ ...tc, shelfSideways: ['front'] }, 1, 4);
-    const half = (plain[1].x - plain[0].x) / 2;
-    // Level 2 (positions 5..8) shifts like level 1, staying in its grooves.
-    for (let i = 4; i < 8; i++) expect(slots[i].bottleX).toBeCloseTo(plain[i].x - half);
-    for (let i = 1; i < 4; i++) expect(slots[i].bottleX).toBeCloseTo(plain[i].x - half);
+  // Forum 2026-10-14: the Atelier Duo's top shelf, 1 across + 4 with 3 in the
+  // grooves on top. It used to stack 4 on the 3 beside the bottle across.
+  it("'front' on a stacked one-deep shelf: the level above lies in the grooves of the bottles behind the one across", () => {
+    const tc = { shelfRows: [2], shelfCols: [5], shelfAlternate: [true], twoDeep: false, stagger: true, shelfSideways: ['front'] };
+    const { slots } = slotsOf(tc, 1, 5);
+    expect(slots).toHaveLength(8);
+    expect(slots[0].sideways).toBe(true);
+    const behind = slots.slice(1, 5).map((s) => s.bottleX);
+    const top = slots.slice(5).map((s) => s.x);
+    expect(top).toHaveLength(3);
+    top.forEach((x, i) => expect(x).toBeCloseTo((behind[i] + behind[i + 1]) / 2));
+    expect(slots[5].y).toBeGreaterThan(slots[1].y);
+    // Without alternating rows the level above holds as many as the row
+    // behind the bottle across, staggered half a bottle over it.
+    const equal = slotsOf({ ...tc, shelfAlternate: [false] }, 1, 5).slots;
+    expect(equal).toHaveLength(9);
+    const eqBehind = equal.slice(1, 5).map((s) => s.bottleX);
+    const half = (eqBehind[1] - eqBehind[0]) / 2;
+    equal.slice(5).forEach((s, i) => expect(s.x).toBeCloseTo(eqBehind[i] + half));
   });
 
   it("'front' two deep: the back rows stay put and the front rows interleave with them", () => {

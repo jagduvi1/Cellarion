@@ -148,7 +148,7 @@ function totalSlots(type, rows, cols, typeConfig) {
       // in turn (cabinetRowWidth). See cabinetPosition for the contract.
       const { twoDeep } = cabinetOptions(typeConfig);
       return cabinetBays(rows, cols, typeConfig)
-        .reduce((sum, bay) => sum + cabinetBayCapacity(bay.rows, bay.cols, { twoDeep, alternate: bay.alternate }), 0);
+        .reduce((sum, bay) => sum + cabinetBayCapacity(bay.rows, bay.cols, cabinetBayOpts(bay, twoDeep)), 0);
     }
 
     default: {
@@ -247,8 +247,10 @@ const CABINET_SIDEWAYS = ['', 'front', 'all'];
 
 /**
  * Per-shelf lie list fitted to `rows` (typeConfig.shelfSideways; a missing or
- * unknown entry means front to back). Drawing only — no capacity or position
- * reads it. Tolerant on READ like cabinetShelfRows.
+ * unknown entry means front to back). Mostly drawing: the one place it counts
+ * is a stacked shelf of a one-deep cabinet with a bottle across the front,
+ * whose levels above the first hold one bottle fewer (cabinetRowWidth).
+ * Tolerant on READ like cabinetShelfRows.
  */
 function cabinetShelfSideways(rows, typeConfig) {
   const n = Number.isFinite(rows) && rows > 0 ? Math.min(20, Math.floor(rows)) : 0;
@@ -262,7 +264,7 @@ function cabinetShelfSideways(rows, typeConfig) {
  * Every bay of a cabinet, top first, with its resolved shape:
  * { rows, cols, alternate, sideways } — the row count, the bay's own width
  * (≤ the cabinet's), whether its rows alternate, and how its bottles lie
- * (drawing only). The one place the per-shelf lists are combined;
+ * (see cabinetShelfSideways). The one place the per-shelf lists are combined;
  * everything else reads bays.
  */
 function cabinetBays(rows, cols, typeConfig) {
@@ -283,21 +285,34 @@ function cabinetBays(rows, cols, typeConfig) {
  * the wooden shelf of a Liebherr GrandCru (support ticket 2026-09-15).
  * Without twoDeep the levels simply alternate cols, cols−1, cols, …
  * A single-bottle-wide cabinet has nothing to alternate (never 0 wide).
+ *
+ * One bottle across the front (sideways 'front') of a ONE-deep shelf: the
+ * first row is that bottle plus cols−1 lying front to back behind it, and the
+ * levels above rest on those, so they are counted from cols−1. A slim
+ * fridge's stacked shelf: 1 across + 4, with 3 in the grooves on top (forum
+ * 2026-10-14; it used to stack 4 on 3). Two deep is left as it was: there the
+ * front and back rows share the level, and the bottle across lies in front
+ * of both.
  */
-function cabinetRowWidth(row, cols, { twoDeep = true, alternate = false } = {}) {
-  if (!alternate) return cols;
+function cabinetRowWidth(row, cols, { twoDeep = true, alternate = false, sideways = '' } = {}) {
+  const base = sideways === 'front' && !twoDeep && row > 1 ? Math.max(1, cols - 1) : cols;
+  if (!alternate) return base;
   const level = twoDeep ? Math.ceil(row / 2) : row;
   const isBack = twoDeep && row % 2 === 0;
   const wide = (level % 2 === 1) !== isBack;
-  return wide ? cols : Math.max(1, cols - 1);
+  return wide ? base : Math.max(1, base - 1);
 }
 
-/** Bottles a bay of `rowCount` rows holds — cols × rowCount unless alternating. */
+/** Bottles a bay of `rowCount` rows holds: the sum of its rows (cabinetRowWidth). */
 function cabinetBayCapacity(rowCount, cols, opts) {
-  if (!opts?.alternate) return cols * rowCount;
   let n = 0;
   for (let r = 1; r <= rowCount; r++) n += cabinetRowWidth(r, cols, opts);
   return n;
+}
+
+/** The options cabinetRowWidth needs for one bay of a cabinet. */
+function cabinetBayOpts(bay, twoDeep) {
+  return { twoDeep, alternate: bay.alternate, sideways: bay.sideways };
 }
 
 /**
@@ -311,7 +326,7 @@ function cabinetRows(rows, cols, typeConfig) {
   const out = [];
   let start = 0;
   cabinetBays(rows, cols, typeConfig).forEach((bay, shelfIndex) => {
-    const opts = { twoDeep, alternate: bay.alternate };
+    const opts = cabinetBayOpts(bay, twoDeep);
     for (let row = 1; row <= bay.rows; row++) {
       const width = cabinetRowWidth(row, bay.cols, opts);
       out.push({ shelfIndex, row, start, width });
@@ -329,17 +344,17 @@ function cabinetRows(rows, cols, typeConfig) {
  *   The rest is the cabinet's typeConfig (defaults as stored: twoDeep on,
  *   alternate off, every shelf the cabinet's width).
  */
-function cabinetPosition({ shelfIndex, row, slot, cols, shelfRows, twoDeep, alternate, shelfCols, shelfAlternate }) {
+function cabinetPosition({ shelfIndex, row, slot, cols, shelfRows, twoDeep, alternate, shelfCols, shelfAlternate, shelfSideways }) {
   if (!Array.isArray(shelfRows) || shelfIndex < 0 || shelfIndex >= shelfRows.length) return null;
-  const typeConfig = { shelfRows, twoDeep, alternate, shelfCols, shelfAlternate };
+  const typeConfig = { shelfRows, twoDeep, alternate, shelfCols, shelfAlternate, shelfSideways };
   const bays = cabinetBays(shelfRows.length, cols, typeConfig);
   const bay = bays[shelfIndex];
   if (!Number.isInteger(row) || row < 1 || row > bay.rows) return null;
   const deep = cabinetOptions(typeConfig).twoDeep;
-  if (!Number.isInteger(slot) || slot < 1 || slot > cabinetRowWidth(row, bay.cols, { twoDeep: deep, alternate: bay.alternate })) return null;
+  if (!Number.isInteger(slot) || slot < 1 || slot > cabinetRowWidth(row, bay.cols, cabinetBayOpts(bay, deep))) return null;
   let base = 0;
-  for (let k = 0; k < shelfIndex; k++) base += cabinetBayCapacity(bays[k].rows, bays[k].cols, { twoDeep: deep, alternate: bays[k].alternate });
-  for (let r = 1; r < row; r++) base += cabinetRowWidth(r, bay.cols, { twoDeep: deep, alternate: bay.alternate });
+  for (let k = 0; k < shelfIndex; k++) base += cabinetBayCapacity(bays[k].rows, bays[k].cols, cabinetBayOpts(bays[k], deep));
+  for (let r = 1; r < row; r++) base += cabinetRowWidth(r, bay.cols, cabinetBayOpts(bay, deep));
   return base + slot;
 }
 
@@ -464,7 +479,7 @@ function getMaxPosition(rack) {
 module.exports = {
   totalSlots, modularTotalSlots, getMaxPosition, validDoubleHeightRows, validateDoubleHeightRows,
   cabinetShelfRows, cabinetPosition, validateCabinetConfig, CABINET_MAX_ROWS_PER_SHELF,
-  cabinetOptions, cabinetRowWidth, cabinetBayCapacity, cabinetRows,
+  cabinetOptions, cabinetRowWidth, cabinetBayCapacity, cabinetBayOpts, cabinetRows,
   cabinetShelfCols, cabinetShelfAlternate, cabinetShelfSideways, cabinetBays, CABINET_SIDEWAYS,
   fitCabinetTypeConfig,
 };

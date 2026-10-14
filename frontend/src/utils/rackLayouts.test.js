@@ -2,7 +2,7 @@ import {
   computeLayout, computeModularLayout, getModularTotalSlots, getTotalSlots,
   SLOT_RADIUS, validDoubleHeightRows, DOUBLE_ROW_HEADROOM, cabinetShelfRows,
   cabinetRowWidth, cabinetBayCapacity, cabinetBays, cabinetBayUnits, cabinetHeadToTail,
-  cabinetShelfSideways, cabinetSlotSideways,
+  cabinetShelfSideways, cabinetSlotSideways, cabinetRestsBehindAcross, cabinetRowOffset,
 } from './rackLayouts';
 
 describe('computeLayout', () => {
@@ -345,6 +345,33 @@ describe('computeLayout', () => {
       expect(cabinetSlotSideways({ sideways: 'front' }, 2, 0)).toBe(false);
       expect(cabinetSlotSideways({ sideways: 'all' }, 3, 2)).toBe(true);
       expect(cabinetSlotSideways({ sideways: '' }, 1, 0)).toBe(false);
+    });
+
+    // Forum 2026-10-14: 1 across + 4, with 3 in the grooves on top (it used
+    // to stack 4 on the 3 beside the bottle across). Mirrors the backend.
+    it('a bottle across a stacked one-deep shelf: the levels above count and draw from the bottles behind it', () => {
+      const front = { twoDeep: false, sideways: 'front' };
+      expect([1, 2, 3].map((r) => cabinetRowWidth(r, 5, { ...front, alternate: true }))).toEqual([5, 3, 4]);
+      expect([1, 2, 3].map((r) => cabinetRowWidth(r, 5, { ...front, alternate: false }))).toEqual([5, 4, 4]);
+      expect(cabinetBayCapacity(2, 5, { ...front, alternate: true })).toBe(8);
+      expect([1, 2, 3, 4].map((r) => cabinetRowWidth(r, 6, { twoDeep: true, alternate: true, sideways: 'front' }))).toEqual([6, 5, 5, 6]);
+      expect(cabinetRestsBehindAcross({ sideways: 'front' }, 2, false)).toBe(true);
+      expect(cabinetRestsBehindAcross({ sideways: 'front' }, 1, false)).toBe(false);
+      expect(cabinetRestsBehindAcross({ sideways: 'front' }, 2, true)).toBe(false);
+      expect(cabinetRestsBehindAcross({ sideways: 'all' }, 2, false)).toBe(false);
+      // Drawn one cell in (the bottle across), then nested as usual.
+      const bay = { rows: 3, cols: 5, alternate: true, sideways: 'front' };
+      expect([1, 2, 3].map((r) => cabinetRowOffset(bay, r, { twoDeep: false, stagger: true }))).toEqual([0, 1.5, 1]);
+      // Any other bay keeps the old nudge exactly.
+      expect([1, 2].map((r) => cabinetRowOffset({ rows: 2, cols: 5, alternate: false, sideways: '' }, r, { twoDeep: false, stagger: true }))).toEqual([0, 0.5]);
+
+      // The map: the level above sits between the bottles behind the one across.
+      const tc = { shelfRows: [2], shelfCols: [5], shelfAlternate: [true], twoDeep: false, shelfSideways: ['front'] };
+      expect(getTotalSlots('cabinet', 1, 5, tc)).toBe(8);
+      const lay = computeLayout('cabinet', 1, 5, tc);
+      const at = (p) => lay.slots.find((s) => s.position === p);
+      expect(at(1).isSideways).toBe(true);
+      [6, 7, 8].forEach((p, i) => expect(at(p).cx).toBeCloseTo((at(i + 2).cx + at(i + 3).cx) / 2));
     });
 
     it('head to tail never applies to a two-deep cabinet (rows lie neck to neck there)', () => {

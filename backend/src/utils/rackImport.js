@@ -10,7 +10,7 @@
  * explicitly in the CSV.
  */
 
-const { totalSlots, cabinetPosition, cabinetRows, cabinetRowWidth, cabinetOptions, cabinetBays } = require('./rackGeometry');
+const { totalSlots, cabinetPosition, cabinetRows, cabinetRowWidth, cabinetOptions, cabinetBays, cabinetBayOpts } = require('./rackGeometry');
 
 const DEFAULT_RACK_TYPE = 'grid';
 const VALID_ANCHORS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
@@ -47,7 +47,7 @@ function computeRackPosition({
   position, row, col,
   rackRows, rackCols,
   rackType, bottlesPerCell, backCols,
-  shelfRows, twoDeep, alternate, shelfCols, shelfAlternate,
+  shelfRows, twoDeep, alternate, shelfCols, shelfAlternate, shelfSideways,
   layer, slotInLayer,
   internalSlot,
   anchor = DEFAULT_ANCHOR
@@ -88,7 +88,7 @@ function computeRackPosition({
     if (p > rows) return { error: `shelf ${p} exceeds rackRows ${rows}` };
     const bottomAnchored = anchor === 'bottom-left' || anchor === 'bottom-right';
     const shelfIndex = bottomAnchored ? rows - p : p - 1;
-    const cab = { shelfRows, twoDeep, alternate, shelfCols, shelfAlternate };
+    const cab = { shelfRows, twoDeep, alternate, shelfCols, shelfAlternate, shelfSideways };
     const bays = cabinetBays(rows, cols, cab);
     const bay = bays[shelfIndex];
     const cell = { shelfIndex, cols, ...cab, shelfRows: bays.map((b) => b.rows) };
@@ -98,7 +98,7 @@ function computeRackPosition({
       if (layerNum < 1 || layerNum > bay.rows) {
         return { error: `row ${layerNum} exceeds the ${bay.rows} rows of shelf ${p}` };
       }
-      const width = cabinetRowWidth(layerNum, bay.cols, { twoDeep: cabinetOptions(cab).twoDeep, alternate: bay.alternate });
+      const width = cabinetRowWidth(layerNum, bay.cols, cabinetBayOpts(bay, cabinetOptions(cab).twoDeep));
       if (slotNum < 1 || slotNum > width) return { error: `slot ${slotNum} exceeds shelf width ${width}` };
       return { position: cabinetPosition({ ...cell, row: layerNum, slot: slotNum }) };
     }
@@ -115,7 +115,7 @@ function computeRackPosition({
   if (rackType === 'cabinet') {
     if (isNaN(rows) || rows < 1) return { error: 'rackRows is required for cabinet placement' };
     if (isNaN(cols) || cols < 1) return { error: 'rackCols is required for cabinet placement' };
-    const bottleRows = cabinetRows(rows, cols, { shelfRows, twoDeep, alternate, shelfCols, shelfAlternate });
+    const bottleRows = cabinetRows(rows, cols, { shelfRows, twoDeep, alternate, shelfCols, shelfAlternate, shelfSideways });
     const srcRow = parseInt(row, 10);
     const srcCol = parseInt(col, 10);
     if (isNaN(srcRow) || srcRow < 1) return { error: 'Invalid row' };
@@ -396,6 +396,7 @@ function placeBottlesInRack(rack, items, anchor) {
       alternate: rack.typeConfig?.alternate,
       shelfCols: rack.typeConfig?.shelfCols,
       shelfAlternate: rack.typeConfig?.shelfAlternate,
+      shelfSideways: rack.typeConfig?.shelfSideways,
       anchor
     });
     if (result.error) {

@@ -148,9 +148,13 @@ const rackSchema = new mongoose.Schema({
     // the first bottle of the shelf's bottom row lies ACROSS the front, in
     // front of the others (a slim fridge's shelf: 5 front to back + 1 across),
     // 'all' = every bottle of the shelf lies across, piled (a bottom bin).
-    // Drawing only — capacity and the position contract are unchanged, so it
-    // can be switched with bottles in place (utils/rackGeometry
-    // .cabinetShelfSideways; support forum 2026-10-13).
+    // Drawing only, with one exception: on a STACKED shelf of a one-deep
+    // cabinet, 'front' leaves one bottle fewer on each level above the
+    // first (they rest on the bottles behind the one across: 1 + 4 with 3 on
+    // top), which changes capacity and numbering (utils/rackGeometry
+    // .cabinetRowWidth). So the update route refuses that one change on a
+    // loaded cabinet; every other switch keeps the bottles in place
+    // (support forum 2026-10-13, 2026-10-14).
     shelfSideways: { type: [{ type: String, enum: ['', 'front', 'all'] }], default: undefined },
     // Grid racks only: 1-indexed row numbers with headroom for a top layer
     // of bottles resting in the gaps (cols across + cols-1 on top).

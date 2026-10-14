@@ -152,7 +152,7 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
                   </label>
                 ))}
                 <small className="help-text edit-rack-option-help">
-                  {t('racks.cabinetSidewaysHelp', 'Bottles lie: front to back, one bottle lying across the front of the others (as in a slim fridge), or all lying across (as in a bottom bin). Drawing only: the number of bottles and the slot numbers stay the same.')}
+                  {t('racks.cabinetSidewaysHelp', 'Bottles lie: front to back, one bottle lying across the front of the others (as in a slim fridge), or all lying across (as in a bottom bin). On a shelf stacked in levels of a one-deep cabinet, the level above a bottle lying across rests on the bottles behind it, so it holds one fewer. Otherwise the number of bottles and the slot numbers stay the same.')}
                 </small>
               </fieldset>
             )}

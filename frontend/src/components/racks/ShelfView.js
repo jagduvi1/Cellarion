@@ -4,7 +4,7 @@ import useSlotDrag from '../../hooks/useSlotDrag';
 import { isReserved } from '../../utils/reservation';
 import { swatchType } from '../../utils/wineColour';
 import { ReservedRibbon } from './RackRenderer';
-import { cabinetBays, cabinetBayUnits, cabinetRowWidth, cabinetHeadToTail, cabinetNeckForward, cabinetSlotSideways, cabinetNeckIndex } from '../../utils/rackLayouts';
+import { cabinetBays, cabinetBayUnits, cabinetRowWidth, cabinetBayOpts, cabinetRowOffset, cabinetHeadToTail, cabinetNeckForward, cabinetSlotSideways, cabinetNeckIndex } from '../../utils/rackLayouts';
 import './ShelfView.css';
 
 const WINE_COLORS = {
@@ -92,11 +92,10 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
         const rowCount = bay.rows;
         const levels = twoDeep ? Math.ceil(rowCount / 2) : rowCount;
         const height = SHELF_PAD_Y * 2 + levels * rowPitch - BOTTLE_GAP;
-        const nest = bay.alternate || stagger;
-        const x0 = ((units - cabinetBayUnits(bay, drawOpts)) / 2) * colPitch;
+        const x0 =((units - cabinetBayUnits(bay, drawOpts)) / 2) * colPitch;
         const slots = [];
         for (let r = 1; r <= rowCount; r++) {
-          const width = cabinetRowWidth(r, bay.cols, { twoDeep, alternate: bay.alternate });
+          const width = cabinetRowWidth(r, bay.cols, cabinetBayOpts(bay, twoDeep));
           const start = pos;
           pos += width;
           const isBackRow = twoDeep && r % 2 === 0;
@@ -104,10 +103,10 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
           const level = twoDeep ? Math.ceil(r / 2) : r;
           const cy = height - SHELF_PAD_Y - BOTTLE_RY - (level - 1) * rowPitch;
           // Nested levels alternate half a bottle left and right; on an
-          // alternating bay it is the narrow rows that sit offset.
-          const nudge = bay.alternate
-            ? (width < bay.cols ? colPitch / 2 : 0)
-            : (nest && bay.cols > 1 && level % 2 === 0 ? colPitch / 2 : 0);
+          // alternating bay it is the narrow rows that sit offset; a level
+          // resting behind a bottle across the front also skips that
+          // bottle's cell (rackLayouts.cabinetRowOffset).
+          const nudge = cabinetRowOffset(bay, r, { twoDeep, stagger }) * colPitch;
           for (let c = 0; c < width; c++) {
             // Head to tail: every other bottle lies neck forward (drawn flipped).
             // A bottle lying across the shelf is drawn turned, in its cell.

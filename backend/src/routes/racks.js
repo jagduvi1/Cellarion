@@ -8,7 +8,7 @@ const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const CellarLayout = require('../models/CellarLayout');
 const { getCellarRole } = require('../utils/cellarAccess');
-const { getMaxPosition, validateDoubleHeightRows, validateCabinetConfig, cabinetShelfAlternate } = require('../utils/rackGeometry');
+const { getMaxPosition, validateDoubleHeightRows, validateCabinetConfig, cabinetShelfAlternate, cabinetRows } = require('../utils/rackGeometry');
 const {
   createGridRack, placeBottleInRack, clearRackSlot,
   buildAnnotatedEntries, validateArrangementTarget, applyArrangement,
@@ -310,6 +310,18 @@ router.put('/:id', async (req, res) => {
       const willTwoDeep = typeConfig.twoDeep !== false;
       if (wasTwoDeep !== willTwoDeep && cabinetShelfAlternate(effRows, typeConfig).some(Boolean)) {
         return res.status(400).json({ error: 'Two deep cannot change on a loaded cabinet whose rows alternate: it decides which rows are the narrow ones. Clear the cabinet first.' });
+      }
+      // How the bottles lie is mostly drawing, and the edit form offers it on
+      // a loaded cabinet for that reason. The exception (rackGeometry
+      // cabinetRowWidth): a bottle across the front of a stacked one-deep
+      // shelf leaves one bottle fewer on each level above, which renumbers
+      // every bottle after it. Compared with the new shape and only the lie
+      // changed, so the other shape edits keep their own rules.
+      const effCols = cols !== undefined ? cols : rack.cols;
+      const widths = (tc) => cabinetRows(effRows, effCols, tc).map((r) => r.width).join(',');
+      const oldLie = { ...typeConfig, shelfSideways: rack.typeConfig?.shelfSideways };
+      if (widths(oldLie) !== widths(typeConfig)) {
+        return res.status(400).json({ error: 'On a loaded cabinet, a bottle lying across the front of a stacked shelf cannot be switched: it changes how many bottles the levels above hold, so every slot after it would be renumbered. Clear the cabinet first.' });
       }
     }
 
