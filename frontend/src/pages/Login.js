@@ -3,9 +3,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation, Trans } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import useVersion from '../hooks/useVersion';
+import { wasSessionExpired, clearSessionExpired } from '../utils/sessionExpired';
 import { stashPostLoginRedirect, takePostLoginRedirect, isSafeInternalPath } from '../utils/postLoginRedirect';
 import { stashSignupSourceForSso } from '../utils/signupSource';
-import { wasSessionExpired, clearSessionExpired } from '../utils/sessionExpired';
 import './Login.css';
 
 const LOGO_WEBP = '/cellarion-logo-light.webp';
