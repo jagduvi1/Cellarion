@@ -19,9 +19,9 @@ import { CELLAR_SORTS, DEFAULT_CELLAR_SORT, preferredCellarSort } from '../utils
 import { formatArrivalMonth, isArrivalLate } from '../utils/onOrder';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
 import { useFeature } from '../utils/featureFlags';
+import BottleUndoNotice from '../components/BottleUndoNotice';
 import { CARD_FIELDS, cardDetails, readCardFields, storeCardFields } from '../utils/cardDetails';
 import { summarizeSelection } from '../utils/bulkSelection';
-import BottleUndoNotice from '../components/BottleUndoNotice';
 import './CellarDetail.css';
 
 // Stable empty rack map for the cross-cellar view (rack placement is per-cellar,
