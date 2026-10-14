@@ -8,6 +8,7 @@ import './Recommendations.css';
 
 import WineImage from '../components/WineImage';
 import ConfirmModal from '../components/ConfirmModal';
+import LoadError from '../components/LoadError';
 import timeAgo from '../utils/timeAgo';
 
 const PAGE_SIZE = 50; // backend caps recommendation pages at 50
@@ -19,6 +20,8 @@ export default function Recommendations() {
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  // The list could not be loaded: shown instead of the empty-tab message.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [message, setMessage] = useState(null); // { type: 'info' | 'error', text }
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -33,7 +36,7 @@ export default function Recommendations() {
 
   const fetchItems = async (loadMore = false) => {
     const seq = ++fetchSeq.current;
-    if (loadMore) setLoadingMore(true); else setLoading(true);
+    if (loadMore) setLoadingMore(true); else { setLoading(true); setLoadFailed(false); }
     try {
       const fetcher = tab === 'received' ? getRecommendations : getSentRecommendations;
       // Request pages explicitly — without a limit the backend serves its
@@ -46,8 +49,12 @@ export default function Recommendations() {
         const data = await res.json();
         setItems(prev => loadMore ? [...prev, ...(data.items || [])] : (data.items || []));
         setTotal(data.total || 0);
+      } else if (!res.ok && !loadMore && seq === fetchSeq.current) {
+        setLoadFailed(true);
       }
-    } catch { /* ignore */ }
+    } catch {
+      if (!loadMore && seq === fetchSeq.current) setLoadFailed(true);
+    }
     if (seq === fetchSeq.current) {
       setLoading(false);
       setLoadingMore(false);
@@ -115,6 +122,8 @@ export default function Recommendations() {
 
       {loading ? (
         <p className="rec-loading">{t('recommendations.loading')}</p>
+      ) : loadFailed ? (
+        <LoadError onRetry={() => fetchItems()} />
       ) : items.length === 0 ? (
         <div className="rec-empty">
           <p>

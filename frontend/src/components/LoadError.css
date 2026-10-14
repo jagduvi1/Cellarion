@@ -1,0 +1,14 @@
+/* Sits where the list's empty state would be, in the same box, so a failed
+   load changes the words and the button but not the page. */
+.load-error {
+  text-align: center;
+  padding: 2rem 1.5rem;
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  border: 2px dashed var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.load-error p {
+  margin: 0 0 1rem;
+}

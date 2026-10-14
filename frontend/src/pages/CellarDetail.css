@@ -1223,3 +1223,15 @@
   color: var(--color-warning);
   font-weight: 600;
 }
+
+/* The import link under "Add Your First Bottle" in an empty cellar (the same
+   look as the hint on the empty cellar list, which may not be loaded here). */
+.cellar-detail-page .empty-state-import {
+  margin-top: 1rem;
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+  max-width: 46ch;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.6;
+}

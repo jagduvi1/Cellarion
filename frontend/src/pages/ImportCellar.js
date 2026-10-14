@@ -133,6 +133,12 @@ function ImportCellar() {
           components={{ 1: <strong />, 3: <strong />, 5: <strong />, 7: <strong /> }}
         />
       </p>
+      {/* People holding a CSV or a CellarTracker/Vivino export land here from
+          the cellar list's header button, which restores backups only. */}
+      <p className="settings-hint">
+        {t('importCellar.wineListPointer', 'Bringing a wine list from CellarTracker, Vivino or a spreadsheet instead? Open a cellar and choose “Import bottles”.')}{' '}
+        <Link to="/cellars?all=1">{t('importCellar.toCellars', 'Go to my cellars')}</Link>
+      </p>
 
       {/* Result view */}
       {result && (

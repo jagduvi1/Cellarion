@@ -21,6 +21,7 @@ import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPromp
 import { useFeature } from '../utils/featureFlags';
 import { CARD_FIELDS, cardDetails, readCardFields, storeCardFields } from '../utils/cardDetails';
 import { summarizeSelection } from '../utils/bulkSelection';
+import LoadError from '../components/LoadError';
 import './CellarDetail.css';
 
 // Stable empty rack map for the cross-cellar view (rack placement is per-cellar,
@@ -370,7 +371,8 @@ function CellarDetail() {
         setError(data.error || 'Failed to load cellar');
       }
     } catch {
-      if (seq === fetchSeq.current) setError('Network error');
+      // Network failure, or a proxy's HTML error page during a deploy.
+      if (seq === fetchSeq.current) setError(t('common.loadFailed', 'This could not be loaded. Check your connection and try again.'));
     } finally {
       if (seq === fetchSeq.current) {
         setLoading(false);
@@ -432,7 +434,7 @@ function CellarDetail() {
 
   // Only replace the whole page when we have nothing to show yet; once the
   // cellar is loaded, transient fetch failures render as an inline banner.
-  if (error && !cellar) return <div className="alert alert-error">{error}</div>;
+  if (error && !cellar) return <LoadError message={error} onRetry={() => { setError(null); fetchCellarData(0); }} />;
 
   return (
     <div className="cellar-detail-page">
@@ -827,6 +829,10 @@ function CellarDetail() {
 
           {loading ? (
             <div className="loading">{t('cellarDetail.loadingCellar')}</div>
+          ) : error && bottles.length === 0 ? (
+            // A failed load is not an empty cellar — "No bottles in this
+            // cellar yet" here reads as "my bottles are gone".
+            <LoadError message={error} onRetry={() => { setError(null); fetchCellarData(0); }} />
           ) : bottles.length === 0 && !bottlesLoading ? (
             (filters.search || filters.vintage?.length || filters.minRating || filters.maxRating || toMaturityArray(filters.maturity).length || filters.unplaced || filters.reserved || filters.storage || filters.producer || filters.bottleSize || filters.purchaseYear || filters.ratingBand || filters.type?.length || filters.country?.length || filters.region?.length || filters.appellation?.length || filters.grapes?.length) ? (
               <div className="empty-state">
@@ -839,6 +845,16 @@ function CellarDetail() {
                   <Link to={`/cellars/${id}/add-bottle`} className="btn btn-primary">
                     {t('cellarDetail.addFirstBottle')}
                   </Link>
+                )}
+                {/* Import is how big collections arrive (and who loads one
+                    stays), but it lived only in the ⋯ menu — say it here,
+                    where someone with a collection elsewhere actually is. */}
+                {canEdit && (
+                  <p className="empty-state-import">
+                    <Link to={`/cellars/${id}/import`}>
+                      {t('cellarDetail.importInstead', 'Or import your collection from CellarTracker, Vivino or a spreadsheet')}
+                    </Link>
+                  </p>
                 )}
               </div>
             )

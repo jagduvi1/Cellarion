@@ -523,6 +523,21 @@
   margin: 0 0 0.75rem;
 }
 
+/* "Enter it yourself" beside "Submit a wine request" — wrap on a phone. */
+.ai-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+/* A finished library search that found nothing — said, not left blank. */
+.wine-search-no-results {
+  margin: 0.25rem 0 0.75rem;
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+}
+
 /* ── Selected wine summary ── */
 .selected-wine {
   background: rgba(var(--color-primary-rgb), 0.1);

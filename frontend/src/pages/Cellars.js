@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import CellarColorPicker from '../components/CellarColorPicker';
+import LoadError from '../components/LoadError';
 import './Cellars.css';
 
 function Cellars() {
@@ -13,6 +14,9 @@ function Cellars() {
   const [cellars, setCellars] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // The list itself could not be loaded — kept apart from `error` (a refused
+  // create) so a failed load never renders as "You have no cellars yet".
+  const [loadFailed, setLoadFailed] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newCellar, setNewCellar] = useState({ name: '', description: '', color: null });
   const [creating, setCreating] = useState(false);
@@ -25,20 +29,38 @@ function Cellars() {
   }, [apiFetch]);
 
   const fetchCellars = async () => {
+    setLoadFailed(false);
     try {
       const res = await apiFetch('/api/cellars');
       const data = await res.json();
       if (res.ok) {
         setCellars(data.cellars);
       } else {
-        setError(data.error || 'Failed to load cellars');
+        setLoadFailed(true);
       }
-    } catch (err) {
-      setError('Network error');
+    } catch {
+      // Network failure, or a proxy's HTML error page during a deploy.
+      setLoadFailed(true);
     } finally {
       setLoading(false);
     }
   };
+
+  const retryLoad = () => {
+    setLoading(true);
+    fetchCellars();
+  };
+
+  // A new account arrives here with nothing. Open the create form with a name
+  // already in it, so the first cellar is one tap on Create — before, the only
+  // way forward was an unlabelled + button and an empty, required name field.
+  const firstCellarOffered = useRef(false);
+  useEffect(() => {
+    if (loading || loadFailed || cellars.length > 0 || firstCellarOffered.current) return;
+    firstCellarOffered.current = true;
+    setNewCellar((prev) => (prev.name ? prev : { ...prev, name: t('cellars.firstCellarName', 'My cellar') }));
+    setShowCreateForm(true);
+  }, [loading, loadFailed, cellars.length, t]);
 
   // Auto-redirect: single cellar or default cellar set
   useEffect(() => {
@@ -107,7 +129,11 @@ function Cellars() {
               className="btn btn-secondary btn-small"
               title={t('cellars.importTooltip')}
             >
-              {t('cellars.import', 'Import')}
+              {/* "Import" sent people with a CSV here, to a page that only
+                  restores a Cellarion backup; the explanation was a hover
+                  tooltip, which phones never show. Wine-list import lives in
+                  a cellar (its ⋯ menu, and its empty state). */}
+              {t('cellars.restoreBackup', 'Restore backup')}
             </Link>
             <button
               onClick={() => {
@@ -175,7 +201,9 @@ function Cellars() {
         </div>
       )}
 
-      {cellars.length === 0 ? (
+      {loadFailed ? (
+        <LoadError onRetry={retryLoad} />
+      ) : cellars.length === 0 ? (
         <div className="empty-state">
           <p>{t('cellars.emptyCellars')}</p>
           <p>{t('cellars.emptyCallToAction')}</p>

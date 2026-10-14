@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getJournalEntries, deleteJournalEntry } from '../api/journal';
 import ConfirmModal from '../components/ConfirmModal';
+import LoadError from '../components/LoadError';
 import './Journal.css';
 
 const JournalEntryForm = lazy(() => import('../components/JournalEntryForm'));
@@ -50,6 +51,9 @@ export default function Journal() {
   const [entries, setEntries] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  // The first page could not be loaded: shown instead of "No journal entries
+  // yet", which on a weak signal reads as "my journal is gone".
+  const [loadFailed, setLoadFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editEntry, setEditEntry] = useState(null);
@@ -75,7 +79,7 @@ export default function Journal() {
 
   const fetchEntries = async (loadMore = false) => {
     const seq = ++fetchSeq.current;
-    if (loadMore) setLoadingMore(true); else setLoading(true);
+    if (loadMore) setLoadingMore(true); else { setLoading(true); setLoadFailed(false); }
     try {
       const params = new URLSearchParams();
       if (debouncedSearch) params.set('q', debouncedSearch);
@@ -90,8 +94,12 @@ export default function Journal() {
         const data = await res.json();
         setEntries(prev => loadMore ? [...prev, ...(data.items || [])] : (data.items || []));
         setTotal(data.total || 0);
+      } else if (!res.ok && !loadMore && seq === fetchSeq.current) {
+        setLoadFailed(true);
       }
-    } catch { /* ignore */ }
+    } catch {
+      if (!loadMore && seq === fetchSeq.current) setLoadFailed(true);
+    }
     if (seq === fetchSeq.current) {
       setLoading(false);
       setLoadingMore(false);
@@ -148,6 +156,8 @@ export default function Journal() {
 
       {loading ? (
         <p className="journal-loading">{t('journal.loading', 'Loading...')}</p>
+      ) : loadFailed ? (
+        <LoadError onRetry={() => fetchEntries()} />
       ) : entries.length === 0 ? (
         <div className="journal-empty">
           <p>{t('journal.empty', 'No journal entries yet. Start capturing your wine moments!')}</p>

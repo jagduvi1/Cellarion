@@ -25,6 +25,18 @@ import { WINE_TYPES } from '../config/wineTypes';
 import { swatchType, wineTypeLabel, isStyleType, colourLabel, WINE_COLOURS } from '../utils/wineColour';
 import './AddBottle.css';
 
+// How this device last started adding a bottle: 'camera' (the label photo, the
+// default) or 'search' (typing the name). Per device on purpose — the same
+// person scans on the phone and types at the desk. Storage may be blocked or
+// absent; the camera card is then simply the start, as before.
+const ADD_MODE_KEY = 'cellarion.addBottleMode';
+function readAddMode() {
+  try { return localStorage.getItem(ADD_MODE_KEY); } catch { return null; }
+}
+function rememberAddMode(mode) {
+  try { localStorage.setItem(ADD_MODE_KEY, mode); } catch { /* not remembered */ }
+}
+
 function AddBottle() {
   const { t } = useTranslation();
   const { id: cellarId } = useParams();
@@ -40,7 +52,28 @@ function AddBottle() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
-  const [showTextSearch, setShowTextSearch] = useState(false);
+  // Opens the way this device last added a bottle: someone who types names
+  // should not have to step past the camera card every time.
+  const [showTextSearch, setShowTextSearchState] = useState(() => readAddMode() === 'search');
+  const setShowTextSearch = useCallback((on) => {
+    setShowTextSearchState(on);
+    rememberAddMode(on ? 'search' : 'camera');
+  }, []);
+  // The query whose library search has finished — the no-results message and
+  // "Enter it yourself" speak about a search that ran, not about typing.
+  const [searchedFor, setSearchedFor] = useState('');
+  const [searchFailed, setSearchFailed] = useState(false);
+  // Every error renders in the one alert at the top of the page, while the
+  // button that caused it is usually at the bottom of a long form on a phone.
+  // Bring it into view whenever one appears — before, only a refused save
+  // scrolled up, and a missing name/country or drink-window problem looked
+  // like "the button did nothing".
+  const errorRef = useRef(null);
+  useEffect(() => {
+    if (!error || !errorRef.current) return;
+    try { errorRef.current.scrollIntoView({ block: 'center' }); } catch { /* old browser */ }
+    errorRef.current.focus({ preventScroll: true });
+  }, [error]);
   const [aiSearching, setAiSearching] = useState(false);
   const [aiSearchError, setAiSearchError] = useState(null);
   // identify-text is read-only: it reports what the AI recognised and what the
@@ -598,19 +631,38 @@ function AddBottle() {
     const query = search.trim();
     setLoading(true);
     setAiSearchError(null);
+    setSearchFailed(false);
+    setSearchedFor('');
     clearAi();
 
     // ownHidden=1: the member's own drinks that are not wine (hidden from
     // the shared registry) come back too, so they can add another bottle.
     searchWines(apiFetch, `search=${encodeURIComponent(query)}&limit=10&ownHidden=1`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.wines) setWines(data.wines);
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`search ${res.status}`);
+        const data = await res.json();
+        setWines(Array.isArray(data.wines) ? data.wines : []);
         setRegistryWines(Array.isArray(data.registryWines) ? data.registryWines : []);
+        setSearchedFor(query);
       })
-      .catch(err => console.error('Search failed:', err))
+      // Said, not just logged: a search that silently returns nothing reads
+      // as "this wine doesn't exist".
+      .catch(() => setSearchFailed(true))
       .finally(() => setLoading(false));
   }, [search, apiFetch, clearAi]);
+
+  // The wine isn't in the library (or the AI couldn't place it): type it in,
+  // in the same form a misread label opens. Before, the only way out here was
+  // a wine request, which leaves the page without adding the bottle.
+  const enterWineByHand = () => {
+    setPendingWineData({
+      name: search.trim(), producer: '', country: '', region: '', appellation: '',
+      classification: '', type: '', grapes: '',
+    });
+    setAiSearchError(null);
+    setError(null);
+    setShowManualForm(true);
+  };
 
   const handleSearchKeyDown = (e) => {
     if (e.key === 'Enter') handleSearch();
@@ -1111,7 +1163,7 @@ function AddBottle() {
         </div>
       </div>
 
-      {error && <div className="alert alert-error">{error}</div>}
+      {error && <div className="alert alert-error" role="alert" ref={errorRef} tabIndex={-1}>{error}</div>}
 
       {step === 1 && (
         <div className="card">
@@ -1352,7 +1404,7 @@ function AddBottle() {
                 </button>
               </div>
               <button type="button" className="wine-select-manual-link" onClick={() => setShowTextSearch(true)}>
-                {t('addBottle.searchManuallyInstead', 'No camera? Search manually instead →')}
+                {t('addBottle.searchManuallyInstead', 'Type the name instead →')}
               </button>
               {/* Several bottles from one purchase: the import page reads the
                   whole receipt at once (Import → Scan a receipt). */}
@@ -1367,7 +1419,7 @@ function AddBottle() {
             <>
               <div className="wine-select-manual-header">
                 <h2>{t('addBottle.searchForWine')}</h2>
-                <button type="button" className="btn-link-muted" onClick={() => { setShowTextSearch(false); setSearch(''); setWines([]); setAiSearchError(null); }}>
+                <button type="button" className="btn-link-muted" onClick={() => { setShowTextSearch(false); setSearch(''); setWines([]); setSearchedFor(''); setSearchFailed(false); setAiSearchError(null); }}>
                   ← {t('addBottle.useCameraInstead', 'Use camera instead')}
                 </button>
               </div>
@@ -1380,9 +1432,10 @@ function AddBottle() {
                     type="text"
                     placeholder={t('addBottle.searchPlaceholder')}
                     value={search}
-                    onChange={(e) => { setSearch(e.target.value); setWines([]); setAiSearchError(null); setError(null); clearAi(); }}
+                    onChange={(e) => { setSearch(e.target.value); setWines([]); setSearchedFor(''); setSearchFailed(false); setAiSearchError(null); setError(null); clearAi(); }}
                     onKeyDown={handleSearchKeyDown}
                     className="search-input-large"
+                    enterKeyHint="search"
                     autoFocus
                   />
                   <button type="button" className="btn btn-secondary search-submit-btn" onClick={handleSearch} disabled={loading}>
@@ -1392,6 +1445,22 @@ function AddBottle() {
               </div>
 
               {loading && <p>{t('addBottle.searching')}</p>}
+
+              {searchFailed && !loading && (
+                <p className="error-text" role="alert">
+                  {t('addBottle.searchFailed', 'The search didn’t go through. Check your connection and try again.')}
+                </p>
+              )}
+
+              {/* A finished search with nothing in it used to render nothing at
+                  all — say so, so the AI row and "Enter it yourself" below read
+                  as the next step rather than as noise. */}
+              {!loading && searchedFor && searchedFor === search.trim() && wines.length === 0 && registryWines.length === 0
+                && !aiSearching && !aiIdentified && !aiMatch && (
+                <p className="wine-search-no-results" role="status">
+                  {t('addBottle.noLibraryMatch', 'No wines in the library match “{{query}}”.', { query: searchedFor })}
+                </p>
+              )}
 
               {/* ── AI result card. Shape-aware: `card` is EITHER a saved
                    registry wine (populated country/region/grape refs) OR the
@@ -1512,14 +1581,28 @@ function AddBottle() {
                 </div>
               )}
 
-              {/* ── AI error with request fallback ── */}
+              {/* ── AI error: type the wine in (the bottle still gets added),
+                   or ask for it to be added to the library ── */}
               {aiSearchError && !aiSearching && (
                 <div className="ai-error-state">
                   <p className="error-text">{aiSearchError}</p>
-                  <Link to="/wine-requests" className="btn btn-secondary btn-small">
-                    {t('addBottle.submitWineRequest')}
-                  </Link>
+                  <div className="ai-error-actions">
+                    <button type="button" className="btn btn-primary btn-small" onClick={enterWineByHand}>
+                      {t('addBottle.enterByHand', 'Enter it yourself')}
+                    </button>
+                    <Link to="/wine-requests" className="btn btn-secondary btn-small">
+                      {t('addBottle.submitWineRequest')}
+                    </Link>
+                  </div>
                 </div>
+              )}
+
+              {/* ── After any finished search: the way out when none of the
+                   results is the wine, without going through the AI ── */}
+              {!loading && searchedFor && searchedFor === search.trim() && !aiSearching && !aiSearchError && (
+                <button type="button" className="wine-select-manual-link" onClick={enterWineByHand}>
+                  {t('addBottle.notListedEnterByHand', 'Not listed? Enter the wine yourself →')}
+                </button>
               )}
             </>
           )}
