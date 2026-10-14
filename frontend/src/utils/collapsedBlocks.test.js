@@ -1,5 +1,5 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { COLLAPSIBLE_BLOCKS, storedCollapsed, toggledCollapsed, useCollapsedBlocks } from './collapsedBlocks';
+import { COLLAPSIBLE_BLOCKS, storedCollapsed, toggledCollapsed, useCollapsedBlocks, __resetCollapsedSessionForTest } from './collapsedBlocks';
 
 const auth = { user: null, updatePreferences: vi.fn() };
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => auth }));
@@ -81,6 +81,51 @@ describe('collapsedBlocks', () => {
     act(() => result.current.toggle('vintage.history'));
     await waitFor(() => expect(auth.updatePreferences).toHaveBeenCalledTimes(2));
     expect(auth.updatePreferences).toHaveBeenLastCalledWith({ collapsedBlocks: ['vintage.wine', 'vintage.history'] });
+  });
+
+  // Audit 2026-10-14: the bottle and vintage pages share block names. A page
+  // opened before the other page's save came back started from the old list,
+  // showed the fold undone, and its next change saved over the new list.
+  describe('a page opened before the last save came back', () => {
+    beforeEach(() => __resetCollapsedSessionForTest());
+
+    it("starts from this tab's newer list, and builds its next save on it", async () => {
+      auth.user = { id: 'u1', preferences: { collapsedBlocks: ['vintage.reviews'] } };
+      auth.updatePreferences = vi.fn(() => new Promise(() => {})); // the save never comes back here
+      const first = renderHook(() => useCollapsedBlocks());
+      act(() => first.result.current.toggle('vintage.tasting'));
+      first.unmount();
+
+      // Same signed-in user object: the save has not landed.
+      const second = renderHook(() => useCollapsedBlocks());
+      expect(second.result.current.isCollapsed('vintage.tasting')).toBe(true);
+      expect(second.result.current.isCollapsed('vintage.reviews')).toBe(true);
+    });
+
+    it('once the user carries something else — the save landed, or another device — that wins', () => {
+      auth.user = { id: 'u1', preferences: { collapsedBlocks: [] } };
+      auth.updatePreferences = vi.fn(() => new Promise(() => {}));
+      const first = renderHook(() => useCollapsedBlocks());
+      act(() => first.result.current.toggle('vintage.tasting'));
+      first.unmount();
+
+      auth.user = { id: 'u1', preferences: { collapsedBlocks: ['vintage.wine'] } };
+      const second = renderHook(() => useCollapsedBlocks());
+      expect(second.result.current.isCollapsed('vintage.wine')).toBe(true);
+      expect(second.result.current.isCollapsed('vintage.tasting')).toBe(false);
+    });
+
+    it("never carries one account's list into another's", () => {
+      auth.user = { id: 'u1', preferences: { collapsedBlocks: [] } };
+      auth.updatePreferences = vi.fn(() => new Promise(() => {}));
+      const first = renderHook(() => useCollapsedBlocks());
+      act(() => first.result.current.toggle('vintage.tasting'));
+      first.unmount();
+
+      auth.user = { id: 'u2', preferences: { collapsedBlocks: [] } };
+      const other = renderHook(() => useCollapsedBlocks());
+      expect(other.result.current.isCollapsed('vintage.tasting')).toBe(false);
+    });
   });
 
   it('a failed save keeps the fold on the page', () => {

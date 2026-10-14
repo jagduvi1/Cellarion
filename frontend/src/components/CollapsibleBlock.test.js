@@ -63,6 +63,29 @@ describe('CollapsibleBlock', () => {
     expect(onToggle).toHaveBeenCalledTimes(2);
   });
 
+  // Audit 2026-10-14: the bottle page's "This wine in your cellar" has an
+  // "Open the vintage page →" link in its title row. Following it opens
+  // nothing in the card, so it must not unfold the card for the account.
+  it('folded: a link to another page leaves the fold alone; an in-page "#" link unfolds', () => {
+    const onToggle = vi.fn();
+    render(
+      <CollapsibleBlock id="vintage.history" label="This wine in your cellar" collapsed onToggle={onToggle}>
+        <div className="card">
+          <div className="head">
+            <h2>This wine in your cellar</h2>
+            <a href="/cellars/c1/vintages/w1/2015" onClick={(e) => e.preventDefault()}>Open the vintage page</a>
+            <a href="#lots" onClick={(e) => e.preventDefault()}>Jump to the lots</a>
+          </div>
+          <p>The body</p>
+        </div>
+      </CollapsibleBlock>
+    );
+    fireEvent.click(screen.getByRole('link', { name: 'Open the vintage page' }));
+    expect(onToggle).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('link', { name: 'Jump to the lots' }));
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
   it('unfolded: a control in the card leaves the fold alone', () => {
     const onToggle = vi.fn();
     render(

@@ -30,16 +30,42 @@ export function toggledCollapsed(list, id) {
   return list.includes(id) ? list.filter((b) => b !== id) : [...list, id];
 }
 
+const sameList = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+
+// The last folded list this tab committed, per account, with the account's
+// list as the signed-in user carried it at that moment (`base`). The bottle
+// and vintage pages share block names, so a page opened right after a fold on
+// the other — before that save has come back into the signed-in user — must
+// start from this tab's list: otherwise it shows the fold undone, and its next
+// change saves the old list over the new one (audit 2026-10-14). Once the
+// user carries something else (the save landed, or another device changed
+// it), the user's list wins again.
+let session = null; // { userId, list, base }
+
+/** The list a page starts from: the account's, or this tab's newer one. */
+function startingList(user) {
+  const stored = storedCollapsed(user);
+  const uid = user?.id;
+  if (!uid || !session || session.userId !== uid) return stored;
+  return sameList(stored, session.base) ? session.list : stored;
+}
+
+/** Test seam: forget this tab's list. */
+export function __resetCollapsedSessionForTest() { session = null; }
+
 /**
  * The page's folded blocks, a toggle and an unfold, both saved. Read from
- * the account once, when the page opens; a change shows at once and is saved
- * in the background (a failed save only costs the memory, never the fold).
- * Changes read the LATEST list (a ref), so two quick ones never overwrite
- * each other, and saves are queued, so they reach the server in order.
+ * the account when the page opens (or from this tab's newer list, above); a
+ * change shows at once and is saved in the background (a failed save only
+ * costs the memory, never the fold). Changes read the LATEST list (a ref), so
+ * two quick ones never overwrite each other, and saves are queued, so they
+ * reach the server in order.
  */
 export function useCollapsedBlocks() {
   const { user, updatePreferences } = useAuth();
-  const [collapsed, setCollapsed] = useState(() => storedCollapsed(user));
+  const [collapsed, setCollapsed] = useState(() => startingList(user));
+  const userRef = useRef(user);
+  userRef.current = user;
   const latest = useRef(collapsed);
   // Saves go one at a time, each sending the list as it is when it starts:
   // two quick changes can never land on the server (or come back into the
@@ -51,6 +77,8 @@ export function useCollapsedBlocks() {
     if (next === latest.current) return;
     latest.current = next;
     setCollapsed(next);
+    const u = userRef.current;
+    if (u?.id) session = { userId: u.id, list: next, base: storedCollapsed(u) };
     if (!updatePreferences) return;
     saving.current = saving.current
       .then(() => {

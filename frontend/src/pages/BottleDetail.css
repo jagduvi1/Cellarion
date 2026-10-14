@@ -496,8 +496,18 @@
 }
 
 .bd-details .cblock--nested > .cblock-toggle {
-  top: -0.35rem;
+  top: -0.15rem;
   right: 0;
+}
+
+/* The record keeps the divider and spacing every section of this card has.
+   Inside its fold wrapper it is the only div, so it matched
+   .bd-section:last-of-type and lost them (audit 2026-10-14); the wrapper
+   carries them now, folded or not. */
+.bd-details > .cblock--nested {
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .bd-detail-grid {

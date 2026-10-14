@@ -167,7 +167,9 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
           (writes are requireNonDemo). It folds to its title row like the
           vintage page's (2026-10-14): a flat inner "card" lets the shared
           folding rules find its title row inside this card. */}
-      {recordFold ? (
+      {/* No registry wine (a bottle waiting on its request): the record shows
+          nothing, so there is nothing to fold (audit 2026-10-14). */}
+      {recordFold && wine ? (
         <CollapsibleBlock nested {...recordFold}>
           <div className="card bd-record-fold">{record}</div>
         </CollapsibleBlock>
