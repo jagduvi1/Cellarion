@@ -180,7 +180,15 @@ async function buildPreferencesUpdate(userId, body = {}) {
 async function updatePreferences(userId, body) {
   const { update, error } = await buildPreferencesUpdate(userId, body);
   if (error) return { error };
-  const user = await User.findByIdAndUpdate(userId, { $set: update }, { new: true });
+  // A language or currency the user picks is a choice: the first-sign-in guess
+  // (POST /api/users/me/locale-defaults, User.localeDefaultsPending) must never
+  // overwrite it later, so choosing either ends that pending guess.
+  const choosesLocale = 'preferences.language' in update || 'preferences.currency' in update;
+  const user = await User.findByIdAndUpdate(
+    userId,
+    { $set: update, ...(choosesLocale ? { $unset: { localeDefaultsPending: 1 } } : {}) },
+    { new: true },
+  );
   if (!user) return { error: err(404, 'User not found') };
   return { user, changed: Object.keys(update) };
 }

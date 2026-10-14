@@ -9,7 +9,7 @@
  */
 process.env.JWT_SECRET = 'test-secret';
 
-jest.mock('../models/User', () => ({ findById: jest.fn(), updateOne: jest.fn() }));
+jest.mock('../models/User', () => ({ findById: jest.fn(), findOneAndUpdate: jest.fn() }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../services/search', () => ({
   getIsAvailable: jest.fn(() => false), indexWine: jest.fn(), removeWine: jest.fn(),
@@ -21,6 +21,7 @@ const express = require('express');
 const http = require('http');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { logAudit } = require('../services/audit');
 const usersRouter = require('./users');
 
 const USER = '64b000000000000000000001';
@@ -36,9 +37,12 @@ beforeAll((done) => {
   server.listen(0, () => { baseUrl = `http://127.0.0.1:${server.address().port}`; done(); });
 });
 afterAll((done) => { server.closeAllConnections(); server.close(done); });
+const SAVED = { _id: USER, toJSON: () => ({ id: USER, preferences: { language: 'sv', currency: 'SEK' } }) };
+const UNCHANGED = { _id: USER, toJSON: () => ({ id: USER, preferences: { language: 'en', currency: 'USD' } }) };
+
 beforeEach(() => {
   jest.clearAllMocks();
-  User.findById.mockResolvedValue({ toJSON: () => ({ id: USER, preferences: { language: 'sv', currency: 'SEK' } }) });
+  User.findById.mockResolvedValue(UNCHANGED);
 });
 
 const post = (body, auth = true) => fetch(`${baseUrl}/api/users/me/locale-defaults`, {
@@ -48,42 +52,48 @@ const post = (body, auth = true) => fetch(`${baseUrl}/api/users/me/locale-defaul
 });
 
 test('saves language + currency only while the first-sign-in flag is set, clearing it in the same update', async () => {
-  User.updateOne.mockResolvedValue({ modifiedCount: 1 });
+  User.findOneAndUpdate.mockResolvedValue(SAVED);
 
   const res = await post({ language: 'sv', currency: 'sek' });
 
   expect(res.status).toBe(200);
   expect(await res.json()).toMatchObject({ applied: true, user: { preferences: { language: 'sv', currency: 'SEK' } } });
-  const [filter, update] = User.updateOne.mock.calls[0];
+  const [filter, update, options] = User.findOneAndUpdate.mock.calls[0];
   expect(filter).toEqual({ _id: USER, localeDefaultsPending: true });
   expect(update.$set).toEqual({ 'preferences.language': 'sv', 'preferences.currency': 'SEK' });
   expect(update.$unset).toEqual({ localeDefaultsPending: 1 });
+  expect(options).toEqual({ new: true });
+  // One query when it applies, and the automatic change is on record.
+  expect(User.findById).not.toHaveBeenCalled();
+  expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'user.locale_defaults',
+    { type: 'user', id: USER }, { language: 'sv', currency: 'SEK' });
 });
 
-test('answers applied:false when the flag is gone (older account, or already saved)', async () => {
-  User.updateOne.mockResolvedValue({ modifiedCount: 0 });
+test('answers applied:false when the flag is gone (older account, or already saved) and records nothing', async () => {
+  User.findOneAndUpdate.mockResolvedValue(null);
 
   const res = await post({ language: 'sv', currency: 'SEK' });
 
-  expect(await res.json()).toMatchObject({ applied: false });
+  expect(await res.json()).toMatchObject({ applied: false, user: { preferences: { language: 'en', currency: 'USD' } } });
+  expect(logAudit).not.toHaveBeenCalled();
 });
 
 test('skips a value the preferences validator refuses, keeps the valid one', async () => {
-  User.updateOne.mockResolvedValue({ modifiedCount: 1 });
+  User.findOneAndUpdate.mockResolvedValue(SAVED);
 
   await post({ language: 'sv', currency: 'XYZ' });
 
-  const [, update] = User.updateOne.mock.calls[0];
+  const [, update] = User.findOneAndUpdate.mock.calls[0];
   expect(update.$set).toEqual({ 'preferences.language': 'sv' });
   expect(update.$unset).toEqual({ localeDefaultsPending: 1 });
 });
 
 test('with nothing valid it only clears the flag', async () => {
-  User.updateOne.mockResolvedValue({ modifiedCount: 1 });
+  User.findOneAndUpdate.mockResolvedValue(SAVED);
 
   await post({ language: '<script>', currency: 42 });
 
-  const [, update] = User.updateOne.mock.calls[0];
+  const [, update] = User.findOneAndUpdate.mock.calls[0];
   expect(update).not.toHaveProperty('$set');
   expect(update.$unset).toEqual({ localeDefaultsPending: 1 });
 });
@@ -91,5 +101,5 @@ test('with nothing valid it only clears the flag', async () => {
 test('requires a signed-in user', async () => {
   const res = await post({ language: 'sv' }, false);
   expect(res.status).toBe(401);
-  expect(User.updateOne).not.toHaveBeenCalled();
+  expect(User.findOneAndUpdate).not.toHaveBeenCalled();
 });

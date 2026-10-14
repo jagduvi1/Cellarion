@@ -202,13 +202,22 @@ router.post('/me/locale-defaults', requireAuth, async (req, res) => {
       const { update, error } = await buildPreferencesUpdate(req.user.id, { [key]: value });
       if (!error) Object.assign($set, update);
     }
-    const updated = await User.updateOne(
+    const applied = await User.findOneAndUpdate(
       { _id: req.user.id, localeDefaultsPending: true },
       { ...(Object.keys($set).length ? { $set } : {}), $unset: { localeDefaultsPending: 1 } },
+      { new: true },
     );
-    const user = await User.findById(req.user.id);
+    if (applied) {
+      // Recorded: the account's language/currency were set automatically, so
+      // "why is my account in SEK?" has an answer (CLAUDE.md, audit logging).
+      logAudit(req, 'user.locale_defaults', { type: 'user', id: applied._id }, {
+        language: $set['preferences.language'] || null,
+        currency: $set['preferences.currency'] || null,
+      });
+    }
+    const user = applied || await User.findById(req.user.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json({ applied: updated.modifiedCount === 1, user: user.toJSON() });
+    res.json({ applied: Boolean(applied), user: user.toJSON() });
   } catch (error) {
     console.error('Locale defaults error:', error);
     res.status(500).json({ error: 'Failed to save language and currency' });

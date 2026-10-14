@@ -17,6 +17,7 @@ import AiConnectSection from '../components/AiConnectSection';
 import SelfHostedBridgeSection from '../components/SelfHostedBridgeSection';
 import RegistryConnectionSection from '../components/RegistryConnectionSection';
 import { isHostedOrigin } from '../utils/mcpConnect';
+import { PASSWORD_POLICY } from '../utils/accountRules';
 import SetPasswordNotice from '../components/SetPasswordNotice';
 import McpActivitySection from '../components/McpActivitySection';
 import ClimateDevicesSection from '../components/ClimateDevicesSection';
@@ -239,7 +240,6 @@ function Settings() {
   // min 12 chars with an uppercase letter, lowercase letter, number and
   // special character. Checked client-side for instant feedback; the
   // backend re-validates and returns 400 if it disagrees.
-  const PASSWORD_POLICY = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z\d]).{12,}$/;
 
   const handleChangePassword = async (e) => {
     e.preventDefault();

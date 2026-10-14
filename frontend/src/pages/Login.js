@@ -5,6 +5,9 @@ import { useAuth } from '../contexts/AuthContext';
 import useVersion from '../hooks/useVersion';
 import { stashPostLoginRedirect, takePostLoginRedirect, isSafeInternalPath } from '../utils/postLoginRedirect';
 import { stashSignupSourceForSso } from '../utils/signupSource';
+// Checked before submitting, so a newcomer learns the rules in their own
+// language, not from an English server refusal afterwards.
+import { USERNAME_RULE, PASSWORD_POLICY } from '../utils/accountRules';
 import './Login.css';
 
 const LOGO_WEBP = '/cellarion-logo-light.webp';
@@ -23,11 +26,6 @@ function GoogleIcon() {
   );
 }
 
-// The account rules the server enforces (routes/auth.js register, User.js
-// password validator). Checked here first so a newcomer learns them in their
-// own language before submitting, not from an English server error after.
-const USERNAME_RULE = /^[a-z0-9_.-]{3,30}$/i;
-const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z\d]).{12,}$/;
 
 function Login() {
   const usernameId = useId();
@@ -94,7 +92,7 @@ function Login() {
         setError(t('auth.usernameRuleError', 'Usernames are 3–30 characters and may use letters, numbers, dots, underscores and hyphens — no spaces.'));
         return;
       }
-      if (!PASSWORD_RULE.test(formData.password)) {
+      if (!PASSWORD_POLICY.test(formData.password)) {
         setError(t('auth.passwordRuleError', 'Your password needs at least 12 characters, with an uppercase letter, a lowercase letter, a number and a symbol.'));
         return;
       }

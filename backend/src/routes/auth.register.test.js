@@ -56,6 +56,7 @@ jest.mock('../utils/clientIp', () => {
 const express = require('express');
 const http = require('http');
 const User = require('../models/User');
+const { issueTokens } = require('../services/authTokens');
 const authRouter = require('./auth');
 
 let server;
@@ -87,6 +88,26 @@ test('a new account is marked for first-sign-in language + currency defaults', a
   expect(res.status).toBe(201);
   expect(mockCreated).toHaveLength(1);
   expect(mockCreated[0].localeDefaultsPending).toBe(true);
+});
+
+test('the duplicate check looks up the trimmed name and address', async () => {
+  User.findOne.mockResolvedValue({ _id: 'someone' });
+
+  await register({ username: 'anna ', email: ' Anna@Example.com ' });
+
+  expect(User.findOne).toHaveBeenCalledWith({ $or: [{ email: 'anna@example.com' }, { username: 'anna' }] });
+});
+
+test('a registration that loses a race on the unique index gets the same answer, not a 500', async () => {
+  User.findOne.mockResolvedValue(null);
+  // With verification off the account is first written when the session is
+  // issued (issueTokens saves it); that write is where the race surfaces.
+  issueTokens.mockRejectedValueOnce(Object.assign(new Error('E11000 duplicate key'), { code: 11000 }));
+
+  const res = await register();
+
+  expect(res.status).toBe(400);
+  expect(await res.json()).toMatchObject({ code: 'REGISTRATION_REJECTED' });
 });
 
 test('a taken username or email answers one code for both', async () => {

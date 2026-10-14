@@ -134,9 +134,11 @@ router.post('/register', authLimiter, async (req, res) => {
       return res.status(400).json({ error: 'You must accept the privacy policy and consent to data processing to register' });
     }
 
-    // Check if user already exists (use generic message to prevent account enumeration)
+    // Check if user already exists (use generic message to prevent account enumeration).
+    // Trimmed like the schema stores them, or "anna " would miss "anna" here
+    // and only collide at save (a 500 instead of this answer).
     const existingUser = await User.findOne({
-      $or: [{ email: email.toLowerCase() }, { username: username.toLowerCase() }]
+      $or: [{ email: email.trim().toLowerCase() }, { username: uname.toLowerCase() }]
     });
 
     if (existingUser) {
@@ -210,6 +212,11 @@ router.post('/register', authLimiter, async (req, res) => {
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map(e => e.message);
       return res.status(400).json({ error: messages.join(', ') });
+    }
+    // Two registrations racing for one username/email: the loser collides on
+    // the unique index. Same answer as the pre-check, not a 500.
+    if (error.code === 11000) {
+      return res.status(400).json({ error: 'Registration failed. Please check your details and try again.', code: 'REGISTRATION_REJECTED' });
     }
     console.error('Registration error:', error);
     res.status(500).json({ error: 'Registration failed' });

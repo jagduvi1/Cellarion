@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import { AuthProvider, useAuth } from './AuthContext';
 import i18n from '../i18n';
 
@@ -32,8 +32,11 @@ function stubFetch(meUser, savedUser) {
   }));
 }
 
+let ctx;
 function Probe() {
-  const { loading, user } = useAuth();
+  ctx = useAuth();
+  const { loading, user } = ctx;
+  if (!loading && !user) return <p>signed out</p>;
   if (loading || !user) return <p>loading</p>;
   return <p>{`currency:${user.preferences.currency} language:${user.preferences.language}`}</p>;
 }
@@ -79,4 +82,26 @@ it('an existing account is never touched and gets its stored language', async ()
   expect(await screen.findByText('currency:USD language:en')).toBeInTheDocument();
   await waitFor(() => expect(i18n.changeLanguage).toHaveBeenCalledWith('en'));
   expect(calls.some((c) => c.path === '/api/users/me/locale-defaults')).toBe(false);
+});
+
+it('an answer that lands after signing out does not bring the account back', async () => {
+  let answer;
+  const late = new Promise((resolve) => { answer = resolve; });
+  calls = [];
+  vi.stubGlobal('fetch', vi.fn((url) => {
+    const path = new URL(String(url), 'http://localhost').pathname;
+    calls.push({ path });
+    if (path === '/api/auth/refresh') return Promise.resolve(json(200, { token: 'T1' }));
+    if (path === '/api/auth/me') return Promise.resolve(json(200, { user: { ...BASE_USER, localeDefaultsPending: true } }));
+    if (path === '/api/users/me/locale-defaults') return late;
+    return Promise.resolve(json(200, {}));
+  }));
+  render(<AuthProvider><Probe /></AuthProvider>);
+  await waitFor(() => expect(calls.some((c) => c.path === '/api/users/me/locale-defaults')).toBe(true));
+
+  await act(async () => { await ctx.logout(); });
+  expect(screen.getByText('signed out')).toBeInTheDocument();
+
+  await act(async () => { answer(json(200, { applied: true, user: { ...BASE_USER, preferences: { currency: 'SEK', language: 'sv' } } })); });
+  expect(screen.getByText('signed out')).toBeInTheDocument();
 });

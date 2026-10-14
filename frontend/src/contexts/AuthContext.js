@@ -644,21 +644,31 @@ export const AuthProvider = ({ children }) => {
   // failed attempt is simply tried again at the next sign-in.
   // ------------------------------------------------------------------
 
-  const localeDefaultsSentRef = useRef(false);
+  // The account it was sent for — per account, so a second new account made
+  // in the same tab (sign out, register again) still gets its own.
+  const localeDefaultsSentForRef = useRef(null);
   const localeDefaultsPending = user?.localeDefaultsPending === true;
+  const localeUserId = user ? String(user.id || user._id || '') : '';
   useEffect(() => {
-    if (!localeDefaultsPending || !token || offlineSession || localeDefaultsSentRef.current) return;
+    if (!localeDefaultsPending || !token || offlineSession) return;
+    if (localeDefaultsSentForRef.current === localeUserId) return;
     // A translator's ?lng= preview is not the visitor's own language.
     if (hasLanguagePreview()) return;
-    localeDefaultsSentRef.current = true;
+    localeDefaultsSentForRef.current = localeUserId;
+    const generation = sessionGenRef.current;
     const language = i18n.resolvedLanguage || i18n.language;
     const currency = guessCurrency();
     saveLocaleDefaults(apiFetch, { language, ...(currency ? { currency } : {}) })
       .then((res) => (res.ok ? res.json() : null))
-      .then((data) => { if (data?.user) replaceUser(data.user); })
+      .then((data) => {
+        // Signed out (or into another account) while this was in flight: the
+        // answer belongs to a session that is gone and must not bring it back.
+        if (sessionGenRef.current !== generation || userIdRef.current !== localeUserId) return;
+        if (data?.user) replaceUser(data.user);
+      })
       .catch(() => { /* kept pending server-side — the next sign-in retries */ });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [localeDefaultsPending, token, offlineSession]);
+  }, [localeDefaultsPending, token, offlineSession, localeUserId]);
 
   // ------------------------------------------------------------------
   // updatePreferences (uses apiFetch for auto-refresh)

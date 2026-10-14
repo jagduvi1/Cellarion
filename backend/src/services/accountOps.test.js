@@ -154,7 +154,20 @@ describe('updatePreferences', () => {
     const res = await updatePreferences(UID, { currency: 'eur' });
     expect(res.error).toBeUndefined();
     expect(res.changed).toEqual(['preferences.currency']);
-    expect(User.findByIdAndUpdate).toHaveBeenCalledWith(UID, { $set: { 'preferences.currency': 'EUR' } }, { new: true });
+    // A chosen currency also ends the first-sign-in guess (User.localeDefaultsPending).
+    expect(User.findByIdAndUpdate).toHaveBeenCalledWith(
+      UID, { $set: { 'preferences.currency': 'EUR' }, $unset: { localeDefaultsPending: 1 } }, { new: true },
+    );
+  });
+
+  test('a chosen language ends the pending first-sign-in guess; other settings leave it', async () => {
+    User.findByIdAndUpdate.mockResolvedValue({ toJSON: () => ({}), preferences: {} });
+    await updatePreferences(UID, { language: 'de' });
+    expect(User.findByIdAndUpdate.mock.calls[0][1]).toMatchObject({ $unset: { localeDefaultsPending: 1 } });
+
+    User.findByIdAndUpdate.mockClear();
+    await updatePreferences(UID, { ratingScale: '100' });
+    expect(User.findByIdAndUpdate.mock.calls[0][1]).not.toHaveProperty('$unset');
   });
 
   test('a validation error short-circuits before any DB write', async () => {
