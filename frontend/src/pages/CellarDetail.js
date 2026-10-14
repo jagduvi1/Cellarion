@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, Suspense, Fragment } from 'react';
 import { lazy } from '../utils/lazyWithReload';
-import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getCellar, getCellarStatistics, listCellars, getMultiCellarBottles } from '../api/cellars';
@@ -21,6 +21,7 @@ import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPromp
 import { useFeature } from '../utils/featureFlags';
 import { CARD_FIELDS, cardDetails, readCardFields, storeCardFields } from '../utils/cardDetails';
 import { summarizeSelection } from '../utils/bulkSelection';
+import BottleUndoNotice from '../components/BottleUndoNotice';
 import './CellarDetail.css';
 
 // Stable empty rack map for the cross-cellar view (rack placement is per-cellar,
@@ -102,6 +103,15 @@ function CellarDetail() {
   const userCurrency = user?.preferences?.currency || 'USD';
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  // A bottle the bottle page just took away (drunk, or "Added by mistake"),
+  // said here with Undo. Read once from the router state, then dropped from
+  // the history entry so Back or a reload does not offer the same undo again.
+  const location = useLocation();
+  const [bottleNotice, setBottleNotice] = useState(() => location.state?.bottleNotice || null);
+  useEffect(() => {
+    if (!location.state?.bottleNotice) return;
+    navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: null });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [cellar, setCellar] = useState(null);
   const [bottles, setBottles] = useState([]);
   const [bottlesTotal, setBottlesTotal] = useState(0);
@@ -448,6 +458,14 @@ function CellarDetail() {
             ✕
           </button>
         </div>
+      )}
+      {bottleNotice && (
+        <BottleUndoNotice
+          notice={bottleNotice}
+          cellarId={id}
+          onUndone={() => { fetchCellarData(0); fetchStatistics(); fetchRacks(); }}
+          onDismiss={() => setBottleNotice(null)}
+        />
       )}
       {/* ── Header — shared shape so the nav anchors at the same Y everywhere ── */}
       <CellarPageHeader

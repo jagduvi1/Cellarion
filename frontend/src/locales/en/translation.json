@@ -1143,6 +1143,13 @@
     "expectedArrivalHint": "Optional. The month is enough: if it has not arrived once that month is over, we will ask.",
     "addOnOrderBtn": "Add on order"
   },
+  "bottleNotice": {
+    "thisBottle": "The bottle",
+    "drunk": "“{{name}}” is marked as drunk.",
+    "takenOut": "“{{name}}” is taken out of the cellar.",
+    "deleted": "“{{name}}” moved to Recently deleted. You can bring it back for {{days}} days.",
+    "restored": "“{{name}}” is back in the cellar."
+  },
   "bottleDetail": {
     "producerPending": "producer being confirmed",
     "backToCellar": "← Back to Cellar",
@@ -1214,6 +1221,7 @@
     "mistakeLink": "Added by mistake?",
     "mistakeTitle": "Remove as a mistake?",
     "mistakeBody": "This will permanently remove the bottle as if it had never been added. It will not appear in your stats, history, or search. This cannot be undone.",
+    "mistakeBodyRecoverable": "The bottle is removed as if it had never been added, so it won’t count in your stats or history. It goes to Recently deleted, where you can bring it back for {{days}} days.",
     "mistakeConfirm": "Yes, remove it",
     "mistakeRemoving": "Removing…",
     "mistakeError": "Failed to remove bottle",

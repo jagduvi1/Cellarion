@@ -1,9 +1,10 @@
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { lazy } from '../utils/lazyWithReload';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { getBottle, consumeBottle, setBottleDefaultImage, undoBottle, openBottle, restoreBottle, markBottleArrived } from '../api/bottles';
+import { getBottle, consumeBottle, setBottleDefaultImage, bulkDeleteBottles, openBottle, restoreBottle, markBottleArrived } from '../api/bottles';
+import { TRASH_DAYS } from '../components/BulkDeleteModal';
 import { lookupPriceHistory } from '../api/somm';
 import { isOnOrder, formatArrivalMonth, isArrivalLate } from '../utils/onOrder';
 import { useFeature } from '../utils/featureFlags';
@@ -105,6 +106,9 @@ function BottleDetail() {
   const [reportDefaultReason, setReportDefaultReason] = useState(null);
   const [recommendOpen, setRecommendOpen] = useState(false);
   const [journalPromptOpen, setJournalPromptOpen] = useState(false);
+  // What the list we go back to should say (with Undo) about this bottle —
+  // held while the journal prompt is open, handed over as router state.
+  const leaveNoticeRef = useRef(null);
   const [openPickerOpen, setOpenPickerOpen] = useState(false);
   const [openingMethod, setOpeningMethod] = useState('coravin');
   const [openingBusy, setOpeningBusy] = useState(false);
@@ -217,21 +221,35 @@ function BottleDetail() {
     setLotMsg(lotOutcome);
   };
 
+  // The name the list's notice uses for this bottle ("Château X 2018").
+  const noticeName = () => {
+    const name = bottle?.wineDefinition?.name || bottle?.pendingWineRequest?.wineName || '';
+    return [name, bottle?.vintage && bottle.vintage !== 'NV' ? bottle.vintage : ''].filter(Boolean).join(' ');
+  };
+
+  // "Added by mistake?" / "Cancel order": the bottle goes to the cellar's
+  // Recently deleted (the bulk delete's path), not away for good — it used to
+  // be the one delete in the app with no way back, while selecting the same
+  // bottle and deleting it could be undone for TRASH_DAYS. The list it returns
+  // to offers Undo at once.
   const handleMistakeConfirm = async () => {
     if (mistakeBusy) return;
     setMistakeBusy(true);
     try {
-      const res = await undoBottle(apiFetch, bottleId);
-      if (res.ok) {
+      const res = await bulkDeleteBottles(apiFetch, [bottleId]);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.deleted === 1) {
+        const bottleNotice = { kind: 'deleted', bottleId, batchId: data.batchId, name: noticeName() };
         // A cancelled order goes back to the list it came from.
-        navigate(isOnOrder(bottle) ? `/cellars/${cellarId}/on-order` : `/cellars/${cellarId}`);
+        navigate(isOnOrder(bottle) ? `/cellars/${cellarId}/on-order` : `/cellars/${cellarId}`, { state: { bottleNotice } });
       } else {
-        const data = await res.json().catch(() => ({}));
-        alert(data.error || t('bottleDetail.mistakeError', 'Failed to remove bottle'));
+        setMistakeOpen(false);
+        setError(data.error || t('bottleDetail.mistakeError', 'Failed to remove bottle'));
         setMistakeBusy(false);
       }
     } catch {
-      alert(t('bottleDetail.mistakeError', 'Failed to remove bottle'));
+      setMistakeOpen(false);
+      setError(t('bottleDetail.mistakeError', 'Failed to remove bottle'));
       setMistakeBusy(false);
     }
   };
@@ -264,12 +282,15 @@ function BottleDetail() {
       const res = await consumeBottle(apiFetch, bottleId, { reason, note, rating, consumedRatingScale, consumedAt });
       const data = await res.json();
       if (res.ok) {
+        // The cellar list says what happened and offers Undo (the restore this
+        // page offers for two days, which nobody found from History).
+        leaveNoticeRef.current = { kind: 'consumed', reason, bottleId, name: noticeName() };
         // Prompt for journal entry if user hasn't opted out
         if (!journalPromptOptedOut() && reason === 'drank') {
           setConsumeOpen(false);
           setJournalPromptOpen(true);
         } else {
-          navigate(`/cellars/${cellarId}`);
+          navigate(`/cellars/${cellarId}`, { state: { bottleNotice: leaveNoticeRef.current } });
         }
       } else {
         // Close the modal so the inline error banner is visible behind it.
@@ -791,7 +812,7 @@ function BottleDetail() {
             label={t('bottleDetail.mistakeTitle', 'Remove as a mistake?')}
           >
             <h2>{t('bottleDetail.mistakeTitle', 'Remove as a mistake?')}</h2>
-            <p>{t('bottleDetail.mistakeBody', 'This will permanently remove the bottle as if it had never been added. It will not appear in your stats, history, or search. This cannot be undone.')}</p>
+            <p>{t('bottleDetail.mistakeBodyRecoverable', 'The bottle is removed as if it had never been added, so it won’t count in your stats or history. It goes to Recently deleted, where you can bring it back for {{days}} days.', { days: TRASH_DAYS })}</p>
             <div className="modal-actions">
               <button
                 type="button"
@@ -910,7 +931,10 @@ function BottleDetail() {
         {journalPromptOpen && (
           <JournalPrompt
             bottle={bottle}
-            onDone={() => { setJournalPromptOpen(false); navigate(`/cellars/${cellarId}`); }}
+            onDone={() => {
+              setJournalPromptOpen(false);
+              navigate(`/cellars/${cellarId}`, { state: { bottleNotice: leaveNoticeRef.current } });
+            }}
           />
         )}
 

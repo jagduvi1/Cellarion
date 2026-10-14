@@ -1,0 +1,21 @@
+/* In the list's banner spot: the message, then Undo and close on one row
+   (wrapping on a phone). */
+.bottle-undo-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.bottle-undo-notice__text {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+.bottle-undo-notice .btn {
+  flex: none;
+}
+
+.bottle-undo-notice__error {
+  color: var(--color-danger);
+}

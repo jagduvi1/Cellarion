@@ -1,0 +1,64 @@
+import { render, screen } from '@testing-library/react';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import CellarDetail from './CellarDetail';
+
+// The bottle page hands over what it just did (router state); the cellar page
+// says it once, with Undo — and a later visit to the same entry does not.
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (k) => k, i18n: { language: 'en' } }),
+}));
+
+let auth;
+vi.mock('../contexts/AuthContext', () => ({ useAuth: () => auth }));
+
+const ok = (body) => ({ ok: true, status: 200, json: async () => body });
+const CELLAR = { _id: 'c1', name: 'Home', userRole: 'owner', bottleCount: 0 };
+
+const api = vi.fn(async (url) => {
+  if (url.startsWith('/api/cellars/c1?')) {
+    return ok({ cellar: CELLAR, bottles: { items: [], total: 0 }, facets: {}, baseFacets: {}, facetMeta: {} });
+  }
+  if (url === '/api/cellars') return ok({ cellars: [CELLAR] });
+  if (url.startsWith('/api/racks')) return ok({ racks: [] });
+  if (url.startsWith('/api/climate/')) return ok({ devices: [] });
+  return ok({});
+});
+
+const memoryStorage = () => {
+  const m = new Map();
+  return {
+    getItem: (k) => (m.has(k) ? m.get(k) : null),
+    setItem: (k, v) => m.set(k, String(v)),
+    removeItem: (k) => m.delete(k),
+    clear: () => m.clear(),
+  };
+};
+
+beforeEach(() => {
+  api.mockClear();
+  vi.stubGlobal('sessionStorage', memoryStorage());
+  vi.stubGlobal('localStorage', memoryStorage());
+  auth = { apiFetch: api, user: { id: 'u1', preferences: {} }, updatePreferences: vi.fn(async () => ({ success: true })) };
+});
+afterEach(() => vi.unstubAllGlobals());
+
+test('a bottle drunk on its page is announced here with Undo', async () => {
+  render(
+    <MemoryRouter initialEntries={[{ pathname: '/cellars/c1', state: { bottleNotice: { kind: 'consumed', reason: 'drank', bottleId: 'b1', name: 'Barolo 2016' } } }]}>
+      <Routes><Route path="/cellars/:id" element={<CellarDetail />} /></Routes>
+    </MemoryRouter>,
+  );
+  expect(await screen.findByText('bottleNotice.drunk')).toBeInTheDocument();
+  expect(screen.getByText('common.undo')).toBeInTheDocument();
+});
+
+test('without a handed-over notice there is none', async () => {
+  render(
+    <MemoryRouter initialEntries={['/cellars/c1']}>
+      <Routes><Route path="/cellars/:id" element={<CellarDetail />} /></Routes>
+    </MemoryRouter>,
+  );
+  expect(await screen.findByText('cellarDetail.noBottles')).toBeInTheDocument();
+  expect(screen.queryByText('common.undo')).not.toBeInTheDocument();
+});
