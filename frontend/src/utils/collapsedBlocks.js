@@ -5,8 +5,10 @@ import { useAuth } from '../contexts/AuthContext';
  * The blocks of the wine and vintage page a member can fold away: its three
  * sections and the cards with a title of their own (beta feedback
  * 2026-10-12: "let the user minimise the stuff they don't want to see").
- * Mirrors backend config/constants COLLAPSIBLE_BLOCKS — the server refuses a
- * name it doesn't know.
+ * The bottle page folds the same cards under the same names (2026-10-14:
+ * tasting, record, personal, history, reviews), so a card folded on one page
+ * is folded on the other. Mirrors backend config/constants
+ * COLLAPSIBLE_BLOCKS — the server refuses a name it doesn't know.
  *
  * The folded set is remembered on the account (preferences.collapsedBlocks),
  * so a fold made on the phone is still there on the computer.

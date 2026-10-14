@@ -466,6 +466,40 @@
   margin-bottom: 1rem;
 }
 
+/* Folding cards, as on the vintage page (2026-10-14). Each wrapper carries
+   the 1rem gap: the shared folding rules zero a wrapped card's top margin
+   (tasting profile and reviews had one), and the personal-data and history
+   cards had none, so they sat flush against each other. A wrapper whose card
+   renders nothing takes no room. */
+.bottle-detail-page > .cblock {
+  margin-top: 1rem;
+}
+
+.bottle-detail-page > .cblock:empty {
+  display: none;
+}
+
+.bottle-detail-page > .cblock > .card {
+  margin-bottom: 0;
+}
+
+/* The wine record folds inside the details card. Its inner "card" is only
+   there so the shared folding rules find the record's title row: flat, and
+   the fold button level with that row. */
+.bd-details .bd-record-fold,
+.bd-details .bd-record-fold:hover {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+.bd-details .cblock--nested > .cblock-toggle {
+  top: -0.35rem;
+  right: 0;
+}
+
 .bd-detail-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));

@@ -25,6 +25,8 @@ import PersonalDataCard from '../components/bottle/PersonalDataCard';
 import LotHistory from '../components/bottle/LotHistory';
 import TastingProfileCard from '../components/bottle/TastingProfileCard';
 import WineReviewsCard from '../components/bottle/WineReviewsCard';
+import CollapsibleBlock from '../components/CollapsibleBlock';
+import { useCollapsedBlocks } from '../utils/collapsedBlocks';
 import DialogBox from '../components/DialogBox';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
 import { swatchType, wineTypeLabel } from '../utils/wineColour';
@@ -85,6 +87,12 @@ function BottleDetail() {
   // Bumped to send the reader to the wine record in "suggest a fix" mode —
   // wrong DATA is corrected there, with the right value, not reported in prose.
   const [suggestFixSignal, setSuggestFixSignal] = useState(0);
+  // Cards that fold to their title row and stay folded, as on the vintage
+  // page (2026-10-14). The SAME block names as there: the same card folded on
+  // one page is folded on the other — "the stuff I don't want to see" is not
+  // per page. Remembered on the account (preferences.collapsedBlocks).
+  const { isCollapsed, toggle: toggleBlock, expand: expandBlocks } = useCollapsedBlocks();
+  const blockProps = (blockId, label) => ({ id: blockId, label, collapsed: isCollapsed(blockId), onToggle: () => toggleBlock(blockId) });
   // What the last draft publish / attach did; survives the refetch that
   // unmounts the draft banner. Cleared when the page moves to another bottle.
   const [draftNotice, setDraftNotice] = useState(null);
@@ -678,6 +686,7 @@ function BottleDetail() {
           hasImage={!!(defaultImage || pendingImage || bottle.wineDefinition?.image)}
           onEdit={() => setEditing(true)}
           suggestFixSignal={suggestFixSignal}
+          recordFold={blockProps('vintage.record', t('wineRecord.title', 'Wine record'))}
           onRemove={() => setConsumeOpen(true)}
           onReportWine={(reason) => { setReportWineOpen(true); setReportDefaultReason(typeof reason === 'string' ? reason : null); }}
           wineDraft={bottle.wineDraft || null}
@@ -690,31 +699,39 @@ function BottleDetail() {
           Demo visitors are excluded: writes are requireNonDemo and their
           ephemeral accounts would orphan shared-visible rows. ── */}
       {!user?.isDemo && (
-        <PersonalDataCard apiFetch={apiFetch} bottleId={bottleId} currentUserId={user?.id} wineId={wine?._id} vintage={bottle?.vintage} />
+        <CollapsibleBlock {...blockProps('vintage.personal', t('personalData.title', 'Your wine data'))}>
+          <PersonalDataCard apiFetch={apiFetch} bottleId={bottleId} currentUserId={user?.id} wineId={wine?._id} vintage={bottle?.vintage} />
+        </CollapsibleBlock>
       )}
 
       {/* ── The viewer's other bottles of this wine, and what happened to the
           ones already drunk (support ticket 2026-09-16). Hides itself when
           there is nothing to say. Personal, so it sits with the personal
           cards, above the registry's profile and the community reviews. ── */}
-      <LotHistory
-        apiFetch={apiFetch}
-        bottleId={bottleId}
-        vintage={bottle?.vintage}
-        isOwner={userRole === 'owner'}
-        vintageHref={wine?._id ? `/cellars/${cellarId}/vintages/${wine._id}/${encodeURIComponent(bottle?.vintage || 'NV')}` : null}
-      />
+      <CollapsibleBlock {...blockProps('vintage.history', t('lotHistory.title', 'This wine in your cellar'))}>
+        <LotHistory
+          apiFetch={apiFetch}
+          bottleId={bottleId}
+          vintage={bottle?.vintage}
+          isOwner={userRole === 'owner'}
+          vintageHref={wine?._id ? `/cellars/${cellarId}/vintages/${wine._id}/${encodeURIComponent(bottle?.vintage || 'NV')}` : null}
+        />
+      </CollapsibleBlock>
 
       {/* ── Tasting profile (generated or curator-verified, vintage-neutral;
           "not yet assessed" when there is none) — shared with the vintage
           page ── */}
-      <TastingProfileCard
-        wine={wine}
-        onReport={() => { setReportDefaultReason('wrong_tasting_profile'); setReportWineOpen(true); }}
-      />
+      <CollapsibleBlock {...blockProps('vintage.tasting', t('bottleDetail.tastingProfile', 'Tasting profile'))}>
+        <TastingProfileCard
+          wine={wine}
+          onReport={() => { setReportDefaultReason('wrong_tasting_profile'); setReportWineOpen(true); }}
+        />
+      </CollapsibleBlock>
 
       {/* ── Reviews (the wine's and this vintage's; shared with the vintage page) ── */}
-      <WineReviewsCard wine={wine} vintage={bottle?.vintage} communityRating={wine?.communityRating} />
+      <CollapsibleBlock {...blockProps('vintage.reviews', t('reviews.communityReviews', 'Reviews'))}>
+        <WineReviewsCard wine={wine} vintage={bottle?.vintage} communityRating={wine?.communityRating} />
+      </CollapsibleBlock>
 
       </>}
 
@@ -875,7 +892,8 @@ function BottleDetail() {
             // tasting-profile report button stays clickable there, so the
             // hand-off would have been a dead click (pre-deploy audit 2026-09-18).
             onSuggestFix={!editing && !user?.isDemo && bottle.wineDefinition.draft !== true
-              ? () => { setReportWineOpen(false); setReportDefaultReason(null); setSuggestFixSignal(n => n + 1); }
+              // The form opens in the wine record: unfold it if it is folded.
+              ? () => { setReportWineOpen(false); setReportDefaultReason(null); expandBlocks('vintage.record'); setSuggestFixSignal(n => n + 1); }
               : undefined}
             onClose={() => { setReportWineOpen(false); setReportDefaultReason(null); }}
           />
