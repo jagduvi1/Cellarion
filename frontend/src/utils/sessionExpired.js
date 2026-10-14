@@ -4,7 +4,8 @@
 // expired and the refresh was rejected), the app signs out and the protected
 // page sends the person to /login. That page used to look exactly like a fresh
 // visit, so it read as "the app threw me out". The flag lives in sessionStorage
-// (this tab only); the login page reads it, then clears it.
+// (this tab only); the login page shows it until the next sign-in clears it
+// (AuthContext.applySession). A sign-out you chose clears sessionStorage.
 
 const KEY = 'cellarion.sessionExpired';
 
@@ -17,7 +18,7 @@ export function wasSessionExpired() {
   try { return sessionStorage.getItem(KEY) === '1'; } catch { return false; }
 }
 
-/** Forget it once said (separate from the read: StrictMode reads twice). */
+/** Forget it — called when a session starts again. */
 export function clearSessionExpired() {
   try { sessionStorage.removeItem(KEY); } catch { /* nothing to clear */ }
 }

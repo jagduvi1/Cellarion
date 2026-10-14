@@ -1,6 +1,7 @@
 /**
  * Landing on the login page because the server ended a session that was in
- * use: the page says so (once), instead of looking like a fresh visit.
+ * use: the page says so — until the next sign-in clears it — instead of
+ * looking like a fresh visit.
  */
 import { render, screen } from '@testing-library/react';
 import Login from './Login';
@@ -34,15 +35,17 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-test('after the server ended the session, the login page says so — once', () => {
+test('after the server ended the session, the login page says so, however often it mounts', () => {
+  // Mounting must not consume it: React's dev double-mount, or a sign-out
+  // finishing after the page mounted, lost it when it did.
   markSessionExpired();
   const first = render(<Login />);
   expect(screen.getByText(/Your session ended/)).toBeInTheDocument();
-  expect(wasSessionExpired()).toBe(false);
   first.unmount();
 
   render(<Login />);
-  expect(screen.queryByText(/Your session ended/)).not.toBeInTheDocument();
+  expect(screen.getByText(/Your session ended/)).toBeInTheDocument();
+  expect(wasSessionExpired()).toBe(true);
 });
 
 test('a plain visit shows no such notice', () => {

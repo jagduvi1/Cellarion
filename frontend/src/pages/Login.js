@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation, Trans } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import useVersion from '../hooks/useVersion';
-import { wasSessionExpired, clearSessionExpired } from '../utils/sessionExpired';
+import { wasSessionExpired } from '../utils/sessionExpired';
 import { stashPostLoginRedirect, takePostLoginRedirect, isSafeInternalPath } from '../utils/postLoginRedirect';
 import { stashSignupSourceForSso } from '../utils/signupSource';
 import './Login.css';
@@ -45,9 +45,11 @@ function Login() {
   // null when no OIDC provider is configured; { name } when one is.
   const [oidcProvider, setOidcProvider] = useState(null);
   // Arrived here because the server ended a session that was in use — say so,
-  // or the page reads as "the app threw me out". Read once, on mount.
+  // or the page reads as "the app threw me out". The word stays (this tab only)
+  // until the next sign-in clears it: clearing it on mount lost it to React's
+  // dev double-mount, and to the parallel sign-outs a burst of refused
+  // requests sets off, which can finish after this page has mounted.
   const [sessionEnded] = useState(() => wasSessionExpired());
-  useEffect(() => { clearSessionExpired(); }, []);
 
   const { t } = useTranslation();
   const { login, register } = useAuth();

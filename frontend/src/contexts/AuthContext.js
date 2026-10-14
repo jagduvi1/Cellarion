@@ -18,7 +18,7 @@ const notifyApiMutation = (url) => {
 };
 import i18n, { hasLanguagePreview } from '../i18n';
 import { getSignupSource } from '../utils/signupSource';
-import { markSessionExpired } from '../utils/sessionExpired';
+import { markSessionExpired, clearSessionExpired } from '../utils/sessionExpired';
 import { track } from '../utils/track';
 
 const AuthContext = createContext();
@@ -155,6 +155,8 @@ export const AuthProvider = ({ children }) => {
     // cookie is gone, and the next start would post that logout with THIS
     // account's cookie, ending the new session (release audit 2026-09-27, L).
     markPendingLogout(false);
+    // A session again: the login page's "Your session ended" has done its job.
+    clearSessionExpired();
     storeToken(token);
     setUser(userData);
     setOfflineSession(false); // a session applied from the server is a live one

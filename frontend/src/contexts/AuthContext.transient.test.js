@@ -111,6 +111,12 @@ describe('a refresh during a deploy or a hiccup', () => {
     expect(sessionStorage.getItem('cellarion.sessionExpired')).toBe('1');
   });
 
+  it('a new session clears the "session ended" word', async () => {
+    sessionStorage.setItem('cellarion.sessionExpired', '1');
+    await signedIn();
+    expect(sessionStorage.getItem('cellarion.sessionExpired')).toBeNull();
+  });
+
   it('signing out yourself leaves no "session ended" word', async () => {
     await signedIn();
     await act(async () => { await ctx.logout(); });
