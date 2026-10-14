@@ -4,11 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getRecommendations, getSentRecommendations, updateRecommendationStatus, deleteRecommendation } from '../api/recommendations';
 import { addToWishlist } from '../api/wishlist';
+import { friendlyError, httpError, responseError } from '../utils/friendlyError';
 import './Recommendations.css';
 
 import WineImage from '../components/WineImage';
 import ConfirmModal from '../components/ConfirmModal';
-import { friendlyError, httpError, responseError } from '../utils/friendlyError';
 import timeAgo from '../utils/timeAgo';
 
 const PAGE_SIZE = 50; // backend caps recommendation pages at 50

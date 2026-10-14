@@ -3,9 +3,9 @@ import { lazy } from '../utils/lazyWithReload';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import { httpError } from '../utils/friendlyError';
 import { getJournalEntries, deleteJournalEntry } from '../api/journal';
 import ConfirmModal from '../components/ConfirmModal';
-import { httpError } from '../utils/friendlyError';
 import './Journal.css';
 
 const JournalEntryForm = lazy(() => import('../components/JournalEntryForm'));
