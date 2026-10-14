@@ -292,7 +292,7 @@ export default function WineDetail() {
             <h2 className="wd-cta-title">{t('wineDetail.ctaTitle')}</h2>
             <p className="wd-cta-text">{t('wineDetail.ctaText')}</p>
             <div className="wd-cta-actions">
-              <Link to="/login" className="btn btn-primary">{t('wineDetail.signUp')}</Link>
+              <Link to="/login?mode=register" className="btn btn-primary">{t('wineDetail.signUp')}</Link>
               <Link to="/" className="btn btn-secondary">{t('wineDetail.learnMore')}</Link>
             </div>
           </div>

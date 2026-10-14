@@ -38,7 +38,7 @@ function DemoBanner() {
 
   const signUp = async () => {
     await logout();
-    navigate('/login');
+    navigate('/login?mode=register');
   };
 
   return (

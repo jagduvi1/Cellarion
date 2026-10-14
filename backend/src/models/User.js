@@ -390,6 +390,18 @@ const userSchema = new mongoose.Schema({
     }, { _id: false }),
     default: undefined
   },
+  // true from account creation (password or SSO) until the first sign-in, when
+  // the app saves the language it is showing and a currency guessed from the
+  // device's region as the account's preferences (POST /api/users/me/locale-
+  // defaults), then this is removed. Without it every new account started on
+  // English + USD whatever the visitor's browser said, and a Swedish visitor
+  // was switched from Swedish to English the moment they signed up.
+  // Deliberately NO default: accounts created before it existed have no field
+  // and are never touched, so their settings stay exactly as they are.
+  localeDefaultsPending: {
+    type: Boolean,
+    default: undefined
+  },
   // GDPR consent tracking
   gdprConsent: {
     privacyPolicy: {

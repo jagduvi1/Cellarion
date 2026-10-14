@@ -102,6 +102,16 @@
   box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb), 0.1);
 }
 
+/* The account rules under the Register fields — read before typing, not
+   learned from a refusal afterwards. */
+.login-card .form-hint {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
 .login-options {
   display: flex;
   align-items: center;

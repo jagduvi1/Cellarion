@@ -38,8 +38,10 @@ function VerifyEmail() {
       if (result.success) {
         setStatus('success');
         // Verification no longer logs the user in (security audit M-1) — send
-        // them to log in rather than into an authenticated view.
-        setTimeout(() => navigate('/login', { replace: true }), 1500);
+        // them to log in rather than into an authenticated view. The flag lets
+        // the login page say why they are there: on a phone this usually opens
+        // in the mail app's own browser, where no session exists yet.
+        setTimeout(() => navigate('/login', { replace: true, state: { verified: true } }), 1500);
       } else {
         setStatus('error');
         setErrorMessage(result.error || t('auth.verificationFailed'));

@@ -1,5 +1,5 @@
 import { useId, useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useTranslation, Trans } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import useVersion from '../hooks/useVersion';
@@ -23,12 +23,23 @@ function GoogleIcon() {
   );
 }
 
+// The account rules the server enforces (routes/auth.js register, User.js
+// password validator). Checked here first so a newcomer learns them in their
+// own language before submitting, not from an English server error after.
+const USERNAME_RULE = /^[a-z0-9_.-]{3,30}$/i;
+const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z\d]).{12,}$/;
+
 function Login() {
   const usernameId = useId();
   const emailId = useId();
   const passwordId = useId();
   const forgotEmailId = useId();
-  const [mode, setMode] = useState('login');
+  const usernameHintId = useId();
+  const passwordHintId = useId();
+  // Every "Create account" button links here with ?mode=register, so a
+  // newcomer lands on the form they came for instead of the sign-in tab.
+  const [searchParams] = useSearchParams();
+  const [mode, setMode] = useState(() => (searchParams.get('mode') === 'register' ? 'register' : 'login'));
   const [formData, setFormData] = useState({ username: '', email: '', password: '' });
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -72,13 +83,30 @@ function Login() {
     setError(null);
     setPendingVerificationEmail(null);
     setResendStatus(null);
+
+    // Phone keyboards add a space after an autocompleted word or address, and
+    // the server would read "anna@example.com " as an unknown account.
+    const username = formData.username.trim();
+    const email = formData.email.trim();
+
+    if (mode === 'register') {
+      if (!USERNAME_RULE.test(username)) {
+        setError(t('auth.usernameRuleError', 'Usernames are 3–30 characters and may use letters, numbers, dots, underscores and hyphens — no spaces.'));
+        return;
+      }
+      if (!PASSWORD_RULE.test(formData.password)) {
+        setError(t('auth.passwordRuleError', 'Your password needs at least 12 characters, with an uppercase letter, a lowercase letter, a number and a symbol.'));
+        return;
+      }
+    }
+
     setLoading(true);
 
     let result;
     if (mode === 'login') {
-      result = await login(formData.username, formData.password, rememberMe);
+      result = await login(username, formData.password, rememberMe);
     } else {
-      result = await register(formData.username, formData.email, formData.password, consentAccepted);
+      result = await register(username, email, formData.password, consentAccepted);
     }
 
     setLoading(false);
@@ -106,7 +134,11 @@ function Login() {
       if (result.code === 'EMAIL_NOT_VERIFIED') {
         setPendingVerificationEmail(result.email);
       }
-      setError(result.error);
+      // Deliberately the same answer whether the username or the email is the
+      // one taken (no account enumeration), but one that says what to try next.
+      setError(result.code === 'REGISTRATION_REJECTED'
+        ? t('auth.registrationRejected', 'That username or email can’t be used. Try another username — or, if you already have an account, log in or reset your password.')
+        : result.error);
     }
   };
 
@@ -304,7 +336,15 @@ function Login() {
           </button>
         </div>
 
-        {error && <div className="alert alert-error">{error}</div>}
+        {/* Set by VerifyEmail on the way here: the link worked, and this is
+            the step that remains. */}
+        {location.state?.verified && !error && (
+          <div className="alert alert-success" role="status">
+            {t('auth.verifiedNowLogin', 'Your email is verified. Log in to start your cellar.')}
+          </div>
+        )}
+
+        {error && <div className="alert alert-error" role="alert">{error}</div>}
 
         {pendingVerificationEmail && (
           <div style={{ marginBottom: '1rem', textAlign: 'center' }}>
@@ -377,11 +417,20 @@ function Login() {
               id={usernameId}
               type="text"
               autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               value={formData.username}
               onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+              aria-describedby={mode === 'register' ? usernameHintId : undefined}
               required
               autoFocus
             />
+            {mode === 'register' && (
+              <small id={usernameHintId} className="form-hint">
+                {t('auth.usernameHint', '3–30 characters: letters, numbers, dots, underscores or hyphens.')}
+              </small>
+            )}
           </div>
           {mode === 'register' && (
             <div className="form-group">
@@ -404,8 +453,14 @@ function Login() {
               autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              aria-describedby={mode === 'register' ? passwordHintId : undefined}
               required
             />
+            {mode === 'register' && (
+              <small id={passwordHintId} className="form-hint">
+                {t('auth.passwordRequirements', 'Must be at least 12 characters with uppercase, lowercase, number, and special character.')}
+              </small>
+            )}
           </div>
           {mode === 'register' && (
             <div className="form-group consent-group">

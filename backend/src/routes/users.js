@@ -33,7 +33,7 @@ const WishlistItem = require('../models/WishlistItem');
 const PriceTrackingRequest = require('../models/PriceTrackingRequest');
 const PriceTrackingSkip = require('../models/PriceTrackingSkip');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
-const { updatePreferences, updateProfile } = require('../services/accountOps');
+const { updatePreferences, updateProfile, buildPreferencesUpdate } = require('../services/accountOps');
 const { buildUserExport } = require('../services/userDataRegistry');
 const { sanitizeSignupSource } = require('../utils/signupSource');
 const { revokeAllSessions } = require('../services/authTokens');
@@ -179,6 +179,39 @@ router.post('/me/signup-source', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Record signup source error:', error);
     res.status(500).json({ error: 'Failed to record signup source' });
+  }
+});
+
+// POST /api/users/me/locale-defaults — on an account's FIRST sign-in, save the
+// language the app is showing and a currency guessed from the device's region
+// as the account's preferences. Before this every new account started on
+// English + USD, and a Swedish visitor was switched to English at sign-up.
+//
+// One-shot: applies only while User.localeDefaultsPending is set (stamped at
+// account creation, never on older accounts), and the flag is removed by the
+// same conditional update, so a second call — another tab, a later sign-in —
+// changes nothing. Each value goes through the ordinary preferences validator;
+// one that fails it is skipped rather than failing the call, and the flag is
+// cleared anyway (the first sign-in has happened). Answers { applied, user }.
+router.post('/me/locale-defaults', requireAuth, async (req, res) => {
+  try {
+    const $set = {};
+    for (const key of ['language', 'currency']) {
+      const value = req.body?.[key];
+      if (value === undefined) continue;
+      const { update, error } = await buildPreferencesUpdate(req.user.id, { [key]: value });
+      if (!error) Object.assign($set, update);
+    }
+    const updated = await User.updateOne(
+      { _id: req.user.id, localeDefaultsPending: true },
+      { ...(Object.keys($set).length ? { $set } : {}), $unset: { localeDefaultsPending: 1 } },
+    );
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json({ applied: updated.modifiedCount === 1, user: user.toJSON() });
+  } catch (error) {
+    console.error('Locale defaults error:', error);
+    res.status(500).json({ error: 'Failed to save language and currency' });
   }
 });
 

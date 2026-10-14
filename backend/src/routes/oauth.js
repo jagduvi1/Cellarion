@@ -180,7 +180,9 @@ async function upsertSsoUser(provider, claims, { trustEmailVerified = false, iss
     emailVerified: true, // provider-verified
     roles: ['user'],
     displayName: displayName || undefined,
-    authProviders: [{ ...identity }]
+    authProviders: [{ ...identity }],
+    // The first sign-in saves the browser's language + currency (User.js).
+    localeDefaultsPending: true
     // GDPR consent is intentionally NOT stamped here. A new SSO account lands
     // with requiresPolicyReconsent === true, and the app's ReconsentModal forces
     // the user to accept the privacy policy + data processing before using the

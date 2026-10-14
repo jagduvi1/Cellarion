@@ -172,7 +172,7 @@ export default function LandingPage() {
               </Link>
             ) : (
               <>
-                <Link to="/login" className="btn-landing-primary btn-landing-large">
+                <Link to="/login?mode=register" className="btn-landing-primary btn-landing-large">
                   {t('landing.getStarted')}
                 </Link>
                 <button
@@ -265,7 +265,7 @@ export default function LandingPage() {
               {t('landing.openCellar')}
             </Link>
           ) : (
-            <Link to="/login" className="btn-landing-primary btn-landing-large">
+            <Link to="/login?mode=register" className="btn-landing-primary btn-landing-large">
               {t('landing.createAccount')}
             </Link>
           )}

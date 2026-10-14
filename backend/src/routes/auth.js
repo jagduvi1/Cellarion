@@ -140,7 +140,9 @@ router.post('/register', authLimiter, async (req, res) => {
     });
 
     if (existingUser) {
-      return res.status(400).json({ error: 'Registration failed. Please check your details and try again.' });
+      // The code lets the app say what to try next in the user's language; it
+      // is the same for a taken username and a taken email (no enumeration).
+      return res.status(400).json({ error: 'Registration failed. Please check your details and try again.', code: 'REGISTRATION_REJECTED' });
     }
 
     // Create new user
@@ -149,6 +151,8 @@ router.post('/register', authLimiter, async (req, res) => {
       email,
       password,
       roles: ['user'],
+      // The first sign-in saves the browser's language + currency (User.js).
+      localeDefaultsPending: true,
       gdprConsent: {
         privacyPolicy: { accepted: true, acceptedAt: new Date(), version: CURRENT_PRIVACY_POLICY_VERSION },
         dataProcessing: { accepted: true, acceptedAt: new Date() }
@@ -260,9 +264,11 @@ router.post('/login', authLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    // Find user by username or email
+    // Find user by username or email. Trimmed: a phone keyboard adds a space
+    // after an autocompleted address, and both fields are stored trimmed.
+    const identifier = username.trim().toLowerCase();
     const user = await User.findOne({
-      $or: [{ username: username.toLowerCase() }, { email: username.toLowerCase() }]
+      $or: [{ username: identifier }, { email: identifier }]
     });
 
     // Always run bcrypt.compare to prevent timing-based user enumeration

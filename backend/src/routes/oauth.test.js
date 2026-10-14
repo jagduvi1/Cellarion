@@ -102,6 +102,8 @@ describe('upsertGoogleUser', () => {
     expect(user.authProviders).toEqual([{ provider: 'google', providerId: 'google-1' }]);
     // GDPR consent must NOT be pre-stamped — the ReconsentModal collects it.
     expect(user.gdprConsent).toBeUndefined();
+    // Its first sign-in saves the browser's language + currency.
+    expect(user.localeDefaultsPending).toBe(true);
   });
 
   test('returns the SAME account when the provider id is already linked (no duplicate)', async () => {
@@ -130,6 +132,8 @@ describe('upsertGoogleUser', () => {
     expect(user.authProviders).toContainEqual({ provider: 'google', providerId: 'google-99' });
     expect(user.emailVerified).toBe(true); // upgraded — Google verified it
     expect(user.password).toBe('hashed'); // password untouched
+    // An existing account keeps its own settings — no first-sign-in defaults.
+    expect(user.localeDefaultsPending).toBeUndefined();
   });
 
   test('matches email case-insensitively when linking', async () => {

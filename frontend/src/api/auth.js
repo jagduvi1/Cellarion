@@ -36,3 +36,15 @@ export const recordSignupSource = (apiFetch, signupSource) =>
     headers: JSON_HEADERS,
     body: JSON.stringify({ signupSource })
   });
+
+// POST /api/users/me/locale-defaults — body: { language, currency }. Sent once,
+// on an account's first sign-in (user.localeDefaultsPending), so a new account
+// keeps the language it signed up in and gets its region's currency. The
+// server applies it only while that flag is set and clears it in the same
+// update; answers { applied, user }.
+export const saveLocaleDefaults = (apiFetch, { language, currency }) =>
+  apiFetch('/api/users/me/locale-defaults', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ language, currency })
+  });

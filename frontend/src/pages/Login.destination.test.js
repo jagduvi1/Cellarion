@@ -18,6 +18,7 @@ let routerLocation;
 vi.mock('react-router-dom', () => ({
   useNavigate: () => navigateMock,
   useLocation: () => routerLocation,
+  useSearchParams: () => [new URLSearchParams(routerLocation.search)],
 }));
 
 const loginMock = vi.fn();
