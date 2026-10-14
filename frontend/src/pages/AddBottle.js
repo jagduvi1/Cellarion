@@ -50,7 +50,14 @@ function AddBottle() {
   const [registryWines, setRegistryWines] = useState([]);
   const [adoptingId, setAdoptingId] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setErrorText] = useState(null);
+  // Bumped with every error shown, so the scroll-into-view below runs again
+  // when the SAME message is shown twice (a second tap on Confirm).
+  const [errorTick, setErrorTick] = useState(0);
+  const setError = useCallback((message) => {
+    setErrorText(message);
+    if (message) setErrorTick((n) => n + 1);
+  }, []);
   const [search, setSearch] = useState('');
   // Opens the way this device last added a bottle: someone who types names
   // should not have to step past the camera card every time.
@@ -63,6 +70,8 @@ function AddBottle() {
   // "Enter it yourself" speak about a search that ran, not about typing.
   const [searchedFor, setSearchedFor] = useState('');
   const [searchFailed, setSearchFailed] = useState(false);
+  // A library search for exactly what is in the box has finished.
+  const searchDone = !loading && !!searchedFor && searchedFor === search.trim();
   // Every error renders in the one alert at the top of the page, while the
   // button that caused it is usually at the bottom of a long form on a phone.
   // Bring it into view whenever one appears — before, only a refused save
@@ -70,10 +79,13 @@ function AddBottle() {
   // like "the button did nothing".
   const errorRef = useRef(null);
   useEffect(() => {
-    if (!error || !errorRef.current) return;
+    if (!errorTick || !errorRef.current) return;
     try { errorRef.current.scrollIntoView({ block: 'center' }); } catch { /* old browser */ }
     errorRef.current.focus({ preventScroll: true });
-  }, [error]);
+  }, [errorTick]);
+  // Only the latest search's answer is shown: an older one arriving last must
+  // not put its results (or its failure) under the newer query.
+  const searchSeq = useRef(0);
   const [aiSearching, setAiSearching] = useState(false);
   const [aiSearchError, setAiSearchError] = useState(null);
   // identify-text is read-only: it reports what the AI recognised and what the
@@ -637,18 +649,26 @@ function AddBottle() {
 
     // ownHidden=1: the member's own drinks that are not wine (hidden from
     // the shared registry) come back too, so they can add another bottle.
+    const seq = ++searchSeq.current;
     searchWines(apiFetch, `search=${encodeURIComponent(query)}&limit=10&ownHidden=1`)
       .then(async (res) => {
         if (!res.ok) throw new Error(`search ${res.status}`);
         const data = await res.json();
+        if (seq !== searchSeq.current) return;
         setWines(Array.isArray(data.wines) ? data.wines : []);
         setRegistryWines(Array.isArray(data.registryWines) ? data.registryWines : []);
         setSearchedFor(query);
       })
       // Said, not just logged: a search that silently returns nothing reads
-      // as "this wine doesn't exist".
-      .catch(() => setSearchFailed(true))
-      .finally(() => setLoading(false));
+      // as "this wine doesn't exist". The previous list goes too — it is not
+      // the answer to this search.
+      .catch(() => {
+        if (seq !== searchSeq.current) return;
+        setWines([]);
+        setRegistryWines([]);
+        setSearchFailed(true);
+      })
+      .finally(() => { if (seq === searchSeq.current) setLoading(false); });
   }, [search, apiFetch, clearAi]);
 
   // The wine isn't in the library (or the AI couldn't place it): type it in,
@@ -1455,7 +1475,7 @@ function AddBottle() {
               {/* A finished search with nothing in it used to render nothing at
                   all — say so, so the AI row and "Enter it yourself" below read
                   as the next step rather than as noise. */}
-              {!loading && searchedFor && searchedFor === search.trim() && wines.length === 0 && registryWines.length === 0
+              {searchDone && wines.length === 0 && registryWines.length === 0
                 && !aiSearching && !aiIdentified && !aiMatch && (
                 <p className="wine-search-no-results" role="status">
                   {t('addBottle.noLibraryMatch', 'No wines in the library match “{{query}}”.', { query: searchedFor })}
@@ -1599,7 +1619,7 @@ function AddBottle() {
 
               {/* ── After any finished search: the way out when none of the
                    results is the wine, without going through the AI ── */}
-              {!loading && searchedFor && searchedFor === search.trim() && !aiSearching && !aiSearchError && (
+              {searchDone && !aiSearching && !aiSearchError && (
                 <button type="button" className="wine-select-manual-link" onClick={enterWineByHand}>
                   {t('addBottle.notListedEnterByHand', 'Not listed? Enter the wine yourself →')}
                 </button>

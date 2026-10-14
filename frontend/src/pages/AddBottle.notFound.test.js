@@ -111,3 +111,22 @@ test('the add screen opens the way this device last chose', () => {
   expect(screen.getByPlaceholderText('addBottle.searchPlaceholder')).toBeInTheDocument();
   expect(screen.queryByText('addBottle.searchManuallyInstead')).not.toBeInTheDocument();
 });
+
+test('an older search answering last does not replace the newer one', async () => {
+  let answerFirst;
+  searchWines
+    .mockImplementationOnce(() => new Promise((resolve) => { answerFirst = resolve; }))
+    .mockResolvedValueOnce(jsonRes({ wines: [] }));
+  render(<AddBottle />);
+  fireEvent.click(screen.getByText('addBottle.searchManuallyInstead'));
+  const box = screen.getByPlaceholderText('addBottle.searchPlaceholder');
+  fireEvent.change(box, { target: { value: 'Barolo' } });
+  await act(async () => { fireEvent.click(screen.getByText('addBottle.searchBtn')); });
+  fireEvent.change(box, { target: { value: 'Barolo Conterno' } });
+  await act(async () => { fireEvent.keyDown(box, { key: 'Enter' }); });
+  expect(screen.getByRole('status')).toHaveTextContent('addBottle.noLibraryMatch');
+
+  await act(async () => { answerFirst(jsonRes({ wines: [{ _id: 'w9', name: 'Barolo Classico', producer: 'Somebody', country: { name: 'Italy' } }] })); });
+  expect(screen.queryByText('Barolo Classico')).not.toBeInTheDocument();
+  expect(screen.getByRole('status')).toHaveTextContent('addBottle.noLibraryMatch');
+});

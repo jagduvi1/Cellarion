@@ -122,7 +122,7 @@ export default function Recommendations() {
 
       {loading ? (
         <p className="rec-loading">{t('recommendations.loading')}</p>
-      ) : loadFailed ? (
+      ) : loadFailed && items.length === 0 ? (
         <LoadError onRetry={() => fetchItems()} />
       ) : items.length === 0 ? (
         <div className="rec-empty">

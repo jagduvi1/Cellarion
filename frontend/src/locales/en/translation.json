@@ -29,7 +29,7 @@
     "clearSearch": "Clear search",
     "submit": "Submit",
     "networkError": "Network error",
-    "loadFailed": "This could not be loaded. Check your connection and try again.",
+    "couldNotLoad": "This could not be loaded. Check your connection and try again.",
     "retry": "Retry",
     "noRating": "Not rated",
     "undo": "Undo",

@@ -119,6 +119,9 @@ function CellarDetail() {
   const [loading, setLoading] = useState(true);
   const [bottlesLoading, setBottlesLoading] = useState(false);
   const [error, setError] = useState(null);
+  // Whether trying the load again can help: a network failure or a 5xx can; a
+  // 404/403 ("Cellar not found") cannot, so it gets no Retry button.
+  const [errorRetryable, setErrorRetryable] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
@@ -369,10 +372,14 @@ function CellarDetail() {
         }
       } else {
         setError(data.error || 'Failed to load cellar');
+        setErrorRetryable(res.status >= 500);
       }
     } catch {
       // Network failure, or a proxy's HTML error page during a deploy.
-      if (seq === fetchSeq.current) setError(t('common.loadFailed', 'This could not be loaded. Check your connection and try again.'));
+      if (seq === fetchSeq.current) {
+        setError(t('common.couldNotLoad', 'This could not be loaded. Check your connection and try again.'));
+        setErrorRetryable(true);
+      }
     } finally {
       if (seq === fetchSeq.current) {
         setLoading(false);
@@ -434,11 +441,23 @@ function CellarDetail() {
 
   // Only replace the whole page when we have nothing to show yet; once the
   // cellar is loaded, transient fetch failures render as an inline banner.
-  if (error && !cellar) return <LoadError message={error} onRetry={() => { setError(null); fetchCellarData(0); }} />;
+  // Load again after a failure. `loading` first, or the moment between the
+  // tap and the answer shows "No bottles in this cellar yet" again.
+  const retryCellar = () => {
+    setError(null);
+    setLoading(true);
+    fetchCellarData(0);
+  };
+  const retryProps = errorRetryable ? { onRetry: retryCellar } : {};
+  // An empty list with a load error says so in the list's own place (below);
+  // the banner at the top is for failures over a list that is on screen.
+  const errorInList = !!error && bottles.length === 0;
+
+  if (error && !cellar) return <LoadError message={error} {...retryProps} />;
 
   return (
     <div className="cellar-detail-page">
-      {error && (
+      {error && !errorInList && (
         <div className="alert alert-error" role="alert">
           {error}
           <button
@@ -832,7 +851,7 @@ function CellarDetail() {
           ) : error && bottles.length === 0 ? (
             // A failed load is not an empty cellar — "No bottles in this
             // cellar yet" here reads as "my bottles are gone".
-            <LoadError message={error} onRetry={() => { setError(null); fetchCellarData(0); }} />
+            <LoadError message={error} {...retryProps} />
           ) : bottles.length === 0 && !bottlesLoading ? (
             (filters.search || filters.vintage?.length || filters.minRating || filters.maxRating || toMaturityArray(filters.maturity).length || filters.unplaced || filters.reserved || filters.storage || filters.producer || filters.bottleSize || filters.purchaseYear || filters.ratingBand || filters.type?.length || filters.country?.length || filters.region?.length || filters.appellation?.length || filters.grapes?.length) ? (
               <div className="empty-state">

@@ -18,9 +18,11 @@ const ok = (body) => ({ ok: true, status: 200, json: async () => body });
 const CELLAR = { _id: 'c1', name: 'Home', userRole: 'owner', bottleCount: 0 };
 
 let cellarFails;
+let cellarGone;
 const api = vi.fn(async (url) => {
   if (url.startsWith('/api/cellars/c1?')) {
     if (cellarFails) throw new TypeError('Failed to fetch');
+    if (cellarGone) return { ok: false, status: 404, json: async () => ({ error: 'Cellar not found' }) };
     return ok({ cellar: CELLAR, bottles: { items: [], total: 0 }, facets: {}, baseFacets: {}, facetMeta: {} });
   }
   if (url === '/api/cellars') return ok({ cellars: [CELLAR] });
@@ -41,6 +43,7 @@ const memoryStorage = () => {
 
 beforeEach(() => {
   api.mockClear();
+  cellarGone = false;
   cellarFails = false;
   vi.stubGlobal('sessionStorage', memoryStorage());
   vi.stubGlobal('localStorage', memoryStorage());
@@ -68,10 +71,24 @@ test('an empty cellar offers import beside "Add your first bottle"', async () =>
 test('a cellar that could not be loaded says so and loads again on Retry', async () => {
   cellarFails = true;
   renderCellar();
-  expect(await screen.findByText('common.loadFailed')).toBeInTheDocument();
+  expect(await screen.findByText('common.couldNotLoad')).toBeInTheDocument();
   expect(screen.queryByText('cellarDetail.noBottles')).not.toBeInTheDocument();
 
   cellarFails = false;
   fireEvent.click(screen.getByText('common.retry'));
   await waitFor(() => expect(screen.getByText('cellarDetail.noBottles')).toBeInTheDocument());
+});
+
+test('one failure is said once, not in a banner and the list at the same time', async () => {
+  cellarFails = true;
+  renderCellar();
+  await screen.findByText('common.couldNotLoad');
+  expect(screen.getAllByRole('alert')).toHaveLength(1);
+});
+
+test('a cellar that is gone gets no Retry that could never work', async () => {
+  cellarGone = true;
+  renderCellar();
+  expect(await screen.findByText('Cellar not found')).toBeInTheDocument();
+  expect(screen.queryByText('common.retry')).not.toBeInTheDocument();
 });

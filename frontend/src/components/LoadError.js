@@ -10,7 +10,7 @@ export default function LoadError({ message, onRetry }) {
   const { t } = useTranslation();
   return (
     <div className="load-error" role="alert">
-      <p>{message || t('common.loadFailed', 'This could not be loaded. Check your connection and try again.')}</p>
+      <p>{message || t('common.couldNotLoad', 'This could not be loaded. Check your connection and try again.')}</p>
       {onRetry && (
         <button type="button" className="btn btn-secondary btn-small" onClick={onRetry}>
           {t('common.retry', 'Retry')}

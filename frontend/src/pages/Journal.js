@@ -156,7 +156,7 @@ export default function Journal() {
 
       {loading ? (
         <p className="journal-loading">{t('journal.loading', 'Loading...')}</p>
-      ) : loadFailed ? (
+      ) : loadFailed && entries.length === 0 ? (
         <LoadError onRetry={() => fetchEntries()} />
       ) : entries.length === 0 ? (
         <div className="journal-empty">

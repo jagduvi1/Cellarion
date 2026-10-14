@@ -191,7 +191,7 @@ function Cellars() {
               </button>
               <button
                 type="button"
-                onClick={() => setShowCreateForm(false)}
+                onClick={() => { setShowCreateForm(false); setNewCellar({ name: '', description: '', color: null }); }}
                 className="btn btn-secondary"
               >
                 {t('common.cancel')}
