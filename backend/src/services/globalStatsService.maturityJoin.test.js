@@ -51,10 +51,28 @@ describe('stats maturity join (Mongo profiler 2026-10-14)', () => {
     expect(lookup.let).toBeUndefined();
   });
 
-  it('picks the REVIEWED profile of the same vintage', () => {
-    const pick = p.find((s) => s.$addFields && s.$addFields.profile).$addFields.profile;
-    expect(JSON.stringify(pick)).toContain('"$$this.vintage","$_id.v"');
-    expect(JSON.stringify(pick)).toContain('"$$this.status","reviewed"');
+  // Release audit 2026-10-14: a substring check here stayed green with $or in
+  // place of $and, $ne in place of $eq, and the $project dropping `profiles`
+  // before the pick (each measured on Mongo 7: noProfile 12017 → 348, or
+  // everything noProfile). The whole condition and the stage order are pinned.
+  it('picks the REVIEWED profile of the SAME vintage, exactly', () => {
+    const pickIdx = p.findIndex((s) => s.$addFields && s.$addFields.profile);
+    expect(p[pickIdx].$addFields.profile).toEqual({ $first: { $filter: {
+      input: '$profiles',
+      cond: { $and: [{ $eq: ['$$this.vintage', '$_id.v'] }, { $eq: ['$$this.status', 'reviewed'] }] },
+    } } });
+  });
+
+  it('runs join → pick → drop the array → classify → tally, in that order', () => {
+    const lookupIdx = stage('$lookup');
+    const pickIdx = p.findIndex((s) => s.$addFields && s.$addFields.profile);
+    const dropIdx = p.findIndex((s) => s.$project && s.$project.profiles === 0);
+    const classifyIdx = p.findIndex((s) => s.$addFields && s.$addFields.maturity);
+    expect(lookupIdx).toBeGreaterThan(-1);
+    expect(pickIdx).toBe(lookupIdx + 1);
+    expect(dropIdx).toBe(pickIdx + 1);
+    expect(classifyIdx).toBe(dropIdx + 1);
+    expect(classifyIdx).toBe(p.length - 2);
   });
 
   it('sums the per-pair bottle count in the final tally (not 1 per row, which would count pairs)', () => {
