@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import useVersion from '../hooks/useVersion';
 import { stashPostLoginRedirect, takePostLoginRedirect, isSafeInternalPath } from '../utils/postLoginRedirect';
 import { stashSignupSourceForSso } from '../utils/signupSource';
+import { wasSessionExpired, clearSessionExpired } from '../utils/sessionExpired';
 import './Login.css';
 
 const LOGO_WEBP = '/cellarion-logo-light.webp';
@@ -43,6 +44,10 @@ function Login() {
   const [googleEnabled, setGoogleEnabled] = useState(false);
   // null when no OIDC provider is configured; { name } when one is.
   const [oidcProvider, setOidcProvider] = useState(null);
+  // Arrived here because the server ended a session that was in use — say so,
+  // or the page reads as "the app threw me out". Read once, on mount.
+  const [sessionEnded] = useState(() => wasSessionExpired());
+  useEffect(() => { clearSessionExpired(); }, []);
 
   const { t } = useTranslation();
   const { login, register } = useAuth();
@@ -288,6 +293,12 @@ function Login() {
           </picture>
           <p>{t('auth.tagline')}</p>
         </div>
+
+        {sessionEnded && (
+          <div className="alert alert-info" role="status">
+            {t('auth.sessionEnded', 'Your session ended. Log in again to pick up where you left off.')}
+          </div>
+        )}
 
         <div className="mode-toggle">
           <button

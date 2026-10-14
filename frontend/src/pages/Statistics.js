@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { lazy } from '../utils/lazyWithReload';
+import { friendlyError, httpError } from '../utils/friendlyError';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
@@ -92,10 +93,10 @@ function Statistics() {
     try {
       const res  = await apiFetch('/api/stats/overview');
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to load statistics');
+      if (!res.ok) throw httpError(res, data, 'Failed to load statistics');
       setStats(data.stats);
     } catch (e) {
-      setError(e.message);
+      setError(friendlyError(e, t));
     } finally {
       setLoading(false);
     }

@@ -32,6 +32,9 @@ export async function apiJson(resOrPromise) {
     const err = new Error(message);
     err.status = res.status;
     err.body = body;
+    // How long a rate limit asked us to wait — utils/friendlyError words it.
+    const retryAfter = Number(res.headers?.get?.('Retry-After'));
+    if (Number.isFinite(retryAfter) && retryAfter > 0) err.retryAfter = retryAfter;
     throw err;
   }
 

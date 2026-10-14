@@ -17,6 +17,7 @@ import AiConnectSection from '../components/AiConnectSection';
 import SelfHostedBridgeSection from '../components/SelfHostedBridgeSection';
 import RegistryConnectionSection from '../components/RegistryConnectionSection';
 import { isHostedOrigin } from '../utils/mcpConnect';
+import { friendlyError, httpError } from '../utils/friendlyError';
 import SetPasswordNotice from '../components/SetPasswordNotice';
 import McpActivitySection from '../components/McpActivitySection';
 import ClimateDevicesSection from '../components/ClimateDevicesSection';
@@ -325,13 +326,13 @@ function Settings() {
     try {
       const res = await apiFetch('/api/users/me/export');
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Export failed');
+        const data = await res.json().catch(() => null);
+        throw httpError(res, data, 'Export failed');
       }
       const blob = await res.blob();
       downloadBlobObject(blob, `cellarion-data-export-${user?.username || 'user'}.json`);
     } catch (err) {
-      setExportError(err.message);
+      setExportError(friendlyError(err, t));
     } finally {
       setExporting(false);
     }

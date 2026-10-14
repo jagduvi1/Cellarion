@@ -1,0 +1,43 @@
+.action-notice {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(1rem + env(safe-area-inset-bottom));
+  /* Above the slot popups and dialogs (1000), so a failure inside one is seen. */
+  z-index: 1100;
+  width: max-content;
+  max-width: min(32rem, calc(100vw - 2rem));
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 0.75rem 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  color: var(--color-danger);
+  box-shadow: var(--shadow-lg);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.action-notice__text {
+  flex: 1;
+}
+
+.action-notice__close {
+  flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  margin: -0.6rem -0.5rem -0.6rem 0;
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .action-notice {
+    bottom: calc(var(--bottom-nav-height) + 0.75rem + env(safe-area-inset-bottom));
+  }
+}

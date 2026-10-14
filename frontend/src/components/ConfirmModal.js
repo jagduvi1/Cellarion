@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from './Modal';
+import { friendlyError } from '../utils/friendlyError';
 import './ConfirmModal.css';
 
 /**
@@ -20,12 +21,26 @@ function ConfirmModal({ title, message, warning, confirmLabel, confirmClass, con
   const { t } = useTranslation();
   const [typed, setTyped] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [failure, setFailure] = useState(null);
   const needsTyping = !!confirmText;
   const isConfirmEnabled = !submitting && (!needsTyping || typed === confirmText);
 
+  const mounted = useRef(true);
+  useEffect(() => () => { mounted.current = false; }, []);
+
+  // A confirm whose action throws used to leave the button disabled for good
+  // and say nothing. Now the dialog stays open, says why, and can be tried
+  // again. (Callers that close the dialog themselves are unaffected.)
   const handleConfirm = async () => {
     setSubmitting(true);
-    try { await onConfirm(); } catch { /* caller handles */ }
+    setFailure(null);
+    try {
+      await onConfirm();
+    } catch (err) {
+      if (mounted.current) setFailure(friendlyError(err, t));
+    } finally {
+      if (mounted.current) setSubmitting(false);
+    }
   };
 
   return (
@@ -49,6 +64,7 @@ function ConfirmModal({ title, message, warning, confirmLabel, confirmClass, con
           />
         </div>
       )}
+      {failure && <p className="confirm-modal__warning" role="alert">{failure}</p>}
       <div className="confirm-modal__actions">
         <button className="btn btn-outline btn-small" onClick={onCancel}>
           {t('common.cancel')}

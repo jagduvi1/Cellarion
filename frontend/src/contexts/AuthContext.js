@@ -18,6 +18,7 @@ const notifyApiMutation = (url) => {
 };
 import i18n, { hasLanguagePreview } from '../i18n';
 import { getSignupSource } from '../utils/signupSource';
+import { markSessionExpired } from '../utils/sessionExpired';
 import { track } from '../utils/track';
 
 const AuthContext = createContext();
@@ -291,6 +292,8 @@ export const AuthProvider = ({ children }) => {
   // logs out; the caller's request fails and the next one tries again.
   const onRefreshFailed = useCallback(() => {
     if (refreshOutcomeRef.current !== 'rejected') return;
+    // The login page this leads to says why (utils/sessionExpired).
+    markSessionExpired();
     logout({ keepQueue: true });
   }, [logout]);
 

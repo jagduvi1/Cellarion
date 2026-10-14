@@ -28,6 +28,11 @@ let modalSeq = 0;
 function Modal({ title, onClose, children, wide, showClose, boxStyle, trapFocus = false }) {
   const titleId = useId();
   const boxRef = useRef(null);
+  // Where the current press began. A click whose press began INSIDE the box —
+  // selecting text in a field and releasing past the edge — is reported by the
+  // browser on the overlay, and used to close the dialog with whatever had
+  // been typed in it (journal entry, review, support message).
+  const pressTarget = useRef(null);
   const token = useRef(null);
   if (token.current === null) token.current = { seq: ++modalSeq };
 
@@ -83,7 +88,16 @@ function Modal({ title, onClose, children, wide, showClose, boxStyle, trapFocus 
   }, [trapFocus]);
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div
+      className="modal-overlay"
+      onPointerDown={(e) => { pressTarget.current = e.target; }}
+      onClick={(e) => {
+        const startedInside = pressTarget.current && pressTarget.current !== e.currentTarget;
+        pressTarget.current = null;
+        if (startedInside || e.target !== e.currentTarget) return;
+        if (onClose) onClose(e);
+      }}
+    >
       <div
         className={`modal-box${wide ? ' modal-box--wide' : ''}`}
         style={boxStyle}

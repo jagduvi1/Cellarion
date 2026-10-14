@@ -1,4 +1,4 @@
-import { useState, useRef, Suspense } from 'react';
+import { useState, useRef, useEffect, Suspense } from 'react';
 import { lazy } from '../../utils/lazyWithReload';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
@@ -38,6 +38,9 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded, lotSiblingIds = 
   const { t } = useTranslation();
   const { apiFetch, user } = useAuth();
   const galleryRef = useRef(null);
+  // The error shows at the top of the form; Save is at the bottom. On a phone
+  // a refused save looked like nothing happened — bring the message into view.
+  const errorRef = useRef(null);
   const [form, setForm] = useState({
     vintage:          bottle.vintage     || '',
     rating:           bottle.rating      || '',
@@ -63,6 +66,11 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded, lotSiblingIds = 
   });
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState(null);
+  useEffect(() => {
+    if (!error || !errorRef.current) return;
+    try { errorRef.current.scrollIntoView({ block: 'center' }); } catch { /* old browser */ }
+    errorRef.current.focus({ preventScroll: true });
+  }, [error]);
   const [applyToLot, setApplyToLot] = useState(false);
 
   const set = (field) => (e) => setForm(f => ({ ...f, [field]: e.target.value }));
@@ -132,7 +140,7 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded, lotSiblingIds = 
   return (
     <form className="bd-edit-form card" onSubmit={handleSave}>
       <h2>{t('bottleDetail.editBottleTitle')}</h2>
-      {error && <div className="alert alert-error">{error}</div>}
+      {error && <div className="alert alert-error" role="alert" ref={errorRef} tabIndex={-1}>{error}</div>}
 
       <div className="bd-edit-grid">
         <div className="form-group">

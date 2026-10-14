@@ -8,6 +8,7 @@ import './Recommendations.css';
 
 import WineImage from '../components/WineImage';
 import ConfirmModal from '../components/ConfirmModal';
+import { friendlyError, httpError, responseError } from '../utils/friendlyError';
 import timeAgo from '../utils/timeAgo';
 
 const PAGE_SIZE = 50; // backend caps recommendation pages at 50
@@ -55,20 +56,25 @@ export default function Recommendations() {
   };
 
   const handleMarkSeen = async (id) => {
-    const res = await updateRecommendationStatus(apiFetch, id, 'seen');
-    if (res.ok) {
-      setItems((prev) => prev.map((r) => r._id === id ? { ...r, status: 'seen' } : r));
+    try {
+      const res = await updateRecommendationStatus(apiFetch, id, 'seen');
+      if (res.ok) {
+        setItems((prev) => prev.map((r) => r._id === id ? { ...r, status: 'seen' } : r));
+      } else {
+        setMessage({ type: 'error', text: await responseError(res, t) });
+      }
+    } catch (err) {
+      setMessage({ type: 'error', text: friendlyError(err, t) });
     }
   };
 
+  // A refused or failed delete throws, so the confirm dialog stays open and
+  // says why — it used to close as if the recommendation had gone.
   const handleDelete = async (id) => {
-    try {
-      const res = await deleteRecommendation(apiFetch, id);
-      if (res.ok) {
-        setItems(prev => prev.filter(r => r._id !== id));
-        setTotal(prev => prev - 1);
-      }
-    } catch { /* ignore */ }
+    const res = await deleteRecommendation(apiFetch, id);
+    if (!res.ok) throw httpError(res, await res.json().catch(() => null));
+    setItems(prev => prev.filter(r => r._id !== id));
+    setTotal(prev => prev - 1);
     setConfirmDeleteId(null);
   };
 

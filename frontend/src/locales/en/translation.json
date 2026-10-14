@@ -112,12 +112,20 @@
     "dashboard": "Dashboard",
     "pickLists": "Pick lists"
   },
+  "errors": {
+    "network": "Cellarion could not be reached. Check your connection and try again.",
+    "serverUnavailable": "Cellarion could not answer just now. Try again in a moment.",
+    "rateLimited": "That was a lot of changes in a short time. Wait a few minutes and try again.",
+    "rateLimitedFor": "That was a lot of changes in a short time. Try again in {{minutes}} min.",
+    "generic": "Something went wrong. Please try again."
+  },
   "auth": {
     "continueWithGoogle": "Continue with Google",
     "continueWithProvider": "Continue with {{provider}}",
     "login": "Login",
     "register": "Register",
     "tagline": "Your personal wine cellar",
+    "sessionEnded": "Your session ended. Log in again to pick up where you left off.",
     "usernameLabel": "Username",
     "usernameOrEmail": "Username or email",
     "emailLabel": "Email",
@@ -1363,6 +1371,19 @@
     }
   },
   "racks": {
+    "errors": {
+      "create": "The rack could not be created.",
+      "delete": "The rack could not be deleted.",
+      "assign": "The bottle could not be placed.",
+      "assignMany": "Not all the bottles could be placed.",
+      "removeFromRack": "The bottle could not be taken out of the rack.",
+      "disableSlot": "The slot could not be marked unusable.",
+      "enableSlot": "The slot could not be made usable again.",
+      "consume": "The bottle could not be taken out.",
+      "move": "The bottle could not be moved.",
+      "pour": "The glass could not be recorded.",
+      "nfc": "The NFC tag could not be saved."
+    },
     "groupLabel": "Group",
     "groupPlaceholder": "e.g. Basement, Kitchen fridge",
     "groupHint": "Optional. Racks with the same group are shown together — a room, a fridge, a cooler. Leave it empty for no group.",

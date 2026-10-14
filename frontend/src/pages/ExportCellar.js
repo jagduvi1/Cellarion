@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { listCellars } from '../api/cellars';
 import { getExportSummary, downloadDataExport, downloadFullExport } from '../api/cellarExport';
 import { downloadBlobObject } from '../utils/downloadBlob';
+import { friendlyError, httpError } from '../utils/friendlyError';
 
 /**
  * The single "Take your cellars with you" export page. Reached from the cellar
@@ -108,14 +109,14 @@ function ExportCellar() {
         if (res.status === 429 && data.nextAvailableAt) {
           throw new Error(t('exportCellar.weeklyLimitError', { date: formatDate(data.nextAvailableAt) }));
         }
-        throw new Error(data.error || t('exportCellar.exportFailed'));
+        throw httpError(res, data, t('exportCellar.exportFailed'));
       }
       const blob = await res.blob();
       downloadBlobObject(blob, `cellarion-${scopeLabel}-export.${withImages ? 'zip' : 'json'}`);
       // The ZIP consumes the weekly allowance — refresh so the lock reflects it.
       if (withImages) loadSummary();
     } catch (err) {
-      setError(err.message);
+      setError(friendlyError(err, t));
     } finally {
       setDownloading(null);
     }

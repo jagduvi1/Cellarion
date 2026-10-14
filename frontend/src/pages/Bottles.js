@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { listBottles } from '../api/bottles';
 import BottleCard from '../components/BottleCard';
 import { ratingRangeLabel, ratingBandName, toMaturityArray, MATURITY_I18N_KEY } from '../utils/filterLabels';
+import { friendlyError, httpError } from '../utils/friendlyError';
 import './Bottles.css';
 
 const FILTER_KEYS = [
@@ -92,12 +93,12 @@ function Bottles() {
         offset: effectivePage * PAGE_SIZE,
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to load bottles');
+      if (!res.ok) throw httpError(res, json, 'Failed to load bottles');
       if (seq === loadSeq.current) {
         setData(json.bottles || { items: [], total: 0, count: 0 });
       }
     } catch (err) {
-      if (seq === loadSeq.current) setError(err.message);
+      if (seq === loadSeq.current) setError(friendlyError(err, t));
     } finally {
       if (seq === loadSeq.current) setLoading(false);
     }
