@@ -366,7 +366,8 @@ function cabinetPosition({ shelfIndex, row, slot, cols, shelfRows, twoDeep, alte
  * row lies head to tail one deep, never neck to neck); the optional
  * per-shelf lists shelfCols (whole numbers 1..cols, one per shelf),
  * shelfAlternate (booleans, one per shelf) and shelfSideways ('', 'front' or
- * 'all', one per shelf — drawing only, so valid on a loaded cabinet).
+ * 'all', one per shelf — mostly drawing; where it changes a width, on a
+ * stacked one-deep shelf, the update route refuses it on a loaded cabinet).
  * Non-cabinet racks may not carry any of them (a stale shelfRows on a grid
  * would be silently ignored by the geometry but is a client bug).
  * `effectiveCols` bounds shelfCols; when the caller has none, that bound

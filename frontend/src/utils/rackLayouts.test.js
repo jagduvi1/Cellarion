@@ -355,10 +355,15 @@ describe('computeLayout', () => {
       expect([1, 2, 3].map((r) => cabinetRowWidth(r, 5, { ...front, alternate: false }))).toEqual([5, 4, 4]);
       expect(cabinetBayCapacity(2, 5, { ...front, alternate: true })).toBe(8);
       expect([1, 2, 3, 4].map((r) => cabinetRowWidth(r, 6, { twoDeep: true, alternate: true, sideways: 'front' }))).toEqual([6, 5, 5, 6]);
-      expect(cabinetRestsBehindAcross({ sideways: 'front' }, 2, false)).toBe(true);
-      expect(cabinetRestsBehindAcross({ sideways: 'front' }, 1, false)).toBe(false);
-      expect(cabinetRestsBehindAcross({ sideways: 'front' }, 2, true)).toBe(false);
-      expect(cabinetRestsBehindAcross({ sideways: 'all' }, 2, false)).toBe(false);
+      expect(cabinetRestsBehindAcross({ sideways: 'front', cols: 5 }, 2, false)).toBe(true);
+      expect(cabinetRestsBehindAcross({ sideways: 'front', cols: 5 }, 1, false)).toBe(false);
+      expect(cabinetRestsBehindAcross({ sideways: 'front', cols: 5 }, 2, true)).toBe(false);
+      expect(cabinetRestsBehindAcross({ sideways: 'all', cols: 5 }, 2, false)).toBe(false);
+      // Release audit 2026-10-14: a one-wide shelf has nothing behind the bottle
+      // across, and moving its levels a cell over drew them outside the bay.
+      expect(cabinetRestsBehindAcross({ sideways: 'front', cols: 1 }, 2, false)).toBe(false);
+      const narrow = computeLayout('cabinet', 1, 1, { shelfRows: [3], twoDeep: false, shelfSideways: ['front'] });
+      expect(narrow.slots.map((s) => s.cx)).toEqual(computeLayout('cabinet', 1, 1, { shelfRows: [3], twoDeep: false }).slots.map((s) => s.cx));
       // Drawn one cell in (the bottle across), then nested as usual.
       const bay = { rows: 3, cols: 5, alternate: true, sideways: 'front' };
       expect([1, 2, 3].map((r) => cabinetRowOffset(bay, r, { twoDeep: false, stagger: true }))).toEqual([0, 1.5, 1]);

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../Modal';
 import BetaBadge from '../BetaBadge';
-import { cabinetShelfAlternate, cabinetShelfSideways } from '../../utils/rackLayouts';
+import { cabinetShelfAlternate, cabinetShelfSideways, cabinetBays } from '../../utils/rackLayouts';
 import { useFeature } from '../../utils/featureFlags';
 
 /**
@@ -27,9 +27,12 @@ import { useFeature } from '../../utils/featureFlags';
  * already has it keeps the box in view, so it can be switched off again
  * after early access is.
  * How each shelf's bottles lie (early access, 'cabinetSideways': front to
- * back, one across the front, all across) is drawing only as well, so it is
- * edited here on a loaded cabinet; a cabinet that already has a sideways
- * shelf keeps the choice in view, like head to tail.
+ * back, one across the front, all across) is mostly drawing as well, so it
+ * is edited here on a loaded cabinet; a cabinet that already has a sideways
+ * shelf keeps the choice in view, like head to tail. The exception: on a
+ * stacked shelf of a one-deep cabinet a bottle across the front leaves one
+ * fewer on the level above, so there Two deep stays as created and the
+ * route refuses switching that bottle on a loaded cabinet.
  */
 export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
   const { t } = useTranslation();
@@ -44,13 +47,18 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
   // on such a cabinet it stays as created; the route refuses the flip on a
   // loaded rack (audit 2026-09-16).
   const anyAlternate = altList.some(Boolean);
+  // Same for a stacked shelf with a bottle across the front: two deep decides
+  // whether the levels above hold one fewer (release audit 2026-10-14).
+  const stackedAcross = isCabinet && cabinetBays(rack.rows, rack.cols, rack.typeConfig)
+    .some((b) => b.sideways === 'front' && b.rows > 1);
+  const twoDeepLocked = anyAlternate || stackedAcross;
   const [twoDeep, setTwoDeep] = useState(rack.typeConfig?.twoDeep !== false);
   const [stagger, setStagger] = useState(alternate || rack.typeConfig?.stagger !== false);
   const [headToTail, setHeadToTail] = useState(rack.typeConfig?.headToTail === true);
-  // Not where Two deep is locked on (rows that alternate): it could never be
-  // ticked there (release audit 2026-10-12).
+  // Not where Two deep is locked on: it could never be ticked there
+  // (release audit 2026-10-12).
   const showHeadToTail = (useFeature('cabinetHeadToTail') || rack.typeConfig?.headToTail === true)
-    && !(anyAlternate && twoDeep);
+    && !(twoDeepLocked && twoDeep);
   const storedSide = isCabinet ? cabinetShelfSideways(rack.rows, rack.typeConfig) : [];
   const [sideways, setSideways] = useState(storedSide);
   const sidewaysOn = useFeature('cabinetSideways');
@@ -111,7 +119,7 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
           <>
             <label className="form-group">
               <span>
-                <input type="checkbox" checked={twoDeep} onChange={(e) => setTwoDeep(e.target.checked)} disabled={saving || anyAlternate} />
+                <input type="checkbox" checked={twoDeep} onChange={(e) => setTwoDeep(e.target.checked)} disabled={saving || twoDeepLocked} />
                 {' '}{t('racks.cabinetTwoDeepLabel', 'Two deep (neck to neck)')}
               </span>
             </label>
@@ -158,6 +166,7 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
             )}
             <small className="help-text">
               {anyAlternate ? `${t('racks.cabinetTwoDeepLocked', 'Two deep is part of the shape on a cabinet whose rows alternate — it sets which rows are the narrow ones — so it stays as created.')} ` : ''}
+              {!anyAlternate && stackedAcross ? `${t('racks.cabinetTwoDeepLockedAcross', 'Two deep is part of the shape here: with a bottle lying across the front of a stacked shelf, it decides how many bottles the levels above hold, so it stays as created.')} ` : ''}
               {alternate ? `${t('racks.cabinetAlternateNests', 'Rows that alternate in width always nest: each narrow row lies in the grooves of the wide row below it.')} ` : ''}
               {t('racks.cabinetEditHint', 'These options only change how the cabinet is drawn — the number of bottles it holds and where each bottle sits stay the same. To change the shelves themselves, create a new cabinet.')}
             </small>

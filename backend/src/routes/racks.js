@@ -301,27 +301,35 @@ router.put('/:id', async (req, res) => {
       }
     }
 
-    // Two-deep is drawing-only on a plain cabinet, but on one whose rows
-    // alternate it decides which rows are the narrow ones (cabinetRowWidth),
-    // so flipping it renumbers every placed bottle. Fixed once bottles are in.
-    if (typeConfig && !rack.isModular && (type !== undefined ? type : rack.type) === 'cabinet' && (rack.slots || []).length > 0) {
+    // Two deep and how the bottles lie are mostly drawing, and the edit form
+    // offers them on a loaded cabinet for that reason. But each can change a
+    // row's width (rackGeometry.cabinetRowWidth), and the widths ARE the
+    // numbering: two deep decides which rows of an alternating bay are the
+    // narrow ones, and on a stacked one-deep shelf a bottle across the front
+    // leaves one bottle fewer on each level above. Then every slot after it
+    // would be renumbered under the bottles, zones and switched-off slots
+    // already numbered. So on a cabinet holding any of those, the widths with
+    // the stored two deep and lie must equal the new ones. Only those two
+    // come from the stored shape, so the other shape edits keep their own
+    // rules (release audit 2026-10-14: ticking Two deep moved a bottle).
+    const numbered = (rack.slots || []).length > 0 || (rack.disabledPositions || []).length > 0
+      || (rack.zones || []).some((z) => (z.positions || []).length > 0);
+    if (typeConfig && !rack.isModular && (type !== undefined ? type : rack.type) === 'cabinet' && numbered) {
       const effRows = rows !== undefined ? rows : rack.rows;
+      const effCols = cols !== undefined ? cols : rack.cols;
       const wasTwoDeep = rack.typeConfig?.twoDeep !== false;
       const willTwoDeep = typeConfig.twoDeep !== false;
       if (wasTwoDeep !== willTwoDeep && cabinetShelfAlternate(effRows, typeConfig).some(Boolean)) {
         return res.status(400).json({ error: 'Two deep cannot change on a loaded cabinet whose rows alternate: it decides which rows are the narrow ones. Clear the cabinet first.' });
       }
-      // How the bottles lie is mostly drawing, and the edit form offers it on
-      // a loaded cabinet for that reason. The exception (rackGeometry
-      // cabinetRowWidth): a bottle across the front of a stacked one-deep
-      // shelf leaves one bottle fewer on each level above, which renumbers
-      // every bottle after it. Compared with the new shape and only the lie
-      // changed, so the other shape edits keep their own rules.
-      const effCols = cols !== undefined ? cols : rack.cols;
       const widths = (tc) => cabinetRows(effRows, effCols, tc).map((r) => r.width).join(',');
-      const oldLie = { ...typeConfig, shelfSideways: rack.typeConfig?.shelfSideways };
-      if (widths(oldLie) !== widths(typeConfig)) {
-        return res.status(400).json({ error: 'On a loaded cabinet, a bottle lying across the front of a stacked shelf cannot be switched: it changes how many bottles the levels above hold, so every slot after it would be renumbered. Clear the cabinet first.' });
+      const stored = { ...typeConfig, twoDeep: wasTwoDeep, shelfSideways: rack.typeConfig?.shelfSideways };
+      if (widths(stored) !== widths(typeConfig)) {
+        return res.status(400).json({
+          error: wasTwoDeep !== willTwoDeep
+            ? 'Two deep cannot change on this loaded cabinet: with a bottle lying across the front of a stacked shelf it changes how many bottles the levels above hold, so every slot after it would be renumbered. Clear the cabinet first.'
+            : 'On a loaded cabinet, a bottle lying across the front of a stacked shelf cannot be switched: it changes how many bottles the levels above hold, so every slot after it would be renumbered. Clear the cabinet first.',
+        });
       }
     }
 

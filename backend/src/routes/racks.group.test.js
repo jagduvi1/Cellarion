@@ -268,6 +268,31 @@ describe('PUT /api/racks/:id cabinet options', () => {
     expect((await request(buildApp(), 'PUT', `/api/racks/${RACK_ID}`, { typeConfig: { ...deep, shelfSideways: ['front', '', ''] } })).status).toBe(200);
   });
 
+  // Release audit 2026-10-14: with a bottle across a stacked one-deep shelf,
+  // ticking Two deep (or leaving it out, which means two deep) changed the
+  // widths and moved a placed bottle — the old guard only knew alternating rows.
+  test('two deep is fixed on a loaded cabinet where it changes a width; zones and switched-off slots count as loaded', async () => {
+    const shape = { shelfRows: [3, 1, 1], twoDeep: false, stagger: true, shelfSideways: ['front', '', ''] };
+    const loaded = cabinet({ typeConfig: { ...shape } });
+    Rack.findOne.mockResolvedValue(loaded);
+    const flip = await request(buildApp(), 'PUT', `/api/racks/${RACK_ID}`, { typeConfig: { ...shape, twoDeep: true } });
+    expect(flip.status).toBe(400);
+    expect(flip.body.error).toMatch(/Two deep/);
+    expect(loaded.save).not.toHaveBeenCalled();
+    const omitted = { ...shape };
+    delete omitted.twoDeep;
+    Rack.findOne.mockResolvedValue(cabinet({ typeConfig: { ...shape } }));
+    expect((await request(buildApp(), 'PUT', `/api/racks/${RACK_ID}`, { typeConfig: omitted })).status).toBe(400);
+    // Numbered without bottles: a zone or a switched-off slot pins it too.
+    Rack.findOne.mockResolvedValue(cabinet({ typeConfig: { ...shape }, slots: [], zones: [{ name: 'Ready', positions: [9] }] }));
+    expect((await request(buildApp(), 'PUT', `/api/racks/${RACK_ID}`, { typeConfig: { ...shape, shelfSideways: ['', '', ''] } })).status).toBe(400);
+    Rack.findOne.mockResolvedValue(cabinet({ typeConfig: { ...shape }, slots: [], disabledPositions: [12] }));
+    expect((await request(buildApp(), 'PUT', `/api/racks/${RACK_ID}`, { typeConfig: { ...shape, twoDeep: true } })).status).toBe(400);
+    // Truly empty: free to change.
+    Rack.findOne.mockResolvedValue(cabinet({ typeConfig: { ...shape }, slots: [] }));
+    expect((await request(buildApp(), 'PUT', `/api/racks/${RACK_ID}`, { typeConfig: { ...shape, twoDeep: true } })).status).toBe(200);
+  });
+
   test('a shape edit is audited with both sides; a rename carries no shape (audit 2026-09-16)', async () => {
     const { logAudit } = require('../services/audit');
     Rack.findOne.mockResolvedValue(cabinet({ slots: [] }));

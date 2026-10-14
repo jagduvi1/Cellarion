@@ -1450,6 +1450,7 @@
     "cabinetShelfN": "Shelf {{n}}",
     "cabinetTwoDeepLabel": "Two deep (neck to neck)",
     "cabinetTwoDeepLocked": "Two deep is part of the shape on a cabinet whose rows alternate — it sets which rows are the narrow ones — so it stays as created.",
+    "cabinetTwoDeepLockedAcross": "Two deep is part of the shape here: with a bottle lying across the front of a stacked shelf, it decides how many bottles the levels above hold, so it stays as created.",
     "cabinetTwoDeepHelp": "Bottles lie neck to neck, two rows per level. This changes how the cabinet is drawn, not how many bottles it holds.",
     "cabinetStaggerLabel": "Stacked rows nest (staggered)",
     "cabinetEditHint": "These options only change how the cabinet is drawn — the number of bottles it holds and where each bottle sits stay the same. To change the shelves themselves, create a new cabinet.",

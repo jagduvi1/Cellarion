@@ -399,7 +399,9 @@ function shelfLayout(rows, cols, typeConfig) {
 //   position = cols × Σ_{k<i} shelfRows[k] + (row − 1) × cols + slot
 // rows counted from the plank up, slots left to right; in general (an
 // alternating cabinet) position = Σ widths of every earlier row + slot.
-// twoDeep never changes the numbering, only where a row is drawn.
+// twoDeep changes the numbering only where it changes a width (an
+// alternating bay, or a stacked bay with a bottle across the front:
+// cabinetRowWidth); otherwise only where a row is drawn.
 export const CABINET_MAX_ROWS_PER_SHELF = 12;
 
 /**
@@ -472,7 +474,9 @@ export function cabinetBayOpts(bay, twoDeep) {
  * are drawn over the first row's cells 1…, not 0….
  */
 export function cabinetRestsBehindAcross(bay, row, twoDeep) {
-  return bay?.sideways === 'front' && !twoDeep && row > 1;
+  // A one-bottle-wide shelf has nothing behind the bottle across to rest on:
+  // its levels stay where they were drawn (the count is 1 either way).
+  return bay?.sideways === 'front' && !twoDeep && row > 1 && bay.cols > 1;
 }
 
 /**

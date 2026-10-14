@@ -25,7 +25,8 @@
  * in front of 6); it changes capacity, so a preset carrying it is one whose
  * maker stacks that way. `shelfCols` / `shelfAlternate` give a shelf its own
  * width and pattern where the maker's layout is not uniform. `shelfSideways`
- * says how a shelf's bottles lie (drawing only); `feature` names the early
+ * says how a shelf's bottles lie (drawing only, except a bottle across the
+ * front of a stacked one-deep shelf: rackLayouts.cabinetRowWidth); `feature` names the early
  * access flag a preset needs to be listed (the create form hides it
  * without). Whatever the preset says, the owner then edits every shelf —
  * rows, width, pattern — exactly as for a custom shape.
