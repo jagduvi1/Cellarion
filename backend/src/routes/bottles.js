@@ -1603,19 +1603,34 @@ router.post('/:id/restore', requireBottleAccess('editor'), async (req, res) => {
 
 // POST /api/bottles/:id/undo - Reverse an incorrectly-added bottle.
 // The bottle disappears from cellar, racks, search, and stats as if it had
-// never been added. Internal audit log keeps the original `bottle.add` row
-// plus a new `bottle.undo` row so admins can still investigate disputes.
-// Active bottles only — consumed bottles must use a different path.
+// never been added — into the cellar's "Recently deleted" for TRASH_DAYS, like
+// any delete in the app (services/bottleTrash), so a slip on "Added by
+// mistake?" can be undone. It used to be gone for good. The audit log keeps the
+// original `bottle.add` row plus a `bottle.undo` row so admins can still tell
+// a mistaken add from a deletion. Active (or on-order) bottles only — consumed
+// bottles must use a different path. The MCP undo tools call the service
+// layer directly and are unchanged.
+// Response: { message, batchId, purgeAt } — batchId restores it (POST /trash/restore).
 router.post('/:id/undo', requireBottleAccess('editor'), async (req, res) => {
   try {
-    // Full cleanup cascade shared with the MCP undo path (services/bottleOps).
-    const result = await removeBottleCascade(req.bottle, req, 'bottle.undo');
-    if (result.error) {
-      return res.status(result.error.status).json({
+    if (req.bottle.status !== 'active' && req.bottle.status !== ORDERED_STATUS) {
+      return res.status(400).json({
         error: 'Only active bottles can be marked as a mistake. Already-consumed bottles cannot be undone.'
       });
     }
-    res.json({ message: 'Bottle removed as mistake' });
+    const batchId = new mongoose.Types.ObjectId();
+    const deletedAt = new Date();
+    const result = await trashBottle(req.bottle, req, { batchId, deletedAt, auditAction: 'bottle.undo' });
+    if (result.error) {
+      return res.status(result.error.status || 400).json({
+        error: 'Only active bottles can be marked as a mistake. Already-consumed bottles cannot be undone.'
+      });
+    }
+    res.json({
+      message: 'Bottle removed as mistake',
+      batchId,
+      purgeAt: new Date(deletedAt.getTime() + TRASH_DAYS * 24 * 60 * 60 * 1000),
+    });
   } catch (error) {
     console.error('Undo bottle error:', error);
     res.status(500).json({ error: 'Failed to undo bottle' });

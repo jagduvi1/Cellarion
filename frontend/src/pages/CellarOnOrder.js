@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
+import useHandedOverState from '../hooks/useHandedOverState';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import WineImage from '../components/WineImage';
@@ -33,14 +34,8 @@ function CellarOnOrder() {
   // { count } after a delivery was marked — the "now in your cellar" note.
   const [arrived, setArrived] = useState(null);
   // An order the bottle page just cancelled (it went to Recently deleted),
-  // said here with Undo — read once, then dropped from the history entry.
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [bottleNotice, setBottleNotice] = useState(() => location.state?.bottleNotice || null);
-  useEffect(() => {
-    if (!location.state?.bottleNotice) return;
-    navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: null });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // said here with Undo — handed over once (hooks/useHandedOverState).
+  const [bottleNotice, setBottleNotice] = useHandedOverState('bottleNotice');
 
   const load = async () => {
     try {

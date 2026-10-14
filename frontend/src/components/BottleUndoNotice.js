@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { restoreBottle, restoreRecentlyDeleted } from '../api/bottles';
-import { TRASH_DAYS } from './BulkDeleteModal';
+import { TRASH_DAYS, RESTORE_SKIP_KEYS } from '../utils/trash';
 import './BottleUndoNotice.css';
 
 /**
@@ -37,6 +37,18 @@ export default function BottleUndoNotice({ notice, cellarId, onUndone, onDismiss
       if (!res.ok) {
         setFailure(body?.error || t('trash.restoreFailed', 'Couldn’t restore. Please try again.'));
         return;
+      }
+      // The trash restore answers 200 even when nothing came back — say why
+      // (its wine was removed, its cellar deleted) instead of "it's back".
+      // 'exists' means it already is back (restored elsewhere meanwhile).
+      if (notice.kind === 'deleted' && !(body?.restored > 0)) {
+        const reason = body?.skipped?.[0]?.reason;
+        if (reason !== 'exists') {
+          setFailure(reason && RESTORE_SKIP_KEYS[reason]
+            ? t(RESTORE_SKIP_KEYS[reason], { count: 1 })
+            : t('trash.restoreFailed', 'Couldn’t restore. Please try again.'));
+          return;
+        }
       }
       setUndone(true);
       if (onUndone) onUndone();

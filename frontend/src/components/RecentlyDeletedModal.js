@@ -4,16 +4,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { getRecentlyDeleted, restoreRecentlyDeleted } from '../api/bottles';
 import Modal from './Modal';
 import { bottleLine } from '../utils/bulkSelection';
+// Why a bottle could not come back (POST /api/bottles/trash/restore reasons).
+import { RESTORE_SKIP_KEYS as SKIP_KEYS } from '../utils/trash';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // Rows shown per deletion before "Show all".
 const ROWS_COLLAPSED = 8;
-// Why a bottle could not come back (POST /api/bottles/trash/restore reasons).
-const SKIP_KEYS = {
-  wine_gone: 'trash.skippedWineGone',
-  cellar_gone: 'trash.skippedCellarGone',
-  exists: 'trash.skippedExists',
-};
 
 const daysLeft = (purgeAt) => Math.max(0, Math.ceil((new Date(purgeAt).getTime() - Date.now()) / DAY_MS));
 

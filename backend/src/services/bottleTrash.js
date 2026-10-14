@@ -57,9 +57,12 @@ async function labelFor(bottle) {
  * Move one bottle to "Recently deleted". The row is written BEFORE anything
  * is deleted — a bottle must never be gone without its way back — and taken
  * out again if the delete cascade refuses.
+ * `auditAction` names the per-bottle audit row: 'bottle.delete' for a delete,
+ * 'bottle.undo' for "added by mistake" (POST /:id/undo), so the log still
+ * tells a mistaken add from a deletion.
  * Returns { error } | { row }.
  */
-async function trashBottle(bottle, req, { batchId, deletedAt = new Date() }) {
+async function trashBottle(bottle, req, { batchId, deletedAt = new Date(), auditAction = 'bottle.delete' }) {
   const { snapshot } = await snapshotBottleForDelete(bottle);
   // The snapshot keeps an import request only when THIS bottle is the last
   // one waiting on it. Every trashed bottle keeps its own copy instead, so
@@ -83,7 +86,7 @@ async function trashBottle(bottle, req, { batchId, deletedAt = new Date() }) {
     deletedAt,
     purgeAt: new Date(deletedAt.getTime() + TRASH_DAYS * DAY_MS),
   });
-  const result = await removeBottleCascade(bottle, req, 'bottle.delete', {
+  const result = await removeBottleCascade(bottle, req, auditAction, {
     anyStatus: true,
     keepOwnPhotos: true,
     auditDetail: { trashed: true, batchId: String(batchId) },

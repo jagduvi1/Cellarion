@@ -4,8 +4,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { bulkDeleteBottles, restoreRecentlyDeleted } from '../api/bottles';
 import Modal from './Modal';
 
-// How long "Recently deleted" keeps a bottle — services/bottleTrash TRASH_DAYS.
-export const TRASH_DAYS = 30;
+import { TRASH_DAYS } from '../utils/trash';
+
+// How long "Recently deleted" keeps a bottle (utils/trash), re-exported for
+// the screens that already read it from here.
+export { TRASH_DAYS };
 // From this many bottles the delete asks for the number to be typed: a whole
 // import is one tap away from "Select all", and a slip there should cost a
 // moment of typing, not an afternoon of restoring.

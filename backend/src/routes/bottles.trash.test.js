@@ -245,3 +245,41 @@ describe('POST /api/bottles/trash/restore', () => {
     expect(restoreTrashed).not.toHaveBeenCalled();
   });
 });
+
+// "Added by mistake?" on the bottle page. It used to delete for good (the one
+// delete with no way back); it now moves the bottle to "Recently deleted"
+// like every other delete, keeping its own `bottle.undo` audit action.
+describe('POST /api/bottles/:id/undo', () => {
+  test('moves an active bottle to Recently deleted under the bottle.undo action, with its batch id', async () => {
+    Bottle.findById.mockResolvedValue({ _id: B(1), cellar: MINE, user: USER, status: 'active' });
+    const { status, body } = await call(app(), 'POST', `/api/bottles/${B(1)}/undo`);
+
+    expect(status).toBe(200);
+    expect(trashBottle).toHaveBeenCalledTimes(1);
+    const opts = trashBottle.mock.calls[0][2];
+    expect(opts.auditAction).toBe('bottle.undo');
+    expect(String(body.batchId)).toBe(String(opts.batchId));
+    expect((new Date(body.purgeAt) - opts.deletedAt) / 86400000).toBe(30);
+  });
+
+  test('an on-order bottle ("Cancel order") goes the same way', async () => {
+    Bottle.findById.mockResolvedValue({ _id: B(1), cellar: MINE, user: USER, status: 'ordered' });
+    const { status } = await call(app(), 'POST', `/api/bottles/${B(1)}/undo`);
+    expect(status).toBe(200);
+    expect(trashBottle).toHaveBeenCalledTimes(1);
+  });
+
+  test('a consumed bottle is refused and nothing is moved', async () => {
+    Bottle.findById.mockResolvedValue({ _id: B(1), cellar: MINE, user: USER, status: 'drank' });
+    const { status } = await call(app(), 'POST', `/api/bottles/${B(1)}/undo`);
+    expect(status).toBe(400);
+    expect(trashBottle).not.toHaveBeenCalled();
+  });
+
+  test('a viewer cannot', async () => {
+    Bottle.findById.mockResolvedValue({ _id: B(1), cellar: SHARED_VIEW, user: OTHER, status: 'active' });
+    const { status } = await call(app(), 'POST', `/api/bottles/${B(1)}/undo`);
+    expect([403, 404]).toContain(status);
+    expect(trashBottle).not.toHaveBeenCalled();
+  });
+});

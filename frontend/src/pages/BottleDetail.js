@@ -3,8 +3,8 @@ import { lazy } from '../utils/lazyWithReload';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { getBottle, consumeBottle, setBottleDefaultImage, bulkDeleteBottles, openBottle, restoreBottle, markBottleArrived } from '../api/bottles';
-import { TRASH_DAYS } from '../components/BulkDeleteModal';
+import { getBottle, consumeBottle, setBottleDefaultImage, undoBottle, openBottle, restoreBottle, markBottleArrived } from '../api/bottles';
+import { TRASH_DAYS } from '../utils/trash';
 import { lookupPriceHistory } from '../api/somm';
 import { isOnOrder, formatArrivalMonth, isArrivalLate } from '../utils/onOrder';
 import { useFeature } from '../utils/featureFlags';
@@ -224,21 +224,22 @@ function BottleDetail() {
   // The name the list's notice uses for this bottle ("Château X 2018").
   const noticeName = () => {
     const name = bottle?.wineDefinition?.name || bottle?.pendingWineRequest?.wineName || '';
-    return [name, bottle?.vintage && bottle.vintage !== 'NV' ? bottle.vintage : ''].filter(Boolean).join(' ');
+    const vintage = bottle?.vintage && !['NV', 'Unknown'].includes(bottle.vintage) ? bottle.vintage : '';
+    return [name, vintage].filter(Boolean).join(' ');
   };
 
   // "Added by mistake?" / "Cancel order": the bottle goes to the cellar's
-  // Recently deleted (the bulk delete's path), not away for good — it used to
-  // be the one delete in the app with no way back, while selecting the same
-  // bottle and deleting it could be undone for TRASH_DAYS. The list it returns
-  // to offers Undo at once.
+  // Recently deleted (POST /:id/undo now trashes it), not away for good — it
+  // used to be the one delete in the app with no way back, while selecting the
+  // same bottle and deleting it could be undone for TRASH_DAYS. The list it
+  // returns to offers Undo at once.
   const handleMistakeConfirm = async () => {
     if (mistakeBusy) return;
     setMistakeBusy(true);
     try {
-      const res = await bulkDeleteBottles(apiFetch, [bottleId]);
+      const res = await undoBottle(apiFetch, bottleId);
       const data = await res.json().catch(() => ({}));
-      if (res.ok && data.deleted === 1) {
+      if (res.ok && data.batchId) {
         const bottleNotice = { kind: 'deleted', bottleId, batchId: data.batchId, name: noticeName() };
         // A cancelled order goes back to the list it came from.
         navigate(isOnOrder(bottle) ? `/cellars/${cellarId}/on-order` : `/cellars/${cellarId}`, { state: { bottleNotice } });

@@ -53,3 +53,21 @@ test('a refused undo says why and can be tried again', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent('Restore window has passed');
   expect(screen.getByText('Undo')).not.toBeDisabled();
 });
+
+test('a restore that brought nothing back says why instead of "it is back"', async () => {
+  restoreRecentlyDeleted.mockResolvedValue(json(200, { restored: 0, skipped: [{ id: 'b1', reason: 'wine_gone' }] }));
+  render(<BottleUndoNotice notice={{ kind: 'deleted', bottleId: 'b1', batchId: 'batch9', name: 'Barolo 2016' }} cellarId="c1" onDismiss={() => {}} />);
+
+  fireEvent.click(screen.getByText('Undo'));
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('trash.skippedWineGone');
+  expect(screen.getByRole('status')).not.toHaveTextContent('is back in the cellar');
+});
+
+test('already back (restored elsewhere meanwhile) counts as undone', async () => {
+  restoreRecentlyDeleted.mockResolvedValue(json(200, { restored: 0, skipped: [{ id: 'b1', reason: 'exists' }] }));
+  render(<BottleUndoNotice notice={{ kind: 'deleted', bottleId: 'b1', batchId: 'batch9', name: 'Barolo 2016' }} cellarId="c1" onDismiss={() => {}} />);
+
+  fireEvent.click(screen.getByText('Undo'));
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('is back in the cellar'));
+});
