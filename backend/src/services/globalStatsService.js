@@ -699,20 +699,30 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
   // instance-wide roll-up. See statsService.js for the personal-window-aware path.
   const maturityRaw = await safeAggregate(Bottle, [
     { $match: { ...bottleMatch, status: 'active', vintage: { $nin: ['NV', null, ''] } } },
+    // One join per (wine, vintage), not per bottle: bottles of the same wine
+    // and vintage share a profile, so they are counted together (n) and the
+    // final $group sums n. With a plain localField/foreignField join through
+    // the wineDefinition index and the vintage picked in $filter, this is
+    // 3.3 s → 1.0 s on prod data (19,851 bottles, 9,896 pairs, the same
+    // profile on every pair). The per-bottle let/$expr sub-pipeline was the
+    // slowest query in the Mongo profiler (2026-10-14), and it grew with
+    // every bottle; this grows with distinct wine + vintage pairs instead.
+    { $group: { _id: { wd: '$wineDefinition', v: '$vintage' }, n: { $sum: 1 } } },
     { $lookup: {
       from: 'winevintageprofiles',
-      let: { wdId: '$wineDefinition', v: '$vintage' },
-      pipeline: [
-        { $match: { $expr: { $and: [
-          { $eq: ['$wineDefinition', '$$wdId'] },
-          { $eq: ['$vintage', '$$v'] },
-          { $eq: ['$status', 'reviewed'] },
-        ]}}},
-        { $limit: 1 },
-      ],
-      as: 'profile',
+      localField: '_id.wd',
+      foreignField: 'wineDefinition',
+      as: 'profiles',
     }},
-    { $unwind: { path: '$profile', preserveNullAndEmptyArrays: true } },
+    { $addFields: {
+      // The reviewed profile of this vintage (unique on wine + vintage), or
+      // missing, which the classification below reads as noProfile.
+      profile: { $first: { $filter: {
+        input: '$profiles',
+        cond: { $and: [{ $eq: ['$$this.vintage', '$_id.v'] }, { $eq: ['$$this.status', 'reviewed'] }] },
+      } } },
+    }},
+    { $project: { profiles: 0 } },
     { $addFields: {
       maturity: {
         // Mirror utils/maturityUtils.js#classifyMaturity's PROFILE branch (the
@@ -790,7 +800,7 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
         },
       },
     }},
-    { $group: { _id: '$maturity', count: { $sum: 1 } } },
+    { $group: { _id: '$maturity', count: { $sum: '$n' } } },
   ]);
   const maturity = { peak: 0, early: 0, late: 0, declining: 0, notReady: 0, noProfile: 0 };
   for (const m of maturityRaw) {

@@ -39,6 +39,16 @@ const auditLogSchema = new mongoose.Schema({
 // Index for per-user queries
 auditLogSchema.index({ 'actor.userId': 1, timestamp: -1 });
 
+// The account-erasure scrub finds OTHER users' share events by the departing
+// user's email (services/userDataRegistry: detail.sharedWith /
+// detail.invitedEmail). Without these it read every audit row on every
+// account deletion, which happens hourly with demo-account expiry, so its cost
+// grew with users × rows (Mongo profiler 2026-10-14: 92k rows, 143 ms, 45 runs
+// in five days). Sparse: only share events carry the fields, so both indexes
+// stay tiny, and an equality match on an email can always use them.
+auditLogSchema.index({ 'detail.sharedWith': 1 }, { sparse: true });
+auditLogSchema.index({ 'detail.invitedEmail': 1 }, { sparse: true });
+
 // TTL: auto-delete old entries if AUDIT_TTL_DAYS is set. The timestamp field
 // must not also declare a plain index — two indexes with the same key pattern
 // but different options make createIndexes fail with IndexOptionsConflict,
