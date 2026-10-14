@@ -26,7 +26,7 @@ jest.mock('../../models/WineReport', () => ({}));
 jest.mock('../../models/Review', () => ({}));
 jest.mock('../../models/Discussion', () => ({}));
 jest.mock('../../models/DiscussionReply', () => ({}));
-jest.mock('../../models/WineEmbedding', () => ({}));
+jest.mock('../../models/WineEmbedding', () => ({ deleteMany: jest.fn().mockResolvedValue({ deletedCount: 0 }) }));
 jest.mock('../../models/WineNotDuplicate', () => ({ find: jest.fn() }));
 jest.mock('../../models/WineList', () => ({}));
 jest.mock('../../models/WishlistItem', () => ({}));
@@ -40,7 +40,7 @@ jest.mock('../../models/WineRequest', () => ({}));
 jest.mock('../../models/Country', () => ({ findById: jest.fn() }));
 jest.mock('../../services/vectorStore', () => ({}));
 jest.mock('../../services/imageProcessor', () => ({ unlinkImageFiles: jest.fn() }));
-jest.mock('../../services/embeddingJob', () => ({ embedSinglePair: jest.fn() }));
+jest.mock('../../services/embeddingJob', () => ({ embedSinglePair: jest.fn(), reembedActiveVintages: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../../services/search', () => ({ indexWine: jest.fn(), removeWine: jest.fn() }));
 jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../../services/indexNow', () => ({ submitUrls: jest.fn() }));
@@ -105,6 +105,10 @@ test('quarantines a row: sets the flag, saves, self-heals the index, audits', as
   );
   // A quarantine seeds nothing — the queue rows are what it takes away.
   expect(ensurePendingVintageProfile).not.toHaveBeenCalled();
+  // Its vectors go too (audit 2026-10-14): semantic search and the
+  // similar-wines graph must not keep a row keyword search dropped.
+  expect(require('../../models/WineEmbedding').deleteMany).toHaveBeenCalledWith({ wineDefinition: WINE_ID });
+  expect(require('../../services/embeddingJob').reembedActiveVintages).not.toHaveBeenCalled();
 });
 
 test('restores a row with value: false and re-seeds the maturity queue from its bottles in cellars', async () => {
@@ -118,6 +122,9 @@ test('restores a row with value: false and re-seeds the maturity queue from its 
   expect(doc.nonWine).toBe(false);
   expect(Bottle.distinct).toHaveBeenCalledWith('vintage', { wineDefinition: WINE_ID, status: 'active' });
   expect(ensurePendingVintageProfile.mock.calls).toEqual([[WINE_ID, '2019'], [WINE_ID, 'NV']]);
+  // A restore re-embeds (the quarantine purged the vectors) and purges nothing.
+  expect(require('../../services/embeddingJob').reembedActiveVintages).toHaveBeenCalledWith(WINE_ID);
+  expect(require('../../models/WineEmbedding').deleteMany).not.toHaveBeenCalled();
 });
 
 test('a restore still answers 200 when the re-seed fails', async () => {
@@ -138,6 +145,7 @@ test('setting false on a row that was never quarantined re-seeds nothing', async
   const res = await toggle(WINE_ID, { value: false });
   expect(res.status).toBe(200);
   expect(Bottle.distinct).not.toHaveBeenCalled();
+  expect(require('../../services/embeddingJob').reembedActiveVintages).not.toHaveBeenCalled();
 });
 
 test.each([

@@ -637,8 +637,11 @@ describe('findOrCreateWine — fuzzy threshold routing', () => {
 
     const result = await findOrCreateWine(INPUT, USER_ID);
 
+    // A quarantined non-wine is out of the index and out of this fallback too
+    // (audit 2026-10-14).
     expect(WineDefinition.find).toHaveBeenCalledWith({
       $text: { $search: 'Clos des Papes Paul Avril' },
+      nonWine: { $ne: true },
     });
     expect(result).toEqual({ wine: EXISTING_WINE, created: false });
   });

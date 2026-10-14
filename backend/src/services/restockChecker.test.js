@@ -20,6 +20,7 @@ jest.mock('./embedding', () => ({
 jest.mock('./vectorStore', () => ({ getVector: jest.fn(), search: jest.fn() }));
 jest.mock('../config/aiConfig', () => ({ get: () => ({ embeddingModel: 'voyage-4-large', vectorIndex: 'v1' }) }));
 jest.mock('../models/Bottle', () => ({ findById: jest.fn(), distinct: jest.fn() }));
+jest.mock('../models/WineDefinition', () => ({ distinct: jest.fn() }));
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('../models/RestockAlert', () => ({ findOne: jest.fn(), create: jest.fn(), find: jest.fn() }));
 jest.mock('./notifications', () => ({ createNotification: jest.fn() }));
@@ -27,6 +28,7 @@ jest.mock('./notifications', () => ({ createNotification: jest.fn() }));
 const embedding = require('./embedding');
 const vectorStore = require('./vectorStore');
 const Bottle = require('../models/Bottle');
+const WineDefinition = require('../models/WineDefinition');
 const User = require('../models/User');
 const RestockAlert = require('../models/RestockAlert');
 const { createNotification } = require('./notifications');
@@ -42,6 +44,8 @@ beforeEach(() => {
   Bottle.findById.mockReturnValue(lean({ _id: 'b1', vintage: '2016', wineDefinition: WINE }));
   vectorStore.getVector.mockResolvedValue(VECTOR);
   Bottle.distinct.mockResolvedValue(['wOther1', 'wOther2']);
+  // The registry shows every hit unless a test says otherwise.
+  WineDefinition.distinct.mockImplementation(async (_field, q) => q._id.$in);
   RestockAlert.findOne.mockResolvedValue(null);
 });
 
@@ -72,6 +76,34 @@ test('nothing similar left → an alert with the registry\'s closest distinct wi
     user: 'u1', wine: 'wBarolo', vintage: '2016', similarWineIds: ['wBarolo', 'wBarbaresco'],
   }));
   expect(createNotification).toHaveBeenCalledWith('u1', 'restock_alert', 'Restock Suggestion', expect.stringContaining('Barolo'), '/restock');
+  // Hits are filtered to rows the registry shows (audit 2026-10-14).
+  expect(WineDefinition.distinct).toHaveBeenCalledWith('_id', expect.objectContaining({
+    _id: { $in: ['wBarolo', 'wBarbaresco'] }, nonWine: { $ne: true }, pendingIdentity: { $ne: true }, canary: { $ne: true },
+  }));
+});
+
+test('a quarantined non-wine among the hits is never named as a similar wine; none left → no alert', async () => {
+  vectorStore.search
+    .mockResolvedValueOnce([])
+    .mockResolvedValueOnce([
+      { wineDefinitionId: 'wCider', vintage: 'NV', score: 0.9 },
+      { wineDefinitionId: 'wBarbaresco', vintage: '2016', score: 0.86 },
+    ]);
+  WineDefinition.distinct.mockResolvedValueOnce(['wBarbaresco']);
+  await checkRestockGap('u1', 'b1', 'c1');
+  expect(RestockAlert.create).toHaveBeenCalledWith(expect.objectContaining({ similarWineIds: ['wBarbaresco'] }));
+
+  jest.clearAllMocks();
+  User.findById.mockReturnValue(lean({ username: 'u', preferences: {} }));
+  Bottle.findById.mockReturnValue(lean({ _id: 'b1', vintage: '2016', wineDefinition: WINE }));
+  vectorStore.getVector.mockResolvedValue(VECTOR);
+  Bottle.distinct.mockResolvedValue([]);
+  RestockAlert.findOne.mockResolvedValue(null);
+  vectorStore.search.mockResolvedValue([{ wineDefinitionId: 'wCider', vintage: 'NV', score: 0.9 }]);
+  WineDefinition.distinct.mockResolvedValue([]);
+  await checkRestockGap('u1', 'b1', 'c1');
+  expect(RestockAlert.create).not.toHaveBeenCalled();
+  expect(createNotification).not.toHaveBeenCalled();
 });
 
 test('nothing in the registry is really like it → no alert', async () => {

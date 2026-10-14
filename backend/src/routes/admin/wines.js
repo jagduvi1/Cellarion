@@ -49,7 +49,7 @@ const Recommendation = require('../../models/Recommendation');
 const RestockAlert = require('../../models/RestockAlert');
 const WineRequest = require('../../models/WineRequest');
 const { unlinkImageFiles } = require('../../services/imageProcessor');
-const { embedSinglePair } = require('../../services/embeddingJob');
+const { embedSinglePair, reembedActiveVintages } = require('../../services/embeddingJob');
 const searchService = require('../../services/search');
 const { logAudit } = require('../../services/audit');
 const { submitUrls } = require('../../services/indexNow');
@@ -696,6 +696,11 @@ router.post('/:id/non-wine', async (req, res) => {
     await wine.save();
     // Self-healing index sync: indexWine removes flagged rows, re-adds restored ones.
     searchService.indexWine(wine._id);
+    // The vectors too: a quarantined row's embeddings would keep it in
+    // semantic search and the similar-wines graph (audit 2026-10-14). A
+    // restore re-embeds the vintages in cellars, as a promotion does.
+    if (req.body.value === true) await purgeSourceVectors(wine._id);
+    else if (wasNonWine) reembedActiveVintages(wine._id).catch(() => {});
 
     // A restore gives back the maturity-queue rows the quarantine removed
     // (wineProposals' non_wine apply deletes the PENDING ones), seeded from

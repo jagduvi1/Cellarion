@@ -44,11 +44,17 @@ export default function PickList() {
   const tRef = useRef(t);
   tRef.current = t;
 
+  // The newest load wins: an older answer (history navigation between two
+  // lists on this same page) must not land over it (audit 2026-10-14).
+  const loadSeq = useRef(0);
+
   /** Loads the list; true when it worked. Never clears an error: the caller decides. */
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
     try {
       const res = await getPickList(apiFetch, id);
       const data = await res.json().catch(() => ({}));
+      if (seq !== loadSeq.current) return true;
       if (!res.ok || !data.list) throw new Error(data.error || tRef.current('pickLists.loadOneError', 'Could not load this pick list.'));
       const overlay = new Map([...inFlight.current, ...pending.current]);
       const items = data.list.items.map((it) => {
@@ -59,7 +65,10 @@ export default function PickList() {
       setList({ ...data.list, items, picked: items.filter((it) => it.pickedAt).length });
       return true;
     } catch (err) {
-      setError(err.message);
+      if (seq !== loadSeq.current) return false;
+      // A dropped connection throws a TypeError with the browser's own text
+      // ("Failed to fetch"), not a message for the user (audit 2026-10-14).
+      setError(err instanceof TypeError ? tRef.current('common.networkError', 'Network error') : err.message);
       return false;
     }
   }, [apiFetch, id]);
@@ -92,13 +101,18 @@ export default function PickList() {
     return flushing.current;
   }, [apiFetch, id, load]);
 
-  // Send what is still pending when the page closes — only then: a ref, so a
-  // re-render (a new flush) never sends a batch early.
+  // Send what is still pending when the page closes, or when this same page
+  // moves to another list (history navigation) — only then: a ref, so a
+  // re-render (a new flush) never sends a batch early. The ticks go to the
+  // list they were made on (flush closes over its id); nothing of that list
+  // may then lie over the next one (audit 2026-10-14).
   const flushRef = useRef(flush);
   flushRef.current = flush;
   useEffect(() => () => {
     if (flushTimer.current) { clearTimeout(flushTimer.current); flushRef.current(); }
-  }, []);
+    pending.current.clear();
+    inFlight.current.clear();
+  }, [id]);
 
   const toggle = (bottleId, picked) => {
     setList((prev) => ({
@@ -135,7 +149,7 @@ export default function PickList() {
       setRenaming(false);
       await load();
     } catch (err) {
-      setError(err.message || t('pickLists.renameError', 'Could not rename the list.'));
+      setError(err instanceof TypeError ? t('common.networkError', 'Network error') : (err.message || t('pickLists.renameError', 'Could not rename the list.')));
     }
   };
 
@@ -155,6 +169,9 @@ export default function PickList() {
       <div className="pick-list-page">
         <Link to="/pick-lists" className="pick-list-back">← {t('pickLists.all', 'All pick lists')}</Link>
         <p className="error-message" role="alert">{error}</p>
+        <button type="button" className="btn btn-secondary btn-small" onClick={() => { setError(''); load(); }}>
+          {t('common.retry', 'Retry')}
+        </button>
       </div>
     );
   }
@@ -193,10 +210,12 @@ export default function PickList() {
           <button type="button" className="btn btn-secondary btn-small" onClick={() => setRenaming(false)}>{t('common.cancel', 'Cancel')}</button>
         </form>
       ) : (
-        <h1 className="pick-list-title">
-          {list.name}
+        <div className="pick-list-title">
+          {/* The button sits beside the heading, not in it: a screen reader
+              would read "Saturday dinner Rename" as the heading (audit 2026-10-14). */}
+          <h1 className="pick-list-title-text">{list.name}</h1>
           <button type="button" className="pick-list-icon-btn no-print" onClick={() => { setNewName(list.name); setRenaming(true); }} aria-label={t('pickLists.rename', 'Rename')} title={t('pickLists.rename', 'Rename')}>✎</button>
-        </h1>
+        </div>
       )}
       <p className="pick-list-meta">
         {t('pickLists.countLine', { count: list.count, picked: list.picked, defaultValue: `${list.count} bottles · ${list.picked} picked` })}

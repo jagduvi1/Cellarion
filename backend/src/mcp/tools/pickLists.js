@@ -138,6 +138,9 @@ registerTool({
     }
     if (!Object.keys(done).length) return fail('invalid_input', 'Nothing to change: pass name, add/remove bottle ids, or picked/unpicked ids.');
     const view = await getPickListView(ctx.user.id, args.pick_list_id);
+    // Deleted by another connection between the last step and this read:
+    // the steps above still applied (audit 2026-10-14).
+    if (view.error) return failAfter(view.error);
     const list = view.list;
     return ok(`"${list.name}" — ${list.count} bottle(s), ${list.picked} picked`, { pick_list_id: list.id, ...done });
   },

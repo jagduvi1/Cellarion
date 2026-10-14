@@ -37,6 +37,7 @@ const CellarLayout = require('../models/CellarLayout');
 const BottleImage = require('../models/BottleImage');
 const WineRequest = require('../models/WineRequest');
 const { findOrCreatePendingRequest, pickImportHints } = require('./wineRequestIntake');
+const { currencyOrFallback } = require('../config/currencies');
 const Review = require('../models/Review');
 const WineVintageProfile = require('../models/WineVintageProfile');
 
@@ -500,7 +501,9 @@ function buildBottle({ cellarId, ownerId, item, canonicalVintage, wineDefinition
     ...(wineDefinitionId ? { wineDefinition: wineDefinitionId } : { pendingWineRequest: pendingWineRequestId }),
     vintage: canonicalVintage,
     price: item.price || undefined,
-    currency: item.currency || defaultCurrency || 'USD',
+    // File data: a code the app knows, else the import's default (the
+    // importer's profile currency), as the CSV path does (audit 2026-10-14).
+    currency: currencyOrFallback(item.currency, currencyOrFallback(defaultCurrency, 'USD')),
     priceSetAt,
     bottleSize: normalizeBottleSize(item.bottleSize) || DEFAULT_SIZE,
     purchaseDate: item.purchaseDate || undefined,

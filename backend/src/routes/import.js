@@ -46,6 +46,7 @@ const { planRackCreations, placeBottlesInRack, VALID_ANCHORS, DEFAULT_ANCHOR } =
 const { RACK_TYPES } = require('../models/Rack');
 const { validatePriceSanity } = require('../utils/priceValidation');
 const { computeUserMediansByCurrency } = require('../services/priceWarnings');
+const { parseCurrency, currencyOrFallback, isSupportedCurrency } = require('../config/currencies');
 const { runConcurrent } = require('../utils/concurrency');
 const WineRequest = require('../models/WineRequest');
 const { findOrCreatePendingRequest, pickImportHints } = require('../services/wineRequestIntake');
@@ -1300,7 +1301,10 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     for (const r of results) {
       const price = Number(r.item?.price);
       if (!isFinite(price) || price <= 0) continue;
-      const currency = (r.item?.currency || 'USD').toUpperCase();
+      // A currency the app does not know ("kr", "€ EUR") is told here and
+      // replaced by the import's default on confirm (audit 2026-10-14).
+      const rawCurrency = typeof r.item?.currency === 'string' ? r.item.currency.trim() : '';
+      const currency = currencyOrFallback(rawCurrency, 'USD');
       const m = userMedians[currency];
       r.priceWarnings = validatePriceSanity({
         price,
@@ -1308,6 +1312,9 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
         userMedianPrice:  m?.median ?? null,
         userMedianSample: m?.sample ?? 0,
       });
+      if (rawCurrency && !isSupportedCurrency(rawCurrency)) {
+        r.priceWarnings.push({ code: 'unknownCurrency', severity: 'warning', context: { currency: rawCurrency.slice(0, 20) } });
+      }
     }
 
     res.json({
@@ -1374,13 +1381,16 @@ router.post('/confirm', async (req, res) => {
 
     const positionAnchor = VALID_ANCHORS.includes(rawAnchor) ? rawAnchor : DEFAULT_ANCHOR;
 
-    // Currency to apply when an import item has no Currency column of its own.
-    // We accept any 3-letter ISO code here so the user's profile preference
-    // (or a future addition to the frontend CURRENCIES list) flows through
-    // without backend changes. Falls back to USD when no preference is set.
-    const defaultCurrency = (typeof rawDefaultCurrency === 'string' && /^[A-Z]{3}$/i.test(rawDefaultCurrency))
-      ? rawDefaultCurrency.toUpperCase()
-      : 'USD';
+    // Currency to apply when an import item has no Currency column of its
+    // own, or one the app does not know. The user's choice on the confirm
+    // screen (their profile currency by default): a supported code or an
+    // alias of one, as every other write path demands — this used to accept
+    // any three letters (audit 2026-10-14). Falls back to USD when unset.
+    const defaultCurrencyCheck = parseCurrency(rawDefaultCurrency);
+    if (!defaultCurrencyCheck.ok) {
+      return res.status(400).json({ error: defaultCurrencyCheck.error });
+    }
+    const defaultCurrency = defaultCurrencyCheck.value || 'USD';
 
     // Whole-import comment/occasion (support ticket 2026-07-30): typed once on
     // the confirm screen, they land on every BOTTLE this import creates.
@@ -1814,7 +1824,7 @@ router.post('/confirm', async (req, res) => {
             pendingWineRequest: wineRequest._id,
             vintage: canonicalVintage,
             price: item.price || undefined,
-            currency: item.currency || defaultCurrency,
+            currency: currencyOrFallback(item.currency, defaultCurrency),
             priceSetAt,
             bottleSize: normalizeBottleSize(item.bottleSize) || DEFAULT_SIZE,
             purchaseDate: item.purchaseDate || undefined,
@@ -1912,7 +1922,7 @@ router.post('/confirm', async (req, res) => {
           wineDefinition: item.wineDefinition,
           vintage: canonicalVintage,
           price: item.price || undefined,
-          currency: item.currency || defaultCurrency,
+          currency: currencyOrFallback(item.currency, defaultCurrency),
           priceSetAt,
           bottleSize: normalizeBottleSize(item.bottleSize) || DEFAULT_SIZE,
           purchaseDate: item.purchaseDate || undefined,

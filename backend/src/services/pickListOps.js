@@ -93,7 +93,8 @@ const summary = (list) => ({
 });
 
 async function listPickLists(userId) {
-  const lists = await PickList.find({ user: userId }).sort({ updatedAt: -1 }).lean();
+  // The summary needs two counts, not 50 × 500 item subdocuments (audit 2026-10-14).
+  const lists = await PickList.find({ user: userId }).select('name createdAt updatedAt items.pickedAt').sort({ updatedAt: -1 }).lean();
   return { lists: lists.map(summary) };
 }
 
@@ -179,7 +180,11 @@ async function removeFromPickList(userId, id, bottleIds, req) {
     { new: true },
   ).lean();
   if (!list) return err(404, 'Pick list not found');
-  const removed = (before.items || []).length - (list.items || []).length;
+  // What the $pull took: the rows of these ids that were on the list when we
+  // read it — not before − after, which an add landing in between undercounts
+  // (audit 2026-10-14).
+  const wanted = new Set(parsed.ids);
+  const removed = (before.items || []).filter((it) => wanted.has(String(it.bottle))).length;
   if (removed > 0) logAudit(req, 'picklist.remove', { type: 'picklist', id: list._id }, { name: list.name, bottles: removed });
   return { list: summary(list), removed };
 }

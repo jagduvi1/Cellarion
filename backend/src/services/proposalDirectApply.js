@@ -60,6 +60,7 @@
  */
 const Appellation = require('../models/Appellation');
 const Bottle = require('../models/Bottle');
+const Cellar = require('../models/Cellar');
 const { normalizeAppellationKey } = require('../utils/normalize');
 
 // Blank-fillable, reversible, and not part of the dedup key.
@@ -67,7 +68,22 @@ const DIRECT_FIELDS = ['appellation', 'region', 'classification'];
 
 // A non-wine flag applies on filing while at most this many members hold a
 // bottle of the row (any status — a drunk bottle is still in their history).
+// A member = the owner or a member of a cellar with a bottle of it: a
+// bottle's `user` is the cellar OWNER, so counting that made ten members of
+// one shared cellar count as one (audit 2026-10-14).
 const NON_WINE_DIRECT_MAX_OWNERS = 3;
+
+async function countHoldingMembers(wineId) {
+  const cellarIds = await Bottle.distinct('cellar', { wineDefinition: wineId });
+  if (!cellarIds.length) return 0;
+  const cellars = await Cellar.find({ _id: { $in: cellarIds }, deletedAt: null }).select('user members.user').lean();
+  const people = new Set();
+  for (const c of cellars) {
+    if (c.user) people.add(String(c.user));
+    for (const m of c.members || []) if (m.user) people.add(String(m.user));
+  }
+  return people.size;
+}
 
 // A name is at most this many tokens deep for candidate generation — guards a
 // pathological title from generating a quadratic number of lookups.
@@ -208,7 +224,7 @@ async function proposedAppellationCountryConflict(proposed, countryId) {
  */
 async function classifyProposal(wine, kind, proposedFields) {
   if (kind === 'non_wine') {
-    const owners = (await Bottle.distinct('user', { wineDefinition: wine._id })).length;
+    const owners = await countHoldingMembers(wine._id);
     if (owners > NON_WINE_DIRECT_MAX_OWNERS) {
       return {
         direct: false,

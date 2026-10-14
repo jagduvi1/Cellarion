@@ -53,7 +53,9 @@ function followingSiblings(results, selections, sourceIndex, identityChoice) {
     if (!colourCompatible(r.item, source.item)) return false;
     const cur = sel[r.index];
     if (cur == null) return true;
-    return identityChoice && before != null && cur === before;
+    // A skip is a decision only an undo on that row reverses: a sibling
+    // skipped on purpose never follows a wine choice (audit 2026-10-14).
+    return identityChoice && before != null && before !== 'skip' && cur === before;
   });
 }
 

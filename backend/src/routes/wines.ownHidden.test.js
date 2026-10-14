@@ -125,6 +125,26 @@ test('the Meilisearch path does the same', async () => {
   expect(body.total).toBe(8);
 });
 
+// Audit 2026-10-14: search results answered with whole documents, so every
+// row named the member who contributed it and carried the curation keys.
+test('a member\'s results carry no curation internals and no createdBy, on both paths', async () => {
+  const internals = { createdBy: USER_ID, normalizedKey: 'k', canonicalKey: 'c', productNumber: '123', canary: false, identityProvenance: { x: 1 } };
+  WineDefinition.find.mockReset();
+  WineDefinition.find.mockReturnValueOnce(chain([{ ...beer(), ...internals }])).mockReturnValue(chain([{ ...wine(), ...internals }]));
+  let { body } = await get('/api/wines?search=lager&ownHidden=1');
+  for (const w of body.wines) {
+    for (const f of Object.keys(internals)) expect(w).not.toHaveProperty(f);
+  }
+  expect(body.wines[0].nonWine).toBe(true); // what the picker reads stays
+
+  searchService.getIsAvailable.mockReturnValue(true);
+  searchService.search.mockResolvedValue({ ids: [WINE], estimatedTotalHits: 7 });
+  WineDefinition.find.mockReset();
+  WineDefinition.find.mockReturnValueOnce(chain([{ ...beer(), ...internals }])).mockReturnValue(chain([{ ...wine(), ...internals }]));
+  ({ body } = await get('/api/wines?search=lager&ownHidden=1'));
+  for (const w of body.wines) expect(w).not.toHaveProperty('createdBy');
+});
+
 test('without ownHidden=1 (a forum wine tag, a wine-request link) nothing hidden is looked up', async () => {
   WineDefinition.find.mockReset();
   WineDefinition.find.mockReturnValue(chain([wine()]));

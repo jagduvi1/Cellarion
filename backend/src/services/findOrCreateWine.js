@@ -639,10 +639,12 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     }
   }
 
-  // MongoDB text-search fallback
+  // MongoDB text-search fallback. A quarantined non-wine is out of the index
+  // and must not come back through here either (audit 2026-10-14): the
+  // exact-key stage above is the one place its owner's add still reaches it.
   if (candidates.length === 0) {
     try {
-      candidates = await WineDefinition.find({ $text: { $search: searchQuery } })
+      candidates = await WineDefinition.find({ $text: { $search: searchQuery }, nonWine: { $ne: true } })
         .populate(POPULATE)
         .limit(20);
     } catch {
@@ -944,7 +946,7 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // that could not contain the wine they were duplicating.
   if (!producerMissing) {
     try {
-      const siblings = (await WineDefinition.find({ producer: producerToStore })
+      const siblings = (await WineDefinition.find({ producer: producerToStore, nonWine: { $ne: true } })
         .limit(60).populate(POPULATE)).filter((c) => !pendingBlocked(c));
       if (siblings.length > 0) {
         const grapeDocs = await Grape.find({}).select('name normalizedName normalizedSynonyms').lean();

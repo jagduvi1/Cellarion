@@ -441,6 +441,9 @@ function validateCabinetConfig(typeConfig, effectiveType, effectiveRows, effecti
  */
 function fitCabinetTypeConfig(rows, cols, typeConfig) {
   const tc = typeConfig && typeof typeConfig === 'object' ? typeConfig : {};
+  // A grid-only key in a hand-edited export would make every later edit of
+  // the cabinet a 400 ("only supported on grid racks" — audit 2026-10-14).
+  delete tc.doubleHeightRows;
   return {
     ...tc,
     shelfRows: cabinetShelfRows(rows, tc),

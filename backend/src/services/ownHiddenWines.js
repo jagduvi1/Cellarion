@@ -9,11 +9,13 @@
  * hidden row (exact-key resolution matches it on purpose); searching did not.
  *
  * So a search also looks among the quarantined rows the caller created or holds
- * a bottle of (any status: a drunk bottle is the "buy it again" case). Nobody
- * else's search ever returns them, and the rows stay out of the shared index.
+ * a bottle of (any status: a drunk bottle is the "buy it again" case) in a
+ * cellar of theirs — own or shared with them. Nobody else's search ever
+ * returns them, and the rows stay out of the shared index.
  */
 const WineDefinition = require('../models/WineDefinition');
 const Bottle = require('../models/Bottle');
+const Cellar = require('../models/Cellar');
 const { normalizeString } = require('../utils/normalize');
 const { escapeRegex } = require('../utils/sanitize');
 
@@ -35,6 +37,18 @@ function termFilter(term) {
 }
 
 /**
+ * The cellars the caller holds bottles in: their own and the ones shared
+ * with them. "Holds a bottle" is a cellar-membership question, not
+ * `Bottle.user` — every bottle's user is the cellar OWNER (bottleOps), so
+ * keying on it left the editor who added the cider unable to find it while
+ * the owner, who never touched it, could (audit 2026-10-14). Same resolution
+ * as wineVisibility.isDraftVisibleViaSharedCellar.
+ */
+function memberCellarIds(userId) {
+  return Cellar.find({ $or: [{ user: userId }, { 'members.user': userId }], deletedAt: null }).distinct('_id');
+}
+
+/**
  * Ids of the caller's own quarantined rows that match a search.
  *
  * @param {string} userId
@@ -52,9 +66,12 @@ async function findOwnHiddenWineIds(userId, term, { limit = DEFAULT_LIMIT } = {}
 
   const uid = String(userId);
   const created = candidates.filter((c) => String(c.createdBy) === uid).map((c) => String(c._id));
-  const held = (await Bottle.distinct('wineDefinition', {
-    user: userId, wineDefinition: { $in: candidates.map((c) => c._id) },
-  })).map(String);
+  const cellarIds = await memberCellarIds(userId);
+  const held = cellarIds.length
+    ? (await Bottle.distinct('wineDefinition', {
+      cellar: { $in: cellarIds }, wineDefinition: { $in: candidates.map((c) => c._id) },
+    })).map(String)
+    : [];
   return [...new Set([...created, ...held])].slice(0, limit);
 }
 
@@ -67,7 +84,9 @@ async function isOwnHiddenWine(userId, wineId) {
   const wine = await WineDefinition.findOne({ _id: wineId, nonWine: true }).select('createdBy').lean();
   if (!wine) return false;
   if (String(wine.createdBy) === String(userId)) return true;
-  return !!(await Bottle.exists({ user: userId, wineDefinition: wineId }));
+  const cellarIds = await memberCellarIds(userId);
+  if (!cellarIds.length) return false;
+  return !!(await Bottle.exists({ cellar: { $in: cellarIds }, wineDefinition: wineId }));
 }
 
 module.exports = { findOwnHiddenWineIds, isOwnHiddenWine };

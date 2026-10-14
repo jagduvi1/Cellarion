@@ -104,6 +104,10 @@ export function describePriceWarning(w) {
       return `${c.ratio}× the recorded market price (${fmt(c.marketPrice)} ${c.currency}) for this wine and vintage.`;
     case 'possiblyCents':
       return `Looks like cents — if you meant ${fmt(c.ifCents)} ${c.currency}, divide by 100.`;
+    case 'unknownCurrency':
+      // The server's import validate step: the row's currency is not one the
+      // app knows, so the bottle is saved in the import's currency instead.
+      return `"${c.currency}" is not a currency Cellarion knows — the bottle will be saved in the import's currency.`;
     default:
       return code;
   }

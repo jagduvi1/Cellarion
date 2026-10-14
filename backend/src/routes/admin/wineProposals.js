@@ -33,6 +33,7 @@ const router = express.Router();
 const WineCorrectionProposal = require('../../models/WineCorrectionProposal');
 const WineDefinition = require('../../models/WineDefinition');
 const WineVintageProfile = require('../../models/WineVintageProfile');
+const WineEmbedding = require('../../models/WineEmbedding');
 const Country = require('../../models/Country');
 const Grape = require('../../models/Grape');
 const { requireAuth, requireRole } = require('../../middleware/auth');
@@ -654,6 +655,9 @@ async function approveProposal(proposalId, req, { deferFollowThrough = false, pr
         wine.nonWine = true;
         await wine.save();
         searchService.indexWine(wine._id);
+        // Its vectors go too, or semantic search and the similar-wines graph
+        // would keep showing the row (audit 2026-10-14).
+        await WineEmbedding.deleteMany({ wineDefinition: wine._id });
         // Completes the quarantine for the somm queue: PENDING maturity rows
         // go (they are auto-seeded stubs); REVIEWED windows are curated data
         // and stay with the record.

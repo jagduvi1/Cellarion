@@ -1,4 +1,5 @@
 const Bottle = require('../models/Bottle');
+const WineDefinition = require('../models/WineDefinition');
 const RestockAlert = require('../models/RestockAlert');
 const User = require('../models/User');
 const { createNotification } = require('./notifications');
@@ -87,7 +88,15 @@ async function runCheck(userId, bottleId, cellarId) {
     const hits = await vectorStore.search(queryVector, {
       model, indexVersion, limit: TOP_K, minScore: SIMILARITY_THRESHOLD, distinctWines: true,
     });
-    const similarWineIds = hits.map(h => h.wineDefinitionId);
+    // Only wines the registry shows: a quarantined non-wine, a pending row
+    // or a canary keeps its vectors but must not be named as a similar wine
+    // in the alert (audit 2026-10-14).
+    const hitIds = hits.map(h => h.wineDefinitionId);
+    const similarWineIds = hitIds.length
+      ? (await WineDefinition.distinct('_id', {
+        _id: { $in: hitIds }, nonWine: { $ne: true }, pendingIdentity: { $ne: true }, canary: { $ne: true },
+      })).map(String)
+      : [];
     if (similarWineIds.length === 0) return;
 
     // Check if there's already an active alert for this wine

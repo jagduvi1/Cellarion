@@ -46,7 +46,9 @@ export default function PickLists() {
       if (!res.ok) throw new Error(data.error || t('pickLists.createFailed', 'Could not create the pick list.'));
       navigate(`/pick-lists/${data.list.id}`);
     } catch (err) {
-      setError(err.message);
+      // A dropped connection throws a TypeError with the browser's own text
+      // ("Failed to fetch"), not a message for the user (audit 2026-10-14).
+      setError(err instanceof TypeError ? t('common.networkError', 'Network error') : err.message);
       setCreating(false);
     }
   };

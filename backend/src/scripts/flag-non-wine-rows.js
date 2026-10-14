@@ -29,6 +29,7 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 const WineDefinition = require('../models/WineDefinition');
+const WineEmbedding = require('../models/WineEmbedding');
 const searchService = require('../services/search');
 
 const APPLY = process.argv.includes('--apply');
@@ -66,15 +67,16 @@ async function run() {
     if (APPLY) {
       await WineDefinition.updateOne({ _id: id }, { $set: { nonWine: true, updatedAt: new Date() } });
       searchService.removeWine(id);
+      // Vectors too: semantic search and the similar-wines graph read the
+      // WineEmbedding rows, not the flag (audit 2026-10-14).
+      await WineEmbedding.deleteMany({ wineDefinition: id });
     }
     stats.flagged += 1;
   }
 
   console.log(`\nFlagged: ${stats.flagged}  already flagged: ${stats.already}  missing: ${stats.missing}  of ${NON_WINE_IDS.length}`);
   if (APPLY) {
-    console.log('Rows removed from Meilisearch; owners keep their bottles and wine pages.');
-    console.log('No re-embed needed: nonWine is not in the embedding text (embeddings for');
-    console.log('these rows are harmless leftovers; semantic search dedupes against Mongo).');
+    console.log('Rows removed from Meilisearch and their vectors deleted; owners keep their bottles and wine pages.');
   }
   await mongoose.disconnect();
 }

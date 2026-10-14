@@ -59,4 +59,15 @@ function currencySpellings(code) {
   return [code, ...Object.keys(CURRENCY_ALIASES).filter((a) => CURRENCY_ALIASES[a] === code)];
 }
 
-module.exports = { SUPPORTED_CURRENCIES, CURRENCY_ALIASES, normalizeCurrency, isSupportedCurrency, parseCurrency, currencySpellings };
+/**
+ * A currency from FILE data (an import row, an archive): the supported code
+ * it names ("euro" → "EUR"), else `fallback`. A file is not a form — a row
+ * saying "kr" or "€ EUR" must not become a bottle's stored code, which stats
+ * would then silently drop (audit 2026-10-14).
+ */
+function currencyOrFallback(value, fallback) {
+  const parsed = parseCurrency(value);
+  return parsed.ok && parsed.value ? parsed.value : fallback;
+}
+
+module.exports = { SUPPORTED_CURRENCIES, CURRENCY_ALIASES, normalizeCurrency, isSupportedCurrency, parseCurrency, currencySpellings, currencyOrFallback };

@@ -8,7 +8,7 @@ const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const CellarLayout = require('../models/CellarLayout');
 const { getCellarRole } = require('../utils/cellarAccess');
-const { getMaxPosition, validateDoubleHeightRows, validateCabinetConfig, cabinetShelfAlternate, cabinetRows } = require('../utils/rackGeometry');
+const { getMaxPosition, validateDoubleHeightRows, validateCabinetConfig, cabinetShelfAlternate, cabinetRows, modularTotalSlots } = require('../utils/rackGeometry');
 const {
   createGridRack, placeBottleInRack, clearRackSlot,
   buildAnnotatedEntries, validateArrangementTarget, applyArrangement,
@@ -49,6 +49,12 @@ const SLOT_BOTTLES = {
 };
 
 const MAX_MODULES = 50;
+// A modular rack's slots in total. Within the per-module bounds alone, 50
+// modules of a 20×20 cube with 10×10 cells is two million slots — which the
+// racks page, the print map and the room then draw, one by one, for every
+// member of the cellar (audit 2026-10-14). The largest real cabinets are a
+// few thousand.
+const MAX_RACK_SLOTS = 10000;
 // Mirrors the Rack schema's rows/cols bounds (models/Rack.js). Checked at the
 // request boundary because geometry runs on the values BEFORE save() would
 // reject them (security audit 2026-09-02 D14-1).
@@ -159,6 +165,9 @@ router.post('/', requireCellarAccess('editor'), async (req, res) => {
           return res.status(400).json({ error: `Invalid module type: ${m.type}` });
         }
       }
+      if (modularTotalSlots(modules) > MAX_RACK_SLOTS) {
+        return res.status(400).json({ error: `A rack can hold at most ${MAX_RACK_SLOTS} slots in total` });
+      }
       // Racks are owned by the cellar owner
       const rack = new Rack({
         cellar: req.cellar._id,
@@ -248,6 +257,9 @@ router.put('/:id', async (req, res) => {
         if ((m.rows !== undefined && !isRackDim(m.rows)) || (m.cols !== undefined && !isRackDim(m.cols))) {
           return res.status(400).json({ error: `Module rows and cols must be whole numbers between 1 and ${MAX_RACK_DIM}` });
         }
+      }
+      if (modularTotalSlots(modules) > MAX_RACK_SLOTS) {
+        return res.status(400).json({ error: `A rack can hold at most ${MAX_RACK_SLOTS} slots in total` });
       }
     } else if (type && !RACK_TYPES.includes(type)) {
       return res.status(400).json({ error: `Invalid rack type. Must be one of: ${RACK_TYPES.join(', ')}` });

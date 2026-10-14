@@ -82,6 +82,11 @@
   overflow-wrap: anywhere;
 }
 
+.pick-list-title-text {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .pick-list-meta {
   color: var(--color-text-muted);
   margin: 0.25rem 0 0.75rem;

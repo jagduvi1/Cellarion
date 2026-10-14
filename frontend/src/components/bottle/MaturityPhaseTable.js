@@ -35,13 +35,15 @@ function MaturityPhaseTable({ profile, anchorYear }) {
             <span className="bd-maturity-phase-range">
               {p.from && p.until
                 ? (p.from === p.until ? `${p.from}` : `${p.from}\u2013${p.until}`)
-                : p.from ? `from ${p.from}` : `until ${p.until}`}
+                : p.from
+                  ? t('bottleDetail.maturityPhaseFrom', { year: p.from, defaultValue: 'from {{year}}' })
+                  : t('bottleDetail.maturityPhaseUntil', { year: p.until, defaultValue: 'until {{year}}' })}
             </span>
             {(yrsFrom !== null) && (
               <span className="bd-maturity-phase-yrs">
-                {yrsUntil === null ? `${yrsFrom}+ yrs`
-                  : yrsUntil === yrsFrom ? `${yrsFrom} ${yrsFrom === 1 ? 'yr' : 'yrs'}`
-                  : `${yrsFrom}\u2013${yrsUntil} yrs`}
+                {yrsUntil === null ? t('bottleDetail.maturityYearsPlus', { count: yrsFrom, defaultValue: '{{count}}+ yrs' })
+                  : yrsUntil === yrsFrom ? t('bottleDetail.maturityYears', { count: yrsFrom, defaultValue: '{{count}} yrs' })
+                  : t('bottleDetail.maturityYearsRange', { from: yrsFrom, until: yrsUntil, defaultValue: '{{from}}\u2013{{until}} yrs' })}
               </span>
             )}
           </div>

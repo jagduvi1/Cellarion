@@ -188,7 +188,9 @@ async function runJob(cfg) {
         // (reembedActiveVintages), which is when the pair genuinely enters.
         // A canary (registry lockdown L4) is never embedded either: it must
         // not become anyone's "similar wine".
-        if (!wine || wine.pendingIdentity === true || wine.canary === true) {
+        // A quarantined non-wine neither: the registry does not show it, so
+        // neither may semantic search (audit 2026-10-14).
+        if (!wine || wine.pendingIdentity === true || wine.canary === true || wine.nonWine === true) {
           neverEmbedded.add(String(wineDefId));
           job.skipped++;
           job.done++;
@@ -322,7 +324,7 @@ async function embedSinglePair(wineDefId, vintage) {
     // the fire-and-forget call every bottle add makes, so without it the very
     // add that mints a pending wine would immediately index it for semantic
     // search — the one surface that would leak it to strangers.
-    if (!wine || wine.pendingIdentity === true || wine.canary === true) return;
+    if (!wine || wine.pendingIdentity === true || wine.canary === true || wine.nonWine === true) return;
 
     const text = buildEmbeddingText(wine, vintage);
     const textHash = sha256(text);

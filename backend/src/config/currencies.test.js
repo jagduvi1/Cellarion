@@ -1,4 +1,20 @@
-const { SUPPORTED_CURRENCIES, normalizeCurrency, isSupportedCurrency, currencySpellings } = require('./currencies');
+const { SUPPORTED_CURRENCIES, normalizeCurrency, isSupportedCurrency, currencySpellings, currencyOrFallback } = require('./currencies');
+
+// 2026-10-14: import rows carried any string into Bottle.currency ("kr", "€ EUR").
+describe('currencyOrFallback', () => {
+  test('a supported code or an alias of one is kept as its code', () => {
+    expect(currencyOrFallback('sek', 'USD')).toBe('SEK');
+    expect(currencyOrFallback('euro', 'USD')).toBe('EUR');
+    expect(currencyOrFallback('€', 'USD')).toBe('EUR');
+  });
+  test('anything else — unknown, blank, not a string — is the fallback', () => {
+    expect(currencyOrFallback('kr', 'EUR')).toBe('EUR');
+    expect(currencyOrFallback('€ EUR', 'EUR')).toBe('EUR');
+    expect(currencyOrFallback('', 'EUR')).toBe('EUR');
+    expect(currencyOrFallback(undefined, 'EUR')).toBe('EUR');
+    expect(currencyOrFallback({ $ne: null }, 'EUR')).toBe('EUR');
+  });
+});
 
 // 2026-10-13: Chrome's page translation turned the add form's "EUR" into "EURO".
 describe('normalizeCurrency', () => {

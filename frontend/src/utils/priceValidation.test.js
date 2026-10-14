@@ -1,6 +1,16 @@
-import { validatePriceSanity, centsHeuristicFloor, ABSOLUTE_CAP } from './priceValidation';
+import { validatePriceSanity, centsHeuristicFloor, ABSOLUTE_CAP, describePriceWarning } from './priceValidation';
 
 const codes = (warnings) => warnings.map(w => w.code);
+
+describe('describePriceWarning', () => {
+  it('describes the import validate step\'s unknown-currency warning (audit 2026-10-14)', () => {
+    expect(describePriceWarning({ code: 'unknownCurrency', context: { currency: 'kr' } }))
+      .toMatch(/"kr" is not a currency Cellarion knows/);
+  });
+  it('falls back to the code for one it does not know', () => {
+    expect(describePriceWarning({ code: 'somethingNew', context: {} })).toBe('somethingNew');
+  });
+});
 
 describe('centsHeuristicFloor', () => {
   it('is the legacy 10,000 for USD/EUR-magnitude currencies', () => {

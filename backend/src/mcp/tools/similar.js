@@ -97,7 +97,9 @@ registerTool({
     }
     if (ranked.length === 0) return ok('No similar wines found', []);
 
-    const docs = await WineDefinition.find({ _id: { $in: ranked.map(([id]) => id) }, pendingIdentity: { $ne: true }, canary: { $ne: true } })
+    // This tool is public scope: a quarantined non-wine must never be
+    // anyone's "similar wine", whatever vectors it still has (audit 2026-10-14).
+    const docs = await WineDefinition.find({ _id: { $in: ranked.map(([id]) => id) }, pendingIdentity: { $ne: true }, canary: { $ne: true }, nonWine: { $ne: true } })
       .select('name producer slug country region appellation classification grapes type colour communityRating')
       .populate(['country', 'region', 'grapes'])
       .lean();

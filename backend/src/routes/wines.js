@@ -316,6 +316,20 @@ async function mongoSearch(filter, sort, limit, offset, search) {
 // GET /api/wines - Search/list wines (auth required)
 // Regular users: search term mandatory, results capped at USER_SEARCH_LIMIT.
 // Admin / somm: full browse and unlimited results.
+// Curation internals a member's search result never needs: the same list
+// GET /:id strips for non-curators, plus createdBy — the search path used to
+// answer with whole documents, so every result named the member who
+// contributed the row (audit 2026-10-14). Curators keep the full document.
+const MEMBER_HIDDEN_FIELDS = [
+  'scanImage', 'scanImageBack', 'scanFieldConflicts', 'normalizedKey', 'canonicalKey',
+  'verifiedChecks', 'identityProvenance', 'productNumber', 'previousSlugs', 'canary', 'createdBy',
+];
+const forMember = (isCurator) => (wine) => {
+  if (isCurator || !wine) return wine;
+  for (const f of MEMBER_HIDDEN_FIELDS) delete wine[f];
+  return wine;
+};
+
 router.get('/', requireAuth, async (req, res) => {
   try {
     const isPrivileged = req.user.roles.includes('admin') || req.user.roles.includes('somm');
@@ -371,6 +385,7 @@ router.get('/', requireAuth, async (req, res) => {
     // that put a bottle on the wine (?ownHidden=1) — a forum wine tag or a
     // wine-request link must not point at a row with no public page. Nobody
     // else's search returns them; a failure here never costs the search.
+    const isCurator = req.user.roles.includes('admin') || req.user.roles.includes('somm');
     let ownHidden = [];
     if (searchTerm && parsedOffset === 0 && req.query.ownHidden === '1') {
       try {
@@ -410,7 +425,7 @@ router.get('/', requireAuth, async (req, res) => {
           total: ownHidden.length + estimatedTotalHits,
           offset: parsedOffset,
           limit: parsedLimit,
-          wines: [...ownHidden, ...wines].map(decorateGrapes),
+          wines: [...ownHidden, ...wines].map(decorateGrapes).map(forMember(isCurator)),
           registryWines
         });
       } catch (err) {
@@ -426,7 +441,7 @@ router.get('/', requireAuth, async (req, res) => {
       total: ownHidden.length + total,
       offset: parsedOffset,
       limit: parsedLimit,
-      wines: [...ownHidden, ...wines].map(decorateGrapes),
+      wines: [...ownHidden, ...wines].map(decorateGrapes).map(forMember(isCurator)),
       registryWines
     });
   } catch (error) {

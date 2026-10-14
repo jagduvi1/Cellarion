@@ -225,24 +225,50 @@ describe('what stays gated, and why', () => {
   });
 
   describe('non_wine (2026-10-13)', () => {
-    const owners = (n) => jest.spyOn(Bottle, 'distinct')
-      .mockResolvedValue(Array.from({ length: n }, (_, i) => `user-${i}`));
+    const Cellar = require('../models/Cellar');
+    // n members across cellars: one cellar per owner, `extraMembers` more
+    // people on the first one.
+    const members = (n, { extraMembers = 0 } = {}) => {
+      const cellars = Array.from({ length: n }, (_, i) => ({
+        _id: `cellar-${i}`, user: `user-${i}`,
+        members: i === 0 ? Array.from({ length: extraMembers }, (_, j) => ({ user: `member-${j}` })) : [],
+      }));
+      const distinct = jest.spyOn(Bottle, 'distinct').mockResolvedValue(cellars.map((c) => c._id));
+      const find = jest.spyOn(Cellar, 'find').mockReturnValue({ select: () => ({ lean: async () => cellars }) });
+      return { distinct, find };
+    };
 
     it('applies a quarantine on a row one member holds — the beer in its creator\'s cellar', async () => {
-      const spy = owners(1);
+      const { distinct, find } = members(1);
       const v = await classifyProposal(wine('Sparkling Ale', { _id: 'wine-1' }), 'non_wine', null);
       expect(v.direct).toBe(true);
-      // Counted per member across every bottle status, for THIS row.
-      expect(spy).toHaveBeenCalledWith('user', { wineDefinition: 'wine-1' });
+      // Counted per member across every bottle status, for THIS row: the
+      // owner and the members of each live cellar holding it.
+      expect(distinct).toHaveBeenCalledWith('cellar', { wineDefinition: 'wine-1' });
+      expect(find).toHaveBeenCalledWith({ _id: { $in: ['cellar-0'] }, deletedAt: null });
     });
 
-    it('applies at the owner limit and gates one past it', async () => {
-      owners(NON_WINE_DIRECT_MAX_OWNERS);
+    it('applies at the member limit and gates one past it', async () => {
+      members(NON_WINE_DIRECT_MAX_OWNERS);
       expect((await classifyProposal(wine('X'), 'non_wine', null)).direct).toBe(true);
-      owners(NON_WINE_DIRECT_MAX_OWNERS + 1);
+      members(NON_WINE_DIRECT_MAX_OWNERS + 1);
       const v = await classifyProposal(wine('X'), 'non_wine', null);
       expect(v.direct).toBe(false);
       expect(v.reason).toMatch(`${NON_WINE_DIRECT_MAX_OWNERS + 1} members`);
+    });
+
+    it('the members of one shared cellar count — a bottle\'s user is only its owner (audit 2026-10-14)', async () => {
+      members(1, { extraMembers: NON_WINE_DIRECT_MAX_OWNERS });
+      const v = await classifyProposal(wine('X'), 'non_wine', null);
+      expect(v.direct).toBe(false);
+      expect(v.reason).toMatch(`${NON_WINE_DIRECT_MAX_OWNERS + 1} members`);
+    });
+
+    it('a row nobody holds any more applies at once', async () => {
+      jest.spyOn(Bottle, 'distinct').mockResolvedValue([]);
+      const find = jest.spyOn(Cellar, 'find');
+      expect((await classifyProposal(wine('X'), 'non_wine', null)).direct).toBe(true);
+      expect(find).not.toHaveBeenCalled();
     });
   });
 

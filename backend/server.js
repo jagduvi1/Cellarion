@@ -122,15 +122,30 @@ connectDB().then(async () => {
   }
 
   // Migration: a wine name's star grade is part of its keys ("Auslese**" and
-  // "Auslese***" are two wines). Re-keys the few names that carry stars; once
-  // their keys are current, a later boot finds nothing to change.
+  // "Auslese***" are two wines). Re-keys the few names that carry stars. The
+  // scan is an unanchored regex over the whole registry, so it runs ONCE: a
+  // SiteConfig marker records a complete run (names created since get their
+  // keys at creation), and a run with failures leaves no marker and retries
+  // next boot (audit 2026-10-14). A restore from backup brings the marker
+  // back with the data it describes.
   try {
-    const { run: rekeyStarGradeWines } = require('./src/scripts/rekey-star-grade-wines');
-    const r = await rekeyStarGradeWines({ apply: true });
-    if (r.rekeyed.length || r.canonical.length) {
-      console.log(`[migration] Star-grade keys: ${r.rekeyed.length} dedup key(s), ${r.canonical.length} canonical key(s) updated`);
+    const SiteConfig = require('./src/models/SiteConfig');
+    const MARKER = 'migration.starGradeRekey';
+    if (!(await SiteConfig.exists({ key: MARKER }))) {
+      const { run: rekeyStarGradeWines } = require('./src/scripts/rekey-star-grade-wines');
+      const r = await rekeyStarGradeWines({ apply: true });
+      if (r.rekeyed.length || r.canonical.length) {
+        console.log(`[migration] Star-grade keys: ${r.rekeyed.length} dedup key(s), ${r.canonical.length} canonical key(s) updated`);
+      }
+      for (const line of [...r.skipped, ...r.failed]) console.warn('[migration] Star-grade keys:', line);
+      if (!r.failed.length) {
+        await SiteConfig.updateOne(
+          { key: MARKER },
+          { $set: { value: { at: new Date(), rekeyed: r.rekeyed.length, canonical: r.canonical.length, skipped: r.skipped.length }, updatedAt: new Date() } },
+          { upsert: true },
+        );
+      }
     }
-    for (const line of [...r.skipped, ...r.failed]) console.warn('[migration] Star-grade keys:', line);
   } catch (err) {
     console.error('[migration] Star-grade re-key failed (will retry next boot):', err.message);
   }

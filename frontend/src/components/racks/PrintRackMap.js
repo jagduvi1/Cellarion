@@ -72,7 +72,7 @@ export default function PrintRackMap({ rack }) {
           const d = r * 0.5;
           return (
             <g key={position}>
-              <circle cx={cx} cy={cy} r={r} fill="#F0F0EC" stroke="#C8C8C0" strokeWidth={1} />
+              {shape({ fill: '#F0F0EC', stroke: '#C8C8C0', strokeWidth: 1 })}
               <line x1={cx - d} y1={cy - d} x2={cx + d} y2={cy + d} stroke="#B0B0A8" strokeWidth={1.2} />
               <line x1={cx - d} y1={cy + d} x2={cx + d} y2={cy - d} stroke="#B0B0A8" strokeWidth={1.2} />
             </g>

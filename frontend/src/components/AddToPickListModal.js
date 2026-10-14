@@ -66,7 +66,9 @@ export default function AddToPickListModal({ bottleIds, onClose, onDone }) {
       if (!res.ok) throw new Error(data.error || t('pickLists.addFailed', 'Could not add to the pick list'));
       setResult({ id: data.list.id, name: data.list.name, added: data.added ?? 0, skipped: (data.skipped || []).length });
     } catch (err) {
-      setError(err.message);
+      // A dropped connection throws a TypeError with the browser's own text
+      // ("Failed to fetch"), not a message for the user (audit 2026-10-14).
+      setError(err instanceof TypeError ? t('common.networkError', 'Network error') : err.message);
       setSubmitting(false);
     }
   };

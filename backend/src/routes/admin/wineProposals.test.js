@@ -24,6 +24,7 @@ jest.mock('../../models/WineCorrectionProposal', () => ({
 }));
 jest.mock('../../models/WineDefinition', () => ({ findById: jest.fn() }));
 jest.mock('../../models/WineVintageProfile', () => ({ deleteMany: jest.fn() }));
+jest.mock('../../models/WineEmbedding', () => ({ deleteMany: jest.fn().mockResolvedValue({ deletedCount: 0 }) }));
 jest.mock('../../models/Bottle', () => ({ distinct: jest.fn() }));
 jest.mock('../../models/Country', () => ({ findOne: jest.fn() }));
 // Read by the list only, to flag a proposed variety the taxonomy lacks.
@@ -610,6 +611,9 @@ describe('POST /:id/approve', () => {
     expect(WineVintageProfile.deleteMany).toHaveBeenCalledWith({ wineDefinition: W1, status: 'pending' });
     expect((await res.json()).appliedNote).toMatch(/2 pending/);
     expect(searchService.indexWine).toHaveBeenCalledWith(W1);
+    // The vectors go with the row (audit 2026-10-14): nothing left for
+    // semantic search or the similar-wines graph to find.
+    expect(require('../../models/WineEmbedding').deleteMany).toHaveBeenCalledWith({ wineDefinition: W1 });
   });
 
   test('a second decide is a clean 409 (claim already taken), a bogus id is 404', async () => {

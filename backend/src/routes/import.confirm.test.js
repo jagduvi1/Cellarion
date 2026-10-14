@@ -483,3 +483,38 @@ describe('importNotes / importOccasion', () => {
     expect(Bottle.__instances[0].occasion).toBeUndefined();
   });
 });
+
+// ── Currency: file data is checked like every other write path (audit 2026-10-14)
+
+describe('currency on confirm', () => {
+  const confirmWith = (items, extra) =>
+    postJson(buildApp(), '/api/bottles/import/confirm', { cellarId: CELLAR_ID, items, ...extra });
+
+  test('a row\'s known code or alias is stored as its code; an unknown one takes the import default', async () => {
+    const { status, body } = await confirmWith([
+      { wineDefinition: WINE_ID, vintage: '2018', price: 10, currency: 'sek' },
+      { wineDefinition: WINE_ID, vintage: '2018', price: 10, currency: 'euro' },
+      { wineDefinition: WINE_ID, vintage: '2018', price: 10, currency: 'kr' },
+      { wineDefinition: WINE_ID, vintage: '2018', price: 10, currency: '€ EUR' },
+      { requestWine: true, wineName: 'Mystery', producer: 'Someone', vintage: '2019', price: 10, currency: 'kr' },
+    ], { defaultCurrency: 'GBP' });
+    expect(status).toBe(200);
+    expect(body.created).toBe(5);
+    expect(Bottle.__instances.map((b) => b.currency)).toEqual(['SEK', 'EUR', 'GBP', 'GBP', 'GBP']);
+  });
+
+  test('the import default is an alias-tolerant supported code; an unknown one is a 400, USD when unset', async () => {
+    let r = await confirmWith([{ wineDefinition: WINE_ID, vintage: '2018' }], { defaultCurrency: 'EURO' });
+    expect(r.status).toBe(200);
+    expect(Bottle.__instances[0].currency).toBe('EUR');
+
+    r = await confirmWith([{ wineDefinition: WINE_ID, vintage: '2018' }], { defaultCurrency: 'XYZ' });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/Unsupported currency/);
+    expect(Bottle.__instances).toHaveLength(1);
+
+    r = await confirmWith([{ wineDefinition: WINE_ID, vintage: '2018' }], {});
+    expect(r.status).toBe(200);
+    expect(Bottle.__instances[1].currency).toBe('USD');
+  });
+});

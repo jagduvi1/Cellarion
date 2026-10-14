@@ -47,10 +47,16 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
   // on such a cabinet it stays as created; the route refuses the flip on a
   // loaded rack (audit 2026-09-16).
   const anyAlternate = altList.some(Boolean);
+  const storedSide = isCabinet ? cabinetShelfSideways(rack.rows, rack.typeConfig) : [];
+  const [sideways, setSideways] = useState(storedSide);
   // Same for a stacked shelf with a bottle across the front: two deep decides
-  // whether the levels above hold one fewer (release audit 2026-10-14).
-  const stackedAcross = isCabinet && cabinetBays(rack.rows, rack.cols, rack.typeConfig)
-    .some((b) => b.sideways === 'front' && b.rows > 1);
+  // whether the levels above hold one fewer (release audit 2026-10-14). Read
+  // from the dialog's own lie list, so switching a shelf back to front to
+  // back frees Two deep at once (audit 2026-10-14; the route still refuses
+  // the flip on a loaded rack).
+  const stackedAcross = isCabinet && cabinetBays(rack.rows, rack.cols, {
+    ...(rack.typeConfig || {}), shelfSideways: sideways.some(Boolean) ? sideways : undefined,
+  }).some((b) => b.sideways === 'front' && b.rows > 1);
   const twoDeepLocked = anyAlternate || stackedAcross;
   const [twoDeep, setTwoDeep] = useState(rack.typeConfig?.twoDeep !== false);
   const [stagger, setStagger] = useState(alternate || rack.typeConfig?.stagger !== false);
@@ -59,8 +65,6 @@ export default function EditRackModal({ rack, groups = [], onSave, onClose }) {
   // (release audit 2026-10-12).
   const showHeadToTail = (useFeature('cabinetHeadToTail') || rack.typeConfig?.headToTail === true)
     && !(twoDeepLocked && twoDeep);
-  const storedSide = isCabinet ? cabinetShelfSideways(rack.rows, rack.typeConfig) : [];
-  const [sideways, setSideways] = useState(storedSide);
   const sidewaysOn = useFeature('cabinetSideways');
   const showSideways = isCabinet && (sidewaysOn || storedSide.some(Boolean));
   const setSide = (i, value) => setSideways((prev) => prev.map((v, k) => (k === i ? value : v)));

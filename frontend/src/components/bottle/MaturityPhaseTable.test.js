@@ -1,6 +1,27 @@
 import { render } from '@testing-library/react';
 import MaturityPhaseTable from './MaturityPhaseTable';
 
+// Without an initialised i18n the stock t returns a template verbatim; the
+// years cell is built from translated strings (audit 2026-10-14), so this
+// gives it the English strings, interpolated and pluralised like i18next.
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key, opts = {}) => {
+      const en = {
+        'bottleDetail.maturityPhaseFrom': 'from {{year}}',
+        'bottleDetail.maturityPhaseUntil': 'until {{year}}',
+        'bottleDetail.maturityYearsPlus': '{{count}}+ yrs',
+        'bottleDetail.maturityYears_one': '{{count}} yr',
+        'bottleDetail.maturityYears_other': '{{count}} yrs',
+        'bottleDetail.maturityYearsRange': '{{from}}–{{until}} yrs',
+      };
+      const plural = typeof opts.count === 'number' ? (opts.count === 1 ? '_one' : '_other') : '';
+      const s = en[key + plural] ?? en[key] ?? opts.defaultValue ?? key;
+      return s.replace(/\{\{(\w+)\}\}/g, (_, k) => String(opts[k]));
+    },
+  }),
+}));
+
 // Beta feedback 2026-10-12: an early and an optimal phase that shared a year
 // were both marked as now.
 describe('MaturityPhaseTable', () => {
