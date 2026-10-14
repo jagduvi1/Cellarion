@@ -26,7 +26,12 @@ function ConfirmModal({ title, message, warning, confirmLabel, confirmClass, con
   const isConfirmEnabled = !submitting && (!needsTyping || typed === confirmText);
 
   const mounted = useRef(true);
-  useEffect(() => () => { mounted.current = false; }, []);
+  useEffect(() => {
+    // Set here as well as cleared: StrictMode runs the cleanup and then the
+    // effect again, and a ref only cleared would stay false for good.
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   // A confirm whose action throws used to leave the button disabled for good
   // and say nothing. Now the dialog stays open, says why, and can be tried

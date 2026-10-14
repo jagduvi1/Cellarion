@@ -21,22 +21,15 @@
  * @returns {Promise<any>} parsed JSON body (null when the body is empty/invalid)
  * @throws {Error} on a non-2xx response; `.status` and `.body` are attached
  */
+import { httpError } from './friendlyError';
+
 export async function apiJson(resOrPromise) {
   const res = await resOrPromise;
   // A 204 or an empty/invalid body shouldn't crash the caller — treat as null.
   const body = await res.json().catch(() => null);
 
-  if (!res.ok) {
-    const message =
-      (body && (body.error || body.message)) || `Request failed (${res.status})`;
-    const err = new Error(message);
-    err.status = res.status;
-    err.body = body;
-    // How long a rate limit asked us to wait — utils/friendlyError words it.
-    const retryAfter = Number(res.headers?.get?.('Retry-After'));
-    if (Number.isFinite(retryAfter) && retryAfter > 0) err.retryAfter = retryAfter;
-    throw err;
-  }
+  // Carries status, body and Retry-After — utils/friendlyError words them.
+  if (!res.ok) throw httpError(res, body);
 
   return body;
 }

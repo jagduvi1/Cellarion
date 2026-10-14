@@ -265,7 +265,7 @@ export const AuthProvider = ({ children }) => {
   // unsent offline changes, so they still go out once the same user signs
   // back in. A user-initiated logout deletes everything (Layout confirms first
   // when changes are waiting).
-  const logout = useCallback(async ({ keepQueue = false } = {}) => {
+  const logout = useCallback(async ({ keepQueue = false, sessionExpired = false } = {}) => {
     // Tell the server to end this device's session and clear its cookie. With
     // no network (offline mode) that can't happen now — remember it, and the
     // next start finishes it before anything else (restoreSession).
@@ -275,6 +275,9 @@ export const AuthProvider = ({ children }) => {
     // Wipe per-tab user state so chat history etc. don't bleed across logins.
     // Only sessionStorage — localStorage holds theme / language / persisted token.
     try { sessionStorage.clear(); } catch { /* noop */ }
+    // After the clear, or the clear takes it: the login page this leads to
+    // says why (utils/sessionExpired).
+    if (sessionExpired) markSessionExpired();
     // …and the service worker's cached API responses (cellars, bottles, wines),
     // and the profile kept for an offline start.
     await clearApiCaches();
@@ -292,9 +295,7 @@ export const AuthProvider = ({ children }) => {
   // logs out; the caller's request fails and the next one tries again.
   const onRefreshFailed = useCallback(() => {
     if (refreshOutcomeRef.current !== 'rejected') return;
-    // The login page this leads to says why (utils/sessionExpired).
-    markSessionExpired();
-    logout({ keepQueue: true });
+    logout({ keepQueue: true, sessionExpired: true });
   }, [logout]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -474,7 +475,7 @@ export const AuthProvider = ({ children }) => {
       if (cancelled) return;
       if (!newToken) {
         // Still no network: stay. The server rejected the session: end it.
-        if (refreshOutcomeRef.current === 'rejected') logout({ keepQueue: true });
+        if (refreshOutcomeRef.current === 'rejected') logout({ keepQueue: true, sessionExpired: true });
         return;
       }
       let res = null;
@@ -491,7 +492,7 @@ export const AuthProvider = ({ children }) => {
         applySession(newToken, data.user);
         setOfflineSession(false);
       } else if (res.status === 401 || res.status === 404) {
-        logout({ keepQueue: true });
+        logout({ keepQueue: true, sessionExpired: true });
       }
     };
     const onVisible = () => { if (document.visibilityState === 'visible') reconnect(); };

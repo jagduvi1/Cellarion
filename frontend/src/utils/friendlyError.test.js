@@ -60,3 +60,20 @@ describe('messageForStatus', () => {
     expect(messageForStatus(404, {}, t)).toBe('Something went wrong. Please try again.');
   });
 });
+
+describe('rate limits', () => {
+  test('a 429 that names its own limit keeps those words', () => {
+    const err = httpError(response(429, null, { 'Retry-After': '3000' }), { error: 'Account exports are limited to three per hour' });
+    expect(friendlyError(err, t)).toBe('Account exports are limited to three per hour');
+  });
+
+  test('a short wait is "a few seconds", not "1 min"', () => {
+    const err = httpError(response(429, null, { 'Retry-After': '10' }), { error: 'Too many requests, please try again later' });
+    expect(friendlyError(err, t)).toMatch(/Try again in a few seconds/);
+  });
+});
+
+test("httpError's own message is for logs: a 4xx without a reason is never \"Request failed (404)\"", () => {
+  expect(friendlyError(httpError(response(404, null), null), t)).toBe('Something went wrong. Please try again.');
+  expect(friendlyError(httpError(response(404, null), null, 'The entry could not be deleted.'), t)).toBe('The entry could not be deleted.');
+});

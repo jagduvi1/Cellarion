@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ConfirmModal from './ConfirmModal';
 
@@ -27,4 +28,15 @@ test('a refused action keeps the server reason', async () => {
 
   fireEvent.click(screen.getByText('Delete'));
   expect(await screen.findByRole('alert')).toHaveTextContent('Entry is locked');
+});
+
+test('under StrictMode (the dev double-mount) a failure is still said', async () => {
+  render(
+    <StrictMode>
+      <ConfirmModal message="Delete?" onConfirm={vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))} onCancel={() => {}} />
+    </StrictMode>,
+  );
+  fireEvent.click(screen.getByText('Delete'));
+  expect(await screen.findByRole('alert')).toHaveTextContent(/could not be reached/);
+  expect(screen.getByText('Delete')).not.toBeDisabled();
 });

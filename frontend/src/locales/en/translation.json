@@ -115,8 +115,9 @@
   "errors": {
     "network": "Cellarion could not be reached. Check your connection and try again.",
     "serverUnavailable": "Cellarion could not answer just now. Try again in a moment.",
-    "rateLimited": "That was a lot of changes in a short time. Wait a few minutes and try again.",
-    "rateLimitedFor": "That was a lot of changes in a short time. Try again in {{minutes}} min.",
+    "rateLimited": "Too many requests in a short time. Wait a few minutes and try again.",
+    "rateLimitedFor": "Too many requests in a short time. Try again in {{minutes}} min.",
+    "rateLimitedSoon": "Too many requests in a short time. Try again in a few seconds.",
     "generic": "Something went wrong. Please try again."
   },
   "auth": {

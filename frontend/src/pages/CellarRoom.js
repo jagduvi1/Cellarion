@@ -17,7 +17,7 @@ import CellarNav from '../components/CellarNav';
 import CellarPageHeader from '../components/CellarPageHeader';
 import DialogBox from '../components/DialogBox';
 import { swatchType, wineTypeLabel } from '../utils/wineColour';
-import { friendlyError, messageForStatus, retryAfterSeconds } from '../utils/friendlyError';
+import { friendlyError, messageForResponse } from '../utils/friendlyError';
 import ActionNotice from '../components/ActionNotice';
 import './CellarRoom.css';
 
@@ -57,9 +57,9 @@ export default function CellarRoom() {
   // Why the last slot action failed (translated) — shown by ActionNotice
   // instead of an English browser alert().
   const [actionError, setActionError] = useState(null);
-  const failed = (res, body, fallback) => {
-    setActionError(messageForStatus(res.status, { body, retryAfter: retryAfterSeconds(res), fallback }, t));
-  };
+  const failed = useCallback((res, body, fallback) => {
+    setActionError(messageForResponse(res, body, fallback, t));
+  }, [t]);
   const [interactionMode, setInteractionMode] = useState(null); // 'stack' | 'link' | null
   const [showAddRackPicker, setShowAddRackPicker] = useState(false);
 
@@ -288,7 +288,7 @@ export default function CellarRoom() {
         redoStackRef.current = [];
       } else {
         const errData = await res.json().catch(() => ({}));
-        setSaveError(messageForStatus(res.status, { body: errData, retryAfter: retryAfterSeconds(res) }, t));
+        setSaveError(messageForResponse(res, errData, undefined, t));
         console.error('Save layout failed:', errData.error || res.status);
       }
     } catch (err) {
@@ -923,7 +923,7 @@ export default function CellarRoom() {
     } catch (err) {
       setActionError(friendlyError(err, t));
     }
-  }, [emptySlotTarget, apiFetch]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [emptySlotTarget, apiFetch, failed, t]);
 
   // Remove bottle from rack slot
   const handleRemoveFromRack = useCallback(async () => {
@@ -942,7 +942,7 @@ export default function CellarRoom() {
     } catch (err) {
       setActionError(friendlyError(err, t));
     }
-  }, [selectedBottle, apiFetch]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedBottle, apiFetch, failed, t]);
 
   // "Just a glass — keep the bottle": escape hatch out of the remove flow
   // (see CellarRacks.handlePartial for the rationale).
@@ -997,7 +997,7 @@ export default function CellarRoom() {
     } catch (err) {
       setActionError(friendlyError(err, t));
     }
-  }, [consumeModal, apiFetch]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [consumeModal, apiFetch, failed, t]);
 
   // Backend search for slot picker
   const fetchSlotBottles = useCallback(async (term) => {

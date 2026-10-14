@@ -65,12 +65,19 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded, lotSiblingIds = 
     expectedArrival:  toMonthInput(bottle.expectedArrival),
   });
   const [saving, setSaving] = useState(false);
-  const [error, setError]   = useState(null);
+  const [error, setErrorText] = useState(null);
+  // Bumped with every error shown, so the same message shown twice (a second
+  // tap on Save) is brought into view again.
+  const [errorTick, setErrorTick] = useState(0);
+  const setError = (message) => {
+    setErrorText(message);
+    if (message) setErrorTick((n) => n + 1);
+  };
   useEffect(() => {
-    if (!error || !errorRef.current) return;
+    if (!errorTick || !errorRef.current) return;
     try { errorRef.current.scrollIntoView({ block: 'center' }); } catch { /* old browser */ }
     errorRef.current.focus({ preventScroll: true });
-  }, [error]);
+  }, [errorTick]);
   const [applyToLot, setApplyToLot] = useState(false);
 
   const set = (field) => (e) => setForm(f => ({ ...f, [field]: e.target.value }));

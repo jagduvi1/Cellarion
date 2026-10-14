@@ -38,7 +38,7 @@ import BetaBadge from '../components/BetaBadge';
 import { useFeature } from '../utils/featureFlags';
 import { groupRacks, groupNames } from '../utils/rackGroups';
 import { swatchType, wineTypeLabel } from '../utils/wineColour';
-import { friendlyError, messageForStatus, retryAfterSeconds } from '../utils/friendlyError';
+import { friendlyError, messageForResponse } from '../utils/friendlyError';
 import ActionNotice from '../components/ActionNotice';
 import './CellarRacks.css';
 
@@ -142,9 +142,10 @@ function CellarRacks() {
   // Why the last rack action failed (translated), shown by ActionNotice — the
   // rack actions used English browser alerts, and some failed silently.
   const [actionError, setActionError] = useState(null);
-  // One slot action at a time: a double tap sent two requests, and the second
-  // came back as a conflict alert for a move that had in fact worked.
-  const slotActionBusy = useRef(false);
+  // Slot actions in flight, by what they act on: a double tap on the same
+  // slot sent two requests, and the second came back as a conflict alert for
+  // a move that had in fact worked. Other slots stay usable meanwhile.
+  const slotActionsBusy = useRef(new Set());
 
   // --- post-add placing mode (issue #1055) — HOOKS live up here, before the
   // page's early `if (error) return` (audit 2026-09-14 H: hooks declared after
@@ -262,15 +263,15 @@ function CellarRacks() {
   // A refused rack action, worded for the person (rate limit with its wait,
   // server down, or the server's own reason) and shown by ActionNotice.
   const failed = (res, body, fallback) => {
-    setActionError(messageForStatus(res.status, { body, retryAfter: retryAfterSeconds(res), fallback }, t));
+    setActionError(messageForResponse(res, body, fallback, t));
   };
-  // Runs one slot action at a time; a repeat tap while one is in flight is
-  // ignored rather than sent.
-  const slotAction = async (run) => {
-    if (slotActionBusy.current) return;
-    slotActionBusy.current = true;
+  // Runs a slot action unless the same one (same rack + slot) is already in
+  // flight — a repeat tap is dropped rather than sent twice.
+  const slotAction = async (key, run) => {
+    if (slotActionsBusy.current.has(key)) return;
+    slotActionsBusy.current.add(key);
     setActionError(null);
-    try { await run(); } finally { slotActionBusy.current = false; }
+    try { await run(); } finally { slotActionsBusy.current.delete(key); }
   };
 
   const handleCreateRack = async (e) => {
@@ -362,6 +363,7 @@ function CellarRacks() {
       if (res.ok) {
         const remaining = racks.filter(r => r._id !== rackId);
         setRacks(remaining);
+        setActionError(null);
         if (selectedRackId === rackId) {
           setSelectedRackId(remaining.length > 0 ? remaining[0]._id : null);
         }
@@ -377,7 +379,7 @@ function CellarRacks() {
   };
 
   // --- assign bottle to slot ---
-  const handleAssign = (rackId, position, bottleId) => slotAction(async () => {
+  const handleAssign = (rackId, position, bottleId) => slotAction(`${rackId}:${position}`, async () => {
     try {
       const res = await updateSlot(apiFetch, rackId, position, { bottleId });
       const data = await res.json();
@@ -395,7 +397,7 @@ function CellarRacks() {
   // --- case placement: assign several bottles of the same wine to the free
   // positions from startPosition onward. Sequential on purpose — each save
   // bumps the rack version, so parallel PUTs would 409 each other.
-  const handleAssignMany = (rackId, startPosition, bottleIds) => slotAction(async () => {
+  const handleAssignMany = (rackId, startPosition, bottleIds) => slotAction(`${rackId}:${startPosition}`, async () => {
     const r = racks.find(x => x._id === rackId);
     if (!r) return;
     const total = r.isModular && r.modules?.length > 0
@@ -425,7 +427,7 @@ function CellarRacks() {
   });
 
   // --- remove bottle from slot (keep bottle in cellar) ---
-  const handleRemoveFromRack = (rackId, position) => slotAction(async () => {
+  const handleRemoveFromRack = (rackId, position) => slotAction(`${rackId}:${position}`, async () => {
     try {
       const res = await clearSlot(apiFetch, rackId, position);
       const data = await res.json();
@@ -442,7 +444,7 @@ function CellarRacks() {
   });
 
   // --- disable / re-enable a slot position ---
-  const handleDisableSlot = (rackId, position) => slotAction(async () => {
+  const handleDisableSlot = (rackId, position) => slotAction(`${rackId}:${position}`, async () => {
     try {
       const res = await disableSlot(apiFetch, rackId, position);
       const data = await res.json();
@@ -457,7 +459,7 @@ function CellarRacks() {
     setActivePopup(null);
   });
 
-  const handleEnableSlot = (rackId, position) => slotAction(async () => {
+  const handleEnableSlot = (rackId, position) => slotAction(`${rackId}:${position}`, async () => {
     try {
       const res = await enableSlot(apiFetch, rackId, position);
       const data = await res.json();
@@ -488,6 +490,7 @@ function CellarRacks() {
           })
         })));
         setConsumeModal(null);
+        setActionError(null);
         if (reason === 'drank' && !journalPromptOptedOut()) {
           setJournalBottle(bottle);
         }
@@ -503,7 +506,7 @@ function CellarRacks() {
   };
 
   // --- drag & drop: move a bottle to another slot / swap two bottles ---
-  const handleSlotMove = (rackId, fromPosition, toPosition) => slotAction(async () => {
+  const handleSlotMove = (rackId, fromPosition, toPosition) => slotAction(`${rackId}:${fromPosition}`, async () => {
     try {
       const res = await moveSlot(apiFetch, rackId, fromPosition, toPosition);
       const data = await res.json();
@@ -554,6 +557,7 @@ function CellarRacks() {
         failed(res, data, t('racks.errors.pour', 'The glass could not be recorded.'));
         return;
       }
+      setActionError(null);
       const patch = {
         openedAt: data.bottle.openedAt,
         preservationMethod: data.bottle.preservationMethod,
@@ -679,6 +683,7 @@ function CellarRacks() {
       if (res.ok) {
         setRacks(racks.map(r => r._id === rackId ? { ...r, rfidTag: data.rack.rfidTag } : r));
         setNfcModal(null);
+        setActionError(null);
       } else {
         // Keep the modal open so the user can retry instead of silently losing the tag
         failed(res, data, t('racks.errors.nfc', 'The NFC tag could not be saved.'));
