@@ -254,12 +254,12 @@ function BottleDetail() {
         navigate(isOnOrder(bottle) ? `/cellars/${cellarId}/on-order` : `/cellars/${cellarId}`, { state: { bottleNotice } });
       } else {
         setMistakeOpen(false);
-        setError(data.error || t('bottleDetail.mistakeError', 'Failed to remove bottle'));
+        setError(data.error || t('bottleDetail.mistakeError', 'Could not move the bottle to Recently deleted. Please try again.'));
         setMistakeBusy(false);
       }
     } catch {
       setMistakeOpen(false);
-      setError(t('bottleDetail.mistakeError', 'Failed to remove bottle'));
+      setError(t('bottleDetail.mistakeError', 'Could not move the bottle to Recently deleted. Please try again.'));
       setMistakeBusy(false);
     }
   };

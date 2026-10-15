@@ -2615,7 +2615,12 @@
     "late": "Tardif",
     "declining": "En déclin",
     "notReady": "Pas prêt",
-    "noData": "Aucune donnée de maturité"
+    "noData": "Aucune donnée de maturité",
+    "hints": {
+      "from": "à partir de {{year}}",
+      "peakFrom": "apogée à partir de {{year}}",
+      "lateFrom": "tardif à partir de {{year}}"
+    }
   },
   "cellarNav": {
     "aria": "Vues de la cave"

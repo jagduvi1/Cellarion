@@ -1,14 +1,14 @@
 import { resolveWindow } from './maturityUtils';
+import { MATURITY_I18N_KEY } from './filterLabels';
 
 const CURRENT_YEAR = new Date().getFullYear();
 
 /**
  * Derive the current maturity phase from a 3-phase reviewed WineVintageProfile.
  * For relative (NV) profiles the window is resolved against the bottle's anchor
- * year first. Returns null if the profile is not ready, or { status, label,
- * hint?, year? }: `hint` + `year` name the next change ("peak from 2028").
- * `label` is English, for tests and logs; screens show maturityBadgeText —
- * the same names as the filter chips (maturity.*), translated.
+ * year first. Returns null if the profile is not ready, or { status, hint?,
+ * year? }: `hint` + `year` name the next change ("peak from 2028"). Screens
+ * show maturityBadgeText — the same names as the filter chips, translated.
  *
  * @param {object} profile
  * @param {number} [anchorYear] - the bottle's purchase year (for relative/NV profiles)
@@ -22,26 +22,20 @@ export function getMaturityStatus(profile, anchorYear, year = CURRENT_YEAR) {
   if (!earlyFrom && !peakFrom && !peakUntil) return null;
 
   const firstYear = earlyFrom || peakFrom;
-  if (firstYear && year < firstYear)                 return { status: 'not-ready', label: `Not ready — from ${firstYear}`, hint: 'from', year: firstYear };
-  if (earlyUntil && year <= earlyUntil)              return { status: 'early',     label: 'Early' };
-  if (peakFrom   && year <  peakFrom)                return { status: 'early',     label: `Early — peak from ${peakFrom}`, hint: 'peakFrom', year: peakFrom };
-  if (peakUntil  && year <= peakUntil)               return { status: 'peak',      label: 'Peak ⭐' };
-  if (lateFrom   && year <  lateFrom)                return { status: 'peak',      label: `Peak — late from ${lateFrom}`, hint: 'lateFrom', year: lateFrom };
-  if (lateUntil  && year <= lateUntil)               return { status: 'late',      label: 'Late' };
+  if (firstYear && year < firstYear)                 return { status: 'not-ready', hint: 'from', year: firstYear };
+  if (earlyUntil && year <= earlyUntil)              return { status: 'early' };
+  if (peakFrom   && year <  peakFrom)                return { status: 'early', hint: 'peakFrom', year: peakFrom };
+  if (peakUntil  && year <= peakUntil)               return { status: 'peak' };
+  if (lateFrom   && year <  lateFrom)                return { status: 'peak', hint: 'lateFrom', year: lateFrom };
+  if (lateUntil  && year <= lateUntil)               return { status: 'late' };
   // A late phase with no end stays late once it has begun (release audit
   // 2026-10-13: it fell through to "Optimal maturity").
-  if (lateFrom   && !lateUntil && year >= lateFrom)  return { status: 'late',      label: 'Late' };
+  if (lateFrom   && !lateUntil && year >= lateFrom)  return { status: 'late' };
   if ((lateUntil && year >  lateUntil) ||
-      (peakUntil && year >  peakUntil && !lateFrom)) return { status: 'declining', label: 'Declining' };
-  if (peakFrom   && year >= peakFrom)                return { status: 'peak',      label: 'Peak ⭐' };
-  return { status: 'early', label: 'Early' };
+      (peakUntil && year >  peakUntil && !lateFrom)) return { status: 'declining' };
+  if (peakFrom   && year >= peakFrom)                return { status: 'peak' };
+  return { status: 'early' };
 }
-
-// The i18n key of each maturity name — the filter chips' (utils/filterLabels).
-const MATURITY_NAME_KEY = {
-  'not-ready': 'maturity.notReady', early: 'maturity.early', peak: 'maturity.peak',
-  late: 'maturity.late', declining: 'maturity.declining',
-};
 
 /**
  * A maturity badge's text, translated: the same name the filter chips and
@@ -50,7 +44,7 @@ const MATURITY_NAME_KEY = {
  */
 export function maturityBadgeText(m, t) {
   if (!m) return '';
-  const name = t(MATURITY_NAME_KEY[m.status] || 'maturity.noData');
+  const name = t(MATURITY_I18N_KEY[m.status] || MATURITY_I18N_KEY.none);
   if (m.hint) return `${name} — ${t(`maturity.hints.${m.hint}`, { year: m.year })}`;
   return m.status === 'peak' ? `${name} ⭐` : name;
 }
@@ -89,7 +83,7 @@ export function getPersonalWindowStatus(bottle, currentYear = CURRENT_YEAR) {
  * A bottle's effective drink status: the user's OWN drinkFrom/drinkTo window
  * takes precedence over the sommelier vintage-profile window when set.
  * Returns null, or { status, source: 'personal' | 'profile', ... } — profile
- * results additionally carry the legacy `label`, personal results `from`/`to`.
+ * results carry `hint`/`year` (maturityBadgeText), personal results `from`/`to`.
  *
  * @param {object} bottle
  * @param {object} profile - WineVintageProfile (may be null)

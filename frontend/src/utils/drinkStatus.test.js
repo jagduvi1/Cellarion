@@ -256,7 +256,7 @@ describe('getBottleDrinkStatus', () => {
     const r = getBottleDrinkStatus({}, peakProfile);
     expect(r.status).toBe('peak');
     expect(r.source).toBe('profile');
-    expect(r.label).toBe(getMaturityStatus(peakProfile).label);
+    expect({ status: r.status, hint: r.hint, year: r.year }).toEqual((({ status, hint, year }) => ({ status, hint, year }))(getMaturityStatus(peakProfile)));
   });
 
   test('no personal window and no usable profile → null (unchanged behavior)', () => {

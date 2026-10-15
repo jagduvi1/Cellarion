@@ -228,7 +228,7 @@
       "readTitle": "Read",
       "readBody": "Look at your cellars, bottles, racks and notes. Changes nothing.",
       "consumeTitle": "Read and drink",
-      "consumeBody": "Also mark bottles as consumed, and track open bottles (opened, glasses poured, preservation). All of it is reversible.",
+      "consumeBody": "Also drink or take bottles out, and track open bottles (opened, glasses poured, preservation). All of it is reversible.",
       "writeTitle": "Full access",
       "writeBody": "Also add and edit bottles, and organise racks and cellars.",
       "tokenNote": "Set-ups that use a URL sign you in with OAuth, so there is nothing to paste. Only the stdio bridge needs a personal API token: mint one under Settings → API tokens and put it where those snippets say cel_YOUR_TOKEN_HERE."
@@ -1073,7 +1073,7 @@
     "drinkWindowYearRange": "Drink window years must be between {{min}} and {{max}}",
     "drinkWindowOrder": "The drink window \"from\" year cannot be after the \"to\" year",
     "addToHistory": "Add to History",
-    "addToHistoryHint": "Add this bottle directly to your history (already consumed, gifted, or sold).",
+    "addToHistoryHint": "Add this bottle directly to your history (already drunk, gifted, or sold).",
     "consumedDate": "Date",
     "consumedReason": "Reason",
     "consumedNote": "Note",
@@ -1232,7 +1232,7 @@
     "personalNotReady": "Not ready — from {{year}}",
     "personalEarly": "Early — peak from {{year}}",
     "personalLate": "Late — past its peak",
-    "personalDrinkNow": "Peak — drink now",
+    "personalDrinkNow": "Drink now",
     "personalPast": "Declining — past your window",
     "windowFromYear": "from {{year}}",
     "windowUntilYear": "until {{year}}",
@@ -1739,7 +1739,7 @@
     "noHistory": "No bottles have been removed from this cellar yet",
     "bottleCount_one": "{{count}} bottle in history",
     "bottleCount_other": "{{count}} bottles in history",
-    "emptyHistoryHint": "When you mark a bottle as consumed, gifted, or sold it will appear here.",
+    "emptyHistoryHint": "When you take a bottle out — drunk, gifted or sold — it appears here.",
     "backToCellarBtn": "Back to Cellar",
     "reasonDrank": "Drank",
     "reasonGifted": "Gifted",
@@ -2902,11 +2902,11 @@
       "noUrgent": "No bottles need urgent attention — your cellar is well timed!"
     },
     "holdingTime": {
-      "empty": "Mark bottles as consumed to see your patience profile.",
+      "empty": "Take bottles out of the cellar to see your patience profile.",
       "note": "Higher ratings at longer holding times suggest aging is rewarding for your cellar."
     },
     "joyPerDollar": {
-      "empty": "Rate your consumed bottles to see which type gives you the most joy per {{currency}}.",
+      "empty": "Rate the bottles you have drunk to see which type gives you the most joy per {{currency}}.",
       "count_one": "{{count}} bottle",
       "count_other": "{{count}} bottles",
       "avg": "avg {{price}}",
@@ -3634,7 +3634,7 @@
         "d2": "World map showing where your wines come from.",
         "d3": "Drink window overview: how many bottles are not ready, early, at their peak, late or declining.",
         "d4": "Export your stats as a shareable card image.",
-        "d5": "Premium feature — available on the Premium plan."
+        "d5": "Free for everyone, like every feature in Cellarion."
       },
       "community": {
         "title": "Community",
@@ -5435,7 +5435,7 @@
     "pageInfo": "{{from}}–{{to}} of {{total}}",
     "scope": {
       "active": "Active bottles",
-      "consumed": "Consumed bottles",
+      "consumed": "Bottles taken out",
       "all": "All bottles",
       "bottlesTitle": "Bottles",
       "cellarsTitle": "Cellars",
@@ -5529,7 +5529,7 @@
     "suggestedBoardName": "Dashboard {{n}}",
     "deleteViewConfirm": "Delete the view \"{{name}}\"?",
     "emptyFiltered": "No bottles match these filters.",
-    "emptyConsumed": "No consumed bottles in this scope — the history view fills as you drink.",
+    "emptyConsumed": "No bottles taken out in this scope — the history view fills as you drink.",
     "agg": {
       "sum": "Sum of",
       "avg": "Average",

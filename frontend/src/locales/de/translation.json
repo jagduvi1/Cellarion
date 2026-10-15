@@ -2574,7 +2574,12 @@
     "late": "Späte Reife",
     "declining": "Nachlassend",
     "notReady": "Noch nicht trinkreif",
-    "noData": "Keine Reifedaten"
+    "noData": "Keine Reifedaten",
+    "hints": {
+      "from": "ab {{year}}",
+      "peakFrom": "optimale Reife ab {{year}}",
+      "lateFrom": "späte Reife ab {{year}}"
+    }
   },
   "cellarNav": {
     "aria": "Keller-Ansichten"

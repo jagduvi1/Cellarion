@@ -6,30 +6,10 @@ import ConfirmModal from '../components/ConfirmModal';
 import SommWineProfilePanel from '../components/SommWineProfilePanel';
 import { removeMaturityProfile } from '../api/somm';
 import { swatchType } from '../utils/wineColour';
+import { getMaturityStatus, maturityBadgeText } from '../utils/drinkStatus';
 import './SommMaturity.css';
 
 const CURRENT_YEAR = new Date().getFullYear();
-
-// Compute current maturity phase from 6-field profile
-function getMaturityPhase(p) {
-  if (!p || p.status !== 'reviewed') return null;
-  const { earlyFrom, earlyUntil, peakFrom, peakUntil, lateFrom, lateUntil } = p;
-
-  // Need at least one window boundary to classify
-  if (!earlyFrom && !peakFrom && !peakUntil) return null;
-
-  const firstYear = earlyFrom || peakFrom;
-  if (firstYear && CURRENT_YEAR < firstYear)                 return { cls: 'not-ready', label: `Not yet mature — from ${firstYear}` };
-  if (earlyUntil && CURRENT_YEAR <= earlyUntil)              return { cls: 'early',     label: 'Early drinking' };
-  if (peakFrom   && CURRENT_YEAR <  peakFrom)                return { cls: 'early',     label: `Early drinking — peak from ${peakFrom}` };
-  if (peakUntil  && CURRENT_YEAR <= peakUntil)               return { cls: 'peak',      label: 'Optimal maturity ⭐' };
-  if (lateFrom   && CURRENT_YEAR <  lateFrom)                return { cls: 'peak',      label: `Optimal maturity — late phase from ${lateFrom}` };
-  if (lateUntil  && CURRENT_YEAR <= lateUntil)               return { cls: 'late',      label: 'Late maturity' };
-  if ((lateUntil && CURRENT_YEAR > lateUntil) ||
-      (peakUntil && CURRENT_YEAR > peakUntil && !lateFrom))  return { cls: 'declining', label: 'Past prime' };
-  if (peakFrom   && CURRENT_YEAR >= peakFrom)                return { cls: 'peak',      label: 'Optimal maturity ⭐' };
-  return { cls: 'early', label: 'Early drinking' };
-}
 
 // Format a year span relative to vintage: "5–7 years" or "5 years"
 function yearsFromVintage(vintageInt, from, until) {
@@ -296,7 +276,7 @@ function ProfileCard({ profile, isPending, onSaved, onReset, onRemoved }) {
     }
   };
 
-  const phase = isNv ? null : getMaturityPhase(profile);
+  const phase = isNv ? null : getMaturityStatus(profile);
 
   return (
     <div className={`somm-card ${expanded ? 'expanded' : ''}`}>
@@ -315,7 +295,7 @@ function ProfileCard({ profile, isPending, onSaved, onReset, onRemoved }) {
         <div className="somm-card-right">
           <span className="somm-vintage-pill">{profile.vintage}</span>
           {phase ? (
-            <span className={`maturity-badge maturity-badge--${phase.cls}`}>{phase.label}</span>
+            <span className={`maturity-badge maturity-badge--${phase.status}`}>{maturityBadgeText(phase, t)}</span>
           ) : (
             <span className={`somm-status-pill ${profile.status}`}>
               {profile.status === 'pending' ? t('somm.maturity.statusPending') : t('somm.maturity.statusReviewed')}
@@ -536,13 +516,13 @@ function MaturityPreview({ form, vintageInt, isNv }) {
   const hasAny = Object.values(mock).some(v => v && !isNaN(v));
   if (!hasAny) return null;
 
-  const phase = getMaturityPhase(mock);
+  const phase = getMaturityStatus(mock);
   if (!phase) return null;
 
   return (
     <div className={`somm-preview somm-preview--${phase.cls}`}>
       <span className="somm-preview-label">{t('somm.maturity.statusToday', { year: CURRENT_YEAR })}</span>
-      <span className={`maturity-badge maturity-badge--${phase.cls}`}>{phase.label}</span>
+      <span className={`maturity-badge maturity-badge--${phase.status}`}>{maturityBadgeText(phase, t)}</span>
     </div>
   );
 }

@@ -517,56 +517,56 @@ describe('maturityLabel', () => {
   test('returns correct string for "not-ready" with earlyFrom', () => {
     const profile = { earlyFrom: 2028 };
     const label = maturityLabel('not-ready', profile);
-    expect(label).toBe('Not ready yet — drinking from 2028');
+    expect(label).toBe('Not ready — drinking from 2028');
   });
 
   test('returns correct string for "not-ready" with peakFrom only', () => {
     const profile = { peakFrom: 2030 };
     const label = maturityLabel('not-ready', profile);
-    expect(label).toBe('Not ready yet — drinking from 2030');
+    expect(label).toBe('Not ready — drinking from 2030');
   });
 
   test('returns correct string for "not-ready" with missing windows', () => {
     const label = maturityLabel('not-ready', {});
-    expect(label).toBe('Not ready yet — drinking from ?');
+    expect(label).toBe('Not ready — drinking from ?');
   });
 
   test('returns correct string for "early" with peakFrom', () => {
     const profile = { peakFrom: 2030 };
     const label = maturityLabel('early', profile);
-    expect(label).toBe('Early drinking — peak from 2030');
+    expect(label).toBe('Early — peak from 2030');
   });
 
   test('returns correct string for "early" without peakFrom', () => {
     const label = maturityLabel('early', {});
-    expect(label).toBe('Early drinking window');
+    expect(label).toBe('Early — in its drinking window');
   });
 
   test('returns correct string for "peak" with peakUntil', () => {
     const profile = { peakUntil: 2032 };
     const label = maturityLabel('peak', profile);
-    expect(label).toBe('At peak — drink now through 2032');
+    expect(label).toBe('Peak — drink now through 2032');
   });
 
   test('returns correct string for "peak" without peakUntil', () => {
     const label = maturityLabel('peak', {});
-    expect(label).toBe('At peak maturity — drink now');
+    expect(label).toBe('Peak — drink now');
   });
 
   test('returns correct string for "late" with lateUntil', () => {
     const profile = { lateUntil: 2036 };
     const label = maturityLabel('late', profile);
-    expect(label).toBe('Late maturity — drink soon, until 2036');
+    expect(label).toBe('Late — drink soon, until 2036');
   });
 
   test('returns correct string for "late" without lateUntil', () => {
     const label = maturityLabel('late', {});
-    expect(label).toBe('Late maturity — drink soon');
+    expect(label).toBe('Late — drink soon');
   });
 
   test('returns correct string for "declining"', () => {
     const label = maturityLabel('declining', {});
-    expect(label).toBe('Past peak — declining, drink immediately if at all');
+    expect(label).toBe('Declining — past its peak, drink now if at all');
   });
 
   test('returns null for unknown status', () => {
@@ -581,7 +581,7 @@ describe('maturityLabel', () => {
   test('handles null profile gracefully', () => {
     // Uses optional chaining: profile?.earlyFrom
     const label = maturityLabel('not-ready', null);
-    expect(label).toBe('Not ready yet — drinking from ?');
+    expect(label).toBe('Not ready — drinking from ?');
   });
 });
 
@@ -594,45 +594,45 @@ describe('maturityLabel — personal window precedence', () => {
   test('not-ready: quotes the personal drinkFrom, not the profile early/peak year', () => {
     const bottle = { drinkFrom: 2035, drinkTo: 2040 };
     // status derived from the personal window (currentYear 2026 < 2035)
-    expect(maturityLabel('not-ready', profileSaysNow, bottle)).toBe('Not ready yet — drinking from 2035');
+    expect(maturityLabel('not-ready', profileSaysNow, bottle)).toBe('Not ready — drinking from 2035');
   });
 
   test('peak: quotes the personal drinkTo, not the profile peakUntil', () => {
     const bottle = { drinkFrom: 2024, drinkTo: 2038 };
-    expect(maturityLabel('peak', profileSaysNow, bottle)).toBe('At peak — drink now through 2038');
+    expect(maturityLabel('peak', profileSaysNow, bottle)).toBe('Peak — drink now through 2038');
   });
 
   test('peak with only drinkFrom set: open-ended personal peak has no year suffix', () => {
     const bottle = { drinkFrom: 2024 };
-    expect(maturityLabel('peak', profileSaysNow, bottle)).toBe('At peak maturity — drink now');
+    expect(maturityLabel('peak', profileSaysNow, bottle)).toBe('Peak — drink now');
   });
 
   test('declining: personal window → year-free past-peak label', () => {
     const bottle = { drinkFrom: 2018, drinkTo: 2022 };
-    expect(maturityLabel('declining', profileSaysNow, bottle)).toBe('Past peak — declining, drink immediately if at all');
+    expect(maturityLabel('declining', profileSaysNow, bottle)).toBe('Declining — past its peak, drink now if at all');
   });
 
   // Support ticket 2026-09-10: a bottle recorded as drinkTo 2027 with its
-  // peak already behind it read "Late maturity — drink soon, until 2032" —
+  // peak already behind it read "Late — drink soon, until 2032" —
   // the PROFILE's lateUntil — because 'late' fell through to the profile
   // labels. The personal peak pair makes 'early' and 'late' reachable, so
   // both must quote the bottle's own years.
   test('late: quotes the personal drinkTo, not the profile lateUntil', () => {
     const bottle = { drinkFrom: 2021, peakFrom: 2022, peakUntil: 2024, drinkTo: 2027 };
     expect(classifyPersonalWindow(bottle)).toBe('late');
-    expect(maturityLabel('late', profileSaysNow, bottle)).toBe('Late maturity — drink soon, until 2027');
+    expect(maturityLabel('late', profileSaysNow, bottle)).toBe('Late — drink soon, until 2027');
   });
 
   test('late with no drinkTo: open-ended personal late phase has no year suffix', () => {
     const bottle = { peakUntil: 2024 };
     expect(classifyPersonalWindow(bottle)).toBe('late');
-    expect(maturityLabel('late', profileSaysNow, bottle)).toBe('Late maturity — drink soon');
+    expect(maturityLabel('late', profileSaysNow, bottle)).toBe('Late — drink soon');
   });
 
   test('early: quotes the personal peakFrom, not the profile peakFrom', () => {
     const bottle = { drinkFrom: 2021, peakFrom: 2030, drinkTo: 2040 };
     expect(classifyPersonalWindow(bottle)).toBe('early');
-    expect(maturityLabel('early', profileSaysNow, bottle)).toBe('Early drinking — peak from 2030');
+    expect(maturityLabel('early', profileSaysNow, bottle)).toBe('Early — peak from 2030');
   });
 
   test('a status the personal window cannot produce never leaks profile years', () => {
@@ -642,12 +642,12 @@ describe('maturityLabel — personal window precedence', () => {
 
   test('no personal window on the bottle → unchanged profile-based label', () => {
     const bottle = { vintage: 2020 }; // no drinkFrom/drinkTo
-    expect(maturityLabel('peak', profileSaysNow, bottle)).toBe('At peak — drink now through 2028');
-    expect(maturityLabel('not-ready', { earlyFrom: 2028 }, bottle)).toBe('Not ready yet — drinking from 2028');
+    expect(maturityLabel('peak', profileSaysNow, bottle)).toBe('Peak — drink now through 2028');
+    expect(maturityLabel('not-ready', { earlyFrom: 2028 }, bottle)).toBe('Not ready — drinking from 2028');
   });
 
   test('omitting the bottle arg keeps the legacy profile-based behaviour', () => {
-    expect(maturityLabel('peak', profileSaysNow)).toBe('At peak — drink now through 2028');
+    expect(maturityLabel('peak', profileSaysNow)).toBe('Peak — drink now through 2028');
   });
 });
 
@@ -656,17 +656,17 @@ describe('maturityLabel — relative (NV) profiles quote resolved years', () => 
 
   test('peak label quotes anchor + offset, not the raw offset', () => {
     const bottle = { vintage: 'NV', purchaseDate: '2024-03-01' };
-    expect(maturityLabel('peak', relProfile, bottle)).toBe('At peak — drink now through 2029');
+    expect(maturityLabel('peak', relProfile, bottle)).toBe('Peak — drink now through 2029');
   });
 
   test('late label resolves lateUntil the same way', () => {
     const bottle = { vintage: 'NV', purchaseDate: '2020-03-01' };
-    expect(maturityLabel('late', relProfile, bottle)).toBe('Late maturity — drink soon, until 2028');
+    expect(maturityLabel('late', relProfile, bottle)).toBe('Late — drink soon, until 2028');
   });
 
   test('no anchor → generic year-free labels, never a bare offset', () => {
-    expect(maturityLabel('peak', relProfile, { vintage: 'NV' })).toBe('At peak maturity — drink now');
-    expect(maturityLabel('not-ready', relProfile, { vintage: 'NV' })).toBe('Not ready yet — drinking from ?');
+    expect(maturityLabel('peak', relProfile, { vintage: 'NV' })).toBe('Peak — drink now');
+    expect(maturityLabel('not-ready', relProfile, { vintage: 'NV' })).toBe('Not ready — drinking from ?');
   });
 });
 

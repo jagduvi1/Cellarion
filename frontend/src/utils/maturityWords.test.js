@@ -1,4 +1,7 @@
 import en from '../locales/en/translation.json';
+import sv from '../locales/sv/translation.json';
+import de from '../locales/de/translation.json';
+import fr from '../locales/fr/translation.json';
 import { getMaturityStatus, maturityBadgeText } from './drinkStatus';
 
 // One set of maturity names everywhere (usability pass, Step 3): the filter
@@ -22,7 +25,9 @@ test('the filter chips, the statistics and the bottle page use the same names', 
   expect(en.bottleDetail.personalNotReady.startsWith(chips.notReady)).toBe(true);
   expect(en.bottleDetail.personalEarly.startsWith(chips.early)).toBe(true);
   expect(en.bottleDetail.personalLate.startsWith(chips.late)).toBe(true);
-  expect(en.bottleDetail.personalDrinkNow.startsWith(chips.peak)).toBe(true);
+  // Inside an own window with no peak years set it is simply "Drink now" —
+  // no claim of a peak the user never gave.
+  expect(en.bottleDetail.personalDrinkNow).toBe('Drink now');
   expect(en.bottleDetail.personalPast.startsWith(chips.declining)).toBe(true);
 });
 
@@ -38,4 +43,11 @@ test('the maturity badge is the chip name, translated, with the next change\'s y
   expect(maturityBadgeText(getMaturityStatus(profile({ peakFrom: 2020, peakUntil: 2030 }), null, year), t)).toBe('Peak ⭐');
   expect(maturityBadgeText(getMaturityStatus(profile({ peakFrom: 2010, peakUntil: 2015, lateFrom: 2016, lateUntil: 2030 }), null, year), t)).toBe('Late');
   expect(maturityBadgeText(getMaturityStatus(profile({ peakFrom: 2000, peakUntil: 2010 }), null, year), t)).toBe('Declining');
+});
+
+test('every language with maturity names has the year hints of the badge too (never a half-English badge)', () => {
+  for (const [lng, bundle] of Object.entries({ sv, de, fr })) {
+    if (!bundle.maturity) continue;
+    expect([lng, Object.keys(bundle.maturity.hints || {}).sort()]).toEqual([lng, ['from', 'lateFrom', 'peakFrom']]);
+  }
 });

@@ -3208,7 +3208,12 @@
     "late": "Sen",
     "declining": "Avtagande",
     "notReady": "Ej redo",
-    "noData": "Ingen mognadsdata"
+    "noData": "Ingen mognadsdata",
+    "hints": {
+      "from": "från {{year}}",
+      "peakFrom": "optimal från {{year}}",
+      "lateFrom": "sen från {{year}}"
+    }
   },
   "cellarNav": {
     "aria": "Källarvyer"

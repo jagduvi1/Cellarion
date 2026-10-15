@@ -250,15 +250,15 @@ function maturityLabel(status, profile, bottle = null) {
     // the shared profile's late-phase end (support ticket 2026-09-10).
     switch (status) {
       case 'not-ready':
-        return `Not ready yet — drinking from ${from ?? '?'}`;
+        return `Not ready — drinking from ${from ?? '?'}`;
       case 'early':
-        return peakFrom ? `Early drinking — peak from ${peakFrom}` : 'Early drinking window';
+        return peakFrom ? `Early — peak from ${peakFrom}` : 'Early — in its drinking window';
       case 'peak':
-        return to ? `At peak — drink now through ${to}` : 'At peak maturity — drink now';
+        return to ? `Peak — drink now through ${to}` : 'Peak — drink now';
       case 'late':
-        return to ? `Late maturity — drink soon, until ${to}` : 'Late maturity — drink soon';
+        return to ? `Late — drink soon, until ${to}` : 'Late — drink soon';
       case 'declining':
-        return 'Past peak — declining, drink immediately if at all';
+        return 'Declining — past its peak, drink now if at all';
       default:
         return null;
     }
@@ -271,21 +271,21 @@ function maturityLabel(status, profile, bottle = null) {
 
   switch (status) {
     case 'not-ready':
-      return `Not ready yet — drinking from ${w.earlyFrom || w.peakFrom || '?'}`;
+      return `Not ready — drinking from ${w.earlyFrom || w.peakFrom || '?'}`;
     case 'early':
       return w.peakFrom
-        ? `Early drinking — peak from ${w.peakFrom}`
-        : 'Early drinking window';
+        ? `Early — peak from ${w.peakFrom}`
+        : 'Early — in its drinking window';
     case 'peak':
       return w.peakUntil
-        ? `At peak — drink now through ${w.peakUntil}`
-        : 'At peak maturity — drink now';
+        ? `Peak — drink now through ${w.peakUntil}`
+        : 'Peak — drink now';
     case 'late':
       return w.lateUntil
-        ? `Late maturity — drink soon, until ${w.lateUntil}`
-        : 'Late maturity — drink soon';
+        ? `Late — drink soon, until ${w.lateUntil}`
+        : 'Late — drink soon';
     case 'declining':
-      return 'Past peak — declining, drink immediately if at all';
+      return 'Declining — past its peak, drink now if at all';
     default:
       return null;
   }

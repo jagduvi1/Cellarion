@@ -1361,7 +1361,7 @@ export default function CellarRoom() {
                         setConsumeModal({ bottleId: bottle._id, bottle });
                       }}
                     >
-                      {t('racks.remove', 'Remove')}
+                      {t('racks.remove', 'Drink')}
                     </button>
                   </div>
                 )}
@@ -1426,7 +1426,7 @@ export default function CellarRoom() {
                 className="room-consume-modal"
                 onClick={e => e.stopPropagation()}
                 onClose={() => setConsumeModal(null)}
-                label={t('bottleDetail.removeBottleTitle', 'Remove Bottle')}
+                label={t('bottleDetail.removeBottleTitle', 'Take out of the cellar')}
               >
                 <RoomConsumeForm
                   onSubmit={handleConsumeSubmit}
@@ -1716,7 +1716,7 @@ function RoomConsumeForm({ onSubmit, onCancel, onPartial, defaultRatingScale, t 
 
   return (
     <form onSubmit={handleSubmit}>
-      <h3>{t('bottleDetail.removeBottleTitle', 'Remove Bottle')}</h3>
+      <h3>{t('bottleDetail.removeBottleTitle', 'Take out of the cellar')}</h3>
       {onPartial && (
         <div className="consume-partial-row">
           <button type="button" className="btn btn-secondary consume-partial-btn" onClick={onPartial}>
