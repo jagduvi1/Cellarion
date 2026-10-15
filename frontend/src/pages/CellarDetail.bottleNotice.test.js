@@ -23,6 +23,7 @@ const api = vi.fn(async (url, init) => {
     return ok({ cellar: CELLAR, bottles: { items, total: items.length }, facets: {}, baseFacets: {}, facetMeta: {} });
   }
   if (url.endsWith('/consume') && init?.method === 'POST') return ok({ bottle: { _id: url.split('/')[3], status: 'drank' } });
+  if (url.endsWith('/restore') && init?.method === 'POST') return ok({ bottle: { _id: url.split('/')[3], status: 'active' } });
   if (url === '/api/cellars') return ok({ cellars: [CELLAR] });
   if (url.startsWith('/api/racks')) return ok({ racks: [] });
   if (url.startsWith('/api/climate/')) return ok({ devices: [] });
@@ -75,10 +76,22 @@ it('drinking from a card says so at the top, with Undo — it used to change the
       <Routes><Route path="/cellars/:id" element={<CellarDetail />} /></Routes>
     </MemoryRouter>,
   );
+  // The racks have answered (none): the bottles' places are known.
+  await waitFor(() => expect(api.mock.calls.some(([u]) => u.startsWith('/api/racks'))).toBe(true));
   fireEvent.click(await screen.findByText('bottleCard.groupDrinkOne'));
   // Two identical bottles: no "Which bottle?" — straight to the form.
   fireEvent.click(await screen.findByText('common.confirm'));
   await waitFor(() => expect(api).toHaveBeenCalledWith('/api/bottles/x1/consume', expect.anything()));
+  expect(await screen.findByText('bottleNotice.drunk')).toBeInTheDocument();
+
+  // Undo, then the same bottle again: a fresh notice with its own Undo, not
+  // the previous one's "back in the cellar".
+  fireEvent.click(screen.getByText('common.undo'));
+  expect(await screen.findByText('bottleNotice.restored')).toBeInTheDocument();
+  const journal = screen.queryByText('journal.notNow');
+  if (journal) fireEvent.click(journal);
+  fireEvent.click(await screen.findByText('bottleCard.groupDrinkOne'));
+  fireEvent.click(await screen.findByText('common.confirm'));
   expect(await screen.findByText('bottleNotice.drunk')).toBeInTheDocument();
   expect(screen.getByText('common.undo')).toBeInTheDocument();
 });

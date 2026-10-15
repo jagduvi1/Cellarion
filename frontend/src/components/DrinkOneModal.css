@@ -51,3 +51,15 @@
   font-size: 0.82rem;
   color: var(--color-text-muted);
 }
+
+/* An opened bottle in the picker: the one usually meant when finishing it. */
+.drink-one__opened {
+  display: inline-block;
+  margin-right: 0.4rem;
+  padding: 0 0.4rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+}

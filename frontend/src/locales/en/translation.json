@@ -5014,6 +5014,7 @@
   "drinkOne": {
     "title": "Which bottle?",
     "hint": "Pick the bottle you are taking out. The others stay as they are.",
+    "opened": "Opened",
     "slot": "{{rack}} · slot {{position}}",
     "unplaced": "Not in a rack",
     "failed": "Could not log the bottle. Please try again."

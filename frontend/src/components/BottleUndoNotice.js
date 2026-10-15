@@ -5,6 +5,13 @@ import { restoreBottle, restoreRecentlyDeleted } from '../api/bottles';
 import { TRASH_DAYS, RESTORE_SKIP_KEYS } from '../utils/trash';
 import './BottleUndoNotice.css';
 
+/** "Château X 2018" — the name a notice uses for a bottle (NV/Unknown left out). */
+export function bottleNoticeName(bottle) {
+  const name = bottle?.wineDefinition?.name || bottle?.pendingWineRequest?.wineName || '';
+  const vintage = bottle?.vintage && !['NV', 'Unknown'].includes(bottle.vintage) ? bottle.vintage : '';
+  return [name, vintage].filter(Boolean).join(' ');
+}
+
 /**
  * The line a list shows after the bottle page took a bottle away — with the
  * way back right there.
@@ -15,17 +22,13 @@ import './BottleUndoNotice.css';
  *  - kind 'deleted' ("Added by mistake?" / "Cancel order"): the bottle went to
  *    Recently deleted; Undo brings that batch back.
  *
- * `notice` = { kind, name, bottleId, batchId?, reason? } — handed over in the
- * navigation's router state by BottleDetail. `onUndone` refreshes the list.
+ * `notice` = { kind, name, bottleId, batchId?, reason, at } — handed over in
+ * the navigation's router state by BottleDetail, or set by the page itself
+ * after a drink from a card (cellar list) or the vintage page. `onUndone`
+ * refreshes the list. `floating` fixes it to the bottom of the screen, for an
+ * action taken anywhere down a long page (the top of the page may be far away).
  */
-/** "Château X 2018" — the name a notice uses for a bottle (NV/Unknown left out). */
-export function bottleNoticeName(bottle) {
-  const name = bottle?.wineDefinition?.name || bottle?.pendingWineRequest?.wineName || '';
-  const vintage = bottle?.vintage && !['NV', 'Unknown'].includes(bottle.vintage) ? bottle.vintage : '';
-  return [name, vintage].filter(Boolean).join(' ');
-}
-
-export default function BottleUndoNotice({ notice, cellarId, onUndone, onDismiss }) {
+export default function BottleUndoNotice({ notice, cellarId, onUndone, onDismiss, floating = false }) {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const [busy, setBusy] = useState(false);
@@ -79,7 +82,7 @@ export default function BottleUndoNotice({ notice, cellarId, onUndone, onDismiss
   }
 
   return (
-    <div className="alert alert-success bottle-undo-notice" role="status">
+    <div className={`alert alert-success bottle-undo-notice${floating ? ' bottle-undo-notice--floating' : ''}`} role="status">
       <span className="bottle-undo-notice__text">
         {text}
         {failure && <span className="bottle-undo-notice__error" role="alert"> {failure}</span>}

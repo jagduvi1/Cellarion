@@ -19,3 +19,24 @@
 .bottle-undo-notice__error {
   color: var(--color-danger);
 }
+
+/* After a drink from a card or the vintage page's action bar the user may be
+   far down the page: the notice floats at the bottom (above the phone's tab
+   bar), like ActionNotice, instead of sitting out of sight at the top. */
+.bottle-undo-notice--floating {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(1rem + env(safe-area-inset-bottom));
+  z-index: 1050;
+  width: max-content;
+  max-width: min(32rem, calc(100vw - 2rem));
+  margin: 0;
+  box-shadow: var(--shadow-lg);
+}
+
+@media (max-width: 768px) {
+  .bottle-undo-notice--floating {
+    bottom: calc(var(--bottom-nav-height) + 0.75rem + env(safe-area-inset-bottom));
+  }
+}

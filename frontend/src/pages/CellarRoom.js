@@ -19,6 +19,7 @@ import DialogBox from '../components/DialogBox';
 import { swatchType, wineTypeLabel } from '../utils/wineColour';
 import { friendlyError, messageForResponse } from '../utils/friendlyError';
 import ActionNotice from '../components/ActionNotice';
+import { backLabel } from '../utils/backLabel';
 import './CellarRoom.css';
 
 const DEFAULT_DIMENSIONS = { width: 10, depth: 10, height: 3 };
@@ -1071,7 +1072,7 @@ export default function CellarRoom() {
           <div className="cellar-room-header-left">
             <Link to={`/cellars/${id}/racks`} className="back-link">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
-              {t('room.backToRacks', 'Racks')}
+              {backLabel(t('room.backToRacks', 'Racks'))}
             </Link>
             <h1>{cellar?.name || '...'} — {t('room.title', 'Room View')}</h1>
             <span className="room-mode-badge edit">{t('room.editMode', 'Edit')}</span>

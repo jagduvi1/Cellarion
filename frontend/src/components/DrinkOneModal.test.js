@@ -118,3 +118,24 @@ test('one difference (a rack slot, a price, a reservation) keeps the picker', ()
   render(<DrinkOneModal bottles={almost} rackMap={new Map()} wineName="Barolo 2019" onClose={vi.fn()} onDone={vi.fn()} />);
   expect(screen.getByText('drinkOne.title')).toBeInTheDocument();
 });
+
+test('while the rack places are not known yet, identical-looking bottles still get the picker', () => {
+  // The cellar list fills rackMap after the racks load: until then every
+  // bottle reads "Not in a rack", and skipping could free the wrong slot.
+  const same = [
+    { _id: 'x1', status: 'active', vintage: '2019' },
+    { _id: 'x2', status: 'active', vintage: '2019' },
+  ];
+  render(<DrinkOneModal bottles={same} rackMap={new Map()} placesKnown={false} wineName="Barolo 2019" onClose={vi.fn()} onDone={vi.fn()} />);
+  expect(screen.getByText('drinkOne.title')).toBeInTheDocument();
+});
+
+test('an opened bottle is not the same as a sealed one — the picker stays and says which is open', () => {
+  const pair = [
+    { _id: 'x1', status: 'active', vintage: '2019' },
+    { _id: 'x2', status: 'active', vintage: '2019', openedAt: '2026-10-14T19:00:00Z' },
+  ];
+  render(<DrinkOneModal bottles={pair} rackMap={new Map()} wineName="Barolo 2019" onClose={vi.fn()} onDone={vi.fn()} />);
+  expect(screen.getByText('drinkOne.title')).toBeInTheDocument();
+  expect(screen.getByText('drinkOne.opened')).toBeInTheDocument();
+});

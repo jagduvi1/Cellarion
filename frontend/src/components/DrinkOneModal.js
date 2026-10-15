@@ -22,7 +22,7 @@ import { slotLabel as slotWords } from '../utils/slotLabel';
  * after the server confirmed, so the caller can refresh and offer the
  * journal prompt as the bottle page does.
  */
-export default function DrinkOneModal({ bottles, rackMap, wineName, onClose, onDone }) {
+export default function DrinkOneModal({ bottles, rackMap, wineName, onClose, onDone, placesKnown = true }) {
   const { t, i18n } = useTranslation();
   const { apiFetch, user } = useAuth();
 
@@ -36,9 +36,14 @@ export default function DrinkOneModal({ bottles, rackMap, wineName, onClose, onD
     return parts.join(' · ');
   };
   // What a row of the picker shows — equal for every bottle means the picker
-  // would offer identical rows, so any of them is the answer.
-  const rowText = (b) => [slotLabel(b), purchaseLabel(b), isReserved(b) ? reservationSummary(b, t) : ''].join('|');
-  const nothingToChoose = bottles.length === 1 || bottles.every((b) => rowText(b) === rowText(bottles[0]));
+  // would offer identical rows, so any of them is the answer. Only when the
+  // places are KNOWN: the cellar list fills rackMap after the racks load, and
+  // until then (or if that load failed) every bottle reads "Not in a rack" —
+  // skipping then could free the wrong slot. An opened bottle is never the
+  // same as a sealed one.
+  const rowText = (b) => [slotLabel(b), purchaseLabel(b), isReserved(b) ? reservationSummary(b, t) : '', b.openedAt ? 'open' : ''].join('|');
+  const nothingToChoose = bottles.length === 1
+    || (placesKnown && bottles.every((b) => rowText(b) === rowText(bottles[0])));
 
   const [picked, setPicked] = useState(() => (nothingToChoose ? bottles[0] : null));
   const [error, setError] = useState(null);
@@ -97,6 +102,7 @@ export default function DrinkOneModal({ bottles, rackMap, wineName, onClose, onD
                 <button type="button" className="drink-one__row" onClick={() => setPicked(b)}>
                   <span className="drink-one__slot">{slotLabel(b)}</span>
                   <span className="drink-one__meta">
+                    {b.openedAt && <span className="drink-one__opened">{t('drinkOne.opened', 'Opened')}</span>}
                     {purchaseLabel(b)}
                     {reserved && <span className="reserved-badge"><span aria-hidden="true">🔖</span> {reservationSummary(b, t)}</span>}
                   </span>

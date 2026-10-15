@@ -4,5 +4,5 @@
 // walkthrough 2026-10-15). Stripping it here fixes every language at once
 // and leaves the strings alone for the screens that show them without an icon.
 export function backLabel(label) {
-  return String(label ?? '').replace(/^\s*(?:←|‹|<|&larr;)\s*/, '');
+  return String(label ?? '').replace(/^\s*(?:←|‹|<)\s*/, '');
 }
