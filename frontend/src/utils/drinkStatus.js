@@ -5,7 +5,10 @@ const CURRENT_YEAR = new Date().getFullYear();
 /**
  * Derive the current maturity phase from a 3-phase reviewed WineVintageProfile.
  * For relative (NV) profiles the window is resolved against the bottle's anchor
- * year first. Returns null if the profile is not ready, or { status, label }.
+ * year first. Returns null if the profile is not ready, or { status, label,
+ * hint?, year? }: `hint` + `year` name the next change ("peak from 2028").
+ * `label` is English, for tests and logs; screens show maturityBadgeText —
+ * the same names as the filter chips (maturity.*), translated.
  *
  * @param {object} profile
  * @param {number} [anchorYear] - the bottle's purchase year (for relative/NV profiles)
@@ -19,19 +22,37 @@ export function getMaturityStatus(profile, anchorYear, year = CURRENT_YEAR) {
   if (!earlyFrom && !peakFrom && !peakUntil) return null;
 
   const firstYear = earlyFrom || peakFrom;
-  if (firstYear && year < firstYear)                 return { status: 'not-ready', label: `Not yet mature — from ${firstYear}` };
-  if (earlyUntil && year <= earlyUntil)              return { status: 'early',     label: 'Early drinking' };
-  if (peakFrom   && year <  peakFrom)                return { status: 'early',     label: `Early drinking — peak from ${peakFrom}` };
-  if (peakUntil  && year <= peakUntil)               return { status: 'peak',      label: 'Optimal maturity ⭐' };
-  if (lateFrom   && year <  lateFrom)                return { status: 'peak',      label: `Optimal maturity — late phase from ${lateFrom}` };
-  if (lateUntil  && year <= lateUntil)               return { status: 'late',      label: 'Late maturity' };
+  if (firstYear && year < firstYear)                 return { status: 'not-ready', label: `Not ready — from ${firstYear}`, hint: 'from', year: firstYear };
+  if (earlyUntil && year <= earlyUntil)              return { status: 'early',     label: 'Early' };
+  if (peakFrom   && year <  peakFrom)                return { status: 'early',     label: `Early — peak from ${peakFrom}`, hint: 'peakFrom', year: peakFrom };
+  if (peakUntil  && year <= peakUntil)               return { status: 'peak',      label: 'Peak ⭐' };
+  if (lateFrom   && year <  lateFrom)                return { status: 'peak',      label: `Peak — late from ${lateFrom}`, hint: 'lateFrom', year: lateFrom };
+  if (lateUntil  && year <= lateUntil)               return { status: 'late',      label: 'Late' };
   // A late phase with no end stays late once it has begun (release audit
   // 2026-10-13: it fell through to "Optimal maturity").
-  if (lateFrom   && !lateUntil && year >= lateFrom)  return { status: 'late',      label: 'Late maturity' };
+  if (lateFrom   && !lateUntil && year >= lateFrom)  return { status: 'late',      label: 'Late' };
   if ((lateUntil && year >  lateUntil) ||
-      (peakUntil && year >  peakUntil && !lateFrom)) return { status: 'declining', label: 'Past prime' };
-  if (peakFrom   && year >= peakFrom)                return { status: 'peak',      label: 'Optimal maturity ⭐' };
-  return { status: 'early', label: 'Early drinking' };
+      (peakUntil && year >  peakUntil && !lateFrom)) return { status: 'declining', label: 'Declining' };
+  if (peakFrom   && year >= peakFrom)                return { status: 'peak',      label: 'Peak ⭐' };
+  return { status: 'early', label: 'Early' };
+}
+
+// The i18n key of each maturity name — the filter chips' (utils/filterLabels).
+const MATURITY_NAME_KEY = {
+  'not-ready': 'maturity.notReady', early: 'maturity.early', peak: 'maturity.peak',
+  late: 'maturity.late', declining: 'maturity.declining',
+};
+
+/**
+ * A maturity badge's text, translated: the same name the filter chips and
+ * the statistics use ("Peak", "Declining" …), a star at the peak itself, and
+ * the next change's year when there is one ("Early — peak from 2028").
+ */
+export function maturityBadgeText(m, t) {
+  if (!m) return '';
+  const name = t(MATURITY_NAME_KEY[m.status] || 'maturity.noData');
+  if (m.hint) return `${name} — ${t(`maturity.hints.${m.hint}`, { year: m.year })}`;
+  return m.status === 'peak' ? `${name} ⭐` : name;
 }
 
 /**

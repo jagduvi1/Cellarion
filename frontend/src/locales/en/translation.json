@@ -90,7 +90,7 @@
       "somm": "Somm",
       "mod": "Mod"
     },
-    "analytics": "Analytics",
+    "analytics": "Statistics",
     "restock": "Restock",
     "wishlist": "Wishlist",
     "recommendations": "Recommendations",
@@ -445,7 +445,7 @@
       "scope_consume": "consume",
       "scope_climate": "climate device",
       "scopeDesc_read": "Read — view cellars, bottles, racks, statistics, and notifications",
-      "scopeDesc_consume": "Consume — mark bottles as consumed",
+      "scopeDesc_consume": "Consume — drink or take bottles out of the cellar",
       "passwordLabel": "Confirm with your password",
       "passwordHint": "Creating a token requires your account password.",
       "createConfirmBtn": "Create token",
@@ -984,7 +984,7 @@
     "tabBottles": "Bottles",
     "tabOverview": "Overview",
     "viewRackLayout": "View rack layout",
-    "consumedBottles": "Consumed bottles",
+    "consumedBottles": "Bottles taken out",
     "sortBottlesAria": "Sort bottles",
     "removeFilterAria": "Remove {{label}}",
     "groupBottleCount_one": "{{count}} bottle",
@@ -1229,11 +1229,11 @@
     "personalWindow": "Your Drink Window",
     "yourWindow": "your window",
     "yourWindowTooltip": "This status comes from your own drink window for this bottle, not the sommelier profile.",
-    "personalNotReady": "Not yet — from {{year}}",
+    "personalNotReady": "Not ready — from {{year}}",
     "personalEarly": "Early — peak from {{year}}",
     "personalLate": "Late — past its peak",
-    "personalDrinkNow": "Drink now",
-    "personalPast": "Past your window",
+    "personalDrinkNow": "Peak — drink now",
+    "personalPast": "Declining — past your window",
     "windowFromYear": "from {{year}}",
     "windowUntilYear": "until {{year}}",
     "rackLocation": "Rack Location",
@@ -1244,8 +1244,8 @@
     "agingMaturityPremiumDesc": "See expert aging windows and maturity phases for this vintage. Available on the Premium plan.",
     "editDetails": "Edit Details",
     "editDetailsShort": "Edit",
-    "removeBottle": "Remove Bottle",
-    "removeBottleShort": "Remove",
+    "removeBottle": "Drink",
+    "removeBottleShort": "Drink",
     "moreShort": "More",
     "restore": "Move back to cellar",
     "restoring": "Moving back…",
@@ -1257,12 +1257,12 @@
     "mistakeBodyRecoverable": "The bottle is removed as if it had never been added, so it won’t count in your stats or history. It goes to Recently deleted, where you can bring it back for {{days}} days.",
     "mistakeConfirm": "Yes, remove it",
     "mistakeRemoving": "Removing…",
-    "mistakeError": "Failed to remove bottle",
+    "mistakeError": "Could not move the bottle to Recently deleted. Please try again.",
     "editBottleTitle": "Edit Bottle Details",
     "vintagePlaceholder": "e.g. 2018, NV, or Unknown",
     "vintagePattern": "Enter a 4-digit year (1900-onwards), NV for non-vintage, or Unknown if you don't know the year",
     "saveChanges": "Save Changes",
-    "removeBottleTitle": "Remove Bottle",
+    "removeBottleTitle": "Take out of the cellar",
     "drinkReason": "Drank it",
     "giftedReason": "Gifted",
     "soldReason": "Sold",
@@ -1279,9 +1279,9 @@
     "maturityYears_one": "{{count}} yr",
     "maturityYears_other": "{{count}} yrs",
     "maturityYearsRange": "{{from}}–{{until}} yrs",
-    "maturityPhaseEarly": "Early drinking",
-    "maturityPhasePeak": "Optimal maturity ⭐",
-    "maturityPhaseLate": "Late maturity",
+    "maturityPhaseEarly": "Early",
+    "maturityPhasePeak": "Peak ⭐",
+    "maturityPhaseLate": "Late",
     "rackSlot": "slot",
     "grapes": "Grape Varieties",
     "noGrapes": "No grape varieties listed",
@@ -1328,7 +1328,7 @@
     "structure": "Structure",
     "flavours": "Flavours",
     "pairsWith": "Pairs with",
-    "consumeError": "Failed to remove bottle",
+    "consumeError": "Could not take the bottle out. Please try again.",
     "addMore": {
       "action": "Add more bottles",
       "title": "Add more bottles",
@@ -1391,11 +1391,11 @@
     "chipMaturity": "Maturity: {{value}}",
     "chipSearch": "Search: \"{{value}}\"",
     "chipPurchased": "Purchased: {{value}}",
-    "chipConsumed": "Consumed: {{value}}",
+    "chipConsumed": "Taken out: {{value}}",
     "chipStatus": "Status: {{value}}",
     "statusLabels": {
       "active": "Active",
-      "consumed": "Consumed",
+      "consumed": "Taken out",
       "all": "All",
       "drank": "Drunk",
       "gifted": "Gifted",
@@ -1575,7 +1575,7 @@
     "casePlaceBtn": "Place {{count}} bottles",
     "casePlacing": "Placing…",
     "removeFromRack": "Remove from rack",
-    "remove": "Remove",
+    "remove": "Drink",
     "quickCreate": "Quick Create",
     "builder": "Builder",
     "builderHint": "Drag modules here to start building",
@@ -1786,13 +1786,13 @@
     "actions": {
       "bottleAdd": "Added bottle",
       "bottleUpdate": "Updated bottle",
-      "bottleConsume": "Consumed bottle",
+      "bottleConsume": "Bottle taken out",
       "bottleDelete": "Deleted bottle",
       "bottleMoveOut": "Moved bottle out",
       "bottleMoveIn": "Moved bottle in",
       "bottleBulkMove": "Moved bottles in bulk",
       "bottleBulkUpdate": "Edited bottles in bulk",
-      "bottleBulkConsume": "Marked bottles consumed in bulk",
+      "bottleBulkConsume": "Bottles taken out in bulk",
       "cellarDelete": "Deleted cellar",
       "cellarShareAdd": "Shared cellar",
       "cellarShareUpdate": "Changed share role",
@@ -1812,7 +1812,7 @@
   "bulk": {
     "moveAction": "Move",
     "purchaseAction": "Purchase",
-    "consumeAction": "Drunk",
+    "consumeAction": "Drink",
     "reserveAction": "Reserve",
     "listAction": "List",
     "failed": "Couldn't apply the change. Please try again.",
@@ -1828,16 +1828,16 @@
     "priceInvalid": "Price must be a number of zero or more.",
     "purchaseSubmit": "Save details",
     "purchaseDoneTitle": "Purchase details saved",
-    "consumeTitle_one": "Mark {{count}} bottle as consumed",
-    "consumeTitle_other": "Mark {{count}} bottles as consumed",
+    "consumeTitle_one": "Take {{count}} bottle out of the cellar",
+    "consumeTitle_other": "Take {{count}} bottles out of the cellar",
     "consumeIntro": "They leave the cellar and go to your drinking history with one date. Ratings and notes can be added per bottle from the history later.",
     "consumeDate": "Date",
-    "consumeSubmit_one": "Mark {{count}} bottle",
-    "consumeSubmit_other": "Mark {{count}} bottles",
-    "consumeDoneTitle": "Bottles marked as consumed",
+    "consumeSubmit_one": "Take out {{count}} bottle",
+    "consumeSubmit_other": "Take out {{count}} bottles",
+    "consumeDoneTitle": "Bottles taken out",
     "reservedSkipped_one": "{{count}} bottle is reserved (spoken for) and was left alone.",
     "reservedSkipped_other": "{{count}} bottles are reserved (spoken for) and were left alone.",
-    "consumeReservedToo": "Mark the reserved ones too",
+    "consumeReservedToo": "Take the reserved ones out too",
     "reserveTitle_one": "Reserve {{count}} bottle",
     "reserveTitle_other": "Reserve {{count}} bottles",
     "reserveIntro": "Mark them as spoken for — they are left out of drink suggestions until then.",
@@ -2587,9 +2587,9 @@
       "noPending": "No vintages awaiting review. Great work!",
       "noReviewed": "No reviewed profiles yet.",
       "phaseHint": "Enter calendar years for each drinking phase. Leave a phase blank if it doesn't apply.",
-      "phaseEarly": "Early drinking",
-      "phasePeak": "Optimal maturity ⭐",
-      "phaseLate": "Late maturity",
+      "phaseEarly": "Early",
+      "phasePeak": "Peak ⭐",
+      "phaseLate": "Late",
       "fromLabel": "From",
       "untilLabel": "Until",
       "sommNotes": "Sommelier notes",
@@ -2822,13 +2822,13 @@
     "openBottle": "Open this bottle",
     "replacementValue": "Est. replacement value",
     "vsPaid": "vs paid",
-    "title": "Collection Analytics",
+    "title": "Statistics",
     "subtitleFull_one": "Complete insights across {{cellars}} cellar · {{countries}} countries · {{grapes}} grape varieties",
     "subtitleFull_other": "Complete insights across {{cellars}} cellars · {{countries}} countries · {{grapes}} grape varieties",
     "subtitleFree": "Your collection at a glance",
     "loading": "Analysing your collection…",
     "emptyTitle": "Your cellar is empty",
-    "emptyDesc": "Add bottles to your cellars to see your analytics.",
+    "emptyDesc": "Add bottles to your cellars to see your statistics.",
     "emptyBtn": "Go to My Cellars",
     "noDataYet": "No data yet",
     "noVintageData": "No vintage data yet",
@@ -2857,12 +2857,12 @@
       "poor": "Poor"
     },
     "maturityPhases": {
-      "declining": "Past Prime",
-      "late": "Late Maturity",
-      "peak": "Optimal Maturity",
-      "early": "Early Drinking",
-      "notReady": "Not Ready Yet",
-      "noProfile": "No Profile"
+      "declining": "Declining",
+      "late": "Late",
+      "peak": "Peak",
+      "early": "Early",
+      "notReady": "Not ready",
+      "noProfile": "No maturity data"
     },
     "days": {
       "overdue": "{{count}}d overdue",
@@ -3018,7 +3018,7 @@
       "avgVintageAge": "Avg Vintage Age",
       "yrs": "yrs",
       "decliningLate": "Declining / Late",
-      "pastPrime": "{{count}} past prime",
+      "pastPrime": "{{count}} declining",
       "atPeak": "{{count}} at peak",
       "estValue": "Est. Collection Value",
       "avgPerBottle": "avg {{price}} / bottle",
@@ -3045,7 +3045,8 @@
       "all": "All",
       "cellar": "In the cellar",
       "history": "History"
-    }
+    },
+    "dashboardLink": "Build your own tables and charts in the Dashboard →"
   },
   "blog": {
     "title": "Blog",
@@ -3550,12 +3551,12 @@
       "bottles": {
         "title": "Bottles",
         "summary": "Add, manage, and track individual bottles in your cellars.",
-        "d1": "Add a bottle: click \"+ Add Bottle\" in a cellar. Two ways: search the wine database by name, OR scan a wine label with your phone camera to identify the wine automatically.",
+        "d1": "Add a bottle: click \"+ Add Bottle\" in a cellar. Two ways: search the shared wine registry by name, OR scan a wine label with your phone camera to identify the wine automatically.",
         "d2": "Bottle detail page shows: wine info, vintage, price paid, market value estimate, your rating, your notes, images, grape varieties, aging & maturity status, price evolution chart.",
         "d3": "Edit details: click \"Edit Details\" on the bottle page to change vintage, price, rating, notes, size.",
         "d4": "Upload photos: on the bottle detail page, you can add photos of the bottle or label. Background removal is automatic.",
         "d5": "Share a bottle: click the share icon on the bottle detail page to send a link to someone.",
-        "d6": "Consume/remove: click \"Remove Bottle\" to mark it as consumed. Set the date you drank it. The bottle moves to the cellar's history.",
+        "d6": "Drink or take out: click \"Drink\" on the bottle page, choose why it left (drank, gifted, sold or other) and the date. The bottle moves to the cellar's history.",
         "d7": "Write a review: on the bottle detail page, scroll down to write a community review.",
         "d8": "Bottles on order: bought wine that has not arrived yet (en primeur, a pre-order)? When adding, open More details and tick \"Not delivered yet\". It waits on the cellar's \"On order\" list, outside counts and racks, until you tap \"Mark as arrived\". If the expected month passes, Cellarion asks whether it has come.",
         "d9": "Saved a bottle under the wrong wine? Open the bottle, tap the ⋮ menu and choose \"Change wine…\": search for the right wine and the bottle moves there, keeping its dates, price, notes, rating, rack slot and history."
@@ -3594,7 +3595,7 @@
       "wishlist": {
         "title": "Wishlist",
         "summary": "Track wines you want to buy.",
-        "d1": "Click \"+ Add Wine\" to search the database and add a wine to your wishlist.",
+        "d1": "Click \"+ Add Wine\" to search the wine registry and add a wine to your wishlist.",
         "d2": "Add notes (e.g. where to buy it) and set a target price.",
         "d3": "Filter tabs: Wanted / Bought / All."
       },
@@ -3627,11 +3628,11 @@
         "d3": "Usage limits depend on your plan (Free: 4/week, Basic: 20/day, Premium: 50/day)."
       },
       "analytics": {
-        "title": "Analytics",
+        "title": "Statistics",
         "summary": "Charts and insights about your wine collection.",
         "d1": "Collection value over time, bottles by country/type/grape/region.",
         "d2": "World map showing where your wines come from.",
-        "d3": "Drink window overview: wines that are ready, still aging, or past peak.",
+        "d3": "Drink window overview: how many bottles are not ready, early, at their peak, late or declining.",
         "d4": "Export your stats as a shareable card image.",
         "d5": "Premium feature — available on the Premium plan."
       },
@@ -3644,7 +3645,7 @@
       },
       "wineRequests": {
         "title": "Wine Requests",
-        "summary": "Suggest wines missing from the database.",
+        "summary": "Suggest wines missing from the registry.",
         "d1": "Click \"+ New Request\" to suggest a wine.",
         "d2": "An admin reviews and adds approved wines so everyone can use them."
       },
@@ -3653,7 +3654,7 @@
         "summary": "Import your wine collection from a CSV or JSON file.",
         "d1": "Access: open a cellar → \"...\" menu → Import Bottles.",
         "d2": "Upload a CSV or JSON file with your wine data.",
-        "d3": "Imported wines are automatically matched to the database."
+        "d3": "Imported wines are automatically matched to the registry."
       },
       "settings": {
         "title": "Settings",
@@ -3666,9 +3667,9 @@
       },
       "history": {
         "title": "Cellar History",
-        "summary": "View all bottles you've consumed from a cellar.",
+        "summary": "Every bottle you have taken out of a cellar.",
         "d1": "Access: open a cellar → \"...\" menu → History.",
-        "d2": "Shows every bottle you've marked as consumed, with dates."
+        "d2": "Shows every bottle you have drunk, gifted or sold, with dates."
       },
       "other": {
         "title": "Other Features",
@@ -3750,8 +3751,13 @@
     "early": "Early",
     "late": "Late",
     "declining": "Declining",
-    "notReady": "Not Ready",
-    "noData": "No Maturity Data"
+    "notReady": "Not ready",
+    "noData": "No maturity data",
+    "hints": {
+      "from": "from {{year}}",
+      "peakFrom": "peak from {{year}}",
+      "lateFrom": "late from {{year}}"
+    }
   },
   "cellarNav": {
     "aria": "Cellar views"
@@ -3802,7 +3808,7 @@
     "undoOpenBtn": "Opened by mistake?",
     "undoOpenHint": "Removes the open state and all pours",
     "partialOption": "Just a glass — keep the bottle",
-    "partialOr": "or remove it completely:",
+    "partialOr": "or take it out of the cellar:",
     "partialConfirmBtn": "Open & pour a glass"
   },
   "audit": {
@@ -5483,14 +5489,14 @@
       "giftedVsDrunk": "How bottles leave (drunk, gifted, sold)"
     },
     "beta": "Beta",
-    "betaHint": "Analytics is new and still settling in. If a number looks wrong or something misbehaves, please tell us via Support — it helps more than you would think.",
+    "betaHint": "The dashboard is new and still settling in. If a number looks wrong or something misbehaves, please tell us via Support — it helps more than you would think.",
     "dashboardTitle": "Dashboard",
     "tabs": {
       "boards": "Boards",
       "table": "Table"
     },
-    "tabsAria": "Analytics sections",
-    "openTable": "Open the analytics table",
+    "tabsAria": "Dashboard sections",
+    "openTable": "Open the table",
     "dashboardHint": "Widgets come from the Table tab: group something interesting there and press \"Add to dashboard\".",
     "addToDashboard": "Add to dashboard",
     "widgetTitlePrompt": "Name this dashboard widget:",
@@ -5534,7 +5540,8 @@
       "purchasePrice": "purchase price",
       "myRating": "my rating",
       "consumedRating": "rating at consumption"
-    }
+    },
+    "statisticsLink": "Your collection at a glance: Statistics →"
   },
   "imageActions": {
     "deleteTitle": "Delete this photo?",

@@ -26,7 +26,7 @@ import PriceHistoryTimeline from '../components/bottle/PriceHistoryTimeline';
 import PriceTrackingToggle from '../components/bottle/PriceTrackingToggle';
 import { fetchRates } from '../utils/currency';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
-import { getMaturityStatus } from '../utils/drinkStatus';
+import { getMaturityStatus, maturityBadgeText } from '../utils/drinkStatus';
 import { bottleAnchorYear } from '../utils/maturityUtils';
 import { totalsByCurrency } from '../utils/onOrder';
 import { isReserved, reservationSummary } from '../utils/reservation';
@@ -565,7 +565,7 @@ function CellarVintageBeta() {
                       </div>
                     ) : (
                       <div className="bd-maturity-reviewed">
-                        {maturityStatus && <span className={`maturity-badge maturity-badge--${maturityStatus.status}`}>{maturityStatus.label}</span>}
+                        {maturityStatus && <span className={`maturity-badge maturity-badge--${maturityStatus.status}`}>{maturityBadgeText(maturityStatus, t)}</span>}
                         <MaturityPhaseTable profile={profile} anchorYear={anchorYear} />
                         {profile.sommNotes && <p className="bd-maturity-notes">{profile.sommNotes}</p>}
                       </div>

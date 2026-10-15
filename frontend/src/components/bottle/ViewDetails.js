@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { getMaturityStatus, getPersonalWindowStatus } from '../../utils/drinkStatus';
+import { getMaturityStatus, getPersonalWindowStatus, maturityBadgeText } from '../../utils/drinkStatus';
 import { isReserved, reservationSummary } from '../../utils/reservation';
 import { bottleAnchorYear } from '../../utils/maturityUtils';
 import { convertAmountHistorical } from '../../utils/currency';
@@ -226,7 +226,7 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
                   the personal window (above) takes precedence. */}
               {maturityStatus && !personalWindow && (
                 <span className={`maturity-badge maturity-badge--${maturityStatus.status}`}>
-                  {maturityStatus.label}
+                  {maturityBadgeText(maturityStatus, t)}
                 </span>
               )}
               <MaturityPhaseTable profile={vintageProfile} anchorYear={anchorYear} />

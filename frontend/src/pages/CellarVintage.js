@@ -15,7 +15,7 @@ import LotHistory from '../components/bottle/LotHistory';
 import PersonalDataCard from '../components/bottle/PersonalDataCard';
 import WineRecordSection from '../components/bottle/WineRecordSection';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
-import { getMaturityStatus } from '../utils/drinkStatus';
+import { getMaturityStatus, maturityBadgeText } from '../utils/drinkStatus';
 import { bottleAnchorYear } from '../utils/maturityUtils';
 import { totalsByCurrency } from '../utils/onOrder';
 import './CellarDetail.css';
@@ -248,7 +248,7 @@ function CellarVintage() {
               ) : (
                 <div className="bd-maturity-reviewed">
                   {maturityStatus && !sharedWindow && (
-                    <span className={`maturity-badge maturity-badge--${maturityStatus.status}`}>{maturityStatus.label}</span>
+                    <span className={`maturity-badge maturity-badge--${maturityStatus.status}`}>{maturityBadgeText(maturityStatus, t)}</span>
                   )}
                   <MaturityPhaseTable profile={profile} anchorYear={anchorYear} />
                   {profile.sommNotes && <p className="bd-maturity-notes">{profile.sommNotes}</p>}

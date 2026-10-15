@@ -1,5 +1,5 @@
 import React, { Suspense, useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { lazy } from '../utils/lazyWithReload';
 import { useAuth } from '../contexts/AuthContext';
@@ -339,6 +339,8 @@ export default function AnalyticsDashboard() {
       </div>
       <p className="ad-hint">
         {t('analytics.dashboardHint', 'Widgets come from the Table tab: group something interesting there and press "Add to dashboard".')}
+        {' '}
+        <Link to="/statistics">{t('analytics.statisticsLink', 'Your collection at a glance: Statistics →')}</Link>
       </p>
       <div className="ad-grid">
         {boards === null && <div className="ad-empty">{t('analytics.loading', 'Loading…')}</div>}
