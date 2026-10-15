@@ -69,4 +69,13 @@ test('the filter counts bottles, and its maturity buttons carry their counts', a
   await waitFor(() => expect(api.mock.calls.some(([u]) => u === '/api/cellars/c1/maturity-counts')).toBe(true));
   const peak = await screen.findByRole('button', { name: /maturity\.peak/ });
   await waitFor(() => expect(within(peak).getByText('2')).toBeInTheDocument());
+
+  // Opened again: asked again (a drink window edited meanwhile moves bottles
+  // between stages without changing how many there are).
+  const asked = () => api.mock.calls.filter(([u]) => u === '/api/cellars/c1/maturity-counts').length;
+  const before = asked();
+  fireEvent.click(screen.getByText('cellarDetail.showBottles:2'));
+  await waitFor(() => expect(screen.queryByText('cellarDetail.showBottles:2')).toBeNull());
+  fireEvent.click(screen.getByLabelText('cellarDetail.toggleFilters'));
+  await waitFor(() => expect(asked()).toBe(before + 1));
 });

@@ -1,9 +1,9 @@
-import { isIOS, isSafariOrHomeScreen, stopIOSFocusZoom } from './iosFocusZoom';
+import { isIOS, isSafariTab, stopIOSFocusZoom } from './iosFocusZoom';
 
 // iOS zooms the page in on a focused field with text under 16 px and leaves
 // it zoomed; maximum-scale=1 stops that. Safari still lets people pinch-zoom
-// with it; other iOS browsers and in-app viewers may not, and Android would
-// not — so only Safari and the home-screen app get it.
+// with it; other iOS browsers, in-app viewers and the home-screen app may not,
+// and Android would not — so only Safari itself gets it.
 
 const SAFARI_TAIL = ' (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
 const IPHONE = { userAgent: `Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15${SAFARI_TAIL}`, maxTouchPoints: 5 };
@@ -46,17 +46,17 @@ test('on iOS the viewport gains maximum-scale=1, once; elsewhere it is left alon
   expect(viewport(android)).toBe(base);
 });
 
-test('only Safari and the home-screen app: Chrome on iOS and in-app viewers keep pinch-zoom', () => {
-  expect(isSafariOrHomeScreen(IPHONE, noWin)).toBe(true);
-  expect(isSafariOrHomeScreen(HOME_SCREEN, noWin)).toBe(true);
-  expect(isSafariOrHomeScreen(CHROME_IOS, noWin)).toBe(false);
-  expect(isSafariOrHomeScreen(IN_APP, noWin)).toBe(false);
+test('only Safari itself: Chrome on iOS, in-app viewers and the home-screen app keep pinch-zoom', () => {
+  expect(isSafariTab(IPHONE, noWin)).toBe(true);
+  expect(isSafariTab(CHROME_IOS, noWin)).toBe(false);
+  expect(isSafariTab(IN_APP, noWin)).toBe(false);
+  expect(isSafariTab(HOME_SCREEN, noWin)).toBe(false);
+  // Safari's own user agent, but opened from the home screen.
+  expect(isSafariTab(IPHONE, { matchMedia: () => ({ matches: true }) })).toBe(false);
   const base = 'width=device-width, initial-scale=1';
-  for (const nav of [CHROME_IOS, IN_APP]) {
+  for (const nav of [CHROME_IOS, IN_APP, HOME_SCREEN]) {
     const doc = docWith(base);
     expect(stopIOSFocusZoom(doc, nav, noWin)).toBe(false);
     expect(viewport(doc)).toBe(base);
   }
-  const home = docWith(base);
-  expect(stopIOSFocusZoom(home, HOME_SCREEN, noWin)).toBe(true);
 });

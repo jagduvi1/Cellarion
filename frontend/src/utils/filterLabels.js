@@ -15,7 +15,7 @@ export const MATURITY_I18N_KEY = {
   declining: 'maturity.declining', 'not-ready': 'maturity.notReady', none: 'maturity.noData',
 };
 
-// cellar statistics `maturity` bucket name for each filter value.
+// The maturity-counts bucket (GET /api/cellars/:id/maturity-counts) for each filter value.
 export const MATURITY_STATS_KEY = {
   peak: 'peak', early: 'early', late: 'late', declining: 'declining',
   'not-ready': 'notReady', none: 'noProfile',

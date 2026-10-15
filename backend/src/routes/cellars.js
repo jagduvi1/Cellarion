@@ -781,8 +781,8 @@ router.get('/multi/history', async (req, res) => {
 // GET /api/cellars/:id/statistics - Get cellar statistics (active bottles only)
 // GET /api/cellars/:id/maturity-counts — how many bottles are at each stage,
 // for the counts on the filter's maturity buttons (#1291: they were never
-// sent, so the buttons showed none). The filter asks as it opens; this reads
-// only what the classification needs — not the cellar's other statistics. The
+// sent, so the buttons showed none). The filter asks as it opens; this groups
+// only what the classification reads — not the cellar's other statistics. The
 // same classification the list's maturity filter uses, so a button's count is
 // what choosing it shows (without the other filters).
 router.get('/:id/maturity-counts', async (req, res) => {
@@ -793,18 +793,45 @@ router.get('/:id/maturity-counts', async (req, res) => {
     if (!role || cellar.deletedAt) {
       return res.status(404).json({ error: 'Cellar not found' });
     }
-    const rows = await Bottle.find({ cellar: cellar._id, status: { $nin: NOT_IN_CELLAR_STATUSES } })
-      .select('wineDefinition vintage drinkFrom drinkTo peakFrom peakUntil purchaseDate createdAt')
-      .lean();
+    // One grouping query, like the statistics: bottles that share what the
+    // classification reads — wine, vintage, their own window, and the year
+    // an NV window counts from (bottleAnchorYear: bought, else added) — are
+    // classified once and weighed by their number.
+    const anchorDate = { $convert: { input: { $ifNull: ['$purchaseDate', '$createdAt'] }, to: 'date', onError: null, onNull: null } };
+    const groups = await Bottle.aggregate([
+      { $match: { cellar: cellar._id, status: { $nin: NOT_IN_CELLAR_STATUSES } } },
+      {
+        $group: {
+          _id: {
+            wineDefinition: '$wineDefinition',
+            vintage: '$vintage',
+            drinkFrom: '$drinkFrom',
+            drinkTo: '$drinkTo',
+            peakFrom: '$peakFrom',
+            peakUntil: '$peakUntil',
+            anchorYear: { $year: anchorDate },
+          },
+          count: { $sum: 1 },
+        },
+      },
+    ]).allowDiskUse(true);
+    const rows = groups.map((g) => ({
+      ...g._id,
+      // Mid-year, so the UTC year read back is the year grouped on.
+      purchaseDate: g._id.anchorYear != null ? new Date(Date.UTC(g._id.anchorYear, 6, 1)) : null,
+      count: g.count,
+    }));
     const profileMap = await buildProfileMap(rows);
     const maturity = { declining: 0, late: 0, peak: 0, early: 0, notReady: 0, noProfile: 0 };
+    let total = 0;
     for (const b of rows) {
+      total += b.count;
       const status = classifyMaturity(b, profileMap);
-      if (!status) maturity.noProfile++;
-      else if (status === 'not-ready') maturity.notReady++;
-      else if (Object.hasOwn(maturity, status)) maturity[status]++;
+      if (!status) maturity.noProfile += b.count;
+      else if (status === 'not-ready') maturity.notReady += b.count;
+      else if (Object.hasOwn(maturity, status)) maturity[status] += b.count;
     }
-    res.json({ maturity, total: rows.length });
+    res.json({ maturity, total });
   } catch (error) {
     console.error('Get maturity counts error:', error);
     res.status(500).json({ error: 'Failed to get maturity counts' });

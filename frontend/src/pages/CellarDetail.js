@@ -115,8 +115,8 @@ function CellarDetail() {
   // (cards, for paging) can be 1 where the filter's button means 2 bottles.
   const [bottleCount, setBottleCount] = useState(0);
   // Bottles per maturity stage, for the filter's maturity buttons — asked for
-  // when the filter opens (#1291). Kept with the cellar they are for and its
-  // bottle count then: { id, total, counts }.
+  // each time the filter opens (#1291), kept with the cellar they are for:
+  // { id, counts }.
   const [maturity, setMaturity] = useState(null);
   // { count, nextExpected } — bottles bought for this cellar, not arrived yet.
   const [onOrder, setOnOrder] = useState(null);
@@ -403,20 +403,19 @@ function CellarDetail() {
 
   const loadMore = () => fetchCellarData(bottles.length);
 
-  // The maturity buttons' counts, when the filter opens on this cellar alone
-  // (the all-cellars view has none). Asked again only when they may have
-  // changed: another cellar, or bottles added or taken out since.
-  const cellarBottles = statistics?.totalBottles;
+  // The maturity buttons' counts, fresh each time the filter opens on this
+  // cellar alone (the all-cellars view has none): any change — a bottle
+  // drunk, a drink window edited — may have moved bottles between stages.
+  // The last counts for this cellar show meanwhile; another cellar's never.
   useEffect(() => {
     if (!showFilterModal || multiScope) return undefined;
-    if (maturity && maturity.id === id && maturity.total === cellarBottles) return undefined;
     let live = true;
     getCellarMaturityCounts(apiFetch, id)
       .then((res) => (res.ok ? res.json() : null))
-      .then((data) => { if (live && data?.maturity) setMaturity({ id, total: data.total, counts: data.maturity }); })
+      .then((data) => { if (live && data?.maturity) setMaturity({ id, counts: data.maturity }); })
       .catch(() => {});
     return () => { live = false; };
-  }, [showFilterModal, multiScope, id, cellarBottles]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [showFilterModal, multiScope, id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchStatistics = async () => {
     try {

@@ -187,38 +187,33 @@ test('another user\'s cellar is not found', async () => {
 // carried them. Their own endpoint (the filter asks as it opens) uses the
 // list's maturity classification, so a count is what choosing it shows, and
 // reads only what that needs — not the cellar's other statistics.
-test('maturity counts: bottles per stage from vintage profiles and own windows, nothing else computed', async () => {
-  setGroups([]);
+test('maturity counts: bottles per stage from vintage profiles and own windows, one grouping query', async () => {
   const year = new Date().getFullYear();
   const oid = (id) => new mongoose.Types.ObjectId(id);
-  let selected;
-  Bottle.find.mockImplementation(() => ({
-    select: (fields) => { selected = fields; return { lean: async () => [
-      { _id: 'b1', wineDefinition: oid(RED), vintage: '2015' },                      // profile: at its peak
-      { _id: 'b2', wineDefinition: oid(RED), vintage: '2015' },
-      { _id: 'b3', wineDefinition: oid(WHITE), vintage: '2020' },                    // no profile
-      { _id: 'b4', wineDefinition: oid(WHITE), vintage: '2021', drinkFrom: year + 2 }, // own window: not ready
-      { _id: 'b5', drinkFrom: year - 10, drinkTo: year - 1 },                         // own window: past it
-    ] }; },
-  }));
+  let pipe;
+  Bottle.aggregate.mockImplementation((p) => {
+    pipe = p;
+    return { allowDiskUse: async () => [
+      { _id: { wineDefinition: oid(RED), vintage: '2015', anchorYear: 2020 }, count: 2 },                 // profile: at its peak
+      { _id: { wineDefinition: oid(WHITE), vintage: '2020', anchorYear: 2021 }, count: 1 },               // no profile
+      { _id: { wineDefinition: oid(WHITE), vintage: '2021', drinkFrom: year + 2, anchorYear: 2022 }, count: 3 }, // own window: not ready
+      { _id: { drinkFrom: year - 10, drinkTo: year - 1, anchorYear: null }, count: 1 },                 // own window: past it
+    ] };
+  });
   WineVintageProfile.find.mockReturnValue({ lean: async () => [
     { wineDefinition: oid(RED), vintage: '2015', status: 'reviewed', earlyFrom: year - 6, earlyUntil: year - 2, peakFrom: year - 1, peakUntil: year + 1, lateFrom: year + 2, lateUntil: year + 4 },
   ] });
 
   const { status, body } = await request(`/api/cellars/${CELLAR_ID}/maturity-counts`);
   expect(status).toBe(200);
-  expect(body).toEqual({ maturity: { declining: 1, late: 0, peak: 2, early: 0, notReady: 1, noProfile: 1 }, total: 5 });
-  // No statistics work: the grouping query never ran.
-  expect(Bottle.aggregate).not.toHaveBeenCalled();
-  // This cellar's active bottles, only the fields the classification reads.
-  const [query] = Bottle.find.mock.calls[0];
-  expect(String(query.cellar)).toBe(CELLAR_ID);
-  expect(query.status).toEqual({ $nin: ['drank', 'gifted', 'sold', 'other', 'ordered'] });
-  expect(selected.split(' ').sort()).toEqual(['createdAt', 'drinkFrom', 'drinkTo', 'peakFrom', 'peakUntil', 'purchaseDate', 'vintage', 'wineDefinition']);
-
-  // The statistics stay as they were.
-  const plain = await request(`/api/cellars/${CELLAR_ID}/statistics`);
-  expect(plain.body.statistics.maturity).toBeUndefined();
+  // Each group is classified once and counts as many bottles as it holds.
+  expect(body).toEqual({ maturity: { declining: 1, late: 0, peak: 2, early: 0, notReady: 3, noProfile: 1 }, total: 7 });
+  // This cellar's active bottles, grouped by what the classification reads.
+  const { cellar, status: st } = pipe[0].$match;
+  expect(String(cellar)).toBe(CELLAR_ID);
+  expect(st).toEqual({ $nin: ['drank', 'gifted', 'sold', 'other', 'ordered'] });
+  expect(Object.keys(pipe[1].$group._id).sort()).toEqual(['anchorYear', 'drinkFrom', 'drinkTo', 'peakFrom', 'peakUntil', 'vintage', 'wineDefinition']);
+  expect(Bottle.find).not.toHaveBeenCalled();
 });
 
 test('maturity counts: a cellar of another user is not found', async () => {

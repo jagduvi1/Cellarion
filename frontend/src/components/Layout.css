@@ -517,7 +517,7 @@
 
 .install-prompt-dismiss {
   position: relative;
-  --tap-reach: -10px; /* touch tap area, styles/common.css */
+  --tap-reach: -10px -4px; /* touch tap area (styles/common.css) — half the gap to Install */
   background: none;
   border: none;
   color: rgba(255, 255, 255, 0.8);

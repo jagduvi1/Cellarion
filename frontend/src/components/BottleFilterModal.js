@@ -154,10 +154,11 @@ function FilterSection({ label, icon, children, defaultExpanded = true }) {
 // applied server-side after search like Placement, so no facet counts.
 // ratingScale: the user's rating scale ('5' | '20' | '100') — the rating range
 // is typed in that scale and stored normalised.
-// maturityCounts: the cellar statistics' maturity buckets ({ peak, early,
-// late, declining, notReady, noProfile }) — rendered beside each maturity
-// pill so "Late (4) / Declining (0)" answers the question before the filter
-// is applied. null hides the counts (cross-cellar scope has no single stats).
+// maturityCounts: bottles per maturity stage ({ peak, early, late, declining,
+// notReady, noProfile } from GET /api/cellars/:id/maturity-counts — not the
+// statistics) — rendered beside each maturity pill so "Late (4) / Declining
+// (0)" answers the question before the filter is applied. null hides the
+// counts (the cross-cellar scope has none).
 function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, facetMeta, bottlesTotal, showRatingMaturity = true, showUnplaced = false, showReserved = false, storage = null, ratingScale = '5', maturityCounts = null }) {
   const { t } = useTranslation();
 
