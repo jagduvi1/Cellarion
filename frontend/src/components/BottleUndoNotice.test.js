@@ -8,7 +8,7 @@ import BottleUndoNotice from './BottleUndoNotice';
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (k, fallback, opts) => String(typeof fallback === 'string' ? fallback : k)
-      .replace('{{name}}', opts?.name).replace('{{days}}', opts?.days),
+      .replace('{{name}}', opts?.name).replace('{{days}}', opts?.days).replace('{{count}}', opts?.count),
   }),
 }));
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ apiFetch: vi.fn() }) }));
@@ -70,4 +70,14 @@ test('already back (restored elsewhere meanwhile) counts as undone', async () =>
 
   fireEvent.click(screen.getByText('Undo'));
   await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('is back in the cellar'));
+});
+
+test('bottles taken off an order: how many, and Undo brings them back on order', async () => {
+  restoreRecentlyDeleted.mockResolvedValue(json(200, { restored: 2 }));
+  render(<BottleUndoNotice notice={{ kind: 'deleted', onOrder: true, count: 2, bottleId: 'b3', batchId: 'batch1', name: 'Léoville Barton 2023' }} cellarId="c1" onDismiss={() => {}} />);
+
+  expect(screen.getByRole('status')).toHaveTextContent('2 bottles of “Léoville Barton 2023” moved to Recently deleted. You can bring them back for 30 days.');
+  fireEvent.click(screen.getByText('Undo'));
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('“Léoville Barton 2023” is back on order.'));
+  expect(restoreRecentlyDeleted).toHaveBeenCalledWith(expect.any(Function), 'c1', { batchId: 'batch1' });
 });

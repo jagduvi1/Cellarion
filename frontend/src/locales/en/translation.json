@@ -1171,7 +1171,10 @@
     "drunk": "“{{name}}” is marked as drunk.",
     "takenOut": "“{{name}}” is taken out of the cellar.",
     "deleted": "“{{name}}” moved to Recently deleted. You can bring it back for {{days}} days.",
-    "restored": "“{{name}}” is back in the cellar."
+    "restored": "“{{name}}” is back in the cellar.",
+    "restoredOnOrder": "“{{name}}” is back on order.",
+    "deletedSome_one": "“{{name}}” moved to Recently deleted. You can bring it back for {{days}} days.",
+    "deletedSome_other": "{{count}} bottles of “{{name}}” moved to Recently deleted. You can bring them back for {{days}} days."
   },
   "bottleDetail": {
     "producerPending": "producer being confirmed",
@@ -5657,7 +5660,14 @@
     "monthFailed": "Could not change the expected month. Please try again.",
     "monthAppliesTo_one": "For this bottle",
     "monthAppliesTo_other": "For all {{count}} bottles of this delivery",
-    "linkLate": "expected {{month}}: has it arrived?"
+    "linkLate": "expected {{month}}: has it arrived?",
+    "changeQty": "Change quantity",
+    "qtyLabel": "Bottles on this order",
+    "saveQty": "Save",
+    "qtyAddHint": "The new bottles get this order’s price, shop and expected month.",
+    "qtyRemoveHint": "The bottles taken off go to Recently deleted. You can bring them back for {{days}} days.",
+    "qtyOnlyFewer": "Bottles can only be taken off this order here.",
+    "qtyFailed": "Could not change how many bottles are on order. Please try again."
   },
   "changeWine": {
     "action": "Change wine…",

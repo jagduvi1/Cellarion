@@ -103,7 +103,10 @@ registerTool({
     'undo_last. Pass an idempotency_key when retrying. With new_wine, draft:true keeps the new wine as the user\'s ' +
     'PRIVATE DRAFT — visible only to them, editable with update_wine_draft without any review, published to the ' +
     'shared registry with publish_wine when the record is complete (an untouched draft holding bottles publishes ' +
-    'by itself after 7 days). Prefer it when the user is still gathering the facts of a wine the registry does not know.',
+    'by itself after 7 days). Prefer it when the user is still gathering the facts of a wine the registry does not know. ' +
+    'on_order:true adds a bottle that is bought but not delivered yet (en primeur, a pre-order, a delivery on its way): it ' +
+    'stays out of the cellar counts, racks and suggestions until marked as arrived in the app; expected_arrival is its ' +
+    'month (YYYY-MM). One call adds one bottle — call it again for each further bottle of an order.',
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
@@ -124,6 +127,8 @@ registerTool({
     drink_to: z.number().int().optional(),
     peak_from: z.number().int().optional().describe('Optional peak start inside the drink window ("drinkable ≠ peak")'),
     peak_until: z.number().int().optional().describe('Optional peak end inside the drink window'),
+    on_order: z.boolean().optional().describe('Bought but not delivered yet: the bottle waits "on order" (search_bottles status on_order) until it arrives'),
+    expected_arrival: z.string().regex(/^\d{4}-\d{2}$/).optional().describe('With on_order: the month it is expected, YYYY-MM'),
     idempotency_key: z.string().max(100).optional(),
   },
   handler: async (args, ctx) => {
@@ -228,6 +233,8 @@ registerTool({
       drinkTo: args.drink_to,
       peakFrom: args.peak_from,
       peakUntil: args.peak_until,
+      onOrder: args.on_order === true,
+      expectedArrival: args.on_order === true ? args.expected_arrival : undefined,
     }, ctx.req);
     if (result.error) return fail('invalid_input', result.error.message);
     const { bottle } = result;
@@ -237,7 +244,7 @@ registerTool({
     // meaning — the producer was missing and a curator finishes the row.
     const pendingIdentity = wineDoc.pendingIdentity === true && !wineDraft;
     const envelope = {
-      summary: `Added ${wineDoc.name} ${bottle.vintage} to "${access.cellar.name}"${wineDraft ? (wineCreated ? ' (private draft wine — only you can see it; publish_wine when the record is complete)' : ' (on your private draft wine)') : wineCreated ? (pendingIdentity ? ' (registry wine filed for sommelier completion — no producer)' : ' (new registry wine created)') : ''}`,
+      summary: `Added ${wineDoc.name} ${bottle.vintage} to "${access.cellar.name}"${bottle.status === 'ordered' ? ' — on order, not in the cellar until it arrives' : ''}${wineDraft ? (wineCreated ? ' (private draft wine — only you can see it; publish_wine when the record is complete)' : ' (on your private draft wine)') : wineCreated ? (pendingIdentity ? ' (registry wine filed for sommelier completion — no producer)' : ' (new registry wine created)') : ''}`,
       data: {
         bottle_id: bottle._id,
         wine: { ...wineSummary(wineDoc) },

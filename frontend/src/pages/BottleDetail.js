@@ -249,7 +249,7 @@ function BottleDetail() {
       const res = await undoBottle(apiFetch, bottleId);
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.batchId) {
-        const bottleNotice = { kind: 'deleted', bottleId, batchId: data.batchId, name: noticeName() };
+        const bottleNotice = { kind: 'deleted', bottleId, batchId: data.batchId, name: noticeName(), onOrder: isOnOrder(bottle) };
         // A cancelled order goes back to the list it came from.
         navigate(isOnOrder(bottle) ? `/cellars/${cellarId}/on-order` : `/cellars/${cellarId}`, { state: { bottleNotice } });
       } else {

@@ -185,6 +185,7 @@
   .on-order-actions {
     width: 100%;
     flex-direction: row;
+    flex-wrap: wrap;
   }
   .on-order-actions .btn {
     flex: 1;

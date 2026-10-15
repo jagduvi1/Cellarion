@@ -72,7 +72,11 @@ export default function BottleUndoNotice({ notice, cellarId, onUndone, onDismiss
   const name = notice.name || t('bottleNotice.thisBottle', 'The bottle');
   let text;
   if (undone) {
-    text = t('bottleNotice.restored', '“{{name}}” is back in the cellar.', { name });
+    text = notice.onOrder
+      ? t('bottleNotice.restoredOnOrder', '“{{name}}” is back on order.', { name })
+      : t('bottleNotice.restored', '“{{name}}” is back in the cellar.', { name });
+  } else if (notice.kind === 'deleted' && notice.count > 1) {
+    text = t('bottleNotice.deletedSome', '{{count}} bottles of “{{name}}” moved to Recently deleted. You can bring them back for {{days}} days.', { name, count: notice.count, days: TRASH_DAYS });
   } else if (notice.kind === 'deleted') {
     text = t('bottleNotice.deleted', '“{{name}}” moved to Recently deleted. You can bring it back for {{days}} days.', { name, days: TRASH_DAYS });
   } else if (notice.reason === 'drank') {

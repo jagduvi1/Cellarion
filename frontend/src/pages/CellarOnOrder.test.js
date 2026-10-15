@@ -137,3 +137,69 @@ test('nothing on order shows the empty state', async () => {
   renderPage();
   expect(await screen.findByText('onOrder.emptyTitle')).toBeInTheDocument();
 });
+
+// "It would be good to be able to edit the quantity of bottles on order": an
+// order line's own "Change quantity". More bottles copy the order; fewer move
+// the most recently added to Recently deleted, with Undo.
+describe('Change quantity', () => {
+  const withCreated = (b, created) => ({ ...b, createdAt: created, purchaseLocation: 'Shop', purchaseDate: '2026-09-01T00:00:00.000Z' });
+  const ORDER = [
+    withCreated(ordered('b1', MARCH), '2026-09-01T10:00:00Z'),
+    withCreated(ordered('b2', MARCH), '2026-09-01T10:00:01Z'),
+    withCreated(ordered('b3', MARCH), '2026-09-02T10:00:00Z'), // added last
+  ];
+  let onOrderList;
+  beforeEach(() => {
+    onOrderList = ORDER;
+    api.mockImplementation(async (url, opts) => {
+      if (url === '/api/cellars/c1/on-order') return ok({ cellar: CELLAR, bottles: onOrderList, total: onOrderList.length });
+      if (url === '/api/bottles' && opts?.method === 'POST') return { ok: true, status: 201, json: async () => ({ bottle: { _id: 'new' } }) };
+      if (url === '/api/bottles/bulk-delete') {
+        const ids = JSON.parse(opts.body).bottleIds;
+        return ok({ deleted: ids.length, deletedIds: ids, skipped: [], batchId: 'batch1' });
+      }
+      return ok({});
+    });
+  });
+  const setQty = async (n) => {
+    fireEvent.click(await screen.findByText('onOrder.changeQty'));
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: String(n) } });
+    fireEvent.click(screen.getByText('onOrder.saveQty'));
+  };
+
+  test('more: new bottles on order with this order\'s wine, size, price, shop and month', async () => {
+    renderPage();
+    await setQty(5);
+    await waitFor(() => expect(api.mock.calls.filter(([u, o]) => u === '/api/bottles' && o?.method === 'POST')).toHaveLength(2));
+    const body = JSON.parse(api.mock.calls.find(([u, o]) => u === '/api/bottles' && o?.method === 'POST')[1].body);
+    expect(body).toMatchObject({
+      cellar: 'c1', wineDefinition: 'w1', vintage: '2023', bottleSize: '750ml',
+      onOrder: true, expectedArrival: '2027-03', price: 60, currency: 'EUR', purchaseLocation: 'Shop',
+    });
+    // The list is read again, with the new bottles in it.
+    await waitFor(() => expect(api.mock.calls.filter(([u]) => u === '/api/cellars/c1/on-order').length).toBe(2));
+  });
+
+  test('fewer: the most recently added go to Recently deleted, in one request, said with Undo', async () => {
+    renderPage();
+    await setQty(2);
+    await waitFor(() => expect(api.mock.calls.some(([u]) => u === '/api/bottles/bulk-delete')).toBe(true));
+    const body = JSON.parse(api.mock.calls.find(([u]) => u === '/api/bottles/bulk-delete')[1].body);
+    expect(body.bottleIds).toEqual(['b3']);
+    expect(await screen.findByText(/onOrder.qty:2/)).toBeInTheDocument();
+    expect(screen.getByText('common.undo')).toBeInTheDocument();
+  });
+
+  test('a wine still waiting for review can only have bottles taken off', async () => {
+    onOrderList = ORDER.map((b) => ({ ...b, wineDefinition: null, pendingWineRequest: { _id: 'r1', wineName: 'Unknown red' } }));
+    renderPage();
+    fireEvent.click(await screen.findByText('onOrder.changeQty'));
+    const input = screen.getByRole('spinbutton');
+    expect(input).toHaveAttribute('max', '3');
+    expect(screen.getByText('onOrder.qtyOnlyFewer')).toBeInTheDocument();
+    fireEvent.change(input, { target: { value: '9' } });
+    fireEvent.click(screen.getByText('onOrder.saveQty'));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(api.mock.calls.some(([u, o]) => u === '/api/bottles' && o?.method === 'POST')).toBe(false);
+  });
+});
