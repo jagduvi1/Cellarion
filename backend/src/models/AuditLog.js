@@ -48,6 +48,13 @@ auditLogSchema.index({ 'actor.userId': 1, timestamp: -1 });
 // stay tiny, and an equality match on an email can always use them.
 auditLogSchema.index({ 'detail.sharedWith': 1 }, { sparse: true });
 auditLogSchema.index({ 'detail.invitedEmail': 1 }, { sparse: true });
+// The same erasure finds the rows ABOUT the departing account (sign-up,
+// sign-in, admin actions on it) by resource.id. Partial: only rows about a
+// user are indexed, and the query names resource.type so it can use it.
+auditLogSchema.index(
+  { 'resource.id': 1 },
+  { partialFilterExpression: { 'resource.type': 'user' }, name: 'resource_user_id' }
+);
 
 // TTL: auto-delete old entries if AUDIT_TTL_DAYS is set. The timestamp field
 // must not also declare a plain index — two indexes with the same key pattern

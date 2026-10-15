@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const AuditLog = require('../../models/AuditLog');
+const User = require('../../models/User');
 const { parsePagination } = require('../../utils/pagination');
 const { SECURITY_EVENT_ACTIONS } = require('../../services/securityAlertJob');
 
@@ -56,9 +57,26 @@ router.get('/', async (req, res) => {
         .sort({ timestamp: -1 })
         .skip(offset)
         .limit(limit)
-        .populate('actor.userId', 'username email'),
+        .populate('actor.userId', 'username email')
+        .lean(),
       AuditLog.countDocuments(filter)
     ]);
+
+    // Sign-up, sign-in and the like happen before anyone is signed in: no
+    // actor, the account is the row's resource. Name it, so the row does not
+    // read as anonymous. (Gone once the account is deleted — erased with it.)
+    const aboutIds = [...new Set(logs
+      .filter((l) => !l.actor?.userId && l.resource?.type === 'user' && l.resource.id)
+      .map((l) => String(l.resource.id)))];
+    if (aboutIds.length) {
+      const users = await User.find({ _id: { $in: aboutIds } }, 'username').lean();
+      const names = new Map(users.map((u) => [String(u._id), u.username]));
+      for (const l of logs) {
+        const name = !l.actor?.userId && l.resource?.type === 'user' && l.resource.id
+          ? names.get(String(l.resource.id)) : null;
+        if (name) l.about = { username: name };
+      }
+    }
 
     res.json({ total, page, limit, logs });
   } catch (error) {

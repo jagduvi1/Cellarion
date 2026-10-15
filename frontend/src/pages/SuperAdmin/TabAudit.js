@@ -166,7 +166,14 @@ export default function TabAudit() {
                         {isSecurity && '⚠ '}{log.action}
                       </td>
                       <td className="mono">
-                        {log.actor?.userId?.username || log.actor?.userId?.email || '—'}
+                        {log.actor?.userId?.username || log.actor?.userId?.email || (log.about?.username ? (
+                          // Before sign-in (sign-up, sign-in, its failures):
+                          // no actor yet — the account the row is about.
+                          <span style={{ color: 'var(--sa-text-dim)' }} title="The account this is about (not signed in yet)">→ {log.about.username}</span>
+                        ) : log.actor?.role && log.actor.role !== 'anonymous' ? (
+                          // The account has been deleted: erased from its rows.
+                          <span style={{ color: 'var(--sa-text-dim)' }}>deleted account</span>
+                        ) : '—')}
                         {log.actor?.role && log.actor.role !== 'anonymous' && (
                           <span style={{ marginLeft: 4 }}><RoleBadge role={log.actor.role} /></span>
                         )}

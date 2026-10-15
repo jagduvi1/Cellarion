@@ -96,6 +96,35 @@ describe('userDataRegistry', () => {
       updateSpy.mockRestore();
     }
   });
+
+  // Sign-up, e-mail verification and sign-in rows have NO actor (nobody is
+  // signed in yet): the account is the resource, and the detail carries its
+  // username and e-mail. The actor-scoped scrub never reached them, so a
+  // deleted account's name, address and IP stayed in the log.
+  test('AuditLog purge also scrubs the rows ABOUT the account (sign-up, sign-in)', async () => {
+    const audit = REGISTRY.find(e => e.model.modelName === 'AuditLog');
+    const updateSpy = jest.spyOn(AuditLog, 'updateMany').mockResolvedValue({});
+
+    try {
+      await audit.purge({ userId: 'u1', deletedUserId: 'del1' });
+      expect(updateSpy).toHaveBeenCalledWith(
+        { 'resource.type': 'user', 'resource.id': 'u1' },
+        {
+          $set: { 'resource.id': null, 'actor.ipAddress': null },
+          $unset: { 'detail.email': '', 'detail.username': '' },
+        }
+      );
+    } finally {
+      updateSpy.mockRestore();
+    }
+  });
+
+  test('the rows about an account are found by an index (erasure runs hourly)', () => {
+    const indexes = AuditLog.schema.indexes();
+    const about = indexes.find(([keys]) => keys['resource.id'] === 1);
+    expect(about).toBeTruthy();
+    expect(about[1].partialFilterExpression).toEqual({ 'resource.type': 'user' });
+  });
 });
 
 // L-17: a deleted user's display name must not survive erasure inside OTHER

@@ -1334,6 +1334,19 @@ const REGISTRY = [
         { $or: [{ 'detail.sharedWith': ctx.userEmail }, { 'detail.invitedEmail': ctx.userEmail }] },
         { $unset: { 'detail.sharedWith': '', 'detail.invitedEmail': '' } }
       )] : []),
+      // (c) The departing user as the account an event is ABOUT. Sign-up,
+      // e-mail verification, sign-in (and its failures) happen before anyone
+      // is signed in: the row has no actor, the account sits in resource.id,
+      // and the detail carries { username, email } — (a) never matched them,
+      // so a deleted account's name, address and IP stayed in those rows.
+      // Admin actions on the account are scrubbed the same way.
+      AuditLog.updateMany(
+        { 'resource.type': 'user', 'resource.id': ctx.userId },
+        {
+          $set: { 'resource.id': null, 'actor.ipAddress': null },
+          $unset: { 'detail.email': '', 'detail.username': '' },
+        }
+      ),
     ],
     exportFragment: async (ctx) => ({
       activityLog: markTrunc(ctx, 'activityLog', await AuditLog.find({ 'actor.userId': ctx.userId }).sort({ timestamp: -1 }).limit(AUDIT_MAX).lean(), AUDIT_MAX)
