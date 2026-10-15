@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useBackToClose } from './useBackToClose';
 
 /**
  * A11y wiring for hand-rolled modal dialogs that build their own
@@ -8,7 +9,8 @@ import { useEffect, useRef } from 'react';
  * dialog attributes (role="dialog" aria-modal="true" aria-labelledby tabIndex={-1}).
  * This hook then:
  *   - moves focus into the dialog on open (first focusable, else the box), and
- *   - closes the dialog on Escape (mirrors the shared Modal / Drawer).
+ *   - closes the dialog on Escape (mirrors the shared Modal / Drawer), and
+ *   - closes it on the phone's Back instead of leaving the page (useBackToClose).
  *
  * Purely additive — it does not change layout or markup.
  */
@@ -19,6 +21,7 @@ export function useDialogA11y(onClose) {
   // re-bind the listener on every render).
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  useBackToClose(onClose);
 
   useEffect(() => {
     const box = boxRef.current;

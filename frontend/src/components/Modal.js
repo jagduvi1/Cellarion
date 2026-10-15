@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef } from 'react';
+import { useBackToClose } from '../utils/useBackToClose';
 import './Modal.css';
 
 /**
@@ -33,6 +34,8 @@ function Modal({ title, onClose, children, wide, showClose, boxStyle, trapFocus 
   // browser on the overlay, and used to close the dialog with whatever had
   // been typed in it (journal entry, review, support message).
   const pressTarget = useRef(null);
+  // The phone's Back closes the dialog instead of leaving the page.
+  useBackToClose(onClose);
   const token = useRef(null);
   if (token.current === null) token.current = { seq: ++modalSeq };
 

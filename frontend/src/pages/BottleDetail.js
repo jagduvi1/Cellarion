@@ -34,6 +34,7 @@ import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPromp
 import { swatchType, wineTypeLabel } from '../utils/wineColour';
 import './BottleDetail.css';
 import { backLabel as backLabelText } from '../utils/backLabel';
+import { isSafeInternalPath } from '../utils/postLoginRedirect';
 
 // Lazy-load heavy components only needed on user interaction
 const ReportWineModal = lazy(() => import('../components/ReportWineModal'));
@@ -56,6 +57,13 @@ function BottleDetail() {
   const location = useLocation();
   const fromHistory = location.state?.fromHistory === true;
   const fromChat = location.state?.fromChat === true;
+  // Any other page that opened this one (racks, the room, a pick list,
+  // statistics, all bottles) hands over where it is and what to call it, so
+  // the back link returns there instead of to the bottle list. In-app paths
+  // only — the same check the post-login return uses.
+  const handedBack = isSafeInternalPath(location.state?.backTo) && typeof location.state?.backLabel === 'string'
+    ? { to: location.state.backTo, label: location.state.backLabel }
+    : null;
   // Opened from a row on the vintage page (early access): back goes there.
   // Only an in-app cellar path is taken from the router state.
   const fromVintage = typeof location.state?.fromVintage === 'string' && location.state.fromVintage.startsWith('/cellars/')
@@ -322,6 +330,8 @@ function BottleDetail() {
   const arrivalLate = onOrderNow && isArrivalLate(bottle.expectedArrival);
   const backTo = fromChat
     ? '/cellar-chat'
+    : handedBack
+      ? handedBack.to
     : onOrderNow
       ? `/cellars/${cellarId}/on-order`
       : fromVintage
@@ -329,6 +339,8 @@ function BottleDetail() {
         : (isConsumed || fromHistory ? `/cellars/${cellarId}/history` : `/cellars/${cellarId}`);
   const backLabel = fromChat
     ? t('bottleDetail.backToChat', 'Back to chat')
+    : handedBack
+      ? handedBack.label
     : onOrderNow
       ? t('onOrder.backToOnOrder')
       : fromVintage

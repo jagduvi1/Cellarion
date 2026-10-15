@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react';
-import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, useSearchParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Canvas } from '@react-three/fiber';
 import { useAuth } from '../contexts/AuthContext';
@@ -35,6 +35,9 @@ function isTypingTarget(e) {
 
 export default function CellarRoom() {
   const { t } = useTranslation();
+  // Handed to the bottle page so its back link returns here (BottleDetail).
+  const roomLocation = useLocation();
+  const backHere = { backTo: roomLocation.pathname + roomLocation.search, backLabel: t('bottleDetail.backToRoom', 'Back to the room') };
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const { apiFetch, user } = useAuth();
@@ -952,7 +955,7 @@ export default function CellarRoom() {
     setSelectedBottle(null);
     if (bottle.openedAt) {
       try { await pourBottle(apiFetch, bottle._id); } catch { /* bottle page shows truth */ }
-      navigate(`/cellars/${id}/bottles/${bottle._id}`);
+      navigate(`/cellars/${id}/bottles/${bottle._id}`, { state: backHere });
     } else {
       setPartialPicker({ bottleId: bottle._id });
     }
@@ -967,7 +970,7 @@ export default function CellarRoom() {
     } catch { /* bottle page shows truth */ }
     setPartialBusy(false);
     setPartialPicker(null);
-    navigate(`/cellars/${id}/bottles/${bottleId}`);
+    navigate(`/cellars/${id}/bottles/${bottleId}`, { state: backHere });
   };
 
   // Consume bottle

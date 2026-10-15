@@ -64,6 +64,23 @@ const BULK_ACTIONS = [
 ];
 
 const BOTTLES_PER_PAGE = 30;
+// Coming back to the list (Back from a bottle) should find it as it was left:
+// the "all my cellars" scope, how many bottles were loaded, and where the page
+// was scrolled. Per cellar, this tab only (sessionStorage), like the filters.
+const SCOPE_STORAGE_PREFIX = 'cellarion.cellarScope.';
+const PLACE_STORAGE_PREFIX = 'cellarion.cellarPlace.';
+// The server's page cap (routes/cellars.js maxLimit): a place deeper than this
+// comes back with its first 200 bottles and the rest behind "Load more".
+const MAX_RESTORE = 200;
+// A place older than this is a different visit, not a Back.
+const PLACE_TTL_MS = 30 * 60 * 1000;
+const readStored = (key) => {
+  try { return JSON.parse(sessionStorage.getItem(key) || 'null'); } catch { return null; }
+};
+const readSavedScope = (cellarId) => {
+  const saved = readStored(SCOPE_STORAGE_PREFIX + cellarId);
+  return Array.isArray(saved) && saved[0] === cellarId && saved.every((x) => typeof x === 'string') ? saved : [cellarId];
+};
 
 // Persist the per-cellar filter/sort selection for the tab session so that
 // opening a bottle and hitting browser-back doesn't wipe it (the bottle page is
@@ -185,7 +202,7 @@ function CellarDetail() {
 
   // ── Cross-cellar scope: which cellars this view spans (default: this one) ──
   const [allCellars, setAllCellars] = useState([]);
-  const [scopeIds, setScopeIds] = useState([id]);
+  const [scopeIds, setScopeIds] = useState(() => readSavedScope(id));
   const scopeKey = scopeIds.join(',');
   const multiScope = !(scopeIds.length === 1 && scopeIds[0] === id);
   // Shape of the bottles CURRENTLY in state (grouped vs flat). Tracked separately
@@ -204,6 +221,12 @@ function CellarDetail() {
       .then(d => {
         const list = d.cellars || [];
         setAllCellars(list);
+        // A remembered scope may name a cellar since deleted or unshared.
+        const known = new Set(list.map((c) => String(c._id)));
+        setScopeIds((prev) => {
+          const kept = prev.filter((cid) => cid === id || known.has(cid));
+          return kept.length === prev.length ? prev : kept;
+        });
         // Mount-time value: this effect runs once, on arrival.
         if (pendingOwnedScope) {
           // This cellar first, then the rest the user owns — the same set the
@@ -228,8 +251,13 @@ function CellarDetail() {
     // Skip the mount run: the initial state already is [id], and resetting
     // here would race the ?scope=owned widening above.
     if (scopeResetFirstRun.current) { scopeResetFirstRun.current = false; return; }
-    setScopeIds([id]);
+    setScopeIds(readSavedScope(id));
   }, [id]);
+
+  // Remember the scope per cellar, like the filters.
+  useEffect(() => {
+    try { sessionStorage.setItem(SCOPE_STORAGE_PREFIX + id, JSON.stringify(scopeIds)); } catch { /* best-effort */ }
+  }, [id, scopeKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The unplaced filter is single-cellar only (placement is per-cellar; the
   // cross-cellar endpoint doesn't resolve rack slots) — drop it when the scope
@@ -297,10 +325,48 @@ function CellarDetail() {
   // in-place navigation to another cellar whose scope key happens to match the
   // current one still refetches; the fetch-seq guard drops the transient
   // stale-scope response that the id→scope-reset produces.
+  // Where this list was left (read once, on arrival): restored when the
+  // filters and scope are the same as then — i.e. this is coming back.
+  const placeToRestore = useRef(readStored(PLACE_STORAGE_PREFIX + id));
+  const pendingScroll = useRef(null);
   useEffect(() => {
     if (pendingOwnedScope) return;
-    fetchCellarData(0);
+    const place = placeToRestore.current;
+    placeToRestore.current = null;
+    const same = place && place.filterKey === filterKey && place.scopeKey === scopeKey
+      && Date.now() - (place.at || 0) < PLACE_TTL_MS;
+    if (same) {
+      pendingScroll.current = place.scrollY || 0;
+      fetchCellarData(0, Math.min(Math.max(place.count || 0, BOTTLES_PER_PAGE), MAX_RESTORE));
+    } else {
+      fetchCellarData(0);
+    }
   }, [id, filterKey, scopeKey, pendingOwnedScope]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Scroll back once the restored page is on screen.
+  useEffect(() => {
+    if (pendingScroll.current == null || bottles.length === 0) return;
+    const y = pendingScroll.current;
+    pendingScroll.current = null;
+    requestAnimationFrame(() => window.scrollTo(0, y));
+  }, [bottles]);
+
+  // Save the place when leaving (Back, a bottle, another page). The scroll
+  // position is tracked as it changes: by the time a leaving page cleans up,
+  // the next one may already have moved the window.
+  const placeNow = useRef({});
+  placeNow.current = { count: bottles.length, filterKey, scopeKey };
+  useEffect(() => {
+    let scrollY = window.scrollY;
+    const onScroll = () => { scrollY = window.scrollY; };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      try {
+        sessionStorage.setItem(PLACE_STORAGE_PREFIX + id, JSON.stringify({ ...placeNow.current, scrollY, at: Date.now() }));
+      } catch { /* best-effort */ }
+    };
+  }, [id]);
 
   useEffect(() => {
     fetchStatistics();
@@ -308,7 +374,7 @@ function CellarDetail() {
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
-  const fetchCellarData = async (skip) => {
+  const fetchCellarData = async (skip, limit = BOTTLES_PER_PAGE) => {
     const seq = ++fetchSeq.current;
     setError(null);
     try {
@@ -332,7 +398,7 @@ function CellarDetail() {
           params.append(key, val);
         }
       });
-      params.set('limit', BOTTLES_PER_PAGE);
+      params.set('limit', limit);
       params.set('skip', skip);
       const multi = !(scopeIds.length === 1 && scopeIds[0] === id);
       let res;

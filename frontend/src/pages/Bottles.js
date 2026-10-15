@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { listBottles } from '../api/bottles';
@@ -46,6 +46,9 @@ const PAGE_SIZE = 30;
  */
 function Bottles() {
   const { t } = useTranslation();
+  // Handed to the bottle page so its back link returns here (BottleDetail).
+  const bottlesLocation = useLocation();
+  const backHere = { backTo: bottlesLocation.pathname + bottlesLocation.search, backLabel: t('bottleDetail.backToAllBottles', 'Back to all bottles') };
   const { apiFetch, user } = useAuth();
   const ratingScale = user?.preferences?.ratingScale || '5';
   const [searchParams, setSearchParams] = useSearchParams();
@@ -240,6 +243,7 @@ function Bottles() {
             rackMap={rackMap}
             cellarId={bottle.cellar}
             viewMode="card"
+            linkState={backHere}
           />
         ))}
       </div>

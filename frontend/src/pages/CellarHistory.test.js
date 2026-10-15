@@ -125,3 +125,22 @@ test('a history card links to the vintage page of its wine and vintage', async (
   await waitFor(() => expect(screen.getByText('Wine b1')).toBeInTheDocument());
   expect(screen.getByText('history.vintagePage')).toHaveAttribute('href', '/cellars/c1/vintages/w-b1/2015');
 });
+
+test('Back from a bottle finds the same search and scope (kept per cellar for this tab)', async () => {
+  const m = new Map();
+  vi.stubGlobal('sessionStorage', {
+    getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)),
+    removeItem: (k) => m.delete(k), clear: () => m.clear(),
+  });
+  try {
+    sessionStorage.setItem('cellarion.historyView.c1', JSON.stringify({ filters: { search: 'barolo' }, scope: ['c1'] }));
+    answer = () => page([bottle('b1', 'drank', 9)]);
+    renderPage();
+    await waitFor(() => expect(historyCalls().length).toBeGreaterThan(0));
+    // The very first request already searches: no unfiltered load first.
+    expect(historyCalls()[0].get('search')).toBe('barolo');
+    expect(screen.getByDisplayValue('barolo')).toBeInTheDocument();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

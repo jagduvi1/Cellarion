@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { TYPE_COLORS, fmtDays, fmtCurrency } from './chartHelpers';
 
@@ -17,6 +17,9 @@ import { TYPE_COLORS, fmtDays, fmtCurrency } from './chartHelpers';
  */
 function UrgencyLadder({ bottles, currency }) {
   const { t } = useTranslation();
+  // Handed to the bottle page so its back link returns here (BottleDetail).
+  const location = useLocation();
+  const backHere = { backTo: location.pathname + location.search, backLabel: t('bottleDetail.backToStatistics', 'Back to the statistics') };
   if (!bottles || bottles.length === 0) {
     return (
       <p className="stats-empty">
@@ -37,7 +40,7 @@ function UrgencyLadder({ bottles, currency }) {
               style={{ background: TYPE_COLORS[b.type] || '#7A1E2D' }}
               title={t(`statistics.typeLabels.${b.type}`, { defaultValue: b.type })} />
             {b.id && b.cellarId ? (
-              <Link to={`/cellars/${b.cellarId}/bottles/${b.id}`} className="urgency-info urgency-info--link" title={t('statistics.openBottle')}>
+              <Link to={`/cellars/${b.cellarId}/bottles/${b.id}`} state={backHere} className="urgency-info urgency-info--link" title={t('statistics.openBottle')}>
                 <div className="urgency-name" title={b.name}>{b.name}</div>
                 <div className="urgency-meta">
                   {b.producer}{b.producer && b.vintage ? ' \u00b7 ' : ''}{b.vintage}

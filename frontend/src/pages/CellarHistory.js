@@ -33,6 +33,26 @@ const reasonOf = (bottle) => {
 // Where a section's next page starts: after this bottle (?before).
 const cursorOf = (bottle) => `${bottle.consumedAt || ''}|${bottle._id}`;
 
+// What the history view was showing — search, filters and scope — kept per
+// cellar for this tab, so Back from a bottle finds the same list (it used to
+// start over: everything in component state only).
+const HISTORY_VIEW_PREFIX = 'cellarion.historyView.';
+const DEFAULT_HISTORY_FILTERS = {
+  search: '',
+  type: [], country: [], region: [], grapes: [], vintage: [],
+  minRating: '', maxRating: '', maturity: []
+};
+const readSavedHistoryView = (cellarId) => {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(HISTORY_VIEW_PREFIX + cellarId) || 'null');
+    if (!v || typeof v !== 'object') return null;
+    const scope = Array.isArray(v.scope) && v.scope[0] === cellarId && v.scope.every((x) => typeof x === 'string') ? v.scope : [cellarId];
+    return { filters: { ...DEFAULT_HISTORY_FILTERS, ...(v.filters || {}) }, scope };
+  } catch {
+    return null;
+  }
+};
+
 function CellarHistory() {
   const { t } = useTranslation();
   const { id } = useParams();
@@ -52,11 +72,8 @@ function CellarHistory() {
   const [error, setError] = useState(null);
   const [total, setTotal] = useState(0);
   const [reasonCounts, setReasonCounts] = useState(null);
-  const [filters, setFilters] = useState({
-    search: '',
-    type: [], country: [], region: [], grapes: [], vintage: [],
-    minRating: '', maxRating: '', maturity: []
-  });
+  const [savedView] = useState(() => readSavedHistoryView(id));
+  const [filters, setFilters] = useState(() => savedView?.filters || DEFAULT_HISTORY_FILTERS);
   const [facets, setFacets] = useState(null);
   const [baseFacets, setBaseFacets] = useState(null);
   const [facetMeta, setFacetMeta] = useState(null);
@@ -64,7 +81,7 @@ function CellarHistory() {
 
   // ── Cross-cellar scope: which cellars this history view spans (default: this one) ──
   const [allCellars, setAllCellars] = useState([]);
-  const [scopeIds, setScopeIds] = useState([id]);
+  const [scopeIds, setScopeIds] = useState(() => savedView?.scope || [id]);
   const scopeKey = scopeIds.join(',');
   const isMulti = !(scopeIds.length === 1 && scopeIds[0] === id);
 
@@ -77,7 +94,19 @@ function CellarHistory() {
 
   // Reset the scope to just this cellar whenever the user navigates to a
   // different cellar's history.
-  useEffect(() => { setScopeIds([id]); }, [id]);
+  const historyFirstRun = useRef(true);
+  useEffect(() => {
+    if (historyFirstRun.current) { historyFirstRun.current = false; return; }
+    const view = readSavedHistoryView(id);
+    setScopeIds(view?.scope || [id]);
+    setFilters(view?.filters || DEFAULT_HISTORY_FILTERS);
+  }, [id]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(HISTORY_VIEW_PREFIX + id, JSON.stringify({ filters, scope: scopeIds }));
+    } catch { /* best-effort */ }
+  }, [id, filters, scopeKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Monotonic fetch token — only the most-recent fetch commits its result, so an
   // out-of-order response from a superseded scope/filter can't overwrite newer data.
@@ -87,7 +116,7 @@ function CellarHistory() {
   const listQuery = useRef(null);
 
   // Debounce search
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState(() => filters.search || '');
   const searchTimer = useRef(null);
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useBackToClose } from '../utils/useBackToClose';
 import './Drawer.css';
 
 /**
@@ -12,6 +13,8 @@ import './Drawer.css';
  *   </Drawer>
  */
 function Drawer({ title, onClose, children, footer, width }) {
+  // The phone's Back closes the panel instead of leaving the page.
+  useBackToClose(onClose);
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
