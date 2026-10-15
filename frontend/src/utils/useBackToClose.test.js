@@ -272,3 +272,23 @@ test('a pop-up whose close opens another page: that page is opened, not come bac
   await screen.findByText('next page');
   expect(arrivedBy).toBe('PUSH');
 });
+
+test('a form shown inside its picker from the start: Back closes the form first', async () => {
+  // Their effects push child first; the entries still follow render order.
+  function Shell() {
+    const [open, setOpen] = useState(true);
+    const [form, setForm] = useState(true);
+    if (!open) return null;
+    return (
+      <Dialog name="picker" onClose={() => setOpen(false)}>
+        {form && <Dialog name="form" onClose={() => setForm(false)} />}
+      </Dialog>
+    );
+  }
+  render(<Shell />);
+  await back();
+  expect(screen.queryByRole('dialog', { name: 'form' })).toBeNull();
+  expect(screen.getByRole('dialog', { name: 'picker' })).toBeInTheDocument();
+  await back();
+  expect(screen.queryByRole('dialog')).toBeNull();
+});

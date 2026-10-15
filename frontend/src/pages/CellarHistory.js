@@ -94,8 +94,9 @@ function CellarHistory() {
       .then(d => {
         const list = d.cellars || [];
         setAllCellars(list);
-        // A remembered scope may name a cellar since deleted or unshared.
-        setScopeIds((prev) => keepKnownCellars(prev, id, list));
+        // A remembered scope may name a cellar since deleted or unshared —
+        // judged only on a real answer (an error must not wipe the scope).
+        if (Array.isArray(d.cellars)) setScopeIds((prev) => keepKnownCellars(prev, id, list));
       })
       .catch(() => {});
   }, [apiFetch]); // eslint-disable-line react-hooks/exhaustive-deps

@@ -103,6 +103,13 @@ function Bottles() {
 
   useEffect(() => { load(); }, [load]);
 
+  // A page that no longer exists (bottles drunk since; an old link): the last
+  // one there is, instead of an empty list with no way back.
+  const lastPage = Math.max(0, Math.ceil((data.total || 0) / PAGE_SIZE) - 1);
+  useEffect(() => {
+    if (!loading && !error && page > lastPage) setPage(lastPage);
+  }, [loading, error, page, lastPage]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const removeFilter = (key) => {
     const next = new URLSearchParams(searchParams);
     // The rating chip stands for a range — both bounds go together.

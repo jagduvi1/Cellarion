@@ -124,7 +124,8 @@ function Discussions() {
       setLinkedWine(location.state.newDiscussionWine);
       setShowCreate(true);
       // Clear the state so a Back-then-Forward doesn't re-open the modal
-      window.history.replaceState({}, '');
+      // (only the handed-over part: the router's key/idx stay).
+      window.history.replaceState({ ...window.history.state, usr: null }, '');
     }
   }, [user, location.state]);
 
@@ -137,7 +138,7 @@ function Discussions() {
       setLinkedBlogPost(bp);
       setForm((f) => ({ ...f, title: bp.title ? `Re: ${bp.title}`.slice(0, 200) : f.title }));
       setShowCreate(true);
-      window.history.replaceState({}, '');
+      window.history.replaceState({ ...window.history.state, usr: null }, '');
     }
   }, [user, location.state]);
 

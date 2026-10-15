@@ -25,8 +25,13 @@ const LOAD = Math.random().toString(36).slice(2, 8);
 // Our entries in history order, oldest first. Each sits above the entry of
 // the page it was opened on (`at` = the router's index of that page), in the
 // order it was pushed (`n`).
-const stack = []; // { id, n, at, onCloseRef, open, mounted, closedByBack }
+const stack = []; // { id, n, at, order, onCloseRef, open, mounted, closedByBack }
 let seq = 0;
+// First-render order of the pop-ups: a parent renders before its child, but
+// their effects (which push the entries) run child first.
+let renderSeq = 0;
+// Entries pushed in this task (one commit's effects), in history order.
+let batch = null;
 let flushTimer = null;
 // Our own history step in flight: its pop is ours, never the user's Back.
 let ownStep = null; // { time, delta, removed: Set<id> }
@@ -88,19 +93,41 @@ function pushEntry(entry) {
   }
   Object.assign(entry, { id, n, at: here[0], open: true, closedByBack: false });
   stack.push(entry);
+  // Pop-ups opened in the same commit (a form shown inside its picker from the
+  // start): the entries were pushed child first, so hand the history slots out
+  // again in render order — Back then closes the inner one first.
+  if (!batch) {
+    batch = [];
+    queueMicrotask(() => { batch = null; });
+  }
+  batch.push(entry);
+  if (batch.length > 1 && stack.slice(-batch.length).every((e, i) => e === batch[i])) {
+    const slots = batch.map((e) => ({ id: e.id, n: e.n }));
+    const byRender = [...batch].sort((a, b) => a.order - b.order);
+    byRender.forEach((e, i) => Object.assign(e, slots[i]));
+    stack.splice(stack.length - batch.length, batch.length, ...byRender);
+    batch = byRender;
+  }
   return true;
 }
 
 // The pop-up closes a task later: by then the router has taken this Back as
 // what it is (the same page), so a close that opens another page is a plain
-// push, not part of the Back. A pop-up that stays open (busy saving, or
-// one that cannot be dismissed just now) gets its entry back.
+// push, not part of the Back. A pop-up with no close just now (busy saving)
+// gets its entry straight back; one whose close did not close it (it asks
+// first, say) gets it back once it is clear it stayed.
+const STAYED_OPEN_MS = 500;
 function closeByBack(e) {
   e.open = false;
   e.closedByBack = true;
   setTimeout(() => {
-    if (e.onCloseRef.current) e.onCloseRef.current();
-    setTimeout(() => { if (e.mounted && e.closedByBack) pushEntry(e); }, 50);
+    const close = e.onCloseRef.current;
+    if (!close) {
+      if (e.mounted && e.closedByBack) pushEntry(e);
+      return;
+    }
+    close();
+    setTimeout(() => { if (e.mounted && e.closedByBack) pushEntry(e); }, STAYED_OPEN_MS);
   }, 0);
 }
 
@@ -188,6 +215,8 @@ export function useBackToClose(onClose, enabled = true) {
   if (typeof onClose === 'function') closableRef.current = true;
   const wanted = enabled && closableRef.current;
   const entryRef = useRef(null);
+  const orderRef = useRef(0);
+  if (!orderRef.current) orderRef.current = ++renderSeq;
 
   useEffect(() => {
     if (!wanted || suspended || typeof window === 'undefined' || !window.history?.pushState) return undefined;
@@ -199,7 +228,7 @@ export function useBackToClose(onClose, enabled = true) {
       entry.open = true;
       entry.mounted = true;
     } else {
-      entry = { onCloseRef, mounted: true };
+      entry = { onCloseRef, mounted: true, order: orderRef.current };
       if (!pushEntry(entry)) return undefined;
       entryRef.current = entry;
     }
@@ -224,4 +253,5 @@ export function resetBackToCloseForTests() {
   ownStep = null;
   suspended = 0;
   gone.clear();
+  batch = null;
 }

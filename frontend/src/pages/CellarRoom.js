@@ -1669,14 +1669,20 @@ export default function CellarRoom() {
 function leaveBackPastThisPage() {
   const here = window.location.href;
   let steps = 0;
-  const onPop = () => {
-    if (window.location.href !== here || ++steps >= 10) {
-      window.removeEventListener('popstate', onPop);
-      return;
-    }
-    window.history.back();
+  let timer = null;
+  const done = () => {
+    clearTimeout(timer);
+    window.removeEventListener('popstate', onPop);
   };
+  // A Back with nowhere to go fires nothing: stop listening anyway.
+  const arm = () => { clearTimeout(timer); timer = setTimeout(done, 1500); };
+  function onPop() {
+    if (window.location.href !== here || ++steps >= 10) { done(); return; }
+    arm();
+    window.history.back();
+  }
   window.addEventListener('popstate', onPop);
+  arm();
   window.history.back();
 }
 

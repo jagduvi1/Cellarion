@@ -52,3 +52,10 @@ test('Next puts the page in the address', async () => {
   await waitFor(() => expect(where.search).toBe('?type=red&page=2'));
   await waitFor(() => expect(offsets()).toContain('30'));
 });
+
+test('a page that no longer exists (bottles drunk since) goes to the last one there is', async () => {
+  renderAt('/bottles?type=red&page=9');
+  // 95 bottles = 4 pages: page 9 is past the end.
+  await waitFor(() => expect(where.search).toBe('?type=red&page=4'));
+  await waitFor(() => expect(offsets()).toContain('90'));
+});

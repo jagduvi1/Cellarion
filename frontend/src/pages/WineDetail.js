@@ -48,7 +48,7 @@ export default function WineDetail() {
           // upgrade the URL bar to the slug so users see + share the pretty form.
           // replaceState avoids a navigation event and preserves history.
           if (OBJECT_ID_RE.test(idOrSlug) && data.wine?.slug) {
-            window.history.replaceState(null, '', `/wines/${data.wine.slug}`);
+            window.history.replaceState(window.history.state, '', `/wines/${data.wine.slug}`);
           }
         } else {
           setError(t('wineDetail.wineNotFound'));

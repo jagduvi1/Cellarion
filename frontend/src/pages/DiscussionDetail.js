@@ -98,7 +98,7 @@ function DiscussionDetail() {
         // discussion has a slug, swap to the slug URL via history.replaceState
         // (no navigation, no extra render). Same trick WineDetail uses.
         if (data.discussion?.slug && data.discussion.slug !== idOrSlug) {
-          window.history.replaceState({}, '', `/community/discussions/${data.discussion.slug}`);
+          window.history.replaceState(window.history.state, '', `/community/discussions/${data.discussion.slug}`);
         }
       } else {
         setError(data.error || t('discussions.failedLoadDiscussion'));

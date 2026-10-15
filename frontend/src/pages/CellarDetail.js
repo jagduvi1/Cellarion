@@ -206,6 +206,11 @@ function CellarDetail() {
   const cameBack = useCameBack();
   const [scopeIds, setScopeIds] = useState(() => (cameBack ? readSavedScope(id) : [id]));
   const scopeKey = scopeIds.join(',');
+  const scopeNow = useRef(scopeIds);
+  scopeNow.current = scopeIds;
+  // The place restored on arrival (kept for a scope trimmed after it).
+  const restoredPlace = useRef(null);
+  const restoring = useRef(null);
   const multiScope = !(scopeIds.length === 1 && scopeIds[0] === id);
   // Shape of the bottles CURRENTLY in state (grouped vs flat). Tracked separately
   // from the live scope selection so a scope change never renders the just-loaded
@@ -223,8 +228,16 @@ function CellarDetail() {
       .then(d => {
         const list = d.cellars || [];
         setAllCellars(list);
-        // A remembered scope may name a cellar since deleted or unshared.
-        setScopeIds((prev) => keepKnownCellars(prev, id, list));
+        // A remembered scope may name a cellar since deleted or unshared —
+        // judged only on a real answer (an error must not wipe the scope).
+        // Trimmed while its place was being restored: restore it again.
+        if (Array.isArray(d.cellars)) {
+          const kept = keepKnownCellars(scopeNow.current, id, list);
+          if (kept !== scopeNow.current) {
+            if (restoredPlace.current) restoring.current = { ...restoredPlace.current, scopeKey: kept.join(',') };
+            setScopeIds(kept);
+          }
+        }
         // Mount-time value: this effect runs once, on arrival.
         if (pendingOwnedScope) {
           // This cellar first, then the rest the user owns — the same set the
@@ -326,9 +339,9 @@ function CellarDetail() {
   // Where this list was left (read once, on arrival): restored when the
   // filters and scope are the same as then — i.e. this is coming back.
   const placeToRestore = useRef(cameBack ? readStored(PLACE_STORAGE_PREFIX + id) : null);
-  // The place being restored, until its list is on screen: a remembered scope
-  // trimmed meanwhile (a cellar since gone) asks again with the same count.
-  const restoring = useRef(null);
+  // The place being restored (restoring, until its list is on screen): a
+  // remembered scope trimmed meanwhile (a cellar since gone) asks again with
+  // the same count.
   const pendingScroll = useRef(null);
   useEffect(() => {
     if (pendingOwnedScope) return;
@@ -337,6 +350,7 @@ function CellarDetail() {
     if (place && place.filterKey === filterKey && place.scopeKey === scopeKey
       && Date.now() - (place.at || 0) < PLACE_TTL_MS) {
       restoring.current = place;
+      restoredPlace.current = place;
     }
     const restore = restoring.current && restoring.current.filterKey === filterKey ? restoring.current : null;
     restoring.current = restore;
