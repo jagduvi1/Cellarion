@@ -1390,6 +1390,7 @@ function CabinetShapeFields({ newRack, setNewRack }) {
               <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                 <input
                   type="number"
+                  inputMode="numeric"
                   min={1} max={CABINET_MAX_ROWS_PER_SHELF}
                   value={v}
                   onChange={(e) => setRow(i, e.target.value)}
@@ -1401,6 +1402,7 @@ function CabinetShapeFields({ newRack, setNewRack }) {
               <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                 <input
                   type="number"
+                  inputMode="numeric"
                   min={1} max={newRack.cols || 1}
                   value={shelfCols[i]}
                   onChange={(e) => setWidth(i, e.target.value)}
@@ -1602,6 +1604,7 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving, grou
             <label>{t(dims.rowLabel || 'racks.rowsLabel')}</label>
             <input
               type="number"
+              inputMode="numeric"
               min={1} max={20}
               value={newRack.rows}
               onChange={e => setNewRack({ ...newRack, rows: parseInt(e.target.value) || dims.defaultRows })}
@@ -1614,6 +1617,7 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving, grou
             <label>{t(dims.colLabel || 'racks.colsLabel')}</label>
             <input
               type="number"
+              inputMode="numeric"
               min={1} max={20}
               value={newRack.cols}
               onChange={e => setNewRack({ ...newRack, cols: parseInt(e.target.value) || dims.defaultCols })}
@@ -1626,7 +1630,6 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving, grou
             <label>{t('racks.doubleHeightRowsLabel', 'Double-height rows')}</label>
             <input
               type="text"
-              inputMode="numeric"
               value={doubleRowsText}
               placeholder={t('racks.doubleHeightRowsPlaceholder', 'e.g. 1,3')}
               onChange={e => {
@@ -1692,6 +1695,7 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving, grou
               <label>{t('racks.moduleRowsLabel')}</label>
               <input
                 type="number"
+                inputMode="numeric"
                 min={1} max={10}
                 value={newRack.typeConfig?.moduleRows || 2}
                 onChange={e => setNewRack({
@@ -1704,6 +1708,7 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving, grou
               <label>{t('racks.moduleColsLabel')}</label>
               <input
                 type="number"
+                inputMode="numeric"
                 min={1} max={10}
                 value={newRack.typeConfig?.moduleCols || 2}
                 onChange={e => setNewRack({
@@ -1724,6 +1729,7 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving, grou
             <label>{t('racks.bottlesPerCellLabel', 'Bottles per cell')}</label>
             <input
               type="number"
+              inputMode="numeric"
               min={1} max={20}
               value={newRack.typeConfig?.bottlesPerCell || 1}
               onChange={e => setNewRack({
@@ -1739,6 +1745,7 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving, grou
             <label>{t('racks.backColsLabel', 'Back row bottles (per shelf)')}</label>
             <input
               type="number"
+              inputMode="numeric"
               min={0} max={20}
               value={newRack.typeConfig?.backCols ?? 0}
               onChange={e => setNewRack({
@@ -1754,6 +1761,7 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving, grou
             <label>{t('racks.bottlesPerSectionLabel', 'Bottles per section')}</label>
             <input
               type="number"
+              inputMode="numeric"
               min={1} max={30}
               value={newRack.typeConfig?.bottlesPerSection || 10}
               onChange={e => setNewRack({

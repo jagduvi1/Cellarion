@@ -110,6 +110,25 @@ export default function RackRenderer({
   const activePos = activeRackId === rack._id ? activePosition : null;
   const R = SLOT_RADIUS;
 
+  // On a phone a slot is small (an 8-column rack: ~30 px) and the gap between
+  // two is dead space. Each slot also answers taps a little beyond its circle,
+  // invisibly, up to half the way to its nearest neighbour — never into it.
+  // One bottle per cell and no back row only (sub-circles and back slots sit
+  // too close); racks whose slots are tighter than that keep the circle.
+  const hitR = useMemo(() => {
+    if ((layout.bottlesPerCell || 1) !== 1 || layout.backRadius) return null;
+    let min = Infinity;
+    const pts = layout.slots || [];
+    for (let i = 0; i < pts.length; i += 1) {
+      for (let j = i + 1; j < pts.length; j += 1) {
+        const d = Math.hypot(pts[i].cx - pts[j].cx, pts[i].cy - pts[j].cy);
+        if (d < min) min = d;
+      }
+    }
+    const r = Math.min(R * 1.2, min / 2);
+    return r > R ? r : null;
+  }, [layout, R]);
+
   // Actual rendered slot centers (mirrors the render logic below, including
   // the sub-circle offsets of multi-bottle cells) — the drag hit map.
   const slotCenters = useMemo(() => {
@@ -337,6 +356,7 @@ export default function RackRenderer({
                   key={position}
                   position={position}
                   cx={cx} cy={cy} R={isBack && backR ? backR : R}
+                  hitR={hitR}
                   isNeck={!!isNeck}
                   isSideways={!!isSideways}
                   slot={slotMap[position]}
@@ -469,7 +489,7 @@ export function ReservedRibbon({ cx, cy, r }) {
  * base forward shows the dark punt; `isNeck` (a head-to-tail cabinet's
  * every other bottle) shows the light capsule inside the shoulder instead.
  */
-function SlotCircle({ position, cx, cy, R, isNeck = false, isSideways = false, slot, disabled, isActive, isHighlight, onSlotClick, getSlotStyle, onDragStart, isDragOrigin, isDragTarget }) {
+function SlotCircle({ position, cx, cy, R, hitR = null, isNeck = false, isSideways = false, slot, disabled, isActive, isHighlight, onSlotClick, getSlotStyle, onDragStart, isDragOrigin, isDragTarget }) {
   const { t } = useTranslation();
   const wine = slot?.bottle?.wineDefinition;
   const wineType = swatchType(wine, 'red');
@@ -571,6 +591,9 @@ function SlotCircle({ position, cx, cy, R, isNeck = false, isSideways = false, s
       {isDragTarget && (
         <circle cx={cx} cy={cy} r={R + 3} fill="none" stroke={ACTIVE_STROKE} strokeWidth={2.5} strokeDasharray="5 3" />
       )}
+      {/* The larger, invisible tap area (see hitR). Last, so the slot's own
+          :first-child styling never lands on it. */}
+      {hitR && <circle cx={cx} cy={cy} r={hitR} fill="transparent" className="rack-slot-hit" />}
     </g>
   );
 }

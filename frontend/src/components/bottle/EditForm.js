@@ -234,6 +234,7 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded, lotSiblingIds = 
             <label>{t('addBottle.drinkFrom')}</label>
             <input
               type="number"
+              inputMode="numeric"
               value={form.drinkFrom}
               onChange={set('drinkFrom')}
               placeholder={t('addBottle.drinkFromPlaceholder')}
@@ -246,6 +247,7 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded, lotSiblingIds = 
             <label>{t('addBottle.drinkTo')}</label>
             <input
               type="number"
+              inputMode="numeric"
               value={form.drinkTo}
               onChange={set('drinkTo')}
               placeholder={t('addBottle.drinkToPlaceholder')}
@@ -260,6 +262,7 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded, lotSiblingIds = 
             <label>{t('addBottle.peakFrom')}</label>
             <input
               type="number"
+              inputMode="numeric"
               value={form.peakFrom}
               onChange={set('peakFrom')}
               placeholder={t('addBottle.peakFromPlaceholder')}
@@ -272,6 +275,7 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded, lotSiblingIds = 
             <label>{t('addBottle.peakUntil')}</label>
             <input
               type="number"
+              inputMode="numeric"
               value={form.peakUntil}
               onChange={set('peakUntil')}
               placeholder={t('addBottle.peakUntilPlaceholder')}
@@ -310,6 +314,7 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded, lotSiblingIds = 
             <label>{t('bottleDetail.reservedUntilLabel')}</label>
             <input
               type="number"
+              inputMode="numeric"
               value={form.reservedUntil}
               onChange={set('reservedUntil')}
               placeholder={t('bottleDetail.reservedUntilPlaceholder')}

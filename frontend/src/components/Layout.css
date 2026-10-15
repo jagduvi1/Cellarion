@@ -525,6 +525,15 @@
   line-height: 1;
 }
 
+/* Touch screens: the tap area reaches further than the drawn button,
+   invisibly (an overlay that changes nothing on screen) — small icons and
+   "×"s were hard to hit with a thumb (usability pass 2026-10). */
+@media (pointer: coarse) {
+  .install-prompt-dismiss { position: relative; }
+  .install-prompt-dismiss::after { content: ''; position: absolute; inset: -10px; }
+}
+
+
 .install-prompt-dismiss:hover {
   color: #fff;
 }

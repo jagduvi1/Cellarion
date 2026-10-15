@@ -92,6 +92,7 @@ function VerifyEmail() {
             <div className="form-group">
               <input
                 type="email"
+                autoComplete="email"
                 placeholder={t('auth.emailExamplePlaceholder')}
                 value={resendEmail}
                 onChange={e => setResendEmail(e.target.value)}

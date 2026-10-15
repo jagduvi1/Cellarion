@@ -61,6 +61,7 @@ function TypedValueInput({ id, keyDef, value, onChange, required = true }) {
         id={id}
         type={type === 'date' ? 'date' : (type === 'integer' || type === 'decimal') ? 'number' : 'text'}
         step={type === 'decimal' ? 'any' : undefined}
+      inputMode={type === 'integer' ? 'numeric' : undefined}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         maxLength={type === 'text' ? 500 : undefined}

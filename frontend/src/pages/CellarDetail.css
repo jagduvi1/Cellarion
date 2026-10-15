@@ -484,6 +484,16 @@
   transition: background var(--transition-fast);
 }
 
+/* Touch screens: the tap area reaches further than the drawn button,
+   invisibly (an overlay that changes nothing on screen) — small icons and
+   "×"s were hard to hit with a thumb (usability pass 2026-10). */
+@media (pointer: coarse) {
+  /* 16 x 16 -> 40 x 40 */
+  .active-filter-chip-remove { position: relative; }
+  .active-filter-chip-remove::after { content: ''; position: absolute; inset: -12px; }
+}
+
+
 .active-filter-chip-remove:hover {
   background: rgba(var(--color-primary-rgb), 0.15);
 }
@@ -598,6 +608,16 @@
   color: var(--color-text-muted);
   transition: border-color var(--transition-fast), color var(--transition-fast);
 }
+
+/* Touch screens: the tap area reaches further than the drawn button,
+   invisibly (an overlay that changes nothing on screen) — small icons and
+   "×"s were hard to hit with a thumb (usability pass 2026-10). */
+@media (pointer: coarse) {
+  /* A row of 32 px icons with a 5.6 px gap: taller, never into a neighbour. */
+  .view-toggle-btn { position: relative; }
+  .view-toggle-btn::after { content: ''; position: absolute; inset: -6px -2px; }
+}
+
 
 .view-toggle-btn:hover {
   border-color: var(--color-text-secondary);
@@ -1100,6 +1120,15 @@
   color: var(--color-text-muted);
   cursor: pointer;
 }
+
+/* Touch screens: the tap area reaches further than the drawn button,
+   invisibly (an overlay that changes nothing on screen) — small icons and
+   "×"s were hard to hit with a thumb (usability pass 2026-10). */
+@media (pointer: coarse) {
+  .bulk-bar-close { position: relative; }
+  .bulk-bar-close::after { content: ''; position: absolute; inset: -6px; }
+}
+
 .bulk-bar-close:hover { background: var(--color-primary-light); color: var(--color-primary); }
 
 .bulk-bar-actions {

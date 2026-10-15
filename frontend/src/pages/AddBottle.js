@@ -1713,6 +1713,7 @@ function AddBottle() {
                 <label>{t('addBottle.numberOfBottles')}</label>
                 <input
                   type="number"
+                  inputMode="numeric"
                   value={numBottles}
                   onChange={(e) => setNumBottles(Math.max(1, parseInt(e.target.value) || 1))}
                   onFocus={(e) => e.target.select()}
@@ -1952,6 +1953,7 @@ function AddBottle() {
                       <label>{t('addBottle.drinkFrom')}</label>
                       <input
                         type="number"
+                        inputMode="numeric"
                         value={bottleData.drinkFrom}
                         onChange={(e) => setBottleData({ ...bottleData, drinkFrom: e.target.value })}
                         placeholder={t('addBottle.drinkFromPlaceholder')}
@@ -1964,6 +1966,7 @@ function AddBottle() {
                       <label>{t('addBottle.drinkTo')}</label>
                       <input
                         type="number"
+                        inputMode="numeric"
                         value={bottleData.drinkTo}
                         onChange={(e) => setBottleData({ ...bottleData, drinkTo: e.target.value })}
                         placeholder={t('addBottle.drinkToPlaceholder')}
@@ -1983,6 +1986,7 @@ function AddBottle() {
                         <label>{t('addBottle.peakFrom')}</label>
                         <input
                           type="number"
+                          inputMode="numeric"
                           value={bottleData.peakFrom}
                           onChange={(e) => setBottleData({ ...bottleData, peakFrom: e.target.value })}
                           placeholder={t('addBottle.peakFromPlaceholder')}
@@ -1995,6 +1999,7 @@ function AddBottle() {
                         <label>{t('addBottle.peakUntil')}</label>
                         <input
                           type="number"
+                          inputMode="numeric"
                           value={bottleData.peakUntil}
                           onChange={(e) => setBottleData({ ...bottleData, peakUntil: e.target.value })}
                           placeholder={t('addBottle.peakUntilPlaceholder')}

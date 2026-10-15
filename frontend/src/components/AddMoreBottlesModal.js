@@ -130,6 +130,7 @@ function AddMoreBottlesModal({ bottle, onClose, onAdded }) {
         <input
           id={countId}
           type="number"
+          inputMode="numeric"
           min="1"
           max={MAX_MORE}
           value={count}
