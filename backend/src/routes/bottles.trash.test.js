@@ -151,6 +151,18 @@ describe('POST /api/bottles/bulk-delete', () => {
       expect.objectContaining({ requested: 5, deleted: 2, skipped: 3, retentionDays: 30 }));
   });
 
+  test('onlyOnOrder: an order lowered from an out-of-date list takes off only bottles still on order', async () => {
+    Bottle.find.mockResolvedValue([
+      { _id: B(1), cellar: MINE, status: 'ordered' },
+      { _id: B(2), cellar: MINE, status: 'active' }, // another member marked it as arrived meanwhile
+    ]);
+    const { status, body } = await call(app(), 'POST', '/api/bottles/bulk-delete', { bottleIds: [B(1), B(2)], onlyOnOrder: true });
+    expect(status).toBe(200);
+    expect(body.deletedIds).toEqual([B(1)]);
+    expect(body.skipped).toEqual([{ id: B(2), reason: 'not_on_order' }]);
+    expect(trashBottle).toHaveBeenCalledTimes(1);
+  });
+
   test('a bottle that throws is reported and the rest of the batch still goes', async () => {
     Bottle.find.mockResolvedValue([
       { _id: B(1), cellar: MINE, status: 'active' },

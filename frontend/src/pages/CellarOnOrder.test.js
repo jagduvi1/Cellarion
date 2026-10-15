@@ -158,6 +158,7 @@ describe('Change quantity', () => {
         const ids = JSON.parse(opts.body).bottleIds;
         return ok({ deleted: ids.length, deletedIds: ids, skipped: [], batchId: 'batch1' });
       }
+      if (url === '/api/bottles/trash/restore') return ok({ restored: 1, skipped: [] });
       return ok({});
     });
   });
@@ -188,6 +189,70 @@ describe('Change quantity', () => {
     expect(body.bottleIds).toEqual(['b3']);
     expect(await screen.findByText(/onOrder.qty:2/)).toBeInTheDocument();
     expect(screen.getByText('common.undo')).toBeInTheDocument();
+  });
+
+  test('a blank or 0 is refused, never read as 1 (no bottles taken off by a guess)', async () => {
+    renderPage();
+    fireEvent.click(await screen.findByText('onOrder.changeQty'));
+    for (const v of ['', '0', '2.5']) {
+      fireEvent.change(screen.getByRole('spinbutton'), { target: { value: v } });
+      expect(screen.getByText('onOrder.saveQty').closest('button')).toBeDisabled();
+      expect(screen.getByText('onOrder.qtyRange')).toBeInTheDocument();
+    }
+    expect(api.mock.calls.some(([u]) => u === '/api/bottles/bulk-delete')).toBe(false);
+  });
+
+  test('bottles that arrived meanwhile are left alone (only bottles still on order go) and the list is read again', async () => {
+    api.mockImplementation(async (url, opts) => {
+      if (url === '/api/cellars/c1/on-order') return ok({ cellar: CELLAR, bottles: onOrderList, total: onOrderList.length });
+      if (url === '/api/bottles/bulk-delete') {
+        expect(JSON.parse(opts.body).onlyOnOrder).toBe(true);
+        return ok({ deleted: 1, deletedIds: ['b3'], skipped: [{ id: 'b2', reason: 'not_on_order' }], batchId: 'batch1' });
+      }
+      return ok({});
+    });
+    renderPage();
+    await setQty(1);
+    expect(await screen.findByText('onOrder.qtyArrivedMeanwhile')).toBeInTheDocument();
+    await waitFor(() => expect(api.mock.calls.filter(([u]) => u === '/api/cellars/c1/on-order').length).toBe(2));
+  });
+
+  test('a new notice after an Undo has its own Undo again', async () => {
+    renderPage();
+    await setQty(2);
+    fireEvent.click(await screen.findByText('common.undo'));
+    await waitFor(() => expect(screen.queryByText('common.undo')).toBeNull());
+    await setQty(1);
+    expect(await screen.findByText('common.undo')).toBeInTheDocument();
+  });
+
+  test('a line holding two purchases: the new bottles copy the most recent one, and say so', async () => {
+    onOrderList = [ORDER[0], ORDER[1], { ...ORDER[2], price: 75, purchaseLocation: 'Other shop' }];
+    renderPage();
+    fireEvent.click(await screen.findByText('onOrder.changeQty'));
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '4' } });
+    expect(screen.getByText('onOrder.qtyAddHintMixed')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('onOrder.saveQty'));
+    await waitFor(() => expect(api.mock.calls.some(([u, o]) => u === '/api/bottles' && o?.method === 'POST')).toBe(true));
+    const body = JSON.parse(api.mock.calls.find(([u, o]) => u === '/api/bottles' && o?.method === 'POST')[1].body);
+    expect(body).toMatchObject({ price: 75, purchaseLocation: 'Other shop', onOrder: true });
+  });
+
+  test('bottles added together (same purchase, saved milliseconds apart) are one purchase, not a mix', async () => {
+    onOrderList = ORDER.map((b, i) => ({ ...b, purchaseDate: `2026-09-01T10:00:0${i}.123Z` }));
+    renderPage();
+    fireEvent.click(await screen.findByText('onOrder.changeQty'));
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '4' } });
+    expect(screen.getByText('onOrder.qtyAddHint')).toBeInTheDocument();
+    expect(screen.queryByText('onOrder.qtyAddHintMixed')).toBeNull();
+  });
+
+  test('"Mark as arrived" offers the whole order again after its size changed', async () => {
+    renderPage();
+    await setQty(2);
+    await screen.findByText(/onOrder.qty:2/);
+    fireEvent.click(screen.getByText('onOrder.markArrived'));
+    expect(screen.getByRole('spinbutton')).toHaveValue(2);
   });
 
   test('a wine still waiting for review can only have bottles taken off', async () => {

@@ -5665,7 +5665,10 @@
     "qtyLabel": "Bottles on this order",
     "saveQty": "Save",
     "qtyAddHint": "The new bottles get this order’s price, shop and expected month.",
-    "qtyRemoveHint": "The bottles taken off go to Recently deleted. You can bring them back for {{days}} days.",
+    "qtyRemoveHint": "The most recently added bottles go to Recently deleted. You can bring them back for {{days}} days.",
+    "qtyAddHintMixed": "This line holds bottles bought at different prices or shops: the new bottles copy the most recent purchase, with the expected month.",
+    "qtyRange": "Enter a number from 1 to {{max}}.",
+    "qtyArrivedMeanwhile": "Some of these bottles had already arrived, so they were left in the cellar. The list is up to date now.",
     "qtyOnlyFewer": "Bottles can only be taken off this order here.",
     "qtyFailed": "Could not change how many bottles are on order. Please try again."
   },

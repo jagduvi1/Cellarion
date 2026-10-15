@@ -129,11 +129,11 @@ export const bulkMoveBottles = (apiFetch, bottleIds, toCellarId) =>
 // Move MANY bottles to the cellar's "Recently deleted" (POST
 // /api/bottles/bulk-delete). Kept 30 days, restorable; the response carries
 // the batchId an Undo restores.
-export const bulkDeleteBottles = (apiFetch, bottleIds) =>
+export const bulkDeleteBottles = (apiFetch, bottleIds, { onlyOnOrder = false } = {}) =>
   apiFetch('/api/bottles/bulk-delete', {
     method: 'POST',
     headers: JSON_HEADERS,
-    body: JSON.stringify({ bottleIds }),
+    body: JSON.stringify(onlyOnOrder ? { bottleIds, onlyOnOrder: true } : { bottleIds }),
   });
 
 // A cellar's "Recently deleted", newest first.

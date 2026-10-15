@@ -26,6 +26,8 @@ const mcpActionLogSchema = new mongoose.Schema({
   // reserved atomically BEFORE the mutation runs, overwritten with the real
   // action on success. Never shown in the timeline, never undo-eligible.
   action: { type: String, enum: ['pending', 'consume', 'restore', 'add', 'update', 'lot_update', 'undo_add', 'bulk_preview', 'bulk_add', 'somm_maturity', 'somm_maturity_remove', 'somm_wine_profile', 'somm_price', 'somm_price_decline', 'somm_proposal', 'somm_grape', 'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange_preview', 'arrange', 'tasting_note', 'attach_image', 'winelist_add', 'winelist_price', 'open', 'pour', 'close', 'personal_data',
+    // A bottle on order marked as arrived (mark_arrived), and its undo.
+    'arrive', 'unarrive',
     // Irreversible writes that reach a human queue or the shared registry
     // (support ticket 2026-09-12): recorded so an idempotency_key can replay
     // them after an ambiguous transport failure. Never undo-eligible.

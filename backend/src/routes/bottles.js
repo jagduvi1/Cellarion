@@ -1366,11 +1366,14 @@ router.post('/bulk-move', async (req, res) => {
 // batch added wrong). Nothing is gone for good yet: each bottle keeps its
 // snapshot and its own photos for TRASH_DAYS and can be restored, one at a
 // time or the whole batch (services/bottleTrash). Its rack slot is freed now.
-// Editor+ on each bottle's cellar — the single DELETE rule. Any status.
+// Editor+ on each bottle's cellar — the single DELETE rule. Any status,
+// unless onlyOnOrder: an order's quantity lowered from a list that may be out
+// of date (another member marked bottles as arrived meanwhile) takes off only
+// bottles still on order; the rest are skipped as 'not_on_order'.
 //
-// Body:     { bottleIds: string[] (1..BULK_MAX) }
+// Body:     { bottleIds: string[] (1..BULK_MAX), onlyOnOrder?: boolean }
 // Response: { deleted, deletedIds: string[], skipped: [{ id, reason }], batchId, purgeAt }
-//   reason ∈ 'not_found', 'error'
+//   reason ∈ 'not_found', 'not_on_order', 'error'
 router.post('/bulk-delete', async (req, res) => {
   try {
     const resolved = await resolveBulkBottles(req, (req.body || {}).bottleIds, 'editor');
@@ -1381,8 +1384,10 @@ router.post('/bulk-delete', async (req, res) => {
     const deletedIds = [];
     const skipped = [];
     let firstCellar = null;
+    const onlyOnOrder = (req.body || {}).onlyOnOrder === true;
     for (const item of resolved.items) {
       if (item.reason) { skipped.push({ id: item.id, reason: item.reason }); continue; }
+      if (onlyOnOrder && item.bottle.status !== ORDERED_STATUS) { skipped.push({ id: item.id, reason: 'not_on_order' }); continue; }
       // One bottle that fails is reported, not a 500 halfway through a batch
       // whose first bottles are already in "Recently deleted".
       let result;
