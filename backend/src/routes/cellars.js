@@ -77,6 +77,23 @@ function groupPartExpr(field, fallback) {
   };
 }
 
+// Sort by quantity (forum request 2026-10-15): the grouped list's cards by
+// how many identical bottles each holds — sortDir -1 most first; cards holding
+// as many stay A to Z. Lists that are not grouped keep name order.
+const QUANTITY_SORT = 'quantity';
+// A bottle's wine name for sorting, case-insensitive: the registry wine's, a
+// pending request's, or — with neither — after every named wine.
+const wineSortName = (b) => (b.wineDefinition?.name || b.pendingWineRequest?.wineName || '\uffff').toLowerCase();
+const byWineName = (a, b) => {
+  const av = wineSortName(a);
+  const bv = wineSortName(b);
+  return av < bv ? -1 : av > bv ? 1 : 0;
+};
+// Stable: groups holding as many keep the order their bottles came in.
+function sortGroupsByQuantity(groups, sortDir) {
+  return groups.sort((a, b) => sortDir * (a.bottles.length - b.bottles.length));
+}
+
 /**
  * DB-side grouping for the default cellar page (?group=1, no filters).
  *
@@ -87,20 +104,6 @@ function groupPartExpr(field, fallback) {
  *
  * Aggregation pipelines bypass Mongoose casting, so ids are cast explicitly.
  */
-// Sort by quantity (forum request 2026-10-15): the grouped list's cards by
-// how many identical bottles each holds — sortDir -1 most first. Bottles were
-// put in name order before grouping, so cards holding as many stay A to Z.
-// Lists that are not grouped keep that name order.
-const QUANTITY_SORT = 'quantity';
-const byWineName = (a, b) => {
-  const av = (a.wineDefinition?.name || '').toLowerCase();
-  const bv = (b.wineDefinition?.name || '').toLowerCase();
-  return av < bv ? -1 : av > bv ? 1 : 0;
-};
-function sortGroupsByQuantity(groups, sortDir) {
-  return groups.sort((a, b) => sortDir * (a.bottles.length - b.bottles.length));
-}
-
 async function loadGroupedBottlePage({ cellarId, excludeSet, onlyIds = null, sortField, sortDir, skip, limit, populate = WINE_POPULATE_LIST }) {
   const { ObjectId } = mongoose.Types;
   const match = {
@@ -119,7 +122,28 @@ async function loadGroupedBottlePage({ cellarId, excludeSet, onlyIds = null, sor
     size: groupPartExpr('bottleSize', '750ml'),
   };
 
-  const [pageGroups, countResult] = await Promise.all([
+  let pageGroups;
+  let countResult;
+  if (sortField === QUANTITY_SORT) {
+    // Every group's size (ids only — nothing populated), the wines' names
+    // once for the ties, then only the page's members are loaded below.
+    const all = await Bottle.aggregate([
+      { $match: match },
+      { $sort: { createdAt: -1 } },
+      { $group: { _id: groupId, n: { $sum: 1 }, wineRef: { $first: '$wineDefinition' }, memberIds: { $push: '$_id' } } },
+    ]).allowDiskUse(true);
+    const wineIds = [...new Set(all.map((g) => g.wineRef).filter(Boolean).map(String))];
+    const names = new Map((wineIds.length
+      ? await WineDefinition.find({ _id: { $in: wineIds } }).select('name').lean()
+      : []).map((w) => [String(w._id), (w.name || '').toLowerCase()]));
+    const nameOf = (g) => (g.wineRef && names.get(String(g.wineRef))) || '\uffff';
+    all.sort((a, b) => sortDir * (a.n - b.n)
+      || (nameOf(a) < nameOf(b) ? -1 : nameOf(a) > nameOf(b) ? 1 : 0)
+      || (String(a._id.wine) < String(b._id.wine) ? -1 : String(a._id.wine) > String(b._id.wine) ? 1 : 0)
+      || (String(a._id.vintage) < String(b._id.vintage) ? -1 : 1));
+    pageGroups = all.slice(skip, skip + limit);
+    countResult = [{ total: all.length, bottles: all.reduce((sum, g) => sum + g.n, 0) }];
+  } else [pageGroups, countResult] = await Promise.all([
     Bottle.aggregate([
       { $match: match },
       { $sort: { [sortField]: sortDir } },
@@ -414,11 +438,7 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
     // History is a chronological view — newest-consumed first, always.
     bottles.sort(historyOrder);
   } else if (sortField === 'name') {
-    bottles.sort((a, b) => {
-      const av = (a.wineDefinition?.name || '').toLowerCase();
-      const bv = (b.wineDefinition?.name || '').toLowerCase();
-      return av < bv ? -sortDir : av > bv ? sortDir : 0;
-    });
+    bottles.sort((a, b) => sortDir * byWineName(a, b));
   } else if (sortField === QUANTITY_SORT) {
     bottles.sort(byWineName);
   } else if (sortField === 'maturity' && maturityStatusMap) {
@@ -443,7 +463,7 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
   let remaining;
   if (history) ({ page: items, remaining } = sliceHistory(bottles, history));
   // `found` carries the search's facet counts, so the caller needs no second pass.
-  return { items, total, limit, skip, maturityStatusMap, found, reasonCounts, remaining };
+  return { items, total, limit, skip, maturityStatusMap, found, reasonCounts, remaining, sortField, sortDir };
 }
 
 // Attach the same per-bottle image fields the single-cellar /:id route adds, so
@@ -695,7 +715,7 @@ router.get('/multi/bottles', async (req, res) => {
       cellarIds, statusFilter: 'active', paginate: !grouped,
       version: scopeVersion(cellarIds.map(id => accessibleMap.get(id).user)),
     });
-    const { limit, skip, maturityStatusMap, found } = result;
+    const { limit, skip, maturityStatusMap, found, sortField, sortDir } = result;
     let { total } = result;
     let items = result.items;
     let groupsForPage = null;
@@ -705,8 +725,7 @@ router.get('/multi/bottles', async (req, res) => {
     if (grouped) {
       bottleTotal = items.length;
       const allGroups = groupIdenticalBottles(items, { byCellar: true });
-      const sort = coerceStringQuery(req.query.sort) || '';
-      if (sort.replace(/^-/, '') === QUANTITY_SORT) sortGroupsByQuantity(allGroups, sort.startsWith('-') ? -1 : 1);
+      if (sortField === QUANTITY_SORT) sortGroupsByQuantity(allGroups, sortDir);
       total = allGroups.length;
       groupsForPage = allGroups.slice(skip, skip + limit);
       items = groupsForPage.flatMap(g => g.bottles);
@@ -1428,7 +1447,7 @@ router.get('/:id', async (req, res) => {
     const groupedInDb = grouped
       && !hasSearchFilters
       && !minRating && !maxRating && !ratingBandParam && !maturityFilter && !reservedOnly && !extraFilters
-      && ['createdAt', 'vintage', 'price', 'rating'].includes(sortField);
+      && ['createdAt', 'vintage', 'price', 'rating', QUANTITY_SORT].includes(sortField);
     if (groupedInDb) {
       ({ groupsForPage, bottles, totalCount, bottleTotal } = await loadGroupedBottlePage({
         cellarId: req.params.id, excludeSet, onlyIds, sortField, sortDir, skip, limit,
@@ -1448,7 +1467,7 @@ router.get('/:id', async (req, res) => {
       // over them, grouped or not, and load only the page's bottles. Loading
       // every hit to show 30 cost a big cellar ~4 MB and most of the request.
       const pageOnly = !minRating && !maxRating && !ratingBandParam && !maturityFilter && !reservedOnly && !extraFilters
-        && sortField !== 'maturity' && sortField !== QUANTITY_SORT;
+        && sortField !== 'maturity' && (sortField !== QUANTITY_SORT || grouped);
       found = await bottleSearch.searchBottles(search || '', {
         cellarId: req.params.id,
         type,
@@ -1474,6 +1493,8 @@ router.get('/:id', async (req, res) => {
           const allGroups = groupIdenticalBottles(hits.map(h => ({
             _id: h.id, wineDefinition: h.wineDefinition, vintage: h.vintage, bottleSize: h.bottleSize,
           })));
+          // Cards holding as many keep the search's ranking.
+          if (sortField === QUANTITY_SORT) sortGroupsByQuantity(allGroups, sortDir);
           totalCount = allGroups.length;
           bottleTotal = hits.length;
           const pageGroups = allGroups.slice(skip, skip + limit);
@@ -1548,10 +1569,8 @@ router.get('/:id', async (req, res) => {
         bottles.sort((a, b) => {
           let aVal, bVal;
           if (sortField === QUANTITY_SORT) return byWineName(a, b);
-          if (sortField === 'name') {
-            aVal = a.wineDefinition?.name || '';
-            bVal = b.wineDefinition?.name || '';
-          } else if (sortField === 'maturity' && maturityStatusMap_) {
+          if (sortField === 'name') return sortDir * byWineName(a, b);
+          if (sortField === 'maturity' && maturityStatusMap_) {
             const aStatus = maturityStatusMap_.get(a._id.toString());
             const bStatus = maturityStatusMap_.get(b._id.toString());
             aVal = aStatus != null ? MATURITY_RANK[aStatus] : 5;
@@ -1610,6 +1629,7 @@ router.get('/:id', async (req, res) => {
     // (Skipped when the DB-grouped hot path already produced groupsForPage.)
     if (grouped && !groupsForPage && !pageReady) {
       // Wine + vintage + bottle size, so a magnum and a 750ml stay apart.
+      if (sortField === QUANTITY_SORT) bottles.sort(byWineName); // ties A to Z, also after a search
       const allGroups = groupIdenticalBottles(bottles);
       if (sortField === QUANTITY_SORT) sortGroupsByQuantity(allGroups, sortDir);
       totalCount = allGroups.length;                  // total = number of groups

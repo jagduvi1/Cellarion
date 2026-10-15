@@ -108,18 +108,22 @@ function sortBottles(list, sort) {
   const field = s.replace(/^-/, '');
   const value = (b) => {
     if (field === 'name') return norm(b.wineDefinition?.name || b.pendingWineRequest?.wineName);
+    // Quantity: bottles in name order (A to Z, whichever direction); the
+    // grouped list then orders its cards by size (cellarDetail).
+    if (field === 'quantity') return norm(b.wineDefinition?.name || b.pendingWineRequest?.wineName) || '\uffff';
     if (field === 'maturity') return b.maturityStatus != null && b.maturityStatus in MATURITY_RANK ? MATURITY_RANK[b.maturityStatus] : 5;
     if (field === 'vintage') return b.vintage && /^\d+$/.test(b.vintage) ? Number(b.vintage) : null;
     if (field === 'price' || field === 'rating') return typeof b[field] === 'number' ? b[field] : null;
     return b.createdAt || '';
   };
+  const order = field === 'quantity' ? 1 : dir;
   return [...list].sort((a, b) => {
     const av = value(a); const bv = value(b);
     if (av == null && bv == null) return 0;
     if (av == null) return 1;   // missing values last, whichever direction
     if (bv == null) return -1;
-    if (av < bv) return -dir;
-    if (av > bv) return dir;
+    if (av < bv) return -order;
+    if (av > bv) return order;
     return 0;
   });
 }
@@ -147,6 +151,7 @@ function cellarDetail(idx, cellarId, params) {
   const list = sortBottles(filterBottles(idx, cellarId, params), params.get('sort'));
   let items;
   let total;
+  let bottleTotal;
   if (grouped) {
     const groups = new Map();
     for (const b of list) {
@@ -155,7 +160,15 @@ function cellarDetail(idx, cellarId, params) {
       groups.get(k).push(b);
     }
     const all = [...groups.entries()].map(([key, bottles]) => ({ key, count: bottles.length, bottles }));
+    // Sort by quantity: the cards by how many bottles each holds (stable, so
+    // cards holding as many stay in name order) — as the server does.
+    const sort = params.get('sort') || '';
+    if (sort.replace(/^-/, '') === 'quantity') {
+      const dir = sort.startsWith('-') ? -1 : 1;
+      all.sort((a, b) => dir * (a.count - b.count));
+    }
     total = all.length;
+    bottleTotal = list.length;
     items = all.slice(skip, skip + limit);
   } else {
     total = list.length;
@@ -163,7 +176,7 @@ function cellarDetail(idx, cellarId, params) {
   }
   return {
     status: 200,
-    body: { cellar: cellarForDetail(cellar), bottles: { total, count: items.length, limit, skip, grouped, items } },
+    body: { cellar: cellarForDetail(cellar), bottles: { total, count: items.length, limit, skip, grouped, ...(grouped ? { bottleTotal } : {}), items } },
   };
 }
 

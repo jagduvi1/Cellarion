@@ -22,6 +22,7 @@ jest.mock('../utils/exchangeRates', () => ({
 }));
 jest.mock('../models/Cellar', () => ({ findById: jest.fn(), find: jest.fn() }));
 jest.mock('../models/Bottle', () => ({ find: jest.fn(), countDocuments: jest.fn(), aggregate: jest.fn() }));
+jest.mock('../models/WineDefinition', () => ({ find: jest.fn() }));
 jest.mock('../models/Rack', () => ({ find: jest.fn() }));
 jest.mock('../models/BottleImage', () => ({ find: jest.fn() }));
 jest.mock('../models/User', () => ({}));
@@ -366,8 +367,8 @@ describe('GET /api/cellars/:id?sort=-quantity — cards by how many bottles they
     expect(most.body.bottles.items.map((g) => g.count)).toEqual([2, 1]);
     expect(most.body.bottles.items[0].key).toBe(`${W1}::2015::750ml`);
     expect(most.body.bottles.bottleTotal).toBe(3);
-    // Not the page-only shortcut: the cards had to be counted.
-    expect(bottleSearch.searchBottles).toHaveBeenCalledWith('x', expect.objectContaining({ withHits: false }));
+    // Grouped, the hits themselves are counted: only the page is loaded.
+    expect(bottleSearch.searchBottles).toHaveBeenCalledWith('x', expect.objectContaining({ withHits: true }));
 
     const fewest = await request(`/api/cellars/${CELLAR_ID}?search=x&group=1&sort=quantity`);
     expect(fewest.body.bottles.items.map((g) => g.count)).toEqual([1, 2]);
@@ -380,5 +381,47 @@ describe('GET /api/cellars/:id?sort=-quantity — cards by how many bottles they
     expect(most.body.bottles.items.map((g) => g.count)).toEqual([2, 1]);
     const fewest = await request(`/api/cellars/multi/bottles?cellars=${CELLAR_ID}&search=x&group=1&sort=quantity`);
     expect(fewest.body.bottles.items.map((g) => g.count)).toEqual([1, 2]);
+  });
+});
+
+// The default cellar page sorted by quantity (no search, no filters): the
+// groups are counted in MongoDB and only the page's bottles are loaded —
+// not the whole cellar. Cards holding as many: A to Z by the wine's name.
+describe('GET /api/cellars/:id?group=1&sort=-quantity — counted in the database', () => {
+  const WineDefinition = require('../models/WineDefinition');
+  const W1 = '64b0000000000000000000f1';
+  const W2 = '64b0000000000000000000f2';
+  const W3 = '64b0000000000000000000f3';
+  const oid = (h) => new (require('mongoose').Types.ObjectId)(h);
+  const saved = { ...ROWS };
+  beforeEach(() => {
+    ROWS[B1] = bottleRow(B1, { wineDefinition: { _id: W1, name: 'Zinfandel' } });
+    ROWS[B2] = bottleRow(B2, { wineDefinition: { _id: W2, name: 'Barolo' } });
+    ROWS[B3] = bottleRow(B3, { wineDefinition: { _id: W3, name: 'Albariño' } });
+  });
+  afterAll(() => Object.assign(ROWS, saved));
+
+  test('cards by size from one grouping query; ties A to Z; only the page is loaded', async () => {
+    let pipeline;
+    Bottle.aggregate.mockImplementation((p) => {
+      pipeline = p;
+      return { allowDiskUse: async () => [
+        { _id: { wine: oid(W1), vintage: '2015', size: '750ml' }, n: 1, wineRef: oid(W1), memberIds: [oid(B1)] },
+        { _id: { wine: oid(W2), vintage: '2015', size: '750ml' }, n: 1, wineRef: oid(W2), memberIds: [oid(B2)] },
+        { _id: { wine: oid(W3), vintage: '2015', size: '750ml' }, n: 4, wineRef: oid(W3), memberIds: [oid(B3)] },
+      ] };
+    });
+    WineDefinition.find.mockReturnValue({ select: () => ({ lean: async () => [
+      { _id: oid(W1), name: 'Zinfandel' }, { _id: oid(W2), name: 'Barolo' }, { _id: oid(W3), name: 'Albariño' },
+    ] }) });
+    const { status, body } = await request(`/api/cellars/${CELLAR_ID}?group=1&sort=-quantity&limit=2`);
+    expect(status).toBe(200);
+    // The size is counted in the $group; no bottle documents for that.
+    expect(pipeline.find((st) => st.$group).$group.n).toEqual({ $sum: 1 });
+    expect(body.bottles.total).toBe(3);
+    expect(body.bottles.bottleTotal).toBe(6);
+    // 4 first, then the two singles A to Z (Barolo before Zinfandel); page of 2.
+    expect(body.bottles.items.map((g) => g.key)).toEqual([`${W3}::2015::750ml`, `${W2}::2015::750ml`]);
+    expect(loads.map((l) => l.ids).flat().sort()).toEqual([B2, B3].sort());
   });
 });

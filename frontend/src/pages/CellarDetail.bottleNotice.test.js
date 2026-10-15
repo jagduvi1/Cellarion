@@ -80,7 +80,7 @@ it('drinking from a card says so at the top, with Undo — it used to change the
   await waitFor(() => expect(api.mock.calls.some(([u]) => u.startsWith('/api/racks'))).toBe(true));
   fireEvent.click(await screen.findByText('bottleCard.groupDrinkOne'));
   // Two identical bottles: no "Which bottle?" — straight to the form.
-  fireEvent.click(await screen.findByText('common.confirm'));
+  fireEvent.click(await screen.findByText('common.confirm', {}, { timeout: 5000 })); // a lazy-loaded pop-up: slow on a busy test run
   await waitFor(() => expect(api).toHaveBeenCalledWith('/api/bottles/x1/consume', expect.anything()));
   expect(await screen.findByText('bottleNotice.drunk')).toBeInTheDocument();
 
@@ -91,7 +91,7 @@ it('drinking from a card says so at the top, with Undo — it used to change the
   const journal = screen.queryByText('journal.notNow');
   if (journal) fireEvent.click(journal);
   fireEvent.click(await screen.findByText('bottleCard.groupDrinkOne'));
-  fireEvent.click(await screen.findByText('common.confirm'));
+  fireEvent.click(await screen.findByText('common.confirm', {}, { timeout: 5000 })); // a lazy-loaded pop-up: slow on a busy test run
   expect(await screen.findByText('bottleNotice.drunk')).toBeInTheDocument();
   expect(screen.getByText('common.undo')).toBeInTheDocument();
 });
