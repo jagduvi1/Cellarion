@@ -142,8 +142,10 @@ const SUPPORT_CATEGORIES = ['bug', 'help', 'feature', 'other', 'beta'];
 // The orders a cellar's bottle list can open in: the values of the cellar
 // page's sort select (the frontend's utils/cellarSort.js keeps the same list).
 // Remembered per account as preferences.cellarSort, validated in accountOps
-// and offered by the MCP update_preferences tool.
-const CELLAR_SORTS = ['-createdAt', 'createdAt', 'name', '-name', 'vintage', '-vintage', 'price', '-price', 'maturity'];
+// and offered by the MCP update_preferences tool. 'quantity' orders the
+// grouped list by how many identical bottles a card holds ('-quantity': most
+// first) — the cards, not single bottles (routes/cellars.js sortGroupsByQuantity).
+const CELLAR_SORTS = ['-createdAt', 'createdAt', 'name', '-name', 'vintage', '-vintage', 'price', '-price', '-quantity', 'quantity', 'maturity'];
 
 // The blocks of the wine and vintage page a member can fold away: its three
 // sections and the cards with a title of their own (the frontend's

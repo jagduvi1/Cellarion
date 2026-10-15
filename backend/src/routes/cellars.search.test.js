@@ -344,3 +344,41 @@ describe('GET /api/cellars/multi/bottles — only the page is loaded', () => {
     expect(loads[0].ids).toEqual([B2, B3, B1]);
   });
 });
+
+// ── Sort by quantity (forum request 2026-10-15) ─────────────────────────────
+// The grouped list's cards by how many identical bottles each holds; the
+// search's ranking can't do that, so every hit is loaded and the cards are
+// counted.
+describe('GET /api/cellars/:id?sort=-quantity — cards by how many bottles they hold', () => {
+  const W1 = '64b0000000000000000000f1';
+  const saved = { ...ROWS };
+  beforeEach(() => {
+    ROWS[B1] = bottleRow(B1, { wineDefinition: { _id: W1, name: 'Barolo' } });
+    ROWS[B2] = bottleRow(B2, { wineDefinition: { _id: W1, name: 'Barolo' } });
+    ROWS[B3] = bottleRow(B3, { wineDefinition: { _id: '64b0000000000000000000f3', name: 'Albariño' } });
+  });
+  afterAll(() => Object.assign(ROWS, saved));
+
+  test('most first, fewest first — whatever the search ranked first', async () => {
+    bottleSearch.searchBottles.mockResolvedValue(FOUND([B3, B1, B2], { [B1]: W1, [B2]: W1 }));
+
+    const most = await request(`/api/cellars/${CELLAR_ID}?search=x&group=1&sort=-quantity`);
+    expect(most.body.bottles.items.map((g) => g.count)).toEqual([2, 1]);
+    expect(most.body.bottles.items[0].key).toBe(`${W1}::2015::750ml`);
+    expect(most.body.bottles.bottleTotal).toBe(3);
+    // Not the page-only shortcut: the cards had to be counted.
+    expect(bottleSearch.searchBottles).toHaveBeenCalledWith('x', expect.objectContaining({ withHits: false }));
+
+    const fewest = await request(`/api/cellars/${CELLAR_ID}?search=x&group=1&sort=quantity`);
+    expect(fewest.body.bottles.items.map((g) => g.count)).toEqual([1, 2]);
+  });
+
+  test('the "all my cellars" view sorts its cards the same way', async () => {
+    bottleSearch.searchBottles.mockResolvedValue(FOUND([B3, B1, B2], { [B1]: W1, [B2]: W1 }));
+    const most = await request(`/api/cellars/multi/bottles?cellars=${CELLAR_ID}&search=x&group=1&sort=-quantity`);
+    expect(most.status).toBe(200);
+    expect(most.body.bottles.items.map((g) => g.count)).toEqual([2, 1]);
+    const fewest = await request(`/api/cellars/multi/bottles?cellars=${CELLAR_ID}&search=x&group=1&sort=quantity`);
+    expect(fewest.body.bottles.items.map((g) => g.count)).toEqual([1, 2]);
+  });
+});

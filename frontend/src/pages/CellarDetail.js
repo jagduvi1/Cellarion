@@ -906,6 +906,8 @@ function CellarDetail() {
                     <option value="-vintage">{t('cellarDetail.sortVintageNew')}</option>
                     <option value="price">{t('cellarDetail.sortPriceLow')}</option>
                     <option value="-price">{t('cellarDetail.sortPriceHigh')}</option>
+                    <option value="-quantity">{t('cellarDetail.sortQuantityMost', 'Most bottles first')}</option>
+                    <option value="quantity">{t('cellarDetail.sortQuantityFewest', 'Fewest bottles first')}</option>
                     <option value="maturity">{t('cellarDetail.sortMaturity')}</option>
                   </select>
                   {allCellars.length > 1 && (

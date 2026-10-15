@@ -1,7 +1,7 @@
 // The orders a cellar's bottle list can open in: the values of the cellar
 // page's sort select. The backend validates the remembered choice against the
 // same list (config/constants.js CELLAR_SORTS).
-export const CELLAR_SORTS = ['-createdAt', 'createdAt', 'name', '-name', 'vintage', '-vintage', 'price', '-price', 'maturity'];
+export const CELLAR_SORTS = ['-createdAt', 'createdAt', 'name', '-name', 'vintage', '-vintage', 'price', '-price', '-quantity', 'quantity', 'maturity'];
 export const DEFAULT_CELLAR_SORT = '-createdAt';
 
 // The sort the user last picked on a cellar page (preferences.cellarSort), or

@@ -87,6 +87,20 @@ function groupPartExpr(field, fallback) {
  *
  * Aggregation pipelines bypass Mongoose casting, so ids are cast explicitly.
  */
+// Sort by quantity (forum request 2026-10-15): the grouped list's cards by
+// how many identical bottles each holds — sortDir -1 most first. Bottles were
+// put in name order before grouping, so cards holding as many stay A to Z.
+// Lists that are not grouped keep that name order.
+const QUANTITY_SORT = 'quantity';
+const byWineName = (a, b) => {
+  const av = (a.wineDefinition?.name || '').toLowerCase();
+  const bv = (b.wineDefinition?.name || '').toLowerCase();
+  return av < bv ? -1 : av > bv ? 1 : 0;
+};
+function sortGroupsByQuantity(groups, sortDir) {
+  return groups.sort((a, b) => sortDir * (a.bottles.length - b.bottles.length));
+}
+
 async function loadGroupedBottlePage({ cellarId, excludeSet, onlyIds = null, sortField, sortDir, skip, limit, populate = WINE_POPULATE_LIST }) {
   const { ObjectId } = mongoose.Types;
   const match = {
@@ -349,7 +363,7 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
     // or re-sort in memory, load only the page instead of every hit.
     const pageOnly = paginate && statusFilter !== 'consumed'
       && !minRating && !maxRating && !ratingBandParam && !maturityFilter && !extraFilters
-      && sortField !== 'name' && sortField !== 'maturity';
+      && sortField !== 'name' && sortField !== 'maturity' && sortField !== QUANTITY_SORT;
     if (pageOnly) {
       const items = await loadBottlesInOrder(found.ids.slice(skip, skip + limit));
       return { items, total: found.ids.length, limit, skip, maturityStatusMap: null, found };
@@ -405,6 +419,8 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
       const bv = (b.wineDefinition?.name || '').toLowerCase();
       return av < bv ? -sortDir : av > bv ? sortDir : 0;
     });
+  } else if (sortField === QUANTITY_SORT) {
+    bottles.sort(byWineName);
   } else if (sortField === 'maturity' && maturityStatusMap) {
     bottles.sort((a, b) => {
       const av = maturityStatusMap.get(a._id.toString());
@@ -689,6 +705,8 @@ router.get('/multi/bottles', async (req, res) => {
     if (grouped) {
       bottleTotal = items.length;
       const allGroups = groupIdenticalBottles(items, { byCellar: true });
+      const sort = coerceStringQuery(req.query.sort) || '';
+      if (sort.replace(/^-/, '') === QUANTITY_SORT) sortGroupsByQuantity(allGroups, sort.startsWith('-') ? -1 : 1);
       total = allGroups.length;
       groupsForPage = allGroups.slice(skip, skip + limit);
       items = groupsForPage.flatMap(g => g.bottles);
@@ -1430,7 +1448,7 @@ router.get('/:id', async (req, res) => {
       // over them, grouped or not, and load only the page's bottles. Loading
       // every hit to show 30 cost a big cellar ~4 MB and most of the request.
       const pageOnly = !minRating && !maxRating && !ratingBandParam && !maturityFilter && !reservedOnly && !extraFilters
-        && sortField !== 'maturity';
+        && sortField !== 'maturity' && sortField !== QUANTITY_SORT;
       found = await bottleSearch.searchBottles(search || '', {
         cellarId: req.params.id,
         type,
@@ -1529,6 +1547,7 @@ router.get('/:id', async (req, res) => {
         }
         bottles.sort((a, b) => {
           let aVal, bVal;
+          if (sortField === QUANTITY_SORT) return byWineName(a, b);
           if (sortField === 'name') {
             aVal = a.wineDefinition?.name || '';
             bVal = b.wineDefinition?.name || '';
@@ -1592,6 +1611,7 @@ router.get('/:id', async (req, res) => {
     if (grouped && !groupsForPage && !pageReady) {
       // Wine + vintage + bottle size, so a magnum and a 750ml stay apart.
       const allGroups = groupIdenticalBottles(bottles);
+      if (sortField === QUANTITY_SORT) sortGroupsByQuantity(allGroups, sortDir);
       totalCount = allGroups.length;                  // total = number of groups
       bottleTotal = bottles.length;                   // …and the bottles in them
       groupsForPage = allGroups.slice(skip, skip + limit);

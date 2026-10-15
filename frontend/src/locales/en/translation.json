@@ -933,6 +933,8 @@
     "sortVintageNew": "Vintage (New→Old)",
     "sortPriceLow": "Price (Low→High)",
     "sortPriceHigh": "Price (High→Low)",
+    "sortQuantityMost": "Most bottles first",
+    "sortQuantityFewest": "Fewest bottles first",
     "sortMaturity": "Maturity (Drink Soon→Later)",
     "allMaturity": "All Maturity",
     "maturityLabel": "Maturity",
