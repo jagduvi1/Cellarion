@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from 'react';
 import { lazy } from '../utils/lazyWithReload';
 import { useParams, Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
+import { useBackHere } from '../utils/useBackHere';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getCellar } from '../api/cellars';
@@ -153,7 +154,7 @@ function CellarRacks() {
   // use them sit further down, next to the render.
   const location = useLocation();
   // Handed to the bottle page so its back link returns here (BottleDetail).
-  const backHere = { backTo: location.pathname + location.search, backLabel: t('bottleDetail.backToRacks', 'Back to the racks') };
+  const backHere = useBackHere(t('bottleDetail.backToRacks', 'Back to the racks'));
   const [placeQueue, setPlaceQueue] = useState(() => readPlaceQueue(location.state));
   const [placeTotal] = useState(() => readPlaceQueue(location.state).length);
   const [placeNotice, setPlaceNotice] = useState(null);

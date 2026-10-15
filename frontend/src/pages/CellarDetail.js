@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, Suspense, Fragment } from 'react';
 import { lazy } from '../utils/lazyWithReload';
-import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams, useNavigationType } from 'react-router-dom';
 import useHandedOverState from '../hooks/useHandedOverState';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
@@ -67,6 +67,8 @@ const BOTTLES_PER_PAGE = 30;
 // Coming back to the list (Back from a bottle) should find it as it was left:
 // the "all my cellars" scope, how many bottles were loaded, and where the page
 // was scrolled. Per cellar, this tab only (sessionStorage), like the filters.
+// Only Back/Forward (or a reload) restores them — a link to the cellar opens
+// it fresh.
 const SCOPE_STORAGE_PREFIX = 'cellarion.cellarScope.';
 const PLACE_STORAGE_PREFIX = 'cellarion.cellarPlace.';
 // The server's page cap (routes/cellars.js maxLimit): a place deeper than this
@@ -202,7 +204,8 @@ function CellarDetail() {
 
   // ── Cross-cellar scope: which cellars this view spans (default: this one) ──
   const [allCellars, setAllCellars] = useState([]);
-  const [scopeIds, setScopeIds] = useState(() => readSavedScope(id));
+  const cameBack = useNavigationType() === 'POP';
+  const [scopeIds, setScopeIds] = useState(() => (cameBack ? readSavedScope(id) : [id]));
   const scopeKey = scopeIds.join(',');
   const multiScope = !(scopeIds.length === 1 && scopeIds[0] === id);
   // Shape of the bottles CURRENTLY in state (grouped vs flat). Tracked separately
@@ -251,8 +254,8 @@ function CellarDetail() {
     // Skip the mount run: the initial state already is [id], and resetting
     // here would race the ?scope=owned widening above.
     if (scopeResetFirstRun.current) { scopeResetFirstRun.current = false; return; }
-    setScopeIds(readSavedScope(id));
-  }, [id]);
+    setScopeIds(cameBack ? readSavedScope(id) : [id]);
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Remember the scope per cellar, like the filters.
   useEffect(() => {
@@ -327,7 +330,7 @@ function CellarDetail() {
   // stale-scope response that the id→scope-reset produces.
   // Where this list was left (read once, on arrival): restored when the
   // filters and scope are the same as then — i.e. this is coming back.
-  const placeToRestore = useRef(readStored(PLACE_STORAGE_PREFIX + id));
+  const placeToRestore = useRef(cameBack ? readStored(PLACE_STORAGE_PREFIX + id) : null);
   const pendingScroll = useRef(null);
   useEffect(() => {
     if (pendingOwnedScope) return;
@@ -343,19 +346,24 @@ function CellarDetail() {
     }
   }, [id, filterKey, scopeKey, pendingOwnedScope]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Scroll back once the restored page is on screen.
+  // Scroll back once the restored page is on screen — or forget it, when the
+  // list came back empty, so a later filter does not jump down the page.
   useEffect(() => {
-    if (pendingScroll.current == null || bottles.length === 0) return;
+    if (pendingScroll.current == null || loading) return;
     const y = pendingScroll.current;
     pendingScroll.current = null;
-    requestAnimationFrame(() => window.scrollTo(0, y));
-  }, [bottles]);
+    if (bottles.length > 0) requestAnimationFrame(() => window.scrollTo(0, y));
+  }, [bottles, loading]);
 
   // Save the place when leaving (Back, a bottle, another page). The scroll
   // position is tracked as it changes: by the time a leaving page cleans up,
   // the next one may already have moved the window.
+  // Kept after each commit (not during render), so leaving for another
+  // cellar saves the one being left, not the one arriving.
   const placeNow = useRef({});
-  placeNow.current = { count: bottles.length, filterKey, scopeKey };
+  useEffect(() => {
+    placeNow.current = { count: bottles.length, filterKey, scopeKey };
+  });
   useEffect(() => {
     let scrollY = window.scrollY;
     const onScroll = () => { scrollY = window.scrollY; };

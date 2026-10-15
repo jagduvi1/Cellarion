@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Link, useSearchParams, useLocation } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
+import { useBackHere } from '../utils/useBackHere';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { listBottles } from '../api/bottles';
@@ -47,8 +48,7 @@ const PAGE_SIZE = 30;
 function Bottles() {
   const { t } = useTranslation();
   // Handed to the bottle page so its back link returns here (BottleDetail).
-  const bottlesLocation = useLocation();
-  const backHere = { backTo: bottlesLocation.pathname + bottlesLocation.search, backLabel: t('bottleDetail.backToAllBottles', 'Back to all bottles') };
+  const backHere = useBackHere(t('bottleDetail.backToAllBottles', 'Back to all bottles'));
   const { apiFetch, user } = useAuth();
   const ratingScale = user?.preferences?.ratingScale || '5';
   const [searchParams, setSearchParams] = useSearchParams();
@@ -62,25 +62,19 @@ function Bottles() {
     return out;
   }, [searchParams]);
 
-  const [page, setPage] = useState(0);
+  // The page is in the address (?page=2), so Back from a bottle — and the
+  // bottle page's back link — returns to the same page, not the first. It is
+  // replaced, not pushed: Back still leaves the list in one press. A filter
+  // change drops it (removeFilter, clearAll), so a new filter starts at the top.
+  const page = Math.max(0, (parseInt(searchParams.get('page'), 10) || 1) - 1);
+  const setPage = (p) => {
+    const next = new URLSearchParams(searchParams);
+    if (p > 0) next.set('page', String(p + 1)); else next.delete('page');
+    setSearchParams(next, { replace: true });
+  };
   const [data, setData] = useState({ items: [], total: 0, count: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  // Reset page when filters change so a new filter starts at the top. The
-  // reset lands one render AFTER the filter change, so derive the effective
-  // page for the current render — otherwise removing a chip while on page N
-  // fires a request with the new filters but the stale offset, and its
-  // response can arrive after (and clobber) the correct page-0 one.
-  const filtersKey = searchParams.toString();
-  const pageFiltersRef = useRef(filtersKey);
-  const effectivePage = pageFiltersRef.current === filtersKey ? page : 0;
-  useEffect(() => {
-    if (pageFiltersRef.current !== filtersKey) {
-      pageFiltersRef.current = filtersKey;
-      setPage(0);
-    }
-  }, [filtersKey]);
 
   // Latest-wins guard for out-of-order responses between page changes.
   const loadSeq = useRef(0);
@@ -93,7 +87,7 @@ function Bottles() {
       const res = await listBottles(apiFetch, {
         ...filters,
         limit: PAGE_SIZE,
-        offset: effectivePage * PAGE_SIZE,
+        offset: page * PAGE_SIZE,
       });
       const json = await res.json();
       if (!res.ok) throw httpError(res, json, 'Failed to load bottles');
@@ -105,7 +99,7 @@ function Bottles() {
     } finally {
       if (seq === loadSeq.current) setLoading(false);
     }
-  }, [apiFetch, filters, effectivePage]);
+  }, [apiFetch, filters, page]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -113,6 +107,7 @@ function Bottles() {
     const next = new URLSearchParams(searchParams);
     // The rating chip stands for a range — both bounds go together.
     if (key === 'rating') { next.delete('minRating'); next.delete('maxRating'); } else next.delete(key);
+    next.delete('page');
     setSearchParams(next, { replace: true });
   };
 
@@ -253,7 +248,7 @@ function Bottles() {
           <button
             type="button"
             disabled={page === 0}
-            onClick={() => setPage(p => Math.max(0, p - 1))}
+            onClick={() => setPage(page - 1)}
           >
             ← {t('bottles.prev', 'Previous')}
           </button>
@@ -263,7 +258,7 @@ function Bottles() {
           <button
             type="button"
             disabled={page + 1 >= totalPages}
-            onClick={() => setPage(p => p + 1)}
+            onClick={() => setPage(page + 1)}
           >
             {t('bottles.next', 'Next')} →
           </button>

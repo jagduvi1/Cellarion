@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
-import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
+import { useBackHere } from '../utils/useBackHere';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getPickList, renamePickList, removeFromPickList, setPicked, deletePickList } from '../api/pickLists';
@@ -24,8 +25,7 @@ const TICK_FLUSH_MS = 700;
 export default function PickList() {
   const { t } = useTranslation();
   // Handed to the bottle page so its back link returns here (BottleDetail).
-  const pickLocation = useLocation();
-  const backHere = { backTo: pickLocation.pathname + pickLocation.search, backLabel: t('bottleDetail.backToPickList', 'Back to the pick list') };
+  const backHere = useBackHere(t('bottleDetail.backToPickList', 'Back to the pick list'));
   const { id } = useParams();
   const navigate = useNavigate();
   const { apiFetch, user } = useAuth();

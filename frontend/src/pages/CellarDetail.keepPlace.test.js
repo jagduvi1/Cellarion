@@ -1,5 +1,5 @@
 import { render, waitFor } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import CellarDetail from './CellarDetail';
 
 // Back from a bottle finds the cellar list as it was left: the "all my
@@ -49,6 +49,7 @@ beforeEach(() => {
   loaded = 30;
   vi.stubGlobal('sessionStorage', memoryStorage());
   vi.stubGlobal('localStorage', memoryStorage());
+  vi.stubGlobal('scrollTo', () => {}); // jsdom has none; the restored place scrolls
   auth = { apiFetch: api, user: { id: 'u1', preferences: {} }, updatePreferences: vi.fn(async () => ({ success: true })) };
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -89,4 +90,25 @@ test('the "all my cellars" scope is kept for this cellar, and dropped cellars ar
     const last = listCalls().filter((u) => u.startsWith('/api/cellars/multi/bottles?')).pop();
     expect(new URLSearchParams(last.split('?')[1]).get('cellars')).toBe('c1,c2');
   });
+});
+
+test('a link to the cellar opens it fresh: the kept scope and place are for Back only', async () => {
+  sessionStorage.setItem('cellarion.cellarScope.c1', JSON.stringify(['c1', 'c2']));
+  function Start() {
+    const navigate = useNavigate();
+    return <button type="button" onClick={() => navigate('/cellars/c1')}>to cellar</button>;
+  }
+  const { fireEvent, screen } = await import('@testing-library/react');
+  render(
+    <MemoryRouter initialEntries={['/start']}>
+      <Routes>
+        <Route path="/start" element={<Start />} />
+        <Route path="/cellars/:id" element={<CellarDetail />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  fireEvent.click(screen.getByText('to cellar'));
+  await waitFor(() => expect(listCalls().length).toBeGreaterThan(0));
+  expect(listCalls()[0].startsWith('/api/cellars/c1?')).toBe(true);
+  expect(new URLSearchParams(listCalls()[0].split('?')[1]).get('limit')).toBe('30');
 });

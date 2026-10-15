@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react';
-import { useParams, useSearchParams, Link, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom';
+import { useBackHere } from '../utils/useBackHere';
 import { useTranslation } from 'react-i18next';
 import { Canvas } from '@react-three/fiber';
 import { useAuth } from '../contexts/AuthContext';
@@ -20,6 +21,7 @@ import { swatchType, wineTypeLabel } from '../utils/wineColour';
 import { friendlyError, messageForResponse } from '../utils/friendlyError';
 import ActionNotice from '../components/ActionNotice';
 import { backLabel } from '../utils/backLabel';
+import { suspendBackToClose } from '../utils/useBackToClose';
 import './CellarRoom.css';
 
 const DEFAULT_DIMENSIONS = { width: 10, depth: 10, height: 3 };
@@ -36,8 +38,7 @@ function isTypingTarget(e) {
 export default function CellarRoom() {
   const { t } = useTranslation();
   // Handed to the bottle page so its back link returns here (BottleDetail).
-  const roomLocation = useLocation();
-  const backHere = { backTo: roomLocation.pathname + roomLocation.search, backLabel: t('bottleDetail.backToRoom', 'Back to the room') };
+  const backHere = useBackHere(t('bottleDetail.backToRoom', 'Back to the room'));
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const { apiFetch, user } = useAuth();
@@ -800,6 +801,9 @@ export default function CellarRoom() {
   // navigate() calls, etc.) and browser back/forward via popstate.
   useEffect(() => {
     if (!hasUnsavedChanges) return;
+    // This guard owns Back while there are unsaved changes: pop-ups (its own
+    // prompt among them) add no history entries meanwhile.
+    const resumeBackToClose = suspendBackToClose();
 
     const currentPath = window.location.pathname + window.location.search;
     // Normalize any URL form (relative path, absolute path, or full href) to
@@ -846,7 +850,11 @@ export default function CellarRoom() {
       // cleanup runs because navigation committed (unmount), the current
       // entry is the new route — not the sentinel — so this is skipped.
       if (window.history.state?.__roomUnsavedSentinel) {
+        // That step is the room's own, not a Back for a pop-up to act on.
+        window.addEventListener('popstate', resumeBackToClose, { once: true });
         window.history.go(-1);
+      } else {
+        resumeBackToClose();
       }
     };
   }, [hasUnsavedChanges]);

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigationType } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import RatingDisplay from '../components/RatingDisplay';
@@ -35,7 +35,8 @@ const cursorOf = (bottle) => `${bottle.consumedAt || ''}|${bottle._id}`;
 
 // What the history view was showing — search, filters and scope — kept per
 // cellar for this tab, so Back from a bottle finds the same list (it used to
-// start over: everything in component state only).
+// start over: everything in component state only). Only Back/Forward (or a
+// reload) restores it — a link to the history opens it fresh.
 const HISTORY_VIEW_PREFIX = 'cellarion.historyView.';
 const DEFAULT_HISTORY_FILTERS = {
   search: '',
@@ -72,7 +73,8 @@ function CellarHistory() {
   const [error, setError] = useState(null);
   const [total, setTotal] = useState(0);
   const [reasonCounts, setReasonCounts] = useState(null);
-  const [savedView] = useState(() => readSavedHistoryView(id));
+  const cameBack = useNavigationType() === 'POP';
+  const [savedView] = useState(() => (cameBack ? readSavedHistoryView(id) : null));
   const [filters, setFilters] = useState(() => savedView?.filters || DEFAULT_HISTORY_FILTERS);
   const [facets, setFacets] = useState(null);
   const [baseFacets, setBaseFacets] = useState(null);
@@ -88,19 +90,28 @@ function CellarHistory() {
   useEffect(() => {
     listCellars(apiFetch)
       .then(r => r.json())
-      .then(d => setAllCellars(d.cellars || []))
+      .then(d => {
+        const list = d.cellars || [];
+        setAllCellars(list);
+        // A remembered scope may name a cellar since deleted or unshared.
+        const known = new Set(list.map((c) => String(c._id)));
+        setScopeIds((prev) => {
+          const kept = prev.filter((cid) => cid === id || known.has(cid));
+          return kept.length === prev.length ? prev : kept;
+        });
+      })
       .catch(() => {});
-  }, [apiFetch]);
+  }, [apiFetch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset the scope to just this cellar whenever the user navigates to a
   // different cellar's history.
   const historyFirstRun = useRef(true);
   useEffect(() => {
     if (historyFirstRun.current) { historyFirstRun.current = false; return; }
-    const view = readSavedHistoryView(id);
+    const view = cameBack ? readSavedHistoryView(id) : null;
     setScopeIds(view?.scope || [id]);
     setFilters(view?.filters || DEFAULT_HISTORY_FILTERS);
-  }, [id]);
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     try {

@@ -434,8 +434,13 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
 // Whether the two group buttons SHOW is compared (hasGroupActions), so a card
 // re-renders when a caller starts or stops offering them — and so is whether
 // a separate expand handler exists, which decides what the card's tap means.
+// linkState (where the bottle page's back link leads) is compared by value:
+// callers build it inline.
 const COMPARED_PROPS = ['bottle', 'rackMap', 'cellarId', 'viewMode', 'groupCount', 'showCellarBadge', 'compact', 'rackKnown', 'showNotes', 'selectable', 'selected', 'actionsInline', 'details'];
 const hasGroupActions = (p) => `${!!p.onInfo}/${!!p.onDrinkOne}/${!!p.onExpand}`;
+const linkStateKey = (p) => (p.linkState ? `${p.linkState.backTo}|${p.linkState.backLabel}` : '');
 export default memo(BottleCard, (prev, next) =>
-  COMPARED_PROPS.every(key => prev[key] === next[key]) && hasGroupActions(prev) === hasGroupActions(next)
+  COMPARED_PROPS.every(key => prev[key] === next[key])
+  && hasGroupActions(prev) === hasGroupActions(next)
+  && linkStateKey(prev) === linkStateKey(next)
 );

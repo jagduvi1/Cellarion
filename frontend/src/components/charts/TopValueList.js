@@ -1,4 +1,5 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import { useBackHere } from '../../utils/useBackHere';
 import { useTranslation } from 'react-i18next';
 import { TYPE_COLORS, fmtCurrency } from './chartHelpers';
 
@@ -10,8 +11,7 @@ import { TYPE_COLORS, fmtCurrency } from './chartHelpers';
 function TopValueList({ bottles, currency }) {
   const { t } = useTranslation();
   // Handed to the bottle page so its back link returns here (BottleDetail).
-  const location = useLocation();
-  const backHere = { backTo: location.pathname + location.search, backLabel: t('bottleDetail.backToStatistics', 'Back to the statistics') };
+  const backHere = useBackHere(t('bottleDetail.backToStatistics', 'Back to the statistics'));
   if (!bottles || bottles.length === 0) {
     return <p className="stats-empty">{t('statistics.topValue.empty')}</p>;
   }

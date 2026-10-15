@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
-import { useBackToClose, resetBackToCloseForTests } from './useBackToClose';
+import { useBackToClose, resetBackToCloseForTests, suspendBackToClose } from './useBackToClose';
 
 // The phone's Back (history.back) closes the open pop-up instead of leaving
 // the page — in the Android app it used to leave the page, and a half-filled
@@ -125,4 +125,86 @@ test('a pop-up shown inside another that both close at once leave no extra Back 
   // Both entries go in one step: the page's own entry is current again.
   await waitFor(() => expect(window.history.state.cellarionDialog).toBeUndefined());
   expect(window.history.state.key).toBe('page');
+});
+
+test('a pop-up that closed by opening another page is skipped by Back from that page', async () => {
+  // The menu-link case: the link opens a page and the pop-up closes with it.
+  function Host() {
+    const [open, setOpen] = useState(false);
+    return (
+      <div>
+        <button type="button" onClick={() => setOpen(true)}>open</button>
+        {open && (
+          <Dialog name="menu" onClose={() => setOpen(false)}>
+            <button
+              type="button"
+              onClick={() => {
+                // What a router link does: a new entry, one page index on.
+                window.history.pushState({ usr: null, key: 'next', idx: 1 }, '', '/bottles/b1');
+                setOpen(false);
+              }}
+            >go</button>
+          </Dialog>
+        )}
+      </div>
+    );
+  }
+  render(<Host />);
+  fireEvent.click(screen.getByText('open'));
+  fireEvent.click(screen.getByText('go'));
+  // The app moved on: the closed pop-up's entry stays under the new page.
+  await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+  expect(window.location.pathname).toBe('/bottles/b1');
+
+  await back();
+  // Back lands on that entry and goes straight on to the page itself.
+  await waitFor(() => expect(window.history.state.cellarionDialog).toBeUndefined());
+  expect(window.location.pathname).toBe('/cellars/c1');
+  expect(window.history.state.key).toBe('page');
+});
+
+test('while another guard owns Back (the room with unsaved changes), pop-ups add no entry', () => {
+  const resume = suspendBackToClose();
+  render(<Page />);
+  fireEvent.click(screen.getByText('open'));
+  expect(screen.getByRole('dialog', { name: 'outer' })).toBeInTheDocument();
+  expect(window.history.state.cellarionDialog).toBeUndefined();
+  resume();
+});
+
+test('a pop-up that stays open on Back (it is busy) gets its entry back', async () => {
+  function Busy() { useBackToClose(() => {}); return <div role="dialog" aria-label="busy" />; }
+  render(<Busy />);
+  await back();
+  expect(screen.getByRole('dialog', { name: 'busy' })).toBeInTheDocument();
+  // So the next Back is still the pop-up's, not the page's.
+  await waitFor(() => expect(window.history.state.cellarionDialog).toBeTruthy());
+});
+
+test('an entry left by an earlier page load (reloaded with a pop-up open) is not taken for one of ours', async () => {
+  window.history.replaceState({ usr: null, key: 'page', idx: 0, cellarionDialog: 'old.1' }, '');
+  render(<Page />);
+  fireEvent.click(screen.getByText('open'));
+  await back();
+  expect(screen.queryByRole('dialog')).toBeNull();
+});
+
+test("the room's own step off its unsaved-changes entry (after Save) does not close a pop-up", async () => {
+  render(<Page />);
+  fireEvent.click(screen.getByText('open'));
+  // The room turns dirty: it takes Back and seeds its own entry.
+  const resume = suspendBackToClose();
+  window.history.pushState({ __roomUnsavedSentinel: true }, '');
+  // Saved: it steps off that entry and hands Back back once the step landed.
+  await act(async () => {
+    const popped = new Promise((r) => window.addEventListener('popstate', r, { once: true }));
+    window.addEventListener('popstate', resume, { once: true });
+    window.history.back();
+    await popped;
+  });
+  await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+  expect(screen.getByRole('dialog', { name: 'outer' })).toBeInTheDocument();
+  // Back is the pop-up's again.
+  await back();
+  expect(screen.queryByRole('dialog')).toBeNull();
 });

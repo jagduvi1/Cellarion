@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import CellarHistory from './CellarHistory';
 
 // The history is paged (2026-09-27): it used to receive and render every
@@ -140,6 +140,35 @@ test('Back from a bottle finds the same search and scope (kept per cellar for th
     // The very first request already searches: no unfiltered load first.
     expect(historyCalls()[0].get('search')).toBe('barolo');
     expect(screen.getByDisplayValue('barolo')).toBeInTheDocument();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+test('a link to the history opens it fresh (only Back finds the kept search)', async () => {
+  const m = new Map();
+  vi.stubGlobal('sessionStorage', {
+    getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)),
+    removeItem: (k) => m.delete(k), clear: () => m.clear(),
+  });
+  try {
+    sessionStorage.setItem('cellarion.historyView.c1', JSON.stringify({ filters: { search: 'barolo' }, scope: ['c1'] }));
+    answer = () => page([bottle('b1', 'drank', 9)]);
+    function Start() {
+      const navigate = useNavigate();
+      return <button type="button" onClick={() => navigate('/cellars/c1/history')}>to history</button>;
+    }
+    render(
+      <MemoryRouter initialEntries={['/start']}>
+        <Routes>
+          <Route path="/start" element={<Start />} />
+          <Route path="/cellars/:id/history" element={<CellarHistory />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByText('to history'));
+    await waitFor(() => expect(historyCalls().length).toBeGreaterThan(0));
+    expect(historyCalls()[0].get('search')).toBeNull();
   } finally {
     vi.unstubAllGlobals();
   }
