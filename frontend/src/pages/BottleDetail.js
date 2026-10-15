@@ -34,6 +34,8 @@ import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPromp
 import { swatchType, wineTypeLabel } from '../utils/wineColour';
 import './BottleDetail.css';
 import { backLabel as backLabelText } from '../utils/backLabel';
+import { isSafeInternalPath } from '../utils/postLoginRedirect';
+import { backPlaceLabel, RETURNING } from '../utils/useBackHere';
 
 // Lazy-load heavy components only needed on user interaction
 const ReportWineModal = lazy(() => import('../components/ReportWineModal'));
@@ -56,6 +58,15 @@ function BottleDetail() {
   const location = useLocation();
   const fromHistory = location.state?.fromHistory === true;
   const fromChat = location.state?.fromChat === true;
+  // Any other page that opened this one (racks, the room, a pick list,
+  // statistics, all bottles) hands over where it is and which page it is, so
+  // the back link returns there instead of to the bottle list. In-app paths
+  // only — the same check the post-login return uses — and only known pages;
+  // the label is looked up here, so it follows a language switch.
+  const handedPlace = backPlaceLabel(location.state?.backFrom);
+  const handedBack = handedPlace && isSafeInternalPath(location.state?.backTo)
+    ? { to: location.state.backTo, label: t(handedPlace[0], handedPlace[1]) }
+    : null;
   // Opened from a row on the vintage page (early access): back goes there.
   // Only an in-app cellar path is taken from the router state.
   const fromVintage = typeof location.state?.fromVintage === 'string' && location.state.fromVintage.startsWith('/cellars/')
@@ -322,6 +333,8 @@ function BottleDetail() {
   const arrivalLate = onOrderNow && isArrivalLate(bottle.expectedArrival);
   const backTo = fromChat
     ? '/cellar-chat'
+    : handedBack
+      ? handedBack.to
     : onOrderNow
       ? `/cellars/${cellarId}/on-order`
       : fromVintage
@@ -329,6 +342,8 @@ function BottleDetail() {
         : (isConsumed || fromHistory ? `/cellars/${cellarId}/history` : `/cellars/${cellarId}`);
   const backLabel = fromChat
     ? t('bottleDetail.backToChat', 'Back to chat')
+    : handedBack
+      ? handedBack.label
     : onOrderNow
       ? t('onOrder.backToOnOrder')
       : fromVintage
@@ -502,7 +517,7 @@ function BottleDetail() {
       {/* ── Clean header ── */}
       <div className="bd-page-header">
         <div className="bd-header-top">
-          <Link to={backTo} className="back-link">
+          <Link to={backTo} state={RETURNING} className="back-link">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
             {backLabelText(backLabel)}
           </Link>

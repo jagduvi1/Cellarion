@@ -25,6 +25,7 @@ import { WINE_TYPES } from '../config/wineTypes';
 import { swatchType, wineTypeLabel, isStyleType, colourLabel, WINE_COLOURS } from '../utils/wineColour';
 import './AddBottle.css';
 import { backLabel } from '../utils/backLabel';
+import { useBackToClose } from '../utils/useBackToClose';
 
 // How this device last started adding a bottle: 'camera' (the label photo, the
 // default) or 'search' (typing the name). Per device on purpose — the same
@@ -455,6 +456,9 @@ function AddBottle() {
     setBarcodeMode(false);
     stopLabelCamera();
   }, [stopLabelCamera]);
+  // The phone's Back closes the camera, not the add screen (with whatever was
+  // typed in it).
+  useBackToClose(closeCamera, labelCam.open);
 
   // Advance to step 2 WITHOUT any registry write: the confirmed wine fields
   // ride along and are minted by POST /api/bottles when the user commits the

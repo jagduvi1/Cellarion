@@ -21,7 +21,7 @@ const MATURITY_LABELS = {
  * Renders a single bottle in either list or card (grid) view.
  * Props: bottle, rackMap, cellarId, viewMode ('list' | 'card')
  */
-function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onClick, showCellarBadge = false, compact = false, rackKnown = false, showNotes = false, selectable = false, selected = false, onToggleSelect, onLongPress, onInfo, onDrinkOne, onExpand, actionsInline = false, details = '' }) {
+function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onClick, showCellarBadge = false, compact = false, rackKnown = false, showNotes = false, selectable = false, selected = false, onToggleSelect, onLongPress, onInfo, onDrinkOne, onExpand, actionsInline = false, details = '', linkState }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -83,7 +83,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
   // collapsed group instead.
   const handleClick = selectable
     ? () => onToggleSelect?.()
-    : (onClick || (() => navigate(`/cellars/${cellarId}/bottles/${bottle._id}`)));
+    : (onClick || (() => navigate(`/cellars/${cellarId}/bottles/${bottle._id}`, linkState ? { state: linkState } : undefined)));
   const handleKey = e => {
     if (e.key === 'Enter') handleClick();
     else if (selectable && e.key === ' ') { e.preventDefault(); handleClick(); }
@@ -434,8 +434,13 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
 // Whether the two group buttons SHOW is compared (hasGroupActions), so a card
 // re-renders when a caller starts or stops offering them — and so is whether
 // a separate expand handler exists, which decides what the card's tap means.
+// linkState (where the bottle page's back link leads) is compared by value:
+// callers build it inline.
 const COMPARED_PROPS = ['bottle', 'rackMap', 'cellarId', 'viewMode', 'groupCount', 'showCellarBadge', 'compact', 'rackKnown', 'showNotes', 'selectable', 'selected', 'actionsInline', 'details'];
 const hasGroupActions = (p) => `${!!p.onInfo}/${!!p.onDrinkOne}/${!!p.onExpand}`;
+const linkStateKey = (p) => (p.linkState ? `${p.linkState.backTo}|${p.linkState.backFrom}` : '');
 export default memo(BottleCard, (prev, next) =>
-  COMPARED_PROPS.every(key => prev[key] === next[key]) && hasGroupActions(prev) === hasGroupActions(next)
+  COMPARED_PROPS.every(key => prev[key] === next[key])
+  && hasGroupActions(prev) === hasGroupActions(next)
+  && linkStateKey(prev) === linkStateKey(next)
 );

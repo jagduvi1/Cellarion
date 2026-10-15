@@ -96,6 +96,58 @@ describe('userDataRegistry', () => {
       updateSpy.mockRestore();
     }
   });
+
+  // Sign-up, e-mail verification and sign-in rows have NO actor (nobody is
+  // signed in yet): the account is the resource, and the detail carries its
+  // username and e-mail. The actor-scoped scrub never reached them, so a
+  // deleted account's name, address and IP stayed in the log.
+  test('AuditLog purge also scrubs the rows ABOUT the account (sign-up, sign-in)', async () => {
+    const audit = REGISTRY.find(e => e.model.modelName === 'AuditLog');
+    const updateSpy = jest.spyOn(AuditLog, 'updateMany').mockResolvedValue({});
+
+    try {
+      await audit.purge({ userId: 'u1', deletedUserId: 'del1' });
+      const about = updateSpy.mock.calls.find(([filter]) => filter['resource.id'] === 'u1');
+      expect(about[0]).toEqual({ 'resource.type': 'user', 'resource.id': 'u1' });
+      const [setStage, unsetStage] = about[1];
+      expect(setStage.$set['resource.id']).toBeNull();
+      // The IP and browser go only where nobody was signed in: an admin's or
+      // another member's action on the account keeps whoever acted.
+      expect(setStage.$set['actor.ipAddress'].$cond[1]).toBeNull();
+      expect(setStage.$set['actor.ipAddress'].$cond[2]).toBe('$actor.ipAddress');
+      expect(setStage.$set.userAgent.$cond[1]).toBe('$$REMOVE');
+      expect(unsetStage).toEqual({ $unset: ['detail.email', 'detail.username'] });
+
+      // Once more after the batch: a sign-in logged while it ran.
+      updateSpy.mockClear();
+      await audit.postPurge({ userId: 'u1' });
+      expect(updateSpy).toHaveBeenCalledWith({ 'resource.type': 'user', 'resource.id': 'u1' }, expect.any(Array));
+    } finally {
+      updateSpy.mockRestore();
+    }
+  });
+
+  test('the export carries the rows about the account written before sign-in', async () => {
+    const audit = REGISTRY.find(e => e.model.modelName === 'AuditLog');
+    const chain = { sort: () => chain, limit: () => chain, lean: async () => [] };
+    const findSpy = jest.spyOn(AuditLog, 'find').mockReturnValue(chain);
+    try {
+      await audit.exportFragment({ userId: 'u1', truncated: {} });
+      expect(findSpy).toHaveBeenCalledWith({ $or: [
+        { 'actor.userId': 'u1' },
+        { 'resource.type': 'user', 'resource.id': 'u1', 'actor.userId': null },
+      ] });
+    } finally {
+      findSpy.mockRestore();
+    }
+  });
+
+  test('the rows about an account are found by an index (erasure runs hourly)', () => {
+    const indexes = AuditLog.schema.indexes();
+    const about = indexes.find(([keys]) => keys['resource.id'] === 1);
+    expect(about).toBeTruthy();
+    expect(about[1].partialFilterExpression).toEqual({ 'resource.type': 'user' });
+  });
 });
 
 // L-17: a deleted user's display name must not survive erasure inside OTHER

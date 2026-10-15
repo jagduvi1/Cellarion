@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react';
 import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom';
+import { useBackHere } from '../utils/useBackHere';
 import { useTranslation } from 'react-i18next';
 import { Canvas } from '@react-three/fiber';
 import { useAuth } from '../contexts/AuthContext';
@@ -20,6 +21,7 @@ import { swatchType, wineTypeLabel } from '../utils/wineColour';
 import { friendlyError, messageForResponse } from '../utils/friendlyError';
 import ActionNotice from '../components/ActionNotice';
 import { backLabel } from '../utils/backLabel';
+import { suspendBackToClose } from '../utils/useBackToClose';
 import './CellarRoom.css';
 
 const DEFAULT_DIMENSIONS = { width: 10, depth: 10, height: 3 };
@@ -35,6 +37,8 @@ function isTypingTarget(e) {
 
 export default function CellarRoom() {
   const { t } = useTranslation();
+  // Handed to the bottle page so its back link returns here (BottleDetail).
+  const backHere = useBackHere('room');
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const { apiFetch, user } = useAuth();
@@ -797,6 +801,9 @@ export default function CellarRoom() {
   // navigate() calls, etc.) and browser back/forward via popstate.
   useEffect(() => {
     if (!hasUnsavedChanges) return;
+    // This guard owns Back while there are unsaved changes: pop-ups (its own
+    // prompt among them) add no history entries meanwhile.
+    const resumeBackToClose = suspendBackToClose();
 
     const currentPath = window.location.pathname + window.location.search;
     // Normalize any URL form (relative path, absolute path, or full href) to
@@ -843,7 +850,11 @@ export default function CellarRoom() {
       // cleanup runs because navigation committed (unmount), the current
       // entry is the new route — not the sentinel — so this is skipped.
       if (window.history.state?.__roomUnsavedSentinel) {
+        // That step is the room's own, not a Back for a pop-up to act on.
+        window.addEventListener('popstate', resumeBackToClose, { once: true });
         window.history.go(-1);
+      } else {
+        resumeBackToClose();
       }
     };
   }, [hasUnsavedChanges]);
@@ -952,7 +963,7 @@ export default function CellarRoom() {
     setSelectedBottle(null);
     if (bottle.openedAt) {
       try { await pourBottle(apiFetch, bottle._id); } catch { /* bottle page shows truth */ }
-      navigate(`/cellars/${id}/bottles/${bottle._id}`);
+      navigate(`/cellars/${id}/bottles/${bottle._id}`, { state: backHere });
     } else {
       setPartialPicker({ bottleId: bottle._id });
     }
@@ -967,7 +978,7 @@ export default function CellarRoom() {
     } catch { /* bottle page shows truth */ }
     setPartialBusy(false);
     setPartialPicker(null);
-    navigate(`/cellars/${id}/bottles/${bottleId}`);
+    navigate(`/cellars/${id}/bottles/${bottleId}`, { state: backHere });
   };
 
   // Consume bottle
@@ -1630,12 +1641,12 @@ export default function CellarRoom() {
                 savedLayoutRef.current = JSON.stringify(layout);
                 setPendingNavPath(null);
                 // Either way the current entry is the sentinel duplicate of
-                // this page. For Back, one step only reaches the identical
-                // room entry — go(-2) skips past it to the real previous
-                // page. For link navigation, replace the sentinel instead of
-                // stacking the target on top of it.
+                // this page. For Back, step back past every entry of this
+                // same page (the sentinel, the room's own, any a pop-up left)
+                // to the real previous page. For link navigation, replace the
+                // sentinel instead of stacking the target on top of it.
                 if (path === '__back__') {
-                  window.history.go(-2);
+                  leaveBackPastThisPage();
                 } else {
                   navigate(path, { replace: true });
                 }
@@ -1651,6 +1662,30 @@ export default function CellarRoom() {
 }
 
 // LOCAL calendar date, YYYY-MM-DD — what <input type="date"> speaks.
+// "Leave" after Back with unsaved changes: step back until the page changes.
+// Above the previous page sit the room's own entry, its guard's sentinel and
+// possibly an entry a pop-up left behind — a fixed go(-2) could stop short and
+// leave the user in the room.
+function leaveBackPastThisPage() {
+  const here = window.location.href;
+  let steps = 0;
+  let timer = null;
+  const done = () => {
+    clearTimeout(timer);
+    window.removeEventListener('popstate', onPop);
+  };
+  // A Back with nowhere to go fires nothing: stop listening anyway.
+  const arm = () => { clearTimeout(timer); timer = setTimeout(done, 1500); };
+  function onPop() {
+    if (window.location.href !== here || ++steps >= 10) { done(); return; }
+    arm();
+    window.history.back();
+  }
+  window.addEventListener('popstate', onPop);
+  arm();
+  window.history.back();
+}
+
 const roomToday = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;

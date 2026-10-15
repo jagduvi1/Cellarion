@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
+import { useBackHere } from '../utils/useBackHere';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getPickList, renamePickList, removeFromPickList, setPicked, deletePickList } from '../api/pickLists';
@@ -23,6 +24,8 @@ const TICK_FLUSH_MS = 700;
  */
 export default function PickList() {
   const { t } = useTranslation();
+  // Handed to the bottle page so its back link returns here (BottleDetail).
+  const backHere = useBackHere('pickList');
   const { id } = useParams();
   const navigate = useNavigate();
   const { apiFetch, user } = useAuth();
@@ -275,7 +278,7 @@ export default function PickList() {
                     </Link>
                   ) : <span title={it.location || undefined}>{it.location || '—'}</span>}
                 </span>
-                <Link className="pick-list-wine" to={`/cellars/${it.cellar.id}/bottles/${it.bottleId}`}>{wineText(it)}</Link>
+                <Link className="pick-list-wine" to={`/cellars/${it.cellar.id}/bottles/${it.bottleId}`} state={backHere}>{wineText(it)}</Link>
                 <button type="button" className="pick-list-icon-btn no-print" onClick={() => remove([it.bottleId])} aria-label={t('pickLists.remove', 'Remove from the list')} title={t('pickLists.remove', 'Remove from the list')}>×</button>
               </li>
             ))}

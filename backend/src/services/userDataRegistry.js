@@ -128,6 +128,27 @@ const EXCLUDED = {
   CommunityWinePrice: 'no user reference (k-anonymised aggregate community prices; never an individual\'s purchase)',
 };
 
+// Audit rows ABOUT an account (resource = the user). Sign-up, e-mail
+// verification and sign-in (and their failures) happen before anyone is
+// signed in: the row has no actor, the account sits in resource.id, and the
+// detail carries { username, email } — the actor scrub never matched them, so
+// a deleted account's name, address and IP stayed in those rows. Admin and
+// other members' actions on the account lose the account's id and name too,
+// but keep THEIR IP and browser: those belong to whoever acted. A pipeline
+// update, so that choice is made per row.
+const actorless = { $eq: [{ $ifNull: ['$actor.userId', null] }, null] };
+const scrubAuditRowsAbout = (userId) => AuditLog.updateMany(
+  { 'resource.type': 'user', 'resource.id': userId },
+  [
+    { $set: {
+      'resource.id': null,
+      'actor.ipAddress': { $cond: [actorless, null, '$actor.ipAddress'] },
+      userAgent: { $cond: [actorless, '$$REMOVE', '$userAgent'] },
+    } },
+    { $unset: ['detail.email', 'detail.username'] },
+  ]
+);
+
 const REGISTRY = [
   // ── The account itself ──────────────────────────────────────────────────
   {
@@ -1323,7 +1344,7 @@ const REGISTRY = [
         { 'actor.userId': ctx.userId },
         {
           $set: { 'actor.userId': null, 'actor.ipAddress': null },
-          $unset: { 'detail.email': '', 'detail.username': '', 'detail.sharedWith': '', 'detail.invitedEmail': '' },
+          $unset: { 'detail.email': '', 'detail.username': '', 'detail.sharedWith': '', 'detail.invitedEmail': '', userAgent: '' },
         }
       ),
       // (b) The departing user as the SUBJECT of ANOTHER actor's event — a
@@ -1334,9 +1355,20 @@ const REGISTRY = [
         { $or: [{ 'detail.sharedWith': ctx.userEmail }, { 'detail.invitedEmail': ctx.userEmail }] },
         { $unset: { 'detail.sharedWith': '', 'detail.invitedEmail': '' } }
       )] : []),
+      // (c) The departing user as the account an event is ABOUT.
+      scrubAuditRowsAbout(ctx.userId),
     ],
+    // Again after the batch: a sign-in logged while the batch ran (logAudit is
+    // fire-and-forget) would otherwise keep its name and IP. Once the account
+    // is gone no new row can be about it.
+    postPurge: (ctx) => scrubAuditRowsAbout(ctx.userId),
+    // The user's own actions, and the rows about the account written before
+    // anyone was signed in (sign-up, sign-ins, failed sign-ins) — theirs too.
     exportFragment: async (ctx) => ({
-      activityLog: markTrunc(ctx, 'activityLog', await AuditLog.find({ 'actor.userId': ctx.userId }).sort({ timestamp: -1 }).limit(AUDIT_MAX).lean(), AUDIT_MAX)
+      activityLog: markTrunc(ctx, 'activityLog', await AuditLog.find({ $or: [
+        { 'actor.userId': ctx.userId },
+        { 'resource.type': 'user', 'resource.id': ctx.userId, 'actor.userId': null },
+      ] }).sort({ timestamp: -1 }).limit(AUDIT_MAX).lean(), AUDIT_MAX)
         .map(a => ({ action: a.action, timestamp: a.timestamp, detail: a.detail })),
     }),
   },

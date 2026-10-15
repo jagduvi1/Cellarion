@@ -22,6 +22,7 @@ vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ apiFetch: apiFetch
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ id: 'pl1' }),
   useNavigate: () => vi.fn(),
+  useLocation: () => ({ pathname: '/pick-lists/pl1', search: '' }),
   Link: ({ children, to, ...rest }) => <a href={to} {...rest}>{children}</a>,
 }));
 vi.mock('../components/BetaBadge', () => ({ default: () => null }));

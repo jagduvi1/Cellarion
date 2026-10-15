@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from 'react';
 import { lazy } from '../utils/lazyWithReload';
 import { useParams, Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
+import { useBackHere } from '../utils/useBackHere';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getCellar } from '../api/cellars';
@@ -152,6 +153,8 @@ function CellarRacks() {
   // a conditional return crash the page on a load error). The handlers that
   // use them sit further down, next to the render.
   const location = useLocation();
+  // Handed to the bottle page so its back link returns here (BottleDetail).
+  const backHere = useBackHere('racks');
   const [placeQueue, setPlaceQueue] = useState(() => readPlaceQueue(location.state));
   const [placeTotal] = useState(() => readPlaceQueue(location.state).length);
   const [placeNotice, setPlaceNotice] = useState(null);
@@ -528,7 +531,7 @@ function CellarRacks() {
     setConsumeModal(null);
     if (bottle.openedAt) {
       try { await pourBottle(apiFetch, bottle._id); } catch { /* bottle page shows truth */ }
-      navigate(`/cellars/${id}/bottles/${bottle._id}`);
+      navigate(`/cellars/${id}/bottles/${bottle._id}`, { state: backHere });
     } else {
       setPartialPicker({ bottleId: bottle._id });
     }
@@ -543,7 +546,7 @@ function CellarRacks() {
     } catch { /* bottle page shows truth */ }
     setPartialBusy(false);
     setPartialPicker(null);
-    navigate(`/cellars/${id}/bottles/${bottleId}`);
+    navigate(`/cellars/${id}/bottles/${bottleId}`, { state: backHere });
   };
 
   // Pour a glass from an open (Coravin'd) bottle right from the slot popup.
