@@ -170,8 +170,9 @@ export default function TabAudit() {
                           // Before sign-in (sign-up, sign-in, its failures):
                           // no actor yet — the account the row is about.
                           <span style={{ color: 'var(--sa-text-dim)' }} title="The account this is about (not signed in yet)">→ {log.about.username}</span>
-                        ) : log.actor?.role && log.actor.role !== 'anonymous' ? (
-                          // The account has been deleted: erased from its rows.
+                        ) : log.actor?.role && log.actor.role !== 'anonymous' && log.actor.role !== 'system' ? (
+                          // A member's row with no member: the account has
+                          // been deleted and erased from its rows.
                           <span style={{ color: 'var(--sa-text-dim)' }}>deleted account</span>
                         ) : '—')}
                         {log.actor?.role && log.actor.role !== 'anonymous' && (

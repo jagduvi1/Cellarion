@@ -46,6 +46,10 @@ beforeEach(() => {
     { _id: '2', action: 'auth.register', actor: { userId: null, role: 'anonymous' }, resource: { type: 'user', id: GONE } },
     { _id: '3', action: 'bottle.add', actor: { userId: { _id: ALIVE, username: 'alice' }, role: 'user' }, resource: { type: 'bottle', id: BOTTLE } },
     { _id: '4', action: 'user.profile.update', actor: { userId: { _id: ALIVE, username: 'alice' }, role: 'user' }, resource: { type: 'user', id: ALIVE } },
+    // A system job about alice, and a member since erased who followed her:
+    // neither is a row "before sign-in", and neither may read as alice's.
+    { _id: '5', action: 'bottle.trash_purge', actor: { userId: null, role: 'system' }, resource: { type: 'user', id: ALIVE } },
+    { _id: '6', action: 'user.follow', actor: { userId: null, role: 'user' }, resource: { type: 'user', id: ALIVE } },
   ];
   const chain = { sort: () => chain, skip: () => chain, limit: () => chain, populate: () => chain, lean: async () => rows };
   AuditLog.find.mockReturnValue(chain);
@@ -64,7 +68,18 @@ test('a row written before sign-in names the account it is about; others are lef
   // Rows with an actor carry the actor, not an "about".
   expect(byId['3'].about).toBeUndefined();
   expect(byId['4'].about).toBeUndefined();
+  expect(byId['5'].about).toBeUndefined();
+  expect(byId['6'].about).toBeUndefined();
   // One lookup, for the actor-less rows about a user only.
   expect(User.find).toHaveBeenCalledTimes(1);
   expect(User.find.mock.calls[0][0]).toEqual({ _id: { $in: [ALIVE, GONE] } });
+});
+
+test('filtering by a user also finds the rows about them written before sign-in', async () => {
+  const res = await fetch(`${baseUrl}/api/admin/audit?userId=${ALIVE}`);
+  expect(res.status).toBe(200);
+  expect(AuditLog.find.mock.calls[0][0].$or).toEqual([
+    { 'actor.userId': ALIVE },
+    { 'resource.type': 'user', 'resource.id': ALIVE, 'actor.userId': null, 'actor.role': 'anonymous' },
+  ]);
 });

@@ -35,7 +35,13 @@ router.get('/', async (req, res) => {
       if (!mongoose.Types.ObjectId.isValid(userId)) {
         return res.status(400).json({ error: 'Invalid userId filter' });
       }
-      filter['actor.userId'] = userId;
+      // The user's own actions, and the rows about them written before they
+      // were signed in (sign-ins, failed sign-ins, sign-up) — the table shows
+      // those as theirs too.
+      filter.$or = [
+        { 'actor.userId': userId },
+        { 'resource.type': 'user', 'resource.id': userId, 'actor.userId': null, 'actor.role': 'anonymous' },
+      ];
     }
 
     if (from || to) {
@@ -63,17 +69,17 @@ router.get('/', async (req, res) => {
     ]);
 
     // Sign-up, sign-in and the like happen before anyone is signed in: no
-    // actor, the account is the row's resource. Name it, so the row does not
-    // read as anonymous. (Gone once the account is deleted — erased with it.)
-    const aboutIds = [...new Set(logs
-      .filter((l) => !l.actor?.userId && l.resource?.type === 'user' && l.resource.id)
-      .map((l) => String(l.resource.id)))];
-    if (aboutIds.length) {
-      const users = await User.find({ _id: { $in: aboutIds } }, 'username').lean();
+    // actor (role 'anonymous' — not a system job, not an erased member), the
+    // account is the row's resource. Name it, so the row does not read as
+    // anonymous. (Gone once the account is deleted — erased with it.)
+    const beforeSignIn = logs.filter((l) => !l.actor?.userId && l.actor?.role === 'anonymous'
+      && l.resource?.type === 'user' && l.resource.id);
+    if (beforeSignIn.length) {
+      const ids = [...new Set(beforeSignIn.map((l) => String(l.resource.id)))];
+      const users = await User.find({ _id: { $in: ids } }, 'username').lean();
       const names = new Map(users.map((u) => [String(u._id), u.username]));
-      for (const l of logs) {
-        const name = !l.actor?.userId && l.resource?.type === 'user' && l.resource.id
-          ? names.get(String(l.resource.id)) : null;
+      for (const l of beforeSignIn) {
+        const name = names.get(String(l.resource.id));
         if (name) l.about = { username: name };
       }
     }
