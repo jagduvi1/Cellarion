@@ -438,7 +438,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
 // callers build it inline.
 const COMPARED_PROPS = ['bottle', 'rackMap', 'cellarId', 'viewMode', 'groupCount', 'showCellarBadge', 'compact', 'rackKnown', 'showNotes', 'selectable', 'selected', 'actionsInline', 'details'];
 const hasGroupActions = (p) => `${!!p.onInfo}/${!!p.onDrinkOne}/${!!p.onExpand}`;
-const linkStateKey = (p) => (p.linkState ? `${p.linkState.backTo}|${p.linkState.backLabel}` : '');
+const linkStateKey = (p) => (p.linkState ? `${p.linkState.backTo}|${p.linkState.backFrom}` : '');
 export default memo(BottleCard, (prev, next) =>
   COMPARED_PROPS.every(key => prev[key] === next[key])
   && hasGroupActions(prev) === hasGroupActions(next)

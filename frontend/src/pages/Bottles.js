@@ -48,7 +48,7 @@ const PAGE_SIZE = 30;
 function Bottles() {
   const { t } = useTranslation();
   // Handed to the bottle page so its back link returns here (BottleDetail).
-  const backHere = useBackHere(t('bottleDetail.backToAllBottles', 'Back to all bottles'));
+  const backHere = useBackHere('allBottles');
   const { apiFetch, user } = useAuth();
   const ratingScale = user?.preferences?.ratingScale || '5';
   const [searchParams, setSearchParams] = useSearchParams();

@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, Suspense, Fragment } from 'react';
 import { lazy } from '../utils/lazyWithReload';
-import { useParams, Link, useNavigate, useSearchParams, useNavigationType } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useCameBack } from '../utils/useBackHere';
+import { validScope, keepKnownCellars } from '../utils/savedScope';
 import useHandedOverState from '../hooks/useHandedOverState';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
@@ -79,10 +81,7 @@ const PLACE_TTL_MS = 30 * 60 * 1000;
 const readStored = (key) => {
   try { return JSON.parse(sessionStorage.getItem(key) || 'null'); } catch { return null; }
 };
-const readSavedScope = (cellarId) => {
-  const saved = readStored(SCOPE_STORAGE_PREFIX + cellarId);
-  return Array.isArray(saved) && saved[0] === cellarId && saved.every((x) => typeof x === 'string') ? saved : [cellarId];
-};
+const readSavedScope = (cellarId) => validScope(readStored(SCOPE_STORAGE_PREFIX + cellarId), cellarId);
 
 // Persist the per-cellar filter/sort selection for the tab session so that
 // opening a bottle and hitting browser-back doesn't wipe it (the bottle page is
@@ -204,7 +203,7 @@ function CellarDetail() {
 
   // ── Cross-cellar scope: which cellars this view spans (default: this one) ──
   const [allCellars, setAllCellars] = useState([]);
-  const cameBack = useNavigationType() === 'POP';
+  const cameBack = useCameBack();
   const [scopeIds, setScopeIds] = useState(() => (cameBack ? readSavedScope(id) : [id]));
   const scopeKey = scopeIds.join(',');
   const multiScope = !(scopeIds.length === 1 && scopeIds[0] === id);
@@ -225,11 +224,7 @@ function CellarDetail() {
         const list = d.cellars || [];
         setAllCellars(list);
         // A remembered scope may name a cellar since deleted or unshared.
-        const known = new Set(list.map((c) => String(c._id)));
-        setScopeIds((prev) => {
-          const kept = prev.filter((cid) => cid === id || known.has(cid));
-          return kept.length === prev.length ? prev : kept;
-        });
+        setScopeIds((prev) => keepKnownCellars(prev, id, list));
         // Mount-time value: this effect runs once, on arrival.
         if (pendingOwnedScope) {
           // This cellar first, then the rest the user owns — the same set the
@@ -331,17 +326,25 @@ function CellarDetail() {
   // Where this list was left (read once, on arrival): restored when the
   // filters and scope are the same as then — i.e. this is coming back.
   const placeToRestore = useRef(cameBack ? readStored(PLACE_STORAGE_PREFIX + id) : null);
+  // The place being restored, until its list is on screen: a remembered scope
+  // trimmed meanwhile (a cellar since gone) asks again with the same count.
+  const restoring = useRef(null);
   const pendingScroll = useRef(null);
   useEffect(() => {
     if (pendingOwnedScope) return;
     const place = placeToRestore.current;
     placeToRestore.current = null;
-    const same = place && place.filterKey === filterKey && place.scopeKey === scopeKey
-      && Date.now() - (place.at || 0) < PLACE_TTL_MS;
-    if (same) {
-      pendingScroll.current = place.scrollY || 0;
-      fetchCellarData(0, Math.min(Math.max(place.count || 0, BOTTLES_PER_PAGE), MAX_RESTORE));
+    if (place && place.filterKey === filterKey && place.scopeKey === scopeKey
+      && Date.now() - (place.at || 0) < PLACE_TTL_MS) {
+      restoring.current = place;
+    }
+    const restore = restoring.current && restoring.current.filterKey === filterKey ? restoring.current : null;
+    restoring.current = restore;
+    if (restore) {
+      pendingScroll.current = restore.scrollY || 0;
+      fetchCellarData(0, Math.min(Math.max(restore.count || 0, BOTTLES_PER_PAGE), MAX_RESTORE));
     } else {
+      pendingScroll.current = null;
       fetchCellarData(0);
     }
   }, [id, filterKey, scopeKey, pendingOwnedScope]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -352,6 +355,7 @@ function CellarDetail() {
     if (pendingScroll.current == null || loading) return;
     const y = pendingScroll.current;
     pendingScroll.current = null;
+    restoring.current = null;
     if (bottles.length > 0) requestAnimationFrame(() => window.scrollTo(0, y));
   }, [bottles, loading]);
 

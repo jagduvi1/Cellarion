@@ -13,7 +13,9 @@ import { useEffect, useRef } from 'react';
 // (Cancel, Escape, Save) their entries are taken off again, in one step, a
 // tick later — while they are still the current entry. A pop-up that closed
 // by opening another page leaves its entry under that page; Back from there
-// skips it, so Back never needs a dead press.
+// skips it, and Forward onto an entry whose pop-up is gone steps off it again.
+// (One case is left: a page reloaded with a pop-up open keeps that entry, and
+// the first Back after it lands on the same page.)
 
 const MARK = 'cellarionDialog';
 const OWN_STEP_WINDOW_MS = 1000;
@@ -28,6 +30,13 @@ let seq = 0;
 let flushTimer = null;
 // Our own history step in flight: its pop is ours, never the user's Back.
 let ownStep = null; // { time, delta, removed: Set<id> }
+// Entries we took off that may still be in the history (forward of where
+// Back went, or under a page opened over them): landing on one steps off it.
+const gone = new Set();
+const forget = (ids) => {
+  if (gone.size > 500) gone.clear();
+  ids.forEach((id) => gone.add(id));
+};
 // While another history guard owns Back (the room's unsaved-changes prompt),
 // pop-ups add no entries and Back is left to that guard.
 let suspended = 0;
@@ -47,6 +56,7 @@ function position() {
 const isAbove = (e, [at, n]) => e.at > at || (e.at === at && e.n > n);
 
 function step(delta, removedIds) {
+  forget(removedIds);
   ownStep = { time: Date.now(), delta, removed: new Set(removedIds) };
   window.history.go(delta);
 }
@@ -81,14 +91,30 @@ function pushEntry(entry) {
   return true;
 }
 
+// The pop-up closes a task later: by then the router has taken this Back as
+// what it is (the same page), so a close that opens another page is a plain
+// push, not part of the Back. A pop-up that stays open (busy saving, or
+// one that cannot be dismissed just now) gets its entry back.
+function closeByBack(e) {
+  e.open = false;
+  e.closedByBack = true;
+  setTimeout(() => {
+    if (e.onCloseRef.current) e.onCloseRef.current();
+    setTimeout(() => { if (e.mounted && e.closedByBack) pushEntry(e); }, 50);
+  }, 0);
+}
+
 function onPopState() {
   if (suspended) return;
+  const mark = historyState()[MARK];
   if (ownStep && Date.now() - ownStep.time < OWN_STEP_WINDOW_MS) {
     const { delta, removed } = ownStep;
     ownStep = null;
     // Our step back started from an entry the app pushed in the meantime (a
     // page opened just as a pop-up closed): go forward to it again.
-    if (delta < 0 && removed.has(historyState()[MARK])) step(-delta, []);
+    if (delta < 0 && removed.has(mark)) step(-delta, []);
+    // Skipping down a run of entries whose pop-ups are gone: keep going.
+    else if (delta < 0 && gone.has(mark)) step(-1, [mark]);
     return;
   }
   ownStep = null;
@@ -98,21 +124,19 @@ function onPopState() {
   // Every entry of ours above where Back landed is gone: its pop-up closes
   // (normally just one — the newest).
   const first = stack.findIndex((e) => isAbove(e, here));
-  const gone = first < 0 ? [] : stack.splice(first);
-  for (const e of gone.reverse()) {
-    if (!e.open) continue;
-    e.open = false;
-    e.closedByBack = true;
-    if (e.onCloseRef.current) e.onCloseRef.current();
-    // A pop-up that stays open (it is busy saving) gets its entry back.
-    setTimeout(() => { if (e.mounted && e.closedByBack) pushEntry(e); }, 0);
-  }
-  // Landed on the entry of a pop-up that closed by opening another page:
-  // skip it (and any closed under it) down to the page itself.
+  const above = first < 0 ? [] : stack.splice(first);
+  forget(above.map((e) => e.id));
+  for (const e of above.reverse()) if (e.open) closeByBack(e);
   const top = stack[stack.length - 1];
-  if (top && !top.open && top.id === historyState()[MARK]) {
+  if (top && !top.open && top.id === mark) {
+    // Landed on the entry of a pop-up that closed by opening another page:
+    // skip it (and any closed under it) down to the page itself.
     const skipped = closedOnTop();
     step(-skipped.length, skipped);
+  } else if (gone.has(mark)) {
+    // An entry whose pop-up is gone (Forward onto it, or Back onto one left
+    // under another page): step off it, onto what is under it.
+    step(-1, [mark]);
   }
 }
 
@@ -157,11 +181,16 @@ export function suspendBackToClose() {
 export function useBackToClose(onClose, enabled = true) {
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
-  const hasClose = typeof onClose === 'function';
+  // Once a pop-up could be closed, it keeps its entry while it is open: many
+  // drop onClose while saving (`onClose={busy ? undefined : close}`), and Back
+  // then must not leave the page — it does nothing until the save is done.
+  const closableRef = useRef(false);
+  if (typeof onClose === 'function') closableRef.current = true;
+  const wanted = enabled && closableRef.current;
   const entryRef = useRef(null);
 
   useEffect(() => {
-    if (!enabled || !hasClose || suspended || typeof window === 'undefined' || !window.history?.pushState) return undefined;
+    if (!wanted || suspended || typeof window === 'undefined' || !window.history?.pushState) return undefined;
 
     let entry = entryRef.current;
     if (entry && stack.includes(entry) && !entry.closedByBack) {
@@ -184,7 +213,7 @@ export function useBackToClose(onClose, enabled = true) {
       // are taken off together.
       scheduleFlush();
     };
-  }, [enabled, hasClose]);
+  }, [wanted]);
 }
 
 // Tests only: forget every entry and pending step, so one test's pop-ups (and
@@ -194,4 +223,5 @@ export function resetBackToCloseForTests() {
   if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
   ownStep = null;
   suspended = 0;
+  gone.clear();
 }

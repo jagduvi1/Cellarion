@@ -112,3 +112,43 @@ test('a link to the cellar opens it fresh: the kept scope and place are for Back
   expect(listCalls()[0].startsWith('/api/cellars/c1?')).toBe(true);
   expect(new URLSearchParams(listCalls()[0].split('?')[1]).get('limit')).toBe('30');
 });
+
+test('the back link from a bottle counts as coming back: the kept scope returns', async () => {
+  sessionStorage.setItem('cellarion.cellarScope.c1', JSON.stringify(['c1', 'c2']));
+  const { fireEvent, screen } = await import('@testing-library/react');
+  const { Link } = await import('react-router-dom');
+  const { RETURNING } = await import('../utils/useBackHere');
+  render(
+    <MemoryRouter initialEntries={['/bottle']}>
+      <Routes>
+        <Route path="/bottle" element={<Link to="/cellars/c1" state={RETURNING}>back to cellar</Link>} />
+        <Route path="/cellars/:id" element={<CellarDetail />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  fireEvent.click(screen.getByText('back to cellar'));
+  await waitFor(() => expect(listCalls().length).toBeGreaterThan(0));
+  expect(listCalls()[0].startsWith('/api/cellars/multi/bottles?')).toBe(true);
+});
+
+test('a kept scope that loses a cellar meanwhile still comes back with as many bottles as were loaded', async () => {
+  const first = renderCellar();
+  const { fireEvent, screen } = await import('@testing-library/react');
+  fireEvent.click(await screen.findByText('cellarDetail.loadMore'));
+  await screen.findByText('Wine 60');
+  first.unmount();
+  // As if it had been left in an "all my cellars" view whose third cellar has
+  // since been deleted.
+  const place = JSON.parse(sessionStorage.getItem('cellarion.cellarPlace.c1'));
+  sessionStorage.setItem('cellarion.cellarPlace.c1', JSON.stringify({ ...place, scopeKey: 'c1,c2,gone' }));
+  sessionStorage.setItem('cellarion.cellarScope.c1', JSON.stringify(['c1', 'c2', 'gone']));
+
+  api.mockClear();
+  renderCellar();
+  await waitFor(() => {
+    const last = listCalls().filter((u) => u.startsWith('/api/cellars/multi/bottles?')).pop();
+    expect(last && new URLSearchParams(last.split('?')[1]).get('cellars')).toBe('c1,c2');
+  });
+  const last = listCalls().filter((u) => u.startsWith('/api/cellars/multi/bottles?')).pop();
+  expect(new URLSearchParams(last.split('?')[1]).get('limit')).toBe('60');
+});

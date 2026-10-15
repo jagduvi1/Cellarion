@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { useParams, Link, useNavigationType } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
+import { useCameBack } from '../utils/useBackHere';
+import { validScope, keepKnownCellars } from '../utils/savedScope';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import RatingDisplay from '../components/RatingDisplay';
@@ -47,8 +49,7 @@ const readSavedHistoryView = (cellarId) => {
   try {
     const v = JSON.parse(sessionStorage.getItem(HISTORY_VIEW_PREFIX + cellarId) || 'null');
     if (!v || typeof v !== 'object') return null;
-    const scope = Array.isArray(v.scope) && v.scope[0] === cellarId && v.scope.every((x) => typeof x === 'string') ? v.scope : [cellarId];
-    return { filters: { ...DEFAULT_HISTORY_FILTERS, ...(v.filters || {}) }, scope };
+    return { filters: { ...DEFAULT_HISTORY_FILTERS, ...(v.filters || {}) }, scope: validScope(v.scope, cellarId) };
   } catch {
     return null;
   }
@@ -73,7 +74,7 @@ function CellarHistory() {
   const [error, setError] = useState(null);
   const [total, setTotal] = useState(0);
   const [reasonCounts, setReasonCounts] = useState(null);
-  const cameBack = useNavigationType() === 'POP';
+  const cameBack = useCameBack();
   const [savedView] = useState(() => (cameBack ? readSavedHistoryView(id) : null));
   const [filters, setFilters] = useState(() => savedView?.filters || DEFAULT_HISTORY_FILTERS);
   const [facets, setFacets] = useState(null);
@@ -94,23 +95,20 @@ function CellarHistory() {
         const list = d.cellars || [];
         setAllCellars(list);
         // A remembered scope may name a cellar since deleted or unshared.
-        const known = new Set(list.map((c) => String(c._id)));
-        setScopeIds((prev) => {
-          const kept = prev.filter((cid) => cid === id || known.has(cid));
-          return kept.length === prev.length ? prev : kept;
-        });
+        setScopeIds((prev) => keepKnownCellars(prev, id, list));
       })
       .catch(() => {});
   }, [apiFetch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset the scope to just this cellar whenever the user navigates to a
-  // different cellar's history.
+  // different cellar's history (the filters carry over) — unless coming back
+  // to it, when its own remembered view returns.
   const historyFirstRun = useRef(true);
   useEffect(() => {
     if (historyFirstRun.current) { historyFirstRun.current = false; return; }
     const view = cameBack ? readSavedHistoryView(id) : null;
     setScopeIds(view?.scope || [id]);
-    setFilters(view?.filters || DEFAULT_HISTORY_FILTERS);
+    if (view) setFilters(view.filters);
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

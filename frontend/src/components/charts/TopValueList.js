@@ -11,7 +11,7 @@ import { TYPE_COLORS, fmtCurrency } from './chartHelpers';
 function TopValueList({ bottles, currency }) {
   const { t } = useTranslation();
   // Handed to the bottle page so its back link returns here (BottleDetail).
-  const backHere = useBackHere(t('bottleDetail.backToStatistics', 'Back to the statistics'));
+  const backHere = useBackHere('statistics');
   if (!bottles || bottles.length === 0) {
     return <p className="stats-empty">{t('statistics.topValue.empty')}</p>;
   }

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { RETURNING } from '../utils/useBackHere';
 import './CellarPageHeader.css';
 import { backLabel as backLabelText } from '../utils/backLabel';
 
@@ -20,7 +21,7 @@ import { backLabel as backLabelText } from '../utils/backLabel';
 function CellarPageHeader({ backTo, backLabel, title, subtitle, loading, userColor, titleBadge, actions }) {
   return (
     <div className="cellar-page-header">
-      <Link to={backTo} className="back-link">
+      <Link to={backTo} state={RETURNING} className="back-link">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
         {backLabelText(backLabel)}
       </Link>

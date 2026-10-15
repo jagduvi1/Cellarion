@@ -25,7 +25,7 @@ const TICK_FLUSH_MS = 700;
 export default function PickList() {
   const { t } = useTranslation();
   // Handed to the bottle page so its back link returns here (BottleDetail).
-  const backHere = useBackHere(t('bottleDetail.backToPickList', 'Back to the pick list'));
+  const backHere = useBackHere('pickList');
   const { id } = useParams();
   const navigate = useNavigate();
   const { apiFetch, user } = useAuth();

@@ -38,7 +38,7 @@ function isTypingTarget(e) {
 export default function CellarRoom() {
   const { t } = useTranslation();
   // Handed to the bottle page so its back link returns here (BottleDetail).
-  const backHere = useBackHere(t('bottleDetail.backToRoom', 'Back to the room'));
+  const backHere = useBackHere('room');
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const { apiFetch, user } = useAuth();
@@ -1641,12 +1641,12 @@ export default function CellarRoom() {
                 savedLayoutRef.current = JSON.stringify(layout);
                 setPendingNavPath(null);
                 // Either way the current entry is the sentinel duplicate of
-                // this page. For Back, one step only reaches the identical
-                // room entry — go(-2) skips past it to the real previous
-                // page. For link navigation, replace the sentinel instead of
-                // stacking the target on top of it.
+                // this page. For Back, step back past every entry of this
+                // same page (the sentinel, the room's own, any a pop-up left)
+                // to the real previous page. For link navigation, replace the
+                // sentinel instead of stacking the target on top of it.
                 if (path === '__back__') {
-                  window.history.go(-2);
+                  leaveBackPastThisPage();
                 } else {
                   navigate(path, { replace: true });
                 }
@@ -1662,6 +1662,24 @@ export default function CellarRoom() {
 }
 
 // LOCAL calendar date, YYYY-MM-DD — what <input type="date"> speaks.
+// "Leave" after Back with unsaved changes: step back until the page changes.
+// Above the previous page sit the room's own entry, its guard's sentinel and
+// possibly an entry a pop-up left behind — a fixed go(-2) could stop short and
+// leave the user in the room.
+function leaveBackPastThisPage() {
+  const here = window.location.href;
+  let steps = 0;
+  const onPop = () => {
+    if (window.location.href !== here || ++steps >= 10) {
+      window.removeEventListener('popstate', onPop);
+      return;
+    }
+    window.history.back();
+  };
+  window.addEventListener('popstate', onPop);
+  window.history.back();
+}
+
 const roomToday = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;

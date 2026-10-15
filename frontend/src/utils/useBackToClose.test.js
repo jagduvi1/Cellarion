@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { BrowserRouter, Routes, Route, useNavigate, useNavigationType } from 'react-router-dom';
 import { useBackToClose, resetBackToCloseForTests, suspendBackToClose } from './useBackToClose';
 
 // The phone's Back (history.back) closes the open pop-up instead of leaving
@@ -30,11 +31,13 @@ function Page() {
 
 // jsdom moves through history asynchronously, like a browser: wait for the
 // pop itself rather than a fixed time.
+// The pop-up itself closes a task after the pop: wait for that too.
 const back = async () => {
   await act(async () => {
     const popped = new Promise((r) => window.addEventListener('popstate', r, { once: true }));
     window.history.back();
     await popped;
+    await new Promise((r) => setTimeout(r, 10));
   });
 };
 
@@ -207,4 +210,65 @@ test("the room's own step off its unsaved-changes entry (after Save) does not cl
   // Back is the pop-up's again.
   await back();
   expect(screen.queryByRole('dialog')).toBeNull();
+});
+
+test('a pop-up that drops its close while saving keeps its entry: Back does not leave the page', async () => {
+  // Many pop-ups pass `onClose={busy ? undefined : close}`.
+  function Saving() {
+    const [busy, setBusy] = useState(false);
+    const [open, setOpen] = useState(true);
+    if (!open) return null;
+    return (
+      <Dialog name="form" onClose={busy ? undefined : () => setOpen(false)}>
+        <button type="button" onClick={() => setBusy(true)}>save</button>
+      </Dialog>
+    );
+  }
+  render(<Saving />);
+  const mark = window.history.state.cellarionDialog;
+  expect(mark).toBeTruthy();
+  fireEvent.click(screen.getByText('save'));
+  await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+  expect(window.history.state.cellarionDialog).toBe(mark);
+
+  await back();
+  expect(screen.getByRole('dialog', { name: 'form' })).toBeInTheDocument();
+  await waitFor(() => expect(window.history.state.cellarionDialog).toBeTruthy());
+});
+
+test('Forward onto the entry of a pop-up that Back closed steps off it again', async () => {
+  render(<Page />);
+  fireEvent.click(screen.getByText('open'));
+  await back();
+  expect(screen.queryByRole('dialog')).toBeNull();
+  await act(async () => {
+    const popped = new Promise((r) => window.addEventListener('popstate', r, { once: true }));
+    window.history.forward();
+    await popped;
+  });
+  await waitFor(() => expect(window.history.state.cellarionDialog).toBeUndefined());
+  expect(screen.queryByRole('dialog')).toBeNull();
+});
+
+test('a pop-up whose close opens another page: that page is opened, not come back to', async () => {
+  // The post-add "place it?" prompt closes by going to the cellar list, which
+  // restores where it was left only when it is come back to.
+  let arrivedBy;
+  function Next() { arrivedBy = useNavigationType(); return <p>next page</p>; }
+  function Home() {
+    const navigate = useNavigate();
+    return <Dialog name="prompt" onClose={() => navigate('/next')} />;
+  }
+  window.history.replaceState({ usr: null, key: 'page', idx: 0 }, '', '/home');
+  render(
+    <BrowserRouter>
+      <Routes>
+        <Route path="/home" element={<Home />} />
+        <Route path="/next" element={<Next />} />
+      </Routes>
+    </BrowserRouter>,
+  );
+  await back();
+  await screen.findByText('next page');
+  expect(arrivedBy).toBe('PUSH');
 });

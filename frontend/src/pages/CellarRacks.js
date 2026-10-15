@@ -154,7 +154,7 @@ function CellarRacks() {
   // use them sit further down, next to the render.
   const location = useLocation();
   // Handed to the bottle page so its back link returns here (BottleDetail).
-  const backHere = useBackHere(t('bottleDetail.backToRacks', 'Back to the racks'));
+  const backHere = useBackHere('racks');
   const [placeQueue, setPlaceQueue] = useState(() => readPlaceQueue(location.state));
   const [placeTotal] = useState(() => readPlaceQueue(location.state).length);
   const [placeNotice, setPlaceNotice] = useState(null);
