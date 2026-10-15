@@ -1796,6 +1796,7 @@
       "cellarShareUpdate": "Changed share role",
       "cellarShareRemove": "Removed share",
       "bottleArrive": "Bottle arrived",
+      "bottleArriveUndo": "Arrival undone (back on order)",
       "bottleBulkArrive": "Bottles arrived in bulk",
       "bottleChangeWine": "Changed a bottle's wine"
     },

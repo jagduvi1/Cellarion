@@ -11,12 +11,14 @@ export const MAX_COPIES = 24;
  *   this bottle" means the same wine, same vintage, same format, same cellar —
  *   and the same currency even when details are left out, because the backend
  *   otherwise defaults a blank copy to USD (bottleOps).
- * - copyDetails carries provenance: price, purchase info, notes, occasion.
+ * - copyDetails carries provenance: price, purchase info — and, unless
+ *   copyNotes is false, the notes and occasion (an order's new bottles copy
+ *   the purchase, not one bottle's own remarks).
  * - Never copied: rating and the personal drink window (judgements about that
  *   specific bottle, not the purchase), rack position (new bottles arrive
  *   unplaced) and the migration helpers (dateAdded / addToHistory).
  */
-export function bottleCopyPayload(bottle, { copyDetails = true } = {}) {
+export function bottleCopyPayload(bottle, { copyDetails = true, copyNotes = copyDetails } = {}) {
   const payload = {
     cellar: bottle.cellar?._id || bottle.cellar,
     wineDefinition: bottle.wineDefinition?._id || bottle.wineDefinition,
@@ -29,8 +31,8 @@ export function bottleCopyPayload(bottle, { copyDetails = true } = {}) {
     if (bottle.purchaseDate) payload.purchaseDate = bottle.purchaseDate;
     if (bottle.purchaseLocation) payload.purchaseLocation = bottle.purchaseLocation;
     if (bottle.purchaseUrl) payload.purchaseUrl = bottle.purchaseUrl;
-    if (bottle.notes) payload.notes = bottle.notes;
-    if (bottle.occasion) payload.occasion = bottle.occasion;
+    if (copyNotes && bottle.notes) payload.notes = bottle.notes;
+    if (copyNotes && bottle.occasion) payload.occasion = bottle.occasion;
   }
   return payload;
 }

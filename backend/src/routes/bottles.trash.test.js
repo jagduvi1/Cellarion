@@ -45,7 +45,7 @@ jest.mock('../models/PriceTrackingRequest', () => ({}));
 jest.mock('../models/PriceTrackingSkip', () => ({}));
 jest.mock('../models/BottleImage', () => ({ findOne: jest.fn(), findById: jest.fn() }));
 jest.mock('../models/WineRequest', () => ({}));
-jest.mock('../models/Bottle', () => ({ findById: jest.fn(), find: jest.fn() }));
+jest.mock('../models/Bottle', () => ({ findById: jest.fn(), find: jest.fn(), exists: jest.fn() }));
 jest.mock('../models/DeletedBottle', () => ({ find: jest.fn() }));
 
 const Bottle = require('../models/Bottle');
@@ -154,12 +154,14 @@ describe('POST /api/bottles/bulk-delete', () => {
   test('onlyOnOrder: an order lowered from an out-of-date list takes off only bottles still on order', async () => {
     Bottle.find.mockResolvedValue([
       { _id: B(1), cellar: MINE, status: 'ordered' },
-      { _id: B(2), cellar: MINE, status: 'active' }, // another member marked it as arrived meanwhile
+      { _id: B(2), cellar: MINE, status: 'active' },  // marked as arrived before the list was read
+      { _id: B(3), cellar: MINE, status: 'ordered' }, // …and this one while the batch ran
     ]);
-    const { status, body } = await call(app(), 'POST', '/api/bottles/bulk-delete', { bottleIds: [B(1), B(2)], onlyOnOrder: true });
+    Bottle.exists.mockImplementation(async (q) => (String(q._id) === B(3) ? null : { _id: q._id }));
+    const { status, body } = await call(app(), 'POST', '/api/bottles/bulk-delete', { bottleIds: [B(1), B(2), B(3)], onlyOnOrder: true });
     expect(status).toBe(200);
     expect(body.deletedIds).toEqual([B(1)]);
-    expect(body.skipped).toEqual([{ id: B(2), reason: 'not_on_order' }]);
+    expect(body.skipped).toEqual([{ id: B(2), reason: 'not_on_order' }, { id: B(3), reason: 'not_on_order' }]);
     expect(trashBottle).toHaveBeenCalledTimes(1);
   });
 

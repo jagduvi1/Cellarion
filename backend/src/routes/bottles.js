@@ -1387,7 +1387,13 @@ router.post('/bulk-delete', async (req, res) => {
     const onlyOnOrder = (req.body || {}).onlyOnOrder === true;
     for (const item of resolved.items) {
       if (item.reason) { skipped.push({ id: item.id, reason: item.reason }); continue; }
-      if (onlyOnOrder && item.bottle.status !== ORDERED_STATUS) { skipped.push({ id: item.id, reason: 'not_on_order' }); continue; }
+      // Read again right before it goes: one marked as arrived since the
+      // batch was loaded stays (the window left is milliseconds).
+      if (onlyOnOrder && (item.bottle.status !== ORDERED_STATUS
+        || !(await Bottle.exists({ _id: item.bottle._id, status: ORDERED_STATUS })))) {
+        skipped.push({ id: item.id, reason: 'not_on_order' });
+        continue;
+      }
       // One bottle that fails is reported, not a 500 halfway through a batch
       // whose first bottles are already in "Recently deleted".
       let result;

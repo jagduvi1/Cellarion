@@ -253,7 +253,7 @@ function OnOrderGroup({ group, cellarId, canEdit, onArrived, onMonthChanged, onA
     try {
       if (parsedQty > count) {
         const payload = {
-          ...bottleCopyPayload(newest),
+          ...bottleCopyPayload(newest, { copyNotes: false }),
           cellar: cellarId,
           onOrder: true,
           expectedArrival: toMonthInput(newest.expectedArrival) || undefined,

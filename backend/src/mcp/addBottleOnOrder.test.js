@@ -68,7 +68,7 @@ describe('mark_arrived', () => {
   const BOTTLE = 'bbbbbbbbbbbbbbbbbbbbbbb1';
   const added = new Date('2026-09-01T10:00:00Z');
   beforeEach(() => {
-    resolveBottleAccess.mockResolvedValue({ bottle: { _id: BOTTLE, status: 'ordered', addedToCellarAt: added, cellar: CELLAR }, cellar: { _id: CELLAR, name: 'Home' } });
+    resolveBottleAccess.mockResolvedValue({ bottle: { _id: BOTTLE, status: 'ordered', addedToCellarAt: added, arrivalNotifiedAt: null, cellar: CELLAR }, cellar: { _id: CELLAR, name: 'Home' } });
   });
 
   test('brings a bottle on order into the cellar, with the day it came, and records how to undo it', async () => {
@@ -76,7 +76,7 @@ describe('mark_arrived', () => {
     const res = parse(await tool('mark_arrived').handler({ bottle_id: BOTTLE, arrived_on: '2026-10-14' }, CTX));
     expect(markArrived).toHaveBeenCalledWith(expect.objectContaining({ _id: BOTTLE }), { arrivedAt: '2026-10-14' }, CTX.req);
     expect(res.data.status).toBe('active');
-    expect(logAction).toHaveBeenCalledWith(CTX, expect.objectContaining({ tool: 'mark_arrived', action: 'arrive', prev: { addedToCellarAt: added } }));
+    expect(logAction).toHaveBeenCalledWith(CTX, expect.objectContaining({ tool: 'mark_arrived', action: 'arrive', prev: { addedToCellarAt: added, arrivalNotifiedAt: null } }));
     expect(tool('mark_arrived').scope).toBe('write');
   });
 
@@ -93,4 +93,11 @@ test('update_bottle passes the month of an order on (the shared update keeps it 
   updateBottleFields.mockResolvedValue({ changes: { expectedArrival: true }, prev: { expectedArrival: null } });
   await tool('update_bottle').handler({ bottle_id: 'bbbbbbbbbbbbbbbbbbbbbbb1', expected_arrival: '2027-04' }, CTX);
   expect(updateBottleFields.mock.calls[0][1].expectedArrival).toBe('2027-04');
+});
+
+test('update_bottle refuses an expected month on a bottle that is not on order (never "no changes")', async () => {
+  resolveBottleAccess.mockResolvedValue({ bottle: { _id: 'b2', status: 'active', cellar: CELLAR }, cellar: { _id: CELLAR, user: 'u1', name: 'Home' } });
+  const res = parse(await tool('update_bottle').handler({ bottle_id: 'bbbbbbbbbbbbbbbbbbbbbbb2', expected_arrival: '2027-04' }, CTX));
+  expect(JSON.stringify(res)).toMatch(/only to a bottle on order/);
+  expect(updateBottleFields).not.toHaveBeenCalled();
 });

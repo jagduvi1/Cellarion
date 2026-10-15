@@ -261,7 +261,7 @@ registerTool({
         // shared registry content until a curator completes the identity.
         ...(pendingIdentity ? {
           wine_pending_identity: true,
-          note: 'The wine could not be fully identified, so it is filed for sommelier completion: the bottle is in the cellar and works normally, but the wine is invisible to other users until a curator finishes it.',
+          note: `The wine could not be fully identified, so it is filed for sommelier completion: the bottle is ${bottle.status === ORDERED_STATUS ? 'saved on order' : 'in the cellar'} and works normally, but the wine is invisible to other users until a curator finishes it.`,
         } : {}),
         ...(wineDraft ? {
           wine_draft: true,
@@ -361,6 +361,13 @@ registerTool({
     const access = await resolveBottleAccess(ctx.user.id, args.bottle_id, 'editor');
     if (!access) return fail('not_found', MSG_BOTTLE_NOT_FOUND);
     const { bottle } = access;
+
+    // The shared update keeps an order's month on a bottle on order only and
+    // drops it elsewhere — say so rather than answer "no changes".
+    if (args.expected_arrival !== undefined && bottle.status !== ORDERED_STATUS) {
+      await releaseClaim(ctx, args.idempotency_key, 'update_bottle');
+      return fail('invalid_input', 'expected_arrival applies only to a bottle on order; this one is not on order.');
+    }
 
     let bottleSize;
     if (args.bottle_size !== undefined) {
@@ -486,7 +493,7 @@ module.exports = { NEW_WINE_SHAPE };
 // A bottle bought but not delivered yet has arrived — the MCP twin of the
 // On order page's "Mark as arrived" (bottleOps.markArrived, the same rules).
 // Undoable: undo_last puts it back on order while it is still simply in the
-// cellar (not placed, drunk or moved since).
+// cellar it arrived in (not placed, opened, drunk or moved since).
 registerTool({
   name: 'mark_arrived',
   title: 'Mark a bottle on order as arrived',
@@ -511,7 +518,9 @@ registerTool({
       return fail('not_found', MSG_BOTTLE_NOT_FOUND);
     }
     const { bottle } = access;
-    const prev = { addedToCellarAt: bottle.addedToCellarAt || null };
+    // What the undo puts back: the "added to cellar" date and whether the
+    // "has it arrived?" reminder had already gone out.
+    const prev = { addedToCellarAt: bottle.addedToCellarAt || null, arrivalNotifiedAt: bottle.arrivalNotifiedAt || null };
     const result = await markArrived(bottle, { arrivedAt: args.arrived_on }, ctx.req);
     if (result.error) {
       await releaseClaim(ctx, args.idempotency_key, 'mark_arrived');

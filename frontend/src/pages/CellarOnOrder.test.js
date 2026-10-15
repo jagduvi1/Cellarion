@@ -142,7 +142,7 @@ test('nothing on order shows the empty state', async () => {
 // order line's own "Change quantity". More bottles copy the order; fewer move
 // the most recently added to Recently deleted, with Undo.
 describe('Change quantity', () => {
-  const withCreated = (b, created) => ({ ...b, createdAt: created, purchaseLocation: 'Shop', purchaseDate: '2026-09-01T00:00:00.000Z' });
+  const withCreated = (b, created) => ({ ...b, createdAt: created, purchaseLocation: 'Shop', purchaseDate: '2026-09-01T00:00:00.000Z', notes: 'label torn' });
   const ORDER = [
     withCreated(ordered('b1', MARCH), '2026-09-01T10:00:00Z'),
     withCreated(ordered('b2', MARCH), '2026-09-01T10:00:01Z'),
@@ -177,6 +177,8 @@ describe('Change quantity', () => {
       cellar: 'c1', wineDefinition: 'w1', vintage: '2023', bottleSize: '750ml',
       onOrder: true, expectedArrival: '2027-03', price: 60, currency: 'EUR', purchaseLocation: 'Shop',
     });
+    // The purchase is copied, not one bottle's own remarks.
+    expect(body.notes).toBeUndefined();
     // The list is read again, with the new bottles in it.
     await waitFor(() => expect(api.mock.calls.filter(([u]) => u === '/api/cellars/c1/on-order').length).toBe(2));
   });

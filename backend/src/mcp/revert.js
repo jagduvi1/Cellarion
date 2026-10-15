@@ -1017,11 +1017,11 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     envelope = { summary: `Undid consume — ${bottleLabel(bottle)} is back in the cellar (unplaced)`, data: { undone: 'consume_bottle', bottle_id: bottle._id, status: 'active' } };
     reverseEntry = { action: 'restore', prev: prevSnapshot };
   } else if (row.action === 'arrive') {
-    // Back on order — only while it is still simply in the cellar: not drunk
-    // or otherwise changed since, and not placed in a rack (a bottle on order
-    // never sits in one).
-    if (bottle.status !== 'active') {
-      return fail('conflict', 'That arrival cannot be undone: the bottle is no longer in the cellar as it arrived. Nothing was changed.');
+    // Back on order — only while it is still simply in the cellar it arrived
+    // in: not drunk, opened or moved to another cellar since, and not placed
+    // in a rack (a bottle on order never sits in one).
+    if (bottle.status !== 'active' || String(bottle.cellar) !== String(row.cellar) || bottle.openedAt || (bottle.pours && bottle.pours.length)) {
+      return fail('conflict', 'That arrival cannot be undone: the bottle has been drunk, opened or moved since it arrived. Nothing was changed.');
     }
     if (await Rack.exists({ 'slots.bottle': bottle._id })) {
       return fail('conflict', 'That arrival cannot be undone: the bottle has been placed in a rack since — take it out of the rack first. Nothing was changed.');
@@ -1030,7 +1030,14 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     bottle.status = ORDERED_STATUS;
     bottle.arrivedAt = undefined;
     bottle.addedToCellarAt = prev.addedToCellarAt || undefined;
-    await bottle.save();
+    // The "has it arrived?" reminder: as it was, so it is not sent twice.
+    bottle.arrivalNotifiedAt = prev.arrivalNotifiedAt || undefined;
+    try {
+      await bottle.save();
+    } catch (err) {
+      if (err?.name === 'VersionError') return fail('conflict', 'The bottle was changed by another request just now; nothing was undone. Try again.');
+      throw err;
+    }
     logAudit(ctx.req, 'bottle.arrive.undo', { type: 'bottle', id: bottle._id, cellarId: bottle.cellar }, { via: 'mcp' });
     envelope = { summary: `Undid arrival — ${bottleLabel(bottle)} is on order again`, data: { undone: 'mark_arrived', bottle_id: bottle._id, status: ORDERED_STATUS } };
     reverseEntry = { action: 'unarrive', prev: null };
