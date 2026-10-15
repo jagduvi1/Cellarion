@@ -4,7 +4,7 @@ import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import useHandedOverState from '../hooks/useHandedOverState';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { getCellar, getCellarStatistics, listCellars, getMultiCellarBottles } from '../api/cellars';
+import { getCellar, getCellarStatistics, getCellarMaturityCounts, listCellars, getMultiCellarBottles } from '../api/cellars';
 import { getRacks } from '../api/racks';
 import { getCellarLayout } from '../api/cellarLayout';
 import BottleCard from '../components/BottleCard';
@@ -111,6 +111,12 @@ function CellarDetail() {
   const [cellar, setCellar] = useState(null);
   const [bottles, setBottles] = useState([]);
   const [bottlesTotal, setBottlesTotal] = useState(0);
+  // Bottles behind the cards: identical bottles share a card, so `bottlesTotal`
+  // (cards, for paging) can be 1 where the filter's button means 2 bottles.
+  const [bottleCount, setBottleCount] = useState(0);
+  // Bottles per maturity stage, for the filter's maturity buttons — asked for
+  // when the filter opens (#1291).
+  const [maturityCounts, setMaturityCounts] = useState(null);
   // { count, nextExpected } — bottles bought for this cellar, not arrived yet.
   const [onOrder, setOnOrder] = useState(null);
   const [statistics, setStatistics] = useState(null);
@@ -363,6 +369,7 @@ function CellarDetail() {
         // cellar's count never lingers.
         if (!multi) setOnOrder(data.onOrder || null);
         setBottlesTotal(data.bottles.total);
+        setBottleCount(data.bottles.bottleTotal ?? data.bottles.total);
         if (skip === 0) {
           // Set the data + its shape together so BottlesList never sees a
           // shape/flag mismatch (grouped items rendered as flat, or vice-versa).
@@ -394,6 +401,18 @@ function CellarDetail() {
   };
 
   const loadMore = () => fetchCellarData(bottles.length);
+
+  // The maturity buttons' counts, fresh each time the filter opens on this
+  // cellar alone (the all-cellars view has no such counts).
+  useEffect(() => {
+    if (!showFilterModal || multiScope) return undefined;
+    let live = true;
+    getCellarMaturityCounts(apiFetch, id)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => { if (live && data?.statistics?.maturity) setMaturityCounts(data.statistics.maturity); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [showFilterModal, multiScope, id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchStatistics = async () => {
     try {
@@ -848,12 +867,12 @@ function CellarDetail() {
                       facets={facets}
                       baseFacets={baseFacets}
                       facetMeta={facetMeta}
-                      bottlesTotal={bottlesTotal}
+                      bottlesTotal={bottleCount}
                       showUnplaced={!multiScope && hasRacks === true}
                       showReserved={!multiScope}
                       storage={!multiScope ? storageRacks : null}
                       ratingScale={ratingScale}
-                      maturityCounts={!multiScope ? (statistics?.maturity || null) : null}
+                      maturityCounts={!multiScope ? maturityCounts : null}
                     />
                   </Suspense>
                 )}

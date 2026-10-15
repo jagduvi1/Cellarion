@@ -281,6 +281,8 @@ describe('GET /api/cellars/:id — only the page is loaded', () => {
     const first = await request(`/api/cellars/${CELLAR_ID}?search=x&group=1&limit=1`);
     expect(bottleSearch.searchBottles).toHaveBeenCalledWith('x', expect.objectContaining({ withHits: true }));
     expect(first.body.bottles.total).toBe(2); // groups
+    // …and the bottles in them, for the filter's "Show n bottles".
+    expect(first.body.bottles.bottleTotal).toBe(3);
     expect(first.body.bottles.items).toHaveLength(1);
     expect(first.body.bottles.items[0]).toMatchObject({ key: `${W1}::2015::750ml`, count: 2 });
     expect(idsOf(first.body.bottles.items[0].bottles)).toEqual([B2, B1]);
@@ -299,6 +301,7 @@ describe('GET /api/cellars/:id — only the page is loaded', () => {
     const { body } = await request(`/api/cellars/${CELLAR_ID}?search=x&limit=2&skip=1`);
 
     expect(body.bottles.total).toBe(3);
+    expect(body.bottles.bottleTotal).toBeUndefined(); // flat: total is bottles
     expect(idsOf(body.bottles.items)).toEqual([B3, B1]);
     expect(loads[0].ids).toEqual([B3, B1]);
   });

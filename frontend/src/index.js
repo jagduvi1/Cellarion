@@ -15,10 +15,14 @@ import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import * as serviceWorkerRegistration from './serviceWorkerRegistration';
 import { captureSignupSource } from './utils/signupSource';
+import { stopIOSFocusZoom } from './utils/iosFocusZoom';
 
 // Note where this visit came from before any in-app navigation rewrites the
 // URL: the referrer and the landing link's campaign tags (in memory only).
 captureSignupSource();
+
+// iOS zooms in on a focused field with text under 16 px and stays zoomed.
+stopIOSFocusZoom();
 
 // A page's code file that no longer exists: this tab is on a build that a
 // deploy has replaced (and, offline, the stored app is now the new build).

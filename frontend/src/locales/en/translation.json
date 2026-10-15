@@ -907,6 +907,8 @@
     "filterModalTitle": "Filters",
     "wineType": "Wine Type",
     "showBottles": "Show {{count}} bottles",
+    "showBottles_one": "Show {{count}} bottle",
+    "showBottles_other": "Show {{count}} bottles",
     "clearAllFilters": "Clear all",
     "countryLabel": "Country",
     "regionLabel": "Region",

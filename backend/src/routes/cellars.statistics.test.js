@@ -42,6 +42,7 @@ jest.mock('../models/WineRequest', () => ({}));
 jest.mock('../models/Country', () => ({}));
 jest.mock('../models/Region', () => ({}));
 jest.mock('../models/Grape', () => ({}));
+jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn() }));
 
 const express = require('express');
 const http = require('http');
@@ -50,6 +51,7 @@ const mongoose = require('mongoose');
 const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const WineDefinition = require('../models/WineDefinition');
+const WineVintageProfile = require('../models/WineVintageProfile');
 const { getSnapshotsForDates, getOrCreateDailySnapshot } = require('../utils/exchangeRates');
 const cellarsRouter = require('./cellars');
 
@@ -179,4 +181,39 @@ test('another user\'s cellar is not found', async () => {
   const { status } = await request(`/api/cellars/${CELLAR_ID}/statistics`);
   expect(status).toBe(404);
   expect(Bottle.aggregate).not.toHaveBeenCalled();
+});
+
+// #1291: the filter's maturity buttons showed no counts — the statistics never
+// carried them. Asked for with ?maturity=1 (as the filter opens), they use the
+// list's own maturity classification, so a count is what choosing it shows.
+test('?maturity=1 adds the bottles per maturity stage; without it nothing extra is loaded', async () => {
+  setGroups([]);
+  const year = new Date().getFullYear();
+  const oid = (id) => new mongoose.Types.ObjectId(id);
+  let selected;
+  Bottle.find.mockImplementation(() => ({
+    select: (fields) => { selected = fields; return { lean: async () => [
+      { _id: 'b1', wineDefinition: oid(RED), vintage: '2015' },                      // profile: at its peak
+      { _id: 'b2', wineDefinition: oid(RED), vintage: '2015' },
+      { _id: 'b3', wineDefinition: oid(WHITE), vintage: '2020' },                    // no profile
+      { _id: 'b4', wineDefinition: oid(WHITE), vintage: '2021', drinkFrom: year + 2 }, // own window: not ready
+      { _id: 'b5', drinkFrom: year - 10, drinkTo: year - 1 },                         // own window: past it
+    ] }; },
+  }));
+  WineVintageProfile.find.mockReturnValue({ lean: async () => [
+    { wineDefinition: oid(RED), vintage: '2015', status: 'reviewed', earlyFrom: year - 6, earlyUntil: year - 2, peakFrom: year - 1, peakUntil: year + 1, lateFrom: year + 2, lateUntil: year + 4 },
+  ] });
+
+  const plain = await request(`/api/cellars/${CELLAR_ID}/statistics`);
+  expect(plain.body.statistics.maturity).toBeUndefined();
+  expect(Bottle.find).not.toHaveBeenCalled();
+
+  const { status, body } = await request(`/api/cellars/${CELLAR_ID}/statistics?maturity=1`);
+  expect(status).toBe(200);
+  expect(body.statistics.maturity).toEqual({ declining: 1, late: 0, peak: 2, early: 0, notReady: 1, noProfile: 1 });
+  // This cellar's active bottles, only the fields the classification reads.
+  const [query] = Bottle.find.mock.calls[0];
+  expect(String(query.cellar)).toBe(CELLAR_ID);
+  expect(query.status).toEqual({ $nin: ['drank', 'gifted', 'sold', 'other', 'ordered'] });
+  expect(selected.split(' ').sort()).toEqual(['createdAt', 'drinkFrom', 'drinkTo', 'peakFrom', 'peakUntil', 'purchaseDate', 'vintage', 'wineDefinition']);
 });
