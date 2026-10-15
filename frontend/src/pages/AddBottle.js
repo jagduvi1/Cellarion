@@ -24,6 +24,7 @@ import AddBottleCustomFields, { buildPersonalDataPayload } from '../components/b
 import { WINE_TYPES } from '../config/wineTypes';
 import { swatchType, wineTypeLabel, isStyleType, colourLabel, WINE_COLOURS } from '../utils/wineColour';
 import './AddBottle.css';
+import { backLabel } from '../utils/backLabel';
 
 // How this device last started adding a bottle: 'camera' (the label photo, the
 // default) or 'search' (typing the name). Per device on purpose — the same
@@ -1166,7 +1167,7 @@ function AddBottle() {
       <div className="add-bottle-header">
         <Link to={`/cellars/${cellarId}`} className="back-link">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
-          {t('addBottle.backToCellar')}
+          {backLabel(t('addBottle.backToCellar'))}
         </Link>
         <h1>{t('addBottle.title')}</h1>
       </div>

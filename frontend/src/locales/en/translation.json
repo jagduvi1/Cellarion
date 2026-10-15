@@ -870,7 +870,7 @@
     "restoreBackup": "Restore backup",
     "firstCellarName": "My cellar",
     "importTooltip": "Restore a Cellarion backup (.json or .zip) — for a wine list from CellarTracker, Vivino or a CSV, create a cellar first and use Import bottles inside it",
-    "emptyImportHint": "Already keep your collection somewhere else? Create a cellar, then open it and choose “Import bottles” from its ⋯ menu to bring in a CSV, or a CellarTracker or Vivino export.",
+    "emptyImportHint": "Already keep your collection somewhere else? Create your cellar first — the empty cellar then offers to import a CSV, or a CellarTracker or Vivino export.",
     "ownedCount_one": "{{count}} owned",
     "ownedCount_other": "{{count}} owned",
     "sharedCount_one": "{{count}} shared",

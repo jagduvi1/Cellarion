@@ -18,6 +18,13 @@ import './BottleUndoNotice.css';
  * `notice` = { kind, name, bottleId, batchId?, reason? } — handed over in the
  * navigation's router state by BottleDetail. `onUndone` refreshes the list.
  */
+/** "Château X 2018" — the name a notice uses for a bottle (NV/Unknown left out). */
+export function bottleNoticeName(bottle) {
+  const name = bottle?.wineDefinition?.name || bottle?.pendingWineRequest?.wineName || '';
+  const vintage = bottle?.vintage && !['NV', 'Unknown'].includes(bottle.vintage) ? bottle.vintage : '';
+  return [name, vintage].filter(Boolean).join(' ');
+}
+
 export default function BottleUndoNotice({ notice, cellarId, onUndone, onDismiss }) {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();

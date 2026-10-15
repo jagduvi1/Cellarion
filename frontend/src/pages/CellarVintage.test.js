@@ -96,7 +96,8 @@ test('Drink one hands the page\'s bottles to the picker and reloads once a bottl
   page = { ...page, bottles: page.bottles.slice(1), total: 2, consumedCount: 2 };
   fireEvent.click(stub);
   expect(await screen.findByText('cellarVintage.inCellar:2')).toBeInTheDocument();
-  expect(screen.getByText('cellarVintage.drunkNote')).toBeInTheDocument();
+  // Said with Undo now, not only "Logged" (live walkthrough 2026-10-15).
+  expect(screen.getByText('common.undo')).toBeInTheDocument();
   await waitFor(() => expect(api.mock.calls.filter(([u]) => u === '/api/cellars/c1/vintages/w1/2015')).toHaveLength(2));
 });
 

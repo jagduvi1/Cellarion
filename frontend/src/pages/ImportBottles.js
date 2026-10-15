@@ -45,6 +45,7 @@ import {
 } from '../api/importSessions';
 import Modal from '../components/Modal';
 import './ImportBottles.css';
+import { backLabel } from '../utils/backLabel';
 
 const STEPS = ['upload', 'review', 'importing', 'done'];
 
@@ -2745,7 +2746,7 @@ function ImportBottles() {
       <div className="import-header">
         <Link to={`/cellars/${cellarId}`} className="back-link">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-          {t('importBottles.backToCellar')}
+          {backLabel(t('importBottles.backToCellar'))}
         </Link>
         <h1>{t('importBottles.title')}</h1>
       </div>

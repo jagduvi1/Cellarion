@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getCellar, getCellarAudit } from '../api/cellars';
 import './CellarAudit.css';
+import { backLabel } from '../utils/backLabel';
 
 function formatTimestamp(ts) {
   return new Date(ts).toLocaleString(undefined, {
@@ -148,7 +149,7 @@ function CellarAudit() {
       <div className="audit-header">
         <Link to={`/cellars/${id}`} className="back-link">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-          {t('cellarAudit.backToCellar')}
+          {backLabel(t('cellarAudit.backToCellar'))}
         </Link>
         <h1 style={h1Style}>{cellarName ? `${cellarName} — ${t('cellarAudit.auditLogTitle')}` : t('cellarAudit.auditLogTitle')}</h1>
         <p className="page-subtitle">{t('cellarAudit.last100Events')}</p>

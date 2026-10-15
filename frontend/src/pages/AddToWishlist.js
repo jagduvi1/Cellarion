@@ -15,6 +15,7 @@ import SimilarWinesModal from '../components/SimilarWinesModal';
 import { WINE_TYPES } from '../config/wineTypes';
 import { swatchType, wineTypeLabel, isStyleType, colourLabel, WINE_COLOURS } from '../utils/wineColour';
 import './AddToWishlist.css';
+import { backLabel } from '../utils/backLabel';
 
 function AddToWishlist() {
   const { t } = useTranslation();
@@ -657,7 +658,7 @@ function AddToWishlist() {
       <div className="add-wishlist-header">
         <Link to="/wishlist" className="back-link">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
-          {t('addToWishlist.backToWishlist')}
+          {backLabel(t('addToWishlist.backToWishlist'))}
         </Link>
         <h1>{t('addToWishlist.title')}</h1>
       </div>

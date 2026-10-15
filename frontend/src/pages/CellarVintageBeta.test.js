@@ -169,7 +169,9 @@ test('Drink, Edit vintage and Add act on this vintage\'s bottles; the page reloa
   page = { ...page, bottles: page.bottles.slice(1), total: 2 };
   fireEvent.click(await screen.findByText('drink-stub:3'));
   expect(await screen.findByText('cellarVintageBeta.kindLine:{"count":2,"cellar":"Home"}')).toBeInTheDocument();
-  expect(screen.getByText('cellarVintage.drunkNote')).toBeInTheDocument();
+  // Said with Undo now, not only "Logged" (live walkthrough 2026-10-15).
+  expect(screen.getByRole('status')).toHaveTextContent('bottleNotice.takenOut');
+  expect(screen.getByText('common.undo')).toBeInTheDocument();
 
   fireEvent.click(screen.getAllByText('cellarVintageBeta.editVintage')[0]);
   fireEvent.click(await screen.findByText('edit-stub:b2,b3'));

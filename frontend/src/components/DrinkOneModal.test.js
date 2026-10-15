@@ -92,3 +92,29 @@ test('a refused consume of a single bottle shows the reason too, with that bottl
   expect(screen.getByText('drinkOne.title')).toBeInTheDocument();
   expect(screen.getByText('Already consumed')).toBeInTheDocument();
 });
+
+test('bottles that would read the same in the picker skip it — there is nothing to choose', async () => {
+  // Three bottles of one delivery, none in a rack: three identical rows.
+  const same = [
+    { _id: 'x1', status: 'active', vintage: '2019', purchaseDate: '2026-10-01' },
+    { _id: 'x2', status: 'active', vintage: '2019', purchaseDate: '2026-10-01' },
+    { _id: 'x3', status: 'active', vintage: '2019', purchaseDate: '2026-10-01' },
+  ];
+  const onDone = vi.fn();
+  render(<DrinkOneModal bottles={same} rackMap={new Map()} wineName="Barolo 2019" onClose={vi.fn()} onDone={onDone} />);
+
+  expect(screen.queryByText('drinkOne.title')).toBeNull();
+  expect(screen.getByText('bottleDetail.removeBottleTitle')).toBeInTheDocument();
+  fireEvent.click(screen.getByText('common.confirm'));
+  await waitFor(() => expect(onDone).toHaveBeenCalledWith(same[0], 'drank'));
+  expect(api).toHaveBeenCalledTimes(1);
+});
+
+test('one difference (a rack slot, a price, a reservation) keeps the picker', () => {
+  const almost = [
+    { _id: 'x1', status: 'active', vintage: '2019' },
+    { _id: 'x2', status: 'active', vintage: '2019', price: 40, currency: 'EUR' },
+  ];
+  render(<DrinkOneModal bottles={almost} rackMap={new Map()} wineName="Barolo 2019" onClose={vi.fn()} onDone={vi.fn()} />);
+  expect(screen.getByText('drinkOne.title')).toBeInTheDocument();
+});

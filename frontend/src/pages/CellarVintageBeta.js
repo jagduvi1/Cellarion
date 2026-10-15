@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { lazy } from '../utils/lazyWithReload';
 import { useParams, Link } from 'react-router-dom';
+import BottleUndoNotice from '../components/BottleUndoNotice';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { useFeature } from '../utils/featureFlags';
@@ -102,6 +103,8 @@ function CellarVintageBeta() {
   const [suggestSignal, setSuggestSignal] = useState(0);
   const [journalBottle, setJournalBottle] = useState(null);
   const [notice, setNotice] = useState(null);
+  // The bottle just taken out here, said with Undo (components/BottleUndoNotice).
+  const [drunkNotice, setDrunkNotice] = useState(null);
 
   const vintage = safeDecode(vintageParam || 'NV');
   const pagePath = `/cellars/${id}/vintages/${wineId}/${encodeURIComponent(vintage)}`;
@@ -288,7 +291,9 @@ function CellarVintageBeta() {
 
   const handleDrunk = (bottle, reason) => {
     setModal(null);
-    setNotice(t('cellarVintage.drunkNote', 'Logged. One bottle fewer of this vintage.'));
+    // The line now offers Undo (the 2-day restore), not just "Logged".
+    setNotice(null);
+    setDrunkNotice({ kind: 'consumed', reason, bottleId: bottle._id, name: title });
     if (reason === 'drank' && !journalPromptOptedOut()) setJournalBottle(bottle);
     else load();
   };
@@ -442,6 +447,15 @@ function CellarVintageBeta() {
           <span>{notice}</span>
           <button type="button" className="cellar-vintage-notice-close" aria-label={t('common.close', 'Close')} onClick={() => setNotice(null)}>✕</button>
         </div>
+      )}
+      {drunkNotice && (
+        <BottleUndoNotice
+          key={String(drunkNotice.bottleId)}
+          notice={drunkNotice}
+          cellarId={id}
+          onUndone={load}
+          onDismiss={() => setDrunkNotice(null)}
+        />
       )}
 
       {loading ? (

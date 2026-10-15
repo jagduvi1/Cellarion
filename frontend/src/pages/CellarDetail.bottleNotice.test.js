@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import CellarDetail from './CellarDetail';
 
@@ -15,10 +15,14 @@ vi.mock('../contexts/AuthContext', () => ({ useAuth: () => auth }));
 const ok = (body) => ({ ok: true, status: 200, json: async () => body });
 const CELLAR = { _id: 'c1', name: 'Home', userRole: 'owner', bottleCount: 0 };
 
-const api = vi.fn(async (url) => {
+// A delivery of two identical bottles, shown as one group card.
+const BAROLO = (id) => ({ _id: id, status: 'active', vintage: '2019', cellar: 'c1', wineDefinition: { _id: 'w1', name: 'Barolo' } });
+let items = [];
+const api = vi.fn(async (url, init) => {
   if (url.startsWith('/api/cellars/c1?')) {
-    return ok({ cellar: CELLAR, bottles: { items: [], total: 0 }, facets: {}, baseFacets: {}, facetMeta: {} });
+    return ok({ cellar: CELLAR, bottles: { items, total: items.length }, facets: {}, baseFacets: {}, facetMeta: {} });
   }
+  if (url.endsWith('/consume') && init?.method === 'POST') return ok({ bottle: { _id: url.split('/')[3], status: 'drank' } });
   if (url === '/api/cellars') return ok({ cellars: [CELLAR] });
   if (url.startsWith('/api/racks')) return ok({ racks: [] });
   if (url.startsWith('/api/climate/')) return ok({ devices: [] });
@@ -37,6 +41,7 @@ const memoryStorage = () => {
 
 beforeEach(() => {
   api.mockClear();
+  items = [];
   vi.stubGlobal('sessionStorage', memoryStorage());
   vi.stubGlobal('localStorage', memoryStorage());
   auth = { apiFetch: api, user: { id: 'u1', preferences: {} }, updatePreferences: vi.fn(async () => ({ success: true })) };
@@ -61,4 +66,19 @@ test('without a handed-over notice there is none', async () => {
   );
   expect(await screen.findByText('cellarDetail.noBottles')).toBeInTheDocument();
   expect(screen.queryByText('common.undo')).not.toBeInTheDocument();
+});
+
+it('drinking from a card says so at the top, with Undo — it used to change the count silently', async () => {
+  items = [{ key: 'w1|2019', count: 2, bottles: [BAROLO('x1'), BAROLO('x2')] }];
+  render(
+    <MemoryRouter initialEntries={['/cellars/c1']}>
+      <Routes><Route path="/cellars/:id" element={<CellarDetail />} /></Routes>
+    </MemoryRouter>,
+  );
+  fireEvent.click(await screen.findByText('bottleCard.groupDrinkOne'));
+  // Two identical bottles: no "Which bottle?" — straight to the form.
+  fireEvent.click(await screen.findByText('common.confirm'));
+  await waitFor(() => expect(api).toHaveBeenCalledWith('/api/bottles/x1/consume', expect.anything()));
+  expect(await screen.findByText('bottleNotice.drunk')).toBeInTheDocument();
+  expect(screen.getByText('common.undo')).toBeInTheDocument();
 });

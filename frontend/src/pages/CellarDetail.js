@@ -20,7 +20,7 @@ import { CELLAR_SORTS, DEFAULT_CELLAR_SORT, preferredCellarSort } from '../utils
 import { formatArrivalMonth, isArrivalLate } from '../utils/onOrder';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
 import { useFeature } from '../utils/featureFlags';
-import BottleUndoNotice from '../components/BottleUndoNotice';
+import BottleUndoNotice, { bottleNoticeName } from '../components/BottleUndoNotice';
 import { CARD_FIELDS, cardDetails, readCardFields, storeCardFields } from '../utils/cardDetails';
 import { summarizeSelection } from '../utils/bulkSelection';
 import LoadError from '../components/LoadError';
@@ -477,6 +477,7 @@ function CellarDetail() {
       )}
       {bottleNotice && (
         <BottleUndoNotice
+          key={String(bottleNotice.bottleId)}
           notice={bottleNotice}
           cellarId={id}
           onUndone={() => { fetchCellarData(0); fetchStatistics(); fetchRacks(); }}
@@ -904,6 +905,7 @@ function CellarDetail() {
               canConsume={!dataIsMulti && canEdit}
               onBulkDone={() => { fetchCellarData(0); fetchStatistics(); fetchRacks(); }}
               onSelectModeChange={setSelecting}
+              onTakenOut={setBottleNotice}
             />
           )}
         </div>
@@ -976,7 +978,7 @@ function CellarDetail() {
 // `canBulkMove` (owner of this one cellar) enables select mode and its bulk
 // actions; `onBulkDone` refreshes the parent's list, stats and racks after
 // one; `onSelectModeChange` tells the parent to hide the FAB meanwhile.
-function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadMore, multi = false, rackKnown = false, canBulkMove = false, canConsume = false, onBulkDone, onSelectModeChange }) {
+function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadMore, multi = false, rackKnown = false, canBulkMove = false, canConsume = false, onBulkDone, onSelectModeChange, onTakenOut }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -1010,6 +1012,9 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
     : null);
   const handleDrunk = (bottle, reason) => {
     setDrinkGroup(null);
+    // Said at the top of the list, with Undo — drinking from a card used to
+    // change the count and say nothing (live walkthrough 2026-10-15).
+    onTakenOut?.({ kind: 'consumed', reason, bottleId: bottle._id, name: bottleNoticeName(bottle) });
     if (reason === 'drank' && !journalPromptOptedOut()) setJournalBottle(bottle);
     else onBulkDone?.();
   };

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getBottle, consumeBottle, setBottleDefaultImage, undoBottle, openBottle, restoreBottle, markBottleArrived } from '../api/bottles';
 import { TRASH_DAYS } from '../utils/trash';
+import { bottleNoticeName } from '../components/BottleUndoNotice';
 import { lookupPriceHistory } from '../api/somm';
 import { isOnOrder, formatArrivalMonth, isArrivalLate } from '../utils/onOrder';
 import { useFeature } from '../utils/featureFlags';
@@ -32,6 +33,7 @@ import DialogBox from '../components/DialogBox';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
 import { swatchType, wineTypeLabel } from '../utils/wineColour';
 import './BottleDetail.css';
+import { backLabel as backLabelText } from '../utils/backLabel';
 
 // Lazy-load heavy components only needed on user interaction
 const ReportWineModal = lazy(() => import('../components/ReportWineModal'));
@@ -222,11 +224,7 @@ function BottleDetail() {
   };
 
   // The name the list's notice uses for this bottle ("Château X 2018").
-  const noticeName = () => {
-    const name = bottle?.wineDefinition?.name || bottle?.pendingWineRequest?.wineName || '';
-    const vintage = bottle?.vintage && !['NV', 'Unknown'].includes(bottle.vintage) ? bottle.vintage : '';
-    return [name, vintage].filter(Boolean).join(' ');
-  };
+  const noticeName = () => bottleNoticeName(bottle);
 
   // "Added by mistake?" / "Cancel order": the bottle goes to the cellar's
   // Recently deleted (POST /:id/undo now trashes it), not away for good — it
@@ -506,7 +504,7 @@ function BottleDetail() {
         <div className="bd-header-top">
           <Link to={backTo} className="back-link">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
-            {backLabel}
+            {backLabelText(backLabel)}
           </Link>
           {!loading && !editing && (
             <div className="bd-header-actions">
