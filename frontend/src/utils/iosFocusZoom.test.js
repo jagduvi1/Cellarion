@@ -1,12 +1,18 @@
-import { isIOS, stopIOSFocusZoom } from './iosFocusZoom';
+import { isIOS, isSafariOrHomeScreen, stopIOSFocusZoom } from './iosFocusZoom';
 
 // iOS zooms the page in on a focused field with text under 16 px and leaves
-// it zoomed; maximum-scale=1 stops that there (pinch-zoom still works on iOS).
-// Android would lose pinch-zoom, so nothing changes off iOS.
+// it zoomed; maximum-scale=1 stops that. Safari still lets people pinch-zoom
+// with it; other iOS browsers and in-app viewers may not, and Android would
+// not — so only Safari and the home-screen app get it.
 
-const IPHONE = { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15', maxTouchPoints: 5 };
-const IPAD = { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15', maxTouchPoints: 5 };
-const MAC = { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15', maxTouchPoints: 0 };
+const SAFARI_TAIL = ' (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
+const IPHONE = { userAgent: `Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15${SAFARI_TAIL}`, maxTouchPoints: 5 };
+const IPAD = { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15', maxTouchPoints: 5 };
+const MAC = { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15', maxTouchPoints: 0 };
+const CHROME_IOS = { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/140.0.0.0 Mobile/15E148 Safari/604.1', maxTouchPoints: 5 };
+const IN_APP = { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 300.0', maxTouchPoints: 5 };
+const HOME_SCREEN = { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148', maxTouchPoints: 5, standalone: true };
+const noWin = { matchMedia: () => ({ matches: false }) };
 const ANDROID = { userAgent: 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 Chrome/140 Mobile', maxTouchPoints: 5 };
 
 const docWith = (content) => {
@@ -30,12 +36,27 @@ test('iPhones and iPads (which call themselves a Mac) are iOS; a Mac and Android
 test('on iOS the viewport gains maximum-scale=1, once; elsewhere it is left alone', () => {
   const base = 'width=device-width, initial-scale=1, viewport-fit=cover';
   const ios = docWith(base);
-  expect(stopIOSFocusZoom(ios, IPHONE)).toBe(true);
+  expect(stopIOSFocusZoom(ios, IPHONE, noWin)).toBe(true);
   expect(viewport(ios)).toBe(`${base}, maximum-scale=1`);
-  expect(stopIOSFocusZoom(ios, IPHONE)).toBe(false);
+  expect(stopIOSFocusZoom(ios, IPHONE, noWin)).toBe(false);
   expect(viewport(ios)).toBe(`${base}, maximum-scale=1`);
 
   const android = docWith(base);
-  expect(stopIOSFocusZoom(android, ANDROID)).toBe(false);
+  expect(stopIOSFocusZoom(android, ANDROID, noWin)).toBe(false);
   expect(viewport(android)).toBe(base);
+});
+
+test('only Safari and the home-screen app: Chrome on iOS and in-app viewers keep pinch-zoom', () => {
+  expect(isSafariOrHomeScreen(IPHONE, noWin)).toBe(true);
+  expect(isSafariOrHomeScreen(HOME_SCREEN, noWin)).toBe(true);
+  expect(isSafariOrHomeScreen(CHROME_IOS, noWin)).toBe(false);
+  expect(isSafariOrHomeScreen(IN_APP, noWin)).toBe(false);
+  const base = 'width=device-width, initial-scale=1';
+  for (const nav of [CHROME_IOS, IN_APP]) {
+    const doc = docWith(base);
+    expect(stopIOSFocusZoom(doc, nav, noWin)).toBe(false);
+    expect(viewport(doc)).toBe(base);
+  }
+  const home = docWith(base);
+  expect(stopIOSFocusZoom(home, HOME_SCREEN, noWin)).toBe(true);
 });

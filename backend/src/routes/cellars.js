@@ -779,6 +779,38 @@ router.get('/multi/history', async (req, res) => {
 });
 
 // GET /api/cellars/:id/statistics - Get cellar statistics (active bottles only)
+// GET /api/cellars/:id/maturity-counts — how many bottles are at each stage,
+// for the counts on the filter's maturity buttons (#1291: they were never
+// sent, so the buttons showed none). The filter asks as it opens; this reads
+// only what the classification needs — not the cellar's other statistics. The
+// same classification the list's maturity filter uses, so a button's count is
+// what choosing it shows (without the other filters).
+router.get('/:id/maturity-counts', async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+    const cellar = await Cellar.findById(req.params.id);
+    const role = getCellarRole(cellar, req.user.id);
+    if (!role || cellar.deletedAt) {
+      return res.status(404).json({ error: 'Cellar not found' });
+    }
+    const rows = await Bottle.find({ cellar: cellar._id, status: { $nin: NOT_IN_CELLAR_STATUSES } })
+      .select('wineDefinition vintage drinkFrom drinkTo peakFrom peakUntil purchaseDate createdAt')
+      .lean();
+    const profileMap = await buildProfileMap(rows);
+    const maturity = { declining: 0, late: 0, peak: 0, early: 0, notReady: 0, noProfile: 0 };
+    for (const b of rows) {
+      const status = classifyMaturity(b, profileMap);
+      if (!status) maturity.noProfile++;
+      else if (status === 'not-ready') maturity.notReady++;
+      else if (Object.hasOwn(maturity, status)) maturity[status]++;
+    }
+    res.json({ maturity, total: rows.length });
+  } catch (error) {
+    console.error('Get maturity counts error:', error);
+    res.status(500).json({ error: 'Failed to get maturity counts' });
+  }
+});
+
 router.get('/:id/statistics', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
@@ -944,27 +976,6 @@ router.get('/:id/statistics', async (req, res) => {
     stats.averagePrice = Math.round(stats.averagePrice * 100) / 100;
     stats.convertedTotal = Math.round(stats.convertedTotal * 100) / 100;
     stats.convertedAverage = Math.round(stats.convertedAverage * 100) / 100;
-
-    // ?maturity=1 — how many bottles are at each stage, for the counts on the
-    // filter's maturity buttons (#1291: they were never sent, so the buttons
-    // showed none). Only when asked — the filter asks as it opens — since it
-    // needs every bottle and its vintage profile. The same classification the
-    // list's maturity filter uses, so a button's count is what choosing it
-    // shows (without the other filters).
-    if (req.query.maturity === '1') {
-      const rows = await Bottle.find({ cellar: cellar._id, status: { $nin: NOT_IN_CELLAR_STATUSES } })
-        .select('wineDefinition vintage drinkFrom drinkTo peakFrom peakUntil purchaseDate createdAt')
-        .lean();
-      const profileMap = await buildProfileMap(rows);
-      const maturity = { declining: 0, late: 0, peak: 0, early: 0, notReady: 0, noProfile: 0 };
-      for (const b of rows) {
-        const status = classifyMaturity(b, profileMap);
-        if (!status) maturity.noProfile++;
-        else if (status === 'not-ready') maturity.notReady++;
-        else if (Object.hasOwn(maturity, status)) maturity[status]++;
-      }
-      stats.maturity = maturity;
-    }
 
     res.json({ statistics: stats });
   } catch (error) {

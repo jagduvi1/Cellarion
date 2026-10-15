@@ -358,6 +358,7 @@
 }
 
 .bd-contribute__dismiss {
+  --tap-reach: -12px; /* touch tap area, styles/common.css */
   position: absolute;
   top: 0.5rem;
   right: 0.6rem;
@@ -369,14 +370,6 @@
   cursor: pointer;
   padding: 0;
   transition: color 0.15s;
-}
-
-/* Touch screens: the tap area reaches further than the drawn button,
-   invisibly (an overlay that changes nothing on screen) — small icons and
-   "×"s were hard to hit with a thumb (usability pass 2026-10). */
-@media (pointer: coarse) {
-  /* Already positioned in the card's corner. */
-  .bd-contribute__dismiss::after { content: ''; position: absolute; inset: -12px; }
 }
 
 .bd-contribute__dismiss:hover { color: var(--color-text-muted); }

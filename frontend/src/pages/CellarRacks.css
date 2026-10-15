@@ -125,6 +125,8 @@
 }
 
 .rack-icon-btn {
+  position: relative;
+  --tap-reach: -7px -2px; /* touch tap area, styles/common.css */
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -137,16 +139,6 @@
   cursor: pointer;
   transition: all var(--transition-fast);
 }
-
-/* Touch screens: the tap area reaches further than the drawn button,
-   invisibly (an overlay that changes nothing on screen) — small icons and
-   "×"s were hard to hit with a thumb (usability pass 2026-10). */
-@media (pointer: coarse) {
-  /* Edit, zones, NFC, delete: 30 px side by side — taller, never wider. */
-  .rack-icon-btn { position: relative; }
-  .rack-icon-btn::after { content: ''; position: absolute; inset: -7px -2px; }
-}
-
 
 .rack-icon-btn:hover {
   background: var(--color-surface-raised);
@@ -584,6 +576,7 @@
 }
 
 .rack-lens-search-clear {
+  --tap-reach: -10px; /* touch tap area, styles/common.css */
   position: absolute;
   right: 7px;
   width: 20px;
@@ -600,15 +593,6 @@
   cursor: pointer;
   padding: 0;
 }
-
-/* Touch screens: the tap area reaches further than the drawn button,
-   invisibly (an overlay that changes nothing on screen) — small icons and
-   "×"s were hard to hit with a thumb (usability pass 2026-10). */
-@media (pointer: coarse) {
-  /* 20 x 20 -> 40 x 40 (already positioned inside the search box) */
-  .rack-lens-search-clear::after { content: ''; position: absolute; inset: -10px; }
-}
-
 
 .rack-lens-search-clear:hover {
   color: var(--color-text);
@@ -1024,6 +1008,8 @@
 }
 
 .zones-remove {
+  position: relative;
+  --tap-reach: -10px -6px; /* touch tap area, styles/common.css */
   border: none;
   background: none;
   color: var(--color-text-muted);
@@ -1032,15 +1018,6 @@
   cursor: pointer;
   padding: 0 0.25rem;
 }
-
-/* Touch screens: the tap area reaches further than the drawn button,
-   invisibly (an overlay that changes nothing on screen) — small icons and
-   "×"s were hard to hit with a thumb (usability pass 2026-10). */
-@media (pointer: coarse) {
-  .zones-remove { position: relative; }
-  .zones-remove::after { content: ''; position: absolute; inset: -10px -6px; }
-}
-
 
 .zones-remove:hover {
   color: var(--color-danger, #c62828);

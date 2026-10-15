@@ -706,6 +706,26 @@ export function computeLayout(type, rows, cols, typeConfig) {
 
 /** Slot radius — exported so renderers can use it. */
 export const SLOT_RADIUS = SLOT_R;
+// How far beyond its drawn circle a slot still counts as hit: a dragged
+// bottle's drop (hooks/useSlotDrag) and a finger's tap (RackRenderer) — the
+// same forgiveness for both.
+export const SLOT_HIT_FACTOR = 1.2;
+
+/**
+ * The closest two slot centres of a layout. Sorted by x and swept, so a big
+ * rack costs about n log n rather than every pair.
+ */
+export function minSlotDistance(slots) {
+  const pts = [...(slots || [])].sort((a, b) => a.cx - b.cx);
+  let min = Infinity;
+  for (let i = 0; i < pts.length; i += 1) {
+    for (let j = i + 1; j < pts.length && pts[j].cx - pts[i].cx < min; j += 1) {
+      const d = Math.hypot(pts[j].cx - pts[i].cx, pts[j].cy - pts[i].cy);
+      if (d < min) min = d;
+    }
+  }
+  return min;
+}
 
 /** Centre-to-centre distance — exported for builder grid snapping. */
 export const CELL_SIZE = CELL;

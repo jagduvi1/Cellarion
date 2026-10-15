@@ -19,6 +19,17 @@
   transition: transform 0.15s ease;
 }
 
+/* A slot's larger, invisible tap area (RackRenderer hitR): touch screens only —
+   a mouse hits the drawn circle, as before. */
+.rack-slot-hit {
+  pointer-events: none;
+}
+@media (pointer: coarse) {
+  .rack-slot-hit {
+    pointer-events: all;
+  }
+}
+
 .rack-slot-g:hover circle:first-child {
   filter: brightness(1.1);
 }

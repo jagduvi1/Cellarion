@@ -27,8 +27,8 @@ const api = vi.fn(async (url) => {
       facets: {}, baseFacets: {}, facetMeta: {},
     });
   }
-  if (url === '/api/cellars/c1/statistics?maturity=1') {
-    return ok({ statistics: { maturity: { declining: 0, late: 0, peak: 2, early: 0, notReady: 0, noProfile: 0 } } });
+  if (url === '/api/cellars/c1/maturity-counts') {
+    return ok({ maturity: { declining: 0, late: 0, peak: 2, early: 0, notReady: 0, noProfile: 0 }, total: 2 });
   }
   if (url === '/api/cellars') return ok({ cellars: [CELLAR] });
   if (url.startsWith('/api/racks')) return ok({ racks: [] });
@@ -62,11 +62,11 @@ test('the filter counts bottles, and its maturity buttons carry their counts', a
   );
   await waitFor(() => expect(api.mock.calls.some(([u]) => u.startsWith('/api/cellars/c1?'))).toBe(true));
   // Not asked for until the filter opens.
-  expect(api.mock.calls.some(([u]) => u.includes('maturity=1'))).toBe(false);
+  expect(api.mock.calls.some(([u]) => u.includes('maturity-counts'))).toBe(false);
 
   fireEvent.click(await screen.findByLabelText('cellarDetail.toggleFilters'));
   expect(await screen.findByText('cellarDetail.showBottles:2')).toBeInTheDocument();
-  await waitFor(() => expect(api.mock.calls.some(([u]) => u === '/api/cellars/c1/statistics?maturity=1')).toBe(true));
+  await waitFor(() => expect(api.mock.calls.some(([u]) => u === '/api/cellars/c1/maturity-counts')).toBe(true));
   const peak = await screen.findByRole('button', { name: /maturity\.peak/ });
   await waitFor(() => expect(within(peak).getByText('2')).toBeInTheDocument());
 });

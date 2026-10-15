@@ -115,8 +115,9 @@ function CellarDetail() {
   // (cards, for paging) can be 1 where the filter's button means 2 bottles.
   const [bottleCount, setBottleCount] = useState(0);
   // Bottles per maturity stage, for the filter's maturity buttons — asked for
-  // when the filter opens (#1291).
-  const [maturityCounts, setMaturityCounts] = useState(null);
+  // when the filter opens (#1291). Kept with the cellar they are for and its
+  // bottle count then: { id, total, counts }.
+  const [maturity, setMaturity] = useState(null);
   // { count, nextExpected } — bottles bought for this cellar, not arrived yet.
   const [onOrder, setOnOrder] = useState(null);
   const [statistics, setStatistics] = useState(null);
@@ -402,17 +403,20 @@ function CellarDetail() {
 
   const loadMore = () => fetchCellarData(bottles.length);
 
-  // The maturity buttons' counts, fresh each time the filter opens on this
-  // cellar alone (the all-cellars view has no such counts).
+  // The maturity buttons' counts, when the filter opens on this cellar alone
+  // (the all-cellars view has none). Asked again only when they may have
+  // changed: another cellar, or bottles added or taken out since.
+  const cellarBottles = statistics?.totalBottles;
   useEffect(() => {
     if (!showFilterModal || multiScope) return undefined;
+    if (maturity && maturity.id === id && maturity.total === cellarBottles) return undefined;
     let live = true;
     getCellarMaturityCounts(apiFetch, id)
       .then((res) => (res.ok ? res.json() : null))
-      .then((data) => { if (live && data?.statistics?.maturity) setMaturityCounts(data.statistics.maturity); })
+      .then((data) => { if (live && data?.maturity) setMaturity({ id, total: data.total, counts: data.maturity }); })
       .catch(() => {});
     return () => { live = false; };
-  }, [showFilterModal, multiScope, id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [showFilterModal, multiScope, id, cellarBottles]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchStatistics = async () => {
     try {
@@ -872,7 +876,7 @@ function CellarDetail() {
                       showReserved={!multiScope}
                       storage={!multiScope ? storageRacks : null}
                       ratingScale={ratingScale}
-                      maturityCounts={!multiScope ? maturityCounts : null}
+                      maturityCounts={!multiScope && maturity?.id === id ? maturity.counts : null}
                     />
                   </Suspense>
                 )}

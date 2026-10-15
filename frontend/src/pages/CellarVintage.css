@@ -132,6 +132,8 @@ a.cellar-vintage-aux:hover {
 }
 
 .cellar-vintage-notice-close {
+  position: relative;
+  --tap-reach: -12px; /* touch tap area, styles/common.css */
   margin-left: auto;
   background: none;
   border: none;
@@ -139,15 +141,6 @@ a.cellar-vintage-aux:hover {
   color: inherit;
   font: inherit;
 }
-
-/* Touch screens: the tap area reaches further than the drawn button,
-   invisibly (an overlay that changes nothing on screen) — small icons and
-   "×"s were hard to hit with a thumb (usability pass 2026-10). */
-@media (pointer: coarse) {
-  .cellar-vintage-notice-close { position: relative; }
-  .cellar-vintage-notice-close::after { content: ''; position: absolute; inset: -12px; }
-}
-
 
 @media (max-width: 860px) {
   .cellar-vintage-grid {

@@ -516,6 +516,8 @@
 }
 
 .install-prompt-dismiss {
+  position: relative;
+  --tap-reach: -10px; /* touch tap area, styles/common.css */
   background: none;
   border: none;
   color: rgba(255, 255, 255, 0.8);
@@ -524,15 +526,6 @@
   padding: 0 0.25rem;
   line-height: 1;
 }
-
-/* Touch screens: the tap area reaches further than the drawn button,
-   invisibly (an overlay that changes nothing on screen) — small icons and
-   "×"s were hard to hit with a thumb (usability pass 2026-10). */
-@media (pointer: coarse) {
-  .install-prompt-dismiss { position: relative; }
-  .install-prompt-dismiss::after { content: ''; position: absolute; inset: -10px; }
-}
-
 
 .install-prompt-dismiss:hover {
   color: #fff;

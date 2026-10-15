@@ -39,3 +39,27 @@ test('a shelf with a back row (its slots sit behind the front ones) keeps the pl
   expect(container.querySelectorAll('.rack-slot-g').length).toBeGreaterThan(0);
   expect(hits(container)).toHaveLength(0);
 });
+
+test('a disabled slot gets it too: editors re-enable it by tapping', () => {
+  const onSlotClick = vi.fn();
+  const { container } = render(<RackRenderer rack={rack({ disabledPositions: [2] })} canEdit onSlotClick={onSlotClick} />);
+  const disabled = container.querySelector('.rack-slot-g.disabled');
+  const hit = disabled.querySelector('circle.rack-slot-hit');
+  expect(hit).not.toBeNull();
+  fireEvent.click(hit);
+  expect(onSlotClick).toHaveBeenCalledWith(2, null);
+});
+
+test('the closest two slots are found without trying every pair (and agree with doing so)', async () => {
+  const { minSlotDistance, computeLayout } = await import('../../utils/rackLayouts');
+  const brute = (pts) => {
+    let m = Infinity;
+    for (let i = 0; i < pts.length; i += 1) for (let j = i + 1; j < pts.length; j += 1) m = Math.min(m, Math.hypot(pts[i].cx - pts[j].cx, pts[i].cy - pts[j].cy));
+    return m;
+  };
+  for (const [type, rows, cols, cfg] of [['grid', 12, 20], ['hex', 6, 8], ['x-rack', 0, 0, {}], ['triangle', 5, 5], ['cube', 2, 2, { moduleRows: 3, moduleCols: 3 }], ['stack', 6, 1]]) {
+    const { slots } = computeLayout(type, rows, cols, cfg);
+    expect(minSlotDistance(slots)).toBeCloseTo(brute(slots));
+  }
+  expect(minSlotDistance([])).toBe(Infinity);
+});

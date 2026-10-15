@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { SLOT_HIT_FACTOR } from '../utils/rackLayouts';
 
 /**
  * Find the slot whose center is nearest to (x, y) within its own hit radius
  * (scaled by `factor` to be a little forgiving). Returns the slot's position
  * or null. Pure — exported for tests.
  */
-export function findNearestSlot(slotCenters, x, y, { exclude = null, factor = 1.2 } = {}) {
+export function findNearestSlot(slotCenters, x, y, { exclude = null, factor = SLOT_HIT_FACTOR } = {}) {
   let best = null;
   let bestD = Infinity;
   for (const s of slotCenters) {

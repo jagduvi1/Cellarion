@@ -184,9 +184,10 @@ test('another user\'s cellar is not found', async () => {
 });
 
 // #1291: the filter's maturity buttons showed no counts — the statistics never
-// carried them. Asked for with ?maturity=1 (as the filter opens), they use the
-// list's own maturity classification, so a count is what choosing it shows.
-test('?maturity=1 adds the bottles per maturity stage; without it nothing extra is loaded', async () => {
+// carried them. Their own endpoint (the filter asks as it opens) uses the
+// list's maturity classification, so a count is what choosing it shows, and
+// reads only what that needs — not the cellar's other statistics.
+test('maturity counts: bottles per stage from vintage profiles and own windows, nothing else computed', async () => {
   setGroups([]);
   const year = new Date().getFullYear();
   const oid = (id) => new mongoose.Types.ObjectId(id);
@@ -204,16 +205,25 @@ test('?maturity=1 adds the bottles per maturity stage; without it nothing extra 
     { wineDefinition: oid(RED), vintage: '2015', status: 'reviewed', earlyFrom: year - 6, earlyUntil: year - 2, peakFrom: year - 1, peakUntil: year + 1, lateFrom: year + 2, lateUntil: year + 4 },
   ] });
 
-  const plain = await request(`/api/cellars/${CELLAR_ID}/statistics`);
-  expect(plain.body.statistics.maturity).toBeUndefined();
-  expect(Bottle.find).not.toHaveBeenCalled();
-
-  const { status, body } = await request(`/api/cellars/${CELLAR_ID}/statistics?maturity=1`);
+  const { status, body } = await request(`/api/cellars/${CELLAR_ID}/maturity-counts`);
   expect(status).toBe(200);
-  expect(body.statistics.maturity).toEqual({ declining: 1, late: 0, peak: 2, early: 0, notReady: 1, noProfile: 1 });
+  expect(body).toEqual({ maturity: { declining: 1, late: 0, peak: 2, early: 0, notReady: 1, noProfile: 1 }, total: 5 });
+  // No statistics work: the grouping query never ran.
+  expect(Bottle.aggregate).not.toHaveBeenCalled();
   // This cellar's active bottles, only the fields the classification reads.
   const [query] = Bottle.find.mock.calls[0];
   expect(String(query.cellar)).toBe(CELLAR_ID);
   expect(query.status).toEqual({ $nin: ['drank', 'gifted', 'sold', 'other', 'ordered'] });
   expect(selected.split(' ').sort()).toEqual(['createdAt', 'drinkFrom', 'drinkTo', 'peakFrom', 'peakUntil', 'purchaseDate', 'vintage', 'wineDefinition']);
+
+  // The statistics stay as they were.
+  const plain = await request(`/api/cellars/${CELLAR_ID}/statistics`);
+  expect(plain.body.statistics.maturity).toBeUndefined();
+});
+
+test('maturity counts: a cellar of another user is not found', async () => {
+  Cellar.findById.mockResolvedValue({ _id: new mongoose.Types.ObjectId(CELLAR_ID), user: '64b0000000000000000000ff', members: [], deletedAt: null });
+  const { status } = await request(`/api/cellars/${CELLAR_ID}/maturity-counts`);
+  expect(status).toBe(404);
+  expect(Bottle.find).not.toHaveBeenCalled();
 });

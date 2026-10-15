@@ -1,6 +1,6 @@
 import { useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { computeLayout, computeModularLayout, SLOT_RADIUS, CELL_SIZE } from '../../utils/rackLayouts';
+import { computeLayout, computeModularLayout, SLOT_RADIUS, CELL_SIZE, SLOT_HIT_FACTOR, minSlotDistance } from '../../utils/rackLayouts';
 import useSlotDrag from '../../hooks/useSlotDrag';
 import { isReserved } from '../../utils/reservation';
 import { swatchType } from '../../utils/wineColour';
@@ -111,21 +111,14 @@ export default function RackRenderer({
   const R = SLOT_RADIUS;
 
   // On a phone a slot is small (an 8-column rack: ~30 px) and the gap between
-  // two is dead space. Each slot also answers taps a little beyond its circle,
-  // invisibly, up to half the way to its nearest neighbour — never into it.
-  // One bottle per cell and no back row only (sub-circles and back slots sit
-  // too close); racks whose slots are tighter than that keep the circle.
+  // two is dead space. On a touch screen each slot also answers taps a little
+  // beyond its circle, invisibly (the same forgiveness a dragged bottle's drop
+  // gets), up to half the way to its nearest neighbour — never into it. One
+  // bottle per cell and no back row only (sub-circles and back slots sit too
+  // close); racks whose slots are tighter than that keep the circle.
   const hitR = useMemo(() => {
     if ((layout.bottlesPerCell || 1) !== 1 || layout.backRadius) return null;
-    let min = Infinity;
-    const pts = layout.slots || [];
-    for (let i = 0; i < pts.length; i += 1) {
-      for (let j = i + 1; j < pts.length; j += 1) {
-        const d = Math.hypot(pts[i].cx - pts[j].cx, pts[i].cy - pts[j].cy);
-        if (d < min) min = d;
-      }
-    }
-    const r = Math.min(R * 1.2, min / 2);
+    const r = Math.min(R * SLOT_HIT_FACTOR, minSlotDistance(layout.slots) / 2);
     return r > R ? r : null;
   }, [layout, R]);
 
@@ -527,6 +520,7 @@ function SlotCircle({ position, cx, cy, R, hitR = null, isNeck = false, isSidewa
           stroke={DISABLED_CROSS} strokeWidth={1.5} strokeLinecap="round" pointerEvents="none" />
         <line x1={cx - d} y1={cy + d} x2={cx + d} y2={cy - d}
           stroke={DISABLED_CROSS} strokeWidth={1.5} strokeLinecap="round" pointerEvents="none" />
+        {hitR && <circle cx={cx} cy={cy} r={hitR} fill="transparent" className="rack-slot-hit" />}
       </g>
     );
   }

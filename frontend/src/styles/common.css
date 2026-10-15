@@ -484,3 +484,23 @@
   color: var(--color-text-muted);
   white-space: nowrap;
 }
+
+/* Touch screens: small controls answer taps further than they are drawn — an
+   invisible overlay, nothing changes on screen (small icons and "×"s were hard
+   to hit with a thumb; usability pass 2026-10). Each control sets how far with
+   --tap-reach beside its own rule, and is positioned there. */
+@media (pointer: coarse) {
+  .active-filter-chip-remove::after,
+  .view-toggle-btn::after,
+  .bulk-bar-close::after,
+  .rack-lens-search-clear::after,
+  .rack-icon-btn::after,
+  .zones-remove::after,
+  .bd-contribute__dismiss::after,
+  .cellar-vintage-notice-close::after,
+  .install-prompt-dismiss::after {
+    content: '';
+    position: absolute;
+    inset: var(--tap-reach, -10px);
+  }
+}
