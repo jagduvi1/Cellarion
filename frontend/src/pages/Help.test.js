@@ -1,4 +1,5 @@
 import { render, screen, act } from '@testing-library/react';
+import { createRequire } from 'module';
 import { MemoryRouter } from 'react-router-dom';
 import en from '../locales/en/translation.json';
 import Help from './Help';
@@ -26,6 +27,9 @@ vi.mock('../utils/featureFlags', () => ({
   useFeatureFlags: () => [{ key: 'pickLists', state: pickListsState }],
 }));
 
+// The server's real help content (backend/src/data/helpContent.js): the
+// "Go to" pages come from there.
+const serverHelp = createRequire(import.meta.url)('../../../backend/src/data/helpContent.js');
 const getHelpContent = vi.fn();
 vi.mock('../api/help', () => ({ getHelpContent: (...a) => getHelpContent(...a) }));
 
@@ -38,7 +42,7 @@ const nextFrame = () => act(async () => { await new Promise((r) => requestAnimat
 beforeEach(() => {
   pickListsOn = false;
   pickListsState = 'everyone';
-  getHelpContent.mockResolvedValue({ sections: [] });
+  getHelpContent.mockResolvedValue(serverHelp);
   Element.prototype.scrollIntoView = vi.fn();
 });
 
@@ -130,19 +134,19 @@ describe('the page', () => {
     expect(await screen.findByRole('link', { name: /Go to Cellar Chat/ })).toHaveAttribute('href', '/cellar-chat');
   });
 
-  test('the Dashboard section links to the Dashboard', () => {
+  test('the Dashboard section links to the Dashboard', async () => {
     at('/help#dashboard');
-    expect(screen.getByRole('link', { name: /Go to Dashboard/ })).toHaveAttribute('href', '/dashboard');
+    expect(await screen.findByRole('link', { name: /Go to Dashboard/ })).toHaveAttribute('href', '/dashboard');
   });
 
   // Settings opens a group by its id (components/SettingsGroup): offline
   // mode is a card inside Preferences, early access a group of its own.
-  test('offline use and early access link to the Settings group that holds them', () => {
+  test('offline use and early access link to the Settings group that holds them', async () => {
     const { unmount } = at('/help#offline');
-    expect(screen.getByRole('link', { name: /Go to/ })).toHaveAttribute('href', '/settings#preferences');
+    expect(await screen.findByRole('link', { name: /Go to/ })).toHaveAttribute('href', '/settings#preferences');
     unmount();
     at('/help#earlyAccess');
-    expect(screen.getByRole('link', { name: /Go to/ })).toHaveAttribute('href', '/settings#early-access');
+    expect(await screen.findByRole('link', { name: /Go to/ })).toHaveAttribute('href', '/settings#early-access');
   });
 
   // The flag changes without a deploy (SuperAdmin → Feature flags).
@@ -166,9 +170,9 @@ describe('the page', () => {
     expect(screen.queryByRole('heading', { level: 2, name: /Pick lists/ })).not.toBeInTheDocument();
   });
 
-  test('"Go to" navigates inside the app instead of loading the page again', () => {
+  test('"Go to" navigates inside the app instead of loading the page again', async () => {
     at('/help#offline');
-    const link = screen.getByRole('link', { name: /Go to/ });
+    const link = await screen.findByRole('link', { name: /Go to/ });
     expect(link).toHaveAttribute('href', '/settings#preferences');
     // A router <Link> is a plain anchor whose click the router takes over:
     // the default (a full page load) is prevented.

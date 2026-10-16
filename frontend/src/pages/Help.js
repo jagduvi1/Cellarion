@@ -9,17 +9,6 @@ import scrollBelowNavbar from '../utils/scrollBelowNavbar';
 import { SECTION_KEYS, sectionKeyFor } from '../utils/helpSections';
 import './Help.css';
 
-// "Go to …" links take their page from the server's help content
-// (/api/help, backend/src/data/helpContent.js). These are the fallback for
-// the newer sections while that answer is on its way, or if it fails.
-const LOCAL_ROUTES = {
-  dashboard: '/dashboard',
-  // The offline switch is a card inside Settings → Preferences
-  // (components/OfflineSettings); that group is what the address opens.
-  offline: '/settings#preferences',
-  earlyAccess: '/settings#early-access',
-};
-
 function sectionKeyForHash(hash) {
   try {
     return sectionKeyFor(decodeURIComponent((hash || '').slice(1)));
@@ -82,8 +71,10 @@ function Help() {
       else break;
     }
 
-    const route = routes[key] || LOCAL_ROUTES[key]
-      || (key === 'pickLists' && pickListsOn ? '/pick-lists' : null);
+    // "Go to …" takes its page from the server's help content (/api/help,
+    // backend/src/data/helpContent.js); pick lists' only for members who have
+    // them (the server gives them none).
+    const route = routes[key] || (key === 'pickLists' && pickListsOn ? '/pick-lists' : null);
     return { key, name, title, summary, details, route };
   }), [t, routes, pickListsOn, pickListsState]);
 

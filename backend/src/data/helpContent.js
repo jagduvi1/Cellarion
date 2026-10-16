@@ -8,15 +8,25 @@
  *    digits, so `on-order` here is `onOrder` there.
  * 2. The crawler page /og/help (routes/og.js), which prints every section.
  *
- * The wording follows the Help page's own text (`help.sections.*` in
- * frontend/src/locales/en/translation.json). When a screen changes, update
- * both so they keep saying the same thing.
+ * It says what the Help page says (`help.sections.*` in
+ * frontend/src/locales/en/translation.json), section for section; the words
+ * may differ a little. When a screen changes, update both. The frontend's
+ * utils/helpSections.test.js checks that the two list the same sections.
  *
  * `route` is null when a section has no page of its own. Pick lists keep
- * null on purpose: they are early access, and the Help page offers their
- * page only to members who see it in the menu, which a route here would
- * override.
+ * null on purpose: the Help page offers their page only to members who see
+ * it in the menu, which a route here would override. Their text holds
+ * whichever state their flag is in (it changes without a deploy).
  */
+
+const { PLANS } = require('../config/plans');
+
+// "Supporter ($2/mo), Patron ($5/mo) and Benefactor ($10/mo)", from the plans
+// themselves, so a price change cannot leave the help text behind.
+const tierLine = () => {
+  const tiers = ['supporter', 'patron', 'benefactor'].map(k => `${PLANS[k].label} ($${PLANS[k].price}/mo)`);
+  return `${tiers.slice(0, -1).join(', ')} and ${tiers[tiers.length - 1]}`;
+};
 
 const sections = [
   {
@@ -137,7 +147,7 @@ const sections = [
     details: [
       'In your cellar\'s bottle list, tap "Select" (or press and hold a bottle) and tick the bottles. Ticking a stack ticks all its bottles.',
       '"Select all" ticks every bottle loaded in the list.',
-      'Then choose an action: Move (to another cellar), Purchase, Drink, Reserve, Drink window, List (add to a wine list) or Delete. With early access on, Pick list is there too.',
+      'Then choose an action: Move (to another cellar), Purchase, Drink, Reserve, Drink window, List (add to a wine list) or Delete. If you have pick lists, Pick list is there too.',
       'Purchase and Drink window change only what you fill in. Anything left blank stays as it is on each bottle.',
       'Drink takes the bottles out of the cellar with one date. Rate them one by one later in the History.',
       'Reserve marks bottles as spoken for: give a person or occasion, a year, or both. Reserved bottles are left out of drink suggestions, and Drink leaves them alone unless you tick "Take the reserved ones out too".',
@@ -203,11 +213,11 @@ const sections = [
   },
   {
     id: 'pick-lists',
-    title: 'Pick lists (early access)',
+    title: 'Pick lists',
     route: null,
     summary: 'The bottles you are about to fetch, with the cellar, rack and slot of each. An early-access preview, not yet shown to everyone.',
     details: [
-      'Pick lists are an early-access preview. To try them, turn on Settings → Early access → "Show me new features before everyone else". Until they reach everyone, members without early access do not see them.',
+      'Not in your menu yet? Pick lists may still be in early access: turn on Settings → Early access → "Show me new features before everyone else" to try them.',
       'Add bottles: in your cellar, tap Select, tick the bottles and choose "Pick list". Or tap ⋮ → "Add to pick list" on a bottle\'s page or a wine and vintage page.',
       'Choose a list, or "New pick list…" to start one and give it a name, for example Saturday dinner.',
       'Your lists are under Pick lists in the menu. Each one shows where every bottle sits, in the order you walk past them.',
@@ -426,7 +436,7 @@ const sections = [
     summary: 'Blog, supporting Cellarion, support tickets and NFC tags.',
     details: [
       'Blog (/blog): wine articles and guides.',
-      'Support Us (/supporter): every feature is free for everyone, on the free Enthusiast tier too. Supporter ($2/mo), Patron ($5/mo) and Benefactor ($10/mo), also available yearly, are voluntary gifts that fund development and unlock nothing extra. A custom or one-time amount can be given through GitHub Sponsors.',
+      `Support Us (/supporter): every feature is free for everyone, on the free Enthusiast tier too. ${tierLine()}, also available yearly, are voluntary gifts that fund development and unlock nothing extra. A custom or one-time amount can be given through GitHub Sponsors.`,
       'Support (/support): look in Help first; if you are still stuck, send a support ticket.',
       'NFC tags: attach NFC tags to racks — scan with your phone to open the rack directly.',
     ],

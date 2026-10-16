@@ -227,8 +227,8 @@ ${hreflangLinks(pageUrl)}
 });
 
 // GET /og/help — Server-rendered help & guide page for crawlers. Built from
-// backend/src/data/helpContent.js (the single source of truth shared with the
-// help AI), so it stays in sync without duplicating copy. Nginx routes the
+// backend/src/data/helpContent.js, the server's copy of the Help page's text
+// (kept section for section with the page; see that file). Nginx routes the
 // "/help" SPA route for crawler user-agents here.
 router.get('/help', ogLimiter, (req, res) => {
   try {

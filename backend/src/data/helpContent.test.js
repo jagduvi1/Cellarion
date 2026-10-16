@@ -81,12 +81,22 @@ describe('helpContent', () => {
     expect(hits).toEqual([]);
   });
 
-  test('pick lists say they are early access and offer no page link', () => {
+  test('pick lists say where early access is, whatever state their flag is in, and offer no page link', () => {
     const pick = sections.find(s => s.id === 'pick-lists');
     expect(pick).toBeDefined();
     expect(userText(pick).join(' ')).toMatch(/early access/i);
     // The Help page links to /pick-lists only for members who have it; a
     // route here would override that.
     expect(pick.route).toBeNull();
+  });
+});
+
+describe('the supporter tiers', () => {
+  test('come from the plans, so a price change reaches the help text', () => {
+    const { PLANS } = require('../config/plans');
+    const other = sections.find(s => s.id === 'other').details.join(' ');
+    for (const k of ['supporter', 'patron', 'benefactor']) {
+      expect(other).toContain(`${PLANS[k].label} ($${PLANS[k].price}/mo)`);
+    }
   });
 });
