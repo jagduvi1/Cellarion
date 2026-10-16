@@ -1,33 +1,82 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
 import { getHelpContent } from '../api/help';
 import SEOHead from '../components/SEOHead';
 import SITE_URL from '../config/siteUrl';
+import { useFeature } from '../utils/featureFlags';
+import scrollBelowNavbar from '../utils/scrollBelowNavbar';
 import './Help.css';
 
-const SECTION_KEYS = [
-  'cellars', 'bottles', 'labelScan', 'sharing', 'racks', 'roomView',
-  'wishlist', 'restock', 'journal', 'recommendations', 'cellarChat',
-  'analytics', 'community', 'wineRequests', 'import', 'settings',
-  'history', 'other',
+// Each key is also the section's address: /help#onOrder opens that section.
+export const SECTION_KEYS = [
+  'cellars', 'bottles', 'vintagePage', 'openBottle', 'labelScan', 'barcode',
+  'onOrder', 'selectMode', 'recentlyDeleted', 'sharing', 'racks', 'roomView',
+  'pickLists', 'wineLists', 'wishlist', 'restock', 'journal', 'recommendations',
+  'cellarChat', 'analytics', 'dashboard', 'community', 'wineRequests', 'import',
+  'settings', 'offline', 'earlyAccess', 'history', 'other',
 ];
+
+// The pages the "Go to …" links open for the newer sections. The older ones
+// take theirs from the server's help content (/api/help), which does not
+// list these.
+const LOCAL_ROUTES = {
+  dashboard: '/dashboard',
+  offline: '/settings#offline',
+  earlyAccess: '/settings#early-access',
+};
+
+// "onOrder", "on-order" and "onorder" all name the same section: these links
+// are typed by people (support answers, forum posts), and the server's help
+// content spells its ids in kebab case ("cellar-chat" for cellarChat).
+const squash = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+export function sectionKeyFor(id) {
+  const wanted = squash(id);
+  return wanted ? SECTION_KEYS.find(k => squash(k) === wanted) || null : null;
+}
+
+function sectionKeyForHash(hash) {
+  try {
+    return sectionKeyFor(decodeURIComponent((hash || '').slice(1)));
+  } catch {
+    return null; // a malformed escape in the address
+  }
+}
 
 function Help() {
   const { t } = useTranslation();
+  const { hash } = useLocation();
+  const linked = sectionKeyForHash(hash);
   const [search, setSearch] = useState('');
-  const [openSection, setOpenSection] = useState(null);
+  const [openSection, setOpenSection] = useState(linked);
   const [routes, setRoutes] = useState({});
+  // Pick lists are early access: their page is offered only to the members
+  // who also see it in the menu.
+  const pickListsOn = useFeature('pickLists');
 
   // Fetch route mappings from backend (for "Go to" links)
   useEffect(() => {
     getHelpContent()
       .then(data => {
         const map = {};
-        for (const s of data.sections) map[s.id] = s.route;
+        for (const s of data.sections) {
+          const key = sectionKeyFor(s.id);
+          if (key && s.route) map[key] = s.route;
+        }
         setRoutes(map);
       })
       .catch(() => {});
   }, []);
+
+  // /help#<section>: open that section and bring it into view — on arrival,
+  // and again when a link inside the app changes the hash. A search would
+  // hide the section, so it is cleared.
+  useEffect(() => {
+    if (!linked) return;
+    setSearch('');
+    setOpenSection(linked);
+    requestAnimationFrame(() => scrollBelowNavbar(document.getElementById(linked)));
+  }, [linked, hash]);
 
   const sections = useMemo(() => SECTION_KEYS.map(key => {
     const prefix = `help.sections.${key}`;
@@ -42,8 +91,10 @@ function Help() {
       else break;
     }
 
-    return { key, title, summary, details, route: routes[key] || null };
-  }), [t, routes]);
+    const route = routes[key] || LOCAL_ROUTES[key]
+      || (key === 'pickLists' && pickListsOn ? '/pick-lists' : null);
+    return { key, title, summary, details, route };
+  }), [t, routes, pickListsOn]);
 
   const filtered = search.trim()
     ? sections.filter(s => {
@@ -116,7 +167,7 @@ function Help() {
             const isOpen = openSection === section.key || search.trim().length > 0;
 
             return (
-              <div key={section.key} className={`help-section ${isOpen ? 'help-section--open' : ''}`}>
+              <div key={section.key} id={section.key} className={`help-section ${isOpen ? 'help-section--open' : ''}`}>
                 <button
                   className="help-section-header"
                   onClick={() => toggleSection(section.key)}

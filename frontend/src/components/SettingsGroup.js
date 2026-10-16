@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import scrollBelowNavbar from '../utils/scrollBelowNavbar';
 
 /**
  * One collapsible group on the Settings page (Account, Preferences, AI &
@@ -62,19 +63,7 @@ export default function SettingsGroup({ id, title, summary, defaultOpen = false,
   useEffect(() => {
     if (!linked) return;
     setOpen(true);
-    requestAnimationFrame(() => {
-      const el = ref.current;
-      if (!el) return;
-      // Clear the sticky top bar, whose height varies (the admin menu wraps
-      // onto several rows), so the group's heading is never hidden under it.
-      const bar = document.querySelector('.navbar');
-      const barBottom = bar && getComputedStyle(bar).position === 'sticky' ? bar.getBoundingClientRect().bottom : 0;
-      if (typeof window.scrollTo === 'function' && barBottom > 0) {
-        window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - barBottom - 12, behavior: 'smooth' });
-      } else {
-        el.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
-      }
-    });
+    requestAnimationFrame(() => scrollBelowNavbar(ref.current));
   }, [id, hash, linked]);
 
   return (

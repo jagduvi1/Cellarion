@@ -17,6 +17,17 @@
   color: var(--color-text);
 }
 
+/* "Look in Help first": one line under the title, not a banner. */
+.support-help-hint {
+  margin: -8px 0 16px;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+}
+
+.support-help-hint a {
+  color: var(--color-accent);
+}
+
 .support-tabs {
   display: flex;
   gap: 4px;

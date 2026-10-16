@@ -111,7 +111,8 @@
     "switchToDark": "Switch to dark mode",
     "switchToLight": "Switch to light mode",
     "dashboard": "Dashboard",
-    "pickLists": "Pick lists"
+    "pickLists": "Pick lists",
+    "help": "Help"
   },
   "errors": {
     "network": "Cellarion could not be reached. Check your connection and try again.",
@@ -3543,43 +3544,111 @@
       "cellars": {
         "title": "Cellars",
         "summary": "Create cellars to organize your wine collection.",
-        "d1": "Create cellars by clicking \"+ New Cellar\" and typing a name.",
+        "d1": "Create a cellar: on My Cellars, tap \"+ New Cellar\" and type a name.",
         "d2": "Each cellar is a separate bottle collection.",
-        "d3": "Open a cellar to see all its bottles. Filter by search, vintage, rating. Sort by newest/oldest/price/rating.",
-        "d4": "Cellar overview tab shows: bottle count, total value, and links to Racks and Room View."
+        "d3": "Open a cellar to see its bottles. Search by name, producer, grape or region, narrow the list with Filters, and sort it by date added, name, vintage, price, number of bottles or maturity.",
+        "d4": "The strip at the top of a cellar switches between its views: Bottles, Overview, Racks, Room View, History and Cellar Book. Overview shows the number of bottles and wines, the total value and the average price.",
+        "d5": "The ⋮ menu at the top right holds the cellar's actions: Edit Cellar, Set Color, Share, Wine Lists, Import Bottles, Export, Audit Log, Recently deleted and Delete Cellar. Some are for the cellar's owner only."
       },
       "bottles": {
         "title": "Bottles",
         "summary": "Add, manage, and track individual bottles in your cellars.",
-        "d1": "Add a bottle: click \"+ Add Bottle\" in a cellar. Two ways: search the shared wine registry by name, OR scan a wine label with your phone camera to identify the wine automatically.",
+        "d1": "Add a bottle: open a cellar and tap \"Add Bottle\" (on a phone, the round + button). Search the shared wine registry by name, or point your camera at the label or the barcode.",
         "d2": "Bottle detail page shows: wine info, vintage, price paid, market value estimate, your rating, your notes, images, grape varieties, aging & maturity status, price evolution chart.",
-        "d3": "Edit details: click \"Edit Details\" on the bottle page to change vintage, price, rating, notes, size.",
+        "d3": "Edit details: tap \"Edit Details\" on the bottle page to change vintage, price, rating, notes and size.",
         "d4": "Upload photos: on the bottle detail page, you can add photos of the bottle or label. Background removal is automatic.",
         "d5": "Share a bottle: click the share icon on the bottle detail page to send a link to someone.",
-        "d6": "Drink or take out: click \"Drink\" on the bottle page, choose why it left (drank, gifted, sold or other) and the date. The bottle moves to the cellar's history.",
+        "d6": "Drink or give away: tap \"Drink\" on the bottle page. In \"Take out of the cellar\", choose why it left (drank it, gifted, sold or other) and the date. The bottle is then \"Taken out\" and moves to the cellar's History.",
         "d7": "Write a review: on the bottle detail page, scroll down to write a community review.",
-        "d8": "Bottles on order: bought wine that has not arrived yet (en primeur, a pre-order)? When adding, open More details and tick \"Not delivered yet\". It waits on the cellar's \"On order\" list, outside counts and racks, until you tap \"Mark as arrived\". If the expected month passes, Cellarion asks whether it has come.",
-        "d9": "Saved a bottle under the wrong wine? Open the bottle, tap the ⋮ menu and choose \"Change wine…\": search for the right wine and the bottle moves there, keeping its dates, price, notes, rating, rack slot and history."
+        "d8": "Bought wine that has not arrived yet? Add it on order: see \"Bottles on order\" below.",
+        "d9": "Saved a bottle under the wrong wine? Open the bottle, tap the ⋮ menu and choose \"Change wine…\": search for the right wine and the bottle moves there, keeping its dates, price, notes, rating, rack slot and history.",
+        "d10": "The bottle page's ⋮ menu also has \"Add more bottles\", \"Move to another cellar\" and \"Added by mistake?\". A bottle added by mistake goes to Recently deleted, where you can bring it back for 30 days."
+      },
+      "vintagePage": {
+        "title": "Wine and vintage page",
+        "summary": "One page for each wine and vintage in a cellar, whether you have one bottle or twenty.",
+        "d1": "Tap a wine in your cellar's bottle list to open it. The page shows the wine, then this vintage, then each of your bottles with its rack slot, size, price and shop.",
+        "d2": "\"Drink a bottle\" takes one bottle out of the cellar. If you have more than one, pick which; the others stay as they are.",
+        "d3": "\"Edit vintage\" sets the drink window and notes on all your bottles of this vintage at once. A field that differs between the bottles is left as it is unless you fill it in.",
+        "d4": "\"Add bottle\" starts adding another bottle of this wine and vintage.",
+        "d5": "On a phone, these buttons sit in a bar at the bottom of the screen.",
+        "d6": "The ⋮ menu holds the rest: Add a photo of this vintage, Add barcode, Suggest a fix to the wine, Report a problem with this wine, Recommend to a friend and Open in the shared registry.",
+        "d7": "Tap \"View bottle\" to open one bottle's own page. Bottles already taken out and your other vintages of the wine are under \"Drunk and other vintages\".",
+        "d8": "Fold away the parts you do not need with the arrow beside their title. Cellarion remembers this on your account, and the bottle page folds the same parts."
+      },
+      "openBottle": {
+        "title": "Open bottles and glasses",
+        "summary": "Keep track of a bottle you have opened but not finished.",
+        "d1": "On the bottle page, tap \"Open bottle…\" and choose how you will keep it: Coravin, inert gas spray, vacuum stopper, sparkling stopper, or recorked. That sets the date to drink it by.",
+        "d2": "An open bottle stays in your cellar, and in its rack slot, until you finish it.",
+        "d3": "\"Pour a glass\" counts each glass and shows about how many are left. \"Undo pour\" takes the last one back.",
+        "d4": "When it is empty, tap \"Finish bottle…\" to take it out of the cellar as usual.",
+        "d5": "Opened it by mistake? \"Opened by mistake?\" closes it again and removes its pours.",
+        "d6": "In a rack, tap a bottle and then \"Drink\": the dialog also offers \"Just a glass — keep the bottle\", which opens the bottle and pours one glass."
       },
       "labelScan": {
         "title": "Label Scanning",
         "summary": "Scan a wine label with your camera to identify it automatically.",
-        "d1": "Available when adding a bottle — click the camera button.",
+        "d1": "When adding a bottle, tap \"Start Camera\" under \"Scan the wine label\".",
         "d2": "Take a photo of the wine label and we'll read it and identify the wine for you.",
         "d3": "Works with most printed labels. Best results with clear, well-lit photos.",
-        "d4": "After scanning, the wine details are pre-filled. Review and save."
+        "d4": "After scanning, the wine details are pre-filled. Review and save.",
+        "d5": "If the front label leaves gaps, you may be asked to scan the back label too."
+      },
+      "barcode": {
+        "title": "Barcodes",
+        "summary": "Find a wine by the barcode on its bottle, and help the next person find it.",
+        "d1": "When the camera is open in Add Bottle, it also reads barcodes. If members have saved that barcode before, the wine is found at once, without a label photo.",
+        "d2": "A barcode nobody has saved yet is kept with your bottle: photograph the front label as usual, and the next member who scans it finds the wine straight away.",
+        "d3": "Chose the wine by name instead? Tap \"Scan barcode\" under the wine to add its barcode.",
+        "d4": "For a bottle already in your cellar: open it and tap ⋮ → \"Add barcode\". You can also type the numbers under the stripes (8, 12 or 13 digits).",
+        "d5": "On the wine and vintage page, ⋮ → \"Add barcode\" saves it on your bottles of that vintage, except other bottle sizes and bottles that have a barcode of their own."
+      },
+      "onOrder": {
+        "title": "Bottles on order",
+        "summary": "Wine you have bought that has not been delivered yet, such as en primeur or a pre-order.",
+        "d1": "When adding a bottle, tap \"Add notes, occasion, purchase info\" and tick \"Not delivered yet (on order)\". Add the month you expect it, if you know it.",
+        "d2": "Bottles on order stay out of the cellar's counts, racks and drinking suggestions. A bar above the cellar's bottle list shows how many are on order and opens the On order page.",
+        "d3": "On the On order page, each delivery has \"Mark as arrived\", \"Change month\" and \"Change quantity\".",
+        "d4": "Mark as arrived: say how many came and on which date. They become ordinary bottles in the cellar, ready to place in a rack.",
+        "d5": "Change quantity: type the new number of bottles on the order. New bottles get the order's price, shop and expected month. With fewer, the most recently added go to Recently deleted, where you can bring them back for 30 days.",
+        "d6": "Once the expected month is over, Cellarion asks whether the wine has arrived.",
+        "d7": "Order cancelled? Open the bottle and tap ⋮ → \"Order cancelled? Remove it\".",
+        "d8": "A scanned prepayment receipt or pro-forma invoice brings its wines in on order too."
+      },
+      "selectMode": {
+        "title": "Select several bottles",
+        "summary": "Move, take out, reserve or delete many bottles at once.",
+        "d1": "In your cellar's bottle list, tap \"Select\" (or press and hold a bottle) and tick the bottles. Ticking a stack ticks all its bottles.",
+        "d2": "\"Select all\" ticks every bottle loaded in the list.",
+        "d3": "Then choose an action: Move (to another cellar), Purchase, Drink, Reserve, Drink window, List (add to a wine list) or Delete. With early access on, Pick list is there too.",
+        "d4": "Purchase and Drink window change only what you fill in. Anything left blank stays as it is on each bottle.",
+        "d5": "Drink takes the bottles out of the cellar with one date. Rate them one by one later in the History.",
+        "d6": "Reserve marks bottles as spoken for: give a person or occasion, a year, or both. Reserved bottles are left out of drink suggestions, and Drink leaves them alone unless you tick \"Take the reserved ones out too\".",
+        "d7": "Delete moves the bottles to Recently deleted; from 10 bottles you type the number to confirm. Undo brings them all back at once.",
+        "d8": "Select is for the cellar's owner, in one cellar at a time."
+      },
+      "recentlyDeleted": {
+        "title": "Recently deleted",
+        "summary": "Deleted bottles wait here for 30 days, so you can bring them back.",
+        "d1": "Open it from the cellar's ⋮ menu → Recently deleted.",
+        "d2": "Bottles end up here when you delete them with Select → Delete, remove one with \"Added by mistake?\", or take some off an order with \"Change quantity\".",
+        "d3": "Tap \"Restore\" on a bottle, or restore a whole batch at once. A restored bottle comes back with its photos and notes, and goes back to its rack slot if that slot is still free.",
+        "d4": "After 30 days they are deleted for good, with their photos.",
+        "d5": "A bottle you drank, gave away or sold is not deleted: you find it in the cellar's History."
       },
       "sharing": {
         "title": "Sharing",
         "summary": "Share cellars with friends or send a link to a specific bottle.",
-        "d1": "Share a cellar: open a cellar → click the \"...\" menu → Share. Invite someone by email as Viewer (can browse) or Editor (can add/remove bottles). Only the cellar owner can share.",
-        "d2": "Share a bottle: on any bottle detail page, click the share icon to send a direct link to someone."
+        "d1": "Share a cellar: open the cellar and tap ⋮ → Share. Invite someone by email as Viewer (can browse bottles and racks) or Editor (can also add and remove bottles). Only the cellar owner can share.",
+        "d2": "Share a bottle: on any bottle detail page, click the share icon to send a direct link to someone.",
+        "d3": "\"Make owner\" hands the whole cellar, with its bottles and racks, to someone you share it with. You stay on as an editor, but you cannot take it back."
       },
       "racks": {
         "title": "Racks",
         "summary": "Organize bottles in physical rack grids that match your real storage.",
-        "d1": "Access racks: open a cellar → click the \"...\" menu → Racks.",
-        "d2": "Choose from multiple rack types: standard grid, X-rack, hexagonal honeycomb, triangle (A-frame), vertical stack, modular cube, or open shelf.",
+        "d1": "Open a cellar and tap Racks in the strip at the top.",
+        "d2": "Choose a rack type: grid, X-rack, honeycomb, A-frame, stack, modular cube, open shelf or wine cabinet.",
         "d3": "Customize each rack with a name, size, and layout that matches your real storage.",
         "d4": "Place bottles into rack slots by clicking an empty slot and selecting a bottle.",
         "d5": "Visual grid shows which slots are filled and which are empty."
@@ -3587,10 +3656,33 @@
       "roomView": {
         "title": "3D Room View",
         "summary": "Build a 3D virtual room that mirrors your real cellar.",
-        "d1": "Access: open a cellar → overview tab → Room View.",
+        "d1": "Open a cellar and tap Room View in the strip at the top.",
         "d2": "Place and arrange your racks in a virtual 3D room.",
         "d3": "Click \"Edit\" to enter edit mode: drag racks, rotate them, add unplaced racks.",
-        "d4": "Click \"Save\" to keep your layout. Come back anytime to rearrange."
+        "d4": "Click \"Save\" to keep your layout. Come back anytime to rearrange.",
+        "d5": "In edit mode, click a rack to select it; Shift+click adds or removes more racks. The arrow keys move the selected racks 5 cm at a time.",
+        "d6": "Ctrl+Z undoes your last change and Ctrl+Y (or Ctrl+Shift+Z) redoes it; on a Mac, use Cmd. Esc cancels Stack or Link while you are choosing a rack."
+      },
+      "pickLists": {
+        "title": "Pick lists (early access)",
+        "summary": "The bottles you are about to fetch, with the cellar, rack and slot of each.",
+        "d1": "Pick lists are an early-access preview. To try them, turn on Settings → Early access → \"Show me new features before everyone else\".",
+        "d2": "Add bottles: in your cellar, tap Select, tick the bottles and choose \"Pick list\". Or tap ⋮ → \"Add to pick list\" on a bottle's page or a wine and vintage page.",
+        "d3": "Choose a list, or \"New pick list…\" to start one and give it a name, for example Saturday dinner.",
+        "d4": "Your lists are under Pick lists in the menu. Each one shows where every bottle sits, in the order you walk past them.",
+        "d5": "Tick bottles off as you pick them. \"Print\" gives a clean sheet to take with you.",
+        "d6": "The \"Mark … picked as drunk\" button takes all the ticked bottles out of the cellar in one go.",
+        "d7": "Deleting a list leaves its bottles in your cellar."
+      },
+      "wineLists": {
+        "title": "Wine lists",
+        "summary": "Turn a cellar's bottles into a wine menu: a printable PDF and a web page.",
+        "d1": "Open a cellar and tap ⋮ → Wine Lists, or Wine Lists on the Overview tab. Only the cellar's owner can make them.",
+        "d2": "Tap \"New Wine List\" and name it. Start with every wine in the cellar, priced from what you paid, or pick the wines yourself.",
+        "d3": "The editor's tabs: Wines (which wines, their sections and prices), Preview, Branding (name, tagline, logo), Layout (style, font, page size and display options), Dashboard (stock, revenue and margin) and Share.",
+        "d4": "\"Preview PDF\" shows the printable menu. Changes are saved as you go.",
+        "d5": "Publish it under Share to get a public link; the PDF then carries a QR code that opens the web menu. \"Unpublish\" takes it down again.",
+        "d6": "From the bottle list, Select → List adds the ticked bottles to a wine list."
       },
       "wishlist": {
         "title": "Wishlist",
@@ -3601,11 +3693,11 @@
       },
       "restock": {
         "title": "Smart Restock",
-        "summary": "Automatic analysis of your consumption patterns vs inventory.",
-        "d1": "Shows: bottles consumed per year, purchased per year, net change, and years of runway.",
+        "summary": "Compares how fast you drink with what is left in your cellar.",
+        "d1": "Shows how many bottles you drink and buy per year, the net change, and how many years your stock lasts at that pace.",
         "d2": "Breaks down stock levels by wine type, grape, region, country, and producer.",
         "d3": "Flags categories running low based on your actual drinking pace.",
-        "d4": "Fully automatic — based on your consumption history. No manual setup needed."
+        "d4": "Fully automatic, based on the bottles you have taken out. No setup needed."
       },
       "journal": {
         "title": "Wine Journal",
@@ -3625,7 +3717,7 @@
         "summary": "Chat with a sommelier who knows your entire cellar.",
         "d1": "Ask for food pairings, what to drink tonight, or wine suggestions from your collection.",
         "d2": "The sommelier knows all your bottles, ratings, and notes.",
-        "d3": "Usage limits depend on your plan (Free: 4/week, Basic: 20/day, Premium: 50/day)."
+        "d3": "Everyone gets the same number of questions per day, free like every feature. The count at the top shows how many you have asked today."
       },
       "analytics": {
         "title": "Statistics",
@@ -3633,8 +3725,20 @@
         "d1": "Collection value over time, bottles by country/type/grape/region.",
         "d2": "World map showing where your wines come from.",
         "d3": "Drink window overview: how many bottles are not ready, early, at their peak, late or declining.",
-        "d4": "Export your stats as a shareable card image.",
-        "d5": "Free for everyone, like every feature in Cellarion."
+        "d4": "\"Share Card\" turns your stats into an image you can share.",
+        "d5": "Free for everyone, like every feature in Cellarion.",
+        "d6": "Want your own tables and charts? The Dashboard builds them: see \"Dashboard\" below."
+      },
+      "dashboard": {
+        "title": "Dashboard",
+        "summary": "Build your own tables and charts from your bottles. Statistics is the ready-made overview.",
+        "d1": "Open Dashboard in the top menu (on a computer), from the link on the Statistics page, or with the table button above a cellar's bottle list.",
+        "d2": "The Table tab lists your bottles. Choose which ones (Active bottles, Bottles taken out or All bottles) and which cellars, narrow them with \"+ Filter\", and pick the columns.",
+        "d3": "\"Summarize\" groups the bottles, for example by region or vintage, and adds totals or averages such as price or rating. Show the result as a table, bars, a donut or a line.",
+        "d4": "\"Views\" has ready-made views such as \"Where my money sits\" and \"Drink soon (my windows)\". \"Save view\" keeps your own, and a star keeps the ones you use most at the top.",
+        "d5": "\"Add to dashboard\" pins the table or chart on a dashboard. The Boards tab shows your dashboards; \"+ New dashboard\" starts another.",
+        "d6": "\"Export CSV\" downloads the table as a spreadsheet file.",
+        "d7": "Prices are converted to the currency you chose in Settings."
       },
       "community": {
         "title": "Community",
@@ -3651,32 +3755,58 @@
       },
       "import": {
         "title": "Bulk Import",
-        "summary": "Import your wine collection from a CSV or JSON file.",
-        "d1": "Access: open a cellar → \"...\" menu → Import Bottles.",
-        "d2": "Upload a CSV or JSON file with your wine data.",
-        "d3": "Imported wines are automatically matched to the registry."
+        "summary": "Bring bottles in from a file, another app, or a photo of a receipt.",
+        "d1": "Open the cellar and tap ⋮ → Import Bottles.",
+        "d2": "Upload a file: a Cellarion export (JSON), Vivino, CellarTracker, Oeno by Vintec, Ploc, or any CSV with Wine, Producer and Vintage columns.",
+        "d3": "Imported wines are matched to the registry automatically, and you check the matches before anything is added.",
+        "d4": "Bought several bottles? \"Scan a receipt or order\" (in beta) reads photos or a PDF of the receipt into rows you check the same way.",
+        "d5": "To recreate whole cellars, with their racks and layout, from a Cellarion export, use \"Import a cellar export\" in Settings → Your data."
       },
       "settings": {
         "title": "Settings",
         "summary": "Customize your Cellarion experience.",
         "d1": "Currency preference (used for prices and value calculations).",
         "d2": "Language selection.",
-        "d3": "Rating scale: 5-star, 10-point, 20-point, or 100-point.",
+        "d3": "Rating scale: 5-star, 20-point or 100-point.",
         "d4": "Push notification preferences and device management.",
-        "d5": "Profile: username and email."
+        "d5": "Profile: username and email.",
+        "d6": "Offline mode is under Preferences, and \"Try new features early\" under Early access: see their own sections below.",
+        "d7": "Your data: download everything Cellarion stores about you, or export your cellars to take them elsewhere."
+      },
+      "offline": {
+        "title": "Offline use",
+        "summary": "Use your cellar where there is no signal.",
+        "d1": "Turn it on in Settings → Preferences → Offline mode: \"Keep my cellar available offline on this device\". The installed app asks you once.",
+        "d2": "A copy of your cellars, racks and bottles is kept on that device, so you can open them without a connection.",
+        "d3": "Offline you can take bottles out, open them, pour a glass, edit them, and place or move them in racks.",
+        "d4": "A banner shows how many changes are waiting. They are sent when you are back online; if the cellar changed in the meantime, \"Review\" lets you keep yours or theirs.",
+        "d5": "Other pages need a connection. They say so, and load by themselves when you are back online.",
+        "d6": "Logging out deletes the copy, and any changes not sent yet. On a shared computer, leave offline mode off."
+      },
+      "earlyAccess": {
+        "title": "Early access",
+        "summary": "Try new features before everyone else, and tell us what you think.",
+        "d1": "Turn it on in Settings → Early access → \"Show me new features before everyone else\". Turn it off again at any time.",
+        "d2": "Larger changes reach these members first, so they can be tried and improved before everyone gets them.",
+        "d3": "Settings → Early access lists what is \"In beta now\" and what was \"Recently released\".",
+        "d4": "A feature in early access shows a Beta strip with \"Give feedback\", which sends your thoughts to the Cellarion team as a support ticket.",
+        "d5": "Your data is stored the same way either way, so turning it off loses nothing.",
+        "d6": "Like everything in Cellarion, it is free."
       },
       "history": {
         "title": "Cellar History",
         "summary": "Every bottle you have taken out of a cellar.",
-        "d1": "Access: open a cellar → \"...\" menu → History.",
-        "d2": "Shows every bottle you have drunk, gifted or sold, with dates."
+        "d1": "Open a cellar and tap History in the strip at the top.",
+        "d2": "Shows every bottle you have drunk, gifted or sold, with dates.",
+        "d3": "Rate a bottle and add a tasting note afterwards, right in the history.",
+        "d4": "Took one out by mistake? Tap Undo in the message that appears straight away, or open the bottle within 2 days and tap \"Move back to cellar\"."
       },
       "other": {
         "title": "Other Features",
-        "summary": "Blog, plans, support, and NFC tags.",
+        "summary": "Blog, supporting Cellarion, support tickets and NFC tags.",
         "d1": "Blog (/blog): wine articles and guides.",
-        "d2": "Support Us (/supporter): supporter tiers — Enthusiast (free), Supporter ($2/mo), Patron ($5/mo), Benefactor ($10/mo), each also available yearly. A custom or one-time amount can be given through GitHub Sponsors.",
-        "d3": "Support (/support): submit support tickets for help.",
+        "d2": "Support Us (/supporter): every feature is free for everyone, on the free Enthusiast tier too. Supporter ($2/mo), Patron ($5/mo) and Benefactor ($10/mo), also available yearly, are voluntary gifts that fund development and unlock nothing extra. A custom or one-time amount can be given through GitHub Sponsors.",
+        "d3": "Support (/support): look in Help first; if you are still stuck, send a support ticket.",
         "d4": "NFC tags: attach NFC tags to racks — scan with your phone to open the rack directly."
       }
     }
@@ -5227,6 +5357,8 @@
   },
   "support": {
     "title": "Support",
+    "helpFirst": "Have a question? Look in Help first — most answers are already there.",
+    "helpLink": "Open Help",
     "newTicket": "+ New Support Ticket",
     "myTickets": "My Tickets ({{count}})",
     "myWineReports": "My Wine Reports ({{count}})",

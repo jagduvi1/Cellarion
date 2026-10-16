@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import SupportPage from './SupportPage';
 
 // The person who opened a ticket can close it themselves once it is answered
@@ -47,10 +48,24 @@ beforeEach(() => {
   getReports.mockResolvedValue(jsonRes({ reports: [] }));
 });
 
+// In a router: the page links to Help.
+const renderPage = () => render(<MemoryRouter><SupportPage /></MemoryRouter>);
+
 async function openTicket() {
-  render(<SupportPage />);
+  renderPage();
   fireEvent.click(await screen.findByRole('button', { name: /Import stuck at 80%/ }));
 }
+
+// Most questions are answered in Help, which nobody found (usability plan,
+// Step 6): the Support page points there before the ticket list.
+test('points to Help first', async () => {
+  renderPage();
+  expect(screen.getByText(/Look in Help first/)).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Open Help' })).toHaveAttribute('href', '/help');
+  // The ticket button stays where it was.
+  expect(screen.getByRole('button', { name: 'support.newTicket' })).toBeInTheDocument();
+  await screen.findByRole('button', { name: /Import stuck at 80%/ });
+});
 
 test('"Mark as resolved" asks first, then closes the ticket and the reply box gives way to the closed note', async () => {
   close.mockResolvedValue(jsonRes({ ticket: { ...TICKET, status: 'closed' } }));

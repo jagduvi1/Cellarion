@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getMySupportTickets, getMyWineReports, replySupportTicket, closeSupportTicket } from '../api/support';
 import SupportModal from '../components/SupportModal';
@@ -103,6 +104,12 @@ function SupportPage() {
           {t('support.newTicket')}
         </button>
       </div>
+      {/* Most questions already have an answer in Help: point there first,
+          in one quiet line that does not stand in the way of a ticket. */}
+      <p className="support-help-hint">
+        {t('support.helpFirst', 'Have a question? Look in Help first — most answers are already there.')}{' '}
+        <Link to="/help">{t('support.helpLink', 'Open Help')}</Link>
+      </p>
 
       <div className="support-tabs">
         <button

@@ -191,6 +191,14 @@ function Layout({ children }) {
                 >
                   {t('nav.support')}
                 </Link>
+                {/* Help sits beside Support: where people look when stuck,
+                    before they write a ticket. */}
+                <Link
+                  to="/help"
+                  className={`nav-link ${isActive('/help') ? 'active' : ''}`}
+                >
+                  {t('nav.help', 'Help')}
+                </Link>
 
                 {(roles.includes('somm') || roles.includes('admin')) && (
                   <>
@@ -313,6 +321,7 @@ function Layout({ children }) {
               <Link to="/blog" className={`mobile-menu-link ${isActive('/blog') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.blog')}{blogBadge}</Link>
               <Link to="/supporter" className={`mobile-menu-link ${isActive('/supporter') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.supporter')}</Link>
               <Link to="/support" className={`mobile-menu-link ${isActive('/support') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.support')}</Link>
+              <Link to="/help" className={`mobile-menu-link ${isActive('/help') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.help', 'Help')}</Link>
             </div>
 
             {(roles.includes('somm') || roles.includes('admin')) && (
