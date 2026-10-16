@@ -4,7 +4,7 @@
  * (the admin menu wraps onto several rows), so it is measured each time.
  *
  * Used where a link opens one part of a long page: a Settings group
- * (/settings#notifications) and a Help section (/help#onOrder).
+ * (/settings#preferences) and a Help section (/help#onOrder).
  */
 export default function scrollBelowNavbar(el) {
   if (!el) return;

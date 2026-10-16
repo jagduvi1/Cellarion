@@ -2408,26 +2408,19 @@
       "cellars": {
         "title": "Caves",
         "summary": "Crée des caves pour organiser ta collection de vins.",
-        "d1": "Crée une cave en cliquant sur « + Nouvelle cave » et en saisissant un nom.",
-        "d2": "Chaque cave est une collection de bouteilles distincte.",
-        "d3": "Ouvre une cave pour voir toutes ses bouteilles. Filtre par recherche, millésime ou note. Trie par plus récentes/plus anciennes/prix/note.",
-        "d4": "L'onglet Aperçu de la cave affiche : le nombre de bouteilles, la valeur totale, et des liens vers les Casiers et la Vue salle."
+        "d2": "Chaque cave est une collection de bouteilles distincte."
       },
       "bottles": {
         "title": "Bouteilles",
         "summary": "Ajoute, gère et suis chaque bouteille de tes caves.",
-        "d1": "Ajouter une bouteille : clique sur « + Ajouter une bouteille » dans une cave. Deux méthodes : rechercher le vin par son nom dans la base, OU scanner une étiquette avec l'appareil photo de ton téléphone pour identifier le vin automatiquement.",
         "d2": "La page d'une bouteille affiche : les informations sur le vin, le millésime, le prix payé, l'estimation de la valeur de marché, ta note, tes commentaires, les images, les cépages, le statut de garde et de maturité, et le graphique d'évolution du prix.",
-        "d3": "Modifier les détails : clique sur « Modifier les détails » sur la page de la bouteille pour changer le millésime, le prix, la note, les commentaires ou le format.",
         "d4": "Envoyer des photos : sur la page de la bouteille, tu peux ajouter des photos de la bouteille ou de l'étiquette. L'arrière-plan est supprimé automatiquement.",
         "d5": "Partager une bouteille : clique sur l'icône de partage sur la page de la bouteille pour envoyer un lien à quelqu'un.",
-        "d6": "Boire ou retirer : clique sur « Retirer la bouteille » pour la marquer comme consommée. Indique la date à laquelle tu l'as bue. La bouteille passe dans l'historique de la cave.",
         "d7": "Écrire un avis : sur la page de la bouteille, descends pour rédiger un avis visible par la communauté."
       },
       "labelScan": {
         "title": "Scan d'étiquette",
         "summary": "Scanne une étiquette avec ton appareil photo pour identifier le vin automatiquement.",
-        "d1": "Disponible au moment d'ajouter une bouteille — clique sur le bouton appareil photo.",
         "d2": "Prends une photo de l'étiquette : nous la lisons et identifions le vin pour toi.",
         "d3": "Fonctionne avec la plupart des étiquettes imprimées. Les meilleurs résultats viennent de photos nettes et bien éclairées.",
         "d4": "Après le scan, les informations du vin sont pré-remplies. Vérifie, puis enregistre."
@@ -2435,14 +2428,11 @@
       "sharing": {
         "title": "Partage",
         "summary": "Partage des caves avec tes amis, ou envoie le lien d'une bouteille précise.",
-        "d1": "Partager une cave : ouvre une cave → menu « ... » → Partager. Invite quelqu'un par e-mail en Lecture (peut consulter) ou en Modification (peut ajouter et retirer des bouteilles). Seul le propriétaire de la cave peut la partager.",
         "d2": "Partager une bouteille : sur la page d'une bouteille, clique sur l'icône de partage pour envoyer un lien direct."
       },
       "racks": {
         "title": "Casiers",
         "summary": "Range tes bouteilles dans des grilles de casiers qui reproduisent ton rangement réel.",
-        "d1": "Accéder aux casiers : ouvre une cave → menu « ... » → Casiers.",
-        "d2": "Choisis parmi plusieurs types de casiers : grille standard, casier en X, nid d'abeille, casier en A, empilement vertical, cube modulaire ou étagère ouverte.",
         "d3": "Personnalise chaque casier avec un nom, une taille et une disposition qui correspondent à ton rangement réel.",
         "d4": "Place des bouteilles dans les emplacements en cliquant sur un emplacement vide et en choisissant une bouteille.",
         "d5": "La grille visuelle montre quels emplacements sont occupés et lesquels sont libres."
@@ -2450,7 +2440,6 @@
       "roomView": {
         "title": "Vue salle 3D",
         "summary": "Construis une salle virtuelle en 3D qui reproduit ta vraie cave.",
-        "d1": "Accès : ouvre une cave → onglet Aperçu → Vue salle.",
         "d2": "Place et agence tes casiers dans une salle virtuelle en 3D.",
         "d3": "Clique sur « Modifier » pour passer en mode édition : déplace les casiers, fais-les pivoter, ajoute les casiers non placés.",
         "d4": "Clique sur « Enregistrer » pour conserver ton agencement. Reviens quand tu veux pour le réorganiser."
@@ -2464,11 +2453,8 @@
       },
       "restock": {
         "title": "Réapprovisionnement intelligent",
-        "summary": "Analyse automatique de tes habitudes de consommation par rapport à ton stock.",
-        "d1": "Affiche : bouteilles bues par an, bouteilles achetées par an, variation nette et années d'autonomie.",
         "d2": "Détaille les niveaux de stock par type de vin, cépage, région, pays et producteur.",
-        "d3": "Signale les catégories bientôt épuisées d'après ton rythme réel de consommation.",
-        "d4": "Entièrement automatique — fondé sur ton historique de consommation. Aucun réglage nécessaire."
+        "d3": "Signale les catégories bientôt épuisées d'après ton rythme réel de consommation."
       },
       "journal": {
         "title": "Journal de dégustation",
@@ -2487,8 +2473,7 @@
         "title": "Chat de cave",
         "summary": "Discute avec un sommelier qui connaît toute ta cave.",
         "d1": "Demande des accords mets-vins, quoi boire ce soir, ou des suggestions puisées dans ta collection.",
-        "d2": "Le sommelier connaît toutes tes bouteilles, tes notes et tes commentaires.",
-        "d3": "Les limites d'utilisation dépendent de ta formule (Gratuite : 4/semaine, Basique : 20/jour, Premium : 50/jour)."
+        "d2": "Le sommelier connaît toutes tes bouteilles, tes notes et tes commentaires."
       },
       "analytics": {
         "title": "Analyses",
@@ -2496,7 +2481,6 @@
         "d1": "Valeur de la collection dans le temps, bouteilles par pays/type/cépage/région.",
         "d2": "Carte du monde montrant d'où viennent tes vins.",
         "d3": "Aperçu des fenêtres de dégustation : vins prêts, encore en garde, ou au-delà de leur apogée.",
-        "d4": "Exporte tes statistiques sous forme de carte à partager.",
         "d5": "Fonctionnalité Premium — disponible avec la formule Premium."
       },
       "community": {
@@ -2513,33 +2497,24 @@
         "d2": "Un administrateur examine la demande et ajoute les vins approuvés pour que tout le monde puisse les utiliser."
       },
       "import": {
-        "title": "Import en masse",
-        "summary": "Importe ta collection depuis un fichier CSV ou JSON.",
-        "d1": "Accès : ouvre une cave → menu « ... » → Importer des bouteilles.",
-        "d2": "Envoie un fichier CSV ou JSON contenant les données de tes vins.",
-        "d3": "Les vins importés sont automatiquement rapprochés de la base."
+        "title": "Import en masse"
       },
       "settings": {
         "title": "Paramètres",
         "summary": "Personnalise ton expérience Cellarion.",
         "d1": "Devise préférée (utilisée pour les prix et les calculs de valeur).",
         "d2": "Choix de la langue.",
-        "d3": "Échelle de notation : 5 étoiles, sur 10, sur 20 ou sur 100.",
         "d4": "Préférences de notifications push et gestion des appareils.",
         "d5": "Profil : nom d'utilisateur et e-mail."
       },
       "history": {
         "title": "Historique de la cave",
         "summary": "Consulte toutes les bouteilles que tu as bues dans une cave.",
-        "d1": "Accès : ouvre une cave → menu « ... » → Historique.",
         "d2": "Affiche chaque bouteille marquée comme consommée, avec les dates."
       },
       "other": {
         "title": "Autres fonctionnalités",
-        "summary": "Blog, formules, assistance et étiquettes NFC.",
         "d1": "Blog (/blog) : articles et guides sur le vin.",
-        "d2": "Nous soutenir (/supporter) : niveaux de soutien — Passionné (gratuit), Soutien (1,50 $/mois), Mécène (5,50 $/mois).",
-        "d3": "Assistance (/support) : envoie un ticket pour obtenir de l'aide.",
         "d4": "Étiquettes NFC : colle des étiquettes NFC sur tes casiers — scanne-les avec ton téléphone pour ouvrir directement le casier."
       }
     }

@@ -1,21 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { getHelpContent } from '../api/help';
 import SEOHead from '../components/SEOHead';
 import SITE_URL from '../config/siteUrl';
-import { useFeature } from '../utils/featureFlags';
+import { useFeature, useFeatureFlags } from '../utils/featureFlags';
 import scrollBelowNavbar from '../utils/scrollBelowNavbar';
+import { SECTION_KEYS, sectionKeyFor } from '../utils/helpSections';
 import './Help.css';
-
-// Each key is also the section's address: /help#onOrder opens that section.
-export const SECTION_KEYS = [
-  'cellars', 'bottles', 'vintagePage', 'openBottle', 'labelScan', 'barcode',
-  'onOrder', 'selectMode', 'recentlyDeleted', 'sharing', 'racks', 'roomView',
-  'pickLists', 'wineLists', 'wishlist', 'restock', 'journal', 'recommendations',
-  'cellarChat', 'analytics', 'dashboard', 'community', 'wineRequests', 'import',
-  'settings', 'offline', 'earlyAccess', 'history', 'other',
-];
 
 // The pages the "Go to …" links open for the newer sections. The older ones
 // take theirs from the server's help content (/api/help), which does not
@@ -27,15 +19,6 @@ const LOCAL_ROUTES = {
   offline: '/settings#preferences',
   earlyAccess: '/settings#early-access',
 };
-
-// "onOrder", "on-order" and "onorder" all name the same section: these links
-// are typed by people (support answers, forum posts), and the server's help
-// content spells its ids in kebab case ("cellar-chat" for cellarChat).
-const squash = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-export function sectionKeyFor(id) {
-  const wanted = squash(id);
-  return wanted ? SECTION_KEYS.find(k => squash(k) === wanted) || null : null;
-}
 
 function sectionKeyForHash(hash) {
   try {
@@ -52,9 +35,13 @@ function Help() {
   const [search, setSearch] = useState('');
   const [openSection, setOpenSection] = useState(linked);
   const [routes, setRoutes] = useState({});
-  // Pick lists are early access: their page is offered only to the members
-  // who also see it in the menu.
+  // Pick lists follow their flag, which changes without a deploy (SuperAdmin
+  // → Feature flags): in beta the section says it is early access and how to
+  // turn that on; out for everyone it is an ordinary section; switched off
+  // it is not shown. Its page is offered to the members who see it in the
+  // menu.
   const pickListsOn = useFeature('pickLists');
+  const pickListsState = useFeatureFlags().find(f => f.key === 'pickLists')?.state || 'off';
 
   // Fetch route mappings from backend (for "Go to" links)
   useEffect(() => {
@@ -80,13 +67,15 @@ function Help() {
     requestAnimationFrame(() => scrollBelowNavbar(document.getElementById(linked)));
   }, [linked, hash]);
 
-  const sections = useMemo(() => SECTION_KEYS.map(key => {
+  const sections = useMemo(() => SECTION_KEYS.filter(key => key !== 'pickLists' || pickListsState !== 'off').map(key => {
     const prefix = `help.sections.${key}`;
-    const title = t(`${prefix}.title`);
+    const name = t(`${prefix}.title`);
+    const early = key === 'pickLists' && pickListsState === 'beta';
+    const title = early ? t(`${prefix}.earlyTitle`) : name;
     const summary = t(`${prefix}.summary`);
 
     // Collect detail bullets (d1, d2, d3, ...)
-    const details = [];
+    const details = early ? [t(`${prefix}.earlyNote`)] : [];
     for (let i = 1; i <= 10; i++) {
       const val = t(`${prefix}.d${i}`, { defaultValue: '' });
       if (val) details.push(val);
@@ -95,8 +84,8 @@ function Help() {
 
     const route = routes[key] || LOCAL_ROUTES[key]
       || (key === 'pickLists' && pickListsOn ? '/pick-lists' : null);
-    return { key, title, summary, details, route };
-  }), [t, routes, pickListsOn]);
+    return { key, name, title, summary, details, route };
+  }), [t, routes, pickListsOn, pickListsState]);
 
   const filtered = search.trim()
     ? sections.filter(s => {
@@ -196,10 +185,13 @@ function Help() {
                         <li key={i}>{detail}</li>
                       ))}
                     </ul>
+                    {/* In-app navigation: a full page load would fetch the
+                        app again (and fail offline, which one section is
+                        about). Settings opens a group from the hash. */}
                     {section.route && (
-                      <a href={section.route} className="help-section-link">
-                        {t('help.goTo', { name: section.title })} &rarr;
-                      </a>
+                      <Link to={section.route} className="help-section-link">
+                        {t('help.goTo', { name: section.name })} &rarr;
+                      </Link>
                     )}
                   </div>
                 )}
@@ -209,7 +201,7 @@ function Help() {
         </div>
 
         <p className="help-connect-ai">
-          <a href="/connect-ai">{t('help.connectAiLink')} &rarr;</a>
+          <Link to="/connect-ai">{t('help.connectAiLink')} &rarr;</Link>
         </p>
       </div>
     </div>

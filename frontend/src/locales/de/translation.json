@@ -2367,26 +2367,19 @@
       "cellars": {
         "title": "Keller",
         "summary": "Erstelle Keller, um deine Weinsammlung zu organisieren.",
-        "d1": "Erstelle Keller, indem du auf \"+ Neuer Keller\" klickst und einen Namen eingibst.",
-        "d2": "Jeder Keller ist eine separate Flaschensammlung.",
-        "d3": "Öffne einen Keller, um alle seine Flaschen zu sehen. Filtere nach Suche, Jahrgang, Bewertung. Sortiere nach neuesten/ältesten/Preis/Bewertung.",
-        "d4": "Der Keller-Übersichtstab zeigt: Flaschenanzahl, Gesamtwert sowie Links zu Regalen und 3D-Raumansicht."
+        "d2": "Jeder Keller ist eine separate Flaschensammlung."
       },
       "bottles": {
         "title": "Flaschen",
         "summary": "Füge Flaschen hinzu, verwalte sie und verfolge sie in deinen Kellern.",
-        "d1": "Flasche hinzufügen: Klicke in einem Keller auf \"+ Flasche hinzufügen\". Zwei Möglichkeiten: Durchsuche die Weindatenbank nach Namen ODER scanne mit deiner Handykamera ein Wein-Etikett, um den Wein automatisch zu identifizieren.",
         "d2": "Die Flaschen-Detailseite zeigt: Wein-Infos, Jahrgang, bezahlter Preis, geschätzter Marktpreis, deine Bewertung, deine Notizen, Bilder, Rebsorten, Alterungs- und Reifestatus, Preisverlaufsdiagramm.",
-        "d3": "Details bearbeiten: Klicke auf der Flaschenseite auf \"Details bearbeiten\", um Jahrgang, Preis, Bewertung, Notizen, Größe zu ändern.",
         "d4": "Fotos hochladen: Auf der Flaschen-Detailseite kannst du Fotos von der Flasche oder dem Etikett hinzufügen. Der Hintergrund wird automatisch entfernt.",
         "d5": "Flasche teilen: Klicke auf der Flaschen-Detailseite auf das Teilungssymbol, um einen Link an jemanden zu senden.",
-        "d6": "Konsumieren/entfernen: Klicke auf \"Flasche entfernen\", um sie als konsumiert zu markieren. Lege das Datum fest, an dem du sie getrunken hast. Die Flasche wird in die Kellerhistorie verschoben.",
         "d7": "Bewertung schreiben: Scrolle auf der Flaschen-Detailseite nach unten, um eine Community-Bewertung zu schreiben."
       },
       "labelScan": {
         "title": "Etikett-Scan",
         "summary": "Scanne ein Weinetikett mit der Kamera, um den Wein automatisch zu erkennen.",
-        "d1": "Verfügbar beim Hinzufügen einer Flasche — klicke auf die Kamera-Schaltfläche.",
         "d2": "Mach ein Foto vom Weinetikett, und wir lesen es und erkennen den Wein für dich.",
         "d3": "Funktioniert mit den meisten gedruckten Etiketten. Die besten Ergebnisse bringen scharfe, gut belichtete Fotos.",
         "d4": "Nach dem Scan sind die Weindaten vorausgefüllt. Prüfe sie und speichere."
@@ -2394,14 +2387,11 @@
       "sharing": {
         "title": "Teilen",
         "summary": "Teile Keller mit Freunden oder sende einen Link zu einer bestimmten Flasche.",
-        "d1": "Keller teilen: Öffne einen Keller → klicke auf das \"…\"-Menü → Teilen. Lade jemanden per E-Mail als Betrachter (kann stöbern) oder Bearbeiter (kann Flaschen hinzufügen/entfernen) ein. Nur der Kellerbesitzer kann teilen.",
         "d2": "Flasche teilen: Klicke auf der Flaschen-Detailseite auf das Teilungssymbol, um einen direkten Link an jemanden zu senden."
       },
       "racks": {
         "title": "Regale",
         "summary": "Organisiere Flaschen in physischen Regal-Rastern, die deine echte Lagerung widerspiegeln.",
-        "d1": "Zugriff auf Regale: Öffne einen Keller → klicke auf das \"…\"-Menü → Regale.",
-        "d2": "Wähle aus mehreren Regaltypen: Standard-Raster, X-Regal, hexagonale Wabe, Dreieck (A-Rahmen), vertikaler Stapel, modularer Würfel oder offenes Regal.",
         "d3": "Passe jedes Regal mit einem Namen, einer Größe und einem Layout an, das deine echte Lagerung widerspiegelt.",
         "d4": "Platziere Flaschen in Regalfächer, indem du auf ein leeres Fach klickst und eine Flasche auswählst.",
         "d5": "Das visuelle Raster zeigt, welche Fächer belegt und welche leer sind."
@@ -2409,7 +2399,6 @@
       "roomView": {
         "title": "3D-Raumansicht",
         "summary": "Baue einen virtuellen 3D-Raum, der deinen echten Keller widerspiegelt.",
-        "d1": "Zugriff: Öffne einen Keller → Übersichtstab → 3D-Raumansicht.",
         "d2": "Platziere und ordne deine Regale in einem virtuellen 3D-Raum.",
         "d3": "Klicke auf \"Bearbeiten\", um in den Bearbeitungsmodus zu wechseln: Verschiebe Regale, drehe sie, füge nicht platzierte Regale hinzu.",
         "d4": "Klicke auf \"Speichern\", um dein Layout zu behalten. Komm jederzeit zurück, um umzuordnen."
@@ -2423,11 +2412,8 @@
       },
       "restock": {
         "title": "Intelligentes Nachfüllen",
-        "summary": "Automatische Analyse deiner Konsumgewohnheiten im Vergleich zu deinem Bestand.",
-        "d1": "Zeigt an: Flaschen pro Jahr konsumiert, pro Jahr gekauft, Nettoänderung und Jahre Vorlauf.",
         "d2": "Unterteilt die Lagerbestände nach Weintyp, Rebsorte, Region, Land und Erzeuger.",
-        "d3": "Kennzeichnet Kategorien, die zur Neige gehen, basierend auf deinem tatsächlichen Trinktempo.",
-        "d4": "Vollständig automatisch – basierend auf deiner Konsumhistorie. Keine manuelle Einrichtung erforderlich."
+        "d3": "Kennzeichnet Kategorien, die zur Neige gehen, basierend auf deinem tatsächlichen Trinktempo."
       },
       "journal": {
         "title": "Weinjournal",
@@ -2446,8 +2432,7 @@
         "title": "Keller-Chat",
         "summary": "Chatte mit einem Sommelier, der deinen gesamten Keller kennt.",
         "d1": "Frage nach Essenspaarungen, was du heute Abend trinken sollst oder Weinvorschlägen aus deiner Sammlung.",
-        "d2": "Der Sommelier kennt alle deine Flaschen, Bewertungen und Notizen.",
-        "d3": "Nutzungslimits hängen von deinem Plan ab (Kostenlos: 4/Woche, Basic: 20/Tag, Premium: 50/Tag)."
+        "d2": "Der Sommelier kennt alle deine Flaschen, Bewertungen und Notizen."
       },
       "analytics": {
         "title": "Analysen",
@@ -2455,7 +2440,6 @@
         "d1": "Sammlungswert über die Zeit, Flaschen nach Land/Typ/Rebsorte/Region.",
         "d2": "Weltkarte, die zeigt, woher deine Weine stammen.",
         "d3": "Trinkfenster-Übersicht: Weine, die bereit sind, noch altern oder über ihrem Höhepunkt.",
-        "d4": "Exportiere deine Statistiken als teilbare Kartenbilder.",
         "d5": "Premium-Funktion – verfügbar im Premium-Plan."
       },
       "community": {
@@ -2472,33 +2456,24 @@
         "d2": "Ein Admin überprüft und fügt genehmigte Weine hinzu, sodass alle sie nutzen können."
       },
       "import": {
-        "title": "Massenimport",
-        "summary": "Importiere deine Weinsammlung aus einer CSV- oder JSON-Datei.",
-        "d1": "Zugriff: Öffne einen Keller → \"…\"-Menü → Flaschen importieren.",
-        "d2": "Lade eine CSV- oder JSON-Datei mit deinen Weindaten hoch.",
-        "d3": "Importierte Weine werden automatisch mit der Datenbank abgeglichen."
+        "title": "Massenimport"
       },
       "settings": {
         "title": "Einstellungen",
         "summary": "Passe dein Cellarion-Erlebnis an.",
         "d1": "Währungspräferenz (wird für Preise und Wertberechnungen verwendet).",
         "d2": "Sprachauswahl.",
-        "d3": "Bewertungsskala: 5-Sterne, 10-Punkte, 20-Punkte oder 100-Punkte.",
         "d4": "Push-Benachrichtigungspräferenzen und Geräteverwaltung.",
         "d5": "Profil: Benutzername und E-Mail."
       },
       "history": {
         "title": "Kellerhistorie",
         "summary": "Zeige alle Flaschen an, die du aus einem Keller konsumiert hast.",
-        "d1": "Zugriff: Öffne einen Keller → \"…\"-Menü → Historie.",
         "d2": "Zeigt jede Flasche, die du als konsumiert markiert hast, mit Daten an."
       },
       "other": {
         "title": "Weitere Funktionen",
-        "summary": "Blog, Pläne, Unterstützung und NFC-Tags.",
         "d1": "Blog (/blog): Weinartikel und Anleitungen.",
-        "d2": "Unterstütze uns (/supporter): Unterstützer-Stufen – Enthusiast (kostenlos), Unterstützer (1,50 $/Monat), Patron (5,50 $/Monat).",
-        "d3": "Support (/support): Support-Tickets einreichen, um Hilfe zu erhalten.",
         "d4": "NFC-Tags: NFC-Tags an Regale anbringen – scanne sie mit deinem Handy, um das Regal direkt zu öffnen."
       }
     }

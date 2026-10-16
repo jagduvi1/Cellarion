@@ -3664,15 +3664,16 @@
         "d6": "Ctrl+Z undoes your last change and Ctrl+Y (or Ctrl+Shift+Z) redoes it; on a Mac, use Cmd. Esc cancels Stack or Link while you are choosing a rack."
       },
       "pickLists": {
-        "title": "Pick lists (early access)",
+        "title": "Pick lists",
         "summary": "The bottles you are about to fetch, with the cellar, rack and slot of each.",
-        "d1": "Pick lists are an early-access preview. To try them, turn on Settings → Early access → \"Show me new features before everyone else\".",
-        "d2": "Add bottles: in your cellar, tap Select, tick the bottles and choose \"Pick list\". Or tap ⋮ → \"Add to pick list\" on a bottle's page or a wine and vintage page.",
-        "d3": "Choose a list, or \"New pick list…\" to start one and give it a name, for example Saturday dinner.",
-        "d4": "Your lists are under Pick lists in the menu. Each one shows where every bottle sits, in the order you walk past them.",
-        "d5": "Tick bottles off as you pick them. \"Print\" gives a clean sheet to take with you.",
-        "d6": "The \"Mark … picked as drunk\" button takes all the ticked bottles out of the cellar in one go.",
-        "d7": "Deleting a list leaves its bottles in your cellar."
+        "earlyTitle": "Pick lists (early access)",
+        "earlyNote": "Pick lists are an early-access preview. To try them, turn on Settings → Early access → \"Show me new features before everyone else\".",
+        "d1": "Add bottles: in your cellar, tap Select, tick the bottles and choose \"Pick list\". Or tap ⋮ → \"Add to pick list\" on a bottle's page or a wine and vintage page.",
+        "d2": "Choose a list, or \"New pick list…\" to start one and give it a name, for example Saturday dinner.",
+        "d3": "Your lists are under Pick lists in the menu. Each one shows where every bottle sits, in the order you walk past them.",
+        "d4": "Tick bottles off as you pick them. \"Print\" gives a clean sheet to take with you.",
+        "d5": "The \"Mark … picked as drunk\" button takes all the ticked bottles out of the cellar in one go.",
+        "d6": "Deleting a list leaves its bottles in your cellar."
       },
       "wineLists": {
         "title": "Wine lists",
@@ -3855,6 +3856,7 @@
     "openCellar": "Open My Cellar",
     "footerSourceLink": "Source on GitHub",
     "footerConnectAi": "Connect your AI",
+    "footerHelp": "Help",
     "footerTranslate": "Translate Cellarion",
     "footerCopy": "Cellarion",
     "metaTitle": "Cellarion — Wine Cellar App | Track Your Wine Collection Online",

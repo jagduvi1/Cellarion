@@ -1,7 +1,8 @@
 import { render, screen, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import en from '../locales/en/translation.json';
-import Help, { SECTION_KEYS, sectionKeyFor } from './Help';
+import Help from './Help';
+import { SECTION_KEYS, sectionKeyFor } from '../utils/helpSections';
 
 // What Help says is the point of these tests, so t() reads the real English
 // strings instead of echoing keys or inline defaults.
@@ -19,7 +20,11 @@ vi.mock('react-i18next', async () => {
 vi.mock('../components/SEOHead', () => ({ default: () => null }));
 
 let pickListsOn = false;
-vi.mock('../utils/featureFlags', () => ({ useFeature: (key) => key === 'pickLists' && pickListsOn }));
+let pickListsState = 'everyone';
+vi.mock('../utils/featureFlags', () => ({
+  useFeature: (key) => key === 'pickLists' && pickListsOn,
+  useFeatureFlags: () => [{ key: 'pickLists', state: pickListsState }],
+}));
 
 const getHelpContent = vi.fn();
 vi.mock('../api/help', () => ({ getHelpContent: (...a) => getHelpContent(...a) }));
@@ -32,6 +37,7 @@ const nextFrame = () => act(async () => { await new Promise((r) => requestAnimat
 
 beforeEach(() => {
   pickListsOn = false;
+  pickListsState = 'everyone';
   getHelpContent.mockResolvedValue({ sections: [] });
   Element.prototype.scrollIntoView = vi.fn();
 });
@@ -66,10 +72,11 @@ describe('the help text', () => {
     expect(all).not.toMatch(/10-point/);
   });
 
-  test('says that pick lists are an early-access preview, and where to turn it on', () => {
-    expect(sections.pickLists.title).toMatch(/early access/i);
-    expect(sections.pickLists.d1).toMatch(/early-access preview/);
-    expect(sections.pickLists.d1).toMatch(/Settings → Early access/);
+  test('has the words for pick lists in early access: the title and where to turn it on', () => {
+    expect(sections.pickLists.earlyTitle).toMatch(/early access/i);
+    expect(sections.pickLists.title).not.toMatch(/early access/i);
+    expect(sections.pickLists.earlyNote).toMatch(/early-access preview/);
+    expect(sections.pickLists.earlyNote).toMatch(/Settings → Early access/);
   });
 
   test('names the Room view shortcuts the page really has', () => {
@@ -136,6 +143,38 @@ describe('the page', () => {
     unmount();
     at('/help#earlyAccess');
     expect(screen.getByRole('link', { name: /Go to/ })).toHaveAttribute('href', '/settings#early-access');
+  });
+
+  // The flag changes without a deploy (SuperAdmin → Feature flags).
+  test('pick lists follow their flag: early access in beta, ordinary for everyone, gone when off', () => {
+    pickListsState = 'beta';
+    const { unmount: u1 } = at('/help#pickLists');
+    expect(screen.queryByRole('heading', { level: 2, name: sections.pickLists.title })).toBeNull();
+    expect(screen.getByRole('heading', { level: 2, name: sections.pickLists.earlyTitle })).toBeInTheDocument();
+    expect(screen.getByText(sections.pickLists.earlyNote)).toBeInTheDocument();
+    u1();
+
+    pickListsState = 'everyone';
+    const { unmount: u2 } = at('/help#pickLists');
+    expect(header('pickLists')).toBeInTheDocument();
+    expect(screen.queryByText(sections.pickLists.earlyNote)).not.toBeInTheDocument();
+    expect(screen.getByText(sections.pickLists.d1)).toBeInTheDocument();
+    u2();
+
+    pickListsState = 'off';
+    at('/help');
+    expect(screen.queryByRole('heading', { level: 2, name: /Pick lists/ })).not.toBeInTheDocument();
+  });
+
+  test('"Go to" navigates inside the app instead of loading the page again', () => {
+    at('/help#offline');
+    const link = screen.getByRole('link', { name: /Go to/ });
+    expect(link).toHaveAttribute('href', '/settings#preferences');
+    // A router <Link> is a plain anchor whose click the router takes over:
+    // the default (a full page load) is prevented.
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+    link.dispatchEvent(click);
+    expect(click.defaultPrevented).toBe(true);
   });
 
   test('pick lists link to their page only for members who have them', () => {
