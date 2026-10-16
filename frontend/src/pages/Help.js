@@ -9,9 +9,9 @@ import scrollBelowNavbar from '../utils/scrollBelowNavbar';
 import { SECTION_KEYS, sectionKeyFor } from '../utils/helpSections';
 import './Help.css';
 
-// The pages the "Go to …" links open for the newer sections. The older ones
-// take theirs from the server's help content (/api/help), which does not
-// list these.
+// "Go to …" links take their page from the server's help content
+// (/api/help, backend/src/data/helpContent.js). These are the fallback for
+// the newer sections while that answer is on its way, or if it fails.
 const LOCAL_ROUTES = {
   dashboard: '/dashboard',
   // The offline switch is a card inside Settings → Preferences
