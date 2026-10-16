@@ -82,6 +82,29 @@ describe('ConsumeModal — "Just a glass" and the reservation warning', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /openBottle\.partialOption/ })).toBeEnabled());
   });
 
+  test('the first focus is the form, not "Just a glass" (a stray Enter must not pour)', () => {
+    render(<ConsumeModal onConfirm={vi.fn()} onCancel={vi.fn()} onJustAGlass={vi.fn()} />);
+    expect(document.activeElement.tagName).toBe('SELECT');
+  });
+
+  test('while the take-out is on its way, a tap beside the dialog does not close it and Cancel waits', async () => {
+    let finish;
+    const onCancel = vi.fn();
+    const onConfirm = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
+    render(<ConsumeModal onConfirm={onConfirm} onCancel={onCancel} onJustAGlass={vi.fn()} />);
+    const overlay = screen.getByRole('dialog').parentElement;
+
+    fireEvent.click(screen.getByText('common.confirm'));
+    await waitFor(() => expect(screen.getByText('common.cancel')).toBeDisabled());
+    fireEvent.click(overlay);
+    expect(onCancel).not.toHaveBeenCalled();
+
+    finish();
+    await waitFor(() => expect(screen.getByText('common.cancel')).toBeEnabled());
+    fireEvent.click(overlay);
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
   test('a reserved bottle shows the warning above the form', () => {
     render(<ConsumeModal wineName="Rioja Reserva" reservationText="for Anna until 2030" onConfirm={vi.fn()} onCancel={vi.fn()} />);
     expect(screen.getByRole('alert')).toHaveTextContent(

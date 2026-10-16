@@ -1415,6 +1415,7 @@
       "consume": "The bottle could not be taken out.",
       "move": "The bottle could not be moved.",
       "pour": "The glass could not be recorded.",
+      "open": "The bottle could not be opened.",
       "nfc": "The NFC tag could not be saved."
     },
     "groupLabel": "Group",

@@ -961,11 +961,24 @@ export default function CellarRoom() {
 
   // "Just a glass — keep the bottle": escape hatch out of the remove flow
   // (see CellarRacks.handlePartial for the rationale).
+  // "Just a glass": pour one from an open bottle, or open it first, then
+  // show the bottle. A refusal says why and stays here — nothing changed, so
+  // the bottle page would have nothing to show. Opened but the glass refused:
+  // the bottle page shows it open, where a glass is one tap.
   const handlePartial = async (bottle) => {
     setConsumeModal(null);
     setSelectedBottle(null);
     if (bottle.openedAt) {
-      try { await pourBottle(apiFetch, bottle._id); } catch { /* bottle page shows truth */ }
+      try {
+        const res = await pourBottle(apiFetch, bottle._id);
+        if (!res.ok) {
+          failed(res, await res.json().catch(() => ({})), t('racks.errors.pour', 'The glass could not be recorded.'));
+          return;
+        }
+      } catch (err) {
+        setActionError(friendlyError(err, t));
+        return;
+      }
       navigate(`/cellars/${id}/bottles/${bottle._id}`, { state: backHere });
     } else {
       setPartialPicker({ bottleId: bottle._id });
@@ -977,10 +990,18 @@ export default function CellarRoom() {
     setPartialBusy(true);
     try {
       const res = await openBottle(apiFetch, bottleId, method);
-      if (res.ok) await pourBottle(apiFetch, bottleId);
-    } catch { /* bottle page shows truth */ }
-    setPartialBusy(false);
-    setPartialPicker(null);
+      if (!res.ok) {
+        failed(res, await res.json().catch(() => ({})), t('racks.errors.open', 'The bottle could not be opened.'));
+        return;
+      }
+      await pourBottle(apiFetch, bottleId).catch(() => {});
+    } catch (err) {
+      setActionError(friendlyError(err, t));
+      return;
+    } finally {
+      setPartialBusy(false);
+      setPartialPicker(null);
+    }
     navigate(`/cellars/${id}/bottles/${bottleId}`, { state: backHere });
   };
 
@@ -1432,7 +1453,7 @@ export default function CellarRoom() {
               reservationText={isReserved(consumeModal.bottle) ? reservationSummary(consumeModal.bottle, t) : undefined}
               onConfirm={handleConsumeSubmit}
               onCancel={() => setConsumeModal(null)}
-              onJustAGlass={consumeModal.bottle ? () => handlePartial(consumeModal.bottle) : undefined}
+              onJustAGlass={() => handlePartial(consumeModal.bottle)}
             />
           )}
 

@@ -50,7 +50,11 @@ export function ConsumeModal({ wineName, defaultRatingScale, reservationText, on
   };
 
   return (
-    <div className="modal-overlay" onClick={onCancel}>
+    // While the take-out is on its way, a tap beside the dialog does not
+    // close it: a refusal keeps the dialog open with what was typed (the
+    // racks, the room), and a stray tap must not throw that away. Escape and
+    // Back still close it — those are meant.
+    <div className="modal-overlay" onClick={saving ? undefined : onCancel}>
       <div className="modal-box" onClick={e => e.stopPropagation()} ref={boxRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
         <h2 id={titleId}>{t('bottleDetail.removeBottleTitle')}</h2>
         {wineName && <p className="modal-wine-name">{wineName}</p>}
@@ -74,7 +78,9 @@ export function ConsumeModal({ wineName, defaultRatingScale, reservationText, on
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label>{t('common.reason')}</label>
-            <select value={reason} onChange={e => setReason(e.target.value)}>
+            {/* The first focus is the form, also when "Just a glass" sits
+                above it: a stray Enter must not pour a glass. */}
+            <select value={reason} onChange={e => setReason(e.target.value)} autoFocus>
               <option value="drank">{t('bottleDetail.drinkReason')}</option>
               <option value="gifted">{t('bottleDetail.giftedReason')}</option>
               <option value="sold">{t('bottleDetail.soldReason')}</option>
@@ -114,7 +120,7 @@ export function ConsumeModal({ wineName, defaultRatingScale, reservationText, on
             />
           </div>
           <div className="modal-actions">
-            <button type="button" className="btn btn-secondary" onClick={onCancel}>{t('common.cancel')}</button>
+            <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={saving}>{t('common.cancel')}</button>
             <button type="submit" className="btn btn-consume" disabled={saving}>
               {saving ? t('common.saving') : t('common.confirm')}
             </button>

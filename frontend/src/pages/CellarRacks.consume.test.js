@@ -55,12 +55,18 @@ const rackWith = (b) => ({
 
 let api;
 let consumeResponse;
+let pourResponse;
+let openResponse;
 const setup = (b = bottle()) => {
   consumeResponse = ok({ bottle: { _id: 'b1', status: 'drank' } });
+  pourResponse = ok({ bottle: { _id: 'b1' } });
+  openResponse = ok({ bottle: { _id: 'b1' } });
   api = vi.fn(async (url) => {
     if (url === '/api/cellars/c1') return ok({ cellar: { _id: 'c1', name: 'Home', userRole: 'owner' } });
     if (url === '/api/racks?cellar=c1') return ok({ racks: [rackWith(b)] });
     if (url === '/api/bottles/b1/consume') return consumeResponse;
+    if (url === '/api/bottles/b1/pour') return pourResponse;
+    if (url === '/api/bottles/b1/open') return openResponse;
     return ok({});
   });
   auth = { apiFetch: api, user: { id: 'u1', preferences: { ratingScale: '5' } } };
@@ -68,7 +74,10 @@ const setup = (b = bottle()) => {
 
 const renderPage = () => render(
   <MemoryRouter initialEntries={['/cellars/c1/racks']}>
-    <Routes><Route path="/cellars/:id/racks" element={<CellarRacks />} /></Routes>
+    <Routes>
+      <Route path="/cellars/:id/racks" element={<CellarRacks />} />
+      <Route path="/cellars/:id/bottles/:bottleId" element={<div>bottle-page</div>} />
+    </Routes>
   </MemoryRouter>,
 );
 const { default: CellarRacks } = await import('./CellarRacks');
@@ -141,4 +150,40 @@ test('a refused take-out keeps the dialog open and says why in the floating noti
   expect(screen.getByRole('dialog', { name: 'bottleDetail.removeBottleTitle' })).toBeInTheDocument();
   expect(screen.getByText('slot-3')).toBeInTheDocument();
   expect(screen.queryByTestId('journal-prompt')).not.toBeInTheDocument();
+});
+
+test('"Just a glass" from an open bottle pours one and shows the bottle', async () => {
+  setup(bottle({ openedAt: '2026-10-10T18:00:00.000Z', preservationMethod: 'coravin' }));
+  renderPage();
+  const dialog = await openDrinkDialog();
+  fireEvent.click(within(dialog).getByRole('button', { name: /openBottle\.partialOption/ }));
+
+  expect(await screen.findByText('bottle-page')).toBeInTheDocument();
+  expect(api.mock.calls.filter(([u]) => u === '/api/bottles/b1/pour')).toHaveLength(1);
+});
+
+test('a refused glass says why and stays on the racks page', async () => {
+  setup(bottle({ openedAt: '2026-10-10T18:00:00.000Z', preservationMethod: 'coravin' }));
+  renderPage();
+  const dialog = await openDrinkDialog();
+  pourResponse = refused(400, { error: 'This bottle is already finished.' });
+  fireEvent.click(within(dialog).getByRole('button', { name: /openBottle\.partialOption/ }));
+
+  expect(await screen.findByText('This bottle is already finished.')).toBeInTheDocument();
+  expect(screen.queryByText('bottle-page')).not.toBeInTheDocument();
+  expect(screen.getByText('slot-3')).toBeInTheDocument();
+});
+
+test('a refused open says why and stays; nothing is poured', async () => {
+  setup();
+  renderPage();
+  const dialog = await openDrinkDialog();
+  fireEvent.click(within(dialog).getByRole('button', { name: /openBottle\.partialOption/ }));
+  openResponse = refused(403, { error: 'Only editors can open bottles in this cellar.' });
+  fireEvent.click(screen.getByText('openBottle.partialConfirmBtn'));
+
+  expect(await screen.findByText('Only editors can open bottles in this cellar.')).toBeInTheDocument();
+  expect(screen.queryByText('openBottle.pickerTitle')).not.toBeInTheDocument();
+  expect(screen.queryByText('bottle-page')).not.toBeInTheDocument();
+  expect(api.mock.calls.some(([u]) => u === '/api/bottles/b1/pour')).toBe(false);
 });
