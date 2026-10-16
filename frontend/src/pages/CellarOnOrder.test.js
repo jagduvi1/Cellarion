@@ -283,19 +283,23 @@ test('bottles just added on order are announced with "Add another bottle"', asyn
   expect(screen.getByRole('status')).toHaveTextContent(/bottleNotice\.added|Barolo 2016/);
 });
 
-// Release audit 2026-10-16: a retry after a raise that stopped part-way adds
-// only what is still missing — also when the list could not be re-read.
-test('a raise that stopped part-way, retried while the list could not be re-read, adds only the rest', async () => {
+// Release audit 2026-10-16: after a raise that stopped part-way, Save waits
+// until the list is read again — a retry on the stale count added the whole
+// difference again (2 → 7 ended at 10).
+test('a raise that stopped part-way waits for the list, then adds only the rest', async () => {
   let posts = 0;
+  let created = 0;
   let offline = false;
   api.mockImplementation(async (url, opts) => {
     if (url === '/api/cellars/c1/on-order') {
       if (offline) throw new TypeError('Failed to fetch');
-      return ok({ cellar: CELLAR, bottles: [ordered('b1', MARCH), ordered('b2', MARCH)], total: 2 });
+      const extra = Array.from({ length: created }, (_, i) => ordered(`n${i}`, MARCH));
+      return ok({ cellar: CELLAR, bottles: [ordered('b1', MARCH), ordered('b2', MARCH), ...extra], total: 2 + created });
     }
     if (url === '/api/bottles' && opts?.method === 'POST') {
       posts += 1;
       if (posts === 4) { offline = true; throw new TypeError('Failed to fetch'); }
+      created += 1;
       return { ok: true, status: 201, json: async () => ({ bottle: { _id: `n${posts}` } }) };
     }
     return ok({});
@@ -304,13 +308,17 @@ test('a raise that stopped part-way, retried while the list could not be re-read
   fireEvent.click(await screen.findByText('onOrder.changeQty'));
   fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '7' } });
   fireEvent.click(screen.getByText('onOrder.saveQty'));
-  // 3 added, the 4th failed, and the list could not be read again.
+  // 3 added, the 4th failed, and the list could not be read again: Save waits.
   expect(await screen.findByText('onOrder.loadFailed')).toBeInTheDocument();
-  await waitFor(() => expect(screen.getByText('onOrder.saveQty').closest('button')).toBeEnabled());
+  expect(await screen.findByText('onOrder.qtyWaitList', { exact: false })).toBeInTheDocument();
+  expect(screen.getByText('onOrder.saveQty').closest('button')).toBeDisabled();
 
   offline = false;
+  fireEvent.click(screen.getByText('onOrder.qtyReadAgain'));
+  expect(await screen.findByText(/onOrder.qty:5/)).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByText('onOrder.saveQty').closest('button')).toBeEnabled());
   fireEvent.click(screen.getByText('onOrder.saveQty'));
-  // 2 + 3 are there: 2 more make 7 (not 5 more, which made 10).
+  // 5 are there: 2 more make 7.
   await waitFor(() => expect(posts).toBe(6));
   await new Promise((r) => setTimeout(r, 50));
   expect(posts).toBe(6);

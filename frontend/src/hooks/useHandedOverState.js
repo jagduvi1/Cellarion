@@ -1,19 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
-/**
- * A value another page handed over in the navigation's router state
- * (`navigate(to, { state: { [key]: value } })`), read ONCE: kept in this
- * component's state, then taken off the history entry, so Back, Forward or a
- * reload never hands it over again (an Undo for a bottle already undone).
- *
- * Taken off with history.replaceState rather than a router navigation: a
- * second navigation in the same commit as the page's own URL clean-up (the
- * cellar page clears its filter params on mount) could put back what that
- * one removed, and would re-run every effect keyed on the location. The
- * router keeps its state under history.state.usr; under a MemoryRouter there
- * is nothing there and this does nothing.
- */
 // The other channel: a value handed over to a page reached by going BACK
 // (router state cannot ride a pop) — one item in sessionStorage naming the
 // key and the page's path, read once, and only within a minute.
@@ -33,6 +20,21 @@ function peekHandedBack(key, path) {
   } catch { return null; }
 }
 
+/**
+ * A value another page handed over in the navigation's router state
+ * (`navigate(to, { state: { [key]: value } })`), read ONCE: kept in this
+ * component's state, then taken off the history entry, so Back, Forward or a
+ * reload never hands it over again (an Undo for a bottle already undone).
+ *
+ * Taken off with history.replaceState rather than a router navigation: a
+ * second navigation in the same commit as the page's own URL clean-up (the
+ * cellar page clears its filter params on mount) could put back what that
+ * one removed, and would re-run every effect keyed on the location. The
+ * router keeps its state under history.state.usr; under a MemoryRouter there
+ * is nothing there and this does nothing.
+ *
+ * A page reached by Back gets it from handOverBack instead (sessionStorage).
+ */
 export default function useHandedOverState(key) {
   const location = useLocation();
   // Peeked here, removed in the effect: StrictMode calls this twice.

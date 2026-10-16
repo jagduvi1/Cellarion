@@ -54,8 +54,9 @@ function Help() {
     setSearch('');
     setOpenSection(linked);
     requestAnimationFrame(() => scrollBelowNavbar(document.getElementById(linked)));
-    // Again once the flags arrive: pick lists' section exists only then.
-  }, [linked, hash, pickListsState]);
+    // A link to pick lists: again once the flags arrive (its section exists
+    // only then). Other links are left as the reader has them.
+  }, [linked, hash, linked === 'pickLists' ? pickListsState : null]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sections = useMemo(() => SECTION_KEYS.filter(key => key !== 'pickLists' || pickListsState !== 'off').map(key => {
     const prefix = `help.sections.${key}`;

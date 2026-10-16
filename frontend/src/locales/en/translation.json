@@ -5808,7 +5808,9 @@
     "qtyRange": "Enter a number from 1 to {{max}}.",
     "qtyArrivedMeanwhile": "Some of these bottles had already arrived, so they were left in the cellar. The list is up to date now.",
     "qtyOnlyFewer": "Bottles can only be taken off this order here.",
-    "qtyFailed": "Could not change how many bottles are on order. Please try again."
+    "qtyFailed": "Could not change how many bottles are on order. Please try again.",
+    "qtyWaitList": "Some bottles were added before it stopped. Read the list again first, so the number is right.",
+    "qtyReadAgain": "Read the list again"
   },
   "changeWine": {
     "action": "Change wine…",

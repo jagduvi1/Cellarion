@@ -28,7 +28,7 @@ import { backLabel } from '../utils/backLabel';
 import { useBackToClose } from '../utils/useBackToClose';
 import { bottleNoticeName } from '../components/BottleUndoNotice';
 import { handOverBack } from '../hooks/useHandedOverState';
-import { afterPopupEntryGone } from '../utils/useBackToClose';
+import { afterPopupEntryGone, isOnPopupEntry } from '../utils/useBackToClose';
 
 // How this device last started adding a bottle: 'camera' (the label photo, the
 // default) or 'search' (typing the name). Per device on purpose — the same
@@ -904,20 +904,43 @@ function AddBottle() {
   // made the first Back dead (release audit 2026-10-16) — and the notice is
   // handed over through sessionStorage. Otherwise the add page is replaced,
   // so Back never lands on an emptied form.
-  const leaveTo = (path) => {
-    const notice = addedNotice();
+  // From a closing pop-up ("Place them now?", "did you mean?", the custom-
+  // field notice) it first waits until that pop-up's own Back entry is gone;
+  // still on it after the wait, going back would only close that entry, so
+  // it replaces instead.
+  const cameFromHere = (path) => {
     const entry = window.history.state || {};
-    if (entry.usr?.cameFrom === path && Number.isInteger(entry.idx) && entry.idx > 0) {
+    return entry.usr?.cameFrom === path && Number.isInteger(entry.idx) && entry.idx > 0 && !isOnPopupEntry();
+  };
+  const leaveTo = (path) => afterPopupEntryGone(() => {
+    const notice = addedNotice();
+    if (cameFromHere(path)) {
       handOverBack('addedNotice', path, notice);
       navigate(-1);
     } else {
       navigate(path, { replace: true, state: { addedNotice: notice } });
     }
-  };
+  });
   const listPath = () => (onOrder && !addToHistory ? `/cellars/${cellarId}/on-order` : `/cellars/${cellarId}`);
   const goToCellarAdded = () => leaveTo(`/cellars/${cellarId}`);
-  // From a closing pop-up: once its own Back entry is gone (utils/useBackToClose).
-  const leavePlacePrompt = () => { setPlacePrompt(null); afterPopupEntryGone(goToCellarAdded); };
+  const leavePlacePrompt = () => { setPlacePrompt(null); goToCellarAdded(); };
+  // Leaving without saving (Cancel, the back link): back to the list it came
+  // from too — a pushed copy of it made the first Back land on the emptied
+  // form. Bottles already saved (a save that stopped part-way) are said there.
+  const leaveUnsaved = (e) => {
+    if (createdBottlesRef.current.some(Boolean)) {
+      e?.preventDefault?.();
+      leaveTo(listPath());
+      return;
+    }
+    const from = window.history.state?.usr?.cameFrom;
+    if (from && cameFromHere(from)) {
+      e?.preventDefault?.();
+      navigate(-1);
+      return;
+    }
+    if (!e) navigate(`/cellars/${cellarId}`);
+  };
 
   // What happens once every bottle exists: link the photos, then either offer
   // to place them or go to the cellar. Extracted so the custom-field notice
@@ -1217,7 +1240,7 @@ function AddBottle() {
       )}
 
       <div className="add-bottle-header">
-        <Link to={`/cellars/${cellarId}`} className="back-link">
+        <Link to={`/cellars/${cellarId}`} className="back-link" onClick={leaveUnsaved}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
           {backLabel(t('addBottle.backToCellar'))}
         </Link>
@@ -2169,7 +2192,7 @@ function AddBottle() {
                   added: those bottles exist. */}
               <button
                 type="button"
-                onClick={() => (createdBottlesRef.current.some(Boolean) ? leaveTo(listPath()) : navigate(`/cellars/${cellarId}`))}
+                onClick={() => leaveUnsaved()}
                 className="btn btn-secondary"
               >
                 {t('common.cancel')}

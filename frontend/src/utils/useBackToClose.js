@@ -245,8 +245,6 @@ export function useBackToClose(onClose, enabled = true) {
   }, [wanted]);
 }
 
-// Tests only: forget every entry and pending step, so one test's pop-ups (and
-// jsdom's shared history) cannot reach into the next.
 /**
  * The state for another entry of the SAME page (the room's unsaved-changes
  * guard): the router's own state (usr/key/idx) so later pages keep counting
@@ -268,17 +266,21 @@ export function pageEntryState(extra = {}) {
  */
 export function afterPopupEntryGone(fn, timeoutMs = 1500) {
   const start = Date.now();
-  const own = () => {
-    const mark = historyState()[MARK];
-    return typeof mark === 'string' && mark.startsWith(`${LOAD}.`);
-  };
   const check = () => {
-    if (!own() || Date.now() - start > timeoutMs) { fn(); return; }
+    if (!isOnPopupEntry() || Date.now() - start > timeoutMs) { fn(); return; }
     setTimeout(check, 25);
   };
   check();
 }
 
+/** Whether the current history entry is an open (or closing) pop-up's own. */
+export function isOnPopupEntry() {
+  const mark = historyState()[MARK];
+  return typeof mark === 'string' && mark.startsWith(`${LOAD}.`);
+}
+
+// Tests only: forget every entry and pending step, so one test's pop-ups (and
+// jsdom's shared history) cannot reach into the next.
 export function resetBackToCloseForTests() {
   stack.length = 0;
   if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }

@@ -174,6 +174,20 @@ describe('back to the list it came from', () => {
     });
   });
 
+  test('Cancel with nothing saved goes back to the list it came from (no second copy of it)', async () => {
+    window.history.replaceState({ usr: { cameFrom: '/cellars/cellar1' }, key: 'add', idx: 3 }, '');
+    routeApi({ racks: [] });
+    render(<AddBottle />);
+    fireEvent.click(screen.getByText('addBottle.searchManuallyInstead'));
+    fireEvent.change(screen.getByPlaceholderText('addBottle.searchPlaceholder'), { target: { value: 'kaefferkopf kaysersberg' } });
+    await act(async () => { fireEvent.click(screen.getByText('addBottle.searchBtn')); });
+    await act(async () => { fireEvent.click(screen.getByText('addBottle.cantFindAiTitle')); });
+    await act(async () => { fireEvent.click(screen.getByText('addBottle.aiAddAndUse')); });
+    fireEvent.click(await screen.findByText('common.cancel'));
+    expect(navigateMock).toHaveBeenCalledWith(-1);
+    expect(sessionStorage.getItem('cellarion.handOver')).toBeNull();
+  });
+
   test('"Add another" after an add on order starts on order', async () => {
     window.history.replaceState({ usr: { cameFrom: '/cellars/cellar1/on-order', addMode: 'onOrder' }, key: 'add', idx: 3 }, '');
     routeApi({ racks: [] });

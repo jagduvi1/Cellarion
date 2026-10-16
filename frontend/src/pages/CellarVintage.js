@@ -418,7 +418,7 @@ function CellarVintage() {
   ) : null;
 
   return (
-    <div className="cellar-detail-page cellar-vintage-page cvb-page">
+    <div className={`cellar-detail-page cellar-vintage-page cvb-page${!loading && data && hasActions ? ' cvb-page--bar' : ''}`}>
       {error && (
         <div className="alert alert-error" role="alert">
           {error}

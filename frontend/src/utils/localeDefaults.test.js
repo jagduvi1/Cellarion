@@ -53,4 +53,5 @@ test('an English region tag outside Europe says nothing about money', () => {
   expect(guessCurrency({ timeZone: 'Asia/Kolkata', languages: ['en-GB'] })).toBeNull();
   expect(guessCurrency({ timeZone: 'Asia/Dubai', languages: ['en-GB', 'en'] })).toBeNull();
   expect(guessCurrency({ timeZone: 'Asia/Bangkok', languages: ['sv-SE'] })).toBe('SEK');
+  expect(guessCurrency({ timeZone: 'America/Puerto_Rico', languages: ['en-US'] })).toBe('USD');
 });
