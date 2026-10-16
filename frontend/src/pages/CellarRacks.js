@@ -22,7 +22,9 @@ import {
   fitShelfRows, cabinetCapacity,
 } from '../utils/cabinetPresets';
 import { cabinetShelfCols, cabinetShelfAlternate, cabinetShelfSideways } from '../utils/rackLayouts';
-import RatingInput from '../components/RatingInput';
+import { ConsumeModal } from '../components/ConsumeModal';
+import { bottleNoticeName } from '../components/BottleUndoNotice';
+import { isReserved, reservationSummary } from '../utils/reservation';
 import WineImage from '../components/WineImage';
 import ConfirmModal from '../components/ConfirmModal';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
@@ -1154,13 +1156,17 @@ function CellarRacks() {
         );
       })()}
 
-      {/* Consume/remove modal */}
+      {/* The one "take out of the cellar" dialog the bottle page uses too,
+          with "Just a glass" on top — the bottle page's separate "Open
+          bottle…" button is not at hand from a slot. */}
       {consumeModal && (
         <ConsumeModal
+          wineName={bottleNoticeName(consumeModal.bottle)}
           defaultRatingScale={user?.preferences?.ratingScale || '5'}
-          onSubmit={handleConsumeSubmit}
+          reservationText={isReserved(consumeModal.bottle) ? reservationSummary(consumeModal.bottle, t) : undefined}
+          onConfirm={handleConsumeSubmit}
           onCancel={() => setConsumeModal(null)}
-          onPartial={() => handlePartial(consumeModal.bottle)}
+          onJustAGlass={() => handlePartial(consumeModal.bottle)}
         />
       )}
 
@@ -2118,110 +2124,6 @@ function FilledSlotContent({ position, slot, zone, canEdit, onRemoveFromRack, on
         </div>
       )}
     </>
-  );
-}
-
-// ---- Consume / remove modal ----
-// Local calendar date, YYYY-MM-DD — what <input type="date"> speaks.
-const todayLocal = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
-
-// onSubmit(reason, note, rating, ratingScale, consumedAt) — consumedAt is the
-// day the bottle was actually drunk (YYYY-MM-DD, default today), mirroring
-// components/ConsumeModal and BulkConsumeModal (support ticket 2026-09-13).
-function ConsumeModal({ defaultRatingScale, onSubmit, onCancel, onPartial }) {
-  const { t } = useTranslation();
-  const [reason,       setReason]      = useState('drank');
-  const [note,         setNote]        = useState('');
-  const [rating,       setRating]      = useState('');
-  const [ratingScale,  setRatingScale] = useState(defaultRatingScale || '5');
-  const [date,         setDate]        = useState(todayLocal);
-  const [saving,       setSaving]      = useState(false);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      await onSubmit(reason, note || undefined, rating || undefined, ratingScale, date || undefined);
-    } finally {
-      // Always re-enable the button — a rejected onSubmit must not leave the
-      // modal stuck on "Saving...".
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="slot-modal-overlay" onClick={onCancel}>
-      <DialogBox
-        className="slot-modal consume-modal-box"
-        onClick={e => e.stopPropagation()}
-        onClose={onCancel}
-        label={t('bottleDetail.removeBottleTitle')}
-      >
-        <div className="slot-popup-header">
-          <span className="slot-popup-title">{t('bottleDetail.removeBottleTitle')}</span>
-          <button className="slot-popup-close" onClick={onCancel} aria-label="Close">&times;</button>
-        </div>
-        {onPartial && (
-          <div className="consume-partial-row">
-            <button type="button" className="btn btn-secondary consume-partial-btn" onClick={onPartial}>
-              🍷 {t('openBottle.partialOption', 'Just a glass — keep the bottle')}
-            </button>
-            <span className="consume-partial-or">{t('openBottle.partialOr', 'or remove it completely:')}</span>
-          </div>
-        )}
-        <form onSubmit={handleSubmit} className="consume-modal-form">
-          <div className="form-group">
-            <label>{t('common.reason')}</label>
-            <select value={reason} onChange={e => setReason(e.target.value)}>
-              <option value="drank">{t('bottleDetail.drinkReason')}</option>
-              <option value="gifted">{t('bottleDetail.giftedReason')}</option>
-              <option value="sold">{t('bottleDetail.soldReason')}</option>
-              <option value="other">{t('bottleDetail.otherReason')}</option>
-            </select>
-          </div>
-          <label className="form-group">
-            <span>{t('bulk.consumeDate')}</span>
-            <input
-              type="date"
-              value={date}
-              max={todayLocal()}
-              onChange={e => setDate(e.target.value)}
-              disabled={saving}
-            />
-          </label>
-          {reason === 'drank' && (
-            <div className="form-group">
-              <label>{t('bottleDetail.ratingOptional')}</label>
-              <RatingInput
-                value={rating}
-                scale={ratingScale}
-                onChange={v => setRating(v ?? '')}
-                onScaleChange={s => { setRatingScale(s); setRating(''); }}
-                allowScaleOverride
-              />
-            </div>
-          )}
-          <div className="form-group">
-            <label>{t('bottleDetail.noteOptional')}</label>
-            <textarea
-              value={note}
-              onChange={e => setNote(e.target.value)}
-              rows={2}
-              placeholder={t('racks.consumeNotePlaceholder')}
-            />
-          </div>
-          <div className="consume-modal-actions">
-            <button type="button" className="btn btn-secondary" onClick={onCancel}>{t('common.cancel')}</button>
-            <button type="submit" className="btn btn-consume" disabled={saving}>
-              {saving ? t('common.saving') : t('common.confirm')}
-            </button>
-          </div>
-        </form>
-      </DialogBox>
-    </div>
   );
 }
 

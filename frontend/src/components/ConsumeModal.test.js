@@ -47,3 +47,50 @@ describe('ConsumeModal — the day the bottle was drunk (support ticket 2026-09-
     expect(onConfirm.mock.calls[0][4]).toBeUndefined();
   });
 });
+
+// One drink dialog (usability plan 2026-10-14, D2): the rack page and the 3D
+// room use this dialog too, with "Just a glass" on top; the bottle page has
+// its own "Open bottle…" button and does not pass it.
+describe('ConsumeModal — "Just a glass" and the reservation warning', () => {
+  test('without onJustAGlass there is no "Just a glass" choice (the bottle page)', () => {
+    render(<ConsumeModal wineName="Rioja Reserva" onConfirm={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.getByRole('dialog')).toHaveAccessibleName('bottleDetail.removeBottleTitle');
+    expect(screen.queryByText(/openBottle\.partialOption/)).not.toBeInTheDocument();
+    expect(screen.queryByText('openBottle.partialOr')).not.toBeInTheDocument();
+  });
+
+  test('with onJustAGlass the choice comes first, and taking it never takes the bottle out', () => {
+    const onJustAGlass = vi.fn();
+    const onConfirm = vi.fn();
+    render(<ConsumeModal wineName="Rioja Reserva" onConfirm={onConfirm} onCancel={vi.fn()} onJustAGlass={onJustAGlass} />);
+
+    expect(screen.getByText('openBottle.partialOr')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /openBottle\.partialOption/ }));
+
+    expect(onJustAGlass).toHaveBeenCalledTimes(1);
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  test('"Just a glass" cannot be tapped while the bottle is being taken out', async () => {
+    let finish;
+    const onConfirm = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
+    render(<ConsumeModal onConfirm={onConfirm} onCancel={vi.fn()} onJustAGlass={vi.fn()} />);
+
+    fireEvent.click(screen.getByText('common.confirm'));
+    await waitFor(() => expect(screen.getByRole('button', { name: /openBottle\.partialOption/ })).toBeDisabled());
+    finish();
+    await waitFor(() => expect(screen.getByRole('button', { name: /openBottle\.partialOption/ })).toBeEnabled());
+  });
+
+  test('a reserved bottle shows the warning above the form', () => {
+    render(<ConsumeModal wineName="Rioja Reserva" reservationText="for Anna until 2030" onConfirm={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'bottleDetail.consumeReservedWarning:{"reservation":"for Anna until 2030"}',
+    );
+  });
+
+  test('an unreserved bottle shows no warning', () => {
+    render(<ConsumeModal wineName="Rioja Reserva" onConfirm={vi.fn()} onCancel={vi.fn()} onJustAGlass={vi.fn()} />);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});

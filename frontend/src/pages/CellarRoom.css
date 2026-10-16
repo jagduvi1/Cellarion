@@ -502,7 +502,9 @@
   margin: 0;
 }
 
-/* ── Consume modal overlay ─────────────────────────── */
+/* ── Room dialog overlay ───────────────────────────────
+   Named for the drink dialog it was made for; that one is the shared
+   ConsumeModal now, and the unsaved-changes dialog still uses these. */
 .room-consume-overlay {
   position: absolute;
   inset: 0;
@@ -526,17 +528,6 @@
 .room-consume-modal h3 {
   margin: 0 0 0.75rem;
   font-size: 1rem;
-}
-
-.room-consume-modal .form-group {
-  margin-bottom: 0.5rem;
-}
-
-.room-consume-modal select,
-.room-consume-modal input,
-.room-consume-modal textarea {
-  width: 100%;
-  font-size: 0.85rem;
 }
 
 @media (max-width: 768px) {

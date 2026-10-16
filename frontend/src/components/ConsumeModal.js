@@ -18,7 +18,16 @@ const today = () => {
 // bottle logged after the fact used to be stamped with the logging day, and
 // the only way to say otherwise was the bulk action (support ticket
 // 2026-09-13). Same field and rule as BulkConsumeModal: never in the future.
-export function ConsumeModal({ wineName, defaultRatingScale, reservationText, onConfirm, onCancel }) {
+//
+// `onJustAGlass`: the rack page and the 3D room open this dialog straight
+// from a slot, where the bottle page's own "Open bottle…" button is not at
+// hand. They pass this, and the dialog first offers "Just a glass — keep the
+// bottle" (open it and pour one glass instead of taking it out). Without it
+// — the bottle page, "Drink one" — that choice is not shown. The racks and
+// the room used to carry copies of this dialog for the sake of that one
+// button, and those copies never learned the reservation warning
+// (usability plan 2026-10-14, D2).
+export function ConsumeModal({ wineName, defaultRatingScale, reservationText, onConfirm, onCancel, onJustAGlass }) {
   const { t } = useTranslation();
   const [reason,       setReason]      = useState('drank');
   const [note,         setNote]        = useState('');
@@ -49,6 +58,17 @@ export function ConsumeModal({ wineName, defaultRatingScale, reservationText, on
           <div className="alert alert-warning" role="alert">
             <span aria-hidden="true">🔖</span>{' '}
             {t('bottleDetail.consumeReservedWarning', { reservation: reservationText })}
+          </div>
+        )}
+        {onJustAGlass && (
+          // Disabled while the take-out is saving: a glass poured from a
+          // bottle the server is taking out at that moment would land on a
+          // drunk bottle.
+          <div className="consume-partial-row">
+            <button type="button" className="btn btn-secondary consume-partial-btn" onClick={onJustAGlass} disabled={saving}>
+              🍷 {t('openBottle.partialOption')}
+            </button>
+            <span className="consume-partial-or">{t('openBottle.partialOr')}</span>
           </div>
         )}
         <form onSubmit={handleSubmit}>
