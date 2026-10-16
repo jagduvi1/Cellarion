@@ -1040,8 +1040,7 @@
     "previewLabel": "Vorschau — so sieht das Regal nach dem Erstellen aus",
     "viewCompact": "Kompakt",
     "viewShelf": "Ebenenansicht",
-    "view3d": "3D",
-    "consumeNotePlaceholder": "Wie war er?"
+    "view3d": "3D"
   },
   "nfc": {
     "linkTitle": "NFC-Tag verknüpfen",

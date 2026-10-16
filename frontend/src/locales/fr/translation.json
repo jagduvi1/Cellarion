@@ -1047,8 +1047,7 @@
     "previewLabel": "Aperçu — voici à quoi ressemblera le casier une fois créé",
     "viewCompact": "Compact",
     "viewShelf": "Vue étagère",
-    "view3d": "3D",
-    "consumeNotePlaceholder": "Alors, c'était comment ?"
+    "view3d": "3D"
   },
   "nfc": {
     "linkTitle": "Lier une étiquette NFC",
