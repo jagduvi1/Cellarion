@@ -3072,8 +3072,7 @@
         "summary": "Diagram och insikter om din vinsamling.",
         "d1": "Samlingsvärde över tid, flaskor per land/typ/druva/region.",
         "d2": "Världskarta som visar var dina viner kommer ifrån.",
-        "d3": "Drickfönsteröversikt: viner som är redo, fortfarande lagras eller passerat toppen.",
-        "d5": "Premiumfunktion — tillgänglig med Premium-planen."
+        "d3": "Drickfönsteröversikt: viner som är redo, fortfarande lagras eller passerat toppen."
       },
       "community": {
         "title": "Gemenskap",

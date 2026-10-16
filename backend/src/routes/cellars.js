@@ -140,7 +140,8 @@ async function loadGroupedBottlePage({ cellarId, excludeSet, onlyIds = null, sor
     all.sort((a, b) => sortDir * (a.n - b.n)
       || (nameOf(a) < nameOf(b) ? -1 : nameOf(a) > nameOf(b) ? 1 : 0)
       || (String(a._id.wine) < String(b._id.wine) ? -1 : String(a._id.wine) > String(b._id.wine) ? 1 : 0)
-      || (String(a._id.vintage) < String(b._id.vintage) ? -1 : 1));
+      || (String(a._id.vintage) < String(b._id.vintage) ? -1 : String(a._id.vintage) > String(b._id.vintage) ? 1 : 0)
+      || (String(a._id.size) < String(b._id.size) ? -1 : String(a._id.size) > String(b._id.size) ? 1 : 0));
     pageGroups = all.slice(skip, skip + limit);
     countResult = [{ total: all.length, bottles: all.reduce((sum, g) => sum + g.n, 0) }];
   } else [pageGroups, countResult] = await Promise.all([
@@ -1217,6 +1218,9 @@ router.get('/:id/vintages/:wineId/:vintage', async (req, res) => {
     // Rack slots, answered here like the bottle page does: the page must not
     // download every rack to place a few bottles.
     const slotOf = {};
+    // Said in the answer: when the lookup fails every bottle reads "not in a
+    // rack", and the page must not take them for identical (DrinkOneModal).
+    let placesKnown = true;
     if (bottles.length) {
       try {
         const ids = bottles.map((b) => b._id);
@@ -1238,6 +1242,7 @@ router.get('/:id/vintages/:wineId/:vintage', async (req, res) => {
         }
       } catch (err) {
         // Placement is auxiliary: never 500 the page over it.
+        placesKnown = false;
         console.error('Vintage page rack lookup failed:', err.message);
       }
     }
@@ -1271,6 +1276,7 @@ router.get('/:id/vintages/:wineId/:vintage', async (req, res) => {
       historyBottleId,
       historyBottleVintage,
       shared,
+      placesKnown,
     });
   } catch (error) {
     console.error('Get vintage page error:', error);

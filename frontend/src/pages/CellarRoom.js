@@ -24,7 +24,7 @@ import { swatchType, wineTypeLabel } from '../utils/wineColour';
 import { friendlyError, messageForResponse } from '../utils/friendlyError';
 import ActionNotice from '../components/ActionNotice';
 import { backLabel } from '../utils/backLabel';
-import { suspendBackToClose } from '../utils/useBackToClose';
+import { suspendBackToClose, pageEntryState } from '../utils/useBackToClose';
 import './CellarRoom.css';
 
 const DEFAULT_DIMENSIONS = { width: 10, depth: 10, height: 3 };
@@ -834,11 +834,16 @@ export default function CellarRoom() {
     // Seed a sentinel history entry via the NATIVE pushState (not the patched
     // one — otherwise it blocks its own seed and pops a spurious dialog). The
     // state tag lets the cleanup below recognise and remove it.
-    const SENTINEL = { __roomUnsavedSentinel: true };
-    origPushState(SENTINEL, '', window.location.href);
+    // It carries the router's own state (usr/key/idx): without it, "Leave"
+    // (a replace) copied an undefined index and every later page counted
+    // from NaN — which switched off Back-to-close (utils/useBackToClose)
+    // everywhere after the room (release audit 2026-10-16). A pop-up's mark
+    // is not carried over: the sentinel is the page's, not the pop-up's.
+    const sentinel = () => pageEntryState({ __roomUnsavedSentinel: true });
+    origPushState(sentinel(), '', window.location.href);
     const handlePopState = () => {
       if (hasUnsavedRef.current) {
-        origPushState(SENTINEL, '', window.location.href);
+        origPushState(sentinel(), '', window.location.href);
         setPendingNavPath('__back__');
       }
     };

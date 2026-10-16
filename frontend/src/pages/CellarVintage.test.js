@@ -496,3 +496,32 @@ describe('folding blocks', () => {
     await waitFor(() => expect(auth.updatePreferences).toHaveBeenLastCalledWith({ collapsedBlocks: [] }));
   });
 });
+
+// Release audit 2026-10-16: NV follows the bottle page's rule — a window
+// only in relative mode and with a year to measure from.
+describe('NV maturity', () => {
+  const nvPage = (bottles) => ({ ...page, vintage: 'NV', bottles, total: bottles.length });
+  const withProfile = (profile, bottles) => {
+    api.mockImplementation(async (url) => {
+      if (url === '/api/cellars/c1/vintages/w1/NV') return ok(nvPage(bottles));
+      if (url.startsWith('/api/somm/maturity/lookup')) return ok({ profile });
+      return ok({});
+    });
+  };
+
+  test('a relative window with no bottle left to measure from shows no years and no badge', async () => {
+    withProfile({ status: 'reviewed', relative: true, earlyFrom: 0, earlyUntil: 1, peakFrom: 1, peakUntil: 3, lateFrom: 3, lateUntil: 5 }, []);
+    renderPage('/cellars/c1/vintages/w1/NV');
+    await screen.findByText('cellarVintageBeta.wineTitle');
+    await waitFor(() => expect(api.mock.calls.some(([u]) => u.startsWith('/api/somm/maturity/lookup'))).toBe(true));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(document.querySelector('.maturity-badge--declining')).toBeNull();
+    expect(screen.queryByText(/^0–1$/)).toBeNull();
+  });
+
+  test('an old absolute NV window waits for review, as on the bottle page', async () => {
+    withProfile({ status: 'reviewed', peakFrom: 2015, peakUntil: 2018 }, [page.bottles[1]]);
+    renderPage('/cellars/c1/vintages/w1/NV');
+    expect(await screen.findByText('bottleDetail.awaitingSommelier')).toBeInTheDocument();
+  });
+});

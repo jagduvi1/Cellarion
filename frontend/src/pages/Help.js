@@ -54,7 +54,8 @@ function Help() {
     setSearch('');
     setOpenSection(linked);
     requestAnimationFrame(() => scrollBelowNavbar(document.getElementById(linked)));
-  }, [linked, hash]);
+    // Again once the flags arrive: pick lists' section exists only then.
+  }, [linked, hash, pickListsState]);
 
   const sections = useMemo(() => SECTION_KEYS.filter(key => key !== 'pickLists' || pickListsState !== 'off').map(key => {
     const prefix = `help.sections.${key}`;

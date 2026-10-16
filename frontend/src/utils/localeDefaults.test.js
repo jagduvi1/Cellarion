@@ -46,3 +46,11 @@ describe('guessCurrency', () => {
     expect(guessCurrency({ timeZone: null, languages: [] })).toBeNull();
   });
 });
+
+// Release audit 2026-10-16: en-GB is the English many devices outside Europe
+// are set to; other languages' regions still count.
+test('an English region tag outside Europe says nothing about money', () => {
+  expect(guessCurrency({ timeZone: 'Asia/Kolkata', languages: ['en-GB'] })).toBeNull();
+  expect(guessCurrency({ timeZone: 'Asia/Dubai', languages: ['en-GB', 'en'] })).toBeNull();
+  expect(guessCurrency({ timeZone: 'Asia/Bangkok', languages: ['sv-SE'] })).toBe('SEK');
+});

@@ -160,6 +160,7 @@ describe('GET /api/cellars/:id/vintages/:wineId/:vintage', () => {
     // Slots: 11 is in the rack (and the rack is in the 3D room), 12 is not placed.
     expect(body.bottles[0].rackInfo).toEqual({ rackId: RACK, rackName: 'Left wall', rackGroup: null, position: 3, inRoom: true });
     expect(body.bottles[1].rackInfo).toBeNull();
+    expect(body.placesKnown).toBe(true);
     expect(Rack.find).toHaveBeenCalledWith({ cellar: CELLAR_ID, deletedAt: null, 'slots.bottle': { $in: [id(11), id(12)] } });
     // The on-order and drunk counts are scoped exactly like the list.
     expect(Bottle.countDocuments).toHaveBeenCalledWith(expect.objectContaining({ cellar: CELLAR_ID, wineDefinition: WINE, vintage: '2015', status: 'ordered' }));
@@ -249,5 +250,8 @@ describe('GET /api/cellars/:id/vintages/:wineId/:vintage', () => {
     const { status, body } = await request(url());
     expect(status).toBe(200);
     expect(body.bottles.every((b) => b.rackInfo === null)).toBe(true);
+    // Said, so the page never takes them for identical bottles ("Which
+    // bottle?" skipped) — release audit 2026-10-16.
+    expect(body.placesKnown).toBe(false);
   });
 });

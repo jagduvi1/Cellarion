@@ -2480,8 +2480,7 @@
         "summary": "Graphiques et enseignements sur ta collection de vins.",
         "d1": "Valeur de la collection dans le temps, bouteilles par pays/type/cépage/région.",
         "d2": "Carte du monde montrant d'où viennent tes vins.",
-        "d3": "Aperçu des fenêtres de dégustation : vins prêts, encore en garde, ou au-delà de leur apogée.",
-        "d5": "Fonctionnalité Premium — disponible avec la formule Premium."
+        "d3": "Aperçu des fenêtres de dégustation : vins prêts, encore en garde, ou au-delà de leur apogée."
       },
       "community": {
         "title": "Communauté",

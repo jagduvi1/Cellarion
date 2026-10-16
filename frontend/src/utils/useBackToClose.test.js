@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { BrowserRouter, Routes, Route, useNavigate, useNavigationType } from 'react-router-dom';
-import { useBackToClose, resetBackToCloseForTests, suspendBackToClose } from './useBackToClose';
+import { useBackToClose, resetBackToCloseForTests, suspendBackToClose, pageEntryState, afterPopupEntryGone } from './useBackToClose';
 
 // The phone's Back (history.back) closes the open pop-up instead of leaving
 // the page — in the Android app it used to leave the page, and a half-filled
@@ -291,4 +291,31 @@ test('a form shown inside its picker from the start: Back closes the form first'
   expect(screen.getByRole('dialog', { name: 'picker' })).toBeInTheDocument();
   await back();
   expect(screen.queryByRole('dialog')).toBeNull();
+});
+
+// Release audit 2026-10-16: another entry of the same page (the room's
+// unsaved-changes guard) keeps the router's own state, or React Router counts
+// from NaN after a replace and Back-to-close goes dead everywhere after.
+test('pageEntryState keeps the router state and leaves a pop-up mark out', () => {
+  window.history.replaceState({ usr: { a: 1 }, key: 'kk', idx: 4, cellarionDialog: 'x.1' }, '', '/cellars/c1/room');
+  expect(pageEntryState({ __roomUnsavedSentinel: true })).toEqual({ usr: { a: 1 }, key: 'kk', idx: 4, __roomUnsavedSentinel: true });
+});
+
+// A navigation from a closing pop-up's handler waits until the pop-up's own
+// entry is gone, so it acts on the page's entry.
+test('afterPopupEntryGone runs once the closing pop-up has taken its entry off', async () => {
+  let seen;
+  function Closer() {
+    const [open, setOpen] = useState(true);
+    return open ? (
+      <Dialog name="d" onClose={() => setOpen(false)}>
+        <button type="button" onClick={() => { setOpen(false); afterPopupEntryGone(() => { seen = { ...window.history.state }; }); }}>done</button>
+      </Dialog>
+    ) : null;
+  }
+  render(<BrowserRouter><Routes><Route path="*" element={<Closer />} /></Routes></BrowserRouter>);
+  await waitFor(() => expect(window.history.state.cellarionDialog).toBeTruthy());
+  fireEvent.click(screen.getByText('done'));
+  await waitFor(() => expect(seen).toBeDefined());
+  expect(seen.cellarionDialog).toBeUndefined();
 });

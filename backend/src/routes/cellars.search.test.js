@@ -424,4 +424,24 @@ describe('GET /api/cellars/:id?group=1&sort=-quantity — counted in the databas
     expect(body.bottles.items.map((g) => g.key)).toEqual([`${W3}::2015::750ml`, `${W2}::2015::750ml`]);
     expect(loads.map((l) => l.ids).flat().sort()).toEqual([B2, B3].sort());
   });
+
+  // Release audit 2026-10-16: one wine and vintage in two sizes, as many of
+  // each — the order no longer depends on the order MongoDB groups in, so a
+  // page boundary never shows one card twice and the other not at all.
+  test('cards that differ only in size keep one order whatever order the groups come in', async () => {
+    ROWS[B2] = bottleRow(B2, { wineDefinition: { _id: W1, name: 'Zinfandel' }, bottleSize: '1500ml' });
+    const groups = [
+      { _id: { wine: oid(W1), vintage: '2015', size: '750ml' }, n: 2, wineRef: oid(W1), memberIds: [oid(B1)] },
+      { _id: { wine: oid(W1), vintage: '2015', size: '1500ml' }, n: 2, wineRef: oid(W1), memberIds: [oid(B2)] },
+    ];
+    WineDefinition.find.mockReturnValue({ select: () => ({ lean: async () => [{ _id: oid(W1), name: 'Zinfandel' }] }) });
+    const orders = [];
+    for (const answer of [groups, [...groups].reverse()]) {
+      Bottle.aggregate.mockImplementation(() => ({ allowDiskUse: async () => answer.map((g) => ({ ...g })) }));
+      const { body } = await request(`/api/cellars/${CELLAR_ID}?group=1&sort=-quantity`);
+      orders.push(body.bottles.items.map((g) => g.key));
+    }
+    expect(orders[0]).toEqual(orders[1]);
+    expect(orders[0]).toEqual([`${W1}::2015::1500ml`, `${W1}::2015::750ml`]);
+  });
 });

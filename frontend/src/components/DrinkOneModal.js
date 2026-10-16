@@ -7,6 +7,7 @@ import { useDialogA11y } from '../utils/useDialogA11y';
 import { isReserved, reservationSummary } from '../utils/reservation';
 import './DrinkOneModal.css';
 import { slotLabel as slotWords } from '../utils/slotLabel';
+import { bottleSizeLabel, DEFAULT_SIZE } from '../config/bottleSizes';
 
 /**
  * "Drink one" from a grouped entry or the vintage page (support ticket
@@ -41,7 +42,11 @@ export default function DrinkOneModal({ bottles, rackMap, wineName, onClose, onD
   // until then (or if that load failed) every bottle reads "Not in a rack" —
   // skipping then could free the wrong slot. An opened bottle is never the
   // same as a sealed one.
-  const rowText = (b) => [slotLabel(b), purchaseLabel(b), isReserved(b) ? reservationSummary(b, t) : '', b.openedAt ? 'open' : ''].join('|');
+  // The size too: the vintage page offers every size of the wine and year
+  // (release audit 2026-10-16 — a magnum went for a 75 cl).
+  const sizeOf = (b) => b.bottleSize || DEFAULT_SIZE;
+  const sizeLabel = (b) => (sizeOf(b) === DEFAULT_SIZE ? '' : bottleSizeLabel(sizeOf(b), t));
+  const rowText = (b) => [slotLabel(b), sizeOf(b), purchaseLabel(b), isReserved(b) ? reservationSummary(b, t) : '', b.openedAt ? 'open' : ''].join('|');
   const nothingToChoose = bottles.length === 1
     || (placesKnown && bottles.every((b) => rowText(b) === rowText(bottles[0])));
 
@@ -103,6 +108,7 @@ export default function DrinkOneModal({ bottles, rackMap, wineName, onClose, onD
                   <span className="drink-one__slot">{slotLabel(b)}</span>
                   <span className="drink-one__meta">
                     {b.openedAt && <span className="drink-one__opened">{t('drinkOne.opened', 'Opened')}</span>}
+                    {sizeLabel(b) && <span className="drink-one__size">{sizeLabel(b)}</span>}
                     {purchaseLabel(b)}
                     {reserved && <span className="reserved-badge"><span aria-hidden="true">🔖</span> {reservationSummary(b, t)}</span>}
                   </span>

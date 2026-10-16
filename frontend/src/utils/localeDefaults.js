@@ -120,12 +120,16 @@ export function guessCurrency({ timeZone = deviceTimeZone(), languages = deviceL
   if (zoneRegion) return currencyOf(zoneRegion);
 
   const tags = Array.isArray(languages) ? languages : [];
+  const zoneIsEuropeanOrUnknown = !timeZone || timeZone.startsWith('Europe/') || timeZone.startsWith('Etc/') || timeZone === 'UTC';
   for (const tag of tags) {
+    // Outside Europe an English tag says little about money: en-GB is the
+    // English many devices in India, Nigeria or the Gulf are set to
+    // (release audit 2026-10-16). Other languages' regions still count.
+    if (!zoneIsEuropeanOrUnknown && /^en\b/i.test(tag)) continue;
     const fromTag = currencyOf(explicitRegion(tag));
     if (fromTag) return fromTag;
   }
 
-  const zoneIsEuropeanOrUnknown = !timeZone || timeZone.startsWith('Europe/') || timeZone.startsWith('Etc/') || timeZone === 'UTC';
   if (zoneIsEuropeanOrUnknown) {
     for (const tag of tags) {
       if (explicitRegion(tag)) continue;

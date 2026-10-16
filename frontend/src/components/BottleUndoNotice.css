@@ -39,4 +39,10 @@
   .bottle-undo-notice--floating {
     bottom: calc(var(--bottom-nav-height) + 0.75rem + env(safe-area-inset-bottom));
   }
+  /* Above a page's own action bar (the vintage page's .bd-mobile-actions,
+     ~61 px): the notice covered Drink, Edit vintage and Add until closed
+     (release audit 2026-10-16). */
+  .cvb-page .bottle-undo-notice--floating {
+    bottom: calc(var(--bottom-nav-height) + 5.25rem + env(safe-area-inset-bottom));
+  }
 }

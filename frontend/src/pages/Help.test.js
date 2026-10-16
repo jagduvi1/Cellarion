@@ -76,6 +76,15 @@ describe('the help text', () => {
     expect(all).not.toMatch(/10-point/);
   });
 
+  // Release audit 2026-10-16: a rewritten English line left the old
+  // translation behind ("Premium feature" in sv/de/fr).
+  test('no language says a feature is paid', async () => {
+    for (const lng of ['sv', 'de', 'fr', 'et']) {
+      const bundle = (await import(`../locales/${lng}/translation.json`)).default;
+      expect(JSON.stringify(bundle.help?.sections || {}), lng).not.toMatch(/premium/i);
+    }
+  });
+
   test('has the words for pick lists in early access: the title and where to turn it on', () => {
     expect(sections.pickLists.earlyTitle).toMatch(/early access/i);
     expect(sections.pickLists.title).not.toMatch(/early access/i);

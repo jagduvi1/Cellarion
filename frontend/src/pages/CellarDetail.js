@@ -627,7 +627,7 @@ function CellarDetail() {
         actions={!loading && (
           <>
             {canEdit && !user?.isDemo && (
-              <Link to={`/cellars/${id}/add-bottle`} className="btn btn-primary btn-small cph-desktop-only">
+              <Link to={`/cellars/${id}/add-bottle`} state={{ cameFrom: `/cellars/${id}` }} className="btn btn-primary btn-small cph-desktop-only">
                 + {t('cellarDetail.addBottle')}
               </Link>
             )}
@@ -1004,7 +1004,7 @@ function CellarDetail() {
               <div className="empty-state">
                 <p>{t('cellarDetail.noBottles')}</p>
                 {canEdit && (
-                  <Link to={`/cellars/${id}/add-bottle`} className="btn btn-primary">
+                  <Link to={`/cellars/${id}/add-bottle`} state={{ cameFrom: `/cellars/${id}` }} className="btn btn-primary">
                     {t('cellarDetail.addFirstBottle')}
                   </Link>
                 )}
@@ -1044,7 +1044,7 @@ function CellarDetail() {
       {/* ── FAB: Add Bottle (mobile only) — hidden while selecting bottles ── */}
       {!loading && canEdit && !selecting && (
         <Link
-          to={`/cellars/${id}/add-bottle`}
+          to={`/cellars/${id}/add-bottle`} state={{ cameFrom: `/cellars/${id}` }}
           className="fab"
           aria-label={t('cellarDetail.addBottle')}
         >

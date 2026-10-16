@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 
 // After a save the cellar page says what was added and offers the next one
 // (newcomer walkthrough 2026-10-15).
@@ -33,4 +33,23 @@ test('✕ closes it', () => {
 test('without a wine name there is no quoted stand-in', () => {
   renderIt({ name: '', count: 3 });
   expect(screen.getByRole('status')).toHaveTextContent('bottleNotice.addedUnnamed:{"count":3}');
+});
+
+// Release audit 2026-10-16: the next bottle is added the same way, and the
+// add page comes back to where the notice was.
+test('"Add another bottle" carries the way back and the mode of the bottle just added', () => {
+  function Where() {
+    const loc = useLocation();
+    return <p data-testid="where">{JSON.stringify(loc.state)}</p>;
+  }
+  render(
+    <MemoryRouter initialEntries={['/cellars/c1/on-order']}>
+      <Routes>
+        <Route path="/cellars/:id/on-order" element={<BottleAddedNotice notice={{ name: 'Barolo 2019', count: 1, onOrder: true }} cellarId="c1" onDismiss={vi.fn()} />} />
+        <Route path="/cellars/:id/add-bottle" element={<Where />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  fireEvent.click(screen.getByRole('link', { name: 'Add another bottle' }));
+  expect(JSON.parse(screen.getByTestId('where').textContent)).toEqual({ cameFrom: '/cellars/c1/on-order', addMode: 'onOrder' });
 });

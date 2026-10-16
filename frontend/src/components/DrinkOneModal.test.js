@@ -139,3 +139,22 @@ test('an opened bottle is not the same as a sealed one — the picker stays and 
   expect(screen.getByText('drinkOne.title')).toBeInTheDocument();
   expect(screen.getByText('drinkOne.opened')).toBeInTheDocument();
 });
+
+// Release audit 2026-10-16: the vintage page offers every size of the wine
+// and year — a magnum is never "the same" as a 75 cl.
+test('bottles that differ only in size are asked about, with the size on the row', () => {
+  const two = [
+    { _id: 'm1', status: 'active', vintage: '2019', bottleSize: '1500ml' },
+    { _id: 's1', status: 'active', vintage: '2019' },
+  ];
+  render(<DrinkOneModal bottles={two} rackMap={new Map()} wineName="Barolo 2019" onClose={vi.fn()} onDone={vi.fn()} />);
+  expect(screen.getByText('drinkOne.title')).toBeInTheDocument();
+  expect(screen.getAllByText('drinkOne.unplaced')).toHaveLength(2);
+  expect(document.querySelectorAll('.drink-one__size')).toHaveLength(1);
+});
+
+test('a vintage page whose rack lookup failed never takes the bottles for identical', () => {
+  const two = [{ _id: 'a', status: 'active', vintage: '2019' }, { _id: 'b', status: 'active', vintage: '2019' }];
+  render(<DrinkOneModal bottles={two} wineName="Barolo 2019" placesKnown={false} onClose={vi.fn()} onDone={vi.fn()} />);
+  expect(screen.getByText('drinkOne.title')).toBeInTheDocument();
+});

@@ -247,6 +247,38 @@ export function useBackToClose(onClose, enabled = true) {
 
 // Tests only: forget every entry and pending step, so one test's pop-ups (and
 // jsdom's shared history) cannot reach into the next.
+/**
+ * The state for another entry of the SAME page (the room's unsaved-changes
+ * guard): the router's own state (usr/key/idx) so later pages keep counting
+ * from the right index, without a pop-up's mark, plus `extra`. A bare
+ * `{ … }` made React Router count from NaN after a replace, which switched
+ * Back-to-close off everywhere after (release audit 2026-10-16).
+ */
+export function pageEntryState(extra = {}) {
+  const { [MARK]: _mark, ...routerState } = historyState();
+  return { ...routerState, ...extra };
+}
+
+/**
+ * Run `fn` once the current history entry is no longer a pop-up's own (one
+ * that just closed is taken off a tick later): a navigation from a closing
+ * pop-up's handler would otherwise replace or step from that entry, not the
+ * page's (release audit 2026-10-16). Runs at once when there is none; gives
+ * up waiting after `timeoutMs`.
+ */
+export function afterPopupEntryGone(fn, timeoutMs = 1500) {
+  const start = Date.now();
+  const own = () => {
+    const mark = historyState()[MARK];
+    return typeof mark === 'string' && mark.startsWith(`${LOAD}.`);
+  };
+  const check = () => {
+    if (!own() || Date.now() - start > timeoutMs) { fn(); return; }
+    setTimeout(check, 25);
+  };
+  check();
+}
+
 export function resetBackToCloseForTests() {
   stack.length = 0;
   if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }

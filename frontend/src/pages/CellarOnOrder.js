@@ -251,15 +251,21 @@ function OnOrderGroup({ group, cellarId, canEdit, onArrived, onMonthChanged, onA
   const validQty = String(newQty).trim() !== '' && Number.isInteger(parsedQty) && parsedQty >= 1 && parsedQty <= maxQty;
   const qtyFailed = () => t('onOrder.qtyFailed', 'Could not change how many bottles are on order. Please try again.');
   const saving = useRef(false);
+  // The count when this panel opened and the bottles it has added since: a
+  // retry after a part-failed raise adds only what is still missing, whether
+  // or not the list has been re-read meanwhile (release audit 2026-10-16 —
+  // 2 → 7 ended at 10).
+  const qtyStart = useRef({ count, added: 0 });
   const saveQty = async () => {
     if (!validQty || saving.current) return;
-    if (parsedQty === count) { setPanel(null); return; }
+    const current = qtyStart.current.count + qtyStart.current.added;
+    if (parsedQty === current) { setPanel(null); onAdded(); return; }
     saving.current = true;
     setBusy(true);
-    const wanted = parsedQty - count;
+    const wanted = parsedQty - current;
     let added = 0;
     try {
-      if (parsedQty > count) {
+      if (parsedQty > current) {
         const payload = {
           ...bottleCopyPayload(newest, { copyNotes: false }),
           cellar: cellarId,
@@ -268,6 +274,7 @@ function OnOrderGroup({ group, cellarId, canEdit, onArrived, onMonthChanged, onA
         };
         for (; added < wanted; added += 1) {
           const res = await createBottle(apiFetch, payload);
+          if (res.ok) qtyStart.current.added += 1;
           if (!res.ok) {
             const data = await res.json().catch(() => ({}));
             const msg = data.error || qtyFailed();
@@ -289,6 +296,9 @@ function OnOrderGroup({ group, cellarId, canEdit, onArrived, onMonthChanged, onA
         onTakenOff(deletedIds, { batchId: data.batchId, name: bottleNoticeName(newest), bottleId: deletedIds[0] || surplus[0] });
         if ((data.skipped || []).some((s) => s.reason === 'not_on_order')) {
           onFailure(t('onOrder.qtyArrivedMeanwhile', 'Some of these bottles had already arrived, so they were left in the cellar. The list is up to date now.'));
+        } else if (deletedIds.length < surplus.length) {
+          // Gone meanwhile, or refused one by one: never a silent no-op.
+          onFailure(qtyFailed());
         }
       }
     } catch {
@@ -341,7 +351,7 @@ function OnOrderGroup({ group, cellarId, canEdit, onArrived, onMonthChanged, onA
             <button type="button" className="btn btn-secondary btn-small" onClick={() => setPanel('month')}>
               {t('onOrder.changeMonth')}
             </button>
-            <button type="button" className="btn btn-secondary btn-small" onClick={() => { setNewQty(count); setPanel('qty'); }}>
+            <button type="button" className="btn btn-secondary btn-small" onClick={() => { setNewQty(count); qtyStart.current = { count, added: 0 }; setPanel('qty'); }}>
               {t('onOrder.changeQty', 'Change quantity')}
             </button>
           </div>

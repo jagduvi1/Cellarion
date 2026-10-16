@@ -520,7 +520,7 @@ function MaturityPreview({ form, vintageInt, isNv }) {
   if (!phase) return null;
 
   return (
-    <div className={`somm-preview somm-preview--${phase.cls}`}>
+    <div className={`somm-preview somm-preview--${phase.status}`}>
       <span className="somm-preview-label">{t('somm.maturity.statusToday', { year: CURRENT_YEAR })}</span>
       <span className={`maturity-badge maturity-badge--${phase.status}`}>{maturityBadgeText(phase, t)}</span>
     </div>

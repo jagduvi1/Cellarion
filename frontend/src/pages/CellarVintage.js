@@ -279,8 +279,15 @@ function CellarVintage() {
   const notes = sharedState('notes');
 
   const anchorYear = bottleAnchorYear(first);
-  const maturityStatus = profile ? getMaturityStatus(profile, anchorYear) : null;
-  const profileReviewed = profile?.status === 'reviewed';
+  // An NV window is meaningful only in relative mode (offsets from purchase)
+  // and with a year to measure from — the bottle page's rule (ViewDetails).
+  // An old absolute NV profile waits for review; a relative one with no
+  // bottle left to anchor it shows no years at all (release audit 2026-10-16:
+  // offsets read as years said "Declining", "0–1").
+  const isNv = String(vintage || '').toUpperCase() === 'NV';
+  const nvUnanchored = isNv && !!profile?.relative && !Number.isFinite(anchorYear);
+  const profileReviewed = profile?.status === 'reviewed' && (!isNv || !!profile.relative);
+  const maturityStatus = profile && !nvUnanchored ? getMaturityStatus(profile, anchorYear) : null;
 
   // Hero, in the cards' order: a chosen or own photo of this vintage, the
   // vintage's official photo, the wine's image, then an own photo of another year.
@@ -561,7 +568,7 @@ function CellarVintage() {
                     ) : (
                       <div className="bd-maturity-reviewed">
                         {maturityStatus && <span className={`maturity-badge maturity-badge--${maturityStatus.status}`}>{maturityBadgeText(maturityStatus, t)}</span>}
-                        <MaturityPhaseTable profile={profile} anchorYear={anchorYear} />
+                        {!nvUnanchored && <MaturityPhaseTable profile={profile} anchorYear={anchorYear} />}
                         {profile.sommNotes && <p className="bd-maturity-notes">{profile.sommNotes}</p>}
                       </div>
                     )}
@@ -594,7 +601,7 @@ function CellarVintage() {
                         {bottlesFolded && (
                           <>
                             {' '}
-                            <button type="button" className="cvb-inline-link" onClick={() => setShowAllBottles(true)}>
+                            <button type="button" className="cvb-inline-link" onClick={() => { setShowAllBottles(true); expand('vintage.bottles'); }}>
                               {t('cellarVintageBeta.showBottles', { count: bottles.length })}
                             </button>
                           </>
@@ -739,7 +746,7 @@ function CellarVintage() {
 
       <Suspense fallback={null}>
         {modal === 'drink' && (
-          <DrinkOneModal bottles={bottles} wineName={title} onClose={() => setModal(null)} onDone={handleDrunk} />
+          <DrinkOneModal bottles={bottles} wineName={title} placesKnown={data?.placesKnown !== false} onClose={() => setModal(null)} onDone={handleDrunk} />
         )}
         {modal === 'pickList' && (
           <AddToPickListModal choices={pickable} onClose={() => setModal(null)} onDone={() => setModal(null)} />
