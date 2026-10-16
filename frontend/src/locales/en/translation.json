@@ -1182,7 +1182,9 @@
     "added_other": "{{count}} bottles of “{{name}}” added.",
     "addedToHistory_one": "“{{name}}” added to the history.",
     "addedToHistory_other": "{{count}} bottles of “{{name}}” added to the history.",
-    "addAnother": "Add another bottle"
+    "addAnother": "Add another bottle",
+    "addedUnnamed_one": "Bottle added.",
+    "addedUnnamed_other": "{{count}} bottles added."
   },
   "bottleDetail": {
     "producerPending": "producer being confirmed",

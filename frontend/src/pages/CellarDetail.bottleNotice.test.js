@@ -95,3 +95,14 @@ it('drinking from a card says so at the top, with Undo — it used to change the
   expect(await screen.findByText('bottleNotice.drunk')).toBeInTheDocument();
   expect(screen.getByText('common.undo')).toBeInTheDocument();
 });
+
+// The add page hands over what it added (newcomer walkthrough 2026-10-15).
+test('bottles just added are announced with "Add another bottle"', async () => {
+  render(
+    <MemoryRouter initialEntries={[{ pathname: '/cellars/c1', state: { addedNotice: { name: 'Barolo 2016', count: 2, history: false } } }]}>
+      <Routes><Route path="/cellars/:id" element={<CellarDetail />} /></Routes>
+    </MemoryRouter>,
+  );
+  expect(await screen.findByText('bottleNotice.added')).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'bottleNotice.addAnother' })).toHaveAttribute('href', '/cellars/c1/add-bottle');
+});

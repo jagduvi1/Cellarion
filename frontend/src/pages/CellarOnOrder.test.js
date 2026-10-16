@@ -270,3 +270,15 @@ describe('Change quantity', () => {
     expect(api.mock.calls.some(([u, o]) => u === '/api/bottles' && o?.method === 'POST')).toBe(false);
   });
 });
+
+// An add on order lands here and says so, with the next one a tap away
+// (newcomer walkthrough 2026-10-15).
+test('bottles just added on order are announced with "Add another bottle"', async () => {
+  render(
+    <MemoryRouter initialEntries={[{ pathname: '/cellars/c1/on-order', state: { addedNotice: { name: 'Barolo 2016', count: 3, history: false } } }]}>
+      <Routes><Route path="/cellars/:id/on-order" element={<CellarOnOrder />} /></Routes>
+    </MemoryRouter>,
+  );
+  expect(await screen.findByRole('link', { name: /Add another bottle|bottleNotice\.addAnother/ })).toHaveAttribute('href', '/cellars/c1/add-bottle');
+  expect(screen.getByRole('status')).toHaveTextContent(/bottleNotice\.added|Barolo 2016/);
+});

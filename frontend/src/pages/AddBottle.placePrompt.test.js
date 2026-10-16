@@ -102,7 +102,11 @@ describe('AddBottle — "Place your bottles now?" (issue #1055)', () => {
 
   // The cellar page then says what was added, with "Add another bottle"
   // (newcomer walkthrough 2026-10-15).
-  const ADDED = { state: { addedNotice: { name: 'Kaefferkopf 2019', count: 2, history: false, at: expect.any(Number) } } };
+  // Straight from the form the add page is replaced (Back never lands on an
+  // emptied form); from the place dialog it is a push, as its Back entry needs.
+  const NOTICE = { addedNotice: { name: 'Kaefferkopf 2019', count: 2, history: false } };
+  const ADDED = { replace: true, state: NOTICE };
+  const ADDED_FROM_DIALOG = { replace: false, state: NOTICE };
 
   test('"Not now" goes to the cellar page, which says what was added', async () => {
     routeApi({ racks: [{ _id: 'r1' }] });
@@ -110,7 +114,7 @@ describe('AddBottle — "Place your bottles now?" (issue #1055)', () => {
     await waitFor(() => expect(screen.getByText('addBottle.placePrompt.title')).toBeInTheDocument());
 
     fireEvent.click(screen.getByText('addBottle.placePrompt.notNow'));
-    expect(navigateMock).toHaveBeenCalledWith('/cellars/cellar1', ADDED);
+    expect(navigateMock).toHaveBeenCalledWith('/cellars/cellar1', ADDED_FROM_DIALOG);
   });
 
   test('a cellar WITHOUT racks never sees the offer', async () => {
@@ -133,4 +137,18 @@ describe('AddBottle — "Place your bottles now?" (issue #1055)', () => {
     fireEvent.click(screen.getByText('common.cancel'));
     expect(navigateMock).toHaveBeenCalledWith('/cellars/cellar1');
   });
+});
+
+// The name is the wine the server filed the bottles under, not what was typed:
+// a "did you mean?" pick at commit, or a resolve to an existing wine.
+test('the notice names the wine the bottles were saved under', async () => {
+  apiFetchMock.mockImplementation(async (url) => {
+    if (url.startsWith('/api/racks?cellar=')) return jsonRes({ racks: [] });
+    apiFetchMock.__n = (apiFetchMock.__n || 0) + 1;
+    return jsonRes({ bottle: { _id: `s${apiFetchMock.__n}`, wineDefinition: { _id: 'w-x', name: 'Kaefferkopf Grand Cru' }, vintage: '2019' }, priceWarnings: [] }, true, 201);
+  });
+  await submitTwoBottles();
+  await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/cellars/cellar1', {
+    replace: true, state: { addedNotice: { name: 'Kaefferkopf Grand Cru 2019', count: 2, history: false } },
+  }));
 });

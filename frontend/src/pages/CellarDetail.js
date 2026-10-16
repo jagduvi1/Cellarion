@@ -127,8 +127,10 @@ function CellarDetail() {
   // A bottle the bottle page just took away (drunk, or "Added by mistake"),
   // said here with Undo — handed over once (hooks/useHandedOverState).
   const [bottleNotice, setBottleNotice] = useHandedOverState('bottleNotice');
-  // "“X” added — Add another bottle", handed over by the add page.
+  // "“X” added — Add another bottle", handed over by the add page. It gives
+  // way to the next notice (a drink from a card): one line at a time.
   const [addedNotice, setAddedNotice] = useHandedOverState('addedNotice');
+  useEffect(() => { if (bottleNotice) setAddedNotice(null); }, [bottleNotice]); // eslint-disable-line react-hooks/exhaustive-deps
   const [cellar, setCellar] = useState(null);
   const [bottles, setBottles] = useState([]);
   const [bottlesTotal, setBottlesTotal] = useState(0);
@@ -604,7 +606,6 @@ function CellarDetail() {
       )}
       {addedNotice && (
         <BottleAddedNotice
-          key={addedNotice.at || 'added'}
           notice={addedNotice}
           cellarId={id}
           onDismiss={() => setAddedNotice(null)}

@@ -7,6 +7,7 @@ import WineImage from '../components/WineImage';
 import CellarNav from '../components/CellarNav';
 import CellarPageHeader from '../components/CellarPageHeader';
 import BottleUndoNotice, { bottleNoticeName } from '../components/BottleUndoNotice';
+import BottleAddedNotice from '../components/BottleAddedNotice';
 import { getCellarOnOrder } from '../api/cellars';
 import { markBottleArrived, bulkArriveBottles, bulkUpdateBottles, createBottle, bulkDeleteBottles } from '../api/bottles';
 import { TRASH_DAYS } from '../utils/trash';
@@ -39,6 +40,10 @@ function CellarOnOrder() {
   // An order the bottle page just cancelled (it went to Recently deleted),
   // said here with Undo — handed over once (hooks/useHandedOverState).
   const [bottleNotice, setBottleNotice] = useHandedOverState('bottleNotice');
+  // "“X” added — Add another bottle" after an add on order (AddBottle); gives
+  // way to the next notice.
+  const [addedNotice, setAddedNotice] = useHandedOverState('addedNotice');
+  useEffect(() => { if (bottleNotice) setAddedNotice(null); }, [bottleNotice]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const load = async () => {
     try {
@@ -107,6 +112,9 @@ function CellarOnOrder() {
             ✕
           </button>
         </div>
+      )}
+      {addedNotice && (
+        <BottleAddedNotice notice={addedNotice} cellarId={id} onDismiss={() => setAddedNotice(null)} />
       )}
       {bottleNotice && (
         // Keyed per notice: a new one starts fresh, never as an earlier one's "undone".

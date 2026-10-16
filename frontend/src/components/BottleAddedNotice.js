@@ -8,16 +8,20 @@ import './BottleUndoNotice.css';
  * in a row had to find the add button again after every save (newcomer
  * walkthrough 2026-10-15). Same look as BottleUndoNotice.
  *
- * `notice` = { name, count, history, at } — handed over in the navigation's
- * router state by AddBottle (hooks/useHandedOverState).
+ * `notice` = { name, count, history } — handed over in the navigation's
+ * router state by AddBottle (hooks/useHandedOverState), to the cellar page or
+ * the On order list.
  */
 export default function BottleAddedNotice({ notice, cellarId, onDismiss }) {
   const { t } = useTranslation();
-  const name = notice.name || t('bottleNotice.thisBottle', 'The bottle');
+  const name = notice.name;
   const count = notice.count > 0 ? notice.count : 1;
-  const text = notice.history
-    ? t('bottleNotice.addedToHistory', { name, count })
-    : t('bottleNotice.added', { name, count });
+  // Without a wine name (none should reach here), no quoted stand-in.
+  const text = !name
+    ? t('bottleNotice.addedUnnamed', { count })
+    : notice.history
+      ? t('bottleNotice.addedToHistory', { name, count })
+      : t('bottleNotice.added', { name, count });
   return (
     <div className="alert alert-success bottle-undo-notice" role="status">
       <span className="bottle-undo-notice__text">{text}</span>

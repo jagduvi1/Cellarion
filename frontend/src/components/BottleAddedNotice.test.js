@@ -13,19 +13,24 @@ const renderIt = (notice, onDismiss = vi.fn()) => render(
 );
 
 test('says what was added, with the count, and leads to the add page for the next one', () => {
-  renderIt({ name: 'Barolo 2019', count: 2, history: false, at: 1 });
+  renderIt({ name: 'Barolo 2019', count: 2, history: false });
   expect(screen.getByRole('status')).toHaveTextContent('bottleNotice.added:{"name":"Barolo 2019","count":2}');
   expect(screen.getByRole('link', { name: 'Add another bottle' })).toHaveAttribute('href', '/cellars/c1/add-bottle');
 });
 
 test('a bottle added straight to the history says so', () => {
-  renderIt({ name: 'Barolo 2019', count: 1, history: true, at: 1 });
+  renderIt({ name: 'Barolo 2019', count: 1, history: true });
   expect(screen.getByRole('status')).toHaveTextContent('bottleNotice.addedToHistory:{"name":"Barolo 2019","count":1}');
 });
 
 test('✕ closes it', () => {
   const onDismiss = vi.fn();
-  renderIt({ name: 'Barolo 2019', count: 1, at: 1 }, onDismiss);
+  renderIt({ name: 'Barolo 2019', count: 1 }, onDismiss);
   fireEvent.click(screen.getByRole('button', { name: 'Close' }));
   expect(onDismiss).toHaveBeenCalledTimes(1);
+});
+
+test('without a wine name there is no quoted stand-in', () => {
+  renderIt({ name: '', count: 3 });
+  expect(screen.getByRole('status')).toHaveTextContent('bottleNotice.addedUnnamed:{"count":3}');
 });
