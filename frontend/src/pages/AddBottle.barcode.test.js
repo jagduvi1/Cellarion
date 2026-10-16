@@ -111,6 +111,9 @@ it('step 2 asks for the barcode; one scanned there is kept for the bottle, no lo
   await act(async () => { fireEvent.click(screen.getByText('addBottle.searchBtn')); });
   await act(async () => { fireEvent.click(screen.getByText('Barolo').closest('.wine-row')); });
   expect(screen.getByText('addBottle.barcodeHelp')).toBeInTheDocument();
+  // Below the fields: the vintage comes first (newcomer walkthrough 2026-10-15).
+  const vintageField = screen.getByPlaceholderText('addBottle.vintagePlaceholder');
+  expect(vintageField.compareDocumentPosition(screen.getByText('addBottle.barcodeHelp')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
   camState.open = true; // the click opens the camera
   await act(async () => { fireEvent.click(screen.getByText('addBottle.barcodeHelpBtn')); });
@@ -124,6 +127,8 @@ it('step 2 asks for the barcode; one scanned there is kept for the bottle, no lo
   camState.open = false;
   expect(screen.getByText('addBottle.barcodeThanks')).toBeInTheDocument();
   expect(screen.queryByText('addBottle.barcodeHelp')).toBeNull();
+  // The thanks lands where the scan was asked for.
+  expect(vintageField.compareDocumentPosition(screen.getByText('addBottle.barcodeThanks')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
   fireEvent.change(screen.getByPlaceholderText('addBottle.vintagePlaceholder'), { target: { value: '2018' } });
   await act(async () => { fireEvent.click(screen.getByText('addBottle.addBottleBtn')); });

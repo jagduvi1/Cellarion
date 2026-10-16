@@ -947,6 +947,11 @@
   color: var(--color-text-muted);
 }
 
+/* Below the photo: the barcode ask, or the thanks once one is scanned. */
+.barcode-ask {
+  margin-top: 1rem;
+}
+
 /* "Help the community: scan the barcode" — same quiet register, one button. */
 .barcode-help {
   display: flex;
@@ -979,12 +984,17 @@
   gap: 0.15rem;
 }
 
+/* The name wraps onto a second line rather than "Château Ma…" on a phone
+   (newcomer walkthrough 2026-10-15); a very long one ends in … after two. */
 .selected-wine-bar-name {
   color: var(--color-text);
   font-size: 0.95rem;
-  white-space: nowrap;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .selected-wine-bar-producer {

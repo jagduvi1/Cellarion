@@ -143,7 +143,7 @@ describe('AddBottle — linking the uploaded photos', () => {
     await act(async () => { fireEvent.click(screen.getByText('common.close')); });
 
     // Dismissing resumes the flow, and links once only.
-    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/cellars/cellar1'));
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/cellars/cellar1', expect.objectContaining({ state: { addedNotice: expect.any(Object) } })));
     expect(linkCalls()).toHaveLength(1);
   });
 
@@ -151,7 +151,7 @@ describe('AddBottle — linking the uploaded photos', () => {
     routeApi();
     await uploadAndSubmitWithFields();
 
-    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/cellars/cellar1'));
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/cellars/cellar1', expect.objectContaining({ state: { addedNotice: expect.any(Object) } })));
     expect(linkCalls()).toEqual([{ bottleId: 'b1', imageIds: ['img-1'] }]);
   });
 });

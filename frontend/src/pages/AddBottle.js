@@ -871,6 +871,23 @@ function AddBottle() {
     });
   };
 
+  // The wine on screen came from a scanned barcode (not just a barcode kept
+  // for a wine picked by hand).
+  const foundByBarcode = !!barcodeWineId && selectedWine?._id === barcodeWineId;
+
+  // What the cellar page says once the bottles exist — "“X 2019” added" with
+  // "Add another bottle" (components/BottleAddedNotice). A newcomer adding a
+  // few wines in a row had to find the add button again after every save
+  // (newcomer walkthrough 2026-10-15). Not on Cancel.
+  const goToCellarAdded = () => {
+    const vintage = String(bottleData.vintage || '').trim();
+    const name = [selectedWine?.name, /^(nv|unknown)$/i.test(vintage) ? '' : vintage].filter(Boolean).join(' ');
+    const count = createdBottlesRef.current.filter(Boolean).length;
+    navigate(`/cellars/${cellarId}`, {
+      state: { addedNotice: { name, count, history: !!addToHistory, at: Date.now() } },
+    });
+  };
+
   // What happens once every bottle exists: link the photos, then either offer
   // to place them or go to the cellar. Extracted so the custom-field notice
   // can hold it back for one dialog and then resume exactly the same flow.
@@ -899,7 +916,7 @@ function AddBottle() {
       setPlacePrompt({ ids: newIds, count: newIds.length });
       return;
     }
-    navigate(`/cellars/${cellarId}`);
+    goToCellarAdded();
   };
 
   // Create the bottle records that are still missing. wineRef is EITHER
@@ -1655,23 +1672,11 @@ function AddBottle() {
               {t('addBottle.changeWine')}
             </button>
           </div>
-          {barcodeWineId && selectedWine?._id === barcodeWineId ? (
+          {/* Which wine this is: said right under it. */}
+          {foundByBarcode && (
             <p className="selected-wine-barcode-note">
               {t('addBottle.barcodeFound', 'Found by its barcode. Not this wine? Use Change wine.')}
             </p>
-          ) : barcode ? (
-            <p className="selected-wine-barcode-note">
-              {t('addBottle.barcodeThanks', 'Thank you — the barcode is saved with this bottle, so the next member who scans it finds this wine straight away.')}
-            </p>
-          ) : (
-            // The registry learns barcodes only from bottles added with one, so
-            // ask — once, quietly, at the one step every add path reaches.
-            <div className="barcode-help">
-              <p>{t('addBottle.barcodeHelp', "Help the community: we're building Cellarion's barcode list together, and it's still small. Scan the barcode on this bottle, and the next member who scans it will find this wine straight away.")}</p>
-              <button type="button" className="btn btn-ghost btn-small" onClick={startBarcodeScan}>
-                {t('addBottle.barcodeHelpBtn', 'Scan barcode')}
-              </button>
-            </div>
           )}
 
           {/* A wine the registry does not know yet will be MINTED with this
@@ -1831,6 +1836,28 @@ function AddBottle() {
               />
               <p className="photo-section-notice">{t('addBottle.photosNotice')}</p>
             </div>
+
+            {/* The registry learns barcodes only from bottles added with one, so
+                ask — once, quietly, at the one step every add path reaches. Below
+                the fields and the photo, next to the other way to help: a
+                newcomer's first job here is the vintage (newcomer walkthrough
+                2026-10-15). The thanks lands where the scan was asked for. */}
+            {!foundByBarcode && (
+              <div className="barcode-ask">
+                {barcode ? (
+                  <p className="selected-wine-barcode-note">
+                    {t('addBottle.barcodeThanks', 'Thank you — the barcode is saved with this bottle, so the next member who scans it finds this wine straight away.')}
+                  </p>
+                ) : (
+                  <div className="barcode-help">
+                    <p>{t('addBottle.barcodeHelp', "Help the community: we're building Cellarion's barcode list together, and it's still small. Scan the barcode on this bottle, and the next member who scans it will find this wine straight away.")}</p>
+                    <button type="button" className="btn btn-ghost btn-small" onClick={startBarcodeScan}>
+                      {t('addBottle.barcodeHelpBtn', 'Scan barcode')}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* ── More details toggle ── */}
             <button
@@ -2190,17 +2217,17 @@ function AddBottle() {
 
       {/* Post-add placing offer (issue #1055) — skippable, never blocking */}
       {placePrompt && (
-        <div className="modal-overlay" onClick={() => navigate(`/cellars/${cellarId}`)}>
+        <div className="modal-overlay" onClick={goToCellarAdded}>
           <DialogBox
             className="modal-box"
             onClick={e => e.stopPropagation()}
-            onClose={() => navigate(`/cellars/${cellarId}`)}
+            onClose={goToCellarAdded}
             label={t('addBottle.placePrompt.title', { count: placePrompt.count })}
           >
             <h2>{t('addBottle.placePrompt.title', { count: placePrompt.count })}</h2>
             <p>{t('addBottle.placePrompt.body')}</p>
             <div className="modal-actions">
-              <button type="button" className="btn btn-secondary" onClick={() => navigate(`/cellars/${cellarId}`)}>
+              <button type="button" className="btn btn-secondary" onClick={goToCellarAdded}>
                 {t('addBottle.placePrompt.notNow')}
               </button>
               <button

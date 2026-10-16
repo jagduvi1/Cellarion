@@ -23,6 +23,7 @@ import { formatArrivalMonth, isArrivalLate } from '../utils/onOrder';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
 import { useFeature } from '../utils/featureFlags';
 import BottleUndoNotice, { bottleNoticeName } from '../components/BottleUndoNotice';
+import BottleAddedNotice from '../components/BottleAddedNotice';
 import { CARD_FIELDS, cardDetails, readCardFields, storeCardFields } from '../utils/cardDetails';
 import { summarizeSelection } from '../utils/bulkSelection';
 import LoadError from '../components/LoadError';
@@ -126,6 +127,8 @@ function CellarDetail() {
   // A bottle the bottle page just took away (drunk, or "Added by mistake"),
   // said here with Undo — handed over once (hooks/useHandedOverState).
   const [bottleNotice, setBottleNotice] = useHandedOverState('bottleNotice');
+  // "“X” added — Add another bottle", handed over by the add page.
+  const [addedNotice, setAddedNotice] = useHandedOverState('addedNotice');
   const [cellar, setCellar] = useState(null);
   const [bottles, setBottles] = useState([]);
   const [bottlesTotal, setBottlesTotal] = useState(0);
@@ -597,6 +600,14 @@ function CellarDetail() {
           cellarId={id}
           onUndone={() => { fetchCellarData(0); fetchStatistics(); fetchRacks(); }}
           onDismiss={() => setBottleNotice(null)}
+        />
+      )}
+      {addedNotice && (
+        <BottleAddedNotice
+          key={addedNotice.at || 'added'}
+          notice={addedNotice}
+          cellarId={id}
+          onDismiss={() => setAddedNotice(null)}
         />
       )}
       {/* ── Header — shared shape so the nav anchors at the same Y everywhere ── */}

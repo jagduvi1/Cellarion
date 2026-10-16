@@ -141,7 +141,7 @@ describe('AddBottle — an N-bottle commit mints ONE wine', () => {
 
     // resolve ran exactly once, back in step 1 — the commit never re-resolves
     expect(resolveWine).toHaveBeenCalledTimes(1);
-    expect(navigateMock).toHaveBeenCalledWith('/cellars/cellar1');
+    expect(navigateMock).toHaveBeenCalledWith('/cellars/cellar1', expect.objectContaining({ state: { addedNotice: expect.any(Object) } }));
   });
 });
 

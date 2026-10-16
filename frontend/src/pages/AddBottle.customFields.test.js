@@ -174,7 +174,7 @@ describe('AddBottle — custom fields on the bottle POSTs', () => {
     await act(async () => { fireEvent.click(screen.getByText('common.close')); });
 
     // Dismissing resumes exactly the flow a clean add would have taken.
-    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/cellars/cellar1'));
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/cellars/cellar1', expect.objectContaining({ state: { addedNotice: expect.any(Object) } })));
   });
 
   // Release audit 2026-09-27 (L): a refusal already received was lost when a

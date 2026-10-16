@@ -100,20 +100,37 @@ describe('AddBottle — "Place your bottles now?" (issue #1055)', () => {
     expect(navigateMock).toHaveBeenCalledWith('/cellars/cellar1/racks', { state: { placeQueue: ['b1', 'b2'] } });
   });
 
-  test('"Not now" goes to the cellar page exactly as before', async () => {
+  // The cellar page then says what was added, with "Add another bottle"
+  // (newcomer walkthrough 2026-10-15).
+  const ADDED = { state: { addedNotice: { name: 'Kaefferkopf 2019', count: 2, history: false, at: expect.any(Number) } } };
+
+  test('"Not now" goes to the cellar page, which says what was added', async () => {
     routeApi({ racks: [{ _id: 'r1' }] });
     await submitTwoBottles();
     await waitFor(() => expect(screen.getByText('addBottle.placePrompt.title')).toBeInTheDocument());
 
     fireEvent.click(screen.getByText('addBottle.placePrompt.notNow'));
-    expect(navigateMock).toHaveBeenCalledWith('/cellars/cellar1');
+    expect(navigateMock).toHaveBeenCalledWith('/cellars/cellar1', ADDED);
   });
 
   test('a cellar WITHOUT racks never sees the offer', async () => {
     routeApi({ racks: [] });
     await submitTwoBottles();
 
-    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/cellars/cellar1'));
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/cellars/cellar1', ADDED));
     expect(screen.queryByText('addBottle.placePrompt.title')).not.toBeInTheDocument();
+  });
+
+  test('Cancel leaves without a notice: nothing was added', async () => {
+    routeApi({ racks: [] });
+    render(<AddBottle />);
+    fireEvent.click(screen.getByText('addBottle.searchManuallyInstead'));
+    fireEvent.change(screen.getByPlaceholderText('addBottle.searchPlaceholder'), { target: { value: 'kaefferkopf kaysersberg' } });
+    await act(async () => { fireEvent.click(screen.getByText('addBottle.searchBtn')); });
+    await act(async () => { fireEvent.click(screen.getByText('addBottle.cantFindAiTitle')); });
+    await act(async () => { fireEvent.click(screen.getByText('addBottle.aiAddAndUse')); });
+    await waitFor(() => expect(screen.getByText('common.cancel')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('common.cancel'));
+    expect(navigateMock).toHaveBeenCalledWith('/cellars/cellar1');
   });
 });
