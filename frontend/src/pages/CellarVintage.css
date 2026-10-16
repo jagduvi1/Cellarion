@@ -1,106 +1,15 @@
-/* One wine and vintage in a cellar (support ticket 2026-10-09). */
+/* One page per wine and vintage (CellarVintage.js; its classes are cvb-* and
+   cellar-vintage-*, its strings cellarVintageBeta.* and cellarVintage.* —
+   kept from its early-access days so no translation is lost).
+   Wide screens: the wine on the left, the vintage and the bottles on the
+   right. Narrow: one column in the same order. The actions sit next to the
+   title on desktop and in a fixed bar at the bottom on a phone (the bottle
+   page's .bd-header-actions / .bd-mobile-actions, from BottleDetail.css). */
 
-.cellar-vintage-grid {
-  display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
-  gap: 1.25rem;
-  align-items: start;
-  margin-top: 1rem;
-}
-
-.cellar-vintage-side {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  position: sticky;
-  top: calc(80px + env(safe-area-inset-top, 0px));
-}
-
-.cellar-vintage-hero {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 1 / 1.4;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-}
-
-.cellar-vintage-hero-img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-}
-
-.cellar-vintage-summary {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  padding: 1rem 1.1rem;
-}
-
-.cellar-vintage-count {
-  font-size: 1.1rem;
-  font-weight: 700;
-}
-
-.cellar-vintage-aux {
-  font-size: 0.88rem;
-  color: var(--color-text-secondary);
-}
-
-a.cellar-vintage-aux:hover {
-  color: var(--color-primary);
-}
-
-.cellar-vintage-wine-link {
-  margin-top: 0.25rem;
-}
-
-.cellar-vintage-slots {
-  list-style: none;
-  margin: 0.25rem 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  font-size: 0.88rem;
-  color: var(--color-text-secondary);
-}
-
-.cellar-vintage-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-}
-
-.cellar-vintage-main {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  min-width: 0;
-}
+/* The section card, its notes and notice (from the first version of the page). */
 
 .cellar-vintage-section.card {
   padding: 1.1rem 1.25rem;
-}
-
-.cellar-vintage-h2 {
-  font-size: 1rem;
-  font-weight: 700;
-  margin: 0 0 0.75rem;
-}
-
-.cellar-vintage-shared-row {
-  margin: 0 0 0.75rem;
-}
-
-.cellar-vintage-shared-row:last-child {
-  margin-bottom: 0;
 }
 
 .cellar-vintage-notes {
@@ -117,12 +26,6 @@ a.cellar-vintage-aux:hover {
 .cellar-vintage-empty {
   color: var(--color-text-muted);
   margin: 0;
-}
-
-.cellar-vintage-bottles {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
 }
 
 .cellar-vintage-notice {
@@ -142,33 +45,310 @@ a.cellar-vintage-aux:hover {
   font: inherit;
 }
 
-@media (max-width: 860px) {
-  .cellar-vintage-grid {
+.cvb-page .cellar-page-header-actions .bd-header-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* The stock line at the head of "Your bottles": where they sit, on order,
+   drunk, paid. */
+.cvb-stock {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 1.1rem;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.cvb-bottles-toggle {
+  display: block;
+  width: 100%;
+  padding: 0.65rem 1rem;
+  border: none;
+  background: none;
+  color: var(--color-primary);
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cvb-bottles-toggle + .cvb-bottle-list {
+  border-top: 1px solid var(--color-border-light);
+}
+
+/* "Show all N bottles" inside a sentence (the notes-differ hint). */
+.cvb-inline-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-primary);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.cvb-summary-item {
+  font-size: 0.88rem;
+  color: var(--color-text-secondary);
+}
+
+a.cvb-summary-item:hover {
+  color: var(--color-primary);
+}
+
+.cvb-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+  margin-top: 1rem;
+}
+
+.cvb-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.cvb-col > section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+/* A section title with its fold button (components/CollapsibleBlock). */
+.cvb-h2-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 1.9rem;
+}
+
+/* A section's content under its title — the same column as the section,
+   hidden while the section is folded. */
+.cvb-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: inherit;
+  min-width: 0;
+}
+
+.cvb-section-body[hidden] {
+  display: none;
+}
+
+.cvb-h2 {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+/* The wine: photo beside its name, maker, region and type. */
+.cvb-wine {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.cvb-hero {
+  position: relative;
+  width: 110px;
+  flex-shrink: 0;
+  aspect-ratio: 1 / 1.4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.cvb-hero-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.cvb-wine-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.cvb-wine-name {
+  font-family: var(--font-heading);
+  font-size: 1.15rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.cvb-wine-line {
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+}
+
+/* The vintage */
+.cvb-vintage {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1rem 1.25rem;
+}
+
+.cvb-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.cvb-muted {
+  color: var(--color-text-muted);
+}
+
+.cvb-edit-vintage {
+  align-self: flex-start;
+}
+
+/* The bottles: one row each */
+.cvb-bottles {
+  padding: 0.25rem 0;
+}
+
+.cvb-bottle-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cvb-bottle-list li + li {
+  border-top: 1px solid var(--color-border-light);
+}
+
+.cvb-bottle {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 1rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.cvb-bottle:hover,
+.cvb-bottle:focus-visible {
+  background: var(--color-surface-hover);
+}
+
+.cvb-bottle-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.cvb-bottle-slot {
+  font-weight: 600;
+}
+
+.cvb-bottle-facts {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.cvb-bottle-note {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cvb-bottle-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.3rem;
+}
+
+@media (max-width: 1000px) {
+  .cvb-grid {
     grid-template-columns: minmax(0, 1fr);
   }
-  .cellar-vintage-side {
-    position: static;
-    flex-direction: row;
-    align-items: flex-start;
-  }
-  .cellar-vintage-hero {
-    width: 120px;
-    flex-shrink: 0;
-  }
-  .cellar-vintage-summary {
-    flex: 1;
-    min-width: 0;
+}
+
+/* Phone: room under the content for the fixed action bar (its inset rides
+   on the bar's own `bottom`, so a padding here cannot disturb it). */
+@media (max-width: 768px) {
+  .cvb-page {
+    padding-bottom: 80px;
   }
 }
 
 @media (max-width: 480px) {
-  .cellar-vintage-side {
-    flex-direction: column;
+  .cvb-hero {
+    width: 84px;
   }
-  .cellar-vintage-hero {
-    width: 100%;
-    max-height: 220px;
-    aspect-ratio: auto;
-    height: 220px;
+  .cvb-bottle-badges {
+    flex-direction: column;
+    align-items: flex-end;
+  }
+}
+
+/* The wine card's photo column: this vintage's gallery (or the hero) and
+   "Add a photo". */
+.cvb-photo {
+  width: 150px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cvb-photo .cvb-hero {
+  width: 100%;
+}
+
+.cvb-gallery .carousel-medium {
+  height: 210px;
+}
+
+.cvb-add-photo {
+  align-self: stretch;
+  justify-content: center;
+}
+
+.cvb-photo-hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.88rem;
+  color: var(--color-text-secondary);
+}
+
+.cvb-bottle-open {
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .cvb-photo {
+    width: 110px;
+  }
+  .cvb-gallery .carousel-medium {
+    height: 160px;
   }
 }

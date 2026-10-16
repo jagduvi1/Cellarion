@@ -185,7 +185,26 @@ test('a search with no matches says so — never "nothing taken out yet"', async
     sessionStorage.setItem('cellarion.historyView.c1', JSON.stringify({ filters: { search: 'zzz' }, scope: ['c1'] }));
     answer = () => page([], { total: 0, reasonCounts: { drank: 0, gifted: 0, sold: 0, other: 0 } });
     renderPage();
-    expect(await screen.findByText('history.noResults')).toBeInTheDocument();
+    expect(await screen.findByText('cellarDetail.noSearchResults')).toBeInTheDocument();
+    expect(screen.queryByText('history.emptyHistoryHint')).toBeNull();
+    expect(screen.queryByText(/^history.noHistory/)).toBeNull(); // the subtitle too
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+test('a filter and a search that find nothing say so once', async () => {
+  const m = new Map();
+  vi.stubGlobal('sessionStorage', {
+    getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)),
+    removeItem: (k) => m.delete(k), clear: () => m.clear(),
+  });
+  try {
+    sessionStorage.setItem('cellarion.historyView.c1', JSON.stringify({ filters: { search: 'zzz', type: ['Rosé'] }, scope: ['c1'] }));
+    answer = () => page([], { total: 0, reasonCounts: { drank: 0, gifted: 0, sold: 0, other: 0 } });
+    renderPage();
+    expect(await screen.findAllByText('cellarDetail.noSearchResults')).toHaveLength(1);
+    expect(screen.queryByText('history.noResults')).toBeNull();
     expect(screen.queryByText('history.emptyHistoryHint')).toBeNull();
   } finally {
     vi.unstubAllGlobals();

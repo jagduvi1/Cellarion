@@ -80,12 +80,12 @@ function Where() {
 const renderPage = (at = '/cellars/c1/vintages/w1/2015') => render(
   <MemoryRouter initialEntries={[at]}>
     <Routes>
-      <Route path="/cellars/:id/vintages/:wineId/:vintage" element={<CellarVintageBeta />} />
+      <Route path="/cellars/:id/vintages/:wineId/:vintage" element={<CellarVintage />} />
       <Route path="/cellars/:id/bottles/:bottleId" element={<Where />} />
     </Routes>
   </MemoryRouter>,
 );
-const { default: CellarVintageBeta } = await import('./CellarVintageBeta');
+const { default: CellarVintage } = await import('./CellarVintage');
 const { __setFeatureFlagsForTest } = await import('../utils/featureFlags');
 
 beforeEach(() => {

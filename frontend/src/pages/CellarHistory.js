@@ -73,6 +73,11 @@ function CellarHistory() {
   const [sections, setSections] = useState({});
   const [error, setError] = useState(null);
   const [total, setTotal] = useState(0);
+  // Whether the list on screen was asked for with a search or a filter: an
+  // empty answer then means "nothing matches", not "nothing taken out yet".
+  // Kept with the answer, not read off the search box, so the empty state
+  // never flashes the wrong message while a new answer is on its way.
+  const [shownNarrowed, setShownNarrowed] = useState(false);
   const [reasonCounts, setReasonCounts] = useState(null);
   const cameBack = useCameBack();
   const [savedView] = useState(() => (cameBack ? readSavedHistoryView(id) : null));
@@ -165,6 +170,7 @@ function CellarHistory() {
         if (key === 'search') return;
         if (Array.isArray(val) && val.length > 0) filterParams.append(key, val.join(','));
       });
+      const asked = [...filterParams.keys()].length > 0;
       const multi = !(scopeIds.length === 1 && scopeIds[0] === id);
       if (multi) filterParams.append('cellars', scopeIds.join(','));
       const query = { multi, cellarId: id, filters: filterParams.toString() };
@@ -181,6 +187,7 @@ function CellarHistory() {
       listQuery.current = query;
       // A server from before paging sends the whole history and no total.
       setTotal(typeof data.total === 'number' ? data.total : page.length);
+      setShownNarrowed(asked);
       setReasonCounts(data.reasonCounts || null);
       setBottles(page);
       const next = {};
@@ -285,10 +292,10 @@ function CellarHistory() {
   (filters.grapes || []).forEach(v => activeChips.push({ key: 'grapes', value: v, label: grapeNames[v] || v }));
   (filters.vintage || []).forEach(v => activeChips.push({ key: 'vintage', value: v, label: v }));
 
-  // Something narrows the list — a filter chip or the search box. With either,
-  // an empty list means "nothing matches", never "nothing taken out yet"
-  // (the search text has no chip, so it used to show the empty-history note).
-  const narrowed = activeChips.length > 0 || !!String(filters.search || '').trim();
+  // Something narrows the list — a filter chip or the search box (which has
+  // no chip, so a search that found nothing used to show the empty-history
+  // note). Read from the answer on screen (shownNarrowed).
+  const narrowed = shownNarrowed;
 
   const removeChip = (chip) => {
     setFilters(prev => {
@@ -334,7 +341,7 @@ function CellarHistory() {
       ) : <>
 
       {/* Summary row */}
-      {total > 0 && !activeChips.length && (
+      {total > 0 && !narrowed && (
         <div className="history-summary-row">
           {Object.entries(REASON_CONFIG).map(([key, cfg]) => {
             const count = countOf(key);
@@ -407,10 +414,6 @@ function CellarHistory() {
         />
       )}
 
-      {total === 0 && narrowed && (
-        <p className="history-no-results">{t('history.noResults')}</p>
-      )}
-
       {total === 0 && !narrowed && (
         <div className="empty-state">
           <p>{t('history.emptyHistoryHint')}</p>
@@ -418,7 +421,7 @@ function CellarHistory() {
         </div>
       )}
 
-      {total === 0 && activeChips.length > 0 && (
+      {total === 0 && narrowed && (
         <div className="empty-state">
           <p>{t('cellarDetail.noSearchResults')}</p>
         </div>

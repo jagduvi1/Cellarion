@@ -51,7 +51,6 @@ function BottleDetail() {
   const { t, i18n } = useTranslation();
   const { id: cellarId, bottleId } = useParams();
   const { apiFetch, user } = useAuth();
-  // Early access: a wine and vintage has its own page, so this one says it is a bottle.
   const pickListsOn = useFeature('pickLists');
   const navigate = useNavigate();
   const location = useLocation();
@@ -66,7 +65,7 @@ function BottleDetail() {
   const handedBack = handedPlace && isSafeInternalPath(location.state?.backTo)
     ? { to: location.state.backTo, label: t(handedPlace[0], handedPlace[1]) }
     : null;
-  // Opened from a row on the vintage page (early access): back goes there.
+  // Opened from a row on the vintage page: back goes there.
   // Only an in-app cellar path is taken from the router state.
   const fromVintage = typeof location.state?.fromVintage === 'string' && location.state.fromVintage.startsWith('/cellars/')
     ? location.state.fromVintage

@@ -150,15 +150,12 @@ describe('BottleCard private-draft badge', () => {
  * select mode, where a tap means "toggle" and nothing else.
  */
 describe('BottleCard stacked card actions', () => {
-  test('Info and Drink one call their handlers without expanding the group, in both views', () => {
+  test('Drink one calls its handler without expanding the group, in both views', () => {
     for (const viewMode of ['list', 'card']) {
       const onClick = vi.fn();
-      const onInfo = vi.fn();
       const onDrinkOne = vi.fn();
-      const { unmount } = renderCard({ viewMode, groupCount: 4, onClick, onInfo, onDrinkOne });
-      fireEvent.click(screen.getByText('bottleCard.groupInfo'));
+      const { unmount } = renderCard({ viewMode, groupCount: 4, onClick, onDrinkOne });
       fireEvent.click(screen.getByText('bottleCard.groupDrinkOne'));
-      expect(onInfo).toHaveBeenCalledTimes(1);
       expect(onDrinkOne).toHaveBeenCalledTimes(1);
       expect(onClick).not.toHaveBeenCalled();
       fireEvent.click(screen.getByText('Barolo Albe'));
@@ -174,25 +171,18 @@ describe('BottleCard stacked card actions', () => {
     const { unmount } = renderCard({ groupCount: 3, onClick: vi.fn() });
     expect(screen.queryByText('bottleCard.groupDrinkOne')).toBeNull();
     unmount();
-    renderCard({ groupCount: 3, onClick: vi.fn(), onInfo: vi.fn(), onDrinkOne: vi.fn(), selectable: true, onToggleSelect: vi.fn() });
-    expect(screen.queryByText('bottleCard.groupInfo')).toBeNull();
-    expect(screen.queryByText('bottleCard.groupDrinkOne')).toBeNull();
-  });
-
-  test('only Info when the caller cannot consume (a viewer of a shared cellar)', () => {
-    renderCard({ groupCount: 2, onClick: vi.fn(), onInfo: vi.fn() });
-    expect(screen.getByText('bottleCard.groupInfo')).toBeInTheDocument();
+    renderCard({ groupCount: 3, onClick: vi.fn(), onDrinkOne: vi.fn(), selectable: true, onToggleSelect: vi.fn() });
     expect(screen.queryByText('bottleCard.groupDrinkOne')).toBeNull();
   });
 });
 
 /**
- * Early access, one page per wine and vintage: a tap on any entry opens the
+ * One page per wine and vintage: a tap on any entry opens the
  * vintage page, and "Drink one" sits on every card — the last bottle of a
  * vintage looks and behaves like the ones before it. The stack still expands
  * from the ⊕ in select mode, through its own handler.
  */
-describe('BottleCard with one page per wine and vintage (early access)', () => {
+describe('BottleCard with one page per wine and vintage', () => {
   test('a single bottle carries Drink one too, compact and named for screen readers; the card itself opens the page', () => {
     const onClick = vi.fn(); // navigate to the vintage page
     const onDrinkOne = vi.fn();

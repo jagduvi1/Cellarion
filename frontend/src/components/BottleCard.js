@@ -21,7 +21,7 @@ const MATURITY_LABELS = {
  * Renders a single bottle in either list or card (grid) view.
  * Props: bottle, rackMap, cellarId, viewMode ('list' | 'card')
  */
-function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onClick, showCellarBadge = false, compact = false, rackKnown = false, showNotes = false, selectable = false, selected = false, onToggleSelect, onLongPress, onInfo, onDrinkOne, onExpand, actionsInline = false, details = '', linkState }) {
+function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onClick, showCellarBadge = false, compact = false, rackKnown = false, showNotes = false, selectable = false, selected = false, onToggleSelect, onLongPress, onDrinkOne, onExpand, actionsInline = false, details = '', linkState }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -131,26 +131,19 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
   // bottle out of five (Johan, 2026-09-03, from the phone). It stops
   // propagation so the card's own click / keydown handlers don't also flip
   // the selection. `onExpand` is the expand handler when the card's own
-  // click does something else (opens the vintage page, early access).
+  // click does something else (opens the vintage page).
   const expandHandler = onExpand || onClick;
   const canExpandInSelect = selectable && isGroup && typeof expandHandler === 'function';
   const expandGroup = (e) => { e.stopPropagation(); expandHandler(); };
   const stopKeys = (e) => e.stopPropagation();
-  // A card's direct actions (support ticket 2026-10-09): "Info" opens the
-  // vintage page — the wine, this vintage, every bottle with its slot — and
-  // "Drink one" takes a single bottle out without expanding the group first.
-  // The callers offer them on stacked cards; with early access's one page per
-  // vintage, "Drink one" sits on every card, one bottle or many, compact
-  // (`actionsInline`) so it never adds a line on a phone. Hidden in select
-  // mode, where a tap means "toggle" and nothing else. Each stops propagation
-  // so the card does not also open or expand.
-  const groupActions = !selectable && (onInfo || onDrinkOne) ? (
+  // A card's direct action (support ticket 2026-10-09): "Drink one" takes a
+  // single bottle out without expanding the group first. The cellar list
+  // offers it on every card, one bottle or many (the card itself opens the
+  // vintage page), compact (`actionsInline`) so it never adds a line on a
+  // phone. Hidden in select mode, where a tap means "toggle" and nothing
+  // else. It stops propagation so the card does not also open or expand.
+  const groupActions = !selectable && onDrinkOne ? (
     <div className={`bottle-group-actions${actionsInline ? ' bottle-group-actions--inline' : ''}`}>
-      {onInfo && (
-        <button type="button" className="bottle-group-btn" onClick={(e) => { e.stopPropagation(); onInfo(); }} onKeyDown={stopKeys}>
-          {t('bottleCard.groupInfo', 'Info')}
-        </button>
-      )}
       {onDrinkOne && (
         <button
           type="button"
@@ -424,20 +417,20 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
 // search keystroke re-renders the page — without memo, hundreds of cards
 // re-render per keystroke even though their props are unchanged.
 //
-// onClick, onToggleSelect, onLongPress, onInfo and onDrinkOne are excluded from
+// onClick, onToggleSelect, onLongPress and onDrinkOne are excluded from
 // the comparison: callers pass inline arrows (`onClick={() => toggleGroup(item.key)}`),
 // whose identity changes every parent render and would defeat the memo for
 // exactly the grouped cards it exists for. This is safe because every current
 // handler closes only over values derived from the OTHER compared props (the
 // bottle/group item) plus functional setState — if a future caller closes over
 // unrelated state, that handler must be stabilized with useCallback instead.
-// Whether the two group buttons SHOW is compared (hasGroupActions), so a card
-// re-renders when a caller starts or stops offering them — and so is whether
+// Whether the group button SHOWS is compared (hasGroupActions), so a card
+// re-renders when a caller starts or stops offering it — and so is whether
 // a separate expand handler exists, which decides what the card's tap means.
 // linkState (where the bottle page's back link leads) is compared by value:
 // callers build it inline.
 const COMPARED_PROPS = ['bottle', 'rackMap', 'cellarId', 'viewMode', 'groupCount', 'showCellarBadge', 'compact', 'rackKnown', 'showNotes', 'selectable', 'selected', 'actionsInline', 'details'];
-const hasGroupActions = (p) => `${!!p.onInfo}/${!!p.onDrinkOne}/${!!p.onExpand}`;
+const hasGroupActions = (p) => `${!!p.onDrinkOne}/${!!p.onExpand}`;
 const linkStateKey = (p) => (p.linkState ? `${p.linkState.backTo}|${p.linkState.backFrom}` : '');
 export default memo(BottleCard, (prev, next) =>
   COMPARED_PROPS.every(key => prev[key] === next[key])

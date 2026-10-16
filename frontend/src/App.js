@@ -34,7 +34,7 @@ const CellarBook      = lazy(() => import('./pages/CellarBook'));
 const BottleDetail    = lazy(() => import('./pages/BottleDetail'));
 const CellarHistory   = lazy(() => import('./pages/CellarHistory'));
 const CellarOnOrder   = lazy(() => import('./pages/CellarOnOrder'));
-const CellarVintageBeta = lazy(() => import('./pages/CellarVintageBeta'));
+const CellarVintage = lazy(() => import('./pages/CellarVintage'));
 const CellarAudit     = lazy(() => import('./pages/CellarAudit'));
 const WineRequests    = lazy(() => import('./pages/WineRequests'));
 const WineDrafts      = lazy(() => import('./pages/WineDrafts'));
@@ -100,7 +100,7 @@ const PublicWineList       = lazy(() => import('./pages/PublicWineList'));
 // folded list carried over from the last.
 function VintagePage() {
   const { id, wineId, vintage } = useParams();
-  return <CellarVintageBeta key={`${id}/${wineId}/${vintage}`} />;
+  return <CellarVintage key={`${id}/${wineId}/${vintage}`} />;
 }
 
 function AppRoutes() {

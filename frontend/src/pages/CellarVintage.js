@@ -37,7 +37,6 @@ import { slotLabel } from '../utils/slotLabel';
 import './CellarDetail.css';
 import './BottleDetail.css';
 import './CellarVintage.css';
-import './CellarVintageBeta.css';
 
 const DrinkOneModal = lazy(() => import('../components/DrinkOneModal'));
 const AddToPickListModal = lazy(() => import('../components/AddToPickListModal'));
@@ -73,7 +72,7 @@ const safeDecode = (s) => {
  * /api/cellars/:id/vintages/…, and every save goes through the routes the
  * other screens use (bulk update, consume, add bottles).
  */
-function CellarVintageBeta() {
+function CellarVintage() {
   const { t, i18n } = useTranslation();
   const { id, wineId, vintage: vintageParam } = useParams();
   const { apiFetch, user } = useAuth();
@@ -869,4 +868,4 @@ function BottleRow({ bottle, cellarId, fromPath, showNote }) {
   );
 }
 
-export default CellarVintageBeta;
+export default CellarVintage;
