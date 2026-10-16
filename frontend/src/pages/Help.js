@@ -22,7 +22,9 @@ export const SECTION_KEYS = [
 // list these.
 const LOCAL_ROUTES = {
   dashboard: '/dashboard',
-  offline: '/settings#offline',
+  // The offline switch is a card inside Settings → Preferences
+  // (components/OfflineSettings); that group is what the address opens.
+  offline: '/settings#preferences',
   earlyAccess: '/settings#early-access',
 };
 

@@ -128,6 +128,16 @@ describe('the page', () => {
     expect(screen.getByRole('link', { name: /Go to Dashboard/ })).toHaveAttribute('href', '/dashboard');
   });
 
+  // Settings opens a group by its id (components/SettingsGroup): offline
+  // mode is a card inside Preferences, early access a group of its own.
+  test('offline use and early access link to the Settings group that holds them', () => {
+    const { unmount } = at('/help#offline');
+    expect(screen.getByRole('link', { name: /Go to/ })).toHaveAttribute('href', '/settings#preferences');
+    unmount();
+    at('/help#earlyAccess');
+    expect(screen.getByRole('link', { name: /Go to/ })).toHaveAttribute('href', '/settings#early-access');
+  });
+
   test('pick lists link to their page only for members who have them', () => {
     const { unmount } = at('/help#pickLists');
     expect(screen.queryByRole('link', { name: /Go to Pick lists/ })).not.toBeInTheDocument();
