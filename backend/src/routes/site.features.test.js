@@ -33,13 +33,13 @@ function get(path) {
 afterEach(() => featureFlags.set({}));
 
 test('a feature in beta is listed with its dates and forum thread, and nothing else', async () => {
-  featureFlags.set({ vintagePage: { state: 'beta', betaAt: '2026-10-10T09:00:00.000Z', forumPath: '/community/discussions/vintage-page', betaNotifiedAt: '2026-10-10T09:00:00.000Z' } });
+  featureFlags.set({ pickLists: { state: 'beta', betaAt: '2026-10-10T09:00:00.000Z', forumPath: '/community/discussions/vintage-page', betaNotifiedAt: '2026-10-10T09:00:00.000Z' } });
   const { status, headers, body } = await get('/api/site/features');
   expect(status).toBe(200);
   expect(headers['cache-control']).toBe('public, max-age=60');
   // Other flags may be listed too; this one carries exactly these fields.
-  expect(body.features.find((f) => f.key === 'vintagePage')).toEqual({
-    key: 'vintagePage', state: 'beta', betaAt: '2026-10-10T09:00:00.000Z', releasedAt: null, forumPath: '/community/discussions/vintage-page',
+  expect(body.features.find((f) => f.key === 'pickLists')).toEqual({
+    key: 'pickLists', state: 'beta', betaAt: '2026-10-10T09:00:00.000Z', releasedAt: null, forumPath: '/community/discussions/vintage-page',
   });
   for (const f of body.features) {
     expect(Object.keys(f).sort()).toEqual(['betaAt', 'forumPath', 'key', 'releasedAt', 'state']);
@@ -47,7 +47,7 @@ test('a feature in beta is listed with its dates and forum thread, and nothing e
 });
 
 test('a feature switched off is left out entirely', async () => {
-  featureFlags.set({ vintagePage: { state: 'off' } });
+  featureFlags.set({ pickLists: { state: 'off' } });
   const { body } = await get('/api/site/features');
-  expect(body.features.find((f) => f.key === 'vintagePage')).toBeUndefined();
+  expect(body.features.find((f) => f.key === 'pickLists')).toBeUndefined();
 });

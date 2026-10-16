@@ -33,12 +33,6 @@ const STATES = Object.freeze(['off', 'beta', 'everyone']);
 // frontend (earlyAccess.features.<key>.name). `since` is the day the flag
 // entered the code — the "in beta since" date until a super admin moves it.
 const FEATURES = Object.freeze([
-  Object.freeze({
-    key: 'vintagePage',
-    title: 'One page per wine and vintage',
-    defaultState: 'beta',
-    since: '2026-10-10',
-  }),
   // The "Move bottles to another rack" action in a rack's tools menu. The
   // move itself (POST /api/racks/:id/move-bottles) works for everyone; the
   // flag only decides who sees the button.

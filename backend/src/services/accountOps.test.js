@@ -228,22 +228,22 @@ describe('createSupportTicket', () => {
 
   test('beta feedback names its feature; without a subject it takes the feature\'s English title', async () => {
     SupportTicket.create.mockResolvedValue({ _id: 't2', category: 'beta', status: 'open' });
-    const res = await createSupportTicket(UID, { category: 'beta', feature: 'vintagePage', message: 'Love the bar at the bottom' });
+    const res = await createSupportTicket(UID, { category: 'beta', feature: 'pickLists', message: 'Love the bar at the bottom' });
     expect(res.error).toBeUndefined();
     expect(SupportTicket.create).toHaveBeenCalledWith({
-      user: UID, category: 'beta', feature: 'vintagePage',
-      subject: 'Beta feedback: One page per wine and vintage', message: 'Love the bar at the bottom',
+      user: UID, category: 'beta', feature: 'pickLists',
+      subject: 'Beta feedback: Pick lists', message: 'Love the bar at the bottom',
     });
     // A subject the sender wrote wins; beta feedback with no feature still files.
-    await createSupportTicket(UID, { category: 'beta', feature: 'vintagePage', subject: 'Rows', message: 'm' });
-    expect(SupportTicket.create).toHaveBeenLastCalledWith(expect.objectContaining({ subject: 'Rows', feature: 'vintagePage' }));
+    await createSupportTicket(UID, { category: 'beta', feature: 'pickLists', subject: 'Rows', message: 'm' });
+    expect(SupportTicket.create).toHaveBeenLastCalledWith(expect.objectContaining({ subject: 'Rows', feature: 'pickLists' }));
     await createSupportTicket(UID, { category: 'beta', message: 'm' });
     expect(SupportTicket.create).toHaveBeenLastCalledWith({ user: UID, category: 'beta', subject: 'Beta feedback', message: 'm' });
   });
 
   test('a feature key is checked: unknown keys and keys on non-beta tickets are refused', async () => {
     expect((await createSupportTicket(UID, { category: 'beta', feature: 'noSuchThing', message: 'm' })).error.status).toBe(400);
-    expect((await createSupportTicket(UID, { category: 'bug', feature: 'vintagePage', subject: 's', message: 'm' })).error.status).toBe(400);
+    expect((await createSupportTicket(UID, { category: 'bug', feature: 'pickLists', subject: 's', message: 'm' })).error.status).toBe(400);
     expect(SupportTicket.create).not.toHaveBeenCalled();
   });
 });

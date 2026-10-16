@@ -173,3 +173,21 @@ test('a link to the history opens it fresh (only Back finds the kept search)', a
     vi.unstubAllGlobals();
   }
 });
+
+test('a search with no matches says so — never "nothing taken out yet"', async () => {
+  const m = new Map();
+  vi.stubGlobal('sessionStorage', {
+    getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)),
+    removeItem: (k) => m.delete(k), clear: () => m.clear(),
+  });
+  try {
+    // Back to a history whose kept search finds nothing.
+    sessionStorage.setItem('cellarion.historyView.c1', JSON.stringify({ filters: { search: 'zzz' }, scope: ['c1'] }));
+    answer = () => page([], { total: 0, reasonCounts: { drank: 0, gifted: 0, sold: 0, other: 0 } });
+    renderPage();
+    expect(await screen.findByText('history.noResults')).toBeInTheDocument();
+    expect(screen.queryByText('history.emptyHistoryHint')).toBeNull();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

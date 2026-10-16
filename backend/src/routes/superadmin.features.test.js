@@ -60,7 +60,7 @@ function call(method, path, body) {
   });
 }
 
-const flag = (over = {}) => ({ key: 'vintagePage', title: 'One page per wine and vintage', state: 'beta', betaAt: null, releasedAt: null, forumPath: null, ...over });
+const flag = (over = {}) => ({ key: 'pickLists', title: 'Pick lists', state: 'beta', betaAt: null, releasedAt: null, forumPath: null, ...over });
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -83,12 +83,12 @@ describe('GET /api/superadmin/features', () => {
 
 describe('PATCH /api/superadmin/features/:key', () => {
   test('moves a flag, answers the new state and the notices sent, and writes an audit row', async () => {
-    const { status, body } = await call('PATCH', '/api/superadmin/features/vintagePage', { state: 'everyone' });
+    const { status, body } = await call('PATCH', '/api/superadmin/features/pickLists', { state: 'everyone' });
     expect(status).toBe(200);
     expect(body.feature.state).toBe('everyone');
     expect(body.notified).toEqual({ announced: 0, thanked: 4 });
-    expect(earlyAccess.changeFlag).toHaveBeenCalledWith('vintagePage', { state: 'everyone' }, 'admin-1');
-    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'superadmin.feature_flag', { type: 'feature', id: 'vintagePage' }, {
+    expect(earlyAccess.changeFlag).toHaveBeenCalledWith('pickLists', { state: 'everyone' }, 'admin-1');
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'superadmin.feature_flag', { type: 'feature', id: 'pickLists' }, {
       from: { state: 'beta', forumPath: null },
       to: { state: 'everyone', forumPath: null },
       notified: { announced: 0, thanked: 4 },
@@ -96,26 +96,26 @@ describe('PATCH /api/superadmin/features/:key', () => {
   });
 
   test('a full forum link to this site is saved as its path; one to another site is refused before anything is saved', async () => {
-    let res = await call('PATCH', '/api/superadmin/features/vintagePage', { forumPath: 'https://cellarion.app/community/discussions/vintage-page' });
+    let res = await call('PATCH', '/api/superadmin/features/pickLists', { forumPath: 'https://cellarion.app/community/discussions/vintage-page' });
     expect(res.status).toBe(200);
-    expect(earlyAccess.changeFlag).toHaveBeenCalledWith('vintagePage', { forumPath: '/community/discussions/vintage-page' }, 'admin-1');
+    expect(earlyAccess.changeFlag).toHaveBeenCalledWith('pickLists', { forumPath: '/community/discussions/vintage-page' }, 'admin-1');
 
     earlyAccess.changeFlag.mockClear();
-    res = await call('PATCH', '/api/superadmin/features/vintagePage', { forumPath: 'https://elsewhere.example.com/thread' });
+    res = await call('PATCH', '/api/superadmin/features/pickLists', { forumPath: 'https://elsewhere.example.com/thread' });
     expect(res.status).toBe(400);
     expect(earlyAccess.changeFlag).not.toHaveBeenCalled();
   });
 
   test('an unknown feature is a 404 and an empty body a 400', async () => {
     expect((await call('PATCH', '/api/superadmin/features/noSuchFeature', { state: 'beta' })).status).toBe(404);
-    expect((await call('PATCH', '/api/superadmin/features/vintagePage', {})).status).toBe(400);
+    expect((await call('PATCH', '/api/superadmin/features/pickLists', {})).status).toBe(400);
     expect(earlyAccess.changeFlag).not.toHaveBeenCalled();
     expect(logAudit).not.toHaveBeenCalled();
   });
 
   test('a refusal from the service (an unknown state) is passed on, with no audit row', async () => {
     earlyAccess.changeFlag.mockResolvedValue({ error: { status: 400, message: 'state must be one of: off, beta, everyone' } });
-    const { status, body } = await call('PATCH', '/api/superadmin/features/vintagePage', { state: 'later' });
+    const { status, body } = await call('PATCH', '/api/superadmin/features/pickLists', { state: 'later' });
     expect(status).toBe(400);
     expect(body.error).toMatch(/state must be/);
     expect(logAudit).not.toHaveBeenCalled();

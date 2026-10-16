@@ -36,39 +36,39 @@ describe('the registry', () => {
   });
 
   test('a flag with no stored row runs in its default state, in beta since the day it entered the code', () => {
-    const f = featureFlags.get('vintagePage');
-    expect(f).toEqual(expect.objectContaining({ key: 'vintagePage', state: 'beta', releasedAt: null, forumPath: null }));
-    expect(f.betaAt).toBe(new Date('2026-10-10').toISOString());
+    const f = featureFlags.get('pickLists');
+    expect(f).toEqual(expect.objectContaining({ key: 'pickLists', state: 'beta', releasedAt: null, forumPath: null }));
+    expect(f.betaAt).toBe(new Date('2026-10-13').toISOString());
     expect(featureFlags.get('noSuchFeature')).toBeNull();
   });
 });
 
 describe('who sees what', () => {
   test('beta: only users with early access on; everyone: all users; off: nobody', () => {
-    expect(featureFlags.enabledKeys(true)).toContain('vintagePage');
-    expect(featureFlags.enabledKeys(false)).not.toContain('vintagePage');
+    expect(featureFlags.enabledKeys(true)).toContain('pickLists');
+    expect(featureFlags.enabledKeys(false)).not.toContain('pickLists');
 
-    featureFlags.set({ vintagePage: { state: 'everyone' } });
-    expect(featureFlags.enabledKeys(false)).toContain('vintagePage');
+    featureFlags.set({ pickLists: { state: 'everyone' } });
+    expect(featureFlags.enabledKeys(false)).toContain('pickLists');
 
-    featureFlags.set({ vintagePage: { state: 'off' } });
-    expect(featureFlags.enabledKeys(true)).not.toContain('vintagePage');
+    featureFlags.set({ pickLists: { state: 'off' } });
+    expect(featureFlags.enabledKeys(true)).not.toContain('pickLists');
   });
 
   test('only a real true opts in', () => {
-    expect(featureFlags.enabledKeys('true')).not.toContain('vintagePage');
-    expect(featureFlags.enabledKeys(undefined)).not.toContain('vintagePage');
+    expect(featureFlags.enabledKeys('true')).not.toContain('pickLists');
+    expect(featureFlags.enabledKeys(undefined)).not.toContain('pickLists');
   });
 });
 
 describe('load', () => {
   test('reads the stored rows, cleans them, and drops keys the code no longer knows', async () => {
     stored({
-      vintagePage: { state: 'everyone', betaAt: '2026-10-11T08:00:00.000Z', releasedAt: '2026-11-01T08:00:00.000Z', forumPath: '/community/discussions/vintage-page' },
+      pickLists: { state: 'everyone', betaAt: '2026-10-11T08:00:00.000Z', releasedAt: '2026-11-01T08:00:00.000Z', forumPath: '/community/discussions/vintage-page' },
       retiredFeature: { state: 'beta' },
     });
     await featureFlags.load();
-    expect(featureFlags.get('vintagePage')).toEqual(expect.objectContaining({
+    expect(featureFlags.get('pickLists')).toEqual(expect.objectContaining({
       state: 'everyone', betaAt: '2026-10-11T08:00:00.000Z', releasedAt: '2026-11-01T08:00:00.000Z',
       forumPath: '/community/discussions/vintage-page',
     }));
@@ -76,25 +76,25 @@ describe('load', () => {
   });
 
   test('a flag released straight from off was never in beta: no "in beta since" date', async () => {
-    stored({ vintagePage: { state: 'everyone', releasedAt: '2026-11-01T08:00:00.000Z' } });
+    stored({ pickLists: { state: 'everyone', releasedAt: '2026-11-01T08:00:00.000Z' } });
     await featureFlags.load();
-    expect(featureFlags.get('vintagePage')).toEqual(expect.objectContaining({ state: 'everyone', betaAt: null, releasedAt: '2026-11-01T08:00:00.000Z' }));
-    featureFlags.set({ vintagePage: { state: 'off' } });
-    expect(featureFlags.get('vintagePage').betaAt).toBeNull();
+    expect(featureFlags.get('pickLists')).toEqual(expect.objectContaining({ state: 'everyone', betaAt: null, releasedAt: '2026-11-01T08:00:00.000Z' }));
+    featureFlags.set({ pickLists: { state: 'off' } });
+    expect(featureFlags.get('pickLists').betaAt).toBeNull();
   });
 
   test('a corrupt state falls back to the default, never to everyone', async () => {
-    stored({ vintagePage: { state: 'EVERYBODY!', betaAt: 'not a date' } });
+    stored({ pickLists: { state: 'EVERYBODY!', betaAt: 'not a date' } });
     await featureFlags.load();
-    expect(featureFlags.get('vintagePage').state).toBe('beta');
-    expect(featureFlags.get('vintagePage').betaAt).toBe(new Date('2026-10-10').toISOString());
+    expect(featureFlags.get('pickLists').state).toBe('beta');
+    expect(featureFlags.get('pickLists').betaAt).toBe(new Date('2026-10-13').toISOString());
   });
 
   test('a database error keeps the defaults', async () => {
     SiteConfig.findOne.mockReturnValue({ lean: async () => { throw new Error('db down'); } });
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     await featureFlags.load();
-    expect(featureFlags.get('vintagePage').state).toBe('beta');
+    expect(featureFlags.get('pickLists').state).toBe('beta');
     warn.mockRestore();
   });
 });

@@ -1,11 +1,12 @@
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 
-// One page per wine and vintage — the early-access layout. The same page for
-// one bottle or many, always in the same order: the wine (with its
-// description), the vintage (the sommelier's window, what the bottles share
-// or that they differ), the bottles (one row each with what differs between
-// them). Drink, Edit vintage and Add are the actions; viewers get none.
+// One page per wine and vintage (out for everyone; the classic page is gone).
+// The same page for one bottle or many, always in the same order: the wine
+// (with its description), the vintage (the sommelier's window, what the
+// bottles share or that they differ), the bottles (one row each with what
+// differs between them). Drink, Edit vintage and Add are the actions;
+// viewers get none.
 
 vi.mock('react-i18next', () => {
   const t = (key, a, b) => {
@@ -19,6 +20,7 @@ vi.mock('../components/AuthImage', () => ({ default: ({ src, alt }) => <img src=
 // A tripwire: the page does not use the cellar menu; were it put back, this
 // stand-in would show up and the test below would say so.
 vi.mock('../components/CellarNav', () => ({ default: () => <nav data-testid="cellar-nav" /> }));
+// A tripwire too: the page is out of early access and carries no beta strip.
 vi.mock('../components/BetaBadge', () => ({ default: ({ feature }) => <div data-testid="beta-badge">{feature}</div> }));
 vi.mock('../components/bottle/WineRecordSection', () => ({ default: ({ suggestSignal }) => <div data-testid="wine-record">{suggestSignal}</div> }));
 vi.mock('../components/bottle/PersonalDataCard', () => ({ default: ({ bottleId, vintage, scope, vintageScopable }) => <div data-testid="personal-data">{bottleId}:{vintage}:{scope}:{String(vintageScopable)}</div> }));
@@ -107,7 +109,7 @@ beforeEach(() => {
   auth = { apiFetch: api, user: { id: 'u1', preferences: { ratingScale: '5', earlyAccess: true } } };
 });
 
-test('the wine, then the vintage, then the bottles — with the description and the beta strip', async () => {
+test('the wine, then the vintage, then the bottles — with the description, and no beta strip', async () => {
   renderPage();
   const wineTitle = await screen.findByText('cellarVintageBeta.wineTitle');
   const vintageTitle = screen.getByText('cellarVintageBeta.vintageTitle:{"vintage":"2015"}');
@@ -118,7 +120,7 @@ test('the wine, then the vintage, then the bottles — with the description and 
 
   expect(screen.getByText('Cassis, cedar and violets.')).toBeInTheDocument();
   expect(screen.getByText('Château Margaux · Margaux · France')).toBeInTheDocument();
-  expect(screen.getByTestId('beta-badge')).toHaveTextContent('vintagePage');
+  expect(screen.queryByTestId('beta-badge')).toBeNull();
   // The stock line heads the bottle list (no summary box above the page).
   const stock = document.querySelector('.cvb-bottles .cvb-stock');
   expect(stock).toHaveTextContent('cellarVintageBeta.rackSlots:{"rack":"Left wall","slots":"3, 7","count":2}');
@@ -446,7 +448,7 @@ test('own data is told when "this vintage" cannot be scoped (an NV group of empt
 
 test('a vintage with a "%" in it does not crash the page (the router has decoded it already)', async () => {
   renderPage('/cellars/c1/vintages/w1/100%25');
-  expect(await screen.findByTestId('beta-badge')).toBeInTheDocument();
+  expect(await screen.findByText('cellarVintageBeta.wineTitle')).toBeInTheDocument();
 });
 
 // Beta feedback 2026-10-12: every block folds, and stays folded next time.

@@ -26,7 +26,7 @@ beforeEach(() => {
   updatePreferences.mockResolvedValue({ success: true });
   auth = { user: { id: 'u1', preferences: { earlyAccess: false } }, updatePreferences };
   __setFeatureFlagsForTest([
-    { key: 'vintagePage', state: 'beta', betaAt: '2026-10-10T08:00:00.000Z', releasedAt: null, forumPath: '/community/discussions/vintage-page' },
+    { key: 'pickLists', state: 'beta', betaAt: '2026-10-13T08:00:00.000Z', releasedAt: null, forumPath: '/community/discussions/pick-lists' },
   ]);
 });
 
@@ -34,9 +34,9 @@ test('the list shows what is in beta even with the switch off; feedback only onc
   renderIt();
   const toggle = screen.getByRole('checkbox');
   expect(toggle).not.toBeChecked();
-  expect(screen.getByText('One page per wine and vintage')).toBeInTheDocument();
-  expect(screen.getByText(/In your cellar list: tap any wine\./)).toBeInTheDocument();
-  expect(screen.getByRole('link', { name: 'Discuss with other testers' })).toHaveAttribute('href', '/community/discussions/vintage-page');
+  expect(screen.getByText('Pick lists')).toBeInTheDocument();
+  expect(screen.getByText(/In your cellar, tap Select, pick bottles/)).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Discuss with other testers' })).toHaveAttribute('href', '/community/discussions/pick-lists');
   expect(screen.queryByRole('button', { name: 'Give feedback' })).toBeNull();
 });
 
@@ -55,19 +55,19 @@ test('with early access on, Give feedback opens the form for that feature', () =
   renderIt();
   expect(screen.getByRole('checkbox')).toBeChecked();
   fireEvent.click(screen.getByRole('button', { name: 'Give feedback' }));
-  return screen.findByTestId('feedback').then((el) => expect(el).toHaveTextContent('vintagePage'));
+  return screen.findByTestId('feedback').then((el) => expect(el).toHaveTextContent('pickLists'));
 });
 
 test('nothing in beta says so; a feature released lately is listed, an old release is not', () => {
   const recent = new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString();
   const old = new Date(Date.now() - 200 * 24 * 3600 * 1000).toISOString();
   __setFeatureFlagsForTest([
-    { key: 'vintagePage', state: 'everyone', betaAt: null, releasedAt: recent, forumPath: null },
+    { key: 'pickLists', state: 'everyone', betaAt: null, releasedAt: recent, forumPath: null },
     { key: 'ancient', state: 'everyone', betaAt: null, releasedAt: old, forumPath: null },
   ]);
   renderIt();
   expect(screen.getByText('Nothing is in beta right now.')).toBeInTheDocument();
   expect(screen.getByText('Recently released')).toBeInTheDocument();
-  expect(screen.getByText('One page per wine and vintage')).toBeInTheDocument();
+  expect(screen.getByText('Pick lists')).toBeInTheDocument();
   expect(screen.queryByText('ancient')).toBeNull();
 });

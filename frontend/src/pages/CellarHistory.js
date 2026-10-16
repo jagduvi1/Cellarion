@@ -285,6 +285,11 @@ function CellarHistory() {
   (filters.grapes || []).forEach(v => activeChips.push({ key: 'grapes', value: v, label: grapeNames[v] || v }));
   (filters.vintage || []).forEach(v => activeChips.push({ key: 'vintage', value: v, label: v }));
 
+  // Something narrows the list — a filter chip or the search box. With either,
+  // an empty list means "nothing matches", never "nothing taken out yet"
+  // (the search text has no chip, so it used to show the empty-history note).
+  const narrowed = activeChips.length > 0 || !!String(filters.search || '').trim();
+
   const removeChip = (chip) => {
     setFilters(prev => {
       const val = prev[chip.key];
@@ -319,7 +324,7 @@ function CellarHistory() {
         title={t('history.title')}
         loading={loading}
         userColor={cellar?.userColor}
-        subtitle={total === 0 && !activeChips.length ? t('history.noHistory') : t('history.bottleCount', { count: total })}
+        subtitle={total === 0 && !narrowed ? t('history.noHistory') : t('history.bottleCount', { count: total })}
       />
 
       <CellarNav cellarId={id} active="history" />
@@ -402,7 +407,11 @@ function CellarHistory() {
         />
       )}
 
-      {total === 0 && !activeChips.length && (
+      {total === 0 && narrowed && (
+        <p className="history-no-results">{t('history.noResults')}</p>
+      )}
+
+      {total === 0 && !narrowed && (
         <div className="empty-state">
           <p>{t('history.emptyHistoryHint')}</p>
           <Link to={`/cellars/${id}`} className="btn btn-primary">{t('history.backToCellarBtn')}</Link>

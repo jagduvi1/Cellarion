@@ -7,12 +7,6 @@
  */
 export function betaFeatureText(t, key) {
   switch (key) {
-    case 'vintagePage':
-      return {
-        name: t('earlyAccess.features.vintagePage.name', 'One page per wine and vintage'),
-        description: t('earlyAccess.features.vintagePage.description', 'Tapping a wine in your cellar list opens one page for that wine and vintage, whether you have one bottle or twenty: the wine, then the vintage, then each bottle with its slot, size, price and shop. Drink, Edit vintage and Add sit in a bar that stays in reach.'),
-        where: t('earlyAccess.features.vintagePage.where', 'In your cellar list: tap any wine.'),
-      };
     case 'rackMoveBottles':
       return {
         name: t('earlyAccess.features.rackMoveBottles.name', "Move a rack's bottles to another rack"),

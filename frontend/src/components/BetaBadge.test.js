@@ -46,7 +46,7 @@ test('Give feedback sends a beta ticket naming the feature, and thanks the sende
   submitSupportTicket.mockResolvedValue({ ok: true, json: async () => ({ ticket: { _id: 't1' } }) });
   renderBadge();
   fireEvent.click(screen.getByRole('button', { name: 'Give feedback' }));
-  const box = await screen.findByRole('textbox');
+  const box = await screen.findByRole('textbox', {}, { timeout: 5000 }); // the form is lazy
   const send = screen.getByRole('button', { name: 'Send feedback' });
   expect(send).toBeDisabled();
   fireEvent.change(box, { target: { value: '  The bar at the bottom is great  ' } });

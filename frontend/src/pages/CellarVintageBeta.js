@@ -12,7 +12,6 @@ import AuthImage from '../components/AuthImage';
 import BottlePlaceholder from '../components/BottlePlaceholder';
 import CollapsibleBlock, { CollapseToggle } from '../components/CollapsibleBlock';
 import { useCollapsedBlocks } from '../utils/collapsedBlocks';
-import BetaBadge from '../components/BetaBadge';
 import Modal from '../components/Modal';
 import CellarPageHeader from '../components/CellarPageHeader';
 import MaturityPhaseTable from '../components/bottle/MaturityPhaseTable';
@@ -63,18 +62,16 @@ const safeDecode = (s) => {
 };
 
 /**
- * One wine and vintage in a cellar — the EARLY-ACCESS layout (feature flag
- * 'vintagePage', backend config/featureFlags). The same page whether the
- * cellar holds one bottle of the vintage or forty, reached by tapping any
- * entry in the cellar list, and always in the same order: the wine, the
- * vintage, the bottles — with Drink, Edit vintage and Add in a bar that
- * stays in reach (support ticket 2026-10-09, follow-up).
+ * One wine and vintage in a cellar. The same page whether the cellar holds
+ * one bottle of the vintage or forty, reached by tapping any entry in the
+ * cellar list, and always in the same order: the wine, the vintage, the
+ * bottles — with Drink, Edit vintage and Add in a bar that stays in reach
+ * (support ticket 2026-10-09, follow-up).
  *
- * The classic layout (CellarVintage.js) stays for everyone else until the
- * flag goes to everyone; then this one replaces it. Same data (GET
- * /api/cellars/:id/vintages/…), and every save goes through the routes the
- * other screens use (bulk update, consume, add bottles), so switching early
- * access off loses nothing.
+ * Began in early access; out for everyone since 2026-10-13, and the classic
+ * layout and its flag are gone. Its data comes from GET
+ * /api/cellars/:id/vintages/…, and every save goes through the routes the
+ * other screens use (bulk update, consume, add bottles).
  */
 function CellarVintageBeta() {
   const { t, i18n } = useTranslation();
@@ -444,7 +441,6 @@ function CellarVintageBeta() {
       {/* No cellar menu here: it belongs to the cellar, not to the wine, and
           "Back to the cellar" above already leads there (beta feedback
           2026-10-10). */}
-      <BetaBadge feature="vintagePage" note={t('cellarVintageBeta.betaNote', 'A new layout for this page, in early access.')} />
 
       {notice && (
         <div className="alert alert-success cellar-vintage-notice" role="status">

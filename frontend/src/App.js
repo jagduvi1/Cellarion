@@ -10,7 +10,7 @@ import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import ReconsentModal from './components/ReconsentModal';
 import Analytics from './components/Analytics';
-import { useFeature, useFeatureFlagsReady, loadFeatureFlags } from './utils/featureFlags';
+import { loadFeatureFlags } from './utils/featureFlags';
 import './styles/common.css';
 
 // Lazy-load all pages so each route gets its own chunk.
@@ -34,7 +34,6 @@ const CellarBook      = lazy(() => import('./pages/CellarBook'));
 const BottleDetail    = lazy(() => import('./pages/BottleDetail'));
 const CellarHistory   = lazy(() => import('./pages/CellarHistory'));
 const CellarOnOrder   = lazy(() => import('./pages/CellarOnOrder'));
-const CellarVintage   = lazy(() => import('./pages/CellarVintage'));
 const CellarVintageBeta = lazy(() => import('./pages/CellarVintageBeta'));
 const CellarAudit     = lazy(() => import('./pages/CellarAudit'));
 const WineRequests    = lazy(() => import('./pages/WineRequests'));
@@ -94,21 +93,14 @@ const WineLists            = lazy(() => import('./pages/WineLists'));
 const WineListEditor       = lazy(() => import('./pages/WineListEditor'));
 const PublicWineList       = lazy(() => import('./pages/PublicWineList'));
 
-// The vintage page in the layout the user's flags call for: early access's
-// one page per wine and vintage, or the classic one (utils/featureFlags).
-// Same address, same data — a bookmark works with the switch on or off. On a
-// cold start (no cached flags) it waits for the answer instead of mounting
-// the classic page and swapping — which loaded everything twice.
+// The page of one wine and vintage (the early-access layout, out for
+// everyone since 2026-10-13 — the classic page and its flag are gone).
 // Keyed by the address: one vintage page links to another (its "Other
 // vintages"), and the next one must start fresh — no notice, open window or
 // folded list carried over from the last.
 function VintagePage() {
   const { id, wineId, vintage } = useParams();
-  const ready = useFeatureFlagsReady();
-  const beta = useFeature('vintagePage');
-  if (!ready) return <div className="loading">Loading…</div>;
-  const key = `${id}/${wineId}/${vintage}`;
-  return beta ? <CellarVintageBeta key={key} /> : <CellarVintage key={key} />;
+  return <CellarVintageBeta key={`${id}/${wineId}/${vintage}`} />;
 }
 
 function AppRoutes() {

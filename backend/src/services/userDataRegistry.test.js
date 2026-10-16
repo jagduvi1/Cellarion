@@ -403,14 +403,14 @@ describe('SupportTicket export', () => {
     const c = {};
     for (const m of ['select', 'limit']) c[m] = jest.fn(() => c);
     c.lean = jest.fn(async () => [
-      { category: 'beta', feature: 'vintagePage', subject: 'Beta feedback: One page per wine and vintage', message: 'm', status: 'open', createdAt: 'c1', replies: [] },
+      { category: 'beta', feature: 'pickLists', subject: 'Beta feedback: Pick lists', message: 'm', status: 'open', createdAt: 'c1', replies: [] },
       { category: 'bug', subject: 'Crash', message: 'n', status: 'closed', createdAt: 'c2', replies: [{ author: 'admin', by: 'admin-id', message: 'Fixed', createdAt: 'r1' }] },
     ]);
     const findSpy = jest.spyOn(SupportTicket, 'find').mockReturnValue(c);
     try {
       const frag = await entry.exportFragment({ userId: 'u1', truncated: {} });
       expect(c.select.mock.calls[0][0]).toEqual(expect.stringContaining('feature'));
-      expect(frag.supportTickets[0]).toMatchObject({ category: 'beta', feature: 'vintagePage', subject: 'Beta feedback: One page per wine and vintage' });
+      expect(frag.supportTickets[0]).toMatchObject({ category: 'beta', feature: 'pickLists', subject: 'Beta feedback: Pick lists' });
       expect(frag.supportTickets[1]).not.toHaveProperty('feature');
       // The admin's account id is not the exporting user's data.
       expect(frag.supportTickets[1].replies).toEqual([{ author: 'admin', message: 'Fixed', createdAt: 'r1' }]);

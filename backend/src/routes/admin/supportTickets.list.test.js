@@ -41,7 +41,7 @@ let rows;
 beforeEach(() => {
   jest.clearAllMocks();
   rows = [
-    { _id: 't1', category: 'beta', feature: 'vintagePage', subject: 'Beta feedback: One page per wine and vintage', status: 'open' },
+    { _id: 't1', category: 'beta', feature: 'pickLists', subject: 'Beta feedback: Pick lists', status: 'open' },
     { _id: 't2', category: 'beta', feature: 'retiredFeature', subject: 'Beta feedback', status: 'open' },
     { _id: 't3', category: 'bug', subject: 'Crash', status: 'open' },
   ];
@@ -58,16 +58,16 @@ const list = async (query = '') => {
 test('beta tickets carry their feature\'s title; a flag already gone from the code shows its key', async () => {
   const { status, body } = await list();
   expect(status).toBe(200);
-  expect(body.tickets[0].featureTitle).toBe('One page per wine and vintage');
+  expect(body.tickets[0].featureTitle).toBe('Pick lists');
   expect(body.tickets[1].featureTitle).toBe('retiredFeature');
   expect(body.tickets[2].featureTitle).toBeUndefined();
   expect(SupportTicket.find).toHaveBeenCalledWith({});
 });
 
 test('status, category and feature filter the list; unknown values are ignored', async () => {
-  await list('?status=open&category=beta&feature=vintagePage');
-  expect(SupportTicket.find).toHaveBeenLastCalledWith({ status: 'open', category: 'beta', feature: 'vintagePage' });
-  expect(SupportTicket.countDocuments).toHaveBeenLastCalledWith({ status: 'open', category: 'beta', feature: 'vintagePage' });
+  await list('?status=open&category=beta&feature=pickLists');
+  expect(SupportTicket.find).toHaveBeenLastCalledWith({ status: 'open', category: 'beta', feature: 'pickLists' });
+  expect(SupportTicket.countDocuments).toHaveBeenLastCalledWith({ status: 'open', category: 'beta', feature: 'pickLists' });
 
   await list('?category=complaint&feature[$ne]=x');
   expect(SupportTicket.find).toHaveBeenLastCalledWith({});
