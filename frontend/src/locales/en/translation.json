@@ -1619,6 +1619,12 @@
       "leftover_other": "{{count}} bottles did not fit in this rack and stay unplaced",
       "slotTaken": "That slot was taken meanwhile — pick another",
       "leaveMode": "Stop placing"
+    },
+    "moveMode": {
+      "button": "Move",
+      "hint": "Tap the slot to move {{name}} to",
+      "otherRackHint": "for another rack, open its tab first",
+      "otherRackFilled": "In another rack, choose an empty slot — bottles only swap places within one rack."
     }
   },
   "nfc": {
@@ -4019,7 +4025,7 @@
     "undoError": "A move failed while undoing — the rack may have changed. Close and check the rack."
   },
   "rackLens": {
-    "dragHint": "Tip: drag a bottle to an empty slot to move it, onto another bottle to swap them.",
+    "dragHint": "Tip: drag a bottle to an empty slot to move it, onto another bottle to swap them — or tap the bottle and choose Move.",
     "searchPlaceholder": "Find in racks…",
     "colorBy": "Color by",
     "lensType": "Wine type",

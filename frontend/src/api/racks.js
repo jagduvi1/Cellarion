@@ -18,11 +18,13 @@ export const updateSlot = (apiFetch, rackId, position, data) =>
 export const clearSlot = (apiFetch, rackId, position) =>
   apiFetch(`/api/racks/${rackId}/slots/${position}`, { method: 'DELETE' });
 
-export const moveSlot = (apiFetch, rackId, fromPosition, toPosition) =>
+// expect: optional { expectFrom, expectTo } — the bottle ids the caller saw in
+// the two slots (null = empty); the server refuses with 409 if either changed.
+export const moveSlot = (apiFetch, rackId, fromPosition, toPosition, expect = {}) =>
   apiFetch(`/api/racks/${rackId}/slots/${fromPosition}/move`, {
     method: 'POST',
     headers: JSON_HEADERS,
-    body: JSON.stringify({ toPosition }),
+    body: JSON.stringify({ toPosition, ...expect }),
   });
 
 // Auto-arrange — server-side engine (same one the MCP auto_arrange tool uses).

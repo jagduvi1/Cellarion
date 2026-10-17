@@ -26,8 +26,9 @@ export function findNearestSlot(slotCenters, x, y, { exclude = null, factor = SL
 /**
  * Pointer-based drag & drop between the slots of an SVG rack renderer.
  *
- * Mouse/pen only — on touch the tap→popup flow already covers moving a
- * bottle, and capturing touch drags would fight page scrolling.
+ * Mouse/pen only — capturing touch drags would fight page scrolling. On a
+ * touch screen a bottle is moved from its slot popup instead: "Move", then a
+ * tap on the slot it should go to (the move mode in pages/CellarRacks).
  *
  * A drag only begins once the pointer travels past a small threshold, so
  * plain clicks still open the slot popup; after a drop the next click on
