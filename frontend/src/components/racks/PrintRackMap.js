@@ -46,7 +46,7 @@ export default function PrintRackMap({ rack }) {
   // A shelf cell holding several bottles: the layout gives them all the
   // cell's centre, so they are fanned out the way the rack view draws them
   // (as given they printed on top of each other, numbers and all).
-  const cells = useMemo(() => multiBottleCells(layout), [layout]);
+  const cells = useMemo(() => multiBottleCells(layout, { fit: true }), [layout]);
   const digits = String(layout.totalSlots).length;
 
   const R = SLOT_RADIUS;

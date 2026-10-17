@@ -87,7 +87,7 @@ export default function ZoneEditorModal({ rack, onSave, onClose }) {
 
   // A shelf cell holding several bottles is fanned out the way the rack view
   // draws it (the layout gives them all the cell's centre).
-  const cells = useMemo(() => multiBottleCells(layout), [layout]);
+  const cells = useMemo(() => multiBottleCells(layout, { fit: true }), [layout]);
   const digits = String(layout.totalSlots).length;
 
   // One slot's click target and its number, apart so a cell's numbers can go

@@ -832,3 +832,18 @@ describe('cabinetBayUnits', () => {
     expect(cabinetBayUnits({ ...bay, alternate: true }, { twoDeep: true, stagger: true })).toBe(6);
   });
 });
+
+// Release review: from 10 per cell the rack view's bottles cover the next
+// bottle's centre; the print map and the zone editor fit them to the spacing.
+test('multiBottleCells with fit: no bottle wider than the spacing; without it the rack view is unchanged', () => {
+  const layout = computeLayout('shelf', 1, 1, { bottlesPerCell: 10 });
+  const plain = multiBottleCells(layout)[0];
+  const fitted = multiBottleCells(layout, { fit: true })[0];
+  expect(plain.r).toBeGreaterThan(plain.pitch / 2);
+  expect(fitted.r).toBeLessThanOrEqual(fitted.pitch / 2 + 1e-9);
+  expect(fitted.bottles).toEqual(plain.bottles);
+  const few = computeLayout('shelf', 1, 1, { bottlesPerCell: 2 });
+  // Two per cell overlap a little in the rack view too: fitted, they just touch.
+  expect(multiBottleCells(few, { fit: true })[0].r).toBeLessThanOrEqual(multiBottleCells(few)[0].r);
+  expect(multiBottleCells(few, { fit: true })[0].r).toBeLessThanOrEqual(multiBottleCells(few)[0].pitch / 2 + 1e-9);
+});

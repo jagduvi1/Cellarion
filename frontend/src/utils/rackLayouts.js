@@ -787,13 +787,19 @@ const CELL_TRAY_PAD = 3;
  * radius), size (side of the tray drawn behind it), pitch (closest two
  * bottles' centres), bottles: [{ position, cx, cy }] }.
  */
-export function multiBottleCells(layout) {
+export function multiBottleCells(layout, { fit = false } = {}) {
   const bpc = layout.bottlesPerCell || 1;
   if (bpc <= 1) return null;
   const backR = layout.backRadius;
   const kind = (R, size) => {
     const offsets = getSubOffsets(bpc, R);
-    return { offsets, r: getSubRadius(bpc, R), size, pitch: minSlotDistance(offsets.map(o => ({ cx: o.dx, cy: o.dy }))) };
+    const pitch = minSlotDistance(offsets.map(o => ({ cx: o.dx, cy: o.dy })));
+    // `fit`: no bottle wider than the spacing, so each one's number (and
+    // click target) is its own — from 10 per cell the rack view's radius
+    // covers the next bottle's centre. The print map and the zone editor
+    // fit; the rack view keeps its drawing.
+    const r = fit ? Math.min(getSubRadius(bpc, R), pitch / 2) : getSubRadius(bpc, R);
+    return { offsets, r, size, pitch };
   };
   const front = kind(SLOT_R, CELL - CELL_TRAY_PAD * 2);
   const back = backR ? kind(backR, backR * 2 + 4) : front;
