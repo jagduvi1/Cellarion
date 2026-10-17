@@ -3,6 +3,7 @@ import {
   SLOT_RADIUS, validDoubleHeightRows, DOUBLE_ROW_HEADROOM, cabinetShelfRows,
   cabinetRowWidth, cabinetBayCapacity, cabinetBays, cabinetBayUnits, cabinetHeadToTail,
   cabinetShelfSideways, cabinetSlotSideways, cabinetRestsBehindAcross, cabinetRowOffset,
+  CELL_SIZE, getSubOffsets, getSubRadius, multiBottleCells, cellNumberSize,
 } from './rackLayouts';
 
 describe('computeLayout', () => {
@@ -248,6 +249,84 @@ describe('computeLayout', () => {
       expect(layout.totalSlots).toBe(4);
       const uniqueCoords = new Set(layout.slots.map(s => `${s.cx},${s.cy}`));
       expect(uniqueCoords.size).toBe(1);
+    });
+  });
+
+  // The layout leaves a multi-bottle cell's bottles on the cell centre; every
+  // 2D map fans them out with these (a reported overlap: the print map drew
+  // them as given, on top of each other).
+  describe('multi-bottle cells', () => {
+    const R = SLOT_RADIUS;
+    const key = (p) => `${p.dx ?? p.cx},${p.dy ?? p.cy}`;
+
+    it('getSubOffsets: one distinct offset per bottle, inside the cell, for every allowed count', () => {
+      for (let bpc = 2; bpc <= 20; bpc++) {
+        const offsets = getSubOffsets(bpc, R);
+        expect(offsets).toHaveLength(bpc);
+        expect(new Set(offsets.map(key)).size).toBe(bpc);
+        for (const o of offsets) {
+          expect(Math.abs(o.dx)).toBeLessThanOrEqual(R * 0.42 + 1e-9);
+          expect(Math.abs(o.dy)).toBeLessThanOrEqual(R * 0.42 + 1e-9);
+        }
+      }
+      expect(getSubOffsets(2, R)).toEqual([{ dx: -R * 0.42, dy: 0 }, { dx: R * 0.42, dy: 0 }]);
+    });
+
+    it('getSubRadius shrinks with the count', () => {
+      expect(getSubRadius(2, R)).toBeCloseTo(R * 0.45);
+      expect(getSubRadius(4, R)).toBeCloseTo(R * 0.4);
+      expect(getSubRadius(5, R)).toBeCloseTo(R * 0.3);
+      expect(getSubRadius(20, 14)).toBeCloseTo(14 * 0.3);
+    });
+
+    it('is null where each cell holds one bottle', () => {
+      expect(multiBottleCells(computeLayout('grid', 2, 3))).toBeNull();
+      expect(multiBottleCells(computeLayout('shelf', 2, 3, { backCols: 2 }))).toBeNull();
+      expect(multiBottleCells(computeLayout('shelf', 2, 3, { bottlesPerCell: 1 }))).toBeNull();
+      expect(multiBottleCells(computeLayout('cabinet', 2, 4, { shelfRows: [2, 1] }))).toBeNull();
+    });
+
+    it('a 1×1 shelf of 5: one cell, five bottles fanned out around its centre', () => {
+      const layout = computeLayout('shelf', 1, 1, { bottlesPerCell: 5, backCols: 0 });
+      const cells = multiBottleCells(layout);
+      expect(cells).toHaveLength(1);
+      const [cell] = cells;
+      expect([cell.cx, cell.cy]).toEqual([layout.slots[0].cx, layout.slots[0].cy]);
+      expect(cell.isBack).toBe(false);
+      expect(cell.r).toBeCloseTo(getSubRadius(5, R));
+      expect(cell.size).toBe(CELL_SIZE - 6);
+      expect(cell.pitch).toBeCloseTo(R * 0.42);
+      expect(cell.bottles.map(b => b.position)).toEqual([1, 2, 3, 4, 5]);
+      expect(new Set(cell.bottles.map(key)).size).toBe(5);
+      getSubOffsets(5, R).forEach((o, i) => {
+        expect(cell.bottles[i].cx).toBeCloseTo(cell.cx + o.dx);
+        expect(cell.bottles[i].cy).toBeCloseTo(cell.cy + o.dy);
+      });
+    });
+
+    it('every position once; back-row cells are fanned out at the back radius', () => {
+      const layout = computeLayout('shelf', 2, 3, { bottlesPerCell: 4, backCols: 2 });
+      const cells = multiBottleCells(layout);
+      expect(cells).toHaveLength(2 * (3 + 2));
+      const positions = cells.flatMap(c => c.bottles.map(b => b.position)).sort((a, b) => a - b);
+      expect(positions).toEqual(Array.from({ length: 40 }, (_, i) => i + 1));
+      const back = cells.filter(c => c.isBack);
+      expect(back).toHaveLength(4);
+      for (const c of back) {
+        expect(c.r).toBeCloseTo(getSubRadius(4, layout.backRadius));
+        expect(c.size).toBeCloseTo(layout.backRadius * 2 + 4);
+      }
+      for (const c of cells.filter(x => !x.isBack)) expect(c.r).toBeCloseTo(getSubRadius(4, R));
+    });
+
+    it('cellNumberSize: the radius ratio, shrunk where a long number would reach the next bottle', () => {
+      const five = multiBottleCells(computeLayout('shelf', 1, 1, { bottlesPerCell: 5 }))[0];
+      expect(cellNumberSize(five, 0.66, 1)).toBeCloseTo(five.r * 0.66);
+      // A stacked shelf of ten per cell with three-digit positions sits tighter.
+      const ten = multiBottleCells(computeLayout('shelf', 6, 7, { bottlesPerCell: 10 }))[0];
+      const size = cellNumberSize(ten, 0.66, 3);
+      expect(size).toBeLessThan(ten.r * 0.66);
+      expect(3 * 0.6 * size).toBeLessThan(ten.pitch);
     });
   });
 

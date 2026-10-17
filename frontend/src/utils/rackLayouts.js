@@ -730,6 +730,102 @@ export function minSlotDistance(slots) {
 /** Centre-to-centre distance — exported for builder grid snapping. */
 export const CELL_SIZE = CELL;
 
+// ── Multi-bottle cells (shelf bottlesPerCell > 1) ───────────────────
+// shelfLayout gives every bottle of a cell the cell's own centre; spreading
+// them is the renderer's job. Every 2D map of a rack (the rack view, the
+// Cellar Book print map, the zone editor) spreads them with the helpers
+// below, so a position sits in the same spot on each.
+
+/** Sub-circle offsets for multi-bottle cells (dx, dy from cell centre) */
+export function getSubOffsets(bpc, R) {
+  const g = R * 0.42;
+  switch (bpc) {
+    case 2: return [{ dx: -g, dy: 0 }, { dx: g, dy: 0 }];
+    case 3: {
+      // Equilateral triangle, slightly tighter so the cluster reads as one unit
+      const t = R * 0.38;
+      return [
+        { dx: 0,             dy: -t * 0.85 },
+        { dx: -t * 0.85,     dy:  t * 0.55 },
+        { dx:  t * 0.85,     dy:  t * 0.55 },
+      ];
+    }
+    case 4: return [{ dx: -g, dy: -g }, { dx: g, dy: -g }, { dx: -g, dy: g }, { dx: g, dy: g }];
+    default: {
+      // General grid arrangement
+      const cols = Math.ceil(Math.sqrt(bpc));
+      const rows = Math.ceil(bpc / cols);
+      const offsets = [];
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (offsets.length >= bpc) break;
+          offsets.push({
+            dx: -g + (2 * g * c) / Math.max(cols - 1, 1),
+            dy: -g + (2 * g * r) / Math.max(rows - 1, 1),
+          });
+        }
+      }
+      return offsets;
+    }
+  }
+}
+
+/** Sub-circle radius for multi-bottle cells */
+export function getSubRadius(bpc, R) {
+  if (bpc <= 2) return R * 0.45;
+  if (bpc <= 4) return R * 0.40;
+  return R * 0.3;
+}
+
+const CELL_TRAY_PAD = 3;
+
+/**
+ * The cells of a layout whose cells hold several bottles, or null when each
+ * holds one. Positions sharing a centre form a cell (layout order); each
+ * bottle is fanned out by getSubOffsets at getSubRadius, a back-row cell's
+ * from layout.backRadius. Per cell: { cx, cy, isBack, r (each bottle's
+ * radius), size (side of the tray drawn behind it), pitch (closest two
+ * bottles' centres), bottles: [{ position, cx, cy }] }.
+ */
+export function multiBottleCells(layout) {
+  const bpc = layout.bottlesPerCell || 1;
+  if (bpc <= 1) return null;
+  const backR = layout.backRadius;
+  const kind = (R, size) => {
+    const offsets = getSubOffsets(bpc, R);
+    return { offsets, r: getSubRadius(bpc, R), size, pitch: minSlotDistance(offsets.map(o => ({ cx: o.dx, cy: o.dy }))) };
+  };
+  const front = kind(SLOT_R, CELL - CELL_TRAY_PAD * 2);
+  const back = backR ? kind(backR, backR * 2 + 4) : front;
+
+  const cellMap = {};
+  layout.slots.forEach(s => {
+    const key = `${s.cx},${s.cy}`;
+    if (!cellMap[key]) cellMap[key] = { cx: s.cx, cy: s.cy, isBack: !!s.isBack, positions: [] };
+    cellMap[key].positions.push(s.position);
+  });
+  return Object.values(cellMap).map(({ positions, ...cell }) => {
+    const { offsets, r, size, pitch } = cell.isBack ? back : front;
+    return {
+      ...cell, r, size, pitch,
+      bottles: positions.map((position, idx) => {
+        const off = offsets[idx] || { dx: 0, dy: 0 };
+        return { position, cx: cell.cx + off.dx, cy: cell.cy + off.dy };
+      }),
+    };
+  });
+}
+
+/**
+ * Font size for the position numbers on a multi-bottle cell's bottles:
+ * `ratio` of the bottle's radius, but never so large that a number of
+ * `digits` digits (about 0.6 em each) reaches the next bottle's — a cell of
+ * ten or more bottles sits tighter than its radius suggests.
+ */
+export function cellNumberSize(cell, ratio, digits) {
+  return Math.min(cell.r * ratio, (cell.pitch * 0.9) / (Math.max(1, digits) * 0.6));
+}
+
 /**
  * Compute layout for a modular rack (multiple modules composed together).
  * Each module gets its own sub-layout, offset by (module.x, module.y) in grid-cell units.

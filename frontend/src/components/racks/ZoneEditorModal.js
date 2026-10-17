@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../Modal';
-import { computeLayout, computeModularLayout, SLOT_RADIUS } from '../../utils/rackLayouts';
+import { computeLayout, computeModularLayout, SLOT_RADIUS, multiBottleCells, cellNumberSize } from '../../utils/rackLayouts';
 
 const ZONE_PALETTE = ['#2E7D32', '#1565C0', '#C62828', '#6A1B9A', '#E65100', '#00838F', '#9E9D24', '#AD1457'];
 const MAX_ZONES = 12;
@@ -85,6 +85,42 @@ export default function ZoneEditorModal({ rack, onSave, onClose }) {
 
   const R = SLOT_RADIUS;
 
+  // A shelf cell holding several bottles is fanned out the way the rack view
+  // draws it (the layout gives them all the cell's centre).
+  const cells = useMemo(() => multiBottleCells(layout), [layout]);
+  const digits = String(layout.totalSlots).length;
+
+  // One slot's click target and its number, apart so a cell's numbers can go
+  // on top of all its bottles (a one-bottle slot keeps its number inside).
+  const slotTarget = (position, cx, cy, r, number = null) => {
+    const zi = zoneByPos.get(position);
+    const zone = zi !== undefined ? zones[zi] : null;
+    const disabled = disabledSet.has(position);
+    return (
+      <g
+        key={position}
+        onClick={() => togglePosition(position)}
+        style={{ cursor: disabled || zones.length === 0 ? 'default' : 'pointer' }}
+      >
+        <circle
+          cx={cx} cy={cy} r={r}
+          fill={disabled ? 'rgba(120,110,95,0.15)' : zone ? zone.color : 'transparent'}
+          fillOpacity={zone ? 0.8 : 1}
+          stroke={zi === active ? 'var(--color-text)' : 'var(--color-border)'}
+          strokeWidth={zi === active ? 2 : 1}
+          strokeDasharray={zone || disabled ? null : '3 2'}
+        />
+        {number}
+      </g>
+    );
+  };
+  const slotNumber = (position, cx, cy, fontSize) => (disabledSet.has(position) ? null : (
+    <text key={`n-${position}`} x={cx} y={cy} textAnchor="middle" dominantBaseline="central"
+      fontSize={fontSize} fill={zoneByPos.has(position) ? '#fff' : 'var(--color-text-muted)'} pointerEvents="none">
+      {position}
+    </text>
+  ));
+
   return (
     <Modal title={t('zones.title', 'Rack zones')} onClose={saving ? undefined : onClose} wide showClose={!saving}>
       <p className="zones-intro">
@@ -138,34 +174,16 @@ export default function ZoneEditorModal({ rack, onSave, onClose }) {
         <svg viewBox={`0 0 ${layout.viewBox.width} ${layout.viewBox.height}`} className="zones-map-svg">
           <rect x={1} y={1} width={layout.viewBox.width - 2} height={layout.viewBox.height - 2} rx={7}
             fill="var(--color-bg)" stroke="var(--color-border)" strokeWidth={1.5} />
-          {layout.slots.map(({ position, cx, cy, isBack }) => {
+          {!cells && layout.slots.map(({ position, cx, cy, isBack }) => {
             const r = isBack ? R * 0.7 : R;
-            const zi = zoneByPos.get(position);
-            const zone = zi !== undefined ? zones[zi] : null;
-            const disabled = disabledSet.has(position);
-            return (
-              <g
-                key={position}
-                onClick={() => togglePosition(position)}
-                style={{ cursor: disabled || zones.length === 0 ? 'default' : 'pointer' }}
-              >
-                <circle
-                  cx={cx} cy={cy} r={r}
-                  fill={disabled ? 'rgba(120,110,95,0.15)' : zone ? zone.color : 'transparent'}
-                  fillOpacity={zone ? 0.8 : 1}
-                  stroke={zi === active ? 'var(--color-text)' : 'var(--color-border)'}
-                  strokeWidth={zi === active ? 2 : 1}
-                  strokeDasharray={zone || disabled ? null : '3 2'}
-                />
-                {!disabled && (
-                  <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central"
-                    fontSize={r * 0.6} fill={zone ? '#fff' : 'var(--color-text-muted)'} pointerEvents="none">
-                    {position}
-                  </text>
-                )}
-              </g>
-            );
+            return slotTarget(position, cx, cy, r, slotNumber(position, cx, cy, r * 0.6));
           })}
+          {cells && cells.map(cell => (
+            <g key={`cell-${cell.cx},${cell.cy}`}>
+              {cell.bottles.map(b => slotTarget(b.position, b.cx, b.cy, cell.r))}
+              {cell.bottles.map(b => slotNumber(b.position, b.cx, b.cy, cellNumberSize(cell, 0.6, digits)))}
+            </g>
+          ))}
         </svg>
       </div>
 
