@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { bulkConsumeBottles } from '../api/bottles';
+import { bulkConsumeBottles, restoreBottle } from '../api/bottles';
+import { messageForResponse } from '../utils/friendlyError';
 import Modal from './Modal';
-import BulkOutcome from './BulkOutcome';
 
 // LOCAL calendar date, YYYY-MM-DD — toISOString() would give the UTC day, which
 // is yesterday for anyone west of Greenwich in the evening (audit 2026-09-14).
@@ -22,6 +22,11 @@ const today = () => {
  * reported; the outcome screen then offers to mark those too. The single
  * flow warns before consuming a reservation, so bulk must not be the one
  * path that does it silently.
+ *
+ * The outcome screen also offers Undo, as a single drink does: every bottle
+ * this batch took out goes back (POST /:id/restore each, the bottle page's
+ * "Move back to cellar"), unplaced. A bottle that could not come back is
+ * counted, with the reason — never reported as back.
  */
 export default function BulkConsumeModal({ bottleIds, onClose, onDone }) {
   const { t } = useTranslation();
@@ -33,7 +38,9 @@ export default function BulkConsumeModal({ bottleIds, onClose, onDone }) {
   const [submitting, setSubmitting] = useState(false);
   const [moreBusy, setMoreBusy] = useState(false);
   const [error, setError] = useState('');
-  const [result, setResult] = useState(null); // { done, skipped, reserved: [ids] }
+  const [result, setResult] = useState(null); // { done, doneIds, skipped, reserved: [ids] }
+  const [undoBusy, setUndoBusy] = useState(false);
+  const [undone, setUndone] = useState(null); // { restored, failed, reason } after Undo
 
   const send = (ids, includeReserved) => bulkConsumeBottles(apiFetch, ids, {
     reason,
@@ -46,7 +53,7 @@ export default function BulkConsumeModal({ bottleIds, onClose, onDone }) {
     if (!res.ok) throw new Error(data.error || t('bulk.failed'));
     const skipped = data.skipped || [];
     const reserved = skipped.filter((s) => s.reason === 'reserved').map((s) => s.id);
-    return { done: data.done ?? 0, skipped: skipped.length - reserved.length, reserved };
+    return { done: data.done ?? 0, doneIds: data.doneIds || [], skipped: skipped.length - reserved.length, reserved };
   };
 
   const submit = async (e) => {
@@ -68,7 +75,7 @@ export default function BulkConsumeModal({ bottleIds, onClose, onDone }) {
     setError('');
     try {
       const more = await parse(await send(result.reserved, true));
-      setResult({ done: result.done + more.done, skipped: result.skipped + more.skipped, reserved: [] });
+      setResult({ done: result.done + more.done, doneIds: [...result.doneIds, ...more.doneIds], skipped: result.skipped + more.skipped, reserved: [] });
     } catch (err) {
       setError(err.message || t('bulk.failed'));
     } finally {
@@ -76,17 +83,71 @@ export default function BulkConsumeModal({ bottleIds, onClose, onDone }) {
     }
   };
 
+  // One restore per bottle, one after another. A rate limit or a dropped
+  // connection stops the run: the bottles not yet tried count as not back.
+  const undo = async () => {
+    if (undoBusy || moreBusy || !result?.doneIds.length) return;
+    setUndoBusy(true);
+    setError('');
+    let restored = 0;
+    let reason = '';
+    try {
+      for (const id of result.doneIds) {
+        const res = await restoreBottle(apiFetch, id);
+        if (res.ok) { restored += 1; continue; }
+        const body = await res.json().catch(() => ({}));
+        if (!reason) reason = messageForResponse(res, body, t('bottleDetail.restoreError'), t);
+        if (res.status === 429) break;
+      }
+    } catch {
+      if (!reason) reason = t('common.networkError');
+    }
+    setUndone({ restored, failed: result.doneIds.length - restored, reason });
+    setUndoBusy(false);
+  };
+  const close = () => { if (!undoBusy) onDone(); };
+
   if (result) {
-    const extra = result.reserved.length > 0 ? (
-      <div className="bulk-reserved-note">
-        <p role="status">{t('bulk.reservedSkipped', { count: result.reserved.length })}</p>
-        <button type="button" className="btn btn-secondary btn-small" onClick={consumeReservedToo} disabled={moreBusy}>
-          {moreBusy ? t('common.saving') : t('bulk.consumeReservedToo')}
-        </button>
-        {error && <p className="error-message" role="alert">{error}</p>}
-      </div>
-    ) : null;
-    return <BulkOutcome title={t('bulk.consumeDoneTitle')} done={result.done} skipped={result.skipped} extra={extra} onClose={onDone} />;
+    return (
+      <Modal title={undone ? t('trash.restoredTitle') : t('bulk.consumeDoneTitle')} onClose={close} showClose trapFocus>
+        {undone ? (
+          <>
+            <p className="move-bottle-success" role="status">{t('trash.restoredInfo', { count: undone.restored })}</p>
+            {undone.failed > 0 && (
+              <p className="move-bottle-skipped" role="alert">
+                {t('bulk.consumeUndoFailed', { count: undone.failed })}{undone.reason ? ` ${undone.reason}` : ''}
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            {result.reserved.length > 0 && (
+              <div className="bulk-reserved-note">
+                <p role="status">{t('bulk.reservedSkipped', { count: result.reserved.length })}</p>
+                <button type="button" className="btn btn-secondary btn-small" onClick={consumeReservedToo} disabled={moreBusy || undoBusy}>
+                  {moreBusy ? t('common.saving') : t('bulk.consumeReservedToo')}
+                </button>
+                {error && <p className="error-message" role="alert">{error}</p>}
+              </div>
+            )}
+            <p className="move-bottle-success">{t('bulk.doneInfo', { count: result.done })}</p>
+            {result.skipped > 0 && (
+              <p className="move-bottle-skipped" role="status">{t('bulk.skippedInfo', { count: result.skipped })}</p>
+            )}
+          </>
+        )}
+        <div className="modal-actions">
+          {!undone && result.doneIds.length > 0 && (
+            <button type="button" className="btn btn-secondary" onClick={undo} disabled={undoBusy || moreBusy}>
+              {undoBusy ? t('trash.restoring') : t('common.undo')}
+            </button>
+          )}
+          <button type="button" className="btn btn-primary" onClick={close} disabled={undoBusy}>
+            {t('bulk.close')}
+          </button>
+        </div>
+      </Modal>
+    );
   }
 
   return (

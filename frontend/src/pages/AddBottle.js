@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { searchWines, resolveWine, identifyWineByText, lookupBarcode } from '../api/wines';
+import { searchWines, resolveWine, identifyWineByText, lookupBarcode, getWine } from '../api/wines';
 import { adoptRegistryWine } from '../api/bridge';
 import { getRacks } from '../api/racks';
 import { track } from '../utils/track';
@@ -415,6 +415,29 @@ function AddBottle() {
     clearAi();
     setStep(2);
   }, [clearAi]);
+
+  // "Add to cellar" from a wishlist item or a wine's page (components/
+  // AddToCellarButton): ?wine=<id> — and the wishlist's ?vintage — arrive
+  // already chosen, straight to the bottle's details. A wine that cannot be
+  // read (gone, not visible) leaves the search as usual. Read from the address
+  // itself, as startMode is read from the history entry.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const wineId = params.get('wine');
+    // Only a well-formed id goes into the API path (as AddToWishlist's ?wine).
+    if (!/^[a-f0-9]{24}$/i.test(wineId || '')) return undefined;
+    const vintage = (params.get('vintage') || '').trim().slice(0, 20);
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await getWine(apiFetch, wineId);
+        if (cancelled || !res.ok) return;
+        const data = await res.json();
+        if (!cancelled && data?.wine?._id) applyResolvedWine(data.wine, vintage);
+      } catch { /* the search is there as usual */ }
+    })();
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // A barcode read in the viewfinder. A code members have already added a
   // bottle of goes straight to that wine — no label photo, no AI call. An

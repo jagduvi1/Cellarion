@@ -11,6 +11,7 @@ import SEOHead from '../components/SEOHead';
 import SITE_URL from '../config/siteUrl';
 import WineImage from '../components/WineImage';
 import WineDiscussionsPanel from '../components/WineDiscussionsPanel';
+import AddToCellarButton from '../components/AddToCellarButton';
 import { getWineImageUrl } from '../utils/wineImageUrl';
 import { API_URL } from '../api/apiConstants';
 import { swatchType, wineTypeLabel } from '../utils/wineColour';
@@ -304,6 +305,8 @@ export default function WineDetail() {
           <Link to={`/wishlist/add?wine=${wine._id}`} className="btn btn-primary">
             {t('wineDetail.addToWishlist')}
           </Link>
+          {/* A bottle of it straight into a cellar — the wishlist never adds one. */}
+          <AddToCellarButton wineId={wine._id} className="btn btn-secondary" />
           <Link to="/cellars" className="btn btn-secondary">
             {t('wineDetail.backToCellars')}
           </Link>

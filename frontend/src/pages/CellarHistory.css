@@ -269,8 +269,10 @@
 }
 
 /* Add-to-wishlist button — lifted above the stretched-link overlay so it
-   captures its own clicks. */
-.history-add-wishlist-btn {
+   captures its own clicks. "Add again" and "Move back to cellar" share its
+   look (.history-card-btn). */
+.history-add-wishlist-btn,
+.history-card-btn {
   position: relative;
   z-index: 2;
   display: inline-flex;
@@ -288,16 +290,19 @@
   white-space: nowrap;
   transition: border-color 0.15s, color 0.15s, background 0.15s;
 }
-.history-add-wishlist-btn:hover:not(:disabled) {
+.history-add-wishlist-btn:hover:not(:disabled),
+.history-card-btn:hover:not(:disabled) {
   border-color: var(--color-primary);
   color: var(--color-primary);
   background: var(--color-primary-light);
 }
-.history-add-wishlist-btn:focus-visible {
+.history-add-wishlist-btn:focus-visible,
+.history-card-btn:focus-visible {
   outline: 2px solid var(--color-border-focus);
   outline-offset: 2px;
 }
-.history-add-wishlist-btn.is-saving {
+.history-add-wishlist-btn.is-saving,
+.history-card-btn:disabled {
   cursor: default;
   opacity: 0.7;
 }
@@ -378,6 +383,25 @@
   flex-shrink: 0;
 }
 
+/* "Move back to cellar" under a bottle taken out in the last two days. */
+.history-restore-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  margin-top: 0.5rem;
+}
+.history-restore-hint {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+.history-restore-error {
+  position: relative;
+  z-index: 2;
+  font-size: 0.78rem;
+  color: var(--color-danger);
+}
+
 /* ── Consumption details ── */
 .history-bottle-details {
   padding-left: 0;
@@ -411,10 +435,12 @@
   }
   /* Compact, icon-only wishlist button on narrow screens — the button colour
      (added = green, error = red) still conveys state without the label. */
-  .history-add-wishlist-label {
+  .history-add-wishlist-label,
+  .history-card-btn-label {
     display: none;
   }
-  .history-add-wishlist-btn {
+  .history-add-wishlist-btn,
+  .history-bottle-main-right .history-card-btn {
     padding: 0.4rem;
   }
 }

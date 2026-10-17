@@ -139,6 +139,43 @@ test('confirming takes the bottle out: one consume request, the slot empties, th
   expect(screen.getByTestId('journal-prompt')).toHaveTextContent('b1');
 });
 
+// A member drank a bottle from a slot by mistake and found no way back from
+// here: the take-out is now said with Undo, as on the cellar list.
+test('after a take-out the floating notice offers Undo, beside the journal prompt; Undo restores it and reads the racks again', async () => {
+  setup();
+  renderPage();
+  const dialog = await openDrinkDialog();
+  fireEvent.click(within(dialog).getByRole('button', { name: 'common.confirm' }));
+
+  const notice = await screen.findByText('bottleNotice.drunk:{"name":"Château Margaux 2015"}');
+  expect(screen.getByTestId('journal-prompt')).toHaveTextContent('b1');
+  const racksReads = () => api.mock.calls.filter(([u]) => u === '/api/racks?cellar=c1').length;
+  const before = racksReads();
+
+  fireEvent.click(within(notice.closest('.bottle-undo-notice')).getByRole('button', { name: 'common.undo' }));
+
+  expect(await screen.findByText('bottleNotice.restored:{"name":"Château Margaux 2015"}')).toBeInTheDocument();
+  const restores = api.mock.calls.filter(([u]) => u === '/api/bottles/b1/restore');
+  expect(restores).toHaveLength(1);
+  expect(restores[0][1]).toMatchObject({ method: 'POST' });
+  await waitFor(() => expect(racksReads()).toBe(before + 1));
+  expect(screen.queryByRole('button', { name: 'common.undo' })).not.toBeInTheDocument();
+});
+
+test('a refused Undo says why and keeps the button', async () => {
+  setup();
+  renderPage();
+  const dialog = await openDrinkDialog();
+  fireEvent.click(within(dialog).getByRole('button', { name: 'common.confirm' }));
+  const notice = (await screen.findByText(/^bottleNotice\.drunk/)).closest('.bottle-undo-notice');
+  api.mockImplementationOnce(async () => refused(400, { error: 'Bottle is already active' }));
+
+  fireEvent.click(within(notice).getByRole('button', { name: 'common.undo' }));
+
+  expect(await within(notice).findByText(/Bottle is already active/)).toBeInTheDocument();
+  expect(within(notice).getByRole('button', { name: 'common.undo' })).toBeInTheDocument();
+});
+
 test('a refused take-out keeps the dialog open and says why in the floating notice', async () => {
   setup();
   renderPage();

@@ -14,7 +14,7 @@ import { getRackHeight, clampToRoom } from '../utils/roomConstants';
 import WineImage from '../components/WineImage';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
 import { ConsumeModal } from '../components/ConsumeModal';
-import { bottleNoticeName } from '../components/BottleUndoNotice';
+import BottleUndoNotice, { bottleNoticeName } from '../components/BottleUndoNotice';
 import { isReserved, reservationSummary } from '../utils/reservation';
 import { LENSES, getLensStyle, getLensLegend, bottleMatchesSearch } from '../utils/rackLens';
 import CellarNav from '../components/CellarNav';
@@ -80,6 +80,9 @@ export default function CellarRoom() {
   const slotTimerRef = useRef(null);
   const [consumeModal, setConsumeModal] = useState(null); // { bottleId, bottle }
   const [journalBottle, setJournalBottle] = useState(null); // consumed bottle awaiting journal prompt
+  // The bottle just taken out, said with Undo — as on the racks page
+  // (components/BottleUndoNotice). Undo brings it back unplaced.
+  const [drunkNotice, setDrunkNotice] = useState(null);
 
   // "just a glass" partial flow (see CellarRacks.handlePartial)
   const [partialPicker, setPartialPicker] = useState(null); // { bottleId }
@@ -1028,6 +1031,7 @@ export default function CellarRoom() {
         })));
         setConsumeModal(null);
         setSelectedBottle(null);
+        setDrunkNotice({ kind: 'consumed', reason, bottleId: consumeModal.bottleId, name: bottleNoticeName(consumeModal.bottle), at: Date.now() });
         if (reason === 'drank' && !journalPromptOptedOut()) {
           setJournalBottle(consumeModal.bottle);
         }
@@ -1039,6 +1043,16 @@ export default function CellarRoom() {
       setActionError(friendlyError(err, t));
     }
   }, [consumeModal, apiFetch, failed, t]);
+
+  // After an Undo: only the racks are read again — the room layout may hold
+  // unsaved edits, and a restored bottle comes back unplaced anyway.
+  const refreshRacks = useCallback(async () => {
+    try {
+      const res = await getRacks(apiFetch, id);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) setRacks(data.racks || []);
+    } catch { /* the room keeps what it shows */ }
+  }, [apiFetch, id]);
 
   // Backend search for slot picker
   const fetchSlotBottles = useCallback(async (term) => {
@@ -1078,6 +1092,16 @@ export default function CellarRoom() {
   return (
     <div className="cellar-room-page">
       <ActionNotice message={actionError} onDismiss={() => setActionError(null)} />
+      {drunkNotice && (
+        <BottleUndoNotice
+          key={`${drunkNotice.bottleId}:${drunkNotice.at}`}
+          floating
+          notice={drunkNotice}
+          cellarId={id}
+          onUndone={refreshRacks}
+          onDismiss={() => setDrunkNotice(null)}
+        />
+      )}
       {/* View mode uses the shared header so the nav anchors like every other
           cellar page. Edit mode keeps its own full-bleed working toolbar (and
           the nav is hidden while arranging racks). */}

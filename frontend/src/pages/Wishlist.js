@@ -4,6 +4,7 @@ import { useTranslation, Trans } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getWishlist, updateWishlistItem, removeWishlistItem } from '../api/wishlist';
 import Modal from '../components/Modal';
+import AddToCellarButton from '../components/AddToCellarButton';
 import './AddBottle.css';
 import WineImage from '../components/WineImage';
 import { swatchType, wineTypeLabel } from '../utils/wineColour';
@@ -264,6 +265,14 @@ function Wishlist() {
                     {item.notes && <p className="wishlist-item-notes">{item.notes}</p>}
                     {item.status === 'bought' && item.boughtAt && (
                       <span className="wishlist-item-bought-date">{t('wishlist.boughtOn', { date: new Date(item.boughtAt).toLocaleDateString() })}</span>
+                    )}
+                    {/* "Bought" only ticks the wishlist; this puts the bottle
+                        in the cellar — Add Bottle with the wine (and the
+                        vintage, when set) already chosen. */}
+                    {wd?._id && (
+                      <div className="wishlist-item-cellar">
+                        <AddToCellarButton wineId={wd._id} vintage={item.vintage} />
+                      </div>
                     )}
                   </div>
                   <div className="wishlist-item-actions">

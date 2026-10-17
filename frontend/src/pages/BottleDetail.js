@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getBottle, consumeBottle, setBottleDefaultImage, undoBottle, openBottle, restoreBottle, markBottleArrived } from '../api/bottles';
 import { TRASH_DAYS } from '../utils/trash';
+import { withinRestoreWindow } from '../utils/restoreWindow';
 import { bottleNoticeName } from '../components/BottleUndoNotice';
 import { lookupPriceHistory } from '../api/somm';
 import { isOnOrder, formatArrivalMonth, isArrivalLate } from '../utils/onOrder';
@@ -349,14 +350,13 @@ function BottleDetail() {
         : (isConsumed || fromHistory ? t('bottleDetail.backToHistory', 'Back to history') : t('bottleDetail.backToCellar'));
 
   // "Move back to cellar" (undo an accidental removal) — only for a bottle
-  // consumed within the last 2 days. Matches the server-side restore window;
+  // consumed within the last 2 days (utils/restoreWindow, the server's rule);
   // past it the button is hidden and the endpoint refuses.
-  const RESTORE_WINDOW_MS = 2 * 24 * 60 * 60 * 1000;
-  // The window counts from when the consume was logged (a backdated bulk
-  // "mark as drunk" stays undoable); rows from before that field only have consumedAt.
-  const restoreAnchor = bottle?.consumedLoggedAt || bottle?.consumedAt;
-  const canRestore = canEditConsumed && restoreAnchor &&
-    (Date.now() - new Date(restoreAnchor).getTime()) <= RESTORE_WINDOW_MS;
+  const canRestore = canEditConsumed && withinRestoreWindow(bottle);
+  // "Add again": new bottles of this wine and vintage, copied from this one —
+  // the drunk bottle's page had no way to buy it again (Add more bottles is
+  // for bottles still in the cellar). Same gate as Add more bottles.
+  const canAddAgain = canEditConsumed && !!wine && !user?.isDemo;
 
   // Shared overflow-menu contents — same list used by the desktop header ⋮ and
   // the mobile bar ⋮, so these actions live in exactly one place and can never
@@ -693,6 +693,15 @@ function BottleDetail() {
           </button>
           <span className="bd-restore-hint">{t('bottleDetail.restoreHint', 'Removed by mistake? Put it back as active (within 2 days).')}</span>
           {restoreError && <span className="bd-restore-error">{restoreError}</span>}
+        </div>
+      )}
+      {canAddAgain && (
+        <div className="bd-restore-row">
+          <button type="button" className="bd-restore-btn" onClick={() => setAddMoreOpen(true)}>
+            <span aria-hidden="true">➕</span>
+            {t('bottleDetail.addAgain', 'Add again')}
+          </button>
+          <span className="bd-restore-hint">{t('bottleDetail.addAgainHint', 'Bought it again? Add new bottles of this wine and vintage to the cellar.')}</span>
         </div>
       )}
 

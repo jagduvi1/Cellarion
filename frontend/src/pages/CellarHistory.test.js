@@ -29,14 +29,29 @@ const page = (bottles, extra = {}) => ok({
 
 // Answers per request, by its query: the test sets `answer`.
 let answer;
+// POST /api/bottles/:id/restore ("Move back to cellar" on a card).
+let restoreAnswer;
 const api = vi.fn(async (url) => {
   if (url.startsWith('/api/cellars/c1/history?')) return answer(new URLSearchParams(url.split('?')[1]));
   if (url === '/api/cellars') return ok({ cellars: [CELLAR] });
+  if (/^\/api\/bottles\/[^/]+\/restore$/.test(url)) return restoreAnswer();
   return ok({});
 });
 
+// "Add again" opens the shared Add more bottles dialog with the card's bottle.
+vi.mock('../components/AddMoreBottlesModal', () => ({
+  default: ({ bottle, onAdded, onClose }) => (
+    <div data-testid="add-more">
+      {bottle._id}
+      <button type="button" onClick={() => onAdded(2)}>add-two</button>
+      <button type="button" onClick={onClose}>close-add</button>
+    </div>
+  ),
+}));
+
 beforeEach(() => {
   api.mockClear();
+  restoreAnswer = () => ok({ bottle: {} });
   auth = { apiFetch: api, user: { id: 'u1' } };
 });
 
@@ -209,4 +224,79 @@ test('a filter and a search that find nothing say so once', async () => {
   } finally {
     vi.unstubAllGlobals();
   }
+});
+
+// A drink logged by mistake could only be undone from the bottle's own page,
+// which nobody found from here: the card offers it too, within the same two
+// days, and "Add again" puts new bottles of it in the cellar (the wishlist
+// never does).
+const justNow = (b) => ({ ...b, consumedLoggedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(), vintage: '2016' });
+const cardOf = (name) => screen.getByText(name).closest('.history-bottle-card');
+
+test('a bottle taken out in the last two days moves back from its card; the list is read again and says so', async () => {
+  answer = () => page([justNow(bottle('b1', 'drank', 9)), bottle('b2', 'drank', 8)]);
+  renderPage();
+  await waitFor(() => expect(screen.getByText('Wine b1')).toBeInTheDocument());
+
+  // Only the recent one: b2 left in January.
+  expect(within(cardOf('Wine b2')).queryByRole('button', { name: /bottleDetail\.restore$/ })).toBeNull();
+  const reads = historyCalls().length;
+  fireEvent.click(within(cardOf('Wine b1')).getByRole('button', { name: /bottleDetail\.restore$/ }));
+
+  await waitFor(() => expect(historyCalls().length).toBe(reads + 1));
+  const restores = api.mock.calls.filter(([u]) => u === '/api/bottles/b1/restore');
+  expect(restores).toHaveLength(1);
+  expect(restores[0][1]).toMatchObject({ method: 'POST' });
+  expect(screen.getByRole('status')).toHaveTextContent('bottleNotice.restored');
+});
+
+test('a refused move back says why on the card, and the list stays as it is', async () => {
+  answer = () => page([justNow(bottle('b1', 'drank', 9))]);
+  restoreAnswer = () => ({
+    ok: false, status: 400,
+    json: async () => ({ error: 'This bottle was removed too long ago to move back. Add it again as a new bottle instead.' }),
+  });
+  renderPage();
+  await waitFor(() => expect(screen.getByText('Wine b1')).toBeInTheDocument());
+  const reads = historyCalls().length;
+
+  fireEvent.click(within(cardOf('Wine b1')).getByRole('button', { name: /bottleDetail\.restore$/ }));
+
+  expect(await within(cardOf('Wine b1')).findByRole('alert')).toHaveTextContent('removed too long ago');
+  expect(historyCalls().length).toBe(reads);
+  expect(screen.queryByText('bottleNotice.restored')).toBeNull();
+  // Free to try again.
+  expect(within(cardOf('Wine b1')).getByRole('button', { name: /bottleDetail\.restore$/ })).not.toBeDisabled();
+});
+
+test('a cellar the member may only view: no Move back and no Add again', async () => {
+  answer = () => page([justNow(bottle('b1', 'drank', 9))], { cellar: { ...CELLAR, userRole: 'viewer' } });
+  renderPage();
+  await waitFor(() => expect(screen.getByText('Wine b1')).toBeInTheDocument());
+
+  expect(within(cardOf('Wine b1')).queryByRole('button', { name: /bottleDetail\.restore$/ })).toBeNull();
+  expect(within(cardOf('Wine b1')).queryByRole('button', { name: 'bottleDetail.addAgain' })).toBeNull();
+  // The wishlist stays.
+  expect(within(cardOf('Wine b1')).getByText('history.addToWishlist')).toBeInTheDocument();
+});
+
+test('"Add again" opens Add more bottles with that bottle; once added, the line says so', async () => {
+  answer = () => page([bottle('b1', 'drank', 9), bottle('b2', 'gifted', 8)]);
+  renderPage();
+  await waitFor(() => expect(screen.getByText('Wine b2')).toBeInTheDocument());
+
+  fireEvent.click(within(cardOf('Wine b2')).getByRole('button', { name: 'bottleDetail.addAgain' }));
+  expect(await screen.findByTestId('add-more')).toHaveTextContent('b2');
+
+  fireEvent.click(screen.getByText('add-two'));
+  expect(screen.queryByTestId('add-more')).toBeNull();
+  expect(screen.getByRole('status')).toHaveTextContent('bottleNotice.added:2');
+});
+
+test('a demo visitor gets no "Add again" (adding bottles is not open to the demo)', async () => {
+  auth = { apiFetch: api, user: { id: 'u1', isDemo: true } };
+  answer = () => page([bottle('b1', 'drank', 9)]);
+  renderPage();
+  await waitFor(() => expect(screen.getByText('Wine b1')).toBeInTheDocument());
+  expect(screen.queryByRole('button', { name: 'bottleDetail.addAgain' })).toBeNull();
 });

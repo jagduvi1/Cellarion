@@ -1259,6 +1259,8 @@
     "restoring": "Moving back…",
     "restoreHint": "Removed by mistake? Put it back as active (within 2 days). It returns unplaced.",
     "restoreError": "Could not move it back — try again",
+    "addAgain": "Add again",
+    "addAgainHint": "Bought it again? Add new bottles of this wine and vintage to the cellar.",
     "mistakeLink": "Added by mistake?",
     "mistakeTitle": "Remove as a mistake?",
     "mistakeBody": "This will permanently remove the bottle as if it had never been added. It will not appear in your stats, history, or search. This cannot be undone.",
@@ -1853,6 +1855,8 @@
     "reservedSkipped_one": "{{count}} bottle is reserved (spoken for) and was left alone.",
     "reservedSkipped_other": "{{count}} bottles are reserved (spoken for) and were left alone.",
     "consumeReservedToo": "Take the reserved ones out too",
+    "consumeUndoFailed_one": "{{count}} bottle couldn’t be moved back.",
+    "consumeUndoFailed_other": "{{count}} bottles couldn’t be moved back.",
     "reserveTitle_one": "Reserve {{count}} bottle",
     "reserveTitle_other": "Reserve {{count}} bottles",
     "reserveIntro": "Mark them as spoken for — they are left out of drink suggestions until then.",
@@ -6028,5 +6032,10 @@
     "unavailable_other": "{{count}} bottles on this list are no longer available — deleted, or in a cellar no longer shared with you.",
     "clearUnavailable": "Remove them from the list",
     "adding": "Adding…"
+  },
+  "addToCellar": {
+    "action": "Add to cellar",
+    "pickTitle": "Add to which cellar?",
+    "loadError": "Could not load your cellars. Please try again."
   }
 }

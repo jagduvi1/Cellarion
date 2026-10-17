@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
+import { lazy } from '../utils/lazyWithReload';
 import { useParams, Link } from 'react-router-dom';
 import { useCameBack } from '../utils/useBackHere';
 import { validScope, keepKnownCellars } from '../utils/savedScope';
@@ -8,13 +9,19 @@ import RatingDisplay from '../components/RatingDisplay';
 import WineImage from '../components/WineImage';
 import BottleFilterModal from '../components/BottleFilterModal';
 import { addToWishlist } from '../api/wishlist';
+import { restoreBottle } from '../api/bottles';
 import { listCellars, getCellarHistory, getMultiCellarHistory } from '../api/cellars';
+import { withinRestoreWindow } from '../utils/restoreWindow';
+import { bottleNoticeName } from '../components/BottleUndoNotice';
 import CellarScopePicker from '../components/CellarScopePicker';
 import CellarNav from '../components/CellarNav';
 import CellarPageHeader from '../components/CellarPageHeader';
 import SearchInput from '../components/SearchInput';
 import './CellarDetail.css';
 import './CellarHistory.css';
+import '../components/BottleUndoNotice.css';
+
+const AddMoreBottlesModal = lazy(() => import('../components/AddMoreBottlesModal'));
 
 // Bottles per page. The first page is the newest bottles of every section; a
 // section's "Load more" continues after the last bottle it shows.
@@ -58,7 +65,7 @@ const readSavedHistoryView = (cellarId) => {
 function CellarHistory() {
   const { t } = useTranslation();
   const { id } = useParams();
-  const { apiFetch } = useAuth();
+  const { apiFetch, user } = useAuth();
   const [cellar, setCellar] = useState(null);
   // The pages loaded so far, and the server's totals for the whole history.
   const [bottles, setBottles] = useState([]);
@@ -86,6 +93,11 @@ function CellarHistory() {
   const [baseFacets, setBaseFacets] = useState(null);
   const [facetMeta, setFacetMeta] = useState(null);
   const [showFilterModal, setShowFilterModal] = useState(false);
+  // What a card's "Move back to cellar" or "Add again" just did, said in the
+  // floating line (the card may be far down a long history).
+  const [notice, setNotice] = useState(null);
+  // The bottle "Add again" copies (components/AddMoreBottlesModal).
+  const [addTemplate, setAddTemplate] = useState(null);
 
   // ── Cross-cellar scope: which cellars this history view spans (default: this one) ──
   const [allCellars, setAllCellars] = useState([]);
@@ -263,6 +275,16 @@ function CellarHistory() {
   };
   const busy = refreshing || loadingMore !== null;
 
+  // Owners and editors of a bottle's own cellar may move it back or add it
+  // again, as on the bottle page — the cross-cellar view spans several.
+  const roleIn = (cellarId) => (String(cellarId) === String(id) && cellar?.userRole)
+    || allCellars.find((c) => String(c._id) === String(cellarId))?.userRole;
+  const canEditIn = (cellarId) => ['owner', 'editor'].includes(roleIn(cellarId || id));
+  const handleRestored = (bottle) => {
+    setNotice(t('bottleNotice.restored', '“{{name}}” is back in the cellar.', { name: bottleNoticeName(bottle) || t('bottleNotice.thisBottle', 'The bottle') }));
+    fetchHistory();
+  };
+
   // Only replace the whole page when nothing has loaded yet; after a successful
   // load, transient fetch failures render as an inline banner instead.
   const hasLoadedContent = hasLoaded;
@@ -320,6 +342,19 @@ function CellarHistory() {
             className="btn btn-small btn-secondary"
             style={{ marginLeft: '0.75rem' }}
             onClick={() => setError(null)}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+      {notice && (
+        <div className="alert alert-success bottle-undo-notice bottle-undo-notice--floating" role="status">
+          <span className="bottle-undo-notice__text">{notice}</span>
+          <button
+            type="button"
+            className="btn btn-small btn-secondary bottle-undo-notice__close"
+            onClick={() => setNotice(null)}
+            aria-label={t('common.close', 'Close')}
           >
             ✕
           </button>
@@ -442,9 +477,20 @@ function CellarHistory() {
               </div>
               {items.length > 0 && (
                 <div className="history-bottles">
-                  {items.map(bottle => (
-                    <HistoryBottleCard key={bottle._id} bottle={bottle} cellarId={id} showCellarBadge={isMulti} />
-                  ))}
+                  {items.map(bottle => {
+                    const canEdit = canEditIn(bottle.cellar);
+                    return (
+                      <HistoryBottleCard
+                        key={bottle._id}
+                        bottle={bottle}
+                        cellarId={id}
+                        showCellarBadge={isMulti}
+                        canEdit={canEdit}
+                        onRestored={handleRestored}
+                        onAddAgain={canEdit && bottle.wineDefinition?._id && !user?.isDemo ? setAddTemplate : undefined}
+                      />
+                    );
+                  })}
                 </div>
               )}
               {hasMoreIn(key) && (
@@ -465,11 +511,27 @@ function CellarHistory() {
       })()}
 
       </>}
+
+      <Suspense fallback={null}>
+        {addTemplate && (
+          <AddMoreBottlesModal
+            bottle={addTemplate}
+            onClose={() => setAddTemplate(null)}
+            onAdded={(count) => {
+              const name = bottleNoticeName(addTemplate);
+              setAddTemplate(null);
+              setNotice(name
+                ? t('bottleNotice.added', { count, name })
+                : t('bottleNotice.addedUnnamed', { count }));
+            }}
+          />
+        )}
+      </Suspense>
     </div>
   );
 }
 
-function HistoryBottleCard({ bottle, cellarId, showCellarBadge = false }) {
+function HistoryBottleCard({ bottle, cellarId, showCellarBadge = false, canEdit = false, onRestored, onAddAgain }) {
   const { t } = useTranslation();
   const { apiFetch, user } = useAuth();
   const wine = bottle.wineDefinition;
@@ -483,6 +545,31 @@ function HistoryBottleCard({ bottle, cellarId, showCellarBadge = false }) {
 
   // One-tap add-to-wishlist: 'idle' → 'saving' → 'added' | 'error'.
   const [wishState, setWishState] = useState('idle');
+
+  // "Move back to cellar" — the bottle page's restore, here too: a drink
+  // logged by mistake was only undoable from the bottle's own page. Same
+  // two-day window (utils/restoreWindow) and the same refusal from the server.
+  const canRestore = canEdit && withinRestoreWindow(bottle);
+  const [restoreBusy, setRestoreBusy] = useState(false);
+  const [restoreError, setRestoreError] = useState(null);
+  const handleRestore = async () => {
+    if (restoreBusy) return;
+    setRestoreBusy(true);
+    setRestoreError(null);
+    try {
+      const res = await restoreBottle(apiFetch, bottle._id);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setRestoreError(data.error || t('bottleDetail.restoreError', 'Could not move it back — try again'));
+        return;
+      }
+      onRestored?.(bottle);
+    } catch {
+      setRestoreError(t('bottleDetail.restoreError', 'Could not move it back — try again'));
+    } finally {
+      setRestoreBusy(false);
+    }
+  };
 
   const handleAddToWishlist = async (e) => {
     // The button is a sibling of the stretched-link overlay (not nested), but
@@ -556,6 +643,21 @@ function HistoryBottleCard({ bottle, cellarId, showCellarBadge = false }) {
               {t('history.vintagePage', 'Vintage page')}
             </Link>
           )}
+          {/* "Add again": new bottles of this wine and vintage, copied from
+              this one, straight into the cellar — the visible way back used to
+              be the wishlist, which never adds a bottle. */}
+          {onAddAgain && (
+            <button
+              type="button"
+              className="history-card-btn"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onAddAgain(bottle); }}
+              title={t('bottleDetail.addAgainHint', 'Bought it again? Add new bottles of this wine and vintage to the cellar.')}
+              aria-label={t('bottleDetail.addAgain', 'Add again')}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span className="history-card-btn-label">{t('bottleDetail.addAgain', 'Add again')}</span>
+            </button>
+          )}
           {wine?._id && (
             <button
               type="button"
@@ -588,6 +690,19 @@ function HistoryBottleCard({ bottle, cellarId, showCellarBadge = false }) {
           <p className="history-note">"{bottle.consumedNote}"</p>
         )}
       </div>
+
+      {canRestore && (
+        <div className="history-restore-row">
+          <button type="button" className="history-card-btn" onClick={handleRestore} disabled={restoreBusy}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><polyline points="3 3 3 8 8 8"/>
+            </svg>
+            {restoreBusy ? t('bottleDetail.restoring', 'Moving back…') : t('bottleDetail.restore', 'Move back to cellar')}
+          </button>
+          <span className="history-restore-hint">{t('bottleDetail.restoreHint', 'Removed by mistake? Put it back as active (within 2 days).')}</span>
+          {restoreError && <span className="history-restore-error" role="alert">{restoreError}</span>}
+        </div>
+      )}
     </div>
   );
 }

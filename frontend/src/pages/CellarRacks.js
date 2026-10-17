@@ -24,7 +24,7 @@ import {
 } from '../utils/cabinetPresets';
 import { cabinetShelfCols, cabinetShelfAlternate, cabinetShelfSideways } from '../utils/rackLayouts';
 import { ConsumeModal } from '../components/ConsumeModal';
-import { bottleNoticeName } from '../components/BottleUndoNotice';
+import BottleUndoNotice, { bottleNoticeName } from '../components/BottleUndoNotice';
 import { isReserved, reservationSummary } from '../utils/reservation';
 import WineImage from '../components/WineImage';
 import ConfirmModal from '../components/ConfirmModal';
@@ -216,6 +216,11 @@ function CellarRacks() {
 
   // consumed bottle awaiting the "add to journal?" prompt, or null
   const [journalBottle, setJournalBottle] = useState(null);
+  // The bottle just taken out of a slot, said with Undo (components/
+  // BottleUndoNotice) — a member could not undo a drink from the racks page.
+  // It floats above the journal prompt, as on the cellar list. Undo brings the
+  // bottle back unplaced (its slot was freed); the racks are read again.
+  const [drunkNotice, setDrunkNotice] = useState(null);
 
   // NFC modal: { rackId } or null
   const [nfcModal, setNfcModal] = useState(null);
@@ -531,6 +536,7 @@ function CellarRacks() {
         })));
         setConsumeModal(null);
         setActionError(null);
+        setDrunkNotice({ kind: 'consumed', reason, bottleId, name: bottleNoticeName(bottle), at: Date.now() });
         if (reason === 'drank' && !journalPromptOptedOut()) {
           setJournalBottle(bottle);
         }
@@ -964,6 +970,16 @@ function CellarRacks() {
   return (
     <div className="cellar-racks-page">
       <ActionNotice message={actionError} onDismiss={() => setActionError(null)} />
+      {drunkNotice && (
+        <BottleUndoNotice
+          key={`${drunkNotice.bottleId}:${drunkNotice.at}`}
+          floating
+          notice={drunkNotice}
+          cellarId={id}
+          onUndone={fetchAll}
+          onDismiss={() => setDrunkNotice(null)}
+        />
+      )}
       <CellarPageHeader
         backTo={`/cellars/${id}`}
         backLabel={t('racks.backToCellar')}

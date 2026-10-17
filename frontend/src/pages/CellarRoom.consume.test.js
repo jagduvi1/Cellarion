@@ -98,6 +98,27 @@ test('confirming takes the bottle out: one request, the panel closes, the journa
   expect(screen.getByTestId('journal-prompt')).toHaveTextContent('b1');
 });
 
+test('after a take-out the floating notice offers Undo; Undo restores it and reads only the racks again (never the layout)', async () => {
+  setup();
+  renderRoom();
+  const dialog = await openDrinkDialog();
+  fireEvent.click(within(dialog).getByRole('button', { name: 'common.confirm' }));
+
+  const notice = (await screen.findByText('bottleNotice.drunk:{"name":"Château Margaux 2015"}')).closest('.bottle-undo-notice');
+  expect(notice).toHaveClass('bottle-undo-notice--floating');
+  expect(screen.getByTestId('journal-prompt')).toHaveTextContent('b1');
+  const reads = (u) => api.mock.calls.filter(([x]) => x === u).length;
+  const racksBefore = reads('/api/racks?cellar=c1');
+  const layoutBefore = reads('/api/cellar-layout?cellar=c1');
+
+  fireEvent.click(within(notice).getByRole('button', { name: 'common.undo' }));
+
+  expect(await screen.findByText('bottleNotice.restored:{"name":"Château Margaux 2015"}')).toBeInTheDocument();
+  expect(api.mock.calls.filter(([u]) => u === '/api/bottles/b1/restore')).toHaveLength(1);
+  await waitFor(() => expect(reads('/api/racks?cellar=c1')).toBe(racksBefore + 1));
+  expect(reads('/api/cellar-layout?cellar=c1')).toBe(layoutBefore);
+});
+
 test('a refused take-out keeps the dialog open and says why', async () => {
   setup();
   renderRoom();

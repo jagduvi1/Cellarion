@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 vi.mock('../api/bottles', () => ({
   bulkUpdateBottles: vi.fn(),
   bulkConsumeBottles: vi.fn(),
+  restoreBottle: vi.fn(),
 }));
 vi.mock('../api/wineLists', () => ({
   getWineLists: vi.fn(),
@@ -26,7 +27,7 @@ vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({ apiFetch, user: { preferences: { currency: 'SEK' } } }),
 }));
 
-const { bulkUpdateBottles, bulkConsumeBottles } = await import('../api/bottles');
+const { bulkUpdateBottles, bulkConsumeBottles, restoreBottle } = await import('../api/bottles');
 const { getWineLists, getWineList, addBottlesToWineList } = await import('../api/wineLists');
 const BulkPurchaseModal = (await import('./BulkPurchaseModal')).default;
 const BulkConsumeModal = (await import('./BulkConsumeModal')).default;
@@ -87,6 +88,69 @@ describe('BulkConsumeModal', () => {
     }));
     expect(await screen.findByText('bulk.doneInfo:{"count":3}')).toBeTruthy();
     expect(screen.queryByText('bulk.consumeReservedToo')).toBeNull();
+  });
+
+  // The cellar list's "Mark as drunk" and the pick list's "Mark picked as
+  // drunk" both end here: the whole batch can be put back, as one drink can.
+  test('Undo puts every bottle the batch took out back — the reserved ones taken out after too', async () => {
+    bulkConsumeBottles
+      .mockResolvedValueOnce(okResult({ done: 2, doneIds: ['b1', 'b2'], skipped: [{ id: 'b3', reason: 'reserved' }] }))
+      .mockResolvedValueOnce(okResult({ done: 1, doneIds: ['b3'], skipped: [] }));
+    restoreBottle.mockResolvedValue(okResult({ bottle: {} }));
+    const onDone = vi.fn();
+    render(<BulkConsumeModal bottleIds={['b1', 'b2', 'b3']} onClose={() => {}} onDone={onDone} />);
+
+    fireEvent.click(screen.getByText('bulk.consumeSubmit:{"count":3}'));
+    fireEvent.click(await screen.findByText('bulk.consumeReservedToo'));
+    expect(await screen.findByText('bulk.doneInfo:{"count":3}')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'common.undo' }));
+
+    expect(await screen.findByText('trash.restoredInfo:{"count":3}')).toBeTruthy();
+    expect(restoreBottle.mock.calls.map(([, id]) => id)).toEqual(['b1', 'b2', 'b3']);
+    expect(screen.getByText('trash.restoredTitle')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'common.undo' })).toBeNull();
+    fireEvent.click(screen.getByText('bulk.close'));
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  test('a bottle that cannot come back is counted with the reason, never reported as back', async () => {
+    bulkConsumeBottles.mockResolvedValueOnce(okResult({ done: 3, doneIds: ['b1', 'b2', 'b3'], skipped: [] }));
+    restoreBottle
+      .mockResolvedValueOnce(okResult({ bottle: {} }))
+      .mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({ error: 'Bottle is already active' }) })
+      .mockResolvedValueOnce(okResult({ bottle: {} }));
+    render(<BulkConsumeModal bottleIds={['b1', 'b2', 'b3']} onClose={() => {}} onDone={() => {}} />);
+
+    fireEvent.click(screen.getByText('bulk.consumeSubmit:{"count":3}'));
+    fireEvent.click(await screen.findByRole('button', { name: 'common.undo' }));
+
+    expect(await screen.findByText('trash.restoredInfo:{"count":2}')).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toBe('bulk.consumeUndoFailed:{"count":1} Bottle is already active');
+  });
+
+  test('a rate limit stops the run: the bottles not tried yet count as not back', async () => {
+    bulkConsumeBottles.mockResolvedValueOnce(okResult({ done: 3, doneIds: ['b1', 'b2', 'b3'], skipped: [] }));
+    restoreBottle
+      .mockResolvedValueOnce(okResult({ bottle: {} }))
+      .mockResolvedValueOnce({ ok: false, status: 429, json: async () => ({ error: 'Too many write requests' }) });
+    render(<BulkConsumeModal bottleIds={['b1', 'b2', 'b3']} onClose={() => {}} onDone={() => {}} />);
+
+    fireEvent.click(screen.getByText('bulk.consumeSubmit:{"count":3}'));
+    fireEvent.click(await screen.findByRole('button', { name: 'common.undo' }));
+
+    expect(await screen.findByText('trash.restoredInfo:{"count":1}')).toBeTruthy();
+    expect(restoreBottle).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('alert').textContent).toMatch(/^bulk\.consumeUndoFailed:\{"count":2\} errors\.rateLimited/);
+  });
+
+  test('nothing taken out, nothing to undo', async () => {
+    bulkConsumeBottles.mockResolvedValueOnce(okResult({ done: 0, doneIds: [], skipped: [{ id: 'b1', reason: 'not_active' }] }));
+    render(<BulkConsumeModal bottleIds={['b1']} onClose={() => {}} onDone={() => {}} />);
+
+    fireEvent.click(screen.getByText('bulk.consumeSubmit:{"count":1}'));
+    expect(await screen.findByText('bulk.doneInfo:{"count":0}')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'common.undo' })).toBeNull();
   });
 });
 
