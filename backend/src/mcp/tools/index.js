@@ -24,6 +24,7 @@ require('./bottleEdit');
 require('./bulk');
 require('./wineDrafts');
 require('./somm');
+require('./sommImages');
 require('./rack');
 require('./similar');
 require('./insights');
