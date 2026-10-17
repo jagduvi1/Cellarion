@@ -460,14 +460,11 @@ function statusMatch(statusFilter) {
 const splitList = (value) => String(value).split(',').map((v) => v.trim()).filter(Boolean);
 
 /**
- * The structural filters as one predicate over a search document. Values are
+ * The active structural filters, one test each over a search document, with
+ * the facets that test narrows: [{ facets: ['countryName', 'countryId'], test }, …].
+ * A field's own counts leave its own test out (searchBottles). Values are
  * validated like the index's filter builder did: an invalid value is ignored,
  * and a list with no valid value filters nothing.
- */
-/**
- * The active filters, one test each, with the facets that test narrows:
- * [{ facets: ['countryName', 'countryId'], test }, …]. A field's own counts
- * leave its own test out (searchBottles).
  */
 function filterTests({ type, countryId, regionId, appellation, grapeIds, vintage }) {
   const tests = [];
@@ -493,9 +490,9 @@ function filterTests({ type, countryId, regionId, appellation, grapeIds, vintage
  * value (filters match either) — under the spelling most bottles use; empty
  * values are not counted.
  */
-function countFacets(entries) {
+function countFacets(entries, names = FACETS) {
   const groups = {};
-  for (const name of FACETS) groups[name] = new Map();
+  for (const name of names) groups[name] = new Map();
   const add = (name, value, count) => {
     if (value === '' || value === undefined || value === null) return;
     const key = facetKey(value);
@@ -507,13 +504,13 @@ function countFacets(entries) {
     group.spellings.set(spelling, (group.spellings.get(spelling) || 0) + count);
   };
   for (const { facets, count } of entries) {
-    for (const name of FACETS) {
+    for (const name of names) {
       if (name === 'grapeIds') new Set(facets.grapeIds).forEach((id) => add(name, id, count));
       else add(name, facets[name], count);
     }
   }
   const out = {};
-  for (const name of FACETS) {
+  for (const name of names) {
     out[name] = {};
     for (const { total, spellings } of groups[name].values()) {
       let label = null;
@@ -639,6 +636,24 @@ async function loadScope(scope, statusFilter, { withText, version }) {
 
 const EMPTY_FACETS = () => countFacets([]);
 
+/**
+ * Counts keyed by the spelling the whole scope uses: a subset can favour
+ * another spelling of the same value ("Nv" where the cellar says "NV"), and
+ * the filter modal looks counts up by the listed (whole-scope) label.
+ */
+function underBaseLabels(dist, base) {
+  const out = {};
+  for (const name of Object.keys(dist)) {
+    const labels = new Map(Object.keys(base[name] || {}).map((label) => [facetKey(label), label]));
+    out[name] = {};
+    for (const [label, n] of Object.entries(dist[name])) {
+      const listed = labels.get(facetKey(label)) || label;
+      out[name][listed] = (out[name][listed] || 0) + n;
+    }
+  }
+  return out;
+}
+
 function emptyResult() {
   return {
     ids: [],
@@ -670,6 +685,9 @@ function emptyResult() {
  * @param {string} [opts.sort] name | createdAt | vintage | price | rating, '-' for descending
  * @param {number} [opts.limit=30]
  * @param {number} [opts.offset=0]
+ * @param {boolean} [opts.withFacets=true] count the facets; false skips them
+ *   (and the near-miss ranking a narrowed field's own counts need) for
+ *   callers that never read them (MCP search_bottles)
  * @param {boolean} [opts.withHits=false] also return `hits`: every hit in rank
  *   order as { id, wineDefinition, vintage, bottleSize } — enough to group and
  *   page the hits without loading them (routes/cellars loads only the page)
@@ -695,6 +713,7 @@ async function searchBottles(query, {
   limit = 30,
   offset = 0,
   withHits = false,
+  withFacets = true,
   version,
 } = {}) {
   const scope = scopeOf({ cellarId, cellarIds });
@@ -718,13 +737,15 @@ async function searchBottles(query, {
   // France sent France back to the whole cellar's count, as if Red were off).
   const hits = [];
   const ownEntries = tests.map(() => []);
+  // Without facets, a near-miss is never needed: one failure is enough.
+  const allowed = withFacets ? 1 : 0;
   for (const doc of docs) {
     let failed = -1;
     let failures = 0;
-    for (let i = 0; i < tests.length && failures < 2; i += 1) {
+    for (let i = 0; i < tests.length && failures <= allowed; i += 1) {
       if (!tests[i].test(doc.facets)) { failed = i; failures += 1; }
     }
-    if (failures > 1) continue;
+    if (failures > allowed) continue;
     const rank = rankOf(doc);
     if (!rank) continue;
     if (failures === 0) hits.push({ doc, rank: parsed ? rank : null });
@@ -737,18 +758,23 @@ async function searchBottles(query, {
 
   const start = Math.max(0, Number(offset) || 0);
   const count = Math.max(0, Number(limit) || 0);
-  const hitEntries = keyed.map((h) => ({ facets: h.doc.facets, count: 1 }));
-  const facetDistribution = countFacets(hitEntries);
-  tests.forEach(({ facets: names }, i) => {
-    // The hits pass this field's test too: they count with the rest.
-    const own = countFacets(hitEntries.concat(ownEntries[i]));
-    for (const name of names) facetDistribution[name] = own[name];
-  });
+  let facetDistribution = EMPTY_FACETS();
+  let baseFacetDistribution = EMPTY_FACETS();
+  if (withFacets) {
+    const hitEntries = keyed.map((h) => ({ facets: h.doc.facets, count: 1 }));
+    baseFacetDistribution = countFacets(docs.map((d) => ({ facets: d.facets, count: 1 })));
+    facetDistribution = countFacets(hitEntries);
+    tests.forEach(({ facets: names }, i) => {
+      // The hits pass this field's test too: they count with the rest.
+      Object.assign(facetDistribution, countFacets(hitEntries.concat(ownEntries[i]), names));
+    });
+    facetDistribution = underBaseLabels(facetDistribution, baseFacetDistribution);
+  }
   return {
     ids: keyed.slice(start, start + count).map((h) => h.doc.id),
     total: keyed.length,
     facetDistribution,
-    baseFacetDistribution: countFacets(docs.map((d) => ({ facets: d.facets, count: 1 }))),
+    baseFacetDistribution,
     facetMeta: facetMetaOf(wines),
     ...(withHits ? { hits: keyed.map((h) => h.doc.hit) } : {}),
   };
@@ -784,7 +810,7 @@ module.exports = {
   bottleFacets,
   // Exported for unit tests.
   _internal: {
-    fold, toWords, tokenize, editDistance, matchWord, parseQuery, rankDocument, buildSearchDoc, countFacets,
+    fold, toWords, tokenize, editDistance, matchWord, parseQuery, rankDocument, buildSearchDoc, countFacets, underBaseLabels,
     sortKey, parseSort, compareHits, typoBudget, FIELDS, DOCS_TTL_MS,
     MAX_QUERY_CHARS, MAX_WORD_CHARS, MAX_TYPO_WORD_CHARS,
     docBytes,

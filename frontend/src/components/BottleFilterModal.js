@@ -195,7 +195,9 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
   // so a second country can still be added — a selected field used to show
   // the whole cellar's counts instead, as if no other filter were on
   // (support report 2026-10-16).
-  const countsFor = (facetKey) => facets?.[facetKey] || {};
+  // No counts sent at all (a rack / storage filter the search cannot count):
+  // no numbers and nothing dimmed.
+  const countsFor = (facetKey) => (facets ? facets[facetKey] || {} : null);
 
   return (
     <Modal title={t('cellarDetail.filterModalTitle')} onClose={onClose} wide showClose>
@@ -208,7 +210,7 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
               {Object.entries(allFacets.type)
                 .sort(([, a], [, b]) => b - a)
                 .map(([typeName]) => {
-                  const count = counts[typeName] || 0;
+                  const count = counts ? counts[typeName] || 0 : null;
                   const selected = filters.type?.includes(typeName);
                   return (
                     <FilterPill
@@ -234,7 +236,7 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
                 .sort(([, a], [, b]) => b - a)
                 .map(([name]) => {
                   const id = facetMeta.countries[name];
-                  const count = counts[name] || 0;
+                  const count = counts ? counts[name] || 0 : null;
                   const selected = filters.country?.includes(id);
                   return id ? (
                     <FilterPill
@@ -260,7 +262,7 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
                 .sort(([, a], [, b]) => b - a)
                 .map(([name]) => {
                   const id = facetMeta.regions[name];
-                  const count = counts[name] || 0;
+                  const count = counts ? counts[name] || 0 : null;
                   const selected = filters.region?.includes(id);
                   return id ? (
                     <FilterPill
@@ -289,7 +291,7 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
               {entries
                 .sort(([, a], [, b]) => b - a)
                 .map(([name]) => {
-                  const count = counts[name] || 0;
+                  const count = counts ? counts[name] || 0 : null;
                   const selected = filters.appellation?.includes(name);
                   return (
                     <FilterPill
@@ -318,7 +320,7 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
                   return cb - ca;
                 })
                 .map(([name, grapeId]) => {
-                  const count = counts[grapeId] || 0;
+                  const count = counts ? counts[grapeId] || 0 : null;
                   const selected = filters.grapes?.includes(grapeId);
                   return (
                     <FilterPill
@@ -343,7 +345,7 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
               {Object.entries(allFacets.vintage)
                 .sort(([a], [b]) => b.localeCompare(a))
                 .map(([year]) => {
-                  const count = counts[year] || 0;
+                  const count = counts ? counts[year] || 0 : null;
                   const selected = filters.vintage?.includes(year);
                   return (
                     <FilterPill

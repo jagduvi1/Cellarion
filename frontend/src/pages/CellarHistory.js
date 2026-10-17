@@ -194,7 +194,7 @@ function CellarHistory() {
       for (const bottle of page) next[reasonOf(bottle)] = { cursor: cursorOf(bottle) };
       setSections(next);
       setHasLoaded(true);
-      if (data.facets) setFacets(data.facets);
+      setFacets(data.facets ?? null); // none sent: no counts, not stale ones
       if (data.baseFacets) setBaseFacets(data.baseFacets);
       if (data.facetMeta) setFacetMeta(data.facetMeta);
     } catch {

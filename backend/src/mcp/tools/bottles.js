@@ -113,6 +113,7 @@ registerTool({
         sort: query ? undefined : '-createdAt',
         limit,
         offset,
+        withFacets: false, // never read here
       });
       // Hydration re-asserts the SAME cellar scope the search ran on, so a
       // bottle moved out of scope in between is never shown. No OTHER filter

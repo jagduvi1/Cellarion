@@ -301,9 +301,14 @@ describe('results, pages and facets', () => {
     expect(both.facetDistribution.type).toEqual(franceOnly.facetDistribution.type);
     // Not the whole cellar's counts.
     expect(both.facetDistribution.countryName).not.toEqual(both.baseFacetDistribution.countryName);
-    // A field nobody narrowed still counts the hits.
-    const vintages = Object.values(both.facetDistribution.vintage).reduce((a, b) => a + b, 0);
-    expect(vintages).toBeLessThanOrEqual(both.total);
+    // A field nobody narrowed still counts the hits: each vintage's count is
+    // what adding that vintage to both filters would find.
+    const expected = {};
+    for (const label of Object.keys(both.baseFacetDistribution.vintage)) {
+      const n = (await search('', { type: 'red', countryId: String(FRANCE._id), vintage: label })).total;
+      if (n > 0) expected[label] = n;
+    }
+    expect(both.facetDistribution.vintage).toEqual(expected);
     // The chosen value's own count is the hits.
     expect(both.facetDistribution.countryName.France).toBe(both.total);
   });
@@ -318,6 +323,21 @@ describe('results, pages and facets', () => {
     expect(both.facetDistribution.countryName).toEqual(redText.facetDistribution.countryName);
     expect(both.facetDistribution.countryName).not.toEqual(redAll.facetDistribution.countryName);
     expect(Object.keys(both.facetDistribution.countryName).length).toBeGreaterThan(0);
+  });
+
+  test('counts are keyed by the spelling the whole scope lists (a subset may favour another)', () => {
+    const { underBaseLabels } = _internal;
+    expect(underBaseLabels({ vintage: { Nv: 2 }, appellation: { margaux: 1 } }, { vintage: { NV: 5 }, appellation: { Margaux: 3 } }))
+      .toEqual({ vintage: { NV: 2 }, appellation: { Margaux: 1 } });
+  });
+
+  test('withFacets: false counts nothing but finds the same bottles (MCP never reads them)', async () => {
+    const full = await search('chateau', { type: 'red', countryId: String(FRANCE._id) });
+    const bare = await search('chateau', { type: 'red', countryId: String(FRANCE._id), withFacets: false });
+    expect(bare.ids).toEqual(full.ids);
+    expect(bare.total).toBe(full.total);
+    expect(bare.facetDistribution.countryName).toEqual({});
+    expect(bare.baseFacetDistribution.type).toEqual({});
   });
 
   test('empty values are not counted; NV and Nv are one value under the common spelling', async () => {

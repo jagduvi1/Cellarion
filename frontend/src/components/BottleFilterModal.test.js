@@ -168,3 +168,16 @@ describe('BottleFilterModal — counts of a field with a choice made', () => {
     expect(pill('Red')).toHaveTextContent('Red32');
   });
 });
+
+// A rack / storage filter: the server sends no counts. No numbers then, and
+// nothing dimmed — never the previous request's counts.
+test('without counts (null) the pills show no numbers and none is dimmed', () => {
+  renderModal({ country: ['fr'] }, {
+    facets: null,
+    baseFacets: { countryName: { France: 92, Italy: 40 } },
+    facetMeta: { countries: { France: 'fr', Italy: 'it' } },
+  });
+  const italy = screen.getByRole('button', { name: /^Italy/ });
+  expect(italy).toHaveTextContent(/^Italy$/);
+  expect(italy).not.toHaveClass('filter-pill--dimmed');
+});

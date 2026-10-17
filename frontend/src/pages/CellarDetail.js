@@ -473,8 +473,10 @@ function CellarDetail() {
           // shape/flag mismatch (grouped items rendered as flat, or vice-versa).
           setBottles(data.bottles.items);
           setDataIsMulti(multi);
-          // Update facets on every fetch so cascading filters work
-          if (data.facets) setFacets(data.facets);
+          // Update facets on every fetch so cascading filters work. An
+          // answer with none (a rack / storage filter: the search cannot
+          // count it) clears them — never the previous request's numbers.
+          setFacets(data.facets ?? null);
           if (data.baseFacets) setBaseFacets(data.baseFacets);
           if (data.facetMeta) setFacetMeta(data.facetMeta);
         } else {
