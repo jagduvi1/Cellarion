@@ -1423,7 +1423,6 @@
       "disableSlot": "The slot could not be marked unusable.",
       "enableSlot": "The slot could not be made usable again.",
       "consume": "The bottle could not be taken out.",
-      "reload": "The racks could not be read again. Reload the page to see them as they are now.",
       "move": "The bottle could not be moved.",
       "pour": "The glass could not be recorded.",
       "open": "The bottle could not be opened.",

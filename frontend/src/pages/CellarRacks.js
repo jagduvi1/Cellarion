@@ -556,18 +556,8 @@ function CellarRacks() {
   // came from when that slot is still free — the server checks it is still
   // empty (expectOccupant: null), so a bottle placed there meanwhile is never
   // displaced; otherwise it stays unplaced, which the notice's "back in the
-  // cellar" covers. A failed re-read is said in the floating notice, never as
-  // the whole-page error.
-  const refreshRacks = async () => {
-    try {
-      const res = await getRacks(apiFetch, id);
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) setRacks(data.racks || []);
-      else failed(res, data, t('racks.errors.reload', 'The racks could not be read again. Reload the page to see them as they are now.'));
-    } catch (err) {
-      setActionError(friendlyError(err, t));
-    }
-  };
+  // cellar" covers, and the racks are read again quietly (reloadRacks — a
+  // failed re-read keeps what is shown, never the whole-page error).
   const handleUndone = async (notice) => {
     setJournalBottle((prev) => (prev && String(prev._id) === String(notice.bottleId) ? null : prev));
     const { slot } = notice;
@@ -584,7 +574,7 @@ function CellarRacks() {
         }
       } catch { /* it stays unplaced */ }
     }
-    await refreshRacks();
+    await reloadRacks();
   };
 
   // --- drag & drop: move a bottle to another slot / swap two bottles ---

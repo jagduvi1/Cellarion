@@ -199,17 +199,20 @@ test('a slot taken meanwhile is left alone: the bottle stays unplaced and the ra
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });
 
-test('a re-read that fails after an Undo is said in the floating notice — the page stays', async () => {
+test('a re-read that fails after an Undo is quiet — the page stays, never the whole-page error', async () => {
   setup();
   renderPage();
   const undo = await drinkAndUndo();
   putResponse = () => refused(409, { error: 'This slot has changed since — check the rack and try again.' });
   racksResponse = () => refused(503, { error: 'Service unavailable' });
+  const before = racksReads();
 
   undo();
 
-  expect(await screen.findByRole('alert')).toHaveTextContent('errors.serverUnavailable');
+  await waitFor(() => expect(racksReads()).toBe(before + 1));
+  await new Promise((r) => setTimeout(r, 20));
   // Still the racks page (its header, its notice), not the whole-page error.
+  expect(screen.queryByText('Service unavailable')).toBeNull();
   expect(screen.getByText('bottleNotice.restored:{"name":"Château Margaux 2015"}')).toBeInTheDocument();
   expect(screen.getAllByText('Home').length).toBeGreaterThan(0);
   expect(document.querySelector('.cellar-racks-page')).toBeInTheDocument();
