@@ -107,9 +107,6 @@ export default function PrintRackMap({ rack }) {
     <svg
       viewBox={`0 0 ${layout.viewBox.width} ${layout.viewBox.height}`}
       className="print-rack-map"
-      // At most 4 px per layout unit: a one-bottle-wide rack would otherwise
-      // fill the whole column with a single huge disc.
-      style={{ maxWidth: layout.viewBox.width * 4 }}
       role="img"
       aria-label={`${rack.name} map`}
     >

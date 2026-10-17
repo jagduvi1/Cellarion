@@ -72,9 +72,3 @@ test('a grid rack prints as before: one full-size circle per slot on the layout 
   expect(container.querySelectorAll('line')).toHaveLength(2);
 });
 
-test('a one-bottle-wide map is capped at 4 px per unit; a wider one still fills its column', () => {
-  const one = render(<PrintRackMap rack={rack({ type: 'shelf', rows: 1, cols: 1, typeConfig: { bottlesPerCell: 5 } })} />);
-  expect(one.container.querySelector('svg').style.maxWidth).toBe(`${computeLayout('shelf', 1, 1, {}).viewBox.width * 4}px`);
-  const wide = render(<PrintRackMap rack={rack({ type: 'grid', rows: 4, cols: 8 })} />);
-  expect(parseFloat(wide.container.querySelector('svg').style.maxWidth)).toBeGreaterThan(520);
-});
