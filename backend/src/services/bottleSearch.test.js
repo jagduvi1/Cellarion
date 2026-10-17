@@ -287,6 +287,39 @@ describe('results, pages and facets', () => {
     expect(res.baseFacetDistribution.grapeIds[MERLOT._id]).toBe(3);
   });
 
+  // Support report 2026-10-16: with Red chosen, picking France sent France
+  // back to the whole cellar's count. A narrowed field counts with every
+  // OTHER filter and the search text, never with none.
+  test('a narrowed field counts with every other filter, not its own and not none', async () => {
+    const both = await search('', { type: 'red', countryId: String(FRANCE._id) });
+    const redOnly = await search('', { type: 'red' });
+    const franceOnly = await search('', { countryId: String(FRANCE._id) });
+    // Countries: the red bottles per country (France's own filter left out).
+    expect(both.facetDistribution.countryName).toEqual(redOnly.facetDistribution.countryName);
+    expect(both.facetDistribution.countryId).toEqual(redOnly.facetDistribution.countryId);
+    // Types: the French bottles per type (the type filter left out).
+    expect(both.facetDistribution.type).toEqual(franceOnly.facetDistribution.type);
+    // Not the whole cellar's counts.
+    expect(both.facetDistribution.countryName).not.toEqual(both.baseFacetDistribution.countryName);
+    // A field nobody narrowed still counts the hits.
+    const vintages = Object.values(both.facetDistribution.vintage).reduce((a, b) => a + b, 0);
+    expect(vintages).toBeLessThanOrEqual(both.total);
+    // The chosen value's own count is the hits.
+    expect(both.facetDistribution.countryName.France).toBe(both.total);
+  });
+
+  test('the search text narrows the own counts of a field too', async () => {
+    // Italy has no red "chateau": the countries still say where the red
+    // chateaux are (the text counts), not every red bottle and not nothing.
+    const both = await search('chateau', { type: 'red', countryId: String(ITALY._id) });
+    expect(both.total).toBe(0);
+    const redText = await search('chateau', { type: 'red' });
+    const redAll = await search('', { type: 'red' });
+    expect(both.facetDistribution.countryName).toEqual(redText.facetDistribution.countryName);
+    expect(both.facetDistribution.countryName).not.toEqual(redAll.facetDistribution.countryName);
+    expect(Object.keys(both.facetDistribution.countryName).length).toBeGreaterThan(0);
+  });
+
   test('empty values are not counted; NV and Nv are one value under the common spelling', async () => {
     const { baseFacetDistribution: f } = await search('');
     expect(f.type).not.toHaveProperty('');

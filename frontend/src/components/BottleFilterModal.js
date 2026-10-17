@@ -163,7 +163,9 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
   const { t } = useTranslation();
 
   // baseFacets = all options in the cellar (unfiltered) — used to LIST available pills
-  // facets = filtered counts — used to show how many match the current filter combination
+  // facets = the counts: a field with no choice made counts under every filter;
+  // a field with choices counts under every OTHER filter (the server counts it
+  // without its own), so "France (32)" with Red chosen means 32 red bottles
   const allFacets = baseFacets || facets;
 
   const toggle = (key, value) => {
@@ -188,20 +190,19 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
     (filters.vintage?.length || 0) + (filters.minRating || filters.maxRating ? 1 : 0) + (maturitySelected.length ? 1 : 0) +
     (filters.unplaced ? 1 : 0) + (filters.reserved ? 1 : 0) + (filters.storage ? 1 : 0);
 
-  // For a given facet key, decide which counts to use:
-  // - If THIS category has active selections, use baseFacets (so you can still add more)
-  // - Otherwise use filtered facets (cascading from other categories)
-  const countsFor = (facetKey, filterKey) => {
-    const hasSelection = Array.isArray(filters[filterKey]) ? filters[filterKey].length > 0 : !!filters[filterKey];
-    return hasSelection ? (allFacets?.[facetKey] || {}) : (facets?.[facetKey] || {});
-  };
+  // A pill's count: how many bottles choosing it gives, with the other
+  // fields' choices kept. Every pill of the cellar stays listed (allFacets),
+  // so a second country can still be added — a selected field used to show
+  // the whole cellar's counts instead, as if no other filter were on
+  // (support report 2026-10-16).
+  const countsFor = (facetKey) => facets?.[facetKey] || {};
 
   return (
     <Modal title={t('cellarDetail.filterModalTitle')} onClose={onClose} wide showClose>
       <div className="bfm-content">
         {/* Wine Type */}
         {allFacets?.type && Object.keys(allFacets.type).length > 0 && (() => {
-          const counts = countsFor('type', 'type');
+          const counts = countsFor('type');
           return (
             <FilterSection label={t('cellarDetail.wineType')} icon="🍷">
               {Object.entries(allFacets.type)
@@ -226,7 +227,7 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
 
         {/* Country */}
         {allFacets?.countryName && facetMeta?.countries && Object.keys(allFacets.countryName).length > 0 && (() => {
-          const counts = countsFor('countryName', 'country');
+          const counts = countsFor('countryName');
           return (
             <FilterSection label={t('cellarDetail.countryLabel')} icon="🌍">
               {Object.entries(allFacets.countryName)
@@ -252,7 +253,7 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
 
         {/* Region */}
         {allFacets?.regionName && facetMeta?.regions && Object.keys(allFacets.regionName).length > 0 && (() => {
-          const counts = countsFor('regionName', 'region');
+          const counts = countsFor('regionName');
           return (
             <FilterSection label={t('cellarDetail.regionLabel')} icon="📍" defaultExpanded={false}>
               {Object.entries(allFacets.regionName)
@@ -282,7 +283,7 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
         {(() => {
           const entries = Object.entries(allFacets?.appellation || {}).filter(([name]) => name !== '');
           if (entries.length === 0) return null;
-          const counts = countsFor('appellation', 'appellation');
+          const counts = countsFor('appellation');
           return (
             <FilterSection label={t('cellarDetail.appellationLabel', 'Appellation')} icon="🏷️" defaultExpanded={false}>
               {entries
@@ -307,7 +308,7 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
 
         {/* Grapes */}
         {facetMeta?.grapes && Object.keys(facetMeta.grapes).length > 0 && (() => {
-          const counts = countsFor('grapeIds', 'grapes');
+          const counts = countsFor('grapeIds');
           return (
             <FilterSection label={t('cellarDetail.grapeLabel')} icon="🍇" defaultExpanded={false}>
               {Object.entries(facetMeta.grapes)
@@ -336,7 +337,7 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
 
         {/* Vintage */}
         {allFacets?.vintage && Object.keys(allFacets.vintage).length > 0 && (() => {
-          const counts = countsFor('vintage', 'vintage');
+          const counts = countsFor('vintage');
           return (
             <FilterSection label={t('cellarDetail.vintageLabel')} icon="📅">
               {Object.entries(allFacets.vintage)
