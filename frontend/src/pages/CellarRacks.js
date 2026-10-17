@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from 'rea
 import { lazy } from '../utils/lazyWithReload';
 import { useParams, Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { useBackHere } from '../utils/useBackHere';
+import { useBackToClose } from '../utils/useBackToClose';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getCellar } from '../api/cellars';
@@ -152,6 +153,18 @@ function CellarRacks() {
   // Move mode — "Move" in a filled slot's popup, then a tap on the slot the
   // bottle should go to: { rackId, position, bottle } or null (handleMoveTap).
   const [moving, setMoving] = useState(null);
+  const movingOn = !!moving;
+  // The phone's Back and Escape leave it, as they close a pop-up. Escape with
+  // a pop-up open over the page is that pop-up's.
+  useBackToClose(() => setMoving(null), movingOn);
+  useEffect(() => {
+    if (!movingOn) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape' && !document.querySelector('[role="dialog"]')) setMoving(null);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [movingOn]);
 
   // --- post-add placing mode (issue #1055) — HOOKS live up here, before the
   // page's early `if (error) return` (audit 2026-09-14 H: hooks declared after
@@ -211,6 +224,8 @@ function CellarRacks() {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   useEffect(() => {
+    // A move begun in another cellar must never reach this one's racks.
+    setMoving(null);
     fetchAll();
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -266,6 +281,20 @@ function CellarRacks() {
       setError('Network error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Re-read the racks after a move refused because a rack changed meanwhile,
+  // so the next try works on the real layout. Quietly: the notice already
+  // says why, and a failed re-read keeps what is shown (never the page error).
+  const reloadRacks = async () => {
+    try {
+      const res = await getRacks(apiFetch, id);
+      if (!res.ok) return;
+      const data = await res.json();
+      setRacks(data.racks || []);
+    } catch {
+      // keep what is shown
     }
   };
 
@@ -374,6 +403,7 @@ function CellarRacks() {
         const remaining = racks.filter(r => r._id !== rackId);
         setRacks(remaining);
         setActionError(null);
+        setMoving(m => (m?.rackId === rackId ? null : m));
         if (selectedRackId === rackId) {
           setSelectedRackId(remaining.length > 0 ? remaining[0]._id : null);
         }
@@ -525,11 +555,20 @@ function CellarRacks() {
         setRacks(prev => prev.map(r => r._id === rackId ? data.rack : r));
       } else {
         failed(res, data, t('racks.errors.move', 'The bottle could not be moved.'));
+        // The move mode's 409: the rack is not what the page shows.
+        if (expect && res.status === 409) await reloadRacks();
       }
     } catch (err) {
       setActionError(friendlyError(err, t));
     }
   });
+
+  // A drop (mouse/pen) of the bottle the move mode is moving — or onto its
+  // slot — has moved it already: the mode ends.
+  const handleDrop = (rackId, fromPosition, toPosition) => {
+    setMoving(m => (m?.rackId === rackId && (m.position === fromPosition || m.position === toPosition) ? null : m));
+    return handleSlotMove(rackId, fromPosition, toPosition);
+  };
 
   // "Just a glass — keep the bottle": escape hatch out of the remove flow.
   // Already-open bottles pour immediately; unopened ones ask for the
@@ -870,8 +909,11 @@ function CellarRacks() {
   // mouse/pen only — hooks/useSlotDrag). Within the bottle's own rack a tap
   // does what a drop does: an empty slot takes it, an occupied one swaps. In
   // another rack (its tab chosen while the mode stays on) an empty slot takes
-  // it and the server clears its old slot. The mode ends after one move or a
-  // tap on the bottle's own slot; a refused slot keeps it on.
+  // it and the server clears its old slot. The mode ends after one try at a
+  // move, done or refused by the server (a 409 re-reads the racks), and on a
+  // tap on the bottle's own slot, Cancel, Escape or Back. Only a slot refused
+  // here before any request (unusable, or occupied in another rack) keeps it
+  // on, for another pick.
   // Returns true when the tap was consumed by the move mode.
   const handleMoveTap = async (targetRack, pos, slotData) => {
     if (!moving || !canEdit) return false;
@@ -909,6 +951,7 @@ function CellarRacks() {
           }));
         } else {
           failed(res, data, t('racks.errors.move', 'The bottle could not be moved.'));
+          if (res.status === 409) await reloadRacks();
         }
       } catch (err) {
         setActionError(friendlyError(err, t));
@@ -1142,7 +1185,7 @@ function CellarRacks() {
                 highlightPos: highlightPos?.rackId === rack._id ? highlightPos.position : null,
                 onSlotClick: handleClick,
                 getSlotStyle,
-                onSlotMove: canEdit ? (from, to) => handleSlotMove(rack._id, from, to) : undefined,
+                onSlotMove: canEdit ? (from, to) => handleDrop(rack._id, from, to) : undefined,
               };
               if (viewMode === '3d') {
                 // 3D has no selected-slot ring (its "selected" note points at
@@ -1163,7 +1206,7 @@ function CellarRacks() {
               activePosition={(moving || activePopup)?.position}
               highlightPos={highlightPos?.rackId === rack._id ? highlightPos.position : null}
               getSlotStyle={getSlotStyle}
-              onSlotMove={canEdit ? (from, to) => handleSlotMove(rack._id, from, to) : undefined}
+              onSlotMove={canEdit ? (from, to) => handleDrop(rack._id, from, to) : undefined}
               onSlotClick={async (pos, slotData) => {
                 // Move mode consumes every tap while it is on.
                 if (moving && await handleMoveTap(rack, pos, slotData)) return;
