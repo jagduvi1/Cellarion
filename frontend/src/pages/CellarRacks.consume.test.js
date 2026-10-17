@@ -57,13 +57,20 @@ let api;
 let consumeResponse;
 let pourResponse;
 let openResponse;
+// GET /api/racks (first load, and any re-read) and PUT of slot 3 (an Undo
+// putting the bottle back).
+let racksResponse;
+let putResponse;
 const setup = (b = bottle()) => {
   consumeResponse = ok({ bottle: { _id: 'b1', status: 'drank' } });
   pourResponse = ok({ bottle: { _id: 'b1' } });
   openResponse = ok({ bottle: { _id: 'b1' } });
-  api = vi.fn(async (url) => {
+  racksResponse = () => ok({ racks: [rackWith(b)] });
+  putResponse = () => ok({ rack: rackWith(b) });
+  api = vi.fn(async (url, opts) => {
     if (url === '/api/cellars/c1') return ok({ cellar: { _id: 'c1', name: 'Home', userRole: 'owner' } });
-    if (url === '/api/racks?cellar=c1') return ok({ racks: [rackWith(b)] });
+    if (url === '/api/racks?cellar=c1') return racksResponse();
+    if (url === '/api/racks/r1/slots/3' && opts?.method === 'PUT') return putResponse();
     if (url === '/api/bottles/b1/consume') return consumeResponse;
     if (url === '/api/bottles/b1/pour') return pourResponse;
     if (url === '/api/bottles/b1/open') return openResponse;
@@ -141,25 +148,71 @@ test('confirming takes the bottle out: one consume request, the slot empties, th
 
 // A member drank a bottle from a slot by mistake and found no way back from
 // here: the take-out is now said with Undo, as on the cellar list.
-test('after a take-out the floating notice offers Undo, beside the journal prompt; Undo restores it and reads the racks again', async () => {
-  setup();
-  renderPage();
+const drinkAndUndo = async () => {
   const dialog = await openDrinkDialog();
   fireEvent.click(within(dialog).getByRole('button', { name: 'common.confirm' }));
+  const notice = (await screen.findByText('bottleNotice.drunk:{"name":"Château Margaux 2015"}')).closest('.bottle-undo-notice');
+  expect(screen.queryByText('slot-3')).not.toBeInTheDocument();
+  return () => fireEvent.click(within(notice).getByRole('button', { name: 'common.undo' }));
+};
+const racksReads = () => api.mock.calls.filter(([u]) => u === '/api/racks?cellar=c1').length;
+const slotPuts = () => api.mock.calls.filter(([u, o]) => u === '/api/racks/r1/slots/3' && o?.method === 'PUT');
 
-  const notice = await screen.findByText('bottleNotice.drunk:{"name":"Château Margaux 2015"}');
+test('after a take-out the floating notice offers Undo beside the journal prompt; Undo puts the bottle back in its slot and closes the prompt', async () => {
+  setup();
+  renderPage();
+  const undo = await drinkAndUndo();
   expect(screen.getByTestId('journal-prompt')).toHaveTextContent('b1');
-  const racksReads = () => api.mock.calls.filter(([u]) => u === '/api/racks?cellar=c1').length;
   const before = racksReads();
 
-  fireEvent.click(within(notice.closest('.bottle-undo-notice')).getByRole('button', { name: 'common.undo' }));
+  undo();
 
   expect(await screen.findByText('bottleNotice.restored:{"name":"Château Margaux 2015"}')).toBeInTheDocument();
   const restores = api.mock.calls.filter(([u]) => u === '/api/bottles/b1/restore');
   expect(restores).toHaveLength(1);
   expect(restores[0][1]).toMatchObject({ method: 'POST' });
-  await waitFor(() => expect(racksReads()).toBe(before + 1));
+  // Back where it came from — only if the slot is still empty (the server checks).
+  expect(await screen.findByText('slot-3')).toBeInTheDocument();
+  expect(slotPuts()).toHaveLength(1);
+  expect(JSON.parse(slotPuts()[0][1].body)).toEqual({ bottleId: 'b1', expectOccupant: null });
+  // It was not drunk after all: no journal prompt for it.
+  expect(screen.queryByTestId('journal-prompt')).not.toBeInTheDocument();
+  expect(racksReads()).toBe(before);
   expect(screen.queryByRole('button', { name: 'common.undo' })).not.toBeInTheDocument();
+});
+
+test('a slot taken meanwhile is left alone: the bottle stays unplaced and the racks are read again', async () => {
+  setup();
+  renderPage();
+  const undo = await drinkAndUndo();
+  putResponse = () => refused(409, { error: 'This slot has changed since — check the rack and try again.', code: 'slot_changed' });
+  const someoneElse = { ...bottle(), _id: 'b9', wineDefinition: { _id: 'w9', name: 'Other', type: 'white' } };
+  racksResponse = () => ok({ racks: [rackWith(someoneElse)] });
+  const before = racksReads();
+
+  undo();
+
+  expect(await screen.findByText('bottleNotice.restored:{"name":"Château Margaux 2015"}')).toBeInTheDocument();
+  await waitFor(() => expect(racksReads()).toBe(before + 1));
+  expect(slotPuts()).toHaveLength(1);
+  // No error for it: "back in the cellar" is the whole truth.
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
+
+test('a re-read that fails after an Undo is said in the floating notice — the page stays', async () => {
+  setup();
+  renderPage();
+  const undo = await drinkAndUndo();
+  putResponse = () => refused(409, { error: 'This slot has changed since — check the rack and try again.' });
+  racksResponse = () => refused(503, { error: 'Service unavailable' });
+
+  undo();
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('errors.serverUnavailable');
+  // Still the racks page (its header, its notice), not the whole-page error.
+  expect(screen.getByText('bottleNotice.restored:{"name":"Château Margaux 2015"}')).toBeInTheDocument();
+  expect(screen.getAllByText('Home').length).toBeGreaterThan(0);
+  expect(document.querySelector('.cellar-racks-page')).toBeInTheDocument();
 });
 
 test('a refused Undo says why and keeps the button', async () => {

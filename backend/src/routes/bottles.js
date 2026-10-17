@@ -1448,7 +1448,15 @@ router.post('/bulk-delete', async (req, res) => {
 //       order, one day for all. A bottle not on order is skipped as
 //       'not_on_order'. expectedArrival rides 'update' like the purchase
 //       details (it is dropped on a bottle that is not on order).
-// Editor+ on each bottle's cellar (the single PUT / consume rule).
+//   { action: 'restore', bottleIds }
+//       → services/bottleOps.restoreBottle per bottle: Undo of a bulk "mark
+//       as drunk" (the cellar list's and the pick list's), in ONE request —
+//       one restore call per bottle ate the member's write budget and could
+//       not undo a batch larger than the write limit. The single restore's
+//       rules: a bottle not taken out is skipped as 'not_consumed', one taken
+//       out more than two days ago as 'restore_window_expired'. Every refusal
+//       is per bottle; restore has no payload to reject.
+// Editor+ on each bottle's cellar (the single PUT / consume / restore rule).
 // A payload the shared validation rejects (a bad date, a note too long) is
 // the SAME error for every bottle, so it fails the whole request with that
 // message before anything is touched, rather than reporting N identical skips.
@@ -1457,14 +1465,14 @@ const BULK_UPDATE_FIELDS = ['price', 'currency', 'purchaseDate', 'purchaseLocati
 router.post('/bulk', async (req, res) => {
   try {
     const { action, bottleIds } = req.body || {};
-    if (!['update', 'consume', 'arrive'].includes(action)) {
-      return res.status(400).json({ error: 'action must be "update", "consume" or "arrive"' });
+    if (!['update', 'consume', 'arrive', 'restore'].includes(action)) {
+      return res.status(400).json({ error: 'action must be "update", "consume", "arrive" or "restore"' });
     }
     let fields = null;
     let consumeArgs = null;
     const arriveArgs = action === 'arrive' ? { arrivedAt: req.body.arrivedAt } : null;
-    if (action === 'arrive') {
-      // Nothing more to collect — markArrived validates the date.
+    if (action === 'arrive' || action === 'restore') {
+      // Nothing more to collect — markArrived validates the date; restore takes none.
     } else if (action === 'update') {
       const src = req.body.fields;
       if (!src || typeof src !== 'object' || Array.isArray(src)) {
@@ -1533,6 +1541,9 @@ router.post('/bulk', async (req, res) => {
       } else if (action === 'arrive') {
         if (bottle.status !== ORDERED_STATUS) { skipped.push({ id, reason: 'not_on_order' }); continue; }
         result = await markArrived(bottle, arriveArgs, req);
+      } else if (action === 'restore') {
+        if (!CONSUMED_STATUSES.includes(bottle.status)) { skipped.push({ id, reason: 'not_consumed' }); continue; }
+        result = await restoreBottle(bottle, req);
       } else {
         if (bottle.status !== 'active') { skipped.push({ id, reason: 'not_active' }); continue; }
         if (!includeReserved && isReserved(bottle)) { skipped.push({ id, reason: 'reserved' }); continue; }
@@ -1543,8 +1554,10 @@ router.post('/bulk', async (req, res) => {
         // A 400 about THIS bottle's own values (its peak outside the new
         // window) is a per-bottle skip, whatever its position in the list;
         // only a payload-wide error still fails the whole request up front
-        // (audit 2026-09-07: the outcome depended on list order).
-        const perBottle = result.error.status === 400 && /cannot be (after|before)/.test(result.error.message || '');
+        // (audit 2026-09-07: the outcome depended on list order). A restore
+        // refusal is always about the bottle (its two days are over).
+        const perBottle = action === 'restore'
+          || (result.error.status === 400 && /cannot be (after|before)/.test(result.error.message || ''));
         if (result.error.status === 400 && !touched && !perBottle) {
           return res.status(400).json({ error: result.error.message });
         }
@@ -1565,9 +1578,12 @@ router.post('/bulk', async (req, res) => {
       }
     }
 
-    // One summary row on top of the per-bottle update / consume / arrive rows.
+    // One summary row on top of the per-bottle update / consume / arrive /
+    // restore rows.
     if (firstCellar) {
-      const summaryAction = { update: 'bottle.bulk_update', consume: 'bottle.bulk_consume', arrive: 'bottle.bulk_arrive' }[action];
+      const summaryAction = {
+        update: 'bottle.bulk_update', consume: 'bottle.bulk_consume', arrive: 'bottle.bulk_arrive', restore: 'bottle.bulk_restore',
+      }[action];
       logAudit(req, summaryAction,
         { type: 'cellar', id: firstCellar._id, cellarId: firstCellar._id },
         {

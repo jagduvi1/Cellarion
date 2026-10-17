@@ -23,6 +23,8 @@ const ACTION_LABEL_KEYS = {
   'bottle.bulk_move':    'cellarAudit.actions.bottleBulkMove',
   'bottle.bulk_update':  'cellarAudit.actions.bottleBulkUpdate',
   'bottle.bulk_consume': 'cellarAudit.actions.bottleBulkConsume',
+  'bottle.restore':      'cellarAudit.actions.bottleRestore',
+  'bottle.bulk_restore': 'cellarAudit.actions.bottleBulkRestore',
   'bottle.arrive':       'cellarAudit.actions.bottleArrive',
   'bottle.arrive.undo':  'cellarAudit.actions.bottleArriveUndo',
   'bottle.bulk_arrive':  'cellarAudit.actions.bottleBulkArrive',
@@ -43,6 +45,8 @@ const ACTION_ICONS = {
   'bottle.bulk_move':    '📦',
   'bottle.bulk_update':  '✏️',
   'bottle.bulk_consume': '🍷',
+  'bottle.restore':      '↩️',
+  'bottle.bulk_restore': '↩️',
   'bottle.arrive':       '🚚',
   'bottle.arrive.undo':  '↩️',
   'bottle.bulk_arrive':  '🚚',
@@ -86,6 +90,9 @@ function formatDetail(action, detail, t) {
   }
   if (action === 'bottle.bulk_arrive') {
     return t('cellarAudit.bulkArriveDetail', { done: detail.done ?? 0, requested: detail.requested ?? 0 });
+  }
+  if (action === 'bottle.bulk_restore') {
+    return t('cellarAudit.bulkRestoreDetail', { done: detail.done ?? 0, requested: detail.requested ?? 0 });
   }
   if (action === 'bottle.bulk_update' || action === 'bottle.bulk_consume') {
     const what = action === 'bottle.bulk_update'

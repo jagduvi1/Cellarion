@@ -168,6 +168,16 @@ export const bulkConsumeBottles = (apiFetch, bottleIds, { reason, note, consumed
     body: JSON.stringify({ action: 'consume', bottleIds, reason, note, consumedAt, ...(includeReserved ? { includeReserved: true } : {}) }),
   });
 
+// Put MANY taken-out bottles back (action 'restore') — the Undo of a bulk
+// "mark as drunk", in one request. Per bottle: done, or skipped as
+// 'not_consumed' (already back), 'restore_window_expired', 'not_found'.
+export const bulkRestoreBottles = (apiFetch, bottleIds) =>
+  apiFetch('/api/bottles/bulk', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ action: 'restore', bottleIds }),
+  });
+
 export const updateConsumedRating = (apiFetch, id, data) =>
   apiFetch(`/api/bottles/${id}/consumed-rating`, {
     method: 'PUT',

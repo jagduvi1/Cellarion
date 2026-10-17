@@ -412,3 +412,101 @@ describe('POST /api/bottles/bulk — arrive (bottles on order)', () => {
     expect(body.error).toMatch(/arrivedAt/);
   });
 });
+
+// Undo of a bulk "mark as drunk" (the cellar list's and the pick list's) in
+// ONE request: one restore call per bottle ate the member's write budget and
+// could not undo a batch larger than the write limit. The real per-bottle
+// restore runs here (services/bottleOps.restoreBottle), with its two-day rule.
+describe('POST /api/bottles/bulk — restore (Undo of a bulk take-out)', () => {
+  const { restoreBottle } = require('../services/bottleOps');
+  const hoursAgo = (h) => new Date(Date.now() - h * 60 * 60 * 1000);
+  const consumed = (n, cellar, over = {}) => ({
+    _id: B(n), cellar, status: 'drank', consumedReason: 'drank',
+    consumedAt: hoursAgo(1), consumedLoggedAt: hoursAgo(1), save: jest.fn().mockResolvedValue(undefined), ...over,
+  });
+  beforeEach(() => {
+    restoreBottle.mockImplementation(jest.requireActual('../services/bottleOps').restoreBottle);
+  });
+
+  test('puts every bottle the batch took out back to active, in owned and editable cellars, with one summary row', async () => {
+    const rows = [consumed(1, OWNED), consumed(2, EDITABLE, { status: 'gifted', consumedReason: 'gifted' })];
+    Bottle.find.mockResolvedValue(rows);
+
+    const { status, body } = await postJson(app(), '/api/bottles/bulk', { action: 'restore', bottleIds: [B(1), B(2)] });
+
+    expect(status).toBe(200);
+    expect(body).toEqual({ done: 2, doneIds: [B(1), B(2)], skipped: [] });
+    for (const b of rows) {
+      expect(b.status).toBe('active');
+      expect(b.consumedAt).toBeUndefined();
+      expect(b.consumedReason).toBeUndefined();
+      expect(b.save).toHaveBeenCalledTimes(1);
+    }
+    // The per-bottle rows the single restore writes, and the bulk summary.
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'bottle.restore', expect.objectContaining({ id: B(1) }), { from: 'drank' });
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'bottle.restore', expect.objectContaining({ id: B(2) }), { from: 'gifted' });
+    expect(logAudit).toHaveBeenCalledWith(
+      expect.anything(), 'bottle.bulk_restore', expect.objectContaining({ type: 'cellar', id: OWNED }),
+      { requested: 2, done: 2, skipped: 0 },
+    );
+  });
+
+  test('refusals are per bottle, with the reason: not taken out, past the two days, not found', async () => {
+    const back = consumed(1, OWNED);
+    const active = { _id: B(2), cellar: OWNED, status: 'active', save: jest.fn() };
+    const old = consumed(3, OWNED, { consumedAt: hoursAgo(72), consumedLoggedAt: hoursAgo(72) });
+    Bottle.find.mockResolvedValue([back, active, old]);
+
+    const { status, body } = await postJson(app(), '/api/bottles/bulk', { action: 'restore', bottleIds: [B(3), B(1), B(2), B(4)] });
+
+    // The first bottle's refusal does not fail the request: it is about that bottle.
+    expect(status).toBe(200);
+    expect(body).toEqual({
+      done: 1,
+      doneIds: [B(1)],
+      skipped: [
+        { id: B(3), reason: 'restore_window_expired' },
+        { id: B(2), reason: 'not_consumed' },
+        { id: B(4), reason: 'not_found' },
+      ],
+    });
+    expect(old.status).toBe('drank');
+    expect(old.save).not.toHaveBeenCalled();
+    expect(active.save).not.toHaveBeenCalled();
+    expect(logAudit).toHaveBeenCalledWith(
+      expect.anything(), 'bottle.bulk_restore', expect.anything(), { requested: 4, done: 1, skipped: 3 },
+    );
+  });
+
+  test('a bottle logged today with a backdated date is still within its two days (the window counts from the log)', async () => {
+    const backdated = consumed(1, OWNED, { consumedAt: hoursAgo(24 * 9), consumedLoggedAt: hoursAgo(1) });
+    Bottle.find.mockResolvedValue([backdated]);
+    const { body } = await postJson(app(), '/api/bottles/bulk', { action: 'restore', bottleIds: [B(1)] });
+    expect(body).toEqual({ done: 1, doneIds: [B(1)], skipped: [] });
+  });
+
+  test('a viewer may not move bottles back: they read as not_found and nothing changes', async () => {
+    const theirs = consumed(1, VIEWONLY);
+    Bottle.find.mockResolvedValue([theirs]);
+
+    const { status, body } = await postJson(app(), '/api/bottles/bulk', { action: 'restore', bottleIds: [B(1)] });
+
+    expect(status).toBe(200);
+    expect(body).toEqual({ done: 0, doneIds: [], skipped: [{ id: B(1), reason: 'not_found' }] });
+    expect(theirs.status).toBe('drank');
+    expect(theirs.save).not.toHaveBeenCalled();
+    // No cellar was touched: no summary row either.
+    expect(logAudit).not.toHaveBeenCalled();
+  });
+
+  test('the id list rules of every bulk action apply (empty, malformed, over the cap)', async () => {
+    let res = await postJson(app(), '/api/bottles/bulk', { action: 'restore', bottleIds: [] });
+    expect(res.status).toBe(400);
+    res = await postJson(app(), '/api/bottles/bulk', { action: 'restore', bottleIds: ['nope'] });
+    expect(res.status).toBe(400);
+    res = await postJson(app(), '/api/bottles/bulk', { action: 'restore', bottleIds: Array.from({ length: 501 }, (_, i) => `64b0000000000000000${String(i).padStart(5, '0')}`) });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/At most 500/);
+    expect(restoreBottle).not.toHaveBeenCalled();
+  });
+});

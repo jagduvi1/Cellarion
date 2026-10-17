@@ -45,12 +45,16 @@ const rackWith = (b) => ({
 let api;
 let consumeResponse;
 let pourResponse;
+// PUT of slot 3: an Undo putting the bottle back where it came from.
+let putResponse;
 const setup = (b = bottle()) => {
   consumeResponse = ok({ bottle: { _id: 'b1', status: 'drank' } });
   pourResponse = ok({ bottle: { _id: 'b1' } });
-  api = vi.fn(async (url) => {
+  putResponse = () => ok({ rack: rackWith(b) });
+  api = vi.fn(async (url, opts) => {
     if (url === '/api/cellars/c1') return ok({ cellar: { _id: 'c1', name: 'Home', userRole: 'owner' } });
     if (url === '/api/racks?cellar=c1') return ok({ racks: [rackWith(b)] });
+    if (url === '/api/racks/r1/slots/3' && opts?.method === 'PUT') return putResponse();
     if (url === '/api/cellar-layout?cellar=c1') return ok({ layout: null });
     if (url === '/api/bottles/b1/consume') return consumeResponse;
     if (url === '/api/bottles/b1/pour') return pourResponse;
@@ -98,16 +102,20 @@ test('confirming takes the bottle out: one request, the panel closes, the journa
   expect(screen.getByTestId('journal-prompt')).toHaveTextContent('b1');
 });
 
-test('after a take-out the floating notice offers Undo; Undo restores it and reads only the racks again (never the layout)', async () => {
-  setup();
-  renderRoom();
+const reads = (u) => api.mock.calls.filter(([x]) => x === u).length;
+const slotPuts = () => api.mock.calls.filter(([u, o]) => u === '/api/racks/r1/slots/3' && o?.method === 'PUT');
+const drinkThenNotice = async () => {
   const dialog = await openDrinkDialog();
   fireEvent.click(within(dialog).getByRole('button', { name: 'common.confirm' }));
+  return (await screen.findByText('bottleNotice.drunk:{"name":"Château Margaux 2015"}')).closest('.bottle-undo-notice');
+};
 
-  const notice = (await screen.findByText('bottleNotice.drunk:{"name":"Château Margaux 2015"}')).closest('.bottle-undo-notice');
+test('after a take-out the floating notice offers Undo; Undo puts the bottle back in its slot and closes its journal prompt', async () => {
+  setup();
+  renderRoom();
+  const notice = await drinkThenNotice();
   expect(notice).toHaveClass('bottle-undo-notice--floating');
   expect(screen.getByTestId('journal-prompt')).toHaveTextContent('b1');
-  const reads = (u) => api.mock.calls.filter(([x]) => x === u).length;
   const racksBefore = reads('/api/racks?cellar=c1');
   const layoutBefore = reads('/api/cellar-layout?cellar=c1');
 
@@ -115,8 +123,28 @@ test('after a take-out the floating notice offers Undo; Undo restores it and rea
 
   expect(await screen.findByText('bottleNotice.restored:{"name":"Château Margaux 2015"}')).toBeInTheDocument();
   expect(api.mock.calls.filter(([u]) => u === '/api/bottles/b1/restore')).toHaveLength(1);
+  await waitFor(() => expect(slotPuts()).toHaveLength(1));
+  expect(JSON.parse(slotPuts()[0][1].body)).toEqual({ bottleId: 'b1', expectOccupant: null });
+  await waitFor(() => expect(screen.queryByTestId('journal-prompt')).not.toBeInTheDocument());
+  // Put back: nothing to read again — and never the layout (it may hold unsaved edits).
+  expect(reads('/api/racks?cellar=c1')).toBe(racksBefore);
+  expect(reads('/api/cellar-layout?cellar=c1')).toBe(layoutBefore);
+});
+
+test('a slot taken meanwhile: the bottle stays unplaced and only the racks are read again', async () => {
+  setup();
+  renderRoom();
+  const notice = await drinkThenNotice();
+  putResponse = () => refused(409, { error: 'This slot has changed since — check the rack and try again.' });
+  const racksBefore = reads('/api/racks?cellar=c1');
+  const layoutBefore = reads('/api/cellar-layout?cellar=c1');
+
+  fireEvent.click(within(notice).getByRole('button', { name: 'common.undo' }));
+
+  expect(await screen.findByText('bottleNotice.restored:{"name":"Château Margaux 2015"}')).toBeInTheDocument();
   await waitFor(() => expect(reads('/api/racks?cellar=c1')).toBe(racksBefore + 1));
   expect(reads('/api/cellar-layout?cellar=c1')).toBe(layoutBefore);
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });
 
 test('a refused take-out keeps the dialog open and says why', async () => {

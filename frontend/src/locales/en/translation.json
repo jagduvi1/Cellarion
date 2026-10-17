@@ -1423,6 +1423,7 @@
       "disableSlot": "The slot could not be marked unusable.",
       "enableSlot": "The slot could not be made usable again.",
       "consume": "The bottle could not be taken out.",
+      "reload": "The racks could not be read again. Reload the page to see them as they are now.",
       "move": "The bottle could not be moved.",
       "pour": "The glass could not be recorded.",
       "open": "The bottle could not be opened.",
@@ -1810,6 +1811,8 @@
       "bottleBulkMove": "Moved bottles in bulk",
       "bottleBulkUpdate": "Edited bottles in bulk",
       "bottleBulkConsume": "Bottles taken out in bulk",
+      "bottleRestore": "Bottle moved back to the cellar",
+      "bottleBulkRestore": "Bottles moved back in bulk",
       "cellarDelete": "Deleted cellar",
       "cellarShareAdd": "Shared cellar",
       "cellarShareUpdate": "Changed share role",
@@ -1824,7 +1827,8 @@
     "roleChanged": "Role changed: {{from}} → {{to}}",
     "bulkMoveDetail": "{{moved}} of {{requested}} bottles moved",
     "bulkDoneDetail": "{{done}} of {{requested}} bottles · {{what}}",
-    "bulkArriveDetail": "{{done}} of {{requested}} bottles arrived"
+    "bulkArriveDetail": "{{done}} of {{requested}} bottles arrived",
+    "bulkRestoreDetail": "{{done}} of {{requested}} bottles moved back"
   },
   "bulk": {
     "moveAction": "Move",

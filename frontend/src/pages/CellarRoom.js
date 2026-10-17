@@ -81,7 +81,7 @@ export default function CellarRoom() {
   const [consumeModal, setConsumeModal] = useState(null); // { bottleId, bottle }
   const [journalBottle, setJournalBottle] = useState(null); // consumed bottle awaiting journal prompt
   // The bottle just taken out, said with Undo — as on the racks page
-  // (components/BottleUndoNotice). Undo brings it back unplaced.
+  // (components/BottleUndoNotice), with its slot for handleUndone.
   const [drunkNotice, setDrunkNotice] = useState(null);
 
   // "just a glass" partial flow (see CellarRacks.handlePartial)
@@ -1031,7 +1031,10 @@ export default function CellarRoom() {
         })));
         setConsumeModal(null);
         setSelectedBottle(null);
-        setDrunkNotice({ kind: 'consumed', reason, bottleId: consumeModal.bottleId, name: bottleNoticeName(consumeModal.bottle), at: Date.now() });
+        setDrunkNotice({
+          kind: 'consumed', reason, bottleId: consumeModal.bottleId, slot: consumeModal.slot,
+          name: bottleNoticeName(consumeModal.bottle), at: Date.now(),
+        });
         if (reason === 'drank' && !journalPromptOptedOut()) {
           setJournalBottle(consumeModal.bottle);
         }
@@ -1044,8 +1047,11 @@ export default function CellarRoom() {
     }
   }, [consumeModal, apiFetch, failed, t]);
 
-  // After an Undo: only the racks are read again — the room layout may hold
-  // unsaved edits, and a restored bottle comes back unplaced anyway.
+  // After an Undo, as on the racks page (CellarRacks handleUndone): the
+  // journal prompt for that bottle closes, and the bottle goes back into its
+  // slot when that slot is still free (the server checks: expectOccupant
+  // null), else it stays unplaced. Only the racks are read again — the room
+  // layout may hold unsaved edits.
   const refreshRacks = useCallback(async () => {
     try {
       const res = await getRacks(apiFetch, id);
@@ -1053,6 +1059,24 @@ export default function CellarRoom() {
       if (res.ok) setRacks(data.racks || []);
     } catch { /* the room keeps what it shows */ }
   }, [apiFetch, id]);
+  const handleUndone = async (notice) => {
+    setJournalBottle((prev) => (prev && String(prev._id) === String(notice.bottleId) ? null : prev));
+    const { slot } = notice;
+    const rack = slot && racks.find((r) => r._id === slot.rackId);
+    const free = !!rack && !(rack.disabledPositions || []).includes(slot.position)
+      && !rack.slots.some((s) => s.position === slot.position && s.bottle);
+    if (free) {
+      try {
+        const res = await updateSlot(apiFetch, slot.rackId, slot.position, { bottleId: notice.bottleId, expectOccupant: null });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.rack) {
+          setRacks((prev) => prev.map((r) => (r._id === slot.rackId ? data.rack : r)));
+          return;
+        }
+      } catch { /* it stays unplaced */ }
+    }
+    await refreshRacks();
+  };
 
   // Backend search for slot picker
   const fetchSlotBottles = useCallback(async (term) => {
@@ -1098,7 +1122,7 @@ export default function CellarRoom() {
           floating
           notice={drunkNotice}
           cellarId={id}
-          onUndone={refreshRacks}
+          onUndone={() => handleUndone(drunkNotice)}
           onDismiss={() => setDrunkNotice(null)}
         />
       )}
@@ -1411,7 +1435,11 @@ export default function CellarRoom() {
                     <button
                       className="btn btn-consume btn-small"
                       onClick={() => {
-                        setConsumeModal({ bottleId: bottle._id, bottle });
+                        setConsumeModal({
+                          bottleId: bottle._id,
+                          bottle,
+                          slot: { rackId: selectedBottle.rackId, position: selectedBottle.slot.position },
+                        });
                       }}
                     >
                       {t('racks.remove', 'Drink')}

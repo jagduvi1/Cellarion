@@ -128,6 +128,22 @@ test('unticking "copy details" sends only wine, cellar, vintage, size and curren
   });
 });
 
+// "Add again" of a drunk bottle (history card, its own page) is a new
+// purchase: the old date, price, shop, notes and occasion stay behind unless
+// the member ticks the box.
+test('copyDetailsDefault={false} starts unticked and sends a blank copy; ticking it copies as usual', async () => {
+  createBottle.mockResolvedValue(ok());
+  const onAdded = vi.fn();
+  renderModal({ onAdded, copyDetailsDefault: false });
+
+  expect(screen.getByRole('checkbox')).not.toBeChecked();
+  fireEvent.click(submitBtn(1));
+  await waitFor(() => expect(onAdded).toHaveBeenCalledWith(1));
+  expect(createBottle).toHaveBeenCalledWith(apiFetch, {
+    cellar: 'c1', wineDefinition: 'w1', vintage: '2016', bottleSize: '750ml', currency: 'EUR',
+  });
+});
+
 test('a mid-batch failure reports created/total, locks the batch shape, and a retry adds only the remainder', async () => {
   createBottle
     .mockResolvedValueOnce(ok())

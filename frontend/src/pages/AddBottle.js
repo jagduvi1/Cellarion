@@ -420,7 +420,14 @@ function AddBottle() {
   // AddToCellarButton): ?wine=<id> — and the wishlist's ?vintage — arrive
   // already chosen, straight to the bottle's details. A wine that cannot be
   // read (gone, not visible) leaves the search as usual. Read from the address
-  // itself, as startMode is read from the history entry.
+  // itself, as startMode is read from the history entry. A late answer never
+  // replaces what the member did meanwhile: it lands only while nothing is
+  // chosen yet — step 1, no wine, no scan (camera open, scanning, or its
+  // result), no AI lookup, no hand-typed wine (read through a ref: the answer
+  // arrives after renders this effect did not see).
+  const nothingChosenRef = useRef(true);
+  nothingChosenRef.current = step === 1 && !selectedWine && !pendingNewWine && !scanResult
+    && !labelCam.open && !labelScanning && !aiSearching && !aiIdentified && !showManualForm;
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const wineId = params.get('wine');
@@ -433,7 +440,7 @@ function AddBottle() {
         const res = await getWine(apiFetch, wineId);
         if (cancelled || !res.ok) return;
         const data = await res.json();
-        if (!cancelled && data?.wine?._id) applyResolvedWine(data.wine, vintage);
+        if (!cancelled && data?.wine?._id && nothingChosenRef.current) applyResolvedWine(data.wine, vintage);
       } catch { /* the search is there as usual */ }
     })();
     return () => { cancelled = true; };

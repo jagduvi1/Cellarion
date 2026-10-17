@@ -40,9 +40,9 @@ const api = vi.fn(async (url) => {
 
 // "Add again" opens the shared Add more bottles dialog with the card's bottle.
 vi.mock('../components/AddMoreBottlesModal', () => ({
-  default: ({ bottle, onAdded, onClose }) => (
+  default: ({ bottle, onAdded, onClose, copyDetailsDefault }) => (
     <div data-testid="add-more">
-      {bottle._id}
+      {bottle._id}|copy:{String(copyDetailsDefault)}
       <button type="button" onClick={() => onAdded(2)}>add-two</button>
       <button type="button" onClick={onClose}>close-add</button>
     </div>
@@ -233,7 +233,7 @@ test('a filter and a search that find nothing say so once', async () => {
 const justNow = (b) => ({ ...b, consumedLoggedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(), vintage: '2016' });
 const cardOf = (name) => screen.getByText(name).closest('.history-bottle-card');
 
-test('a bottle taken out in the last two days moves back from its card; the list is read again and says so', async () => {
+test('a bottle taken out in the last two days moves back from its card: it leaves the list, the counts drop, and it says so', async () => {
   answer = () => page([justNow(bottle('b1', 'drank', 9)), bottle('b2', 'drank', 8)]);
   renderPage();
   await waitFor(() => expect(screen.getByText('Wine b1')).toBeInTheDocument());
@@ -243,11 +243,47 @@ test('a bottle taken out in the last two days moves back from its card; the list
   const reads = historyCalls().length;
   fireEvent.click(within(cardOf('Wine b1')).getByRole('button', { name: /bottleDetail\.restore$/ }));
 
-  await waitFor(() => expect(historyCalls().length).toBe(reads + 1));
+  await waitFor(() => expect(screen.queryByText('Wine b1')).toBeNull());
   const restores = api.mock.calls.filter(([u]) => u === '/api/bottles/b1/restore');
   expect(restores).toHaveLength(1);
   expect(restores[0][1]).toMatchObject({ method: 'POST' });
   expect(screen.getByRole('status')).toHaveTextContent('bottleNotice.restored');
+  // Updated where it stands, not read again from the first page.
+  expect(historyCalls().length).toBe(reads);
+  expect(screen.getByText('history.bottleCount:3')).toBeInTheDocument();
+  expect(within(section('history.reasonDrank')).getByRole('heading', { level: 2 })).toHaveTextContent('(2)');
+  expect(cardNames(section('history.reasonDrank'))).toEqual(['Wine b2']);
+});
+
+test('the pages "Load more" brought are kept when a bottle moves back', async () => {
+  answer = (q) => (q.get('reason') === 'drank'
+    ? page([bottle('b3', 'drank', 2)], { remaining: 0 })
+    : page([justNow(bottle('b1', 'drank', 9)), bottle('b2', 'drank', 8)]));
+  renderPage();
+  await waitFor(() => expect(screen.getByText('Wine b1')).toBeInTheDocument());
+  fireEvent.click(within(section('history.reasonDrank')).getByRole('button', { name: 'cellarDetail.loadMore' }));
+  await waitFor(() => expect(screen.getByText('Wine b3')).toBeInTheDocument());
+
+  fireEvent.click(within(cardOf('Wine b1')).getByRole('button', { name: /bottleDetail\.restore$/ }));
+
+  await waitFor(() => expect(screen.queryByText('Wine b1')).toBeNull());
+  expect(cardNames(section('history.reasonDrank'))).toEqual(['Wine b2', 'Wine b3']);
+});
+
+test('a rate-limited move back is worded with the wait, not the limiter\'s English', async () => {
+  answer = () => page([justNow(bottle('b1', 'drank', 9))]);
+  restoreAnswer = () => ({
+    ok: false, status: 429, headers: { get: (h) => (h === 'Retry-After' ? '300' : null) },
+    json: async () => ({ error: 'Too many write requests, please try again later.' }),
+  });
+  renderPage();
+  await waitFor(() => expect(screen.getByText('Wine b1')).toBeInTheDocument());
+
+  fireEvent.click(within(cardOf('Wine b1')).getByRole('button', { name: /bottleDetail\.restore$/ }));
+
+  const alert = await within(cardOf('Wine b1')).findByRole('alert');
+  expect(alert).toHaveTextContent('errors.rateLimitedFor');
+  expect(alert).not.toHaveTextContent('Too many write requests');
 });
 
 test('a refused move back says why on the card, and the list stays as it is', async () => {
@@ -286,7 +322,8 @@ test('"Add again" opens Add more bottles with that bottle; once added, the line 
   await waitFor(() => expect(screen.getByText('Wine b2')).toBeInTheDocument());
 
   fireEvent.click(within(cardOf('Wine b2')).getByRole('button', { name: 'bottleDetail.addAgain' }));
-  expect(await screen.findByTestId('add-more')).toHaveTextContent('b2');
+  // A new purchase: the old bottle's details are not copied unless asked for.
+  expect(await screen.findByTestId('add-more')).toHaveTextContent('b2|copy:false');
 
   fireEvent.click(screen.getByText('add-two'));
   expect(screen.queryByTestId('add-more')).toBeNull();

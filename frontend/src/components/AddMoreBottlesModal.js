@@ -25,14 +25,16 @@ const MAX_MORE = MAX_COPIES;
  *
  * Props: bottle (the populated bottle being viewed — must have a
  * wineDefinition), onClose(), onAdded(count) — fired only when the whole
- * batch succeeded.
+ * batch succeeded. copyDetailsDefault: whether "Copy this bottle's details"
+ * starts ticked — off for "Add again" of a bottle already drunk, a new
+ * purchase whose date, price, shop, notes and occasion are not the old one's.
  */
-function AddMoreBottlesModal({ bottle, onClose, onAdded }) {
+function AddMoreBottlesModal({ bottle, onClose, onAdded, copyDetailsDefault = true }) {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const countId = useId();
   const [count, setCount] = useState(1);
-  const [copyDetails, setCopyDetails] = useState(true);
+  const [copyDetails, setCopyDetails] = useState(copyDetailsDefault);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   // Bottles already created by earlier attempts of THIS batch — a retry after

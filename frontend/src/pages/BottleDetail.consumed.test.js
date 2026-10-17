@@ -33,9 +33,9 @@ vi.mock('../utils/collapsedBlocks', () => ({
 vi.mock('../utils/featureFlags', () => ({ useFeature: () => false }));
 vi.mock('../utils/currency', () => ({ fetchRates: async () => null }));
 vi.mock('../components/AddMoreBottlesModal', () => ({
-  default: ({ bottle, onAdded }) => (
+  default: ({ bottle, onAdded, copyDetailsDefault }) => (
     <div data-testid="add-more">
-      {bottle._id}:{bottle.status}
+      {bottle._id}:{bottle.status}|copy:{String(copyDetailsDefault)}
       <button type="button" onClick={() => onAdded(3)}>add-three</button>
     </div>
   ),
@@ -79,12 +79,25 @@ test('a bottle drunk a few hours ago offers both Move back and Add again; Add ag
   const reads = api.mock.calls.filter(([u]) => u === '/api/bottles/b1').length;
   fireEvent.click(screen.getByRole('button', { name: /bottleDetail\.addAgain$/ }));
 
-  expect(await screen.findByTestId('add-more')).toHaveTextContent('b1:drank');
+  // A new purchase: the old bottle's details are not copied unless asked for.
+  expect(await screen.findByTestId('add-more')).toHaveTextContent('b1:drank|copy:false');
   fireEvent.click(screen.getByText('add-three'));
 
   expect(await screen.findByText('bottleDetail.addMore.success:3')).toBeInTheDocument();
   expect(screen.queryByTestId('add-more')).toBeNull();
   await waitFor(() => expect(api.mock.calls.filter(([u]) => u === '/api/bottles/b1').length).toBe(reads + 1));
+});
+
+test('a bottle still in the cellar: "Add more bottles" keeps copying its details by default', async () => {
+  setup({ bottle: drunk({ status: 'active', consumedReason: undefined, consumedAt: undefined, consumedLoggedAt: undefined }) });
+  renderPage();
+
+  fireEvent.click((await screen.findAllByRole('button', { name: 'cellarDetail.moreActions' }))[0]);
+  // The header ⋮ and the phone bar's ⋮ share one open state: both menus show.
+  fireEvent.click(screen.getAllByRole('menuitem', { name: /bottleDetail\.addMore\.action/ })[0]);
+
+  expect(await screen.findByTestId('add-more')).toHaveTextContent('b1:active|copy:true');
+  expect(screen.queryByRole('button', { name: /bottleDetail\.addAgain$/ })).toBeNull();
 });
 
 test('past the two days only Add again is left', async () => {

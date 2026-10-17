@@ -12,6 +12,7 @@ import { addToWishlist } from '../api/wishlist';
 import { restoreBottle } from '../api/bottles';
 import { listCellars, getCellarHistory, getMultiCellarHistory } from '../api/cellars';
 import { withinRestoreWindow } from '../utils/restoreWindow';
+import { messageForResponse, friendlyError } from '../utils/friendlyError';
 import { bottleNoticeName } from '../components/BottleUndoNotice';
 import CellarScopePicker from '../components/CellarScopePicker';
 import CellarNav from '../components/CellarNav';
@@ -280,9 +281,15 @@ function CellarHistory() {
   const roleIn = (cellarId) => (String(cellarId) === String(id) && cellar?.userRole)
     || allCellars.find((c) => String(c._id) === String(cellarId))?.userRole;
   const canEditIn = (cellarId) => ['owner', 'editor'].includes(roleIn(cellarId || id));
+  // A bottle moved back leaves the list where it is — the pages "Load more"
+  // brought stay, and the totals drop by one — rather than the history
+  // starting over from its first page.
   const handleRestored = (bottle) => {
     setNotice(t('bottleNotice.restored', '“{{name}}” is back in the cellar.', { name: bottleNoticeName(bottle) || t('bottleNotice.thisBottle', 'The bottle') }));
-    fetchHistory();
+    const reason = reasonOf(bottle);
+    setBottles((prev) => prev.filter((b) => b._id !== bottle._id));
+    setTotal((n) => Math.max(0, n - 1));
+    setReasonCounts((prev) => (prev ? { ...prev, [reason]: Math.max(0, (prev[reason] || 0) - 1) } : prev));
   };
 
   // Only replace the whole page when nothing has loaded yet; after a successful
@@ -516,6 +523,7 @@ function CellarHistory() {
         {addTemplate && (
           <AddMoreBottlesModal
             bottle={addTemplate}
+            copyDetailsDefault={false}
             onClose={() => setAddTemplate(null)}
             onAdded={(count) => {
               const name = bottleNoticeName(addTemplate);
@@ -560,12 +568,14 @@ function HistoryBottleCard({ bottle, cellarId, showCellarBadge = false, canEdit 
       const res = await restoreBottle(apiFetch, bottle._id);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setRestoreError(data.error || t('bottleDetail.restoreError', 'Could not move it back — try again'));
+        // The server's reason ("removed too long ago…"), or for a rate limit
+        // or an outage words with the wait — utils/friendlyError.
+        setRestoreError(messageForResponse(res, data, t('bottleDetail.restoreError', 'Could not move it back — try again'), t));
         return;
       }
       onRestored?.(bottle);
-    } catch {
-      setRestoreError(t('bottleDetail.restoreError', 'Could not move it back — try again'));
+    } catch (err) {
+      setRestoreError(friendlyError(err, t));
     } finally {
       setRestoreBusy(false);
     }

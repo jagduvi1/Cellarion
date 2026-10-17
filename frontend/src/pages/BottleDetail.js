@@ -903,6 +903,8 @@ function BottleDetail() {
         {addMoreOpen && bottle && (
           <AddMoreBottlesModal
             bottle={bottle}
+            // "Add again" of a drunk bottle is a new purchase: its details start blank.
+            copyDetailsDefault={!isConsumed}
             onClose={() => setAddMoreOpen(false)}
             onAdded={handleAddedMore}
           />

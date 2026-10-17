@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { bulkConsumeBottles, restoreBottle } from '../api/bottles';
-import { messageForResponse } from '../utils/friendlyError';
+import { bulkConsumeBottles, bulkRestoreBottles } from '../api/bottles';
+import { messageForResponse, friendlyError } from '../utils/friendlyError';
 import Modal from './Modal';
+import BulkOutcome from './BulkOutcome';
 
 // LOCAL calendar date, YYYY-MM-DD — toISOString() would give the UTC day, which
 // is yesterday for anyone west of Greenwich in the evening (audit 2026-09-14).
@@ -24,9 +25,10 @@ const today = () => {
  * path that does it silently.
  *
  * The outcome screen also offers Undo, as a single drink does: every bottle
- * this batch took out goes back (POST /:id/restore each, the bottle page's
- * "Move back to cellar"), unplaced. A bottle that could not come back is
- * counted, with the reason — never reported as back.
+ * this batch took out goes back, unplaced, in ONE request (POST /bulk
+ * action 'restore' — the bottle page's "Move back to cellar" per bottle, with
+ * its two-day rule). A bottle that did not come back is counted, never
+ * reported as back, and Retry tries only those again.
  */
 export default function BulkConsumeModal({ bottleIds, onClose, onDone }) {
   const { t } = useTranslation();
@@ -40,7 +42,9 @@ export default function BulkConsumeModal({ bottleIds, onClose, onDone }) {
   const [error, setError] = useState('');
   const [result, setResult] = useState(null); // { done, doneIds, skipped, reserved: [ids] }
   const [undoBusy, setUndoBusy] = useState(false);
-  const [undone, setUndone] = useState(null); // { restored, failed, reason } after Undo
+  // After an Undo: how many are back, the ids that are not (offered again),
+  // and why the request itself failed, if it did.
+  const [undone, setUndone] = useState(null); // { restored, pending: [ids], reason }
 
   const send = (ids, includeReserved) => bulkConsumeBottles(apiFetch, ids, {
     reason,
@@ -83,70 +87,77 @@ export default function BulkConsumeModal({ bottleIds, onClose, onDone }) {
     }
   };
 
-  // One restore per bottle, one after another. A rate limit or a dropped
-  // connection stops the run: the bottles not yet tried count as not back.
+  // Undo, and Retry for the bottles a first Undo did not bring back.
+  // 'not_consumed' means it is back already (moved back from its own page
+  // meanwhile) — it counts as back, not as a failure.
   const undo = async () => {
-    if (undoBusy || moreBusy || !result?.doneIds.length) return;
+    const ids = undone ? undone.pending : result?.doneIds;
+    if (undoBusy || moreBusy || !ids?.length) return;
     setUndoBusy(true);
-    setError('');
-    let restored = 0;
+    let restored = undone?.restored || 0;
+    let pending = ids;
     let reason = '';
     try {
-      for (const id of result.doneIds) {
-        const res = await restoreBottle(apiFetch, id);
-        if (res.ok) { restored += 1; continue; }
-        const body = await res.json().catch(() => ({}));
-        if (!reason) reason = messageForResponse(res, body, t('bottleDetail.restoreError'), t);
-        if (res.status === 429) break;
+      const res = await bulkRestoreBottles(apiFetch, ids);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        reason = messageForResponse(res, data, t('bottleDetail.restoreError'), t);
+      } else {
+        const skipped = data.skipped || [];
+        const alreadyBack = skipped.filter((s) => s.reason === 'not_consumed').length;
+        restored += (data.doneIds || []).length + alreadyBack;
+        pending = skipped.filter((s) => s.reason !== 'not_consumed').map((s) => s.id);
       }
-    } catch {
-      if (!reason) reason = t('common.networkError');
+    } catch (err) {
+      reason = friendlyError(err, t);
     }
-    setUndone({ restored, failed: result.doneIds.length - restored, reason });
+    setUndone({ restored, pending, reason });
     setUndoBusy(false);
   };
-  const close = () => { if (!undoBusy) onDone(); };
 
   if (result) {
+    const pending = undone ? undone.pending : result.doneIds;
+    const undoButton = pending.length > 0 ? (
+      <button type="button" className="btn btn-secondary" onClick={undo} disabled={undoBusy || moreBusy}>
+        {undoBusy ? t('trash.restoring') : undone ? t('common.retry', 'Retry') : t('common.undo')}
+      </button>
+    ) : null;
+    if (undone) {
+      // Titled by what came back: nothing back yet keeps the take-out's title.
+      const someBack = undone.restored > 0;
+      return (
+        <BulkOutcome
+          title={someBack ? t('trash.restoredTitle') : t('bulk.consumeDoneTitle')}
+          done={someBack ? undone.restored : result.done}
+          doneKey={someBack ? 'trash.restoredInfo' : 'bulk.doneInfo'}
+          skipped={undone.pending.length}
+          skippedKey="bulk.consumeUndoFailed"
+          extra={undone.reason ? <p className="error-message" role="alert">{undone.reason}</p> : null}
+          actions={undoButton}
+          busy={undoBusy}
+          onClose={onDone}
+        />
+      );
+    }
+    const extra = result.reserved.length > 0 ? (
+      <div className="bulk-reserved-note">
+        <p role="status">{t('bulk.reservedSkipped', { count: result.reserved.length })}</p>
+        <button type="button" className="btn btn-secondary btn-small" onClick={consumeReservedToo} disabled={moreBusy || undoBusy}>
+          {moreBusy ? t('common.saving') : t('bulk.consumeReservedToo')}
+        </button>
+        {error && <p className="error-message" role="alert">{error}</p>}
+      </div>
+    ) : null;
     return (
-      <Modal title={undone ? t('trash.restoredTitle') : t('bulk.consumeDoneTitle')} onClose={close} showClose trapFocus>
-        {undone ? (
-          <>
-            <p className="move-bottle-success" role="status">{t('trash.restoredInfo', { count: undone.restored })}</p>
-            {undone.failed > 0 && (
-              <p className="move-bottle-skipped" role="alert">
-                {t('bulk.consumeUndoFailed', { count: undone.failed })}{undone.reason ? ` ${undone.reason}` : ''}
-              </p>
-            )}
-          </>
-        ) : (
-          <>
-            {result.reserved.length > 0 && (
-              <div className="bulk-reserved-note">
-                <p role="status">{t('bulk.reservedSkipped', { count: result.reserved.length })}</p>
-                <button type="button" className="btn btn-secondary btn-small" onClick={consumeReservedToo} disabled={moreBusy || undoBusy}>
-                  {moreBusy ? t('common.saving') : t('bulk.consumeReservedToo')}
-                </button>
-                {error && <p className="error-message" role="alert">{error}</p>}
-              </div>
-            )}
-            <p className="move-bottle-success">{t('bulk.doneInfo', { count: result.done })}</p>
-            {result.skipped > 0 && (
-              <p className="move-bottle-skipped" role="status">{t('bulk.skippedInfo', { count: result.skipped })}</p>
-            )}
-          </>
-        )}
-        <div className="modal-actions">
-          {!undone && result.doneIds.length > 0 && (
-            <button type="button" className="btn btn-secondary" onClick={undo} disabled={undoBusy || moreBusy}>
-              {undoBusy ? t('trash.restoring') : t('common.undo')}
-            </button>
-          )}
-          <button type="button" className="btn btn-primary" onClick={close} disabled={undoBusy}>
-            {t('bulk.close')}
-          </button>
-        </div>
-      </Modal>
+      <BulkOutcome
+        title={t('bulk.consumeDoneTitle')}
+        done={result.done}
+        skipped={result.skipped}
+        extra={extra}
+        actions={undoButton}
+        busy={undoBusy}
+        onClose={onDone}
+      />
     );
   }
 
