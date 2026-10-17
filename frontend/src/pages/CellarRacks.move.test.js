@@ -15,7 +15,10 @@ vi.mock('react-i18next', () => {
 });
 vi.mock('../components/CellarNav', () => ({ default: () => null }));
 vi.mock('../components/WineImage', () => ({ default: () => null }));
-vi.mock('../utils/featureFlags', () => ({ useFeature: () => false }));
+// The slot Move is early access (flag rackSlotMove); on in these tests unless one turns it off.
+let slotMoveOn = true;
+vi.mock('../utils/featureFlags', () => ({ useFeature: (key) => key === 'rackSlotMove' && slotMoveOn }));
+vi.mock('../components/BetaBadge', () => ({ default: ({ feature }) => <div data-testid="beta-badge">{feature}</div> }));
 // The drawn rack is beside the point here: one button per position (empty
 // ones too), wired to the page's own slot handler, marked when active; plus
 // a stand-in for a drop of slot 3 on slot 4.
@@ -246,4 +249,26 @@ test('a viewer gets no Move', async () => {
 
   expect(screen.getByRole('dialog')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'racks.moveMode.button' })).not.toBeInTheDocument();
+});
+
+// Early access (flag rackSlotMove, Johan 2026-10-17): only members who see
+// the feature get the button; the move bar carries the beta strip.
+describe('early access', () => {
+  afterEach(() => { slotMoveOn = true; });
+
+  test('without it there is no Move; with it the move bar carries the beta strip', async () => {
+    slotMoveOn = false;
+    setup();
+    const { unmount } = renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'slot-3:b1' }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'racks.moveMode.button' })).not.toBeInTheDocument();
+    unmount();
+
+    slotMoveOn = true;
+    setup();
+    renderPage();
+    await startMove();
+    expect(screen.getByTestId('beta-badge')).toHaveTextContent('rackSlotMove');
+  });
 });

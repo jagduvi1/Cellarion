@@ -73,6 +73,16 @@ const FEATURES = Object.freeze([
     defaultState: 'beta',
     since: '2026-10-13',
   }),
+  // "Move" in a rack slot's pop-up, then a tap on the slot it goes to — the
+  // way to move a bottle on a phone, where dragging is off. It uses the
+  // same move and place requests as the drag; the flag only decides who sees
+  // the button.
+  Object.freeze({
+    key: 'rackSlotMove',
+    title: 'Move a bottle by tapping (phones)',
+    defaultState: 'beta',
+    since: '2026-10-17',
+  }),
 ]);
 
 const FEATURE_KEYS = Object.freeze(FEATURES.map((f) => f.key));

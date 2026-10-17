@@ -191,6 +191,8 @@ function CellarRacks() {
   // after the move can change which rack the page has selected (a ?highlight
   // follows its bottle into the target).
   const moveRackOn = useFeature('rackMoveBottles');
+  // Early access: "Move" in a slot's pop-up, then a tap on the slot it goes to.
+  const slotMoveOn = useFeature('rackSlotMove');
   const [moveOpen, setMoveOpen] = useState(null);
 
   // Zone editor modal
@@ -971,6 +973,7 @@ function CellarRacks() {
               {t('common.cancel')}
             </button>
           </span>
+          <BetaBadge feature="rackSlotMove" note={t('racks.moveMode.betaNote', 'Moving a bottle by tapping is in early access.')} />
         </div>
       )}
 
@@ -1079,7 +1082,9 @@ function CellarRacks() {
               </div>
               {canEdit && (
                 <p className="rack-drag-hint">
-                  {t('rackLens.dragHint', 'Tip: drag a bottle to an empty slot to move it, onto another bottle to swap them — or tap the bottle and choose Move.')}
+                  {slotMoveOn
+                    ? t('rackLens.dragHintMove', 'Tip: drag a bottle to an empty slot to move it, onto another bottle to swap them — or tap the bottle and choose Move.')
+                    : t('rackLens.dragHint', 'Tip: drag a bottle to an empty slot to move it, onto another bottle to swap them.')}
                 </p>
               )}
             </>
@@ -1221,11 +1226,11 @@ function CellarRacks() {
                   canEdit={canEdit}
                   onPour={() => handlePour(activePopup.rackId, (activePopup.slot.bottle?._id || activePopup.slot.bottle).toString())}
                   onRemoveFromRack={() => handleRemoveFromRack(activePopup.rackId, activePopup.position)}
-                  onMove={() => {
+                  onMove={slotMoveOn ? () => {
                     setMoving({ rackId: activePopup.rackId, position: activePopup.position, bottle: activePopup.slot.bottle });
                     setActivePopup(null);
                     setActionError(null);
-                  }}
+                  } : undefined}
                   onConsume={() => {
                     setConsumeModal({ bottleId: activePopup.slot.bottle._id, bottle: activePopup.slot.bottle });
                     setActivePopup(null);

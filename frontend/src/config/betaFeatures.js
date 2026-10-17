@@ -31,6 +31,12 @@ export function betaFeatureText(t, key) {
         description: t('earlyAccess.features.pickLists.description', 'Make a list of the bottles you are about to fetch — for a dinner, a tasting, or what to drink next — and see the cellar, rack and slot of each, in the order you walk past them. Tick bottles off as you pick them, print the list, and mark the picked ones as drunk in one go.'),
         where: t('earlyAccess.features.pickLists.where', 'In your cellar, tap Select, pick bottles and choose Pick list, or use ⋮ → Add to pick list on a bottle\'s page. Your lists are under Pick lists in the menu.'),
       };
+    case 'rackSlotMove':
+      return {
+        name: t('earlyAccess.features.rackSlotMove.name', 'Move a bottle by tapping'),
+        description: t('earlyAccess.features.rackSlotMove.description', 'Move a bottle to another slot without dragging — made for phones, where dragging does not work. Tap the bottle, choose Move, then tap the slot it should go to. On a bottle in the same rack the two swap places.'),
+        where: t('earlyAccess.features.rackSlotMove.where', 'On the Racks page: tap a bottle, then Move.'),
+      };
     default:
       return { name: key, description: '', where: '' };
   }

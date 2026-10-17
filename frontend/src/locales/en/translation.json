@@ -1624,7 +1624,8 @@
       "button": "Move",
       "hint": "Tap the slot to move {{name}} to",
       "otherRackHint": "for another rack, open its tab first",
-      "otherRackFilled": "In another rack, choose an empty slot — bottles only swap places within one rack."
+      "otherRackFilled": "In another rack, choose an empty slot — bottles only swap places within one rack.",
+      "betaNote": "Moving a bottle by tapping is in early access."
     }
   },
   "nfc": {
@@ -4025,7 +4026,7 @@
     "undoError": "A move failed while undoing — the rack may have changed. Close and check the rack."
   },
   "rackLens": {
-    "dragHint": "Tip: drag a bottle to an empty slot to move it, onto another bottle to swap them — or tap the bottle and choose Move.",
+    "dragHint": "Tip: drag a bottle to an empty slot to move it, onto another bottle to swap them.",
     "searchPlaceholder": "Find in racks…",
     "colorBy": "Color by",
     "lensType": "Wine type",
@@ -4042,7 +4043,8 @@
     "ratingGood": "Good",
     "ratingAverage": "Average",
     "ratingLow": "Low",
-    "ratingNone": "Not rated"
+    "ratingNone": "Not rated",
+    "dragHintMove": "Tip: drag a bottle to an empty slot to move it, onto another bottle to swap them — or tap the bottle and choose Move."
   },
   "cellarCred": {
     "newcomer": "Newcomer",
@@ -5876,6 +5878,11 @@
         "name": "Pick lists",
         "description": "Make a list of the bottles you are about to fetch — for a dinner, a tasting, or what to drink next — and see the cellar, rack and slot of each, in the order you walk past them. Tick bottles off as you pick them, print the list, and mark the picked ones as drunk in one go.",
         "where": "In your cellar, tap Select, pick bottles and choose Pick list, or use ⋮ → Add to pick list on a bottle's page. Your lists are under Pick lists in the menu."
+      },
+      "rackSlotMove": {
+        "name": "Move a bottle by tapping",
+        "description": "Move a bottle to another slot without dragging — made for phones, where dragging does not work. Tap the bottle, choose Move, then tap the slot it should go to. On a bottle in the same rack the two swap places.",
+        "where": "On the Racks page: tap a bottle, then Move."
       }
     }
   },
