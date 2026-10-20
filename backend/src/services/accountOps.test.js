@@ -90,6 +90,7 @@ describe('buildPreferencesUpdate', () => {
         evil: { hacked: true },              // ignored: not a known category
         communityFollow: { email: true },    // ignored: follow has no email leaf
         supportReply: { email: false, push: true }, // push ignored: support answers are email-only
+        ownerInquiry: { email: false, push: true }, // push ignored: owner questions' setting is email-only
       },
     });
     expect(update).toEqual({
@@ -97,6 +98,7 @@ describe('buildPreferencesUpdate', () => {
       'preferences.notifications.drinkWindow.push': true,
       'preferences.notifications.communityReply.email': true,
       'preferences.notifications.supportReply.email': false,
+      'preferences.notifications.ownerInquiry.email': false,
       emailOptOutAt: null, // an email turned on withdraws the unsubscribe-all objection
     });
     expect(Object.keys(update).some((k) => k.includes('evil') || k.includes('hacked'))).toBe(false);

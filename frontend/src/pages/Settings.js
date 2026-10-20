@@ -78,6 +78,7 @@ function Settings() {
   const cmInit = notifPrefs.communityMention || {};
   const cfInit = notifPrefs.communityFollow || {};
   const srInit = notifPrefs.supportReply || {};
+  const oiInit = notifPrefs.ownerInquiry || {};
   const [drinkWindowEnabled, setDrinkWindowEnabled] = useState(dwInit.enabled !== false);
   const [drinkWindowEmail, setDrinkWindowEmail] = useState(dwInit.email === true);
   const [drinkWindowPush,  setDrinkWindowPush]  = useState(dwInit.push  === true);
@@ -88,6 +89,8 @@ function Settings() {
   const [communityFollowPush,   setCommunityFollowPush]   = useState(cfInit.push  !== false);
   // Support answers are a service email, on unless turned off (User schema).
   const [supportReplyEmail,     setSupportReplyEmail]     = useState(srInit.email !== false);
+  // Curators' questions about your wines: on unless turned off (User schema).
+  const [ownerInquiryEmail,     setOwnerInquiryEmail]     = useState(oiInit.email !== false);
   // Combined "any push enabled?" flag — drives the device-registration UX
   // below. If the user turns off all push categories there's no reason to
   // keep a registered device.
@@ -189,7 +192,8 @@ function Settings() {
         communityReply:   { email: communityReplyEmail,   push: communityReplyPush },
         communityMention: { email: communityMentionEmail, push: communityMentionPush },
         communityFollow:  { push: communityFollowPush },
-        supportReply:     { email: supportReplyEmail }
+        supportReply:     { email: supportReplyEmail },
+        ownerInquiry:     { email: ownerInquiryEmail }
       }
     });
     setNotifSaving(false);
@@ -625,6 +629,14 @@ function Settings() {
               <td>
                 <input type="checkbox" aria-label={`${t('settings.notifications.supportReply')} — ${t('settings.notifications.email')}`}
                   checked={supportReplyEmail} onChange={e => setSupportReplyEmail(e.target.checked)} />
+              </td>
+              <td className="settings-notif-grid__na">—</td>
+            </tr>
+            <tr>
+              <td>{t('settings.notifications.ownerInquiry')}</td>
+              <td>
+                <input type="checkbox" aria-label={`${t('settings.notifications.ownerInquiry')} — ${t('settings.notifications.email')}`}
+                  checked={ownerInquiryEmail} onChange={e => setOwnerInquiryEmail(e.target.checked)} />
               </td>
               <td className="settings-notif-grid__na">—</td>
             </tr>

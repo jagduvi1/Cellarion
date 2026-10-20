@@ -105,6 +105,7 @@ describe('get_preferences / get_profile', () => {
     expect(body.data.notifications.drink_window.enabled).toBe(false);
     expect(body.data.notifications.community_reply.push).toBe(true); // default
     expect(body.data.notifications.support_reply.email).toBe(true); // a service email: on unless turned off
+    expect(body.data.notifications.owner_inquiry.email).toBe(true); // curators' questions: on unless turned off
     expect(body.data.cellar_sort).toBe('-createdAt'); // never picked: newest first
   });
 
@@ -139,9 +140,9 @@ describe('update_preferences', () => {
   test('maps snake_case params to the camelCase accountOps body and echoes the result', async () => {
     accountOps.updatePreferences.mockResolvedValue({ user: { preferences: { currency: 'EUR' } }, changed: ['preferences.currency'] });
     const body = parse(await tool('update_preferences').handler(
-      { currency: 'EUR', rating_scale: '100', cellar_sort: 'maturity', default_cellar_id: null, notifications: { drinkWindow: { push: true }, supportReply: { email: false } } }, CTX));
+      { currency: 'EUR', rating_scale: '100', cellar_sort: 'maturity', default_cellar_id: null, notifications: { drinkWindow: { push: true }, supportReply: { email: false }, ownerInquiry: { email: false } } }, CTX));
     expect(accountOps.updatePreferences).toHaveBeenCalledWith(ME, {
-      currency: 'EUR', ratingScale: '100', cellarSort: 'maturity', defaultCellarId: null, notifications: { drinkWindow: { push: true }, supportReply: { email: false } },
+      currency: 'EUR', ratingScale: '100', cellarSort: 'maturity', defaultCellarId: null, notifications: { drinkWindow: { push: true }, supportReply: { email: false }, ownerInquiry: { email: false } },
     });
     expect(body.data.currency).toBe('EUR');
   });

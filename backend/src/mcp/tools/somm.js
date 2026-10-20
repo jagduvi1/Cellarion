@@ -2444,7 +2444,8 @@ registerTool({
   name: 'ask_bottle_owner',
   title: 'Sommelier: ask a wine\'s bottle owners about their record',
   description:
-    'Sends a question about a registry wine to the users who OWN bottles of it (in-app notification; owners answer ' +
+    'Sends a question about a registry wine to the users who OWN bottles of it (in-app notification, and an email ' +
+    'unless the owner turned it off; owners answer ' +
     'from their bottle page, answers land in the owner-inquiry queue). THE tool for record facts research cannot ' +
     'settle — "what does the label say the producer is?", "is this the DOCG or the DOC bottling?". Owners with ' +
     'ACTIVE bottles are asked; when none exist, owners who consumed one are asked instead. Capped at 20 owners. One ' +
@@ -2493,7 +2494,7 @@ registerTool({
         recipients_notified: result.recipientCount,
         asked_consumed_owners: result.fallbackUsed,
         expires_at: result.inquiry.expiresAt,
-        note: 'Owners answer in-app; answers appear in list_owner_inquiries. The inquiry expires after 60 days. Not undoable — the notifications are already out.',
+        note: 'Owners are told in-app and, where their settings allow, by email; they answer in the app, and answers appear in list_owner_inquiries. The inquiry expires after 60 days. Not undoable — the notifications are already out.',
       }
     );
   },

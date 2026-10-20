@@ -397,6 +397,7 @@
       "communityMention": "@mentions",
       "communityFollow": "Followed thread activity",
       "supportReply": "Answers to your support tickets",
+      "ownerInquiry": "Questions from curators about your wines",
       "pushUnsupported": "Push notifications are not supported in this browser.",
       "pushBlocked": "Push notifications are blocked. Enable them in your browser settings.",
       "pushNotConfigured": "Push notifications are not configured on this server.",
@@ -4515,6 +4516,7 @@
     "title": "Unsubscribed",
     "message": "You have been unsubscribed from every Cellarion email and push notification category.",
     "messageSupport": "We won't email you answers to your support tickets any more. They still appear on the Support page and under the bell, and your other email settings are unchanged.",
+    "messageOwnerQuestions": "We won't email you curators' questions about your wines any more. They still appear under the bell and on your bottle, and your other email settings are unchanged.",
     "reEnable": "You can re-enable individual categories at any time from <1>Settings</1>."
   },
   "wishlist": {

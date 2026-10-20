@@ -10,6 +10,7 @@
  *     communityMention:{ email, push },
  *     communityFollow: { push },                 // no email — too noisy
  *     supportReply:    { email },                // support answered your ticket
+ *     ownerInquiry:    { email },                // a curator asks about your wine
  *   }
  *
  * There is NO top-level `email` / `push` flag — writing to one is silently
@@ -34,6 +35,7 @@ const CATEGORY_CHANNELS = {
   communityMention: ['email', 'push'],
   communityFollow: ['push'],
   supportReply: ['email'],
+  ownerInquiry: ['email'],
 };
 
 const NOTIFICATION_CATEGORIES = Object.keys(CATEGORY_CHANNELS);

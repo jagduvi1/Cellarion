@@ -31,8 +31,12 @@ jest.mock('./notifications', () => ({
   createNotification: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock('./audit', () => ({ logAudit: jest.fn() }));
+jest.mock('./ownerInquiryEmail', () => ({
+  emailInquiryRecipients: jest.fn().mockResolvedValue({ emailed: 0 }),
+}));
 
 const WineOwnerInquiry = require('../models/WineOwnerInquiry');
+const { emailInquiryRecipients } = require('./ownerInquiryEmail');
 const WineDefinition = require('../models/WineDefinition');
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
@@ -773,5 +777,54 @@ describe('owner side', () => {
       expect(createNotification).not.toHaveBeenCalled();
       expect(logAudit).not.toHaveBeenCalled();
     });
+  });
+});
+
+// 2026-10-20: the question is also emailed (services/ownerInquiryEmail decides
+// who). It runs in the background: the create never waits on mail, and a mail
+// failure never fails the create. A send that reached anyone is audited.
+describe('createOwnerInquiry — the email copy', () => {
+  const flush = () => new Promise((resolve) => setImmediate(resolve));
+  const created = { _id: oid('e'), status: 'open', question: QUESTION, recipients: [{ user: oid('1') }, { user: oid('4') }] };
+  const ask = () => {
+    mockWineFound();
+    Bottle.aggregate.mockResolvedValue([
+      { _id: oid('1'), bottle: oid('2'), cellar: oid('3') },
+      { _id: oid('4'), bottle: oid('5'), cellar: oid('6') },
+    ]);
+    WineOwnerInquiry.create.mockResolvedValue(created);
+    return createOwnerInquiry({ wineId: WINE, userId: ASKER, via: 'mcp', question: QUESTION });
+  };
+
+  test('hands the created inquiry, the wine label and the question link to the email step, and audits the sends', async () => {
+    emailInquiryRecipients.mockResolvedValueOnce({ emailed: 2 });
+
+    const res = await ask();
+    await flush();
+
+    expect(res.ok).toBe(true);
+    expect(emailInquiryRecipients).toHaveBeenCalledWith(expect.objectContaining({
+      inquiry: created, wineLabel: 'Pira — Barolo', questionPath: `/questions/${oid('e')}`,
+    }));
+    expect(logAudit).toHaveBeenCalledWith(null, 'admin.wine.ownerInquiry.emailed',
+      { type: 'wine', id: WINE }, { inquiryId: oid('e'), emailed: 2, via: 'mcp' });
+  });
+
+  test('no email sent: no emailed audit row', async () => {
+    await ask();
+    await flush();
+    expect(logAudit.mock.calls.some((c) => c[1] === 'admin.wine.ownerInquiry.emailed')).toBe(false);
+  });
+
+  test('a mail failure never fails the create', async () => {
+    emailInquiryRecipients.mockRejectedValueOnce(new Error('mailgun down'));
+    const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const res = await ask();
+    await flush();
+
+    expect(res.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Owner question emails failed:', 'mailgun down');
+    spy.mockRestore();
   });
 });

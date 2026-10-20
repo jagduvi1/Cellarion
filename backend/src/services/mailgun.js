@@ -661,6 +661,85 @@ async function sendSupportReplyEmail(toEmail, recipientName, recipientId, ticket
 }
 
 /**
+ * A curator's question about a wine the recipient owns a bottle of
+ * (services/ownerInquiryEmail). Until 2026-10-20 these reached the in-app bell
+ * and push only, and almost nobody answered. Sent unless the recipient turned
+ * it off (preferences.notifications.ownerInquiry) or unsubscribed; the caller
+ * checks both, and rations it to one a day.
+ *
+ * The question is in the email itself, so an owner can read the label first;
+ * the button opens the question in the app, where it is answered. Reply-To
+ * reaches a person, so an answer sent by email is not lost.
+ *
+ * @param {string} toEmail
+ * @param {string} recipientName  display/username of the recipient (greeting)
+ * @param {string} recipientId    user ObjectId (for the unsubscribe tokens)
+ * @param {string} wineLabel      "Producer — Name" of the registry wine
+ * @param {string} question       the curator's question (plain text, already stripped of HTML)
+ * @param {string} questionPath   app path of the question, e.g. /questions/<id>
+ */
+async function sendOwnerInquiryEmail(toEmail, recipientName, recipientId, wineLabel, question, questionPath) {
+  if (!EMAIL_VERIFICATION_ENABLED) return;
+
+  const { createUnsubscribeToken, createScopedUnsubscribeToken } = require('../utils/unsubscribe');
+  // See sendDrinkWindowDigest for why this uses FRONTEND_URL not BACKEND_URL.
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  const unsubLink = `${frontendUrl}/api/users/unsubscribe?token=${createUnsubscribeToken(recipientId)}`;
+  // One click, no login: stop only these question emails (the rest stays on).
+  const stopQuestionsLink = `${frontendUrl}/api/users/unsubscribe/owner-questions?token=${createScopedUnsubscribeToken(recipientId, 'ownerInquiry')}`;
+  const settingsLink = `${frontendUrl}/settings#notifications`;
+  const questionUrl = `${frontendUrl}${questionPath}`;
+  // Registry text: one line, bounded, before it becomes a header.
+  const wine = String(wineLabel || 'your wine').replace(/[\r\n]+/g, ' ').trim().slice(0, 120);
+  const ask = String(question || '').trim();
+
+  await mg.messages.create(DOMAIN, {
+    from: FROM,
+    to: [toEmail],
+    'h:Reply-To': process.env.SUPPORT_REPLY_TO || 'info@cellarion.app',
+    subject: `A question about your ${wine}`,
+    text: [
+      `Hello ${recipientName},`,
+      '',
+      `A Cellarion curator is checking the shared record for ${wine}, and you have a bottle of it. Their question:`,
+      '',
+      ask,
+      '',
+      `Answer it in a minute, with the bottle in front of you: ${questionUrl}`,
+      'Your own bottle, notes and ratings will not change.',
+      '',
+      'You get this email because you own a bottle of this wine.',
+      `Stop emailing me questions about my wines: ${stopQuestionsLink}`,
+      `Choose which emails you get: ${settingsLink}`,
+      `Unsubscribe from all Cellarion emails: ${unsubLink}`
+    ].join('\n'),
+    html: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#2a2a2a;line-height:1.5;">
+        <p>Hello <strong>${escapeHtml(recipientName)}</strong>,</p>
+        <p>A Cellarion curator is checking the shared record for <strong>${escapeHtml(wine)}</strong>, and you have a bottle of it. Their question:</p>
+        <blockquote style="border-left:3px solid #D4A373;margin:1rem 0;padding:0.25rem 0.75rem;color:#333;">${escapeHtml(ask).replace(/\n/g, '<br>')}</blockquote>
+        <p style="margin:1.5rem 0;">
+          <a href="${questionUrl}"
+             style="background:#7B9E88;color:#0d0d0d;padding:10px 22px;
+                    border-radius:4px;text-decoration:none;font-weight:600;
+                    display:inline-block;">
+            Answer the question
+          </a>
+        </p>
+        <p style="color:#555;">It takes a minute, with the bottle in front of you. Your own bottle, notes and ratings will not change.</p>
+        <hr style="border:none;border-top:1px solid #ddd;margin:2rem 0;" />
+        <p style="color:#9A9484;font-size:0.85em;">
+          You get this email because you own a bottle of this wine.
+          <a href="${stopQuestionsLink}" style="color:#9A9484;">Stop emailing me questions about my wines</a> ·
+          <a href="${settingsLink}" style="color:#9A9484;">Choose which emails you get</a> ·
+          <a href="${unsubLink}" style="color:#9A9484;">Unsubscribe from all Cellarion emails</a>
+        </p>
+      </div>
+    `
+  });
+}
+
+/**
  * Warn the site admin that today's AI calls reached a share of the site-wide
  * daily cap (services/aiCapAlertJob). At the cap every AI feature is off for
  * everyone until 00:00 UTC, so the early warnings leave time to look first.
@@ -740,4 +819,4 @@ async function sendAiCapAlertEmail(toEmail, alert) {
   });
 }
 
-module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendDrinkWindowDigest, sendRecommendationEmail, sendCellarInviteEmail, sendDiscussionReplyEmail, sendAccountLockoutAlert, sendSecurityAlertEmail, sendAiCapAlertEmail, sendSupporterThankYou, sendSupportReplyEmail, EMAIL_VERIFICATION_ENABLED };
+module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendDrinkWindowDigest, sendRecommendationEmail, sendCellarInviteEmail, sendDiscussionReplyEmail, sendAccountLockoutAlert, sendSecurityAlertEmail, sendAiCapAlertEmail, sendSupporterThankYou, sendSupportReplyEmail, sendOwnerInquiryEmail, EMAIL_VERIFICATION_ENABLED };

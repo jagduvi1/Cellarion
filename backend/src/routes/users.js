@@ -687,36 +687,47 @@ router.get('/unsubscribe', async (req, res) => {
   }
 });
 
-// GET /api/users/unsubscribe/support-replies?token=:token — one click, no
-// login: stop emailing ME answers to my support tickets, and nothing else.
-// The support-reply email links it beside "unsubscribe from all". Its token
-// is scoped (utils/unsubscribe), so it can't turn off any other category.
-// The answer still reaches the in-app bell and the support page.
-router.get('/unsubscribe/support-replies', async (req, res) => {
-  const { token } = req.query;
-  if (!token || typeof token !== 'string') {
-    return res.status(400).json({ error: 'Unsubscribe token is required' });
-  }
-  try {
-    const { verifyScopedUnsubscribeToken } = require('../utils/unsubscribe');
-    const userId = verifyScopedUnsubscribeToken(token, 'supportReply');
-    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
-      return res.status(400).json({ error: 'Invalid unsubscribe link' });
+// One click, no login: stop ONE email category and nothing else. The email
+// links it beside "unsubscribe from all". Its token is scoped
+// (utils/unsubscribe), so it can't turn off any other category; the bell
+// still carries what the email used to.
+function scopedUnsubscribe(scope, only) {
+  const flag = `preferences.notifications.${scope}.email`;
+  return async (req, res) => {
+    const { token } = req.query;
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ error: 'Unsubscribe token is required' });
     }
-    // Filter on the cast id, and only write when the flag is not already off.
-    const result = await User.updateOne(
-      { _id: new mongoose.Types.ObjectId(userId), 'preferences.notifications.supportReply.email': { $ne: false } },
-      { $set: { 'preferences.notifications.supportReply.email': false } },
-    );
-    if (result.modifiedCount > 0) {
-      logAudit(req, 'user.unsubscribe.supportReply', { type: 'user', id: userId }, {});
+    try {
+      const { verifyScopedUnsubscribeToken } = require('../utils/unsubscribe');
+      const userId = verifyScopedUnsubscribeToken(token, scope);
+      if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+        return res.status(400).json({ error: 'Invalid unsubscribe link' });
+      }
+      // Filter on the cast id, and only write when the flag is not already off.
+      const result = await User.updateOne(
+        { _id: new mongoose.Types.ObjectId(userId), [flag]: { $ne: false } },
+        { $set: { [flag]: false } },
+      );
+      if (result.modifiedCount > 0) {
+        logAudit(req, `user.unsubscribe.${scope}`, { type: 'user', id: userId }, {});
+      }
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      res.redirect(`${frontendUrl}/unsubscribed?only=${only}`);
+    } catch (error) {
+      console.error(`Scoped unsubscribe (${scope}) error:`, error);
+      res.status(500).json({ error: 'Failed to unsubscribe' });
     }
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    res.redirect(`${frontendUrl}/unsubscribed?only=support`);
-  } catch (error) {
-    console.error('Support-reply unsubscribe error:', error);
-    res.status(500).json({ error: 'Failed to unsubscribe' });
-  }
-});
+  };
+}
+
+// GET /api/users/unsubscribe/support-replies?token=:token — stop emailing ME
+// answers to my support tickets (they stay on the support page).
+router.get('/unsubscribe/support-replies', scopedUnsubscribe('supportReply', 'support'));
+
+// GET /api/users/unsubscribe/owner-questions?token=:token — stop emailing me
+// curators' questions about wines I own (2026-10-20; they stay on the bell
+// and the bottle page).
+router.get('/unsubscribe/owner-questions', scopedUnsubscribe('ownerInquiry', 'owner-questions'));
 
 module.exports = router;

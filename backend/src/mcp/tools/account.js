@@ -53,6 +53,7 @@ function prefsView(user) {
       community_mention: { email: !!n.communityMention?.email, push: n.communityMention?.push ?? true },
       community_follow: { push: n.communityFollow?.push ?? true },
       support_reply: { email: n.supportReply?.email ?? true },
+      owner_inquiry: { email: n.ownerInquiry?.email ?? true },
     },
   };
 }
@@ -84,6 +85,7 @@ const NOTIFICATION_SHAPE = z.object({
   communityMention: z.object({ email: z.boolean().optional(), push: z.boolean().optional() }).optional(),
   communityFollow: z.object({ push: z.boolean().optional() }).optional(),
   supportReply: z.object({ email: z.boolean().optional() }).optional(),
+  ownerInquiry: z.object({ email: z.boolean().optional() }).optional(),
 }).optional();
 
 registerTool({

@@ -183,6 +183,17 @@ const userSchema = new mongoose.Schema({
         // and so does the one-click unsubscribe (utils/notifications.js).
         // No push: the bell already carries it inside the app.
         email: { type: Boolean, default: true }
+      },
+      ownerInquiry: {
+        // A curator's question about a wine you own a bottle of (2026-10-20).
+        // Until now it reached the bell and push only, and none of 64 open
+        // questions had an answer. Not marketing: one precise question about
+        // the record of your own bottle, with every send rationed by the
+        // curators' contact budget and at most one such email a day. On by
+        // default; Settings turns it off, so do the "stop these" link in the
+        // email and the one-click unsubscribe (utils/notifications.js).
+        // Push already goes out with the in-app notification.
+        email: { type: Boolean, default: true }
       }
     },
     restockScope: {

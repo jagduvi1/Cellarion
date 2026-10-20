@@ -26,6 +26,7 @@ describe('NOTIFICATION_CATEGORIES', () => {
       'communityMention',
       'communityFollow',
       'supportReply',
+      'ownerInquiry',
     ]);
   });
 
@@ -110,6 +111,7 @@ describe('unsubscribeAllNotifications', () => {
       communityMention: { email: false, push: false },
       communityFollow:  { push: false },
       supportReply:     { email: false },
+      ownerInquiry:     { email: false },
     }, { emailOptOutAt: new Date('2026-08-01') });
 
     const changed = unsubscribeAllNotifications(user);
@@ -166,7 +168,7 @@ describe('unsubscribeAllNotifications', () => {
   it('writes a category missing from the stored record off, rather than skipping it', () => {
     const user = makeUser({
       drinkWindow: { enabled: true, email: true, push: true },
-      // communityReply, communityMention, communityFollow, supportReply all absent
+      // communityReply, communityMention, communityFollow, supportReply, ownerInquiry all absent
     });
 
     const changed = unsubscribeAllNotifications(user);
@@ -178,8 +180,9 @@ describe('unsubscribeAllNotifications', () => {
       communityMention: { email: false, push: false },
       communityFollow:  { push: false },
       supportReply:     { email: false },
+      ownerInquiry:     { email: false },
     });
-    expect(user.markModified).toHaveBeenCalledTimes(5);
+    expect(user.markModified).toHaveBeenCalledTimes(6);
     for (const category of NOTIFICATION_CATEGORIES) {
       expect(user.markModified).toHaveBeenCalledWith(`preferences.notifications.${category}`);
     }
@@ -196,6 +199,7 @@ describe('the objection itself — emailOptOutAt', () => {
     communityMention: { email: false, push: false },
     communityFollow:  { push: false },
     supportReply:     { email: false },
+    ownerInquiry:     { email: false },
   });
 
   it('is stamped with the time of the click', () => {
@@ -252,5 +256,33 @@ describe('support-reply emails and the one-click unsubscribe', () => {
     // …and the objection is recorded on the real document too.
     expect(user.emailOptOutAt).toBeInstanceOf(Date);
     expect(user.isModified('emailOptOutAt')).toBe(true);
+  });
+});
+
+// Curators' questions about a wine you own are emailed by default
+// (2026-10-20). "Unsubscribe from all Cellarion emails" must stop them too,
+// including on accounts stored before the category existed.
+describe('owner-question emails and the one-click unsubscribe', () => {
+  it('turns the owner-question email off with everything else', () => {
+    const user = makeUser({ communityFollow: { push: true }, ownerInquiry: { email: true } });
+
+    expect(unsubscribeAllNotifications(user)).toBe(true);
+    expect(user.preferences.notifications.ownerInquiry.email).toBe(false);
+    expect(user.markModified).toHaveBeenCalledWith('preferences.notifications.ownerInquiry');
+  });
+
+  it('covers an account stored before the category existed (the schema default fills it in)', () => {
+    const mongoose = require('mongoose');
+    const User = require('../models/User');
+    const user = User.hydrate({
+      _id: new mongoose.Types.ObjectId(),
+      username: 'older', email: 'older@cellarion.app',
+      preferences: { notifications: { supportReply: { email: true } } },
+    });
+    expect(user.preferences.notifications.ownerInquiry.email).toBe(true);
+
+    expect(unsubscribeAllNotifications(user)).toBe(true);
+    expect(user.preferences.notifications.ownerInquiry.email).toBe(false);
+    expect(user.isModified('preferences.notifications.ownerInquiry')).toBe(true);
   });
 });

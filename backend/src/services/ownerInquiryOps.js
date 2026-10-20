@@ -22,6 +22,7 @@ const Cellar = require('../models/Cellar');
 const User = require('../models/User');
 const { CONSUMED_STATUSES, NOT_IN_CELLAR_STATUSES } = require('../config/constants');
 const { createNotifications, createNotification } = require('./notifications');
+const { emailInquiryRecipients } = require('./ownerInquiryEmail');
 const { logAudit } = require('./audit');
 const { stripHtml } = require('../utils/sanitize');
 const { isValidId } = require('../utils/validation');
@@ -403,11 +404,12 @@ async function createOwnerInquiry({ wineId, userId, via = 'rest', question, req 
     throw err;
   }
 
-  // In-app + push only (existing notification consent surfaces) — never
-  // email. The link opens the QUESTION, which finds the owner's bottle when
-  // they click: a bottle link written now goes dead when the bottle or its
-  // cellar is deleted later (support ticket 2026-10-14). Batch call: one
-  // insertMany + capped push fan-out.
+  // In-app + push (existing notification consent surfaces), and email: the
+  // bell alone left every question unanswered (2026-10-20). The link opens the
+  // QUESTION, which finds the owner's bottle when they click: a bottle link
+  // written now goes dead when the bottle or its cellar is deleted later
+  // (support ticket 2026-10-14). Batch call: one insertMany + capped push
+  // fan-out.
   const label = wineLabel(wine);
   createNotifications(recipients.map((r) => ({
     userId: r.user,
@@ -417,6 +419,19 @@ async function createOwnerInquiry({ wineId, userId, via = 'rest', question, req 
     link: questionLink(inquiry._id),
     category: 'community',
   }))).catch(() => {});
+
+  // The email copy, in the background so the curator's call never waits on
+  // mail (each send is bounded at 10 s). Who gets one, and the one-a-day
+  // cap, live in services/ownerInquiryEmail.
+  emailInquiryRecipients({ inquiry, wineLabel: label, questionPath: questionLink(inquiry._id), now })
+    .then(({ emailed }) => {
+      if (emailed > 0) {
+        logAudit(req, 'admin.wine.ownerInquiry.emailed',
+          { type: 'wine', id: wine._id },
+          { inquiryId: inquiry._id, emailed, ...(via === 'mcp' ? { via: 'mcp' } : {}) });
+      }
+    })
+    .catch((err) => console.error('Owner question emails failed:', err.message));
 
   logAudit(req, 'admin.wine.ownerInquiry.create',
     { type: 'wine', id: wine._id },
@@ -518,7 +533,8 @@ async function resolveOwnerInquiry({ inquiryId, userId, note, ownerReply, via = 
 
   const label = wineLabel(inquiry.wineDefinition);
 
-  // In-app + push only, exactly like the ask — never email. Best-effort: a
+  // In-app + push only — the ask is emailed, this thank-you is not: the owner
+  // who answered has just been in the app. Best-effort: a
   // notification failure must not un-resolve an inquiry that is already
   // written (the wine-report close draws the same line). The link opens the
   // question, which finds a bottle of the wine the owner can open when they

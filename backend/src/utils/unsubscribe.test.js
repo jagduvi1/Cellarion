@@ -145,4 +145,15 @@ describe('scoped unsubscribe tokens (support-reply only, 2026-09-30)', () => {
     const oldMac = crypto.createHmac('sha256', process.env.JWT_SECRET).update(`${UID}:${old}:supportReply`).digest('hex');
     expect(verifyScopedUnsubscribeToken(rebuilt(UID, old, 'supportReply', oldMac), 'supportReply')).toBeNull();
   });
+
+  // 2026-10-20: the owner-question email has its own "stop these" link. Its
+  // token must stop only that email: it can't stand in for the support-reply
+  // scope, nor the other way round.
+  it('the owner-question scope round-trips and never verifies as another scope', () => {
+    const own = createScopedUnsubscribeToken(UID, 'ownerInquiry');
+    expect(verifyScopedUnsubscribeToken(own, 'ownerInquiry')).toBe(UID);
+    expect(verifyScopedUnsubscribeToken(own, 'supportReply')).toBeNull();
+    expect(verifyScopedUnsubscribeToken(createScopedUnsubscribeToken(UID, 'supportReply'), 'ownerInquiry')).toBeNull();
+    expect(verifyUnsubscribeToken(own)).toBeNull();
+  });
 });

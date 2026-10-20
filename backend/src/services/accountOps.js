@@ -83,6 +83,10 @@ async function buildPreferencesUpdate(userId, body = {}) {
     if (sr && typeof sr === 'object') {
       if (sr.email !== undefined) setLeaf('supportReply.email', sr.email);
     }
+    const oi = notifications.ownerInquiry;
+    if (oi && typeof oi === 'object') {
+      if (oi.email !== undefined) setLeaf('ownerInquiry.email', oi.email);
+    }
     // Turning any email back on withdraws the blanket objection the one-click
     // unsubscribe recorded (User.emailOptOutAt): from here on the per-category
     // switches decide. Turning one off never sets it — that is a per-category

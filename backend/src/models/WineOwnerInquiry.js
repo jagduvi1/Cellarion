@@ -38,6 +38,10 @@ const recipientSchema = new mongoose.Schema({
     ref: 'Bottle',
   },
   notifiedAt: { type: Date, default: null },
+  // When the question was also EMAILED to this owner (services/
+  // ownerInquiryEmail); null = in-app and push only (email off, unverified
+  // address, or another question already emailed them that day).
+  emailedAt: { type: Date, default: null },
   response: { type: String, trim: true, maxlength: RESPONSE_MAX, default: null },
   respondedAt: { type: Date, default: null },
 }, { _id: false });

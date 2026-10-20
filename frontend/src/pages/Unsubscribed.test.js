@@ -18,6 +18,19 @@ test('the support-only link says only support answers stopped', () => {
   expect(screen.queryByText('unsubscribed.message')).toBeNull();
 });
 
+// 2026-10-20: the owner-question email's "stop emailing me questions" link
+// turns off ONE email too.
+test('the owner-questions link says only curator questions stopped', () => {
+  at('/unsubscribed?only=owner-questions');
+  expect(screen.getByText('unsubscribed.messageOwnerQuestions')).toBeInTheDocument();
+  expect(screen.queryByText('unsubscribed.message')).toBeNull();
+});
+
+test('an unknown only= value falls back to the all-categories message', () => {
+  at('/unsubscribed?only=whatever');
+  expect(screen.getByText('unsubscribed.message')).toBeInTheDocument();
+});
+
 test('the all-categories link keeps its message', () => {
   at('/unsubscribed');
   expect(screen.getByText('unsubscribed.message')).toBeInTheDocument();
