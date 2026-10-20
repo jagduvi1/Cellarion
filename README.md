@@ -98,6 +98,16 @@ docker-compose up --build
 | http://localhost | Frontend (React SPA) — served via Traefik |
 | http://localhost/api/health | Backend health check |
 
+### Make yourself admin
+
+A fresh install has no admin. Register your own account in the app, then run:
+
+```bash
+docker exec cellarion-backend node src/scripts/make-admin.js <your username or email>
+```
+
+Sign out and in again to see the admin pages. `--remove` takes the role away again.
+
 ### Seed demo data
 
 After the containers are running:

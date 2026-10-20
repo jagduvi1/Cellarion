@@ -12,19 +12,31 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # decoder RCE must not land as root in-container. gunicorn binds :5000 (a
 # non-privileged port), so no extra capability is needed.
 RUN useradd --create-home --uid 10001 appuser
-ENV U2NET_HOME=/home/appuser/.u2net
+# The model lives outside any home directory, readable by every user, so the
+# image also runs under a uid it was not built for (a NAS app platform runs
+# each container as its own user — TrueNAS uses 568). It used to sit in
+# /home/appuser (mode 0700): any other user could not read it, rembg tried to
+# download it again, and every background removal failed (tested 2026-10-20).
+ENV U2NET_HOME=/opt/u2net
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download the u2net model so container startup is fast. Land it in the
-# non-root user's model dir (U2NET_HOME) so it is readable at runtime.
-RUN mkdir -p $U2NET_HOME && python -c "from rembg import new_session; new_session('u2net')"
+# Pre-download the u2net model so container startup is fast.
+RUN mkdir -p $U2NET_HOME && python -c "from rembg import new_session; new_session('u2net')" \
+ && chmod -R a+rX $U2NET_HOME
 
 COPY app.py .
 
-# Hand /app and the model cache to the runtime user, then drop privileges.
-RUN chown -R appuser:appuser /app $U2NET_HOME
+# What the runtime writes goes to /tmp, writable whatever the uid: numba's JIT
+# cache (pymatting) and gunicorn's control socket, which lives under HOME.
+# appuser stays the default user, so `docker run` and the compose file run it
+# exactly as before.
+ENV NUMBA_CACHE_DIR=/tmp/numba-cache \
+    HOME=/tmp
+
+# Hand /app to the runtime user, then drop privileges.
+RUN chown -R appuser:appuser /app
 USER appuser
 
 EXPOSE 5000

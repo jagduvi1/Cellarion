@@ -79,5 +79,8 @@ def remove_bg():
             mimetype='image/png',
             download_name='output.png'
         )
-    except Exception:
+    except Exception as err:
+        # Say why in the log: a bare 500 hid a model the runtime user could
+        # not read (2026-10-20). The error only, never the image.
+        app.logger.error("remove-bg failed: %s: %s", type(err).__name__, str(err)[:300])
         return jsonify({"error": "Image processing failed"}), 500

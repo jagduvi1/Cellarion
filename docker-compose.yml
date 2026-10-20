@@ -61,6 +61,13 @@ services:
       # volume, MEILI_FORCE_REINDEX). Budget must stay well under the limit.
       - MEILI_MAX_INDEXING_MEMORY=128Mb
       - MEILI_MAX_INDEXING_THREADS=2
+      # A newer Meilisearch refuses to open an older version's data ("database
+      # version incompatible") and stays down until someone migrates it. With
+      # this it upgrades the data in place on the first start of the new
+      # version; it does nothing while the version is unchanged (tested
+      # 2026-10-20: 1.45.1 → 1.55.0, indexes kept). Dependabot bumps the tag
+      # above. The index can always be rebuilt from MongoDB (MEILI_FORCE_REINDEX).
+      - MEILI_UPGRADE_DB=true
     volumes:
       - meili-data:/meili_data
     deploy:
