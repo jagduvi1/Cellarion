@@ -629,9 +629,12 @@ describe('open-bottle ops (openBottle / pourFromBottle / closeBottle)', () => {
 
   test('openBottle sets the open state, re-arms the expiry alert, saves, audits', async () => {
     const bottle = freshBottle({ pours: [{ ml: 999 }], openBottleNotifiedAt: new Date() });
-    const res = await openBottle(bottle, { preservationMethod: 'coravin', openedAt: '2026-07-20' }, REQ);
+    // Relative to today: a fixed day falls outside the 90-day back-date window
+    // as the calendar moves on ('2026-07-20' started failing on 2026-10-20).
+    const openedAt = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    const res = await openBottle(bottle, { preservationMethod: 'coravin', openedAt }, REQ);
     expect(res.error).toBeUndefined();
-    expect(bottle.openedAt).toEqual(new Date('2026-07-20'));
+    expect(bottle.openedAt).toEqual(new Date(openedAt));
     expect(bottle.preservationMethod).toBe('coravin');
     expect(bottle.pours).toEqual([]); // a fresh opening starts a fresh pour log
     expect(bottle.openBottleNotifiedAt).toBeNull();
