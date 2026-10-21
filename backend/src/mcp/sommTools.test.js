@@ -1876,6 +1876,16 @@ describe('propose_wine_correction', () => {
     expect(WineCorrectionProposal.create).not.toHaveBeenCalled();
   });
 
+  test('merge kind: the same wine spelled in another letter case is refused too', async () => {
+    const body = parse(await tool('propose_wine_correction').handler({
+      wine_id: WINE_ID, kind: 'merge', merge_target_id: WINE_ID.toUpperCase(), reason: REASON,
+    }, SOMM_CTX));
+    expect(body.error.code).toBe('invalid_input');
+    expect(body.error.message).toMatch(/DIFFERENT wine/);
+    expect(WineDefinition.findById).not.toHaveBeenCalled();
+    expect(WineCorrectionProposal.create).not.toHaveBeenCalled();
+  });
+
   test('a short reason is refused before any read', async () => {
     const body = parse(await tool('propose_wine_correction').handler({
       wine_id: WINE_ID, kind: 'non_wine', reason: 'too short',

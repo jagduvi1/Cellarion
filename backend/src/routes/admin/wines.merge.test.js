@@ -9,10 +9,9 @@
  * Every model write is recorded in `calls` in the order it was made, so the
  * ordering is asserted, not assumed.
  *
- * Not pinned here on purpose: three known defects with fixes of their own,
- * which add their cases to this file — a self-merge spelled with a different
- * id case, a private draft among the golden merge's sources, and the
- * PersonalDataEntry / RegistryDataValue rows a merge or delete leaves behind.
+ * Not pinned here on purpose: a known defect with a fix of its own, which
+ * adds its cases to this file — the PersonalDataEntry / RegistryDataValue
+ * rows a merge or delete leaves behind.
  */
 
 process.env.JWT_SECRET = 'test-secret';
@@ -603,5 +602,90 @@ describe('DELETE /api/admin/wines/:id', () => {
     for (const c of calls.slice(deleted + 1)) expect(c).toBe('removeWine');
     expect(calls.indexOf('logAudit')).toBeLessThan(deleted);
     expect(searchService.removeWine).toHaveBeenCalledWith(S);
+  });
+});
+
+// ── Self-merge and private drafts ───────────────────────────────────────────
+
+describe('a wine never merges into itself, and a private draft never takes part', () => {
+  const S_UPPER = S.toUpperCase();
+  const K_UPPER = K.toUpperCase();
+
+  // MongoDB casts an id in either letter case to the same ObjectId; the
+  // stubs do the same, and honour the draft filter a query carries.
+  beforeEach(() => {
+    stub(WineDefinition.findById, async (id) => docs[String(id).toLowerCase()] ?? null);
+    stub(WineDefinition.find, async (q) => (q._id.$in || [])
+      .map((id) => docs[String(id).toLowerCase()])
+      .filter((d) => d && !(q.draft?.$ne === true && d.draft === true)));
+  });
+
+  test.each([
+    ['the same id', S],
+    ['the same id in another letter case', S_UPPER],
+  ])('performWineMerge refuses %s on both sides and writes nothing', async (_label, target) => {
+    docs[S] = wine(S);
+    expect(await performWineMerge(S, target, REQ)).toEqual({ error: { status: 400, message: 'Cannot merge a wine into itself' } });
+    expect(calls.filter((c) => c !== 'WineDefinition.findById')).toEqual([]);
+  });
+
+  test('POST /:id/merge refuses the same id in another letter case before any lookup', async () => {
+    docs[S] = wine(S);
+    expect(await send('POST', `/${S}/merge`, { targetId: S_UPPER })).toEqual({ status: 400, body: { error: 'Cannot merge a wine into itself' } });
+    expect(WineDefinition.findById).not.toHaveBeenCalled();
+    expect(docs[S].deleteOne).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['a number', 123],
+    ['a 12-character string', 'abcdefghijkl'],
+  ])('POST /:id/merge answers 400 for %s as targetId', async (_label, targetId) => {
+    expect(await send('POST', `/${S}/merge`, { targetId })).toEqual({ status: 400, body: { error: 'A valid targetId is required' } });
+    expect(WineDefinition.findById).not.toHaveBeenCalled();
+  });
+
+  test('POST /merge drops the keeper from the sources whatever its letter case', async () => {
+    docs[K] = wine(K, { image: 'keeper.webp' });
+    docs[S] = wine(S);
+
+    expect(await send('POST', '/merge', { keeperId: K, sourceIds: [K_UPPER] }))
+      .toEqual({ status: 400, body: { error: 'No valid source ids (distinct from the keeper) provided' } });
+
+    const res = await send('POST', '/merge', { keeperId: K, sourceIds: [K_UPPER, S, S_UPPER] });
+    expect(res.status).toBe(200);
+    expect(res.body.sourcesMerged).toBe(1);
+    expect(plain(WineDefinition.find.mock.calls.at(-1)[0]._id)).toEqual({ $in: [S] });
+    expect(docs[K].deleteOne).not.toHaveBeenCalled();
+    expect(docs[S].deleteOne).toHaveBeenCalledTimes(1);
+  });
+
+  test('POST /merge answers 404 for a draft keeper and moves nothing', async () => {
+    docs[K] = wine(K, { draft: true });
+    docs[S] = wine(S);
+    expect(await send('POST', '/merge', { keeperId: K, sourceIds: [S] })).toEqual({ status: 404, body: { error: 'Keeper wine not found' } });
+    expect(Bottle.updateMany).not.toHaveBeenCalled();
+    expect(docs[S].deleteOne).not.toHaveBeenCalled();
+  });
+
+  test('POST /merge leaves a draft source out and merges the rest', async () => {
+    docs[K] = wine(K, { image: 'keeper.webp' });
+    docs[S] = wine(S, { draft: true });
+    docs[S2] = wine(S2);
+
+    const res = await send('POST', '/merge', { keeperId: K, sourceIds: [S, S2] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.sourcesMerged).toBe(1);
+    expect(WineDefinition.find.mock.calls.at(-1)[0]).toMatchObject({ draft: { $ne: true } });
+    expect(plain(Bottle.updateMany.mock.calls.map((c) => c[0]))).toEqual([{ wineDefinition: S2 }]);
+    expect(docs[S].deleteOne).not.toHaveBeenCalled();
+    expect(docs[S2].deleteOne).toHaveBeenCalledTimes(1);
+  });
+
+  test('POST /merge with only draft sources answers 404 and moves nothing', async () => {
+    docs[K] = wine(K);
+    docs[S] = wine(S, { draft: true });
+    expect(await send('POST', '/merge', { keeperId: K, sourceIds: [S] })).toEqual({ status: 404, body: { error: 'No source wines found' } });
+    expect(Bottle.updateMany).not.toHaveBeenCalled();
   });
 });

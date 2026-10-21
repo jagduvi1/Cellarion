@@ -2233,7 +2233,8 @@ registerTool({
         if (!args.merge_target_id) {
           return fail('invalid_input', 'kind "merge" needs merge_target_id — the registry wine this duplicate should be merged INTO.');
         }
-        if (String(args.merge_target_id) === String(args.wine_id)) {
+        // Canonical forms: an id in another letter case is the same wine.
+        if (String(args.merge_target_id).toLowerCase() === String(args.wine_id).toLowerCase()) {
           return fail('invalid_input', 'merge_target_id must be a DIFFERENT wine — a wine cannot merge into itself.');
         }
       } else if (args.merge_target_id) {

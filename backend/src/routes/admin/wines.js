@@ -1784,10 +1784,12 @@ router.post('/:id/merge', async (req, res) => {
     const { targetId } = req.body;
     const sourceId = req.params.id;
 
-    if (!targetId || !mongoose.Types.ObjectId.isValid(targetId)) {
+    if (!isValidId(targetId)) {
       return res.status(400).json({ error: 'A valid targetId is required' });
     }
-    if (sourceId === targetId) {
+    // Compare canonical forms: an id in another letter case names the same
+    // wine (MongoDB casts both to one ObjectId).
+    if (sourceId.toLowerCase() === targetId.toLowerCase()) {
       return res.status(400).json({ error: 'Cannot merge a wine into itself' });
     }
 
@@ -1807,8 +1809,9 @@ router.post('/:id/merge', async (req, res) => {
 
 // The single-pair merge body, extracted so the correction-proposal approve
 // (routes/admin/wineProposals.js) runs EXACTLY the machinery the route above
-// runs — one implementation, two callers. Ids must be pre-validated (24-hex,
-// source ≠ target) by the caller. `req` is for audit attribution only.
+// runs — one implementation, two callers. Ids must be pre-validated (24-hex)
+// by the caller; a source that IS the target is refused here, for every
+// caller. `req` is for audit attribution only.
 // Returns { error: { status, message } } or { bottlesMoved, imageAction,
 // source, target }.
 async function performWineMerge(sourceId, targetId, req) {
@@ -1822,6 +1825,12 @@ async function performWineMerge(sourceId, targetId, req) {
   if (target && target.draft === true) target = null;
   if (!source) return { error: { status: 404, message: 'Source wine not found' } };
   if (!target) return { error: { status: 404, message: 'Target wine not found' } };
+  // Merging a wine into itself would drop its profiles, price-tracking rows
+  // and vectors as "collisions" and then delete it under its own bottles.
+  // Compared on the loaded ids, so no spelling of the request ids gets past.
+  if (String(source._id) === String(target._id)) {
+    return { error: { status: 400, message: 'Cannot merge a wine into itself' } };
+  }
 
   // Capture the source's primary BottleImage (the one whose URL backs
   // WineDefinition.image) BEFORE the bulk reassign below. After reassign
@@ -2195,7 +2204,11 @@ router.post('/merge', async (req, res) => {
     if (!Array.isArray(sourceIds) || sourceIds.length === 0) {
       return res.status(400).json({ error: 'sourceIds must be a non-empty array' });
     }
-    const ids = [...new Set(sourceIds.filter(id => isValidId(id) && id !== keeperId))];
+    // Canonical (lower-case) ids, so a source spelled in another letter case
+    // dedupes and the keeper is left out whatever its spelling.
+    const keeperCanon = keeperId.toLowerCase();
+    const ids = [...new Set(sourceIds.filter(id => isValidId(id)).map(id => id.toLowerCase()))]
+      .filter(id => id !== keeperCanon);
     if (ids.length === 0) {
       return res.status(400).json({ error: 'No valid source ids (distinct from the keeper) provided' });
     }
@@ -2211,9 +2224,12 @@ router.post('/merge', async (req, res) => {
     const sourceOids = ids.map(id => new mongoose.Types.ObjectId(id));
     const imageOid = imageFromWineId ? new mongoose.Types.ObjectId(imageFromWineId) : null;
 
+    // A private draft takes no part in a merge, as in performWineMerge: a
+    // draft keeper answers like a missing one, and a draft among the sources
+    // is left out while the rest of the cluster merges.
     const keeper = await WineDefinition.findById(keeperOid);
-    if (!keeper) return res.status(404).json({ error: 'Keeper wine not found' });
-    const sources = await WineDefinition.find({ _id: { $in: sourceOids } });
+    if (!keeper || keeper.draft === true) return res.status(404).json({ error: 'Keeper wine not found' });
+    const sources = await WineDefinition.find({ _id: { $in: sourceOids }, draft: { $ne: true } });
     if (sources.length === 0) return res.status(404).json({ error: 'No source wines found' });
 
     // Capture the admin's chosen surviving image BEFORE the reassign — after it,
