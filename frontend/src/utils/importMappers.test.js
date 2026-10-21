@@ -686,6 +686,38 @@ describe('parseAndMap', () => {
     expect(result.items[0].bottleSize).toBe('750ml');
   });
 
+  describe('generic CSV bottle sizes', () => {
+    const sizeOf = (size) => {
+      const result = parseAndMap(`Wine,Producer,Vintage,Size\nMargaux,Chateau Margaux,2015,${size}`);
+      expect(result.format).toBe('generic');
+      return result.items[0].bottleSize;
+    };
+
+    it('reads a bare number under 20 as litres', () => {
+      expect(sizeOf('0.75')).toBe('750ml');
+      expect(sizeOf('1')).toBe('1000ml');
+      expect(sizeOf('1.5')).toBe('1500ml');
+      expect(sizeOf('0.375')).toBe('375ml');
+      expect(sizeOf('3')).toBe('3000ml');
+    });
+
+    it('reads a bare number of 20 or more as millilitres', () => {
+      expect(sizeOf('750')).toBe('750ml');
+      expect(sizeOf('1500')).toBe('1500ml');
+    });
+
+    it('returns canonical codes for sizes with a unit', () => {
+      expect(sizeOf('75cl')).toBe('750ml');
+      expect(sizeOf('1.5L')).toBe('1500ml');
+    });
+
+    it('still reads a decimal comma', () => {
+      const result = parseAndMap('Wine;Producer;Vintage;Size\nMargaux;Chateau Margaux;2015;0,75');
+      expect(result.format).toBe('generic');
+      expect(result.items[0].bottleSize).toBe('750ml');
+    });
+  });
+
   it('normalises purchaseDate, consumedAt and dateAdded to ISO dates', () => {
     const csv = 'wineName,producer,vintage,purchaseDate,consumedAt,dateAdded\n' +
       'Margaux,Chateau Margaux,2015,10/30/2024,11/26/2024,2024-01-05';

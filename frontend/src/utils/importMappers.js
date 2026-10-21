@@ -360,18 +360,6 @@ export function summariseRacks(items) {
 }
 
 /**
- * Normalise a bottle-size value. Accepts strings like "750ml", "1.5L", or a
- * bare number ("750" / 750) which is treated as millilitres.
- */
-function normaliseBottleSize(value) {
-  if (value === undefined || value === null || value === '') return undefined;
-  const s = String(value).trim();
-  if (!s) return undefined;
-  if (/^\d+(\.\d+)?$/.test(s)) return `${s}ml`;
-  return s;
-}
-
-/**
  * Decode a raw import file (ArrayBuffer/Uint8Array) into text with encoding
  * detection. CellarTracker's browser-UI export is Windows-1252 — reading it
  * as UTF-8 silently corrupts every accented producer (Pétrus → P�trus).
@@ -1333,7 +1321,7 @@ function mapGenericRow(row) {
     type: mapWineType(get(['Type', 'type', 'Color', 'Colour', 'Category', 'category'])),
     price: isNaN(price) ? undefined : price,
     currency: get(['Currency', 'currency']) || headerPrice?.currency || undefined,
-    bottleSize: normaliseBottleSize(get(['Size', 'size', 'Bottle Size', 'BottleSize'])) || '750ml',
+    bottleSize: normalizeBottleSize(get(['Size', 'size', 'Bottle Size', 'BottleSize'])) || '750ml',
     quantity: isNaN(qty) || qty < 1 ? 1 : qty,
     purchaseDate: get(['Purchase Date', 'PurchaseDate', 'Date', 'date']),
     purchaseLocation: get(['Store', 'store', 'Purchase Location', 'Vendor', 'vendor']),
